@@ -36,7 +36,6 @@ export interface PlannerOrchestrationBenchmarkRecord {
   readonly rerunBoundReached: boolean | null
   readonly enumerationBoundReached: boolean | null
   readonly outcomeKey: string | null
-  readonly progressEvents: number
   readonly engineVersion: string
   readonly hardwareConcurrency: number | null
   readonly userAgent: string
@@ -138,7 +137,6 @@ export function PlannerOrchestrationBenchmarkPage() {
         rerunBoundReached: result.boundFlags?.rerunBoundReached ?? null,
         enumerationBoundReached: result.boundFlags?.enumerationBoundReached ?? null,
         outcomeKey: result.outcome?.outcomeKey ?? null,
-        progressEvents: result.progressEvents,
         engineVersion: result.engineVersion,
         hardwareConcurrency: navigator.hardwareConcurrency ?? null,
         userAgent: navigator.userAgent,
@@ -325,7 +323,6 @@ export function PlannerOrchestrationBenchmarkPage() {
                 <TableCell>Bound reached T/G/R/E</TableCell>
                 <TableCell>Warnings</TableCell>
                 <TableCell>Outcome key</TableCell>
-                <TableCell>Progress</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -361,7 +358,6 @@ export function PlannerOrchestrationBenchmarkPage() {
                     {record.error !== null && <><br />{record.error}</>}
                   </TableCell>
                   <TableCell>{record.outcomeKey ?? '—'}</TableCell>
-                  <TableCell>{record.progressEvents}</TableCell>
                 </TableRow>
               ))}
               {records.length === 0 && (

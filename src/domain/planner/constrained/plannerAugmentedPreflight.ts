@@ -39,7 +39,7 @@ import {
  * right now, rebuilding a complete `PlannerConflictResolution[]` whose
  * `conflictKey` is the *current* `PlanConflict.id`.
  *
- * It deliberately runs no Beam Search, no Trace Replay, and no Candidate trial
+ * It deliberately runs no full Planner run, no Trace Replay, and no Candidate trial
  * loop: coexistence and Candidate adoption stay with the full rerun (9.2.11),
  * and this preflight never counts against `maxPlannerReruns` (9.2.16).
  */
@@ -342,7 +342,7 @@ function reassociateConstraint(
  * `conflictKey`.
  *
  * `validatePlannerInput()` requires unique conflict keys, so a silent dedupe
- * would either drop a user's explicit choice or make the next Beam Search input
+ * would either drop a user's explicit choice or make the next full Planner run input
  * invalid. Neither is guessable, so this fails closed like every other
  * re-association failure.
  */
@@ -431,17 +431,17 @@ export function reassociatePlannerFixedConstraints(
 
 /**
  * Runs the augmented initial conflict preflight and rebuilds the complete
- * `PlannerConflictResolution[]` for the caller's next full Beam Search.
+ * `PlannerConflictResolution[]` for the caller's next full Planner run.
  *
  * `fixedConstraints` come from `preparePlannerFixedConflictConstraints()` over
  * the *original* validated Planner input (PLANNER_SPEC 9.2.3.1). This function
  * creates no constraint of its own, so a generated Entry that joins a current
  * conflict is never promoted to the fixed side (9.2.7), and a conflict without
  * an explicit resolution is never fixed from `recommendedBuildListEntryId`, a
- * Beam Search bestState participant, Target priority, or Candidate score.
+ * full Planner run's bestState participant, Target priority, or Candidate score.
  *
  * It is all-or-nothing: one failure yields `status: 'unresolved'` with no
- * resolutions at all, so a partially rebuilt array can never reach Beam Search.
+ * resolutions at all, so a partially rebuilt array can never reach a full Planner run.
  *
  * `replacements` name the temporary Entries of `augmentedInput` and the
  * persisted Entries they stand in for (`docs/PLANNER_SPEC.md` 9.2.18); the
@@ -543,7 +543,7 @@ export type PlannerReplacementConflictPreflightResult =
  *    every other participant of its original conflict was replaced; every
  *    other failure fails the trial closed.
  *
- * Neither step runs a Beam Search or counts against `maxPlannerReruns`, and
+ * Neither step runs a full Planner run or counts against `maxPlannerReruns`, and
  * both are all-or-nothing. `originalConflictContexts` are the conflicts of the
  * original validated Planner input the fixed constraints were built from.
  */

@@ -21,7 +21,11 @@ import type {
   TargetWeaponId,
   WeaponTypeId,
 } from '../domain/models/publicTypes'
-import type { PlannerInput, PlannerOptions } from '../domain/planner'
+import type {
+  PlannerBeamSearchInput,
+  PlannerBeamSearchOptions,
+  PlannerInput,
+} from '../domain/planner'
 import { ProductionRngEngine } from '../domain/rng/production/productionRngEngine'
 import {
   createCandidateFromPrediction,
@@ -105,7 +109,13 @@ export interface PlannerSearchInstrumentationWorkload {
   readonly id: string
   readonly label: string
   readonly note: string
-  readonly options: PlannerOptions
+  /**
+   * The bounds the workload was recorded with. `maxPlanSteps` is the
+   * Production bound both strategies read; `beamWidth` / `maxExpandedStates`
+   * are the Beam Search oracle's own and reach only its input (Issue #103
+   * Phase D-2a).
+   */
+  readonly options: PlannerBeamSearchOptions
   readonly targets: readonly PlannerSearchInstrumentationTargetSpec[]
 }
 
@@ -212,7 +222,7 @@ function representativeTargets(
 }
 
 /** The Build List settings of the Issue #103 post-#102 baseline report. */
-export const ISSUE_103_BASELINE_PLANNER_OPTIONS: PlannerOptions = {
+export const ISSUE_103_BASELINE_PLANNER_OPTIONS: PlannerBeamSearchOptions = {
   maxPlanSteps: 1_000,
   maxExpandedStates: 200_000,
   beamWidth: 50,
@@ -573,7 +583,10 @@ function compareStableStrings(left: string, right: string): number {
 
 export interface PlannerSearchInstrumentationFixture {
   readonly workload: PlannerSearchInstrumentationWorkload
+  /** The Production input: `maxPlanSteps` is its only option. */
   readonly input: PlannerInput
+  /** The same input with the workload's Beam Search oracle bounds added. */
+  readonly beamSearchInput: PlannerBeamSearchInput
   readonly engine: ProductionRngEngine
 }
 
@@ -641,27 +654,29 @@ export function createPlannerSearchInstrumentationInput(
     }
     return createBuildListEntry(candidate, targets[index], { createdAt: FIXTURE_TIME })
   })
+  const input: PlannerInput = {
+    rngState,
+    normalCounters,
+    ownedWeapons,
+    targetWeapons: targets,
+    buildListEntries,
+    calculationContext,
+    options: { maxPlanSteps: workload.options.maxPlanSteps },
+    master: {
+      weaponBonusDefinitions: master.weaponBonusDefinitions,
+      weaponTypes: master.weaponTypes,
+      elements: master.elements,
+      bonusTypes: master.bonusTypes,
+      bonusRanks: master.bonusRanks,
+      artianBonusTypeMappings: master.artianBonusTypeMappings,
+      materialCosts: master.materialCosts,
+    },
+    conflictResolutions: [],
+  }
   return {
     workload,
     engine,
-    input: {
-      rngState,
-      normalCounters,
-      ownedWeapons,
-      targetWeapons: targets,
-      buildListEntries,
-      calculationContext,
-      options: { ...workload.options },
-      master: {
-        weaponBonusDefinitions: master.weaponBonusDefinitions,
-        weaponTypes: master.weaponTypes,
-        elements: master.elements,
-        bonusTypes: master.bonusTypes,
-        bonusRanks: master.bonusRanks,
-        artianBonusTypeMappings: master.artianBonusTypeMappings,
-        materialCosts: master.materialCosts,
-      },
-      conflictResolutions: [],
-    },
+    input,
+    beamSearchInput: { ...input, options: { ...workload.options } },
   }
 }

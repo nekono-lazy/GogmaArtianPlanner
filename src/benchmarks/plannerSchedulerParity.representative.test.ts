@@ -12,10 +12,12 @@ import { runPlannerSchedulerParity } from './plannerSchedulerParity'
  */
 describe('representative-12 Beam / scheduler parity', { timeout: 300_000 }, () => {
   it('keeps every mandatory contract and completes at least as many Targets', async () => {
-    const { input, engine } = createPlannerSearchInstrumentationInput('representative-12')
+    const { input, beamSearchInput, engine } = createPlannerSearchInstrumentationInput('representative-12')
     const run = await runPlannerSchedulerParity(input, {
       engine,
       createDependencies: () => createDeterministicPlannerDependencies(engine),
+      // The workload's own Beam Search oracle bounds; the scheduler gets none.
+      beamSearchOptions: beamSearchInput.options,
     })
     expect(mandatoryParityProblems(run)).toEqual([])
     expect(run.report.completion.regression).toBe(false)
@@ -47,6 +49,13 @@ describe('representative-12 Beam / scheduler parity', { timeout: 300_000 }, () =
     expect(run.scheduler.expandedStates).toBe(run.scheduler.traceLength)
     expect(run.scheduler.projection).toMatchObject({ status: 'valid', expectedStateChainClosed: true })
     expect(run.beam.projection.status).toBe('valid')
+    // The projection keeps the oracle's own truncation (Issue #103 Phase D-2a):
+    // it is never rewritten into a Production termination.
+    expect(run.beam.projection).toMatchObject({
+      terminationStatus: 'incomplete',
+      terminationReachedLimits: ['max_expanded_states'],
+    })
+    expect(run.scheduler.projection.terminationReachedLimits).toEqual([])
     expect(run.beam.replay?.isValid).toBe(true)
   })
 })

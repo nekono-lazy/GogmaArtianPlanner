@@ -1061,7 +1061,7 @@ describe('B8-C3b invalid preflight', () => {
       }],
     )
     const augmented = scenario(two.targets, two.entries, two.sources)
-    augmented.input.options = { ...augmented.input.options, beamWidth: 0 }
+    augmented.input.options = { ...augmented.input.options, maxPlanSteps: 0 }
     const result = preparePlannerAugmentedConflictPreflight(
       augmented.input,
       original.constraints,
@@ -1070,7 +1070,7 @@ describe('B8-C3b invalid preflight', () => {
     expect(result.status).toBe('invalid')
     if (result.status !== 'invalid') return
     expect(result.issues).toContainEqual(
-      expect.objectContaining({ path: 'beamWidth' }),
+      expect.objectContaining({ path: 'maxPlanSteps' }),
     )
     expect(result.excludedBuildListEntries).toEqual([])
     expect(result).not.toHaveProperty('failures')

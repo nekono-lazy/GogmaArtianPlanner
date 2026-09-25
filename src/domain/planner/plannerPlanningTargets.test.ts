@@ -14,7 +14,8 @@ import {
   orchestrationSource,
   orchestrationTarget,
 } from '../../test/fixtures/plannerConstrainedOrchestration'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
+import { defaultPlannerBeamSearchOptions } from './plannerBeamSearchTypes'
 import { preparePlannerInitialContext } from './plannerInitialContext'
 import { derivePlannerPlanningTargets } from './plannerPlanningTargets'
 import { validatePlannerInput } from './plannerValidation'
@@ -96,7 +97,7 @@ describe('Planner planning Target scope (#102)', () => {
     expect([...context.planningTargetsById.keys()]).toEqual([goal.id])
     expect(Object.keys(context.initialState.targetSatisfaction)).toEqual([goal.id])
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.termination).toMatchObject({
       status: 'completed',
       completedTargetCount: 1,
@@ -124,7 +125,7 @@ describe('Planner planning Target scope (#102)', () => {
     )
     const { input, dependencies } = fixture([...listed, ...unlisted], entries, sources)
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     expect(result.termination.totalTargetCount).toBe(5)
     expect(result.termination.totalTargetCount).not.toBe(input.targetWeapons.length)
@@ -160,7 +161,7 @@ describe('Planner planning Target scope (#102)', () => {
     expect(context.validBuildListEntries).toHaveLength(3)
     expect(context.planningTargetIds).toEqual([a.id, b.id])
 
-    const result = await runPlannerBeamSearch(
+    const result = await runPlannerBeamSearchOracle(
       { ...input, buildListEntries: input.buildListEntries.filter(({ id }) => id !== entries[0].id) },
       dependencies,
       {},
@@ -173,7 +174,7 @@ describe('Planner planning Target scope (#102)', () => {
     // The ordinary persisted input fails closed on the same legacy duplicate
     // (`docs/PLANNER_SPEC.md` 4.1), still counting each planning Target once
     // in its unsearched termination.
-    const ordinary = await runPlannerBeamSearch(input, dependencies)
+    const ordinary = await runPlannerBeamSearchOracle(input, dependencies)
     expect(ordinary.bestState).toBeNull()
     expect(ordinary.warnings.map(({ kind }) => kind)).toContain(
       'duplicate_build_list_entries_for_target',
@@ -201,7 +202,7 @@ describe('Planner planning Target scope (#102)', () => {
     expect(context.warnings.map(({ kind }) => kind)).toContain('build_list_entry_stale')
     expect(context.planningTargetIds).toEqual([a.id])
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.termination).toMatchObject({
       status: 'completed',
       completedTargetCount: 1,
@@ -220,14 +221,15 @@ describe('Planner planning Target scope (#102)', () => {
     expect(context.planningTargetIds).toEqual([])
     expect(context.initialState.targetSatisfaction).toEqual({})
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.expandedStates).toBe(0)
     expect(result.completed).toBe(false)
     expect(result.bestState?.trace).toEqual([])
     expect(result.termination).toEqual({
       status: 'exhausted',
       reachedLimits: [],
-      limits: input.options,
+      // The Beam Search oracle records its own bounds (Issue #103 Phase D-2a).
+      limits: { ...defaultPlannerBeamSearchOptions, maxPlanSteps: input.options.maxPlanSteps },
       expandedStates: 0,
       completedTargetCount: 0,
       totalTargetCount: 0,
@@ -246,7 +248,7 @@ describe('Planner planning Target scope (#102)', () => {
     const { input, dependencies } = listedAndUnlisted(2)
     input.buildListEntries = []
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.expandedStates).toBe(0)
     expect(result.termination).toMatchObject({
       status: 'exhausted',

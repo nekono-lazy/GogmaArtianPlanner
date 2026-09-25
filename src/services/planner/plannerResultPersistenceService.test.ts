@@ -249,25 +249,28 @@ describe('PlannerResultPersistenceService', () => {
       expect(await storedPlanIds()).toEqual([])
     }))
 
-  it('refuses a Plan whose Beam Search a PlannerOptions bound truncated', () =>
+  it('refuses a Plan whose Planner run maxPlanSteps truncated', () =>
     withScenario(
       async ({ service, context, result, storedEntryIds, storedPlanIds }) => {
-        // PLANNER_SPEC 7.2.1: an incomplete search's best state is a partial
-        // Beam Search artifact, so it never becomes an executable Draft. The
-        // typed termination is the authority, never a warning message.
+        // PLANNER_SPEC 7.2.1: an incomplete run's best state is a partial
+        // Planner artifact, so it never becomes an executable Draft. The typed
+        // termination is the authority, never a warning message.
         await expect(
           service.savePlannerOrchestrationResult(
             {
               ...result,
-              termination: incompletePlannerTermination(['max_expanded_states'], {
-                expandedStates: 10_000,
+              termination: incompletePlannerTermination(['max_plan_steps'], {
+                expandedStates: 1_000,
                 completedTargetCount: 1,
                 totalTargetCount: 2,
               }),
             },
             context,
           ),
-        ).rejects.toMatchObject({ code: 'planner_result_invalid' })
+        ).rejects.toMatchObject({
+          code: 'planner_result_invalid',
+          message: expect.stringContaining('The Planner run did not complete: it reached max_plan_steps'),
+        })
         // Nothing is salvaged: not the Plan, and not its generated Entries.
         expect(await storedEntryIds()).toEqual([
           'build-list.persisted.a',
@@ -277,7 +280,7 @@ describe('PlannerResultPersistenceService', () => {
       },
     ))
 
-  it('refuses a truncated search that reached the maxPlanSteps bound too', () =>
+  it('refuses a truncated run with the default incomplete termination', () =>
     withScenario(async ({ service, context, result, storedPlanIds }) => {
       await expect(
         service.savePlannerOrchestrationResult(
@@ -294,17 +297,17 @@ describe('PlannerResultPersistenceService', () => {
   it('saves a completed search that happened to touch a bound', () =>
     withScenario(async ({ service, context, plan, result, storedPlanIds }) => {
       // The reached bound is a diagnostic here, not a truncation: the last
-      // affordable expansion was the one that completed the search.
+      // affordable action was the one that completed the run.
       const saved = await service.savePlannerOrchestrationResult(
         {
           ...result,
           warnings: [{
-            kind: 'max_expanded_states_reached',
-            message: 'Planner reached maxExpandedStates (10000).',
+            kind: 'max_steps_reached',
+            message: 'Planner reached maxPlanSteps (1000).',
           }],
           termination: completedPlannerTermination({
-            reachedLimits: ['max_expanded_states'],
-            expandedStates: 10_000,
+            reachedLimits: ['max_plan_steps'],
+            expandedStates: 1_000,
             completedTargetCount: 2,
             totalTargetCount: 2,
           }),

@@ -24,9 +24,9 @@ import {
 import type { PlannerFixedConflictConstraint } from './plannerConflictContext'
 import type { PlannerConflictWork } from './plannerConstrainedOrchestration'
 import {
-  createPlannerWhatIfFullBeamBudget,
+  createPlannerWhatIfFullRunBudget,
   PlannerWhatIfRerunLimitError,
-  type PlannerWhatIfFullBeamBudget,
+  type PlannerWhatIfFullRunBudget,
 } from './plannerWhatIfRerunBudget'
 import {
   preparePlannerWhatIfScenario,
@@ -160,18 +160,18 @@ export async function createPlannerWhatIfComparison(
   const prepared = preparePlannerWhatIfScenario(request, dependencies)
   if (prepared.status !== 'ready') return prepared
   const scenario: PreparedPlannerWhatIfScenario = prepared.scenario
-  const budget = createPlannerWhatIfFullBeamBudget(request.bounds)
+  const budget = createPlannerWhatIfFullRunBudget(request.bounds)
   const maxTrials = request.bounds.maxCandidateTrialsPerTarget
   const executionOptions = options.executionOptions
 
   // Reset before every run, so one run can never read another run's result.
-  let cancelledBeam = false
+  let cancelledPlannerRun = false
   /** Declared return type: the assignment below happens inside a callback. */
-  const readCancelledBeam = (): boolean => cancelledBeam
+  const readCancelledPlannerRun = (): boolean => cancelledPlannerRun
   const observer: ProductionPlanGenerationObserver = {
     beforePlannerRun: () => budget.beforePlannerRun(),
-    afterPlannerRun: (beamResult) => {
-      if (beamResult.cancelled) cancelledBeam = true
+    afterPlannerRun: (runResult) => {
+      if (runResult.cancelled) cancelledPlannerRun = true
     },
   }
 
@@ -268,12 +268,12 @@ export async function createPlannerWhatIfComparison(
     candidates: readonly ConstrainedCandidate[],
     summary: ConstrainedEnumerationSummary,
     materializer: ConstrainedMaterializer,
-    beamBudget: PlannerWhatIfFullBeamBudget,
+    runBudget: PlannerWhatIfFullRunBudget,
   ): Promise<PlannerWhatIfOutcome> {
     // No Candidate at all needs no full Planner run, so the enumeration itself
     // already decides this slot even when the rerun budget is spent.
     if (candidates.length === 0) return plannerWhatIfEnumerationOutcome(summary)
-    if (beamBudget.exhausted) return rerunBoundOutcome()
+    if (runBudget.exhausted) return rerunBoundOutcome()
     let trialsUsed = 0
     for (const candidate of candidates) {
       // Only reaching a further Candidate proves the trial cap truncated
@@ -392,7 +392,7 @@ export async function createPlannerWhatIfComparison(
     | { status: 'completed'; result: PlannerResult }
     | { status: 'rerun_budget_reached' }
   > {
-    cancelledBeam = false
+    cancelledPlannerRun = false
     let result: PlannerResult
     try {
       // A Candidate trial runs over its replacement set
@@ -417,7 +417,7 @@ export async function createPlannerWhatIfComparison(
     // A cancelled full Planner run returns a safe `plan: null` result, which must
     // not be read as "this Candidate is infeasible". The whole request ends
     // instead, and no partial comparison is returned (PLANNER_SPEC 9.2.4.12).
-    if (readCancelledBeam()) throw new PlannerWhatIfCancelledError()
+    if (readCancelledPlannerRun()) throw new PlannerWhatIfCancelledError()
     return { status: 'completed', result }
   }
 }

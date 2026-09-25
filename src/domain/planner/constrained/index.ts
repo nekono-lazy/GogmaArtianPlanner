@@ -9,7 +9,7 @@ export * from './plannerRerunBudget'
 export * from './plannerWhatIfBounds'
 /**
  * The B9-B1b what-if Domain calculation exposes exactly its entry point and its
- * cancellation signal. The shared Beam budget, the feasibility predicate and
+ * cancellation signal. The shared full-run budget, the feasibility predicate and
  * the enumeration-outcome mapping stay internal to the B9 implementation, so
  * `plannerWhatIfRerunBudget` is deliberately not re-exported here.
  */

@@ -7,6 +7,7 @@ import type {
 } from '../domain/models/publicTypes'
 import {
   defaultPlannerOptions,
+  defaultPlannerOrchestrationBounds,
   preparePlannerInitialContext,
   type PlannerInput,
 } from '../domain/planner'
@@ -213,6 +214,57 @@ describe('Production Planner Worker composition', () => {
   })
 })
 
+describe('Production Planner Worker posts no progress (Issue #103 Phase D-2a)', () => {
+  it('answers the ordinary, constrained and what-if requests with their result alone', async () => {
+    const scenario = () => {
+      const found = plannerSchedulerCatalogue().find(({ id }) => id === 'J-same-owned-weapon')
+      if (!found) throw new Error('Missing catalogue scenario.')
+      return found.scenario
+    }
+    const run = async (request: PlannerWorkerProtocolRequest) => {
+      const built = scenario()
+      const responses: PlannerWorkerProtocolResponse[] = []
+      const controller = createPlannerWorkerController(
+        built.dependencies,
+        createProductionPlannerWorkerCalculations(),
+        (response) => responses.push(response),
+      )
+      await controller.handleMessage(structuredClone(request))
+      return responses
+    }
+    const input = scenario().input
+    expect(Object.keys(input.options)).toEqual(['maxPlanSteps'])
+
+    const ordinary = await run({ type: 'create_plan', requestId: 'd2a.plan', generation: 1, input })
+    expect(ordinary.map(({ type }) => type)).toEqual(['create_plan_result'])
+    const planResult = ordinary[0].type === 'create_plan_result' ? ordinary[0].result : null
+    expect(planResult?.conflicts).toHaveLength(1)
+
+    const constrained = await run({
+      type: 'create_constrained_plan',
+      requestId: 'd2a.constrained',
+      generation: 1,
+      input: { plannerInput: input, orchestrationBounds: defaultPlannerOrchestrationBounds },
+    })
+    expect(constrained.map(({ type }) => type)).toEqual(['create_constrained_plan_result'])
+
+    const whatIf = await run({
+      type: 'create_what_if_comparison',
+      requestId: 'd2a.what-if',
+      generation: 1,
+      input: {
+        plannerInput: input,
+        scenarioResolution: {
+          conflictKey: planResult!.conflicts[0].id,
+          selectedBuildListEntryId: planResult!.conflicts[0].buildListEntryIds[1],
+        },
+        bounds: { maxCandidateTrialsPerTarget: 1, maxPlannerReruns: 4 },
+      },
+    })
+    expect(whatIf.map(({ type }) => type)).toEqual(['create_what_if_comparison_result'])
+  })
+})
+
 describe('Production Planner Worker runs the deterministic scheduler (Issue #103 Phase C)', () => {
   it('answers create_plan with the scheduler result, with no strategy in the request', async () => {
     const found = plannerSchedulerCatalogue().find(({ id }) => id === 'J-same-owned-weapon')
@@ -253,15 +305,11 @@ describe('Production Planner Worker runs the deterministic scheduler (Issue #103
     expect(result?.plan?.rejectedBuildListEntries).toEqual([
       expect.objectContaining({ buildListEntryId: 'entry.b', reason: 'resource_conflict' }),
     ])
-    // Progress keeps its shape: applied actions over maxExpandedStates.
-    const progress = responses.filter(
-      (response): response is Extract<PlannerWorkerProtocolResponse, { type: 'progress' }> =>
-        response.type === 'progress',
-    )
-    progress.forEach(({ progress: { expandedStates, maxExpandedStates } }) => {
-      expect(maxExpandedStates).toBe(built.input.options.maxExpandedStates)
-      expect(expandedStates).toBeLessThanOrEqual(result?.termination.expandedStates ?? 0)
-    })
+    // The Production Worker answers with the result alone: no progress
+    // message, and a termination naming the Production bound only (Issue #103
+    // Phase D-2a).
+    expect(responses.map(({ type }) => type)).toEqual(['create_plan_result'])
+    expect(result?.termination.limits).toEqual({ maxPlanSteps: built.input.options.maxPlanSteps })
   })
 })
 
@@ -351,7 +399,7 @@ describe('Production Worker interaction projection (B10-B1)', () => {
     (failure) => {
       const { input, dependencies, entries } = interactionFixture()
       if (failure === 'validation') {
-        input.options.beamWidth = 0
+        input.options.maxPlanSteps = 0
       } else {
         input.ownedWeapons.push(structuredClone(input.ownedWeapons[0]))
       }

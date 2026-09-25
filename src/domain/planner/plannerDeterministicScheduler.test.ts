@@ -35,10 +35,11 @@ import {
   createProductionPlanWithObserver,
   createRejectedBuildListEntries,
 } from './productionPlanGeneration'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
+import { createPlannerBeamSearchInput } from './plannerBeamSearchTypes'
 import {
   defaultPlannerOptions,
-  type PlannerBeamSearchResult,
+  type PlannerRunResult,
   type PlannerSearchAction,
   type PlannerSearchRouteAction,
 } from './plannerTypes'
@@ -49,11 +50,11 @@ import {
  * Every scheduled trace is verified by the unchanged Trace Replay.
  */
 
-async function schedule(scenario: OrchestrationScenario): Promise<PlannerBeamSearchResult> {
+async function schedule(scenario: OrchestrationScenario): Promise<PlannerRunResult> {
   return runPlannerDeterministicSchedule(scenario.input, scenario.dependencies)
 }
 
-function expectReplayValid(scenario: OrchestrationScenario, result: PlannerBeamSearchResult) {
+function expectReplayValid(scenario: OrchestrationScenario, result: PlannerRunResult) {
   expect(result.bestState).not.toBeNull()
   const replay = replayPlannerSearchTrace(scenario.input, result.bestState!, scenario.engine)
   expect(replay.issues).toEqual([])
@@ -62,7 +63,7 @@ function expectReplayValid(scenario: OrchestrationScenario, result: PlannerBeamS
   return replay
 }
 
-function routeActions(result: PlannerBeamSearchResult): PlannerSearchRouteAction[] {
+function routeActions(result: PlannerRunResult): PlannerSearchRouteAction[] {
   return (result.bestState?.trace ?? []).filter(
     (action): action is PlannerSearchRouteAction => action.kind === 'route_operation',
   )
@@ -75,17 +76,17 @@ function gogmaCounterBefore(action: PlannerSearchAction): number | null {
     : null
 }
 
-function progressedIn(result: PlannerBeamSearchResult, entryId: BuildListEntryId): boolean {
+function progressedIn(result: PlannerRunResult, entryId: BuildListEntryId): boolean {
   return routeActions(result).some((action) => action.progressedBuildListEntryIds.includes(entryId))
 }
 
-function reserveIndexOf(result: PlannerBeamSearchResult, entryId: BuildListEntryId): number {
+function reserveIndexOf(result: PlannerRunResult, entryId: BuildListEntryId): number {
   return (result.bestState?.trace ?? []).findIndex(
     (action) => action.kind === 'reserve_candidate' && action.primaryBuildListEntryId === entryId,
   )
 }
 
-function lastRouteIndexOf(result: PlannerBeamSearchResult, entryId: BuildListEntryId): number {
+function lastRouteIndexOf(result: PlannerRunResult, entryId: BuildListEntryId): number {
   const trace = result.bestState?.trace ?? []
   for (let index = trace.length - 1; index >= 0; index -= 1) {
     const action = trace[index]
@@ -104,7 +105,7 @@ function readyRun(scenario: OrchestrationScenario): PlannerDeterministicSchedule
   return created.run
 }
 
-function runToEnd(run: PlannerDeterministicScheduleRun): PlannerBeamSearchResult {
+function runToEnd(run: PlannerDeterministicScheduleRun): PlannerRunResult {
   for (let guard = 0; guard < 10_000; guard += 1) {
     const outcome = run.step()
     if (outcome === 'finished' || outcome === 'bounded') return run.finish(false)
@@ -401,7 +402,7 @@ describe('Scenario G: the improvement preference inside one Entry', () => {
     return builder.build()
   }
 
-  const firstLane = (result: PlannerBeamSearchResult) =>
+  const firstLane = (result: PlannerRunResult) =>
     result.bestState!.trace[0].routeOperation?.type === 'reset_skills' ? 'skill' : 'bonus'
 
   it('bonus_first runs the Bonus lane first and skill_first the Skill lane', async () => {
@@ -827,7 +828,7 @@ describe('16.3 / Phase D-1: zero-operation confirmations within maxPlanSteps', (
     return { scenario: builder.build(options), entryA, entryB }
   }
 
-  function confirmations(result: PlannerBeamSearchResult) {
+  function confirmations(result: Pick<PlannerRunResult, 'bestState'>) {
     return result.bestState!.trace.filter((action) => action.kind === 'reserve_candidate')
   }
 
@@ -902,7 +903,7 @@ describe('16.3 / Phase D-1: zero-operation confirmations within maxPlanSteps', (
   /** The Beam Search oracle keeps its own unbounded start confirmations. */
   it('leaves the Beam Search oracle start confirmations unchanged', async () => {
     const { scenario } = twoConfirmations({ maxPlanSteps: 1 })
-    const beam = await runPlannerBeamSearch(scenario.input, scenario.dependencies)
+    const beam = await runPlannerBeamSearchOracle(scenario.input, scenario.dependencies)
     expect(confirmations(beam)).toHaveLength(2)
   })
 })
@@ -1297,12 +1298,15 @@ describe('14: bounds, cancellation and determinism', () => {
   })
 
   /**
-   * Phase D-1: `maxPlanSteps` is the only Production bound. A hidden
-   * `maxExpandedStates` never stops the scheduler, however small it is.
+   * Phase D-1 / D-2a: `maxPlanSteps` is the whole Production `PlannerOptions`.
+   * Even a stray Beam Search oracle field reaching the scheduler at runtime is
+   * neither a bound nor echoed into the Production termination.
    */
-  it('never stops at maxExpandedStates (Phase D-1)', async () => {
+  it('reads maxPlanSteps only and never reports or echoes an oracle bound (Phase D-2a)', async () => {
     const unbounded = await schedule(scenarioB().builder.build({ maxPlanSteps: 1000 }))
-    const scenario = scenarioB().builder.build({ maxPlanSteps: 1000, maxExpandedStates: 1 })
+    const scenario = scenarioB().builder.build({ maxPlanSteps: 1000 })
+    const stray = { maxPlanSteps: 1000, maxExpandedStates: 1, beamWidth: 1 }
+    scenario.input.options = stray
     const result = await schedule(scenario)
     expect(result.expandedStates).toBeGreaterThan(1)
     expect(result.expandedStates).toBe(unbounded.expandedStates)
@@ -1310,20 +1314,22 @@ describe('14: bounds, cancellation and determinism', () => {
     expect(result.termination.status).toBe(unbounded.termination.status)
     expect(result.termination.status).not.toBe('incomplete')
     expect(result.termination.reachedLimits).toEqual([])
-    expect(result.termination.reachedLimits).not.toContain('max_expanded_states')
     expect(result.warnings.map(({ kind }) => kind)).not.toContain('max_expanded_states_reached')
-    // The run's options are still reported as they were supplied.
-    expect(result.termination.limits.maxExpandedStates).toBe(1)
+    // The Production termination records exactly the Production bound.
+    expect(result.termination.limits).toEqual({ maxPlanSteps: 1000 })
     expectReplayValid(scenario, result)
   })
 
-  it('completes past maxExpandedStates and reports no bound', async () => {
-    const scenario = scenarioA().builder.build({ maxPlanSteps: 1000, maxExpandedStates: 1 })
+  it('completes with no bound below maxPlanSteps', async () => {
+    const scenario = scenarioA().builder.build({ maxPlanSteps: 1000 })
     const result = await schedule(scenario)
     expect(result.completed).toBe(true)
     expect(result.expandedStates).toBe(154)
-    expect(result.termination).toMatchObject({ status: 'completed', reachedLimits: [] })
-    expect(result.warnings.map(({ kind }) => kind)).not.toContain('max_expanded_states_reached')
+    expect(result.termination).toMatchObject({
+      status: 'completed',
+      reachedLimits: [],
+      limits: { maxPlanSteps: 1000 },
+    })
   })
 
   it('completes on exactly maxPlanSteps and still reports the bound', async () => {
@@ -1336,15 +1342,8 @@ describe('14: bounds, cancellation and determinism', () => {
     expect(result.warnings.map(({ kind }) => kind)).toContain('max_steps_reached')
   })
 
-  it('reports only maxPlanSteps when a completion reaches both values exactly', async () => {
-    const scenario = scenarioA().builder.build({ maxPlanSteps: 154, maxExpandedStates: 154 })
-    const result = await schedule(scenario)
-    expect(result.termination.status).toBe('completed')
-    expect(result.termination.reachedLimits).toEqual(['max_plan_steps'])
-  })
-
   it('reports no bound when the completion stays below maxPlanSteps', async () => {
-    const scenario = scenarioA().builder.build({ maxPlanSteps: 155, maxExpandedStates: 155 })
+    const scenario = scenarioA().builder.build({ maxPlanSteps: 155 })
     const result = await schedule(scenario)
     expect(result.termination).toMatchObject({ status: 'completed', reachedLimits: [] })
   })
@@ -1357,10 +1356,13 @@ describe('14: bounds, cancellation and determinism', () => {
     expect(result.termination.limits).toEqual(defaultPlannerOptions)
   })
 
-  /** The Beam Search oracle still stops on the very same `maxExpandedStates`. */
+  /** The Beam Search oracle still stops on its own `maxExpandedStates`. */
   it('leaves maxExpandedStates bounding the Beam Search oracle', async () => {
-    const scenario = scenarioB().builder.build({ maxPlanSteps: 1000, maxExpandedStates: 1 })
-    const beam = await runPlannerBeamSearch(scenario.input, scenario.dependencies)
+    const scenario = scenarioB().builder.build({ maxPlanSteps: 1000 })
+    const beam = await runPlannerBeamSearchOracle(
+      createPlannerBeamSearchInput(scenario.input, { maxExpandedStates: 1 }),
+      scenario.dependencies,
+    )
     expect(beam.termination).toMatchObject({
       status: 'incomplete',
       reachedLimits: ['max_expanded_states'],
@@ -1379,7 +1381,7 @@ describe('14: bounds, cancellation and determinism', () => {
     expect(result.bestState!.trace).toHaveLength(5)
   })
 
-  it('reports progress per applied action and yields while it runs', async () => {
+  it('reports benchmark progress per applied action and yields while it runs', async () => {
     const scenario = scenarioB().builder.build()
     const progress: number[] = []
     let yields = 0
@@ -1452,7 +1454,7 @@ describe('Phase C: Production runs the deterministic scheduler', () => {
     const { builder } = scenarioD({ a: 2, b: 4 }, 2)
     const scenario = builder.build()
     let runs = 0
-    const runResults: PlannerBeamSearchResult[] = []
+    const runResults: PlannerRunResult[] = []
     const result = await createProductionPlanWithObserver(scenario.input, scenario.dependencies, undefined, {
       beforePlannerRun: () => {
         runs += 1
@@ -1636,5 +1638,35 @@ describe('Route commitment: a passed pin-blocked skippable unit', () => {
     expect(progressedIn(result, entryP.id)).toBe(false)
     expect(result.termination.status).toBe('exhausted')
     expectReplayValid(scenario, result)
+  })
+})
+
+/**
+ * Issue #103 Phase D-2a: every real scheduler result keeps the Production
+ * termination invariant - `incomplete` only through `maxPlanSteps`, named as
+ * exactly `['max_plan_steps']`, over the Production bound alone.
+ */
+describe('Production termination invariant over the acceptance catalogue', () => {
+  it.each(plannerSchedulerCatalogue().map(({ id }) => id))('%s', async (id) => {
+    const item = plannerSchedulerCatalogue().find((candidate) => candidate.id === id)!
+    const result = await runPlannerDeterministicSchedule(
+      item.scenario.input,
+      item.scenario.dependencies,
+      {},
+      item.buildListContext,
+    )
+    const { termination } = result
+    expect(termination.limits).toEqual({ maxPlanSteps: item.scenario.input.options.maxPlanSteps })
+    if (termination.status === 'incomplete') {
+      expect(termination.reachedLimits).toEqual(['max_plan_steps'])
+    } else {
+      expect(['[]', '["max_plan_steps"]']).toContain(JSON.stringify(termination.reachedLimits))
+    }
+  })
+
+  it('reaches incomplete through maxPlanSteps in the bounded scenarios', async () => {
+    const item = plannerSchedulerCatalogue().find(({ id }) => id === 'bounded-max-plan-steps')!
+    const result = await runPlannerDeterministicSchedule(item.scenario.input, item.scenario.dependencies)
+    expect(result.termination).toMatchObject({ status: 'incomplete', reachedLimits: ['max_plan_steps'] })
   })
 })

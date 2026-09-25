@@ -12,7 +12,7 @@ import {
   sourceWeapon,
   target,
 } from '../../test/fixtures/plannerBeam'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { preparePlannerInitialContext } from './plannerInitialContext'
 import { validatePlannerInput } from './plannerValidation'
 import { createProductionPlan } from './productionPlanGeneration'
@@ -62,7 +62,7 @@ describe('Planner input Build List cardinality', () => {
     expect(validation.warnings.map(({ kind }) => kind)).not.toContain(
       'duplicate_build_list_entries_for_target',
     )
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.bestState).not.toBeNull()
     expect(result.termination).toMatchObject({
       status: 'completed',
@@ -88,7 +88,7 @@ describe('Planner input Build List cardinality', () => {
     })
     expect(preparePlannerInitialContext(input, dependencies).status).toBe('invalid')
 
-    const beam = await runPlannerBeamSearch(input, dependencies)
+    const beam = await runPlannerBeamSearchOracle(input, dependencies)
     expect(beam.bestState).toBeNull()
     expect(beam.expandedStates).toBe(0)
     const result = await createProductionPlan(input, dependencies)
@@ -133,7 +133,7 @@ describe('Planner input Build List cardinality', () => {
       'duplicate_build_list_entries_for_target',
     )
     expect(preparePlannerInitialContext(input, dependencies).status).toBe('ready')
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     expect(result.termination).toMatchObject({
       status: 'completed',
       completedTargetCount: 1,
@@ -208,7 +208,7 @@ describe('Planner trial input temporary Build List cardinality', () => {
       'entry.cardinality.a2',
       'entry.cardinality.b1',
     ])
-    const beam = await runPlannerBeamSearch(replacementSet, dependencies, {}, {
+    const beam = await runPlannerBeamSearchOracle(replacementSet, dependencies, {}, {
       kind: 'temporary_replacement',
       replacements,
     })
@@ -288,7 +288,7 @@ describe('Planner trial input temporary Build List cardinality', () => {
 
   it('refuses a replacement set that still holds the replaced Entry', async () => {
     const { input, dependencies, replacements } = trialScenario()
-    const beam = await runPlannerBeamSearch(input, dependencies, {}, {
+    const beam = await runPlannerBeamSearchOracle(input, dependencies, {}, {
       kind: 'temporary_replacement',
       replacements,
     })
@@ -318,7 +318,7 @@ describe('Planner trial input temporary Build List cardinality', () => {
       ...input,
       buildListEntries: applyBuildListEntryReplacements(input.buildListEntries, replacements, []),
     }
-    const beam = await runPlannerBeamSearch(replacementSet, dependencies, {}, {
+    const beam = await runPlannerBeamSearchOracle(replacementSet, dependencies, {}, {
       kind: 'temporary_replacement',
       replacements,
     })

@@ -1,15 +1,14 @@
 /**
  * Presentation for the Production Planner settings and its running state
- * (UI_FLOW 10.0, PLANNER_SPEC 7.2, Issue #103 Phase D-1).
+ * (UI_FLOW 10.0, PLANNER_SPEC 7.2, Issue #103 Phase D-1 / D-2a).
  *
  * The Production Planner is the deterministic scheduler. Its only bound is
- * `PlannerOptions.maxPlanSteps`, so the Build List detail settings expose that
- * one field. `beamWidth` and `maxExpandedStates` are Beam Search oracle values
- * the scheduler never reads; they are neither shown nor edited here.
+ * `PlannerOptions.maxPlanSteps` - the whole Production `PlannerOptions` - so
+ * the Build List detail settings expose that one field.
  *
- * A running Production Planner is shown as indeterminate. No text here is built
- * from `PlannerProgress`: its `maxExpandedStates` is not a completion
- * denominator, and no single authority knows the final Step count in advance
+ * A running Production Planner is shown as indeterminate. The Production
+ * Planner Worker reports no progress at all (Phase D-2a), and no single
+ * authority knows the final Step count in advance
  * (physical action sharing, silent fast-forward, dynamic release / recommit and
  * deadlock / stall drops all change it while the schedule runs).
  */

@@ -23,8 +23,15 @@ import {
 import type {
   PlannerDependencies,
   PlannerInput,
+  PlannerOptions,
+  PlannerRunResult,
+  PlannerRunTermination,
   PlannerWarning,
 } from './plannerTypes'
+import type {
+  PlannerBeamSearchResult,
+  PlannerBeamSearchTermination,
+} from './plannerBeamSearchTypes'
 import {
   defaultPlannerOptions,
 } from './plannerTypes'
@@ -124,11 +131,51 @@ describe('Planner contracts', () => {
     expect(input.options).not.toHaveProperty('preferPracticalBeforeIdeal')
   })
 
-  it('validates only the three positive integer Planner options', () => {
+  it('holds maxPlanSteps as the whole Production Planner options (Phase D-2a)', () => {
+    expect(defaultPlannerOptions).toEqual({ maxPlanSteps: 1000 })
+    expect(Object.keys(defaultPlannerOptions)).toEqual(['maxPlanSteps'])
+    // A Beam Search oracle bound is not a Production option at all.
+    // @ts-expect-error `beamWidth` is not part of the Production PlannerOptions.
+    const withBeamWidth: PlannerOptions = { maxPlanSteps: 1, beamWidth: 1 }
+    // @ts-expect-error `maxExpandedStates` is not part of the Production PlannerOptions.
+    const withMaxExpandedStates: PlannerOptions = { maxPlanSteps: 1, maxExpandedStates: 1 }
+    expect([withBeamWidth, withMaxExpandedStates]).toHaveLength(2)
+  })
+
+  it('keeps the Beam Search oracle termination out of the Production types (Phase D-2a)', () => {
+    const production: PlannerRunTermination = {
+      status: 'incomplete',
+      reachedLimits: ['max_plan_steps'],
+      limits: { maxPlanSteps: 1 },
+      expandedStates: 1,
+      completedTargetCount: 0,
+      totalTargetCount: 1,
+    }
+    const oracle: PlannerBeamSearchTermination = {
+      ...production,
+      reachedLimits: ['max_expanded_states'],
+      limits: { maxPlanSteps: 1, beamWidth: 1, maxExpandedStates: 1 },
+    }
+    // A Production termination can never name the oracle's bound ...
+    // @ts-expect-error `max_expanded_states` is not a Production limit kind.
+    const namesOracleBound: PlannerRunTermination['reachedLimits'] = ['max_expanded_states']
+    // ... so an oracle termination or result is never a Production one.
+    // @ts-expect-error a Beam Search termination is not a PlannerRunTermination.
+    const asProduction: PlannerRunTermination = oracle
+    const oracleResult = {} as PlannerBeamSearchResult
+    // @ts-expect-error a Beam Search result is not a PlannerRunResult.
+    const asProductionResult: PlannerRunResult = oracleResult
+    // The Production shape stays assignable to itself.
+    const kept: PlannerRunTermination = production
+    expect([namesOracleBound, asProduction, asProductionResult, kept]).toHaveLength(4)
+  })
+
+  it('validates only the positive integer maxPlanSteps', () => {
     expect(validatePlannerOptions({ ...defaultPlannerOptions }).isValid).toBe(true)
+    expect(validatePlannerOptions({ maxPlanSteps: 1 }).isValid).toBe(true)
     expect(validatePlannerOptions({ ...defaultPlannerOptions, maxPlanSteps: 0 }).isValid).toBe(false)
-    expect(validatePlannerOptions({ ...defaultPlannerOptions, beamWidth: 0 }).isValid).toBe(false)
-    expect(validatePlannerOptions({ ...defaultPlannerOptions, maxExpandedStates: 0 }).isValid).toBe(false)
+    expect(validatePlannerOptions({ ...defaultPlannerOptions, maxPlanSteps: 1.5 }).isValid).toBe(false)
+    expect(validatePlannerOptions({ ...defaultPlannerOptions, maxPlanSteps: Number.NaN }).isValid).toBe(false)
     expect(validatePlannerOptions({
       ...defaultPlannerOptions,
       preferPracticalBeforeIdeal: true,

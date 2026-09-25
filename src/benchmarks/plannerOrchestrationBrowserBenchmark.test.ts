@@ -90,8 +90,9 @@ describe('B8-E1 Planner orchestration benchmark harness', () => {
     expect(fake.calls[0].requestId).toBe('run-1')
     expect(fake.calls[0].bounds).toEqual(BOUNDS)
     // The Production Worker adapter supplies ConstrainedEnumerationBounds
-    // inside the Worker; the benchmark never passes one.
-    expect(fake.calls[0].argumentCount).toBe(4)
+    // inside the Worker; the benchmark never passes one, and the Production
+    // Client takes no progress callback (Issue #103 Phase D-2a).
+    expect(fake.calls[0].argumentCount).toBe(3)
     expect(fake.calls[0].input.buildListEntries.map(({ id }) => id)).toEqual(
       fixture.input.buildListEntries.map(({ id }) => id),
     )
@@ -189,15 +190,15 @@ describe('B8-E1 Planner orchestration benchmark harness', () => {
     expect(createClient).not.toHaveBeenCalled()
   })
 
-  it('counts Planner progress events without changing the result', async () => {
+  it('observes only the settled result, with no progress metric', async () => {
     const fake = createFakeClient()
     const result = await runPlannerOrchestrationBenchmark(
       { requestId: 'run-7', workloadId: WORKLOAD_ID, orchestrationBounds: BOUNDS },
       { createClient: () => fake.client },
     )
-    // The fake Client emits none, so the counter stays at zero and the outcome
-    // digest is built from the result alone.
-    expect(result.progressEvents).toBe(0)
+    // The Production Worker reports no progress (Issue #103 Phase D-2a), so the
+    // outcome digest is built from the result alone.
+    expect(result).not.toHaveProperty('progressEvents')
     expect(result.outcome?.planPresent).toBe(false)
     expect(result.outcome?.outcomeKey).toEqual(expect.any(String))
     expect(result.boundFlags).toEqual({

@@ -15,8 +15,10 @@ import {
 import { fixture, routeEntry, synchronizeEntry } from '../../test/fixtures/plannerBeam'
 import { FakeRngEngine, type FakeRngFixtures } from '../rng/fakeRngEngine'
 import type { PlannerDependencies, PlannerInput } from './plannerTypes'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { createProductionPlan } from './productionPlanGeneration'
+import { derivePlannerCheckpointRequirements } from './plannerCheckpoints'
+import { createPlannerRunTermination } from './plannerTermination'
 
 /**
  * Typed Beam Search termination (PLANNER_SPEC 7.2.1).
@@ -207,9 +209,9 @@ function scenario(): { input: PlannerInput; dependencies: PlannerDependencies } 
 
 describe('Planner search termination', () => {
   it('reports completed with the bounds the search actually ran with', async () => {
-    const { input, dependencies } = scenario()
-    input.options = { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10_000 }
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const built = scenario()
+    const input = { ...built.input, options: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10_000 } }
+    const result = await runPlannerBeamSearchOracle(input, built.dependencies)
 
     expect(result.completed).toBe(true)
     expect(result.termination).toEqual({
@@ -226,8 +228,10 @@ describe('Planner search termination', () => {
 
   it('reports incomplete with max_expanded_states and never contradicts its warning', async () => {
     const { input, dependencies } = scenario()
-    input.options = { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 2 }
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(
+      { ...input, options: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 2 } },
+      dependencies,
+    )
 
     expect(result.completed).toBe(false)
     expect(result.termination.status).toBe('incomplete')
@@ -244,8 +248,10 @@ describe('Planner search termination', () => {
 
   it('reports incomplete with max_plan_steps when the step bound truncates the search', async () => {
     const { input, dependencies } = scenario()
-    input.options = { maxPlanSteps: 2, beamWidth: 50, maxExpandedStates: 10_000 }
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(
+      { ...input, options: { maxPlanSteps: 2, beamWidth: 50, maxExpandedStates: 10_000 } },
+      dependencies,
+    )
 
     expect(result.termination.status).toBe('incomplete')
     expect(result.termination.reachedLimits).toContain('max_plan_steps')
@@ -255,7 +261,7 @@ describe('Planner search termination', () => {
 
   it('reports cancelled rather than incomplete when the user stopped the search', async () => {
     const { input, dependencies } = scenario()
-    const result = await runPlannerBeamSearch(input, dependencies, {
+    const result = await runPlannerBeamSearchOracle(input, dependencies, {
       shouldCancel: () => true,
     })
 
@@ -267,7 +273,7 @@ describe('Planner search termination', () => {
   it('reports exhausted, not incomplete, when an invalid input never reached the search', async () => {
     const { input, dependencies } = scenario()
     input.buildListEntries = []
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
 
     // No `PlannerOptions` bound was touched, so this keeps its existing "no
     // Plan from this input" meaning and stays saveable/reportable as before.
@@ -289,7 +295,7 @@ describe('Planner search termination', () => {
     }))
     const full = scenario()
     full.input.targetWeapons.push(...unlisted)
-    const completed = await runPlannerBeamSearch(full.input, full.dependencies)
+    const completed = await runPlannerBeamSearchOracle(full.input, full.dependencies)
     expect(completed.termination).toMatchObject({
       status: 'completed',
       completedTargetCount: 2,
@@ -299,8 +305,10 @@ describe('Planner search termination', () => {
 
     const truncated = scenario()
     truncated.input.targetWeapons.push(...structuredClone(unlisted))
-    truncated.input.options = { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 2 }
-    const partial = await runPlannerBeamSearch(truncated.input, truncated.dependencies)
+    const partial = await runPlannerBeamSearchOracle(
+      { ...truncated.input, options: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 2 } },
+      truncated.dependencies,
+    )
     expect(partial.termination.status).toBe('incomplete')
     expect(partial.termination.reachedLimits).toEqual(['max_expanded_states'])
     expect(partial.termination.totalTargetCount).toBe(2)
@@ -309,11 +317,12 @@ describe('Planner search termination', () => {
 
   it('carries the scheduler termination out through Production Plan generation', async () => {
     const { input, dependencies } = scenario()
-    input.options = { maxPlanSteps: 1, beamWidth: 50, maxExpandedStates: 10_000 }
+    input.options = { maxPlanSteps: 1 }
     const truncated = await createProductionPlan(input, dependencies)
 
     expect(truncated.termination.status).toBe('incomplete')
     expect(truncated.termination.reachedLimits).toEqual(['max_plan_steps'])
+    expect(truncated.termination.limits).toEqual({ maxPlanSteps: 1 })
 
     const { input: fullInput, dependencies: fullDependencies } = scenario()
     const completed = await createProductionPlan(fullInput, fullDependencies)
@@ -323,26 +332,68 @@ describe('Planner search termination', () => {
   })
 
   /**
-   * Phase D-1: Production Plan generation runs the deterministic scheduler,
-   * which never stops on `maxExpandedStates`, while the Beam Search oracle
-   * still does on the very same input.
+   * Phase D-1 / D-2a: Production Plan generation runs the deterministic
+   * scheduler over the Production `PlannerOptions` (`maxPlanSteps` only), so
+   * it can never report `max_expanded_states`, while the Beam Search oracle
+   * still stops on its own bound over the same Planner input.
    */
   it('never reports max_expanded_states from Production Plan generation', async () => {
     const { input, dependencies } = scenario()
-    input.options = { maxPlanSteps: 1000, beamWidth: 50, maxExpandedStates: 1 }
+    input.options = { maxPlanSteps: 1000 }
     const production = await createProductionPlan(input, dependencies)
     expect(production.plan).not.toBeNull()
-    expect(production.termination).toMatchObject({ status: 'completed', reachedLimits: [] })
+    expect(production.termination).toMatchObject({
+      status: 'completed',
+      reachedLimits: [],
+      limits: { maxPlanSteps: 1000 },
+    })
     expect(production.warnings.map(({ kind }) => kind)).not.toContain(
       'max_expanded_states_reached',
     )
 
     const oracle = scenario()
-    oracle.input.options = { maxPlanSteps: 1000, beamWidth: 50, maxExpandedStates: 1 }
-    const beam = await runPlannerBeamSearch(oracle.input, oracle.dependencies)
+    const beam = await runPlannerBeamSearchOracle(
+      { ...oracle.input, options: { maxPlanSteps: 1000, beamWidth: 50, maxExpandedStates: 1 } },
+      oracle.dependencies,
+    )
     expect(beam.termination).toMatchObject({
       status: 'incomplete',
       reachedLimits: ['max_expanded_states'],
     })
+  })
+})
+
+/**
+ * The Production termination invariant (Issue #103 Phase D-2a): the Production
+ * scheduler's one bound is `maxPlanSteps`, so an `incomplete` Production run
+ * always names exactly `max_plan_steps`. `createPlannerRunTermination()`
+ * derives both from the one `reachedStepLimit` flag, so it cannot build an
+ * `incomplete` termination with empty `reachedLimits` at all.
+ */
+describe('Production PlannerRunTermination invariant', () => {
+  it('is incomplete only with reachedLimits exactly [max_plan_steps]', () => {
+    const { requirements } = derivePlannerCheckpointRequirements([])
+    const targetId = targetWeaponId('target.invariant')
+    const seen: string[] = []
+    ;[false, true].forEach((cancelled) => {
+      ;[false, true].forEach((reachedStepLimit) => {
+        const termination = createPlannerRunTermination({
+          options: { maxPlanSteps: 7 },
+          planningTargetIds: [targetId],
+          checkpointRequirements: requirements,
+          bestState: null,
+          expandedStates: 7,
+          cancelled,
+          reachedStepLimit,
+        })
+        seen.push(termination.status)
+        expect(termination.limits).toEqual({ maxPlanSteps: 7 })
+        expect(termination.reachedLimits).toEqual(reachedStepLimit ? ['max_plan_steps'] : [])
+        if (termination.status === 'incomplete') {
+          expect(termination.reachedLimits).toEqual(['max_plan_steps'])
+        }
+      })
+    })
+    expect(seen).toEqual(['exhausted', 'incomplete', 'cancelled', 'cancelled'])
   })
 })

@@ -7,7 +7,7 @@ import {
 /**
  * The B9 shared `maxPlannerReruns` budget (PLANNER_SPEC 9.2.4.9).
  *
- * It is deliberately a separate type from B8's `PlannerFullBeamBudget` /
+ * It is deliberately a separate type from B8's `PlannerFullRunBudget` /
  * `PlannerOrchestrationLimitError`. B8 counts an initial ordinary Planner run
  * as well and reports its stop through a `PlannerWarningKind`; B9 starts no
  * Plan-producing run at all and reports its stop through
@@ -48,7 +48,7 @@ export class PlannerWhatIfRerunLimitError extends Error {
  * construction, Candidate enumeration, or materialization: none of those starts a
  * full Planner run, so none of them reaches this observer.
  */
-export interface PlannerWhatIfFullBeamBudget extends ProductionPlanGenerationObserver {
+export interface PlannerWhatIfFullRunBudget extends ProductionPlanGenerationObserver {
   readonly limit: number
   readonly used: number
   /**
@@ -69,9 +69,9 @@ export interface PlannerWhatIfFullBeamBudget extends ProductionPlanGenerationObs
  * Invalid bounds fail closed with `PlannerWhatIfBoundsError` rather than being
  * repaired, clamped, completed field-wise, or replaced with that default.
  */
-export function createPlannerWhatIfFullBeamBudget(
+export function createPlannerWhatIfFullRunBudget(
   bounds: PlannerWhatIfBounds,
-): PlannerWhatIfFullBeamBudget {
+): PlannerWhatIfFullRunBudget {
   assertPlannerWhatIfBounds(bounds)
   const limit = bounds.maxPlannerReruns
   let used = 0

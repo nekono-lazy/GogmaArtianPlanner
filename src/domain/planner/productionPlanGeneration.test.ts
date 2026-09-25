@@ -37,7 +37,7 @@ import {
 import { PlannerPlanGenerationError } from './plannerPlanGenerationError'
 import { projectProductionPlanExecution } from './productionPlanExecutionProjection'
 import type { PlannerPlanStepDraft } from './plannerTraceReplay'
-import { defaultPlannerOptions, type PlannerBeamSearchResult, type PlannerDependencies, type PlannerInput } from './plannerTypes'
+import { defaultPlannerOptions, type PlannerRunResult, type PlannerDependencies, type PlannerInput } from './plannerTypes'
 
 function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
   const searchInput = createCandidateSearchInput()
@@ -610,7 +610,7 @@ describe('Production plan generation', () => {
       completed: true,
       cancelled: false,
       termination: completedPlannerTermination({ expandedStates: 1 }),
-    } satisfies PlannerBeamSearchResult
+    } satisfies PlannerRunResult
     expect(createRejectedBuildListEntries(
       { ...input, buildListEntries: [selectedEntry, progressedEntry] },
       beamResult,
@@ -656,7 +656,7 @@ describe('Production plan generation', () => {
       completed: true,
       cancelled: false,
       termination: completedPlannerTermination(),
-    } satisfies PlannerBeamSearchResult
+    } satisfies PlannerRunResult
     const rejected = createRejectedBuildListEntries(
       { ...input, buildListEntries: [selectedEntry, protectedEntry, fallbackEntry, unprovenEntry] },
       beamResult,

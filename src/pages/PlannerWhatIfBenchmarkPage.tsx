@@ -157,12 +157,11 @@ export function PlannerWhatIfBenchmarkPage() {
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
         </Paper>
-        <Typography variant="body2">roundTripMs: createWhatIfComparison() callからPromise settleまで。postMessage、structured clone、request時点で残るWorker async initialization、Production enumeration / materialization / preflight / Beam Search / Trace Replayと配送を含みます。fixture生成、bounds validation、new Worker constructor、dispose、outcome normalization、表示は計測外です。enumeration boundsはWorker内のProduction adapterが供給します。</Typography>
+        <Typography variant="body2">roundTripMs: createWhatIfComparison() callからPromise settleまで。postMessage、structured clone、request時点で残るWorker async initialization、Production enumeration / materialization / preflight / full Planner run / Trace Replayと配送を含みます。fixture生成、bounds validation、new Worker constructor、dispose、outcome normalization、表示は計測外です。enumeration boundsはWorker内のProduction adapterが供給します。</Typography>
         {records.length === 0 && <Typography>No measurements yet.</Typography>}
         {records.map((record) => (
           <Paper key={record.requestId} variant="outlined" sx={{ p: 2, overflowX: 'auto' }}>
             <Typography>{record.phase} · {record.workloadId} · T/R {record.bounds.maxCandidateTrialsPerTarget}/{record.bounds.maxPlannerReruns} · {record.status} · {record.roundTripMs.toFixed(1)} ms</Typography>
-            <Typography variant="body2">Progress events: {record.progressEvents}</Typography>
             {record.error && <Alert severity="error">{record.error}</Alert>}
             <pre>{JSON.stringify(record.outcome, null, 2)}</pre>
           </Paper>

@@ -13,8 +13,9 @@ import {
   type PlannerStrategyRunSummary,
 } from '../benchmarks/plannerSchedulerParity'
 import type {
+  PlannerBeamSearchInput,
+  PlannerBeamSearchOptions,
   PlannerInput,
-  PlannerOptions,
   PlannerSearchDepthMetrics,
 } from '../domain/planner'
 import type { RngEngine } from '../domain/rng/rngEngine'
@@ -61,7 +62,12 @@ export type PlannerSearchInstrumentationBenchmarkRequest =
       type: 'issue103_run'
       requestId: string
       source: PlannerSearchInstrumentationBenchmarkSource
-      options: PlannerOptions
+      /**
+       * The benchmark bounds. The scheduler run receives `maxPlanSteps` only,
+       * as Production does; `beamWidth` / `maxExpandedStates` reach the Beam
+       * Search oracle alone (Issue #103 Phase D-2a).
+       */
+      options: PlannerBeamSearchOptions
       instrumented: boolean
       collectDiagnosticProjections: boolean
       /** Benchmark-only; omitted means the PR #107 Beam Search run. */
@@ -117,14 +123,18 @@ export function createPlannerSearchInstrumentationBenchmarkController(
           request.source.kind === 'workload'
             ? createPlannerSearchInstrumentationInput(request.source.workloadId).input
             : request.source.input
-        const measured = { ...input, options: { ...request.options } }
+        const beamInput: PlannerBeamSearchInput = { ...input, options: { ...request.options } }
+        const schedulerInput: PlannerInput = {
+          ...input,
+          options: { maxPlanSteps: request.options.maxPlanSteps },
+        }
         const strategy = request.strategy ?? 'beam'
         const summarize = request.summarize ?? true
         const startedAt = now()
         const shouldCancel = () => cancelled.has(request.requestId)
         let run: PlannerBenchmarkRunResult
         if (strategy === 'beam') {
-          const executed = await executePlannerSearchInstrumentation(measured, engine, {
+          const executed = await executePlannerSearchInstrumentation(beamInput, engine, {
             instrumented: request.instrumented,
             collectDiagnosticProjections: request.collectDiagnosticProjections,
             now,
@@ -144,7 +154,7 @@ export function createPlannerSearchInstrumentationBenchmarkController(
             summary: summarize
               ? await summarizePlannerStrategyRun({
                   strategy,
-                  input: measured,
+                  input: beamInput,
                   result: executed.result,
                   engine,
                   dependencies: executed.dependencies,
@@ -152,7 +162,7 @@ export function createPlannerSearchInstrumentationBenchmarkController(
               : null,
           }
         } else {
-          const executed = await executePlannerSchedulerInstrumentation(measured, engine, {
+          const executed = await executePlannerSchedulerInstrumentation(schedulerInput, engine, {
             instrumented: request.instrumented,
             now,
             shouldCancel,
@@ -173,7 +183,7 @@ export function createPlannerSearchInstrumentationBenchmarkController(
             summary: summarize
               ? await summarizePlannerStrategyRun({
                   strategy,
-                  input: measured,
+                  input: schedulerInput,
                   result: executed.result,
                   engine,
                   dependencies: executed.dependencies,
@@ -185,7 +195,7 @@ export function createPlannerSearchInstrumentationBenchmarkController(
         postMessage({
           type: 'issue103_result',
           requestId: request.requestId,
-          entryCount: measured.buildListEntries.length,
+          entryCount: input.buildListEntries.length,
           run,
         })
       } catch (error) {

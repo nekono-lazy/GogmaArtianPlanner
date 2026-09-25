@@ -291,7 +291,8 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         expect(runtime).toBe(dependencies)
         expect(typeof executionOptions?.shouldCancel).toBe('function')
         expect(typeof executionOptions?.yieldControl).toBe('function')
-        executionOptions?.onProgress?.({ expandedStates: 4, maxExpandedStates: 20 })
+        // Exactly the Production hooks: no progress callback (Issue #103 Phase D-2a).
+        expect(Object.keys(executionOptions ?? {}).sort()).toEqual(['shouldCancel', 'yieldControl'])
         return {
           plan: createValidProductionPlan(),
           conflicts: [],
@@ -322,14 +323,9 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
 
     expect(createPlan).not.toHaveBeenCalled()
     expect(createConstrainedPlan).toHaveBeenCalledOnce()
-    // The Beam progress response is shared with the ordinary request kind.
+    // The result is the only response: the Worker posts no progress.
+    expect(responses).toHaveLength(1)
     expect(responses[0]).toEqual({
-      type: 'progress',
-      requestId: 'planner.constrained.request',
-      generation: 1,
-      progress: { expandedStates: 4, maxExpandedStates: 20 },
-    })
-    expect(responses[1]).toEqual({
       type: 'create_constrained_plan_result',
       requestId: 'planner.constrained.request',
       generation: 1,
@@ -338,7 +334,6 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         generatedBuildListEntryReplacements: [],
       }),
     })
-    expect(responses).toHaveLength(2)
   })
 
   it('keeps generatedBuildListEntries and their replacements in the structured-cloneable response', async () => {
@@ -398,9 +393,9 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
     // A truncated search, with the diagnostic warning it also produces. The
     // Worker must forward both unchanged: it never rebuilds the termination
     // from the warning, and never drops it (PLANNER_SPEC 7.2.1, 14).
-    const termination = incompletePlannerTermination(['max_expanded_states'], {
-      limits: { maxPlanSteps: 300, beamWidth: 50, maxExpandedStates: 10_000 },
-      expandedStates: 10_000,
+    const termination = incompletePlannerTermination(['max_plan_steps'], {
+      limits: { maxPlanSteps: 300 },
+      expandedStates: 300,
       completedTargetCount: 1,
       totalTargetCount: 2,
     })
@@ -411,8 +406,8 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
           plan: createValidProductionPlan(),
           conflicts: [],
           warnings: [{
-            kind: 'max_expanded_states_reached' as const,
-            message: 'Planner reached maxExpandedStates (10000).',
+            kind: 'max_steps_reached' as const,
+            message: 'Planner reached maxPlanSteps (300).',
           }],
           termination,
           generatedBuildListEntries: [],
@@ -474,7 +469,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
     expect(responses.some(({ type }) => type.endsWith('_result'))).toBe(false)
   })
 
-  it('retires a superseded calculation so its stale progress, result, and error are never posted', async () => {
+  it('retires a superseded calculation so its stale result and error are never posted', async () => {
     const { input, dependencies } = fixture()
     const responses: PlannerWorkerProtocolResponse[] = []
     const first = deferred<PlannerResult>()
@@ -518,11 +513,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
     })
     expect(capturedOptions[0]?.shouldCancel?.()).toBe(true)
 
-    // Stale progress from the retired calculation is dropped.
-    capturedOptions[0]?.onProgress?.({ expandedStates: 1, maxExpandedStates: 10 })
-    expect(responses).toEqual([])
-
-    // So is its stale result.
+    // The retired calculation's stale result is dropped.
     first.resolve({
       plan: createValidProductionPlan(),
       conflicts: [],
@@ -541,16 +532,9 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
     // The replacement calculation is the one still holding the id.
     expect(createPlan).toHaveBeenCalledTimes(2)
     expect(capturedOptions[1]?.shouldCancel?.()).toBe(false)
-    capturedOptions[1]?.onProgress?.({ expandedStates: 3, maxExpandedStates: 10 })
     second.resolve(result)
     await replacement
     expect(responses).toEqual([
-      {
-        type: 'progress',
-        requestId: 'planner.generation',
-        generation: 2,
-        progress: { expandedStates: 3, maxExpandedStates: 10 },
-      },
       {
         type: 'create_plan_result',
         requestId: 'planner.generation',
@@ -888,7 +872,7 @@ describe('Planner Worker what-if request routing (B9-C)', () => {
         expect(runtime).toBe(dependencies)
         expect(typeof executionOptions?.shouldCancel).toBe('function')
         expect(typeof executionOptions?.yieldControl).toBe('function')
-        executionOptions?.onProgress?.({ expandedStates: 5, maxExpandedStates: 21 })
+        expect(Object.keys(executionOptions ?? {}).sort()).toEqual(['shouldCancel', 'yieldControl'])
         return fixtureWhatIfResult
       },
     )
@@ -910,19 +894,13 @@ describe('Planner Worker what-if request routing (B9-C)', () => {
     expect(createWhatIfComparison).toHaveBeenCalledOnce()
     expect(responses).toEqual([
       {
-        type: 'progress',
-        requestId: 'planner.what-if.routing',
-        generation: 1,
-        progress: { expandedStates: 5, maxExpandedStates: 21 },
-      },
-      {
         type: 'create_what_if_comparison_result',
         requestId: 'planner.what-if.routing',
         generation: 1,
         result: fixtureWhatIfResult,
       },
     ])
-    expect(structuredClone(responses[1])).toEqual(responses[1])
+    expect(structuredClone(responses[0])).toEqual(responses[0])
   })
 
   it('reports an unexpected what-if failure through the shared error response', async () => {
@@ -1055,7 +1033,6 @@ describe('Planner Worker what-if request routing (B9-C)', () => {
       input: fixtureWhatIfRequest(input),
     })
     expect(ordinaryOptions?.shouldCancel?.()).toBe(true)
-    ordinaryOptions?.onProgress?.({ expandedStates: 1, maxExpandedStates: 4 })
     ordinaryResult.reject(new Error('stale ordinary error'))
     await oldRun
 
@@ -1161,7 +1138,6 @@ describe('Planner Worker interaction preparation (B10-B1)', () => {
       type: 'prepare_interaction', requestId, generation: 2, input,
     })
     expect(options?.shouldCancel?.()).toBe(true)
-    options?.onProgress?.({ expandedStates: 1, maxExpandedStates: 10 })
     pending.reject(new Error('retired what-if failure'))
     await oldRun
     await controller.handleMessage({

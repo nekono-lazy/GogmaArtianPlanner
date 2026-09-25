@@ -486,12 +486,12 @@ describe('B9-B1a scenario preparation failures', () => {
       resolution(contexts[0].conflictId, scenario.entries[1].id),
       [],
       (input) => {
-        input.options = { ...input.options, beamWidth: 0 }
+        input.options = { ...input.options, maxPlanSteps: 0 }
       },
     )
     expect(result.status).toBe('planner_input_not_ready')
     if (result.status !== 'planner_input_not_ready') return
-    expect(result.issues.map(({ path }) => path)).toContain('beamWidth')
+    expect(result.issues.map(({ path }) => path)).toContain('maxPlanSteps')
     expect(Array.isArray(result.warnings)).toBe(true)
     expect(Array.isArray(result.excludedBuildListEntries)).toBe(true)
   })

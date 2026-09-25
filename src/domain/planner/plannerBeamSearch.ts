@@ -27,7 +27,10 @@ import {
 import { collectPreferredSourceEntryIds } from './plannerPreferredSource'
 import { preparePlannerInitialContext } from './plannerInitialContext'
 import { createPlannerSearchMetricsCollector } from './plannerSearchInstrumentation'
-import { createPlannerSearchTermination } from './plannerTermination'
+import {
+  createPlannerTermination,
+  type PlannerTerminationStateInput,
+} from './plannerTermination'
 import {
   addPlannerWarning,
   appendUniquePlannerRejection as appendUniqueRejection,
@@ -51,13 +54,20 @@ import {
   type PlannerRouteActionContext,
 } from './plannerStateTransitions'
 import type {
-  PlannerBeamSearchResult,
   PlannerDependencies,
   PlannerRunBuildListContext,
-  PlannerExecutionOptions,
-  PlannerInput,
   PlannerSearchState,
 } from './plannerTypes'
+import {
+  plannerBeamSearchLimits,
+  validatePlannerBeamSearchOptions,
+  type PlannerBeamSearchExecutionOptions,
+  type PlannerBeamSearchInput,
+  type PlannerBeamSearchLimitKind,
+  type PlannerBeamSearchOptions,
+  type PlannerBeamSearchResult,
+  type PlannerBeamSearchTermination,
+} from './plannerBeamSearchTypes'
 import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
 
 function compareStableStrings(left: string, right: string): number {
@@ -70,6 +80,23 @@ function targetCanUseEntry(
   requirements: PlannerCheckpointRequirements,
 ): boolean {
   return entryIsRelevantForState(state, entry, requirements)
+}
+
+/** The oracle's termination: the shared derivation over its two bounds. */
+function createBeamSearchTermination({
+  reachedStepLimit,
+  reachedExpandedLimit,
+  ...input
+}: PlannerTerminationStateInput & {
+  limits: PlannerBeamSearchOptions
+  reachedStepLimit: boolean
+  reachedExpandedLimit: boolean
+}): PlannerBeamSearchTermination {
+  const reachedLimits: PlannerBeamSearchLimitKind[] = [
+    ...(reachedExpandedLimit ? (['max_expanded_states'] as const) : []),
+    ...(reachedStepLimit ? (['max_plan_steps'] as const) : []),
+  ]
+  return createPlannerTermination({ ...input, reachedLimits })
 }
 
 function betterState(
@@ -87,19 +114,28 @@ function betterState(
  *
  * Since Phase C it is a test / benchmark / parity oracle only: Production
  * (`createProductionPlanWithObserver()`) runs the deterministic scheduler, and
- * this search is reached only by injecting it through
- * `createProductionPlanWithSearchRunner()` or by calling it directly.
+ * this search is reached only by calling it directly from a test, a benchmark
+ * or the parity harness. Its input, bounds, termination, progress and result
+ * are its own (`plannerBeamSearchTypes.ts`, Issue #103 Phase D-2a): it takes
+ * `beamWidth` / `maxExpandedStates` from `PlannerBeamSearchOptions` and
+ * validates them with `validatePlannerBeamSearchOptions()`.
  */
 export async function runPlannerBeamSearch(
-  input: PlannerInput,
+  input: PlannerBeamSearchInput,
   dependencies: PlannerDependencies,
-  executionOptions: PlannerExecutionOptions = {},
+  executionOptions: PlannerBeamSearchExecutionOptions = {},
   buildListContext: PlannerRunBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
 ): Promise<PlannerBeamSearchResult> {
-  const prepared = preparePlannerInitialContext(input, dependencies, buildListContext)
+  const limits = plannerBeamSearchLimits(input.options)
+  const prepared = preparePlannerInitialContext(
+    input,
+    dependencies,
+    buildListContext,
+    validatePlannerBeamSearchOptions(input.options),
+  )
   if (prepared.status === 'invalid') {
-    const failure = createPlannerInitialFailureResult(
-      input,
+    const failure: PlannerBeamSearchResult = createPlannerInitialFailureResult(
+      limits,
       prepared.warnings,
       prepared.issues,
       prepared.excludedBuildListEntries,
@@ -185,8 +221,8 @@ export async function runPlannerBeamSearch(
       expandedStates: 0,
       completed: false,
       cancelled: false,
-      termination: createPlannerSearchTermination({
-        options: input.options,
+      termination: createBeamSearchTermination({
+        limits,
         planningTargetIds,
         checkpointRequirements,
         bestState: preparedInitialState,
@@ -278,8 +314,8 @@ export async function runPlannerBeamSearch(
       expandedStates: 0,
       completed: true,
       cancelled: false,
-      termination: createPlannerSearchTermination({
-        options: input.options,
+      termination: createBeamSearchTermination({
+        limits,
         planningTargetIds,
         checkpointRequirements,
         bestState: initialState,
@@ -597,8 +633,8 @@ export async function runPlannerBeamSearch(
     validConflictResolutions,
     discoveredConflictsById,
   ).forEach(({ kind, message }) => addPlannerWarning(warnings, kind, message))
-  const termination = createPlannerSearchTermination({
-    options: input.options,
+  const termination = createBeamSearchTermination({
+    limits,
     planningTargetIds,
     checkpointRequirements,
     bestState,

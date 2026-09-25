@@ -144,9 +144,39 @@ const dialogClosed = () => waitFor(() => expect(screen.queryByRole('dialog')).no
 const planHistory = (database: AppDatabase, plan: ProductionPlan) =>
   database.executionHistory.where('planId').equals(plan.id).toArray()
 
-async function undoThroughDialog(user: ReturnType<typeof userEvent.setup>) {
+/**
+ * Waits until an Undo has fully settled in the Navigator: the view shown
+ * before it is gone, the success notice - set by the transaction's last state
+ * update, after the persisted state was re-read - is shown, and the dialog has
+ * finished closing (while it closes it keeps the page out of the
+ * accessibility tree and re-renders with the next latest record).
+ *
+ * Reading the Step progress any earlier is racy, not wrong: several ended /
+ * stale views already show the progress text the Undo returns to (the
+ * `operation_uncertain` recovery shows 「Step 1 / 5」 too), and the progress
+ * sits at a different place in the ended, recovery and running views, so a
+ * node found mid-transition can be replaced by the next render. After this
+ * the caller reads the current DOM synchronously.
+ */
+async function undoSettled(previousView: () => HTMLElement | null) {
+  await waitFor(() => expect(previousView()).not.toBeInTheDocument(), { timeout: 5000 })
+  await screen.findByText('最後のツール上の操作を元に戻しました。ゲーム内の操作は戻っていません。', {}, { timeout: 5000 })
+  await dialogClosed()
+}
+
+/**
+ * Opens the generic Undo dialog, lets the caller check it while it still
+ * describes the record being undone, then confirms. The dialog is read before
+ * the confirmation: once the Undo reloads the Navigator, a dialog still in its
+ * closing transition renders the next latest record instead.
+ */
+async function undoThroughDialog(
+  user: ReturnType<typeof userEvent.setup>,
+  inspect: (dialog: HTMLElement) => void = () => undefined,
+) {
   await user.click(undoButton() as HTMLElement)
   const dialog = await screen.findByRole('dialog', { name: '最後のツール上の操作を元に戻します' })
+  inspect(dialog)
   await user.click(within(dialog).getByRole('button', { name: 'Undoする' }))
   return dialog
 }
@@ -249,7 +279,8 @@ describe('ExecutionNavigatorPage Undo with the real runtime', () => {
       expect(screen.getByText('作成プランが停止しているため、ゲーム内セーブ地点は記録できません。')).toBeInTheDocument()
 
       await undoThroughDialog(user)
-      expect(await screen.findByText('Step 1 / 2', {}, { timeout: 5000 })).toBeInTheDocument()
+      await undoSettled(() => screen.queryByRole('region', { name: '生産計画の停止' }))
+      expect(screen.getByText('Step 1 / 2')).toBeInTheDocument()
       expect(await currentPlan(database, fixture.plan)).toMatchObject({ status: 'active', recalculationReasons: [] })
       expect(await planHistory(database, fixture.plan)).toEqual([])
     }), 20_000)
@@ -276,7 +307,11 @@ describe('ExecutionNavigatorPage Undo with the real runtime', () => {
       expect(dialog).toHaveTextContent('ゲーム内の状況がツールの案内と一致している場合だけ使用してください。')
       await user.click(within(dialog).getByRole('button', { name: '記録を取り消して元の操作に戻る' }))
 
-      expect(await screen.findByText('Step 1 / 5', {}, { timeout: 5000 })).toBeInTheDocument()
+      // The recovery already shows 「Step 1 / 5」: wait for the Undo to settle
+      // before reading the running Navigator's progress.
+      await undoSettled(() => screen.queryByRole('region', { name: '操作状況の回復' }))
+      expect(deps.undoLatestExecution).toHaveBeenCalledOnce()
+      expect(screen.getByText('Step 1 / 5')).toBeInTheDocument()
       expect(await currentPlan(database, fixture.plan)).toMatchObject({
         status: 'active',
         recalculationReasons: [],
@@ -318,9 +353,11 @@ describe('ExecutionNavigatorPage Undo with the real runtime', () => {
       renderNavigator(deps, fixture.plan.id)
       expect(await screen.findByText('生産計画が完了しました')).toBeInTheDocument()
 
-      const dialog = await undoThroughDialog(user)
-      expect(dialog).toHaveTextContent('終了した生産計画は、この操作の前の状態に戻ります。')
-      expect(await screen.findByText('Step 2 / 2', {}, { timeout: 5000 })).toBeInTheDocument()
+      await undoThroughDialog(user, (dialog) => {
+        expect(dialog).toHaveTextContent('終了した生産計画は、この操作の前の状態に戻ります。')
+      })
+      await undoSettled(() => screen.queryByText('生産計画が完了しました'))
+      expect(screen.getByText('Step 2 / 2')).toBeInTheDocument()
       expect(await currentPlan(database, fixture.plan)).toMatchObject({ status: 'active', completedAt: null })
     }), 20_000)
 
@@ -344,9 +381,11 @@ describe('ExecutionNavigatorPage Undo with the real runtime', () => {
       expect(await screen.findByText('生産計画が完了しました')).toBeInTheDocument()
 
       // An operation_count_recovered record keeps the generic Undo wording.
-      const dialog = await undoThroughDialog(user)
-      expect(dialog).toHaveTextContent('現在位置の確認による再開')
-      expect(await screen.findByRole('region', { name: '操作状況の回復' }, { timeout: 5000 })).toBeInTheDocument()
+      await undoThroughDialog(user, (dialog) => {
+        expect(dialog).toHaveTextContent('現在位置の確認による再開')
+      })
+      await undoSettled(() => screen.queryByText('生産計画が完了しました'))
+      expect(screen.getByRole('region', { name: '操作状況の回復' })).toBeInTheDocument()
       // Back at the operation_uncertain stale state, the dedicated control applies again.
       expect(await screen.findByRole('button', { name: '「操作内容不明」の記録を取り消す' })).toBeInTheDocument()
       expect(await currentPlan(database, fixture.plan)).toMatchObject({
@@ -368,9 +407,11 @@ describe('ExecutionNavigatorPage Undo with the real runtime', () => {
       expect(screen.queryByRole('button', { name: 'ゲーム内セーブ済みとして記録' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '現在Planを破棄する' })).not.toBeInTheDocument()
 
-      const dialog = await undoThroughDialog(user)
-      expect(dialog).toHaveTextContent('戻す操作: 妥協品として確定して終了')
-      expect(await screen.findByText('Step 2 / 5', {}, { timeout: 5000 })).toBeInTheDocument()
+      await undoThroughDialog(user, (dialog) => {
+        expect(dialog).toHaveTextContent('戻す操作: 妥協品として確定して終了')
+      })
+      await undoSettled(() => screen.queryByText('妥協品として現在の生産計画を終了しました'))
+      expect(screen.getByText('Step 2 / 5')).toBeInTheDocument()
       expect(await currentPlan(database, fixture.plan)).toMatchObject({ status: 'active', abandonmentReason: null })
     }), 20_000)
 

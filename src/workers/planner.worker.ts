@@ -21,7 +21,7 @@ export type PlannerDependenciesFactory = () => PlannerDependencies
 /**
  * The four Planner calculations this Worker routes to.
  *
- * All four are injected, so the controller performs no Beam Search, no Candidate
+ * All four are injected, so the controller performs no full Planner run, no Candidate
  * enumeration, no materialization, no preflight, no Trace Replay, and no
  * adoption of its own: B8-C owns all of that, and the Production adapter
  * composes it.
@@ -40,7 +40,7 @@ export type CreatePlannerWhatIfComparisonCalculation = (
   executionOptions?: PlannerExecutionOptions,
 ) => Promise<PlannerWhatIfCalculationResult>
 
-/** Synchronous initial preparation needs no progress or cancellation hooks. */
+/** Synchronous initial preparation needs no cancellation hooks. */
 export type PreparePlannerInteractionCalculation = (
   input: PlannerInput,
   dependencies: PlannerDependencies,
@@ -60,10 +60,12 @@ function workerYield(): Promise<void> {
  * receive the worker-local runtime dependencies rather than structured-cloned
  * methods.
  *
- * `cancel`, progress forwarding, and error conversion are shared by the
- * request kinds: a cancel stops the task
- * instance it names, and Domain cancellation semantics are never reimplemented
- * here.
+ * `cancel` and error conversion are shared by the request kinds: a cancel
+ * stops the task instance it names, and Domain cancellation semantics are never
+ * reimplemented here. The Production Worker forwards no progress (Issue #103
+ * Phase D-2a): a task answers with its result or an error, and cancellation
+ * reaches the calculation through `shouldCancel`, never through a progress
+ * message.
  */
 export function createPlannerWorkerController(
   dependencies: PlannerDependencies,
@@ -89,10 +91,11 @@ export function createPlannerWorkerController(
 
   const isCurrent = (requestId: string, generation: number): boolean =>
     generationByRequestId.get(requestId) === generation
-  /** A retired calculation is silent: it posts no progress, result, or error. */
+  /** A retired calculation is silent: it posts no result or error. */
   const isActive = (requestId: string, generation: number): boolean =>
     isCurrent(requestId, generation) && !cancelledGenerations.has(generation)
 
+  /** Exactly the Production hooks: cancellation and cooperative yielding. */
   const executionOptions = (
     requestId: string,
     generation: number,
@@ -100,11 +103,6 @@ export function createPlannerWorkerController(
     shouldCancel: () =>
       !isCurrent(requestId, generation) || cancelledGenerations.has(generation),
     yieldControl: workerYield,
-    onProgress: (progress) => {
-      if (isActive(requestId, generation)) {
-        postMessage({ type: 'progress', requestId, generation, progress })
-      }
-    },
   })
   return {
     isCancelled: (requestId) => {

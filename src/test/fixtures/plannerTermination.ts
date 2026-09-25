@@ -1,20 +1,21 @@
 import {
   defaultPlannerOptions,
   type PlannerOptions,
-  type PlannerSearchLimitKind,
-  type PlannerSearchTermination,
+  type PlannerRunLimitKind,
+  type PlannerRunTermination,
 } from '../../domain/planner'
 
 /**
- * Test-only `PlannerSearchTermination` builders.
+ * Test-only Production `PlannerRunTermination` builders.
  *
  * They exist so a test that is not about termination can state one line of
- * intent instead of six fields, and so the Beam Search stays the only
- * production code that derives a status.
+ * intent instead of six fields, and so the Planner runs stay the only
+ * production code that derives a status. A Production termination can only
+ * name `max_plan_steps` (Issue #103 Phase D-2a).
  */
 export function plannerTermination(
-  overrides: Partial<PlannerSearchTermination> = {},
-): PlannerSearchTermination {
+  overrides: Partial<PlannerRunTermination> = {},
+): PlannerRunTermination {
   return {
     status: 'completed',
     reachedLimits: [],
@@ -27,20 +28,16 @@ export function plannerTermination(
 }
 
 export function completedPlannerTermination(
-  overrides: Partial<PlannerSearchTermination> = {},
-): PlannerSearchTermination {
+  overrides: Partial<PlannerRunTermination> = {},
+): PlannerRunTermination {
   return plannerTermination({ status: 'completed', ...overrides })
 }
 
-/**
- * A search a `PlannerOptions` bound truncated before it completed. The default
- * is `max_plan_steps`, the only bound the Production scheduler reaches (Issue
- * #103 Phase D-1); `max_expanded_states` is a Beam Search oracle termination.
- */
+/** A Planner run its `maxPlanSteps` bound truncated before it completed. */
 export function incompletePlannerTermination(
-  reachedLimits: readonly PlannerSearchLimitKind[] = ['max_plan_steps'],
-  overrides: Partial<PlannerSearchTermination> = {},
-): PlannerSearchTermination {
+  reachedLimits: readonly PlannerRunLimitKind[] = ['max_plan_steps'],
+  overrides: Partial<PlannerRunTermination> = {},
+): PlannerRunTermination {
   const limits: PlannerOptions =
     overrides.limits ?? { ...defaultPlannerOptions }
   return plannerTermination({
@@ -54,10 +51,10 @@ export function incompletePlannerTermination(
   })
 }
 
-/** A search that ended on its own without completing every Target. */
+/** A run that ended on its own without completing every Target. */
 export function exhaustedPlannerTermination(
-  overrides: Partial<PlannerSearchTermination> = {},
-): PlannerSearchTermination {
+  overrides: Partial<PlannerRunTermination> = {},
+): PlannerRunTermination {
   return plannerTermination({
     status: 'exhausted',
     completedTargetCount: 0,

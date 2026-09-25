@@ -28,7 +28,7 @@ import {
   sourceWeapon,
   target,
 } from '../../test/fixtures/plannerBeam'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { createPlannerRouteUnitPlans } from './plannerRouteProgress'
 import {
   checkpointConditionMatchFor,
@@ -176,7 +176,7 @@ describe('Selected intermediate states as Planner constraints', () => {
     const entry = routeEntry('entry.checkpoint.state', goal, resetRoute(source.id))
     const { input, dependencies } = plannerFixture([goal], [entry], [source])
 
-    const result = await runPlannerBeamSearch(input, dependencies)
+    const result = await runPlannerBeamSearchOracle(input, dependencies)
     const state = result.bestState as PlannerSearchState & {
       practicalFirstProgressTargetIds?: unknown
     }

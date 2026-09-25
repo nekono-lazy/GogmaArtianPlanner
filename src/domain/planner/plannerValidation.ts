@@ -59,19 +59,27 @@ function issue(
   return { path, code, message }
 }
 
-function positiveIntegerIssue(value: number, path: string) {
+/** One Planner bound must be a positive integer; `null` when it is. */
+export function plannerPositiveIntegerOptionIssue(
+  value: number,
+  path: string,
+): DomainValidationIssue | null {
   return Number.isInteger(value) && value >= 1
     ? null
     : issue(path, 'invalid_integer', `${path} must be an integer greater than or equal to 1.`)
 }
 
+/**
+ * The Production Planner options: `maxPlanSteps`, the one Production bound
+ * (Issue #103 Phase D-2a). The Beam Search oracle validates its own two bounds
+ * on top of this through `validatePlannerBeamSearchOptions()`; the Production
+ * scheduler never requires them.
+ */
 export function validatePlannerOptions(
   options: PlannerOptions,
 ): DomainValidationResult {
   const issues = [
-    positiveIntegerIssue(options.maxPlanSteps, 'maxPlanSteps'),
-    positiveIntegerIssue(options.beamWidth, 'beamWidth'),
-    positiveIntegerIssue(options.maxExpandedStates, 'maxExpandedStates'),
+    plannerPositiveIntegerOptionIssue(options.maxPlanSteps, 'maxPlanSteps'),
   ].filter((entry): entry is DomainValidationIssue => entry !== null)
   if ('preferPracticalBeforeIdeal' in options) {
     issues.push(issue(
@@ -364,13 +372,19 @@ function currentEntryEligibility(
  * Build List cardinality fail-closed check (`docs/PLANNER_SPEC.md` 4.1). A
  * trial input gets the same check on its persisted side plus the temporary
  * contract of its replacements (9.2.18).
+ *
+ * `optionsValidation` defaults to the Production `validatePlannerOptions()`.
+ * Only the Beam Search oracle passes its own
+ * (`validatePlannerBeamSearchOptions()`), so an invalid oracle bound fails its
+ * input closed exactly like an invalid Production bound.
  */
 export function validatePlannerInput(
   input: PlannerInput,
   dependencies: PlannerDependencies,
   buildListContext: PlannerBuildListContext = PERSISTED_PLANNER_BUILD_LIST_CONTEXT,
+  optionsValidation: DomainValidationResult = validatePlannerOptions(input.options),
 ): PlannerInputValidationResult {
-  const options = validatePlannerOptions(input.options)
+  const options = optionsValidation
   const issues = [...options.issues]
   const warnings: PlannerWarning[] = []
   const validConflictResolutions: PlannerConflictResolution[] = []

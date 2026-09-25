@@ -1106,8 +1106,9 @@ Plannerに検討させる候補集合を確認・調整する。
 
 Search Resultsと同じ「詳細設定」Accordionを置き、Plannerの安全上限を変更できる。
 通常Plannerは決定的scheduler（PLANNER_SPEC 7）であり、停止条件は「最大計画ステップ数」だけである
-（Issue #103 Phase D-1）。「最大探索状態数」と「Beam幅」は通常Plannerが読まないため、
-詳細設定に表示しない（Beam Search oracleのbenchmark画面だけが扱う。PLANNER_SPEC 7.2）。
+（Issue #103 Phase D-1）。Phase D-2a以降、Production `PlannerOptions` は `maxPlanSteps` だけであり、
+「最大探索状態数」と「Beam幅」はProductionの型にも詳細設定にも存在しない（Beam Search oracleの
+benchmark画面だけが扱う。PLANNER_SPEC 7.2.2）。
 項目が1つでも、通常は変更不要な安全設定なので「詳細設定」Accordionの中に置き、通常画面へ常時
 露出させない。
 
@@ -1136,8 +1137,7 @@ Accordion冒頭の説明文は「生産計画の作成に使う安全上限で�
   「生産計画を作成」と「現在地点から再計画を試算」をdisabledにする
 - 無効な値をPlannerへ渡さない
 - 推測による固定最大値は設けない。長時間化は既存のWorker実行とキャンセルで扱う
-- `PlannerInput.options` の `beamWidth` / `maxExpandedStates` はユーザー入力ではない。
-  型の整理（Phase D-2）までは `defaultPlannerOptions` の値をそのまま補い、通常Plannerはどちらも読まない
+- `PlannerInput.options` は `{ maxPlanSteps }` だけであり、UIが補う他のfieldは無い（Phase D-2a）
 - PCでは入力欄の幅を抑えて説明文を読みやすい行長に保ち、375px幅では1列で横スクロールを作らない
 - 設定はBuildList画面のruntime UI stateであり、再読み込みで既定値へ戻る
 - B8 orchestration boundsとB9 what-if boundsはこの詳細設定に出さない
@@ -1149,15 +1149,15 @@ Accordion冒頭の説明文は「生産計画の作成に使う安全上限で�
 - 「生産計画を作成しています…」の見出し、indeterminateな進捗バー、
   「計算が終わると結果を表示します。途中で止める場合は「キャンセル」を押してください。」、
   「キャンセル」を `role="status"` の領域に表示する
-- `PlannerProgress { expandedStates, maxExpandedStates }` をcompletion progressとして表示しない。
-  「探索状態数 x / y」「計画中 x / y」のような数値分母は表示しない。
-  `maxExpandedStates` は通常Plannerの停止条件ではなく、`expandedStates` はその分子ではない
+- Production Planner Workerは数値progressを返さない（Phase D-2aでprogress responseと `PlannerProgress`
+  を削除、PLANNER_SPEC 14）。UIはWorkerからの結果・error・キャンセルだけを扱い、
+  「探索状態数 x / y」「計画中 x / y」のような数値分母は表示しない
 - commitment後の「総Step数」を分母にした推定値も表示しない。physical action sharing、silent
   fast-forward、動的なrelease / recommit、deadlock / stallによるdropにより、Route unit数や
   Candidateの `estimatedOperationCount` は実際のStep総数ではなく、単一のauthorityが無いためである
 - 同じ表示方針を現在地点からの再計画Preview（16.4、「再計画を試算しています…」）、
   Production Plan画面の再計算（「再計算しています…」）、what-if比較（「比較しています…」）にも適用する
-- Worker protocolの `PlannerProgress` 型は変更しない（Phase D-2で整理する）
+- キャンセルはprogress受信に依存せず、`cancelPlan()` とWorker側の `shouldCancel` で応答する
 
 ### 10.1 探索未完了の表示
 
@@ -1177,9 +1177,9 @@ Accordion冒頭の説明文は「生産計画の作成に使う安全上限で�
 完成した目標武器: 1 / 2
 ```
 
-`max_expanded_states` はBeam Search oracleだけが到達するterminationであり、通常画面の導線からは
-発生しない。互換のため文言（「最大探索状態数 N に到達しました。すべての目標武器を含む完成計画を
-作成できませんでした。」、詳細設定への案内なし）だけを残す。
+Production terminationの `reachedLimits` は型上 `max_plan_steps` だけである（Phase D-2a）。
+`max_expanded_states` はBeam Search oracleだけのterminationであり、通常画面の表示helperは
+その分岐・文言を持たない。
 
 制約。
 
@@ -1525,7 +1525,7 @@ failure    typed failureまたは予期しないerrorを表示
 
 別participantを比較する、別Conflictへ移動する、pageを離れる、Planner再計算を開始する場合は、
 不要なrequestを `cancelPlan(requestId)` でcancelする。cancelはfailure表示にせず、partial resultを
-表示しない。requestId / generationが古いprogress / result / errorを無視し、古い結果を新しい
+表示しない。requestId / generationが古いresult / errorを無視し、古い結果を新しい
 participant cardへ表示しない。
 
 ### 11.3 comparison card

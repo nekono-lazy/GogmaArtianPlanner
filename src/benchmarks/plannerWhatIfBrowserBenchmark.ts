@@ -13,7 +13,6 @@ export interface PlannerWhatIfBenchmarkRunResult extends PlannerWhatIfBenchmarkR
   readonly status: 'completed' | 'error'
   readonly roundTripMs: number
   readonly outcome: PlannerWhatIfBenchmarkOutcome | null
-  readonly progressEvents: number
   readonly engineVersion: string
   readonly error: string | null
 }
@@ -29,7 +28,7 @@ export interface PlannerWhatIfBenchmarkDependencies {
  * 1 run = 1 fresh Production Planner Worker Client, including warm-ups.
  * Only createWhatIfComparison call -> Promise settle is timed: postMessage,
  * structured clones, outstanding async Worker initialization, Production
- * enumeration/materialization/preflight/full Beam/Trace Replay and delivery.
+ * enumeration/materialization/preflight/full Planner run/Trace Replay and delivery.
  * Fixture, validation, Client/new Worker constructor, dispose and normalization
  * are outside the clock interval. No main-thread calculation fallback exists.
  * Enumeration bounds are supplied ONLY by the Production adapter in the Worker.
@@ -45,15 +44,14 @@ export async function runPlannerWhatIfBenchmark(
   const now = dependencies.now ?? (() => performance.now())
   const client = (dependencies.createClient ?? createProductionPlannerWorkerClient)()
   const request = { plannerInput: fixture.plannerInput, scenarioResolution: fixture.scenarioResolution, bounds: options.bounds }
-  let progressEvents = 0
-  const callbacks = { onProgress: () => { progressEvents += 1 } }
   let result: PlannerWhatIfCalculationResult | undefined
   let failure: unknown
   let failed = false
   let settledAt: number
   const startedAt = now()
   try {
-    result = await client.createWhatIfComparison(options.requestId, request, callbacks)
+    // The Production Worker reports no progress (Issue #103 Phase D-2a).
+    result = await client.createWhatIfComparison(options.requestId, request)
     settledAt = now()
   } catch (error) {
     settledAt = now()
@@ -71,7 +69,7 @@ export async function runPlannerWhatIfBenchmark(
     status: failed ? 'error' : 'completed',
     roundTripMs: settledAt - startedAt,
     outcome: result === undefined ? null : createPlannerWhatIfBenchmarkOutcome(result),
-    progressEvents, engineVersion: client.engineVersion,
+    engineVersion: client.engineVersion,
     error: failed ? failure instanceof Error ? failure.message : String(failure) : null,
   }
 }

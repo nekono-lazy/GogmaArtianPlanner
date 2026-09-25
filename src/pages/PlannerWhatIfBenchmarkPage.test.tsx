@@ -16,7 +16,7 @@ beforeEach(() => {
   run.mockImplementation(async (options) => ({
     ...options, status: 'completed', roundTripMs: 0, // Contract stub only; never measurement evidence.
     outcome: createPlannerWhatIfBenchmarkOutcome({ status: 'planner_input_not_ready', issues: [], warnings: [], excludedBuildListEntries: [] }),
-    progressEvents: 0, engineVersion: 'contract-test-only', error: null,
+    engineVersion: 'contract-test-only', error: null,
   }))
 })
 afterEach(() => { delete globalThis.b9WhatIfBenchmark })
@@ -100,7 +100,7 @@ describe('B9 isolated benchmark page', () => {
   it('retains an error record and stops the batch when a Worker request fails', async () => {
     render(<PlannerWhatIfBenchmarkPage />)
     run.mockImplementation(async (options) => ({ ...options, status: 'error', roundTripMs: 0,
-      outcome: null, progressEvents: 0, engineVersion: 'contract-test-only', error: 'Worker failed' }))
+      outcome: null, engineVersion: 'contract-test-only', error: 'Worker failed' }))
     await act(async () => { await expect(api().runMeasurements('what_if_two_targets', bounds, 3)).rejects.toThrow('Worker failed') })
     expect(run).toHaveBeenCalledTimes(1)
     expect(api().records()).toHaveLength(1)

@@ -37,7 +37,7 @@ import type {
  * `createPlannerConflictWorks()` - and reimplements none of validation, initial
  * state, entry relevance, Route unit plans, or conflict detection.
  *
- * It enumerates no Candidate, materializes nothing, starts no Beam Search, and
+ * It enumerates no Candidate, materializes nothing, starts no full Planner run, and
  * computes no distance. Those are B9-B1b.
  */
 

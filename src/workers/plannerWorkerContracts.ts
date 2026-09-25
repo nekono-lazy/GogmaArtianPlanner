@@ -27,8 +27,9 @@ import type { WorkerResultResponse, WorkerTaskRequest } from './contracts'
  * Worker -> Domain here.
  *
  * The ordinary `create_plan` / `create_plan_result` protocol is untouched: this
- * is an additional request kind, and `cancel`, `progress`, and `error` stay
- * shared between both kinds. The Domain request/response shapes are reused
+ * is an additional request kind, and `cancel` and `error` stay shared between
+ * both kinds. No request kind has a progress response (Issue #103 Phase D-2a):
+ * the Production UI shows an indeterminate running state. The Domain request/response shapes are reused
  * verbatim and only extended with the wire-level task generation below.
  */
 
@@ -163,12 +164,6 @@ export type PlannerWhatIfWorkerResultResponse = WorkerResultResponse<
 > &
   PlannerTaskGeneration
 
-export type PlannerWorkerProgressResponse = Extract<
-  PlannerWorkerResponse,
-  { type: 'progress' }
-> &
-  PlannerTaskGeneration
-
 export type PlannerWorkerErrorResponse = Extract<
   PlannerWorkerResponse,
   { type: 'error' }
@@ -183,11 +178,10 @@ export type PlannerWorkerProtocolRequest =
   | PlannerInteractionWorkerRequest
   | PlannerWorkerCancelRequest
 
-/** All Planner results share the existing `progress` / `error` responses. */
+/** All Planner results share the existing `error` response; there is no progress response. */
 export type PlannerWorkerProtocolResponse =
   | PlannerOrdinaryWorkerResultResponse
   | PlannerConstrainedWorkerResultResponse
   | PlannerWhatIfWorkerResultResponse
   | PlannerInteractionWorkerResultResponse
-  | PlannerWorkerProgressResponse
   | PlannerWorkerErrorResponse

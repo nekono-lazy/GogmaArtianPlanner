@@ -128,7 +128,7 @@ function issueMessage(issue: PlannerResultPersistenceIssue): string {
  * save-time shape checks the ordinary Planner result save applies.
  *
  * The typed termination is judged first (`docs/PLANNER_SPEC.md` 7.2.1,
- * `docs/UI_FLOW.md` 10.1): an `incomplete` search is a partial Beam Search
+ * `docs/UI_FLOW.md` 10.1): an `incomplete` search is a partial Planner run
  * artifact whether or not it carries a partial Plan, never a finished no-Plan
  * result. Only a search that ended on its own with no Plan and nothing to
  * persist is the ordinary `no_plan`; a no-Plan result that still carries

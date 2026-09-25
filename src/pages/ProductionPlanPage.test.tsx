@@ -531,10 +531,8 @@ describe('ProductionPlanPage', () => {
     const pending = deferred<PlannerWhatIfCalculationResult>()
     const client = plannerClient(
       async () => fixture.preparation,
-      async (_requestId, _request, callbacks) => {
-        callbacks?.onProgress?.({ expandedStates: 3, maxExpandedStates: 8 })
-        return pending.promise
-      },
+      // The Production Worker reports no progress (Issue #103 Phase D-2a).
+      async () => pending.promise,
     )
     const deps = dependencies(fixture, client)
     vi.mocked(deps.createInput)
@@ -1098,30 +1096,27 @@ describe('ProductionPlanPage explicit selection', () => {
     expect(deps.savePlannerResult).not.toHaveBeenCalled()
   })
 
-  it('shows an indeterminate running state, blocks comparisons and selections during rerun, and ignores results/progress after cancel', async () => {
+  it('shows an indeterminate running state, blocks comparisons and selections during rerun, and ignores results after cancel', async () => {
     const user = userEvent.setup()
     const fixture = pageFixture()
     const pending = deferred<PlannerOrchestrationResult>()
     const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createConstrainedPlan).mockImplementation(async (_id, _input, _bounds, callbacks) => {
-      callbacks?.onProgress?.({ expandedStates: 3, maxExpandedStates: 10 })
-      return pending.promise
-    })
+    vi.mocked(client.createConstrainedPlan).mockImplementation(async () => pending.promise)
     const deps = dependencies(fixture, client)
     const view = renderPage(deps, fixture.plan.id)
     await clickSelection(user)
     expect(await screen.findByText('再計算しています…')).toBeInTheDocument()
     expect(screen.getByRole('progressbar', { name: 'Planner再計算中' })).not.toHaveAttribute('aria-valuenow')
-    expect(screen.queryByText(/3 \/ 10/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '比較する' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: '比較する' }))
     expect(client.createWhatIfComparison).not.toHaveBeenCalled()
-    const [requestId, , , callbacks] = vi.mocked(client.createConstrainedPlan).mock.calls[0]
+    const [requestId] = vi.mocked(client.createConstrainedPlan).mock.calls[0]
+    // No progress callback reaches the Client (Issue #103 Phase D-2a).
+    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0]).toHaveLength(3)
     await user.click(screen.getByRole('button', { name: '再計算をキャンセル' }))
     expect(client.cancelPlan).toHaveBeenCalledWith(requestId)
     await act(async () => {
-      callbacks?.onProgress?.({ expandedStates: 9, maxExpandedStates: 10 })
       pending.resolve(replanResult(createValidProductionPlan()))
     })
     expect(deps.savePlannerResult).not.toHaveBeenCalled()

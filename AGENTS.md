@@ -857,6 +857,50 @@ persisted, so no stored version 14 Plan is read differently: `CURRENT_CALCULATIO
 stays 14 and the versions stay 14 / 8 / 11 (`RngState.schemaVersion` 2,
 `AppSettings.schemaVersion` 1, `PRODUCTION_RNG_ENGINE_VERSION` and Master `dataVersion`
 unchanged).
+Issue #103 Phase D-2a (the Production Planner types and Worker contract) split Phase D-2 into
+D-2a and D-2b (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 14.4) and made the Production
+types say exactly what Production does. `PlannerOptions` is `{ maxPlanSteps }` alone
+(`defaultPlannerOptions = { maxPlanSteps: 1000 }`, `validatePlannerOptions()` checks it alone), so no
+Production `PlannerInput` - the ordinary Worker request, B8, B9, the replan Preview - carries
+`beamWidth` / `maxExpandedStates`. The Beam Search oracle's contract moved to
+`src/domain/planner/plannerBeamSearchTypes.ts`, which no Production module imports:
+`PlannerBeamSearchOptions` (`PlannerOptions` + `beamWidth` / `maxExpandedStates`),
+`defaultPlannerBeamSearchOptions` (1000 / 50 / 10000), `validatePlannerBeamSearchOptions()`
+(passed into the shared `validatePlannerInput()` / `preparePlannerInitialContext()` as the
+options validation, so an invalid oracle bound still fails the oracle input closed),
+`PlannerBeamSearchInput`, `PlannerBeamSearchLimitKind`, `PlannerBeamSearchTermination`,
+`PlannerBeamSearchResult`, `PlannerBeamSearchProgress` and `PlannerBeamSearchExecutionOptions`
+(`onProgress`, `searchInstrumentation`). The shared shapes are generic -
+`PlannerTerminationOf<TLimitKind, TLimits>` and `PlannerRunResultOf<TTermination>` - and the
+Production ones are `PlannerRunTermination` (`reachedLimits` can only be `max_plan_steps`,
+`limits` is `{ maxPlanSteps }`, enforced at compile time), `PlannerRunLimitKind`,
+`PlannerRunTerminationStatus` (status meaning and precedence unchanged; one derivation,
+`createPlannerTermination()`, with `createPlannerRunTermination()` for Production) and the neutral
+`PlannerRunResult` the scheduler, Plan generation, `PlannerFullSearchRunner`,
+`ProductionPlanGenerationObserver.afterPlannerRun()` and B8 / B9 use; `PlannerSearchTermination`,
+`PlannerSearchLimitKind` and `PlannerProgress` are gone and Production code names no
+`PlannerBeamSearchResult`. The Production Planner Worker has no `progress` response and
+`PlannerWorkerClient` no `onProgress` callback: a request answers with its result or an error,
+the Worker hands a calculation only `shouldCancel` / `yieldControl` (the Production
+`PlannerExecutionOptions`), and cancellation stays `cancelPlan()` + generation + `shouldCancel`,
+never a progress message. The scheduler's benchmark `onProgress({ expandedStates })` and
+`schedulerInstrumentation` live in `PlannerScheduleExecutionOptions`, and the planner
+orchestration / what-if browser benchmarks dropped their `progressEvents` metric. The parity
+harness types each strategy's input and result separately and never converts an oracle
+termination into a Production one: the shared Plan-generation tail is the termination-generic
+`generatePlanFromFullRun<T>()` (it reads only the status and returns the run's own termination,
+retrying with the same runner), Production fixes it to `PlannerRunTermination` through
+`createProductionPlanWithSearchRunner()`, and only the harness runs it with the oracle's
+`PlannerBeamSearchTermination`, so a `max_expanded_states` truncation is never rewritten as
+`max_plan_steps`, `exhausted` or `incomplete` with empty `reachedLimits` (a Production `incomplete`
+always names exactly `max_plan_steps`), and no Production type is widened; the
+Beam oracle, its instrumentation, the parity harness and the benchmarks are kept for D-2b. It
+persisted nothing new and changed no scheduler or oracle semantics: `PlannerOptions` was never in
+`PlanningInputSnapshot`, and `ProductionPlan` / `PlanStep` / `PlanningInputSnapshot` /
+`CalculationContext` / DB / Export shapes are unchanged, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION`
+stays 14 and the versions stay 14 / 8 / 11 (`RngState.schemaVersion` 2,
+`AppSettings.schemaVersion` 1, `PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7` and Master
+`dataVersion` 4 unchanged).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3424,38 +3468,35 @@ The Production Planner is **Route commitment plus the deterministic scheduler**
 
 The bounded Beam Search below (`runPlannerBeamSearch()`) was the Production Planner up
 to Phase B. It stays, unchanged, as a test / benchmark / parity oracle - reached only
-through `createProductionPlanWithSearchRunner()` or a direct call - together with its
-semantic key, `comparePlannerSearchStates()`, `evaluationScore`,
-`preferredSourceProgressCount` and the PR #107 instrumentation, until Phase D decides
+by a direct call over its own `PlannerBeamSearchInput` (Issue #103 Phase D-2a) -
+together with its semantic key, `comparePlannerSearchStates()`, `evaluationScore`,
+`preferredSourceProgressCount` and the PR #107 instrumentation, until Phase D-2b decides
 their removal. The rest of this section describes that oracle where it speaks of beams,
 branches, scores or pruning; its state transition, sharing, fast-forward, checkpoint,
 conflict, Trace Replay and termination contracts are the shared ones the scheduler uses.
 
-Default constants:
+Default constant:
 
 ```text
-beamWidth = 50
-maxExpandedStates = 10000
 maxPlanSteps = 1000
 ```
 
-These three positive integers are the complete v1 `PlannerOptions` shape. The
-Production scheduler reads `maxPlanSteps` only - its one execution bound, 1000 by
-default since Issue #103 Phase D-1 - and never reads `beamWidth` or
-`maxExpandedStates`, whose values therefore never change a Production Plan and never
-stop one (`max_expanded_states` / `max_expanded_states_reached` never come from the
-scheduler). Both stay in the type, in `defaultPlannerOptions` and in the
-positive-integer validation only as Beam Search oracle / legacy shape until Phase D-2
-separates them; never turn the hidden `maxExpandedStates` default back into a
-Production bound.
+This one positive integer is the complete v1 Production `PlannerOptions` shape
+(Issue #103 Phase D-2a): the Production scheduler's one execution bound, 1000 by
+default since Phase D-1. `beamWidth` and `maxExpandedStates` are not Production
+options at all: they exist only in the Beam Search oracle's
+`PlannerBeamSearchOptions` (`defaultPlannerBeamSearchOptions` = 1000 / 50 / 10000,
+validated by `validatePlannerBeamSearchOptions()`), which no Production module imports,
+and `max_expanded_states` / `max_expanded_states_reached` never come from the
+scheduler. Never reintroduce either field into `PlannerOptions`, a Production Worker
+request or the UI, and never turn `maxExpandedStates` back into a Production bound.
 `preferPracticalBeforeIdeal` belongs to a legacy Planner contract and is
 unsupported: the Planner has no Practical-first priority, and an input carrying
 that option is refused as a validation issue rather than accepted or ignored.
 
 They are defaults, not fixed constants: the Build List detail settings let the
 user change `maxPlanSteps` (「最大計画ステップ数」, the only field there) for one
-calculation; `beamWidth` and `maxExpandedStates` are not user input and are filled
-from `defaultPlannerOptions` unchanged. `defaultPlannerOptions` is the only
+calculation. `defaultPlannerOptions` is the only
 initial-value authority, the Application caller writes the reviewed values into
 `PlannerInput.options`, and `PlannerInput.options` stays the single Planner bound
 authority — no Worker Client, Worker controller, or Domain module substitutes a
@@ -3466,21 +3507,25 @@ cancellation. The setting is Build List runtime UI state and is not persisted to
 `AppSettings` or IndexedDB. It is not the B8 orchestration bounds,
 `ConstrainedEnumerationBounds`, or `PlannerWhatIfBounds`, and none of those is
 exposed in this detail settings panel. The benchmark pages keep `beamWidth` and
-`maxExpandedStates` for the Beam oracle.
+`maxExpandedStates` for the Beam oracle, through `PlannerBeamSearchOptions`.
 
 A running Production Planner (Build List, replan Preview, B10 recalculation,
-what-if) is shown as indeterminate with Cancel: `PlannerProgress.maxExpandedStates`
-is never a completion denominator, and no estimated total Step count is shown,
-because physical sharing, silent fast-forward, dynamic release / recommit and
-deadlock / stall drops leave no single authority for it (`docs/UI_FLOW.md` 10.0).
+what-if) is shown as indeterminate with Cancel. The Production Planner Worker sends no
+progress at all (no `progress` response, no `PlannerProgress`, no Client `onProgress`,
+Phase D-2a), and no estimated total Step count is shown, because physical sharing,
+silent fast-forward, dynamic release / recommit and deadlock / stall drops leave no
+single authority for it (`docs/UI_FLOW.md` 10.0). Cancellation never depends on a
+progress message.
 
 ### Typed Search Termination
 
-How a Beam Search ended is typed data, never a parsed warning message.
-`PlannerSearchTermination` carries `status`, `reachedLimits`, the `limits` the
-run actually used, `expandedStates`, `completedTargetCount`, and
+How a full Planner run ended is typed data, never a parsed warning message.
+`PlannerRunTermination` (Issue #103 Phase D-2a; the Beam oracle has its own
+`PlannerBeamSearchTermination` of the same shape) carries `status`, `reachedLimits`,
+the `limits` the run actually used, `expandedStates`, `completedTargetCount`, and
 `totalTargetCount`, and it reaches UI, Application, and Persistence through
-`PlannerBeamSearchResult.termination` and `PlannerResult.termination`.
+`PlannerRunResult.termination` and `PlannerResult.termination`. A Production
+`reachedLimits` can only be `max_plan_steps`.
 
 Status precedence is `cancelled`, then `completed` (every enabled Target reached
 Ideal), then `incomplete` (a `PlannerOptions` bound truncated the search first),
@@ -3512,7 +3557,7 @@ ProductionPlan becomes `calculation_context_changed`.
 The two fail-closed defences are separate and both stay in force: version 5 closes
 old persisted artifacts, and `termination.status === 'incomplete'` closes newly
 calculated results. Raising the schema version never removes the Persistence
-termination check. `PlannerSearchTermination` is runtime result metadata and is never
+termination check. The typed termination is runtime result metadata and is never
 persisted in `ProductionPlan`, `PlanStep`, `BuildListEntry`, or the DB schema.
 Calculation semantics and artifact validity are separate from the Dexie schema. At that boundary,
 `DATABASE_SCHEMA_VERSION = 1`, `AppSettings.schemaVersion = 1`, and

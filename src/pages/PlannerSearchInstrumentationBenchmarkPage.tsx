@@ -5,7 +5,7 @@ import {
 } from '@mui/material'
 import { PageShell } from '../components/PageShell'
 import { loadMasterData } from '../domain/master/loadMasterData'
-import type { PlannerOptions } from '../domain/planner'
+import type { PlannerBeamSearchOptions } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import { PLANNER_SEARCH_INSTRUMENTATION_WORKLOADS } from '../benchmarks/plannerSearchInstrumentationFixtures'
 import {
@@ -84,7 +84,7 @@ function report(run: PlannerSearchInstrumentationBrowserRun, label: string): str
       `source: ${label}`,
       `strategy: scheduler`,
       `entries: ${run.entryCount}`,
-      `options: maxPlanSteps ${scheduler.options.maxPlanSteps} / maxExpandedStates ${scheduler.options.maxExpandedStates} / beamWidth ${scheduler.options.beamWidth} (unused)`,
+      `options: maxPlanSteps ${scheduler.options.maxPlanSteps} (the scheduler receives no Beam Search oracle bound)`,
       `instrumented: ${scheduler.instrumented}`,
       `Worker elapsed: ${scheduler.elapsedMs.toFixed(1)} ms, round trip: ${run.roundTripMs.toFixed(1)} ms`,
       ...environmentLines(),
@@ -145,7 +145,7 @@ function compareReport(
 
 interface ConsoleRunRequest {
   workloadId: string
-  options: PlannerOptions
+  options: PlannerBeamSearchOptions
   instrumented?: boolean
   projections?: boolean
   /** Omitted means the PR #107 Beam Search run. */
@@ -246,7 +246,7 @@ export function PlannerSearchInstrumentationBenchmarkPage() {
 
   const startRun = (
     requestSource: PlannerSearchInstrumentationBenchmarkSource,
-    options: PlannerOptions,
+    options: PlannerBeamSearchOptions,
     runStrategy: PlannerBenchmarkStrategy,
   ) => {
     const started = startPlannerSearchInstrumentationBrowserRun(
@@ -269,7 +269,7 @@ export function PlannerSearchInstrumentationBenchmarkPage() {
     setRawJson(null)
     setLive(null)
     cancelRequested.current = false
-    const options: PlannerOptions | null = (() => {
+    const options: PlannerBeamSearchOptions | null = (() => {
       const steps = parsePositiveInteger(maxPlanSteps)
       const expanded = parsePositiveInteger(maxExpandedStates)
       const width = parsePositiveInteger(beamWidth)

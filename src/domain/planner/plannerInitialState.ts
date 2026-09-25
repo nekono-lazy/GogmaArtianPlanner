@@ -31,7 +31,7 @@ export interface InitialPlannerSearchStateResult {
   planningTargets: TargetWeapon[]
 }
 
-/** Creates a Beam Search start state without applying any route or RNG operation. */
+/** Creates a full Planner run start state without applying any route or RNG operation. */
 export function createInitialPlannerSearchState(input: PlannerInput, validEntries: readonly ValidatedBuildListEntry[]): InitialPlannerSearchStateResult {
   const planningTargets = derivePlannerPlanningTargets(input.targetWeapons, validEntries)
   const inventory = createSimulatedInventory(input.ownedWeapons)

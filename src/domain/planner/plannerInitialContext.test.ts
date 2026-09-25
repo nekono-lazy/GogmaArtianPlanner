@@ -14,7 +14,7 @@ import {
 } from '../../test/fixtures/plannerBeam'
 import { entryIsRelevantForState } from './plannerEntryRelevance'
 import { preparePlannerInitialContext } from './plannerInitialContext'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 
 function singleEntryFixture() {
   const goal = target('target.preflight.single')
@@ -326,7 +326,7 @@ describe('Planner initial context preparation', () => {
       [structuredClone(scenario.first), structuredClone(scenario.second)],
       [scenario.firstSource, scenario.secondSource],
     )
-    const result = await runPlannerBeamSearch(searched.input, searched.dependencies)
+    const result = await runPlannerBeamSearchOracle(searched.input, searched.dependencies)
     expect(result.conflicts.map(({ id }) => id))
       .toEqual(context.initialConflictDetection.conflicts.map(({ id }) => id))
     expect(result.excludedBuildListEntries).toEqual(context.excludedBuildListEntries)
@@ -336,7 +336,7 @@ describe('Planner initial context preparation', () => {
     const staleContext = readyContext(stale.input, stale.dependencies)
     const staleSearch = singleEntryFixture()
     staleSearch.input.targetWeapons[0].priority = 5
-    const staleResult = await runPlannerBeamSearch(
+    const staleResult = await runPlannerBeamSearchOracle(
       staleSearch.input,
       staleSearch.dependencies,
     )

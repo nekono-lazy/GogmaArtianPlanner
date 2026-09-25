@@ -22,7 +22,7 @@ import {
   createPlannerRouteUnitPlans,
 } from './plannerRouteProgress'
 import { replayPlannerSearchTrace } from './plannerTraceReplay'
-import { runPlannerBeamSearch } from './plannerBeamSearch'
+import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { createProductionPlan } from './productionPlanGeneration'
 import { validatePlannerInput } from './plannerValidation'
 import type {
@@ -241,7 +241,7 @@ describe('Planner execution of the forced Reset Normal Artian route', () => {
     expect(validation.validBuildListEntries.map(({ entry: valid }) => valid.id))
       .toEqual([entry.id])
 
-    const beam = await runPlannerBeamSearch(input, dependencies)
+    const beam = await runPlannerBeamSearchOracle(input, dependencies)
     expect(beam.rejections.filter(({ reason }) => reason === 'counter_unavailable'))
       .toEqual([])
     expect(beam.bestState?.selectedBuildListEntryIds).toEqual([entry.id])
@@ -297,7 +297,7 @@ describe('Planner execution of the forced Reset Normal Artian route', () => {
         throw new Error('Blind creation must not predict a Normal Artian result.')
       })
 
-    const beam = await runPlannerBeamSearch(input, dependencies)
+    const beam = await runPlannerBeamSearchOracle(input, dependencies)
     expect(beam.bestState?.currentNormalCounters).toEqual([
       expect.objectContaining({ id: 'weapon.fixture.a:8', counter: 5, isConfirmed: true }),
     ])
@@ -341,7 +341,7 @@ describe('Planner execution of the forced Reset Normal Artian route', () => {
     )
     const { input, dependencies } = blindFixture([entry], [targetWeapon], [unconfirmed])
 
-    const beam = await runPlannerBeamSearch(input, dependencies)
+    const beam = await runPlannerBeamSearchOracle(input, dependencies)
     expect(beam.bestState?.currentNormalCounters).toEqual([
       expect.objectContaining({ counter: 4, isConfirmed: false }),
     ])
@@ -362,7 +362,7 @@ describe('Planner execution of the forced Reset Normal Artian route', () => {
     const { targetWeapon, entry } = blindEntry('entry.blind.absent', 'target.blind.absent')
     const { input, dependencies } = blindFixture([entry], [targetWeapon], [])
 
-    const beam = await runPlannerBeamSearch(input, dependencies)
+    const beam = await runPlannerBeamSearchOracle(input, dependencies)
     expect(beam.bestState?.currentNormalCounters).toEqual([])
 
     const { plan } = await createProductionPlan(input, dependencies)
@@ -464,7 +464,7 @@ describe('Trace Replay of the forced Reset Normal Artian route', () => {
     const { targetWeapon, entry } = blindEntry('entry.blind.replay', 'target.blind.replay')
     const { input, dependencies } = blindFixture([entry], [targetWeapon])
     const predictNormalArtian = vi.spyOn(dependencies.rngEngine, 'predictNormalArtian')
-    const beam = await runPlannerBeamSearch(input, dependencies)
+    const beam = await runPlannerBeamSearchOracle(input, dependencies)
     if (!beam.bestState) throw new Error('Fixture Beam Search produced no state.')
     return { input, dependencies, entry, beam, predictNormalArtian }
   }
@@ -472,7 +472,7 @@ describe('Trace Replay of the forced Reset Normal Artian route', () => {
   function replayTrace(
     input: PlannerInput,
     dependencies: PlannerDependencies,
-    bestState: NonNullable<Awaited<ReturnType<typeof runPlannerBeamSearch>>['bestState']>,
+    bestState: NonNullable<Awaited<ReturnType<typeof runPlannerBeamSearchOracle>>['bestState']>,
     trace: PlannerSearchAction[],
   ) {
     return replayPlannerSearchTrace(input, { ...bestState, trace }, dependencies.rngEngine)

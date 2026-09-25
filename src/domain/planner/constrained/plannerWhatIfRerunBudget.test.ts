@@ -3,7 +3,7 @@ import { runtimeUnsupportedFixture } from '../../../test/fixtures/plannerRuntime
 import { createProductionPlanWithObserver } from '../productionPlanGeneration'
 import { PlannerWhatIfBoundsError } from './plannerWhatIfBounds'
 import {
-  createPlannerWhatIfFullBeamBudget,
+  createPlannerWhatIfFullRunBudget,
   PlannerWhatIfRerunLimitError,
 } from './plannerWhatIfRerunBudget'
 
@@ -19,7 +19,7 @@ import {
 describe('B9 what-if full Beam budget', () => {
   it('fails closed on invalid bounds instead of substituting a default', () => {
     expect(() =>
-      createPlannerWhatIfFullBeamBudget({
+      createPlannerWhatIfFullRunBudget({
         maxCandidateTrialsPerTarget: 1,
         maxPlannerReruns: 0,
       }),
@@ -27,7 +27,7 @@ describe('B9 what-if full Beam budget', () => {
   })
 
   it('counts every started execution and reports exhaustion without truncating', () => {
-    const budget = createPlannerWhatIfFullBeamBudget({
+    const budget = createPlannerWhatIfFullRunBudget({
       maxCandidateTrialsPerTarget: 1,
       maxPlannerReruns: 2,
     })
@@ -50,7 +50,7 @@ describe('B9 what-if full Beam budget', () => {
   })
 
   it('refuses the execution the limit actually blocks', () => {
-    const budget = createPlannerWhatIfFullBeamBudget({
+    const budget = createPlannerWhatIfFullRunBudget({
       maxCandidateTrialsPerTarget: 1,
       maxPlannerReruns: 1,
     })
@@ -70,7 +70,7 @@ describe('B9 what-if full Beam budget', () => {
 
   it('counts a runtime-unsupported retry Beam Search', async () => {
     const { input, dependencies } = runtimeUnsupportedFixture()
-    const budget = createPlannerWhatIfFullBeamBudget({
+    const budget = createPlannerWhatIfFullRunBudget({
       maxCandidateTrialsPerTarget: 1,
       maxPlannerReruns: 2,
     })
@@ -89,7 +89,7 @@ describe('B9 what-if full Beam budget', () => {
 
   it('blocks the retry Beam Search when only one execution is affordable', async () => {
     const { input, dependencies } = runtimeUnsupportedFixture()
-    const budget = createPlannerWhatIfFullBeamBudget({
+    const budget = createPlannerWhatIfFullRunBudget({
       maxCandidateTrialsPerTarget: 1,
       maxPlannerReruns: 1,
     })
