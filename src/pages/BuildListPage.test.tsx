@@ -519,6 +519,8 @@ describe('BuildListPage', () => {
   })
 
   it.each([
+    // 1000 Route operations + the reserve_candidate action = 1001 Planner actions.
+    [1000, 1500],
     [1470, 1500],
     [1601, 2000],
   ])('starts at the recommended bound for a %i-operation Candidate and sends it', async (operationCount, expected) => {

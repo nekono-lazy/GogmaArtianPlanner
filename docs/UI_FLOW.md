@@ -1215,10 +1215,14 @@ Accordion冒頭の説明文は「生産計画の作成に使う安全上限で�
 - Domain / Applicationのfallback既定値は引き続き `defaultPlannerOptions`（`maxPlanSteps = 1000`）である
 - BuildList画面の既定値（推奨値）は `recommendedBuildListMaxPlanSteps()`
   （`src/services/planner/plannerRuntimeOptions.ts`）だけをauthorityとし、
-  `max(defaultPlannerOptions.maxPlanSteps, ceilTo500(登録Entryの最大 candidateSnapshot.estimatedOperationCount))`
+  `max(defaultPlannerOptions.maxPlanSteps, ceilTo500(登録Entryの最大 candidateSnapshot.estimatedOperationCount + 1))`
   とする（Issue #130）。500刻みは共通定数 `PLANNER_MAX_PLAN_STEPS_INCREMENT` で表す。
   `estimatedOperationCount` はCandidate Routeのoperation unit数（`create_normal_artian.count` も1本 = 1 unit）
-  であり、Planner Route Unitと同じ単位なので推奨上限の目安に使える。staleなEntryやlegacy duplicateも
+  だけを数える。一方Plannerの `maxPlanSteps` はRoute actionに加えて、Route完了後にCandidateを確保する
+  内部action `reserve_candidate` も1 actionとして数える。そのため単体Candidateの完成に必要な最低action数
+  `estimatedOperationCount + 1`（`+ 1` は安全marginではなく `CANDIDATE_RESERVE_PLANNER_ACTION_COUNT`
+  = 確保action）を500刻みへ切り上げる。例: 999 → 1000、1000 → 1500、1470 → 1500、1500 → 2000、
+  2000 → 2500。staleなEntryやlegacy duplicateも
   登録済みCandidateとして単純に最大値へ含め、cardinalityやPlanner採否の意味は変えない。
   Entryが無い場合は1000
 - ユーザーがまだ値を編集していない間は、表示値を読み込み済みEntryの推奨値から導出する。

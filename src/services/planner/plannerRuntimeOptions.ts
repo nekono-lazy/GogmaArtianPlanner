@@ -23,6 +23,18 @@ export const PLANNER_MAX_PLAN_STEPS_INCREMENT = 500
  */
 export const CONFLICT_RESOLUTION_MAX_PLAN_STEPS_MARGIN = 500
 
+/**
+ * The Planner actions a Candidate needs besides its Route operations.
+ *
+ * `candidateSnapshot.estimatedOperationCount` counts the Route's operation
+ * units only, while the Production scheduler also spends one
+ * `maxPlanSteps` action (`canApplyAction()` / `actionApplied()`) on the
+ * internal `reserve_candidate` that secures the Candidate once its Route is
+ * done. This is that real action, not a safety margin: a 1000-operation
+ * Candidate needs 1001 Planner actions to complete on its own.
+ */
+export const CANDIDATE_RESERVE_PLANNER_ACTION_COUNT = 1
+
 /** Rounds a non-negative Step count up to the next multiple of 500. */
 export function roundUpPlannerMaxPlanSteps(value: number): number {
   if (!Number.isFinite(value) || value < 0) {
@@ -36,21 +48,30 @@ export function roundUpPlannerMaxPlanSteps(value: number): number {
 
 /**
  * The Build List detail settings' recommended `maxPlanSteps`:
- * `max(1000, ceilTo500(max estimatedOperationCount))` over every Entry the
- * Build List holds - stale Entries and legacy duplicates included, since the
- * value only sizes a safety bound and decides nothing about which Entry the
- * Planner accepts.
+ * `max(1000, ceilTo500(max estimatedOperationCount + 1))` over every Entry the
+ * Build List holds, where the `+ 1` is the Candidate's `reserve_candidate`
+ * action (`CANDIDATE_RESERVE_PLANNER_ACTION_COUNT`), so the recommendation
+ * always lets the largest Candidate complete on its own. Stale Entries and
+ * legacy duplicates are included, since the value only sizes a safety bound
+ * and decides nothing about which Entry the Planner accepts. An empty Build
+ * List recommends 1000.
  */
 export function recommendedBuildListMaxPlanSteps(
   entries: readonly Pick<BuildListEntry, 'candidateSnapshot'>[],
 ): number {
-  const maxEstimatedOperationCount = entries.reduce(
-    (max, entry) => Math.max(max, entry.candidateSnapshot.estimatedOperationCount),
+  if (entries.length === 0) return defaultPlannerOptions.maxPlanSteps
+  const maxCandidatePlannerActions = entries.reduce(
+    (max, entry) =>
+      Math.max(
+        max,
+        entry.candidateSnapshot.estimatedOperationCount +
+          CANDIDATE_RESERVE_PLANNER_ACTION_COUNT,
+      ),
     0,
   )
   return Math.max(
     defaultPlannerOptions.maxPlanSteps,
-    roundUpPlannerMaxPlanSteps(maxEstimatedOperationCount),
+    roundUpPlannerMaxPlanSteps(maxCandidatePlannerActions),
   )
 }
 

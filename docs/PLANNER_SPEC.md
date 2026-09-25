@@ -867,8 +867,12 @@ pure helper（`src/services/planner/plannerRuntimeOptions.ts`）で導出し、`
 `roundUpPlannerMaxPlanSteps()` だけが行う。
 
 - BuildList画面の推奨値（`recommendedBuildListMaxPlanSteps(entries)`）:
-  `max(1000, ceilTo500(登録Entryの最大 candidateSnapshot.estimatedOperationCount))`。
-  stale Entry・legacy duplicateも単純に最大値へ含める。ユーザーが編集していない間の表示値と
+  `max(1000, ceilTo500(登録Entryの最大 candidateSnapshot.estimatedOperationCount + 1))`。
+  `estimatedOperationCount` はRoute operation unit数だけであり、決定的schedulerはRoute actionに加えて
+  Candidate確保の `reserve_candidate` も `canApplyAction()` / `actionApplied()` で `maxPlanSteps` へ
+  数える。`+ 1` は安全marginではなくこの確保action（`CANDIDATE_RESERVE_PLANNER_ACTION_COUNT`）であり、
+  推奨値のままで最大Candidateが単体で完成できることを保証する（1000 operation → 1001 action → 1500）。
+  Entryが無い場合は1000。stale Entry・legacy duplicateも単純に最大値へ含める。ユーザーが編集していない間の表示値と
   「既定値に戻す」の戻り先であり、ユーザー編集後はその入力値がauthorityになる（UI_FLOW 10.0）
 - 競合解決の再計算（`conflictResolutionMaxPlanSteps(plan)`、9.5 / UI_FLOW 11.4）:
   `max(1000, ceilTo500(表示中Plan.steps.length) + CONFLICT_RESOLUTION_MAX_PLAN_STEPS_MARGIN)`

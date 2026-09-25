@@ -1745,7 +1745,8 @@ v1のProduction `PlannerOptions` は1以上の整数 `maxPlanSteps` だけとす
 Production Planner（決定的scheduler、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7）が読むboundは
 `maxPlanSteps` だけであり、型もそれに一致させる。初期値は `defaultPlannerOptions = { maxPlanSteps: 1000 }`。
 これはDomain / Applicationのfallback既定値であり、BuildList画面の初期表示（登録Candidateの最大
-`estimatedOperationCount` を500刻みで切り上げ、最低1000）と競合解決再計算の上限（表示中Planの
+`estimatedOperationCount` にCandidate確保action `reserve_candidate` の1を加えて500刻みで切り上げ、
+最低1000）と競合解決再計算の上限（表示中Planの
 Step数を500刻みで切り上げて+500、最低1000）はApplication callerがruntimeに導出する
 （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.2.1、Issue #130）。導出値も含め `PlannerOptions` は
 永続化しない。

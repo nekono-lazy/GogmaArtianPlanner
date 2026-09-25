@@ -8,6 +8,7 @@ import {
   createValidProductionPlan,
 } from '../../test/fixtures/domainData'
 import {
+  CANDIDATE_RESERVE_PLANNER_ACTION_COUNT,
   CONFLICT_RESOLUTION_MAX_PLAN_STEPS_MARGIN,
   PLANNER_MAX_PLAN_STEPS_INCREMENT,
   conflictResolutionMaxPlanSteps,
@@ -51,16 +52,25 @@ describe('recommendedBuildListMaxPlanSteps', () => {
     expect(recommendedBuildListMaxPlanSteps([])).toBe(1000)
   })
 
+  it('adds the one reserve_candidate action estimatedOperationCount does not count', () => {
+    expect(CANDIDATE_RESERVE_PLANNER_ACTION_COUNT).toBe(1)
+  })
+
   it.each([
+    [0, 1000],
     [500, 1000],
-    [1000, 1000],
+    [999, 1000],
+    [1000, 1500],
     [1001, 1500],
     [1470, 1500],
-    [1500, 1500],
+    [1499, 1500],
+    [1500, 2000],
     [1501, 2000],
-    [2000, 2000],
+    [1601, 2000],
+    [1999, 2000],
+    [2000, 2500],
     [2001, 2500],
-  ])('max(1000, ceilTo500(%i)) = %i', (operationCount, expected) => {
+  ])('max(1000, ceilTo500(%i + reserve_candidate 1)) = %i', (operationCount, expected) => {
     expect(recommendedBuildListMaxPlanSteps([entryWithOperations(operationCount)])).toBe(expected)
   })
 
