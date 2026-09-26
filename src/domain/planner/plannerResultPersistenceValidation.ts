@@ -19,9 +19,11 @@ import type {
 } from '../models/publicTypes'
 import {
   validateBuildListEntry,
+  validatePlannerConflictRepairLineage,
   validateProductionPlan,
 } from '../models/publicTypes'
 import type { DomainValidationResult } from '../models/validation'
+import type { PlannerAlternativeRepairArtifact } from './alternative'
 import type { PlannerRunTermination } from './plannerTypes'
 
 /**
@@ -229,10 +231,38 @@ export function checkGeneratedBuildListEntriesFresh(
  * part of that set, so a Plan still naming it anywhere - a selected Entry, a
  * Step, a conflict participant, recommendation or selection, a rejection - is
  * refused.
+ *
+ * The "every generated Entry is selected" half is the B8 orchestration
+ * contract. The Planner Alternative actual repair does not have it (an
+ * accepted replacement may be unselected, 9.2.19.6), so it checks only
+ * `checkProductionPlanBuildListEntryReferences()`.
  */
 export function checkProductionPlanBuildListReferences(
   plan: ProductionPlan,
   generatedEntries: readonly BuildListEntry[],
+  finalEntries: readonly BuildListEntry[],
+): PlannerResultPersistenceIssue | null {
+  const references = checkProductionPlanBuildListEntryReferences(plan, finalEntries)
+  if (references !== null) return references
+  const selected = new Set(plan.selectedBuildListEntryIds)
+  const unselected = generatedEntries.find(({ id }) => !selected.has(id))
+  if (unselected) {
+    return resultInvalid(
+      `Generated BuildListEntry '${unselected.id}' is not selected by the final ProductionPlan.`,
+    )
+  }
+  return null
+}
+
+/**
+ * Every BuildListEntry the Plan references - a selected Entry, a Step, a
+ * conflict participant, recommendation or selection, a rejection - exists in
+ * the final replacement set, and each Candidate-derived Step carries its Entry
+ * Snapshot's Candidate ID. A replaced Entry `O` is not part of that set, so a
+ * Plan still naming it anywhere is refused.
+ */
+export function checkProductionPlanBuildListEntryReferences(
+  plan: ProductionPlan,
   finalEntries: readonly BuildListEntry[],
 ): PlannerResultPersistenceIssue | null {
   const entryById = new Map(finalEntries.map((entry) => [entry.id, entry]))
@@ -286,13 +316,115 @@ export function checkProductionPlanBuildListReferences(
       )
     }
   }
-
-  const selected = new Set(plan.selectedBuildListEntryIds)
-  const unselected = generatedEntries.find(({ id }) => !selected.has(id))
-  if (unselected) {
-    return resultInvalid(
-      `Generated BuildListEntry '${unselected.id}' is not selected by the final ProductionPlan.`,
-    )
-  }
   return null
+}
+
+/**
+ * Exact structural equality of two untrusted values: primitives by identity,
+ * arrays element by element in order, plain objects field by field whatever
+ * their key order (a field holding `undefined` equals an absent one). Nothing
+ * is sorted or canonicalized.
+ */
+function sameStructure(left: unknown, right: unknown): boolean {
+  if (left === right) return true
+  if (typeof left !== 'object' || typeof right !== 'object' || left === null || right === null) return false
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+      left.every((value, index) => sameStructure(value, right[index]))
+  }
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const keys = new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)])
+  return [...keys].every((key) => sameStructure(leftRecord[key], rightRecord[key]))
+}
+
+/** One Planner Alternative actual repair, its shape checked and its Draft carrying the lineage. */
+export interface PersistablePlannerAlternativeRepair {
+  /** The final scenario Plan with `conflictRepairLineage` set exactly to the artifact's lineage. */
+  plan: ProductionPlan
+  generatedEntries: readonly BuildListEntry[]
+  replacements: readonly BuildListEntryReplacement[]
+}
+
+export type PlannerAlternativeRepairShapeResult =
+  | { issue: null; repair: PersistablePlannerAlternativeRepair }
+  | { issue: PlannerResultPersistenceIssue; repair: null }
+
+function replacementIdentity(targetWeaponId: string, replaced: string, generated: string | null): string {
+  return JSON.stringify([targetWeaponId, replaced, generated])
+}
+
+/**
+ * The result-shape invariants of a Planner Alternative actual repair artifact
+ * that do not depend on current persisted state (`docs/PLANNER_SPEC.md`
+ * 9.2.19.8 / 9.2.19.11): a final scenario Plan exists, its run is not
+ * `incomplete` and honoured every explicit resolution (no
+ * `invalid_conflict_resolution`), `conflicts` and `plan.conflicts` are the one
+ * expanded list - every PlanConflict equal field by field in the same order,
+ * never only by ID - the generated Entries and their `O -> G` replacements pair up
+ * (`checkPersistablePlannerResultShape()`: draft Plan, unique IDs, Domain-valid
+ * Plan and Entries), and the lineage is structurally valid and its last
+ * decision records exactly these replacements as `replaced`.
+ *
+ * It returns the Plan to persist: the artifact's Plan with
+ * `conflictRepairLineage` set exactly to the artifact's lineage - never a
+ * lineage rebuilt from persisted state or the Plan's Conflicts. It does not
+ * require a generated Entry to be selected by the Plan: the accepted
+ * replacement set is the authority (9.2.19.6), unlike the B8 contract of
+ * `checkProductionPlanBuildListReferences()`.
+ */
+export function checkPersistablePlannerAlternativeRepairShape(
+  artifact: PlannerAlternativeRepairArtifact,
+): PlannerAlternativeRepairShapeResult {
+  const fail = (issue: PlannerResultPersistenceIssue): PlannerAlternativeRepairShapeResult =>
+    ({ issue, repair: null })
+  const { plannerResult, conflictRepairLineage } = artifact
+  const generatedEntries = artifact.generatedBuildListEntries
+  const replacements = artifact.generatedBuildListEntryReplacements
+  const artifactPlan = plannerResult.plan as ProductionPlan | null
+  if (artifactPlan === null || artifactPlan === undefined) {
+    return fail(resultInvalid('A Planner Alternative repair artifact must carry the final scenario Plan.'))
+  }
+  if (plannerResult.warnings.some(({ kind }) => kind === 'invalid_conflict_resolution')) {
+    return fail(resultInvalid(
+      'The final scenario Plan could not honour an explicit conflict resolution (invalid_conflict_resolution) and must not be saved.',
+    ))
+  }
+  // The Domain returns one canonical expanded list for both (9.2.19.9); a
+  // Worker artifact whose two lists differ in any field - a selection, a
+  // participant, a kind - is malformed, not re-sorted or partially compared.
+  if (!sameStructure(artifactPlan.conflicts, plannerResult.conflicts)) {
+    return fail(resultInvalid('The repair artifact reports different Conflicts for its result and its Plan.'))
+  }
+  if (conflictRepairLineage === null || conflictRepairLineage === undefined) {
+    return fail(resultInvalid('A Planner Alternative repair artifact must carry the repair lineage of the Draft it saves.'))
+  }
+  const lineageValidation = validatePlannerConflictRepairLineage(conflictRepairLineage)
+  if (!lineageValidation.isValid) {
+    return fail({ kind: 'entity_invalid', entityName: 'ProductionPlan', validation: lineageValidation })
+  }
+  const decision = conflictRepairLineage.decisions.at(-1)
+  if (decision === undefined) {
+    return fail(resultInvalid('The repair lineage must record this decision as its last decision.'))
+  }
+  const plan: ProductionPlan = { ...artifactPlan, conflictRepairLineage: structuredClone(conflictRepairLineage) }
+  const shape = checkPersistablePlannerResultShape(plan, generatedEntries, plannerResult.termination, replacements)
+  if (shape !== null) return fail(shape)
+  const recorded = decision.invalidatedRoutes
+    .filter(({ outcome }) => outcome === 'replaced')
+    .map((record) => replacementIdentity(record.targetWeaponId, record.invalidatedBuildListEntryId, record.replacementBuildListEntryId))
+    .sort()
+  const replaced = replacements
+    .map((replacement) => replacementIdentity(
+      replacement.targetWeaponId,
+      replacement.replacedBuildListEntryId,
+      replacement.generatedBuildListEntryId,
+    ))
+    .sort()
+  if (recorded.join('\n') !== replaced.join('\n')) {
+    return fail(resultInvalid(
+      'The last repair decision of the lineage does not record exactly the replacements this repair saves.',
+    ))
+  }
+  return { issue: null, repair: { plan, generatedEntries, replacements } }
 }

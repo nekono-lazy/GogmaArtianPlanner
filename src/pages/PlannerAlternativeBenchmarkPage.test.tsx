@@ -50,7 +50,7 @@ describe('Planner Alternative Phase 3 benchmark page', () => {
     expect(api().sanity.rerunPressureExtent).toEqual({ maxNormalAdvance: 1, maxGogmaAdvance: 40, maxSkillAdvance: 1 })
     expect(api().sanity.rerunPressureCandidateTrials).toBe(8)
     expect(api().records()).toEqual([])
-    expect(api().environment()).toMatchObject({ engineVersion: 'production-rng:c5-e7', calculationAppSchemaVersion: 15 })
+    expect(api().environment()).toMatchObject({ engineVersion: 'production-rng:c5-e7', calculationAppSchemaVersion: 16 })
     expect(api().longHeld).toEqual({
       fixedExtent: { maxNormalAdvance: 1, maxGogmaAdvance: 513, maxSkillAdvance: 513 },
       skillIdealPosition: 853,

@@ -48,7 +48,7 @@ describe('fail-closed Target compromise migration', () => {
     try {
       await db.open()
       const migrated = await db.targetWeapons.get(legacy.id)
-      expect(db.verno).toBe(9)
+      expect(db.verno).toBe(10)
       // v1 -> v2 -> v3 -> v4 -> v5 runs in order: the compromise migration first,
       // then the preferred owned weapon field, which starts unset for every
       // Target, then the owned Gogma status rename.
@@ -71,7 +71,7 @@ describe('Target semantics calculation boundary', () => {
   it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])('fails closed for every schema-%i calculation artifact', (version) => {
     const stored = { ...createValidBuildCandidate().calculationContext, appSchemaVersion: version }
     const current = { ...stored, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
     expect(isBuildResultCalculationContextCompatible(stored, current)).toBe(false)
     expect(isCalculationContextCompatible(stored, current)).toBe(false)
     expect(isBuildResultCalculationContextCompatible(current, current)).toBe(true)

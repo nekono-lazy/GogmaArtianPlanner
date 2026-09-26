@@ -281,6 +281,7 @@ describe('Export schema 8 -> 9', () => {
     delete plan.abandonmentReason
     delete plan.abandonedAt
     delete plan.completedAt
+    delete plan.conflictRepairLineage
     return plan as ProductionPlan
   }
 

@@ -71,6 +71,7 @@ function createFakeClient(options: FakeClientOptions = {}) {
     },
     createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
+    createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(),
     cancelPlan: vi.fn(),
     dispose,

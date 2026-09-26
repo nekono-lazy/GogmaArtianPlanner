@@ -59,8 +59,8 @@ describe('AppDatabase schema', () => {
       savePoints,
       settings,
     ]
-    expect(DATABASE_SCHEMA_VERSION).toBe(9)
-    expect(database.verno).toBe(9)
+    expect(DATABASE_SCHEMA_VERSION).toBe(10)
+    expect(database.verno).toBe(10)
     expect(typedTables).toHaveLength(10)
     database.close()
   })

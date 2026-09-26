@@ -16,9 +16,8 @@ import {
   ProductionPlanCalculationContextDetails,
   ProductionPlanContent,
 } from '../components/planner/ProductionPlanContent'
-import { ProductionPlanWhatIfComparison } from '../components/planner/ProductionPlanWhatIfComparison'
+import { ProductionPlanAlternativeComparison } from '../components/planner/ProductionPlanAlternativeComparison'
 import { productionPlannerRunningTitles } from '../components/planner/productionPlannerSettingsPresentation'
-import { createConflictResolutionIncompleteMessage } from '../components/planner/plannerSearchLimitPresentation'
 import { PlanExecutionEntry, type PlanStartPreviewState } from '../components/execution/PlanExecutionEntry'
 import { executionErrorMessage, savePointPositionLabel } from '../components/execution/executionStepPresentation'
 import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
@@ -41,11 +40,12 @@ import type {
   TargetWeapon,
 } from '../domain/models/publicTypes'
 import {
-  defaultPlannerOrchestrationBounds,
-  defaultPlannerWhatIfBounds,
-  type PlannerOrchestrationResult,
+  derivePlannerConflictRepairLineageContext,
+  type PlannerAlternativeComparison as PlannerAlternativeComparisonResult,
+  type PlannerAlternativeRepairArtifact,
+  type PlannerAlternativeRepairNotPersistableReason,
+  type PlannerAlternativeWhatIfCalculationResult,
   type PlannerInput,
-  type PlannerWhatIfCalculationResult,
 } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import { appDatabase } from '../db/AppDatabase'
@@ -61,7 +61,6 @@ import {
   CHECKPOINT_CONFLICT_MESSAGE,
   createProductionPlanInteractionViewModel,
   evaluateProductionPlanCalculationCompatibility,
-  mergeExplicitConflictResolution,
   restorePersistedExplicitResolutions,
   type ProductionPlanInteractionViewModel,
 } from '../services/planner/prepareProductionPlanInteraction'
@@ -72,8 +71,9 @@ import {
 } from '../services/planner/plannerWorkerClient'
 import {
   plannerResultPersistenceService,
-  type PlannerOrchestrationResultSaveOutcome,
+  type PlannerAlternativeRepairSaveOutcome,
 } from '../services/planner/plannerResultPersistenceService'
+import { presentPlannerAlternativeRepairNotSaved } from '../services/planner/presentProductionPlanAlternative'
 import {
   createProductionPlanExecutionService,
   type ProductionPlanStartInspection,
@@ -103,25 +103,32 @@ export interface ProductionPlanPageDependencies {
   createInput(calculationContext: CalculationContext): Promise<PlannerInput>
   createWorkerClient(): PlannerWorkerClient
   /**
-   * Whether saving a recalculated Draft needs the Plan-breaking approval: a
-   * generated BuildListEntry replaces an Entry an `active` Plan depends on
-   * (`docs/PLANNER_SPEC.md` 9.2.18 / 16.6). Read-only; the save re-derives it.
+   * Whether saving a Planner Alternative actual repair needs the Plan-breaking
+   * approval: an accepted replacement deletes an Entry an `active` Plan depends
+   * on (`docs/PLANNER_SPEC.md` 9.2.19.8 / 16.6). Read-only; the save re-derives it.
+   * `expectedSourceDraftId` is the displayed Draft the repair was calculated
+   * from, never an ID read again at save time.
    */
-  inspectPlannerResultSave(
-    result: PlannerOrchestrationResult,
+  inspectPlannerAlternativeRepairSave(
+    artifact: PlannerAlternativeRepairArtifact,
     currentCalculationContext: CalculationContext,
+    expectedSourceDraftId: ProductionPlanId,
   ): Promise<PlanBreakingChangeInspection>
   /**
-   * Saves a recalculated Draft. With an approval whose 16.10 decision restores
-   * the game save point, only the restore happens and the result is dropped
-   * (`docs/PLANNER_SPEC.md` 9.2.18): the outcome then asks for a new
-   * calculation from the restored state.
+   * Saves a Planner Alternative actual repair: the Entry replacements, the new
+   * Draft and its repair lineage in one transaction. With an approval whose
+   * 16.10 decision restores the game save point, only the restore happens and
+   * the artifact is dropped (`docs/PLANNER_SPEC.md` 9.2.18): the outcome then
+   * asks for a new calculation from the restored state. The save refuses with
+   * `planner_state_changed` unless the current Draft is still
+   * `expectedSourceDraftId` (the source Draft CAS, `docs/PLANNER_SPEC.md` 9.2.15).
    */
-  savePlannerResult(
-    result: PlannerOrchestrationResult,
+  savePlannerAlternativeRepair(
+    artifact: PlannerAlternativeRepairArtifact,
     currentCalculationContext: CalculationContext,
+    expectedSourceDraftId: ProductionPlanId,
     approval?: PlanBreakingChangeApproval | null,
-  ): Promise<PlannerOrchestrationResultSaveOutcome>
+  ): Promise<PlannerAlternativeRepairSaveOutcome>
   /**
    * The read-only preview of the Target links a draft's start makes
    * (`docs/UI_FLOW.md` 11). Never write authority: the start re-verifies.
@@ -157,15 +164,17 @@ function createDefaultDependencies(
     createInput: (calculationContext) =>
       createPlannerInput(master, calculationContext),
     createWorkerClient: createProductionPlannerWorkerClient,
-    inspectPlannerResultSave: (result, currentCalculationContext) =>
-      plannerResultPersistenceService.inspectPlannerOrchestrationResultSave(
-        result,
+    inspectPlannerAlternativeRepairSave: (artifact, currentCalculationContext, expectedSourceDraftId) =>
+      plannerResultPersistenceService.inspectPlannerAlternativeRepairSave(
+        artifact,
         currentCalculationContext,
+        expectedSourceDraftId,
       ),
-    savePlannerResult: (result, currentCalculationContext, approval) =>
-      plannerResultPersistenceService.savePlannerOrchestrationResult(
-        result,
+    savePlannerAlternativeRepair: (artifact, currentCalculationContext, expectedSourceDraftId, approval) =>
+      plannerResultPersistenceService.savePlannerAlternativeRepair(
+        artifact,
         currentCalculationContext,
+        expectedSourceDraftId,
         approval ?? null,
       ),
     inspectProductionPlanStart: (planId) => executionService.inspectProductionPlanStart(planId),
@@ -209,12 +218,17 @@ interface WhatIfTargetIdentity {
   buildListEntryId: BuildListEntryId
 }
 
+/**
+ * The Planner Alternative what-if of one participant (「比較する」,
+ * `docs/PLANNER_SPEC.md` 9.2.19.7). Transient: nothing of it is persisted, and
+ * the actual repair never reuses it.
+ */
 type WhatIfUiState =
   | { status: 'idle' }
   | (WhatIfTargetIdentity & { status: 'loading' })
   | (WhatIfTargetIdentity & {
       status: 'completed'
-      result: Extract<PlannerWhatIfCalculationResult, { status: 'completed' }>
+      result: Extract<PlannerAlternativeWhatIfCalculationResult, { status: 'completed' }>
       targetWeapons: PlannerInput['targetWeapons']
     })
   | (WhatIfTargetIdentity & {
@@ -222,11 +236,16 @@ type WhatIfUiState =
       failure:
         | {
             kind: 'typed'
-            result: Exclude<PlannerWhatIfCalculationResult, { status: 'completed' }>
+            result: Exclude<PlannerAlternativeWhatIfCalculationResult, { status: 'completed' }>
           }
         | { kind: 'unexpected'; message: string }
     })
 
+/**
+ * The Planner Alternative actual repair of 「この候補を優先」
+ * (`docs/PLANNER_SPEC.md` 9.2.19.8). Every state but a successful save keeps
+ * the displayed Draft and the Build List as they are.
+ */
 type ReplanUiState =
   | { status: 'idle' }
   | { status: 'loading' }
@@ -234,6 +253,18 @@ type ReplanUiState =
   | { status: 'failure'; message: string }
   | { status: 'notice'; message: string }
   | { status: 'invalid_resolution' }
+  | {
+      /** The repair calculated but has no savable final Plan; its typed comparison explains why. */
+      status: 'not_saved'
+      reason: Exclude<PlannerAlternativeRepairNotPersistableReason, 'invalid_conflict_resolution'>
+      comparison: PlannerAlternativeComparisonResult
+      targetWeapons: PlannerInput['targetWeapons']
+    }
+  | {
+      /** A typed preparation failure of the repair: nothing was calculated or saved. */
+      status: 'preparation_failure'
+      result: Exclude<PlannerAlternativeWhatIfCalculationResult, { status: 'completed' }>
+    }
 
 let fallbackRequestSequence = 0
 
@@ -856,17 +887,31 @@ export function ProductionPlanPage({
         return
       }
 
+      // The Planner Alternative what-if (PLANNER_SPEC 9.2.19.7): its trial and
+      // scenario runs use the same Conflict resolution Planner options the
+      // actual repair saves with (Issue #130), and it reads - never updates -
+      // the displayed Draft's still valid repair lineage (9.2.19.10 /
+      // 9.2.19.11). The lineage expiry is the Domain's, never re-derived here.
+      const whatIfInput: PlannerInput = {
+        ...plannerInput,
+        options: conflictResolutionPlannerOptions(displayedPlan),
+      }
+      const lineage = derivePlannerConflictRepairLineageContext(
+        displayedPlan.conflictRepairLineage,
+        whatIfInput.buildListEntries,
+      )
       const whatIfRequestId = createRequestId()
       activeWorkerRequestRef.current = whatIfRequestId
-      const result = await client.createWhatIfComparison(
+      const result = await client.createPlannerAlternativeComparison(
         whatIfRequestId,
         {
-          plannerInput,
+          plannerInput: whatIfInput,
           scenarioResolution: {
             conflictKey: conflictId,
             selectedBuildListEntryId: currentParticipant.buildListEntryId,
           },
-          bounds: { ...defaultPlannerWhatIfBounds },
+          priorFixedBuildListEntryIds: lineage.priorFixedBuildListEntryIds,
+          priorExcludedRoutes: lineage.priorExcludedRoutes,
         },
         // No progress callback: the comparison is shown as indeterminate
         // (UI_FLOW 10.0, Issue #103 Phase D-1).
@@ -978,49 +1023,53 @@ export function ProductionPlanPage({
         return
       }
 
-      // The Application caller is the Planner bound authority (PLANNER_SPEC
-      // 7.2.1): the fresh input's `defaultPlannerOptions` is replaced by a
-      // bound derived from the Plan this page shows, never from the Build List
-      // page's temporary input (Issue #130).
-      const mergedInput: PlannerInput = {
-        ...mergeExplicitConflictResolution(plannerInput, {
-          conflictKey: conflictId,
-          selectedBuildListEntryId: buildListEntryId,
-        }),
+      // The Planner Alternative actual repair (PLANNER_SPEC 9.2.19.8) runs from
+      // this fresh input - never from a what-if result - with the decision
+      // merged in by the Domain (same conflictKey replaced) and the displayed
+      // Draft's repair lineage. The Application caller is the Planner bound
+      // authority (7.2.1): the fresh input's `defaultPlannerOptions` is
+      // replaced by a bound derived from the Plan this page shows, never from
+      // the Build List page's temporary input (Issue #130).
+      const repairInput: PlannerInput = {
+        ...plannerInput,
         options: conflictResolutionPlannerOptions(displayedPlan),
       }
       const requestId = createRequestId()
       activeWorkerRequestRef.current = requestId
-      const result = await client.createConstrainedPlan(
+      const calculated = await client.createPlannerAlternativeRepair(
         requestId,
-        mergedInput,
-        defaultPlannerOrchestrationBounds,
+        {
+          plannerInput: repairInput,
+          decision: { conflictKey: conflictId, selectedBuildListEntryId: buildListEntryId },
+          lineage: displayedPlan.conflictRepairLineage,
+        },
         // No progress callback: the recalculation is shown as indeterminate
         // (UI_FLOW 10.0, Issue #103 Phase D-1).
       )
       if (!isCurrentAction() || activeWorkerRequestRef.current !== requestId) return
       activeWorkerRequestRef.current = null
 
-      // Application fail-closed boundary: even a non-null ordinary Plan must not
-      // be saved if the Planner could not honour an explicit resolution.
-      const hasInvalidConflictResolution = result.warnings.some(
-        (warning) => warning.kind === 'invalid_conflict_resolution',
-      )
-      if (hasInvalidConflictResolution) {
-        setReplanState({ status: 'invalid_resolution' })
+      // Every branch below is decided by a typed status, never a message.
+      if (calculated.status !== 'completed') {
+        setReplanState({ status: 'preparation_failure', result: calculated })
         return
       }
-      // The same fail-closed boundary as the Build List (PLANNER_SPEC 7.2.1):
-      // a Plan calculated from a full Planner run that a `PlannerOptions` bound
-      // truncated is never saved and never opened. The typed termination
-      // decides that, never a warning message.
-      if (result.termination.status === 'incomplete') {
-        setReplanState({
-          status: 'notice',
-          message: createConflictResolutionIncompleteMessage(result.termination),
-        })
+      if (calculated.persistence.status === 'not_persistable') {
+        const { reason } = calculated.persistence
+        // Application fail-closed boundary: a Plan that could not honour an
+        // explicit resolution is never saved, and no other participant or the
+        // Planner recommendation is tried instead.
+        setReplanState(reason === 'invalid_conflict_resolution'
+          ? { status: 'invalid_resolution' }
+          : {
+              status: 'not_saved',
+              reason,
+              comparison: calculated.comparison,
+              targetWeapons: repairInput.targetWeapons,
+            })
         return
       }
+      const { artifact } = calculated.persistence
       if (!isCurrentAction()) return
       selectionSavingRef.current = true
       setReplanState({ status: 'saving' })
@@ -1029,14 +1078,19 @@ export function ProductionPlanPage({
         client.engineVersion,
       )
       if (!isCurrentAction()) return
-      // Pass the whole result, including no-Plan results: Persistence owns the
-      // generated-Entry invariants, the Entry replacement and the single atomic
+      // Persistence owns the artifact invariants, the current-state
+      // re-validation, the Entry replacement, the lineage and the single atomic
       // transaction. The runtime's inspection alone decides whether the
       // breaking-change warning is shown; nothing is judged here.
+      // The Draft the user acted on is the source authority of this artifact:
+      // its lineage is what the artifact continues, so the save refuses unless
+      // it is still the current Draft (PLANNER_SPEC 9.2.15).
+      const sourceDraftId = displayedPlan.id
       const saved = await planGuard.run({
-        inspect: () => dependencies.inspectPlannerResultSave(result, saveCalculationContext),
+        inspect: () =>
+          dependencies.inspectPlannerAlternativeRepairSave(artifact, saveCalculationContext, sourceDraftId),
         apply: (approval) =>
-          dependencies.savePlannerResult(result, saveCalculationContext, approval),
+          dependencies.savePlannerAlternativeRepair(artifact, saveCalculationContext, sourceDraftId, approval),
         note: 'この再計算では作成リストの候補が置き換わり、実行中の生産計画が参照している候補が削除されます。',
         // This result was calculated before any restore, so restoring drops it
         // instead of saving it over the restored state (PLANNER_SPEC 9.2.18).
@@ -1058,16 +1112,8 @@ export function ProductionPlanPage({
         setReplanState({ status: 'notice', message: SAVE_POINT_RESTORED_RECALCULATION_MESSAGE })
         return
       }
-      const savedPlan = saved.result.kind === 'saved' ? saved.result.plan : null
-      if (savedPlan === null) {
-        setReplanState({
-          status: 'notice',
-          message: '現在の入力から新しい生産計画を作成できませんでした。',
-        })
-      } else {
-        setReplanState({ status: 'idle' })
-        void navigate(`/plans/${savedPlan.id}`)
-      }
+      setReplanState({ status: 'idle' })
+      void navigate(`/plans/${saved.result.plan.id}`)
     } catch (caught: unknown) {
       if (!isCurrentAction()) return
       setReplanState(caught instanceof PlannerCancelledError
@@ -1329,6 +1375,31 @@ export function ProductionPlanPage({
                     再選択またはビルドリストから再計算してください。
                   </Alert>
                 )}
+                {replanState.status === 'not_saved' && (
+                  <Stack spacing={1.5}>
+                    <Alert severity="info">
+                      {presentPlannerAlternativeRepairNotSaved(
+                        replanState.reason,
+                        replanState.comparison.scenario.status === 'stopped_by_plan_step_bound'
+                          ? replanState.comparison.scenario.maxPlanSteps
+                          : null,
+                      )}
+                    </Alert>
+                    <ProductionPlanAlternativeComparison
+                      result={{ status: 'completed', comparison: replanState.comparison }}
+                      targetWeapons={replanState.targetWeapons}
+                      headingLevel="h3"
+                      title="この候補を優先した結果（保存していません）"
+                    />
+                  </Stack>
+                )}
+                {replanState.status === 'preparation_failure' && (
+                  <ProductionPlanAlternativeComparison
+                    result={replanState.result}
+                    targetWeapons={[]}
+                    headingLevel="h3"
+                  />
+                )}
                 {whatIfNotice && <Alert severity="info">{whatIfNotice}</Alert>}
                 {state.viewModel.planStatusMessage && (
                   <Alert
@@ -1418,7 +1489,7 @@ export function ProductionPlanPage({
                             </Stack>
                           )}
                           {showsWhatIf && whatIfState.status === 'completed' && (
-                            <ProductionPlanWhatIfComparison
+                            <ProductionPlanAlternativeComparison
                               result={whatIfState.result}
                               targetWeapons={whatIfState.targetWeapons}
                               headingLevel="h5"
@@ -1426,7 +1497,7 @@ export function ProductionPlanPage({
                           )}
                           {showsWhatIf && whatIfState.status === 'failure' &&
                             (whatIfState.failure.kind === 'typed' ? (
-                              <ProductionPlanWhatIfComparison
+                              <ProductionPlanAlternativeComparison
                                 result={whatIfState.failure.result}
                                 targetWeapons={[]}
                                 headingLevel="h5"

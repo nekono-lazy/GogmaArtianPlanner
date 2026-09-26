@@ -50,11 +50,11 @@ function openSchema8(name: string): Dexie {
 const RECOMMENDED = { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 }
 
 describe('AppSettings Candidate Search defaults persistence migration (Dexie v8 -> v9)', () => {
-  it('moves Dexie to 9, Export to 12 and AppSettings to 2 without moving any calculation authority', () => {
-    expect(DATABASE_SCHEMA_VERSION).toBe(9)
-    expect(EXPORT_SCHEMA_VERSION).toBe(12)
+  it('keeps the AppSettings step at Dexie 9 / Export 12 below the current Dexie 10 / Export 13, with AppSettings at 2', () => {
+    expect(DATABASE_SCHEMA_VERSION).toBe(10)
+    expect(EXPORT_SCHEMA_VERSION).toBe(13)
     expect(APP_SETTINGS_SCHEMA_VERSION).toBe(2)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
     expect(RNG_STATE_SCHEMA_VERSION).toBe(2)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
   })
@@ -80,7 +80,7 @@ describe('AppSettings Candidate Search defaults persistence migration (Dexie v8 
     const database = new AppDatabase(name)
     try {
       await database.open()
-      expect(database.verno).toBe(9)
+      expect(database.verno).toBe(10)
       const migrated = await database.settings.get('settings')
       expect(migrated).toEqual({
         ...legacy,

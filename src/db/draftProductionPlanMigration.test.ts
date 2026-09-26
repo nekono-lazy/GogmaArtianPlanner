@@ -67,10 +67,10 @@ function plan(id: string, status: ProductionPlan['status']): ProductionPlan {
 const MISSING_ENTRY_ID = buildListEntryId('build-list.fnv1a32-7ab0e079')
 
 describe('Draft ProductionPlan persistence migration (Dexie v7 -> v8)', () => {
-  it('keeps the Draft lifecycle step at Dexie 8 below the current DATABASE_SCHEMA_VERSION 9 and Export schema 12 without moving any calculation authority', () => {
-    expect(DATABASE_SCHEMA_VERSION).toBe(9)
-    expect(EXPORT_SCHEMA_VERSION).toBe(12)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
+  it('keeps the Draft lifecycle step at Dexie 8 below the current DATABASE_SCHEMA_VERSION 10 and Export schema 13', () => {
+    expect(DATABASE_SCHEMA_VERSION).toBe(10)
+    expect(EXPORT_SCHEMA_VERSION).toBe(13)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
     expect(RNG_STATE_SCHEMA_VERSION).toBe(2)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
   })
@@ -134,7 +134,7 @@ describe('Draft ProductionPlan persistence migration (Dexie v7 -> v8)', () => {
     const database = new AppDatabase(name)
     try {
       await database.open()
-      expect(database.verno).toBe(9)
+      expect(database.verno).toBe(10)
 
       // A: every Draft is gone, and no Draft was chosen to survive.
       expect(await database.productionPlans.where('status').equals('draft').count()).toBe(0)

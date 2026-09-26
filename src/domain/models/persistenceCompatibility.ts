@@ -131,3 +131,27 @@ export function upgradeAppSettingsToV2(settings: Record<string, unknown>): boole
   settings.schemaVersion = APP_SETTINGS_SCHEMA_VERSION
   return true
 }
+
+/** The repair lineage field every ProductionPlan body carries since Dexie v10 / Export 13. */
+export const CONFLICT_REPAIR_LINEAGE_FIELD = 'conflictRepairLineage'
+
+/** Whether an untrusted ProductionPlan record already carries the repair lineage field. */
+export function hasConflictRepairLineageField(plan: Record<string, unknown>): boolean {
+  return CONFLICT_REPAIR_LINEAGE_FIELD in plan
+}
+
+/**
+ * Gives a ProductionPlan body written before the repair lineage existed its
+ * deterministic `conflictRepairLineage = null` (`docs/DATA_MODEL.md` 11.1.1 /
+ * 14.2 / 15.3, `docs/PLANNER_SPEC.md` 9.2.19.15). `null` - "this Plan belongs to
+ * no repair chain" - is the only value such a record can state: no earlier
+ * runtime saved a repair decision, and one is never reconstructed from the
+ * Plan's selected Conflicts, its BuildListEntries or ExecutionHistory. A body
+ * already carrying the field is not a legacy body and is left as it is.
+ * Mutates and returns whether it filled the body.
+ */
+export function fillProductionPlanConflictRepairLineage(plan: Record<string, unknown>): boolean {
+  if (hasConflictRepairLineageField(plan)) return false
+  plan[CONFLICT_REPAIR_LINEAGE_FIELD] = null
+  return true
+}

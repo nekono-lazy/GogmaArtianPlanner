@@ -175,6 +175,7 @@ describe('Production constrained Planner Worker adapter (B8-D1)', () => {
     expect(Object.keys(productionModule).sort()).toEqual([
       'createProductionConstrainedPlan',
       'createProductionPlannerAlternativeComparison',
+      'createProductionPlannerAlternativeRepair',
       'createProductionPlannerRngEngine',
       'createProductionPlannerWhatIfComparison',
       'createProductionPlannerWorkerCalculations',
@@ -189,6 +190,7 @@ describe('Production constrained Planner Worker adapter (B8-D1)', () => {
       'createConstrainedPlan',
       'createPlan',
       'createPlannerAlternativeComparison',
+      'createPlannerAlternativeRepair',
       'createWhatIfComparison',
       'prepareInteraction',
     ])

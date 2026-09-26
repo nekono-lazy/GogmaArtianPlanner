@@ -112,7 +112,7 @@ export function dataTransferRoot(overrides: Partial<ExportRoot> = {}): ExportRoo
   history.undoSnapshot.affectedTargetWeaponsBefore = [createValidTargetWeapon()]
   history.undoSnapshot.executionSavePointBefore = fixtureSavePoint(plan.id, null)
   return {
-    schemaVersion: 12,
+    schemaVersion: 13,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: { ...createValidRngState(), lastIdentifiedAt: '2026-08-28T12:00:00.000Z' },
@@ -161,4 +161,33 @@ export function dataTransferMaster(): ImportMasterSubset {
     groupSkills: [simple('group_skill.fixture.a', 10)],
     materials: [simple('material.fixture.a', 10)],
   }
+}
+
+/**
+ * A root's ProductionPlan bodies as an Export schema 12 or older root wrote
+ * them: without `conflictRepairLineage` - top-level, in every game save point,
+ * in every Undo snapshot and in the save point an Undo snapshot holds. The
+ * current fixtures carry `null`, which the schema 12 -> 13 migration refuses as
+ * "not a schema 12 body".
+ */
+export function withoutConflictRepairLineage<T>(root: T): T {
+  const copy = structuredClone(root) as unknown as Record<string, unknown>
+  const strip = (plan: unknown) => {
+    if (typeof plan === 'object' && plan !== null) delete (plan as Record<string, unknown>).conflictRepairLineage
+  }
+  const plans = copy.productionPlans
+  if (Array.isArray(plans)) plans.forEach(strip)
+  const savePoints = copy.executionSavePoints
+  if (Array.isArray(savePoints)) savePoints.forEach((savePoint) => strip((savePoint as Record<string, unknown>)?.productionPlan))
+  const history = copy.executionHistory
+  if (Array.isArray(history)) {
+    history.forEach((record) => {
+      const snapshot = (record as Record<string, unknown>)?.undoSnapshot as Record<string, unknown> | undefined
+      if (!snapshot) return
+      strip(snapshot.productionPlanBefore)
+      const savePointBefore = snapshot.executionSavePointBefore as Record<string, unknown> | null | undefined
+      if (savePointBefore) strip(savePointBefore.productionPlan)
+    })
+  }
+  return copy as unknown as T
 }

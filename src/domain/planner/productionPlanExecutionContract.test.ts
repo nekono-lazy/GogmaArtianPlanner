@@ -129,9 +129,9 @@ describe('calculation schema version boundaries', () => {
     // only (14), with no persisted shape change. Issue #129 let the Planner pass
     // the Counter-advance forges of a predicted Normal creation: a calculation
     // change only (15), again with no persisted shape change.
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
-    expect(EXPORT_SCHEMA_VERSION).toBe(12)
-    expect(DATABASE_SCHEMA_VERSION).toBe(9)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
+    expect(EXPORT_SCHEMA_VERSION).toBe(13)
+    expect(DATABASE_SCHEMA_VERSION).toBe(10)
   })
 
   it.each([11, 12, 13, 14])('fails a version %i Plan closed instead of reusing it as a current Plan', (version) => {
@@ -656,7 +656,7 @@ describe('Export schema 7 -> 8', () => {
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(schema7Root(legacy))))
     expect(imported.ok).toBe(true)
     if (!imported.ok) return
-    expect(imported.root.schemaVersion).toBe(12)
+    expect(imported.root.schemaVersion).toBe(13)
     expect(imported.root.productionPlans).toEqual([])
   })
 

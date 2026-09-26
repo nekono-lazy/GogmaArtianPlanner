@@ -50,6 +50,16 @@ export interface ProductionPlan {
   abandonmentReason: ProductionPlanAbandonmentReason | null
   abandonedAt: ISODateTimeString | null
   completedAt: ISODateTimeString | null
+  /**
+   * The Conflict repair chain this Draft continues (`docs/DATA_MODEL.md`
+   * 11.1.1, `docs/PLANNER_SPEC.md` 9.2.19.11). `null` for every Plan that no
+   * 「この候補を優先」 actual repair saved: the ordinary Planner and the replan
+   * adoption start a new chain. It is audit / chain-continuation data only: its
+   * Entry and Target IDs are never current foreign keys, and it enters no
+   * hash, snapshot, staleness or Execution semantics. Every later transition
+   * (start, Execution, Undo, save point snapshots) keeps it exactly.
+   */
+  conflictRepairLineage: PlannerConflictRepairLineage | null
   createdAt: ISODateTimeString
   updatedAt: ISODateTimeString
 }
@@ -340,9 +350,8 @@ export interface PlannerConflictRepairDecision {
 }
 
 /**
- * The repair chain of a Draft (`docs/DATA_MODEL.md` 11.1.1). Phase 5-A adds the
- * Domain type and its pure calculation only; `ProductionPlan` does not carry it
- * yet (Phase 5-B).
+ * The repair chain of a Draft (`docs/DATA_MODEL.md` 11.1.1), persisted as
+ * `ProductionPlan.conflictRepairLineage` since Phase 5-B.
  */
 export interface PlannerConflictRepairLineage {
   /** In decision order: the first 「この候補を優先」 first. */

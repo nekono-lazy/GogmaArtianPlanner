@@ -40,6 +40,7 @@ import type {
   ExpectedPlanState,
   PlanStep,
   PlanStepExecutionEffects,
+  PlannerConflictRepairLineage,
   ProductionPlan,
 } from './planning'
 import { executionSavePointIdForPlan } from './planning'
@@ -1809,6 +1810,105 @@ function validateExecutionPlanProgression(
   }
 }
 
+const CONFLICT_KINDS: readonly unknown[] = [
+  'same_gogma_counter',
+  'same_skill_counter',
+  'same_normal_counter',
+  'same_owned_weapon_consumed',
+]
+
+const CONFLICT_REPAIR_OUTCOMES: readonly unknown[] = [
+  'replaced',
+  'rejected_by_scenario_composition',
+  'not_found_within_search_extent',
+  'stopped_by_search_extent_bound',
+  'stopped_by_candidate_trial_bound',
+  'stopped_by_planner_rerun_bound',
+  'blocked_by_selected_checkpoint',
+]
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function validateConflictRepairLineageInto(
+  value: unknown,
+  path: string,
+  issues: DomainValidationIssue[],
+) {
+  if (!isPlainObject(value)) {
+    addIssue(issues, path, 'invalid_structure', 'conflictRepairLineage must be null or an object.')
+    return
+  }
+  if (!Array.isArray(value.decisions)) {
+    addIssue(issues, `${path}.decisions`, 'invalid_structure', 'decisions must be an array.')
+    return
+  }
+  value.decisions.forEach((decision: unknown, index) => {
+    const decisionPath = `${path}.decisions[${index}]`
+    if (!isPlainObject(decision)) {
+      addIssue(issues, decisionPath, 'invalid_structure', 'A repair decision must be an object.')
+      return
+    }
+    if (!CONFLICT_KINDS.includes(decision.conflictKind)) {
+      addIssue(issues, `${decisionPath}.conflictKind`, 'invalid_literal', 'Repair decision conflictKind is invalid.')
+    }
+    validateId(decision.fixedBuildListEntryId as string | undefined, `${decisionPath}.fixedBuildListEntryId`, issues)
+    validateId(decision.fixedTargetWeaponId as string | undefined, `${decisionPath}.fixedTargetWeaponId`, issues)
+    if (!Array.isArray(decision.invalidatedRoutes)) {
+      addIssue(issues, `${decisionPath}.invalidatedRoutes`, 'invalid_structure', 'invalidatedRoutes must be an array.')
+      return
+    }
+    decision.invalidatedRoutes.forEach((record: unknown, recordIndex) => {
+      const recordPath = `${decisionPath}.invalidatedRoutes[${recordIndex}]`
+      if (!isPlainObject(record)) {
+        addIssue(issues, recordPath, 'invalid_structure', 'An invalidated Route record must be an object.')
+        return
+      }
+      validateId(record.targetWeaponId as string | undefined, `${recordPath}.targetWeaponId`, issues)
+      validateId(
+        record.invalidatedBuildListEntryId as string | undefined,
+        `${recordPath}.invalidatedBuildListEntryId`,
+        issues,
+      )
+      if (typeof record.invalidatedRouteKey !== 'string' || record.invalidatedRouteKey.length === 0) {
+        addIssue(issues, `${recordPath}.invalidatedRouteKey`, 'invalid_structure', 'invalidatedRouteKey must be a non-empty string.')
+      }
+      if (record.replacementBuildListEntryId !== null) {
+        validateId(
+          record.replacementBuildListEntryId as string | undefined,
+          `${recordPath}.replacementBuildListEntryId`,
+          issues,
+        )
+      }
+      if (!CONFLICT_REPAIR_OUTCOMES.includes(record.outcome)) {
+        addIssue(issues, `${recordPath}.outcome`, 'invalid_literal', 'Repair outcome is invalid.')
+      } else if ((record.outcome === 'replaced') !== (record.replacementBuildListEntryId !== null)) {
+        addIssue(
+          issues,
+          `${recordPath}.replacementBuildListEntryId`,
+          'invalid_state',
+          'replacementBuildListEntryId is non-null exactly when the outcome is replaced.',
+        )
+      }
+    })
+  })
+}
+
+/**
+ * The persisted structure of a repair lineage (`docs/DATA_MODEL.md` 11.1.1,
+ * `docs/PLANNER_SPEC.md` 9.2.19.11): shapes, literals and ID forms only. Its
+ * Entry and Target IDs are audit data and are never checked as current
+ * foreign keys, whatever the Plan's status.
+ */
+export function validatePlannerConflictRepairLineage(
+  lineage: PlannerConflictRepairLineage | null,
+): DomainValidationResult {
+  const issues: DomainValidationIssue[] = []
+  if (lineage !== null) validateConflictRepairLineageInto(lineage, '', issues)
+  return result(issues.map((issue) => ({ ...issue, path: issue.path.replace(/^\./, '') })))
+}
+
 export function validateProductionPlan(
   plan: ProductionPlan,
 ): DomainValidationResult {
@@ -1836,6 +1936,11 @@ export function validateProductionPlan(
     validateId(plan.baseSnapshot.dependentBuildListEntriesHash, 'baseSnapshot.dependentBuildListEntriesHash', issues)
   }
   validateProductionPlanLifecycle(plan, issues)
+  // Every persisted Plan carries the field since Dexie v10 / Export 13, a
+  // legacy one as `null`; a missing field is no Plan of the current shape.
+  if (plan.conflictRepairLineage !== null) {
+    validateConflictRepairLineageInto(plan.conflictRepairLineage, 'conflictRepairLineage', issues)
+  }
   plan.steps.forEach((step, index) => validatePlanStep(step, index + 1, issues, executionContract))
   if (executionContract) {
     validateExecutionPlanProgression(plan, issues)

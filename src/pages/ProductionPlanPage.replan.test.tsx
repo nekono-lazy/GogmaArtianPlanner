@@ -160,6 +160,7 @@ function workerClient(
     createConstrainedPlan: vi.fn(createConstrainedPlan),
     createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
+    createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(async () => readyPreparation),
     cancelPlan: vi.fn(),
     dispose: vi.fn(),
@@ -228,8 +229,10 @@ function dependencies(
     getTargetWeapons: vi.fn(async () => [target]),
     createInput: vi.fn(async () => fixtureInput(target, entry)),
     createWorkerClient: vi.fn(() => client),
-    inspectPlannerResultSave: vi.fn(async () => ({ approvalRequired: false as const })),
-    savePlannerResult: vi.fn(async () => ({ kind: 'no_plan' as const })),
+    inspectPlannerAlternativeRepairSave: vi.fn(async () => ({ approvalRequired: false as const })),
+    savePlannerAlternativeRepair: vi.fn(async () => {
+      throw new Error('savePlannerAlternativeRepair is not expected in the replan tests')
+    }),
     inspectProductionPlanStart: vi.fn(async (planId) => ({ planId, changes: [], ownedWeapons: [], targetWeapons: [] })),
     startProductionPlan: vi.fn(async () => {
       throw new Error('startProductionPlan is not expected in this test')
@@ -300,7 +303,7 @@ describe('ProductionPlanPage replan Preview', () => {
     // Nothing was adopted, saved, or started.
     expect(deps.replan.inspectProductionPlanReplanAdoption).not.toHaveBeenCalled()
     expect(deps.replan.adoptProductionPlanReplanPreview).not.toHaveBeenCalled()
-    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
     expect(deps.startProductionPlan).not.toHaveBeenCalled()
   })
 

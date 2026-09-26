@@ -21,11 +21,14 @@ runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #1
                          typed result / Route summary、新Worker request kind、Production Worker adapter、
                          PlannerWorkerClient.createPlannerAlternativeComparison()）も実装した。Phase 5は5-A / 5-Bに分割し、
                          Phase 5-A（actual repairとrepair lineageのPure Domain計算、what-if / actual repair共通のscenario core、
-                         lineage outcome `rejected_by_scenario_composition` の正式仕様補完）を実装した。Phase 5-B以降
-                         （lineage永続化とmigration、Persistence、Worker / Client、Production routing切替、version更新）は未実装
-Production behavior:     変更していない（画面経路はlegacyのB8 / B9のまま。新Client APIはUIから呼ばれない。actual repairは
-                         Domain APIだけであり、Worker・Client・画面から呼ばれない）
-schema / version:        変更していない（10章）
+                         lineage outcome `rejected_by_scenario_composition` の正式仕様補完）とPhase 5-B（lineage永続化と
+                         migration、Planner Alternative専用Persistence、actual repair Worker / Client、what-ifとactual repair
+                         のProduction routing同時切替、version更新）を実装した。Phase 5は完了。次はPhase 6（legacy path整理）、
+                         その後Phase 7（#122 Presentation）
+Production behavior:     Phase 5-Bで切替済み（生産計画画面の「比較する」はcreatePlannerAlternativeComparison()、
+                         「この候補を優先」はcreatePlannerAlternativeRepair() + savePlannerAlternativeRepair()。旧B8 / B9の
+                         実装はPhase 6まで残るが生産計画画面からは呼ばない）
+schema / version:        Phase 5-Bで更新（calculation 16、Dexie 10、Export 13。10章）
 ```
 
 この文書はtask-specificな **設計記録** である。背景、方式選定の理由、後続PRの分割を記録する。
@@ -310,7 +313,7 @@ keyはrun非依存の `candidateStableKey` である（絶対Counter位置を含
 | `AppSettings` | 不可 | 計算履歴を設定へ混ぜない |
 | **`ProductionPlan` 側** | **採用** | B10の操作対象はDraftだけであり、新Draftは旧Draftをatomicに置換する。repairで保存したDraftが次のrepairへlineageを渡し、通常PlannerでDraftを作り直せば自然にresetされる |
 
-field名とshapeは [DATA_MODEL.md](./DATA_MODEL.md) 11.1（`ProductionPlan.conflictRepairLineage`、Phase 5で追加）で確定した。
+field名とshapeは [DATA_MODEL.md](./DATA_MODEL.md) 11.1（`ProductionPlan.conflictRepairLineage`、Phase 5-Bで追加済み）で確定した。
 Targetごとの除外は、そのTargetの現在Entryがlineageの記録と一致する間だけ有効であり、ユーザーがCandidate
 Searchから手動置換すれば、そのTargetの履歴は失効する。恒久的なCandidate Search禁止条件にはしない。
 
@@ -335,9 +338,10 @@ Searchから手動置換すれば、そのTargetの履歴は失効する。恒�
   （PLANNER_SPEC 9.2.19.13。Search summaryのtotal除外件数 `excludedCandidates` とは別semantic）
 - 代替がscenario compositionで採用されたか（採用 / 不採用 / 上限による未評価）
 
-Phase 4-BではUIを変更していない。Phase 4-B完了時点でも、上記のtyped dataはDomain / Worker / Clientまでで返すだけであり、
-Production UI routingはlegacy経路のまま（`ProductionPlanPage` の「比較する」は旧 `createWhatIfComparison()` を呼び、
-新しい `createPlannerAlternativeComparison()` を呼ばない）とする。表示の切替はPhase 5、Presentation改善はPhase 7で行う。
+Phase 4-BではUIを変更していない（当時、Production UI routingはlegacy経路のままだった）。Phase 5-Bで表示を切り替え、
+`ProductionPlanPage` の「比較する」は `createPlannerAlternativeComparison()`、「この候補を優先」は `createPlannerAlternativeRepair()`
+を呼ぶ。Phase 5-Bの表示は既存UI構造を保った最小限のtyped result表示（`adoptedInScenario` の3状態、no-result 5種、scenario 4状態、
+lineage除外件数）であり、Presentation改善はPhase 7で行う。
 
 ---
 
@@ -351,19 +355,20 @@ Production UI routingはlegacy経路のまま（`ProductionPlanPage` の「比�
   決定の **単位**（Conflict 1件 → Route単位）、what-ifのfound判定とresultの **情報量**、
   B8 orchestrationの **反復方式**（全explicit resolutionごとのwork → 今回決定したConflictの直接participantだけ）である
 - 旧B8 constrained enumeration / orchestrationは削除せず、Phase 5のProduction routing切替までlegacy
-  implementationとして残る。切替後はPhase 6で削除またはtest oracle化を判断する
+  implementationとして残った。Phase 5-Bで切り替えた後も実装は残っており、Phase 6で削除またはtest oracle化を判断する
 
 ---
 
 ## 10. version方針
 
-設計PR（#138）、Phase 1〜4（4-A / 4-Bを含む）とPhase 5-Aではversionを変更しない。Phase 5-A完了時点の値は次のとおりである。
-version更新はPhase 5-Bのlineage永続化・Production routing切替と合わせて行う。
+設計PR（#138）、Phase 1〜4（4-A / 4-Bを含む）とPhase 5-Aではversionを変更していない（Phase 5-A完了時点は
+calculation 15 / Dexie 9 / Export 12）。Phase 5-Bのlineage永続化・Production routing切替でversionを更新した。Phase 5-B完了時点の
+値は次のとおりである。
 
 ```text
-CURRENT_CALCULATION_APP_SCHEMA_VERSION  15
-DATABASE_SCHEMA_VERSION                 9
-ExportRoot.schemaVersion                12
+CURRENT_CALCULATION_APP_SCHEMA_VERSION  16（build-result例外 16 -> [12, 13, 14, 15]）
+DATABASE_SCHEMA_VERSION                 10
+ExportRoot.schemaVersion                13
 AppSettings.schemaVersion               2
 RngState.schemaVersion                  2
 PRODUCTION_RNG_ENGINE_VERSION           production-rng:c5-e7
@@ -377,7 +382,7 @@ Master dataVersion                      4
 - Phase 5-A（actual repairとlineageのPure Domain計算）もversionを動かさない
 - Phase 5-B（lineage永続化 + Production routing切替）で
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 15 → 16（build-result互換例外 `16 -> [12, 13, 14, 15]`）、
-  `DATABASE_SCHEMA_VERSION` 9 → 10、`ExportRoot.schemaVersion` 12 → 13
+  `DATABASE_SCHEMA_VERSION` 9 → 10、`ExportRoot.schemaVersion` 12 → 13（実施済み）
 
 ---
 
@@ -431,13 +436,16 @@ Master dataVersion                      4
 5. 外部進行に依存するgenerated Entry（fixed Routeが先に進めることを前提にしたRoute）を、fixed Entryが
    Build Listから消えた後に通常Plannerがstall dropしたときの表示（Phase 5または#122）。Domain上は既存の
    stall drop / `rejectedBuildListEntries` で扱い、新しいstale理由を作らない
-6. repair結果とlineageの保存を既存 `savePlannerOrchestrationResult()` へ載せる具体的なresult型（Phase 5）。
+6. repair結果とlineageの保存の具体的な形（Phase 5。**Phase 5-Bで確定**: B8の `savePlannerOrchestrationResult()` へは載せず、
+   Planner Alternative専用の `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` でartifactを保存する）。
    **Phase 5-Aで決めたDomain側の形**: `createPlannerAlternativeRepair()` は `comparison`（what-ifと同じtyped comparison）と
    `persistence`（`persistable` のとき `PlannerAlternativeRepairArtifact`、そうでなければtypedな `not_persistable` 理由）を返す。
    artifactは決定を展開したfinal `PlannerResult`（`plan` 非null）、accepted replacementのgenerated Entryと
    `BuildListEntryReplacement`、次のrepair lineageを持つ。旧B8の `PlannerOrchestrationResult` の「generated Entryはfinal Planで
    selected」という契約はPlanner Alternativeへ流用しない（accepted replacementがfinal Planでnon-selectedになり得るため。
-   PLANNER_SPEC 9.2.19.6）。Persistence側でこのartifactをどう検証・保存するかはPhase 5-Bで決める
+   PLANNER_SPEC 9.2.19.6）。Phase 5-BのPersistenceは、B8の保存境界（transaction内の再読込・再validation、`O` の現在性、
+   generated ID衝突、cardinality、Plan参照、旧Draft置換、Plan-breaking guard）を共有し、「generated Entryはselected」の検査だけを
+   外し、artifactのlineageをそのまま新Draftへ設定する（正式仕様: PLANNER_SPEC 9.2.15末尾）
 7. **Phase 4-Bで確定した実装上の読み方**（**確定済み**。normativeな記述は [PLANNER_SPEC.md](./PLANNER_SPEC.md) にあり、
    本項はその経緯の記録である。矛盾した場合は正式仕様が優先する）。
    - `unplannedTargetWeaponIds`: final scenario Planのどの `PlanStep.executionEffects.targetCompletions` にも現れない
@@ -469,7 +477,7 @@ Master dataVersion                      4
 
 ---
 
-## 13. Phase 5-Aで変更していないもの
+## 13. Phase 5-Aで変更していないもの（Phase 5-Bで変更したものは末尾）
 
 Phase 4-BはDomain calculation、Search executionのneutralなskip記録、Worker protocol、Production Worker adapter、
 PlannerWorkerClient APIとそのtestを変更した。Phase 5-Aはwhat-if / actual repair共通のscenario core、actual repairと
@@ -492,3 +500,12 @@ defaultPlannerOptions                   maxPlanSteps 1000
 旧constrained enumeration / B8 orchestrationの実装（削除していない）
 Issue #101 / #136 / #122（Closeしない）
 ```
+
+Phase 5-Bで、上記のうち次を変更した: Production UI routing（「比較する」と「この候補を優先」を同じPRで新kernelへ切替）、
+Worker request / response protocol（`create_planner_alternative_repair`）、PlannerWorkerClient（`createPlannerAlternativeRepair()`）、
+Production Worker adapter（`createProductionPlannerAlternativeRepair()`）、Persistence（Planner Alternative専用のinspection / save。
+`savePlannerOrchestrationResult()` の意味は変えていない）、repair lineageの永続化（`ProductionPlan.conflictRepairLineage`、validator、
+Dexie v10 / Export 13 migration）、各version値（10章）。次はPhase 5-Bでも変更していない: `defaultConstrainedEnumerationBounds` /
+`defaultPlannerOrchestrationBounds` / `defaultPlannerWhatIfBounds`、旧constrained enumeration / B8 orchestration / B9 what-ifの実装と
+Worker request kind・Client method（Phase 6で整理）、実行中Planの再計画Preview / 採用（16.8）とBuild List画面の通常Planner、
+RNG / Master / AppSettings version、Issue #101 / #136 / #122（Closeしない）。

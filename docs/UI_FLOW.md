@@ -1595,7 +1595,18 @@ checkpoint関与の判定はcurrent preparationの `checkpointParticipants` か�
 
 各有効participantに「比較する」を置く。クリックしたparticipantだけを
 `scenarioResolution` とし、fresh PlannerInputへ表示中Planの既存explicit resolutionを
-復元して、`defaultPlannerWhatIfBounds = 2 / 8` をApplication callerが明示指定する。
+復元して、Planner Alternative what-if（`PlannerWorkerClient.createPlannerAlternativeComparison()`、
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.7、Phase 5-B以降のProduction routing）を実行する。
+
+- requestは `plannerInput` / `scenarioResolution` / `priorFixedBuildListEntryIds` / `priorExcludedRoutes` だけを持つ。
+  探索範囲（4 / 235 / 4）と試行上限（2 / 8）はProduction Worker adapterがWorker内で渡し、Application callerはboundsを
+  指定しない
+- `plannerInput.options` は「この候補を優先」と同じ `conflictResolutionPlannerOptions(表示中Plan)`（11.4）にする。
+  previewと実際のrepairを同じ条件で計算するためである
+- 表示中Draftの `conflictRepairLineage` から `derivePlannerConflictRepairLineageContext()`（fresh inputの
+  `buildListEntries` で失効判定）を使ってprior fixed Entryとprior除外Route keyを渡す。lineageが `null` なら空である。
+  失効判定をUIで再実装しない。what-ifはlineageを読むだけで更新・保存しない
+- 旧 `createWhatIfComparison()`（B9、`defaultPlannerWhatIfBounds`）は生産計画画面から呼ばない（実装はPhase 6まで残る）
 
 表示中Planから復元するのは `conflicts[].selectedBuildListEntryId !== null` の選択だけである。
 `recommendedBuildListEntryId`、Planner score、Beam bestState、Target priority、
@@ -1627,9 +1638,10 @@ participant cardへ表示しない。
 
 ### 11.3 comparison card
 
-`PlannerWhatIfComparison.alternatives` のstable orderをそのまま使い、UI独自のTarget sortを
+`PlannerAlternativeComparison.alternatives` のstable orderをそのまま使い、UI独自のTarget sortを
 追加しない。各non-fixed Targetについて理想品候補1件の結果を表示する。
-Practical枠 / Ideal枠という2枠構造は存在しない。
+Practical枠 / Ideal枠という2枠構造は存在しない。Phase 5-Bの表示は既存のcard構成を保った最小限の対応であり、
+Route summaryの説明を含む表示の作り込みはIssue #122（Phase 7、11.4.1）で行う。
 
 `found` は `estimatedOperationCount` を主距離として表示する。
 `estimatedGogmaAdvance` / `estimatedSkillAdvance` / `estimatedNormalAdvance` は
@@ -1642,13 +1654,28 @@ typed no-resultは少なくとも次の意味を区別する。すべてを「�
 | status | 表示する意味 |
 | --- | --- |
 | `not_found_within_search_extent` | 探索範囲内に実行可能な候補なし |
-| `stopped_by_enumeration_bound` | 探索範囲上限のため未確認 |
+| `stopped_by_search_extent_bound` | 探索範囲上限のため未確認（旧B9の `stopped_by_enumeration_bound` と同じ表示上の意味） |
 | `stopped_by_candidate_trial_bound` | 候補試行上限のため未確認 |
 | `stopped_by_planner_rerun_bound` | Planner再計算上限のため未確認 |
 | `blocked_by_selected_checkpoint` | 途中採用する状態が選択されているため代替ルートを探索しない。作成リストでの変更または解除を案内する |
 
-comparison全体の `planner_input_not_ready` / `invalid_fixed_resolution` は別のtyped failureとして
-表示する。`invalid_fixed_resolution.reason` を分岐authorityとし、detail / message文字列を
+`found` では `adoptedInScenario` の3状態を区別する: `true` は「計画全体: 採用」、`false` は「計画全体: 不採用」、
+`null` は「Planner再計算上限のため採否が未評価」であり、`null` を不採用と表示しない。
+`excludedByRepairLineageCount` が1以上なら「以前の競合解決で外したルートを除外: N件」を補足表示してよい（内部keyは出さない）。
+
+comparisonの `scenario`（計画全体）も表示する。
+
+| `scenario.status` | 表示する意味 |
+| --- | --- |
+| `evaluated` | 「この候補を優先した場合の計画手数（暫定）: `scenarioOperationCount`」と、この計画で作成しない目標武器、新しく発生する競合、残る競合（種別・関係する目標武器・選択済みか）を並べる。手数は完成までの確定値ではない旨を添える |
+| `no_plan` | この条件では生産計画を作成できない。手数を0件として表示しない |
+| `stopped_by_plan_step_bound` | 最大計画ステップ数に到達したため計画全体の手数は未確定 |
+| `stopped_by_planner_rerun_bound` | Planner再計算上限のため計画全体の手数は未確認 |
+
+色だけを唯一の情報伝達手段にしない（すべて文言で示す）。
+
+comparison全体の `planner_input_not_ready` / `invalid_fixed_resolution` / `invalid_prior_fixed_entry` は別のtyped
+failureとして表示する。`invalid_fixed_resolution.reason` を分岐authorityとし、detail / message文字列を
 解析しない。自動的に別participantまたはPlanner推奨へfallbackせず、再選択または再計算を促す。
 
 ### 11.4 「この候補を優先」とPlanner再計算
@@ -1660,8 +1687,12 @@ comparison全体の `planner_input_not_ready` / `invalid_fixed_resolution` は�
 `PlannerConflictResolution` を作る。fresh PlannerInputへ、表示中Planから復元した他Conflictの
 explicit resolutionを保持してmergeし、同一 `conflictKey` は今回選択で置換する。
 
-選択確定後はwhat-if resultをPlan生成へ使わず、B8 Production constrained Plannerを最初から
-再実行する。Application callerが `defaultPlannerOrchestrationBounds = 2 / 1 / 4` を明示指定する。
+選択確定後はwhat-if resultをPlan生成へ使わず、操作開始時点のcurrent persisted stateから作り直したfresh PlannerInputで
+Planner Alternative actual repair（`PlannerWorkerClient.createPlannerAlternativeRepair()`、
+[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.8、Phase 5-B以降のProduction routing）を最初から実行する。requestは
+`plannerInput`（復元したexplicit resolution付き。今回の決定のmergeはDomainが行う）/ `decision` / `lineage`（表示中Draftの
+`conflictRepairLineage`）だけを持ち、探索範囲と試行上限はProduction Worker adapterがWorker内で渡す。旧
+`createConstrainedPlan()`（B8、`defaultPlannerOrchestrationBounds = 2 / 1 / 4`）は生産計画画面から呼ばない（実装はPhase 6まで残る）。
 
 この再計算の `PlannerInput.options` はfresh inputの `defaultPlannerOptions` のままにせず、
 Application callerが `conflictResolutionPlannerOptions(表示中Plan)`
@@ -1670,31 +1701,41 @@ Application callerが `conflictResolutionPlannerOptions(表示中Plan)`
 であり、例えば800 Step → 1500、1000 Step → 1500、1470 Step → 2000、1500 Step → 2000、1600 Step → 2500。
 +500は競合解決で元Planより多少長くなる余裕であり、無制限にはしない。BuildList画面の一時入力値は
 参照しない。新しいDraftが保存された後の次の競合解決は、そのDraft自身のStep数から同じ規則で求める。
-what-if比較（11.2）の `defaultPlannerWhatIfBounds` と、what-ifのPlanner入力はこの導出の対象外とする。
+Planner Alternative what-if（11.2）のPlanner入力も同じ導出を使う（旧B9 what-ifはこの導出の対象外だった）。
 
-再計算の `termination.status === "incomplete"` はfail closedとし、保存せず旧Planを表示し続ける。
+actual repairのresultはtypedに扱う。`persistence.status === "not_persistable"`（`no_plan` / `stopped_by_plan_step_bound` /
+`stopped_by_planner_rerun_bound` / `invalid_conflict_resolution`）と、準備段階のtyped failure（`planner_input_not_ready` /
+`invalid_fixed_resolution` / `invalid_prior_fixed_entry`）では何も保存せず、表示中の旧Planを維持し、理由と（あれば）同じtyped
+comparisonを「この候補を優先した結果（保存していません）」として示す。cancelはfailure表示にせず、partial resultを表示・保存しない。
+final scenario runの `termination.status === "incomplete"`（`stopped_by_plan_step_bound`）はfail closedとし、保存せず旧Planを表示し続ける。
 案内文は「競合解決の再計算が最大計画ステップ数 N に到達したため、完成した生産計画を作成できません
 でした。この上限は表示中の生産計画のステップ数から自動で決まります。ビルドリスト画面から生産計画を
 作り直してください。」とし、BuildList画面の「詳細設定」を変更すればこの再計算へ反映されるかのような
 案内はしない（BuildList画面の通常Plannerの上限到達案内は10.1のまま）。
 
-結果のwarningsにtyped `warning.kind === 'invalid_conflict_resolution'` が1件でもあれば、
-`plan !== null` でもfail closedとする。checkpoint競合へのresolutionはDomainがこのwarningで
+final scenario resultのwarningsにtyped `warning.kind === 'invalid_conflict_resolution'` が1件でもあれば
+（actual repairは `not_persistable` / `invalid_conflict_resolution` を返す）、`plan !== null` でもfail closedとする。checkpoint競合へのresolutionはDomainがこのwarningで
 拒否するため、同じfail closedがそのまま適用される。選択済みcheckpointを持つTargetの
 Routeを置き換えられない場合の `selected_checkpoint_blocks_constrained_search` は
-再選択を促すwarningであり、Planの保存を妨げない。`savePlannerOrchestrationResult()` を呼ばず、ProductionPlanも
+再選択を促すwarningであり、Planの保存を妨げない。Persistenceを呼ばず、ProductionPlanも
 generated BuildListEntryも保存せず、新Planへ遷移しない。表示中の旧Planを維持し、再選択または
 再計算を促す。warning.messageを解析せず、Planner推奨または別participantへfallbackせず、invalid
 resolutionを無視したordinary Planを保存しない。
 
-上記warningが無い結果だけ、既存
-`plannerResultPersistenceService.savePlannerOrchestrationResult()` でgenerated BuildListEntryと
-ProductionPlanをatomic保存する。新しいPlanが保存された場合はその
-`/plans/:planId` へ遷移する。Planが生成されない場合または保存失敗時は旧Draftを置換・削除しない。
+`persistence.status === "persistable"` の結果だけ、Planner Alternative専用の
+`plannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` で、
+accepted replacementによる元Entryの置換（final Planで非選択のreplacementも含む）、新Draft、その
+`conflictRepairLineage` をatomic保存する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15末尾）。置換する元Entryが実行中の生産計画の
+依存Entryなら、既存の破壊的変更の警告（16.3）を経て承認を求める。「最後のゲーム内セーブ地点へ戻す」を選んだ場合は復元だけを行い、
+repair結果は保存せず再計算を求める。保存時に現在状態が計算時と変わっていれば（`planner_state_changed` 等）何も保存しない。
+保存APIへは操作開始時に表示していたDraftのID（`displayedPlan.id`）を計算元source Draftとしてinspection・保存の両方へ渡し、
+保存transaction内でcurrent Draftがそれと一致しなければ（別タブのrepairで置換済み、開始済み、削除済み）何も保存しない。
+新しいPlanが保存された場合はその `/plans/:planId` へ遷移する。Planが生成されない場合または保存失敗時は旧Draftを置換・削除しない。
 保存が完全に成功した場合だけ、Persistence serviceが同一transaction内で旧Draftを新Draftへatomicに
 置換する（通常Draftは最大1件、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15 /
 [DATA_MODEL.md](./DATA_MODEL.md) 11.1）。B10が独自の判断で旧Planを削除することはなく、実行中・
-完了・破棄済みのPlanは新Draft保存で削除されない。
+完了・破棄済みのPlanは新Draft保存で削除されない。保存された新Draftで次の競合を操作すると、その「比較する」と
+「この候補を優先」はその新Draftの `conflictRepairLineage` を読む（repair chainの継続）。
 
 B10の編集対象は原則 `status === 'draft'` とする。`stale` はwhat-if / Conflict固定を継続せず
 既存の再計算へ誘導する。`active` / `completed` / `abandoned` PlanをB10操作で書き換えない。
@@ -1719,12 +1760,13 @@ PlanStep表示。
 - 現在CalculationContextと非互換なPlanはstaleとする
 - Debug Mode OFFではSeed / Counterを表示しない
 
-### 11.4.1 競合repairの表示契約（Issue #136 / #101、仕様確定・未実装）
+### 11.4.1 競合repairの表示契約（Issue #136 / #101、Phase 5-Bでrouting接続済み）
 
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19で、「比較する」を1段previewとし、「この候補を優先」をRoute単位の
-決定と1段repairにする正式契約を確定した。**現在のUIは11.2〜11.4のままであり、本節はUIを変更しない。**
-Domain / Worker側の切替はPhase 5（Domain計算はPhase 5-Aで実装済み、Production routingの切替はPhase 5-B）、表示の作り込みはIssue #122（Phase 7）で行う。本節は、それまでに
-Domainが返すtyped dataと、どの表示でも守る最低限の意味だけを定める。
+決定と1段repairにする正式契約を確定した。Phase 5（Domain計算はPhase 5-A、Production routingの切替・lineage永続化・
+Persistenceは Phase 5-B）で実装済みであり、11.2〜11.4の画面はこの新しい計算を使う。Phase 5-Bの表示は既存UIの構造を保った
+最小限のtyped result表示（11.3）であり、表示の作り込みはIssue #122（Phase 7）で行う。本節は、Domainが返すtyped dataと、
+どの表示でも守る最低限の意味を定める。
 
 後続UIが使えるtyped data（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.13）。
 
@@ -2712,14 +2754,16 @@ export interface SearchUiState {
 - 別participant、別Conflict、page離脱、Planner再計算でwhat-ifをcancelし、cancelをfailure表示せず
   古いgenerationのpartial / completed resultを新しいcardへ表示しない
 - comparisonがDomainのTarget順を維持し、Targetごとに理想品候補の結果を1つ表示する
-- what-ifの4種類のtyped no-resultを区別し、`planner_input_not_ready` /
-  `invalid_fixed_resolution` をmessage解析なしで扱う
-- 明示選択後はfresh PlannerInputと `defaultPlannerOrchestrationBounds` でB8 constrained Plannerを
-  再実行し、what-if trial結果をPlan生成へ流用しない
-- constrained結果にtyped `invalid_conflict_resolution` warningが1件でもあれば、`plan !== null` でも
+- what-ifのtyped no-result（5種）と `adoptedInScenario` の `true` / `false` / `null`、`scenario` の4状態を区別し、
+  `planner_input_not_ready` / `invalid_fixed_resolution` / `invalid_prior_fixed_entry` をmessage解析なしで扱う
+- 「比較する」は `createPlannerAlternativeComparison()` だけを呼び（旧 `createWhatIfComparison()` を呼ばない）、
+  表示中Draftのlineageから導いたprior fixed Entry / prior除外Route keyを渡す
+- 明示選択後はfresh PlannerInput、決定、表示中Draftのlineageで `createPlannerAlternativeRepair()` を実行し
+  （旧 `createConstrainedPlan()` を呼ばない）、what-if結果をPlan生成へ流用しない
+- actual repairが `not_persistable`（`invalid_conflict_resolution` を含む）または準備段階のtyped failureなら、
   persistenceを呼ばず、Entry / Planを保存せず、遷移せず、旧Planを維持する
-- 新Planとgenerated BuildListEntryを既存atomic persistence境界で保存して新Planへ遷移し、
-  Planなしまたは保存失敗時に旧Planを置換・削除しない
+- 新Plan・accepted replacementのgenerated BuildListEntry・lineageをPlanner Alternative専用のatomic persistence境界で
+  保存して新Planへ遷移し、保存失敗時に旧Planを置換・削除しない
 - Conflict編集をDraft Planに限定し、stale / active / completed / abandonedをB10操作で書き換えない
 - exact persisted Planが取得できていれば、Worker preparation中・preparation失敗後・staleでも
   Plan概要、目標武器ごとの作成ルート、計画全体の実行順、予測結果を表示する

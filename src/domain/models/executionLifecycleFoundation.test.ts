@@ -79,7 +79,7 @@ function savePointFor(
 function exportRoot(overrides: Partial<ExportRoot> = {}): ExportRoot {
   const plan = createValidProductionPlan()
   return {
-    schemaVersion: 12,
+    schemaVersion: 13,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: createValidRngState(),
@@ -141,8 +141,8 @@ describe('Execution lifecycle version boundaries', () => {
     // start effect moved the calculation schema to 13 with no persisted shape
     // change. The Identification provenance moved Export to 10. Issue #103
     // Phase C (14) and Issue #129 (15) moved the calculation schema alone.
-    expect(EXPORT_SCHEMA_VERSION).toBe(12)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
+    expect(EXPORT_SCHEMA_VERSION).toBe(13)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
   })
 })
 
@@ -319,7 +319,7 @@ describe('Export schema 10', () => {
     if (!migrated.ok) return
     expect(migrated.root.schemaVersion).toBe(7)
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(legacy)))
-    expect(imported.ok && imported.root.schemaVersion).toBe(12)
+    expect(imported.ok && imported.root.schemaVersion).toBe(13)
     expect(migrated.root.executionSavePoints).toEqual([])
     migrated.root.targetWeapons.forEach((target) => {
       expect(target).toMatchObject({ lifecycleStatus: 'active', completedAt: null, completedByProductionPlanId: null })
@@ -349,7 +349,7 @@ describe('Export schema 10', () => {
 
   it('refuses unsupported schema versions and malformed roots', () => {
     expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 5 }).ok).toBe(false)
-    expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 13 }).ok).toBe(false)
+    expect(prepareExportRootForImport({ ...exportRoot(), schemaVersion: 14 }).ok).toBe(false)
     expect(prepareExportRootForImport({ ...exportRoot(), appName: 'other' }).ok).toBe(false)
     expect(prepareExportRootForImport({ ...exportRoot(), ownedWeapons: null }).ok).toBe(false)
     expect(prepareExportRootForImport(null).ok).toBe(false)

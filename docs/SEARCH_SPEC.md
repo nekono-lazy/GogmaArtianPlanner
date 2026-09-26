@@ -1023,7 +1023,8 @@ B8-Aで確定した契約である。実装はB8-B1で行う。Planner側の契�
 **legacy。** Issue #101のPR #137実測で、本節のenumeratorはupfront solveのため最初のCandidateまでにほぼ全探索
 時間を払い、巨戟化を常にorigin Skill Counterで組み立てるため共有Skill位置の競合を解決できないことが確認された。
 本節は5.6.8のPlanner Alternative Searchへ段階的に置き換える対象であり、Production routingを切り替えるまで
-（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14のPhase 5）はlegacy implementationとしてそのまま動作する。
+（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14のPhase 5）はlegacy implementationとしてそのまま動作した。Phase 5-Bで
+生産計画画面の「比較する」と「この候補を優先」は5.6.8へ切り替わった。本節の実装はPhase 6で削除またはtest oracle化するまで残る。
 本節のboundsを拡大して新機能のauthorityにしない。
 
 #### 境界
@@ -1575,8 +1576,8 @@ export const defaultPlannerAlternativeSearchExtent: PlannerAlternativeSearchExte
 
 Domain API（`visitPlannerAlternativeCandidates()` の `PlannerAlternativeSearchInput.extent`）はcaller必須指定の
 ままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの定数を明示的に渡す
-（Phase 4-Bで、what-ifのProduction Worker adapterがWorker境界内でこの定数をimportして渡すよう配線した。Production UI
-routingの切替自体はPhase 5-Bで行う）。
+（Phase 4-Bで、what-ifのProduction Worker adapterがWorker境界内でこの定数をimportして渡すよう配線し、Phase 5-Bでactual repairの
+Production Worker adapterも同じ定数を渡すよう配線して、Production UI routingを切り替えた）。
 benchmarkの `BENCHMARK_ONLY_*` gridとsanity値はPhase 3-Bのhistorical
 measurement conditionとして維持し、このdefaultを読まない。
 

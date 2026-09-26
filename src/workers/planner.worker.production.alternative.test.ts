@@ -4,6 +4,8 @@ import {
   defaultPlannerOptions,
 } from '../domain/planner'
 import type {
+  PlannerAlternativeRepairCalculationResult,
+  PlannerAlternativeRepairInput,
   PlannerAlternativeWhatIfCalculationResult,
   PlannerAlternativeWhatIfInput,
   PlannerInput,
@@ -12,7 +14,9 @@ import type {
 import { defaultPlannerAlternativeSearchExtent } from '../domain/search'
 import { createCandidateSearchInput } from '../test/fixtures/candidateSearch'
 import {
+  createProductionConstrainedPlan,
   createProductionPlannerAlternativeComparison,
+  createProductionPlannerAlternativeRepair,
   createProductionPlannerWhatIfComparison,
   createProductionPlannerWorkerCalculations,
   createProductionPlannerWorkerDependencies,
@@ -25,6 +29,7 @@ import {
  */
 const domain = vi.hoisted(() => ({
   createPlannerAlternativeWhatIfComparison: vi.fn(),
+  createPlannerAlternativeRepair: vi.fn(),
   createPlannerWhatIfComparison: vi.fn(),
 }))
 
@@ -33,6 +38,7 @@ vi.mock('../domain/planner', async (importOriginal) => {
   return {
     ...actual,
     createPlannerAlternativeWhatIfComparison: domain.createPlannerAlternativeWhatIfComparison,
+    createPlannerAlternativeRepair: domain.createPlannerAlternativeRepair,
     createPlannerWhatIfComparison: domain.createPlannerWhatIfComparison,
   }
 })
@@ -131,6 +137,46 @@ describe('Production Planner Alternative what-if Worker adapter (Phase 4-B)', ()
     await createProductionPlannerWhatIfComparison(legacyRequest, createProductionPlannerWorkerDependencies())
     expect(domain.createPlannerWhatIfComparison).toHaveBeenCalledOnce()
     expect(domain.createPlannerAlternativeWhatIfComparison).not.toHaveBeenCalled()
+  })
+
+  it('passes the same Domain Production extent and trial bounds to the actual repair, and the wire input unchanged', async () => {
+    const result: PlannerAlternativeRepairCalculationResult = {
+      status: 'invalid_prior_fixed_entry',
+      buildListEntryId: 'build-list.production.prior' as never,
+      detail: 'fixture',
+    }
+    domain.createPlannerAlternativeRepair.mockResolvedValue(result)
+    const input: PlannerAlternativeRepairInput = {
+      plannerInput: plannerInput(),
+      decision: { conflictKey: 'conflict.production.repair', selectedBuildListEntryId: 'build-list.production.repair' as never },
+      lineage: { decisions: [] },
+    }
+    const before = structuredClone(input)
+    const dependencies = createProductionPlannerWorkerDependencies()
+    const executionOptions = { shouldCancel: () => false }
+
+    await expect(createProductionPlannerAlternativeRepair(input, dependencies, executionOptions)).resolves.toBe(result)
+
+    expect(domain.createPlannerAlternativeRepair).toHaveBeenCalledOnce()
+    const [request, calledDependencies, options] = domain.createPlannerAlternativeRepair.mock.calls[0]
+    expect(request.extent).toEqual(defaultPlannerAlternativeSearchExtent)
+    expect(request.bounds).toEqual(defaultPlannerAlternativeTrialBounds)
+    expect(Object.keys(request).sort()).toEqual(['bounds', 'decision', 'extent', 'lineage', 'plannerInput'])
+    expect(request.plannerInput).toBe(input.plannerInput)
+    expect(request.decision).toBe(input.decision)
+    expect(request.lineage).toBe(input.lineage)
+    expect(calledDependencies).toBe(dependencies)
+    expect(options).toEqual({ executionOptions })
+    expect(input).toEqual(before)
+    expect(request.extent).not.toBe(defaultPlannerAlternativeSearchExtent)
+    expect(request.bounds).not.toBe(defaultPlannerAlternativeTrialBounds)
+    expect(domain.createPlannerAlternativeWhatIfComparison).not.toHaveBeenCalled()
+  })
+
+  it('wires the actual repair beside the unchanged legacy constrained Planner', () => {
+    const calculations = createProductionPlannerWorkerCalculations()
+    expect(calculations.createPlannerAlternativeRepair).toBe(createProductionPlannerAlternativeRepair)
+    expect(calculations.createConstrainedPlan).toBe(createProductionConstrainedPlan)
   })
 
   it('exports no Planner Alternative default of its own', async () => {

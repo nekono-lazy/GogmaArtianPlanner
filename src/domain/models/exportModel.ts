@@ -18,7 +18,9 @@ import type {
 import {
   fillNonTerminalPlanLifecycle,
   fillNormalCounterIdentificationProvenance,
+  fillProductionPlanConflictRepairLineage,
   fillRngStateIdentificationProvenance,
+  hasConflictRepairLineageField,
   hasIdentificationProvenanceField,
   hasProductionPlanLifecycleField,
   isDraftProductionPlanRecord,
@@ -63,8 +65,12 @@ import {
  * `candidateSearchDefaults` holds the user's usual Candidate Search bounds
  * (`docs/DATA_MODEL.md` 13 / 15.3); a schema 11 root's AppSettings v1 gets the
  * recommended `350 / 500 / 1500` on migration.
+ * Version 13 adds `ProductionPlan.conflictRepairLineage` (`docs/DATA_MODEL.md`
+ * 11.1.1 / 15.3) to every Plan body - top-level, inside a game save point,
+ * inside an Undo snapshot and inside the save point an Undo snapshot holds; a
+ * schema 12 root's bodies get `null` on migration.
  */
-export const EXPORT_SCHEMA_VERSION = 12
+export const EXPORT_SCHEMA_VERSION = 13
 
 export const EXPORT_APP_NAME = 'mh-wilds-gogma-artian-planner'
 
@@ -163,6 +169,17 @@ export interface ExportRootV10 extends LegacySettingsExportRoot {
  */
 export interface ExportRootV11 extends LegacySettingsExportRoot {
   schemaVersion: 11
+}
+
+/**
+ * The schema 12 Export shape. Its entity fields are the current ones except
+ * that no ProductionPlan body - top-level, in a game save point, in an Undo
+ * snapshot or in the save point an Undo snapshot holds - carries
+ * `conflictRepairLineage`; the entity types are the current ones only for
+ * reading convenience.
+ */
+export interface ExportRootV12 extends Omit<ExportRoot, 'schemaVersion'> {
+  schemaVersion: 12
 }
 
 export type ExportRootMigrationResult =
@@ -660,7 +677,7 @@ export function migrateExportRootV10ToV11(
  */
 export function migrateExportRootV11ToV12(
   root: ExportRootV11,
-): ExportRootMigrationResult {
+): { ok: true; root: ExportRootV12 } | { ok: false; issues: DomainValidationIssue[] } {
   if (!isRecord(root)) {
     return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
   }
@@ -687,9 +704,86 @@ export function migrateExportRootV11ToV12(
     root: {
       ...migrated,
       settings: migratedSettings as unknown as AppSettings,
-      schemaVersion: EXPORT_SCHEMA_VERSION,
+      schemaVersion: 12,
     },
   }
+}
+
+/**
+ * Pure migration from Export schema 12 to 13 (`docs/DATA_MODEL.md` 11.1.1 /
+ * 15.3, `docs/PLANNER_SPEC.md` 9.2.19.15): `conflictRepairLineage = null` is
+ * added to every ProductionPlan body - `root.productionPlans`, the Plan of every
+ * game save point, the `productionPlanBefore` of every ExecutionHistory Undo
+ * snapshot and the Plan of the save point an Undo snapshot holds as
+ * `executionSavePointBefore` - through the same
+ * `fillProductionPlanConflictRepairLineage()` the Dexie v9 -> v10 upgrade uses.
+ * `null` is the only value a schema 12 body can state: no repair decision was
+ * ever saved, and none is reconstructed from selected Conflicts,
+ * BuildListEntries or ExecutionHistory. A schema 12 body that already carries
+ * the field is not a schema 12 body and fails closed instead of being
+ * overwritten or trusted. Nothing else is converted.
+ */
+export function migrateExportRootV12ToV13(
+  root: ExportRootV12,
+): ExportRootMigrationResult {
+  if (!isRecord(root)) {
+    return { ok: false, issues: [structureIssue('', 'Export root must be an object.')] }
+  }
+  const record = root as unknown as Record<string, unknown>
+  const shapeIssues = ['productionPlans', 'executionHistory', 'executionSavePoints']
+    .flatMap((field) => collectionShapeIssues(record, field))
+  if (shapeIssues.length > 0) return { ok: false, issues: shapeIssues }
+
+  const issues: DomainValidationIssue[] = []
+  const checkPlan = (value: unknown, path: string) => {
+    if (!isRecord(value)) {
+      issues.push(structureIssue(path, `${path} must be an object.`))
+    } else if (hasConflictRepairLineageField(value)) {
+      issues.push(structureIssue(path, 'A schema 12 ProductionPlan cannot carry the schema 13 conflictRepairLineage.'))
+    }
+  }
+  root.productionPlans.forEach((plan, index) => checkPlan(plan, `productionPlans[${index}]`))
+  root.executionSavePoints.forEach((savePoint, index) => {
+    checkPlan((savePoint as unknown as Record<string, unknown>).productionPlan, `executionSavePoints[${index}].productionPlan`)
+  })
+  root.executionHistory.forEach((history, index) => {
+    const snapshot = (history as unknown as Record<string, unknown>).undoSnapshot
+    const path = `executionHistory[${index}].undoSnapshot`
+    if (!isRecord(snapshot)) {
+      issues.push(structureIssue(path, `${path} must be an object.`))
+      return
+    }
+    checkPlan(snapshot.productionPlanBefore, `${path}.productionPlanBefore`)
+    const savePointBefore = snapshot.executionSavePointBefore
+    if (savePointBefore !== null && savePointBefore !== undefined) {
+      const savePointPath = `${path}.executionSavePointBefore`
+      if (!isRecord(savePointBefore)) {
+        issues.push(structureIssue(savePointPath, `${savePointPath} must be an object or null.`))
+        return
+      }
+      checkPlan(savePointBefore.productionPlan, `${savePointPath}.productionPlan`)
+    }
+  })
+  if (issues.length > 0) return { ok: false, issues }
+
+  let migrated: ExportRootV12
+  try {
+    migrated = structuredClone(root)
+  } catch {
+    return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
+  }
+  const fillPlan = (value: unknown) => {
+    if (isRecord(value)) fillProductionPlanConflictRepairLineage(value)
+  }
+  migrated.productionPlans.forEach((plan) => fillPlan(plan))
+  migrated.executionSavePoints.forEach((savePoint) => fillPlan(savePoint.productionPlan))
+  migrated.executionHistory.forEach((history) => {
+    const snapshot = history.undoSnapshot as unknown as Record<string, unknown>
+    fillPlan(snapshot.productionPlanBefore)
+    const savePointBefore = snapshot.executionSavePointBefore
+    if (isRecord(savePointBefore)) fillPlan(savePointBefore.productionPlan)
+  })
+  return { ok: true, root: { ...migrated, schemaVersion: EXPORT_SCHEMA_VERSION } }
 }
 
 function prefixed(
@@ -833,13 +927,14 @@ export function validateCurrentExportRoot(root: ExportRoot): DomainValidationRes
 /**
  * Brings a parsed Export object to the current schema and validates its
  * Execution lifecycle state and root-level RNG persistent state, failing closed
- * on anything else. Schema 12 is read as is; schema 11 goes through
- * `migrateExportRootV11ToV12()` (its one Draft is current data and is never
- * deleted); schema 10, 9, 8, 7 and 6 go through the pure migrations in order
+ * on anything else. Schema 13 is read as is; schema 12 goes through
+ * `migrateExportRootV12ToV13()`; schema 11 through `migrateExportRootV11ToV12()`
+ * and then 12 -> 13 (its one Draft is current data and is never deleted);
+ * schema 10, 9, 8, 7 and 6 go through the pure migrations in order
  * (`migrateExportRootV6ToV7()`, `migrateExportRootV7ToV8()`,
  * `migrateExportRootV8ToV9()`, `migrateExportRootV9ToV10()`,
- * `migrateExportRootV10ToV11()`, `migrateExportRootV11ToV12()`), and every
- * other version is refused. Nothing
+ * `migrateExportRootV10ToV11()`, `migrateExportRootV11ToV12()`,
+ * `migrateExportRootV12ToV13()`), and every other version is refused. Nothing
  * is applied here: the caller replaces its data only after a successful result.
  */
 export function prepareExportRootForImport(
@@ -860,8 +955,12 @@ export function prepareExportRootForImport(
   }
   // Each step of the chain runs the pure migrations in order and stops at the
   // first refusal.
-  const fromV11 = (v11: ExportRootV11): ExportRootMigrationResult =>
-    migrateExportRootV11ToV12(v11)
+  const fromV12 = (v12: ExportRootV12): ExportRootMigrationResult =>
+    migrateExportRootV12ToV13(v12)
+  const fromV11 = (v11: ExportRootV11): ExportRootMigrationResult => {
+    const toV12 = migrateExportRootV11ToV12(v11)
+    return toV12.ok ? fromV12(toV12.root) : toV12
+  }
   const fromV10 = (v10: ExportRootV10): ExportRootMigrationResult => {
     const toV11 = migrateExportRootV10ToV11(v10)
     return toV11.ok ? fromV11(toV11.root) : toV11
@@ -893,6 +992,8 @@ export function prepareExportRootForImport(
     } catch {
       return { ok: false, issues: [structureIssue('', 'Export root cannot be copied.')] }
     }
+  } else if (candidate.schemaVersion === 12) {
+    migrated = fromV12(input as ExportRootV12)
   } else if (candidate.schemaVersion === 11) {
     migrated = fromV11(input as ExportRootV11)
   } else if (candidate.schemaVersion === 10) {

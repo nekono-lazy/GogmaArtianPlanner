@@ -1,4 +1,10 @@
+import Dexie from 'dexie'
 import { beforeAll, describe, expect, it } from 'vitest'
+import { AppDatabase } from '../db/AppDatabase'
+import {
+  PlannerResultPersistenceService,
+  createPlannerResultPersistenceRepositories,
+} from '../services/planner/plannerResultPersistenceService'
 import {
   createPlannerAlternativeRepair,
   createProductionPlannerDependencies,
@@ -7,7 +13,7 @@ import {
   type PlannerAlternativeRepairCalculationResult,
   type PlannerAlternativeScenarioOutcome,
 } from '../domain/planner'
-import type { BuildListEntry } from '../domain/models/publicTypes'
+import type { BuildListEntry, ProductionPlan } from '../domain/models/publicTypes'
 import { ProductionRngEngine } from '../domain/rng/production/productionRngEngine'
 import { candidateStableKey, defaultPlannerAlternativeSearchExtent } from '../domain/search'
 import {
@@ -23,8 +29,9 @@ import { summarizeIssue101Route } from './issue101RouteSummary'
  * 9.2.19.9 / 9.2.19.11): 「この候補を優先」 as the pure actual repair on the
  * Normal 206 conflict, with the Production default extent and trial bounds,
  * over the unmodified current Production authorities
- * (`createIssue101RealFixture()`). Nothing is persisted: the artifact is what
- * Phase 5-B will hand to Persistence.
+ * (`createIssue101RealFixture()`). The pure calculation persists nothing; the
+ * Phase 5-B cases at the end hand its artifact to the real Persistence
+ * service over a Dexie database seeded with the fixture state.
  *
  * The expected values were measured with the current Production RNG
  * implementation (`production-rng:c5-e7`); they are a regression fixture of
@@ -153,4 +160,59 @@ describe('Issue #101 Planner Alternative actual repair (Phase 5-A)', () => {
       }],
     }])
   })
+
+  /** Saves one artifact through the real Persistence service over the fixture state (Phase 5-B). */
+  async function saveOverFixtureState(artifact: PlannerAlternativeRepairArtifact) {
+    const name = `issue101-repair-persistence-${Math.random().toString(36).slice(2)}`
+    const database = new AppDatabase(name)
+    await database.open()
+    try {
+      const seedRepositories = createPlannerResultPersistenceRepositories(database)
+      const input = fixture.plannerInput
+      await seedRepositories.rngState.putRngState(input.rngState)
+      for (const counter of input.normalCounters) await seedRepositories.normalCounters.putNormalArtianCounter(counter)
+      for (const weapon of input.ownedWeapons) await seedRepositories.ownedWeapons.putOwnedWeapon(weapon)
+      for (const target of input.targetWeapons) await seedRepositories.targetWeapons.putTargetWeapon(target)
+      for (const entry of input.buildListEntries) await seedRepositories.buildListEntries.putBuildListEntry(entry)
+      // The Draft the user displayed and preferred a participant on: the source
+      // Draft the save requires to be current, and the Draft it replaces.
+      const sourceDraftId = 'plan.issue101.displayed' as ProductionPlan['id']
+      await database.productionPlans.put({ ...structuredClone(artifact.plannerResult.plan), id: sourceDraftId, conflictRepairLineage: null })
+      const service = new PlannerResultPersistenceService(database)
+      const inspection = await service.inspectPlannerAlternativeRepairSave(artifact, input.calculationContext, sourceDraftId)
+      const outcome = await service.savePlannerAlternativeRepair(artifact, input.calculationContext, sourceDraftId)
+      return {
+        inspection,
+        outcome,
+        entryIds: (await database.buildListEntries.toArray()).map(({ id }) => id).sort(),
+        plans: await database.productionPlans.toArray(),
+      }
+    } finally {
+      database.close()
+      await Dexie.delete(name)
+    }
+  }
+
+  it('Phase 5-B: the prefer-Dragon artifact saves the Fire replacement and a Draft carrying the lineage', async () => {
+    const artifact = artifactOf(preferDragon)
+    const saved = await saveOverFixtureState(artifact)
+    const [generated] = artifact.generatedBuildListEntries
+    // No running Plan depends on the Fire Entry, so no approval is needed.
+    expect(saved.inspection).toEqual({ approvalRequired: false })
+    expect(saved.outcome).toMatchObject({ kind: 'saved', plan: { id: artifact.plannerResult.plan.id, status: 'draft' } })
+    expect(saved.entryIds).toEqual([fixture.dragonEntry.id, generated.id].sort())
+    expect(saved.plans).toHaveLength(1)
+    expect(saved.plans[0].steps).toHaveLength(444)
+    expect(saved.plans[0].conflictRepairLineage).toEqual(artifact.conflictRepairLineage)
+  }, SLOW)
+
+  it('Phase 5-B: the prefer-Fire artifact keeps both Entries and saves the Draft with its decided conflicts and lineage', async () => {
+    const artifact = artifactOf(preferFire)
+    const saved = await saveOverFixtureState(artifact)
+    expect(saved.outcome.kind).toBe('saved')
+    expect(saved.entryIds).toEqual([fixture.dragonEntry.id, fixture.fireEntry.id].sort())
+    expect(saved.plans[0].steps).toHaveLength(209)
+    expect(saved.plans[0].conflicts).toEqual(artifact.plannerResult.conflicts)
+    expect(saved.plans[0].conflictRepairLineage).toEqual(artifact.conflictRepairLineage)
+  }, SLOW)
 })
