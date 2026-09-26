@@ -883,7 +883,10 @@ Phase 5は5-A / 5-Bに分けて実装した（Phase 5完了）。Phase 5-Aで、
 生産計画画面の「比較する」と「この候補を優先」を **同じPRで** 新しい計算へ切り替えた。旧計算（23章の制約付き再検索、legacy B8 / B9
 経路）の実装自体はPhase 6で整理するまで残るが、生産計画画面からは呼ばない。Phase 6は6-A / 6-Bに分けた。Phase 6-Aで、
 作成リストの通常「生産計画を作成」と実行中の生産計画の「現在地点から再計画を試算」も旧計算の経路から通常のPlanner実行へ
-切り替えた（どちらも保存済みの競合選択を持たない入力なので、旧経路でも制約付き再検索は始まらず、計算結果は変わらない）。
+切り替えた（どちらも保存済みの競合選択を持たない入力なので、旧経路でも制約付き再検索は始まらず、通常のケースでは計算結果は
+同じである。ただし旧経路固有の再実行上限（4回）が外れるため、実行時に予測非対応と判明した作成リスト項目を除外して計画を
+やり直す回数が4回の計算を超える入力では、旧経路は計画なしで止まり、新経路は計画を作成し得る。このため
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を17へ更新した。32章を参照）。
 これで通常のアプリ実行から旧計算は呼ばれない。次はPhase 6-B（旧計算の実装の削除またはtest oracle化）である。
 
 - 「この候補を優先」は、競合位置1か所の指定ではなく **ルート単位の決定** とする。優先した候補の相手側
@@ -1228,6 +1231,8 @@ Production v1 adapterがpersisted exact Gateを要求せずactive representative
 通常アーティア作成ルートのCounter進行用の途中作成を、別ルートの作成で通過したときに実行不要として飛ばすよう変更した（Issue #129、19章）。同じ入力に対して返す競合、採用・不採用となる作成リスト項目、操作順、完成結果が変わるため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を15へ更新した。version 14以前の作成プランは下書き・実行中を問わず実行・比較・競合操作ができず（`calculation_context_changed`）、実行中のプランは現在地点からの再計画が必要になる。保存内容は削除・変換せず、そのまま表示できる。候補検索と作成リストの意味は変えていないため、version 12 / 13 / 14の候補と作成リスト項目は明示的な互換例外によりそのまま利用できる（version 11以前は非互換のまま）。永続形状、RNG、Masterは変えないため、Dexie `DATABASE_SCHEMA_VERSION`（9）、`ExportRoot.schemaVersion`（12）、`AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`、Master dataVersionは変更しない。
 
 生産計画画面の競合操作（「比較する」「この候補を優先」）を新しい競合repair（23.1、Issue #136 / #101 Phase 5-B）へ切り替えた変更では、同じ入力と決定に対して保存する計画（採用する代替、競合、決定の展開、作成しない目標武器）が変わり、保存済みの作成プランは生成方式を記録しないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を16へ更新した。version 15以前の作成プランは下書き・実行中を問わず実行・比較・競合操作ができず（`calculation_context_changed`）、読み取り時の変換や保存済みversionの書き換えはしない。候補検索と作成リストの意味は変えていないため、version 12 / 13 / 14 / 15の候補と作成リスト項目は明示的な互換例外（`16 -> [12, 13, 14, 15]`、範囲指定ではない）によりそのまま利用できる（version 11以前は非互換のまま、作成プランへは適用しない）。競合repair履歴 `ProductionPlan.conflictRepairLineage` を永続形状へ追加したため、Dexie `DATABASE_SCHEMA_VERSION` を10、`ExportRoot.schemaVersion` を13へ更新した。Dexie v9 -> v10 upgradeとExport schema 12 -> 13 migrationは、すべての作成プラン本体（ゲーム内セーブ地点とUndo snapshot内の作成プランを含む）へ `conflictRepairLineage = null` だけを補い、選択済みの競合や作成リスト項目から過去の決定を推測しない。`AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、Master dataVersion（4）は変更しない。
+
+作成リストの通常「生産計画を作成」と実行中の生産計画の「現在地点から再計画を試算」を、旧計算の経路（legacy B8の `createConstrainedPlan()`）から通常のPlanner実行（`createPlan()`）へ切り替えた変更（Issue #136 / #101 Phase 6-A）は、現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **17** へ更新した。どちらの入力も保存済みの競合選択を持たないため、通常のケースでは計算結果は旧経路と同じである。ただし旧経路固有の再実行上限（`maxPlannerReruns = 4`）は、実行時に予測非対応と判明した作成リスト項目を除外して計画をやり直す計算も数えていた。通常のPlanner実行にはこの上限が無いため、やり直しが4回の計算を超える入力では、旧経路は計画なし（`max_planner_reruns_reached`）で止まり、新経路は計画を作成し得る。同じ入力で計画の有無・採用する作成リスト項目・警告・操作手順・完成する目標武器・必要素材が変わり得て、保存済みの作成プランは生成経路を記録しないため、version 16以前の作成プランは下書き・実行中を問わず `calculation_context_changed` で実行・比較・競合操作ができず、読み取り時の変換や保存済みversionの書き換えはしない。候補検索、作成リスト、RNG予測の意味は変えていないため、version 12 / 13 / 14 / 15 / 16の候補と作成リスト項目は明示的な互換例外（`17 -> [12, 13, 14, 15, 16]`、範囲指定ではない）によりそのまま利用できる（version 11以前は非互換のまま、作成プランへは適用しない）。永続形状は変えないため、Dexie `DATABASE_SCHEMA_VERSION`（10）、`ExportRoot.schemaVersion`（13）、`AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、Master dataVersion（4）は変更せず、migrationも追加しない。
 
 ---
 

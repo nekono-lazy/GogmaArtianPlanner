@@ -119,6 +119,16 @@ export function isCalculationContextCompatible(
  * version 16. Version 1..11 stay incompatible, and the exception never reaches
  * a ProductionPlan: every version 1..15 Plan fails closed under 16.
  *
+ * App schema 17 changes only which Planner entry the Build List's ordinary
+ * Plan creation and the running Plan's replan Preview run (the ordinary
+ * `createPlan()` without the legacy B8 `maxPlannerReruns` budget on its
+ * runtime-unsupported retries, `docs/PLANNER_SPEC.md` 9.2.19.15). Candidate
+ * Search, the constrained enumerator, BuildCandidate and BuildListEntry
+ * snapshot semantics and staleness are untouched, so a version 12, 13, 14, 15
+ * or 16 BuildCandidate or BuildListEntry stays usable under version 17.
+ * Version 1..11 stay incompatible, and the exception never reaches a
+ * ProductionPlan: every version 1..16 Plan fails closed under 17.
+ *
  * Each exception is directional and deliberately narrow: version 1 stays
  * incompatible, it is never a general forward compatibility for future
  * versions, every other CalculationContext field must still be equal, the
@@ -134,6 +144,7 @@ const COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS: ReadonlyMap<number, readonly 
     [14, [12, 13]],
     [15, [12, 13, 14]],
     [16, [12, 13, 14, 15]],
+    [17, [12, 13, 14, 15, 16]],
   ])
 
 export function isBuildResultCalculationContextCompatible(

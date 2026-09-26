@@ -32,7 +32,8 @@ Production behavior:     Phase 5-Bで切替済み（生産計画画面の「比�
                          「この候補を優先」はcreatePlannerAlternativeRepair() + savePlannerAlternativeRepair()）。Phase 6-Aで
                          作成リストの通常Plannerと再計画PreviewもcreatePlan()へ切替済み。旧B8 / B9の実装はPhase 6-Bまで
                          残るが、通常のApplication runtimeからは呼ばない（consumerはbenchmark / testだけ）
-schema / version:        Phase 5-Bで更新（calculation 16、Dexie 10、Export 13。10章）。Phase 6-Aは変更しない
+schema / version:        Phase 5-Bで更新（calculation 16、Dexie 10、Export 13。10章）。Phase 6-Aでcalculationだけ17へ更新
+                         （Dexie 10、Export 13は不変）
 ```
 
 この文書はtask-specificな **設計記録** である。背景、方式選定の理由、後続PRの分割を記録する。
@@ -388,6 +389,12 @@ Master dataVersion                      4
 - Phase 5-B（lineage永続化 + Production routing切替）で
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 15 → 16（build-result互換例外 `16 -> [12, 13, 14, 15]`）、
   `DATABASE_SCHEMA_VERSION` 9 → 10、`ExportRoot.schemaVersion` 12 → 13（実施済み）
+- Phase 6-A（作成リストの通常Plannerと再計画Previewのordinary Planner切替）で
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 16 → 17（build-result互換例外 `17 -> [12, 13, 14, 15, 16]`）。B8固有の
+  `maxPlannerReruns`（4）がordinary経路から外れ、runtime-unsupported retryが4 full runを超える入力で結果が変わり得る
+  ためである（PLANNER_SPEC 9.2.7 / 9.2.19.15）。永続shapeは変えないので `DATABASE_SCHEMA_VERSION` 10、
+  `ExportRoot.schemaVersion` 13のまま（実施済み）。Phase 6-A完了時点の値は calculation 17 / Dexie 10 / Export 13 /
+  AppSettings 2 / RngState 2 / `production-rng:c5-e7` / Master 4 である
 
 ---
 
@@ -525,9 +532,11 @@ codeだけを削除できる。**Phase 6-A**で変更したもの: 作成リス�
 Build Listを書かない）、`ProductionPlanReplanPreview.result` の `PlannerResult` 化、再計画採用からのgenerated Entry追加・`O -> G`
 置換・generated ID衝突 / 鮮度・replacement metadataの除去（採用はBuild Listを書き換えない）、`conflictResolutions = []` で
 B8の結果とordinary Plannerの結果が一致しB8がenumeration / materialization / trial / replacement preflightを開始しないことの
-parity test。唯一の差として、B8の `maxPlannerReruns`（4）が最初のrun内のruntime-unsupported retryも数えていた点を
-PLANNER_SPEC 9.2.7へ記録した。Phase 6-Aで変更していないもの: 生産計画画面の「比較する」「この候補を優先」
+parity test（代表的な通常ケースで同一結果）。B8の `maxPlannerReruns`（4）が最初のrun内のruntime-unsupported retryも
+数えていたため、5回目のfull runが必要な入力では旧経路が `plan = null`、新経路がPlanありとなる。この差を回帰testで固定し、
+observable Planner calculation semanticsの変更として `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を17へ上げた
+（PLANNER_SPEC 9.2.7 / 9.2.19.15。4-run capをordinary Plannerへ移植してparityを保つことはしない）。Phase 6-Aで変更していないもの: 生産計画画面の「比較する」「この候補を優先」
 （Planner Alternativeのまま）、B8 / B9のWorker request kind・Client method・Production adapter・計算本体、
 `defaultConstrainedEnumerationBounds` / `defaultPlannerOrchestrationBounds` / `defaultPlannerWhatIfBounds`、B8専用warning kind、
 B8の保存API（`savePlannerOrchestrationResult()` / `inspectPlannerOrchestrationResultSave()`）、B8 / B9 / Issue #101の
-benchmark harness / page / 記録、`constrained/` 配下の共有primitiveの配置、各version値とmigration。
+benchmark harness / page / 記録、`constrained/` 配下の共有primitiveの配置、Dexie / Exportほかcalculation以外のversion値とmigration。

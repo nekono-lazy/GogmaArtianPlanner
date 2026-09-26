@@ -717,7 +717,7 @@ describe('Approved breaking changes', () => {
         database,
         'undo_not_allowed',
       )
-      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
+      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
       expect(DATABASE_SCHEMA_VERSION).toBe(10)
       expect(EXPORT_SCHEMA_VERSION).toBe(13)
     }))

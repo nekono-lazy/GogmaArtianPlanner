@@ -117,7 +117,7 @@ function completionsOf(step: PlanStep | undefined) {
 }
 
 describe('calculation schema version boundaries', () => {
-  it('moves the calculation schema to 15 for the Normal Counter-advance fast-forward; Export and Dexie move only with persisted shapes', () => {
+  it('moves the calculation schema to 17 for the Phase 6-A ordinary Planner routing; Export and Dexie move only with persisted shapes', () => {
     // The Execution Plan contract moved the calculation schema to 12 and Export
     // to 8 without a Dexie upgrade; the Execution runtime lifecycle metadata then
     // moved Export to 9 and Dexie to 6 without touching calculation semantics.
@@ -128,13 +128,18 @@ describe('calculation schema version boundaries', () => {
     // Production Planner to the deterministic scheduler: a calculation change
     // only (14), with no persisted shape change. Issue #129 let the Planner pass
     // the Counter-advance forges of a predicted Normal creation: a calculation
-    // change only (15), again with no persisted shape change.
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
+    // change only (15), again with no persisted shape change. Issue #136 / #101
+    // Phase 5-B moved the Conflict what-if / repair to the Planner Alternative
+    // scenario (16) together with the persisted repair lineage (Dexie 10 /
+    // Export 13). Phase 6-A moved the Build List and the replan Preview to the
+    // ordinary Planner, dropping the legacy B8 retry budget: a Planner-only
+    // calculation change (17), with no persisted shape change.
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
   })
 
-  it.each([11, 12, 13, 14])('fails a version %i Plan closed instead of reusing it as a current Plan', (version) => {
+  it.each([11, 12, 13, 14, 15, 16])('fails a version %i Plan closed instead of reusing it as a current Plan', (version) => {
     const current = { ...createValidProductionPlan().calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
     expect(isCalculationContextCompatible({ ...current, appSchemaVersion: version }, current)).toBe(false)
   })

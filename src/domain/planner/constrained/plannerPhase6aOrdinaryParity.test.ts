@@ -29,8 +29,11 @@ import { defaultPlannerOrchestrationBounds } from './plannerOrchestrationBounds'
  * Phase 6-A migration evidence (`docs/PLANNER_SPEC.md` 9.2.7 / 9.2.19.16):
  * the Build List ordinary Planner and the replan Preview hand the Planner a
  * fresh input with `conflictResolutions = []`, so the legacy B8 orchestration
- * they used to call ran exactly its initial ordinary Planner run and returned
- * it. Switching them to `createPlan()` therefore changes no result.
+ * they used to call started no constrained work and, in the representative
+ * ordinary cases below, returned exactly its initial ordinary Planner run:
+ * switching them to `createPlan()` gives the same ordinary result there. It is
+ * not a semantic parity for every input - see the retry budget below - which is
+ * why Phase 6-A moved the calculation schema to 17.
  *
  * Each case runs the legacy orchestration with the Production values its
  * Worker adapter passed (`defaultPlannerOrchestrationBounds`,
@@ -46,11 +49,14 @@ import { defaultPlannerOrchestrationBounds } from './plannerOrchestrationBounds'
  *   materialization, Candidate trial or replacement preflight at all
  * - the same RNG Engine and Clock work
  *
- * The one case where the two could differ is outside the Build List and replan
- * inputs' reach in practice: the legacy budget capped the runtime-unsupported
+ * Where the two differ: the legacy budget capped the runtime-unsupported
  * retries of that initial run at `maxPlannerReruns` (4) full runs, while the
- * ordinary Planner has no such cap. It is recorded, not hidden, in
- * `docs/PLANNER_SPEC.md` 9.2.19.16.
+ * ordinary Planner has no such cap. An input that needs a fifth full run gets
+ * `plan = null` with `max_planner_reruns_reached` on the old path and can get a
+ * Plan on the new one - an observable Planner calculation change
+ * (`docs/PLANNER_SPEC.md` 9.2.7 / 9.2.19.15, calculation schema 17), pinned by
+ * `plannerPhase6aRetryBudgetBoundary.test.ts`. Every case below needs at most
+ * two full runs.
  */
 
 const counts = vi.hoisted(() => ({
@@ -232,7 +238,7 @@ function ordinaryShape(result: PlannerResult): PlannerResult {
   }
 }
 
-describe('Phase 6-A: legacy B8 orchestration without an explicit resolution == the ordinary Planner', () => {
+describe('Phase 6-A: legacy B8 orchestration without an explicit resolution == the ordinary Planner in the representative ordinary cases', () => {
   it.each(cases)('$name', async ({ build, expectedFullRuns }) => {
     const legacyBuilt = build()
     const ordinaryBuilt = build()
