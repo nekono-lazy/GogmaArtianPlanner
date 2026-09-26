@@ -1445,7 +1445,10 @@ held 位置で自分のoperationが無い場合、武器状態（Bonus 5枠、sc
   必要な探索に対するものである
 - 決定的な順序で1件ずつ返し、consumer（Planner）が次を要求する限り継続する。canonical Ideal（5.6.3）で
   探索を終了しない。「canonical Ideal → Plannerで使用不可 → 次のIdeal → さらに使用不可なら次」と進める
-- 除外key（`excludedRouteKeys`）と一致するCandidateは返さずに次へ進み、除外件数をsummaryへ数える
+- 除外key（`excludedRouteKeys`）と一致するCandidateは返さずに次へ進み、除外件数をsummaryへ数える。この件数
+  （`excludedCandidates`）は `excludedRouteKeys` 全体によって実際にskipしたCandidate数（total）である。Planner側の
+  typed resultの `excludedByRepairLineageCount` は、そのうちprior repair lineage由来のkeyに一致したCandidate数だけを
+  表す別semanticである（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.13）
 - 終了はconsumer stop、extent内の探索完了（exhausted）、extent到達で未確認が残った（stopped by extent）、
   cancelのいずれかであり、exhaustedとextent到達を区別する（5.6.7の `exhausted` / `stoppedByBound` と同じ原則）
 
@@ -1568,7 +1571,8 @@ export const defaultPlannerAlternativeSearchExtent: PlannerAlternativeSearchExte
 
 Domain API（`visitPlannerAlternativeCandidates()` の `PlannerAlternativeSearchInput.extent`）はcaller必須指定の
 ままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの定数を明示的に渡す
-（Phase 4のrouting接続で行う）。benchmarkの `BENCHMARK_ONLY_*` gridとsanity値はPhase 3-Bのhistorical
+（Phase 4-Bのruntime接続で行う。Phase 4-Aでは配線せず、Production UI routingの切替自体はPhase 5で行う）。
+benchmarkの `BENCHMARK_ONLY_*` gridとsanity値はPhase 3-Bのhistorical
 measurement conditionとして維持し、このdefaultを読まない。
 
 #### 出力とidentity

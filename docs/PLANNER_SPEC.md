@@ -4182,8 +4182,11 @@ Trace Replay → 9.2.19.6のfound判定。試行上限 `maxCandidateTrialsPerTar
 Search・reservation導出・materialization・preflightを数えない。以前の決定のfixed Entry・無効化Route keyはcallerから受け取り、
 trial不採用のCandidateは除外keyへ加えない）、Issue #101実ケースのDomain acceptanceである。Phase 3（benchmark-only
 harness、real Browser Worker測定、extent / 試行上限のProduction default定数の確定。9.2.19.12 / 9.2.19.16）も完了した。
-Phase 4〜7（what-if、actual repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、
-Presentation）は未実装であり、Plannerの画面経路は本節の契約をまだ使っていない（Production routingはlegacyのB8経路のまま）。
+Phase 4-A（docs-only。scenario compositionのrun規則とtrial / adoption / final resultの再利用、request-globalな
+`maxPlannerReruns`、`excludedByRepairLineageCount`、`adoptedInScenario` の未評価状態の明確化。9.2.19.7 / 9.2.19.8 /
+9.2.19.12 / 9.2.19.13 / 9.2.19.16）で正式仕様を確定した。Phase 4-B〜7（what-ifのruntime接続、actual repair、
+lineage永続化、Production routing切替とversion更新、legacy pathの整理、Presentation）は未実装であり、Plannerの画面経路は
+本節の契約をまだ使っていない（Production routingはlegacyのB8経路のまま）。
 
 9.2.19.6の条件4の後半（`G` が選ばれない理由が、fixed Route集合外Entryとの未解決競合の暫定帰結だけであること）は、
 Planの記録（`plan.rejectedBuildListEntries` 等）からは「`G` が暫定帰結で負けた後に勝者がstallで落ちた」と「`G` が
@@ -4440,25 +4443,25 @@ resolutionが選択するEntryである（既存9.2.4.7の「全fixed Entry」�
 3. Targetごとに独立に、9.2.19.5の代替探索と9.2.19.6のtrialを行う
 4. Targetごとに、最初にfoundになったCandidateの代替Route（9.2.19.13のRoute summary）、
    操作量、進行量を返す
-5. scenario trial: 手順4でfoundになったreplacementを、actual repairの9.2.19.8手順5〜7と同じ規則
-   （stable orderのmonotonic adoption、置換後集合での再対応付け、最終full Planner run + Trace Replay、
-   Conflict再生成と決定の展開）で合成し、scenario Planを1つ得る。そのPlanの実際のPlanStep数
-   （scenarioOperationCount）、このPlanで完成しないplanning Target、残るConflictと新しく発生する
-   Conflictを返す（9.2.19.13）
+5. scenario composition: 手順4でfoundになったreplacementを、actual repairと共通のscenario composition
+   （9.2.19.8.1。stable orderのmonotonic adoption、置換後集合での再対応付け、trial / adoption resultの再利用、
+   final scenario resultの確定、Conflict再生成と決定の展開）で合成し、final scenario resultを1つ得る。
+   そのPlanの実際のPlanStep数（scenarioOperationCount）、このPlanで完成しないplanning Target、残るConflictと
+   新しく発生するConflictを返す（9.2.19.13）
 6. 終了する
 ```
 
 - 各Targetの代替探索とtrialは同じ前提（Planner-start origin、fixed Route集合、その他のexplicit resolution、
   同じreservation）から開始し、他Targetの代替を採用した入力で測らない（9.2.4.4を維持）。Targetごとの
-  操作量・進行量はこの独立評価の値である
-- scenario trialは、このscenario（Aを優先）を1段repairした結果の計画全体を表す。直接participantの
-  非固定Targetが1つだけで、そのTargetのtrial Planがそのままscenario Planになる場合（replacementが1件で、
-  展開すべき決定が残らない場合）は、そのtrial Planを再利用し、full Planner runを追加しない。
-  それ以外（非固定Targetが複数、または代替が見つからないTargetがある）は、scenario Plan用のfull Planner runを
-  1回行い、`maxPlannerReruns` に数える
+  操作量・進行量はこの独立評価の値である。他Targetのreplacementを採用した入力を使うのは手順5のscenario
+  compositionだけである
+- scenario compositionは、このscenario（Aを優先）を1段repairした結果の計画全体を表す。どのfull Planner runを
+  新たに行い、どのtrial / adoption resultを再利用するかは9.2.19.8.1だけで決める。非固定Targetの数や、代替が
+  見つからなかったTargetがあることは、それだけではfull Planner runを追加する理由にならない。新たに開始する
+  full Planner runはすべてrequest-globalな `maxPlannerReruns` に数える（9.2.19.12）
 - 1つのConflictの各participantで「比較する」を実行した結果を並べれば、「Aを優先した場合」と「Bを優先した場合」の
   scenario全体の暫定Plan手数を比較できる。比較は同じ表示中Draft・同じ永続状態から得た結果どうしで行う
-- trialとscenario trialの `PlannerInput.options` は、actual repair（9.2.19.8）と同じ
+- trialとscenario compositionの各full Planner runの `PlannerInput.options` は、actual repair（9.2.19.8）と同じ
   `conflictResolutionPlannerOptions(表示中Plan)`（Issue #130）とする。scenario Planが「この候補を優先」で
   保存されるPlanと同じ条件で計算されるようにするためであり、新kernelでは9.2.4.14の「what-ifのPlanner入力は
   この導出の対象外」を置き換える
@@ -4489,13 +4492,15 @@ resolutionが選択するEntryである（既存9.2.4.7の「全fixed Entry」�
    Targetは探索せず blocked_by_selected_checkpoint とする（9.5.2）
 4. 各非固定Targetについて、そのTargetの現在Entry（無効化Entry）のRouteを無効化Routeとし、
    what-ifと同じ条件（同じfixed Route集合・reservation・除外key）で独立に代替探索とtrialを行う
-5. foundになったreplacementを、手順3のstable orderでmonotonicに採用する。
+5. foundになったreplacementを、手順3のstable orderでmonotonicに採用する（scenario composition、9.2.19.8.1）。
    あるreplacementを追加したrunで、そのreplacement自身、または先に採用したreplacementが9.2.19.6の条件
    （明示決定Entryがselected、fixed Route集合と競合しない、stall等で落ちない）を満たさなくなる場合は、
    そのreplacementを採用しない（9.2.14のmonotonic adoptionを維持）
-6. 採用したreplacementで元Entryを置換した集合（9.2.18）で、preflightと全explicit resolutionの
-   再対応付け（9.2.3.1。「置換で充足済み」規則を含む）を行い、最終full Planner run + Trace Replayを行う
-7. 最終runの結果からConflictを再生成し、決定を展開する（9.2.19.9）
+6. 最終accepted replacement集合で元Entryを置換した集合（9.2.18）について、preflightと全explicit resolutionの
+   再対応付け（9.2.3.1。「置換で充足済み」規則を含む）を経たfull Planner run + Trace Replayの結果を
+   final scenario resultとして確定する。その集合をすでに評価したtrial / adoption resultがあれば再利用し、
+   無い場合だけ新たにfull Planner runを行う（9.2.19.8.1）
+7. final scenario resultからConflictを再生成し、決定を展開する（9.2.19.9）
 8. repair lineageを更新する（9.2.19.11）
 9. 既存の savePlannerOrchestrationResult() で、generated Entryによる元Entry置換、新Draft、
    lineageを1 transactionで保存する（9.2.15 / 9.2.18。Plan-breaking guardも既存どおり）
@@ -4514,11 +4519,104 @@ resolutionが選択するEntryである（既存9.2.4.7の「全fixed Entry」�
 - `PlannerInput.options` は9.2.4.14（Issue #130）のとおり `conflictResolutionPlannerOptions(表示中Plan)`
   で上書きする
 - actual repairも9.2.19.13と同じtyped result（Targetごとのoutcome、Route summary、`scenario`）を返す。
-  このときの `scenario` の対象は保存するPlanそのものであり、what-ifの `scenarioOperationCount` と同じ規則で数える
+  このときの `scenario` の対象は保存するPlanそのものであり、what-ifの `scenarioOperationCount` と同じ規則で数える。
+  final scenario resultが得られない場合（`scenario.status === "stopped_by_planner_rerun_bound"`）は保存するPlanが
+  存在しないので、既存fail closedのとおり何も保存しない（lineageも保存しない）
+
+##### 9.2.19.8.1 scenario compositionとfull Planner runの規則（what-if / actual repair共通）
+
+what-ifの手順5（9.2.19.7）とactual repairの手順5〜7はこの規則で行う。何をfull Planner runとして新たに開始し、
+何を再利用するかは本節だけをauthorityとする。
+
+用語。
+
+```text
+individual trial          非固定Targetごとの9.2.19.6のtrial。同じbaseline（今回の決定をmergeした入力、
+                          fixed Route集合、explicit resolution）から、そのTargetのreplacement 1件だけで
+                          評価する（9.2.19.7の独立評価）
+found replacement         individual trialでfoundになったreplacement。Targetごとに高々1件
+accepted replacement集合  scenario compositionで採用済みのreplacementの集合。初期値は空
+adoption run              accepted replacement集合 + 今回追加を検討するreplacement 1件の置換後集合について、
+                          replacement preflight、explicit resolutionの再対応付け、full Planner run +
+                          Trace Replayを行うこと
+current scenario result   直前のaccepted replacement集合を評価した、最新の成功したfull Planner run +
+                          Trace Replayの結果
+final scenario result     最終accepted replacement集合を評価したfull Planner run + Trace Replayの結果。
+                          scenario Plan、scenarioOperationCount、Conflict分類、actual repairの保存対象の
+                          唯一のauthority
+```
+
+基本原則。
+
+- individual trialは9.2.19.7のとおり、Targetごとに同じbaselineから独立に行う。他Targetのreplacementを採用した
+  状態で、個々のTargetの代替探索、trial、距離を測らない
+- scenario compositionは、individual trialがすべて終わった後に、found replacementをTargetのstable order
+  （9.2.19.8手順3。what-ifでも同じ順序）でaccepted replacement集合へmonotonicに追加する
+- ある入力（置換後のEntry集合、merge後のexplicit resolutionとその再対応付け、`PlannerInput.options`）について
+  full Planner run + Trace Replayの成功結果をすでに持っている場合、同じ入力でもう一度full Planner runを行わない。
+  「final full Planner run」は、最後に必ず新規runを1回追加するという意味ではなく、最終accepted replacement集合に
+  ついてfinal authorityとなるfull Planner run + Trace Replayという意味である
+- Conflict再生成と決定の展開（9.2.19.9）はfinal scenario resultのConflictに対する処理であり、それ自体を理由に
+  同じPlanner入力の追加full Planner runを行わない
+
+accepted判定。adoption runは、次をすべて満たすときacceptedとする（9.2.19.6の条件を、accepted replacement集合の
+全replacementへ同時に適用したもの）。
+
+```text
+plan !== null かつ Trace Replayが成功している
+plan.selectedBuildListEntryIds が明示決定Entryをすべて含む
+今回追加するreplacementと既にaccepted済みの各replacementのどれについても、
+  そのgenerated Entryとfixed Route集合のEntryを同時にparticipantとするconflictが無く、
+  そのgenerated Entryがselectedである、または選ばれない理由がfixed Route集合外Entryとの
+  未解決競合の暫定帰結だけである
+```
+
+- acceptedなら、今回のreplacementをaccepted replacement集合へ加え、そのrunの結果をcurrent scenario resultにする
+- acceptedでなければ、今回追加しようとしたreplacementだけをreject（不採用）とする。既にaccepted済みの
+  replacementはrollbackしない。accepted replacement集合とcurrent scenario resultは直前のまま保持し、
+  次のfound replacementがあれば、その直前のaccepted集合へ追加する形で評価を続ける
+- replacement preflightや再対応付けが失敗した場合（9.2.3.1の0件・複数件・fingerprint不一致・validation除外等）も、
+  今回のreplacementのrejectとして扱う。これはfull Planner runを開始しないのでbudgetを消費しない
+
+最初のfound replacementの扱い。最初のfound replacementのindividual trialは、空のaccepted集合へそのreplacementを
+加えた集合を、scenario compositionと同じ条件（今回の決定、fixed Route集合、explicit resolution、replacement
+preflightと再対応付け、`PlannerInput.options`）ですでに評価している。したがってそのtrial resultを最初のaccepted
+scenario result（current scenario result）として再利用し、同じ集合でもう一度full Planner runを行わない。
+foundであることが上記のaccepted判定そのものであるため、最初のfound replacementはrejectされない。
+
+final scenario resultの確定。
+
+- 最新のcurrent scenario result（最初のfound replacementのtrial result、または最後にacceptedになった
+  adoption runの結果）が最終accepted replacement集合を評価済みであるなら、それをfinal scenario resultとして
+  再利用する。同じ入力でfinal用のfull Planner runを追加しない
+- 最終accepted replacement集合を評価済みのresultが存在しない場合だけ、その集合についてpreflightと再対応付けを行い、
+  final scenario用のfull Planner run + Trace Replayを新たに1回行う。monotonic adoptionでは、found replacementが
+  1件以上あれば最初のfound replacementがacceptedになるので、この新規runが必要なのはfound replacementが0件の
+  場合だけである
+
+ケース別の規則（非固定TargetをB / C / D / E、各Targetのfound replacementをB2 / C2 / D2 / E2とする）。
+
+| ケース | 行うfull Planner run（individual trial以外） | final scenario result |
+| --- | --- | --- |
+| A. found replacement = 0 | 今回の決定を反映した入力（replacementなし）について、preflight・再対応付けの後にscenario full Planner run + Trace Replayを1回 | そのrunの結果 |
+| B. found replacement = 1（B2） | なし。非固定Targetが複数あること、他Targetで代替が見つからなかったことだけを理由に追加runしない | B2のindividual trial resultを再利用 |
+| C. found replacement = 2件以上（B2 / C2 / D2） | B2 + C2のadoption run、B2 + C2 + D2のadoption run | 最後にacceptedになったadoption runの結果を再利用（同じ集合でfinal runを追加しない） |
+| D. adoption途中のreject（B2 / C2 / D2 / E2、D2がreject） | B2 + C2（accepted）、B2 + C2 + D2（D2をreject）、B2 + C2 + E2（accepted） | B2 + C2 + E2のadoption runの結果を再利用 |
+
+- ケースDでD2を含むrunは実際に開始したfull Planner runなので、rejectになってもbudgetを1消費する。reject後の
+  accepted replacement集合はB2 + C2のままであり、E2はB2 + C2へ追加する形で評価する
+- ケースDで最後のE2がrejectになった場合は、current scenario resultであるB2 + C2のadoption runの結果が最終accepted
+  replacement集合を評価済みなので、それをfinal scenario resultとして再利用する
+- 途中でrequest-globalな `maxPlannerReruns`（9.2.19.12）が尽き、必要なadoption run（またはケースAのscenario run）を
+  開始できない場合、scenario compositionはそこで止まる。`scenario` は `stopped_by_planner_rerun_bound` とし、
+  scenario Plan・`scenarioOperationCount`・Conflict分類を返さない。そのとき採否を評価できなかったfound replacementの
+  `adoptedInScenario` は未評価（`null`）とする（9.2.19.13）。budgetが尽きたこと自体はfailureではないので、
+  最終accepted集合を評価済みのresultがあり、それ以上のfull Planner runが不要なら `evaluated` としてよい
 
 #### 9.2.19.9 Conflict再生成と決定の展開
 
-保存するPlanの `conflicts` は、最終full runが最新状態から検出したものだけをauthorityとする。
+保存するPlanの `conflicts` は、final scenario result（9.2.19.8.1）が最新状態から検出したものだけをauthorityとする。
+final scenario resultを得るためだけにfull Planner runを追加しない。
 
 ```text
 replacement後のBuild List Entry集合
@@ -4530,8 +4628,8 @@ Planner route commitment
 - 旧PlanのConflict一覧から「解決済みのConflictだけを削除する」方式をauthorityにしない。旧Routeに由来する
   後続Conflictが残るためである
 - replacementで元Entryを置換したTargetでは、無効化Routeに由来するConflict（Issue #136のSkill 341 /
-  Gogma 55）は最終runに存在しないので残らない
-- **決定の展開**: 代替を採用できなかった無効化Entry `O` が残る場合、最終runで検出されたConflictのうち、
+  Gogma 55）はfinal scenario resultに存在しないので残らない
+- **決定の展開**: 代替を採用できなかった無効化Entry `O` が残る場合、final scenario resultで検出されたConflictのうち、
   participant集合が「今回のfixed Entry」と「今回の決定で無効化したEntry」だけからなるものすべてに、fixed Entryを
   選択するresolutionを適用する。それらはpendingのユーザー判断ではなく「fixed側を選択済み」として保存する
   （`selectedBuildListEntryId = fixed Entry`）。他のEntryを含むConflictには展開しない
@@ -4557,6 +4655,11 @@ authority。
   - repair lineage（9.2.19.11）がBについて記録した無効化Routeのkey（lineageがBについて有効な間だけ）
 - 除外集合に含まれるRouteは、同じTargetの代替探索で再採用しない。Search Domainはそれを返さずに
   次のIdealへ進み、除外した件数だけをtyped summaryで返す（9.2.19.13）
+- 除外集合の構成（今回の無効化Route ∪ 有効なlineageの無効化Route）はPhase 4-Aでも変えない。件数は2つの別semanticを
+  持つ。Search Domainのsummaryの除外件数（`excludedCandidates`）は、`excludedRouteKeys` 全体によって実際にskipした
+  Candidate数（今回の無効化Routeとlineage由来の両方を含むtotal）である。Planner Alternativeのtyped resultの
+  `excludedByRepairLineageCount`（9.2.19.13）は、そのうち有効なprior repair lineage由来のkeyに一致したために
+  deliveryしなかったCandidate数だけであり、今回の決定で無効化する現在Routeにだけ一致したCandidateを含めない
 - 1回の代替探索の中でtrial不採用になったCandidateは、その探索の中で再試行しない。trial不採用は、その時点の
   fixed Route集合に対する判定であり決定ではないため、lineageへは記録しない。lineageへ記録するのは、
   決定によって実際に無効化されたRoute（元Route、および以前採用したが後の決定で無効化されたreplacement）だけである
@@ -4632,9 +4735,33 @@ interface PlannerAlternativeSearchExtent {
   意味を維持し、actual repairは同じ2値の意味を持つrepair用boundsを持つ（B8の `maxGeneratedBuildListEntries`
   に相当する上限は持たない。生成Entry数は今回のConflictの直接participant Target数で自然に有限である）。いずれもcaller必須、1以上の
   整数である。`maxPlannerReruns` はfull Planner runの開始回数だけを数え、
-  preflight・validation・Search・materializationを数えない（9.2.4.9 / 9.2.16と同じ）。what-ifのscenario trial
-  （9.2.19.7手順5）で追加のfull runを行う場合もそれを1回と数え、予算が残っていなければ `scenario` を
-  `stopped_by_planner_rerun_bound` とする。trial Planを再利用する場合は数えない
+  preflight・validation・Search・materializationを数えない（9.2.4.9 / 9.2.16と同じ）。消費規則は下記の
+  「request-globalな `maxPlannerReruns`」に従う
+- **request-globalな `maxPlannerReruns`**（Phase 4-Aで確定）。`maxPlannerReruns` は1 request（what-ifの
+  「比較する」1回、actual repairの「この候補を優先」1回）につき1つだけ存在するshared budgetである。次を別budgetに
+  分けず、すべて同じbudgetから消費する。
+
+  ```text
+  非固定Targetごとのindividual trial（Target B / C / D ... のCandidate trial）
+  scenario compositionのadoption run（9.2.19.8.1）
+  必要な場合のfinal scenario run（9.2.19.8.1のケースA）
+  上記の各full Planner run（createProductionPlanWithObserver()）の中のruntime-unsupported retry
+  ```
+
+  - 意味は既存の `PlannerAlternativeFullRunBudget`（`ProductionPlanGenerationObserver.beforePlannerRun()` が
+    full Planner runを開始する直前にだけ呼ばれ、呼ばれるたびに1消費する）と同じである。budgetをどの関数引数で
+    共有するかはPhase 4-Bの実装で決める
+  - 1消費するのは、実際に開始するfull Planner runだけである。runtime-unsupported retryは新しいfull Planner runを
+    実際に開始するので1消費する。adoption runでrejectになったrunも、開始した以上1消費する
+  - 消費しないもの: Search、reservation導出、materialization、validation、preflight、resolutionの再対応付け、
+    Route summary生成、Conflict summary生成、trial / adoption resultの再利用（9.2.19.8.1）
+  - `budget.used === maxPlannerReruns` になったこと自体はfailureではない。limit番目のrunが成功し、そのresultだけで
+    Targetのoutcomeやfinal scenario resultを確定できるなら、そのまま確定してよい（`scenario.status = "evaluated"`
+    を含む）。その後にもう1回full Planner runが必要になった時点で、そのrunを必要とした処理が
+    `stopped_by_planner_rerun_bound` になる（individual trialならそのTargetのoutcome、scenario compositionなら
+    `scenario`）
+  - 再利用できるtrial / adoption resultがあるのに、final用に同じ入力のrunをもう1回行うという理由だけで
+    rerun boundへ到達させない（9.2.19.8.1）
 - 試行上限のProduction default値はPhase 3-Cで次のとおり確定した（Planner Domain、
   `src/domain/planner/alternative/plannerAlternativeTrial.ts`）。
 
@@ -4658,7 +4785,7 @@ interface PlannerAlternativeSearchExtent {
     Phase 3-Bの測定と設計判断から独立に決めた値である
   - Domain API（`runPlannerAlternativeKernel()` の `bounds` / `extent`、`createPlannerAlternativeFullRunBudget()`）は
     caller必須指定のままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの2定数を
-    明示的に渡す（Phase 4以降のrouting接続で行う。Phase 3-Cでは配線しない）
+    明示的に渡す（Phase 4-B以降のruntime接続で行う。Phase 3-C / 4-Aでは配線しない）
 - 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
 - extentは探索範囲の上限であり、探索の進め方はoperation cost層単位のlazy探索である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8
   「cost層単位のlazy性」）。代替探索はextent全体をupfront solveせず、最初のCandidateまでにsettle / solveするworkはそのCandidateのcost層までに
@@ -4676,27 +4803,27 @@ interface PlannerAlternativeComparison {
   fixedBuildListEntryId: BuildListEntryId;
   fixedTargetWeaponId: TargetWeaponId;
   alternatives: PlannerAlternativeTargetOutcome[];   // Domainのstable order（9.2.4.4）
-  scenario: PlannerAlternativeScenarioOutcome;       // 1段repairしたscenario全体（9.2.19.7手順5）
+  scenario: PlannerAlternativeScenarioOutcome;       // 1段repairしたscenario全体（9.2.19.7手順5、9.2.19.8.1）
 }
 
 type PlannerAlternativeScenarioOutcome =
   | {
       status: 'evaluated';
-      scenarioOperationCount: number;              // scenario Planの steps.length（下記）
+      scenarioOperationCount: number;              // final scenario resultのPlanの steps.length（下記）
       unplannedTargetWeaponIds: TargetWeaponId[];  // planning TargetのうちこのPlanで完成しないもの
       introducedConflicts: PlannerAlternativeConflictSummary[]; // 採用replacementをparticipantに含む未解決Conflict
       remainingConflicts: PlannerAlternativeConflictSummary[];  // 採用replacementを含まない未解決Conflict
     }
-  | { status: 'no_plan' }                          // scenario runが plan === null
-  | { status: 'stopped_by_plan_step_bound'; maxPlanSteps: number } // termination.status === 'incomplete'
-  | { status: 'stopped_by_planner_rerun_bound' }   // scenario runを開始する予算が残っていない
+  | { status: 'no_plan' }                          // final scenario resultが plan === null（9.2.19.8.1のケースAでだけ起こる）
+  | { status: 'stopped_by_plan_step_bound'; maxPlanSteps: number } // final scenario resultの termination.status === 'incomplete'
+  | { status: 'stopped_by_planner_rerun_bound' }   // scenario compositionに必要なfull Planner runを開始する予算が残っていない
 
 interface PlannerAlternativeTargetOutcome {
   fixedBuildListEntryId: BuildListEntryId;
   fixedTargetWeaponId: TargetWeaponId;
   alternativeTargetWeaponId: TargetWeaponId;
   outcome: PlannerAlternativeOutcome;
-  excludedByRepairLineageCount: number;   // 9.2.19.10で除外した件数。通常UIでkeyを出さない
+  excludedByRepairLineageCount: number;   // 有効なprior repair lineage由来のkeyで実際にskipしたCandidate数（下記）。通常UIでkeyを出さない
 }
 
 type PlannerAlternativeOutcome =
@@ -4704,7 +4831,7 @@ type PlannerAlternativeOutcome =
       status: 'found';
       alternative: PlannerAlternativeRouteSummary;  // 代替Routeの説明（下記）
       distance: PlannerAlternativeDistance;
-      adoptedInScenario: boolean;          // scenario Planへmonotonic adoptionで採用されたか（9.2.19.8手順5）
+      adoptedInScenario: boolean | null;   // scenario compositionでの採否。null = 未評価（下記、9.2.19.8.1）
     }
   | { status: 'not_found_within_search_extent' }
   | { status: 'stopped_by_search_extent_bound' }
@@ -4739,14 +4866,14 @@ interface PlannerAlternativeRouteSummary {
 
 `scenarioOperationCount` の意味（固定する）。
 
-- authorityは、代替Candidateを差し替えて実行したscenario trialのfull Plannerが生成したscenario Planの、
-  **実際のPlanStep数**（`ProductionPlan.steps.length`）である。Planner-generated Planの組み立て
-  （11章）をそのまま通したPlanの値であり、別途数え直さない
+- authorityは、final scenario result（9.2.19.8.1。再利用したindividual trial / adoption resultを含む）として
+  採用したfull Plannerのscenario Planの、**実際のPlanStep数**（`ProductionPlan.steps.length`）だけである。
+  Planner-generated Planの組み立て（11章）をそのまま通したPlanの値であり、別途数え直さない
 - fixed Routeの `estimatedOperationCount` と代替Routeの `estimatedOperationCount` を足す方式にしない。
   共有physical action、silent fast-forward（Issue #129のCounter進行用forgeを含む）、Route commitmentの暫定帰結、
   Plannerの実行順、reserveやconfirmation（`confirm_owned_ideal`）等の扱いによって、単純合算と実PlanStep数は
   一致しないためである。scenario Planには今回の競合に関係しないTargetのStepも含まれる（計画全体の手数である）
-- これは **この1段repairを適用したscenario trial Planの暫定PlanStep数** であり、全Targetが最終完成するまでの
+- これは **この1段repairを適用したscenario Planの暫定PlanStep数** であり、全Targetが最終完成するまでの
   確定総手数ではない。what-ifは新しいConflictを再帰的に解決しないので、`introducedConflicts` /
   `remainingConflicts` に未解決Conflictが残る場合、その後のユーザー判断によって手数も完成Targetも変わり得る。
   `scenarioOperationCount` は常に `unplannedTargetWeaponIds`、`introducedConflicts`、`remainingConflicts` と
@@ -4755,6 +4882,60 @@ interface PlannerAlternativeRouteSummary {
 - `stopped_by_plan_step_bound`（`maxPlanSteps` 到達）のPlanStep数は途中までの値なので返さない。
   `no_plan` と `stopped_by_planner_rerun_bound` も値を持たない
 - actual repair（9.2.19.8）でも同じ `scenario` を返す。そのときのscenario Planは保存するPlanそのものである
+
+`introducedConflicts` / `remainingConflicts` の分類（固定する）。
+
+- final scenario resultの最新Conflict（9.2.19.9の再生成・決定の展開を適用したもの）だけから分類する。
+  旧Planや表示中PlanのConflict IDとの差分で判定しない（replacementでparticipant集合が変わると同じ物理的競合でも
+  `PlanConflict.id` が変わるため）
+- `introducedConflicts` は、最終accepted replacement集合のgenerated Entryをparticipantに含む未解決Conflictである
+- `remainingConflicts` は、最終accepted replacement集合のgenerated Entryをparticipantに含まない未解決Conflictである
+- what-ifの中でこれらのConflictをさらに再検索して解決しない（1段preview、9.2.19.7）
+
+`found` と `adoptedInScenario` の意味（固定する）。
+
+- `found` は、fixed Route集合とのTarget単独のindividual trialで成立したこと（9.2.19.6）だけを意味する。
+  他Targetのreplacementとの組み合わせでの成立は意味しない
+- `adoptedInScenario` は、他Targetのreplacementを含むscenario composition（9.2.19.8.1）での採否であり、3状態を
+  区別する。
+
+  ```text
+  true   scenario compositionでacceptedになった（最初のfound replacement、またはacceptedになった
+         adoption run）。monotonic adoptionではrollbackされないので、最終accepted replacement集合に含まれる
+  false  scenario compositionで評価した結果、そのreplacementを加えたadoption runがacceptedにならず、
+         不採用になった（preflight・再対応付けの失敗によるrejectを含む）
+  null   scenario compositionがそのreplacementの採否を評価する前に止まり、採否が未確定である
+         （request-globalな maxPlannerReruns が尽き、そのadoption runを開始できなかった）
+  ```
+
+- rejectと、budget等による未評価を同じ `false` へまとめない。例: B2 / C2 / D2がfoundで、B2 accepted、B2 + C2
+  accepted、D2のadoption run開始前に `maxPlannerReruns` に到達した場合、B2 = `true`、C2 = `true`、D2 = `null` であり、
+  `scenario` は `stopped_by_planner_rerun_bound` である
+- `scenario.status === "evaluated"`（および `stopped_by_plan_step_bound`）ならscenario compositionは最後まで評価
+  されているので、すべてのfound outcomeの `adoptedInScenario` は `true` / `false` のどちらかであり、`true` の集合が
+  final scenario resultの最終accepted replacement集合と一致する。`null` を持つfound outcomeがあるのは
+  `scenario.status === "stopped_by_planner_rerun_bound"` のときだけである。そのときの `true` は「止まる前に
+  acceptedになった」ことを表し、final scenario resultは返さない
+- 型は `boolean | null` を例とする。実装Phase（Phase 4-B）で同じ3状態を区別するtyped literal unionにしてもよいが、
+  未評価を `false` へ潰してはならない
+
+`excludedByRepairLineageCount` の意味（固定する）。
+
+- Target Bの代替探索へ渡す `excludedRouteKeys` は9.2.19.10のとおり、Bの現在Route（今回の決定で無効化するRoute）と、
+  有効なprior repair lineageがBについて記録した無効化Routeの和集合のままとする
+- Search Domainのsummaryの `excludedCandidates` は、`excludedRouteKeys` 全体によって実際にskipしたCandidate数
+  （今回の無効化Routeとlineage由来の両方を含むtotal Search exclusion）である
+- `excludedByRepairLineageCount` は、今回のBの代替探索で実際にCandidateとして到達し、有効なprior repair lineageの
+  keyに一致したためdeliveryしなかったCandidate数だけである。`excludedCandidates` とは別semanticである
+  - 今回の決定で無効化する現在Routeにだけ一致したCandidateは数えない
+  - lineageに保存されているroute keyの個数ではない。例: lineageのroute keyが5件でも、今回のextent内で実際に遭遇して
+    skipしたCandidateが1件なら1である。extent外で遭遇しなかったkeyは数えない
+  - trialでrejectされたCandidateはlineage exclusionではないので数えない
+  - 現在の無効化Routeとlineage Routeの両方に一致するCandidateも、Candidate自体を二重に数えない。そのCandidateが
+    有効なprior lineageにも属するなら、lineage exclusionとして1件数える
+  - 探索しなかったTarget（`blocked_by_selected_checkpoint`、探索開始前にbudgetが尽きた等）は0である
+- この件数をどう求めるか（Search summaryの拡張、Planner側での集計等）はPhase 4-Bの実装で決める。field名を変えても、
+  意味を「`excludedRouteKeys` 全体によるskip数」へ広げない
 
 `PlannerAlternativeRouteSummary` の意味（固定する）。
 
@@ -4766,7 +4947,10 @@ interface PlannerAlternativeRouteSummary {
   記録であり、追加のprediction呼び出しをしない。絶対Counter位置はRouteOperationに含まれるが、通常UIでは既存の
   表示契約どおり表示しない
 - transientであり、永続化しない。BuildCandidate IDやgenerated BuildListEntry IDを必須fieldにしない
-  （9.2.4.8を維持）。具体的なfield構成は実装Phase（Phase 4）で調整してよいが、上記の説明能力を欠いてはならない
+  （9.2.4.8を維持）。具体的なfield構成は実装Phase（Phase 4-B）で調整してよいが、上記の説明能力を欠いてはならない
+- `PlannerAlternativeCandidate` が既に持つ `route`、`finalBonuses`、`restorationBonusScope`、`seriesSkillId`、
+  `groupSkillId`、`bonusAmendmentTrace`、`skillAmendmentTrace`、`conversionSkillTrace` からのpure projectionとする。
+  generated BuildCandidateから逆算せず、`candidateStableKey` からRouteを再構築しない
 
 その他の規則。
 
@@ -4802,8 +4986,9 @@ interface PlannerAlternativeRouteSummary {
 
 後続runtimeで必要となるversion境界を次に固定する。
 
-- **Phase 1〜4**（Search Domain API、reservation、benchmark、what-ifのDomain / Worker contract）は永続shapeも
-  Production Plan生成も変えないので、どのversionも動かさない。what-ifのresultは永続化しない
+- **Phase 1〜4**（Search Domain API、reservation、benchmark、Phase 4-Aのdocs-only仕様確定、Phase 4-Bのwhat-ifの
+  Domain / Worker contract）は永続shapeもProduction Plan生成も変えないので、どのversionも動かさない。what-ifの
+  resultは永続化しない
 - **Phase 5**（actual repairの新semantics、Production routing切替、lineage永続化）
   - `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を16へ上げる。同じPlannerInputと決定から保存されるPlan
     （採用replacement、Conflict、決定の展開、不採用記録）が変わり、保存済みPlanは生成方式を記録しないため。
@@ -4827,7 +5012,7 @@ interface PlannerAlternativeRouteSummary {
 #### 9.2.19.16 phase分割
 
 依存関係を確認したうえで、次の7 Phaseとする（理由は
-[PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md) 11章）。
+[PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md) 11章）。Phase 4は4-A / 4-Bに分ける。
 
 ```text
 Phase 1  modern Search基盤を使うPlanner Alternative SearchのSearch Domain API
@@ -4835,9 +5020,14 @@ Phase 1  modern Search基盤を使うPlanner Alternative SearchのSearch Domain 
 Phase 2  fixed Route集合とresource reservationの導出、held位置を跨ぐstream探索、
          OwnedWeapon排他、循環防止の除外、trial full rerunによるfound判定
 Phase 3  Browser Worker benchmark、extent / 試行上限のProduction default決定
-Phase 4  B9 what-if「比較する」の新kernel接続（1段preview、scenario trialと
-         scenarioOperationCount、代替Route summaryを含むtyped result、Worker contract）。
-         Production routingはまだ旧経路
+Phase 4-A  docs-onlyの正式仕様明確化: scenario compositionのmonotonic adoption run規則、
+           trial / adoption / final resultの再利用規則、request-globalな maxPlannerReruns、
+           excludedByRepairLineageCount、adoptedInScenarioの未評価semantic（9.2.19.8.1 / 9.2.19.12 /
+           9.2.19.13）。runtime code・Worker・routing・schema・UIは変えない
+Phase 4-B  B9 what-if「比較する」のPlanner Alternative Kernel runtime接続: Planner Alternative What-if
+           Calculation、typed result、PlannerAlternativeRouteSummary、shared rerun budgetの接続、
+           scenario composition、Worker protocol、Production adapter、PlannerWorkerClient API、
+           Domain / Worker / Client test。Production UI routingはまだ旧経路（切替はPhase 5）
 Phase 5  「この候補を優先」のactual repair、Conflict再生成と決定の展開、lineage永続化、
          what-if / repair両方のProduction routing切替、version更新（9.2.19.15）
 Phase 6  legacy constrained pathの削除またはtest oracle化
@@ -4862,7 +5052,13 @@ Phase 3は3つに分ける。**Phase 3-A**（benchmark-only harness / fixture / 
 **Phase 3-C**（実測からのProduction default確定）も完了し、`defaultPlannerAlternativeSearchExtent = 4 / 235 / 4` と
 `defaultPlannerAlternativeTrialBounds = 2 / 8` を確定した（9.2.19.12、同文書13章）。これでPhase 3は完了である。
 `runPlannerAlternativeKernel()` のextent / boundsはcaller必須のままで、default定数はまだどのProduction caller・Worker・UIにも
-配線していない。次はPhase 4（B9 what-ifの新kernel接続）であり、Production routingはまだlegacyのB8経路のままである。
+配線していない。Phase 4は4-A / 4-Bに分けた。**Phase 4-A**（docs-onlyの仕様明確化）で、scenario composition
+（9.2.19.8.1）、request-globalな `maxPlannerReruns`（9.2.19.12）、`excludedByRepairLineageCount` と
+`adoptedInScenario` の意味（9.2.19.13）を確定した。次は **Phase 4-B**（B9 what-ifのPlanner Alternative Kernel
+runtime接続）である。`runPlannerAlternativeKernel()` はTarget単位の代替探索・individual trial・found判定の
+authorityのまま維持し、scenario compositionはKernelへ混在させず、その上のPlanner Alternative What-if Calculationで
+行う。Phase 4-BでもProduction UI routingは切り替えず（legacyのB8経路のまま）、what-ifとactual repairの
+Production routing切替はPhase 5で同時に行う。
 `maxPlannerReruns` は複数Targetが1つのbudgetを共有するrerun-pressure workloadで実測する。`maxCandidateTrialsPerTarget` は、
 現行semanticsで「Candidate 1がtrialでreject、後続Candidateがfound」となるProduction workloadを確認できていないため、
 semantic thresholdをPhase 3-Bの実測対象とせず、1 trialあたりの実コストと安全弁としての役割からPhase 3-Cで設計判断する
@@ -5857,7 +6053,8 @@ found判定（G selected、fixed外Entryとの暫定帰結だけでの非選択 
 暫定帰結で勝った後に自分がstallで落ちたEntryの非found、fixed Route集合との競合、明示決定Entryの非選択、暫定帰結以外の
 除外理由、plan無し）、試行上限・rerun上限、除外key（無効化Route・以前の無効化Route、trial不採用を除外へ加えない）、
 checkpoint Targetの非探索、Issue #101 fixtureでの `0 / 1 / count 1`・Skill 342での巨戟化・Gogma 56以降のBonus操作・
-full Planner trialでの両立の各testである。what-if / actual repair / scenario / lineage / 決定の展開の項目はPhase 4以降で実装する。
+full Planner trialでの両立の各testである。what-if / actual repair / scenario / lineage / 決定の展開の項目はPhase 4-B以降で実装する（Phase 4-Aはそのsemanticを確定した
+docs-onlyのPhaseである）。
 held位置のcost層単位の処理（same-cost closure）は9.2.19冒頭の実装状態と [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8を参照。
 
 - reservationのheld / blocked / 排他OwnedWeaponが、fixed Route集合の既存Route unit（`canSkipWhenCounterPassed`、
@@ -5884,7 +6081,25 @@ held位置のcost層単位の処理（same-cost closure）は9.2.19冒頭の実�
 - `scenarioOperationCount` がscenario Planの `steps.length` と一致し、fixed Routeと代替Routeの
   `estimatedOperationCount` の和から求めていない（共有action・silent fast-forwardがあるfixtureで両者が異なる）。
   未解決Conflictが残る場合も `evaluated` として値と `introducedConflicts` / `remainingConflicts` を返し、
-  `maxPlanSteps` 到達では値を返さない。非固定Targetが1つでtrial Planを再利用できる場合にfull runを追加しない
+  `maxPlanSteps` 到達では値を返さない
+- scenario compositionのfull Planner run数（9.2.19.8.1）: found replacement = 0ではscenario runが1回だけ、
+  found = 1ではindividual trial resultを再利用して追加runが0回（非固定Targetが複数ある場合、他Targetでfoundが
+  無い場合を含む）、found = n（n >= 2）ではadoption runがn - 1回で、最後のaccepted resultを再利用してfinal runを
+  追加しない。途中rejectではrejectしたreplacementだけを外し、先にacceptedになったreplacementをrollbackせず、
+  rejectしたrunもbudgetを消費する。Conflict再生成・決定の展開のためだけに同じ入力のrunを追加しない
+- request-globalな `maxPlannerReruns`（9.2.19.12）: individual trial、adoption run、final scenario run、各run内の
+  runtime-unsupported retryが1つのbudgetを共有し、Search・preflight・再対応付け・summary生成・resultの再利用は
+  消費しない。limit番目のrunで確定できる場合は `evaluated` になり、再利用できるresultがあるのにrerun boundへ
+  到達しない
+- `adoptedInScenario`（9.2.19.13）: acceptedは `true`、adoption runでのrejectは `false`、budget到達でadoption runを
+  開始できなかったfound replacementは `null` であり、`null` があるのは `scenario` が
+  `stopped_by_planner_rerun_bound` のときだけである。`evaluated` では `true` の集合がfinal scenario resultの
+  accepted集合と一致する
+- `excludedByRepairLineageCount`（9.2.19.13）: 今回の無効化Routeにだけ一致したCandidateを数えず、lineageのkey数では
+  なく実際にskipしたCandidate数を数え、両方に一致するCandidateを1件として数える。Search summaryの
+  `excludedCandidates` は両方を含むtotalのままである
+- `introducedConflicts` / `remainingConflicts` がfinal scenario resultのConflictから分類され、旧PlanのConflict IDとの
+  差分で判定されない
 - 同じConflictの各participantで「比較する」を実行し、Issue #101 fixtureで「龍を優先」と「火を優先」の
   `scenarioOperationCount` が得られる
 - foundの結果が代替RouteのRoute summary（`BuildRoute`、最終Bonus / scope / Skill、観測trace）を持ち、

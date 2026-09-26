@@ -1740,7 +1740,10 @@ Domainが返すtyped dataと、どの表示でも守る最低限の意味だけ�
 - このtrial計画で完成しない目標武器
 - 代替を採用したときに残るConflictと、新しく発生するConflict（種別、関係する目標武器、選択済みかどうか）。
   「追加競合あり / なし」の表示に使う
-- repair chainで以前外したRouteを除外したこと（件数）
+- repair chainで以前外したRouteを除外したこと（件数）。この件数（`excludedByRepairLineageCount`）は、以前のrepair
+  chainで外したRouteに一致したために今回実際に除外した候補の数だけであり、今回の決定で外す相手側の現在Routeは
+  含めない。記録されている以前のRoute数でもない
+- 代替を探したTargetごとに、その代替がscenario全体へ採用されたか（採用 / 不採用 / 再計算上限により未評価）
 
 守る意味。
 
@@ -1755,6 +1758,7 @@ Domainが返すtyped dataと、どの表示でも守る最低限の意味だけ�
 - 進行量は絶対Counter値ではなく進行量として表示し、通常表示でBase Seedや絶対Counterを出さない（11.3と同じ）。
   held位置を跨ぐ代替では、操作数と進行量が一致しないことがある
 - 探索範囲内に無い場合と、上限で未確認の場合を「候補なし」へまとめない
+- scenarioへの採否が未評価（`adoptedInScenario = null`）の代替を「不採用」として表示しない
 - 除外したRouteの内部key（`candidateStableKey` 等）を通常UIに出さない
 - 新kernelではno-result statusの `stopped_by_enumeration_bound` を `stopped_by_search_extent_bound` に置き換える。
   表示する意味（探索範囲上限のため未確認）は11.3と同じである
