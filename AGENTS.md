@@ -3563,8 +3563,8 @@ the Planner Domain (`plannerAlternativeTrial.ts`); `docs/SEARCH_SPEC.md` 5.6.8,
 measured Issue #101 threshold; Normal 4 / Skill 4 / trials 2 / reruns 8 are design judgements, not
 measured thresholds). The Domain APIs keep extent and bounds caller-required - no fallback, no
 partial completion, no clamp - and the benchmark keeps its `BENCHMARK_ONLY_*` conditions. The
-defaults are wired to no Worker, Client, UI or repair yet: Phase 4 is pending, Production routing has
-not switched, and no version moved.
+defaults are wired to no Worker, Client, UI or repair yet: Phase 4-A (below) is complete, the Phase 4-B
+runtime connection is pending, Production routing has not switched, and no version moved.
 Phase 4 is split into 4-A and 4-B. Phase 4-A (docs-only; `docs/PLANNER_SPEC.md` 9.2.19.8.1 / 9.2.19.12 /
 9.2.19.13) fixed the scenario composition: individual trials stay independent from one baseline; found
 replacements are adopted monotonically in stable Target order, the first one reusing its individual trial

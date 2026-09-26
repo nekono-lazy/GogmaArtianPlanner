@@ -369,8 +369,8 @@ Master dataVersion                      4
 
 ## 11. 後続PR分割
 
-依存関係を確認し、依頼案の6 Phaseを次の7 Phaseへ調整した。調整点は2つである（その後、Phase 4を4-A / 4-Bへ
-分割した。下記3）。
+依存関係を確認し、依頼案の6 Phaseを次の7 Phase（Phase 4は4-A / 4-Bの2 subphase）へ調整した。調整点は2つである
+（Phase 4の4-A / 4-B分割は後から加えた。下記3）。
 
 1. **benchmarkをProduction接続の前へ移す**（依頼案Phase 5 → Phase 3）。Production routingへ接続する時点で
    extentと試行上限のdefaultに実測根拠が必要なため。B8では接続後にdefaultを決めた結果、Issue #101の
@@ -390,9 +390,9 @@ Master dataVersion                      4
 | 3 | 実Browser Worker benchmark（Issue #101実ケース、no-Ideal worst case、長いheld run、cancel / responsiveness、time to first Candidate、same-cost closureでsettleしたwork数、held run長に対するコスト、Skill / Gogmaのheld state数とfamily layout数、prediction呼び出し数、Candidate trial数、full Planner rerun数）。extent defaultとwhat-if / repairの試行上限default決定 | 2 | Production behaviorなし（benchmark基盤と、Search / Planner DomainのProduction default定数。routing未接続）/ なし |
 | 4-A | docs-onlyの正式仕様明確化（scenario compositionのmonotonic adoption run規則、trial / adoption / final resultの再利用規則、request-globalな `maxPlannerReruns`、`excludedByRepairLineageCount`、`adoptedInScenario` の未評価semantic）。runtime code・Worker・routing・schema・UIは変えない | 3 | なし / なし |
 | 4-B | B9 what-if「比較する」のPlanner Alternative Kernel runtime接続（Planner Alternative What-if Calculation、scenario compositionと `scenarioOperationCount`、`PlannerAlternativeRouteSummary` を含むtyped result、shared rerun budget接続、Worker protocol、Production adapter、PlannerWorkerClient API、Domain / Worker / Client test）。Production UI routingはまだ旧経路 | 4-A | なし / なし |
-| 5 | 「この候補を優先」のactual repair（Route単位の決定、決定の展開、Conflict再生成、lineage永続化、migration）と、what-if / repair両方のProduction routing切替 | 4 | あり / calc 16、DB 10、Export 13 |
+| 5 | 「この候補を優先」のactual repair（Route単位の決定、決定の展開、Conflict再生成、lineage永続化、migration）と、what-if / repair両方のProduction routing切替 | 4-B | あり / calc 16、DB 10、Export 13 |
 | 6 | legacy constrained path（B8 enumeration / orchestration、関連bounds・warning・benchmark page）の削除またはtest oracle化 | 5 | なし / なし（永続shapeに触れる場合は別途判断） |
-| 7 | #122 Presentation改善（Conflict / what-if / repair結果の表示） | 5（4のtyped dataを使う） | UIのみ / なし |
+| 7 | #122 Presentation改善（Conflict / what-if / repair結果の表示） | 5（4-Bのtyped dataを使う） | UIのみ / なし |
 
 各PhaseのPRは設計レビューで確認し、実測や実装で仕様不足が見つかった場合は推測で埋めずに仕様を先に更新する。
 

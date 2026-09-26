@@ -1571,7 +1571,8 @@ export const defaultPlannerAlternativeSearchExtent: PlannerAlternativeSearchExte
 
 Domain API（`visitPlannerAlternativeCandidates()` の `PlannerAlternativeSearchInput.extent`）はcaller必須指定の
 ままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの定数を明示的に渡す
-（Phase 4のrouting接続で行う）。benchmarkの `BENCHMARK_ONLY_*` gridとsanity値はPhase 3-Bのhistorical
+（Phase 4-Bのruntime接続で行う。Phase 4-Aでは配線せず、Production UI routingの切替自体はPhase 5で行う）。
+benchmarkの `BENCHMARK_ONLY_*` gridとsanity値はPhase 3-Bのhistorical
 measurement conditionとして維持し、このdefaultを読まない。
 
 #### 出力とidentity
