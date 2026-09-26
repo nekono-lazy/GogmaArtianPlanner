@@ -5,7 +5,7 @@ import type {
   ProductionPlanReplanPreviewRequest,
 } from '../../domain/execution'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
-import type { PlannerOrchestrationResult } from '../../domain/planner'
+import type { PlannerResult } from '../../domain/planner'
 import {
   createProductionPlanExecutionService,
   type AdoptProductionPlanReplanPreviewRequest,
@@ -30,10 +30,10 @@ export interface ProductionPlanReplanDependencies {
   prepareProductionPlanReplanPreview(
     request: PrepareProductionPlanReplanPreviewRequest,
   ): Promise<ProductionPlanReplanPreviewRequest>
-  /** Bundles the Planner Worker result into the transient Preview; it writes nothing. */
+  /** Bundles the ordinary Planner Worker result into the transient Preview; it writes nothing. */
   createProductionPlanReplanPreview(
     request: ProductionPlanReplanPreviewRequest,
-    result: PlannerOrchestrationResult,
+    result: PlannerResult,
   ): ProductionPlanReplanPreview
   /** The read-only inspection the adoption confirmation is built from (16.10). */
   inspectProductionPlanReplanAdoption(

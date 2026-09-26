@@ -25,9 +25,8 @@ import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import {
   defaultPlannerOptions,
-  defaultPlannerOrchestrationBounds,
   type PlannerInput,
-  type PlannerOrchestrationResult,
+  type PlannerResult,
 } from '../domain/planner'
 import {
   completedPlannerTermination,
@@ -66,33 +65,28 @@ function unusedReplanDependencies(): ProductionPlanReplanDependencies {
   }
 }
 
-function createOrchestrationResult(
-  overrides: Partial<PlannerOrchestrationResult> = {},
-): PlannerOrchestrationResult {
+function createPlannerResult(
+  overrides: Partial<PlannerResult> = {},
+): PlannerResult {
   return {
     plan: createValidProductionPlan(),
     conflicts: [],
     warnings: [],
     termination: completedPlannerTermination(),
-    generatedBuildListEntries: [],
-    generatedBuildListEntryReplacements: [],
     ...overrides,
   }
 }
 
 function createPlannerClient(
-  result: PlannerOrchestrationResult = createOrchestrationResult(),
+  result: PlannerResult = createPlannerResult(),
 ): PlannerWorkerClient {
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
-    createPlan: vi.fn(async () => ({
-      plan: createValidProductionPlan(),
-      conflicts: [],
-      warnings: [],
-      termination: completedPlannerTermination(),
-    })),
-    // B8-D2b: the page uses the constrained API only.
-    createConstrainedPlan: vi.fn(async () => result),
+    // Phase 6-A: the page runs the ordinary Planner only.
+    createPlan: vi.fn(async () => result),
+    createConstrainedPlan: vi.fn(async () => {
+      throw new Error('The Build List never runs the legacy constrained Planner path.')
+    }),
     createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
     createPlannerAlternativeRepair: vi.fn(),
@@ -206,7 +200,7 @@ describe('BuildListPage', () => {
       .toBe(PRODUCTION_RNG_ENGINE_VERSION)
   })
 
-  it('plans through the constrained Planner path with the Production orchestration bounds', async () => {
+  it('plans through the ordinary Planner createPlan exactly once, never the legacy constrained path', async () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     const deps = dependencies([], client)
@@ -220,54 +214,39 @@ describe('BuildListPage', () => {
     expect(deps.createInput).toHaveBeenCalledWith(expect.objectContaining({
       rngEngineVersion: client.engineVersion,
     }))
-    expect(client.createConstrainedPlan).toHaveBeenCalledOnce()
-    // The ordinary Planner API is no longer part of this page's path.
-    expect(client.createPlan).not.toHaveBeenCalled()
+    expect(client.createPlan).toHaveBeenCalledOnce()
+    // Phase 6-A: the legacy B8 orchestration is no longer part of this page's path.
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
 
-    const [requestId, input, bounds] = vi.mocked(client.createConstrainedPlan).mock.calls[0]
+    const call = vi.mocked(client.createPlan).mock.calls[0]
+    // No orchestration bounds and no progress callback reach the Client.
+    expect(call).toHaveLength(2)
+    const [requestId, input] = call
     expect(typeof requestId).toBe('string')
     // Everything but `options` comes straight from `createInput`; `options`
-    // is the Application caller's own decision (PLANNER_SPEC 7.2.1).
+    // is the Application caller's own decision (PLANNER_SPEC 7.2.1). The fresh
+    // input restores no conflict resolution (PLANNER_SPEC 9.2.7).
     const createdInput = await vi.mocked(deps.createInput).mock.results[0].value
     expect(input).toEqual({ ...createdInput, options: { ...defaultPlannerOptions } })
-    // The caller passes the Production authority itself, not a local copy of
-    // its values: the Worker Client applies no default of its own.
-    expect(bounds).toBe(defaultPlannerOrchestrationBounds)
+    expect(input.conflictResolutions).toEqual([])
   })
 
-  it('passes the B8-E2b Production orchestration bounds 2 / 1 / 4', async () => {
+  it('hands the ordinary PlannerResult unchanged to the ordinary Persistence API', async () => {
     const user = userEvent.setup()
-    const client = createPlannerClient()
-    renderPage(dependencies([], client))
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
-    await screen.findByText(/^Plan destination:/)
-
-    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][2]).toEqual({
-      maxCandidateTrialsPerConflict: 2,
-      maxGeneratedBuildListEntries: 1,
-      maxPlannerReruns: 4,
-    })
-  })
-
-  it('hands the whole PlannerOrchestrationResult to the atomic Persistence boundary', async () => {
-    const user = userEvent.setup()
-    const generatedEntry = createValidBuildListEntry()
-    const result = createOrchestrationResult({
-      generatedBuildListEntries: [generatedEntry],
-      generatedBuildListEntryReplacements: [],
-    })
+    const result = createPlannerResult()
     const client = createPlannerClient(result)
     const deps = dependencies([], client)
     renderPage(deps)
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
     await screen.findByText(/^Plan destination:/)
 
-    // The complete result, never only its Plan: the generated Entries and the
-    // ProductionPlan must reach the same transaction (PLANNER_SPEC 9.2.15).
+    // The complete result, never only its Plan, and never dressed up as a B8
+    // orchestration result with empty generated fields (PLANNER_SPEC 9.2.15).
     expect(deps.savePlannerResult).toHaveBeenCalledOnce()
     const [savedResult] = vi.mocked(deps.savePlannerResult).mock.calls[0]
     expect(savedResult).toBe(result)
-    expect(savedResult.generatedBuildListEntries).toEqual([generatedEntry])
+    expect('generatedBuildListEntries' in savedResult).toBe(false)
+    expect('generatedBuildListEntryReplacements' in savedResult).toBe(false)
     expect(savedResult.plan).toEqual(result.plan)
     expect(savedResult.conflicts).toEqual(result.conflicts)
     expect(savedResult.warnings).toEqual(result.warnings)
@@ -293,11 +272,9 @@ describe('BuildListPage', () => {
   it('passes a Plan-less result to Persistence and reports that no Plan was created', async () => {
     const user = userEvent.setup()
     const client = createPlannerClient(
-      createOrchestrationResult({
+      createPlannerResult({
         plan: null,
         termination: exhaustedPlannerTermination(),
-        generatedBuildListEntries: [],
-        generatedBuildListEntryReplacements: [],
       }),
     )
     const deps = dependencies([], client)
@@ -306,11 +283,10 @@ describe('BuildListPage', () => {
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
 
     expect(await screen.findByText('現在の入力から作成できる生産計画はありませんでした。')).toBeInTheDocument()
-    // `plan === null` still reaches the service: only it may judge whether a
-    // no-Plan result carrying generated Entries is an invariant violation.
+    // `plan === null` still reaches the service: only it judges the result.
     expect(deps.savePlannerResult).toHaveBeenCalledOnce()
     expect(vi.mocked(deps.savePlannerResult).mock.calls[0][0]).toEqual(
-      expect.objectContaining({ plan: null, generatedBuildListEntries: [] }),
+      expect.objectContaining({ plan: null }),
     )
   })
 
@@ -352,7 +328,7 @@ describe('BuildListPage', () => {
       id: productionPlanId('plan.persistence.stored'),
     }
     const deps = dependencies([], createPlannerClient(
-      createOrchestrationResult({ plan: calculated }),
+      createPlannerResult({ plan: calculated }),
     ))
     deps.savePlannerResult = vi.fn(async () => stored)
     const view = renderPage(deps)
@@ -368,11 +344,9 @@ describe('BuildListPage', () => {
   it('stays on the Build List with the no-Plan notice when nothing was stored', async () => {
     const user = userEvent.setup()
     const deps = dependencies([], createPlannerClient(
-      createOrchestrationResult({
+      createPlannerResult({
         plan: null,
         termination: exhaustedPlannerTermination(),
-        generatedBuildListEntries: [],
-        generatedBuildListEntryReplacements: [],
       }),
     ))
     deps.savePlannerResult = vi.fn(async () => null)
@@ -446,11 +420,11 @@ describe('BuildListPage', () => {
     await screen.findByText(/^Plan destination:/)
     // `maxPlanSteps` is the whole Production `PlannerOptions`: no Beam Search
     // oracle bound reaches the Worker request (Issue #103 Phase D-2a).
-    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
+    expect(vi.mocked(client.createPlan).mock.calls[0][1].options).toEqual({
       maxPlanSteps: 1000,
     })
-    // The Client is called with no progress callback.
-    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0]).toHaveLength(3)
+    // The Client is called with no bounds and no progress callback.
+    expect(vi.mocked(client.createPlan).mock.calls[0]).toHaveLength(2)
   })
 
   it('exposes maxPlanSteps as the only Planner bound (Issue #103 Phase D-1)', async () => {
@@ -483,7 +457,7 @@ describe('BuildListPage', () => {
     // `PlannerInput.options` is the single Planner bound authority, so the
     // reviewed value reaches the Worker exactly (PLANNER_SPEC 7.2.1), with no
     // fixed upper cap.
-    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
+    expect(vi.mocked(client.createPlan).mock.calls[0][1].options).toEqual({
       ...defaultPlannerOptions,
       maxPlanSteps: 20_000,
     })
@@ -493,8 +467,8 @@ describe('BuildListPage', () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     // The Production Worker reports no progress (Issue #103 Phase D-2a).
-    client.createConstrainedPlan = vi.fn(
-      () => new Promise<PlannerOrchestrationResult>(() => undefined),
+    client.createPlan = vi.fn(
+      () => new Promise<PlannerResult>(() => undefined),
     )
     renderPage(dependencies([], client))
     await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
@@ -534,7 +508,7 @@ describe('BuildListPage', () => {
 
     await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
     await screen.findByText(/^Plan destination:/)
-    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
+    expect(vi.mocked(client.createPlan).mock.calls[0][1].options).toEqual({
       maxPlanSteps: expected,
     })
   })
@@ -561,7 +535,7 @@ describe('BuildListPage', () => {
 
     await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
     await screen.findByText(/^Plan destination:/)
-    expect(vi.mocked(client.createConstrainedPlan).mock.calls[0][1].options).toEqual({
+    expect(vi.mocked(client.createPlan).mock.calls[0][1].options).toEqual({
       maxPlanSteps: 1000,
     })
   })
@@ -605,12 +579,12 @@ describe('BuildListPage', () => {
 
     expect(await screen.findByText('1以上の整数を入力してください。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeDisabled()
-    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
   })
 
   it('reports an incomplete search that reached maxPlanSteps and saves nothing', async () => {
     const user = userEvent.setup()
-    const deps = dependencies([], createPlannerClient(createOrchestrationResult({
+    const deps = dependencies([], createPlannerClient(createPlannerResult({
       termination: incompletePlannerTermination(['max_plan_steps'], {
         expandedStates: 1_000,
         completedTargetCount: 1,
@@ -636,7 +610,7 @@ describe('BuildListPage', () => {
     const user = userEvent.setup()
     // The last affordable expansion was the one that completed the search, so
     // the diagnostic warning and `reachedLimits` do not contradict `completed`.
-    const deps = dependencies([], createPlannerClient(createOrchestrationResult({
+    const deps = dependencies([], createPlannerClient(createPlannerResult({
       warnings: [{
         kind: 'max_steps_reached',
         message: 'Planner reached maxPlanSteps (1000).',
@@ -932,10 +906,10 @@ describe('BuildListPage presentation', () => {
 
   it('names the Planner progress and offers cancel while planning', async () => {
     const user = userEvent.setup()
-    let releasePlan: (result: PlannerOrchestrationResult) => void = () => undefined
+    let releasePlan: (result: PlannerResult) => void = () => undefined
     const client = createPlannerClient()
-    client.createConstrainedPlan = vi.fn(
-      () => new Promise<PlannerOrchestrationResult>((resolve) => {
+    client.createPlan = vi.fn(
+      () => new Promise<PlannerResult>((resolve) => {
         releasePlan = resolve
       }),
     )
@@ -948,12 +922,12 @@ describe('BuildListPage presentation', () => {
     expect(bar).not.toHaveAttribute('aria-valuenow')
     expect(screen.getByRole('button', { name: 'キャンセル' })).toBeEnabled()
     expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeDisabled()
-    releasePlan(createOrchestrationResult())
+    releasePlan(createPlannerResult())
   })
 
   it('shows Planner warnings with their typed label and the returned message', async () => {
     const user = userEvent.setup()
-    const deps = dependencies([], createPlannerClient(createOrchestrationResult({
+    const deps = dependencies([], createPlannerClient(createPlannerResult({
       plan: null,
       termination: exhaustedPlannerTermination(),
       warnings: [{ kind: 'build_list_entry_stale', message: 'Typed warning message' }],

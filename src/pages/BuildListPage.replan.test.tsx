@@ -12,9 +12,8 @@ import { createSearchStateHash } from '../domain/models/hashing'
 import type { BuildListEntry, ProductionPlan, TargetWeapon } from '../domain/models/publicTypes'
 import {
   defaultPlannerOptions,
-  defaultPlannerOrchestrationBounds,
   type PlannerInput,
-  type PlannerOrchestrationResult,
+  type PlannerResult,
 } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import { RepositoryError } from '../db/repositoryError'
@@ -92,23 +91,24 @@ function plannerInput(target: TargetWeapon, entry: BuildListEntry): PlannerInput
   }
 }
 
-function orchestrationResult(overrides: Partial<PlannerOrchestrationResult> = {}): PlannerOrchestrationResult {
+function plannerResult(overrides: Partial<PlannerResult> = {}): PlannerResult {
   return {
     plan: currentContractPlan(PREVIEW_PLAN_ID, { status: 'draft' }),
     conflicts: [],
     warnings: [],
     termination: completedPlannerTermination(),
-    generatedBuildListEntries: [],
-    generatedBuildListEntryReplacements: [],
     ...overrides,
   }
 }
 
-function workerClient(result: PlannerOrchestrationResult = orchestrationResult()): PlannerWorkerClient {
+function workerClient(result: PlannerResult = plannerResult()): PlannerWorkerClient {
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
-    createPlan: vi.fn(),
-    createConstrainedPlan: vi.fn(async () => result),
+    // Phase 6-A: the replan Preview is an ordinary Planner run.
+    createPlan: vi.fn(async () => result),
+    createConstrainedPlan: vi.fn(async () => {
+      throw new Error('The replan Preview never runs the legacy constrained Planner path.')
+    }),
     createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
     createPlannerAlternativeRepair: vi.fn(),
@@ -138,8 +138,6 @@ function replanDependencies(plan: ProductionPlan, request: ProductionPlanReplanP
       savePointHandling: 'no_choice' as const,
       oldPlan: { ...plan, status: 'abandoned' as const, abandonmentReason: 'replan_adopted' as const },
       newPlan: currentContractPlan(PREVIEW_PLAN_ID, { status: 'active' }),
-      generatedBuildListEntries: [],
-      generatedBuildListEntryReplacements: [],
     })),
   }
 }
@@ -259,10 +257,15 @@ describe('BuildListPage replan entry', () => {
 
     expect(await screen.findByRole('heading', { name: PREVIEW_TITLE })).toBeInTheDocument()
     expect(replan.prepareProductionPlanReplanPreview).toHaveBeenCalledExactlyOnceWith({ runningPlanId: plan.id })
-    expect(client.createConstrainedPlan).toHaveBeenCalledOnce()
-    const [, input, bounds] = vi.mocked(client.createConstrainedPlan).mock.calls[0]
-    expect(bounds).toEqual(defaultPlannerOrchestrationBounds)
+    expect(client.createPlan).toHaveBeenCalledOnce()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    const call = vi.mocked(client.createPlan).mock.calls[0]
+    // The ordinary run: no orchestration bounds reach the Client.
+    expect(call).toHaveLength(2)
+    const [, input] = call
     expect(input).toEqual({ ...request.plannerInput, options: { ...defaultPlannerOptions, maxPlanSteps: 1234 } })
+    // The current-state input carries no conflict resolution (PLANNER_SPEC 16.8).
+    expect(input.conflictResolutions).toEqual([])
     // Only the bounds differ from the runtime's own request.
     expect(input.rngState).toBe(request.plannerInput.rngState)
     expect(input.buildListEntries).toBe(request.plannerInput.buildListEntries)

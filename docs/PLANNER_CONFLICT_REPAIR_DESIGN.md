@@ -23,12 +23,16 @@ runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #1
                          Phase 5-A（actual repairとrepair lineageのPure Domain計算、what-if / actual repair共通のscenario core、
                          lineage outcome `rejected_by_scenario_composition` の正式仕様補完）とPhase 5-B（lineage永続化と
                          migration、Planner Alternative専用Persistence、actual repair Worker / Client、what-ifとactual repair
-                         のProduction routing同時切替、version更新）を実装した。Phase 5は完了。次はPhase 6（legacy path整理）、
-                         その後Phase 7（#122 Presentation）
+                         のProduction routing同時切替、version更新）を実装した。Phase 5は完了。Phase 6は6-A / 6-Bに分割し、
+                         Phase 6-A（作成リストの通常Plannerと実行中Planの再計画PreviewをB8のcreateConstrainedPlan()から
+                         ordinary PlannerのcreatePlan()へ切替、ordinary Planner用Persistence savePlannerResult()、再計画Preview /
+                         採用からのgenerated replacement契約の除去、B8 parity test）を実装した。次はPhase 6-B（consumer再監査の
+                         うえでのlegacy B8 / B9実装の削除またはtest oracle化）、その後Phase 7（#122 Presentation）
 Production behavior:     Phase 5-Bで切替済み（生産計画画面の「比較する」はcreatePlannerAlternativeComparison()、
-                         「この候補を優先」はcreatePlannerAlternativeRepair() + savePlannerAlternativeRepair()。旧B8 / B9の
-                         実装はPhase 6まで残るが生産計画画面からは呼ばない）
-schema / version:        Phase 5-Bで更新（calculation 16、Dexie 10、Export 13。10章）
+                         「この候補を優先」はcreatePlannerAlternativeRepair() + savePlannerAlternativeRepair()）。Phase 6-Aで
+                         作成リストの通常Plannerと再計画PreviewもcreatePlan()へ切替済み。旧B8 / B9の実装はPhase 6-Bまで
+                         残るが、通常のApplication runtimeからは呼ばない（consumerはbenchmark / testだけ）
+schema / version:        Phase 5-Bで更新（calculation 16、Dexie 10、Export 13。10章）。Phase 6-Aは変更しない
 ```
 
 この文書はtask-specificな **設計記録** である。背景、方式選定の理由、後続PRの分割を記録する。
@@ -355,7 +359,8 @@ lineage除外件数）であり、Presentation改善はPhase 7で行う。
   決定の **単位**（Conflict 1件 → Route単位）、what-ifのfound判定とresultの **情報量**、
   B8 orchestrationの **反復方式**（全explicit resolutionごとのwork → 今回決定したConflictの直接participantだけ）である
 - 旧B8 constrained enumeration / orchestrationは削除せず、Phase 5のProduction routing切替までlegacy
-  implementationとして残った。Phase 5-Bで切り替えた後も実装は残っており、Phase 6で削除またはtest oracle化を判断する
+  implementationとして残った。Phase 5-Bで切り替えた後も実装は残っており、Phase 6-Aで残るProduction consumer
+  （作成リストの通常Plannerと再計画Preview）をordinary Plannerへ移した。削除またはtest oracle化はPhase 6-Bで判断する
 
 ---
 
@@ -509,3 +514,20 @@ Dexie v10 / Export 13 migration）、各version値（10章）。次はPhase 5-B�
 `defaultPlannerOrchestrationBounds` / `defaultPlannerWhatIfBounds`、旧constrained enumeration / B8 orchestration / B9 what-ifの実装と
 Worker request kind・Client method（Phase 6で整理）、実行中Planの再計画Preview / 採用（16.8）とBuild List画面の通常Planner、
 RNG / Master / AppSettings version、Issue #101 / #136 / #122（Closeしない）。
+
+Phase 6は6-A / 6-Bに分けた（PLANNER_SPEC 9.2.19.16）。理由: Phase 5-Bの後も、作成リストの通常「生産計画を作成」と実行中Planの
+再計画Previewが `createConstrainedPlan()` + `defaultPlannerOrchestrationBounds` を呼んでいた。どちらの入力もcurrent persisted
+stateから作るfresh input（`conflictResolutions = []`）であり、PLANNER_SPEC 9.2.7によりB8はconstrained re-searchを開始せず、
+最初のordinary Planner runの結果を返すだけだった。Production consumerを先に `createPlan()` へ移せば、Phase 6-Bはdeadになった
+codeだけを削除できる。**Phase 6-A**で変更したもの: 作成リストと再計画Previewの `createPlan()` への切替、
+`PlannerResultPersistenceService.savePlannerResult()`（ordinary `PlannerResult` を `PlannerOrchestrationResult` へダミー変換せず保存。
+`incomplete` 拒否、`no_plan`、draft / lineage `null` / Domain validation、既存のsave-time authorityとatomicな旧Draft置換を共有し、
+Build Listを書かない）、`ProductionPlanReplanPreview.result` の `PlannerResult` 化、再計画採用からのgenerated Entry追加・`O -> G`
+置換・generated ID衝突 / 鮮度・replacement metadataの除去（採用はBuild Listを書き換えない）、`conflictResolutions = []` で
+B8の結果とordinary Plannerの結果が一致しB8がenumeration / materialization / trial / replacement preflightを開始しないことの
+parity test。唯一の差として、B8の `maxPlannerReruns`（4）が最初のrun内のruntime-unsupported retryも数えていた点を
+PLANNER_SPEC 9.2.7へ記録した。Phase 6-Aで変更していないもの: 生産計画画面の「比較する」「この候補を優先」
+（Planner Alternativeのまま）、B8 / B9のWorker request kind・Client method・Production adapter・計算本体、
+`defaultConstrainedEnumerationBounds` / `defaultPlannerOrchestrationBounds` / `defaultPlannerWhatIfBounds`、B8専用warning kind、
+B8の保存API（`savePlannerOrchestrationResult()` / `inspectPlannerOrchestrationResultSave()`）、B8 / B9 / Issue #101の
+benchmark harness / page / 記録、`constrained/` 配下の共有primitiveの配置、各version値とmigration。

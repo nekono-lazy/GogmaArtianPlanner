@@ -981,6 +981,12 @@ usable (version 1..11 stay incompatible, never a Plan exception). The persisted
 `ProductionPlan.conflictRepairLineage` moved `DATABASE_SCHEMA_VERSION` to **10** and
 `ExportRoot.schemaVersion` to **13**; `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2,
 `PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7` and Master `dataVersion` 4 are unchanged.
+Issue #136 / #101 Phase 6-A (`docs/PLANNER_SPEC.md` 9.2.7 / 9.2.19.14 - 9.2.19.16) moved the Build List's
+ordinary 「生産計画を作成」 and the running Plan's replan Preview from the legacy B8 `createConstrainedPlan()` to the
+ordinary `PlannerWorkerClient.createPlan()`. Both inputs carry `conflictResolutions = []`, so B8 never started constrained
+work for them and the result is the same ordinary run; it changed no persisted shape and no calculation semantics, so the
+versions stay 16 / 10 / 13 (`AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2, `PRODUCTION_RNG_ENGINE_VERSION`
+`production-rng:c5-e7`, Master `dataVersion` 4) and no migration was added.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -3642,7 +3648,7 @@ every resolution. Nothing is persisted: `ProductionPlan.conflictRepairLineage`, 
 Client, Production routing, migrations and versions are Phase 5-B, which switches the what-if and the repair together.
 No version moved (15 / 9 / 12).
 Phase 5-B (Production routing, Persistence, lineage persistence and migrations) is complete, so Phase 5 is complete;
-Phase 6 (the legacy path) is next. `ProductionPlan.conflictRepairLineage: PlannerConflictRepairLineage | null` is a
+Phase 6 (the legacy path) followed, split into 6-A and 6-B (see below). `ProductionPlan.conflictRepairLineage: PlannerConflictRepairLineage | null` is a
 persisted field: `validateProductionPlan()` / `validatePlannerConflictRepairLineage()` check its structure, literals, ID
 forms and `outcome === 'replaced'` iff a replacement ID, and never its Entry / Target IDs as current foreign keys; a
 missing field is no current body. Plan generation writes `null` (the ordinary Planner, the replan Preview / adoption and
@@ -3680,6 +3686,37 @@ until Phase 6 (the replan Preview and the Build List keep their own paths). A `n
 failure saves nothing and shows its typed comparison; the minimal presentation (`ProductionPlanAlternativeComparison`,
 `presentProductionPlanAlternative.ts`) tells the five no-result statuses, `adoptedInScenario` true / false / null and the four
 scenario statuses apart, in text. The Phase 7 / Issue #122 redesign is not done.
+Phase 6 is split into 6-A and 6-B (`docs/PLANNER_SPEC.md` 9.2.19.16). Phase 6-A (the Production consumers' separation from the
+legacy B8 path) is complete; Phase 6 as a whole is not. After Phase 5-B the Build List's ordinary 「生産計画を作成」 and the
+running Plan's replan Preview (16.8) still called `createConstrainedPlan()` with `defaultPlannerOrchestrationBounds`, but both hand
+the Planner a fresh current-state input with `conflictResolutions = []` - neither restores a saved Plan's resolution, baseSnapshot,
+past input or repair lineage - so by 9.2.7 B8 only ran its initial ordinary Planner run and returned it. Both now call the ordinary
+`PlannerWorkerClient.createPlan(requestId, input)` (the Build List still writes the reviewed `maxPlanSteps` into
+`PlannerInput.options`). The ordinary `PlannerResult` is never dressed up as a `PlannerOrchestrationResult` with empty generated
+fields: `PlannerResultPersistenceService.savePlannerResult(result, context, approval?)` saves it (an `incomplete` run - partial Plan or
+not - is `planner_result_invalid` before `plan === null` is read; a finished `plan === null` is `no_plan` and keeps the previous Draft;
+otherwise `checkPersistableOrdinaryPlannerResultShape()` requires a draft, `conflictRepairLineage === null` and a Domain-valid Plan,
+and the shared save boundary re-validates CalculationContext, `initialExecutionState`, the Target / Build List hashes over the current
+Build List, every Entry reference and a free Plan ID, then replaces the previous Draft; the Build List is never written, so no approval
+applies), and `BuildListPageDependencies.savePlannerResult` takes a `PlannerResult`. `ProductionPlanReplanPreview.result` is a
+`PlannerResult`; `describeReplanPreviewAdoptability()` judges the typed termination, then `no_plan`, then the ordinary shape check;
+the replan adoption dropped every B8 part - no generated Entry add, no `O -> G` replacement, no generated ID collision / freshness or
+replacement metadata check, `ProductionPlanReplanAdoptionWrite` lost `generatedBuildListEntries` / `replacedBuildListEntryIds` and
+the adoption result its `generatedBuildListEntries` - and starts the new Plan against the current Build List, which it never writes,
+while every other 16.8 check (token, CalculationContext, `initialExecutionState`, dependent Target / Entry hashes, Plan ID collision,
+save point choice and restore, in-progress transfer, start effect, one transaction) is unchanged. The Preview panel no longer
+announces generated Entries. A parity test (`plannerPhase6aOrdinaryParity.test.ts`) fixes that with `conflictResolutions = []` the
+legacy orchestration (Production bounds) and `createProductionPlan()` return the same `plan` / `conflicts` / `warnings` /
+`termination` with the same full-run count and Engine / Clock work, and that B8 starts no enumeration, materialization, trial or
+replacement preflight; the one recorded difference (9.2.7) is that B8's `maxPlannerReruns` (4) also capped the runtime-unsupported
+retries of that initial run, which the ordinary Planner does not cap. The Production Plan screen's Planner Alternative routing is
+unchanged. Phase 6-A deleted nothing: `createConstrainedPlan()` / `createWhatIfComparison()`, the `create_constrained_plan` /
+`create_what_if_comparison` Worker kinds, `createProductionConstrainedPlan()` / `createProductionPlannerWhatIfComparison()`, the B8
+enumeration / orchestration and B9 what-if calculations, `defaultConstrainedEnumerationBounds` / `defaultPlannerOrchestrationBounds` /
+`defaultPlannerWhatIfBounds`, the B8-only warning kinds, `savePlannerOrchestrationResult()` / `inspectPlannerOrchestrationResultSave()`,
+the B8 / B9 / Issue #101 benchmark harnesses / pages / records and the shared primitives under `constrained/` all stay, but no ordinary
+Application runtime path calls them any more (their consumers are benchmarks and tests). Phase 6-B re-audits those consumers and then
+deletes the legacy path or keeps it as a test oracle, relocating the shared primitives by the actual import graph.
 
 ---
 

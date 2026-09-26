@@ -52,6 +52,23 @@ function resultInvalid(message: string): PlannerResultPersistenceIssue {
 }
 
 /**
+ * PLANNER_SPEC 7.2.1: a full Planner run that its `maxPlanSteps` bound
+ * truncated is a partial run artifact, not a finished production plan, so
+ * nothing of it - a partial Plan included - is ever persisted. The typed
+ * termination decides this - never a `PlannerWarning` message, and never the
+ * presence of `max_steps_reached`, which a completed run can carry too.
+ */
+export function checkPlannerRunTerminationPersistable(
+  termination: PlannerRunTermination,
+): PlannerResultPersistenceIssue | null {
+  return termination.status === 'incomplete'
+    ? resultInvalid(
+        `The Planner run did not complete: it reached ${termination.reachedLimits.join(', ')} with ${termination.completedTargetCount} of ${termination.totalTargetCount} target weapons completed. A truncated Planner run result must not be saved as an executable ProductionPlan.`,
+      )
+    : null
+}
+
+/**
  * The result-shape invariants that do not depend on current persisted state:
  * a completed / exhausted search, a draft Plan, unique generated Entry IDs,
  * exactly one replacement per generated Entry naming its own Target
@@ -65,16 +82,8 @@ export function checkPersistablePlannerResultShape(
   termination: PlannerRunTermination,
   replacements: readonly BuildListEntryReplacement[] | undefined,
 ): PlannerResultPersistenceIssue | null {
-  // PLANNER_SPEC 7.2.1: a Plan calculated from a full Planner run that its
-  // `maxPlanSteps` bound truncated is a partial run artifact, not a finished
-  // production plan, so it never becomes an executable Draft. The typed
-  // termination decides this - never a `PlannerWarning` message, and never the
-  // presence of `max_steps_reached`, which a completed run can carry too.
-  if (termination.status === 'incomplete') {
-    return resultInvalid(
-      `The Planner run did not complete: it reached ${termination.reachedLimits.join(', ')} with ${termination.completedTargetCount} of ${termination.totalTargetCount} target weapons completed. A truncated Planner run result must not be saved as an executable ProductionPlan.`,
-    )
-  }
+  const truncated = checkPlannerRunTerminationPersistable(termination)
+  if (truncated !== null) return truncated
   if (plan.status !== 'draft') {
     return resultInvalid(
       `A Planner orchestration result must be saved as a draft ProductionPlan, but its status is '${plan.status}'.`,
@@ -103,6 +112,42 @@ export function checkPersistablePlannerResultShape(
     if (!entryValidation.isValid) {
       return { kind: 'entity_invalid', entityName: 'BuildListEntry', validation: entryValidation }
     }
+  }
+  return null
+}
+
+/**
+ * The result-shape invariants of an **ordinary** Planner result
+ * (`createPlan()`, `docs/PLANNER_SPEC.md` 9.2.15 / 16.8, Phase 6-A) that do not
+ * depend on current persisted state: a completed / exhausted run, a draft Plan,
+ * no repair lineage, and a Domain-valid Plan. An ordinary run carries no
+ * generated BuildListEntry and no replacement, so nothing of the B8
+ * orchestration contract applies; its Plan is saved over - or, for a replan,
+ * started against - the current Build List exactly as it is.
+ *
+ * Only the Planner Alternative actual repair ever stores a lineage
+ * (`docs/DATA_MODEL.md` 11.1.1), so an ordinary Plan carrying one is refused
+ * rather than stored or cleared.
+ */
+export function checkPersistableOrdinaryPlannerResultShape(
+  plan: ProductionPlan,
+  termination: PlannerRunTermination,
+): PlannerResultPersistenceIssue | null {
+  const truncated = checkPlannerRunTerminationPersistable(termination)
+  if (truncated !== null) return truncated
+  if (plan.status !== 'draft') {
+    return resultInvalid(
+      `An ordinary Planner result must be saved as a draft ProductionPlan, but its status is '${plan.status}'.`,
+    )
+  }
+  if (plan.conflictRepairLineage !== null) {
+    return resultInvalid(
+      'An ordinary Planner result must not carry a conflict repair lineage; only a Planner Alternative actual repair records one.',
+    )
+  }
+  const planValidation = validateProductionPlan(plan)
+  if (!planValidation.isValid) {
+    return { kind: 'entity_invalid', entityName: 'ProductionPlan', validation: planValidation }
   }
   return null
 }

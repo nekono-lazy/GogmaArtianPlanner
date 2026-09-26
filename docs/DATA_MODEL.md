@@ -2654,7 +2654,8 @@ UndoもRngState、全NormalArtianCounter、対象OwnedWeapon、対象TargetWeapo
 次も1つのDexie transactionで原子的に行い、失敗時は何も変更しない。
 
 - 再計画採用: 状態再検証、旧実行中Planの `abandoned`（`replan_adopted`）、新Planの保存と `active` 化、
-  generated BuildListEntryの保存、旧Planのセーブ地点削除、作成中状態の付け替え / 解除
+  旧Planのセーブ地点削除、作成中状態の付け替え / 解除。再計画Previewはordinary Planner resultなので、
+  BuildListEntryは書き換えない（Phase 6-A、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.8）
 - ゲーム内セーブ地点の復元（12.1）
 - Planを壊す変更の承認: Planの `abandoned`（`breaking_change_approved`）と変更の保存
 - Plan破棄: Planの `abandoned`（`user_abandoned`）、セーブ地点削除、作成中状態の解除
@@ -2675,8 +2676,17 @@ Planを壊す変更の承認はRuntimeとして実装済みである（[PLANNER_
 
 ## 14.5 Planner Save Transaction
 
-Planner constrained re-searchを経たPlan保存も原子的に行う。契約本文は
+Planner resultのDraft保存は原子的に行う。契約本文は
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15にある。
+
+- 作成リストの通常「生産計画を作成」のordinary Planner result（`createPlan()`、Phase 6-A）は
+  `PlannerResultPersistenceService.savePlannerResult()` で保存する。generated Entryもreplacementも無いので、
+  1つのDexie read-write transactionで、current state再読込・再validation（CalculationContext、
+  `initialExecutionState`、Target / Build List hash、Planの全BuildListEntry参照、新Plan IDの非衝突）、旧Draft全削除、
+  新Draft追加を行い、BuildListEntryは書き換えない。`incomplete` は何も書かず、`plan === null` は旧Draftを維持する。
+  ordinary resultのPlanは `conflictRepairLineage === null` でなければならない
+- 以下のgenerated Entryを含む保存はlegacy B8 orchestrationと「この候補を優先」の契約であり、B8の保存API
+  （`savePlannerOrchestrationResult()`）はPhase 6-Bまで残るが、通常のApplication runtimeからは呼ばない
 
 - Planner-generated BuildListEntry群と `ProductionPlan` を1つのDexie
   read-write transactionで保存する

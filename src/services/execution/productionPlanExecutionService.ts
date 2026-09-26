@@ -40,7 +40,6 @@ import {
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type { ProductionPlanStartTargetLinkChange } from '../../domain/planner/productionPlanStartEffects'
 import type {
-  BuildListEntry,
   BuildListEntryId,
   CalculationContext,
   ExecutionHistory,
@@ -259,7 +258,6 @@ export type AdoptProductionPlanReplanPreviewResult =
       oldPlan: ProductionPlan
       /** The Preview's Plan, now `active`. */
       newPlan: ProductionPlan
-      generatedBuildListEntries: BuildListEntry[]
     }
   | {
       kind: 'save_point_restored_repreview_required'
@@ -651,9 +649,9 @@ export class ProductionPlanExecutionService {
   /**
    * 「この再計画を採用」 (16.8): re-verifies the Preview against the current
    * persisted state and, in one transaction, abandons the running Plan
-   * (`replan_adopted`), starts the Preview's Plan, replaces with its generated
-   * BuildListEntries the Entries they were calculated to replace, moves or clears the running Plan's in-progress marks and
-   * deletes its game save point. The running Plan's ExecutionHistory stays and
+   * (`replan_adopted`), starts the Preview's Plan against the current Build
+   * List - which it never writes - moves or clears the running Plan's
+   * in-progress marks and deletes its game save point. The running Plan's ExecutionHistory stays and
    * no ExecutionHistory is added. Choosing to return to the save point restores
    * it and adopts nothing.
    */
@@ -689,7 +687,6 @@ export class ProductionPlanExecutionService {
             savePointHandling: adoption.savePointHandling,
             oldPlan: adoption.oldPlan,
             newPlan: adoption.newPlan,
-            generatedBuildListEntries: adoption.generatedBuildListEntries,
           }
     })
   }
@@ -700,14 +697,9 @@ export class ProductionPlanExecutionService {
       return
     }
     const { database } = this.dependencies
-    // Each replaced Entry goes first (PLANNER_SPEC 9.2.18): the adoption
-    // confirmed in this transaction that it is still its Target's one
-    // persisted Entry. Added, never put: an Entry or Plan that already exists
-    // is a different record and is never overwritten.
-    if (write.replacedBuildListEntryIds.length > 0) {
-      await database.buildListEntries.bulkDelete(write.replacedBuildListEntryIds)
-    }
-    for (const entry of write.generatedBuildListEntries) await database.buildListEntries.add(entry)
+    // The Build List is not written (Phase 6-A). The new Plan is added, never
+    // put: a Plan that already exists is a different record and is never
+    // overwritten.
     await database.productionPlans.put(write.oldPlan)
     await database.productionPlans.add(write.newPlan)
     if (write.ownedWeapons.length > 0) await database.ownedWeapons.bulkPut(write.ownedWeapons)

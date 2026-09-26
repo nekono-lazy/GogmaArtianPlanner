@@ -160,7 +160,7 @@ function PreviewResult({
   master: MasterDataRoot
   debugMode: boolean
 }) {
-  const { plan, warnings, termination, generatedBuildListEntries } = preview.result
+  const { plan, warnings, termination } = preview.result
   // The Domain classification is the only display authority: the typed
   // termination first, then the ordinary no-Plan result, then an invalid
   // result. The three never show together, and no message text is parsed.
@@ -210,11 +210,6 @@ function PreviewResult({
       {plan !== null && !incomplete && (
         <>
           {runningPlan !== null && <PlanComparison runningPlan={runningPlan} previewPlan={plan} />}
-          {generatedBuildListEntries.length > 0 && (
-            <Alert severity="info">
-              この試算は新しい作成リスト項目を{generatedBuildListEntries.length}件生成しました。採用したときに、新しい生産計画と同時に保存されます。
-            </Alert>
-          )}
           {/* The same read-only view as a persisted Plan (UI_FLOW 11.0), over
               the transient Preview Plan. Its status reads 下書き because the
               Preview is a draft-equivalent that no runtime has started. */}

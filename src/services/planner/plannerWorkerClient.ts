@@ -72,6 +72,11 @@ export interface PlannerWorkerClient {
   /**
    * The B8-D1 Planner-driven constrained re-search entry point.
    *
+   * Legacy since Issue #136 / #101 Phase 6-A: no ordinary Application runtime
+   * path calls it any more (the Build List and the replan Preview use
+   * `createPlan()`, the Production Plan screen the Planner Alternative
+   * entries). It stays for benchmarks and tests until Phase 6-B.
+   *
    * `orchestrationBounds` is caller-required: this client applies no default
    * and no clamping. B8-E2b decided the Production value
    * (`defaultPlannerOrchestrationBounds`, `2 / 1 / 4`), but choosing to pass it
@@ -89,7 +94,11 @@ export interface PlannerWorkerClient {
     input: PlannerInput,
     orchestrationBounds: PlannerOrchestrationBounds,
   ): Promise<PlannerOrchestrationResult>
-  /** B9 transient calculation; the complete caller-required request is wired verbatim. */
+  /**
+   * B9 transient calculation; the complete caller-required request is wired
+   * verbatim. Legacy like `createConstrainedPlan()`: no ordinary Application
+   * runtime path calls it; it stays until Phase 6-B.
+   */
   createWhatIfComparison(
     requestId: string,
     request: PlannerWhatIfRequest,

@@ -18,6 +18,7 @@ import type {
 import type {
   PlannerInput,
   PlannerOrchestrationResult,
+  PlannerResult,
 } from '../../domain/planner'
 import type { BuildListEntryReplacement } from '../../domain/buildList'
 import {
@@ -1145,5 +1146,152 @@ describe('PlannerResultPersistenceService generated Entry replacement (Phase 0-3
         },
         context,
       )).toEqual({ approvalRequired: false })
+    }))
+})
+
+describe('PlannerResultPersistenceService ordinary Planner result (Phase 6-A, PLANNER_SPEC 9.2.15)', () => {
+  /** The scenario without any generated Entry: the Plan runs over the persisted Build List as it is. */
+  function withOrdinaryScenario(run: (scenario: Scenario & { ordinary: PlannerResult }) => Promise<void>) {
+    return withScenario(async (scenario) => {
+      const { plan } = scenario
+      await run({
+        ...scenario,
+        ordinary: { plan, conflicts: [], warnings: [], termination: completedPlannerTermination() },
+      })
+    }, { generatedCount: 0 })
+  }
+
+  function previousDraft(): ProductionPlan {
+    return { ...createValidProductionPlan(), id: productionPlanId('plan.draft.previous') }
+  }
+
+  const PERSISTED_ENTRY_IDS = ['build-list.persisted.a', 'build-list.persisted.b']
+  const failOnEntryWrite = () => {
+    throw new Error('An ordinary Planner result save must not write the Build List.')
+  }
+
+  it('saves the ordinary result as the new Draft, replacing the previous one, and never writes the Build List', () =>
+    withOrdinaryScenario(async ({ service, ordinary, context, database, plan, storedPlanIds }) => {
+      await database.productionPlans.put(previousDraft())
+      const entriesBefore = await database.buildListEntries.toArray()
+      database.buildListEntries.hook('creating', failOnEntryWrite)
+      database.buildListEntries.hook('updating', failOnEntryWrite)
+      database.buildListEntries.hook('deleting', failOnEntryWrite)
+
+      const saved = await service.savePlannerResult(ordinary, context)
+
+      expect(saved).toEqual({ kind: 'saved', plan })
+      expect(await database.productionPlans.get(plan.id)).toEqual(plan)
+      expect(plan.conflictRepairLineage).toBeNull()
+      expect(await storedPlanIds()).toEqual([plan.id])
+      expect(await database.buildListEntries.toArray()).toEqual(entriesBefore)
+    }))
+
+  it('returns no_plan for a finished run without a Plan and keeps the previous Draft', () =>
+    withOrdinaryScenario(async ({ service, context, database, storedEntryIds, storedPlanIds }) => {
+      await database.productionPlans.put(previousDraft())
+
+      const saved = await service.savePlannerResult(
+        { plan: null, conflicts: [], warnings: [], termination: exhaustedPlannerTermination() },
+        context,
+      )
+
+      expect(saved).toEqual({ kind: 'no_plan' })
+      expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+      expect(await storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
+    }))
+
+  it.each([
+    ['with its partial Plan', true],
+    ['without a Plan', false],
+  ])('refuses an incomplete run %s and writes nothing', (_label, withPlan) =>
+    withOrdinaryScenario(async ({ service, ordinary, context, database, storedEntryIds, storedPlanIds }) => {
+      await database.productionPlans.put(previousDraft())
+
+      await expect(service.savePlannerResult(
+        { ...ordinary, plan: withPlan ? ordinary.plan : null, termination: incompletePlannerTermination() },
+        context,
+      )).rejects.toMatchObject({ code: 'planner_result_invalid' })
+      expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+      expect(await storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
+    }))
+
+  it.each([
+    ['a non-draft Plan', (plan: ProductionPlan): ProductionPlan => ({ ...plan, status: 'active' }), 'planner_result_invalid'],
+    [
+      'a Plan carrying a repair lineage',
+      (plan: ProductionPlan): ProductionPlan => ({ ...plan, conflictRepairLineage: { decisions: [] } }),
+      'planner_result_invalid',
+    ],
+    ['a Domain-invalid Plan', (plan: ProductionPlan): ProductionPlan => ({ ...plan, id: productionPlanId('') }), 'validation_failed'],
+    [
+      'a Plan naming an Entry outside the current Build List',
+      (plan: ProductionPlan): ProductionPlan => ({
+        ...plan,
+        selectedBuildListEntryIds: [...plan.selectedBuildListEntryIds, buildListEntryId('build-list.missing')],
+      }),
+      'planner_result_invalid',
+    ],
+  ] as const)('refuses %s and writes nothing', (_label, patch, code) =>
+    withOrdinaryScenario(async ({ service, ordinary, context, database, storedEntryIds, storedPlanIds }) => {
+      await database.productionPlans.put(previousDraft())
+
+      await expect(service.savePlannerResult({ ...ordinary, plan: patch(ordinary.plan as ProductionPlan) }, context))
+        .rejects.toMatchObject({ code })
+      expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+      expect(await storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
+    }))
+
+  it('refuses when the current state moved under the calculation', () =>
+    withOrdinaryScenario(async ({ service, ordinary, context, database, input, storedPlanIds }) => {
+      await database.productionPlans.put(previousDraft())
+      await database.rngState.put({
+        ...input.rngState,
+        skillCounter: { ...input.rngState.skillCounter, value: (input.rngState.skillCounter.value ?? 0) + 1 },
+      })
+
+      await expect(service.savePlannerResult(ordinary, context)).rejects.toMatchObject({ code: 'planner_state_changed' })
+      expect(await storedPlanIds()).toEqual(['plan.draft.previous'])
+    }))
+
+  it('refuses a new Plan ID that is already stored before any Draft is deleted', () =>
+    withOrdinaryScenario(async ({ service, ordinary, context, database, plan }) => {
+      const previous = previousDraft()
+      await database.productionPlans.put(previous)
+      const taken: ProductionPlan = {
+        ...previous,
+        id: plan.id,
+        status: 'completed',
+        completedAt: DOMAIN_FIXTURE_TIME,
+        currentStepId: null,
+        steps: previous.steps.map((step) => ({ ...step, isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME })),
+      }
+      await database.productionPlans.put(taken)
+
+      await expect(service.savePlannerResult(ordinary, context)).rejects.toMatchObject({ code: 'production_plan_id_conflict' })
+      expect(await database.productionPlans.get(previous.id)).toEqual(previous)
+      expect(await database.productionPlans.get(plan.id)).toEqual(taken)
+    }))
+
+  it('saves beside an active Plan without an approval and leaves that Plan untouched', () =>
+    withOrdinaryScenario(async ({ service, ordinary, context, database, plan, persisted }) => {
+      const active: ProductionPlan = {
+        ...buildPlan(plan.baseSnapshot, plan.calculationContext, persisted),
+        id: productionPlanId('plan.running.p1'),
+        status: 'active',
+      }
+      await database.productionPlans.put(active)
+
+      const saved = await service.savePlannerResult(ordinary, context)
+
+      expect(saved).toEqual({ kind: 'saved', plan })
+      expect(await database.productionPlans.get(active.id)).toEqual(active)
+      // An ordinary result replaces no Entry, so an approval never applies.
+      await database.productionPlans.delete(plan.id)
+      await expect(service.savePlannerResult(ordinary, context, {
+        observedPlan: { planId: active.id, status: 'active', currentStepId: active.currentStepId, updatedAt: active.updatedAt },
+        savePointDecision: null,
+      })).rejects.toMatchObject({ code: 'plan_breaking_change_approval_not_required' })
+      expect(await database.productionPlans.get(active.id)).toEqual(active)
     }))
 })
