@@ -1231,8 +1231,14 @@ describe('ProductionPlanPage explicit selection', () => {
     await act(async () => pending.resolve(result))
     await waitFor(() => expect(view.router.state.location.pathname).toBe('/plans/' + next.plan.id))
     expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce()
-    const [savedResult, saveContext] = vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0]
+    const [savedResult, saveContext, sourceDraftId] = vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0]
     expect(savedResult).toBe(artifactOf(result))
+    // The source Draft authority is the Draft the user acted on - never the
+    // calculated Plan's ID, nor the Draft the page opens after the save.
+    expect(sourceDraftId).toBe(fixture.plan.id)
+    expect(sourceDraftId).not.toBe(artifactOf(result).plannerResult.plan.id)
+    expect(sourceDraftId).not.toBe(next.plan.id)
+    expect(vi.mocked(deps.inspectPlannerAlternativeRepairSave).mock.calls[0][2]).toBe(fixture.plan.id)
     expect(saveContext).not.toBe(startContext)
     expect(saveContext.masterDataVersion).toBe(startContext.masterDataVersion + 1)
     expect(saveContext.rngEngineVersion).toBe(client.engineVersion)
@@ -1282,8 +1288,9 @@ describe('ProductionPlanPage explicit selection', () => {
     await user.click(within(warning).getByRole('button', { name: '生産計画を破棄して保存' }))
     await waitFor(() => expect(view.router.state.location.pathname).toBe('/plans/' + next.plan.id))
     expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce()
-    const [savedResult, , approval] = vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0]
+    const [savedResult, , sourceDraftId, approval] = vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0]
     expect(savedResult).toBe(artifactOf(result))
+    expect(sourceDraftId).toBe(fixture.plan.id)
     expect(approval).toEqual({ observedPlan, savePointDecision: null })
   })
 
@@ -1337,8 +1344,9 @@ describe('ProductionPlanPage explicit selection', () => {
       '最後のゲーム内セーブ地点へ戻しました。復元前の計算結果は保存していません。復元後の状態から、もう一度再計算してください。',
     )).toBeInTheDocument()
     expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce()
-    const [savedResult, , approval] = vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0]
+    const [savedResult, , sourceDraftId, approval] = vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0]
     expect(savedResult).toBe(artifactOf(result))
+    expect(sourceDraftId).toBe(fixture.plan.id)
     expect(approval).toEqual({ observedPlan, savePointDecision: { kind: 'restore_save_point', recordedAt } })
     // No Draft is opened, and nothing is reported as a failure.
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)

@@ -3657,13 +3657,19 @@ body already carrying the field fails closed. The Worker gained `create_planner_
 `createPlannerAlternativeRepair()` on the shared requestId / generation / cancel / dispose namespace. Persistence gained
 `PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`: the artifact is
 never converted into a `PlannerOrchestrationResult`; `checkPersistablePlannerAlternativeRepairShape()` refuses a missing
-Plan, an `incomplete` run, an `invalid_conflict_resolution` warning, differing `conflicts` / `plan.conflicts`, malformed
+Plan, an `incomplete` run, an `invalid_conflict_resolution` warning, `conflicts` / `plan.conflicts` that are not structurally
+equal PlanConflict by PlanConflict in order (never an ID-only comparison), malformed
 replacement pairing, an invalid lineage and a last decision whose `replaced` records differ from the replacements, and returns
 the Plan with the artifact lineage set exactly; the save shares the B8 boundary (in-transaction re-read, `O` still the Target's
 one Entry or `planner_state_changed`, generated ID collision, cardinality, Plan references through
 `checkProductionPlanBuildListEntryReferences()`, CalculationContext, Draft replacement, Plan-breaking guard and the save point
 restore that drops the result) but never requires a generated Entry to be selected - an accepted but unselected `G` still
-replaces `O` - while the B8 save keeps `checkProductionPlanBuildListReferences()` unchanged. `ProductionPlanPage` routes
+replaces `O` - while the B8 save keeps `checkProductionPlanBuildListReferences()` unchanged. Both repair APIs take the source
+Draft ID (`expectedSourceDraftId`, the page's `displayedPlan.id` at the action's start, never re-read at save time): the save
+mutation - shared by the inspection, the apply transaction and the save point restore - requires the one current Draft to be that
+ID, refusing a missing / started / replaced source Draft with `planner_state_changed` and two Drafts with `draft_plan_conflict`,
+writing nothing, with zero replacements too; an inspection success is never write authority, the ID is the authority (no Draft
+body comparison), the Worker request carries no source ID, and the B8 save has no such check. `ProductionPlanPage` routes
 「比較する」 to `createPlannerAlternativeComparison()` (fresh input with the restored resolutions and
 `conflictResolutionPlannerOptions(displayed Plan)`, no bounds, prior fixed / excluded from
 `derivePlannerConflictRepairLineageContext(displayedPlan.conflictRepairLineage, freshInput.buildListEntries)`) and

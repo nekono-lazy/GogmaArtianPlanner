@@ -13,7 +13,7 @@ import {
   type PlannerAlternativeRepairCalculationResult,
   type PlannerAlternativeScenarioOutcome,
 } from '../domain/planner'
-import type { BuildListEntry } from '../domain/models/publicTypes'
+import type { BuildListEntry, ProductionPlan } from '../domain/models/publicTypes'
 import { ProductionRngEngine } from '../domain/rng/production/productionRngEngine'
 import { candidateStableKey, defaultPlannerAlternativeSearchExtent } from '../domain/search'
 import {
@@ -174,9 +174,13 @@ describe('Issue #101 Planner Alternative actual repair (Phase 5-A)', () => {
       for (const weapon of input.ownedWeapons) await seedRepositories.ownedWeapons.putOwnedWeapon(weapon)
       for (const target of input.targetWeapons) await seedRepositories.targetWeapons.putTargetWeapon(target)
       for (const entry of input.buildListEntries) await seedRepositories.buildListEntries.putBuildListEntry(entry)
+      // The Draft the user displayed and preferred a participant on: the source
+      // Draft the save requires to be current, and the Draft it replaces.
+      const sourceDraftId = 'plan.issue101.displayed' as ProductionPlan['id']
+      await database.productionPlans.put({ ...structuredClone(artifact.plannerResult.plan), id: sourceDraftId, conflictRepairLineage: null })
       const service = new PlannerResultPersistenceService(database)
-      const inspection = await service.inspectPlannerAlternativeRepairSave(artifact, input.calculationContext)
-      const outcome = await service.savePlannerAlternativeRepair(artifact, input.calculationContext)
+      const inspection = await service.inspectPlannerAlternativeRepairSave(artifact, input.calculationContext, sourceDraftId)
+      const outcome = await service.savePlannerAlternativeRepair(artifact, input.calculationContext, sourceDraftId)
       return {
         inspection,
         outcome,

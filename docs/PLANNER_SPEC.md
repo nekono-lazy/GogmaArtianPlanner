@@ -3772,7 +3772,9 @@ Planが置換後Build Listだけを参照すること、CalculationContext、旧
 保存せず再計算を求める）。artifact固有の検査は次のとおりである。
 
 - final scenario Planがある（`plan !== null`）、`termination.status !== "incomplete"`、warningに
-  `invalid_conflict_resolution` が無い、`conflicts` と `plan.conflicts` が同じ展開後の集合である
+  `invalid_conflict_resolution` が無い、`conflicts` と `plan.conflicts` が同じ展開後の集合である（順序を含めた
+  PlanConflict全体のexact structural equality。IDだけ・selectionだけ・participantだけの部分比較にせず、Persistence側で
+  sortや再canonicalizeもしない。どれか1 fieldでも違えばmalformed artifactとして `planner_result_invalid`）
 - generated Entryとreplacement metadataの対応（1 generated Entryにつき1 replacement、同じTarget）と、generated Entry /
   Planの既存Domain validation（`checkPersistablePlannerResultShape()` を共有）
 - `conflictRepairLineage` が構造validation（[DATA_MODEL.md](./DATA_MODEL.md) 11.1.1）を通り、その最後の決定の `replaced`
@@ -3783,6 +3785,17 @@ Planが置換後Build Listだけを参照すること、CalculationContext、旧
   B8の保存だけに適用し、Planner Alternativeの保存はEntry参照の検査（`checkProductionPlanBuildListEntryReferences()`）だけを行う
 - 保存する新Draftの `conflictRepairLineage` はartifactのlineageをそのまま設定する。current DB stateやPlanのConflictから
   lineageを再構築しない
+- **source Draftの確認（CAS）**: actual repairは表示中Draftのlineageを継承してartifactを計算するので、保存APIは計算元の
+  source Draft ID（`expectedSourceDraftId`。画面が操作開始時に表示していたDraftのID。保存直前に読み直したIDではない）を
+  受け取り、保存transaction内のcurrent persisted stateでDraftがちょうど1件かつそのIDが `expectedSourceDraftId` であることを
+  再確認する。Draftが無い（削除・開始済み）、または別ID（別タブ・別操作のrepairで置換済み）なら `planner_state_changed`
+  で何も保存しない（Draftが2件以上ならDraft不変条件の `draft_plan_conflict`）。replacementが0件でlineageだけが進むrepairでも
+  必ず確認する。inspectionでも同じ確認を行うが、inspection成功はwrite authorityではなく、apply時のtransaction内で必ず
+  再確認する（確認はinspection・apply・セーブ地点復元で共通のsave mutationで行い、「最後のゲーム内セーブ地点へ戻す」が
+  復元だけを書きartifactを保存しない既存挙動は変えない）。確認のauthorityはIDであり、Draft本体の全体比較はしない
+  （その他の状態は上記のcurrent-state authorityで再検証する）。source Draft IDはApplication / Persistenceの保存authorityで
+  あり、Worker requestには含めない。B8の `savePlannerOrchestrationResult()`（新しいchainを始める通常Planner、lineage `null`）
+  にはこの確認を持ち込まない
 
 ```text
 各replacement: O削除 + G追加 → 旧Draft削除 → lineage付き新Draft追加（→ 必要ならactive Planの breaking_change_approved）

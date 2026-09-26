@@ -106,21 +106,27 @@ export interface ProductionPlanPageDependencies {
    * Whether saving a Planner Alternative actual repair needs the Plan-breaking
    * approval: an accepted replacement deletes an Entry an `active` Plan depends
    * on (`docs/PLANNER_SPEC.md` 9.2.19.8 / 16.6). Read-only; the save re-derives it.
+   * `expectedSourceDraftId` is the displayed Draft the repair was calculated
+   * from, never an ID read again at save time.
    */
   inspectPlannerAlternativeRepairSave(
     artifact: PlannerAlternativeRepairArtifact,
     currentCalculationContext: CalculationContext,
+    expectedSourceDraftId: ProductionPlanId,
   ): Promise<PlanBreakingChangeInspection>
   /**
    * Saves a Planner Alternative actual repair: the Entry replacements, the new
    * Draft and its repair lineage in one transaction. With an approval whose
    * 16.10 decision restores the game save point, only the restore happens and
    * the artifact is dropped (`docs/PLANNER_SPEC.md` 9.2.18): the outcome then
-   * asks for a new calculation from the restored state.
+   * asks for a new calculation from the restored state. The save refuses with
+   * `planner_state_changed` unless the current Draft is still
+   * `expectedSourceDraftId` (the source Draft CAS, `docs/PLANNER_SPEC.md` 9.2.15).
    */
   savePlannerAlternativeRepair(
     artifact: PlannerAlternativeRepairArtifact,
     currentCalculationContext: CalculationContext,
+    expectedSourceDraftId: ProductionPlanId,
     approval?: PlanBreakingChangeApproval | null,
   ): Promise<PlannerAlternativeRepairSaveOutcome>
   /**
@@ -158,15 +164,17 @@ function createDefaultDependencies(
     createInput: (calculationContext) =>
       createPlannerInput(master, calculationContext),
     createWorkerClient: createProductionPlannerWorkerClient,
-    inspectPlannerAlternativeRepairSave: (artifact, currentCalculationContext) =>
+    inspectPlannerAlternativeRepairSave: (artifact, currentCalculationContext, expectedSourceDraftId) =>
       plannerResultPersistenceService.inspectPlannerAlternativeRepairSave(
         artifact,
         currentCalculationContext,
+        expectedSourceDraftId,
       ),
-    savePlannerAlternativeRepair: (artifact, currentCalculationContext, approval) =>
+    savePlannerAlternativeRepair: (artifact, currentCalculationContext, expectedSourceDraftId, approval) =>
       plannerResultPersistenceService.savePlannerAlternativeRepair(
         artifact,
         currentCalculationContext,
+        expectedSourceDraftId,
         approval ?? null,
       ),
     inspectProductionPlanStart: (planId) => executionService.inspectProductionPlanStart(planId),
@@ -1074,10 +1082,15 @@ export function ProductionPlanPage({
       // re-validation, the Entry replacement, the lineage and the single atomic
       // transaction. The runtime's inspection alone decides whether the
       // breaking-change warning is shown; nothing is judged here.
+      // The Draft the user acted on is the source authority of this artifact:
+      // its lineage is what the artifact continues, so the save refuses unless
+      // it is still the current Draft (PLANNER_SPEC 9.2.15).
+      const sourceDraftId = displayedPlan.id
       const saved = await planGuard.run({
-        inspect: () => dependencies.inspectPlannerAlternativeRepairSave(artifact, saveCalculationContext),
+        inspect: () =>
+          dependencies.inspectPlannerAlternativeRepairSave(artifact, saveCalculationContext, sourceDraftId),
         apply: (approval) =>
-          dependencies.savePlannerAlternativeRepair(artifact, saveCalculationContext, approval),
+          dependencies.savePlannerAlternativeRepair(artifact, saveCalculationContext, sourceDraftId, approval),
         note: 'この再計算では作成リストの候補が置き換わり、実行中の生産計画が参照している候補が削除されます。',
         // This result was calculated before any restore, so restoring drops it
         // instead of saving it over the restored state (PLANNER_SPEC 9.2.18).

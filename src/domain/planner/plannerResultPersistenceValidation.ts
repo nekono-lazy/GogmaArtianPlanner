@@ -319,6 +319,25 @@ export function checkProductionPlanBuildListEntryReferences(
   return null
 }
 
+/**
+ * Exact structural equality of two untrusted values: primitives by identity,
+ * arrays element by element in order, plain objects field by field whatever
+ * their key order (a field holding `undefined` equals an absent one). Nothing
+ * is sorted or canonicalized.
+ */
+function sameStructure(left: unknown, right: unknown): boolean {
+  if (left === right) return true
+  if (typeof left !== 'object' || typeof right !== 'object' || left === null || right === null) return false
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+      left.every((value, index) => sameStructure(value, right[index]))
+  }
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const keys = new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)])
+  return [...keys].every((key) => sameStructure(leftRecord[key], rightRecord[key]))
+}
+
 /** One Planner Alternative actual repair, its shape checked and its Draft carrying the lineage. */
 export interface PersistablePlannerAlternativeRepair {
   /** The final scenario Plan with `conflictRepairLineage` set exactly to the artifact's lineage. */
@@ -341,7 +360,8 @@ function replacementIdentity(targetWeaponId: string, replaced: string, generated
  * 9.2.19.8 / 9.2.19.11): a final scenario Plan exists, its run is not
  * `incomplete` and honoured every explicit resolution (no
  * `invalid_conflict_resolution`), `conflicts` and `plan.conflicts` are the one
- * expanded list, the generated Entries and their `O -> G` replacements pair up
+ * expanded list - every PlanConflict equal field by field in the same order,
+ * never only by ID - the generated Entries and their `O -> G` replacements pair up
  * (`checkPersistablePlannerResultShape()`: draft Plan, unique IDs, Domain-valid
  * Plan and Entries), and the lineage is structurally valid and its last
  * decision records exactly these replacements as `replaced`.
@@ -370,10 +390,10 @@ export function checkPersistablePlannerAlternativeRepairShape(
       'The final scenario Plan could not honour an explicit conflict resolution (invalid_conflict_resolution) and must not be saved.',
     ))
   }
-  if (
-    artifactPlan.conflicts.map(({ id }) => id).join('\n') !==
-    plannerResult.conflicts.map(({ id }) => id).join('\n')
-  ) {
+  // The Domain returns one canonical expanded list for both (9.2.19.9); a
+  // Worker artifact whose two lists differ in any field - a selection, a
+  // participant, a kind - is malformed, not re-sorted or partially compared.
+  if (!sameStructure(artifactPlan.conflicts, plannerResult.conflicts)) {
     return fail(resultInvalid('The repair artifact reports different Conflicts for its result and its Plan.'))
   }
   if (conflictRepairLineage === null || conflictRepairLineage === undefined) {

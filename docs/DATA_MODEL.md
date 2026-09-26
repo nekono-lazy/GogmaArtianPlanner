@@ -2712,10 +2712,18 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
   final Planで非選択のgenerated Entryも `O` を置換して保存する（B8の「generated Entryはselected」検査は適用しない）。
   新Draftの `conflictRepairLineage`（11.1.1）はartifactのlineageをそのまま設定し、Entry置換・旧Draft削除・lineage付き新Draft
   追加（・必要ならactive Planの `breaking_change_approved`）を1 transactionで行う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）
+- actual repairは表示中Draftのlineageを継承してartifactを計算するため、保存transaction内でcurrent Draftがちょうど1件かつ
+  計算元のsource Draft ID（`expectedSourceDraftId`、画面が操作開始時に表示していたDraftのID）と一致することを再確認する。
+  一致しなければ（Draftが削除・開始済み、または別repairで置換済み）`planner_state_changed` で何も保存しない（Draftが2件以上なら
+  `draft_plan_conflict`）。inspection成功後でもapply時に再確認し、replacementが0件でも確認する。B8の通常Planner保存には
+  適用しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）
+- `plannerResult.conflicts` と `plan.conflicts` は順序を含めたPlanConflict全体の構造一致を要求し、IDだけの比較にしない。
+  不一致のartifactは `planner_result_invalid` で何も保存しない
 
-新しいtableもDexie schema versionの変更も伴わない。`buildListEntries` と
+Planner save transactionのための新しいtable / indexは追加しない。`buildListEntries` と
 `productionPlans` の既存tableをそのまま使う（Draft最大1件契約自体はDexie v8で既存Draftを
-全削除して導入した、14.2）。
+全削除して導入した、14.2）。ただしPhase 5-Bでは、`ProductionPlan.conflictRepairLineage`（11.1.1）の永続shape追加により
+Dexie `DATABASE_SCHEMA_VERSION` を9から10へ更新している（data-only upgrade、14.2）。
 
 ---
 

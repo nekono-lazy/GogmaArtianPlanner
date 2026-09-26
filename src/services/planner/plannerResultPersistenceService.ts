@@ -29,6 +29,7 @@ import type {
   NormalArtianCounter,
   OwnedWeapon,
   ProductionPlan,
+  ProductionPlanId,
   RngState,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
@@ -246,6 +247,13 @@ interface PersistablePlannerResult {
    * set is the authority (`docs/PLANNER_SPEC.md` 9.2.19.6).
    */
   requireGeneratedEntriesSelected: boolean
+  /**
+   * The Draft a Planner Alternative repair was calculated from: the one Draft
+   * the save must still find current (`docs/PLANNER_SPEC.md` 9.2.15). `null`
+   * for a B8 orchestration result, which starts a new chain and inherits
+   * nothing from the displayed Draft.
+   */
+  expectedSourceDraftId: ProductionPlanId | null
 }
 
 export class PlannerResultPersistenceService {
@@ -315,13 +323,16 @@ export class PlannerResultPersistenceService {
    * Reads whether saving a Planner Alternative actual repair needs the
    * Plan-breaking approval (`docs/PLANNER_SPEC.md` 9.2.19.8 step 9 / 16.6) and
    * what the warning and the 16.10 save point choice must show. It writes
-   * nothing, and refuses an artifact the save would refuse.
+   * nothing, and refuses an artifact the save would refuse - a source Draft
+   * that is no longer the current Draft included. Its success is no write
+   * authority: the save checks everything again inside its own transaction.
    */
   async inspectPlannerAlternativeRepairSave(
     artifact: PlannerAlternativeRepairArtifact,
     currentCalculationContext: CalculationContext,
+    expectedSourceDraftId: ProductionPlanId,
   ): Promise<PlanBreakingChangeInspection> {
-    const persistable = this.persistableRepair(artifact)
+    const persistable = this.persistableRepair(artifact, expectedSourceDraftId)
     return this.guard(currentCalculationContext).inspect(
       this.saveMutation(persistable, currentCalculationContext),
     )
@@ -339,13 +350,25 @@ export class PlannerResultPersistenceService {
    * refusal, and an approval that restores the game save point writes the
    * restore alone and returns `save_point_restored_recalculation_required`
    * (no Entry, Draft or lineage of this artifact is saved).
+   *
+   * `expectedSourceDraftId` is the Draft the artifact was calculated from - the
+   * Draft the user acted on, whose lineage the artifact continues. Inside the
+   * transaction the one current Draft must still be exactly that Draft,
+   * whether or not the repair replaces any Entry; otherwise another repair (or
+   * a start, or a deletion) moved the chain on and `planner_state_changed`
+   * writes nothing, so a stale artifact never overwrites a newer lineage.
    */
   async savePlannerAlternativeRepair(
     artifact: PlannerAlternativeRepairArtifact,
     currentCalculationContext: CalculationContext,
+    expectedSourceDraftId: ProductionPlanId,
     approval: PlanBreakingChangeApproval | null = null,
   ): Promise<PlannerAlternativeRepairSaveOutcome> {
-    return this.saveGuarded(this.persistableRepair(artifact), currentCalculationContext, approval)
+    return this.saveGuarded(
+      this.persistableRepair(artifact, expectedSourceDraftId),
+      currentCalculationContext,
+      approval,
+    )
   }
 
   /** The one guarded save both Planner result kinds go through. */
@@ -415,17 +438,26 @@ export class PlannerResultPersistenceService {
       return null
     }
     this.assertPersistableResultShape(plan, generatedEntries, result.termination, replacements)
-    return { plan, generatedEntries, replacements, requireGeneratedEntriesSelected: true }
+    return {
+      plan,
+      generatedEntries,
+      replacements,
+      requireGeneratedEntriesSelected: true,
+      expectedSourceDraftId: null,
+    }
   }
 
   /** The artifact-shape invariants of a Planner Alternative repair; the Plan carries its lineage. */
-  private persistableRepair(artifact: PlannerAlternativeRepairArtifact): PersistablePlannerResult {
+  private persistableRepair(
+    artifact: PlannerAlternativeRepairArtifact,
+    expectedSourceDraftId: ProductionPlanId,
+  ): PersistablePlannerResult {
     const checked = checkPersistablePlannerAlternativeRepairShape(artifact)
     if (checked.issue !== null) {
       throwIssue(checked.issue)
       throw resultInvalid('The Planner Alternative repair artifact is not persistable.')
     }
-    return { ...checked.repair, requireGeneratedEntriesSelected: false }
+    return { ...checked.repair, requireGeneratedEntriesSelected: false, expectedSourceDraftId }
   }
 
   private guard(currentCalculationContext: CalculationContext): PlanBreakingChangeGuard {
@@ -448,6 +480,9 @@ export class PlannerResultPersistenceService {
   ): PlanGuardedMutation<ProductionPlan> {
     return (base: PlanGuardedMutationBase) => {
       const { plan } = persistable
+      if (persistable.expectedSourceDraftId !== null) {
+        this.assertSourceDraftCurrent(base, persistable.expectedSourceDraftId)
+      }
       const current = this.currentState(base)
       const finalEntries = this.assertCurrentStateMatchesPlan(
         persistable,
@@ -459,6 +494,28 @@ export class PlannerResultPersistenceService {
         state: { ...unchangedMutableState(base), buildListEntries: finalEntries },
         result: plan,
       }
+    }
+  }
+
+  /**
+   * The source Draft CAS of a Planner Alternative repair (`docs/PLANNER_SPEC.md`
+   * 9.2.15): the artifact continues the lineage of the Draft it was calculated
+   * from, so the one current Draft must still be that Draft. Its ID is the
+   * authority - never a body comparison; the rest of the state is re-validated
+   * by the snapshot authorities below. Two Drafts break the Draft invariant.
+   */
+  private assertSourceDraftCurrent(base: PlanGuardedMutationBase, expectedSourceDraftId: ProductionPlanId) {
+    const drafts = base.productionPlans.filter(({ status }) => status === 'draft')
+    if (drafts.length > 1) {
+      throw new RepositoryError(
+        'draft_plan_conflict',
+        `ProductionPlan draft invariant violated: ${drafts.length} draft ProductionPlans are stored.`,
+      )
+    }
+    if (drafts.length === 0 || drafts[0].id !== expectedSourceDraftId) {
+      throw stateChanged(
+        `The repair was calculated from Draft '${expectedSourceDraftId}', but the current Draft is ${drafts.length === 0 ? 'missing' : `'${drafts[0].id}'`}; another change moved the repair chain on after the calculation.`,
+      )
     }
   }
 

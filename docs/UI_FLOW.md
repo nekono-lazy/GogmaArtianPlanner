@@ -1728,6 +1728,8 @@ accepted replacementによる元Entryの置換（final Planで非選択のreplac
 `conflictRepairLineage` をatomic保存する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15末尾）。置換する元Entryが実行中の生産計画の
 依存Entryなら、既存の破壊的変更の警告（16.3）を経て承認を求める。「最後のゲーム内セーブ地点へ戻す」を選んだ場合は復元だけを行い、
 repair結果は保存せず再計算を求める。保存時に現在状態が計算時と変わっていれば（`planner_state_changed` 等）何も保存しない。
+保存APIへは操作開始時に表示していたDraftのID（`displayedPlan.id`）を計算元source Draftとしてinspection・保存の両方へ渡し、
+保存transaction内でcurrent Draftがそれと一致しなければ（別タブのrepairで置換済み、開始済み、削除済み）何も保存しない。
 新しいPlanが保存された場合はその `/plans/:planId` へ遷移する。Planが生成されない場合または保存失敗時は旧Draftを置換・削除しない。
 保存が完全に成功した場合だけ、Persistence serviceが同一transaction内で旧Draftを新Draftへatomicに
 置換する（通常Draftは最大1件、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15 /
