@@ -73,8 +73,10 @@ import {
  * fresh structured clone, so no run can mutate a cached fixture.
  *
  * Every `BENCHMARK_ONLY_*` value is a measurement grid for Phase 3-B, never a
- * Production default: Phase 3-C decides those from the real Browser Worker
- * measurements (`docs/PLANNER_SPEC.md` 9.2.19.12 / 9.2.19.16).
+ * Production default. Phase 3-C decided those from the real Browser Worker
+ * measurements in the Search / Planner Domain authorities
+ * (`docs/PLANNER_SPEC.md` 9.2.19.12 / 9.2.19.16); these grids and sanity values
+ * stay unchanged as the historical Phase 3-B measurement conditions.
  */
 
 export const PLANNER_ALTERNATIVE_BENCHMARK_FIXTURE_TIME = '2026-09-26T00:00:00.000Z'

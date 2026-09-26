@@ -416,6 +416,18 @@ describe('Planner Alternative kernel: fail closed and determinism', () => {
     )).rejects.toThrow('maxCandidateTrialsPerTarget')
   })
 
+  it('takes no Production default for missing or partial bounds and extent', async () => {
+    const built = scenario(parts())
+    for (const overrides of [
+      { bounds: undefined as never },
+      { bounds: { maxCandidateTrialsPerTarget: 2 } as never },
+      { extent: undefined as never },
+      { extent: { maxNormalAdvance: 1, maxGogmaAdvance: 5 } as never },
+    ]) {
+      await expect(runPlannerAlternativeKernel(request(built, overrides), built.dependencies)).rejects.toThrow()
+    }
+  })
+
   it('derives the same Candidate and generated Entry whatever the input order and the Clock', async () => {
     const one = scenario(parts())
     const first = targetOf(await runPlannerAlternativeKernel(request(one), one.dependencies), TARGET_B)

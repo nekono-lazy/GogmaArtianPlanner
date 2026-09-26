@@ -4168,7 +4168,7 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 
 ### 9.2.19 Planner Alternative Searchと1段の競合repair（Issue #136 / #101）
 
-実装状態: **Phase 2まで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
+実装状態: **Phase 3まで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
 9.2.19.16のPhaseに従って段階的に行う。Phase 1（Phase 1-A: modern Search基盤のcomposition seam、Phase 1-B: Search Domain
 APIと空reservationでの基本consumer経路、Phase 1-C: 空reservationでの探索完全性。[SEARCH_SPEC.md](./SEARCH_SPEC.md)
 5.6.8の実装状態を参照）は実装済みである。Phase 2も実装済みである: fixed Route集合からのreservation導出
@@ -4180,8 +4180,9 @@ Planner Domainの共通kernel `runPlannerAlternativeKernel()`（決定のmerge�
 非固定Targetごとに同じbaselineから探索 → temporary Entry `G` → `O + G` / `-O + G` preflight → full Planner run +
 Trace Replay → 9.2.19.6のfound判定。試行上限 `maxCandidateTrialsPerTarget` / `maxPlannerReruns` はcaller必須で、
 Search・reservation導出・materialization・preflightを数えない。以前の決定のfixed Entry・無効化Route keyはcallerから受け取り、
-trial不採用のCandidateは除外keyへ加えない）、Issue #101実ケースのDomain acceptanceである。Phase 3〜7（benchmarkと
-Production default、what-if、actual repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、
+trial不採用のCandidateは除外keyへ加えない）、Issue #101実ケースのDomain acceptanceである。Phase 3（benchmark-only
+harness、real Browser Worker測定、extent / 試行上限のProduction default定数の確定。9.2.19.12 / 9.2.19.16）も完了した。
+Phase 4〜7（what-if、actual repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、
 Presentation）は未実装であり、Plannerの画面経路は本節の契約をまだ使っていない（Production routingはlegacyのB8経路のまま）。
 
 9.2.19.6の条件4の後半（`G` が選ばれない理由が、fixed Route集合外Entryとの未解決競合の暫定帰結だけであること）は、
@@ -4618,7 +4619,11 @@ interface PlannerAlternativeSearchExtent {
 - 各値は1以上の整数でcaller必須。Domainはdefault substitution、fallback、clamp、field-wise completionを
   行わない。Production defaultはApplication callerではなくProduction Worker adapterがWorker境界内で
   明示的に渡す（9.2.4.5 / 9.2.4.10と同じ責務分離）
-- Production default値は、runtime実装後のPhase 3 Browser Worker benchmarkで確定する。旧
+- Production default値はPhase 3-Cで、Phase 3-Bの実Browser Worker測定から
+  `defaultPlannerAlternativeSearchExtent = { maxNormalAdvance: 4, maxGogmaAdvance: 235, maxSkillAdvance: 4 }`
+  （Search Domain、`src/domain/search/alternative/plannerAlternativeTypes.ts`）に確定した。根拠は
+  [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8「extent」と
+  [PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md](./PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md) 13章にある。旧
   `defaultConstrainedEnumerationBounds = 40 / 30 / 100 / 500` を新機能のauthorityにしない。Candidate Searchの
   推奨初期値（`recommendedCandidateSearchDefaults = 350 / 500 / 1500`）とユーザー保存既定値
   （`AppSettings.candidateSearchDefaults`）は候補検索画面のための値であり、Plannerが読むauthorityにしない
@@ -4626,10 +4631,34 @@ interface PlannerAlternativeSearchExtent {
 - 試行上限: what-ifは既存 `PlannerWhatIfBounds`（`maxCandidateTrialsPerTarget` / `maxPlannerReruns`）の
   意味を維持し、actual repairは同じ2値の意味を持つrepair用boundsを持つ（B8の `maxGeneratedBuildListEntries`
   に相当する上限は持たない。生成Entry数は今回のConflictの直接participant Target数で自然に有限である）。いずれもcaller必須、1以上の
-  整数で、Production defaultはPhase 3で決め直す。`maxPlannerReruns` はfull Planner runの開始回数だけを数え、
+  整数である。`maxPlannerReruns` はfull Planner runの開始回数だけを数え、
   preflight・validation・Search・materializationを数えない（9.2.4.9 / 9.2.16と同じ）。what-ifのscenario trial
   （9.2.19.7手順5）で追加のfull runを行う場合もそれを1回と数え、予算が残っていなければ `scenario` を
   `stopped_by_planner_rerun_bound` とする。trial Planを再利用する場合は数えない
+- 試行上限のProduction default値はPhase 3-Cで次のとおり確定した（Planner Domain、
+  `src/domain/planner/alternative/plannerAlternativeTrial.ts`）。
+
+  ```ts
+  export const defaultPlannerAlternativeTrialBounds: PlannerAlternativeTrialBounds = {
+    maxCandidateTrialsPerTarget: 2,
+    maxPlannerReruns: 8,
+  }
+  ```
+
+  - **`maxCandidateTrialsPerTarget = 2`**: Phase 3-Bでは「Candidate 1がtrialでreject、Candidate 2がfound」となる
+    Production workloadを確認できなかった。したがって2 trialは実測したsemantic thresholdではなく、1 trialで十分とも
+    証明されていない。Issue #101の1 trialは約0.36秒であり、1件目だけで必ず終わる前提を置かず、fallbackの機会を1回残す
+    安全弁としての設計判断である
+  - **`maxPlannerReruns = 8`**: Phase 3-Bの `kernel_multi_target`（非固定Target 2件が1つのbudgetを共有）では、R = 1で
+    Target Cが `stopped_by_planner_rerun_bound` になりcoverageが不足し、R >= 2でB / Cともfound（実使用rerun = 2）となった。
+    fixture上必要だったのは2であり、8ではない。上限は必要なrunだけが開始されるため未使用分に追加costはなく、R = 2 / 4 / 8の
+    finalist性能に差はなかった。複数の非固定Target、2件目のCandidate trial、runtime-unsupported retryが同じ
+    request-global budgetを消費するため、fixtureを満たすだけの2ではなく、無制限相当にもしない8をProductionの安全弁として
+    採用した。既存 `defaultPlannerWhatIfBounds.maxPlannerReruns` と同値だが、その流用ではなくPlanner Alternative
+    Phase 3-Bの測定と設計判断から独立に決めた値である
+  - Domain API（`runPlannerAlternativeKernel()` の `bounds` / `extent`、`createPlannerAlternativeFullRunBudget()`）は
+    caller必須指定のままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの2定数を
+    明示的に渡す（Phase 4以降のrouting接続で行う。Phase 3-Cでは配線しない）
 - 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
 - extentは探索範囲の上限であり、探索の進め方はoperation cost層単位のlazy探索である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8
   「cost層単位のlazy性」）。代替探索はextent全体をupfront solveせず、最初のCandidateまでにsettle / solveするworkはそのCandidateのcost層までに
@@ -4830,8 +4859,10 @@ Phase 3のBrowser Worker benchmarkは、extent（`maxNormalAdvance` / `maxGogmaA
 Phase 3は3つに分ける。**Phase 3-A**（benchmark-only harness / fixture / Worker / page / execution-only instrumentation）
 は完了、**Phase 3-B**（real Browser Workerでの実測）は完了し、実測記録は
 [PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md](./PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md) 12章にある。
-**Phase 3-C**（実測からのProduction default確定）は未了である。Phase 3-A / 3-Bはextent / 試行上限のdefaultを決めず、
-`runPlannerAlternativeKernel()` のextent / boundsはcaller必須のままである。
+**Phase 3-C**（実測からのProduction default確定）も完了し、`defaultPlannerAlternativeSearchExtent = 4 / 235 / 4` と
+`defaultPlannerAlternativeTrialBounds = 2 / 8` を確定した（9.2.19.12、同文書13章）。これでPhase 3は完了である。
+`runPlannerAlternativeKernel()` のextent / boundsはcaller必須のままで、default定数はまだどのProduction caller・Worker・UIにも
+配線していない。次はPhase 4（B9 what-ifの新kernel接続）であり、Production routingはまだlegacyのB8経路のままである。
 `maxPlannerReruns` は複数Targetが1つのbudgetを共有するrerun-pressure workloadで実測する。`maxCandidateTrialsPerTarget` は、
 現行semanticsで「Candidate 1がtrialでreject、後続Candidateがfound」となるProduction workloadを確認できていないため、
 semantic thresholdをPhase 3-Bの実測対象とせず、1 trialあたりの実コストと安全弁としての役割からPhase 3-Cで設計判断する

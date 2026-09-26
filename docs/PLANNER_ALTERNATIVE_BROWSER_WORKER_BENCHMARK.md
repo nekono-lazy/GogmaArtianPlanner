@@ -5,13 +5,15 @@
 ```text
 Phase 3-A  harness implemented
 Phase 3-B  real Browser measurement completed
-Phase 3-C  Production default pending
+Phase 3-C  Production default decided
 ```
 
 この文書はIssue #136 / #101（Planner競合repair）Phase 3の計測記録である。Phase 3-Aで計測基盤を実装し（1〜11章）、
-Phase 3-Bでreal Browser Workerの実測を記録した（12章）。extent（`maxNormalAdvance` / `maxGogmaAdvance` /
-`maxSkillAdvance`）と試行上限（`maxCandidateTrialsPerTarget` / `maxPlannerReruns`）のProduction defaultは **まだ決めていない**。
-12章の実測をPhase 3-Cの判断材料として渡し、defaultはPhase 3-Cで決める。
+Phase 3-Bでreal Browser Workerの実測を記録した（12章）。Phase 3-Cで、12章の実測を根拠にextent（`maxNormalAdvance` /
+`maxGogmaAdvance` / `maxSkillAdvance`）と試行上限（`maxCandidateTrialsPerTarget` / `maxPlannerReruns`）のProduction
+defaultを決めた（13章）。1〜12章はPhase 3-A / 3-B時点の記録としてそのまま残す（「defaultは未決」という記述はその時点の
+状態である）。benchmark-only grid・sanity値（7章）はPhase 3-Bのhistorical measurement conditionとして維持し、
+Production defaultへ切り替えない。
 
 この文書は計測記録であり、仕様権威ではない。
 
@@ -323,7 +325,7 @@ copy(pa.exportJson())
 protocol version。Phase 3-Bでは生JSONを作業記録として保存し、この文書へは集計表と測定条件だけを転記する。
 中央値はmeasurement recordだけから計算する。
 
-## 10. Phase 3-Cの選定原則（数値は未決）
+## 10. Phase 3-Cの選定原則（Phase 3-A時点。決定は13章）
 
 extent:
 
@@ -704,3 +706,80 @@ planner reruns:
 cancel / responsiveness:
 
 - Search中のcancel ack / settleは約1.5 ms以内、Kernelのtrial中は約210〜225 ms
+
+## 13. Phase 3-C Production default decision
+
+Phase 3-Cでは追加のBrowser測定を行わず、12章のPhase 3-B実測だけを根拠にProduction defaultを決めた。
+仕様上の定義は [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8「extent」と [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.12 に
+ある（この章は計測記録で、仕様権威ではない）。
+
+```ts
+// Search Domain: src/domain/search/alternative/plannerAlternativeTypes.ts
+export const defaultPlannerAlternativeSearchExtent = {
+  maxNormalAdvance: 4,
+  maxGogmaAdvance: 235,
+  maxSkillAdvance: 4,
+}
+
+// Planner Domain: src/domain/planner/alternative/plannerAlternativeTrial.ts
+export const defaultPlannerAlternativeTrialBounds = {
+  maxCandidateTrialsPerTarget: 2,
+  maxPlannerReruns: 8,
+}
+```
+
+Domain API（`visitPlannerAlternativeCandidates()` の `extent`、`runPlannerAlternativeKernel()` の `extent` / `bounds`）は
+caller必須のままで、default値でのfallback・欠けたfieldの補完・clampをしない。Production callerが明示的に渡す
+（Phase 4のrouting接続で行う。Phase 3-CではWorker・Client・UI・actual repairへ配線していない）。
+
+### 13.1 観測事実（Phase 3-B）と設計判断の区別
+
+| 項目 | 観測事実（12章） | Phase 3-Cの設計判断 |
+| --- | --- | --- |
+| Normal | Issue #101 / Gogma 235 / Skill 1で Normal 1 = worker 約1.0 s / 約0.5 GB、4 = 約2.8 s / 約1.2 GB、16 = 約11 s / 約4 GB、40 = V8 OOM / Browser crash（12.6 / 12.3）。最初のCandidateは全て同じ | **4** |
+| Gogma | Issue #101で220 = Candidateなし（stopped by extent）、235 = Fire代替found（Gogma 56..289、`estimatedGogmaAdvance = 235`）、240 / 300 / 350 = 235と同じ最初のCandidate・settled work・prediction（12.5） | **235**（実測境界そのもの） |
+| Skill | Issue #101でSkill 1〜64の最初のCandidate / costに差なし（12.7）。long Skill held 512でも約1.1 sで完走（12.9） | **4** |
+| Candidate trials | 1 trialのコストはIssue #101で約0.36 s（12.11）。「Candidate 1 reject → Candidate 2 found」のProduction workloadは未観測（5.5 / 12.14） | **2** |
+| Planner reruns | `kernel_multi_target`でR = 1はTarget Cが `stopped_by_planner_rerun_bound`、R ≥ 2でB / Cともfound・実使用rerun 2、R = 2 / 4 / 8のfinalistは約39〜41 msで差なし（12.12） | **8** |
+
+### 13.2 extent
+
+- **`maxNormalAdvance = 4`**: Normal extentはsame-cost closureのRoute base数を直接増やし、costとmemoryがほぼ比例して
+  増える（12.6）。一方1は採用しない。fixed Routeのproduction targetがNormal originをheld + blockedにすると、losing Targetは
+  自分のproduction targetをorigin位置へ置けず後方位置へ逃がす必要があり（Phase 2 testで origin 4、held = blocked = [4] →
+  production target 5 / 6 …を探索する契約）、1ではこの基本的なrepairを探索できない場合がある。4は測定済みgridのうち1より
+  広い最小値で、16（約11 s / 約4 GB）と40（OOM）から十分離れている。短いheld / blocked連鎖への余裕として選んだ設計判断で
+  あり、任意の長さのblocked Normal列を保証しない。extentに達した場合は既存のtyped outcome（stopped by extent）で未確認を表す
+- **`maxGogmaAdvance = 235`**: Issue #101 real fixtureの実測境界（Gogma window `55 .. 55 + 235 - 1 = 289`）。235未満では
+  Issue #101を取り逃す。240以上はIssue #101で最初のCandidateもcostも変えず（既知のsemantic benefitなし）、Idealが無い入力
+  （12.8）ではextent拡大分だけ探索costが増えるため採用しない。221〜234は未測定だが、window計算上289へ届く最小値は235である
+- **`maxSkillAdvance = 4`**: Skill windowは既存巨戟のReset Skillsが `origin .. origin + M - 1`、巨戟化Routeの巨戟化 /
+  Reset Skillsが `origin .. origin + M` である（SEARCH_SPEC 3.1 / 5.6.8）。M = 1でも巨戟化はorigin + 1まで置けるので
+  （Issue #101自体もM = 1でSkill 341 held + blocked → 342で巨戟化）、「origin blocked時に次位置へ巨戟化できない」は
+  1を避ける理由にしない。1を避ける理由は2つである。既存巨戟のReset SkillsはM = 1ではorigin位置しか探索しないため、
+  originがblockedなら次位置のResetを探索できない。巨戟化Routeでも、origin + 1より先まで続くheld / blocked連鎖を跨ぐには
+  1より大きいextentが必要になる。観測事実としては、Issue #101でSkill 1〜64の最初のCandidate / costに差がなく（12.7）、
+  long Skill held 512も約1.1 sで完走した（12.9）。4は短いheld / blocked連鎖への小さなheadroomとして選んだ設計判断であり、
+  より大きい値（〜64）のsemantic benefitはPhase 3-Bで観測していないため広げない
+
+### 13.3 trial bounds
+
+- **`maxCandidateTrialsPerTarget = 2`**: **2はPhase 3-Bで観測したsemantic thresholdではない**。2 trialが必要な
+  Production workloadは観測しておらず、同時に **T = 1で十分であることも証明していない**（12.11）。1 trial約0.36 sの
+  コストを踏まえ、1件目だけで必ず終わる前提を置かず、fallbackの機会を1回残す安全弁として2を選んだ設計判断である
+- **`maxPlannerReruns = 8`**: `kernel_multi_target` fixtureで **必要だったのは2** である（R = 1はcoverage不足、R ≥ 2で
+  完了）。8はfixture上必要だった値ではなく、Production安全弁である。上限は必要なrunだけが開始されるため、未使用分に追加
+  costは無い（R = 2 / 4 / 8で差なし）。Productionでは複数の非固定Target、2件目のCandidate trial、runtime-unsupported
+  retryが同じrequest-global budgetを消費するので、fixtureを満たすだけの2では余裕が無く、無制限相当にもしない値として
+  8を選んだ。既存 `defaultPlannerWhatIfBounds.maxPlannerReruns = 8` と同値だが、B9 defaultの流用ではなく、この章の
+  測定と判断から独立に決めた値である
+
+### 13.4 変更していないもの
+
+Phase 3-CはSearch / Planner Domainのdefault定数と対応testだけを追加した。Search / Plannerのalgorithm、Worker、
+`PlannerWorkerClient`、services、pages、Persistence、RNG、benchmark harness（grid・sanity値・page・Worker）、
+Phase 3-Bのraw evidenceとこの文書の12章の数値は変更していない。
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 15`、`DATABASE_SCHEMA_VERSION = 9`、`ExportRoot.schemaVersion = 12`、
+`AppSettings.schemaVersion = 2`、`RngState.schemaVersion = 2`、`PRODUCTION_RNG_ENGINE_VERSION = production-rng:c5-e7`、
+Master `dataVersion = 4` は不変である。次はPhase 4（B9 what-ifの新kernel接続）であり、Production routingはまだlegacyの
+B8経路のままである。
