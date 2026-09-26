@@ -325,6 +325,12 @@ function searchBlindResetNormalRoute(
  * the first representative of each ordered Keep layout.
  * A later equivalent base costs strictly more for identical Bonus/Skill futures;
  * no later canonical tie-break can rescue it. This is NOT Planner pruning.
+ *
+ * Under the Planner Alternative policy (SEARCH_SPEC 5.6.8) none of it applies:
+ * every offset of the extent is registered as a full Route base, exactly like
+ * offset zero, because a Planner reservation can make an earlier production
+ * target unusable. The offsets stay lazy (one cursor, `forgeCount + 1` lower
+ * bound), and their predictions and streams are the same memoized ones.
  */
 function searchPredictedNormalRoutes(
   context: RouteSearchContext,
@@ -350,6 +356,7 @@ function searchPredictedNormalRoutes(
       canSearchAmendments = false
     }
   }
+  const initialSearch = (context.frontierPolicy ?? 'initial_candidate_search') === 'initial_candidate_search'
   const idealFamilyMultiset = keepFamilyMultisetKey(target.idealBonuses, input.master)
   result.searchedRoutes.push('normal_artian_to_gogma')
   for (const counter of counters) {
@@ -357,7 +364,11 @@ function searchPredictedNormalRoutes(
     const start = counter.counter
     const keepLayouts = new Set<string>()
     const scheduleOffset = (offset: number): void => {
-      if (offset >= input.maxNormalAdvance) return
+      if (offset >= input.maxNormalAdvance) {
+        // The next forge count is reachable work the extent leaves unread.
+        scheduler.noteExtentReached()
+        return
+      }
       const forgeCount = offset + 1
       scheduler.queue.enqueue({
         lowerBound: forgeCount + 1,
@@ -372,7 +383,7 @@ function searchPredictedNormalRoutes(
           // Keep preserves family counts. Later Reset routes are already
           // represented by offset zero; an incompatible Keep-only base cannot
           // reach the unordered Ideal bonus multiset, at any Skill position.
-          if (offset > 0 && keepFamilyMultisetKey(bonuses, input.master) !== idealFamilyMultiset) {
+          if (initialSearch && offset > 0 && keepFamilyMultisetKey(bonuses, input.master) !== idealFamilyMultiset) {
             scheduleOffset(offset + 1)
             return
           }
@@ -382,7 +393,7 @@ function searchPredictedNormalRoutes(
           // Normal-scope slots can never be Ideal (even identical labels).
           // No amendment-free Candidate is lost here. Keep the first base's
           // ordinary scope validation, notices and full canonical frontier.
-          if (offset > 0 && (!canSearchAmendments || !firstLayout ||
+          if (initialSearch && offset > 0 && (!canSearchAmendments || !firstLayout ||
             !engine.capabilities.supportsKeepBonusesPrediction)) {
             scheduleOffset(offset + 1)
             return
@@ -400,7 +411,7 @@ function searchPredictedNormalRoutes(
             zeroBonus: { gogmaAdvance: 0, lastResetDepth: 0, finalBonuses: bonuses, restorationBonusScope: 'normal_artian', operations: [], amendmentResults: [] },
             zeroSkill: converted.zeroSkill,
             startSkillCounter: converted.skillCounterAfter,
-            bonusBase: canSearchAmendments ? { startGogmaCounter: input.rngState.gogmaCounter.value as number, bonuses, restorationBonusScope: 'normal_artian', amendmentPolicy: offset === 0 ? 'all' : 'keep_only' } : null,
+            bonusBase: canSearchAmendments ? { startGogmaCounter: input.rngState.gogmaCounter.value as number, bonuses, restorationBonusScope: 'normal_artian', amendmentPolicy: !initialSearch || offset === 0 ? 'all' : 'keep_only' } : null,
             onCandidate: (candidate) => result.candidates.push(candidate),
             onBonusNotice,
           })

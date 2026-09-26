@@ -20,12 +20,11 @@ import type {
  * DTO, a `PlannerConflictResolution`, a Planner trial bound, or any Planner
  * shareability / inventory / source-version judgement.
  *
- * Phase 1-B status: the API shape is the 5.6.8 one, but only an empty
- * reservation is searched, and the search runs over the current modern
- * Candidate Search frontier. It is not yet the complete 5.6.8 search: later
- * same-result Counter positions, lazy off-axis Cross pairs, a Normal
- * enumeration without the #104 reduction, held-position traversal and the
- * exhausted / stopped-by-extent distinction are Phase 1-C / Phase 2.
+ * Phase 1 status: the empty-reservation search is complete over the extent
+ * (later same-result Counter positions, lazy off-axis Cross pairs, every
+ * Normal offset without the #104 reduction, exhausted versus stopped by
+ * extent). A non-empty reservation (held / blocked positions, exclusive
+ * OwnedWeapons) is refused until Phase 2.
  */
 
 /**
@@ -64,7 +63,7 @@ export interface PlannerAlternativeNormalReservation
  * (`docs/PLANNER_SPEC.md` 9.2.19.3). The Search Domain only consumes it and
  * never re-derives required / skippable or shareability.
  *
- * An empty reservation means "no fixed Route". Phase 1-B searches only that
+ * An empty reservation means "no fixed Route". Phase 1 searches only that
  * case and refuses any other reservation explicitly rather than ignoring it.
  */
 export interface PlannerAlternativeReservation {
@@ -132,17 +131,30 @@ export interface PlannerAlternativeSearchSummary {
    * semantic Route identity; it prunes no search work.
    */
   excludedCandidates: number
+  /**
+   * The search ended because no reachable work was left at all, inside or
+   * beyond the extent, for the current input, capability and Route scope.
+   *
+   * `exhausted` and `stoppedByExtent` are never both true, and a consumer stop
+   * leaves both false: the caller, not the search space, ended the search
+   * (the 5.6.7 `exhausted` / `stoppedByBound` principle).
+   */
+  exhausted: boolean
+  /**
+   * The frontier ran out inside the extent while an extent value (Normal forge
+   * count, Gogma positions, Reset Skills count) left reachable work unread.
+   */
+  stoppedByExtent: boolean
 }
 
 /**
  * The completion report of one sequential search.
  *
- * `stoppedByConsumer` is a normal outcome and is not cancellation, which
- * rejects with `CandidateSearchError('cancelled')` instead. When it is false
- * the current Phase 1-B frontier simply ran out of work: that is NOT the
- * SEARCH_SPEC 5.6.8 `exhausted`, because the frontier still carries the
- * initial Search's retention, Cross-only composition and #104 Normal
- * reduction. Phase 1-C adds the exhausted / stopped-by-extent distinction.
+ * `stoppedByConsumer` is execution-level, outside the summary, as in 5.6.7:
+ * it is a normal outcome that says nothing about the search space, and it is
+ * not cancellation, which rejects with `CandidateSearchError('cancelled')`
+ * instead. When it is false, exactly one of `summary.exhausted` and
+ * `summary.stoppedByExtent` is true.
  */
 export interface PlannerAlternativeSearchExecution {
   targetWeaponId: TargetWeaponId

@@ -11,15 +11,17 @@ import {
 import { countRouteOperations } from './candidateFactory'
 import { createDeltaCross } from './deltaCross'
 import { createIncrementalBonusRetention, createIncrementalSkillRetention } from './incrementalStreamSolutions'
+import { createLazyIdealCross } from './lazyIdealCross'
 import {
   createBaseCandidate, existingGogmaRouteKind,
   type CandidateSearchRouteContext, type RouteCompositionBase, type RouteSearchContext,
+  type SearchFrontierPolicy,
 } from './routeSearchShared'
 import { SearchWorkQueue } from './searchWorkQueue'
 import { resetSkillsOperations, skillAmendmentResults } from './skillStream'
 import {
-  buildBonusSolutionSet, buildSkillSolutionSet, type EvaluatedBonusSolution,
-  type EvaluatedSkillSolution, type RouteBonusSolution, type RouteSkillSolution,
+  buildBonusSolutionSet, buildSkillSolutionSet, evaluateBonusSolutions, evaluateSkillSolutions,
+  type EvaluatedBonusSolution, type EvaluatedSkillSolution, type RouteBonusSolution, type RouteSkillSolution,
 } from './streamSolutions'
 
 export type BonusStreamNotice =
@@ -108,6 +110,11 @@ function composeScheduledRoute(
 }
 
 interface Channel<T> {
+  /**
+   * Every solution already delivered, replayed once to a later subscriber:
+   * the initial-Search retained delta, or, under the Planner Alternative
+   * policy, every evaluated solution of each depth.
+   */
   retained: T[]
   subscribers: Array<(value: T) => void>
 }
@@ -126,12 +133,23 @@ interface BonusChannel extends Channel<EvaluatedBonusSolution> {
  * Cross pair (never the Cartesian product). Its cost is a lower bound on any
  * Candidate it can introduce. Positive depths use the cheapest subscribing
  * base; base registration is monotone, so a later subscriber cannot lower it.
+ *
+ * `RouteSearchContext.frontierPolicy` selects the consumer policy. The ordinary
+ * `initial_candidate_search` retains the first position of each stream result
+ * and composes the Cross axes only. `planner_alternative` (SEARCH_SPEC 5.6.8)
+ * publishes every stream position and composes every Ideal pair through
+ * `createLazyIdealCross()`, one pending cell per row and one queued wake-up
+ * step per waiting row resumed, so the Cartesian product is still never
+ * materialized ahead of the lower bound and no long synchronous expansion runs
+ * between two checkpoints. The streams and their
+ * prediction memos are shared by both.
  */
 export class TargetSearchScheduler {
   readonly queue = new SearchWorkQueue()
   private readonly skills = new Map<number, Channel<EvaluatedSkillSolution>>()
   private readonly bonuses = new Map<string, BonusChannel>()
   private idealCost: number | null = null
+  private extentReached = false
 
   private readonly context: RouteSearchContext
   private readonly onComposition: ScheduledCompositionHandler
@@ -155,19 +173,59 @@ export class TargetSearchScheduler {
     }
   }
 
+  /** The frontier policy of this Target's search (`RouteSearchContext.frontierPolicy`). */
+  get policy(): SearchFrontierPolicy {
+    return this.context.frontierPolicy ?? 'initial_candidate_search'
+  }
+
+  /**
+   * True once some search work was left unread only because an extent value
+   * (Normal forge count, Gogma positions, Reset Skills count) ended it while a
+   * further position was still reachable (SEARCH_SPEC 5.6.8 stopped by extent).
+   * The Planner Alternative policy reads it; the ordinary Search never does.
+   */
+  get stoppedByExtent(): boolean {
+    return this.extentReached
+  }
+
+  /** Records that an extent value left reachable work unread. */
+  noteExtentReached(): void {
+    this.extentReached = true
+  }
+
   addBase(base: ScheduledRouteBase): void {
     const { target, input } = this.context
     const baseCost = countRouteOperations({
       kind: base.kindResolution.type === 'fixed' ? base.kindResolution.kind : 'existing_gogma_mixed',
       sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations: [...base.baseOperations],
     })
-    const cross = createDeltaCross((bonus, skill) => {
-      const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
-      this.queue.enqueue({ lowerBound: cost, settle: async () => {
-        await this.context.execution.checkpoint()
-        this.onComposition({ base, bonus, skill, route: composeScheduledRoute(base, bonus, skill), cost })
-      } })
-    })
+    const settleComposition = (bonus: EvaluatedBonusSolution, skill: EvaluatedSkillSolution, cost: number) => async () => {
+      await this.context.execution.checkpoint()
+      this.onComposition({ base, bonus, skill, route: composeScheduledRoute(base, bonus, skill), cost })
+    }
+    // The initial Search composes the Cross axes only (SEARCH_SPEC 5.5.4); the
+    // Planner Alternative policy composes every Ideal pair, lazily (5.6.8).
+    const cross = this.policy === 'planner_alternative'
+      ? createLazyIdealCross({
+        open: (bonus, skill, onSettled) => {
+          const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
+          const settle = settleComposition(bonus, skill, cost)
+          this.queue.enqueue({ lowerBound: cost, settle: async () => {
+            await settle()
+            onSettled()
+          } })
+        },
+        // One waiting row per work item, so resuming many rows passes the
+        // ordinary `step()` checkpoint between any two of them.
+        wake: (bonus, skill, resume) => {
+          const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
+          this.queue.enqueue({ lowerBound: cost, settle: resume })
+        },
+      })
+      : createDeltaCross((bonus, skill) => {
+        const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
+        this.queue.enqueue({ lowerBound: cost, settle: settleComposition(bonus, skill, cost) })
+      })
 
     const bonus = base.zeroBonus === null
       ? null
@@ -201,21 +259,28 @@ export class TargetSearchScheduler {
     if (existing) return existing
     const channel: Channel<EvaluatedSkillSolution> = { retained: [], subscribers: [] }
     this.skills.set(start, channel)
+    const alternative = this.policy === 'planner_alternative'
     const retention = createIncrementalSkillRetention(this.context.target)
     const next = (depth: number) => this.queue.enqueue({
       lowerBound: baseCost + depth,
       settle: async () => {
         const delta = await this.context.skillStream.readDepth(start, depth)
-        const additions = retention.appendDepth(delta.solutions.map((solution) => ({
+        const solutions = delta.solutions.map((solution) => ({
           ...solution, estimatedSkillAdvance: solution.resetCount,
           operations: resetSkillsOperations(delta, solution.resetCount, null),
           amendmentResults: skillAmendmentResults(delta, solution.resetCount),
-        })))
+        }))
+        // Initial-Search retention keeps the first position of each Skill
+        // result; the Planner Alternative policy publishes every position.
+        const additions = alternative
+          ? evaluateSkillSolutions(this.context.target, solutions)
+          : retention.appendDepth(solutions)
         for (const value of additions) {
           channel.retained.push(value)
           for (const receive of channel.subscribers) receive(value)
         }
         if (!delta.exhausted) next(depth + 1)
+        else if (alternative && this.context.skillStream.reachesBeyondExtent(start)) this.noteExtentReached()
       },
     })
     next(1)
@@ -228,6 +293,7 @@ export class TargetSearchScheduler {
     if (existing) return existing
     const channel: BonusChannel = { retained: [], subscribers: [], notices: [], noticeSubscribers: [] }
     this.bonuses.set(key, channel)
+    const alternative = this.policy === 'planner_alternative'
     const retention = createIncrementalBonusRetention(this.context.target, this.context.input)
     const noticeKeys = new Set<string>()
     const publishNotice = (notice: BonusStreamNotice) => {
@@ -247,17 +313,25 @@ export class TargetSearchScheduler {
             : solution.lastResetDepth === 0 ? 'existing_gogma_keep_bonuses' : 'existing_gogma_mixed' })
         }
         for (const prediction of delta.unsupportedPredictions) publishNotice({ type: 'unsupported', prediction })
-        const additions = retention.appendDepth(delta.solutions.map((solution) => ({
+        const solutions = delta.solutions.map((solution) => ({
           gogmaAdvance: solution.depth, lastResetDepth: solution.lastResetDepth,
           finalBonuses: solution.bonuses, restorationBonusScope: solution.restorationBonusScope,
           operations: bonusAmendmentOperations(delta, solution, null),
           amendmentResults: bonusAmendmentResults(solution),
-        })))
+        }))
+        // Initial-Search retention keeps the first position of each (scope,
+        // multiset); the Planner Alternative policy publishes every generated
+        // state. Both read the same stream, so the B2 family-layout frontier
+        // reduction inside it applies to both.
+        const additions = alternative
+          ? evaluateBonusSolutions(this.context.target, this.context.input, solutions)
+          : retention.appendDepth(solutions)
         for (const value of additions) {
           channel.retained.push(value)
           for (const receive of channel.subscribers) receive(value)
         }
         if (!delta.exhausted) next(depth + 1)
+        else if (alternative && this.context.bonusStream.reachesBeyondExtent(base)) this.noteExtentReached()
       },
     })
     next(1)
