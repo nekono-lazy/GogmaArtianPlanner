@@ -4193,13 +4193,12 @@ commitment状態。最終状態がその暫定帰結による除外そのもの�
 あればfoundとし、採用側がその後selectedのまま残るかは問わない。evidenceは `ProductionPlan`、`PlannerResult`、Worker
 message、DB、Exportへ入らず、versionは動かさない。
 
-Phase 2の未決事項（held位置のtime-to-first）: 同じown operation数のheld位置（巨戟化位置、同じdepthのSkill / Gogma state）は、
-正式な6キー順序の上位5キーが一致し得て（例: 巨戟化位置だけが異なりheld位置を跨いで同じReset Skillsへ至るRoute）、最後の
-`candidateStableKey` の文字列比較は位置順と一致しない（`"skillCounterAfter":100` が `99` より先）。そのため、あるcost層の
-最初のCandidateを返す前に、同じcostのheld位置を後回しにする遅延展開は順序を保証できない。現行実装は、各cost層に必要な
-workだけを作り（そのcost層を越えたworkは作らない）、長いheld区間でもcancel / yieldできるが、最初のCandidateまでの時間は
-同じcostのheld位置数に比例し得る。これを解消するには順序またはdominanceの仕様判断が必要であり、推測では変更しない。
-背景、方式選定の理由、Phase分割の根拠は
+代替探索のlazy性はoperation cost層単位である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8「cost層単位のlazy性」）。cost Dの
+Candidateを返す前に、lowerBound <= Dのworkとそこから派生する同じcostのworkを処理し（same-cost closure）、その後6キー順序で
+返す。同じcostのheld位置（巨戟化位置、同じdepthのSkill / Gogma state）は6キーの上位5キーが一致しても `candidateStableKey` の
+順序がCounter位置順と一致しないため、この層単位の処理が正しさの条件であり、Phase 2で確定している。Dより大きいcost層は
+delivery前に先行してsolveしない。同じcost層に属するheld位置・state数によるtime-to-firstの実コストは性能の問題であり、
+Phase 3のBrowser Worker benchmarkで評価する（9.2.19.16）。背景、方式選定の理由、Phase分割の根拠は
 [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（task-specific設計記録、
 非normative）にある。計測事実は
 [ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md](./ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md) にある。
@@ -4632,6 +4631,9 @@ interface PlannerAlternativeSearchExtent {
   （9.2.19.7手順5）で追加のfull runを行う場合もそれを1回と数え、予算が残っていなければ `scenario` を
   `stopped_by_planner_rerun_bound` とする。trial Planを再利用する場合は数えない
 - 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
+- extentは探索範囲の上限であり、探索の進め方はoperation cost層単位のlazy探索である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8
+  「cost層単位のlazy性」）。代替探索はextent全体をupfront solveせず、最初のCandidateまでの作業量はそのCandidateのcost層までに
+  限られる（同じcost層の中はsame-cost closureで閉じてから返す）
 
 #### 9.2.19.13 typed result（#122へ渡す情報）
 
@@ -4811,6 +4813,18 @@ Phase 5  「この候補を優先」のactual repair、Conflict再生成と決�
 Phase 6  legacy constrained pathの削除またはtest oracle化
 Phase 7  #122 Presentation改善
 ```
+
+Phase 3のBrowser Worker benchmarkは、extent（`maxNormalAdvance` / `maxGogmaAdvance` / `maxSkillAdvance`）と試行上限
+（`maxCandidateTrialsPerTarget` / `maxPlannerReruns`）のProduction default決定の根拠として、少なくとも次を測る（Issue #101の
+実fixture、no-Ideal worst case、長いheld runを持つfixtureを含む）。default値はPhase 3より前に決めない。
+
+- time-to-first Candidate
+- same-cost closureでsettleしたwork数
+- held run長に対するコスト
+- Skillのheld state数、Gogmaのheld state数とfamily layout数
+- prediction呼び出し数
+- Candidate trial数とfull Planner rerun数
+- cancel latencyとWorker responsiveness
 
 ---
 
@@ -5802,7 +5816,7 @@ found判定（G selected、fixed外Entryとの暫定帰結だけでの非選択 
 除外理由、plan無し）、試行上限・rerun上限、除外key（無効化Route・以前の無効化Route、trial不採用を除外へ加えない）、
 checkpoint Targetの非探索、Issue #101 fixtureでの `0 / 1 / count 1`・Skill 342での巨戟化・Gogma 56以降のBonus操作・
 full Planner trialでの両立の各testである。what-if / actual repair / scenario / lineage / 決定の展開の項目はPhase 4以降で実装する。
-held位置のtime-to-firstの未決事項は9.2.19冒頭の実装状態を参照。
+held位置のcost層単位の処理（same-cost closure）は9.2.19冒頭の実装状態と [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8を参照。
 
 - reservationのheld / blocked / 排他OwnedWeaponが、fixed Route集合の既存Route unit（`canSkipWhenCounterPassed`、
   `physicalActionKey`、`arePlannerRouteUnitsShareable()`）と既存の所持武器参照authorityだけから導出され、
