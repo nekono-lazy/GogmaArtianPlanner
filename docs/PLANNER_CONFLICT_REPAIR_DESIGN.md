@@ -8,9 +8,11 @@ Refs #136 / #101 / #122
 
 ```text
 正式仕様への反映:        完了（本PR。下記のnormative節）
-runtime実装:             Phase 1まで実装（Phase 1-A: #139、Phase 1-B: #140、Phase 1-C: 空reservationの探索完全性）。
-                         Phase 2以降（reservation、Planner trial、what-if / repair接続、Production routing切替）は未実装
-Production behavior:     変更していない
+runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #140、Phase 1-C: #141、Phase 2: reservation導出、
+                         held / blocked traversal、排他OwnedWeapon、held-aware到達量、新kernelのmaterializer、full Planner trialと
+                         found判定、Issue #101のDomain acceptance）。Phase 3以降（benchmarkとProduction default、what-if /
+                         repair接続、lineage永続化、Production routing切替）は未実装
+Production behavior:     変更していない（画面経路はlegacyのB8のまま）
 schema / version:        変更していない（10章）
 ```
 

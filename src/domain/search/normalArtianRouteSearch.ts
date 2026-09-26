@@ -4,6 +4,11 @@ import type { RouteOperation, SkillAmendmentResult } from '../models/publicTypes
 import { V1_NORMAL_ARTIAN_RARITY } from '../models/publicTypes'
 import type { BonusStreamNotice } from './targetSearchScheduler'
 import {
+  EMPTY_COUNTER_RESERVATION,
+  heldPrefixNormalCreation,
+} from './counterReservation'
+import {
+  conversionSkillPositions,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
   type RouteSearchContext,
@@ -202,17 +207,22 @@ export async function searchNormalArtianRoutes(
   const skillCounter = input.rngState.skillCounter.value
   if (skillCounter === null) return result
   /**
-   * The conversion assigns the initial Series / Group Skills at the current
-   * Skill position, identically for both variants of this RouteKind.
-   *
+   * The conversion assigns the initial Series / Group Skills at its Skill
+   * position, identically for both variants of this RouteKind: the current
+   * Skill position in the ordinary Search, or any position a Planner
+   * reservation lets the conversion cross to (SEARCH_SPEC 5.6.8).
+   */
+  const conversions = await conversionSkillPositions(context, skillCounter)
+  if (conversions.beyondExtent) scheduler.noteExtentReached()
+  /**
    * It stays lazy so a Route that is never registered predicts nothing, exactly
    * as before this variant existed.
    */
-  const conversion = (): ConversionBase => {
-    const skills = context.skillStream.predictAt(skillCounter)
+  const conversion = (conversionSkillCounter: number): ConversionBase => {
+    const skills = context.skillStream.predictAt(conversionSkillCounter)
     return {
-      skillCounter,
-      skillCounterAfter: engine.advanceSkillCounter(skillCounter, {
+      skillCounter: conversionSkillCounter,
+      skillCounterAfter: engine.advanceSkillCounter(conversionSkillCounter, {
         type: 'convert_normal_to_gogma',
       }),
       zeroSkill: {
@@ -239,12 +249,35 @@ export async function searchNormalArtianRoutes(
     )
   }
 
+  const conversionBases: ConversionBases = { positions: conversions.positions, at: conversion }
   if (normalSkip === null) {
-    searchPredictedNormalRoutes(context, scheduler, result, conversion, onBonusNotice)
+    searchPredictedNormalRoutes(context, scheduler, result, conversionBases, onBonusNotice)
     return result
   }
-  searchBlindResetNormalRoute(context, scheduler, result, conversion, onBonusNotice, normalSkip)
+  searchBlindResetNormalRoute(context, scheduler, result, conversionBases, onBonusNotice, normalSkip)
   return result
+}
+
+/** The legal conversion Skill positions and the lazy conversion at one of them. */
+interface ConversionBases {
+  positions: readonly number[]
+  at(conversionSkillCounter: number): ConversionBase
+}
+
+/**
+ * Registers one Route base per legal conversion Skill position: exactly one in
+ * the ordinary Search (the origin), possibly several under a Planner
+ * reservation. A long list stays cancellable between registrations.
+ */
+async function forEachConversion(
+  context: RouteSearchContext,
+  conversions: ConversionBases,
+  register: (converted: ConversionBase) => void,
+): Promise<void> {
+  for (const [index, position] of conversions.positions.entries()) {
+    if (index > 0) await context.execution.checkpoint()
+    register(conversions.at(position))
+  }
 }
 
 /**
@@ -260,7 +293,7 @@ function searchBlindResetNormalRoute(
   context: RouteSearchContext,
   scheduler: TargetSearchScheduler,
   result: RouteSearchResult,
-  conversion: () => ConversionBase,
+  conversions: ConversionBases,
   onBonusNotice: (notice: BonusStreamNotice) => void,
   normalSkip: RouteSkip,
 ): void {
@@ -277,8 +310,10 @@ function searchBlindResetNormalRoute(
   scheduler.queue.enqueue({
     // create + convert + the mandatory first Reset Bonuses.
     lowerBound: 3,
-    async settle() {
-      const converted = conversion()
+    // One blind base per legal conversion position, never one per Normal
+    // offset: the blind forge holds no Normal Counter position, so a Normal
+    // reservation neither blocks it nor gives it a fabricated position.
+    settle: () => forEachConversion(context, conversions, (converted) => {
       const operations: RouteOperation[] = [
         {
           type: 'create_normal_artian',
@@ -314,7 +349,7 @@ function searchBlindResetNormalRoute(
         onCandidate: (candidate) => result.candidates.push(candidate),
         onBonusNotice,
       })
-    },
+    }),
   })
 }
 
@@ -331,12 +366,20 @@ function searchBlindResetNormalRoute(
  * offset zero, because a Planner reservation can make an earlier production
  * target unusable. The offsets stay lazy (one cursor, `forgeCount + 1` lower
  * bound), and their predictions and streams are the same memoized ones.
+ *
+ * Offset `k` is the production target position `start + k` of the extent,
+ * held positions included. Under a Normal reservation a blocked target is not
+ * used, and the creation is the canonical held-prefix one
+ * (`heldPrefixNormalCreation()`): the fixed Routes forge the held run from the
+ * origin, the alternative Route forges the rest through its own target. Its
+ * forge count never decreases with the offset, so the lower bound stays
+ * monotone. With no reservation it is the ordinary `start / start + k + 1`.
  */
 function searchPredictedNormalRoutes(
   context: RouteSearchContext,
   scheduler: TargetSearchScheduler,
   result: RouteSearchResult,
-  conversion: () => ConversionBase,
+  conversions: ConversionBases,
   onBonusNotice: (notice: BonusStreamNotice) => void,
 ): void {
   const { engine, input, target } = context
@@ -359,9 +402,12 @@ function searchPredictedNormalRoutes(
   const initialSearch = (context.frontierPolicy ?? 'initial_candidate_search') === 'initial_candidate_search'
   const idealFamilyMultiset = keepFamilyMultisetKey(target.idealBonuses, input.master)
   result.searchedRoutes.push('normal_artian_to_gogma')
+  // No legal conversion position inside the Skill window: no base can exist.
+  if (conversions.positions.length === 0) return
   for (const counter of counters) {
     if (counter.counter === null) continue
     const start = counter.counter
+    const normalReservation = context.reservation?.normal(counter.id) ?? EMPTY_COUNTER_RESERVATION
     const keepLayouts = new Set<string>()
     const scheduleOffset = (offset: number): void => {
       if (offset >= input.maxNormalAdvance) {
@@ -369,12 +415,19 @@ function searchPredictedNormalRoutes(
         scheduler.noteExtentReached()
         return
       }
-      const forgeCount = offset + 1
+      const candidateCounter = start + offset
+      const creation = heldPrefixNormalCreation(normalReservation, start, candidateCounter)
+      const forgeCount = creation.count
       scheduler.queue.enqueue({
         lowerBound: forgeCount + 1,
         async settle() {
-          const converted = conversion()
-          const candidateCounter = start + offset
+          // A fixed Route's production target: this Route's own target
+          // cannot stand there (its Counter-advance forges may).
+          if (normalReservation.isBlocked(candidateCounter)) {
+            scheduleOffset(offset + 1)
+            return
+          }
+          const converted = conversions.positions.map((position) => conversions.at(position))
           const bonuses = context.normalPredictions?.get(candidateCounter) ?? engine.predictNormalArtian({
             baseSeed, weaponTypeId: target.weaponTypeId, elementId: target.elementId,
             rarity: counter.rarity, normalCounter: candidateCounter, master: input.master,
@@ -398,23 +451,26 @@ function searchPredictedNormalRoutes(
             scheduleOffset(offset + 1)
             return
           }
-          const normalCounterAfter = engine.advanceNormalCounter(start, { type: 'create_normal_artian', count: forgeCount })
-          const operations: RouteOperation[] = [
-            { type: 'create_normal_artian', weaponTypeId: target.weaponTypeId, rarity: counter.rarity, count: forgeCount, normalCounterBefore: start, normalCounterAfter },
-            { type: 'convert_normal_to_gogma', weaponTypeId: target.weaponTypeId, skillCounterBefore: converted.skillCounter, skillCounterAfter: converted.skillCounterAfter },
-          ]
-          scheduler.addBase({
-            kindResolution: { type: 'fixed', kind: 'normal_artian_to_gogma' },
-            sourceOwnedWeaponId: null,
-            baseOperations: operations,
-            conversionSkill: converted.conversionSkill,
-            zeroBonus: { gogmaAdvance: 0, lastResetDepth: 0, finalBonuses: bonuses, restorationBonusScope: 'normal_artian', operations: [], amendmentResults: [] },
-            zeroSkill: converted.zeroSkill,
-            startSkillCounter: converted.skillCounterAfter,
-            bonusBase: canSearchAmendments ? { startGogmaCounter: input.rngState.gogmaCounter.value as number, bonuses, restorationBonusScope: 'normal_artian', amendmentPolicy: !initialSearch || offset === 0 ? 'all' : 'keep_only' } : null,
-            onCandidate: (candidate) => result.candidates.push(candidate),
-            onBonusNotice,
-          })
+          const normalCounterAfter = engine.advanceNormalCounter(creation.normalCounterBefore, { type: 'create_normal_artian', count: forgeCount })
+          for (const [index, conversion] of converted.entries()) {
+            if (index > 0) await context.execution.checkpoint()
+            const operations: RouteOperation[] = [
+              { type: 'create_normal_artian', weaponTypeId: target.weaponTypeId, rarity: counter.rarity, count: forgeCount, normalCounterBefore: creation.normalCounterBefore, normalCounterAfter },
+              { type: 'convert_normal_to_gogma', weaponTypeId: target.weaponTypeId, skillCounterBefore: conversion.skillCounter, skillCounterAfter: conversion.skillCounterAfter },
+            ]
+            scheduler.addBase({
+              kindResolution: { type: 'fixed', kind: 'normal_artian_to_gogma' },
+              sourceOwnedWeaponId: null,
+              baseOperations: operations,
+              conversionSkill: conversion.conversionSkill,
+              zeroBonus: { gogmaAdvance: 0, lastResetDepth: 0, finalBonuses: bonuses, restorationBonusScope: 'normal_artian', operations: [], amendmentResults: [] },
+              zeroSkill: conversion.zeroSkill,
+              startSkillCounter: conversion.skillCounterAfter,
+              bonusBase: canSearchAmendments ? { startGogmaCounter: input.rngState.gogmaCounter.value as number, bonuses, restorationBonusScope: 'normal_artian', amendmentPolicy: !initialSearch || offset === 0 ? 'all' : 'keep_only' } : null,
+              onCandidate: (candidate) => result.candidates.push(candidate),
+              onBonusNotice,
+            })
+          }
           // This cursor advances once; no previous offset is registered again.
           scheduleOffset(offset + 1)
         },

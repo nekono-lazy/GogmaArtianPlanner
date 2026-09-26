@@ -4168,13 +4168,29 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 
 ### 9.2.19 Planner Alternative Searchと1段の競合repair（Issue #136 / #101）
 
-実装状態: **Phase 1まで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
+実装状態: **Phase 2まで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
 9.2.19.16のPhaseに従って段階的に行う。Phase 1（Phase 1-A: modern Search基盤のcomposition seam、Phase 1-B: Search Domain
 APIと空reservationでの基本consumer経路、Phase 1-C: 空reservationでの探索完全性。[SEARCH_SPEC.md](./SEARCH_SPEC.md)
-5.6.8の実装状態を参照）は実装済みである。Phase 2（fixed Route集合とreservationの導出、held位置を跨ぐ探索、排他
-OwnedWeapon、trial full rerunによるfound判定）、Phase 3〜7（benchmarkとProduction default、what-if、actual
-repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、Presentation）は未実装であり、
-Plannerは本節の契約をまだ使っていない（Production routingはlegacyのB8経路のまま）。背景、方式選定の理由、Phase分割の根拠は
+5.6.8の実装状態を参照）は実装済みである。Phase 2も実装済みである: fixed Route集合からのreservation導出
+（`derivePlannerAlternativeReservation()`、9.2.19.3。`createPlannerRouteUnitPlans()` と `collectReferencedOwnedWeaponIds()`
+だけをauthorityとし、held = fixed unitの位置、blocked = 必須かつ共有不可のunitの位置、排他OwnedWeapon = 参照・排他消費する武器）、
+held位置を跨ぐ探索・Normalのheld prefix・排他OwnedWeapon（Search側、[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8）、
+新kernelのdeterministic search identityとmaterializer（旧B8 materializerと共通の決定的core、観測traceを保持）、
+Planner Domainの共通kernel `runPlannerAlternativeKernel()`（決定のmerge・固定制約はwhat-ifの準備をそのまま使い、
+非固定Targetごとに同じbaselineから探索 → temporary Entry `G` → `O + G` / `-O + G` preflight → full Planner run +
+Trace Replay → 9.2.19.6のfound判定。試行上限 `maxCandidateTrialsPerTarget` / `maxPlannerReruns` はcaller必須で、
+Search・reservation導出・materialization・preflightを数えない。以前の決定のfixed Entry・無効化Route keyはcallerから受け取り、
+trial不採用のCandidateは除外keyへ加えない）、Issue #101実ケースのDomain acceptanceである。Phase 3〜7（benchmarkと
+Production default、what-if、actual repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、
+Presentation）は未実装であり、Plannerの画面経路は本節の契約をまだ使っていない（Production routingはlegacyのB8経路のまま）。
+
+Phase 2の既知の制約（9.2.19.6の条件4の後半の判定）: 実装は既存のPlanner結果（`plan.rejectedBuildListEntries`、
+`PlannerResult.conflicts`、trial入力のinitial conflict detection）だけを読み、`G` が `resource_conflict` だけで記録され、
+initial conflictのうち未解決（`selectedBuildListEntryId = null`）で `G` とfixed Route集合外のEntryをparticipantに持ち、
+そのEntryがselectedであるものがある場合にfoundとする。暫定帰結で `G` に勝ったEntry自身が後でstall等で落ちた場合、
+既存の結果からは「`G` が暫定帰結で負けた」と「`G` が勝った後にstallで落ちた」を区別できないため、推測せず
+foundにしない（保守側）。この場合を仕様どおりfoundにするには、schedulerのstall / deadlock dropを暫定帰結と区別できる
+typedな情報が必要であり、その追加はPhase 4以降の設計判断とする。背景、方式選定の理由、Phase分割の根拠は
 [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（task-specific設計記録、
 非normative）にある。計測事実は
 [ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md](./ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md) にある。
@@ -5767,7 +5783,16 @@ generated BuildListEntry IDの決定性(9.2.13)はこれとは別である。gen
 `PlannerIdFactory` を使わず、semantic contentから安定生成するため、Production
 dependencyでもrun間で一致する。
 
-### 15.9.2 Planner Alternative Search / 1段repair Test（9.2.19、後続Phaseで実装）
+### 15.9.2 Planner Alternative Search / 1段repair Test（9.2.19、Phase 2分まで実装）
+
+Phase 2で実装済みなのは、reservation導出（held / blocked / 排他OwnedWeapon、Counter ID分離、skip可能unit、重複・入力順
+非依存、不正fixed Entryのfail closed）、Normalのcanonical表現、Skill / Gogmaのheld traversal、排他OwnedWeapon、held位置を跨ぐ
+到達量、新kernelのsearch identityとmaterializer（trace保持、決定的ID、Clock非依存、同一semantic Entry再利用、ID衝突拒否）、
+found判定（G selected、fixed外Entryとの暫定帰結だけでの非選択、fixed Route集合との競合、明示決定Entryの非選択、
+stall等の非選択、plan無し）、試行上限・rerun上限、除外key（無効化Route・以前の無効化Route、trial不採用を除外へ加えない）、
+checkpoint Targetの非探索、Issue #101 fixtureでの `0 / 1 / count 1`・Skill 342での巨戟化・Gogma 56以降のBonus操作・
+full Planner trialでの両立の各testである。what-if / actual repair / scenario / lineage / 決定の展開の項目はPhase 4以降で実装する。
+found判定の既知の制約は9.2.19冒頭の実装状態を参照。
 
 - reservationのheld / blocked / 排他OwnedWeaponが、fixed Route集合の既存Route unit（`canSkipWhenCounterPassed`、
   `physicalActionKey`、`arePlannerRouteUnitsShareable()`）と既存の所持武器参照authorityだけから導出され、

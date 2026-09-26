@@ -1342,8 +1342,15 @@ stream solve内部のcancel / yieldを実装済みである。実装はmodern Se
 primitivesを共有し、`RouteSearchContext.frontierPolicy = 'planner_alternative'` のときだけ初回Search policy
 （同一結果retention、Cross-only、#104）を使わない。軸外pairはRoute baseごとにIdeal Bonus解を行、Ideal Skill解を列として、
 各行が確定済みcellの次のcellだけをlower bound順にqueueへ載せる（`createLazyIdealCross()`）。空でないreservation
-（held / blocked、`exclusiveOwnedWeaponIds`）はPhase 2で実装し、それまでは明示的に拒否する。Plannerからの
-呼び出しは未接続である（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.16）。Planner側の契約は
+（held / blocked、`exclusiveOwnedWeaponIds`）もPhase 2で実装済みである: reservationは意味集合として検証・正規化し
+（位置は非負整数、`blocked ⊆ held`、Normalは `<weaponTypeId>:8` のCounter ID。不正は `invalid_reservation`）、Skill / Gogma streamは
+held-awareに読み（`readReservedDepth()`。depth = own operation数のまま、stateは絶対位置を持ち、同じdepthで最後のown operationの位置と
+（Bonusでは）family layoutが同じstateだけをB2の代表規則でまとめ、位置やdepthの違うstateはまとめない。held skipではpredictionも
+状態変化もoperation costも生じない）、巨戟化はheld位置を跨いだ合法位置へ置き（`conversionSkillPositions()`）、predicted
+Normalの作成は下記のheld prefix規則（`heldPrefixNormalCreation()`）で表し、blockedのproduction targetは使わず、排他OwnedWeaponは
+source候補にしない。到達量は `createCandidateRouteEstimates()` にoriginを渡して求める（連続Routeでは従来の値と一致する）。
+空reservationではPhase 1と同じ探索になる。Plannerからの呼び出しはPlanner Domainのkernel（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+9.2.19の実装状態）からだけで、画面経路へは未接続である（9.2.19.16）。Planner側の契約は
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19、背景と方式選定の理由は
 [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（非normative）にある。
 
@@ -1428,6 +1435,9 @@ held 位置で自分のoperationが無い場合、武器状態（Bonus 5枠、sc
 
 - 返すのはTargetのIdeal条件（5.1、`gogma_artian` scope）を満たすCandidateだけである。妥協状態を独立した
   Candidateにしない（5.6.7と同じ）
+- lane開始状態（操作0の解）がすでにIdealなら、同じIdealを後方位置で再取得するためだけの後続operationは要求しない
+  （そのlaneのstreamは開かない。5.6.1と同じ）。下記の「後方の同一結果を永久省略しない」規則は、その軸でoperationが
+  必要な探索に対するものである
 - 決定的な順序で1件ずつ返し、consumer（Planner）が次を要求する限り継続する。canonical Ideal（5.6.3）で
   探索を終了しない。「canonical Ideal → Plannerで使用不可 → 次のIdeal → さらに使用不可なら次」と進める
 - 除外key（`excludedRouteKeys`）と一致するCandidateは返さずに次へ進み、除外件数をsummaryへ数える
@@ -2650,7 +2660,7 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
   `id` / `searchRunId` / `createdAt` / random ID / Clock / enumeration ordinalを
   結果へ含めない
 
-## 13.2.6 Planner Alternative Search Test（5.6.8、Phase 1まで実装）
+## 13.2.6 Planner Alternative Search Test（5.6.8、Phase 2まで実装）
 
 Phase 1（1-B / 1-C）で実装済みなのは、`searchCandidates()` とは別APIであること、空reservation・空除外集合での
 first-result parity、canonical Ideal後に次のIdealを返す継続、同じ入力での決定性、観測traceとprediction呼び出し数、
@@ -2658,9 +2668,15 @@ first-result parity、canonical Ideal後に次のIdealを返す継続、同じ�
 offsetのRouteを返し、通常Searchの削減は維持される）、同一結果の後続位置と軸外pair（早期stopで直積を生成しない）、
 全frontierに対する6キー順序とsource登録順への非依存、他streamの解の数に対するprediction呼出し回数、exhaustedと
 extent到達の区別（Normal / Gogma / Skillそれぞれのextent、consumer stopではどちらも立てない）、stream solve中と
-pair処理中のcancel / yield、通常Candidate Searchのprediction呼出し列が変わらないことの各testである。blocked / held
-位置、Normalのcanonical表現、coverage条件、held位置を跨ぐ到達量、排他OwnedWeapon、Issue #101 fixtureはPhase 2で
-実装する。
+pair処理中のcancel / yield、通常Candidate Searchのprediction呼出し列が変わらないことの各testである。Phase 2で、
+blocked位置にoperationを置かないこと、held位置のskipと状態不変、held & !blockedでのskip / operate両方、coverage条件、
+Normalのcanonical表現（0..206 / target 0、0..4 / target 10、target以降のheldの非影響、blocked production targetの除外、
+Counter進行用forgeがblocked位置を跨ぐこと）、Skill 341 held + blocked → 342で巨戟化、Gogma 55 held + blocked → 56以降、
+同じfamily layoutでも位置の違うstateをまとめないこと、排他OwnedWeapon（優先起点でも除外）、held位置を跨ぐ到達量と
+連続Routeでの既存値一致、prediction独立性（Reset = 位置、Keep = 位置 × family layout、held skipでpredictionしない）、
+長いheld runでのcancel / yield、reservationの配列順・重複への非依存、Skill windowでのextent到達、blind variant不変、
+zero Ideal lane不変、不正reservationの拒否、#104非適用（offset 0がblockedでも後方offsetを返す）の各testと、Issue #101
+fixtureのacceptance（Planner側、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 15.9.2）を実装済みである。
 
 - `searchCandidates()` とは別のAPIであり、Conflict DTO、`PlannerConflictResolution`、Planner試行上限を受け取らない
 - 空reservation・空除外集合で、extentを同じ3値の `CandidateSearchSettings`・route filterなしの通常Candidate

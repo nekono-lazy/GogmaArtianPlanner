@@ -46,6 +46,14 @@ export function createConstrainedCandidate(
   target: TargetWeapon,
   origin: ConstrainedSearchOrigin,
   prediction: ConstrainedCandidatePrediction,
+  /**
+   * `origin_reach`: measure the advances as the reach from the origin Counters
+   * (`createCandidateRouteEstimates()` with an origin). Planner Alternative
+   * Search passes it, because its Routes may cross held positions; the
+   * constrained enumerator keeps the operation sum, which equals the reach for
+   * its origin-continuous Routes.
+   */
+  advanceMeasure: 'operation_sum' | 'origin_reach' = 'operation_sum',
 ): ConstrainedCandidate | null {
   if (
     !satisfiesIdealTarget(
@@ -83,9 +91,18 @@ export function createConstrainedCandidate(
     seriesSkillId: prediction.seriesSkillId,
     groupSkillId: prediction.groupSkillId,
     route: prediction.route,
-    ...createCandidateRouteEstimates(prediction.route, target.weaponTypeId, {
-      master: origin.master,
-    }),
+    ...createCandidateRouteEstimates(
+      prediction.route,
+      target.weaponTypeId,
+      { master: origin.master },
+      advanceMeasure === 'origin_reach'
+        ? {
+            gogmaCounter: origin.rngState.gogmaCounter.value,
+            skillCounter: origin.rngState.skillCounter.value,
+            normalCounters: origin.normalCounters,
+          }
+        : undefined,
+    ),
     idealDifference,
     searchStateHash: createSearchStateHash(
       prediction.route,

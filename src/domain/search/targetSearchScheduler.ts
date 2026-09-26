@@ -264,6 +264,30 @@ export class TargetSearchScheduler {
     const next = (depth: number) => this.queue.enqueue({
       lowerBound: baseCost + depth,
       settle: async () => {
+        if (alternative) {
+          // Held-aware reading over the Skill reservation (SEARCH_SPEC 5.6.8):
+          // each solution carries its own absolute operation positions, and
+          // `depth` stays the own operation count, i.e. the cost.
+          const reserved = await this.context.skillStream.readReservedDepth(start, depth)
+          const solutions = reserved.solutions.map((solution) => {
+            const own = { startSkillCounter: start, steps: solution.steps, solutions: [] }
+            return {
+              resetCount: solution.resetCount,
+              seriesSkillId: solution.seriesSkillId,
+              groupSkillId: solution.groupSkillId,
+              estimatedSkillAdvance: solution.resetCount,
+              operations: resetSkillsOperations(own, solution.resetCount, null),
+              amendmentResults: skillAmendmentResults(own, solution.resetCount),
+            }
+          })
+          for (const value of evaluateSkillSolutions(this.context.target, solutions)) {
+            channel.retained.push(value)
+            for (const receive of channel.subscribers) receive(value)
+          }
+          if (!reserved.exhausted) next(depth + 1)
+          else if (this.context.skillStream.reservedReachesBeyondExtent(start)) this.noteExtentReached()
+          return
+        }
         const delta = await this.context.skillStream.readDepth(start, depth)
         const solutions = delta.solutions.map((solution) => ({
           ...solution, estimatedSkillAdvance: solution.resetCount,
@@ -271,16 +295,12 @@ export class TargetSearchScheduler {
           amendmentResults: skillAmendmentResults(delta, solution.resetCount),
         }))
         // Initial-Search retention keeps the first position of each Skill
-        // result; the Planner Alternative policy publishes every position.
-        const additions = alternative
-          ? evaluateSkillSolutions(this.context.target, solutions)
-          : retention.appendDepth(solutions)
-        for (const value of additions) {
+        // result; the Planner Alternative policy (above) publishes every one.
+        for (const value of retention.appendDepth(solutions)) {
           channel.retained.push(value)
           for (const receive of channel.subscribers) receive(value)
         }
         if (!delta.exhausted) next(depth + 1)
-        else if (alternative && this.context.skillStream.reachesBeyondExtent(start)) this.noteExtentReached()
       },
     })
     next(1)
@@ -306,6 +326,35 @@ export class TargetSearchScheduler {
     const next = (depth: number) => this.queue.enqueue({
       lowerBound: baseCost + depth,
       settle: async () => {
+        if (alternative) {
+          // Held-aware reading over the Gogma reservation (SEARCH_SPEC 5.6.8):
+          // each state carries its own absolute amendment positions, and
+          // `depth` stays the own amendment count, i.e. the cost.
+          const reserved = await this.context.bonusStream.readReservedDepth(base, depth)
+          for (const solution of reserved.solutions) {
+            publishNotice({ type: 'route_kind', kind: solution.lastResetDepth === solution.depth
+              ? 'existing_gogma_reset_bonuses'
+              : solution.lastResetDepth === 0 ? 'existing_gogma_keep_bonuses' : 'existing_gogma_mixed' })
+          }
+          for (const prediction of reserved.unsupportedPredictions) publishNotice({ type: 'unsupported', prediction })
+          const solutions = reserved.solutions.map((solution) => ({
+            gogmaAdvance: solution.depth, lastResetDepth: solution.lastResetDepth,
+            finalBonuses: solution.bonuses, restorationBonusScope: solution.restorationBonusScope,
+            operations: bonusAmendmentOperations(
+              { startGogmaCounter: base.startGogmaCounter, steps: solution.steps, solutions: [], unsupportedPredictions: [] },
+              solution,
+              null,
+            ),
+            amendmentResults: bonusAmendmentResults(solution),
+          }))
+          for (const value of evaluateBonusSolutions(this.context.target, this.context.input, solutions)) {
+            channel.retained.push(value)
+            for (const receive of channel.subscribers) receive(value)
+          }
+          if (!reserved.exhausted) next(depth + 1)
+          else if (this.context.bonusStream.reservedReachesBeyondExtent(base)) this.noteExtentReached()
+          return
+        }
         const delta = await this.context.bonusStream.readDepth(base, depth)
         for (const solution of delta.solutions) {
           publishNotice({ type: 'route_kind', kind: solution.lastResetDepth === solution.depth
@@ -320,18 +369,14 @@ export class TargetSearchScheduler {
           amendmentResults: bonusAmendmentResults(solution),
         }))
         // Initial-Search retention keeps the first position of each (scope,
-        // multiset); the Planner Alternative policy publishes every generated
-        // state. Both read the same stream, so the B2 family-layout frontier
-        // reduction inside it applies to both.
-        const additions = alternative
-          ? evaluateBonusSolutions(this.context.target, this.context.input, solutions)
-          : retention.appendDepth(solutions)
-        for (const value of additions) {
+        // multiset); the Planner Alternative policy (above) publishes every
+        // generated state. The B2 family-layout frontier reduction applies to
+        // both, per absolute position in the held-aware reading.
+        for (const value of retention.appendDepth(solutions)) {
           channel.retained.push(value)
           for (const receive of channel.subscribers) receive(value)
         }
         if (!delta.exhausted) next(depth + 1)
-        else if (alternative && this.context.bonusStream.reachesBeyondExtent(base)) this.noteExtentReached()
       },
     })
     next(1)

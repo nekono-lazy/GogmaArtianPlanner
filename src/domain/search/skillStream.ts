@@ -8,6 +8,11 @@ import type {
   TargetWeapon,
 } from '../models/publicTypes'
 import type { RngEngine, SkillPredictionResult } from '../rng/rngEngine'
+import {
+  EMPTY_COUNTER_RESERVATION,
+  nextOperationPositions,
+  type CounterReservation,
+} from './counterReservation'
 import { hasConfirmedSkillInputs } from './searchRngInputs'
 import type { SearchExecutionContext } from './searchExecution'
 import type { SearchMasterSubset } from './searchTypes'
@@ -29,6 +34,12 @@ export interface SkillStreamInput {
   rngState: RngState
   master: SearchMasterSubset
   maxSkillAdvance: number
+  /**
+   * The Skill Counter reservation of Planner Alternative Search
+   * (`docs/SEARCH_SPEC.md` 5.6.8). Only `readReservedDepth()` reads it; the
+   * ordinary `readDepth()` / `solve()` never do. Absent means empty.
+   */
+  reservation?: CounterReservation
 }
 
 export interface SkillStreamStep {
@@ -55,6 +66,16 @@ export interface SkillStreamSolution {
   resetCount: number
   seriesSkillId: SeriesSkillId | null
   groupSkillId: GroupSkillId | null
+}
+
+/**
+ * One held-aware Reset Skills solution (`docs/SEARCH_SPEC.md` 5.6.8): its own
+ * Reset Skills operations at their absolute Skill positions, which need not be
+ * consecutive, because a held position may pass without an own operation.
+ * `resetCount` is the own operation count, `steps.length`.
+ */
+export interface ReservedSkillStreamSolution extends SkillStreamSolution {
+  steps: readonly SkillStreamStep[]
 }
 
 export interface SkillStreamSolutionSet {
@@ -95,6 +116,57 @@ export interface TargetSkillStream {
   reachesBeyondExtent(startSkillCounter: number): boolean
   /** Standalone full-prefix adapter; scheduling uses readDepth. */
   solve(startSkillCounter: number, through?: number): Promise<SkillStreamSolutionSet>
+  /**
+   * Planner Alternative Search only (`docs/SEARCH_SPEC.md` 5.6.8): the Reset
+   * Skills solutions with exactly `depth` own operations over the Skill
+   * reservation (see `createTargetSkillStream()` for the state rule).
+   * `exhausted` means no state of this depth can place a further operation
+   * inside the Skill window.
+   */
+  readReservedDepth(startSkillCounter: number, depth: number): Promise<{
+    solutions: ReservedSkillStreamSolution[]
+    exhausted: boolean
+  }>
+  /**
+   * Whether the Skill window cut a reachable operation position of this
+   * held-aware stream (SEARCH_SPEC 5.6.8 stopped by extent). It predicts nothing.
+   */
+  reservedReachesBeyondExtent(startSkillCounter: number): boolean
+}
+
+/**
+ * The exclusive end of the Skill position window of one held-aware stream
+ * (`docs/SEARCH_SPEC.md` 3.1 / 5.6.8), held positions included: an existing
+ * Gogma's Reset Skills stand at `origin .. origin + M - 1`; a conversion Route's
+ * stand after its conversion, at most at `origin + M`. A stream that starts at
+ * the origin is an existing Gogma's, and any other stream starts right after a
+ * conversion, which never stands before the origin.
+ */
+function reservedSkillPositionLimit(
+  origin: number,
+  startSkillCounter: number,
+  maxSkillAdvance: number,
+): number {
+  return startSkillCounter === origin ? origin + maxSkillAdvance : origin + maxSkillAdvance + 1
+}
+
+/** One step of a held-aware Skill history, shared by every later state. */
+interface ReservedSkillStepNode {
+  readonly step: SkillStreamStep
+  readonly previous: ReservedSkillStepNode | null
+}
+
+/** A held-aware Skill state: the position right after its last own operation. */
+interface ReservedSkillState {
+  /** The Skill Counter after the last own operation (the stream start at depth 0). */
+  readonly nextFrom: number
+  readonly node: ReservedSkillStepNode | null
+}
+
+function reservedSkillSteps(node: ReservedSkillStepNode | null): SkillStreamStep[] {
+  const steps: SkillStreamStep[] = []
+  for (let current = node; current !== null; current = current.previous) steps.push(current.step)
+  return steps.reverse()
 }
 
 export function resetSkillsOperations(
@@ -183,7 +255,132 @@ export function createTargetSkillStream(
     return set
   }
 
+  const reservation = input.reservation ?? EMPTY_COUNTER_RESERVATION
+  interface ReservedSet {
+    depths: ReservedSkillState[][]
+    frontier: ReservedSkillState[]
+    done: boolean
+    cutByExtent: boolean
+    windows: Map<number, { positions: number[]; beyondLimit: boolean }>
+  }
+  const reservedSets = new Map<number, ReservedSet>()
+
+  function reservedSet(startSkillCounter: number): ReservedSet {
+    let set = reservedSets.get(startSkillCounter)
+    if (!set) {
+      set = {
+        depths: [],
+        frontier: [{ nextFrom: startSkillCounter, node: null }],
+        done: false,
+        cutByExtent: false,
+        windows: new Map(),
+      }
+      reservedSets.set(startSkillCounter, set)
+    }
+    return set
+  }
+
+  /**
+   * The legal next operation positions after one state, memoized per start
+   * position because they depend on nothing else. Reaching the window end
+   * records the extent cut: a Skill stream has no natural end.
+   */
+  async function reservedWindow(set: ReservedSet, from: number, limit: number) {
+    let window = set.windows.get(from)
+    if (!window) {
+      window = await nextOperationPositions(reservation, from, limit, execution.checkpoint)
+      set.windows.set(from, window)
+    }
+    if (window.beyondLimit) set.cutByExtent = true
+    return window
+  }
+
+  /**
+   * Held-aware Reset Skills states (`docs/SEARCH_SPEC.md` 5.6.8).
+   *
+   * A state is the position after its last own operation; its Skills are the
+   * prediction at that operation's position, because Reset Skills reads
+   * nothing it replaces. States of one own-operation count are keyed by that
+   * position alone - two histories reaching it hold the same Skills and have
+   * the same future - and the first one reached in ascending predecessor order
+   * is kept. States of different operation counts are never merged. A held
+   * position is skipped or operated on; a blocked one is only skipped.
+   *
+   * With no held position every state has exactly one next position, so this
+   * is the ordinary linear scan: one state, one prediction and one checkpoint
+   * per depth, the Skill window `start .. start + M - 1`.
+   */
+  async function ensureReserved(startSkillCounter: number, through: number): Promise<ReservedSet> {
+    const set = reservedSet(startSkillCounter)
+    const origin = input.rngState.skillCounter.value
+    if (origin === null) {
+      set.done = true
+      return set
+    }
+    const limit = reservedSkillPositionLimit(origin, startSkillCounter, input.maxSkillAdvance)
+    while (!set.done && set.depths.length < through) {
+      const generated = new Map<number, ReservedSkillState>()
+      for (const state of set.frontier) {
+        const { positions } = await reservedWindow(set, state.nextFrom, limit)
+        for (const position of positions) {
+          if (generated.has(position)) continue
+          await execution.checkpoint()
+          const skills = predictAt(position)
+          const skillCounterAfter = engine.advanceSkillCounter(position, { type: 'reset_skills' })
+          generated.set(position, {
+            nextFrom: skillCounterAfter,
+            node: {
+              step: {
+                skillCounterBefore: position,
+                skillCounterAfter,
+                seriesSkillId: skills.seriesSkillId,
+                groupSkillId: skills.groupSkillId,
+              },
+              previous: state.node,
+            },
+          })
+        }
+      }
+      if (generated.size === 0) {
+        set.done = true
+        break
+      }
+      set.frontier = [...generated.entries()]
+        .sort(([left], [right]) => left - right)
+        .map(([, state]) => state)
+      set.depths.push(set.frontier)
+    }
+    return set
+  }
+
   return {
+    readReservedDepth: async (startSkillCounter, depth) => {
+      const set = await ensureReserved(startSkillCounter, depth)
+      const states = set.depths[depth - 1] ?? []
+      const origin = input.rngState.skillCounter.value
+      let exhausted = true
+      if (!set.done && origin !== null) {
+        const limit = reservedSkillPositionLimit(origin, startSkillCounter, input.maxSkillAdvance)
+        for (const state of states) {
+          if ((await reservedWindow(set, state.nextFrom, limit)).positions.length > 0) exhausted = false
+        }
+      }
+      return {
+        solutions: states.map((state) => {
+          const steps = reservedSkillSteps(state.node)
+          const last = steps[steps.length - 1]
+          return {
+            resetCount: steps.length,
+            seriesSkillId: last.seriesSkillId,
+            groupSkillId: last.groupSkillId,
+            steps,
+          }
+        }),
+        exhausted,
+      }
+    },
+    reservedReachesBeyondExtent: (startSkillCounter) =>
+      reservedSets.get(startSkillCounter)?.cutByExtent ?? false,
     isAvailable: () =>
       hasConfirmedSkillInputs(input) &&
       engine.capabilities.supportsSkillPrediction &&
