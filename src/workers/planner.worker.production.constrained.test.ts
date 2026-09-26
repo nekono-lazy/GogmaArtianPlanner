@@ -174,6 +174,7 @@ describe('Production constrained Planner Worker adapter (B8-D1)', () => {
     // Production bounds default in reach is the enumeration one.
     expect(Object.keys(productionModule).sort()).toEqual([
       'createProductionConstrainedPlan',
+      'createProductionPlannerAlternativeComparison',
       'createProductionPlannerRngEngine',
       'createProductionPlannerWhatIfComparison',
       'createProductionPlannerWorkerCalculations',
@@ -187,6 +188,7 @@ describe('Production constrained Planner Worker adapter (B8-D1)', () => {
     expect(Object.keys(calculations).sort()).toEqual([
       'createConstrainedPlan',
       'createPlan',
+      'createPlannerAlternativeComparison',
       'createWhatIfComparison',
       'prepareInteraction',
     ])

@@ -34,7 +34,7 @@ import {
   type PlannerAlternativeKernelResult,
   type PlannerAlternativeKernelTargetResult,
 } from './plannerAlternativeKernel'
-import { judgePlannerAlternativeTrial } from './plannerAlternativeTrial'
+import { createPlannerAlternativeFullRunBudget, judgePlannerAlternativeTrial } from './plannerAlternativeTrial'
 
 /*
  * The Phase 2 Planner Alternative kernel end to end: preparation, reservation,
@@ -337,6 +337,8 @@ describe('Planner Alternative kernel: bounds and exclusions (PLANNER_SPEC 9.2.19
     const b = targetOf(result, TARGET_B)
     expect(b.outcome.status).toBe('found')
     expect(b.search?.excludedCandidates).toBe(1)
+    // The Search Domain's neutral record of what it actually skipped.
+    expect(b.skippedExcludedRouteKeys).toEqual([firstKey])
     expect(b.trials.map(({ candidateKey }) => candidateKey)).not.toContain(firstKey)
     expect(b.excludedRouteKeys).toContain(firstKey)
   })
@@ -356,6 +358,34 @@ describe('Planner Alternative kernel: bounds and exclusions (PLANNER_SPEC 9.2.19
     const outcomes = completed(result).targets.map(({ targetWeaponId, outcome, search }) => [targetWeaponId, outcome.status, search === null])
     expect(outcomes).toContainEqual([TARGET_C, 'stopped_by_planner_rerun_bound', true])
     expect(completed(result).plannerRerunsUsed).toBe(1)
+  })
+
+  it('consumes a shared request-global budget when one is given, and its own otherwise', async () => {
+    const own = scenario(parts())
+    expect(completed(await runPlannerAlternativeKernel(request(own), own.dependencies)).plannerRerunsUsed).toBe(1)
+
+    // A calculation above the kernel already started 7 of 8 runs: the trial takes the last one.
+    const shared = createPlannerAlternativeFullRunBudget({ maxCandidateTrialsPerTarget: 4, maxPlannerReruns: 8 })
+    for (let run = 0; run < 7; run += 1) shared.beforePlannerRun()
+    const built = scenario(parts())
+    const result = completed(await runPlannerAlternativeKernel(request(built), built.dependencies, { fullRunBudget: shared }))
+    expect(result.plannerRerunsUsed).toBe(1)
+    expect(shared.used).toBe(8)
+    expect(targetOf(result, TARGET_B).outcome.status).toBe('found')
+
+    // Spent before the kernel starts: the Target stops without a search.
+    const spent = scenario(parts())
+    const stopped = targetOf(await runPlannerAlternativeKernel(request(spent), spent.dependencies, { fullRunBudget: shared }), TARGET_B)
+    expect(stopped.outcome).toEqual({ status: 'stopped_by_planner_rerun_bound' })
+    expect(stopped.search).toBeNull()
+    expect(stopped.skippedExcludedRouteKeys).toEqual([])
+  })
+
+  it('refuses a shared budget whose limit is not the request maxPlannerReruns', async () => {
+    const built = scenario(parts())
+    await expect(runPlannerAlternativeKernel(request(built), built.dependencies, {
+      fullRunBudget: createPlannerAlternativeFullRunBudget({ maxCandidateTrialsPerTarget: 4, maxPlannerReruns: 3 }),
+    })).rejects.toThrow('maxPlannerReruns')
   })
 
   it('separates an exhausted extent from an extent stop', async () => {

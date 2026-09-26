@@ -379,6 +379,7 @@ describe('exhausted versus stopped by extent (SEARCH_SPEC 5.6.8)', () => {
       // one more depth would generate nothing: that is not stopped by extent.
       expect(execution).toMatchObject({
         stoppedByConsumer: false,
+        skippedExcludedRouteKeys: [],
         summary: { exhausted: true, stoppedByExtent: false },
       })
     }
@@ -436,6 +437,7 @@ describe('exhausted versus stopped by extent (SEARCH_SPEC 5.6.8)', () => {
       targetWeaponId: input.targetWeaponId,
       summary: { deliveredCandidates: 2, excludedCandidates: 0, exhausted: false, stoppedByExtent: false },
       stoppedByConsumer: true,
+      skippedExcludedRouteKeys: [],
     })
   })
 })

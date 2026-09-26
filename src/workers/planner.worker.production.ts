@@ -1,8 +1,10 @@
 import {
+  createPlannerAlternativeWhatIfComparison,
   createProductionPlan,
   createProductionPlanWithConstrainedSearch,
   createProductionPlannerDependencies,
   createPlannerWhatIfComparison,
+  defaultPlannerAlternativeTrialBounds,
   preparePlannerInitialContext,
   type CreateConstrainedProductionPlanCalculation,
   type PlannerDependencies,
@@ -11,8 +13,12 @@ import {
   ProductionRngEngine,
 } from '../domain/rng/production/productionRngEngine'
 import type { RngEngine } from '../domain/rng/rngEngine'
-import { defaultConstrainedEnumerationBounds } from '../domain/search'
+import {
+  defaultConstrainedEnumerationBounds,
+  defaultPlannerAlternativeSearchExtent,
+} from '../domain/search'
 import type {
+  CreatePlannerAlternativeComparisonCalculation,
   CreatePlannerWhatIfComparisonCalculation,
   PlannerWorkerCalculations,
   PreparePlannerInteractionCalculation,
@@ -67,6 +73,29 @@ export const createProductionPlannerWhatIfComparison: CreatePlannerWhatIfCompari
     })
 
 /**
+ * The Production Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md`
+ * 9.2.19.7 / 9.2.19.12). The Domain calculation keeps extent and trial bounds
+ * caller-required; this adapter is that caller inside the Worker boundary and
+ * passes the Phase 3-C Production defaults, each imported from its own Domain
+ * authority rather than restated. Scenario composition, Route summaries and
+ * the typed result all stay in the Domain.
+ *
+ * No Production UI calls it yet: the Production what-if path is still the
+ * legacy `createProductionPlannerWhatIfComparison()` until Phase 5.
+ */
+export const createProductionPlannerAlternativeComparison: CreatePlannerAlternativeComparisonCalculation =
+  (input, dependencies, executionOptions) =>
+    createPlannerAlternativeWhatIfComparison(
+      {
+        ...input,
+        extent: { ...defaultPlannerAlternativeSearchExtent },
+        bounds: { ...defaultPlannerAlternativeTrialBounds },
+      },
+      dependencies,
+      { executionOptions },
+    )
+
+/**
  * Project only the shared Domain helper's validation and current initial
  * Conflicts. No retry, search, or availability rule belongs in this adapter.
  */
@@ -107,5 +136,6 @@ export function createProductionPlannerWorkerCalculations(): PlannerWorkerCalcul
     createPlan: createProductionPlan,
     createConstrainedPlan: createProductionConstrainedPlan,
     createWhatIfComparison: createProductionPlannerWhatIfComparison,
+    createPlannerAlternativeComparison: createProductionPlannerAlternativeComparison,
   }
 }

@@ -16,9 +16,12 @@ runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #1
                          Phase 3-C: extent 4 / 235 / 4、試行上限 2 / 8。PLANNER_SPEC 9.2.19.12）も完了した。Phase 4は
                          4-A / 4-Bに分割し、Phase 4-A（docs-only。scenario compositionのrun再利用規則、request-globalな
                          maxPlannerReruns、excludedByRepairLineageCount、adoptedInScenarioの未評価状態。PLANNER_SPEC
-                         9.2.19.8.1 / 9.2.19.12 / 9.2.19.13）で正式仕様を確定した。Phase 4-B以降（what-ifのruntime接続、
-                         repair接続、lineage永続化、Production routing切替）は未実装
-Production behavior:     変更していない（画面経路はlegacyのB8のまま）
+                         9.2.19.8.1 / 9.2.19.12 / 9.2.19.13）で正式仕様を確定した。Phase 4-B（what-ifのruntime接続:
+                         Planner Alternative What-if Calculation、scenario composition、request-globalなrerun budget、
+                         typed result / Route summary、新Worker request kind、Production Worker adapter、
+                         PlannerWorkerClient.createPlannerAlternativeComparison()）も実装した。Phase 5以降（repair接続、
+                         lineage永続化、Production routing切替）は未実装
+Production behavior:     変更していない（画面経路はlegacyのB8 / B9のまま。新Client APIはUIから呼ばれない）
 schema / version:        変更していない（10章）
 ```
 
@@ -417,6 +420,16 @@ Master dataVersion                      4
    Build Listから消えた後に通常Plannerがstall dropしたときの表示（Phase 5または#122）。Domain上は既存の
    stall drop / `rejectedBuildListEntries` で扱い、新しいstale理由を作らない
 6. repair結果とlineageの保存を既存 `savePlannerOrchestrationResult()` へ載せる具体的なresult型（Phase 5）
+7. **Phase 4-Bで実装した読み方（設計レビューで確認する事項）**。正式仕様の意味は変えていないが、実装上の読み方を記録する。
+   - `unplannedTargetWeaponIds` の「このPlanで完成しない」は、final scenario Planのどの `PlanStep.executionEffects.targetCompletions`
+     にも現れないplanning Target（`PlannerInitialContext.planningTargetIds`）とした。Production Plan画面の完成予定数
+     （`createProductionPlanSummary().plannedCompletionTargetCount`）と同じauthorityである。Plan開始前から理想品を所持して
+     Planner上は完了扱いになるTargetがStepを持たない場合も「完成しない」側に入る
+   - 決定の展開（PLANNER_SPEC 9.2.19.9）は、`checkpointParticipants` が空でないConflict（および判定が `undefined` のConflict）
+     には適用しない。選択済みcheckpointのConflictは勝者選択で解決できない（9.5）ため、展開すると無効なresolutionになる。
+     そのConflictは未解決のまま `remainingConflicts` / `introducedConflicts` に残る
+   - found replacementが0件のscenario run（9.2.19.8.1のケースA）のpreflightは、fixed constraintを作ったのと同じ入力に対する
+     再対応付けなので失敗しない前提とし、失敗した場合は結果を推測せずinvariant errorとしてthrowする
 
 ---
 

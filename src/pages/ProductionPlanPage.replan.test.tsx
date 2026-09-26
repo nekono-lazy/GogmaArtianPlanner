@@ -159,6 +159,7 @@ function workerClient(
     createPlan: vi.fn(),
     createConstrainedPlan: vi.fn(createConstrainedPlan),
     createWhatIfComparison: vi.fn(),
+    createPlannerAlternativeComparison: vi.fn(),
     prepareInteraction: vi.fn(async () => readyPreparation),
     cancelPlan: vi.fn(),
     dispose: vi.fn(),

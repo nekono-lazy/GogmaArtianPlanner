@@ -4,6 +4,8 @@ import type {
   PlanConflictCheckpointParticipant,
 } from '../domain/models/publicTypes'
 import type {
+  PlannerAlternativeWhatIfCalculationResult,
+  PlannerAlternativeWhatIfInput,
   PlannerInput,
   PlannerOrchestrationBounds,
   PlannerOrchestrationResult,
@@ -139,6 +141,19 @@ export type PlannerWhatIfWorkerRequest = WorkerTaskRequest<
 > &
   PlannerTaskGeneration
 
+/**
+ * The Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md` 9.2.19.7):
+ * a separate request kind from the legacy B9 `create_what_if_comparison`,
+ * which stays the Production UI path until Phase 5. The extent and the trial
+ * bounds do not cross the wire: the Production Worker adapter supplies the
+ * Domain defaults inside the Worker boundary (9.2.19.12).
+ */
+export type PlannerAlternativeComparisonWorkerRequest = WorkerTaskRequest<
+  'create_planner_alternative_comparison',
+  PlannerAlternativeWhatIfInput
+> &
+  PlannerTaskGeneration
+
 /** Cancels one task instance, never merely a logical request id. */
 export type PlannerWorkerCancelRequest = Extract<
   PlannerWorkerRequest,
@@ -164,17 +179,24 @@ export type PlannerWhatIfWorkerResultResponse = WorkerResultResponse<
 > &
   PlannerTaskGeneration
 
+export type PlannerAlternativeComparisonWorkerResultResponse = WorkerResultResponse<
+  'create_planner_alternative_comparison_result',
+  PlannerAlternativeWhatIfCalculationResult
+> &
+  PlannerTaskGeneration
+
 export type PlannerWorkerErrorResponse = Extract<
   PlannerWorkerResponse,
   { type: 'error' }
 > &
   PlannerTaskGeneration
 
-/** All four Planner request kinds share one task namespace. */
+/** All five Planner request kinds share one task namespace. */
 export type PlannerWorkerProtocolRequest =
   | PlannerOrdinaryWorkerRequest
   | PlannerConstrainedWorkerRequest
   | PlannerWhatIfWorkerRequest
+  | PlannerAlternativeComparisonWorkerRequest
   | PlannerInteractionWorkerRequest
   | PlannerWorkerCancelRequest
 
@@ -183,5 +205,6 @@ export type PlannerWorkerProtocolResponse =
   | PlannerOrdinaryWorkerResultResponse
   | PlannerConstrainedWorkerResultResponse
   | PlannerWhatIfWorkerResultResponse
+  | PlannerAlternativeComparisonWorkerResultResponse
   | PlannerInteractionWorkerResultResponse
   | PlannerWorkerErrorResponse

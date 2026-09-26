@@ -202,6 +202,7 @@ export async function visitPlannerAlternativeCandidates(
   const seen = new Set<string>()
   let deliveredCandidates = 0
   let excludedCandidates = 0
+  const skippedExcludedRouteKeys: string[] = []
   let stoppedByConsumer = false
 
   delivery: for (;;) {
@@ -220,6 +221,7 @@ export async function visitPlannerAlternativeCandidates(
         seen.add(key)
         if (excluded.has(key)) {
           excludedCandidates += 1
+          skippedExcludedRouteKeys.push(key)
           continue
         }
         deliveredCandidates += 1
@@ -246,5 +248,6 @@ export async function visitPlannerAlternativeCandidates(
       stoppedByExtent,
     },
     stoppedByConsumer,
+    skippedExcludedRouteKeys,
   }
 }

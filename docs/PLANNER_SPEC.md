@@ -4184,9 +4184,18 @@ trial不採用のCandidateは除外keyへ加えない）、Issue #101実ケー�
 harness、real Browser Worker測定、extent / 試行上限のProduction default定数の確定。9.2.19.12 / 9.2.19.16）も完了した。
 Phase 4-A（docs-only。scenario compositionのrun規則とtrial / adoption / final resultの再利用、request-globalな
 `maxPlannerReruns`、`excludedByRepairLineageCount`、`adoptedInScenario` の未評価状態の明確化。9.2.19.7 / 9.2.19.8 /
-9.2.19.12 / 9.2.19.13 / 9.2.19.16）で正式仕様を確定した。Phase 4-B〜7（what-ifのruntime接続、actual repair、
-lineage永続化、Production routing切替とversion更新、legacy pathの整理、Presentation）は未実装であり、Plannerの画面経路は
-本節の契約をまだ使っていない（Production routingはlegacyのB8経路のまま）。
+9.2.19.12 / 9.2.19.13 / 9.2.19.16）で正式仕様を確定した。Phase 4-B（what-ifのruntime接続）も実装済みである:
+Kernelの上位にPlanner Alternative What-if Calculation（`createPlannerAlternativeWhatIfComparison()`、
+`src/domain/planner/alternative/plannerAlternativeWhatIf.ts`）を置き、9.2.19.8.1のscenario composition、request-globalな
+`maxPlannerReruns`（1 requestにつき1つの `PlannerAlternativeFullRunBudget` をKernelのindividual trial・adoption run・
+final run・各run内のruntime-unsupported retryで共有）、9.2.19.13のtyped result（`PlannerAlternativeComparison`、
+`PlannerAlternativeRouteSummary`、`adoptedInScenario`、`excludedByRepairLineageCount`）を返す。Worker protocolは旧B9の
+`create_what_if_comparison` と並行する新しい request kind（`create_planner_alternative_comparison` /
+`create_planner_alternative_comparison_result`）、Production Worker adapter（`createProductionPlannerAlternativeComparison()`、
+extent / 試行上限のProduction defaultをWorker境界内で明示的に渡す）、`PlannerWorkerClient.createPlannerAlternativeComparison()`
+である。Phase 5〜7（actual repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、Presentation）は
+未実装であり、Plannerの画面経路は本節の契約をまだ使っていない（Production UI routingはlegacyのB8 / B9経路のまま。
+`ProductionPlanPage` は旧 `createWhatIfComparison()` を呼び、新しいClient APIを呼ばない）。
 
 9.2.19.6の条件4の後半（`G` が選ばれない理由が、fixed Route集合外Entryとの未解決競合の暫定帰結だけであること）は、
 Planの記録（`plan.rejectedBuildListEntries` 等）からは「`G` が暫定帰結で負けた後に勝者がstallで落ちた」と「`G` が
@@ -4749,8 +4758,13 @@ interface PlannerAlternativeSearchExtent {
   ```
 
   - 意味は既存の `PlannerAlternativeFullRunBudget`（`ProductionPlanGenerationObserver.beforePlannerRun()` が
-    full Planner runを開始する直前にだけ呼ばれ、呼ばれるたびに1消費する）と同じである。budgetをどの関数引数で
-    共有するかはPhase 4-Bの実装で決める
+    full Planner runを開始する直前にだけ呼ばれ、呼ばれるたびに1消費する）と同じである。Phase 4-Bの実装では、
+    what-if calculationが1 requestにつき `createPlannerAlternativeFullRunBudget(bounds)` を1回だけ作り、
+    `runPlannerAlternativeKernel()` / `runPreparedPlannerAlternativeKernel()` のruntime-only option `fullRunBudget` で
+    Kernelへ渡し、scenario compositionのrunも同じinstanceを使う共通のfull run経路
+    （`createPlannerAlternativeFullRunner()`）で開始する。`fullRunBudget` を渡さないKernel単体のcaller（Phase 2 / 3の
+    test・benchmark）は従来どおりKernel自身が `request.bounds` からbudgetを作る。渡すbudgetのlimitは
+    `request.bounds.maxPlannerReruns` と一致しなければならず、不一致はcaller契約違反としてthrowする
   - 1消費するのは、実際に開始するfull Planner runだけである。runtime-unsupported retryは新しいfull Planner runを
     実際に開始するので1消費する。adoption runでrejectになったrunも、開始した以上1消費する
   - 消費しないもの: Search、reservation導出、materialization、validation、preflight、resolutionの再対応付け、
@@ -4785,7 +4799,9 @@ interface PlannerAlternativeSearchExtent {
     Phase 3-Bの測定と設計判断から独立に決めた値である
   - Domain API（`runPlannerAlternativeKernel()` の `bounds` / `extent`、`createPlannerAlternativeFullRunBudget()`）は
     caller必須指定のままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの2定数を
-    明示的に渡す（Phase 4-B以降のruntime接続で行う。Phase 3-C / 4-Aでは配線しない）
+    明示的に渡す（Phase 4-Bで、what-ifのProduction Worker adapter `createProductionPlannerAlternativeComparison()`
+    がWorker境界内で `defaultPlannerAlternativeSearchExtent` と `defaultPlannerAlternativeTrialBounds` を各Domain authorityから
+    importして渡すよう配線した。Worker request・Client・Application callerはどちらも持たない。actual repairへの配線はPhase 5）
 - 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
 - extentは探索範囲の上限であり、探索の進め方はoperation cost層単位のlazy探索である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8
   「cost層単位のlazy性」）。代替探索はextent全体をupfront solveせず、最初のCandidateまでにsettle / solveするworkはそのCandidateのcost層までに
@@ -4917,7 +4933,7 @@ interface PlannerAlternativeRouteSummary {
   `scenario.status === "stopped_by_planner_rerun_bound"` のときだけである。そのときの `true` は「止まる前に
   acceptedになった」ことを表し、final scenario resultは返さない
 - 型は `boolean | null` を例とする。実装Phase（Phase 4-B）で同じ3状態を区別するtyped literal unionにしてもよいが、
-  未評価を `false` へ潰してはならない
+  未評価を `false` へ潰してはならない。Phase 4-Bの実装は `boolean | null` をそのまま使う
 
 `excludedByRepairLineageCount` の意味（固定する）。
 
@@ -4935,7 +4951,13 @@ interface PlannerAlternativeRouteSummary {
     有効なprior lineageにも属するなら、lineage exclusionとして1件数える
   - 探索しなかったTarget（`blocked_by_selected_checkpoint`、探索開始前にbudgetが尽きた等）は0である
 - この件数をどう求めるか（Search summaryの拡張、Planner側での集計等）はPhase 4-Bの実装で決める。field名を変えても、
-  意味を「`excludedRouteKeys` 全体によるskip数」へ広げない
+  意味を「`excludedRouteKeys` 全体によるskip数」へ広げない。Phase 4-Bの実装: Search Domainは
+  `PlannerAlternativeSearchExecution.skippedExcludedRouteKeys`（summaryの外のexecution data。実際に到達し
+  `excludedRouteKeys` に一致してskipしたCandidateの `candidateStableKey` を、skip順に1件ずつ。長さは `excludedCandidates` と
+  一致）をneutralに返すだけで、repair lineageや無効化Routeの意味を持たない。Kernelはそれを
+  `PlannerAlternativeKernelTargetResult.skippedExcludedRouteKeys` として運び、Planner側
+  （`countPlannerAlternativeLineageExclusions()`）がそのTargetの `priorExcludedRoutes` のkeyとの共通部分を数える。
+  summaryの `excludedCandidates` はtotalのまま変えない。keyはtyped resultへ出さない
 
 `PlannerAlternativeRouteSummary` の意味（固定する）。
 
@@ -4947,7 +4969,8 @@ interface PlannerAlternativeRouteSummary {
   記録であり、追加のprediction呼び出しをしない。絶対Counter位置はRouteOperationに含まれるが、通常UIでは既存の
   表示契約どおり表示しない
 - transientであり、永続化しない。BuildCandidate IDやgenerated BuildListEntry IDを必須fieldにしない
-  （9.2.4.8を維持）。具体的なfield構成は実装Phase（Phase 4-B）で調整してよいが、上記の説明能力を欠いてはならない
+  （9.2.4.8を維持）。具体的なfield構成は実装Phase（Phase 4-B）で調整してよいが、上記の説明能力を欠いてはならない。
+  Phase 4-Bの実装は上記interfaceのfield構成のまま（`createPlannerAlternativeRouteSummary()`）である
 - `PlannerAlternativeCandidate` が既に持つ `route`、`finalBonuses`、`restorationBonusScope`、`seriesSkillId`、
   `groupSkillId`、`bonusAmendmentTrace`、`skillAmendmentTrace`、`conversionSkillTrace` からのpure projectionとする。
   generated BuildCandidateから逆算せず、`candidateStableKey` からRouteを再構築しない
@@ -5054,11 +5077,13 @@ Phase 3は3つに分ける。**Phase 3-A**（benchmark-only harness / fixture / 
 `runPlannerAlternativeKernel()` のextent / boundsはcaller必須のままで、default定数はまだどのProduction caller・Worker・UIにも
 配線していない。Phase 4は4-A / 4-Bに分けた。**Phase 4-A**（docs-onlyの仕様明確化）で、scenario composition
 （9.2.19.8.1）、request-globalな `maxPlannerReruns`（9.2.19.12）、`excludedByRepairLineageCount` と
-`adoptedInScenario` の意味（9.2.19.13）を確定した。次は **Phase 4-B**（B9 what-ifのPlanner Alternative Kernel
-runtime接続）である。`runPlannerAlternativeKernel()` はTarget単位の代替探索・individual trial・found判定の
-authorityのまま維持し、scenario compositionはKernelへ混在させず、その上のPlanner Alternative What-if Calculationで
-行う。Phase 4-BでもProduction UI routingは切り替えず（legacyのB8経路のまま）、what-ifとactual repairの
-Production routing切替はPhase 5で同時に行う。
+`adoptedInScenario` の意味（9.2.19.13）を確定した。**Phase 4-B**（B9 what-ifのPlanner Alternative Kernel
+runtime接続）も完了した。`runPlannerAlternativeKernel()` はTarget単位の代替探索・individual trial・found判定の
+authorityのまま維持し、scenario compositionはKernelへ混在させず、その上のPlanner Alternative What-if Calculation
+（`createPlannerAlternativeWhatIfComparison()`）で行う。adoption runの採否は既存 `judgePlannerAlternativeTrial()` を
+accepted集合の全generated Entryへ適用して判定し、判定authorityを複製しない。Worker / Client は旧B9 経路と並行する
+新しいrequest kindとmethodであり、Phase 4-BでもProduction UI routingは切り替えない（legacyのB8 / B9経路のまま）。
+what-ifとactual repairのProduction routing切替はPhase 5で同時に行う。Phase 4-Bはversionを動かさない（9.2.19.15）。
 `maxPlannerReruns` は複数Targetが1つのbudgetを共有するrerun-pressure workloadで実測する。`maxCandidateTrialsPerTarget` は、
 現行semanticsで「Candidate 1がtrialでreject、後続Candidateがfound」となるProduction workloadを確認できていないため、
 semantic thresholdをPhase 3-Bの実測対象とせず、1 trialあたりの実コストと安全弁としての役割からPhase 3-Cで設計判断する
@@ -6044,7 +6069,7 @@ generated BuildListEntry IDの決定性(9.2.13)はこれとは別である。gen
 `PlannerIdFactory` を使わず、semantic contentから安定生成するため、Production
 dependencyでもrun間で一致する。
 
-### 15.9.2 Planner Alternative Search / 1段repair Test（9.2.19、Phase 2分まで実装）
+### 15.9.2 Planner Alternative Search / 1段repair Test（9.2.19、Phase 4-B分まで実装）
 
 Phase 2で実装済みなのは、reservation導出（held / blocked / 排他OwnedWeapon、Counter ID分離、skip可能unit、重複・入力順
 非依存、不正fixed Entryのfail closed）、Normalのcanonical表現、Skill / Gogmaのheld traversal、排他OwnedWeapon、held位置を跨ぐ
@@ -6053,8 +6078,15 @@ found判定（G selected、fixed外Entryとの暫定帰結だけでの非選択 
 暫定帰結で勝った後に自分がstallで落ちたEntryの非found、fixed Route集合との競合、明示決定Entryの非選択、暫定帰結以外の
 除外理由、plan無し）、試行上限・rerun上限、除外key（無効化Route・以前の無効化Route、trial不採用を除外へ加えない）、
 checkpoint Targetの非探索、Issue #101 fixtureでの `0 / 1 / count 1`・Skill 342での巨戟化・Gogma 56以降のBonus操作・
-full Planner trialでの両立の各testである。what-if / actual repair / scenario / lineage / 決定の展開の項目はPhase 4-B以降で実装する（Phase 4-Aはそのsemanticを確定した
-docs-onlyのPhaseである）。
+full Planner trialでの両立の各testである。Phase 4-Bで、what-ifの項目（scenario compositionのfull Planner run数、
+途中rejectとrollbackしないこと、request-globalな `maxPlannerReruns` とruntime-unsupported retryの共有、limit番目のrunでの
+`evaluated`、`adoptedInScenario` の `true` / `false` / `null`、`scenarioOperationCount` と `steps.length` の一致、
+`introducedConflicts` / `remainingConflicts` の分類と決定の展開、1段で終わること、Route summaryのpure projectionと
+prediction呼び出し数、Target順非依存、`excludedByRepairLineageCount`、Issue #101の「龍を優先」「火を優先」）と、
+Worker protocol / Production adapter / Client のtestを追加した（`plannerAlternativeWhatIf.composition.test.ts`、
+`plannerAlternativeWhatIf.test.ts`、`issue101PlannerAlternativeWhatIf.test.ts`、`planner.worker.test.ts`、
+`planner.worker.production.alternative.test.ts`、`plannerWorkerClient.test.ts`）。actual repair / lineage永続化 /
+保存時の決定の展開 / version境界の項目はPhase 5で実装する（Phase 4-Aはそのsemanticを確定したdocs-onlyのPhaseである）。
 held位置のcost層単位の処理（same-cost closure）は9.2.19冒頭の実装状態と [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8を参照。
 
 - reservationのheld / blocked / 排他OwnedWeaponが、fixed Route集合の既存Route unit（`canSkipWhenCounterPassed`、

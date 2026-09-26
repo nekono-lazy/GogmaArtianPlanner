@@ -1,6 +1,8 @@
 import type {
   CreateConstrainedProductionPlanCalculation,
   CreateProductionPlanCalculation,
+  PlannerAlternativeWhatIfCalculationResult,
+  PlannerAlternativeWhatIfInput,
   PlannerDependencies,
   PlannerExecutionOptions,
   PlannerInput,
@@ -19,17 +21,18 @@ export type PlannerWorkerPostMessage = (
 export type PlannerDependenciesFactory = () => PlannerDependencies
 
 /**
- * The four Planner calculations this Worker routes to.
+ * The five Planner calculations this Worker routes to.
  *
- * All four are injected, so the controller performs no full Planner run, no Candidate
+ * All five are injected, so the controller performs no full Planner run, no Candidate
  * enumeration, no materialization, no preflight, no Trace Replay, and no
- * adoption of its own: B8-C owns all of that, and the Production adapter
- * composes it.
+ * adoption of its own: B8-C and the Planner Alternative Domain own all of
+ * that, and the Production adapter composes it.
  */
 export interface PlannerWorkerCalculations {
   createPlan: CreateProductionPlanCalculation
   createConstrainedPlan: CreateConstrainedProductionPlanCalculation
   createWhatIfComparison: CreatePlannerWhatIfComparisonCalculation
+  createPlannerAlternativeComparison: CreatePlannerAlternativeComparisonCalculation
   prepareInteraction: PreparePlannerInteractionCalculation
 }
 
@@ -39,6 +42,17 @@ export type CreatePlannerWhatIfComparisonCalculation = (
   dependencies: PlannerDependencies,
   executionOptions?: PlannerExecutionOptions,
 ) => Promise<PlannerWhatIfCalculationResult>
+
+/**
+ * Worker-facing Planner Alternative what-if calculation shape (Phase 4-B). The
+ * wire input carries no extent and no trial bounds; the Production adapter
+ * supplies them.
+ */
+export type CreatePlannerAlternativeComparisonCalculation = (
+  input: PlannerAlternativeWhatIfInput,
+  dependencies: PlannerDependencies,
+  executionOptions?: PlannerExecutionOptions,
+) => Promise<PlannerAlternativeWhatIfCalculationResult>
 
 /** Synchronous initial preparation needs no cancellation hooks. */
 export type PreparePlannerInteractionCalculation = (
@@ -167,6 +181,18 @@ export function createPlannerWorkerController(
               requestId,
               generation,
               result: await calculations.createWhatIfComparison(
+                request.input,
+                dependencies,
+                executionOptions(requestId, generation),
+              ),
+            }
+            break
+          case 'create_planner_alternative_comparison':
+            response = {
+              type: 'create_planner_alternative_comparison_result',
+              requestId,
+              generation,
+              result: await calculations.createPlannerAlternativeComparison(
                 request.input,
                 dependencies,
                 executionOptions(requestId, generation),

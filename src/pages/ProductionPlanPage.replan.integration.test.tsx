@@ -127,6 +127,7 @@ function realPlannerClient(fixture: ExecutionFixture, generated: BuildListEntry 
           }
     }),
     createWhatIfComparison: vi.fn(),
+    createPlannerAlternativeComparison: vi.fn(),
     prepareInteraction: vi.fn(async () => ({
       status: 'ready' as const,
       validBuildListEntryIds: [],

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
 import type {
+  PlannerAlternativeWhatIfCalculationResult,
+  PlannerAlternativeWhatIfInput,
   PlannerExecutionOptions,
   PlannerOrchestrationBounds,
   PlannerOrchestrationResult,
@@ -374,6 +376,137 @@ describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
   })
 })
 
+function plannerAlternativeInput(input = plannerInput()): PlannerAlternativeWhatIfInput {
+  return {
+    plannerInput: input,
+    scenarioResolution: {
+      conflictKey: 'conflict.planner-alternative.client',
+      selectedBuildListEntryId: 'build-list.planner-alternative.client' as never,
+    },
+    priorFixedBuildListEntryIds: [],
+    priorExcludedRoutes: [],
+  }
+}
+
+const plannerAlternativeResult: PlannerAlternativeWhatIfCalculationResult = {
+  status: 'invalid_prior_fixed_entry',
+  buildListEntryId: 'build-list.planner-alternative.prior' as never,
+  detail: 'fixture',
+}
+
+describe('PlannerWorkerClient Planner Alternative comparison (Phase 4-B)', () => {
+  it('posts the new request kind with the exact input and resolves only its own result', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    expect(client.createPlannerAlternativeComparison).toHaveLength(2)
+    const input = plannerAlternativeInput()
+    const promise = client.createPlannerAlternativeComparison('planner.alternative.client', input)
+    expect(worker.posted).toEqual([{
+      type: 'create_planner_alternative_comparison',
+      requestId: 'planner.alternative.client',
+      generation: 1,
+      input,
+    }])
+    const posted = worker.posted[0]
+    expect(posted.type === 'create_planner_alternative_comparison' && posted.input).toBe(input)
+    // No extent and no trial bounds: the Production Worker adapter supplies them.
+    expect(Object.keys(input).sort()).toEqual([
+      'plannerInput',
+      'priorExcludedRoutes',
+      'priorFixedBuildListEntryIds',
+      'scenarioResolution',
+    ])
+    worker.emit({
+      type: 'create_planner_alternative_comparison_result',
+      requestId: 'planner.alternative.client',
+      generation: 1,
+      result: plannerAlternativeResult,
+    })
+    await expect(promise).resolves.toBe(plannerAlternativeResult)
+  })
+
+  it('fails closed on the legacy what-if result, and the legacy request on the new result', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const alternative = client.createPlannerAlternativeComparison('planner.alternative.mismatch', plannerAlternativeInput())
+    worker.emit({
+      type: 'create_what_if_comparison_result',
+      requestId: 'planner.alternative.mismatch',
+      generation: 1,
+      result: whatIfResult,
+    })
+    await expect(alternative).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
+    await expect(alternative).rejects.toMatchObject({
+      receivedResultType: 'create_what_if_comparison_result',
+      expectedResultType: 'create_planner_alternative_comparison_result',
+    })
+
+    const legacy = client.createWhatIfComparison('planner.legacy.mismatch', whatIfRequest())
+    expect(worker.posted.at(-1)).toMatchObject({ type: 'create_what_if_comparison', generation: 2 })
+    worker.emit({
+      type: 'create_planner_alternative_comparison_result',
+      requestId: 'planner.legacy.mismatch',
+      generation: 2,
+      result: plannerAlternativeResult,
+    })
+    await expect(legacy).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
+  })
+
+  it('ignores a stale generation of the same request id and resolves the current one', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const first = client.createPlannerAlternativeComparison('planner.alternative.shared', plannerAlternativeInput())
+    const second = client.createPlannerAlternativeComparison('planner.alternative.shared', plannerAlternativeInput())
+    await expect(first).rejects.toBeInstanceOf(PlannerCancelledError)
+    // The superseded task finishes late, even with a wrong discriminant: stale, not an error.
+    worker.emit({ type: 'create_what_if_comparison_result', requestId: 'planner.alternative.shared', generation: 1, result: whatIfResult })
+    worker.emit({
+      type: 'create_planner_alternative_comparison_result',
+      requestId: 'planner.alternative.shared',
+      generation: 1,
+      result: { ...plannerAlternativeResult, detail: 'stale' },
+    })
+    worker.emit({
+      type: 'create_planner_alternative_comparison_result',
+      requestId: 'planner.alternative.shared',
+      generation: 2,
+      result: plannerAlternativeResult,
+    })
+    await expect(second).resolves.toBe(plannerAlternativeResult)
+  })
+
+  it('uses the shared cancel, error and dispose paths', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const cancelled = client.createPlannerAlternativeComparison('planner.alternative.cancel', plannerAlternativeInput())
+    client.cancelPlan('planner.alternative.cancel')
+    await expect(cancelled).rejects.toBeInstanceOf(PlannerCancelledError)
+    expect(worker.posted.at(-1)).toEqual({ type: 'cancel', requestId: 'planner.alternative.cancel', generation: 1 })
+
+    const failed = client.createPlannerAlternativeComparison('planner.alternative.error', plannerAlternativeInput())
+    worker.emit({ type: 'error', requestId: 'planner.alternative.error', generation: 2, message: 'alternative Worker failed' })
+    await expect(failed).rejects.toThrow('alternative Worker failed')
+
+    const pending = client.createPlannerAlternativeComparison('planner.alternative.dispose', plannerAlternativeInput())
+    client.dispose()
+    await expect(pending).rejects.toBeInstanceOf(PlannerCancelledError)
+    expect(worker.terminate).toHaveBeenCalledOnce()
+    await expect(client.createPlannerAlternativeComparison('planner.alternative.disposed', plannerAlternativeInput()))
+      .rejects.toThrow('Planner Worker Client is disposed.')
+  })
+
+  it('rejects with the same explicit unavailable error when the browser has no Worker', async () => {
+    vi.stubGlobal('Worker', undefined)
+    try {
+      const client = createProductionPlannerWorkerClient()
+      await expect(client.createPlannerAlternativeComparison('planner.alternative.unavailable', plannerAlternativeInput()))
+        .rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
 describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
   it('posts the constrained request with the exact caller orchestration bounds', async () => {
     const worker = new FakeWorker()
@@ -711,6 +844,9 @@ function integration() {
     prepareInteraction: () => interactionResult,
     createWhatIfComparison: async () => {
       throw new Error('What-if calculation was not expected in this integration fixture.')
+    },
+    createPlannerAlternativeComparison: async () => {
+      throw new Error('Planner Alternative what-if calculation was not expected in this integration fixture.')
     },
   }
   const dependencies = {
