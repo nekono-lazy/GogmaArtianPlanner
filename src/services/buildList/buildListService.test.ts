@@ -106,7 +106,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(16)
+    expect(current.appSchemaVersion).toBe(17)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -142,10 +142,10 @@ describe('BuildListService', () => {
     },
   )
 
-  it.each([12, 13, 14, 15])('keeps a schema %i BuildListEntry usable under schema 16 when nothing else changed', async (appSchemaVersion) => {
+  it.each([12, 13, 14, 15, 16])('keeps a schema %i BuildListEntry usable under schema 17 when nothing else changed', async (appSchemaVersion) => {
     const memory = memoryRepositories()
     const current = createBuildListCalculationContext(createValidMasterDataFixture())
-    expect(current.appSchemaVersion).toBe(16)
+    expect(current.appSchemaVersion).toBe(17)
     const candidate = createValidBuildCandidate()
     candidate.calculationContext = { ...current, appSchemaVersion }
     candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)
@@ -157,8 +157,11 @@ describe('BuildListService', () => {
     // The schema 13 change is ProductionPlan execution only (PLANNER_SPEC 16.11)
     // and the schema 14 change is the Production Planner strategy only (Issue
     // #103 Phase C), and the schema 15 change is the Normal Counter-advance
-    // fast-forward only (Issue #129), so a version 12 / 13 / 14 Entry is not
-    // stale for its calculation context.
+    // fast-forward only (Issue #129), the schema 16 change is the Conflict
+    // what-if / repair routing only (Phase 5-B), and the schema 17 change is the
+    // ordinary Planner routing of the Build List and the replan Preview only
+    // (Phase 6-A), so a version 12..16 Entry is not stale for its calculation
+    // context.
     expect(refreshed.entries[0]).toMatchObject({ isStale: false, staleReasons: [] })
     expect(refreshed.entries[0].candidateSnapshot).toEqual(original.candidateSnapshot)
     expect(refreshed.entries[0].calculationContext.appSchemaVersion).toBe(appSchemaVersion)

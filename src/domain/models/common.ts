@@ -323,7 +323,33 @@ export interface KnownValue<T> {
 // and `ExportRoot.schemaVersion` to 13 on their own; `AppSettings.schemaVersion`,
 // `RngState.schemaVersion`, `PRODUCTION_RNG_ENGINE_VERSION` and the Master
 // `dataVersion` are unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 16
+//
+// Version 17 moves the last Production consumers of the legacy B8 constrained
+// orchestration - the Build List's ordinary 「生産計画を作成」 and the running
+// Plan's replan Preview - from `createConstrainedPlan()` to the ordinary
+// `createPlan()` (Issue #136 / #101 Phase 6-A, `docs/PLANNER_SPEC.md` 9.2.7 /
+// 9.2.19.15). Both hand the Planner `conflictResolutions = []`, so for them
+// B8 never started constrained work and ordinarily returned the same ordinary
+// result. But B8's orchestration budget `maxPlannerReruns = 4` also counted
+// the runtime-unsupported retries inside that initial ordinary run, and the
+// ordinary `createPlan()` has no such budget: an input that needs more than 4
+// full runs of runtime-unsupported retries stopped with `plan = null` and
+// `max_planner_reruns_reached` on the old path, while the new path keeps
+// excluding the unsupported Entries and can still produce a Plan. The Plan's
+// existence, its selected and rejected Entries, warnings, Steps, completed
+// Targets and required materials can therefore differ for the same
+// PlannerInput, and a persisted Plan records no generation path, so every
+// version 1..16 Plan - Draft or active - fails closed with
+// `calculation_context_changed`; none is migrated or rewritten. Candidate
+// Search, the constrained enumerator, RNG prediction and the BuildCandidate /
+// BuildListEntry snapshot semantics do not change, so the explicit
+// build-result exception `17 -> [12, 13, 14, 15, 16]` keeps version 12..16
+// Candidates and Build List Entries usable under 17; version 1..11 stay
+// incompatible. No persisted shape changes, so `DATABASE_SCHEMA_VERSION` stays
+// 10, `ExportRoot.schemaVersion` stays 13, and `AppSettings.schemaVersion`,
+// `RngState.schemaVersion`, `PRODUCTION_RNG_ENGINE_VERSION` and the Master
+// `dataVersion` are unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 17
 
 export interface CalculationContext {
   gameVersion: string

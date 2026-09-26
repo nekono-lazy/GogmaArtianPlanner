@@ -40,8 +40,10 @@ import {
 } from '../../domain/models/publicTypes'
 import {
   checkGeneratedBuildListEntriesFresh,
+  checkPersistableOrdinaryPlannerResultShape,
   checkPersistablePlannerAlternativeRepairShape,
   checkPersistablePlannerResultShape,
+  checkPlannerRunTerminationPersistable,
   checkProductionPlanBuildListEntryReferences,
   checkProductionPlanBuildListReferences,
   collectProductionPlanDependentTargetWeaponIds,
@@ -50,13 +52,21 @@ import {
   prepareFinalReplacementBuildList,
   type PlannerAlternativeRepairArtifact,
   type PlannerOrchestrationResult,
+  type PlannerResult,
   type PlannerResultPersistenceIssue,
   type PlannerRunTermination,
 } from '../../domain/planner'
 import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
 
 /**
- * The B8-D2a save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18.
+ * The save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18.
+ *
+ * The ordinary Planner result (`createPlan()`, Phase 6-A) is saved through
+ * `savePlannerResult()`: it carries no generated BuildListEntry and no
+ * replacement, so the save re-validates the Plan against the current Build
+ * List exactly as it is, replaces the previous Draft with the new one, and
+ * never writes a BuildListEntry. It shares every check below with the B8
+ * orchestration save, which keeps its own entry points until Phase 6-B.
  *
  * A `PlannerOrchestrationResult` is a pure calculation over the snapshot the
  * Planner Worker was handed. Persisting it therefore re-reads the current state
@@ -158,7 +168,7 @@ const systemClock = { now: (): ISODateTimeString => new Date().toISOString() }
  *   Draft and Build List are untouched, the running Plan is the restored one
  *   (not abandoned), and a new calculation from the restored state is required
  */
-export type PlannerOrchestrationResultSaveOutcome =
+export type PlannerResultSaveOutcome =
   | { kind: 'saved'; plan: ProductionPlan }
   | { kind: 'no_plan' }
   | {
@@ -170,13 +180,16 @@ export type PlannerOrchestrationResultSaveOutcome =
       deletedExecutionHistoryIds: ExecutionHistoryId[]
     }
 
+/** The B8 orchestration save's outcome: the same union, kept until Phase 6-B. */
+export type PlannerOrchestrationResultSaveOutcome = PlannerResultSaveOutcome
+
 /**
  * How one Planner Alternative actual repair save ended. A repair artifact
  * always carries its final scenario Plan, so there is no `no_plan`: an
  * unsavable repair never reaches Persistence.
  */
 export type PlannerAlternativeRepairSaveOutcome = Exclude<
-  PlannerOrchestrationResultSaveOutcome,
+  PlannerResultSaveOutcome,
   { kind: 'no_plan' }
 >
 
@@ -244,14 +257,15 @@ interface PersistablePlannerResult {
   /**
    * The B8 orchestration contract that the final Plan selects every generated
    * Entry. `false` for a Planner Alternative repair, whose accepted replacement
-   * set is the authority (`docs/PLANNER_SPEC.md` 9.2.19.6).
+   * set is the authority (`docs/PLANNER_SPEC.md` 9.2.19.6), and for an
+   * ordinary Planner result, which generates no Entry at all.
    */
   requireGeneratedEntriesSelected: boolean
   /**
    * The Draft a Planner Alternative repair was calculated from: the one Draft
    * the save must still find current (`docs/PLANNER_SPEC.md` 9.2.15). `null`
-   * for a B8 orchestration result, which starts a new chain and inherits
-   * nothing from the displayed Draft.
+   * for an ordinary or B8 orchestration result, which starts a new chain and
+   * inherits nothing from the displayed Draft.
    */
   expectedSourceDraftId: ProductionPlanId | null
 }
@@ -270,6 +284,34 @@ export class PlannerResultPersistenceService {
     this.database = database
     this.repositories = repositories
     this.clock = options.clock ?? systemClock
+  }
+
+  /**
+   * Saves one ordinary Planner result (`PlannerWorkerClient.createPlan()`,
+   * `docs/PLANNER_SPEC.md` 9.2.15, Phase 6-A) as the new Draft, replacing the
+   * previous Draft in the same transaction.
+   *
+   * An `incomplete` run is refused (`planner_result_invalid`) whether or not it
+   * carries a partial Plan, and nothing is written. A finished run with no
+   * Plan returns `no_plan` and keeps the previous Draft. Otherwise the Plan
+   * must be a draft without a repair lineage that passes Domain validation,
+   * and inside one transaction it is re-validated against the current state
+   * with the snapshot authorities of the B8 save - CalculationContext,
+   * `initialExecutionState`, the Target and Build List hashes, every
+   * BuildListEntry reference and a free Plan ID - before the previous Draft is
+   * deleted and the new one added. The Build List is read, never written: an
+   * ordinary result replaces no Entry, so the save never breaks a running Plan
+   * and needs no approval (an approval given anyway is refused by the guard as
+   * not required).
+   */
+  async savePlannerResult(
+    result: PlannerResult,
+    currentCalculationContext: CalculationContext,
+    approval: PlanBreakingChangeApproval | null = null,
+  ): Promise<PlannerResultSaveOutcome> {
+    const persistable = this.persistableOrdinaryResult(result)
+    if (persistable === null) return { kind: 'no_plan' }
+    return this.saveGuarded(persistable, currentCalculationContext, approval)
   }
 
   /**
@@ -443,6 +485,27 @@ export class PlannerResultPersistenceService {
       generatedEntries,
       replacements,
       requireGeneratedEntriesSelected: true,
+      expectedSourceDraftId: null,
+    }
+  }
+
+  /**
+   * The result-shape invariants of an ordinary Planner result, or `null` for a
+   * finished run with no Plan. It carries no generated Entry and no
+   * replacement, so the shared save boundary runs with empty sets.
+   */
+  private persistableOrdinaryResult(result: PlannerResult): PersistablePlannerResult | null {
+    // An incomplete run is refused before `plan === null` is read: a
+    // truncated run is never reported as an ordinary "no Plan" result.
+    throwIssue(checkPlannerRunTerminationPersistable(result.termination))
+    const { plan } = result
+    if (plan === null) return null
+    throwIssue(checkPersistableOrdinaryPlannerResultShape(plan, result.termination))
+    return {
+      plan,
+      generatedEntries: [],
+      replacements: [],
+      requireGeneratedEntriesSelected: false,
       expectedSourceDraftId: null,
     }
   }
@@ -643,8 +706,9 @@ export class PlannerResultPersistenceService {
   }
 
   /**
-   * Every BuildListEntry the Plan references must exist in the final set; the
-   * B8 orchestration result additionally selects every generated Entry.
+   * Every BuildListEntry the Plan references must exist in the final set - for
+   * an ordinary result, the current Build List itself; the B8 orchestration
+   * result additionally selects every generated Entry.
    */
   private assertPlanReferences(
     persistable: PersistablePlannerResult,

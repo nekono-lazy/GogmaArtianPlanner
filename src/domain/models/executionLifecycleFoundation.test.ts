@@ -141,8 +141,11 @@ describe('Execution lifecycle version boundaries', () => {
     // start effect moved the calculation schema to 13 with no persisted shape
     // change. The Identification provenance moved Export to 10. Issue #103
     // Phase C (14) and Issue #129 (15) moved the calculation schema alone.
+    // Issue #136 / #101 Phase 5-B moved it to 16 with Export 13, and Phase 6-A
+    // (the ordinary Planner routing of the Build List and the replan Preview)
+    // moved it to 17 alone.
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
   })
 })
 

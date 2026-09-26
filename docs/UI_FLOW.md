@@ -1294,8 +1294,16 @@ Production terminationの `reachedLimits` は型上 `max_plan_steps` だけで�
 
 ### 10.2 Planner実行成功後の遷移
 
-`plannerResultPersistenceService.savePlannerOrchestrationResult()` がnon-nullの
-ProductionPlanを返した場合だけ、その保存済みPlanの `/plans/:planId` へ遷移する。
+「生産計画を作成」はordinary Planner（`PlannerWorkerClient.createPlan(requestId, input)`）を1回実行する
+（Phase 6-A。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.7 / 9.2.19.16）。入力はcurrent persisted stateから作るfresh
+PlannerInputで、`PlannerInput.options` にはユーザーが詳細設定で確認した `maxPlanSteps` をApplication callerが
+設定する。保存済みPlanのexplicit resolutionを復元しない（`conflictResolutions = []`）ため、legacy B8の
+`createConstrainedPlan()` / `defaultPlannerOrchestrationBounds` は呼ばない。返る `PlannerResult` をそのまま
+`plannerResultPersistenceService.savePlannerResult()` へ渡す（generated Entryの空fieldを付けた
+`PlannerOrchestrationResult` へ変換しない）。
+
+`savePlannerResult()` が保存済みProductionPlan（`saved`）を返した場合だけ、その保存済みPlanの
+`/plans/:planId` へ遷移する。
 遷移先のIDはPersistenceが返したPlanの `id` だけをauthorityとする。
 
 以下をauthorityにしない。
@@ -1307,9 +1315,9 @@ Active Plan
 遷移前に生成したID
 ```
 
-保存前に遷移しない。`savePlannerOrchestrationResult()` が `null` を返した場合は
-遷移せず、Plan未生成のnoticeをBuild Listに表示する。保存失敗、cancel、
-`invalid_conflict_resolution` によるfail closedでも遷移しない。
+保存前に遷移しない。`savePlannerResult()` が `no_plan` を返した場合は
+遷移せず、Plan未生成のnoticeをBuild Listに表示する。保存失敗、cancel、探索未完了（10.1。保存しない）でも
+遷移しない。
 
 ### 10.3 現在の下書きへの導線
 
@@ -1324,7 +1332,7 @@ Build Listは `ProductionPlanRepository.getDraftProductionPlan()` で現在の�
 
 - 実行中の生産計画が無く通常のPlanner実行を提供する状態で下書きが既にある場合、「生産計画の作成」に
   「新しい生産計画を保存すると、現在の未開始の生産計画は置き換えられます。」を明示する。これは
-  既存のatomic replacement（`savePlannerOrchestrationResult()`、PLANNER_SPEC 9.2.15）の説明であり、
+  既存のatomic replacement（`savePlannerResult()`、PLANNER_SPEC 9.2.15）の説明であり、
   UIが新しいPersistence semanticsを持つわけではない
 - 下書きと実行中Planの同時存在は禁止されていないため、実行中Planがあるからといって下書きを
   読み捨てない。実行中PlanがあるときのPlanner操作は従来どおり16.4の再計画試算だけとし、下書きは
@@ -1606,7 +1614,7 @@ checkpoint関与の判定はcurrent preparationの `checkpointParticipants` か�
 - 表示中Draftの `conflictRepairLineage` から `derivePlannerConflictRepairLineageContext()`（fresh inputの
   `buildListEntries` で失効判定）を使ってprior fixed Entryとprior除外Route keyを渡す。lineageが `null` なら空である。
   失効判定をUIで再実装しない。what-ifはlineageを読むだけで更新・保存しない
-- 旧 `createWhatIfComparison()`（B9、`defaultPlannerWhatIfBounds`）は生産計画画面から呼ばない（実装はPhase 6まで残る）
+- 旧 `createWhatIfComparison()`（B9、`defaultPlannerWhatIfBounds`）は生産計画画面から呼ばない（実装はPhase 6-Bまで残る）
 
 表示中Planから復元するのは `conflicts[].selectedBuildListEntryId !== null` の選択だけである。
 `recommendedBuildListEntryId`、Planner score、Beam bestState、Target priority、
@@ -1692,7 +1700,7 @@ Planner Alternative actual repair（`PlannerWorkerClient.createPlannerAlternativ
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.8、Phase 5-B以降のProduction routing）を最初から実行する。requestは
 `plannerInput`（復元したexplicit resolution付き。今回の決定のmergeはDomainが行う）/ `decision` / `lineage`（表示中Draftの
 `conflictRepairLineage`）だけを持ち、探索範囲と試行上限はProduction Worker adapterがWorker内で渡す。旧
-`createConstrainedPlan()`（B8、`defaultPlannerOrchestrationBounds = 2 / 1 / 4`）は生産計画画面から呼ばない（実装はPhase 6まで残る）。
+`createConstrainedPlan()`（B8、`defaultPlannerOrchestrationBounds = 2 / 1 / 4`）は生産計画画面から呼ばない（実装はPhase 6-Bまで残る）。
 
 この再計算の `PlannerInput.options` はfresh inputの `defaultPlannerOptions` のままにせず、
 Application callerが `conflictResolutionPlannerOptions(表示中Plan)`
@@ -2554,7 +2562,11 @@ RNG状態を変更すると現在の生産計画は続行できなくなりま�
 
 Preview。
 
-- 入力は現在の確定済みRNG状態・通常アーティアCounter・所持武器、最新の目標武器、最新の作成リストである
+- 入力は現在の確定済みRNG状態・通常アーティアCounter・所持武器、最新の目標武器、最新の作成リストである。
+  実行中Planの `baseSnapshot`・過去の入力・Conflict resolutionは使わない
+- 計算は作成リストの通常Plannerと同じordinary Planner（`PlannerWorkerClient.createPlan()`、Phase 6-A）であり、
+  legacy B8の `createConstrainedPlan()` は呼ばない。Preview結果は `PlannerResult` で、作成リスト項目を生成しない
+  （「この試算は新しい作成リスト項目を…生成しました」のような案内は出さない）
 - 通常のPlanner実行と同じ計算中表示（数値の進捗率なし、10.0）、キャンセル、探索未完了表示（10.1）を使う
 - Preview中は現在のPlanを実行中のまま変更せず、Execution Navigatorの現在Step、RNG状態、所持武器、
   作成リストを変更しない。Preview結果を保存しない
@@ -2569,7 +2581,7 @@ Preview。
   目標武器・作成リスト項目、現在Planの進行が変わっていた場合は採用を拒否し、
   「試算後に状態が変わりました。もう一度試算してください。」と表示する
 - 正常採用時は旧Planの破棄（再計画採用）と新Planの実行中化を同一transactionで行い、新Planの
-  Execution Navigatorへ遷移する。旧Planのゲーム内セーブ地点は引き継がない
+  Execution Navigatorへ遷移する。作成リストは変更しない。旧Planのゲーム内セーブ地点は引き継がない
 
 制約。
 

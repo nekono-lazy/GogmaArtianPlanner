@@ -19,7 +19,7 @@ import type {
   CalculationContext,
   ProductionPlanId,
 } from '../../domain/models/publicTypes'
-import type { PlannerOrchestrationResult } from '../../domain/planner'
+import type { PlannerResult } from '../../domain/planner'
 import { createBuildListCalculationContext } from '../buildList/createBuildListCalculationContext'
 import {
   createPlannerInput,
@@ -46,15 +46,16 @@ export interface PrepareProductionPlanReplanPreviewRequest {
  * the running Plan's token and a PlannerInput built by the ordinary
  * `createPlannerInput()` from the current confirmed RngState, Normal Counters,
  * OwnedWeapons, TargetWeapons and Build List. It never reads the running Plan's
- * `baseSnapshot`, expected states or past PlannerInput, and never copies its
- * conflict resolutions: the replan is an ordinary current-state Planner run.
+ * `baseSnapshot`, expected states, past PlannerInput or repair lineage, and
+ * never copies its conflict resolutions: the replan is an ordinary
+ * current-state Planner run with no conflict resolution.
  *
- * The caller then runs the existing Planner Worker
- * (`PlannerWorkerClient.createConstrainedPlan()` with
- * `defaultPlannerOrchestrationBounds`, cancellable through `cancelPlan()`), and
- * bundles the result with `createProductionPlanReplanPreview()`. Nothing is
- * written at any point: the Preview, its new draft Plan and its generated
- * Entries stay in memory until the Execution runtime adopts them.
+ * The caller then runs the ordinary Planner Worker entry
+ * (`PlannerWorkerClient.createPlan()`, cancellable through `cancelPlan()`;
+ * Phase 6-A) and bundles the `PlannerResult` with
+ * `createProductionPlanReplanPreview()`. Nothing is written at any point: the
+ * Preview and its new draft Plan stay in memory until the Execution runtime
+ * adopts them, and no BuildListEntry is ever generated for it.
  */
 export class ProductionPlanReplanPreviewService {
   private readonly dependencies: ProductionPlanReplanPreviewServiceDependencies
@@ -109,7 +110,7 @@ export class ProductionPlanReplanPreviewService {
   /** Bundles the Planner Worker result into the transient Preview. It writes nothing. */
   createProductionPlanReplanPreview(
     request: ProductionPlanReplanPreviewRequest,
-    result: PlannerOrchestrationResult,
+    result: PlannerResult,
   ): ProductionPlanReplanPreview {
     return createProductionPlanReplanPreview(request, result)
   }

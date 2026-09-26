@@ -7,10 +7,7 @@ import {
   type ProductionPlanReplanPreview,
 } from '../../domain/execution'
 import type { ProductionPlanId } from '../../domain/models/publicTypes'
-import {
-  defaultPlannerOrchestrationBounds,
-  type PlannerOptions,
-} from '../../domain/planner'
+import type { PlannerOptions } from '../../domain/planner'
 import type { AdoptProductionPlanReplanPreviewResult } from '../../services/execution/productionPlanExecutionService'
 import type { ProductionPlanReplanDependencies } from '../../services/execution/productionPlanReplanDependencies'
 import {
@@ -188,13 +185,11 @@ export function useProductionPlanReplanPreview(
         clientRef.current = client
         const requestId = createRequestId()
         activeRequestRef.current = requestId
-        // No progress callback: the Preview is shown as indeterminate
-        // (UI_FLOW 10.0, Issue #103 Phase D-1).
-        const result = await client.createConstrainedPlan(
-          requestId,
-          input,
-          defaultPlannerOrchestrationBounds,
-        )
+        // The ordinary Planner run (PLANNER_SPEC 16.8, Phase 6-A): the
+        // current-state input carries no conflict resolution, so no
+        // constrained re-search could start. No progress callback: the
+        // Preview is shown as indeterminate (UI_FLOW 10.0, Issue #103 Phase D-1).
+        const result = await client.createPlan(requestId, input)
         if (!isCurrent() || activeRequestRef.current !== requestId) return
         activeRequestRef.current = null
         setPreview({ status: 'completed', preview: replan.createProductionPlanReplanPreview(request, result) })

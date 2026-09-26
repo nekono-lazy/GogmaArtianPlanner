@@ -2082,9 +2082,11 @@ B8 architecture自体はProduction RNG semantics、RouteOperationの意味、Pro
 Planner Alternative Search（resource-aware alternative Ideal search）へ段階的に置き換え、「この候補を
 優先」をRoute単位の決定とし、what-if / actual repairを1段に限る正式契約を9.2.19で確定した（Phase 5まで実装済み）。
 9.2.19.1の表に挙げた条項は新kernelで置き換わり、それ以外の9.2.1〜9.2.18の契約は維持する。Phase 5-Bで生産計画画面の
-「比較する」と「この候補を優先」のProduction routingを新kernelへ同時に切り替えた。9.2.6〜9.2.17のB8実装はPhase 6で整理するまで
-legacy implementationとして残る（B8 / B9 Worker request kind・Client methodとそのtestは残るが、生産計画画面の競合操作からは
-呼ばない。実行中Planの再計画Preview（16.8）など他のconsumerは本節の切替の対象外である）。
+「比較する」と「この候補を優先」のProduction routingを新kernelへ同時に切り替えた。Phase 6-Aで、残っていたProduction
+consumer（作成リストの通常「生産計画を作成」と実行中Planの再計画Preview（16.8））もordinary Planner
+（`PlannerWorkerClient.createPlan()`）へ切り替えた（9.2.19.14 / 9.2.19.16）。9.2.6〜9.2.17のB8実装はPhase 6-Bで整理するまで
+legacy implementationとして残る（B8 / B9 Worker request kind・Client method・計算本体・benchmarkとそのtestは残るが、
+通常のApplication runtimeからはどれも呼ばない）。
 
 ### 9.2.1 開始位置を後方固定しない
 
@@ -3278,6 +3280,22 @@ Candidate scoreだけによる自動決定
 re-searchを自動実行せず、その競合を `PlanConflict` として返す。ユーザー選択を経て
 `PlannerConflictResolution` が与えられた実行でだけ再検索を行う。
 
+したがって `conflictResolutions = []` の入力に対するB8 orchestrationは、最初のordinary Planner full run
+（その中のruntime-unsupported retryを含む）を1回行い、その結果を `generatedBuildListEntries = []` /
+`generatedBuildListEntryReplacements = []` で返すだけであり、constrained enumeration、materialization、
+Candidate trial、replacement preflightを1つも開始しない。作成リストの通常Planner入力と実行中Planの再計画Preview
+入力（16.8）はどちらもcurrent persisted stateから作るfresh inputで、保存済みPlanのexplicit resolutionを復元しない
+（常に `conflictResolutions = []`）。Phase 6-A以降、この2つのconsumerはB8 orchestrationを経由せず
+ordinary Planner（`PlannerWorkerClient.createPlan()`、Worker `create_plan`）を直接呼ぶ（9.2.19.16）。通常のケースでは
+結果はB8の最初のordinary runと同値である。ただしB8の `maxPlannerReruns`（Production 4）はその最初のrun内の
+runtime-unsupported retryもfull Planner runとして数えていた。ordinary Plannerにはこのorchestration budgetが無い
+（B8固有のboundであり、ordinary Plannerへ移植しない）ので、retryが4 full runを超える入力では、旧経路はB8が
+5回目のfull runを拒否して `plan = null` と `max_planner_reruns_reached` で止まり、新経路はruntime-unsupported Entryの
+除外を続けてPlanを生成できる。同じPlannerInputに対してPlanの有無、`selectedBuildListEntryIds`、
+`rejectedBuildListEntries`、warnings、Step、完成するTarget、`requiredMaterials` が変わり得るので、Phase 6-Aは
+observable Planner calculation semanticsの変更であり、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を17へ進める
+（9.2.19.15）。
+
 `recommendedBuildListEntryId` は従来どおりユーザー提示用の推奨であり、固定制約では
 ない。削除済み・stale・Target無効・Capability不足・保護状態変更で実行不能な選択を
 `invalid_conflict_resolution` として扱う既存規則も変更しない。
@@ -3761,6 +3779,25 @@ PlanStepのcandidateIdとEntry Snapshot
 Active Plan単一制約、置換、破棄、再計算は従来どおりApplication / Persistence層の
 責務であり、B8で変更しない。
 
+**ordinary Planner resultの保存（Phase 6-A）。** 作成リストの通常「生産計画を作成」は
+ordinary Planner（`createPlan()`）の `PlannerResult` を、`PlannerOrchestrationResult` へ変換せず（空のgenerated field
+を付けたダミー変換もしない）、`PlannerResultPersistenceService.savePlannerResult(result, currentCalculationContext,
+approval?)` で保存する。ordinary resultはgenerated Entryもreplacementも持たないので、Build Listは読むだけで書かない。
+
+- `termination.status === "incomplete"` は、partial Planの有無にかかわらず `planner_result_invalid` で何も書かない
+  （`plan === null` より先に判定し、truncated runを通常の「Plan無し」と報告しない）
+- 探索が自然終了した `plan === null` は `no_plan` を返し、何も書かず旧Draftを維持する
+- `plan !== null` は、`status === "draft"`、`conflictRepairLineage === null`（lineageを記録するのはPlanner Alternative
+  actual repairだけであり、ordinary resultのlineageを推測・生成しない）、ProductionPlanのDomain validation
+  （`checkPersistableOrdinaryPlannerResultShape()`）を満たしたうえで、本節の保存境界を共有する: transaction内の
+  current state再読込、CalculationContext、`initialExecutionState`、`targetWeaponsHash`、`buildListEntriesHash`
+  （current Build Listそのもの）、Planが参照する全BuildListEntryの存在とStepの `candidateId`、新Plan IDの非衝突、
+  旧Draftのatomic replacement
+- Build Listを変更しないのでPlan-breaking変更にならず、承認は不要である（承認を渡した場合は既存guardの
+  `plan_breaking_change_approval_not_required` で拒否される）
+- B8の `savePlannerOrchestrationResult()` / `inspectPlannerOrchestrationResultSave()` はPhase 6-Bまで残すが、
+  通常のApplication runtimeからは呼ばない
+
 **Planner Alternative actual repairの保存（9.2.19.8、Phase 5-B）。** 「この候補を優先」のPure Domain artifact
 （`PlannerAlternativeRepairArtifact`）は `PlannerOrchestrationResult` へ変換せず、専用の
 `PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` で保存する
@@ -4224,8 +4261,8 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 
 ### 9.2.19 Planner Alternative Searchと1段の競合repair（Issue #136 / #101）
 
-実装状態: **Phase 5まで実装済み**（Phase 5-A: Pure Domain、Phase 5-B: Production routing / Persistence / migration。
-次はPhase 6のlegacy path整理）。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
+実装状態: **Phase 5まで実装済み、Phase 6-A実装済み**（Phase 5-A: Pure Domain、Phase 5-B: Production routing / Persistence /
+migration、Phase 6-A: 残るProduction consumerのlegacy B8からの切り離し。次はPhase 6-Bのlegacy implementation整理）。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
 9.2.19.16のPhaseに従って段階的に行う。Phase 1（Phase 1-A: modern Search基盤のcomposition seam、Phase 1-B: Search Domain
 APIと空reservationでの基本consumer経路、Phase 1-C: 空reservationでの探索完全性。[SEARCH_SPEC.md](./SEARCH_SPEC.md)
 5.6.8の実装状態を参照）は実装済みである。Phase 2も実装済みである: fixed Route集合からのreservation導出
@@ -4270,7 +4307,9 @@ Production Worker adapter（`createProductionPlannerAlternativeRepair()`、what-
 「比較する」（`createPlannerAlternativeComparison()`、表示中Draftのlineageから `derivePlannerConflictRepairLineageContext()` で
 prior fixed Entry / prior除外Route keyを渡す）と「この候補を優先」（fresh PlannerInput + 決定 + 表示中Draftのlineageで
 `createPlannerAlternativeRepair()`）の同時切替である。`ProductionPlanPage` は旧 `createWhatIfComparison()` /
-`createConstrainedPlan()` を呼ばない。Phase 6（legacy pathの整理）とPhase 7（Presentation）は未実装である。
+`createConstrainedPlan()` を呼ばない。Phase 6-A（9.2.19.16）で、作成リストの通常Plannerと実行中Planの再計画Preview（16.8）も
+`createConstrainedPlan()` からordinary Plannerの `createPlan()` へ切り替え、通常のApplication runtimeにlegacy B8 / B9の
+consumerは残っていない。Phase 6-B（legacy implementationの削除またはtest oracle化）とPhase 7（Presentation）は未実装である。
 
 9.2.19.6の条件4の後半（`G` が選ばれない理由が、fixed Route集合外Entryとの未解決競合の暫定帰結だけであること）は、
 Planの記録（`plan.rejectedBuildListEntries` 等）からは「`G` が暫定帰結で負けた後に勝者がstallで落ちた」と「`G` が
@@ -4328,7 +4367,8 @@ Counterで組み立てるため、boundをいくら広げてもIssue #101の実�
 - 「比較する」と「この候補を優先」は別操作であり、what-if成功を選択のgateにしない（9.2.4.14）
 
 旧B8 constrained enumeration / orchestrationはこのPRで削除しない。9.2.19.14のとおり、Production routing切替
-（Phase 5-B）まではlegacy implementationとしてProductionで動作し、切替後もPhase 6で削除またはtest oracle化するまで実装として残る。
+（Phase 5-B）まではlegacy implementationとしてProductionで動作し、切替後もPhase 6-Bで削除またはtest oracle化するまで実装として残る
+（Phase 6-A以降、通常のApplication runtimeからは呼ばない）。
 
 #### 9.2.19.2 決定の単位（Route単位の決定）
 
@@ -5165,14 +5205,26 @@ interface PlannerAlternativeRouteSummary {
   Production routingを新kernelへ切り替えるまでlegacy implementationとしてそのまま動作した。途中Phaseで
   Production routingを一度に壊さない。Phase 5-Bの切替後も、B8 / B9のWorker request kind（`create_constrained_plan` /
   `create_what_if_comparison`）、Client method、Production adapter、`defaultPlannerWhatIfBounds` と上記defaultは
-  Phase 6まで残るが、生産計画画面の競合操作はそれらを呼ばない（実行中Planの再計画Previewなど他のconsumerは
-  変更しない）
+  Phase 6-Bまで残るが、生産計画画面の競合操作はそれらを呼ばない
+- **Phase 6-A**で、Phase 5-Bの時点でまだB8 orchestration（`createConstrainedPlan()` +
+  `defaultPlannerOrchestrationBounds`）を呼んでいた2つのProduction consumer、作成リストの通常「生産計画を作成」と
+  実行中Planの再計画Preview（16.8）をordinary Planner（`PlannerWorkerClient.createPlan()`）へ切り替えた。どちらも
+  explicit resolutionを持たないfresh input（`conflictResolutions = []`）なので、9.2.7によりB8でもconstrained re-searchは
+  開始されず、代表的な通常ケースでは結果は最初のordinary runと同じである（切替前後のparityはtestで固定した）。
+  ただしB8固有の `maxPlannerReruns` によるruntime-unsupported retry上限（4 full run）が外れるため、それを超える入力では
+  結果が変わり得る（9.2.7。calculation schema 17、9.2.19.15）。保存は
+  `savePlannerResult()`（9.2.15）、再計画Previewは `PlannerResult` を保持し、採用はBuild Listを書き換えない（16.8）。
+  これで通常のApplication runtimeにB8 / B9のconsumerは無く、残るconsumerはbenchmark / testだけである
 - Phase 5はwhat-if（「比較する」）とactual repair（「この候補を優先」）のProduction routingを **同じPRで**
   切り替える。what-ifだけが新kernelでpreviewし、優先確定が旧kernelで別の結果を保存する期間を作らない
   （Phase 5-Bで同じPRで切り替えた）
 - Production strategy flag、feature flag、AppSettings / UI / query parameterによる切替を追加しない（7章）。
   routingはProduction Worker adapterの固定配線である
-- Phase 6でlegacy pathを削除するか、parity / regression用のtest oracleとして残すかを決める
+- Phase 6-Bで、consumerがbenchmark / testだけであることを再監査したうえで、legacy path（B8 / B9のWorker request kind・
+  Client method・Production adapter・計算本体・bounds / default・専用warning kind・benchmark runtime / page）を削除するか、
+  parity / regression用のtest oracleとして残すかを決める。Planner Alternativeが使う `constrained/` 配下の共有primitive
+  （augmented preflight、what-if scenario、conflict work、deterministic materializerの共通core）の中立化・配置換えも、
+  実際のimport graphを見てPhase 6-Bで行う（Phase 6-Aではフォルダ名だけを理由に移動しない）
 
 #### 9.2.19.15 version / compatibility
 
@@ -5206,7 +5258,25 @@ interface PlannerAlternativeRouteSummary {
     上げ、schema 12 rootのPlan本体（snapshot内を含む）へ同じく `null` を補うpure migrationを置く
   - `AppSettings.schemaVersion`、`RngState.schemaVersion`、`PRODUCTION_RNG_ENGINE_VERSION`、Master
     `dataVersion` は変えない
-- **Phase 6**はlegacy pathの削除だけであれば永続shapeもProduction semanticsも変えない。永続値に触れる必要が
+- **Phase 6-A**（作成リストの通常Plannerと再計画Previewのordinary Plannerへの切替、ordinary Planner用Persistence API、
+  再計画Preview / 採用からのB8 generated replacement契約の除去。**実装済み**）
+  - explicit resolutionの無い入力で、B8は通常、最初のordinary runの結果を返すだけだった。しかしB8固有の
+    `maxPlannerReruns`（4）はその最初のrun内のruntime-unsupported retryも数えていたため、retryが4 full runを超える入力では
+    旧経路は `plan = null` と `max_planner_reruns_reached` で止まり、新経路（ordinary `createPlan()`、このbudgetを持たない）は
+    retryを続けてPlanを生成できる（9.2.7）。これはobservable Planner calculation semanticsの変更であり、保存済みPlanは
+    生成経路を記録しないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **17** へ上げる。version 1..16の
+    ProductionPlanは下書き・実行中を問わず `calculation_context_changed` でfail closedし、read migrationや保存済みPlanの
+    version書き換えをしない（ProductionPlanの互換性は4 fieldの完全一致のまま）
+  - Candidate Search、constrained enumerator、RNG prediction、既存Candidate / BuildListEntry snapshotの意味は変えないので、
+    build-resultの明示互換例外を `17 -> [12, 13, 14, 15, 16]` とする（明示map。range checkにしない。ProductionPlanへ適用しない。
+    version 1..11は非互換のまま。過去の `16 -> [12..15]`、`15 -> [12..14]`、`14 -> [12, 13]`、`13 -> [12]` は変えない）
+  - 永続shapeは変えないので、`DATABASE_SCHEMA_VERSION` 10、`ExportRoot.schemaVersion` 13のままでDexie / Export
+    migrationを追加しない。`AppSettings.schemaVersion` 2、`RngState.schemaVersion` 2、`PRODUCTION_RNG_ENGINE_VERSION`
+    `production-rng:c5-e7`、Master `dataVersion` 4も変えない（RNG semanticsの変更ではない）。再計画Previewは非永続なので、
+    その型変更はversionに影響しない
+  - 旧B8の4-run capをordinary Plannerへ移植してparityを人工的に保つことはしない（legacy orchestration boundを
+    Production ordinary Plannerへ残すことになり、Phase 6の整理目的と矛盾するため）
+- **Phase 6-B**はlegacy pathの削除だけであれば永続shapeもProduction semanticsも変えない。永続値に触れる必要が
   判明した場合は、推測でversionを動かさず設計レビューへ戻す
 - 実装時にここに書いた前提（例: 既存Candidateの到達量が変わる、永続shapeが増える）が崩れる場合は、
   勝手にversionを変えず仕様を先に更新する
@@ -5214,7 +5284,8 @@ interface PlannerAlternativeRouteSummary {
 #### 9.2.19.16 phase分割
 
 依存関係を確認したうえで、次の7 Phaseとする（理由は
-[PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md) 11章）。Phase 4は4-A / 4-B、Phase 5は5-A / 5-Bに分ける。
+[PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md) 11章）。Phase 4は4-A / 4-B、Phase 5は5-A / 5-B、
+Phase 6は6-A / 6-Bに分ける。
 
 ```text
 Phase 1  modern Search基盤を使うPlanner Alternative SearchのSearch Domain API
@@ -5236,7 +5307,14 @@ Phase 5-A  「この候補を優先」のactual repairのPure Domain計算、wha
            Production routing・Persistence・Worker protocol・UI・migration・versionは変えない
 Phase 5-B  lineage永続化とmigration、Persistence（artifactの保存時再validation、Plan-breaking guard）、
            Worker / Client、what-if / repair両方のProduction routing切替、version更新（9.2.19.15）
-Phase 6  legacy constrained pathの削除またはtest oracle化
+Phase 6-A  Production consumerのlegacy B8からの切り離し: 作成リストの通常Plannerと実行中Planの再計画Previewを
+           `createConstrainedPlan()` からordinary Plannerの `createPlan()` へ切り替え、ordinary Planner用Persistence API
+           （`savePlannerResult()`）、再計画Preview resultの `PlannerResult` 化、再計画採用からのgenerated Entry /
+           replacementの除去、切替前後のparity test、B8固有retry上限の除去に伴うcalculation schema 17（9.2.19.15）。
+           legacy B8 / B9実装・Worker / Client・bounds・warning・benchmarkは残す
+Phase 6-B  Productionから完全にdeadになったlegacy constrained path（B8 / B9のWorker / Client、計算本体、bounds / default、
+           専用warning kind、benchmark runtime / page）のconsumer再監査のうえでの削除またはtest oracle化と、
+           Planner Alternativeが使う共有primitiveの配置整理
 Phase 7  #122 Presentation改善
 ```
 
@@ -5271,8 +5349,25 @@ Phase 5は5-A / 5-Bに分けた。**Phase 5-A**（actual repairとlineageのPure
 what-ifから共通scenario core（`runPlannerAlternativeScenario()`）へ移し、what-ifとactual repairはその上の2つのprojectionである
 （what-ifの外部契約・run数・budget semanticsはPhase 4-Bのまま）。**Phase 5-B**も完了した。lineageの永続化とmigration
 （Dexie v10 / Export 13）、Planner Alternative専用Persistence、actual repairのWorker / Client、what-ifとactual repair両方の
-Production routing切替を1PRで行い、versionを9.2.19.15のとおり更新した。これでPhase 5は完了であり、次はPhase 6
-（legacy pathの削除またはtest oracle化）である。
+Production routing切替を1PRで行い、versionを9.2.19.15のとおり更新した。これでPhase 5は完了である。
+Phase 6は6-A / 6-Bに分けた。Phase 5-Bの時点で、作成リストの通常「生産計画を作成」と実行中Planの再計画Preview（16.8）は
+まだ `createConstrainedPlan()` + `defaultPlannerOrchestrationBounds` を呼んでいた。どちらの入力もexplicit resolutionを持たない
+ので、9.2.7によりB8が実際に行っていたのは最初のordinary Planner runだけである（ただしB8固有の `maxPlannerReruns` による
+runtime-unsupported retry上限を伴う）。先にこのProduction consumerを
+`createPlan()` へ移せば、Phase 6-Bではdeadになったcodeだけを安全に削除できる。**Phase 6-A**は完了した: 両consumerを
+`createPlan()` へ切り替え、`PlannerResultPersistenceService.savePlannerResult()`（9.2.15）を追加し、
+`ProductionPlanReplanPreview.result` を `PlannerResult` にし、再計画採用からgenerated Entryの追加・`O -> G` 置換・
+generated IDの衝突 / 鮮度検査・replacement metadata検査を除いた（採用はBuild Listを書き換えない）。
+代表的な通常ケース（`conflictResolutions = []`）でB8の結果とordinary Plannerの結果（`plan` / `conflicts` / `warnings` /
+`termination`）が一致し、B8がconstrained enumeration・materialization・Candidate trial・replacement preflightを1つも開始しない
+ことをparity testで固定した。一方、B8固有の `maxPlannerReruns`（4）がruntime-unsupported retryを打ち切らなくなるため、
+5回目のfull runが必要な入力では旧経路が `plan = null` + `max_planner_reruns_reached`、新経路がPlanありとなることも回帰testで
+固定し（9.2.7）、これをobservable Planner calculation semanticsの変更として `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を17へ
+進めた（build-result例外 `17 -> [12, 13, 14, 15, 16]`、Dexie 10 / Export 13は不変。9.2.19.15）。生産計画画面の競合操作
+（Planner Alternative）は変えていない。legacy B8 / B9実装、Worker request kind、Client method、Production adapter、
+bounds / default、B8専用warning kind、benchmark harness / page、B8の保存API（`savePlannerOrchestrationResult()` /
+`inspectPlannerOrchestrationResultSave()`）はPhase 6-Bまで残す。次は**Phase 6-B**（consumer再監査のうえでのlegacy pathの削除または
+test oracle化）である。Phase 6全体はまだ完了していない。
 `maxPlannerReruns` は複数Targetが1つのbudgetを共有するrerun-pressure workloadで実測する。`maxCandidateTrialsPerTarget` は、
 現行semanticsで「Candidate 1がtrialでreject、後続Candidateがfound」となるProduction workloadを確認できていないため、
 semantic thresholdをPhase 3-Bの実測対象とせず、1 trialあたりの実コストと安全弁としての役割からPhase 3-Cで設計判断する
@@ -6348,6 +6443,11 @@ held位置のcost層単位の処理（same-cost closure）は9.2.19冒頭の実�
 - Phase 5のversion境界（9.2.19.15）: version 1..15のProductionPlanがversion 16で `calculation_context_changed`
   になり、version 12..15のCandidate / BuildListEntryが明示例外 `16 -> [12, 13, 14, 15]` でだけ利用でき、
   Dexie v9 -> v10とExport 12 -> 13がPlan本体（snapshot内を含む）へ `conflictRepairLineage = null` だけを補う
+- Phase 6-Aのversion境界（9.2.19.15）: version 1..16のProductionPlanがversion 17で `calculation_context_changed`
+  になり、version 12..16のCandidate / BuildListEntryが明示例外 `17 -> [12, 13, 14, 15, 16]` でだけ利用でき、
+  Dexie 10 / Export 13は動かない。`conflictResolutions = []` の代表的な通常ケースでB8とordinary Plannerの結果が一致し、
+  5回目のfull runが必要なruntime-unsupported retryでは旧B8が `plan = null` + `max_planner_reruns_reached`、ordinary
+  PlannerがPlanありとなる
 
 ## 15.10 Execution Lifecycle Test
 
@@ -6442,7 +6542,8 @@ calculation schema 13で、既存武器のTarget紐付けを各Entryの最初の
 （16.2 / 16.11）へ移し、Production Plan画面での事前表示とともに実装した。
 続いて、再計画Previewと採用（16.8）のUIをBuild ListとProduction Plan画面に接続した。対象は永続状態が
 active / staleのPlanだけであり、Preview入力はRuntimeの `prepareProductionPlanReplanPreview()` から取り、
-既存のPlanner Worker（constrained orchestration、`defaultPlannerOrchestrationBounds`）で計算し、結果は
+既存のPlanner Worker（当時はconstrained orchestration、`defaultPlannerOrchestrationBounds`。Phase 6-A以降は
+ordinary Plannerの `createPlan()`、16.8）で計算し、結果は
 メモリ上だけの「再計画の試算（未採用）」として通常のPlan内容確認（UI_FLOW 11.0）と同じ形式で表示する
 （Plan無し・探索未完了のPreviewは採用不可）。「この再計画を採用」は `inspectProductionPlanReplanAdoption()`
 の結果だけで16.10の3択を出し、いずれの選択も `adoptProductionPlanReplanPreview()` 1回で行う。
@@ -6935,10 +7036,15 @@ Plan開始時Snapshot（`baseSnapshot`）を検索起点にしない。作成中
 
 - 入力は現在の確定済みRngState / NormalArtianCounter、現在OwnedWeapon、最新TargetWeapon、
   最新Build Listから、通常のPlanner実行と同じ `createPlannerInput()` で作る。Active Planは
-  Planner入力に含めない（4章）
-- Plannerは通常どおりdraft相当のProductionPlanを計算する（constrained re-searchを含む）
+  Planner入力に含めない（4章）。実行中Planの `baseSnapshot`、過去のPlannerInput、Conflict resolution、
+  repair lineageも入力にしない。したがって入力は `conflictResolutions = []` である
+- Plannerはcurrent-stateのordinary Planner runとしてdraft相当のProductionPlanを計算する
+  （Phase 6-A以降 `PlannerWorkerClient.createPlan()`）。explicit conflict resolutionを復元しないので、
+  constrained re-searchは行わない（9.2.7。Phase 6-Aより前の `createConstrainedPlan()` 経由でも、explicit resolutionが
+  無いためconstrained re-searchは開始されなかった）
+- Preview resultは `PlannerResult` であり、generated BuildListEntryもreplacement metadataも持たない
 - Preview中、現実行中Planのstatus、`currentStepId`、永続RngState、NormalArtianCounter、
-  OwnedWeapon、TargetWeapon、Build Listを変更しない。Preview結果とgenerated Entryを永続化しない
+  OwnedWeapon、TargetWeapon、Build Listを変更しない。Preview結果を永続化しない
 
 #### 採用
 
@@ -6954,7 +7060,7 @@ Previewの正式採用は別操作とする。採用時は同一transaction内�
 ```text
 旧実行中Plan（active / stale） -> abandoned（replan_adopted）
 新ProductionPlan                -> active
-generated BuildListEntry       -> 保存
+Build List                     -> 変更しない（current Build Listがそのまま新PlanのBuild List）
 旧Planのゲーム内セーブ地点      -> 削除（新Planへ引き継がない）
 作成中状態                      -> 新Planが同じ武器を追跡する場合は新Plan IDへ付け替え、
                                    追跡しない場合は解除
@@ -6971,23 +7077,25 @@ generated BuildListEntry       -> 保存
 - Preview開始時に保持する旧Plan tokenは `planId`、`status`、`currentStepId` だけであり、`updatedAt` は
   採用の一致条件にしない。Preview入力は1つの読み取りtransaction内で通常の `createPlannerInput()` から作り、
   旧Planの `baseSnapshot`・expected state・conflict resolutionを流用しない。Planner計算は既存の
-  Planner Worker（constrained orchestration、`defaultPlannerOrchestrationBounds`）で行い、Worker protocolは
-  追加しない。Preview（旧Plan token、Planner結果、CalculationContext）はplain dataとしてメモリ上だけに保持し、
-  永続化・Exportしない
-- 採用は、旧Plan tokenの一致、採用可能な結果（Planがあり、`incomplete` でなく、通常Planner保存と共有する
-  save-time検証を満たす）、16.10の選択を先に確認する。現在地点での採用では続けてCalculationContext、
-  新Plan IDの非衝突（既存Planを上書きしない）、generated Entryの非衝突と鮮度、generated Entryを加えた
-  Build Listに対する新Planの `dependentBuildListEntriesHash` / `dependentTargetDefinitionsHash`、
-  `initialExecutionState` を再検証する。全体hash（`targetWeaponsHash` / `buildListEntriesHash`）は採用の
+  Planner Workerのordinary entry（Phase 6-A以降 `PlannerWorkerClient.createPlan()`。それ以前は
+  `createConstrainedPlan()` + `defaultPlannerOrchestrationBounds` だったが、explicit resolutionが無いため結果は同じ
+  ordinary runだった）で行い、Worker protocolは追加しない。Preview（旧Plan token、`PlannerResult`、CalculationContext）は
+  plain dataとしてメモリ上だけに保持し、永続化・Exportしない
+- 採用は、旧Plan tokenの一致、採用可能な結果（Planがあり、`incomplete` でなく、ordinary Planner保存と共有する
+  save-time検証 `checkPersistableOrdinaryPlannerResultShape()`（draft、`conflictRepairLineage === null`、Domain
+  validation）を満たす）、16.10の選択を先に確認する。現在地点での採用では続けてCalculationContext、
+  新Plan IDの非衝突（既存Planを上書きしない）、current Build Listに対する新Planの参照（selected Entryの存在、
+  Planが参照する全Entry、Stepの `candidateId`）、`dependentBuildListEntriesHash` / `dependentTargetDefinitionsHash`、
+  `initialExecutionState` を再検証する（Preview開始後に依存Entryが変わった・消えた場合は `replan_state_changed`）。全体hash（`targetWeaponsHash` / `buildListEntriesHash`）は採用の
   authorityにしないため、新Planに依存しないTarget / Entryの追加・変更だけでは採用を拒否しない
 - 新Planの `active` 化は通常のPlan開始authority（`prepareProductionPlanStart()`）を、旧Planを破棄済みとみなした
-  状態に適用して判定する。旧Plan以外の実行中Planがあれば拒否する。新Planとgenerated Entryは追加であり、
-  既存レコードを上書きしない
+  状態に適用して判定する。旧Plan以外の実行中Planがあれば拒否する。新Planは追加であり、既存レコードを
+  上書きしない。Build List（BuildListEntry）は書き換えない（Phase 6-A以降、generated Entryの追加も `O -> G` 置換も無い）
 - 作成中状態の付け替え先は、新Planのselected EntryのRouteが参照し、かつ現在存在する所持武器である。
   付け替え時は `startedAt` を維持する。採用だけで作成中でない武器を作成中にせず、Targetの優先起点も
   変更しない。旧PlanのExecutionHistoryは残し、採用のExecutionHistoryは追加しない
 - 「最後のゲーム内セーブ地点へ戻す」を選んだ場合は16.9の復元（`prepareExecutionSavePointRestore()`）だけを
-  行い、旧Planの破棄、新Plan / generated Entryの保存、作成中状態の付け替え、セーブ地点削除は行わない。
+  行い、旧Planの破棄、新Planの保存、作成中状態の付け替え、セーブ地点削除は行わない。
   復元後は旧Plan tokenが一致しなくなるため、同じPreviewの採用は拒否され、再試算が必要になる
 
 ### 16.9 ゲーム内セーブ地点

@@ -48,11 +48,10 @@ import type {
 import type {
   PlannerInput,
   PlannerOptions,
-  PlannerOrchestrationResult,
+  PlannerResult,
   PlannerRunTermination,
   PlannerWarning,
 } from '../domain/planner'
-import { defaultPlannerOrchestrationBounds } from '../domain/planner'
 import { defaultIntermediateStateSelection, findBuildListTargetDuplicates } from '../domain/buildList'
 import { plannerWarningLabels, productionPlanStatusLabels, staleReasonLabels } from '../presentation/labels'
 import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
@@ -84,17 +83,16 @@ export interface BuildListPageDependencies {
   refresh(calculationContext: CalculationContext): Promise<{ entries: BuildListEntry[]; targets: TargetWeapon[]; ownedWeapons: OwnedWeapon[] }>
   createInput(calculationContext: CalculationContext): Promise<PlannerInput>
   /**
-   * Persists the whole `PlannerOrchestrationResult` through the B8-D2a
-   * atomic boundary (PLANNER_SPEC 9.2.15).
+   * Persists the ordinary Planner result as the new Draft through the atomic
+   * Draft save (PLANNER_SPEC 9.2.15, Phase 6-A): the previous Draft is
+   * replaced in the same transaction and the Build List is not written.
    *
-   * The complete result is passed, never only its Plan: the generated
-   * BuildListEntries and the ProductionPlan must be written in one
-   * transaction, and a `plan === null` result carrying generated Entries is an
-   * invariant violation only that service may judge. It returns the stored
-   * Plan, or `null` when the calculation produced no Plan.
+   * The complete result is passed, never only its Plan, so the typed
+   * termination and the Plan are judged by that service alone. It returns the
+   * stored Plan, or `null` when the calculation produced no Plan.
    */
   savePlannerResult(
-    result: PlannerOrchestrationResult,
+    result: PlannerResult,
     currentCalculationContext: CalculationContext,
   ): Promise<ProductionPlan | null>
   /** `approval` is the breaking-change approval when the inspection required one (`docs/UI_FLOW.md` 16.3). */
@@ -154,7 +152,7 @@ function createDefaultDependencies(master: MasterDataRoot): BuildListPageDepende
     // The ordinary Draft creation passes no approval, so a save point restore
     // (which only an approval can choose) never happens here.
     savePlannerResult: async (result, currentCalculationContext) => {
-      const outcome = await plannerResultPersistenceService.savePlannerOrchestrationResult(
+      const outcome = await plannerResultPersistenceService.savePlannerResult(
         result,
         currentCalculationContext,
       )
@@ -638,16 +636,12 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
         ...createdInput,
         options: { ...plannerOptions },
       }
-      // B8-D2b: the Application caller is what decides to pass the Production
-      // orchestration bounds. The Worker Client applies no default of its own.
-      // The running state is indeterminate (UI_FLOW 10.0): the Production
-      // Planner Worker reports no progress, only a result, an error or a
-      // cancellation.
-      const result = await client.createConstrainedPlan(
-        requestId,
-        input,
-        defaultPlannerOrchestrationBounds,
-      )
+      // The ordinary Planner run (Phase 6-A): this fresh input restores no
+      // conflict resolution, so no constrained re-search could ever start
+      // (PLANNER_SPEC 9.2.7) and the run is the whole calculation. The running
+      // state is indeterminate (UI_FLOW 10.0): the Production Planner Worker
+      // reports no progress, only a result, an error or a cancellation.
+      const result = await client.createPlan(requestId, input)
       if (activeRequestRef.current !== requestId) return
       setWarnings(result.warnings)
       // `maxPlanSteps` truncated the Planner run, so its best state is a
@@ -667,8 +661,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
         client.engineVersion,
       )
       // The complete result is always handed over, `plan === null` included:
-      // a no-Plan result carrying generated Entries is an invariant violation
-      // the Persistence service fails closed on, and only it may judge that.
+      // the Persistence service alone judges whether it is persistable.
       const savedPlan = await dependencies.savePlannerResult(
         result,
         saveCalculationContext,
@@ -1035,7 +1028,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                 再検索が必要な候補は生産計画に含まれません。作成に成功すると、保存された生産計画の画面へ移動します。
                 {draftPlan.status === 'draft' && (
                   // An explanation of the existing atomic replacement
-                  // (`savePlannerOrchestrationResult()`), not a UI-side rule.
+                  // (`savePlannerResult()`), not a UI-side rule.
                   <>
                     {' '}
                     新しい生産計画を保存すると、現在の未開始の生産計画は置き換えられます。

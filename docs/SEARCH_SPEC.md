@@ -374,25 +374,47 @@ reset_skills             油濁した遺装置 ×6（巨戟化時と異なる激
 
 ---
 
-保護契約の改訂により、現行CalculationContext.appSchemaVersionは **7**。
+現行CalculationContext.appSchemaVersionは **17**。
 単一authorityは src/domain/models/common.ts の CURRENT_CALCULATION_APP_SCHEMA_VERSION。
 Search、BuildList、Planner、benchmark runtime creatorで共用する。
-旧version 1..6のCandidate / BuildListEntry / ProductionPlanはすべて非互換であり、
-calculation_context_changedにより現行計算・実行から除外する。
+schema 17 runtimeでは、version 1..11のCandidate / BuildListEntryと、version 1..16のProductionPlanは
+非互換であり、calculation_context_changedにより現行計算・実行から除外する。
 旧Candidateのcategoryやsnapshotは再分類・削除せず、現在のTarget条件で再検索する。
 
-歴史的にはB5-F1で1→2、Plannerのみの変更で2→3→4→5と更新した。
-2..5間のCandidate / BuildList互換例外は当時の境界に限り、version 6以降へは適用しない。
-version 13（ProductionPlanのPlan開始effect、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）はCandidate
-Searchの意味を変えないため、version 12のCandidate / BuildListEntryに限りversion 13で明示的に互換とする
-（`13 -> [12]`。他のCalculationContext fieldの一致と通常のstaleness判定は必要）。
-version 14（Production Plannerの決定的scheduler切替、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7）もCandidate
-Searchとconstrained enumeratorの意味を変えないため、version 12 / 13のCandidate / BuildListEntryに限り
-version 14で明示的に互換とする（`14 -> [12, 13]`。条件は同じ。ProductionPlanには適用しない）。
-Targetの永続形状は独立してDexie DATABASE_SCHEMA_VERSIONを1→2へ更新する。
-AppSettings.schemaVersion、gameVersion、Master Data version、RNG Engine versionは
-変更しない。移行・ExportRoot契約はDATA_MODELと
-TARGET_COMPROMISE_SEMANTICSを参照する。
+歴史的にはB5-F1で1→2、Plannerのみの変更で2→3→4→5と更新し、Target compromise semanticsで6、
+保護契約の改訂で7へ更新した（保護契約の改訂時点の現行versionは7だった）。その後の正式な
+Calculation semantics変更（優先起点の移設 8、所持武器を素材として消費するmodelの削除 9、canonical Ideal
+Route + compromise checkpoint 10、laneごとの途中状態 11、Execution Plan契約 12）を経て、version 1..11の
+Candidate / BuildListEntryは非互換となった。2..5間のCandidate / BuildList互換例外は当時の境界に限り、
+version 6以降へは適用しない（当時のTarget永続形状の変更でDexie DATABASE_SCHEMA_VERSIONを1→2へ更新した
+ことも歴史的記録である。現行の永続version、移行・ExportRoot契約はDATA_MODELと
+TARGET_COMPROMISE_SEMANTICSを参照する）。
+
+version 13以降の変更はいずれもProductionPlan側の計算意味だけを変え、Candidate Search、constrained
+enumerator、RNG prediction、BuildCandidate / BuildListEntry snapshotの意味を変えていない。そのため
+BuildCandidate / BuildListEntryに限り、次の明示的な互換例外を持つ。
+
+| runtime version | 変更（[PLANNER_SPEC.md](./PLANNER_SPEC.md)） | 互換とするbuild resultのversion |
+| --- | --- | --- |
+| 13 | ProductionPlanのPlan開始effect（16.11） | `13 -> [12]` |
+| 14 | Production Plannerの決定的scheduler切替（7、Issue #103 Phase C） | `14 -> [12, 13]` |
+| 15 | Production PlannerのNormal Counter-advance forgeのfast-forward（7.0.2、Issue #129） | `15 -> [12, 13, 14]` |
+| 16 | 生産計画画面のConflict what-if / actual repairのPlanner Alternativeへの切替（9.2.19、Issue #136 / #101 Phase 5-B） | `16 -> [12, 13, 14, 15]` |
+| 17 | 作成リストの通常Plannerと実行中Planの再計画Previewをlegacy B8 `createConstrainedPlan()` からordinary `createPlan()` へ切替（9.2.7 / 9.2.19.15、Issue #136 / #101 Phase 6-A）。旧B8の `maxPlannerReruns` によるruntime-unsupported retry上限が外れ、ProductionPlanの計算意味は変わる | `17 -> [12, 13, 14, 15, 16]` |
+
+- 互換例外は上表の明示mapだけで表す（`src/domain/models/domainRules.ts` の
+  `isBuildResultCalculationContextCompatible()`）。「12以上なら互換」のような範囲判定にせず、将来のversion
+  （例: 18）は明示的な例外が書かれるまでどのversionとも互換にならない。互換は新しいruntimeが古いbuild resultを
+  読む方向だけである
+- 互換とするにはgameVersion、masterDataVersion、rngEngineVersionの一致と、通常のstaleness判定が引き続き必要である
+- version 1..11のCandidate / BuildListEntryはschema 17 runtimeでも非互換のままである
+- この互換例外はBuildCandidate / BuildListEntryに限り、**ProductionPlanには適用しない**。ProductionPlanは
+  CalculationContextの4 field完全一致を要求し、schema 17 runtimeではversion 1..16のProductionPlanは
+  下書き・実行中を問わず非互換である（read migrationや保存済みversionの書き換えはしない）
+- 現行のDexie DATABASE_SCHEMA_VERSION（10）、ExportRoot.schemaVersion（13）、AppSettings.schemaVersion（2）、
+  RngState.schemaVersion（2）、PRODUCTION_RNG_ENGINE_VERSION（`production-rng:c5-e7`）、Master dataVersion（4）は
+  Calculation schemaとは独立したversionであり、片方の更新はもう片方の更新を意味しない（永続形状とその移行は
+  DATA_MODEL参照）。version 17の変更ではどれも動いていない
 
 ## 5. 条件判定
 

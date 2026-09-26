@@ -195,9 +195,11 @@ build結果に限りversion 12 / 13 -> 14の明示的互換例外を持つ。予
 silent fast-forward（version 15、Issue #129）もProductionPlanの計算意味だけを変えたため、build結果に限り
 version 12 / 13 / 14 -> 15の明示的互換例外を持つ。生産計画画面の競合what-if / actual repairのPlanner Alternative
 routing切替（version 16、Issue #136 / #101 Phase 5-B）も保存するProductionPlanの意味だけを変えたため、build結果に限り
-version 12 / 13 / 14 / 15 -> 16の明示的互換例外を持つ（本節末尾、いずれもProductionPlanには適用しない）。
+version 12 / 13 / 14 / 15 -> 16の明示的互換例外を持つ。作成リストの通常Plannerと実行中Planの再計画Previewの
+ordinary Planner routing切替（version 17、Issue #136 / #101 Phase 6-A）もProductionPlanの計算意味だけを変えたため、
+build結果に限りversion 12 / 13 / 14 / 15 / 16 -> 17の明示的互換例外を持つ（本節末尾、いずれもProductionPlanには適用しない）。
 現行versionの単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 16` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 17` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
 `DATABASE_SCHEMA_VERSION`（現行10。14.2）で管理し、AppSettingsは独立した `schemaVersion`（現行2。13）を持つ。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
@@ -359,7 +361,7 @@ version **15** は、予測 `create_normal_artian(count = N)` の
 `AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`
 （`production-rng:c5-e7`）、Master dataVersionは変更しない（いずれも当時）。migrationは追加しない。
 
-現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` **16** は、生産計画画面の「比較する」と「この候補を優先」を
+version 16（Phase 5-B当時の現行）は、生産計画画面の「比較する」と「この候補を優先」を
 Planner Alternativeのscenario（PLANNER_SPEC 9.2.19.7 / 9.2.19.8）へ同時に切り替えた（Issue #136 / #101 Phase 5-B）。
 同じPlannerInputと決定から保存されるPlan（採用replacement、Conflict、決定の展開、不採用記録）が旧B8 / B9 routingと
 変わり得る。永続ProductionPlanは生成方式を記録しないため、version 15以前のPlanがどちらの方式で保存されたかを判別できない。
@@ -375,6 +377,24 @@ Planner Alternativeのscenario（PLANNER_SPEC 9.2.19.7 / 9.2.19.8）へ同時に
 Dexie `DATABASE_SCHEMA_VERSION` を10（14.2）、`ExportRoot.schemaVersion` を13（15.3）へ更新した。
 `AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、
 Master dataVersion（4）は変更しない。
+
+現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` **17** は、作成リストの通常「生産計画を作成」と実行中Planの再計画Previewを
+legacy B8 `createConstrainedPlan()` からordinary `createPlan()` へ切り替えた（Issue #136 / #101 Phase 6-A、PLANNER_SPEC 9.2.7 /
+9.2.19.15）。両経路の入力は `conflictResolutions = []` なので通常は同じordinary resultになるが、B8固有の
+`maxPlannerReruns`（4）は最初のrun内のruntime-unsupported retryも数えていた。ordinary Plannerにはこのbudgetが無いため、
+4 full runを超えるretryが必要な入力では、旧経路は `plan = null` + `max_planner_reruns_reached` で止まり、新経路はPlanを
+生成し得る。永続ProductionPlanは生成経路を記録しないため、version 16以前のPlanを区別できない。
+
+| artifact | version 17 runtimeでの扱い |
+| --- | --- |
+| ProductionPlan version 1..16（draft / activeを問わない） | 非互換。`calculation_context_changed` でfail closedする。exact persisted内容の表示は維持し、read migrationやversion書き換えはしない。Planの互換判定は4 field完全一致で、Plan向けの例外は無い |
+| BuildCandidate / BuildListEntry version 12 / 13 / 14 / 15 / 16 | 明示的なbuild-result例外 `17 -> [12, 13, 14, 15, 16]` により互換。gameVersion、masterDataVersion、rngEngineVersionの一致と通常のstaleness判定は引き続き必要 |
+| BuildCandidate / BuildListEntry version 1..11 | 従来どおり非互換 |
+
+例外は明示mapだけで表し、過去の `16 -> [12, 13, 14, 15]`、`15 -> [12, 13, 14]`、`14 -> [12, 13]`、`13 -> [12]` もそのまま残す。
+永続形状は変えないため、Dexie `DATABASE_SCHEMA_VERSION`（10）、`ExportRoot.schemaVersion`（13）、`AppSettings.schemaVersion`（2）、
+`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、Master dataVersion（4）は変更せず、
+migrationも追加しない。
 
 ---
 
@@ -2654,7 +2674,8 @@ UndoもRngState、全NormalArtianCounter、対象OwnedWeapon、対象TargetWeapo
 次も1つのDexie transactionで原子的に行い、失敗時は何も変更しない。
 
 - 再計画採用: 状態再検証、旧実行中Planの `abandoned`（`replan_adopted`）、新Planの保存と `active` 化、
-  generated BuildListEntryの保存、旧Planのセーブ地点削除、作成中状態の付け替え / 解除
+  旧Planのセーブ地点削除、作成中状態の付け替え / 解除。再計画Previewはordinary Planner resultなので、
+  BuildListEntryは書き換えない（Phase 6-A、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.8）
 - ゲーム内セーブ地点の復元（12.1）
 - Planを壊す変更の承認: Planの `abandoned`（`breaking_change_approved`）と変更の保存
 - Plan破棄: Planの `abandoned`（`user_abandoned`）、セーブ地点削除、作成中状態の解除
@@ -2675,8 +2696,17 @@ Planを壊す変更の承認はRuntimeとして実装済みである（[PLANNER_
 
 ## 14.5 Planner Save Transaction
 
-Planner constrained re-searchを経たPlan保存も原子的に行う。契約本文は
+Planner resultのDraft保存は原子的に行う。契約本文は
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15にある。
+
+- 作成リストの通常「生産計画を作成」のordinary Planner result（`createPlan()`、Phase 6-A）は
+  `PlannerResultPersistenceService.savePlannerResult()` で保存する。generated Entryもreplacementも無いので、
+  1つのDexie read-write transactionで、current state再読込・再validation（CalculationContext、
+  `initialExecutionState`、Target / Build List hash、Planの全BuildListEntry参照、新Plan IDの非衝突）、旧Draft全削除、
+  新Draft追加を行い、BuildListEntryは書き換えない。`incomplete` は何も書かず、`plan === null` は旧Draftを維持する。
+  ordinary resultのPlanは `conflictRepairLineage === null` でなければならない
+- 以下のgenerated Entryを含む保存はlegacy B8 orchestrationと「この候補を優先」の契約であり、B8の保存API
+  （`savePlannerOrchestrationResult()`）はPhase 6-Bまで残るが、通常のApplication runtimeからは呼ばない
 
 - Planner-generated BuildListEntry群と `ProductionPlan` を1つのDexie
   read-write transactionで保存する

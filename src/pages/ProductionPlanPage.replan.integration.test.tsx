@@ -13,7 +13,7 @@ import type {
   ProductionPlanId,
   TargetWeapon,
 } from '../domain/models/publicTypes'
-import { createProductionPlanWithConstrainedSearch } from '../domain/planner'
+import { createProductionPlan } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import { createProductionPlanReplanDependencies } from '../services/execution/productionPlanReplanDependencies'
 import { ProductionPlanReplanPreviewService } from '../services/execution/productionPlanReplanPreviewService'
@@ -31,9 +31,7 @@ import {
 } from '../test/fixtures/executionRuntime'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import {
-  orchestrationBounds,
   orchestrationEntry,
-  orchestrationEnumerationBounds,
   orchestrationSource,
   orchestrationTarget,
   resetRoute,
@@ -52,8 +50,6 @@ import { ProductionPlanPage, type ProductionPlanPageDependencies } from './Produ
 const EXTRA_SOURCE_ID = 'owned.replan-ui.extra'
 const EXTRA_TARGET_ID = 'target.replan-ui.extra'
 const EXTRA_ENTRY_ID = 'entry.replan-ui.extra'
-/** The added Target's persisted Entry a generated Entry replaces (PLANNER_SPEC 9.2.18). */
-const ORIGINAL_ENTRY_ID = 'entry.replan-ui.extra.original'
 const EARLIER_START = '2026-09-10T00:00:00.000Z'
 
 const START = '現在地点から再計画を試算'
@@ -75,8 +71,6 @@ interface Harness {
 interface HarnessOptions {
   savePoint?: boolean
   confirmedSteps?: number
-  /** Feeds the added Entry to the Planner unpersisted, as a generated Entry. */
-  generatedEntry?: boolean
   /**
    * Adds nothing while the Plan runs: the Preview replans the running Plan's
    * own (still fresh) Entry, and the running Plan itself stays executable.
@@ -90,41 +84,16 @@ function plannerMaster(fixture: ExecutionFixture): MasterDataRoot {
 }
 
 /**
- * The real Planner behind the Worker Client interface: the constrained
- * orchestration over exactly the input the page hands over. A generated Entry
- * replaces the added Target's persisted Entry the way constrained re-search
- * adopts one - the Planner runs over the replacement set - and is reported as
- * generated together with that replacement.
+ * The real Planner behind the Worker Client interface: the ordinary Production
+ * Planner (the Worker's `create_plan` entry, Phase 6-A) over exactly the input
+ * the page hands over.
  */
-function realPlannerClient(fixture: ExecutionFixture, generated: BuildListEntry | null): PlannerWorkerClient {
+function realPlannerClient(fixture: ExecutionFixture): PlannerWorkerClient {
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
-    createPlan: vi.fn(),
-    createConstrainedPlan: vi.fn(async (_, input) => {
-      const replacementSet = generated === null
-        ? input
-        : {
-            ...input,
-            buildListEntries: [
-              ...(input.buildListEntries as BuildListEntry[]).filter((entry) => entry.id !== ORIGINAL_ENTRY_ID),
-              structuredClone(generated),
-            ],
-          }
-      const result = await createProductionPlanWithConstrainedSearch(replacementSet, fixture.built.dependencies, {
-        orchestrationBounds: orchestrationBounds(),
-        enumerationBounds: orchestrationEnumerationBounds(),
-      })
-      return generated === null
-        ? result
-        : {
-            ...result,
-            generatedBuildListEntries: [structuredClone(generated)],
-            generatedBuildListEntryReplacements: [{
-              targetWeaponId: generated.targetWeaponId,
-              replacedBuildListEntryId: ORIGINAL_ENTRY_ID as BuildListEntry['id'],
-              generatedBuildListEntryId: generated.id,
-            }],
-          }
+    createPlan: vi.fn((_, input) => createProductionPlan(input, fixture.built.dependencies, undefined)),
+    createConstrainedPlan: vi.fn(async () => {
+      throw new Error('The replan Preview never runs the legacy constrained Planner path.')
     }),
     createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
@@ -166,15 +135,9 @@ async function running(database: AppDatabase, options: HarnessOptions = {}): Pro
     await database.targetWeapons.put(goal)
     const request = await previewService.prepareProductionPlanReplanPreview({ runningPlanId: fixture.plan.id })
     synchronizeOrchestrationEntry(request.plannerInput, entry)
-    if (options.generatedEntry) {
-      const original = orchestrationEntry(ORIGINAL_ENTRY_ID, goal, resetRoute(source.id))
-      synchronizeOrchestrationEntry(request.plannerInput, original)
-      await database.buildListEntries.put(original)
-    } else {
-      await database.buildListEntries.put(entry)
-    }
+    await database.buildListEntries.put(entry)
   }
-  const client = realPlannerClient(fixture, options.generatedEntry ? entry : null)
+  const client = realPlannerClient(fixture)
   const deps: ProductionPlanPageDependencies = {
     master: createValidMasterDataFixture(),
     currentCalculationContext: structuredClone(fixture.built.input.calculationContext),
@@ -219,7 +182,7 @@ async function openAdoptionDialog(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function shownPreviewPlanId(harness: Harness): Promise<ProductionPlanId> {
-  const [call] = vi.mocked(harness.client.createConstrainedPlan).mock.results
+  const [call] = vi.mocked(harness.client.createPlan).mock.results
   const result = await (call.value as Promise<{ plan: ProductionPlan | null }>)
   expect(result.plan).not.toBeNull()
   return (result.plan as ProductionPlan).id
@@ -364,7 +327,8 @@ describe('ProductionPlanPage replan Preview over the real runtime', () => {
       expect(router.state.location.pathname).toBe(`/plans/${harness.fixture.plan.id}`)
       expect(screen.queryByRole('heading', { name: PREVIEW_TITLE })).not.toBeInTheDocument()
       // No automatic re-Preview.
-      expect(harness.client.createConstrainedPlan).toHaveBeenCalledOnce()
+      expect(harness.client.createPlan).toHaveBeenCalledOnce()
+      expect(harness.client.createConstrainedPlan).not.toHaveBeenCalled()
     }))
 
   it('adopts after a Plan-independent Target was added, because the runtime judges dependencies only', () =>
@@ -384,15 +348,16 @@ describe('ProductionPlanPage replan Preview over the real runtime', () => {
       expect((await database.productionPlans.get(newPlanId))?.status).toBe('active')
     }))
 
-  it('saves a generated Entry only with the adoption, and nothing when the transaction fails', () =>
+  it('keeps the Build List exactly as it is through a failed and a successful adoption', () =>
     withDatabase(async (database) => {
-      const harness = await running(database, { generatedEntry: true })
+      const harness = await running(database)
       const user = userEvent.setup()
       const { router } = renderPage(harness.deps, harness.fixture.plan.id)
       const section = await previewThroughPage(user)
-      expect(within(section).getByText('この試算は新しい作成リスト項目を1件生成しました。採用したときに、新しい生産計画と同時に保存されます。')).toBeInTheDocument()
+      // An ordinary run generates no Build List Entry, so none is announced.
+      expect(within(section).queryByText(/新しい作成リスト項目/)).not.toBeInTheDocument()
       const newPlanId = await shownPreviewPlanId(harness)
-      expect(await database.buildListEntries.get(EXTRA_ENTRY_ID)).toBeUndefined()
+      const entriesBefore = await database.buildListEntries.toArray()
       const before = await dump(database)
 
       // The new Plan write fails: the whole adoption rolls back.
@@ -401,7 +366,6 @@ describe('ProductionPlanPage replan Preview over the real runtime', () => {
       await user.click(within(dialog).getByRole('button', { name: ADOPT }))
       expect(await screen.findByText('保存に失敗しました。状態は変更されていません。再試行してください。', undefined, { timeout: 10_000 })).toBeInTheDocument()
       expect(await dump(database)).toEqual(before)
-      expect(await database.buildListEntries.get(EXTRA_ENTRY_ID)).toBeUndefined()
       expect((await currentPlan(database, harness.fixture.plan)).status).toBe('active')
       expect(router.state.location.pathname).toBe(`/plans/${harness.fixture.plan.id}`)
       failingAdd.mockRestore()
@@ -414,9 +378,9 @@ describe('ProductionPlanPage replan Preview over the real runtime', () => {
 
       expect(await screen.findByText('Execution navigator destination', undefined, { timeout: 10_000 })).toBeInTheDocument()
       expect(router.state.location.pathname).toBe(`/plans/${newPlanId}/run`)
-      // The generated Entry replaced the added Target's original Entry.
+      // The adoption started the new Plan against the Build List as it was.
+      expect(await database.buildListEntries.toArray()).toEqual(entriesBefore)
       expect(await database.buildListEntries.get(EXTRA_ENTRY_ID)).toEqual(harness.entry)
-      expect(await database.buildListEntries.get(ORIGINAL_ENTRY_ID)).toBeUndefined()
       expect((await database.productionPlans.get(newPlanId))?.status).toBe('active')
     }))
 

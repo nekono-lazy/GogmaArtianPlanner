@@ -2730,13 +2730,18 @@ describe('ProductionPlanPage Execution entry', () => {
     ['active', 14],
     ['draft', 15],
     ['active', 15],
+    ['draft', 16],
+    ['active', 16],
   ] as const)(
-    'fails a %s schema %i Plan closed under the current schema 16, keeping its persisted content readable',
+    'fails a %s schema %i Plan closed under the current schema 17, keeping its persisted content readable',
     async (status, appSchemaVersion) => {
       // Issue #103 Phase C: a version 13 Plan was calculated by the Beam Search,
       // and Issue #129: a version 14 Plan turned every Counter-advance Normal
-      // forge into a conflict. A persisted Plan records neither, so it is never
-      // prepared, started, compared or executed under the current runtime.
+      // forge into a conflict; a version 15 Plan predates the Planner Alternative
+      // repair (Phase 5-B), and a version 16 Plan's Build List / replan runs were
+      // still bounded by the legacy B8 retry budget (Phase 6-A). A persisted Plan
+      // records none of these, so it is never prepared, started, compared or
+      // executed under the current runtime.
       const fixture = withStatus({ status })
       fixture.plan.calculationContext = { ...fixture.plan.calculationContext, appSchemaVersion }
       fixture.plan.baseSnapshot = {
@@ -2748,7 +2753,7 @@ describe('ProductionPlanPage Execution entry', () => {
         ...fixture.plan.calculationContext,
         appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
       }
-      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
+      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
       renderPage(deps, fixture.plan.id)
 
       expect(await screen.findByText(

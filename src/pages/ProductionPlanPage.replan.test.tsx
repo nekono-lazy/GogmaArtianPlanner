@@ -15,9 +15,8 @@ import type {
 } from '../domain/models/publicTypes'
 import {
   defaultPlannerOptions,
-  defaultPlannerOrchestrationBounds,
   type PlannerInput,
-  type PlannerOrchestrationResult,
+  type PlannerResult,
 } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import type { AdoptProductionPlanReplanPreviewResult } from '../services/execution/productionPlanExecutionService'
@@ -132,14 +131,12 @@ function previewRequest(plan: ProductionPlan): ProductionPlanReplanPreviewReques
   }
 }
 
-function orchestrationResult(overrides: Partial<PlannerOrchestrationResult> = {}): PlannerOrchestrationResult {
+function plannerResult(overrides: Partial<PlannerResult> = {}): PlannerResult {
   return {
     plan: currentContractPlan(PREVIEW_PLAN_ID, { status: 'draft' }),
     conflicts: [],
     warnings: [],
     termination: completedPlannerTermination(),
-    generatedBuildListEntries: [],
-    generatedBuildListEntryReplacements: [],
     ...overrides,
   }
 }
@@ -152,12 +149,15 @@ const readyPreparation: PlannerInteractionPreparationResult = {
 }
 
 function workerClient(
-  createConstrainedPlan: PlannerWorkerClient['createConstrainedPlan'] = async () => orchestrationResult(),
+  createPlan: PlannerWorkerClient['createPlan'] = async () => plannerResult(),
 ): PlannerWorkerClient {
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
-    createPlan: vi.fn(),
-    createConstrainedPlan: vi.fn(createConstrainedPlan),
+    // Phase 6-A: the replan Preview is an ordinary Planner run.
+    createPlan: vi.fn(createPlan),
+    createConstrainedPlan: vi.fn(async () => {
+      throw new Error('The replan Preview never runs the legacy constrained Planner path.')
+    }),
     createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
     createPlannerAlternativeRepair: vi.fn(),
@@ -200,7 +200,6 @@ function adopted(
     savePointHandling,
     oldPlan: { ...plan, status: 'abandoned', abandonmentReason: 'replan_adopted' },
     newPlan: { ...newPlan, status: 'active' },
-    generatedBuildListEntries: [],
   }
 }
 
@@ -289,10 +288,15 @@ describe('ProductionPlanPage replan Preview', () => {
     expect(deps.replan.prepareProductionPlanReplanPreview).toHaveBeenCalledExactlyOnceWith({ runningPlanId: plan.id })
     // The Preview input is exactly the runtime's request: token and current-state input.
     const request = await vi.mocked(deps.replan.prepareProductionPlanReplanPreview).mock.results[0].value
-    expect(client.createConstrainedPlan).toHaveBeenCalledOnce()
-    const [, input, bounds] = vi.mocked(client.createConstrainedPlan).mock.calls[0]
+    expect(client.createPlan).toHaveBeenCalledOnce()
+    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    const call = vi.mocked(client.createPlan).mock.calls[0]
+    // The ordinary run: no orchestration bounds reach the Client.
+    expect(call).toHaveLength(2)
+    const [, input] = call
     expect(input).toBe(request.plannerInput)
-    expect(bounds).toEqual(defaultPlannerOrchestrationBounds)
+    // The running Plan's resolutions and baseSnapshot are never Planner input.
+    expect(input.conflictResolutions).toEqual([])
     expect(deps.replan.createProductionPlanReplanPreview).toHaveBeenCalledExactlyOnceWith(request, expect.objectContaining({ plan: expect.objectContaining({ id: PREVIEW_PLAN_ID }) }))
     // Displayed as a draft-equivalent, never as the running Plan, with the comparison.
     expect(screen.getByRole('table', { name: '現在の生産計画と再計画の試算の比較' })).toBeInTheDocument()
@@ -333,13 +337,13 @@ describe('ProductionPlanPage replan Preview', () => {
     await startPreview(user)
 
     expect(await screen.findByText('現在の生産計画からは再計画を試算できません。')).toBeInTheDocument()
-    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
     expect(screen.queryByRole('heading', { name: PREVIEW_TITLE })).not.toBeInTheDocument()
   })
 
   it('shows an indeterminate running state and cancels through the Worker without reporting a failure', async () => {
     const plan = runningPlan()
-    const pending = deferred<PlannerOrchestrationResult>()
+    const pending = deferred<PlannerResult>()
     // The Production Worker reports no progress (Issue #103 Phase D-2a).
     const client = workerClient(() => pending.promise)
     vi.mocked(client.cancelPlan).mockImplementation(() => pending.reject(new PlannerCancelledError()))
@@ -370,8 +374,8 @@ describe('ProductionPlanPage replan Preview', () => {
 
   it('never shows the late result of an earlier Preview', async () => {
     const plan = runningPlan()
-    const first = deferred<PlannerOrchestrationResult>()
-    const second = deferred<PlannerOrchestrationResult>()
+    const first = deferred<PlannerResult>()
+    const second = deferred<PlannerResult>()
     let calls = 0
     const client = workerClient(() => (++calls === 1 ? first.promise : second.promise))
     const deps = dependencies(plan, client)
@@ -386,11 +390,11 @@ describe('ProductionPlanPage replan Preview', () => {
     expect(calls).toBe(2)
 
     // The first Preview's result arrives after it was cancelled and replaced.
-    first.resolve(orchestrationResult({ plan: currentContractPlan(productionPlanId('plan.replan.late'), { status: 'draft' }) }))
+    first.resolve(plannerResult({ plan: currentContractPlan(productionPlanId('plan.replan.late'), { status: 'draft' }) }))
     await waitFor(() => expect(screen.getByRole('status', { name: /再計画を試算しています/ })).toBeInTheDocument())
     expect(screen.queryByText('plan.replan.late')).not.toBeInTheDocument()
 
-    second.resolve(orchestrationResult())
+    second.resolve(plannerResult())
     await previewShown()
     expect(screen.getByText(PREVIEW_PLAN_ID)).toBeInTheDocument()
     expect(screen.queryByText('plan.replan.late')).not.toBeInTheDocument()
@@ -398,7 +402,7 @@ describe('ProductionPlanPage replan Preview', () => {
 
   it('shows a no-Plan result as a normal Preview that cannot be adopted', async () => {
     const plan = runningPlan()
-    const client = workerClient(async () => orchestrationResult({
+    const client = workerClient(async () => plannerResult({
       plan: null,
       termination: exhaustedPlannerTermination(),
       warnings: [{ kind: 'no_build_list_entries', message: 'nothing to plan' }],
@@ -424,7 +428,7 @@ describe('ProductionPlanPage replan Preview', () => {
     // bound truncated before any Plan formed is not a finished no-Plan result.
     const plan = runningPlan()
     const termination = incompletePlannerTermination()
-    const client = workerClient(async () => orchestrationResult({ plan: null, termination }))
+    const client = workerClient(async () => plannerResult({ plan: null, termination }))
     const user = userEvent.setup()
     renderPage(dependencies(plan, client), plan.id)
 
@@ -444,7 +448,7 @@ describe('ProductionPlanPage replan Preview', () => {
   it('shows an incomplete search with its reached bound and never offers adoption', async () => {
     const plan = runningPlan()
     const termination = incompletePlannerTermination()
-    const client = workerClient(async () => orchestrationResult({ termination }))
+    const client = workerClient(async () => plannerResult({ termination }))
     const deps = dependencies(plan, client)
     const user = userEvent.setup()
     renderPage(deps, plan.id)
@@ -464,8 +468,10 @@ describe('ProductionPlanPage replan Preview', () => {
 
   it('never offers adoption for a result that cannot be persisted', async () => {
     const plan = runningPlan()
-    // A no-Plan result carrying generated Entries is invalid, never adoptable.
-    const client = workerClient(async () => orchestrationResult({ plan: null, generatedBuildListEntries: [createValidBuildListEntry()] }))
+    // A Plan that fails the ordinary save-time shape checks is invalid, never adoptable.
+    const client = workerClient(async () => plannerResult({
+      plan: currentContractPlan(PREVIEW_PLAN_ID, { status: 'active' }),
+    }))
     const user = userEvent.setup()
     renderPage(dependencies(plan, client), plan.id)
 

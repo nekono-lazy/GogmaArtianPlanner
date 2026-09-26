@@ -63,7 +63,7 @@ describe('Execution lifecycle persistence migration (Dexie v4 -> v5)', () => {
     // The v5 upgrade moved no calculation schema; the later Execution Plan
     // contract moved the calculation schema to 12 without a Dexie upgrade.
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
   })
 
   it('writes only the deterministic defaults and infers nothing', async () => {

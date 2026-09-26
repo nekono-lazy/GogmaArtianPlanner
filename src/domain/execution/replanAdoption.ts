@@ -1,6 +1,5 @@
 import type {
   BuildListEntry,
-  BuildListEntryId,
   CalculationContext,
   ISODateTimeString,
   OwnedWeapon,
@@ -16,13 +15,10 @@ import {
   validateOwnedWeapon,
   validateProductionPlan,
 } from '../models/publicTypes'
-import type { PlannerOrchestrationResult } from '../planner/constrained/plannerConstrainedOrchestration'
-import type { PlannerInput } from '../planner/plannerTypes'
+import type { PlannerInput, PlannerResult } from '../planner/plannerTypes'
 import {
-  checkGeneratedBuildListEntriesFresh,
-  checkPersistablePlannerResultShape,
-  checkProductionPlanBuildListReferences,
-  prepareFinalReplacementBuildList,
+  checkPersistableOrdinaryPlannerResultShape,
+  checkProductionPlanBuildListEntryReferences,
   type PlannerResultPersistenceIssue,
 } from '../planner/plannerResultPersistenceValidation'
 import {
@@ -67,7 +63,10 @@ export interface ReplanRunningPlanToken {
  * What the Application hands to the existing Planner Worker for a replan
  * Preview: the token of the running Plan and a PlannerInput built from the
  * current confirmed persisted state by the ordinary `createPlannerInput()`.
- * The running Plan itself is never part of the PlannerInput.
+ * The running Plan itself - its `baseSnapshot`, past PlannerInput, Conflict
+ * resolutions and repair lineage - is never part of the PlannerInput, so the
+ * input carries no conflict resolution and the Preview is one ordinary
+ * current-state Planner run (`PlannerWorkerClient.createPlan()`, Phase 6-A).
  */
 export interface ProductionPlanReplanPreviewRequest {
   runningPlanToken: ReplanRunningPlanToken
@@ -76,14 +75,16 @@ export interface ProductionPlanReplanPreviewRequest {
 }
 
 /**
- * A transient replan Preview: the running Plan token, the Planner result and
- * the CalculationContext the Preview was calculated under. It is plain
- * structured-clone data that lives only in memory; it is never persisted,
- * exported, or stored in Dexie.
+ * A transient replan Preview: the running Plan token, the ordinary Planner
+ * result and the CalculationContext the Preview was calculated under. It is
+ * plain structured-clone data that lives only in memory; it is never
+ * persisted, exported, or stored in Dexie. An ordinary run generates no
+ * BuildListEntry and replaces none, so adopting the Preview never changes the
+ * Build List.
  */
 export interface ProductionPlanReplanPreview {
   runningPlanToken: ReplanRunningPlanToken
-  result: PlannerOrchestrationResult
+  result: PlannerResult
   calculationContext: CalculationContext
 }
 
@@ -109,7 +110,7 @@ export function createReplanRunningPlanToken(plan: ProductionPlan): ReplanRunnin
 /** Bundles the Planner Worker result with its Preview request, as plain data. */
 export function createProductionPlanReplanPreview(
   request: ProductionPlanReplanPreviewRequest,
-  result: PlannerOrchestrationResult,
+  result: PlannerResult,
 ): ProductionPlanReplanPreview {
   return structuredClone({
     runningPlanToken: request.runningPlanToken,
@@ -125,20 +126,20 @@ function issueMessage(issue: PlannerResultPersistenceIssue): string {
 /**
  * Whether the Preview's Planner result could ever become the running Plan: the
  * search was not truncated, a Plan exists, and the result passes the same
- * save-time shape checks the ordinary Planner result save applies.
+ * shape checks the ordinary Planner result save applies
+ * (`checkPersistableOrdinaryPlannerResultShape()`: a draft, no repair lineage,
+ * a Domain-valid Plan).
  *
  * The typed termination is judged first (`docs/PLANNER_SPEC.md` 7.2.1,
  * `docs/UI_FLOW.md` 10.1): an `incomplete` search is a partial Planner run
  * artifact whether or not it carries a partial Plan, never a finished no-Plan
- * result. Only a search that ended on its own with no Plan and nothing to
- * persist is the ordinary `no_plan`; a no-Plan result that still carries
- * generated Entries breaks the Planner result invariant. A no-Plan Preview is
- * a valid Preview to show, never one to adopt.
+ * result. Only a search that ended on its own with no Plan is the ordinary
+ * `no_plan`. A no-Plan Preview is a valid Preview to show, never one to adopt.
  */
 export function describeReplanPreviewAdoptability(
   preview: ProductionPlanReplanPreview,
 ): ProductionPlanReplanPreviewAdoptability {
-  const { plan, generatedBuildListEntries, generatedBuildListEntryReplacements, termination } = preview.result
+  const { plan, termination } = preview.result
   if (termination.status === 'incomplete') {
     return {
       adoptable: false,
@@ -147,25 +148,11 @@ export function describeReplanPreviewAdoptability(
     }
   }
   if (plan === null) {
-    const replacementCount = Array.isArray(generatedBuildListEntryReplacements)
-      ? generatedBuildListEntryReplacements.length
-      : 0
-    return generatedBuildListEntries.length > 0 || replacementCount > 0
-      ? {
-          adoptable: false,
-          reason: 'invalid_result',
-          message: `The Planner returned no Plan but ${generatedBuildListEntries.length} generated BuildListEntries and ${replacementCount} BuildListEntry replacements. No Entry may be persisted without its Plan.`,
-        }
-      : { adoptable: false, reason: 'no_plan', message: 'The replan Preview has no ProductionPlan to adopt.' }
+    return { adoptable: false, reason: 'no_plan', message: 'The replan Preview has no ProductionPlan to adopt.' }
   }
   // `incomplete` was classified above, so every remaining shape or Domain
   // validation issue is an invalid result.
-  const issue = checkPersistablePlannerResultShape(
-    plan,
-    generatedBuildListEntries,
-    termination,
-    generatedBuildListEntryReplacements,
-  )
+  const issue = checkPersistableOrdinaryPlannerResultShape(plan, termination)
   if (issue !== null) {
     return { adoptable: false, reason: 'invalid_result', message: issueMessage(issue) }
   }
@@ -175,15 +162,8 @@ export function describeReplanPreviewAdoptability(
 function requireAdoptablePlan(preview: ProductionPlanReplanPreview): ProductionPlan {
   const adoptability = describeReplanPreviewAdoptability(preview)
   if (adoptability.adoptable) return adoptability.plan
-  const { plan, generatedBuildListEntries, generatedBuildListEntryReplacements, termination } = preview.result
-  const issue = plan === null
-    ? null
-    : checkPersistablePlannerResultShape(
-        plan,
-        generatedBuildListEntries,
-        termination,
-        generatedBuildListEntryReplacements,
-      )
+  const { plan, termination } = preview.result
+  const issue = plan === null ? null : checkPersistableOrdinaryPlannerResultShape(plan, termination)
   executionFailure(
     'replan_result_invalid',
     adoptability.message,
@@ -292,11 +272,10 @@ export interface ProductionPlanReplanAdoptionInput {
  *   running Plan is not abandoned, nothing of the Preview is persisted, and a
  *   new Preview from the restored state is required (16.8 / 16.10).
  * - `adopted`: the running Plan becomes `abandoned` (`replan_adopted`), the new
- *   Plan becomes `active`, each generated Entry replaces the persisted Entry it
- *   was calculated to replace (`docs/PLANNER_SPEC.md` 9.2.18), in-progress
- *   marks are moved or cleared, and the running Plan's save point is deleted.
- *   The replaced Entries are deleted without a further breaking-change
- *   warning: adopting the Preview already ends the running Plan.
+ *   Plan becomes `active`, in-progress marks are moved or cleared, and the
+ *   running Plan's save point is deleted. The Build List is not written: the
+ *   ordinary replan run generates and replaces no Entry, so the current Build
+ *   List is the new Plan's Build List as it is (Phase 6-A).
  */
 export type ProductionPlanReplanAdoptionWrite =
   | { kind: 'save_point_restored'; restore: ExecutionSavePointRestoreWrite }
@@ -307,13 +286,6 @@ export type ProductionPlanReplanAdoptionWrite =
       oldPlan: ProductionPlan
       /** The new Plan, started. It is added, never put over an existing Plan. */
       newPlan: ProductionPlan
-      /** Added, never put over an existing Entry. */
-      generatedBuildListEntries: BuildListEntry[]
-      /**
-       * The persisted Entries the generated ones replace, confirmed in the same
-       * transaction to be each Target's one persisted Entry; deleted.
-       */
-      replacedBuildListEntryIds: BuildListEntryId[]
       /** Weapons whose in-progress mark moved to the new Plan or was cleared. */
       ownedWeapons: OwnedWeapon[]
       /** Targets the new Plan's start effect changed (16.11). */
@@ -345,8 +317,8 @@ function throwAdoptionIssue(issue: PlannerResultPersistenceIssue | null): void {
  * current persisted state, what the new Plan was calculated from: the
  * RNG / Normal Counter / OwnedWeapon / Plan-dependent Target execution state
  * (`initialExecutionState`), the new Plan's dependent Target definitions and
- * dependent Entries (with the generated Entries added), the CalculationContext,
- * and the generated Entries themselves. Targets and Entries the new Plan does
+ * dependent Entries over the current Build List, and the CalculationContext.
+ * Targets and Entries the new Plan does
  * not depend on never refuse it, because the whole-input audit hashes are not
  * adoption authority. The new Plan is then started through the ordinary Plan
  * start authority, with the running Plan already treated as abandoned.
@@ -379,9 +351,7 @@ export function prepareProductionPlanReplanAdoption(
     }
   }
 
-  const generatedEntries = preview.result.generatedBuildListEntries
-  const replacements = preview.result.generatedBuildListEntryReplacements
-  const finalEntries = assertPreviewStateHolds(input, newPlan, generatedEntries)
+  const buildListEntries = assertPreviewStateHolds(input, newPlan)
 
   // The ordinary Plan start authority, over the post-state in which the
   // running Plan is already abandoned: any other running Plan still refuses.
@@ -394,7 +364,7 @@ export function prepareProductionPlanReplanAdoption(
       normalCounters: state.normalCounters,
       ownedWeapons: state.ownedWeapons,
       targetWeapons: state.targetWeapons,
-      buildListEntries: finalEntries,
+      buildListEntries,
       // The new Plan has not executed anything, so no observation binding applies.
       planExecutionHistory: [],
       executionSavePoint: null,
@@ -415,7 +385,7 @@ export function prepareProductionPlanReplanAdoption(
     updatedAt: now,
   }
 
-  const trackedByNewPlan = collectNewPlanTrackedOwnedWeaponIds(startedPlan, finalEntries, state.ownedWeapons)
+  const trackedByNewPlan = collectNewPlanTrackedOwnedWeaponIds(startedPlan, buildListEntries, state.ownedWeapons)
   const ownedWeapons = state.ownedWeapons.flatMap((weapon): OwnedWeapon[] => {
     const inProgress = weapon.executionInProgress
     if (inProgress?.productionPlanId !== runningPlan.id) return []
@@ -436,8 +406,6 @@ export function prepareProductionPlanReplanAdoption(
     savePointHandling: savePointDecision === null ? 'no_choice' : 'keep_current',
     oldPlan,
     newPlan: startedPlan,
-    generatedBuildListEntries: structuredClone(generatedEntries),
-    replacedBuildListEntryIds: replacements.map(({ replacedBuildListEntryId }) => replacedBuildListEntryId),
     ownedWeapons,
     targetWeapons: start.targetWeapons,
     deletesExecutionSavePoint: state.executionSavePoint !== null,
@@ -449,18 +417,14 @@ export function prepareProductionPlanReplanAdoption(
  * difference refuses with `replan_state_changed`, except an ID collision of the
  * new Plan and broken references of the result itself.
  *
- * Every check reads the **final replacement set** (`docs/PLANNER_SPEC.md`
- * 9.2.18): the current Entries with each replaced `O` removed and each
- * generated `G` added - the Build List the new Plan will run against. A Target
- * whose persisted Entry is no longer exactly the `O` the Preview replaced
- * refuses with `replan_state_changed`, and nothing is deleted on a guess.
- * Returns that set.
+ * Every check reads the current persisted Build List as it is - the Build
+ * List the new Plan will run against, because the ordinary replan run
+ * generates and replaces no Entry. Returns it.
  */
 function assertPreviewStateHolds(
   input: ProductionPlanReplanAdoptionInput,
   newPlan: ProductionPlan,
-  generatedEntries: readonly BuildListEntry[],
-): BuildListEntry[] {
+): readonly BuildListEntry[] {
   const { preview, runningPlan, state, currentCalculationContext } = input
   if (
     !isCalculationContextCompatible(currentCalculationContext, preview.calculationContext) ||
@@ -475,45 +439,34 @@ function assertPreviewStateHolds(
       `ProductionPlan '${newPlan.id}' already exists; a replan Preview never overwrites a persisted Plan.`,
     )
   }
-  const finalBuildList = prepareFinalReplacementBuildList(
-    state.buildListEntries,
-    generatedEntries,
-    preview.result.generatedBuildListEntryReplacements,
-  )
-  throwAdoptionIssue(finalBuildList.issue)
-  const finalEntries = finalBuildList.finalEntries as BuildListEntry[]
+  const { buildListEntries } = state
   const missingEntry = newPlan.selectedBuildListEntryIds.find(
-    (id) => !finalEntries.some((entry) => entry.id === id),
+    (id) => !buildListEntries.some((entry) => entry.id === id),
   )
   if (missingEntry !== undefined) {
     replanStateChanged(`BuildListEntry '${missingEntry}' the new Plan depends on no longer exists.`)
   }
   if (
-    createDependentBuildListEntriesHash(finalEntries, newPlan.selectedBuildListEntryIds) !==
+    createDependentBuildListEntriesHash(buildListEntries, newPlan.selectedBuildListEntryIds) !==
     newPlan.baseSnapshot.dependentBuildListEntriesHash
   ) {
     replanStateChanged('A BuildListEntry the new Plan depends on changed after the replan Preview.')
   }
-  const dependentTargetIds = collectProductionPlanDependentTargetWeaponIds(newPlan, finalEntries)
+  const dependentTargetIds = collectProductionPlanDependentTargetWeaponIds(newPlan, buildListEntries)
   if (
     createDependentTargetDefinitionsHash([...state.targetWeapons], dependentTargetIds) !==
     newPlan.baseSnapshot.dependentTargetDefinitionsHash
   ) {
     replanStateChanged('A Target definition, priority or enablement the new Plan depends on changed after the replan Preview.')
   }
-  const actual = createActualExecutionState(
-    newPlan,
-    { ...state, buildListEntries: finalEntries },
-    [],
-  )
+  const actual = createActualExecutionState(newPlan, state, [])
   if (!executionStateMatches(actual, newPlan.baseSnapshot.initialExecutionState)) {
     replanStateChanged(
       'The current RNG, Normal Counter, OwnedWeapon or Plan-dependent Target state differs from the state the replan Preview was calculated from.',
     )
   }
-  throwAdoptionIssue(checkGeneratedBuildListEntriesFresh(generatedEntries, state, currentCalculationContext))
-  throwAdoptionIssue(checkProductionPlanBuildListReferences(newPlan, generatedEntries, finalEntries))
-  return finalEntries
+  throwAdoptionIssue(checkProductionPlanBuildListEntryReferences(newPlan, buildListEntries))
+  return buildListEntries
 }
 
 /**
