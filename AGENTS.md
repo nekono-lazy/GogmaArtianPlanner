@@ -3550,6 +3550,10 @@ synthetic rerun-pressure workload (two non-fixed Targets sharing one `maxPlanner
 measures the rerun bound; no Production workload where Candidate 1 is rejected and a later
 Candidate is found was found, so the trial bound's semantic threshold is not a Phase 3-B
 measurement (this does not prove that one trial suffices).
+Phase 3-B measurement is completed: the real Browser Worker records (Chrome 153, build `527d2af`)
+are in `docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md` 12, with the raw evidence kept
+locally as the ignored `PLANNER_ALTERNATIVE_PHASE3B_BROWSER_RAW_RESULTS.json`. It changed no code,
+semantics or version and decided no default; Phase 3-C (the Production defaults) is pending.
 
 ---
 
