@@ -4196,8 +4196,8 @@ message、DB、Exportへ入らず、versionは動かさない。
 代替探索のlazy性はoperation cost層単位である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8「cost層単位のlazy性」）。cost Dの
 Candidateを返す前に、lowerBound <= Dのworkとそこから派生する同じcostのworkを処理し（same-cost closure）、その後6キー順序で
 返す。同じcostのheld位置（巨戟化位置、同じdepthのSkill / Gogma state）は6キーの上位5キーが一致しても `candidateStableKey` の
-順序がCounter位置順と一致しないため、この層単位の処理が正しさの条件であり、Phase 2で確定している。Dより大きいcost層は
-delivery前に先行してsolveしない。同じcost層に属するheld位置・state数によるtime-to-firstの実コストは性能の問題であり、
+順序がCounter位置順と一致しないため、この層単位の処理が正しさの条件であり、Phase 2で確定している。Dより大きいcost層のworkは
+queueにenqueueされていてもdelivery前にsettle / solveしない。同じcost層に属するheld位置・state数によるtime-to-firstの実コストは性能の問題であり、
 Phase 3のBrowser Worker benchmarkで評価する（9.2.19.16）。背景、方式選定の理由、Phase分割の根拠は
 [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（task-specific設計記録、
 非normative）にある。計測事実は
@@ -4632,8 +4632,9 @@ interface PlannerAlternativeSearchExtent {
   `stopped_by_planner_rerun_bound` とする。trial Planを再利用する場合は数えない
 - 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
 - extentは探索範囲の上限であり、探索の進め方はoperation cost層単位のlazy探索である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8
-  「cost層単位のlazy性」）。代替探索はextent全体をupfront solveせず、最初のCandidateまでの作業量はそのCandidateのcost層までに
-  限られる（同じcost層の中はsame-cost closureで閉じてから返す）
+  「cost層単位のlazy性」）。代替探索はextent全体をupfront solveせず、最初のCandidateまでにsettle / solveするworkはそのCandidateのcost層までに
+  限られる（同じcost層の中はsame-cost closureで閉じてから返す。より高いcost層のworkはqueueにenqueueされていてもsettle /
+  solveしない）
 
 #### 9.2.19.13 typed result（#122へ渡す情報）
 

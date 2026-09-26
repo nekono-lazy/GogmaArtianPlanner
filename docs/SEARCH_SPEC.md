@@ -1474,8 +1474,9 @@ Planner Alternative Searchのlazy性は **operation cost層単位** であり、
 
 ```text
 work             SearchWorkQueue上のlowerBound = そのworkから生じ得るCandidateのoperation cost（own operation数）の下界
-cost層Dを閉じる   lowerBound <= D のworkを処理する。その処理で新たに lowerBound = D のworkが生じれば、それも処理する。
-                 queueの先頭が lowerBound > D になった時点でcost D層は閉じる
+cost層Dを閉じる   lowerBound <= D のworkをsettleする。そのsettleで新たに lowerBound = D のworkが生じれば、それもsettleする。
+                 queueの先頭が lowerBound > D になった時点でcost D層は閉じる。lowerBound > D のworkは、その間に
+                 queueへenqueueされていてよい（例: 次のstream depth、次のNormal offset）が、settle / solveはしない
 delivery         cost Dで得たCandidateを6キー順序でsortし、除外keyを除いてconsumerへ1件ずつ返す
 ```
 
@@ -1483,13 +1484,17 @@ delivery         cost Dで得たCandidateを6キー順序でsortし、除外key�
   source）がすべて一致しても、最後の `candidateStableKey` の文字列比較はCounter位置順と一致しない（例: 巨戟化位置が98と
   99だけ異なり、held位置を跨いで同じReset Skillsへ至る2 Routeでは、`"skillCounterAfter":100` の99側が先になる）。そのため
   「Counter位置の小さいCandidateを見つけたら即返す」では順序を保証できず、cost D層を閉じてからsortする
-- したがって、最初のCandidateまでの時間は、そのCandidateと **同じoperation costに属する** held位置・Route base・stream
-  stateの数に比例する場合がある（例: 同じcostで置ける巨戟化位置、同じdepthのSkill / Gogma state）
-- 一方、**Dより大きいoperation cost層を、cost DのCandidateのdelivery前に先行してsolveしてはならない**。例えば
-  「巨戟化のみ = cost 1、巨戟化 + Reset = cost 2、巨戟化 + Reset ×2 = cost 3」のとき、cost 1のCandidateを返す前に
-  cost 2 / 3の層を解かない。consumerが停止すれば、未処理のより高いcost層のworkは作られない
-- これは5.6.7（旧B8）のupfront solve、すなわち最初のCandidateの前に **extent内の全Route base・全streamを先に解く** 方式とは
-  別である。Planner Alternative Searchはextent全体をupfront solveしない
+- したがって、最初のCandidateまでの時間は、same-cost closureに必要なheld位置・Route base・stream stateの数に比例し得る
+  （例: 同じcostで置ける巨戟化位置、同じdepthのSkill / Gogma state）。探索対象のRoute baseがすべて同じcost層に属する入力では、
+  結果的にそれらすべてを確認することもある
+- 一方、**Dより大きいoperation cost層を、cost DのCandidateのdelivery前にsettle / solveしてはならない**。そうしたworkは
+  queueへ既にenqueueされていてもよいが、cost Dのdelivery前にはsettle / solveしない。例えば「巨戟化のみ = cost 1、巨戟化 +
+  Reset = cost 2、巨戟化 + Reset ×2 = cost 3」のとき、cost 1のCandidateを返す前にcost 2 / 3の層を解かない。consumerが停止した
+  場合も、queueに残るより高いcost層のworkはそれ以上settle / solveしない
+- これは5.6.7（旧B8）のupfront solve、すなわち最初のCandidateの前に **extent内の全Route base・全stream depth・全候補範囲を
+  先に解く** 方式とは別である。Planner Alternative Searchは、Candidateのcost Dまでのworkとsame-cost closureだけを処理して
+  cost DのCandidateを6キー順序で返し、Dより高いcost層はqueueに存在していてもdelivery前にはsettle / solveしない。extent全体を
+  upfront solveしない
 - held位置も同じ原則に従う。同じcost層に属するheld位置（例: Skill origin 97、97..100 held、98でも99でも巨戟化できる）は、
   その層を閉じる前にすべて確認してよい
 - 同じcost層の中のwork数・prediction数・held run長に対する実コストは正しさの問題ではなく性能の問題であり、
@@ -1498,8 +1503,8 @@ delivery         cost Dで得たCandidateを6キー順序でsortし、除外key�
 #### modern Candidate Searchから再利用するもの
 
 - `TargetSearchScheduler` / `SearchWorkQueue` のlower-bound順のwork処理（Route base登録、stream depth、pair）。
-  Candidateのcostより高いcost層のworkを、そのCandidateのdelivery前に処理しない（上記same-cost closure。5.6.7のextent全体の
-  upfront solveを繰り返さない）
+  Candidateのcostより高いcost層のworkは、queueに存在していても、そのCandidateのdelivery前にsettle / solveしない（上記
+  same-cost closure。5.6.7のextent全体のupfront solveを繰り返さない）
 - Bonus stream / Skill streamのprediction・memo・stream独立性（5.4 / 5.5）。Resetは位置ごと1回、Keepはfamily
   layoutごと。held位置があっても `predictSkills` / `predictGogmaBonus` の呼出し回数が他streamの解の数で
   増えない契約（3.1）を維持する
@@ -1554,10 +1559,11 @@ authorityにしない。
 - deterministicである（同じ入力から同じ順序の `candidateStableKey` 列）
 - extentで有限である
 - cancel可能で、Worker yield可能である。yield / cancel checkpointはstream solveとheld位置の走査の内部にも置く
-- 最初のCandidateを返すためにextent全体をupfront solveしない。cost DのCandidateを返す前に処理してよいのは、lowerBound <= D
-  のworkとそこから派生する同じcostのworkだけであり（same-cost closure）、Dより大きいcost層は先行してsolveしない。そのため
-  time-to-firstは同じcostに属するheld位置・Route base・stream state数に比例する場合があるが、全Route base数・extent全体には
-  比例させない
+- 最初のCandidateを返すためにextent全体をupfront solveしない。cost DのCandidateを返す前にsettle / solveしてよいのは、
+  lowerBound <= D のworkとそこから派生する同じcostのworkだけであり（same-cost closure）、Dより大きいcost層のworkは
+  queueにenqueueされていてもdelivery前にsettle / solveしない。そのためtime-to-firstはsame-cost closureに必要なheld位置・
+  Route base・stream state数に比例し得るが、より高いoperation cost層やextent全体をCandidate delivery前にsolveすることは
+  要求しない
 - Production RNGのinput-level support契約を維持する
 - normal-scope Keepの扱い（5.9）とblind variantの規則（6.1.1）を維持する
 - route-history完全探索へ拡張しない
