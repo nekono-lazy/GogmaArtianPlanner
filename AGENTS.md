@@ -3619,7 +3619,13 @@ the next lineage. The formal spec gained the lineage outcome `rejected_by_scenar
 not accepted by the composition; `replacementBuildListEntryId = null`), the outcome mapping table, and the pruning
 of a decision with no valid record and no valid fixed Entry. The kernel now returns each Target's
 `invalidatedRouteKey` and leaves a prior fixed Entry the current decision invalidates out of every fixed Route set
-(the latest decision wins). Nothing is persisted: `ProductionPlan.conflictRepairLineage`, Persistence, the Worker /
+(the latest decision wins). The same rule covers the restored resolutions: `preparePlannerAlternativeKernel()`
+supersedes every restored explicit resolution (other than the decision's own `conflictKey`, which the ordinary
+merge replaces) selecting an Entry that is both an active prior fixed Entry and invalidated by this decision, and
+prepares the scenario from that effective input, so it is neither a fixed constraint, an explicit decision Entry nor
+a replacement-preflight re-mapping subject (`PreparedPlannerAlternativeKernel.supersededConflictResolutions`).
+Unrelated resolutions and expired lineage decisions never supersede anything, and a request without lineage keeps
+every resolution. Nothing is persisted: `ProductionPlan.conflictRepairLineage`, Persistence, the Worker /
 Client, Production routing, migrations and versions are Phase 5-B, which switches the what-if and the repair together.
 No version moved (15 / 9 / 12).
 

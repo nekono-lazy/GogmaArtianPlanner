@@ -460,6 +460,12 @@ Master dataVersion                      4
    - 「後の決定で以前のfixed Entryが負けた場合は最新の決定が優先する」の「後の決定」には今回の決定も含むので、今回の決定が
      無効化するEntryはlineage由来のprior fixed Entryであってもfixed Route集合へ入れない。Kernel
      （`runPreparedPlannerAlternativeKernel()`）がこれを行い、what-ifとactual repairで共通になる
+   - PR #149のレビューで、上記だけでは不十分と判明した。以前のfixed decisionは、表示中DraftのConflictから復元された
+     explicit resolution（例: `X -> D`）としても `PlannerInput.conflictResolutions` に残り、what-ifの準備がそれをfixed
+     constraint・明示決定Entryにするため、今回の決定でDを負けさせてもDの代替D2がreplacement preflightでrejectされ得た。
+     そこで「active lineageのprior fixed Entry ∩ 今回の無効化Entry」を選択する復元済みresolutionを、今回の決定のmergeの前に
+     実効入力から外す（superseded prior fixed resolution。正式仕様: PLANNER_SPEC 9.2.19.11）。無関係なresolution、
+     失効したlineageの決定、今回の決定と同じ `conflictKey` のresolution（mergeで置換）は対象にしない
 
 ---
 

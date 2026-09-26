@@ -98,9 +98,12 @@ export interface PlannerAlternativeKernelRequest {
   /**
    * Fixed Entries of earlier decisions that are still valid (repair lineage,
    * 9.2.19.11), filtered by the caller. Each must be a valid Entry of the
-   * current input; none is inferred or substituted. An Entry this decision
-   * itself invalidates loses to it (the latest decision wins) and is left out
-   * of every fixed Route set of this request.
+   * current input; none is inferred or substituted. This list is also the
+   * only authority on which restored resolutions a later decision supersedes:
+   * an Entry here that this decision itself invalidates loses to it (the
+   * latest decision wins) and is left out of every fixed Route set, and every
+   * restored resolution of `plannerInput` selecting it is left out of this
+   * request (`PreparedPlannerAlternativeKernel.supersededConflictResolutions`).
    */
   priorFixedBuildListEntryIds: readonly BuildListEntryId[]
   /** Routes earlier decisions invalidated, per Target (9.2.19.10). */
@@ -229,9 +232,25 @@ export type PlannerAlternativeKernelPreparationFailure =
  * kernel reads the same preparation instead of preparing the input twice.
  */
 export interface PreparedPlannerAlternativeKernel {
+  /**
+   * The what-if preparation of the effective input: the request input minus
+   * the superseded prior fixed resolutions, with the decision merged in.
+   */
   scenario: PreparedPlannerWhatIfScenario
-  /** This decision's fixed Entry and every Entry a valid explicit resolution selects. */
+  /** This decision's fixed Entry and every Entry an effective valid explicit resolution selects. */
   explicitDecisionBuildListEntryIds: BuildListEntryId[]
+  /** Every Entry this decision invalidates: the current Entry of each non-fixed Target, in stable order. */
+  invalidatedBuildListEntryIds: BuildListEntryId[]
+  /**
+   * Active prior fixed Entries this decision invalidates (9.2.19.11: the latest
+   * decision wins), in stable order. Empty without repair lineage.
+   */
+  supersededPriorFixedBuildListEntryIds: BuildListEntryId[]
+  /**
+   * The restored explicit resolutions left out of this request because they
+   * select a superseded prior fixed Entry, in their input order.
+   */
+  supersededConflictResolutions: PlannerConflictResolution[]
 }
 
 export type PlannerAlternativeKernelPreparationResult =
@@ -311,16 +330,13 @@ export function preparePlannerAlternativeKernel(
 ): PlannerAlternativeKernelPreparationResult {
   assertPlannerAlternativeTrialBounds(request.bounds)
   assertPlannerAlternativeRequestExtent(request.extent)
-  const prepared = preparePlannerWhatIfScenario(
-    {
-      plannerInput: request.plannerInput,
-      scenarioResolution: request.decision,
-      bounds: request.bounds,
-    },
+  const prepareScenario = (plannerInput: PlannerInput) => preparePlannerWhatIfScenario(
+    { plannerInput, scenarioResolution: request.decision, bounds: request.bounds },
     dependencies,
   )
+  const prepared = prepareScenario(request.plannerInput)
   if (prepared.status !== 'ready') return prepared
-  const scenario: PreparedPlannerWhatIfScenario = prepared.scenario
+  let scenario: PreparedPlannerWhatIfScenario = prepared.scenario
   const { entriesById } = scenario.initialContext
 
   // A prior fixed Entry is used only as it is: it must be a valid Entry of the
@@ -335,6 +351,34 @@ export function preparePlannerAlternativeKernel(
     }
   }
 
+  // 9.2.19.11, the latest decision wins: an active prior fixed Entry this
+  // decision invalidates is no longer fixed, and neither is any restored
+  // explicit resolution that selects it. Those resolutions are left out of this
+  // request's effective input - before the merge, so the decision itself keeps
+  // its ordinary merge semantics - and the scenario is prepared again from it.
+  // Nothing else is dropped: a resolution selecting any other Entry, an Entry
+  // this decision leaves alone, or an Entry no active lineage fixed stays.
+  const invalidatedBuildListEntryIds = invalidatedBuildListEntryIdsOf(scenario)
+  const priorFixed = new Set(request.priorFixedBuildListEntryIds)
+  const supersededPriorFixedBuildListEntryIds = invalidatedBuildListEntryIds.filter((id) => priorFixed.has(id))
+  const superseded = new Set(supersededPriorFixedBuildListEntryIds)
+  const supersededConflictResolutions = request.plannerInput.conflictResolutions.filter((resolution) =>
+    resolution.conflictKey !== request.decision.conflictKey && superseded.has(resolution.selectedBuildListEntryId))
+  if (supersededConflictResolutions.length > 0) {
+    const effective = prepareScenario({
+      ...request.plannerInput,
+      conflictResolutions: request.plannerInput.conflictResolutions
+        .filter((resolution) => !supersededConflictResolutions.includes(resolution)),
+    })
+    if (effective.status !== 'ready') return effective
+    if (invalidatedBuildListEntryIdsOf(effective.scenario).join(',') !== invalidatedBuildListEntryIds.join(',')) {
+      throw new Error(
+        'Planner Alternative invariant violated: superseding prior fixed resolutions changed the Entries the decision invalidates.',
+      )
+    }
+    scenario = effective.scenario
+  }
+
   return {
     status: 'ready',
     prepared: {
@@ -342,8 +386,15 @@ export function preparePlannerAlternativeKernel(
       explicitDecisionBuildListEntryIds: sortedUnique(
         scenario.fixedConstraints.map(({ fixedBuildListEntryId }) => fixedBuildListEntryId),
       ),
+      invalidatedBuildListEntryIds,
+      supersededPriorFixedBuildListEntryIds,
+      supersededConflictResolutions: supersededConflictResolutions.map((resolution) => ({ ...resolution })),
     },
   }
+}
+
+function invalidatedBuildListEntryIdsOf(scenario: PreparedPlannerWhatIfScenario): BuildListEntryId[] {
+  return sortedUnique(scenario.works.map(({ targetWeaponId }) => invalidatedEntryOf(scenario, targetWeaponId).id))
 }
 
 /**
@@ -389,9 +440,8 @@ export async function runPreparedPlannerAlternativeKernel(
   const runner = createPlannerAlternativeFullRunner(budget, dependencies, executionOptions)
   // 9.2.19.11: a prior fixed Entry this very decision invalidates is no longer
   // fixed - the latest decision wins - so no Target's search reserves its Route.
-  const invalidatedByDecision = new Set(
-    scenario.works.map(({ targetWeaponId }) => invalidatedEntryOf(scenario, targetWeaponId).id),
-  )
+  // (Its restored resolutions were already superseded at preparation.)
+  const invalidatedByDecision = new Set(preparedKernel.invalidatedBuildListEntryIds)
   const priorFixedBuildListEntryIds = request.priorFixedBuildListEntryIds
     .filter((id) => !invalidatedByDecision.has(id))
 

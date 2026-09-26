@@ -4735,6 +4735,36 @@ fixed Entryの失効。lineageの以前の決定のfixed Entryは、現在Build 
 今回のrequestのfixed Route集合に入れない（Phase 5-Aの実装では、Kernelが
 `runPreparedPlannerAlternativeKernel()` でcallerの `priorFixedBuildListEntryIds` から今回の無効化Entryを除く）。
 
+**supersededされるprior fixed resolution**（固定する）。以前のrepair decisionでfixedになったEntryは、lineageだけでなく、
+表示中Draftの `PlanConflict.selectedBuildListEntryId` から復元されたexplicit resolution（9.2.4.14）としても今回の
+`PlannerInput.conflictResolutions` に残る。最新の決定が優先するためには、fixed Route集合だけでなくそのresolutionも
+今回のrequestから外す必要がある。
+
+```text
+superseded prior fixed Entry
+  = 現在有効なactive lineage contextのprior fixed Entry（上記の失効規則を適用したもの）
+    ∩ 今回の決定が無効化するEntry（今回のConflictの非固定participant Targetの現在Entry）
+```
+
+- superseded prior fixed Entryを `selectedBuildListEntryId` とする復元済みexplicit resolutionは、今回のrequestでは
+  supersedeされ、fixed constraint、明示決定Entry（9.2.19.6）、replacement preflightの再対応付け（9.2.3.1）の対象に
+  しない。そのresolutionは以前のrepair decisionがそのRouteをfixedした結果であり、今回の後続の決定でそのEntryの現在Route
+  自体が負けたため、以前のfixed decisionを今回のrequestで同時に要求できないからである。同じsuperseded prior fixed Entryを
+  選択するresolutionが複数のConflictにある場合は、同じRoute単位のprior decisionの結果としてすべてsupersedeする
+- supersedeは今回の決定のmerge（9.2.4.5: 同じ `conflictKey` は置換、他は維持、無ければ追加）の前に、今回の決定と同じ
+  `conflictKey` 以外のresolutionについてだけ行う。今回の決定自身と同じ `conflictKey` のresolutionは従来どおりmergeで
+  置換される。mergeの一般契約は変えない
+- 保持するもの: 今回の決定で無効化されないEntryを選択するresolution、active lineageのprior fixed EntryではないEntryを
+  選択するresolution、今回の決定そのもの。`selectedBuildListEntryId` が一致するというだけで広くresolutionを削除しない
+- 失効したlineage（Target単位・fixed Entryの失効で現在有効でない記録）はsupersedeのauthorityにしない。authorityは
+  現在有効なactive lineage contextのprior fixed Entryだけであり、lineageの無いrequest（通常のwhat-ifを含む）では
+  何もsupersedeしない
+- supersedeはshared scenario preparationの意味であり、what-ifとactual repairで共通である。Phase 5-Aの実装では
+  `preparePlannerAlternativeKernel()` が、callerのprior fixed Entry（`priorFixedBuildListEntryIds`、active lineage contextから
+  導出したもの）と今回の無効化Entryからsuperseded resolutionを求め、それを除いた実効入力でscenarioを準備する
+  （`PreparedPlannerAlternativeKernel.supersededConflictResolutions`）。full Planner runではなく、`maxPlannerReruns` を
+  消費しない。individual trial、scenario composition、run再利用の規則は変えない
+
 決定のoutcomeの記録（固定する）。今回の決定の `invalidatedRoutes` は、今回のConflictの直接participant Target
 （9.2.19.8手順3のstable order）ごとに1件であり、`invalidatedRouteKey` はその時点の無効化Entryの現在Routeの
 `candidateStableKey()` である（Route summaryや文字列から再構築しない）。`outcome` と
