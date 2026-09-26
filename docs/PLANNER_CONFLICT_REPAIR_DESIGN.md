@@ -366,7 +366,7 @@ Master dataVersion                      4
 | --- | --- | --- | --- |
 | 1 | Planner Alternative SearchのSearch Domain API（modern scheduler上の別consumer policy、継続探索、extent、除外key、cancel / yield、決定的ordering）。reservation無し（空reservation）で通常Searchとの関係をテスト | なし | なし / なし |
 | 2 | Planner側のfixed Route集合・reservation導出（既存route unit plan authority）、hold付きstream探索、OwnedWeapon排他、trial full rerunのfound判定。Issue #101 fixtureで「火が342で巨戟化」する代替のfull rerun成立をテスト | 1 | なし / なし |
-| 3 | 実Browser Worker benchmark（Issue #101実ケース、no-Ideal worst case、長いheld run、cancel / responsiveness、time to first Candidate、same-cost closureでsettleしたwork数、held run長に対するコスト、Skill / Gogmaのheld state数とfamily layout数、prediction呼び出し数、Candidate trial数、full Planner rerun数）。extent defaultとwhat-if / repairの試行上限default決定 | 2 | なし（benchmark専用コードのみ）/ なし |
+| 3 | 実Browser Worker benchmark（Issue #101実ケース、no-Ideal worst case、長いheld run、cancel / responsiveness、time to first Candidate、same-cost closureでsettleしたwork数、held run長に対するコスト、Skill / Gogmaのheld state数とfamily layout数、prediction呼び出し数、Candidate trial数、full Planner rerun数）。extent defaultとwhat-if / repairの試行上限default決定 | 2 | Production behaviorなし（benchmark基盤と、Search / Planner DomainのProduction default定数。routing未接続）/ なし |
 | 4 | B9 what-if「比較する」の新kernel接続（Domain calculation、scenario trialと `scenarioOperationCount`、代替Route summaryを含むtyped result、Worker protocol / Client）。Production routingはまだ旧経路 | 3 | なし / なし |
 | 5 | 「この候補を優先」のactual repair（Route単位の決定、決定の展開、Conflict再生成、lineage永続化、migration）と、what-if / repair両方のProduction routing切替 | 4 | あり / calc 16、DB 10、Export 13 |
 | 6 | legacy constrained path（B8 enumeration / orchestration、関連bounds・warning・benchmark page）の削除またはtest oracle化 | 5 | なし / なし（永続shapeに触れる場合は別途判断） |
@@ -382,12 +382,15 @@ Master dataVersion                      4
 
 1. Search Domain APIとreservation DTOの具体的な型名・field名（Phase 1 / 2）
 2. hold付きBonus streamのstate search実装方式と、lower boundの定義（own operation数はheld位置で増えない）
-3. 軸外pairのlazy評価で追加の安全上限が必要か（Phase 3の実測で判断。不要ならextentと試行上限だけにする）。同じcost層の
-   held位置・state数によるtime-to-firstのコストも同じくPhase 3で測る。探索のlazy性がoperation cost層単位（same-cost closure）
-   であること自体はPhase 2で確定しており（SEARCH_SPEC 5.6.8）、6キー順序と `candidateStableKey` は変えない
-4. extent / 試行上限のProduction default（Phase 3）。Phase 3-Cで確定済み: `defaultPlannerAlternativeSearchExtent = 4 / 235 / 4`、
+3. 軸外pairのlazy評価で追加の安全上限が必要か。**確定済み（Phase 3-C）**: 軸外pair専用の追加安全上限は設けない。
+   operation cost層単位のlazy探索とextent・試行上限（4）をProduction authorityとする。同じcost層のheld位置・state数による
+   time-to-firstの実コストはPhase 3-Bで測定済みである
+   （[PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md](./PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md) 12章）。
+   探索のlazy性がoperation cost層単位（same-cost closure）であること自体はPhase 2で確定しており（SEARCH_SPEC 5.6.8）、
+   6キー順序と `candidateStableKey` は変えない
+4. extent / 試行上限のProduction default（Phase 3）。**確定済み（Phase 3-C）**: `defaultPlannerAlternativeSearchExtent = 4 / 235 / 4`、
    `defaultPlannerAlternativeTrialBounds = 2 / 8`（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8、[PLANNER_SPEC.md](./PLANNER_SPEC.md)
-   9.2.19.12）。Phase 3-Cでは軸外pair専用の追加安全上限を設けていない
+   9.2.19.12）
 5. 外部進行に依存するgenerated Entry（fixed Routeが先に進めることを前提にしたRoute）を、fixed Entryが
    Build Listから消えた後に通常Plannerがstall dropしたときの表示（Phase 5または#122）。Domain上は既存の
    stall drop / `rejectedBuildListEntries` で扱い、新しいstale理由を作らない

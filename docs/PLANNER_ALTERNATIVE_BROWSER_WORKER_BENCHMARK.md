@@ -753,11 +753,14 @@ caller必須のままで、default値でのfallback・欠けたfieldの補完・
 - **`maxGogmaAdvance = 235`**: Issue #101 real fixtureの実測境界（Gogma window `55 .. 55 + 235 - 1 = 289`）。235未満では
   Issue #101を取り逃す。240以上はIssue #101で最初のCandidateもcostも変えず（既知のsemantic benefitなし）、Idealが無い入力
   （12.8）ではextent拡大分だけ探索costが増えるため採用しない。221〜234は未測定だが、window計算上289へ届く最小値は235である
-- **`maxSkillAdvance = 4`**: 既存巨戟のReset Skillsや巨戟化は、fixed RouteがSkill originをheld + blockedにしたとき次の
-  Skill位置へoperationを置く（held traversal。Issue #101自体もSkill 341 held + blocked → 342で巨戟化）。1ではorigin位置
-  だけのwindowになり狭い場合があるため採用しない。Skill streamはNormalほどのmemory pressureが観測されていない（12.9）。
-  4はblocked originの次位置と短いheld / blocked連鎖への余裕を持たせる小さい値であり、より大きい値（〜64）のsemantic
-  benefitはPhase 3-Bで観測していないため広げない
+- **`maxSkillAdvance = 4`**: Skill windowは既存巨戟のReset Skillsが `origin .. origin + M - 1`、巨戟化Routeの巨戟化 /
+  Reset Skillsが `origin .. origin + M` である（SEARCH_SPEC 3.1 / 5.6.8）。M = 1でも巨戟化はorigin + 1まで置けるので
+  （Issue #101自体もM = 1でSkill 341 held + blocked → 342で巨戟化）、「origin blocked時に次位置へ巨戟化できない」は
+  1を避ける理由にしない。1を避ける理由は2つである。既存巨戟のReset SkillsはM = 1ではorigin位置しか探索しないため、
+  originがblockedなら次位置のResetを探索できない。巨戟化Routeでも、origin + 1より先まで続くheld / blocked連鎖を跨ぐには
+  1より大きいextentが必要になる。観測事実としては、Issue #101でSkill 1〜64の最初のCandidate / costに差がなく（12.7）、
+  long Skill held 512も約1.1 sで完走した（12.9）。4は短いheld / blocked連鎖への小さなheadroomとして選んだ設計判断であり、
+  より大きい値（〜64）のsemantic benefitはPhase 3-Bで観測していないため広げない
 
 ### 13.3 trial bounds
 

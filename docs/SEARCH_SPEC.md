@@ -1558,10 +1558,13 @@ export const defaultPlannerAlternativeSearchExtent: PlannerAlternativeSearchExte
 - **Gogma 235**: Issue #101 real fixtureの実測境界。220ではCandidateなし（stopped by extent）、235でFire
   Alternative（Gogma origin 55、Reset 56..289、`estimatedGogmaAdvance = 235`）が見つかる。240 / 300 / 350では最初の
   Candidateが235と同一で、既知のsemantic benefitがなく、Idealが無い入力ではextent拡大分だけcostが増える
-- **Skill 4**: 既存巨戟のReset Skillsや巨戟化は、fixed RouteがSkill originをheld + blockedにしたとき次のSkill位置へ
-  operationを置く必要がある（held traversal）。1ではorigin位置だけのwindowになり狭い場合がある。4はblocked originの
-  次位置と短いheld / blocked連鎖への余裕を持たせる小さい値である。Phase 3-BのIssue #101ではSkill 1..64で最初の
-  Candidate / costに差がなく、より大きい値のsemantic benefitは観測していないため広げない
+- **Skill 4**: Skill windowは既存巨戟のReset Skillsが `origin .. origin + M - 1`、巨戟化Routeの巨戟化 / Reset Skillsが
+  `origin .. origin + M` である（本節と3.1）。したがってM = 1でも巨戟化はorigin + 1まで置け、Issue #101もM = 1で
+  Skill 341（held + blocked）→ 342で巨戟化する。「origin blocked時に次位置へ巨戟化できない」は理由にしない。一方、既存
+  巨戟のReset SkillsはM = 1ではorigin位置しか探索しないため、originがblockedなら次位置のResetを探索できない。巨戟化Route
+  でも、origin + 1より先まで続くheld / blocked連鎖を跨ぐには1より大きいextentが必要になる。Phase 3-BのIssue #101では
+  Skill 1..64で最初のCandidate / costに差がなく、long Skill held 512も完走した。4は短いheld / blocked連鎖への小さな
+  headroomとして選んだ設計判断であり、より大きい値のsemantic benefitは観測していないため広げない
 
 Domain API（`visitPlannerAlternativeCandidates()` の `PlannerAlternativeSearchInput.extent`）はcaller必須指定の
 ままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの定数を明示的に渡す

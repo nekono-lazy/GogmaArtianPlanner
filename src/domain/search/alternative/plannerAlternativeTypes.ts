@@ -70,9 +70,13 @@ export interface PlannerAlternativeSearchExtent {
  *   for short held / blocked chains, not a guarantee for an arbitrarily long one.
  * - Gogma 235: the measured Issue #101 threshold (220 finds no Candidate; 235
  *   finds the Fire Alternative; 240 / 300 / 350 add no known semantic benefit).
- * - Skill 4: an existing Gogma's Reset Skills or a conversion must be able to
- *   move past a held and blocked Skill origin; 4 leaves room for a short
- *   held / blocked chain. No semantic benefit of a larger value was observed.
+ * - Skill 4: the Skill window is `origin .. origin + M - 1` for an existing
+ *   Gogma's Reset Skills and `origin .. origin + M` for a conversion Route, so
+ *   even M = 1 lets a conversion move to origin + 1 (Issue #101 converts at 342
+ *   past a held and blocked 341). M = 1 is still too narrow for an existing
+ *   Gogma's Reset Skills past a blocked origin, and for a conversion Route
+ *   crossing a held / blocked chain beyond origin + 1. 4 is small headroom for
+ *   short chains; no semantic benefit of a larger value was observed.
  *
  * Callers explicitly pass it (for example as a spread copy); it is never an
  * implicit Domain fallback, a field-completion target or a clamp.
