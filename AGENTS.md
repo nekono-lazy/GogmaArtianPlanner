@@ -3565,6 +3565,22 @@ measured thresholds). The Domain APIs keep extent and bounds caller-required - n
 partial completion, no clamp - and the benchmark keeps its `BENCHMARK_ONLY_*` conditions. The
 defaults are wired to no Worker, Client, UI or repair yet: Phase 4 is pending, Production routing has
 not switched, and no version moved.
+Phase 4 is split into 4-A and 4-B. Phase 4-A (docs-only; `docs/PLANNER_SPEC.md` 9.2.19.8.1 / 9.2.19.12 /
+9.2.19.13) fixed the scenario composition: individual trials stay independent from one baseline; found
+replacements are adopted monotonically in stable Target order, the first one reusing its individual trial
+result and each later one run as the accepted set plus itself (a rejected one is dropped alone, never
+rolling back accepted ones); the latest accepted result is the final scenario result when it already
+evaluated the final accepted set, so a new final run happens only with zero found replacements, and
+Conflict regeneration / decision expansion never adds a run. `maxPlannerReruns` is one request-global
+budget shared by individual trials, adoption runs, a needed final run and every runtime-unsupported retry,
+counting only started full Planner runs; reaching it is no failure until one more run is needed.
+`adoptedInScenario` is `true` / `false` / `null` (not evaluated because the budget stopped the
+composition), never collapsing an unevaluated one into `false`. `excludedByRepairLineageCount` counts
+only Candidates actually skipped for an active prior repair lineage key - not the current invalidated
+Route, not the stored key count - while the Search summary's `excludedCandidates` stays the total.
+Phase 4-B (the what-if runtime connection: Planner Alternative What-if Calculation above the unchanged
+`runPlannerAlternativeKernel()`, typed result, Route summary, shared budget, Worker protocol, Production
+adapter, Client) is next; Production UI routing still switches only in Phase 5. No version moved.
 
 ---
 

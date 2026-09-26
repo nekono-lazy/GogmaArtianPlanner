@@ -13,8 +13,11 @@ runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #1
                          found判定（route commitmentの暫定帰結evidenceによる9.2.19.6の完全判定）、Issue #101のDomain
                          acceptance）。探索のlazy性はoperation cost層単位（same-cost closure。SEARCH_SPEC 5.6.8）で
                          確定している。Phase 3（benchmark harness #144、real Browser Worker測定 #145、Production default確定
-                         Phase 3-C: extent 4 / 235 / 4、試行上限 2 / 8。PLANNER_SPEC 9.2.19.12）も完了した。Phase 4以降
-                         （what-if / repair接続、lineage永続化、Production routing切替）は未実装
+                         Phase 3-C: extent 4 / 235 / 4、試行上限 2 / 8。PLANNER_SPEC 9.2.19.12）も完了した。Phase 4は
+                         4-A / 4-Bに分割し、Phase 4-A（docs-only。scenario compositionのrun再利用規則、request-globalな
+                         maxPlannerReruns、excludedByRepairLineageCount、adoptedInScenarioの未評価状態。PLANNER_SPEC
+                         9.2.19.8.1 / 9.2.19.12 / 9.2.19.13）で正式仕様を確定した。Phase 4-B以降（what-ifのruntime接続、
+                         repair接続、lineage永続化、Production routing切替）は未実装
 Production behavior:     変更していない（画面経路はlegacyのB8のまま）
 schema / version:        変更していない（10章）
 ```
@@ -220,7 +223,8 @@ Trace Replay** である（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.11）。stre
   2. このconflictの非固定participant Targetごとに独立にalternative search
   3. 見つかったCandidateを一時的に差し替えてfull Plannerで検証
   4. 代替Route、操作量、進行量をpreview
-  5. 見つかったreplacementをactual repairと同じ規則で合成したscenario Planを得て、
+  5. 見つかったreplacementをactual repairと同じ規則（scenario composition、PLANNER_SPEC 9.2.19.8.1）で
+     合成したscenario Planを得て、
      その実PlanStep数（scenarioOperationCount）、完成しないTarget、残る / 新しく発生するConflictをpreview
   6. 終了（新Conflictを再帰的にrepairしない）
 
@@ -248,8 +252,15 @@ Trace Replay** である（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.11）。stre
 - what-ifは1段なので、この値は **1段repairを適用したtrial Planの暫定PlanStep数** であり、最終完成までの
   確定総手数ではない。新しい未解決Conflictが残る場合も値は返すが、完成しないTargetと残る / 新しいConflictと
   合わせて読む
-- scenario PlanはTargetごとの独立評価とは別に、actual repairと同じ合成規則で作る。非固定Targetが1つで、その
-  trial Planがそのままscenario Planになる場合は追加のfull runをしない
+- scenario PlanはTargetごとの独立評価とは別に、actual repairと同じ合成規則（scenario composition、
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.8.1）で作る。foundになったreplacementをstable orderでmonotonicに
+  採用し、2件目以降は採用済み集合 + 今回のreplacementでfull Planner runを行う。最初のfound replacementの
+  individual trial resultと、最後にacceptedになったadoption runの結果は再利用し、最終採用集合を評価済みのresultが
+  あれば同じ入力でfinal runを追加しない（新規のscenario runが必要なのはfoundが0件のときだけ）。非固定Targetの数や
+  代替が見つからないTargetの存在だけを理由にrunを追加しない
+- 全full Planner run（individual trial、adoption run、必要なfinal run、runtime-unsupported retry）は1 requestで1つの
+  `maxPlannerReruns` を共有する（PLANNER_SPEC 9.2.19.12）。scenario compositionの途中でbudgetが尽きた場合、採否を
+  評価できなかったreplacementは「不採用」ではなく「未評価」（`adoptedInScenario = null`）として区別する
 - trial / scenarioのPlanner optionsはactual repairと同じ `conflictResolutionPlannerOptions(表示中Plan)` にし、
   previewした手数と「この候補を優先」で保存される計画の条件を揃える
 
@@ -308,7 +319,11 @@ Searchから手動置換すれば、そのTargetの履歴は失効する。恒�
 - 代替Route自身の操作数、Normal / Skill / Gogmaの進行量（Planner-start基準の到達量）
 - scenario全体の暫定Plan手数（`scenarioOperationCount`、6.1）と、このPlanで完成しないTarget
 - 代替採用時に残るConflict、新しく発生するConflict（「追加競合あり / なし」の判断に使う）
-- lineageにより除外した候補があった事実（件数。technical keyは通常UIへ出さない）
+- lineageにより除外した候補があった事実（件数。technical keyは通常UIへ出さない）。件数
+  （`excludedByRepairLineageCount`）は、有効なprior repair lineage由来のkeyに一致して今回実際にskipしたCandidate数
+  だけであり、今回の決定で無効化する現在Routeにだけ一致したCandidateや、lineageに保存されたkey数は数えない
+  （PLANNER_SPEC 9.2.19.13。Search summaryのtotal除外件数 `excludedCandidates` とは別semantic）
+- 代替がscenario compositionで採用されたか（採用 / 不採用 / 上限による未評価）
 
 本PRはUIを変更しない。
 
@@ -354,20 +369,27 @@ Master dataVersion                      4
 
 ## 11. 後続PR分割
 
-依存関係を確認し、依頼案の6 Phaseを次の7 Phaseへ調整した。調整点は2つである。
+依存関係を確認し、依頼案の6 Phaseを次の7 Phaseへ調整した。調整点は2つである（その後、Phase 4を4-A / 4-Bへ
+分割した。下記3）。
 
 1. **benchmarkをProduction接続の前へ移す**（依頼案Phase 5 → Phase 3）。Production routingへ接続する時点で
    extentと試行上限のdefaultに実測根拠が必要なため。B8では接続後にdefaultを決めた結果、Issue #101の
    範囲不足がProductionへ出た
 2. **what-ifとactual repairのProduction routing切替を同じPRにする**（Phase 5）。what-ifだけが新kernelで
    previewし、「この候補を優先」が旧B8で別の結果を保存する期間を作らないため
+3. **Phase 4を4-A（docs-only）と4-B（runtime接続）に分ける**。runtime実装の前に、scenario composition時の
+   full Planner run規則（individual trial / adoption runの結果を再利用し、同じ入力でfinal runを重ねない）、
+   request-globalな `maxPlannerReruns` の消費規則、`excludedByRepairLineageCount` の正確な意味、budget停止時の
+   `adoptedInScenario` の未評価状態が正式仕様上で曖昧だったため、先に仕様だけを確定する
+   （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.8.1 / 9.2.19.12 / 9.2.19.13）
 
 | Phase | 内容 | 依存 | Production影響 / version |
 | --- | --- | --- | --- |
 | 1 | Planner Alternative SearchのSearch Domain API（modern scheduler上の別consumer policy、継続探索、extent、除外key、cancel / yield、決定的ordering）。reservation無し（空reservation）で通常Searchとの関係をテスト | なし | なし / なし |
 | 2 | Planner側のfixed Route集合・reservation導出（既存route unit plan authority）、hold付きstream探索、OwnedWeapon排他、trial full rerunのfound判定。Issue #101 fixtureで「火が342で巨戟化」する代替のfull rerun成立をテスト | 1 | なし / なし |
 | 3 | 実Browser Worker benchmark（Issue #101実ケース、no-Ideal worst case、長いheld run、cancel / responsiveness、time to first Candidate、same-cost closureでsettleしたwork数、held run長に対するコスト、Skill / Gogmaのheld state数とfamily layout数、prediction呼び出し数、Candidate trial数、full Planner rerun数）。extent defaultとwhat-if / repairの試行上限default決定 | 2 | Production behaviorなし（benchmark基盤と、Search / Planner DomainのProduction default定数。routing未接続）/ なし |
-| 4 | B9 what-if「比較する」の新kernel接続（Domain calculation、scenario trialと `scenarioOperationCount`、代替Route summaryを含むtyped result、Worker protocol / Client）。Production routingはまだ旧経路 | 3 | なし / なし |
+| 4-A | docs-onlyの正式仕様明確化（scenario compositionのmonotonic adoption run規則、trial / adoption / final resultの再利用規則、request-globalな `maxPlannerReruns`、`excludedByRepairLineageCount`、`adoptedInScenario` の未評価semantic）。runtime code・Worker・routing・schema・UIは変えない | 3 | なし / なし |
+| 4-B | B9 what-if「比較する」のPlanner Alternative Kernel runtime接続（Planner Alternative What-if Calculation、scenario compositionと `scenarioOperationCount`、`PlannerAlternativeRouteSummary` を含むtyped result、shared rerun budget接続、Worker protocol、Production adapter、PlannerWorkerClient API、Domain / Worker / Client test）。Production UI routingはまだ旧経路 | 4-A | なし / なし |
 | 5 | 「この候補を優先」のactual repair（Route単位の決定、決定の展開、Conflict再生成、lineage永続化、migration）と、what-if / repair両方のProduction routing切替 | 4 | あり / calc 16、DB 10、Export 13 |
 | 6 | legacy constrained path（B8 enumeration / orchestration、関連bounds・warning・benchmark page）の削除またはtest oracle化 | 5 | なし / なし（永続shapeに触れる場合は別途判断） |
 | 7 | #122 Presentation改善（Conflict / what-if / repair結果の表示） | 5（4のtyped dataを使う） | UIのみ / なし |
