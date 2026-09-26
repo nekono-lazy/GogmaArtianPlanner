@@ -20,11 +20,10 @@ import type {
  * DTO, a `PlannerConflictResolution`, a Planner trial bound, or any Planner
  * shareability / inventory / source-version judgement.
  *
- * Phase 1 status: the empty-reservation search is complete over the extent
- * (later same-result Counter positions, lazy off-axis Cross pairs, every
- * Normal offset without the #104 reduction, exhausted versus stopped by
- * extent). A non-empty reservation (held / blocked positions, exclusive
- * OwnedWeapons) is refused until Phase 2.
+ * Status: complete over the extent (later same-result Counter positions, lazy
+ * off-axis Cross pairs, every Normal offset without the #104 reduction,
+ * exhausted versus stopped by extent) under a resource reservation: held /
+ * blocked positions per Counter stream and exclusive OwnedWeapons (Phase 2).
  */
 
 /**
@@ -39,11 +38,20 @@ import type {
  * Every value is caller-supplied; there is no Production default yet (Phase 3).
  */
 export interface PlannerAlternativeSearchExtent {
-  /** Maximum `create_normal_artian` forge count, never the maximum offset. */
+  /**
+   * Production target positions `origin .. origin + N - 1` of the Planner-start
+   * Normal Counter, held positions included; with no held position that is
+   * the ordinary maximum forge count.
+   */
   maxNormalAdvance: number
-  /** Gogma Counter positions covered, never the Engine call count. */
+  /** Gogma Counter positions `origin .. origin + N - 1` covered, never the Engine call count. */
   maxGogmaAdvance: number
-  /** Maximum Reset Skills count (a conversion Route covers one more Skill position). */
+  /**
+   * The Skill position window, held positions included: an existing Gogma's
+   * Reset Skills at `origin .. origin + M - 1`, a conversion Route's conversion
+   * and Reset Skills at `origin .. origin + M`. With no held position that is
+   * the ordinary maximum Reset Skills count.
+   */
   maxSkillAdvance: number
 }
 
@@ -63,8 +71,9 @@ export interface PlannerAlternativeNormalReservation
  * (`docs/PLANNER_SPEC.md` 9.2.19.3). The Search Domain only consumes it and
  * never re-derives required / skippable or shareability.
  *
- * An empty reservation means "no fixed Route". Phase 1 searches only that
- * case and refuses any other reservation explicitly rather than ignoring it.
+ * It is a set: array order and duplicates carry no meaning, and the search
+ * reads its `normalizePlannerAlternativeReservation()` form. An empty
+ * reservation means "no fixed Route".
  */
 export interface PlannerAlternativeReservation {
   normal: readonly PlannerAlternativeNormalReservation[]
@@ -165,7 +174,8 @@ export interface PlannerAlternativeSearchExecution {
 export type PlannerAlternativeSearchErrorCode =
   | 'invalid_input'
   | 'calculation_context_incompatible'
-  | 'unsupported_reservation'
+  /** A reservation that is not a valid semantic set (positions, `blocked ⊆ held`, Counter IDs). */
+  | 'invalid_reservation'
 
 export class PlannerAlternativeSearchError extends Error {
   readonly code: PlannerAlternativeSearchErrorCode

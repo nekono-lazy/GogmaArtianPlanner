@@ -15,6 +15,9 @@ import type {
   BuildCandidateId,
   BuildListEntry,
   BuildListEntryId,
+  CandidateBonusAmendmentStep,
+  CandidateConversionSkillStep,
+  CandidateSkillAmendmentStep,
   ISODateTimeString,
   TargetWeapon,
   TargetWeaponId,
@@ -51,18 +54,34 @@ export interface GeneratedBuildListEntryResult {
   reusedExisting: boolean
 }
 
-export interface ConstrainedMaterializer {
+/**
+ * One transient semantic result a deterministic materializer converts: the
+ * B8 `ConstrainedCandidate`, or a Planner Alternative Candidate that also
+ * carries the ordinary observational traces (`docs/SEARCH_SPEC.md` 5.6.8).
+ * The traces are carried over as they are - never re-predicted - and take no
+ * part in any identity.
+ */
+export interface DeterministicMaterializationSource extends ConstrainedCandidate {
+  bonusAmendmentTrace?: CandidateBonusAmendmentStep[]
+  skillAmendmentTrace?: CandidateSkillAmendmentStep[]
+  conversionSkillTrace?: CandidateConversionSkillStep
+}
+
+export interface DeterministicMaterializer<TSource extends DeterministicMaterializationSource> {
   readonly target: TargetWeapon
-  /** The deterministic constrained search identity, also the `searchRunId`. */
+  /** The deterministic search identity, also the `searchRunId`. */
   readonly searchIdentity: string
-  materializeCandidate(candidate: ConstrainedCandidate): BuildCandidate
+  materializeCandidate(candidate: TSource): BuildCandidate
   materializeBuildListEntry(
-    candidate: ConstrainedCandidate,
+    candidate: TSource,
     existingEntries: readonly BuildListEntry[],
   ): GeneratedBuildListEntryResult
 }
 
+export type ConstrainedMaterializer = DeterministicMaterializer<ConstrainedCandidate>
+
 function deterministicCandidateId(
+  candidateIdPrefix: string,
   searchIdentity: string,
   meaningFingerprint: string,
 ): BuildCandidateId {
@@ -70,7 +89,7 @@ function deterministicCandidateId(
     searchIdentity,
     meaning: meaningFingerprint,
   }).replace(':', '-')
-  return `candidate.constrained.${suffix}` as BuildCandidateId
+  return `${candidateIdPrefix}${suffix}` as BuildCandidateId
 }
 
 /**
@@ -78,9 +97,10 @@ function deterministicCandidateId(
  *
  * It is derived from the Candidate semantic meaning, the Target definition
  * hash, both Search hashes, and the `CalculationContext`. `createdAt`, the
- * Clock, a random UUID, a request UUID, and an enumeration ordinal are all
- * absent, which is exactly why the ordinary `createBuildListEntry()` default ID
- * - meaning plus `createdAt` - cannot be reused here.
+ * Clock, a random UUID, a request UUID, an enumeration ordinal, and the kernel
+ * that found the Candidate are all absent, which is exactly why the ordinary
+ * `createBuildListEntry()` default ID - meaning plus `createdAt` - cannot be
+ * reused here. One semantic content therefore has one generated Entry ID.
  */
 function deterministicEntryId(
   candidate: BuildCandidate,
@@ -106,37 +126,42 @@ function compareIds(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
+export interface DeterministicMaterializationCoreContext {
+  origin: ConstrainedSearchOrigin
+  target: TargetWeapon
+  /** The kernel's own deterministic search identity (PLANNER_SPEC 9.2.13). */
+  searchIdentity: string
+  /** The `BuildCandidate.id` prefix naming the kernel that found the Candidate. */
+  candidateIdPrefix: string
+  clock: PlannerClock
+}
+
 /**
- * The B8-C2 deterministic materializer (PLANNER_SPEC 9.2.13, SEARCH_SPEC 5.6.7).
+ * The shared deterministic materialization core (PLANNER_SPEC 9.2.13): the B8
+ * constrained adapter (`createConstrainedMaterializer()`) and the Planner
+ * Alternative adapter differ only in the search identity they pass and in
+ * whether their source carries observational traces.
  *
- * It converts one transient `ConstrainedCandidate` into `BuildCandidate` shape
- * and, when the Planner needs it as trial input, into a generated
- * `BuildListEntry` of the ordinary persisted shape - no new provenance field
- * and no new entity.
+ * It converts one transient semantic result into `BuildCandidate` shape and,
+ * when the Planner needs it as trial input, into a generated `BuildListEntry`
+ * of the ordinary persisted shape - no new provenance field and no new entity.
  *
- * It recomputes no Search semantics. The completed five slots and their
- * scope, Skills, the concrete Route, every estimate, the material
- * requirements, `idealDifference`, both hashes, and the `CalculationContext`
- * are carried over from the enumerator unchanged. It adds only what the Search
- * Domain deliberately could not produce: the deterministic identity, the
- * deterministic IDs, the Clock-derived `createdAt`, and the checkpoint groups
- * of the materialized Candidate's own Route.
+ * It recomputes no Search semantics. The completed five slots and their scope,
+ * Skills, the concrete Route, every estimate, the material requirements,
+ * `idealDifference`, both hashes, the `CalculationContext` and any
+ * observational trace are carried over unchanged. It adds only what the Search
+ * Domain deliberately could not produce: the deterministic IDs, the
+ * Clock-derived `createdAt`, and the intermediate state groups of the
+ * materialized Candidate's own Route, from the same
+ * `extractIntermediateStateGroups()` authority an ordinary Candidate uses.
  *
  * It is pure apart from the injected `PlannerClock`: no `crypto.randomUUID()`,
  * no `new Date()`, no persistence, and no ordinary-Search candidate factory.
- * The ordinary `createCandidateFromPrediction()` ID rule, the ordinary
- * `searchRunId` contract, and the ordinary `createBuildListEntry()` default
- * behavior are all untouched.
  */
-export function createConstrainedMaterializer(
-  context: ConstrainedMaterializationContext,
-): ConstrainedMaterializer {
-  const target = resolveConstrainedTarget(context.origin, context.targetWeaponId)
-  const searchIdentity = createConstrainedSearchIdentity({
-    origin: context.origin,
-    targetWeaponId: context.targetWeaponId,
-    bounds: context.bounds,
-  })
+export function createDeterministicMaterializer<TSource extends DeterministicMaterializationSource>(
+  context: DeterministicMaterializationCoreContext,
+): DeterministicMaterializer<TSource> {
+  const { target, searchIdentity } = context
   const targetDefinitionHash = createTargetDefinitionHash(target)
   const stalenessContext: BuildListStalenessContext = {
     target,
@@ -147,13 +172,13 @@ export function createConstrainedMaterializer(
   }
 
   function buildCandidate(
-    source: ConstrainedCandidate,
+    source: TSource,
     createdAt: ISODateTimeString,
   ): BuildCandidate {
     if (source.targetWeaponId !== target.id) {
       throw new ConstrainedMaterializationError(
         'target_mismatch',
-        `ConstrainedCandidate targets "${source.targetWeaponId}", not "${target.id}".`,
+        `The materialized Candidate targets "${source.targetWeaponId}", not "${target.id}".`,
       )
     }
     const semantic = structuredClone(source)
@@ -175,21 +200,30 @@ export function createConstrainedMaterializer(
       calculationContext: semantic.calculationContext,
       searchRunId: searchIdentity,
       createdAt,
+      ...(semantic.bonusAmendmentTrace === undefined
+        ? {}
+        : { bonusAmendmentTrace: semantic.bonusAmendmentTrace }),
+      ...(semantic.skillAmendmentTrace === undefined
+        ? {}
+        : { skillAmendmentTrace: semantic.skillAmendmentTrace }),
+      ...(semantic.conversionSkillTrace === undefined
+        ? {}
+        : { conversionSkillTrace: semantic.conversionSkillTrace }),
     }
     const candidate: BuildCandidate = {
       ...withoutId,
       id: deterministicCandidateId(
+        context.candidateIdPrefix,
         searchIdentity,
         createBuildCandidateMeaningFingerprint(withoutId),
       ),
     }
-    // A `ConstrainedCandidate` deliberately carries no observational trace at
-    // all, so nothing here can reconstruct the amended weapon states of its
-    // Route: only a lane start an existing source weapon already holds can be
-    // offered, never an invented amendment result. The enumerator's job is
-    // finding another way to the Target's Ideal under the Planner's fixed
-    // Candidates, and the user selects intermediate states on the Candidate an
-    // ordinary Search produced (`docs/PLANNER_SPEC.md` 9.2.13).
+    // Derived from the finished Route, its observational traces (when the
+    // source carries them) and the Route base OwnedWeapon only, so it adds no
+    // RNG prediction call (`docs/SEARCH_SPEC.md` 5.8.1). A B8
+    // `ConstrainedCandidate` carries no trace, so only a lane start an existing
+    // source weapon already holds can be offered for it, never an invented
+    // amendment result (`docs/PLANNER_SPEC.md` 9.2.13).
     candidate.intermediateStateGroups = extractIntermediateStateGroups(candidate, {
       target,
       master: context.origin.master,
@@ -289,4 +323,29 @@ export function createConstrainedMaterializer(
       }
     },
   }
+}
+
+/**
+ * The B8-C2 deterministic materializer (PLANNER_SPEC 9.2.13, SEARCH_SPEC 5.6.7):
+ * the shared core with the B8 constrained search identity and the
+ * `candidate.constrained.` Candidate ID prefix. A `ConstrainedCandidate`
+ * carries no observational trace, so none is materialized. The ordinary
+ * `createCandidateFromPrediction()` ID rule, the ordinary `searchRunId`
+ * contract, and the ordinary `createBuildListEntry()` default behavior are all
+ * untouched.
+ */
+export function createConstrainedMaterializer(
+  context: ConstrainedMaterializationContext,
+): ConstrainedMaterializer {
+  return createDeterministicMaterializer<ConstrainedCandidate>({
+    origin: context.origin,
+    target: resolveConstrainedTarget(context.origin, context.targetWeaponId),
+    searchIdentity: createConstrainedSearchIdentity({
+      origin: context.origin,
+      targetWeaponId: context.targetWeaponId,
+      bounds: context.bounds,
+    }),
+    candidateIdPrefix: 'candidate.constrained.',
+    clock: context.clock,
+  })
 }

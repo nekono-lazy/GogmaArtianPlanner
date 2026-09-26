@@ -408,29 +408,37 @@ describe('excludedRouteKeys', () => {
   })
 })
 
-describe('reservation (Phase 1: empty only)', () => {
-  const nonEmpty: Array<[string, PlannerAlternativeReservation]> = [
-    ['a held Skill position', { ...emptyPlannerAlternativeReservation, skill: { held: [7], blocked: [] } }],
-    ['a blocked Gogma position', { ...emptyPlannerAlternativeReservation, gogma: { held: [10], blocked: [10] } }],
-    ['a held Normal position', { ...emptyPlannerAlternativeReservation, normal: [{ counterId: 'normal-counter.fixture', held: [4], blocked: [] }] }],
-    ['an exclusive OwnedWeapon', { ...emptyPlannerAlternativeReservation, exclusiveOwnedWeaponIds: [ownedWeaponId('owned.fixture.source')] }],
+describe('reservation validation (Phase 2)', () => {
+  const invalid: Array<[string, PlannerAlternativeReservation]> = [
+    ['a blocked Skill position that is not held', { ...emptyPlannerAlternativeReservation, skill: { held: [7], blocked: [8] } }],
+    ['a fractional Gogma position', { ...emptyPlannerAlternativeReservation, gogma: { held: [10.5], blocked: [] } }],
+    ['a negative Gogma position', { ...emptyPlannerAlternativeReservation, gogma: { held: [-1], blocked: [] } }],
+    ['a Normal Counter ID that is not a rarity-8 Counter ID', { ...emptyPlannerAlternativeReservation, normal: [{ counterId: 'normal-counter.fixture', held: [4], blocked: [] }] }],
+    ['a Normal Counter blocked position outside every held entry', {
+      ...emptyPlannerAlternativeReservation,
+      normal: [{ counterId: 'weapon.fixture.a:8', held: [4], blocked: [] }, { counterId: 'weapon.fixture.a:8', held: [], blocked: [5] }],
+    }],
+    ['an empty exclusive OwnedWeapon ID', { ...emptyPlannerAlternativeReservation, exclusiveOwnedWeaponIds: [ownedWeaponId('')] }],
   ]
 
-  it.each(nonEmpty)('refuses %s instead of searching it as empty', async (_, reservation) => {
+  it.each(invalid)('refuses %s before any prediction', async (_, reservation) => {
     const f = fixture()
     const visitor = vi.fn(() => 'continue' as const)
     await expect(visitPlannerAlternativeCandidates(alternativeInput(f.input, { reservation }), f.engine, visitor))
-      .rejects.toSatisfy((error) => error instanceof PlannerAlternativeSearchError && error.code === 'unsupported_reservation')
+      .rejects.toSatisfy((error) => error instanceof PlannerAlternativeSearchError && error.code === 'invalid_reservation')
     expect(visitor).not.toHaveBeenCalled()
     expect(f.calls).toEqual([])
   })
 
   it('treats a Normal Counter entry that reserves no position as empty', async () => {
+    const plain = fixture()
+    const one = await collect(alternativeInput(plain.input), plain.engine)
     const f = fixture()
-    const { candidates } = await collect(alternativeInput(f.input, {
-      reservation: { ...emptyPlannerAlternativeReservation, normal: [{ counterId: 'normal-counter.fixture', held: [], blocked: [] }] },
+    const two = await collect(alternativeInput(f.input, {
+      reservation: { ...emptyPlannerAlternativeReservation, normal: [{ counterId: 'weapon.fixture.a:8', held: [], blocked: [] }] },
     }), f.engine)
-    expect(candidates.length).toBeGreaterThan(0)
+    expect(two.candidates.map(candidateStableKey)).toEqual(one.candidates.map(candidateStableKey))
+    expect(f.calls).toEqual(plain.calls)
   })
 })
 

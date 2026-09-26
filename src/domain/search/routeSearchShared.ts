@@ -17,6 +17,10 @@ import type {
 import type { RngEngine } from '../rng/rngEngine'
 import { evaluateSkillCondition, satisfiesIdealBonuses } from '../target'
 import {
+  nextOperationPositions,
+  type RouteSearchReservation,
+} from './counterReservation'
+import {
   bonusAmendmentOperations,
   bonusAmendmentResults,
   type BonusStreamSolutionSet,
@@ -104,6 +108,12 @@ export type SearchFrontierPolicy = 'initial_candidate_search' | 'planner_alterna
 export interface RouteSearchContext {
   /** Absent means the ordinary `initial_candidate_search` policy. */
   frontierPolicy?: SearchFrontierPolicy
+  /**
+   * The fixed Route set's resource reservation (`docs/SEARCH_SPEC.md` 5.6.8).
+   * Only Planner Alternative Search sets it; absent means an empty reservation,
+   * which every ordinary Candidate Search context is.
+   */
+  reservation?: RouteSearchReservation
   /** Normal predictions shared across counter records. */
   normalPredictions?: Map<number, RestorationBonusSet>
   target: TargetWeapon
@@ -161,6 +171,45 @@ export interface RouteCompositionBase {
   conversionSkill: SkillAmendmentResult | null
   bonusSolutions: readonly RouteBonusSolution[]
   skillSolutions: readonly RouteSkillSolution[]
+}
+
+/**
+ * The Skill positions a `convert_normal_to_gogma` may stand at
+ * (`docs/SEARCH_SPEC.md` 5.6.8): with no reservation, the origin alone, as in
+ * the ordinary Search. Under a reservation the conversion stands at a position
+ * that is not blocked and that every position from the origin up to it is held,
+ * because the weapon does not exist in the Skill stream before its conversion;
+ * so the fixed Route's Skill positions are crossed, never filled with a fake
+ * Reset Skills. The window is the conversion Route's Skill window
+ * (`origin .. origin + maxSkillAdvance`); a legal position beyond it is
+ * reported as `beyondExtent`.
+ */
+export async function conversionSkillPositions(
+  context: RouteSearchContext,
+  origin: number,
+): Promise<{ positions: number[]; beyondExtent: boolean }> {
+  const reservation = context.reservation
+  if (reservation === undefined) return { positions: [origin], beyondExtent: false }
+  const { positions, beyondLimit } = await nextOperationPositions(
+    reservation.skill,
+    origin,
+    reservation.conversionSkillPositionLimit,
+    context.execution.checkpoint,
+  )
+  return { positions, beyondExtent: beyondLimit }
+}
+
+/**
+ * Whether an OwnedWeapon may be a Route source here: always in the ordinary
+ * Search; never under a Planner reservation that holds it exclusively for a
+ * fixed Route (`docs/PLANNER_SPEC.md` 9.2.19.3). A preferred weapon is no
+ * exception - the preference is a soft ordering, the reservation a hard rule.
+ */
+export function isAvailableRouteSource(
+  context: RouteSearchContext,
+  ownedWeaponId: OwnedWeaponId,
+): boolean {
+  return !(context.reservation?.exclusiveOwnedWeaponIds.has(ownedWeaponId) ?? false)
 }
 
 /**

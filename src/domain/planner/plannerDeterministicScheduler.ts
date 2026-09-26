@@ -83,6 +83,8 @@ import type {
   PlannerExecutionOptions,
   PlannerInput,
   PlannerRunResult,
+  PlannerConflictProvisionalOutcome,
+  PlannerRouteCommitmentEvidence,
   PlannerRunBuildListContext,
   PlannerSearchRejection,
   PlannerSearchState,
@@ -178,6 +180,13 @@ export class PlannerDeterministicScheduleRun {
   readonly unconfirmedTargetIds = new Set<TargetWeaponId>()
 
   private readonly records = new Map<BuildListEntryId, PlannerRouteCommitmentRecord>()
+  /** The provisional outcomes of the initial route commitment (runtime evidence). */
+  private provisionalOutcomes: PlannerConflictProvisionalOutcome[] = []
+  /** The very drop record each provisional outcome gave its losers. */
+  private readonly provisionalDrops = new Map<
+    BuildListEntryId,
+    { rejection: PlannerSearchRejection; conflictId: string; selectedBuildListEntryId: BuildListEntryId }
+  >()
   private readonly rejections: PlannerSearchRejection[]
   private readonly rejectionKeys: Set<string>
   private readonly conflictsById = new Map<string, PlanConflict>()
@@ -280,6 +289,15 @@ export class PlannerDeterministicScheduleRun {
     )
     if (commitment.status === 'invalid') return commitment.message
     commitment.records.forEach((record, entryId) => this.records.set(entryId, record))
+    this.provisionalOutcomes = commitment.provisionalOutcomes.map((outcome) => ({
+      ...outcome,
+      rejectedBuildListEntryIds: [...outcome.rejectedBuildListEntryIds],
+    }))
+    commitment.provisionalOutcomes.forEach(({ conflictId, selectedBuildListEntryId, rejectedBuildListEntryIds }) =>
+      rejectedBuildListEntryIds.forEach((entryId) => {
+        const rejection = commitment.records.get(entryId)?.rejection
+        if (rejection) this.provisionalDrops.set(entryId, { rejection, conflictId, selectedBuildListEntryId })
+      }))
     commitment.rejections.forEach((rejection) => this.recordRejection(rejection))
     this.metrics?.initialCommitment([...commitment.records.values()])
     return null
@@ -843,6 +861,35 @@ export class PlannerDeterministicScheduleRun {
   }
 
   /**
+   * The runtime evidence of this run's route commitment decisions
+   * (`PlannerRouteCommitmentEvidence`). An Entry's `provisionalOutcome` is set
+   * only when its final record is still the very drop a provisional outcome
+   * made: a dropped Entry never changes status again, so that drop is its only
+   * one. Read-only: it changes no decision and no other result field.
+   */
+  private routeCommitmentEvidence(rejections: readonly PlannerSearchRejection[]): PlannerRouteCommitmentEvidence {
+    return {
+      provisionalOutcomes: this.provisionalOutcomes.map((outcome) => ({
+        ...outcome,
+        rejectedBuildListEntryIds: [...outcome.rejectedBuildListEntryIds],
+      })),
+      entries: this.commitmentRecords().map(({ buildListEntryId, status, rejection }) => {
+        const drop = this.provisionalDrops.get(buildListEntryId)
+        return {
+          buildListEntryId,
+          status,
+          provisionalOutcome: status === 'dropped' && drop !== undefined && rejection === drop.rejection
+            ? { conflictId: drop.conflictId, selectedBuildListEntryId: drop.selectedBuildListEntryId }
+            : null,
+          rejectionReasons: rejections
+            .filter((entry) => entry.buildListEntryId === buildListEntryId)
+            .map(({ reason }) => reason),
+        }
+      }),
+    }
+  }
+
+  /**
    * The rejections this schedule reports: every recorded one, plus
    * `candidate_already_satisfied` for each Entry that is still `released`
    * now - its Target was satisfied by another Entry (8.4). The released state
@@ -899,6 +946,7 @@ export class PlannerDeterministicScheduleRun {
     const conflicts = [...this.conflictsById.values()].sort((left, right) =>
       compareStableStrings(left.id, right.id),
     )
+    const rejections = this.finalRejections()
     // Diagnostics only (11): computed once, after every decision was taken.
     this.state.evaluationScore = evaluatePlannerSearchState(this.state, {
       entries: this.context.allSearchEntries,
@@ -913,7 +961,8 @@ export class PlannerDeterministicScheduleRun {
       warnings,
       validationIssues: [],
       excludedBuildListEntries: this.context.excludedBuildListEntries,
-      rejections: this.finalRejections(),
+      rejections,
+      routeCommitment: this.routeCommitmentEvidence(rejections),
       expandedStates: this.expandedStates,
       completed: this.isComplete(),
       cancelled,

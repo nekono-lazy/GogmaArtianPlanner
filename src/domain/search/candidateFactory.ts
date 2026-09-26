@@ -12,6 +12,7 @@ import type {
   CandidateConversionSkillStep,
   CandidateSkillAmendmentStep,
   MaterialRequirement,
+  NormalArtianCounter,
   RouteOperation,
   SkillAmendmentResult,
   TargetWeapon,
@@ -285,11 +286,87 @@ export interface CandidateRouteEstimates {
   requiredMaterials: MaterialRequirement[]
 }
 
+/**
+ * The Planner-start Counters an estimate's advances are measured from
+ * (`docs/SEARCH_SPEC.md` 3.1 / 5.6.8): the Gogma and Skill Counters and every
+ * Normal Artian Counter by `NormalArtianCounter.id`.
+ */
+export interface CandidateRouteEstimateOrigin {
+  gogmaCounter: number | null
+  skillCounter: number | null
+  normalCounters: readonly Pick<NormalArtianCounter, 'id' | 'counter'>[]
+}
+
+/**
+ * The reach of one stream: from the origin Counter to the `counterAfter` of
+ * the Route's last operation of that stream, or `null` when the Route has no
+ * representable operation there (a blind Normal creation included).
+ *
+ * A Route that runs continuously from the origin - every ordinary Candidate
+ * Search and constrained enumeration Route - reaches exactly the sum of its
+ * operations' advances, so this equals `operationAdvance()` for it. A Planner
+ * Alternative Route crossing held positions reaches further than its own
+ * operation count.
+ */
+function operationReach(
+  operations: readonly RouteOperation[],
+  stream: 'gogma' | 'skill' | 'normal',
+  origin: CandidateRouteEstimateOrigin,
+): number | null {
+  let reach: number | null = null
+  for (const operation of operations) {
+    let start: number | null
+    let after: number
+    if (stream === 'normal' && operation.type === 'create_normal_artian') {
+      if (isBlindCreateNormalArtianOperation(operation)) continue
+      start = origin.normalCounters.find(
+        ({ id }) => id === `${operation.weaponTypeId}:${operation.rarity}`,
+      )?.counter ?? null
+      after = operation.normalCounterAfter
+    } else if (
+      stream === 'skill' &&
+      (operation.type === 'convert_normal_to_gogma' || operation.type === 'reset_skills')
+    ) {
+      start = origin.skillCounter
+      after = operation.skillCounterAfter
+    } else if (
+      stream === 'gogma' &&
+      (operation.type === 'reset_bonuses' || operation.type === 'keep_bonuses')
+    ) {
+      start = origin.gogmaCounter
+      after = operation.gogmaCounterAfter
+    } else {
+      continue
+    }
+    if (start === null) {
+      throw new Error(`A Route ${stream} operation has no origin Counter to measure its reach from.`)
+    }
+    reach = after - start
+  }
+  return reach
+}
+
+/**
+ * `origin` switches the advances from the operation sum to the reach from the
+ * Planner-start Counters (`docs/SEARCH_SPEC.md` 5.6.8). The two agree for every
+ * Route continuous from the origin, so only Planner Alternative Search passes
+ * it; every other caller keeps the operation sum.
+ */
 export function createCandidateRouteEstimates(
   route: BuildRoute,
   weaponTypeId: string,
   master: Pick<CandidateSearchInput, 'master'>,
+  origin?: CandidateRouteEstimateOrigin,
 ): CandidateRouteEstimates {
+  if (origin !== undefined) {
+    return {
+      estimatedOperationCount: countRouteOperations(route),
+      estimatedGogmaAdvance: operationReach(route.operations, 'gogma', origin) ?? 0,
+      estimatedSkillAdvance: operationReach(route.operations, 'skill', origin) ?? 0,
+      estimatedNormalAdvance: operationReach(route.operations, 'normal', origin),
+      requiredMaterials: collectRequiredMaterials(route, weaponTypeId, master),
+    }
+  }
   return {
     estimatedOperationCount: countRouteOperations(route),
     estimatedGogmaAdvance: operationAdvance(route.operations, 'gogma') ?? 0,

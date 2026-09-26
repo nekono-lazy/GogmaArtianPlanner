@@ -4168,13 +4168,37 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 
 ### 9.2.19 Planner Alternative Searchと1段の競合repair（Issue #136 / #101）
 
-実装状態: **Phase 1まで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
+実装状態: **Phase 2まで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
 9.2.19.16のPhaseに従って段階的に行う。Phase 1（Phase 1-A: modern Search基盤のcomposition seam、Phase 1-B: Search Domain
 APIと空reservationでの基本consumer経路、Phase 1-C: 空reservationでの探索完全性。[SEARCH_SPEC.md](./SEARCH_SPEC.md)
-5.6.8の実装状態を参照）は実装済みである。Phase 2（fixed Route集合とreservationの導出、held位置を跨ぐ探索、排他
-OwnedWeapon、trial full rerunによるfound判定）、Phase 3〜7（benchmarkとProduction default、what-if、actual
-repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、Presentation）は未実装であり、
-Plannerは本節の契約をまだ使っていない（Production routingはlegacyのB8経路のまま）。背景、方式選定の理由、Phase分割の根拠は
+5.6.8の実装状態を参照）は実装済みである。Phase 2も実装済みである: fixed Route集合からのreservation導出
+（`derivePlannerAlternativeReservation()`、9.2.19.3。`createPlannerRouteUnitPlans()` と `collectReferencedOwnedWeaponIds()`
+だけをauthorityとし、held = fixed unitの位置、blocked = 必須かつ共有不可のunitの位置、排他OwnedWeapon = 参照・排他消費する武器）、
+held位置を跨ぐ探索・Normalのheld prefix・排他OwnedWeapon（Search側、[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8）、
+新kernelのdeterministic search identityとmaterializer（旧B8 materializerと共通の決定的core、観測traceを保持）、
+Planner Domainの共通kernel `runPlannerAlternativeKernel()`（決定のmerge・固定制約はwhat-ifの準備をそのまま使い、
+非固定Targetごとに同じbaselineから探索 → temporary Entry `G` → `O + G` / `-O + G` preflight → full Planner run +
+Trace Replay → 9.2.19.6のfound判定。試行上限 `maxCandidateTrialsPerTarget` / `maxPlannerReruns` はcaller必須で、
+Search・reservation導出・materialization・preflightを数えない。以前の決定のfixed Entry・無効化Route keyはcallerから受け取り、
+trial不採用のCandidateは除外keyへ加えない）、Issue #101実ケースのDomain acceptanceである。Phase 3〜7（benchmarkと
+Production default、what-if、actual repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、
+Presentation）は未実装であり、Plannerの画面経路は本節の契約をまだ使っていない（Production routingはlegacyのB8経路のまま）。
+
+9.2.19.6の条件4の後半（`G` が選ばれない理由が、fixed Route集合外Entryとの未解決競合の暫定帰結だけであること）は、
+Planの記録（`plan.rejectedBuildListEntries` 等）からは「`G` が暫定帰結で負けた後に勝者がstallで落ちた」と「`G` が
+暫定帰結で勝った後に自分がstallで落ちた」を区別できないため、route commitmentが暫定帰結を決めた箇所で記録する非永続の
+runtime evidence（`PlannerRunResult.routeCommitment`: 暫定帰結ごとのConflict・採用Entry・非採用Entryと、各Entryの最終
+commitment状態。最終状態がその暫定帰結による除外そのものであるときだけ `provisionalOutcome` を持つ）で判定する。`G` の
+最終状態が暫定帰結による除外で、その採用側がfixed Route集合外であり、`G` について記録されたrejectionがその除外だけで
+あればfoundとし、採用側がその後selectedのまま残るかは問わない。evidenceは `ProductionPlan`、`PlannerResult`、Worker
+message、DB、Exportへ入らず、versionは動かさない。
+
+代替探索のlazy性はoperation cost層単位である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8「cost層単位のlazy性」）。cost Dの
+Candidateを返す前に、lowerBound <= Dのworkとそこから派生する同じcostのworkを処理し（same-cost closure）、その後6キー順序で
+返す。同じcostのheld位置（巨戟化位置、同じdepthのSkill / Gogma state）は6キーの上位5キーが一致しても `candidateStableKey` の
+順序がCounter位置順と一致しないため、この層単位の処理が正しさの条件であり、Phase 2で確定している。Dより大きいcost層のworkは
+queueにenqueueされていてもdelivery前にsettle / solveしない。同じcost層に属するheld位置・state数によるtime-to-firstの実コストは性能の問題であり、
+Phase 3のBrowser Worker benchmarkで評価する（9.2.19.16）。背景、方式選定の理由、Phase分割の根拠は
 [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（task-specific設計記録、
 非normative）にある。計測事実は
 [ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md](./ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md) にある。
@@ -4607,6 +4631,10 @@ interface PlannerAlternativeSearchExtent {
   （9.2.19.7手順5）で追加のfull runを行う場合もそれを1回と数え、予算が残っていなければ `scenario` を
   `stopped_by_planner_rerun_bound` とする。trial Planを再利用する場合は数えない
 - 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
+- extentは探索範囲の上限であり、探索の進め方はoperation cost層単位のlazy探索である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8
+  「cost層単位のlazy性」）。代替探索はextent全体をupfront solveせず、最初のCandidateまでにsettle / solveするworkはそのCandidateのcost層までに
+  限られる（同じcost層の中はsame-cost closureで閉じてから返す。より高いcost層のworkはqueueにenqueueされていてもsettle /
+  solveしない）
 
 #### 9.2.19.13 typed result（#122へ渡す情報）
 
@@ -4786,6 +4814,18 @@ Phase 5  「この候補を優先」のactual repair、Conflict再生成と決�
 Phase 6  legacy constrained pathの削除またはtest oracle化
 Phase 7  #122 Presentation改善
 ```
+
+Phase 3のBrowser Worker benchmarkは、extent（`maxNormalAdvance` / `maxGogmaAdvance` / `maxSkillAdvance`）と試行上限
+（`maxCandidateTrialsPerTarget` / `maxPlannerReruns`）のProduction default決定の根拠として、少なくとも次を測る（Issue #101の
+実fixture、no-Ideal worst case、長いheld runを持つfixtureを含む）。default値はPhase 3より前に決めない。
+
+- time-to-first Candidate
+- same-cost closureでsettleしたwork数
+- held run長に対するコスト
+- Skillのheld state数、Gogmaのheld state数とfamily layout数
+- prediction呼び出し数
+- Candidate trial数とfull Planner rerun数
+- cancel latencyとWorker responsiveness
 
 ---
 
@@ -5767,7 +5807,17 @@ generated BuildListEntry IDの決定性(9.2.13)はこれとは別である。gen
 `PlannerIdFactory` を使わず、semantic contentから安定生成するため、Production
 dependencyでもrun間で一致する。
 
-### 15.9.2 Planner Alternative Search / 1段repair Test（9.2.19、後続Phaseで実装）
+### 15.9.2 Planner Alternative Search / 1段repair Test（9.2.19、Phase 2分まで実装）
+
+Phase 2で実装済みなのは、reservation導出（held / blocked / 排他OwnedWeapon、Counter ID分離、skip可能unit、重複・入力順
+非依存、不正fixed Entryのfail closed）、Normalのcanonical表現、Skill / Gogmaのheld traversal、排他OwnedWeapon、held位置を跨ぐ
+到達量、新kernelのsearch identityとmaterializer（trace保持、決定的ID、Clock非依存、同一semantic Entry再利用、ID衝突拒否）、
+found判定（G selected、fixed外Entryとの暫定帰結だけでの非選択 — 勝者がその後stallで落ちる場合を含む —、
+暫定帰結で勝った後に自分がstallで落ちたEntryの非found、fixed Route集合との競合、明示決定Entryの非選択、暫定帰結以外の
+除外理由、plan無し）、試行上限・rerun上限、除外key（無効化Route・以前の無効化Route、trial不採用を除外へ加えない）、
+checkpoint Targetの非探索、Issue #101 fixtureでの `0 / 1 / count 1`・Skill 342での巨戟化・Gogma 56以降のBonus操作・
+full Planner trialでの両立の各testである。what-if / actual repair / scenario / lineage / 決定の展開の項目はPhase 4以降で実装する。
+held位置のcost層単位の処理（same-cost closure）は9.2.19冒頭の実装状態と [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8を参照。
 
 - reservationのheld / blocked / 排他OwnedWeaponが、fixed Route集合の既存Route unit（`canSkipWhenCounterPassed`、
   `physicalActionKey`、`arePlannerRouteUnitsShareable()`）と既存の所持武器参照authorityだけから導出され、

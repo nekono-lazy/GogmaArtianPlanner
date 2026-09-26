@@ -1333,17 +1333,29 @@ identityを基点とする専用契約で `searchRunId` と `id` を決める(�
 
 ### 5.6.8 Planner Alternative Search（resource-aware alternative Ideal search）
 
-実装状態: **Phase 1まで実装**（Issue #136 / #101。Phase 1-A #139、Phase 1-B #140、Phase 1-C）。Search Domain API
-（`visitPlannerAlternativeCandidates()`、`src/domain/search/alternative/`）は、空reservationについて本節の探索を
-extent内で完全に行う。transient semantic Candidate、観測trace、`excludedRouteKeys`、canonical Idealとのfirst-result
-parityに加え、同一結果の後続Counter位置、軸外pairのlazy評価、#104を適用しないNormal列挙、extent内の完全探索、
-全frontierに対する6キー順序、exhausted / stopped by extentの区別（summaryの `exhausted` / `stoppedByExtent`）、
-stream solve内部のcancel / yieldを実装済みである。実装はmodern Searchの `TargetSearchScheduler` とRoute search
-primitivesを共有し、`RouteSearchContext.frontierPolicy = 'planner_alternative'` のときだけ初回Search policy
-（同一結果retention、Cross-only、#104）を使わない。軸外pairはRoute baseごとにIdeal Bonus解を行、Ideal Skill解を列として、
-各行が確定済みcellの次のcellだけをlower bound順にqueueへ載せる（`createLazyIdealCross()`）。空でないreservation
-（held / blocked、`exclusiveOwnedWeaponIds`）はPhase 2で実装し、それまでは明示的に拒否する。Plannerからの
-呼び出しは未接続である（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.16）。Planner側の契約は
+実装状態: **Phase 2まで実装**（Issue #136 / #101。Phase 1-A #139、Phase 1-B #140、Phase 1-C #141、Phase 2 #143）。
+Search Domain API（`visitPlannerAlternativeCandidates()`、`src/domain/search/alternative/`）は本節の探索をextent内で完全に行う。
+実装はmodern Searchの `TargetSearchScheduler` とRoute search primitivesを共有し、`RouteSearchContext.frontierPolicy =
+'planner_alternative'` のときだけ初回Search policy（同一結果retention、Cross-only、#104）を使わない。
+
+- Phase 1（空reservation）: transient semantic Candidate、観測trace、`excludedRouteKeys`、canonical Idealとのfirst-result
+  parity、canonical Idealで止まらない継続、extent（exhausted / stopped by extentの区別。summaryの `exhausted` /
+  `stoppedByExtent`）、同一結果の後続Counter位置を含むextent内の完全なfrontier、#104を適用しないNormal列挙、軸外pairの
+  lazy評価（Route baseごとにIdeal Bonus解を行、Ideal Skill解を列として、各行が確定済みcellの次のcellだけをlower bound順に
+  queueへ載せる `createLazyIdealCross()`）、全frontierに対する6キー順序、stream solve内部のcancel / yield
+- Phase 2（空でないreservation）: reservationを意味集合として検証・正規化（位置は非負整数、`blocked ⊆ held`、Normalは
+  `<weaponTypeId>:8` のCounter ID。不正は `invalid_reservation`）、held / blocked、排他OwnedWeapon（source候補にしない）、
+  held-awareなSkill / Gogma stream（`readReservedDepth()`。depth = own operation数のまま、stateは絶対位置を持ち、同じdepthで
+  最後のown operationの位置と（Bonusでは）family layoutが同じstateだけをB2の代表規則でまとめ、位置やdepthの違うstateは
+  まとめない。held skipではpredictionも状態変化もoperation costも生じない）、held位置を跨ぐ巨戟化位置
+  （`conversionSkillPositions()`）、Normalのheld prefix（`heldPrefixNormalCreation()`、blockedのproduction targetは使わない）、
+  held位置を跨ぐ到達量（`createCandidateRouteEstimates()` にoriginを渡す。連続Routeでは従来の値と一致する）。Planner側の
+  deterministic materialization、full Planner trial、9.2.19.6のfound判定、Issue #101のacceptanceは
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19の実装状態を参照
+
+空reservationではPhase 1と同じ探索になる。探索はoperation cost層単位でlazyである（下記「cost層単位のlazy性」）。
+Plannerからの呼び出しはPlanner Domainのkernel（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+9.2.19の実装状態）からだけで、画面経路へは未接続である（9.2.19.16）。Planner側の契約は
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19、背景と方式選定の理由は
 [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（非normative）にある。
 
@@ -1428,6 +1440,9 @@ held 位置で自分のoperationが無い場合、武器状態（Bonus 5枠、sc
 
 - 返すのはTargetのIdeal条件（5.1、`gogma_artian` scope）を満たすCandidateだけである。妥協状態を独立した
   Candidateにしない（5.6.7と同じ）
+- lane開始状態（操作0の解）がすでにIdealなら、同じIdealを後方位置で再取得するためだけの後続operationは要求しない
+  （そのlaneのstreamは開かない。5.6.1と同じ）。下記の「後方の同一結果を永久省略しない」規則は、その軸でoperationが
+  必要な探索に対するものである
 - 決定的な順序で1件ずつ返し、consumer（Planner）が次を要求する限り継続する。canonical Ideal（5.6.3）で
   探索を終了しない。「canonical Ideal → Plannerで使用不可 → 次のIdeal → さらに使用不可なら次」と進める
 - 除外key（`excludedRouteKeys`）と一致するCandidateは返さずに次へ進み、除外件数をsummaryへ数える
@@ -1449,13 +1464,47 @@ held 位置で自分のoperationが無い場合、武器状態（Bonus 5枠、sc
 held位置を跨がない連続Route（通常Candidate Searchと5.6.7のconstrained enumerationが生成するすべてのRoute）では
 既存の `estimated*Advance`（operationごとの進行量の和）と同じ値になる。held位置を跨ぐRouteでは到達量が
 own operation数より大きくなり得る。Candidate factoryのestimate authority（`createCandidateRouteEstimates()`）は、
-実装Phaseでこの定義をoriginを受け取って計算するよう一般化し、既存Routeの値が変わらないことをテストで固定する。
+この定義をoriginを受け取って計算するよう一般化してあり（Phase 2）、既存Routeの値が変わらないことをテストで固定している。
 新しい距離尺度やB9専用comparatorは作らない。
+
+#### cost層単位のlazy性（same-cost closure）
+
+Planner Alternative Searchのlazy性は **operation cost層単位** であり、Candidate単位の完全なlazy性ではない。上記の6キー
+順序は変えない。
+
+```text
+work             SearchWorkQueue上のlowerBound = そのworkから生じ得るCandidateのoperation cost（own operation数）の下界
+cost層Dを閉じる   lowerBound <= D のworkをsettleする。そのsettleで新たに lowerBound = D のworkが生じれば、それもsettleする。
+                 queueの先頭が lowerBound > D になった時点でcost D層は閉じる。lowerBound > D のworkは、その間に
+                 queueへenqueueされていてよい（例: 次のstream depth、次のNormal offset）が、settle / solveはしない
+delivery         cost Dで得たCandidateを6キー順序でsortし、除外keyを除いてconsumerへ1件ずつ返す
+```
+
+- **same-cost closureは正式に許容する。** 6キーの上位5キー（operation cost、Gogma / Skill / Normalの到達量、preferred
+  source）がすべて一致しても、最後の `candidateStableKey` の文字列比較はCounter位置順と一致しない（例: 巨戟化位置が98と
+  99だけ異なり、held位置を跨いで同じReset Skillsへ至る2 Routeでは、`"skillCounterAfter":100` の99側が先になる）。そのため
+  「Counter位置の小さいCandidateを見つけたら即返す」では順序を保証できず、cost D層を閉じてからsortする
+- したがって、最初のCandidateまでの時間は、same-cost closureに必要なheld位置・Route base・stream stateの数に比例し得る
+  （例: 同じcostで置ける巨戟化位置、同じdepthのSkill / Gogma state）。探索対象のRoute baseがすべて同じcost層に属する入力では、
+  結果的にそれらすべてを確認することもある
+- 一方、**Dより大きいoperation cost層を、cost DのCandidateのdelivery前にsettle / solveしてはならない**。そうしたworkは
+  queueへ既にenqueueされていてもよいが、cost Dのdelivery前にはsettle / solveしない。例えば「巨戟化のみ = cost 1、巨戟化 +
+  Reset = cost 2、巨戟化 + Reset ×2 = cost 3」のとき、cost 1のCandidateを返す前にcost 2 / 3の層を解かない。consumerが停止した
+  場合も、queueに残るより高いcost層のworkはそれ以上settle / solveしない
+- これは5.6.7（旧B8）のupfront solve、すなわち最初のCandidateの前に **extent内の全Route base・全stream depth・全候補範囲を
+  先に解く** 方式とは別である。Planner Alternative Searchは、Candidateのcost Dまでのworkとsame-cost closureだけを処理して
+  cost DのCandidateを6キー順序で返し、Dより高いcost層はqueueに存在していてもdelivery前にはsettle / solveしない。extent全体を
+  upfront solveしない
+- held位置も同じ原則に従う。同じcost層に属するheld位置（例: Skill origin 97、97..100 held、98でも99でも巨戟化できる）は、
+  その層を閉じる前にすべて確認してよい
+- 同じcost層の中のwork数・prediction数・held run長に対する実コストは正しさの問題ではなく性能の問題であり、
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.16のPhase 3 Browser Worker benchmarkで評価する
 
 #### modern Candidate Searchから再利用するもの
 
 - `TargetSearchScheduler` / `SearchWorkQueue` のlower-bound順のwork処理（Route base登録、stream depth、pair）。
-  最初のCandidateまでに全Route baseのstreamを先にsolveしない（5.6.7のupfront solveを繰り返さない）
+  Candidateのcostより高いcost層のworkは、queueに存在していても、そのCandidateのdelivery前にsettle / solveしない（上記
+  same-cost closure。5.6.7のextent全体のupfront solveを繰り返さない）
 - Bonus stream / Skill streamのprediction・memo・stream独立性（5.4 / 5.5）。Resetは位置ごと1回、Keepはfamily
   layoutごと。held位置があっても `predictSkills` / `predictGogmaBonus` の呼出し回数が他streamの解の数で
   増えない契約（3.1）を維持する
@@ -1509,8 +1558,12 @@ authorityにしない。
 
 - deterministicである（同じ入力から同じ順序の `candidateStableKey` 列）
 - extentで有限である
-- cancel可能で、Worker yield可能である。yield / cancel checkpointはstream solveの内部にも置き、
-  最初のCandidateまでの時間を全Route base数に比例させない
+- cancel可能で、Worker yield可能である。yield / cancel checkpointはstream solveとheld位置の走査の内部にも置く
+- 最初のCandidateを返すためにextent全体をupfront solveしない。cost DのCandidateを返す前にsettle / solveしてよいのは、
+  lowerBound <= D のworkとそこから派生する同じcostのworkだけであり（same-cost closure）、Dより大きいcost層のworkは
+  queueにenqueueされていてもdelivery前にsettle / solveしない。そのためtime-to-firstはsame-cost closureに必要なheld位置・
+  Route base・stream state数に比例し得るが、より高いoperation cost層やextent全体をCandidate delivery前にsolveすることは
+  要求しない
 - Production RNGのinput-level support契約を維持する
 - normal-scope Keepの扱い（5.9）とblind variantの規則（6.1.1）を維持する
 - route-history完全探索へ拡張しない
@@ -2650,7 +2703,7 @@ Skill stream側はB1で実装済み、Bonus stream側はB2で実装済みであ�
   `id` / `searchRunId` / `createdAt` / random ID / Clock / enumeration ordinalを
   結果へ含めない
 
-## 13.2.6 Planner Alternative Search Test（5.6.8、Phase 1まで実装）
+## 13.2.6 Planner Alternative Search Test（5.6.8、Phase 2まで実装）
 
 Phase 1（1-B / 1-C）で実装済みなのは、`searchCandidates()` とは別APIであること、空reservation・空除外集合での
 first-result parity、canonical Ideal後に次のIdealを返す継続、同じ入力での決定性、観測traceとprediction呼び出し数、
@@ -2658,9 +2711,16 @@ first-result parity、canonical Ideal後に次のIdealを返す継続、同じ�
 offsetのRouteを返し、通常Searchの削減は維持される）、同一結果の後続位置と軸外pair（早期stopで直積を生成しない）、
 全frontierに対する6キー順序とsource登録順への非依存、他streamの解の数に対するprediction呼出し回数、exhaustedと
 extent到達の区別（Normal / Gogma / Skillそれぞれのextent、consumer stopではどちらも立てない）、stream solve中と
-pair処理中のcancel / yield、通常Candidate Searchのprediction呼出し列が変わらないことの各testである。blocked / held
-位置、Normalのcanonical表現、coverage条件、held位置を跨ぐ到達量、排他OwnedWeapon、Issue #101 fixtureはPhase 2で
-実装する。
+pair処理中のcancel / yield、通常Candidate Searchのprediction呼出し列が変わらないことの各testである。Phase 2で、
+blocked位置にoperationを置かないこと、held位置のskipと状態不変、held & !blockedでのskip / operate両方、coverage条件、
+Normalのcanonical表現（0..206 / target 0、0..4 / target 10、target以降のheldの非影響、blocked production targetの除外、
+Counter進行用forgeがblocked位置を跨ぐこと）、Skill 341 held + blocked → 342で巨戟化、Gogma 55 held + blocked → 56以降、
+同じfamily layoutでも位置の違うstateをまとめないこと、排他OwnedWeapon（優先起点でも除外）、held位置を跨ぐ到達量と
+連続Routeでの既存値一致、prediction独立性（Reset = 位置、Keep = 位置 × family layout、held skipでpredictionしない）、
+長いheld runでのcancel / yield、reservationの配列順・重複への非依存、Skill windowでのextent到達、blind variant不変、
+zero Ideal lane不変、不正reservationの拒否、#104非適用（offset 0がblockedでも後方offsetを返す）、同じcostの巨戟化位置の
+順序が6キー（最後の `candidateStableKey`）で決まりCounter位置順と一致しないことのcharacterization testと、Issue #101
+fixtureのacceptance（Planner側、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 15.9.2）を実装済みである。
 
 - `searchCandidates()` とは別のAPIであり、Conflict DTO、`PlannerConflictResolution`、Planner試行上限を受け取らない
 - 空reservation・空除外集合で、extentを同じ3値の `CandidateSearchSettings`・route filterなしの通常Candidate

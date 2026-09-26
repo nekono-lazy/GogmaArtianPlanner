@@ -1,6 +1,7 @@
 import type { RestorationBonusSet } from '../../models/publicTypes'
 import type { RngEngine } from '../../rng/rngEngine'
 import { createTargetBonusStream } from '../bonusStream'
+import { createCounterReservation, EMPTY_COUNTER_RESERVATION } from '../counterReservation'
 import { candidateStableKey } from '../candidateProcessing'
 import { compareConstrainedCandidates } from '../constrained/constrainedCandidateFactory'
 import { searchExistingGogmaRoutes } from '../existingGogmaRouteSearch'
@@ -63,8 +64,20 @@ export interface PlannerAlternativeSearchExecutionOptions {
  * value left reachable work unread, `exhausted` otherwise. A consumer stop sets
  * neither, and cancellation rejects.
  *
- * Only an empty reservation is accepted; held / blocked positions and exclusive
- * OwnedWeapons are Phase 2 (`docs/PLANNER_SPEC.md` 9.2.19.16).
+ * Reservation (`docs/SEARCH_SPEC.md` 5.6.8, Phase 2). Every Route satisfies the
+ * coverage condition on each Counter stream: from the origin to its last own
+ * operation, every position is an own operation or held, a blocked position
+ * holds no own operation (a blocked Normal position no production target), and
+ * a held position without an own operation leaves the weapon unchanged. The
+ * streams read held-aware (`readReservedDepth()`), the conversion may cross
+ * held Skill positions (`conversionSkillPositions()`), the predicted Normal
+ * creation is the canonical held-prefix one (`heldPrefixNormalCreation()`),
+ * and an exclusive OwnedWeapon is never a source. A held skip predicts
+ * nothing, changes nothing and costs no operation, so the lower bounds and
+ * `estimatedOperationCount` stay own operation counts, while the advances are
+ * the reach from the origin. The stream-to-stream time order and cyclic waits
+ * are the Planner's full rerun to judge, never this search's. An empty
+ * reservation searches exactly the Phase 1 frontier.
  */
 export async function visitPlannerAlternativeCandidates(
   input: PlannerAlternativeSearchInput,
@@ -72,7 +85,7 @@ export async function visitPlannerAlternativeCandidates(
   onCandidate: PlannerAlternativeCandidateVisitor,
   options: PlannerAlternativeSearchExecutionOptions = {},
 ): Promise<PlannerAlternativeSearchExecution> {
-  const target = assertPlannerAlternativeSearchInput(input)
+  const { target, reservation } = assertPlannerAlternativeSearchInput(input)
   const { origin, extent } = input
   if (engine.version !== origin.calculationContext.rngEngineVersion) {
     throw new PlannerAlternativeSearchError(
@@ -86,8 +99,21 @@ export async function visitPlannerAlternativeCandidates(
     yieldControl: options.yieldControl,
   })
   const predictionSupport = createSearchPredictionSupport(engine, target, origin.master)
+  const skillReservation = createCounterReservation(reservation.skill.held, reservation.skill.blocked)
+  const gogmaReservation = createCounterReservation(reservation.gogma.held, reservation.gogma.blocked)
+  const normalReservations = new Map(reservation.normal.map((entry) =>
+    [entry.counterId, createCounterReservation(entry.held, entry.blocked)] as const))
+  const originSkillCounter = origin.rngState.skillCounter.value
   const context: RouteSearchContext = {
     frontierPolicy: 'planner_alternative',
+    reservation: {
+      normal: (counterId) => normalReservations.get(counterId) ?? EMPTY_COUNTER_RESERVATION,
+      skill: skillReservation,
+      gogma: gogmaReservation,
+      exclusiveOwnedWeaponIds: new Set(reservation.exclusiveOwnedWeaponIds),
+      // Read only once a confirmed Skill Counter allowed a conversion Route.
+      conversionSkillPositionLimit: (originSkillCounter ?? 0) + extent.maxSkillAdvance + 1,
+    },
     target,
     input: {
       rngState: origin.rngState,
@@ -102,14 +128,24 @@ export async function visitPlannerAlternativeCandidates(
     normalPredictions: new Map<number, RestorationBonusSet>(),
     skillStream: createTargetSkillStream(
       target,
-      { rngState: origin.rngState, master: origin.master, maxSkillAdvance: extent.maxSkillAdvance },
+      {
+        rngState: origin.rngState,
+        master: origin.master,
+        maxSkillAdvance: extent.maxSkillAdvance,
+        reservation: skillReservation,
+      },
       engine,
       execution,
       () => predictionSupport.skill().supported,
     ),
     bonusStream: createTargetBonusStream(
       target,
-      { rngState: origin.rngState, master: origin.master, maxGogmaAdvance: extent.maxGogmaAdvance },
+      {
+        rngState: origin.rngState,
+        master: origin.master,
+        maxGogmaAdvance: extent.maxGogmaAdvance,
+        reservation: gogmaReservation,
+      },
       engine,
       execution,
       predictionSupport,

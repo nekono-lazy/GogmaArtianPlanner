@@ -8,6 +8,7 @@ import { selectCompatibleOwnedGogmaWeapons } from './routeEligibility'
 import {
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
+  isAvailableRouteSource,
   type RouteSearchContext,
   type RouteSearchResult,
 } from './routeSearchShared'
@@ -15,8 +16,14 @@ import type { RouteBonusSolution, RouteSkillSolution } from './streamSolutions'
 
 const bonusAmendmentKinds = ['existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_mixed'] as const
 
+/**
+ * A weapon a Planner reservation holds for a fixed Route is neither a Route
+ * source nor an amendment subject here, its zero-operation current Route
+ * included (SEARCH_SPEC 5.6.8); the ordinary Search has no reservation.
+ */
 function compatibleSources(context: RouteSearchContext): OwnedGogmaArtianWeapon[] {
   return selectCompatibleOwnedGogmaWeapons(context.target, context.input.ownedWeapons)
+    .filter((weapon) => isAvailableRouteSource(context, weapon.id))
 }
 
 function pushAll(result: RouteSearchResult, routes: readonly BuildRoute['kind'][], reason: Parameters<RouteSearchResult['skippedRoutes']['push']>[0]['reason'], detail: string) {
