@@ -8,18 +8,21 @@ vi.mock('./ConstrainedEnumerationBenchmarkPage', () => ({ ConstrainedEnumeration
 vi.mock('./PlannerOrchestrationBenchmarkPage', () => ({ PlannerOrchestrationBenchmarkPage: () => <div>B8 orchestration harness</div> }))
 vi.mock('./PlannerWhatIfBenchmarkPage', () => ({ PlannerWhatIfBenchmarkPage: () => <div>B9 harness</div> }))
 vi.mock('./Issue101ConstrainedResearchBenchmarkPage', () => ({ Issue101ConstrainedResearchBenchmarkPage: () => <div>Issue 101 harness</div> }))
+vi.mock('./PlannerAlternativeBenchmarkPage', () => ({ PlannerAlternativeBenchmarkPage: () => <div>Planner Alternative harness</div> }))
 
 describe('BenchmarkApp', () => {
   it('keeps C5 as default and adds B9 beside all four existing harnesses', () => {
     render(<BenchmarkApp />)
     expect(screen.getByText('C5 harness')).toBeInTheDocument()
     expect(screen.queryByText('B9 harness')).not.toBeInTheDocument()
+    expect(screen.queryByText('Planner Alternative harness')).not.toBeInTheDocument()
     for (const [button, content] of [
       ['B5 Candidate Search', 'B5 harness'],
       ['B8 Constrained Enumeration', 'B8 enumeration harness'],
       ['B8 Planner Orchestration', 'B8 orchestration harness'],
       ['B9 What-if', 'B9 harness'],
       ['Issue 101 Constrained Re-search', 'Issue 101 harness'],
+      ['Planner Alternative Phase 3', 'Planner Alternative harness'],
       ['C5-E2C8 Skill Identification', 'C5 harness'],
     ]) {
       fireEvent.click(screen.getByRole('button', { name: button }))
@@ -30,6 +33,6 @@ describe('BenchmarkApp', () => {
   it('no longer offers the removed Issue 103 Planner Search harness', () => {
     render(<BenchmarkApp />)
     expect(screen.queryByRole('button', { name: 'Issue 103 Planner Search' })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button')).toHaveLength(6)
+    expect(screen.getAllByRole('button')).toHaveLength(7)
   })
 })

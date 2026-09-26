@@ -4827,6 +4827,11 @@ Phase 3のBrowser Worker benchmarkは、extent（`maxNormalAdvance` / `maxGogmaA
 - Candidate trial数とfull Planner rerun数
 - cancel latencyとWorker responsiveness
 
+Phase 3は3つに分ける。**Phase 3-A**（benchmark-only harness / fixture / Worker / page / execution-only instrumentation）
+は実装済み、**Phase 3-B**（real Browser Workerでの実測）と **Phase 3-C**（実測からのProduction default確定）は未了である
+（[PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md](./PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md)）。Phase 3-Aは
+extent / 試行上限のdefaultを決めず、`runPlannerAlternativeKernel()` のextent / boundsはcaller必須のままである。
+
 ---
 
 ## 10. Plan生成手順

@@ -1,6 +1,6 @@
 import type { RestorationBonusSet } from '../../models/publicTypes'
 import type { RngEngine } from '../../rng/rngEngine'
-import { createTargetBonusStream } from '../bonusStream'
+import { createTargetBonusStream, type ReservedGogmaDepthObserver } from '../bonusStream'
 import { createCounterReservation, EMPTY_COUNTER_RESERVATION } from '../counterReservation'
 import { candidateStableKey } from '../candidateProcessing'
 import { compareConstrainedCandidates } from '../constrained/constrainedCandidateFactory'
@@ -10,7 +10,7 @@ import { searchOwnedNormalArtianRoutes } from '../ownedNormalArtianRouteSearch'
 import type { RouteSearchContext } from '../routeSearchShared'
 import { createSearchExecutionContext } from '../searchExecution'
 import { createSearchPredictionSupport } from '../searchPredictionSupport'
-import { createTargetSkillStream } from '../skillStream'
+import { createTargetSkillStream, type ReservedSkillDepthObserver } from '../skillStream'
 import { TargetSearchScheduler } from '../targetSearchScheduler'
 import { createPlannerAlternativeCandidate } from './plannerAlternativeCandidateFactory'
 import {
@@ -23,12 +23,34 @@ import {
 import { assertPlannerAlternativeSearchInput } from './plannerAlternativeValidation'
 
 /**
- * Cancellation and Worker yield only. Planner Alternative Search produces no
- * Candidate ID and no timestamp, so it never takes an ID factory or a Clock.
+ * Read-only observers of one search run (Planner Alternative Search Phase 3
+ * Browser Worker benchmark, `docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md`).
+ *
+ * Execution-only, exactly like cancellation and yield: never part of
+ * `PlannerAlternativeSearchInput`, the search identity, a Candidate identity,
+ * the ordering or the termination. Every callback is invoked after the work it
+ * reports, receives aggregate counts only, and returns nothing the search
+ * reads, so the delivered Candidates, the summary and the prediction calls are
+ * identical with and without it. Every Production caller leaves it undefined.
+ */
+export interface PlannerAlternativeSearchInstrumentation {
+  /** One `TargetSearchScheduler.step()` settled one pending work item. */
+  onWorkSettled?: () => void
+  /** One held-aware Skill stream depth was generated and published. */
+  onSkillReservedDepth?: ReservedSkillDepthObserver
+  /** One held-aware Bonus stream depth was generated, published and reduced. */
+  onGogmaReservedDepth?: ReservedGogmaDepthObserver
+}
+
+/**
+ * Cancellation and Worker yield, plus the optional benchmark instrumentation.
+ * Planner Alternative Search produces no Candidate ID and no timestamp, so it
+ * never takes an ID factory or a Clock.
  */
 export interface PlannerAlternativeSearchExecutionOptions {
   shouldCancel?: () => boolean
   yieldControl?: () => Promise<void>
+  instrumentation?: PlannerAlternativeSearchInstrumentation
 }
 
 /**
@@ -98,6 +120,7 @@ export async function visitPlannerAlternativeCandidates(
     shouldCancel: options.shouldCancel,
     yieldControl: options.yieldControl,
   })
+  const instrumentation = options.instrumentation
   const predictionSupport = createSearchPredictionSupport(engine, target, origin.master)
   const skillReservation = createCounterReservation(reservation.skill.held, reservation.skill.blocked)
   const gogmaReservation = createCounterReservation(reservation.gogma.held, reservation.gogma.blocked)
@@ -137,6 +160,7 @@ export async function visitPlannerAlternativeCandidates(
       engine,
       execution,
       () => predictionSupport.skill().supported,
+      instrumentation?.onSkillReservedDepth,
     ),
     bonusStream: createTargetBonusStream(
       target,
@@ -149,6 +173,7 @@ export async function visitPlannerAlternativeCandidates(
       engine,
       execution,
       predictionSupport,
+      instrumentation?.onGogmaReservedDepth,
     ),
   }
 
@@ -206,6 +231,7 @@ export async function visitPlannerAlternativeCandidates(
       continue
     }
     if (!(await scheduler.step())) break
+    instrumentation?.onWorkSettled?.()
   }
 
   // The frontier ran out unless the consumer stopped first. Whether it ran out

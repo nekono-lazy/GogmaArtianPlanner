@@ -1568,6 +1568,22 @@ authorityにしない。
 - normal-scope Keepの扱い（5.9）とblind variantの規則（6.1.1）を維持する
 - route-history完全探索へ拡張しない
 
+#### 計測用instrumentation（Phase 3-A、execution-only）
+
+Phase 3のBrowser Worker benchmark（[PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md](./PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md)）
+がsettled work数とheld-aware state数を正確に測れるよう、`PlannerAlternativeSearchExecutionOptions` は任意の
+`instrumentation`（read-only observer）を受け取る。
+
+- `onWorkSettled`: `TargetSearchScheduler.step()` が1件のworkをsettleした後に1回
+- `onSkillReservedDepth` / `onGogmaReservedDepth`: held-aware Skill / Bonus streamの1 depthを生成・公開（Bonusは
+  frontier縮約）した後に1回。集計値（depth、state数、遷移数、絶対位置数、Bonusのfamily layout数）だけを渡し、
+  state内容は渡さない
+
+cancel / yieldと同じexecution-only境界であり、`PlannerAlternativeSearchInput`、search identity、Candidate
+identity、6キー順序、終了判定のいずれにも入らない。callbackは報告対象の処理の後に呼ばれ、戻り値をSearchが
+読まないため、有無でdeliverされる `candidateStableKey` 列、summary、prediction呼び出し回数は同一である。
+Production callerは渡さない（Planner Alternative kernelもWorker protocolも持たない）。
+
 #### 変更しないもの
 
 通常Candidate Searchの結果、canonical Ideal、終了条件、retention、Cross規則、`searchRunId` 契約、
@@ -2720,7 +2736,8 @@ Counter進行用forgeがblocked位置を跨ぐこと）、Skill 341 held + block
 長いheld runでのcancel / yield、reservationの配列順・重複への非依存、Skill windowでのextent到達、blind variant不変、
 zero Ideal lane不変、不正reservationの拒否、#104非適用（offset 0がblockedでも後方offsetを返す）、同じcostの巨戟化位置の
 順序が6キー（最後の `candidateStableKey`）で決まりCounter位置順と一致しないことのcharacterization testと、Issue #101
-fixtureのacceptance（Planner側、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 15.9.2）を実装済みである。
+fixtureのacceptance（Planner側、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 15.9.2）を実装済みである。Phase 3-Aで、execution-only instrumentationの有無で `candidateStableKey` 列・summary・
+prediction呼び出し回数が変わらないこと、Production callerがinstrumentationを渡さないことのtestを追加した。
 
 - `searchCandidates()` とは別のAPIであり、Conflict DTO、`PlannerConflictResolution`、Planner試行上限を受け取らない
 - 空reservation・空除外集合で、extentを同じ3値の `CandidateSearchSettings`・route filterなしの通常Candidate

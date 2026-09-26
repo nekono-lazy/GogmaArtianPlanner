@@ -3540,6 +3540,12 @@ Production until Phase 5 switches what-if and repair together. That PR moves
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION` to 16 (build-result exception
 `16 -> [12, 13, 14, 15]`), `DATABASE_SCHEMA_VERSION` to 10 and
 `ExportRoot.schemaVersion` to 13; nothing moved yet.
+Phase 3-A (`docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md`) added only the
+benchmark-only Browser Worker harness (`benchmark.html`, `pa3_benchmark_` protocol) and the
+execution-only `PlannerAlternativeSearchExecutionOptions.instrumentation` observer (settled work,
+held-aware Skill / Gogma depth counts), which no Production caller passes and which changes no
+delivered Candidate, summary or prediction call; the extent / trial bound Production defaults
+stay undecided until Phase 3-B measures and Phase 3-C decides them.
 
 ---
 
