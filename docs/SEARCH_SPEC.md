@@ -1349,7 +1349,9 @@ held-awareに読み（`readReservedDepth()`。depth = own operation数のまま�
 状態変化もoperation costも生じない）、巨戟化はheld位置を跨いだ合法位置へ置き（`conversionSkillPositions()`）、predicted
 Normalの作成は下記のheld prefix規則（`heldPrefixNormalCreation()`）で表し、blockedのproduction targetは使わず、排他OwnedWeaponは
 source候補にしない。到達量は `createCandidateRouteEstimates()` にoriginを渡して求める（連続Routeでは従来の値と一致する）。
-空reservationではPhase 1と同じ探索になる。Plannerからの呼び出しはPlanner Domainのkernel（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+空reservationではPhase 1と同じ探索になる。同じown operation数のheld位置は正式な6キー順序のため各cost層の最初のCandidateより
+前にすべて展開される（最初のCandidateまでの時間がその数に比例し得る点は未決事項。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19の
+実装状態を参照）。Plannerからの呼び出しはPlanner Domainのkernel（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
 9.2.19の実装状態）からだけで、画面経路へは未接続である（9.2.19.16）。Planner側の契約は
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19、背景と方式選定の理由は
 [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（非normative）にある。

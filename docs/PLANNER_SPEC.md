@@ -4184,13 +4184,22 @@ trial不採用のCandidateは除外keyへ加えない）、Issue #101実ケー�
 Production default、what-if、actual repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、
 Presentation）は未実装であり、Plannerの画面経路は本節の契約をまだ使っていない（Production routingはlegacyのB8経路のまま）。
 
-Phase 2の既知の制約（9.2.19.6の条件4の後半の判定）: 実装は既存のPlanner結果（`plan.rejectedBuildListEntries`、
-`PlannerResult.conflicts`、trial入力のinitial conflict detection）だけを読み、`G` が `resource_conflict` だけで記録され、
-initial conflictのうち未解決（`selectedBuildListEntryId = null`）で `G` とfixed Route集合外のEntryをparticipantに持ち、
-そのEntryがselectedであるものがある場合にfoundとする。暫定帰結で `G` に勝ったEntry自身が後でstall等で落ちた場合、
-既存の結果からは「`G` が暫定帰結で負けた」と「`G` が勝った後にstallで落ちた」を区別できないため、推測せず
-foundにしない（保守側）。この場合を仕様どおりfoundにするには、schedulerのstall / deadlock dropを暫定帰結と区別できる
-typedな情報が必要であり、その追加はPhase 4以降の設計判断とする。背景、方式選定の理由、Phase分割の根拠は
+9.2.19.6の条件4の後半（`G` が選ばれない理由が、fixed Route集合外Entryとの未解決競合の暫定帰結だけであること）は、
+Planの記録（`plan.rejectedBuildListEntries` 等）からは「`G` が暫定帰結で負けた後に勝者がstallで落ちた」と「`G` が
+暫定帰結で勝った後に自分がstallで落ちた」を区別できないため、route commitmentが暫定帰結を決めた箇所で記録する非永続の
+runtime evidence（`PlannerRunResult.routeCommitment`: 暫定帰結ごとのConflict・採用Entry・非採用Entryと、各Entryの最終
+commitment状態。最終状態がその暫定帰結による除外そのものであるときだけ `provisionalOutcome` を持つ）で判定する。`G` の
+最終状態が暫定帰結による除外で、その採用側がfixed Route集合外であり、`G` について記録されたrejectionがその除外だけで
+あればfoundとし、採用側がその後selectedのまま残るかは問わない。evidenceは `ProductionPlan`、`PlannerResult`、Worker
+message、DB、Exportへ入らず、versionは動かさない。
+
+Phase 2の未決事項（held位置のtime-to-first）: 同じown operation数のheld位置（巨戟化位置、同じdepthのSkill / Gogma state）は、
+正式な6キー順序の上位5キーが一致し得て（例: 巨戟化位置だけが異なりheld位置を跨いで同じReset Skillsへ至るRoute）、最後の
+`candidateStableKey` の文字列比較は位置順と一致しない（`"skillCounterAfter":100` が `99` より先）。そのため、あるcost層の
+最初のCandidateを返す前に、同じcostのheld位置を後回しにする遅延展開は順序を保証できない。現行実装は、各cost層に必要な
+workだけを作り（そのcost層を越えたworkは作らない）、長いheld区間でもcancel / yieldできるが、最初のCandidateまでの時間は
+同じcostのheld位置数に比例し得る。これを解消するには順序またはdominanceの仕様判断が必要であり、推測では変更しない。
+背景、方式選定の理由、Phase分割の根拠は
 [PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md)（task-specific設計記録、
 非normative）にある。計測事実は
 [ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md](./ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md) にある。
@@ -5788,11 +5797,12 @@ dependencyでもrun間で一致する。
 Phase 2で実装済みなのは、reservation導出（held / blocked / 排他OwnedWeapon、Counter ID分離、skip可能unit、重複・入力順
 非依存、不正fixed Entryのfail closed）、Normalのcanonical表現、Skill / Gogmaのheld traversal、排他OwnedWeapon、held位置を跨ぐ
 到達量、新kernelのsearch identityとmaterializer（trace保持、決定的ID、Clock非依存、同一semantic Entry再利用、ID衝突拒否）、
-found判定（G selected、fixed外Entryとの暫定帰結だけでの非選択、fixed Route集合との競合、明示決定Entryの非選択、
-stall等の非選択、plan無し）、試行上限・rerun上限、除外key（無効化Route・以前の無効化Route、trial不採用を除外へ加えない）、
+found判定（G selected、fixed外Entryとの暫定帰結だけでの非選択 — 勝者がその後stallで落ちる場合を含む —、
+暫定帰結で勝った後に自分がstallで落ちたEntryの非found、fixed Route集合との競合、明示決定Entryの非選択、暫定帰結以外の
+除外理由、plan無し）、試行上限・rerun上限、除外key（無効化Route・以前の無効化Route、trial不採用を除外へ加えない）、
 checkpoint Targetの非探索、Issue #101 fixtureでの `0 / 1 / count 1`・Skill 342での巨戟化・Gogma 56以降のBonus操作・
 full Planner trialでの両立の各testである。what-if / actual repair / scenario / lineage / 決定の展開の項目はPhase 4以降で実装する。
-found判定の既知の制約は9.2.19冒頭の実装状態を参照。
+held位置のtime-to-firstの未決事項は9.2.19冒頭の実装状態を参照。
 
 - reservationのheld / blocked / 排他OwnedWeaponが、fixed Route集合の既存Route unit（`canSkipWhenCounterPassed`、
   `physicalActionKey`、`arePlannerRouteUnitsShareable()`）と既存の所持武器参照authorityだけから導出され、

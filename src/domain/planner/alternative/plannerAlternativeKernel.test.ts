@@ -34,6 +34,7 @@ import {
   type PlannerAlternativeKernelResult,
   type PlannerAlternativeKernelTargetResult,
 } from './plannerAlternativeKernel'
+import { judgePlannerAlternativeTrial } from './plannerAlternativeTrial'
 
 /*
  * The Phase 2 Planner Alternative kernel end to end: preparation, reservation,
@@ -240,14 +241,13 @@ describe('Planner Alternative kernel: found (PLANNER_SPEC 9.2.19.6)', () => {
   })
 })
 
-describe('Planner Alternative kernel: rejection from the trial run (PLANNER_SPEC 9.2.19.6)', () => {
-  it('rejects every trial when the unfixed partner that wins the provisional outcome is itself dropped later', async () => {
+describe('Planner Alternative kernel: provisional winner that later drops (PLANNER_SPEC 9.2.19.6)', () => {
+  it('finds G whose provisional winner C stalls afterwards, and would reject C, which won and then stalled', async () => {
     // C Resets at Gogma 12 only, and no Route of the trial moves the Counter
     // past Gogma 11, so C stalls after winning its provisional outcome against
-    // G. The Plan then records G and C alike as `resource_conflict` with no
-    // selected partner, which is also exactly what a G that won and then
-    // stalled leaves behind. The judgement reads only that record, so it is
-    // conservative here: not found, never a guess that G lost the outcome.
+    // G. The Plan records G and C alike as `resource_conflict` with neither
+    // selected; only the route commitment evidence tells them apart. G's only
+    // drop is the provisional outcome, so G is found although C is not selected.
     const base = parts()
     const c = ownSkillTarget(TARGET_C, SOURCE_C_SKILL, 4)
     const built = scenario({
@@ -257,9 +257,37 @@ describe('Planner Alternative kernel: rejection from the trial run (PLANNER_SPEC
     })
     const result = await runPlannerAlternativeKernel(request(built), built.dependencies)
     const b = targetOf(result, TARGET_B)
-    expect(b.trials.length).toBeGreaterThan(0)
-    expect(b.trials.every(({ result: trial }) => trial.status === 'rejected' && trial.reason === 'not_selected')).toBe(true)
-    expect(['not_found_within_search_extent', 'stopped_by_search_extent_bound']).toContain(b.outcome.status)
+    expect(b.outcome.status).toBe('found')
+    if (b.outcome.status !== 'found') return
+    const generatedId = b.outcome.generated.entry.id
+    expect(b.outcome.generatedSelected).toBe(false)
+    const plan = b.outcome.trialResult.plan!
+    expect(plan.selectedBuildListEntryIds).toEqual([ENTRY_A])
+    expect(plan.rejectedBuildListEntries.map(({ buildListEntryId, reason }) => [buildListEntryId, reason]).sort())
+      .toEqual([[ENTRY_C, 'resource_conflict'], [generatedId, 'resource_conflict']].sort())
+
+    // The evidence the scheduler recorded where commitment decided.
+    const commitment = b.outcome.trialRouteCommitment!
+    expect(commitment.provisionalOutcomes).toEqual([
+      expect.objectContaining({ selectedBuildListEntryId: ENTRY_C, rejectedBuildListEntryIds: [generatedId] }),
+    ])
+    const byId = new Map(commitment.entries.map((entry) => [entry.buildListEntryId, entry]))
+    expect(byId.get(generatedId)).toMatchObject({
+      status: 'dropped',
+      provisionalOutcome: { selectedBuildListEntryId: ENTRY_C },
+      rejectionReasons: ['conflict_not_committed'],
+    })
+    // C won the outcome and then stalled: dropped, but not by a provisional outcome.
+    expect(byId.get(ENTRY_C)).toMatchObject({ status: 'dropped', provisionalOutcome: null })
+
+    // The same trial, judged as if C were the temporary Entry: it won and then
+    // stalled itself, so it is not found.
+    expect(judgePlannerAlternativeTrial(b.outcome.trialResult, {
+      generatedBuildListEntryId: ENTRY_C,
+      explicitDecisionBuildListEntryIds: [ENTRY_A],
+      fixedRouteBuildListEntryIds: [ENTRY_A],
+      routeCommitment: commitment,
+    })).toEqual({ status: 'rejected', reason: 'not_selected' })
   })
 })
 

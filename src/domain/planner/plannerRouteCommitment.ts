@@ -29,6 +29,7 @@ import {
   plannerRouteUnitSourceRejection,
 } from './plannerStateTransitions'
 import type {
+  PlannerConflictProvisionalOutcome,
   PlannerSearchRejection,
   PlannerSearchState,
 } from './plannerTypes'
@@ -105,6 +106,12 @@ export type PlannerRouteCommitmentResult =
       status: 'ready'
       records: Map<BuildListEntryId, PlannerRouteCommitmentRecord>
       rejections: PlannerSearchRejection[]
+      /**
+       * The provisional outcomes this commitment decided, in decision order,
+       * one per (winner, collision conflict). Runtime-only evidence
+       * (`PlannerRouteCommitmentEvidence`).
+       */
+      provisionalOutcomes: PlannerConflictProvisionalOutcome[]
     }
   | {
       /**
@@ -385,6 +392,7 @@ export function createPlannerRouteCommitment(
       context.initialRelevantEntries,
     )
   const decided = new Set<BuildListEntryId>()
+  const provisionalOutcomes: PlannerConflictProvisionalOutcome[] = []
   let remaining = [...candidates]
   for (;;) {
     const { detection, actionKeys } = detectCollisions(state, remaining, context)
@@ -405,9 +413,21 @@ export function createPlannerRouteCommitment(
         const collision = findCollision(winner.id, entry.id, detection, actionKeys)
         return collision === null ? [] : [{ entry, collision }]
       })
-    losers.forEach(({ entry, collision }) =>
-      drop(entry.id, notCommittedRejection(entry.id, winner.id, collision)),
-    )
+    losers.forEach(({ entry, collision }) => {
+      drop(entry.id, notCommittedRejection(entry.id, winner.id, collision))
+      // The decision itself, recorded where it is taken: winner and loser of
+      // this collision's unresolved conflict.
+      const outcome = provisionalOutcomes.find(({ conflictId, selectedBuildListEntryId }) =>
+        conflictId === collision.conflict.id && selectedBuildListEntryId === winner.id)
+      if (outcome) outcome.rejectedBuildListEntryIds.push(entry.id)
+      else {
+        provisionalOutcomes.push({
+          conflictId: collision.conflict.id,
+          selectedBuildListEntryId: winner.id,
+          rejectedBuildListEntryIds: [entry.id],
+        })
+      }
+    })
     observer?.provisionalOutcome(
       winner,
       losers.map(({ entry, collision }) => ({ entry, conflict: collision.conflict })),
@@ -418,7 +438,7 @@ export function createPlannerRouteCommitment(
   remaining.forEach((entry) =>
     records.set(entry.id, { buildListEntryId: entry.id, status: 'committed', rejection: null }),
   )
-  return { status: 'ready', records, rejections }
+  return { status: 'ready', records, rejections, provisionalOutcomes }
 }
 
 /**

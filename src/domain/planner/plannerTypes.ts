@@ -414,6 +414,57 @@ export interface PlannerRunResultOf<TTermination> {
    * were completed.
    */
   termination: TTermination
+  /**
+   * The deterministic scheduler's route commitment decisions of this run
+   * (`PlannerRouteCommitmentEvidence`). Runtime-only: never persisted, never in
+   * a `PlannerResult`, a `ProductionPlan`, a Worker message or Export. Absent
+   * when no route commitment ran (an input finished before scheduling, and
+   * every Beam Search oracle result).
+   */
+  routeCommitment?: PlannerRouteCommitmentEvidence
+}
+
+/**
+ * One provisional outcome of route commitment (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md`
+ * 6.5): at the collision `conflictId` of an unresolved conflict - no explicit
+ * `PlannerConflictResolution` chose - commitment kept `selectedBuildListEntryId`
+ * and dropped `rejectedBuildListEntryIds`. It is recorded where commitment
+ * takes that decision, never reconstructed from a final selection, a priority,
+ * a score or `recommendedBuildListEntryId`.
+ */
+export interface PlannerConflictProvisionalOutcome {
+  conflictId: string
+  selectedBuildListEntryId: BuildListEntryId
+  rejectedBuildListEntryIds: BuildListEntryId[]
+}
+
+/** The final route commitment state of one searchable Entry of a scheduler run. */
+export interface PlannerRouteCommitmentEntryEvidence {
+  buildListEntryId: BuildListEntryId
+  status: 'committed' | 'secured' | 'not_needed' | 'released' | 'dropped'
+  /**
+   * Set only when the Entry's final state is the drop a provisional outcome
+   * decided - that decision was its terminal and only drop (a dropped Entry is
+   * never committed again) - naming that outcome's conflict and winner.
+   * `null` for every other status or drop cause: an explicit resolution, a
+   * precondition, a source, a stall / deadlock, a rejected action or reserve.
+   */
+  provisionalOutcome: { conflictId: string; selectedBuildListEntryId: BuildListEntryId } | null
+  /** The typed rejection reasons the run recorded for this Entry, in order. */
+  rejectionReasons: PlannerSearchRejectionReason[]
+}
+
+/**
+ * Transient evidence of the route commitment decisions of one deterministic
+ * scheduler run, for the Planner Alternative found judgement
+ * (`docs/PLANNER_SPEC.md` 9.2.19.6), which must know why an Entry was not
+ * selected: a Plan's own record cannot tell a provisional loser whose winner
+ * later stalled from an Entry that won and then stalled itself.
+ */
+export interface PlannerRouteCommitmentEvidence {
+  provisionalOutcomes: PlannerConflictProvisionalOutcome[]
+  /** Every searchable Entry, in stable ID order. */
+  entries: PlannerRouteCommitmentEntryEvidence[]
 }
 
 /**

@@ -427,6 +427,28 @@ describe('zero Ideal lane (SEARCH_SPEC 5.6.8)', () => {
   })
 })
 
+describe('six-key order across same-cost conversion positions (SEARCH_SPEC 5.6.8)', () => {
+  it('orders equal-key conversions by candidateStableKey, which is not the position order', async () => {
+    // Skill origin 97; held 97..100 with 97 and 100 blocked, so the conversion
+    // may stand at 98, 99 or 101. Converting at 98 or at 99 and then Resetting
+    // Skills at 101 (crossing the held positions) ties on cost, Gogma reach,
+    // Skill reach, Normal reach and source; candidateStableKey then compares
+    // "skillCounterAfter":100 before "skillCounterAfter":99 as strings.
+    const { input, engine } = fixture({ ownedNormal: true, resetIdealAt: (gogma) => gogma === 10, skillIdealAt: (skill) => skill === 101, extent: 5 })
+    input.rngState.skillCounter = { value: 97, isConfirmed: true, source: 'manual' }
+    input.settings = { maxNormalAdvance: 1, maxGogmaAdvance: 1, maxSkillAdvance: 5 }
+    const { candidates } = await collect(input, engine, reservation({ skill: { held: [97, 98, 99, 100], blocked: [97, 100] } }))
+    const tied = candidates.filter((candidate) =>
+      candidate.route.kind === 'owned_normal_artian_to_gogma' && candidate.estimatedOperationCount === 3)
+    expect(tied.map((candidate) => [conversionOf(candidate), candidate.estimatedGogmaAdvance, candidate.estimatedSkillAdvance]))
+      .toEqual([[99, 1, 5], [98, 1, 5]])
+    // So the later position has to be discovered before the earlier one can
+    // be delivered: a same-cost held position cannot be deferred behind a
+    // delivered Candidate without breaking the order.
+    expect(candidateStableKey(tied[0]) < candidateStableKey(tied[1])).toBe(true)
+  })
+})
+
 describe('determinism and extent under a reservation', () => {
   it('returns the same stable key sequence whatever the reservation array order and duplicates', async () => {
     const options: Options = { owned: [{ bonuses: 'practical', idealSkill: false }], normalCounter: true, resetIdealAt: (gogma) => gogma % 2 === 0, skillIdealAt: (skill) => skill % 2 === 0 }

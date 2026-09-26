@@ -19,7 +19,6 @@ import type {
   PlannerAlternativeSearchExtent,
   PlannerAlternativeSearchSummary,
 } from '../../search'
-import { preparePlannerInitialContext } from '../plannerInitialContext'
 import { createProductionPlanWithObserver } from '../productionPlanGeneration'
 import type {
   PlannerConflictResolution,
@@ -27,6 +26,7 @@ import type {
   PlannerExecutionOptions,
   PlannerInput,
   PlannerResult,
+  PlannerRouteCommitmentEvidence,
   PlannerRunBuildListContext,
   ProductionPlanGenerationObserver,
 } from '../plannerTypes'
@@ -121,6 +121,11 @@ export interface PlannerAlternativeFound {
   replacement: BuildListEntryReplacement
   /** The trial's own full run over the replacement set, Trace Replay included. */
   trialResult: PlannerResult
+  /**
+   * The route commitment evidence of that run (runtime-only, never persisted):
+   * the provisional outcomes and each Entry's final commitment state.
+   */
+  trialRouteCommitment: PlannerRouteCommitmentEvidence | null
   /** False when `G` lost only a provisional outcome to an Entry outside the fixed Route set. */
   generatedSelected: boolean
 }
@@ -252,10 +257,16 @@ export async function runPlannerAlternativeKernel(
   const executionOptions = options.executionOptions
   let cancelledPlannerRun = false
   const readCancelledPlannerRun = (): boolean => cancelledPlannerRun
+  // The route commitment evidence of the last full run of one Plan
+  // generation: the run the Plan (after any runtime-unsupported retry) is
+  // built from. Reset before every generation.
+  let lastRouteCommitment: PlannerRouteCommitmentEvidence | null = null
+  const readLastRouteCommitment = (): PlannerRouteCommitmentEvidence | null => lastRouteCommitment
   const observer: ProductionPlanGenerationObserver = {
     beforePlannerRun: () => budget.beforePlannerRun(),
     afterPlannerRun: (runResult) => {
       if (runResult.cancelled) cancelledPlannerRun = true
+      lastRouteCommitment = runResult.routeCommitment ?? null
     },
   }
 
@@ -435,19 +446,14 @@ export async function runPlannerAlternativeKernel(
       return { status: 'rejected', generatedBuildListEntryId: generated.entry.id, record: { status: 'rejected', reason: 'preflight_refused' } }
     }
     const runContext: PlannerRunBuildListContext = { kind: 'temporary_replacement', replacements }
-    // The initial conflicts of the very input the full run receives, by the
-    // same authority the run itself uses.
-    const trialContext = preparePlannerInitialContext(preflight.resolvedInput, dependencies, runContext)
-    const initialConflictIds = trialContext.status === 'ready'
-      ? trialContext.context.initialConflictDetection.conflicts.map(({ id }) => id)
-      : []
     const run = await runFullPlanner(preflight.resolvedInput, runContext)
     if (run === 'rerun_budget_reached') return { status: 'rerun_bound' }
+    const routeCommitment = readLastRouteCommitment()
     const verdict = judgePlannerAlternativeTrial(run, {
       generatedBuildListEntryId: generated.entry.id,
       explicitDecisionBuildListEntryIds,
       fixedRouteBuildListEntryIds,
-      initialConflictIds,
+      routeCommitment,
     })
     if (verdict.status === 'rejected') {
       return { status: 'rejected', generatedBuildListEntryId: generated.entry.id, record: verdict }
@@ -460,6 +466,7 @@ export async function runPlannerAlternativeKernel(
         generated,
         replacement: resolved.replacement,
         trialResult: run,
+        trialRouteCommitment: routeCommitment,
         generatedSelected: verdict.generatedSelected,
       },
     }
@@ -470,6 +477,7 @@ export async function runPlannerAlternativeKernel(
     buildListContext: PlannerRunBuildListContext,
   ): Promise<PlannerResult | 'rerun_budget_reached'> {
     cancelledPlannerRun = false
+    lastRouteCommitment = null
     let result: PlannerResult
     try {
       result = await createProductionPlanWithObserver(

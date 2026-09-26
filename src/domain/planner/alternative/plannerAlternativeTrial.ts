@@ -3,7 +3,11 @@ import type {
   DomainValidationIssue,
   DomainValidationResult,
 } from '../../models/publicTypes'
-import type { PlannerResult, ProductionPlanGenerationObserver } from '../plannerTypes'
+import type {
+  PlannerResult,
+  PlannerRouteCommitmentEvidence,
+  ProductionPlanGenerationObserver,
+} from '../plannerTypes'
 
 /**
  * The caller-supplied trial bounds of one Planner Alternative kernel request
@@ -114,11 +118,11 @@ export interface PlannerAlternativeTrialJudgeContext {
    */
   fixedRouteBuildListEntryIds: readonly BuildListEntryId[]
   /**
-   * The `PlanConflict.id`s the trial input's initial conflict detection found
-   * (`preparePlannerInitialContext()` over the replacement set): the only
-   * conflicts a provisional outcome of route commitment settles.
+   * The route commitment evidence of the very full run the Plan was built
+   * from (`PlannerRunResult.routeCommitment`, the last run of Production Plan
+   * generation), or `null` when that run made no route commitment.
    */
-  initialConflictIds: readonly string[]
+  routeCommitment: PlannerRouteCommitmentEvidence | null
 }
 
 export type PlannerAlternativeTrialRejectionReason =
@@ -129,10 +133,10 @@ export type PlannerAlternativeTrialRejectionReason =
   /** A trial conflict has `G` and a fixed Route Entry as participants. */
   | 'conflicts_with_fixed_route'
   /**
-   * `G` is not selected, and the Plan's own record does not name the
-   * provisional outcome of an unresolved conflict with a selected Entry
-   * outside the fixed Route set as the only reason: a stall / deadlock drop, a
-   * precondition, validation, source, protection or checkpoint failure.
+   * `G` is not selected, and its only drop was not a provisional outcome of an
+   * unresolved conflict with an Entry outside the fixed Route set: a stall /
+   * deadlock drop, a precondition, validation, source, protection or
+   * checkpoint failure, a rejected action or reserve, or no commitment at all.
    */
   | 'not_selected'
 
@@ -149,26 +153,23 @@ export type PlannerAlternativeTrialVerdict =
  * 1. `plan !== null`
  * 2. every explicit decision Entry is selected
  * 3. no trial conflict has `G` and a fixed Route Entry as participants
- * 4. `G` is selected, or `G` was left out only as the non-adopted side of an
- *    unresolved conflict (`selectedBuildListEntryId === null`) with an Entry
- *    outside the fixed Route set
+ * 4. `G` is selected, or the only reason `G` is not is that it was the
+ *    non-adopted side of an unresolved conflict's provisional outcome against
+ *    an Entry outside the fixed Route set
  *
- * Condition 4's second branch reads only the existing Planner results: `G`
- * appears in `plan.rejectedBuildListEntries` as `resource_conflict` and
- * nothing else, and an unresolved conflict of the trial's *initial* conflict
- * detection - the conflicts route commitment settles by provisional outcome -
- * pairs `G` with an Entry outside the fixed Route set that the Plan did select,
- * the side that outcome adopted. Route commitment never keeps two colliding
- * Entries committed and never commits a dropped Entry again, so such a
- * selected partner exists only when the provisional outcome decided `G`. A
- * stall / deadlock drop is recorded as `resource_conflict` too, but it drops an
- * Entry commitment had kept, whose initial collision partners were therefore
- * dropped and not selected; a precondition, source, protection or checkpoint
- * failure records another reason or none. Anything else is not found.
+ * Condition 4's second branch reads the route commitment evidence of that run,
+ * recorded where commitment took the decision: `G`'s final commitment state is
+ * the very drop a provisional outcome made (`provisionalOutcome !== null`),
+ * whose adopted side is outside the fixed Route set, and every rejection the
+ * run recorded for `G` is that `conflict_not_committed` drop. Whether the
+ * adopted side itself survives to the Plan is deliberately not asked: a winner
+ * that later stalls does not change why `G` was left out. An Entry that won
+ * and then stalled, or was dropped for any other reason, carries no
+ * provisional outcome and is not found.
  *
  * Nothing else is consulted: no Counter comparison, no `usedCounters`
- * shortcut, no Candidate score, no `recommendedBuildListEntryId`, and
- * `completed === true` is not required.
+ * shortcut, no Candidate score, no priority, no `recommendedBuildListEntryId`,
+ * and `completed === true` is not required.
  */
 export function judgePlannerAlternativeTrial(
   result: PlannerResult,
@@ -187,15 +188,16 @@ export function judgePlannerAlternativeTrial(
     return { status: 'rejected', reason: 'conflicts_with_fixed_route' }
   }
   if (selected.has(generated)) return { status: 'found', generatedSelected: true }
-  const recorded = plan.rejectedBuildListEntries.filter(({ buildListEntryId }) => buildListEntryId === generated)
-  const initial = new Set(context.initialConflictIds)
-  const provisionalLoss = recorded.length > 0 &&
-    recorded.every(({ reason }) => reason === 'resource_conflict') &&
-    result.conflicts.some(({ id, buildListEntryIds, selectedBuildListEntryId }) =>
-      initial.has(id) &&
-      selectedBuildListEntryId === null &&
-      buildListEntryIds.includes(generated) &&
-      buildListEntryIds.some((id) => id !== generated && !fixed.has(id) && selected.has(id)))
+  const commitment = context.routeCommitment?.entries.find(
+    ({ buildListEntryId }) => buildListEntryId === generated,
+  )
+  const provisionalLoss =
+    commitment !== undefined &&
+    commitment.status === 'dropped' &&
+    commitment.provisionalOutcome !== null &&
+    !fixed.has(commitment.provisionalOutcome.selectedBuildListEntryId) &&
+    commitment.rejectionReasons.length > 0 &&
+    commitment.rejectionReasons.every((reason) => reason === 'conflict_not_committed')
   return provisionalLoss
     ? { status: 'found', generatedSelected: false }
     : { status: 'rejected', reason: 'not_selected' }
