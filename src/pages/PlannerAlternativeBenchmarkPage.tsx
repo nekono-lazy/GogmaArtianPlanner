@@ -24,6 +24,10 @@ import {
 } from '../benchmarks/plannerAlternativeBenchmarkFixtures'
 import { PLANNER_ALTERNATIVE_BENCHMARK_PROTOCOL_VERSION } from '../benchmarks/plannerAlternativeBenchmarkProtocol'
 import {
+  BENCHMARK_ONLY_RERUN_PRESSURE_CANDIDATE_TRIALS,
+  BENCHMARK_ONLY_RERUN_PRESSURE_SANITY_EXTENT,
+} from '../benchmarks/plannerAlternativeRerunPressureFixtures'
+import {
   createPlannerAlternativeBenchmarkRunner,
   describeIssue101Fixture,
   describeLongHeldFixture,
@@ -52,6 +56,9 @@ export interface PlannerAlternativeBenchmarkGlobal {
   readonly sanity: {
     readonly issue101Extent: PlannerAlternativeSearchExtent
     readonly issue101TrialBounds: typeof BENCHMARK_ONLY_ISSUE_101_SANITY_TRIAL_BOUNDS
+    /** `kernel_multi_target`: its extent and the trial bound the rerun sweep keeps fixed. */
+    readonly rerunPressureExtent: PlannerAlternativeSearchExtent
+    readonly rerunPressureCandidateTrials: number
   }
   readonly workloads: { readonly search: readonly string[]; readonly kernel: readonly string[] }
   run: PlannerAlternativeBenchmarkRunner['run']
@@ -173,6 +180,8 @@ export function PlannerAlternativeBenchmarkPage() {
       sanity: {
         issue101Extent: BENCHMARK_ONLY_ISSUE_101_SANITY_EXTENT,
         issue101TrialBounds: BENCHMARK_ONLY_ISSUE_101_SANITY_TRIAL_BOUNDS,
+        rerunPressureExtent: BENCHMARK_ONLY_RERUN_PRESSURE_SANITY_EXTENT,
+        rerunPressureCandidateTrials: BENCHMARK_ONLY_RERUN_PRESSURE_CANDIDATE_TRIALS,
       },
       workloads: { search: PLANNER_ALTERNATIVE_SEARCH_WORKLOADS, kernel: PLANNER_ALTERNATIVE_KERNEL_WORKLOADS },
       run: (options) => runner.run(options),
@@ -204,6 +213,23 @@ export function PlannerAlternativeBenchmarkPage() {
   const changeMode = (next: Mode) => {
     setMode(next)
     setWorkload(next === 'search' ? PLANNER_ALTERNATIVE_SEARCH_WORKLOADS[0] : PLANNER_ALTERNATIVE_KERNEL_WORKLOADS[0])
+  }
+
+  // Fills the visible fields with the selected Kernel workload's benchmark-only sanity values.
+  const fillKernelSanity = () => {
+    const rerun = workload === 'kernel_multi_target'
+    const sanityExtent = rerun ? BENCHMARK_ONLY_RERUN_PRESSURE_SANITY_EXTENT : BENCHMARK_ONLY_ISSUE_101_SANITY_EXTENT
+    setExtent({
+      maxNormalAdvance: String(sanityExtent.maxNormalAdvance),
+      maxGogmaAdvance: String(sanityExtent.maxGogmaAdvance),
+      maxSkillAdvance: String(sanityExtent.maxSkillAdvance),
+    })
+    setBounds({
+      maxCandidateTrialsPerTarget: String(rerun
+        ? BENCHMARK_ONLY_RERUN_PRESSURE_CANDIDATE_TRIALS
+        : BENCHMARK_ONLY_ISSUE_101_SANITY_TRIAL_BOUNDS.maxCandidateTrialsPerTarget),
+      maxPlannerReruns: rerun ? '1' : String(BENCHMARK_ONLY_ISSUE_101_SANITY_TRIAL_BOUNDS.maxPlannerReruns),
+    })
   }
 
   // The held-length scaling series keeps this one extent for every held length.
@@ -349,6 +375,9 @@ export function PlannerAlternativeBenchmarkPage() {
                       {...field}
                     />
                   ))}
+                  <Button variant="outlined" disabled={running} onClick={fillKernelSanity} sx={{ flex: '1 1 140px' }}>
+                    sanity値を入力
+                  </Button>
                 </Stack>
               </>
             )}

@@ -120,7 +120,13 @@ export type PlannerAlternativeSearchWorkloadId =
   | 'long_skill_held'
   | 'long_gogma_held'
 
-export type PlannerAlternativeKernelWorkloadId = 'issue101_prefer_dragon_normal'
+/**
+ * `issue101_prefer_dragon_normal`: the Issue #101 real case (found path, one
+ * trial). `kernel_multi_target`: the synthetic rerun-pressure fixture of
+ * `plannerAlternativeRerunPressureFixtures.ts`, two non-fixed Targets sharing
+ * one `maxPlannerReruns` budget.
+ */
+export type PlannerAlternativeKernelWorkloadId = 'issue101_prefer_dragon_normal' | 'kernel_multi_target'
 
 export const PLANNER_ALTERNATIVE_SEARCH_WORKLOADS: readonly PlannerAlternativeSearchWorkloadId[] = [
   'issue101_fire_dragon_fixed',
@@ -132,6 +138,7 @@ export const PLANNER_ALTERNATIVE_SEARCH_WORKLOADS: readonly PlannerAlternativeSe
 
 export const PLANNER_ALTERNATIVE_KERNEL_WORKLOADS: readonly PlannerAlternativeKernelWorkloadId[] = [
   'issue101_prefer_dragon_normal',
+  'kernel_multi_target',
 ]
 
 /**
@@ -315,14 +322,15 @@ const LONG_HELD_TARGET_ID = 'target.planner-alternative-benchmark.long-held' as 
 const LONG_HELD_OWNED_SKILL_COUNTER_START = 5_000
 const LONG_HELD_OWNED_GOGMA_COUNTER_START = 5_000
 
-interface BenchmarkMaster {
+export interface BenchmarkMaster {
   readonly master: SearchMasterSubset
   readonly context: ConstrainedSearchOrigin['calculationContext']
 }
 
 let cachedMaster: BenchmarkMaster | null = null
 
-function benchmarkMaster(): BenchmarkMaster {
+/** The Production Master subset and CalculationContext every synthetic benchmark fixture uses. */
+export function benchmarkMaster(): BenchmarkMaster {
   if (cachedMaster !== null) return cachedMaster
   const loaded = loadMasterData()
   if (!loaded.ok) throw new Error(`Master Data is invalid: ${JSON.stringify(loaded.issues)}`)

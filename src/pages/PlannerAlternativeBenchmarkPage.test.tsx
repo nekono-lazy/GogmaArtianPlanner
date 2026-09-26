@@ -46,7 +46,9 @@ describe('Planner Alternative Phase 3 benchmark page', () => {
     expect(api().grids.extent.gogma).toContain(235)
     expect(api().grids.heldLength).toEqual([1, 8, 32, 128, 512])
     expect(api().workloads.search).toContain('issue101_no_ideal')
-    expect(api().workloads.kernel).toEqual(['issue101_prefer_dragon_normal'])
+    expect(api().workloads.kernel).toEqual(['issue101_prefer_dragon_normal', 'kernel_multi_target'])
+    expect(api().sanity.rerunPressureExtent).toEqual({ maxNormalAdvance: 1, maxGogmaAdvance: 40, maxSkillAdvance: 1 })
+    expect(api().sanity.rerunPressureCandidateTrials).toBe(8)
     expect(api().records()).toEqual([])
     expect(api().environment()).toMatchObject({ engineVersion: 'production-rng:c5-e7', calculationAppSchemaVersion: 15 })
     expect(api().longHeld).toEqual({
@@ -81,6 +83,21 @@ describe('Planner Alternative Phase 3 benchmark page', () => {
     expect(within(table).getAllByText(/long_gogma_held \(held_blocked 4\)/)).toHaveLength(3)
     act(() => api().clear())
     expect(within(table).getByText('No measurements yet.')).toBeInTheDocument()
+  })
+
+  it('offers the rerun-pressure Kernel workload and fills its sanity values into the visible fields', async () => {
+    render(<PlannerAlternativeBenchmarkPage />)
+    fireEvent.mouseDown(screen.getByLabelText('Mode'))
+    fireEvent.click(await screen.findByRole('option', { name: 'Kernel measurement' }))
+    fireEvent.mouseDown(screen.getByLabelText('Workload'))
+    const options = await screen.findAllByRole('option')
+    expect(options.map((option) => option.textContent)).toEqual(['issue101_prefer_dragon_normal', 'kernel_multi_target'])
+    fireEvent.click(screen.getByRole('option', { name: 'kernel_multi_target' }))
+    fireEvent.click(screen.getByRole('button', { name: 'sanity値を入力' }))
+    expect(screen.getByLabelText('maxGogmaAdvance')).toHaveValue(40)
+    expect(screen.getByLabelText('maxCandidateTrialsPerTarget')).toHaveValue(8)
+    expect(screen.getByLabelText('maxPlannerReruns')).toHaveValue(1)
+    expect(createHarness).not.toHaveBeenCalled()
   })
 
   it('refuses an invalid extent from the form without creating a Worker', async () => {

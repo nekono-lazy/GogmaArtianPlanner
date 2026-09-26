@@ -3545,7 +3545,11 @@ benchmark-only Browser Worker harness (`benchmark.html`, `pa3_benchmark_` protoc
 execution-only `PlannerAlternativeSearchExecutionOptions.instrumentation` observer (settled work,
 held-aware Skill / Gogma depth counts), which no Production caller passes and which changes no
 delivered Candidate, summary or prediction call; the extent / trial bound Production defaults
-stay undecided until Phase 3-B measures and Phase 3-C decides them.
+stay undecided until Phase 3-B measures and Phase 3-C decides them. The `kernel_multi_target`
+synthetic rerun-pressure workload (two non-fixed Targets sharing one `maxPlannerReruns` budget)
+measures the rerun bound; no Production workload where Candidate 1 is rejected and a later
+Candidate is found was found, so the trial bound's semantic threshold is not a Phase 3-B
+measurement (this does not prove that one trial suffices).
 
 ---
 

@@ -23,6 +23,11 @@ import {
   type PlannerAlternativeSearchWorkloadId,
 } from './plannerAlternativeBenchmarkFixtures'
 import {
+  createPlannerAlternativeRerunPressureFixture,
+  createPlannerAlternativeRerunPressureKernelRequest,
+  type PlannerAlternativeRerunPressureFixture,
+} from './plannerAlternativeRerunPressureFixtures'
+import {
   PLANNER_ALTERNATIVE_BENCHMARK_PROTOCOL_VERSION,
   type PlannerAlternativeRecordingMode,
 } from './plannerAlternativeBenchmarkProtocol'
@@ -98,6 +103,8 @@ export interface PlannerAlternativeBenchmarkRecord {
 export interface PlannerAlternativeRunnerDependencies {
   readonly createHarness?: () => PlannerAlternativeBenchmarkHarness
   readonly loadIssue101Fixture: () => Promise<Issue101RealFixture>
+  /** The synthetic rerun-pressure fixture; built once, outside every measurement. */
+  readonly loadRerunPressureFixture?: () => Promise<PlannerAlternativeRerunPressureFixture>
   readonly createRequestId?: () => string
   readonly visibilityState?: () => string
   readonly onChange?: (state: { running: boolean; records: readonly PlannerAlternativeBenchmarkRecord[] }) => void
@@ -175,6 +182,8 @@ export function createPlannerAlternativeBenchmarkRunner(
   let active: { harness: PlannerAlternativeBenchmarkHarness; requestId: string } | null = null
   let seriesCancelled = false
   let issue101: Promise<Issue101RealFixture> | null = null
+  let rerunPressure: Promise<PlannerAlternativeRerunPressureFixture> | null = null
+  const loadRerunPressureFixture = dependencies.loadRerunPressureFixture ?? createPlannerAlternativeRerunPressureFixture
 
   const notify = () => dependencies.onChange?.({ running: active !== null, records })
   const loadIssue101 = () => {
@@ -183,6 +192,13 @@ export function createPlannerAlternativeBenchmarkRunner(
       throw error
     })
     return issue101
+  }
+  const loadRerunPressure = () => {
+    rerunPressure ??= loadRerunPressureFixture().catch((error: unknown) => {
+      rerunPressure = null
+      throw error
+    })
+    return rerunPressure
   }
 
   async function buildHarnessOptions(
@@ -221,7 +237,9 @@ export function createPlannerAlternativeBenchmarkRunner(
       return {
         ...common,
         kind: 'kernel',
-        request: createIssue101KernelRequest(await loadIssue101(), options.extent, options.bounds),
+        request: options.workload === 'kernel_multi_target'
+          ? createPlannerAlternativeRerunPressureKernelRequest(await loadRerunPressure(), options.extent, options.bounds)
+          : createIssue101KernelRequest(await loadIssue101(), options.extent, options.bounds),
       }
     }
     throw new RangeError(`Unknown mode '${String((options as { mode?: unknown }).mode)}'.`)

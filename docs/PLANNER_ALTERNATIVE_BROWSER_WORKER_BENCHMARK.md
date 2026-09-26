@@ -49,6 +49,7 @@ full Planner trial、9.2.19.6のfound判定、Issue #101 acceptanceは変更し�
 | --- | --- |
 | Worker protocol（`pa3_benchmark_` prefix） | `src/benchmarks/plannerAlternativeBenchmarkProtocol.ts` |
 | fixture / benchmark-only grid | `src/benchmarks/plannerAlternativeBenchmarkFixtures.ts` |
+| rerun-pressure fixture（`kernel_multi_target`） | `src/benchmarks/plannerAlternativeRerunPressureFixtures.ts` |
 | counting Engine / stream集計 / Kernel clock observer | `src/benchmarks/plannerAlternativeBenchmarkInstrumentation.ts` |
 | main-thread harness（1 run = 1 Worker） | `src/benchmarks/plannerAlternativeBrowserBenchmark.ts` |
 | warm-up / measurement series、records、JSON export | `src/benchmarks/plannerAlternativeBenchmarkRunner.ts` |
@@ -141,6 +142,53 @@ reservation）と `issue101_no_ideal_dragon_fixed`（Dragon reservation）があ
   動かす比較をPhase 3-Bのscaling authorityにしない。testは短いseries（`createLongHeldFixture()` の `series`
   引数で固定anchorを近くに置いたもの）を使うが、page / console / runnerは常に既定seriesを使う
 
+### 5.4 multi-target rerun pressure（`kernel_multi_target`、synthetic Production benchmark fixture）
+
+**game observationではない**。`maxPlannerReruns` のsweep用Kernel workloadである。値は `ProductionRngEngine`
+prediction、Candidateは `searchCandidates()`、Entryは `createBuildListEntry()`、conflictは `preparePlannerInitialContext()`、
+計算は `runPlannerAlternativeKernel()`（Production Search / materializer / preflight / full Planner run / Trace Replay）で、
+mockは使わない。
+
+- Charge Blade、Base Seed 51231782、Skill 341 / Gogma 55、Normal Counter無し（Skill / Gogma Counterは全weapon共通）
+- Target A（Dragon、priority 5、decisionで固定）: 所持Dragon Gogma。Route = Reset Skills@341 + Reset@55
+- Target B / C（Fire、priority 1）: それぞれ所持rarity-8 Fire Normal。Ideal = Fire Gogma 56のReset prediction（Skill条件なし）。
+  Route = conversion@341 → Reset@55 → Reset@56。AのDragon GogmaはFire Targetのsourceにならない
+- A / B / Cは1つの `same_skill_counter`（Skill 341）conflictを共有し、decisionは実conflict IDでAを優先する（ID hard-code無し）。
+  Kernelのstable work orderでB、Cの順に評価される
+- 確認済みの意味（Vitestで固定、`production-rng:c5-e7`）:
+
+| `maxPlannerReruns` | B | C | `plannerRerunsUsed` |
+| --- | --- | --- | --- |
+| 1 | found（conversion@342、Reset@56） | `stopped_by_planner_rerun_bound`（search / trialなし） | 1 |
+| 2以上 | found | found | 2 |
+
+- sanity値: extent `BENCHMARK_ONLY_RERUN_PRESSURE_SANITY_EXTENT`（Normal 1 / Gogma 40 / Skill 1）、rerun sweep中に固定する
+  trial上限 `BENCHMARK_ONLY_RERUN_PRESSURE_CANDIDATE_TRIALS = 8`。どちらもProduction defaultではない
+
+### 5.5 Candidate trial boundについて確認できたこと（Phase 3-A）
+
+現行Production semanticsでは、「Candidate 1がtrialでrejectされ、Candidate 2以降が同じ固定Route集合に対して
+foundになる」実Browser benchmark workloadを確認できていない。そのためPhase 3-Bでは、`maxCandidateTrialsPerTarget`
+について `stopped_by_candidate_trial_bound → found` というsemantic thresholdを実測から決定できない。
+これは `maxCandidateTrialsPerTarget = 1` で十分であることの証明ではない。確認したのは、現在のProduction fixture /
+semanticsでcandidate-dependentなreject → 後続foundを再現できなかった、という事実だけである。構造的に絶対不可能とは
+断定しない。
+
+reject経路ごとの調査結果:
+
+- `conflicts_with_fixed_route`: 固定Routeのrequired位置はreservationでblockedになるため、Planner Alternative Searchが
+  そこへown operationを置かない
+- `not_selected`: 固定Routeのheld位置は待機可能で、schedulerはholding unitがreadyでない位置では待つ。試した
+  timing由来stall fixture（固定Routeの上書きされるResetの位置を、巨戟化待ちの代替Routeが使う形）では、代替Routeが
+  1 trialでfoundになった
+- `reused_existing_entry`: invalidateされた現在Route Oは `excludedRouteKeys` に入るため、同じ意味の代替は届かない
+- `preflight_refused`: Domain testでは強制mock（`forced.refusePreflights`）で作れるが、Candidate 1だけreject /
+  Candidate 2 foundとなるProduction fixtureは今回確認できなかった
+
+試作したmulti-trial fixtureはbenchmark workloadとして残していない（mock、fake Planner result、手書きRNG結果で
+成立させることもしない）。全Candidateが一様にrejectされるworkloadは、trial単価は測れてもsemantic coverageの根拠に
+ならないため、今回は追加していない。
+
 ## 6. Worker経路と計測境界
 
 ### 6.1 Search measurement
@@ -201,12 +249,13 @@ clockを読まず、materializationで1回、Plan生成で `productionPlanId()` 
 | Normal extent | 1 / 4 / 16 / 40 / 80 |
 | Gogma extent | 30 / 60 / 120 / 180 / 220 / **235** / 240 / 300 / 350（235はIssue #101 Fire代替の到達閾値。落とさない） |
 | Skill extent | 1 / 2 / 4 / 8 / 16 / 32 / 64 |
-| Candidate trials | 1 / 2 / 3 / 4 / 8 |
+| Candidate trials | 1 / 2 / 3 / 4 / 8（semantic thresholdはPhase 3-Bの実測対象外。5.5） |
 | Planner reruns | 1 / 2 / 3 / 4 / 8 / 16 |
 | held length | 1 / 8 / 32 / 128 / 512 |
 
 sanity値としてPhase 2 acceptanceのextent `1 / 240 / 1` とtrial bounds `3 / 3`
-（`BENCHMARK_ONLY_ISSUE_101_SANITY_*`）を置く。これも既定値ではない。Phase 3-Aでは「512が適切な上限」等の結論を
+（`BENCHMARK_ONLY_ISSUE_101_SANITY_*`）、rerun-pressureのextent `1 / 40 / 1` とtrial上限 `8`
+（`BENCHMARK_ONLY_RERUN_PRESSURE_*`）を置く。これらも既定値ではない。Phase 3-Aでは「512が適切な上限」等の結論を
 出さない。long-held scaling seriesでは held length grid と固定anchor・`BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT`
 （Normal 1 / Gogma 513 / Skill 513）を1組として使う。`held` modeで長いheld runを最後まで（`stopAfterCandidates = null`）
 走らせるとdepth毎にstateが増えるため、重すぎる場合は `stopAfterCandidates` で打ち切るか、series全体で同じ
@@ -226,10 +275,15 @@ Node / jsdom / Vitestの時間はauthorityにしない。real Browser Workerの�
 7. no-Ideal extent sweep: `issue101_no_ideal`（必要なら `_dragon_fixed`）を `stopAfterCandidates: null` で
 8. long-held scaling sweep: `long_skill_held` / `long_gogma_held` × `held` / `held_blocked` × held length grid。
    extentは全held長で `longHeld.fixedExtent`、Target / Idealは固定（5.3）
-9. trial bound sweep: Kernel、Candidate trials grid
-10. rerun bound sweep: Kernel、Planner reruns grid
+9. Candidate trial: Issue #101等の実Production Kernel workload（`issue101_prefer_dragon_normal`）で、1 trialあたりの実コスト
+   （`workerElapsedMs` / `roundTripMs` / `timeToFirstTrialMs` / prediction数）を測る。現行semanticsではlater-Candidate
+   recoveryのProduction workloadを確認できていないため（5.5）、Tのsemantic thresholdはPhase 3-Bの実測対象外とする
+10. rerun bound sweep: `kernel_multi_target`。`maxCandidateTrialsPerTarget` は各Targetの評価を妨げない十分な
+    benchmark-only値（`sanity.rerunPressureCandidateTrials` = 8）で固定し、`maxPlannerReruns` を 1 / 2 / 3 / 4 / 8 / 16 で
+    sweepする。観測: `stopped_by_planner_rerun_bound` の有無、`plannerRerunsUsed`、各Target outcome、`workerElapsedMs`、
+    `roundTripMs`。`stopped_by_planner_rerun_bound → 全対象評価可能` の境界を見る
 11. cancel / responsiveness: `cancelOnFirstCandidate`、`cancelAfterMs`、`pingIntervalMs`
-12. finalist tuples: 候補extent × trial boundsをwarm-up 1 / measurement 3以上で再計測
+12. finalist tuples: 候補extent × rerun boundをwarm-up 1 / measurement 3以上で再計測
 13. raw JSON export: `plannerAlternativeBenchmark.exportJson()` またはpageの「JSON保存」
 
 console例:
@@ -244,6 +298,12 @@ await pa.runMeasurements({
 await pa.runMeasurements({
   mode: 'kernel', workload: 'issue101_prefer_dragon_normal',
   extent: pa.sanity.issue101Extent, bounds: { maxCandidateTrialsPerTarget: 3, maxPlannerReruns: 3 },
+  warmUp: 1, measurements: 3,
+})
+await pa.runMeasurements({
+  mode: 'kernel', workload: 'kernel_multi_target',
+  extent: pa.sanity.rerunPressureExtent,
+  bounds: { maxCandidateTrialsPerTarget: pa.sanity.rerunPressureCandidateTrials, maxPlannerReruns: 1 },
   warmUp: 1, measurements: 3,
 })
 await pa.run({
@@ -273,13 +333,19 @@ extent:
 
 candidate trials:
 
-- reachable workloadで必要なfoundを得る最小値
-- より大きい値でsemantic改善が無いかを確認する
+- 現行semanticsではlater-Candidate recoveryのProduction workloadを確認できていないため（5.5）、実測から
+  semantic thresholdは決めない
+- Production defaultはPhase 3-Cで、現行Kernel semantics、安全弁としての役割、Phase 3-Bで測る1 trialあたりの実コストを
+  合わせて設計判断する（Phase 3-A / 3-Bでは値を決めない）
 
 planner reruns:
 
-- 代表workloadの必要trialがglobal rerun budget不足で評価されない状態を避ける
+- `kernel_multi_target` のように複数Targetが1つのglobal rerun budgetを共有する実ケースで、代表workloadの必要trialが
+  budget不足で評価されない状態を避ける
 - runtime-unsupported retryも1 runとして数える既存契約（9.2.19.12）を維持する
+
+Issue #101（`issue101_prefer_dragon_normal`）はreal fixture sanity、found path、1 trialの実コスト、Issue #101 regressionの
+authorityであり、trial defaultとrerun defaultをこの1ケースだけで決めない（1 trial / 1 rerunで完了するため）。
 
 性能とcoverageのtrade-offは実測後に判断する。
 

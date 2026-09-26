@@ -4831,6 +4831,10 @@ Phase 3は3つに分ける。**Phase 3-A**（benchmark-only harness / fixture / 
 は実装済み、**Phase 3-B**（real Browser Workerでの実測）と **Phase 3-C**（実測からのProduction default確定）は未了である
 （[PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md](./PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md)）。Phase 3-Aは
 extent / 試行上限のdefaultを決めず、`runPlannerAlternativeKernel()` のextent / boundsはcaller必須のままである。
+`maxPlannerReruns` は複数Targetが1つのbudgetを共有するrerun-pressure workloadで実測する。`maxCandidateTrialsPerTarget` は、
+現行semanticsで「Candidate 1がtrialでreject、後続Candidateがfound」となるProduction workloadを確認できていないため、
+semantic thresholdをPhase 3-Bの実測対象とせず、1 trialあたりの実コストと安全弁としての役割からPhase 3-Cで設計判断する
+（`maxCandidateTrialsPerTarget = 1` で十分という証明ではない）。
 
 ---
 

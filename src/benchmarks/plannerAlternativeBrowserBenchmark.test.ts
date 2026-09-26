@@ -19,6 +19,12 @@ import {
   type Issue101RealFixture,
 } from './plannerAlternativeBenchmarkFixtures'
 import {
+  BENCHMARK_ONLY_RERUN_PRESSURE_CANDIDATE_TRIALS,
+  BENCHMARK_ONLY_RERUN_PRESSURE_SANITY_EXTENT,
+  createPlannerAlternativeRerunPressureFixture,
+  createPlannerAlternativeRerunPressureKernelRequest,
+} from './plannerAlternativeRerunPressureFixtures'
+import {
   isPlannerAlternativeBenchmarkRequest,
   isPlannerAlternativeBenchmarkResponse,
   type PlannerAlternativeBenchmarkResponse,
@@ -333,6 +339,34 @@ describe('Planner Alternative benchmark Worker controller', () => {
       })
     }, SLOW)
 
+    it.each([
+      [1, ['found', 'stopped_by_planner_rerun_bound'], 1, 1],
+      [2, ['found', 'found'], 2, 2],
+    ] as const)('reports the rerun-pressure workload with R = %i through the Worker protocol summary', async (maxPlannerReruns, outcomes, reruns, trials) => {
+      const rerunFixture = await createPlannerAlternativeRerunPressureFixture()
+      const { responses, post } = collectResponses()
+      const controller = createPlannerAlternativeBenchmarkController(dependencies, post)
+      await controller.handleMessage({
+        type: 'pa3_benchmark_kernel', requestId: `r${maxPlannerReruns}`, instrumented: true, notifyFirstCandidate: false,
+        request: createPlannerAlternativeRerunPressureKernelRequest(rerunFixture, BENCHMARK_ONLY_RERUN_PRESSURE_SANITY_EXTENT, {
+          maxCandidateTrialsPerTarget: BENCHMARK_ONLY_RERUN_PRESSURE_CANDIDATE_TRIALS, maxPlannerReruns,
+        }),
+      })
+      const result = responses.at(-1)
+      if (result?.type !== 'pa3_benchmark_kernel_result') throw new Error(JSON.stringify(result))
+      expect(result.bounds.maxPlannerReruns).toBe(maxPlannerReruns)
+      const summary = result.measurement.result
+      if (summary.status !== 'completed') throw new Error(JSON.stringify(summary))
+      expect(summary.plannerRerunsUsed).toBe(reruns)
+      expect(summary.candidateTrials).toBe(trials)
+      expect(summary.targets.map(({ targetWeaponId }) => targetWeaponId))
+        .toEqual(rerunFixture.nonFixedEntries.map(({ targetWeaponId }) => targetWeaponId))
+      expect(summary.targets.map(({ outcome }) => outcome)).toEqual(outcomes)
+      if (maxPlannerReruns === 1) expect(summary.targets[1]).toMatchObject({ trials: 0, search: null, found: null })
+      // Aggregates only: no Plan, no Candidate.
+      expect(JSON.stringify(result)).not.toContain('"operations"')
+    }, SLOW)
+
     it('cancels a Kernel at its first trial and reports the trials started', async () => {
       const { responses, post } = collectResponses()
       let controller: ReturnType<typeof createPlannerAlternativeBenchmarkController> | null = null
@@ -520,6 +554,28 @@ describe('Planner Alternative benchmark runner', () => {
     await expect(runner.run({ mode: 'search', workload: 'long_skill_held', extent, longHeld: { heldLength: 4, heldMode: 'held' }, stopAfterCandidates: 1, pingIntervalMs: -1 })).rejects.toThrow(RangeError)
     expect(created).toHaveLength(0)
   })
+
+  it('builds the rerun-pressure fixture once and passes the caller bounds unchanged', async () => {
+    const { created, createHarness } = fakeHarnessFactory()
+    const rerunFixture = await createPlannerAlternativeRerunPressureFixture()
+    let loads = 0
+    const runner = createPlannerAlternativeBenchmarkRunner({
+      createHarness,
+      loadIssue101Fixture: () => Promise.reject(new Error('not needed')),
+      loadRerunPressureFixture: async () => { loads += 1; return rerunFixture },
+    })
+    for (const maxPlannerReruns of [1, 2]) {
+      await runner.run({
+        mode: 'kernel', workload: 'kernel_multi_target', extent: BENCHMARK_ONLY_RERUN_PRESSURE_SANITY_EXTENT,
+        bounds: { maxCandidateTrialsPerTarget: BENCHMARK_ONLY_RERUN_PRESSURE_CANDIDATE_TRIALS, maxPlannerReruns },
+      })
+    }
+    expect(loads).toBe(1)
+    expect(created.map(({ runs }) => runs[0].kind === 'kernel' && runs[0].request.bounds.maxPlannerReruns)).toEqual([1, 2])
+    expect(runner.records().map(({ workload, bounds }) => [workload, bounds?.maxPlannerReruns])).toEqual([
+      ['kernel_multi_target', 1], ['kernel_multi_target', 2],
+    ])
+  }, SLOW)
 
   it('loads the Issue #101 fixture once for every run that needs it', async () => {
     const { createHarness } = fakeHarnessFactory()
