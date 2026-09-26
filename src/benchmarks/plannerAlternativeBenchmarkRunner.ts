@@ -250,10 +250,16 @@ export function createPlannerAlternativeBenchmarkRunner(
         if (interval > 0) await new Promise((resolve) => globalThis.setTimeout(resolve, interval))
       }
     }
-    if (options.pingIntervalMs !== undefined) void pingLoop()
     let result: PlannerAlternativeRunResult
     try {
-      result = await harness.run(harnessOptions)
+      // The run request must be the first message the fresh Worker receives,
+      // so every record's round trip contains the same outstanding Worker
+      // start-up: `harness.run()` posts it synchronously before it returns,
+      // and only then does the ping loop start. It does not wait for
+      // `accepted`, so the pings still observe the Worker from the start.
+      const running = harness.run(harnessOptions)
+      if (options.pingIntervalMs !== undefined) void pingLoop()
+      result = await running
     } finally {
       stopPings = true
       harness.dispose()

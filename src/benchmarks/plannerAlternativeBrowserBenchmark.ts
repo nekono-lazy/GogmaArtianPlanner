@@ -98,6 +98,7 @@ export type PlannerAlternativeHarnessRunOptions =
     })
 
 export interface PlannerAlternativeBenchmarkHarness {
+  /** Posts the run request synchronously, before the returned Promise exists. */
   run(options: PlannerAlternativeHarnessRunOptions): Promise<PlannerAlternativeRunResult>
   /** Posts the cancel of a running request now; false when it is not running. */
   cancel(requestId: string): boolean

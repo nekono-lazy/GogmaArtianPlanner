@@ -15,7 +15,7 @@ import {
   createIssue101KernelRequest,
   createIssue101RealFixture,
   createLongHeldFixture,
-  longHeldReachingExtent,
+  BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT,
   type Issue101RealFixture,
 } from './plannerAlternativeBenchmarkFixtures'
 import {
@@ -62,7 +62,8 @@ class FakeWorker implements BenchmarkWorkerLike {
 }
 
 function tinySearchInput() {
-  return createLongHeldFixture('long_skill_held', { heldLength: 1, heldMode: 'held_blocked' }, longHeldReachingExtent('long_skill_held', 1)).input
+  // A one-position series: Skill 341 held and blocked, the Ideal anchored at 342.
+  return createLongHeldFixture('long_skill_held', { heldLength: 1, heldMode: 'held_blocked' }, { maxNormalAdvance: 1, maxGogmaAdvance: 1, maxSkillAdvance: 2 }, { idealPosition: 342 }).input
 }
 
 function searchOptions(requestId = 'r1'): Extract<PlannerAlternativeHarnessRunOptions, { kind: 'search' }> {
@@ -243,7 +244,7 @@ describe('Planner Alternative benchmark Worker controller', () => {
       const controller = createPlannerAlternativeBenchmarkController(dependencies, post)
       await controller.handleMessage({
         type: 'pa3_benchmark_search', requestId: 'p', recording, instrumented, notifyFirstCandidate: false,
-        input: createLongHeldFixture('long_gogma_held', { heldLength: 4, heldMode: 'held' }, { maxNormalAdvance: 1, maxGogmaAdvance: 6, maxSkillAdvance: 1 }).input,
+        input: createLongHeldFixture('long_gogma_held', { heldLength: 4, heldMode: 'held' }, { maxNormalAdvance: 1, maxGogmaAdvance: 6, maxSkillAdvance: 1 }, { idealPosition: 59 }).input,
         stopAfterCandidates: 6,
       })
       const result = responses.at(-1)
@@ -275,7 +276,7 @@ describe('Planner Alternative benchmark Worker controller', () => {
     })
     await controller.handleMessage({
       type: 'pa3_benchmark_search', requestId: 'c1', recording: 'timing', instrumented: true, notifyFirstCandidate: false,
-      input: createLongHeldFixture('long_skill_held', { heldLength: 200, heldMode: 'held' }, longHeldReachingExtent('long_skill_held', 200)).input,
+      input: createLongHeldFixture('long_skill_held', { heldLength: 200, heldMode: 'held' }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT).input,
       stopAfterCandidates: null,
     })
     expect(yields).toBeGreaterThan(0)
@@ -406,7 +407,7 @@ describe('Planner Alternative benchmark runner', () => {
       visibilityState: () => 'visible',
     })
     const records = await runner.runMeasurements({
-      mode: 'search', workload: 'long_skill_held', extent: longHeldReachingExtent('long_skill_held', 4),
+      mode: 'search', workload: 'long_skill_held', extent: BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT,
       longHeld: { heldLength: 4, heldMode: 'held' }, stopAfterCandidates: 1, warmUp: 1, measurements: 3,
     })
     expect(records.map(({ phase }) => phase)).toEqual(['warm-up', 'measurement', 'measurement', 'measurement'])
@@ -423,6 +424,69 @@ describe('Planner Alternative benchmark runner', () => {
     runner.clear()
     expect(runner.records()).toEqual([])
   })
+
+  it('sends the run request as the first message of every fresh Worker, and only then pings', async () => {
+    const workers: FakeWorker[] = []
+    const types = (worker: FakeWorker) => worker.posted.map((message) => (message as { type: string }).type)
+    const runner = createPlannerAlternativeBenchmarkRunner({
+      createHarness: () => {
+        const worker = new FakeWorker()
+        workers.push(worker)
+        // Answer each run shortly after it is posted, leaving the pings unanswered.
+        const post = worker.postMessage.bind(worker)
+        worker.postMessage = (message: unknown) => {
+          post(message)
+          const request = message as { type: string; requestId?: string }
+          if (request.type === 'pa3_benchmark_search' || request.type === 'pa3_benchmark_kernel') {
+            globalThis.setTimeout(() => worker.emit('message', {
+              type: 'pa3_benchmark_cancelled', requestId: request.requestId, workerElapsedMs: 1, deliveredCandidates: 0,
+            }), 5)
+          }
+        }
+        return createPlannerAlternativeBenchmarkHarness({ createWorker: () => worker })
+      },
+      loadIssue101Fixture: () => Promise.reject(new Error('not needed')),
+    })
+    const records = await runner.runMeasurements({
+      mode: 'search', workload: 'long_skill_held', extent: BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT,
+      longHeld: { heldLength: 4, heldMode: 'held' }, stopAfterCandidates: 1, pingIntervalMs: 0, warmUp: 1, measurements: 2,
+    })
+    expect(records.map(({ phase }) => phase)).toEqual(['warm-up', 'measurement', 'measurement'])
+    // One fresh Worker per run, each terminated after its run.
+    expect(workers).toHaveLength(3)
+    for (const worker of workers) {
+      expect(types(worker)[0]).toBe('pa3_benchmark_search')
+      expect(types(worker)[1]).toBe('pa3_benchmark_ping')
+      expect(types(worker).slice(1).every((type) => type === 'pa3_benchmark_ping')).toBe(true)
+      expect(worker.terminated).toBe(true)
+      expect(worker.listenerCount()).toBe(0)
+    }
+    // The unanswered pings were released by dispose: nothing is left running.
+    expect(runner.running()).toBe(false)
+    expect(records.every(({ workerPings }) => workerPings === 0)).toBe(true)
+  })
+
+  it('posts the Kernel run request before the first ping too', async () => {
+    const fixture = await createIssue101RealFixture()
+    const worker = new FakeWorker()
+    const runner = createPlannerAlternativeBenchmarkRunner({
+      createHarness: () => createPlannerAlternativeBenchmarkHarness({ createWorker: () => worker }),
+      loadIssue101Fixture: async () => fixture,
+    })
+    const running = runner.run({
+      mode: 'kernel', workload: 'issue101_prefer_dragon_normal', extent: BENCHMARK_ONLY_ISSUE_101_SANITY_EXTENT,
+      bounds: BENCHMARK_ONLY_ISSUE_101_SANITY_TRIAL_BOUNDS, pingIntervalMs: 0,
+    })
+    for (let index = 0; index < 50 && worker.posted.length < 2; index += 1) await new Promise((resolve) => setTimeout(resolve, 10))
+    const [first, second] = worker.posted as Array<{ type: string; requestId?: string; pingId?: number }>
+    expect(first.type).toBe('pa3_benchmark_kernel')
+    expect(second.type).toBe('pa3_benchmark_ping')
+    worker.emit('message', { type: 'pa3_benchmark_pong', pingId: second.pingId })
+    worker.emit('message', { type: 'pa3_benchmark_cancelled', requestId: first.requestId, workerElapsedMs: 1, deliveredCandidates: 0 })
+    const record = await running
+    expect(record.workerPings).toBeGreaterThanOrEqual(1)
+    expect(worker.terminated).toBe(true)
+  }, SLOW)
 
   it('never mixes warm-up into the medians', () => {
     const record = (phase: PlannerAlternativeBenchmarkRecord['phase'], workerElapsedMs: number): PlannerAlternativeBenchmarkRecord => {
@@ -447,7 +511,7 @@ describe('Planner Alternative benchmark runner', () => {
   it('validates every option and builds the fixture before a Worker exists', async () => {
     const { created, createHarness } = fakeHarnessFactory()
     const runner = createPlannerAlternativeBenchmarkRunner({ createHarness, loadIssue101Fixture: () => Promise.reject(new Error('fixture failed')) })
-    const extent = longHeldReachingExtent('long_skill_held', 4)
+    const extent = BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT
     await expect(runner.run({ mode: 'search', workload: 'long_skill_held', extent: { ...extent, maxSkillAdvance: 0 }, longHeld: { heldLength: 4, heldMode: 'held' }, stopAfterCandidates: 1 })).rejects.toThrow(RangeError)
     await expect(runner.run({ mode: 'search', workload: 'long_skill_held', extent, longHeld: { heldLength: 4, heldMode: 'held' } } as never)).rejects.toThrow('stopAfterCandidates')
     await expect(runner.run({ mode: 'search', workload: 'nope' as never, extent, stopAfterCandidates: 1 })).rejects.toThrow('Unknown Search workload')
@@ -478,7 +542,7 @@ describe('Planner Alternative benchmark runner', () => {
     })
     runner = createPlannerAlternativeBenchmarkRunner({ createHarness, loadIssue101Fixture: () => Promise.reject(new Error('x')) })
     const records = await runner.runMeasurements({
-      mode: 'search', workload: 'long_skill_held', extent: longHeldReachingExtent('long_skill_held', 2),
+      mode: 'search', workload: 'long_skill_held', extent: BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT,
       longHeld: { heldLength: 2, heldMode: 'held' }, stopAfterCandidates: 1, warmUp: 1, measurements: 3,
     })
     expect(records).toHaveLength(1)
@@ -498,7 +562,7 @@ describe('Planner Alternative benchmark runner', () => {
       dispose: () => undefined,
     })
     const runner = createPlannerAlternativeBenchmarkRunner({ createHarness, loadIssue101Fixture: () => Promise.reject(new Error('x')) })
-    const options = { mode: 'search' as const, workload: 'long_skill_held' as const, extent: longHeldReachingExtent('long_skill_held', 1), longHeld: { heldLength: 1, heldMode: 'held' as const }, stopAfterCandidates: 1 }
+    const options = { mode: 'search' as const, workload: 'long_skill_held' as const, extent: BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT, longHeld: { heldLength: 1, heldMode: 'held' as const }, stopAfterCandidates: 1 }
     const first = runner.run(options)
     await new Promise((resolve) => setTimeout(resolve, 0))
     await expect(runner.run(options)).rejects.toThrow('already in progress')

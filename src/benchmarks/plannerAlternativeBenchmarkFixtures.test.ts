@@ -1,6 +1,6 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
-import type { RouteOperation } from '../domain/models/publicTypes'
+import type { RouteOperation, TargetWeapon } from '../domain/models/publicTypes'
 import { derivePlannerAlternativeReservation } from '../domain/planner'
 import {
   PRODUCTION_RNG_ENGINE_VERSION,
@@ -19,7 +19,7 @@ import {
   ISSUE_101_SKILL_COUNTER,
 } from './issue101ConstrainedResearchFixtures'
 import { summarizeIssue101Route } from './issue101RouteSummary'
-import { createCountingRngEngine } from './plannerAlternativeBenchmarkInstrumentation'
+import { createCountingRngEngine, createPlannerAlternativeSearchObserver } from './plannerAlternativeBenchmarkInstrumentation'
 import {
   assertPlannerAlternativeBenchmarkExtent,
   assertPlannerAlternativeBenchmarkTrialBounds,
@@ -28,6 +28,10 @@ import {
   BENCHMARK_ONLY_HELD_LENGTH_GRID,
   BENCHMARK_ONLY_ISSUE_101_SANITY_EXTENT,
   BENCHMARK_ONLY_ISSUE_101_SANITY_TRIAL_BOUNDS,
+  BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT,
+  BENCHMARK_ONLY_LONG_HELD_GOGMA_IDEAL_POSITION,
+  BENCHMARK_ONLY_LONG_HELD_IDEAL_OFFSET,
+  BENCHMARK_ONLY_LONG_HELD_SKILL_IDEAL_POSITION,
   BENCHMARK_ONLY_PLANNER_RERUN_GRID,
   createIssue101DragonFixedSearchInput,
   createIssue101DragonReservation,
@@ -36,9 +40,9 @@ import {
   createIssue101RealFixture,
   createLongHeldFixture,
   createPlannerAlternativeSearchWorkloadInput,
-  longHeldReachingExtent,
   type Issue101RealFixture,
   type LongHeldMode,
+  type LongHeldWorkloadId,
 } from './plannerAlternativeBenchmarkFixtures'
 
 /*
@@ -208,40 +212,133 @@ describe('no-Ideal worst case', () => {
 })
 
 describe('synthetic long-held fixtures', () => {
-  const cases = [
+  const workloads = ['long_skill_held', 'long_gogma_held'] as const
+  const originOf = (workload: LongHeldWorkloadId) =>
+    workload === 'long_skill_held' ? ISSUE_101_SKILL_COUNTER : ISSUE_101_GOGMA_COUNTER
+  const measured = (workload: LongHeldWorkloadId) => (workload === 'long_skill_held' ? 'skill' : 'gogma')
+  /** A short series so a test can run it to the end of its extent. */
+  const shortSeries = (workload: LongHeldWorkloadId, offset: number) => ({
+    series: { idealPosition: originOf(workload) + offset },
+    extent: {
+      maxNormalAdvance: 1,
+      maxGogmaAdvance: workload === 'long_gogma_held' ? offset + 1 : 1,
+      maxSkillAdvance: workload === 'long_skill_held' ? offset + 1 : 1,
+    },
+  })
+
+  it('anchors every series Ideal at a fixed benchmark-only position and extent', () => {
+    expect(BENCHMARK_ONLY_LONG_HELD_IDEAL_OFFSET).toBe(512)
+    expect(BENCHMARK_ONLY_LONG_HELD_SKILL_IDEAL_POSITION).toBe(ISSUE_101_SKILL_COUNTER + 512)
+    expect(BENCHMARK_ONLY_LONG_HELD_GOGMA_IDEAL_POSITION).toBe(ISSUE_101_GOGMA_COUNTER + 512)
+    expect(BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT).toEqual({ maxNormalAdvance: 1, maxGogmaAdvance: 513, maxSkillAdvance: 513 })
+    for (const heldLength of BENCHMARK_ONLY_HELD_LENGTH_GRID) {
+      expect(heldLength).toBeLessThanOrEqual(BENCHMARK_ONLY_LONG_HELD_IDEAL_OFFSET)
+    }
+  })
+
+  it.each(workloads)('%s keeps Target, Ideal, OwnedWeapon, RNG origin, Counters and context fixed across held lengths', (workload) => {
+    const short = createLongHeldFixture(workload, { heldLength: 1, heldMode: 'held' }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT)
+    const long = createLongHeldFixture(workload, { heldLength: 512, heldMode: 'held' }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT)
+    const [shortTarget] = short.input.origin.targetWeapons
+    const [longTarget] = long.input.origin.targetWeapons
+    const semanticTarget = (target: TargetWeapon) => ({
+      id: target.id,
+      weaponTypeId: target.weaponTypeId,
+      elementId: target.elementId,
+      idealBonuses: target.idealBonuses,
+      idealSkillCondition: target.idealSkillCondition,
+      practicalBonusConditions: target.practicalBonusConditions,
+      alternativeBonusRules: target.alternativeBonusRules,
+      practicalSkillCondition: target.practicalSkillCondition,
+      preferredOwnedWeaponId: target.preferredOwnedWeaponId,
+      priority: target.priority,
+      isEnabled: target.isEnabled,
+      lifecycleStatus: target.lifecycleStatus,
+    })
+    expect(semanticTarget(longTarget)).toEqual(semanticTarget(shortTarget))
+    expect(long.input.origin.ownedWeapons).toEqual(short.input.origin.ownedWeapons)
+    expect(long.input.origin.rngState).toEqual(short.input.origin.rngState)
+    expect(long.input.origin.normalCounters).toEqual(short.input.origin.normalCounters)
+    expect(long.input.origin.calculationContext).toEqual(short.input.origin.calculationContext)
+    expect(long.input.extent).toEqual(short.input.extent)
+    expect(long.input.excludedRouteKeys).toEqual(short.input.excludedRouteKeys)
+    expect(long.idealPosition).toBe(short.idealPosition)
+    // Everything but the measured stream's reservation is identical, display name included.
+    const other = workload === 'long_skill_held' ? 'gogma' : 'skill'
+    const { reservation: shortReservation, ...shortRest } = short.input
+    const { reservation: longReservation, ...longRest } = long.input
+    expect(longRest).toEqual(shortRest)
+    expect(longReservation.normal).toEqual(shortReservation.normal)
+    expect(longReservation[other]).toEqual(shortReservation[other])
+    expect(longReservation.exclusiveOwnedWeaponIds).toEqual(shortReservation.exclusiveOwnedWeaponIds)
+    const origin = originOf(workload)
+    expect(shortReservation[measured(workload)]).toEqual({ held: [origin], blocked: [] })
+    expect(longReservation[measured(workload)].held).toEqual(Array.from({ length: 512 }, (_, index) => origin + index))
+    // heldMode changes only the blocked set.
+    const blocked = createLongHeldFixture(workload, { heldLength: 512, heldMode: 'held_blocked' }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT)
+    expect(blocked.input.reservation[measured(workload)]).toEqual({ held: longReservation[measured(workload)].held, blocked: longReservation[measured(workload)].held })
+    expect({ ...blocked.input, reservation: null }).toEqual({ ...long.input, reservation: null })
+  })
+
+  it('derives the fixed Ideal from the Production prediction at the anchor', () => {
+    const engine = new ProductionRngEngine()
+    const skill = createLongHeldFixture('long_skill_held', { heldLength: 8, heldMode: 'held' }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT)
+    const { origin } = skill.input
+    const target = origin.targetWeapons[0]
+    const predicted = engine.predictSkills({
+      baseSeed: origin.rngState.baseSeed.value as string, skillCounter: BENCHMARK_ONLY_LONG_HELD_SKILL_IDEAL_POSITION,
+      weaponTypeId: target.weaponTypeId, elementId: target.elementId, master: origin.master,
+    })
+    expect(target.idealSkillCondition).toEqual({ ...predicted, matchMode: 'all' })
+    const gogma = createLongHeldFixture('long_gogma_held', { heldLength: 8, heldMode: 'held' }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT)
+    const gogmaTarget = gogma.input.origin.targetWeapons[0]
+    expect(gogmaTarget.idealBonuses).toEqual(engine.predictGogmaBonus({
+      baseSeed: gogma.input.origin.rngState.baseSeed.value as string, gogmaCounter: BENCHMARK_ONLY_LONG_HELD_GOGMA_IDEAL_POSITION,
+      weaponTypeId: gogmaTarget.weaponTypeId, elementId: gogmaTarget.elementId, operation: { type: 'reset_bonuses' }, master: gogma.input.origin.master,
+    }))
+  })
+
+  it.each([
     ['long_skill_held', 'held'], ['long_skill_held', 'held_blocked'],
     ['long_gogma_held', 'held'], ['long_gogma_held', 'held_blocked'],
-  ] as const
-
-  it.each(cases)('%s / %s reaches its Production-predicted Ideal inside the reaching extent', async (workload, heldMode) => {
-    const fixture = createLongHeldFixture(workload, { heldLength: 8, heldMode }, longHeldReachingExtent(workload, 8))
+  ] as const)('%s / %s delivers an Ideal Candidate on the fixed series extent', async (workload, heldMode) => {
+    const fixture = createLongHeldFixture(workload, { heldLength: 8, heldMode }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT)
     const { candidates } = await collect(fixture.input, 1)
     expect(candidates).toHaveLength(1)
-    const route = candidates[0].route
-    expect(route.kind).toBe(workload === 'long_skill_held' ? 'existing_gogma_reset_skills' : 'existing_gogma_reset_bonuses')
-    const own = positions(route.operations, workload === 'long_skill_held' ? 'skill' : 'gogma')
-    for (const position of own) expect(fixture.blockedPositions).not.toContain(position)
-    if (heldMode === 'held_blocked') expect(own).toEqual([fixture.idealPosition])
+    const [candidate] = candidates
+    expect(satisfiesIdealTarget(
+      fixture.input.origin.targetWeapons[0], candidate.finalBonuses, candidate.restorationBonusScope,
+      candidate.seriesSkillId, candidate.groupSkillId, fixture.input.origin.master,
+    )).toBe(true)
+    for (const position of positions(candidate.route.operations, measured(workload))) {
+      expect(fixture.blockedPositions).not.toContain(position)
+    }
   })
 
   it('predicts nothing at a held position it only skips', async () => {
-    for (const workload of ['long_skill_held', 'long_gogma_held'] as const) {
-      const counting = createCountingRngEngine(new ProductionRngEngine())
-      const fixture = createLongHeldFixture(workload, { heldLength: 32, heldMode: 'held_blocked' }, longHeldReachingExtent(workload, 32))
-      await collect(fixture.input, 1, counting.engine)
-      const counts = counting.counts()
-      if (workload === 'long_skill_held') expect(counts).toEqual({ predictNormalArtian: 0, predictSkills: 1, resetBonuses: 0, keepBonuses: 0 })
-      else expect(counts).toEqual({ predictNormalArtian: 0, predictSkills: 0, resetBonuses: 1, keepBonuses: 1 })
+    for (const workload of workloads) {
+      const engine = new ProductionRngEngine()
+      const predicted: number[] = []
+      const skills = vi.spyOn(engine, 'predictSkills')
+      const bonuses = vi.spyOn(engine, 'predictGogmaBonus')
+      const fixture = createLongHeldFixture(workload, { heldLength: 128, heldMode: 'held_blocked' }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT)
+      await collect(fixture.input, 1, engine)
+      skills.mock.calls.forEach(([input]) => predicted.push(input.skillCounter))
+      bonuses.mock.calls.forEach(([input]) => predicted.push(input.gogmaCounter))
+      expect(predicted.length).toBeGreaterThan(0)
+      const firstFree = originOf(workload) + 128
+      for (const position of predicted) expect(position).toBeGreaterThanOrEqual(firstFree)
     }
   })
 
   it('never places an own operation on a blocked position, even when searched to the end', async () => {
-    for (const workload of ['long_skill_held', 'long_gogma_held'] as const) {
-      const fixture = createLongHeldFixture(workload, { heldLength: 4, heldMode: 'held_blocked' }, { ...longHeldReachingExtent(workload, 4), ...(workload === 'long_skill_held' ? { maxSkillAdvance: 7 } : { maxGogmaAdvance: 7 }) })
+    for (const workload of workloads) {
+      const { series, extent } = shortSeries(workload, 6)
+      const fixture = createLongHeldFixture(workload, { heldLength: 4, heldMode: 'held_blocked' }, extent, series)
       const { candidates, execution } = await collect(fixture.input, null)
       expect(execution.stoppedByConsumer).toBe(false)
       for (const candidate of candidates) {
-        for (const position of positions(candidate.route.operations, workload === 'long_skill_held' ? 'skill' : 'gogma')) {
+        for (const position of positions(candidate.route.operations, measured(workload))) {
           expect(fixture.blockedPositions).not.toContain(position)
         }
       }
@@ -250,35 +347,57 @@ describe('synthetic long-held fixtures', () => {
 
   it('is deterministic for the same input', async () => {
     for (const heldMode of ['held', 'held_blocked'] as LongHeldMode[]) {
-      const build = () => createLongHeldFixture('long_gogma_held', { heldLength: 8, heldMode }, { maxNormalAdvance: 1, maxGogmaAdvance: 11, maxSkillAdvance: 1 })
+      const build = () => createLongHeldFixture('long_gogma_held', { heldLength: 8, heldMode }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT)
       expect(build().input).toEqual(build().input)
-      const keys = async () => (await collect(build().input, 5)).candidates.map(candidateStableKey)
+      const keys = async () => (await collect(build().input, 3)).candidates.map(candidateStableKey)
       expect(await keys()).toEqual(await keys())
     }
   })
 
-  it('changes only the held run (and the Ideal defined right after it) when the held length changes', () => {
-    for (const workload of ['long_skill_held', 'long_gogma_held'] as const) {
-      const extent = longHeldReachingExtent(workload, 16)
-      const short = createLongHeldFixture(workload, { heldLength: 4, heldMode: 'held' }, extent)
-      const long = createLongHeldFixture(workload, { heldLength: 16, heldMode: 'held' }, extent)
-      const origin = workload === 'long_skill_held' ? ISSUE_101_SKILL_COUNTER : ISSUE_101_GOGMA_COUNTER
-      expect(short.heldPositions).toEqual([0, 1, 2, 3].map((offset) => origin + offset))
-      expect(long.heldPositions).toHaveLength(16)
-      expect(short.idealPosition).toBe(origin + 4)
-      expect(long.idealPosition).toBe(origin + 16)
-      expect(short.input.origin.rngState).toEqual(long.input.origin.rngState)
-      expect(short.input.origin.normalCounters).toEqual(long.input.origin.normalCounters)
-      expect(short.input.extent).toEqual(long.input.extent)
-      const [shortWeapon] = short.input.origin.ownedWeapons
-      const [longWeapon] = long.input.origin.ownedWeapons
-      // The stream that is not under measurement keeps exactly the same value.
-      if (workload === 'long_skill_held') expect(shortWeapon.restorationBonuses).toEqual(longWeapon.restorationBonuses)
-      const other = workload === 'long_skill_held' ? 'gogma' : 'skill'
-      expect(short.input.reservation[other]).toEqual({ held: [], blocked: [] })
-      expect(long.input.reservation[other]).toEqual({ held: [], blocked: [] })
-      expect(short.input.reservation.normal).toEqual([])
+  it.each(workloads)('%s: on one fixed series only the held length changes, and the instrumentation sees its effect', async (workload) => {
+    const { series, extent } = shortSeries(workload, 16)
+    const run = async (heldLength: number) => {
+      const fixture = createLongHeldFixture(workload, { heldLength, heldMode: 'held' }, extent, series)
+      const counting = createCountingRngEngine(new ProductionRngEngine())
+      const observer = createPlannerAlternativeSearchObserver()
+      const keys: string[] = []
+      const execution = await visitPlannerAlternativeCandidates(fixture.input, counting.engine, (candidate) => {
+        keys.push(candidateStableKey(candidate))
+        return 'continue'
+      }, { instrumentation: observer.instrumentation })
+      return { fixture, keys, execution, counts: counting.counts(), observer }
     }
+    const small = await run(2)
+    const large = await run(12)
+    // Same series: same Target / Ideal / weapon / origin / extent, different reservation length only.
+    const { reservation: smallReservation, ...smallRest } = small.fixture.input
+    const { reservation: largeReservation, ...largeRest } = large.fixture.input
+    expect(largeRest).toEqual(smallRest)
+    expect(smallReservation[measured(workload)].held).toHaveLength(2)
+    expect(largeReservation[measured(workload)].held).toHaveLength(12)
+    // Both run to the end of the same extent, so their termination is comparable.
+    for (const { execution } of [small, large]) {
+      expect(execution.stoppedByConsumer).toBe(false)
+      expect(execution.summary.exhausted || execution.summary.stoppedByExtent).toBe(true)
+    }
+    // Every Candidate of both runs satisfies the same fixed Ideal; the sets may differ.
+    expect(small.keys.length + large.keys.length).toBeGreaterThan(0)
+    // Depth 1 publishes one state per legal position: the held run plus the first free one.
+    if (workload === 'long_skill_held') {
+      expect(small.observer.skill().depths[0]).toMatchObject({ depth: 1, states: 3 })
+      expect(large.observer.skill().depths[0]).toMatchObject({ depth: 1, states: 13 })
+      expect(large.observer.skill().totalStates).toBeGreaterThan(small.observer.skill().totalStates)
+      expect(large.observer.skill().totalTransitions).toBeGreaterThan(small.observer.skill().totalTransitions)
+    } else {
+      expect(small.observer.gogma().depths[0]).toMatchObject({ depth: 1, absolutePositions: 3 })
+      expect(large.observer.gogma().depths[0]).toMatchObject({ depth: 1, absolutePositions: 13 })
+      expect(large.observer.gogma().totalGeneratedStates).toBeGreaterThan(small.observer.gogma().totalGeneratedStates)
+    }
+    expect(large.observer.settledWorkItems()).toBeGreaterThan(0)
+    expect(small.observer.settledWorkItems()).toBeGreaterThan(0)
+    // Predictions are memoized per position (Keep per position and layout), so
+    // a held run adds states, not necessarily prediction calls; both are recorded.
+    expect(large.counts.predictNormalArtian + small.counts.predictNormalArtian).toBe(0)
   })
 
   it('refuses long-held options on other workloads and requires them on long-held ones', () => {
@@ -287,6 +406,11 @@ describe('synthetic long-held fixtures', () => {
     expect(() => createPlannerAlternativeSearchWorkloadInput({ workload: 'issue101_no_ideal', extent, longHeld: { heldLength: 1, heldMode: 'held' } }, null)).toThrow(RangeError)
     expect(() => createPlannerAlternativeSearchWorkloadInput({ workload: 'issue101_fire_dragon_fixed', extent }, null)).toThrow(/Issue #101 real fixture/)
     expect(() => createLongHeldFixture('long_skill_held', { heldLength: 0, heldMode: 'held' }, extent)).toThrow(RangeError)
+    expect(() => createLongHeldFixture('long_skill_held', { heldLength: 1, heldMode: 'held' }, extent, { idealPosition: -1 })).toThrow(RangeError)
+    // The workload entry point always uses the default series.
+    const input = createPlannerAlternativeSearchWorkloadInput(
+      { workload: 'long_skill_held', extent: BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT, longHeld: { heldLength: 32, heldMode: 'held' } }, null)
+    expect(input).toEqual(createLongHeldFixture('long_skill_held', { heldLength: 32, heldMode: 'held' }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT).input)
   })
 
   it('moves no version authority', () => {

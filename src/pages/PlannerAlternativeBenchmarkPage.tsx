@@ -12,7 +12,9 @@ import {
   BENCHMARK_ONLY_ISSUE_101_SANITY_TRIAL_BOUNDS,
   BENCHMARK_ONLY_PLANNER_RERUN_GRID,
   createIssue101RealFixture,
-  longHeldReachingExtent,
+  BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT,
+  BENCHMARK_ONLY_LONG_HELD_GOGMA_IDEAL_POSITION,
+  BENCHMARK_ONLY_LONG_HELD_SKILL_IDEAL_POSITION,
   PLANNER_ALTERNATIVE_KERNEL_WORKLOADS,
   PLANNER_ALTERNATIVE_SEARCH_WORKLOADS,
   type LongHeldMode,
@@ -61,7 +63,12 @@ export interface PlannerAlternativeBenchmarkGlobal {
   exportJson: () => string
   fixture: () => Promise<ReturnType<typeof describeIssue101Fixture>>
   longHeldFixture: typeof describeLongHeldFixture
-  longHeldReachingExtent: typeof longHeldReachingExtent
+  readonly longHeld: {
+    /** The one extent of a held-length scaling series; only the reservation varies. */
+    readonly fixedExtent: PlannerAlternativeSearchExtent
+    readonly skillIdealPosition: number
+    readonly gogmaIdealPosition: number
+  }
   environment: () => Record<string, unknown>
 }
 
@@ -177,7 +184,11 @@ export function PlannerAlternativeBenchmarkPage() {
       exportJson: () => runner.exportJson(environment()),
       fixture: async () => describeIssue101Fixture(await createIssue101RealFixture()),
       longHeldFixture: describeLongHeldFixture,
-      longHeldReachingExtent,
+      longHeld: {
+        fixedExtent: BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT,
+        skillIdealPosition: BENCHMARK_ONLY_LONG_HELD_SKILL_IDEAL_POSITION,
+        gogmaIdealPosition: BENCHMARK_ONLY_LONG_HELD_GOGMA_IDEAL_POSITION,
+      },
       environment,
     }
     globalThis.plannerAlternativeBenchmark = api
@@ -195,14 +206,12 @@ export function PlannerAlternativeBenchmarkPage() {
     setWorkload(next === 'search' ? PLANNER_ALTERNATIVE_SEARCH_WORKLOADS[0] : PLANNER_ALTERNATIVE_KERNEL_WORKLOADS[0])
   }
 
-  const fillReachingExtent = () => {
-    const length = positiveInteger(heldLength)
-    if (!longHeld || length === null) return
-    const reaching = longHeldReachingExtent(workload, length)
+  // The held-length scaling series keeps this one extent for every held length.
+  const fillFixedExtent = () => {
     setExtent({
-      maxNormalAdvance: String(reaching.maxNormalAdvance),
-      maxGogmaAdvance: String(reaching.maxGogmaAdvance),
-      maxSkillAdvance: String(reaching.maxSkillAdvance),
+      maxNormalAdvance: String(BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT.maxNormalAdvance),
+      maxGogmaAdvance: String(BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT.maxGogmaAdvance),
+      maxSkillAdvance: String(BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT.maxSkillAdvance),
     })
   }
 
@@ -359,8 +368,8 @@ export function PlannerAlternativeBenchmarkPage() {
                       <MenuItem value="held">held</MenuItem>
                       <MenuItem value="held_blocked">held_blocked</MenuItem>
                     </TextField>
-                    <Button variant="outlined" disabled={running} onClick={fillReachingExtent} sx={{ flex: '1 1 140px' }}>
-                      到達extentを入力
+                    <Button variant="outlined" disabled={running} onClick={fillFixedExtent} sx={{ flex: '1 1 140px' }}>
+                      固定extentを入力
                     </Button>
                   </>
                 )}

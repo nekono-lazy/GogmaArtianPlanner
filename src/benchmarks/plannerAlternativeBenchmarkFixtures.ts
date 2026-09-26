@@ -64,7 +64,9 @@ import {
  *   `long_gogma_held`): not a game observation. Every weapon value and Ideal
  *   is a `ProductionRngEngine` prediction made while the fixture is built; the
  *   held run is a synthetic reservation that stands for a fixed Route holding
- *   `heldLength` consecutive positions from the origin.
+ *   `heldLength` consecutive positions from the origin. The Ideal comes from a
+ *   fixed benchmark-only anchor position, so a held-length sweep changes only
+ *   the reservation.
  *
  * Fixture construction runs before a measurement (the Issue #101 fixture runs
  * two real Candidate Searches) and is never timed. Every value returned is a
@@ -175,19 +177,49 @@ export function assertLongHeldOptions(options: LongHeldOptions): void {
   }
 }
 
+export type LongHeldWorkloadId = 'long_skill_held' | 'long_gogma_held'
+
 /**
- * The smallest extent whose window reaches the first position after the held
- * run of a long-held fixture - a convenience for the page, never applied
- * implicitly: every run still names its extent.
+ * How far past the origin the long-held Ideal anchor stands: the largest held
+ * length of the grid, so the anchor is the first position after the longest
+ * held run of the series. Benchmark-only, never a Production default.
  */
-export function longHeldReachingExtent(
-  workload: 'long_skill_held' | 'long_gogma_held',
-  heldLength: number,
-): PlannerAlternativeSearchExtent {
+export const BENCHMARK_ONLY_LONG_HELD_IDEAL_OFFSET = 512
+
+/**
+ * The fixed anchor positions the long-held Target Ideals are predicted at
+ * (Skill origin 341 / Gogma origin 55 plus the offset). The Ideal is decided
+ * once per series from these positions and never follows the held length.
+ */
+export const BENCHMARK_ONLY_LONG_HELD_SKILL_IDEAL_POSITION = ISSUE_101_SKILL_COUNTER + BENCHMARK_ONLY_LONG_HELD_IDEAL_OFFSET
+export const BENCHMARK_ONLY_LONG_HELD_GOGMA_IDEAL_POSITION = ISSUE_101_GOGMA_COUNTER + BENCHMARK_ONLY_LONG_HELD_IDEAL_OFFSET
+
+/**
+ * The one extent of a held-length scaling series (both long-held workloads):
+ * its Skill / Gogma window `origin .. origin + 512` covers every held run of
+ * the grid and the Ideal anchor. A scaling comparison keeps it fixed across
+ * every held length; only the reservation changes. Benchmark-only.
+ */
+export const BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT: PlannerAlternativeSearchExtent = {
+  maxNormalAdvance: 1,
+  maxGogmaAdvance: BENCHMARK_ONLY_LONG_HELD_IDEAL_OFFSET + 1,
+  maxSkillAdvance: BENCHMARK_ONLY_LONG_HELD_IDEAL_OFFSET + 1,
+}
+
+/**
+ * The fixed part of one long-held comparison series: where its Ideal is
+ * predicted. Everything else of the fixture is fixed by construction; only
+ * `LongHeldOptions` (the reservation) varies inside a series.
+ */
+export interface LongHeldSeries {
+  readonly idealPosition: number
+}
+
+export function defaultLongHeldSeries(workload: LongHeldWorkloadId): LongHeldSeries {
   return {
-    maxNormalAdvance: 1,
-    maxGogmaAdvance: workload === 'long_gogma_held' ? heldLength + 1 : 1,
-    maxSkillAdvance: workload === 'long_skill_held' ? heldLength + 1 : 1,
+    idealPosition: workload === 'long_skill_held'
+      ? BENCHMARK_ONLY_LONG_HELD_SKILL_IDEAL_POSITION
+      : BENCHMARK_ONLY_LONG_HELD_GOGMA_IDEAL_POSITION,
   }
 }
 
@@ -352,7 +384,7 @@ function heldRun(origin: number, options: LongHeldOptions) {
 
 export interface LongHeldFixture {
   readonly input: PlannerAlternativeSearchInput
-  /** The first position after the held run, where the fixture's Ideal is predicted. */
+  /** The series' fixed anchor position the Ideal is predicted at. */
   readonly idealPosition: number
   readonly heldPositions: readonly number[]
   readonly blockedPositions: readonly number[]
@@ -364,26 +396,40 @@ export interface LongHeldFixture {
  *
  * - `long_skill_held`: the Gogma's five `gogma_artian` slots are the Production
  *   Reset prediction at Gogma 5000 and are the Target's Ideal (so no Bonus
- *   work exists); the Target's Ideal Skills are the Production Skill prediction
- *   at `341 + heldLength`, the first position after the held Skill run
- *   `341 .. 341 + heldLength - 1`. The Gogma Counter is unconfirmed.
+ *   work exists); the Target's Ideal Skills are the Production Skill
+ *   prediction at the series anchor (`BENCHMARK_ONLY_LONG_HELD_SKILL_IDEAL_POSITION`
+ *   = 853 by default). The held Skill run is `341 .. 341 + heldLength - 1`.
+ *   The Gogma Counter is unconfirmed.
  * - `long_gogma_held`: the Gogma's Skills are the Production Skill prediction
  *   at Skill 5000 and are the Target's Ideal (so no Skill work exists); the
- *   Target's Ideal five slots are the Production Reset prediction at
- *   `55 + heldLength`, after the held Gogma run `55 .. 55 + heldLength - 1`.
- *   The Skill Counter is unconfirmed.
+ *   Target's Ideal five slots are the Production Reset prediction at the
+ *   series anchor (`BENCHMARK_ONLY_LONG_HELD_GOGMA_IDEAL_POSITION` = 567 by
+ *   default). The held Gogma run is `55 .. 55 + heldLength - 1`. The Skill
+ *   Counter is unconfirmed.
  *
  * The owned weapon's other value is the first Production prediction at or
  * after 5000 that does not already satisfy the Ideal, so a zero-operation
  * Candidate never short-cuts the run. Nothing is hand-written.
+ *
+ * Inside one series (same `workload`, `series` and extent) the Target, its
+ * Ideal, the OwnedWeapon, the RNG origin, the Normal Counters and the
+ * CalculationContext are identical whatever `options` say: `heldLength` changes
+ * only the held positions of the measured stream, and `heldMode` only its
+ * blocked positions. Whether a Candidate is reachable may differ by held
+ * length; that is part of what a scaling series measures. `series` exists so a
+ * test can use a short series; the benchmark page and console use the default.
  */
 export function createLongHeldFixture(
-  workload: 'long_skill_held' | 'long_gogma_held',
+  workload: LongHeldWorkloadId,
   options: LongHeldOptions,
   extent: PlannerAlternativeSearchExtent,
+  series: LongHeldSeries = defaultLongHeldSeries(workload),
 ): LongHeldFixture {
   assertLongHeldOptions(options)
   assertPlannerAlternativeBenchmarkExtent(extent)
+  if (!Number.isInteger(series.idealPosition) || series.idealPosition < 0) {
+    throw new RangeError('series.idealPosition must be a non-negative integer.')
+  }
   const { master, context } = benchmarkMaster()
   const engine = new ProductionRngEngine()
   const weaponTypeId = ISSUE_101_WEAPON_TYPE_ID as WeaponTypeId
@@ -397,7 +443,7 @@ export function createLongHeldFixture(
 
   const stream = workload === 'long_skill_held' ? 'skill' : 'gogma'
   const origin = stream === 'skill' ? ISSUE_101_SKILL_COUNTER : ISSUE_101_GOGMA_COUNTER
-  const idealPosition = origin + options.heldLength
+  const { idealPosition } = series
   const run = heldRun(origin, options)
 
   let idealBonuses: RestorationBonusSet
@@ -425,7 +471,7 @@ export function createLongHeldFixture(
 
   const target: TargetWeapon = {
     id: LONG_HELD_TARGET_ID,
-    name: `Planner Alternative benchmark: ${workload} ${options.heldMode} ${options.heldLength}`,
+    name: `Planner Alternative benchmark: ${workload} (Ideal @ ${idealPosition})`,
     weaponTypeId,
     elementId: LONG_HELD_ELEMENT,
     priority: 3,

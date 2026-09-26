@@ -49,8 +49,16 @@ describe('Planner Alternative Phase 3 benchmark page', () => {
     expect(api().workloads.kernel).toEqual(['issue101_prefer_dragon_normal'])
     expect(api().records()).toEqual([])
     expect(api().environment()).toMatchObject({ engineVersion: 'production-rng:c5-e7', calculationAppSchemaVersion: 15 })
-    expect(api().longHeldFixture('long_skill_held', { heldLength: 4, heldMode: 'held' }, api().longHeldReachingExtent('long_skill_held', 4)))
-      .toMatchObject({ idealPosition: 345, heldCount: 4, blockedCount: 0 })
+    expect(api().longHeld).toEqual({
+      fixedExtent: { maxNormalAdvance: 1, maxGogmaAdvance: 513, maxSkillAdvance: 513 },
+      skillIdealPosition: 853,
+      gogmaIdealPosition: 567,
+    })
+    // The Ideal anchor stays put whatever the held length.
+    for (const heldLength of [4, 512]) {
+      expect(api().longHeldFixture('long_skill_held', { heldLength, heldMode: 'held' }, api().longHeld.fixedExtent))
+        .toMatchObject({ idealPosition: 853, heldCount: heldLength, blockedCount: 0 })
+    }
     expect(screen.getByText(/Production default ではありません/)).toBeInTheDocument()
     expect(createHarness).not.toHaveBeenCalled()
     view.unmount()
@@ -61,7 +69,7 @@ describe('Planner Alternative Phase 3 benchmark page', () => {
     render(<PlannerAlternativeBenchmarkPage />)
     await act(async () => {
       await api().runMeasurements({
-        mode: 'search', workload: 'long_gogma_held', extent: api().longHeldReachingExtent('long_gogma_held', 4),
+        mode: 'search', workload: 'long_gogma_held', extent: api().longHeld.fixedExtent,
         longHeld: { heldLength: 4, heldMode: 'held_blocked' }, stopAfterCandidates: 1, warmUp: 1, measurements: 2,
       })
     })
@@ -90,8 +98,8 @@ describe('Planner Alternative Phase 3 benchmark page', () => {
     fireEvent.mouseDown(screen.getByLabelText('Workload'))
     fireEvent.click(await screen.findByRole('option', { name: 'long_skill_held' }))
     fireEvent.change(screen.getByLabelText('held length'), { target: { value: '8' } })
-    fireEvent.click(screen.getByRole('button', { name: '到達extentを入力' }))
-    expect(screen.getByLabelText('maxSkillAdvance')).toHaveValue(9)
+    fireEvent.click(screen.getByRole('button', { name: '固定extentを入力' }))
+    expect(screen.getByLabelText('maxSkillAdvance')).toHaveValue(513)
     fireEvent.change(screen.getByLabelText('warm-up'), { target: { value: '0' } })
     fireEvent.change(screen.getByLabelText('measurement'), { target: { value: '1' } })
     await act(async () => {
@@ -100,7 +108,7 @@ describe('Planner Alternative Phase 3 benchmark page', () => {
     expect(createHarness).toHaveBeenCalledTimes(1)
     expect(api().records()[0]).toMatchObject({
       mode: 'search', workload: 'long_skill_held', phase: 'measurement',
-      extent: { maxNormalAdvance: 1, maxGogmaAdvance: 1, maxSkillAdvance: 9 },
+      extent: { maxNormalAdvance: 1, maxGogmaAdvance: 513, maxSkillAdvance: 513 },
       longHeld: { heldLength: 8, heldMode: 'held' }, stopAfterCandidates: 1,
     })
     expect(screen.getByRole('status')).toHaveTextContent('完了: 1 records')

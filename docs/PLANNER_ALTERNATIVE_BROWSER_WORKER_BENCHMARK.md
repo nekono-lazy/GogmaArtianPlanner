@@ -119,17 +119,27 @@ reservation）と `issue101_no_ideal_dragon_fixed`（Dragon reservation）があ
 構成する。値はすべてfixture構築時の `ProductionRngEngine` predictionであり、手書きの予測結果は無い。
 
 - `long_skill_held`: Gogmaの5 slot = Gogma 5000のReset prediction（= TargetのIdeal、Bonus workは無い）。Ideal Skill =
-  Skill `341 + heldLength` のprediction。held run = Skill `341 .. 341 + heldLength - 1`。Gogma Counterは未確定
-- `long_gogma_held`: GogmaのSkill = Skill 5000のprediction（= Ideal Skill）。Ideal 5 slot = Gogma `55 + heldLength`
-  のReset prediction。held run = Gogma `55 .. 55 + heldLength - 1`。Skill Counterは未確定
+  固定anchor `BENCHMARK_ONLY_LONG_HELD_SKILL_IDEAL_POSITION`（Skill 853 = 341 + 512）のprediction。held run = Skill
+  `341 .. 341 + heldLength - 1`。Gogma Counterは未確定
+- `long_gogma_held`: GogmaのSkill = Skill 5000のprediction（= Ideal Skill）。Ideal 5 slot = 固定anchor
+  `BENCHMARK_ONLY_LONG_HELD_GOGMA_IDEAL_POSITION`（Gogma 567 = 55 + 512）のReset prediction。held run = Gogma
+  `55 .. 55 + heldLength - 1`。Skill Counterは未確定
 - `heldMode`: `held`（held位置もown operation可能。state増加の最悪形）/ `held_blocked`（held位置は全てblocked。
   skipだけ。Issue #101のSkill / Gogma形を伸ばしたもの）
-- Idealは「held runの直後の位置」で定義するため、held長の変更でreservationとIdeal位置が一緒に動く。RNG state、
-  Normal Counter、extent、測定対象でないstreamの値は変わらない。`held` modeではheld位置で先にIdealと同じSkill /
-  5 slotが出れば、そこが同じcost 1のCandidateになる（実際に `long_skill_held` held 512では到達量137のCandidateが
-  先頭になる）
-- extentは自動補完しない。page / consoleの `longHeldReachingExtent()` はheld run直後まで届く最小extentを入力する
-  補助であり、runは常に明示extentを持つ
+- **held-length scalingでは、Target / Target Ideal / OwnedWeapon / RNG origin（Base Seed、Counter）/ weapon type /
+  element / Normal Counter / CalculationContext / `excludedRouteKeys` / 測定対象外streamの条件 / extentを固定し、
+  reservationのheld / blocked位置だけを変える**。`heldLength` が変えるのは測定対象streamのheld位置、`heldMode` が
+  変えるのはそのblocked位置だけである（anchorはgridの最大held長512の直後。Target表示名もheld長に依存しない）
+- scaling seriesのextentは `BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT`（Normal 1 / Gogma 513 / Skill 513。window
+  `origin .. origin + 512` がgridの全held runとanchorを含む）で、全held長で同じ値を使う。pageの「固定extentを入力」と
+  consoleの `plannerAlternativeBenchmark.longHeld.fixedExtent` がこの値を入れる。extentは自動補完しない
+- Idealが固定なので、held長によってCandidateへのown operation数や、Candidateが出るかどうかは変わり得る（held run外の
+  位置はown operationで埋める必要がある。また同じSkill / 5 slotがanchorより前に出れば、そこが先に届く）。これは
+  scaling seriesが測る差そのものであり、必要ならPhase 3-Bでは `stopAfterCandidates: null` でextent終端まで走らせる。
+  time-to-firstの主要evidenceはIssue #101 realで取る
+- 旧 `longHeldReachingExtent()`（held長に追従してextentを伸ばすhelper）は削除した。held長ごとにIdealやextentを
+  動かす比較をPhase 3-Bのscaling authorityにしない。testは短いseries（`createLongHeldFixture()` の `series`
+  引数で固定anchorを近くに置いたもの）を使うが、page / console / runnerは常に既定seriesを使う
 
 ## 6. Worker経路と計測境界
 
@@ -178,7 +188,9 @@ clockを読まず、materializationで1回、Plan生成で `productionPlanId()` 
 - `cancelAfterMs`、`cancelOnFirstCandidate`（Search: 最初のdelivery通知で即cancel、Kernel: 最初のCandidate trial
   開始通知で即cancel）。通知はrequestが求めた時だけ送り、Production semanticsを変えない
 - cancel観測: run開始→cancel post（`requestedAtMs`）、cancel post→`cancel_ack`（`ackMs`）、cancel post→settle（`settledMs`）
-- `pingIntervalMs` でrun中にpingを連続送信し、pong件数と最大latencyをrecordに残す
+- `pingIntervalMs` でrun中にpingを連続送信し、pong件数と最大latencyをrecordに残す。fresh Workerへ最初に届くbenchmark
+  messageは必ずrun request（`pa3_benchmark_search` / `pa3_benchmark_kernel`）で、ping loopはrun requestのpost直後
+  （`accepted` は待たない）に始まる。run settle後にping loopを止めてharnessをdisposeし、未応答のpingは `null` で解決する
 
 ## 7. benchmark-only measurement grid
 
@@ -195,8 +207,10 @@ clockを読まず、materializationで1回、Plan生成で `productionPlanId()` 
 
 sanity値としてPhase 2 acceptanceのextent `1 / 240 / 1` とtrial bounds `3 / 3`
 （`BENCHMARK_ONLY_ISSUE_101_SANITY_*`）を置く。これも既定値ではない。Phase 3-Aでは「512が適切な上限」等の結論を
-出さない。`held` modeで長いheld runを最後まで（`stopAfterCandidates = null`）走らせるとdepth毎にstateが増えるため、
-extentを絞って使う。
+出さない。long-held scaling seriesでは held length grid と固定anchor・`BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT`
+（Normal 1 / Gogma 513 / Skill 513）を1組として使う。`held` modeで長いheld runを最後まで（`stopAfterCandidates = null`）
+走らせるとdepth毎にstateが増えるため、重すぎる場合は `stopAfterCandidates` で打ち切るか、series全体で同じ
+（より小さい）extentとanchorに揃える。held長ごとにextentを変えない。
 
 ## 8. Phase 3-B手順
 
@@ -210,7 +224,8 @@ Node / jsdom / Vitestの時間はauthorityにしない。real Browser Workerの�
    regression値（5.1）を確認する
 6. Issue #101 extent sweep: Gogma gridを中心に、Normal / Skill gridを組み合わせる（Search、`stopAfterCandidates: 1`）
 7. no-Ideal extent sweep: `issue101_no_ideal`（必要なら `_dragon_fixed`）を `stopAfterCandidates: null` で
-8. long-held scaling sweep: `long_skill_held` / `long_gogma_held` × `held` / `held_blocked` × held length grid
+8. long-held scaling sweep: `long_skill_held` / `long_gogma_held` × `held` / `held_blocked` × held length grid。
+   extentは全held長で `longHeld.fixedExtent`、Target / Idealは固定（5.3）
 9. trial bound sweep: Kernel、Candidate trials grid
 10. rerun bound sweep: Kernel、Planner reruns grid
 11. cancel / responsiveness: `cancelOnFirstCandidate`、`cancelAfterMs`、`pingIntervalMs`
@@ -233,7 +248,7 @@ await pa.runMeasurements({
 })
 await pa.run({
   mode: 'search', workload: 'long_gogma_held', longHeld: { heldLength: 128, heldMode: 'held' },
-  extent: pa.longHeldReachingExtent('long_gogma_held', 128), stopAfterCandidates: 1,
+  extent: pa.longHeld.fixedExtent, stopAfterCandidates: null,
   cancelOnFirstCandidate: false, pingIntervalMs: 0,
 })
 pa.summarize()

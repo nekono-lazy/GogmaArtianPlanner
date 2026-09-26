@@ -11,6 +11,7 @@ import {
   visitPlannerAlternativeCandidates,
   type PlannerAlternativeSearchInput,
 } from '../domain/search'
+import { ISSUE_101_GOGMA_COUNTER, ISSUE_101_SKILL_COUNTER } from './issue101ConstrainedResearchFixtures'
 import { summarizeIssue101Route } from './issue101RouteSummary'
 import {
   createCountingRngEngine,
@@ -26,7 +27,7 @@ import {
   createIssue101NoIdealSearchInput,
   createIssue101RealFixture,
   createLongHeldFixture,
-  longHeldReachingExtent,
+  BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT,
   type Issue101RealFixture,
 } from './plannerAlternativeBenchmarkFixtures'
 
@@ -57,12 +58,25 @@ async function runSearch(input: PlannerAlternativeSearchInput, stopAfter: number
   return { keys, execution, counts: counting.counts(), observer, settledAtFirst }
 }
 
+/**
+ * A short fixed series whose Ideal anchor is the first position after an
+ * 8-long held run, so a depth-1 Candidate exists and one depth is enough.
+ */
+function shortSeriesFixture(workload: 'long_skill_held' | 'long_gogma_held', heldLength: number, heldMode: 'held' | 'held_blocked') {
+  const origin = workload === 'long_skill_held' ? ISSUE_101_SKILL_COUNTER : ISSUE_101_GOGMA_COUNTER
+  return createLongHeldFixture(workload, { heldLength, heldMode }, {
+    maxNormalAdvance: 1,
+    maxGogmaAdvance: workload === 'long_gogma_held' ? 9 : 1,
+    maxSkillAdvance: workload === 'long_skill_held' ? 9 : 1,
+  }, { idealPosition: origin + 8 })
+}
+
 describe('counting RNG Engine', () => {
   it('forwards every call once with the same input and returns the wrapped result', () => {
     const engine = new ProductionRngEngine()
     const spy = vi.spyOn(engine, 'predictSkills')
     const counting = createCountingRngEngine(engine)
-    const input = createLongHeldFixture('long_skill_held', { heldLength: 1, heldMode: 'held' }, longHeldReachingExtent('long_skill_held', 1)).input
+    const input = createLongHeldFixture('long_skill_held', { heldLength: 1, heldMode: 'held' }, BENCHMARK_ONLY_LONG_HELD_FIXED_EXTENT).input
     const request = {
       baseSeed: input.origin.rngState.baseSeed.value as string,
       skillCounter: 341,
@@ -115,17 +129,17 @@ describe('Planner Alternative Search instrumentation', () => {
   }, SLOW)
 
   it('aggregates held-aware Skill states per depth: every held position is a state, a blocked run leaves one', async () => {
-    const held = await runSearch(createLongHeldFixture('long_skill_held', { heldLength: 8, heldMode: 'held' }, longHeldReachingExtent('long_skill_held', 8)).input, 1, true)
+    const held = await runSearch(shortSeriesFixture('long_skill_held', 8, 'held').input, 1, true)
     const skill = held.observer.skill()
     expect(skill.streams).toBe(1)
     expect(skill.depths[0]).toEqual({ depth: 1, streams: 1, transitions: 9, states: 9, absolutePositions: 9, maxStatesPerStream: 9 })
     expect(held.observer.gogma().streams).toBe(0)
-    const blocked = await runSearch(createLongHeldFixture('long_skill_held', { heldLength: 8, heldMode: 'held_blocked' }, longHeldReachingExtent('long_skill_held', 8)).input, 1, true)
+    const blocked = await runSearch(shortSeriesFixture('long_skill_held', 8, 'held_blocked').input, 1, true)
     expect(blocked.observer.skill().depths[0]).toMatchObject({ depth: 1, states: 1, absolutePositions: 1 })
   })
 
   it('aggregates held-aware Gogma states, positions and family layouts per depth', async () => {
-    const run = await runSearch(createLongHeldFixture('long_gogma_held', { heldLength: 8, heldMode: 'held' }, longHeldReachingExtent('long_gogma_held', 8)).input, 1, true)
+    const run = await runSearch(shortSeriesFixture('long_gogma_held', 8, 'held').input, 1, true)
     const gogma = run.observer.gogma()
     expect(gogma.streams).toBe(1)
     const [depth1] = gogma.depths
