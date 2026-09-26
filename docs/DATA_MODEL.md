@@ -193,11 +193,13 @@ ProductionPlanの実行意味だけを変えたため、build結果に限りvers
 Production Plannerの決定的scheduler切替（version 14）もProductionPlanの計算意味だけを変えたため、
 build結果に限りversion 12 / 13 -> 14の明示的互換例外を持つ。予測Normal creationのCounter進行用forgeの
 silent fast-forward（version 15、Issue #129）もProductionPlanの計算意味だけを変えたため、build結果に限り
-version 12 / 13 / 14 -> 15の明示的互換例外を持つ（本節末尾、いずれもProductionPlanには適用しない）。
+version 12 / 13 / 14 -> 15の明示的互換例外を持つ。生産計画画面の競合what-if / actual repairのPlanner Alternative
+routing切替（version 16、Issue #136 / #101 Phase 5-B）も保存するProductionPlanの意味だけを変えたため、build結果に限り
+version 12 / 13 / 14 / 15 -> 16の明示的互換例外を持つ（本節末尾、いずれもProductionPlanには適用しない）。
 現行versionの単一authorityは `src/domain/models/common.ts` の
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 15` とし、Search、BuildList、Plannerと
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION = 16` とし、Search、BuildList、Plannerと
 benchmark入力のruntime creatorで共用する。永続モデル移行は独立してDexie
-`DATABASE_SCHEMA_VERSION`（現行9。14.2）で管理し、AppSettingsは独立した `schemaVersion`（現行2。13）を持つ。Calculation semantics / artifact
+`DATABASE_SCHEMA_VERSION`（現行10。14.2）で管理し、AppSettingsは独立した `schemaVersion`（現行2。13）を持つ。Calculation semantics / artifact
 validity境界とDexie schemaは別の概念であり、片方の更新はもう片方の更新を意味しない。
 gameVersion、Master Data versionは維持する。
 `PRODUCTION_RNG_ENGINE_VERSION` はこのcheckpoint境界では `production-rng:c5-e2` のまま維持し、
@@ -340,7 +342,7 @@ scheduler由来かを判別できない。
 `RngState.schemaVersion` は2、`AppSettings.schemaVersion` は1、`PRODUCTION_RNG_ENGINE_VERSION`
 （`production-rng:c5-e7`）とMaster dataVersionも変更しない（いずれも当時）。migrationは追加しない。
 
-現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` **15** は、予測 `create_normal_artian(count = N)` の
+version **15** は、予測 `create_normal_artian(count = N)` の
 先頭N - 1本（Counter進行用forge）を `canSkipWhenCounterPassed` にし、同じNormal Counter位置を別Entryの
 実forgeが通過したときsilent fast-forwardする（Issue #129、PLANNER_SPEC 7.0.2）。作成対象forge
 （最終unit）とblind createは引き続き必須であり、Normal creationはphysical action sharingにしない。
@@ -355,7 +357,24 @@ scheduler由来かを判別できない。
 
 永続形状は変えないため、Dexie `DATABASE_SCHEMA_VERSION`（9）、`ExportRoot.schemaVersion`（12）、
 `AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`
-（`production-rng:c5-e7`）、Master dataVersionは変更しない。migrationは追加しない。
+（`production-rng:c5-e7`）、Master dataVersionは変更しない（いずれも当時）。migrationは追加しない。
+
+現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` **16** は、生産計画画面の「比較する」と「この候補を優先」を
+Planner Alternativeのscenario（PLANNER_SPEC 9.2.19.7 / 9.2.19.8）へ同時に切り替えた（Issue #136 / #101 Phase 5-B）。
+同じPlannerInputと決定から保存されるPlan（採用replacement、Conflict、決定の展開、不採用記録）が旧B8 / B9 routingと
+変わり得る。永続ProductionPlanは生成方式を記録しないため、version 15以前のPlanがどちらの方式で保存されたかを判別できない。
+
+| artifact | version 16 runtimeでの扱い |
+| --- | --- |
+| ProductionPlan version 1..15（draft / activeを問わない） | 非互換。`calculation_context_changed` でfail closedし、Worker準備、競合操作、what-if、作成開始、実行準備、実行へ進めない。exact persisted内容の表示は維持し、read migrationやversion書き換えはしない。Planの互換判定は従来どおり4 field完全一致で、Plan向けの例外は無い |
+| BuildCandidate / BuildListEntry version 12 / 13 / 14 / 15 | 明示的なbuild-result例外 `16 -> [12, 13, 14, 15]` により互換。gameVersion、masterDataVersion、rngEngineVersionの一致と通常のstaleness判定は引き続き必要 |
+| BuildCandidate / BuildListEntry version 1..11 | 従来どおり非互換 |
+
+例外は明示mapだけで表し、範囲判定や将来versionへの推移的適用はしない。過去の `15 -> [12, 13, 14]`、
+`14 -> [12, 13]`、`13 -> [12]` もそのまま残す。`ProductionPlan.conflictRepairLineage`（11.1.1）を永続形状へ加えたため、
+Dexie `DATABASE_SCHEMA_VERSION` を10（14.2）、`ExportRoot.schemaVersion` を13（15.3）へ更新した。
+`AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、
+Master dataVersion（4）は変更しない。
 
 ---
 
@@ -1635,6 +1654,8 @@ export interface ProductionPlan {
   abandonmentReason: ProductionPlanAbandonmentReason | null;
   abandonedAt: ISODateTimeString | null;
   completedAt: ISODateTimeString | null;
+  // Issue #136 / #101 Phase 5-Bで追加（11.1.1）
+  conflictRepairLineage: PlannerConflictRepairLineage | null;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
 }
@@ -1688,14 +1709,14 @@ statusの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.2）。
 - Candidate SnapshotをProductionPlanへ埋め込まない。Snapshotの保持場所は
   BuildListEntryのままとする
 
-### 11.1.1 conflictRepairLineage（仕様確定・永続field未実装、Phase 5-Bで追加）
+### 11.1.1 conflictRepairLineage（Phase 5-Bで永続fieldとして実装済み）
 
 競合repair chain（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.11）の履歴。Issue #136 / #101の正式仕様で
-field名とshapeを確定した。**現行schemaにはまだ存在しない。** Phase 5-Aで下記の `PlannerConflictRepairLineage`
-以下の型をDomain型（`src/domain/models/planning.ts`）として追加し、lineageのPure Domain計算（有効なlineageの導出と
-次のlineageの生成）を実装したが、`ProductionPlan` の永続shape、validator、migrationには接続していない。
-`ProductionPlan.conflictRepairLineage` の追加はPhase 5-Bで行い、そのとき `DATABASE_SCHEMA_VERSION` 9 → 10、`ExportRoot.schemaVersion` 12 → 13、
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 15 → 16とする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.15）。
+field名とshapeを確定した。Phase 5-Aで下記の `PlannerConflictRepairLineage` 以下の型をDomain型
+（`src/domain/models/planning.ts`）として追加し、lineageのPure Domain計算（有効なlineageの導出と次のlineageの生成）を
+実装した。Phase 5-Bで `ProductionPlan.conflictRepairLineage` として永続shape、validator（`validateProductionPlan()` と
+`validatePlannerConflictRepairLineage()`）、migrationへ接続し、`DATABASE_SCHEMA_VERSION` 9 → 10、`ExportRoot.schemaVersion`
+12 → 13、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 15 → 16とした（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.15）。
 
 ```ts
 export interface ProductionPlan {
@@ -1774,8 +1795,14 @@ export type PlannerConflictRepairOutcomeStatus =
   ID形式、`decisions` の配列形状だけを検証する
 - Candidate identity、hash、`PlanningInputSnapshot`、`ExpectedPlanState`、staleness、Execution semantics、
   Plan-breaking判定へ入れない
-- Phase 5-Bのmigrationは既存の全ProductionPlan本体（ゲーム内セーブ地点snapshotとUndo snapshot内のPlan本体を含む）
-  へ `conflictRepairLineage = null` だけを補い、過去の決定を推測しない
+- Phase 5-Bのmigration（Dexie v9 -> v10、Export schema 12 -> 13）は既存の全ProductionPlan本体（ゲーム内セーブ地点
+  snapshotとUndo snapshot内のPlan本体、Undo snapshotが保持するセーブ地点内のPlan本体を含む）へ `conflictRepairLineage = null`
+  だけを補い、過去の決定を推測しない
+- 現行shapeのPlan本体は必ずこのfieldを持つ（`null` を含む）。fieldの欠落は現行shapeではなく、validationで拒否する
+- 生成経路ごとの値: 通常Planner（Build List画面の生産計画作成）と実行中Planの再計画Preview / 採用で作る新Planは `null`、
+  「この候補を優先」のactual repairで保存する新Draftはartifactのlineage（表示中Draftの有効なlineage + 今回の決定）を
+  そのまま持つ。what-ifは読むだけで保存しない。`draft -> active`、Execution中のPlan更新、ゲーム内セーブ地点 / Undo snapshot、
+  Undoはこの値をそのまま保持する
 
 ## 11.2 PlanningInputSnapshot
 
@@ -2461,7 +2488,7 @@ mh-wilds-gogma-artian-planner
 
 ## 14.2 DB schemaVersion
 
-初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは9。version(1)のstoresを保持し、
+初期作成schemaは1。現行DATABASE_SCHEMA_VERSIONは10。version(1)のstoresを保持し、
 version(2) upgradeでTarget妥協条件だけを解除する。Idealと他entityを保持し、compromiseNeedsReview=trueとする。
 旧Practical Skillも解除するため、移行直後はIdeal-onlyとなる。
 
@@ -2538,6 +2565,18 @@ table / indexは変更しない。v1 -> ... -> v8 -> v9は順番に適用でき�
   maxGogmaAdvance: 500, maxSkillAdvance: 1500 }` を補完し、`schemaVersion = 2` にする
 - `debugMode`、`resultPageSize`、`defaultSearchLimit`、`createdAt`、`updatedAt` は変更しない。旧候補検索画面の
   固定値（500 / 350 / 1500）は保存されていなかったため引き継がず、`defaultSearchLimit` を流用しない
+
+version(10) upgradeで `ProductionPlan.conflictRepairLineage` を補完する（11.1.1、Issue #136 / #101 Phase 5-B）。
+table / indexは変更しない。v1 -> ... -> v9 -> v10は順番に適用できること。
+
+- `productionPlans` tableの全record、ゲーム内セーブ地点snapshot内の `productionPlan`、ExecutionHistory Undo Snapshot内の
+  `productionPlanBefore`、およびUndo Snapshotが `executionSavePointBefore` として保持するセーブ地点内の `productionPlan`
+  のすべてへ `conflictRepairLineage = null` を補完する（`fillProductionPlanConflictRepairLineage()`）
+- 値は常に `null`（「repair chainに属さない」）である。選択済みConflict、BuildListEntry、ExecutionHistoryから過去の
+  repair decisionを推測しない
+- 既にfieldを持つbodyは変更しない
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 16への更新（3.5）はCalculationContextの境界であり、このupgradeが既存Planを
+  互換にするわけではない
 - settings recordが無いDBでは何も作成しない。v1でないrecordは変更しない
 - 他のtableは変更しない。計算意味を変えないため `CURRENT_CALCULATION_APP_SCHEMA_VERSION`（14）と
   `PRODUCTION_RNG_ENGINE_VERSION` は変更しない
@@ -2666,6 +2705,13 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
   「最後のゲーム内セーブ地点へ戻す」を選んだ場合はセーブ地点復元だけを行い、復元前に計算したPlanner resultは
   保存しない（Entry・Draft・Planを変更せず、復元後の状態からの再計算を求める。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.10）。元Entryを参照するのがDraft / stale /
   終了済みPlanだけならguard対象にしない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）
+- 「この候補を優先」のPlanner Alternative actual repair（Issue #136 / #101 Phase 5-B）は専用の
+  `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` で同じtransaction境界（再読込・再validation、
+  `O` がTargetのちょうど1件の現在Entryであることの確認、generated ID衝突の拒否、cardinality、Plan参照、旧Draftの置換、
+  Plan-breaking guardとセーブ地点復元時の不保存）を使う。違いは2点だけである: accepted replacement集合がauthorityなので、
+  final Planで非選択のgenerated Entryも `O` を置換して保存する（B8の「generated Entryはselected」検査は適用しない）。
+  新Draftの `conflictRepairLineage`（11.1.1）はartifactのlineageをそのまま設定し、Entry置換・旧Draft削除・lineage付き新Draft
+  追加（・必要ならactive Planの `breaking_change_approved`）を1 transactionで行う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）
 
 新しいtableもDexie schema versionの変更も伴わない。`buildListEntries` と
 `productionPlans` の既存tableをそのまま使う（Draft最大1件契約自体はDexie v8で既存Draftを
@@ -2679,7 +2725,7 @@ Planner constrained re-searchを経たPlan保存も原子的に行う。契約�
 
 ```ts
 export interface ExportRoot {
-  schemaVersion: 12;
+  schemaVersion: 13;
   appName: "mh-wilds-gogma-artian-planner";
   exportedAt: ISODateTimeString;
   rngState: RngState | null;
@@ -2772,6 +2818,20 @@ Import準備はschema 12をそのまま読み、schema 11を純粋関数 `migrat
 - schema 11を名乗りながら `settings` がobjectでない、`candidateSearchDefaults` を既に持つ、または
   `schemaVersion` が1でないrootは拒否する（fail closed）
 
+競合repair lineageを永続化した実装PR（Issue #136 / #101 Phase 5-B）で `schemaVersion` を13へ更新した。
+schema 13はすべてのProductionPlan本体が `conflictRepairLineage`（11.1.1）を持つ形状である。Import準備はschema 13を
+そのまま読み、schema 12を純粋関数 `migrateExportRootV12ToV13()`、schema 11..6を既存migrationの後に
+`migrateExportRootV12ToV13()` で読む。schema 12 -> 13は次だけを行い、推測をしない。
+
+- `productionPlans`、`executionSavePoints[].productionPlan`、`executionHistory[].undoSnapshot.productionPlanBefore`、
+  `executionHistory[].undoSnapshot.executionSavePointBefore?.productionPlan` のすべてへDexie v10と同じ
+  `fillProductionPlanConflictRepairLineage()` を適用し、`conflictRepairLineage = null` を補完する
+- その他すべてのcollectionとfieldは変更しない。過去のrepair decisionを推測しない
+- schema 12を名乗りながら上記いずれかのPlan本体が既に `conflictRepairLineage` を持つrootは、schema 12のbodyではないので
+  拒否する（fail closed、既存値を上書きも信用もしない）
+- lineageの中のEntry / Target IDはどのstatusのPlanでもcurrent foreign keyとして検証しない（11.1.1、15.2）。構造・literal・
+  ID形式だけを `validateProductionPlan()` で検証する
+
 ## 15.2 Import方針
 
 Import時は以下の順序で検証する。
@@ -2805,11 +2865,11 @@ Import方式。
 
 ## 15.3 Migration
 
-現行ExportRootはschemaVersion=12である（schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状、schemaVersion 9はProductionPlan lifecycle metadataとExecution Undo Snapshotを加えた形状、schemaVersion 10はRngState / NormalArtianCounterのIdentification provenance `lastIdentifiedAt` を加えた形状、schemaVersion 11はentity形状を変えずDraft最大1件のcollection契約を導入した境界、schemaVersion 12はAppSettings v2の `candidateSearchDefaults` を加えた形状）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
+現行ExportRootはschemaVersion=13である（schemaVersion 13はすべてのProductionPlan本体へ `conflictRepairLineage` を加えた形状、schemaVersion 8はcalculation schema 12のProductionPlan形状を加えた形状、schemaVersion 9はProductionPlan lifecycle metadataとExecution Undo Snapshotを加えた形状、schemaVersion 10はRngState / NormalArtianCounterのIdentification provenance `lastIdentifiedAt` を加えた形状、schemaVersion 11はentity形状を変えずDraft最大1件のcollection契約を導入した境界、schemaVersion 12はAppSettings v2の `candidateSearchDefaults` を加えた形状）。schemaVersion 6はBuildCandidateが `intermediateStateGroups` を、
 BuildListEntryが `intermediateStateSelection` を持つ最初の形状であり（schemaVersion 5は
 旧 `checkpointGroups` / `selectedCheckpointOpportunityIds` の形状）、schemaVersion 7はそれに
 Execution lifecycleの永続状態を加えた形状である（15.1）。
-Dexie `DATABASE_SCHEMA_VERSION = 9` とは独立して更新する。
+Dexie `DATABASE_SCHEMA_VERSION = 10` とは独立して更新する。
 
 全置換Import / Export / 全データクリアのPersistence / Application Service基盤は実装済みである
 （`src/services/dataTransfer/importExportService.ts`、`importExportValidation.ts`）。Settings画面への接続
@@ -2825,7 +2885,7 @@ timestampはPresentationの責務であり、ExportRootの形状、`exportedAt`�
 hydrateし、`getOrCreateDefault()` で上書きしない。
 
 - Export（`exportRoot()` / `serializeExport()`）は全user tableを1つのread-only Dexie transactionで読み、
-  `schemaVersion = 12` / `appName` をService自身が設定し、`exportedAt` は注入したclockの時刻とする。
+  `schemaVersion = 13` / `appName` をService自身が設定し、`exportedAt` は注入したclockの時刻とする。
   top-level entity collectionだけをprimary IDで安定sortし、復元ボーナス5枠順、PlanStep順、その他のnested
   arrayの順序は永続化どおり保つ。作成したrootを後述のImport full validationに通し、Settings recordの欠落や
   Domain不変条件違反があればDBを書き換えずに `export_state_invalid` でfail closedする。旧CalculationContextの

@@ -22,6 +22,7 @@ function fakeClient(): PlannerWorkerClient {
     createConstrainedPlan: vi.fn(() => { throw new Error('Must not call B8 orchestration') }),
     createWhatIfComparison: vi.fn(async () => completed),
     createPlannerAlternativeComparison: vi.fn(),
+    createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(() => { throw new Error('Must not prepare interaction') }),
     cancelPlan: vi.fn(), dispose: vi.fn(),
   }

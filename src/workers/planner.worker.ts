@@ -1,6 +1,8 @@
 import type {
   CreateConstrainedProductionPlanCalculation,
   CreateProductionPlanCalculation,
+  PlannerAlternativeRepairCalculationResult,
+  PlannerAlternativeRepairInput,
   PlannerAlternativeWhatIfCalculationResult,
   PlannerAlternativeWhatIfInput,
   PlannerDependencies,
@@ -21,9 +23,9 @@ export type PlannerWorkerPostMessage = (
 export type PlannerDependenciesFactory = () => PlannerDependencies
 
 /**
- * The five Planner calculations this Worker routes to.
+ * The six Planner calculations this Worker routes to.
  *
- * All five are injected, so the controller performs no full Planner run, no Candidate
+ * All six are injected, so the controller performs no full Planner run, no Candidate
  * enumeration, no materialization, no preflight, no Trace Replay, and no
  * adoption of its own: B8-C and the Planner Alternative Domain own all of
  * that, and the Production adapter composes it.
@@ -33,6 +35,7 @@ export interface PlannerWorkerCalculations {
   createConstrainedPlan: CreateConstrainedProductionPlanCalculation
   createWhatIfComparison: CreatePlannerWhatIfComparisonCalculation
   createPlannerAlternativeComparison: CreatePlannerAlternativeComparisonCalculation
+  createPlannerAlternativeRepair: CreatePlannerAlternativeRepairCalculation
   prepareInteraction: PreparePlannerInteractionCalculation
 }
 
@@ -53,6 +56,16 @@ export type CreatePlannerAlternativeComparisonCalculation = (
   dependencies: PlannerDependencies,
   executionOptions?: PlannerExecutionOptions,
 ) => Promise<PlannerAlternativeWhatIfCalculationResult>
+
+/**
+ * Worker-facing Planner Alternative actual repair calculation shape (Phase
+ * 5-B). Like the what-if, the wire input carries no extent and no trial bounds.
+ */
+export type CreatePlannerAlternativeRepairCalculation = (
+  input: PlannerAlternativeRepairInput,
+  dependencies: PlannerDependencies,
+  executionOptions?: PlannerExecutionOptions,
+) => Promise<PlannerAlternativeRepairCalculationResult>
 
 /** Synchronous initial preparation needs no cancellation hooks. */
 export type PreparePlannerInteractionCalculation = (
@@ -193,6 +206,18 @@ export function createPlannerWorkerController(
               requestId,
               generation,
               result: await calculations.createPlannerAlternativeComparison(
+                request.input,
+                dependencies,
+                executionOptions(requestId, generation),
+              ),
+            }
+            break
+          case 'create_planner_alternative_repair':
+            response = {
+              type: 'create_planner_alternative_repair_result',
+              requestId,
+              generation,
+              result: await calculations.createPlannerAlternativeRepair(
                 request.input,
                 dependencies,
                 executionOptions(requestId, generation),

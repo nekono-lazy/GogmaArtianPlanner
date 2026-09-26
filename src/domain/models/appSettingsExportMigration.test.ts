@@ -6,13 +6,13 @@ import {
   prepareExportRootForImport,
   upgradeAppSettingsToV2,
 } from './publicTypes'
-import { dataTransferRoot, dataTransferSettings, legacyAppSettingsV1 } from '../../test/fixtures/dataTransfer'
+import { dataTransferRoot, dataTransferSettings, legacyAppSettingsV1, withoutConflictRepairLineage } from '../../test/fixtures/dataTransfer'
 
 const RECOMMENDED = { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 }
 
 /** A schema 11 root: the current collections with an AppSettings v1 record. */
 function schema11Root(): ExportRootV11 {
-  const current = dataTransferRoot()
+  const current = withoutConflictRepairLineage(dataTransferRoot())
   return {
     ...current,
     schemaVersion: 11,
@@ -22,8 +22,8 @@ function schema11Root(): ExportRootV11 {
 }
 
 describe('Export schema 11 -> 12 (AppSettings Candidate Search defaults)', () => {
-  it('moves the Export schema to 12', () => {
-    expect(EXPORT_SCHEMA_VERSION).toBe(12)
+  it('moves the Export schema past 12 (the current schema is 13)', () => {
+    expect(EXPORT_SCHEMA_VERSION).toBe(13)
   })
 
   it('fills the recommended 350 / 500 / 1500 and keeps every other settings field', () => {
@@ -53,7 +53,7 @@ describe('Export schema 11 -> 12 (AppSettings Candidate Search defaults)', () =>
     const prepared = prepareExportRootForImport(JSON.parse(JSON.stringify(schema11Root())))
     expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
     if (!prepared.ok) return
-    expect(prepared.root.schemaVersion).toBe(12)
+    expect(prepared.root.schemaVersion).toBe(13)
     expect(prepared.root.settings.candidateSearchDefaults).toEqual(RECOMMENDED)
     expect(prepared.root.settings.debugMode).toBe(true)
   })
@@ -63,7 +63,7 @@ describe('Export schema 11 -> 12 (AppSettings Candidate Search defaults)', () =>
     const prepared = prepareExportRootForImport(JSON.parse(JSON.stringify(legacy)))
     expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
     if (!prepared.ok) return
-    expect(prepared.root.schemaVersion).toBe(12)
+    expect(prepared.root.schemaVersion).toBe(13)
     expect(prepared.root.settings.candidateSearchDefaults).toEqual(RECOMMENDED)
   })
 

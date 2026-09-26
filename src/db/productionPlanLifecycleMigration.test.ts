@@ -58,8 +58,8 @@ function schema5Plan(id: string, status: ProductionPlan['status']): Record<strin
 
 describe('ProductionPlan lifecycle persistence migration (Dexie v5 -> v6)', () => {
   it('uses DATABASE_SCHEMA_VERSION 6 independently of the calculation schema', () => {
-    expect(DATABASE_SCHEMA_VERSION).toBe(9)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
+    expect(DATABASE_SCHEMA_VERSION).toBe(10)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
   })
 
   it('fills only non-terminal Plans and leaves terminal Plans and history exactly as persisted', async () => {
@@ -97,7 +97,7 @@ describe('ProductionPlan lifecycle persistence migration (Dexie v5 -> v6)', () =
     const database = new AppDatabase(name)
     try {
       await database.open()
-      expect(database.verno).toBe(9)
+      expect(database.verno).toBe(10)
       const nulls = { abandonmentReason: null, abandonedAt: null, completedAt: null }
       for (const plan of [active, stale]) {
         const migrated = await database.productionPlans.get(plan.id as string)

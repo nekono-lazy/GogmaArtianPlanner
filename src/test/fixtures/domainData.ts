@@ -302,6 +302,7 @@ export function createValidProductionPlan(): ProductionPlan {
     abandonmentReason: null,
     abandonedAt: null,
     completedAt: null,
+    conflictRepairLineage: null,
     createdAt: DOMAIN_FIXTURE_TIME,
     updatedAt: DOMAIN_FIXTURE_TIME,
   }

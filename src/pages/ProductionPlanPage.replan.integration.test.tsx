@@ -128,6 +128,7 @@ function realPlannerClient(fixture: ExecutionFixture, generated: BuildListEntry 
     }),
     createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
+    createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(async () => ({
       status: 'ready' as const,
       validBuildListEntryIds: [],
@@ -181,9 +182,9 @@ async function running(database: AppDatabase, options: HarnessOptions = {}): Pro
     getTargetWeapons: vi.fn(() => database.targetWeapons.toArray()),
     createInput: vi.fn(async () => structuredClone(fixture.built.input)),
     createWorkerClient: vi.fn(() => client),
-    inspectPlannerResultSave: vi.fn(async () => ({ approvalRequired: false as const })),
-    savePlannerResult: vi.fn(async () => {
-      throw new Error('savePlannerResult is not expected: a running Plan is replanned, never saved as a Draft')
+    inspectPlannerAlternativeRepairSave: vi.fn(async () => ({ approvalRequired: false as const })),
+    savePlannerAlternativeRepair: vi.fn(async () => {
+      throw new Error('savePlannerAlternativeRepair is not expected: a running Plan is replanned, never saved as a Draft')
     }),
     inspectProductionPlanStart: vi.fn(async (planId) => ({ planId, changes: [], ownedWeapons: [], targetWeapons: [] })),
     startProductionPlan: vi.fn(async () => {
@@ -248,7 +249,7 @@ describe('ProductionPlanPage replan Preview over the real runtime', () => {
       expect(await dump(database)).toEqual(before)
       expect(await database.productionPlans.get(newPlanId)).toBeUndefined()
       expect((await database.targetWeapons.get(EXTRA_TARGET_ID))?.preferredOwnedWeaponId).toBeNull()
-      expect(harness.deps.savePlannerResult).not.toHaveBeenCalled()
+      expect(harness.deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
       // The page still shows the same running Plan.
       expect(screen.getByRole('link', { name: '実行ナビを再開する' })).toHaveAttribute('href', `/plans/${harness.fixture.plan.id}/run`)
     }))

@@ -58,6 +58,7 @@ function unusedClient(): PlannerWorkerClient {
     createConstrainedPlan: vi.fn(),
     createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
+    createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(),
     cancelPlan: vi.fn(),
     dispose: vi.fn(),

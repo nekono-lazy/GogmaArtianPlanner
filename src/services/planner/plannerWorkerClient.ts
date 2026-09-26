@@ -1,4 +1,6 @@
 import type {
+  PlannerAlternativeRepairCalculationResult,
+  PlannerAlternativeRepairInput,
   PlannerAlternativeWhatIfCalculationResult,
   PlannerAlternativeWhatIfInput,
   PlannerInput,
@@ -94,16 +96,26 @@ export interface PlannerWorkerClient {
   ): Promise<PlannerWhatIfCalculationResult>
   /**
    * The Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md`
-   * 9.2.19.7): a transient calculation beside the legacy
-   * `createWhatIfComparison()`, which it does not replace - the Production UI
-   * keeps the legacy path until Phase 5. The extent and the trial bounds are
-   * not parameters: the Production Worker adapter supplies them inside the
-   * Worker boundary.
+   * 9.2.19.7): a transient calculation, the Production Plan screen's
+   * 「比較する」 since Phase 5-B. The legacy `createWhatIfComparison()` stays
+   * until Phase 6. The extent and the trial bounds are not parameters: the
+   * Production Worker adapter supplies them inside the Worker boundary.
    */
   createPlannerAlternativeComparison(
     requestId: string,
     input: PlannerAlternativeWhatIfInput,
   ): Promise<PlannerAlternativeWhatIfCalculationResult>
+  /**
+   * The Planner Alternative actual repair (Phase 5-B, `docs/PLANNER_SPEC.md`
+   * 9.2.19.8): 「この候補を優先」. The input is the fresh PlannerInput, this
+   * decision and the displayed Draft's lineage; the extent and the trial
+   * bounds are not parameters. It only calculates: the persistable artifact is
+   * saved by `PlannerResultPersistenceService.savePlannerAlternativeRepair()`.
+   */
+  createPlannerAlternativeRepair(
+    requestId: string,
+    input: PlannerAlternativeRepairInput,
+  ): Promise<PlannerAlternativeRepairCalculationResult>
   /** B10 current initial availability; calculation only, with no search bounds. */
   prepareInteraction(
     requestId: string,
@@ -164,6 +176,10 @@ type PendingPlan =
       expectedResultType: 'create_planner_alternative_comparison_result'
       resolve: (result: PlannerAlternativeWhatIfCalculationResult) => void
     })
+  | (PendingPlanIdentity & {
+      expectedResultType: 'create_planner_alternative_repair_result'
+      resolve: (result: PlannerAlternativeRepairCalculationResult) => void
+    })
 
 export function createPlannerWorkerClient(
   worker: PlannerWorkerLike,
@@ -210,6 +226,13 @@ export function createPlannerWorkerClient(
     if (
       data.type === 'create_planner_alternative_comparison_result' &&
       current.expectedResultType === 'create_planner_alternative_comparison_result'
+    ) {
+      current.resolve(data.result)
+      return
+    }
+    if (
+      data.type === 'create_planner_alternative_repair_result' &&
+      current.expectedResultType === 'create_planner_alternative_repair_result'
     ) {
       current.resolve(data.result)
       return
@@ -317,6 +340,27 @@ export function createPlannerWorkerClient(
         })
       })
     },
+    createPlannerAlternativeRepair: (requestId, input) => {
+      if (disposed) {
+        return Promise.reject(new Error('Planner Worker Client is disposed.'))
+      }
+      const generation = claimRequestId(requestId)
+      return new Promise<PlannerAlternativeRepairCalculationResult>((resolve, reject) => {
+        pending.set(requestId, {
+          requestId,
+          generation,
+          expectedResultType: 'create_planner_alternative_repair_result',
+          resolve,
+          reject,
+        })
+        worker.postMessage({
+          type: 'create_planner_alternative_repair',
+          requestId,
+          generation,
+          input,
+        })
+      })
+    },
     prepareInteraction: (requestId, input) => {
       if (disposed) {
         return Promise.reject(new Error('Planner Worker Client is disposed.'))
@@ -372,6 +416,8 @@ export function createUnavailablePlannerWorkerClient(): PlannerWorkerClient {
     createWhatIfComparison: () =>
       Promise.reject(new ProductionPlannerWorkerUnavailableError()),
     createPlannerAlternativeComparison: () =>
+      Promise.reject(new ProductionPlannerWorkerUnavailableError()),
+    createPlannerAlternativeRepair: () =>
       Promise.reject(new ProductionPlannerWorkerUnavailableError()),
     prepareInteraction: () =>
       Promise.reject(new ProductionPlannerWorkerUnavailableError()),

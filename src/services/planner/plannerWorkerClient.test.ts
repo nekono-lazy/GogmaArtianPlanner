@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
 import type {
+  PlannerAlternativeRepairCalculationResult,
+  PlannerAlternativeRepairInput,
   PlannerAlternativeWhatIfCalculationResult,
   PlannerAlternativeWhatIfInput,
   PlannerExecutionOptions,
@@ -26,6 +28,7 @@ import { createCandidateSearchInput } from '../../test/fixtures/candidateSearch'
 import {
   createPlannerWorkerClient,
   createProductionPlannerWorkerClient,
+  createUnavailablePlannerWorkerClient,
   ProductionPlannerWorkerUnavailableError,
   PlannerCancelledError,
   PlannerWorkerProtocolError,
@@ -393,6 +396,117 @@ const plannerAlternativeResult: PlannerAlternativeWhatIfCalculationResult = {
   buildListEntryId: 'build-list.planner-alternative.prior' as never,
   detail: 'fixture',
 }
+
+function plannerAlternativeRepairInput(input = plannerInput()): PlannerAlternativeRepairInput {
+  return {
+    plannerInput: input,
+    decision: {
+      conflictKey: 'conflict.planner-alternative.repair',
+      selectedBuildListEntryId: 'build-list.planner-alternative.repair' as never,
+    },
+    lineage: null,
+  }
+}
+
+const plannerAlternativeRepairResult: PlannerAlternativeRepairCalculationResult = {
+  status: 'invalid_prior_fixed_entry',
+  buildListEntryId: 'build-list.planner-alternative.repair.prior' as never,
+  detail: 'fixture',
+}
+
+describe('PlannerWorkerClient Planner Alternative actual repair (Phase 5-B)', () => {
+  it('posts the repair request kind with the exact caller input and resolves only its own result', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    expect(client.createPlannerAlternativeRepair).toHaveLength(2)
+    const input = plannerAlternativeRepairInput()
+    const promise = client.createPlannerAlternativeRepair('planner.repair.client', input)
+    expect(worker.posted).toEqual([{
+      type: 'create_planner_alternative_repair',
+      requestId: 'planner.repair.client',
+      generation: 1,
+      input,
+    }])
+    expect(structuredClone(worker.posted[0])).toEqual(worker.posted[0])
+    // No extent and no trial bounds: the Production Worker adapter supplies them.
+    expect(Object.keys(input).sort()).toEqual(['decision', 'lineage', 'plannerInput'])
+    worker.emit({
+      type: 'create_planner_alternative_repair_result',
+      requestId: 'planner.repair.client',
+      generation: 1,
+      result: plannerAlternativeRepairResult,
+    })
+    await expect(promise).resolves.toBe(plannerAlternativeRepairResult)
+  })
+
+  it('resolves a completed not-persistable result as it is', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const result: PlannerAlternativeRepairCalculationResult = {
+      status: 'completed',
+      comparison: {
+        conflictKey: 'conflict.planner-alternative.repair',
+        fixedBuildListEntryId: 'build-list.planner-alternative.repair' as never,
+        fixedTargetWeaponId: 'target.planner-alternative.repair' as never,
+        alternatives: [],
+        scenario: { status: 'stopped_by_planner_rerun_bound' },
+      },
+      persistence: { status: 'not_persistable', reason: 'stopped_by_planner_rerun_bound' },
+    }
+    expect(structuredClone(result)).toEqual(result)
+    const promise = client.createPlannerAlternativeRepair('planner.repair.not-persistable', plannerAlternativeRepairInput())
+    worker.emit({ type: 'create_planner_alternative_repair_result', requestId: 'planner.repair.not-persistable', generation: 1, result })
+    await expect(promise).resolves.toBe(result)
+  })
+
+  it('fails closed on another result discriminant, and ignores a stale generation', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const mismatch = client.createPlannerAlternativeRepair('planner.repair.mismatch', plannerAlternativeRepairInput())
+    worker.emit({
+      type: 'create_planner_alternative_comparison_result',
+      requestId: 'planner.repair.mismatch',
+      generation: 1,
+      result: plannerAlternativeResult,
+    })
+    await expect(mismatch).rejects.toMatchObject({
+      receivedResultType: 'create_planner_alternative_comparison_result',
+      expectedResultType: 'create_planner_alternative_repair_result',
+    })
+
+    const first = client.createPlannerAlternativeRepair('planner.repair.shared', plannerAlternativeRepairInput())
+    const second = client.createPlannerAlternativeRepair('planner.repair.shared', plannerAlternativeRepairInput())
+    // A duplicate request id cancels the pending one.
+    await expect(first).rejects.toBeInstanceOf(PlannerCancelledError)
+    worker.emit({ type: 'create_planner_alternative_repair_result', requestId: 'planner.repair.shared', generation: 2, result: { ...plannerAlternativeRepairResult, detail: 'stale' } })
+    worker.emit({ type: 'create_planner_alternative_repair_result', requestId: 'planner.repair.shared', generation: 3, result: plannerAlternativeRepairResult })
+    await expect(second).resolves.toBe(plannerAlternativeRepairResult)
+  })
+
+  it('uses the shared cancel, error and dispose paths', async () => {
+    const worker = new FakeWorker()
+    const client = createPlannerWorkerClient(worker, 'fixture')
+    const cancelled = client.createPlannerAlternativeRepair('planner.repair.cancel', plannerAlternativeRepairInput())
+    client.cancelPlan('planner.repair.cancel')
+    await expect(cancelled).rejects.toBeInstanceOf(PlannerCancelledError)
+    expect(worker.posted.at(-1)).toEqual({ type: 'cancel', requestId: 'planner.repair.cancel', generation: 1 })
+
+    const failed = client.createPlannerAlternativeRepair('planner.repair.error', plannerAlternativeRepairInput())
+    worker.emit({ type: 'error', requestId: 'planner.repair.error', generation: 2, message: 'repair Worker failed' })
+    await expect(failed).rejects.toThrow('repair Worker failed')
+
+    const pending = client.createPlannerAlternativeRepair('planner.repair.dispose', plannerAlternativeRepairInput())
+    client.dispose()
+    await expect(pending).rejects.toBeInstanceOf(PlannerCancelledError)
+    await expect(client.createPlannerAlternativeRepair('planner.repair.disposed', plannerAlternativeRepairInput()))
+      .rejects.toThrow('Planner Worker Client is disposed.')
+  })
+
+  it('rejects with the explicit unavailable error without a Worker', async () => {
+    await expect(createUnavailablePlannerWorkerClient().createPlannerAlternativeRepair('planner.repair.unavailable', plannerAlternativeRepairInput()))
+      .rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
+  })
+})
 
 describe('PlannerWorkerClient Planner Alternative comparison (Phase 4-B)', () => {
   it('posts the new request kind with the exact input and resolves only its own result', async () => {
@@ -847,6 +961,9 @@ function integration() {
     },
     createPlannerAlternativeComparison: async () => {
       throw new Error('Planner Alternative what-if calculation was not expected in this integration fixture.')
+    },
+    createPlannerAlternativeRepair: async () => {
+      throw new Error('Planner Alternative repair calculation was not expected in this integration fixture.')
     },
   }
   const dependencies = {

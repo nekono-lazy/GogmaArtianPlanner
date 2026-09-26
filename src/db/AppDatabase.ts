@@ -3,6 +3,7 @@ import { migrateLegacyTargetCompromise } from './migrateLegacyTargetCompromise'
 import {
   fillNonTerminalPlanLifecycle,
   fillNormalCounterIdentificationProvenance,
+  fillProductionPlanConflictRepairLineage,
   fillRngStateIdentificationProvenance,
   isDraftProductionPlanRecord,
   upgradeAppSettingsToV2,
@@ -21,7 +22,7 @@ import type {
 } from '../domain/models/publicTypes'
 
 export const DATABASE_NAME = 'mh-wilds-gogma-artian-planner'
-export const DATABASE_SCHEMA_VERSION = 9
+export const DATABASE_SCHEMA_VERSION = 10
 
 export class AppDatabase extends Dexie {
   rngState!: Table<RngState, 'current'>
@@ -234,9 +235,39 @@ export class AppDatabase extends Dexie {
     // keeps its exact value. No table or index changes, no other table is
     // touched, and no calculation semantics change, so
     // `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays where it is.
-    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+    this.version(9).stores({}).upgrade(async (transaction) => {
       await transaction.table('settings').toCollection().modify((settings: Record<string, unknown>) => {
         upgradeAppSettingsToV2(settings)
+      })
+    })
+    // v10 adds `ProductionPlan.conflictRepairLineage` (`docs/DATA_MODEL.md`
+    // 11.1.1 / 14.2, `docs/PLANNER_SPEC.md` 9.2.19.11 / 9.2.19.15): the repair
+    // chain a 「この候補を優先」 actual repair saves with its Draft. No table or
+    // index changes. Every ProductionPlan body gets `null` - "no repair chain" -
+    // wherever it is stored: the `productionPlans` table, the Plan snapshot of a
+    // game save point, the `productionPlanBefore` of an ExecutionHistory Undo
+    // snapshot and the Plan of the save point an Undo snapshot holds as
+    // `executionSavePointBefore`. No earlier runtime saved a repair decision, so
+    // none is reconstructed from selected Conflicts, BuildListEntries or
+    // ExecutionHistory, and a body already carrying the field is left as it is.
+    // The calculation boundary is separate: `CURRENT_CALCULATION_APP_SCHEMA_VERSION`
+    // 16 fails every earlier Plan closed through its CalculationContext.
+    this.version(DATABASE_SCHEMA_VERSION).stores({}).upgrade(async (transaction) => {
+      const fillPlan = (value: unknown) => {
+        if (isPlainRecord(value)) fillProductionPlanConflictRepairLineage(value)
+      }
+      await transaction.table('productionPlans').toCollection().modify((plan: Record<string, unknown>) => {
+        fillProductionPlanConflictRepairLineage(plan)
+      })
+      await transaction.table('executionSavePoints').toCollection().modify((savePoint: Record<string, unknown>) => {
+        fillPlan(savePoint.productionPlan)
+      })
+      await transaction.table('executionHistory').toCollection().modify((history: Record<string, unknown>) => {
+        const snapshot = history.undoSnapshot
+        if (!isPlainRecord(snapshot)) return
+        fillPlan(snapshot.productionPlanBefore)
+        const savePointBefore = snapshot.executionSavePointBefore
+        if (isPlainRecord(savePointBefore)) fillPlan(savePointBefore.productionPlan)
       })
     })
   }

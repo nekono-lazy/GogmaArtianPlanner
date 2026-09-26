@@ -111,6 +111,14 @@ export function isCalculationContextCompatible(
  * incompatible, and the exception never reaches a ProductionPlan: every
  * version 1..14 Plan fails closed under 15.
  *
+ * App schema 16 changes only how the Production Plan screen's Conflict
+ * what-if and actual repair are calculated and saved (the Planner Alternative
+ * scenario, `docs/PLANNER_SPEC.md` 9.2.19.15). Candidate Search, BuildCandidate
+ * and BuildListEntry snapshot semantics and staleness are untouched, so a
+ * version 12, 13, 14 or 15 BuildCandidate or BuildListEntry stays usable under
+ * version 16. Version 1..11 stay incompatible, and the exception never reaches
+ * a ProductionPlan: every version 1..15 Plan fails closed under 16.
+ *
  * Each exception is directional and deliberately narrow: version 1 stays
  * incompatible, it is never a general forward compatibility for future
  * versions, every other CalculationContext field must still be equal, the
@@ -125,6 +133,7 @@ const COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS: ReadonlyMap<number, readonly 
     [13, [12]],
     [14, [12, 13]],
     [15, [12, 13, 14]],
+    [16, [12, 13, 14, 15]],
   ])
 
 export function isBuildResultCalculationContextCompatible(

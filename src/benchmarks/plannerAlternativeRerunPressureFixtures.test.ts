@@ -125,7 +125,7 @@ describe('Planner Alternative rerun-pressure fixture', () => {
   }, SLOW)
 
   it('moves no version authority', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
   })
 })

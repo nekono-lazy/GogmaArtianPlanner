@@ -306,7 +306,24 @@ export interface KnownValue<T> {
 // `DATABASE_SCHEMA_VERSION`, `ExportRoot.schemaVersion`,
 // `AppSettings.schemaVersion`, `RngState.schemaVersion`,
 // `PRODUCTION_RNG_ENGINE_VERSION` and the Master `dataVersion` are unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 15
+//
+// Version 16 switches the Production Plan screen's Conflict what-if
+// (「比較する」) and actual repair (「この候補を優先」) from the legacy B8 / B9
+// constrained path to the Planner Alternative scenario (Issue #136 / #101,
+// `docs/PLANNER_SPEC.md` 9.2.19, Phase 5-B). For the same PlannerInput and
+// decision the saved Plan - its accepted replacements, its Conflicts, the
+// expanded decision and the non-adopted Targets - can differ, and a persisted
+// Plan records no generation strategy, so every version 1..15 Plan - Draft or
+// active - fails closed with `calculation_context_changed`; none is migrated or
+// rewritten. Candidate Search and the BuildCandidate / BuildListEntry snapshot
+// semantics do not change, so the explicit build-result exception
+// `16 -> [12, 13, 14, 15]` keeps version 12..15 Candidates and Build List
+// Entries usable under 16; version 1..11 stay incompatible. The persisted
+// `ProductionPlan.conflictRepairLineage` moves `DATABASE_SCHEMA_VERSION` to 10
+// and `ExportRoot.schemaVersion` to 13 on their own; `AppSettings.schemaVersion`,
+// `RngState.schemaVersion`, `PRODUCTION_RNG_ENGINE_VERSION` and the Master
+// `dataVersion` are unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 16
 
 export interface CalculationContext {
   gameVersion: string

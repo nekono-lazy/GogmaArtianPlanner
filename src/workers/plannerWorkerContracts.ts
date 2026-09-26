@@ -4,6 +4,8 @@ import type {
   PlanConflictCheckpointParticipant,
 } from '../domain/models/publicTypes'
 import type {
+  PlannerAlternativeRepairCalculationResult,
+  PlannerAlternativeRepairInput,
   PlannerAlternativeWhatIfCalculationResult,
   PlannerAlternativeWhatIfInput,
   PlannerInput,
@@ -143,14 +145,30 @@ export type PlannerWhatIfWorkerRequest = WorkerTaskRequest<
 
 /**
  * The Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md` 9.2.19.7):
- * a separate request kind from the legacy B9 `create_what_if_comparison`,
- * which stays the Production UI path until Phase 5. The extent and the trial
- * bounds do not cross the wire: the Production Worker adapter supplies the
- * Domain defaults inside the Worker boundary (9.2.19.12).
+ * a separate request kind from the legacy B9 `create_what_if_comparison`. It
+ * is the Production Plan screen's 「比較する」 since Phase 5-B; the legacy kind
+ * stays until Phase 6. The extent and the trial bounds do not cross the wire:
+ * the Production Worker adapter supplies the Domain defaults inside the Worker
+ * boundary (9.2.19.12).
  */
 export type PlannerAlternativeComparisonWorkerRequest = WorkerTaskRequest<
   'create_planner_alternative_comparison',
   PlannerAlternativeWhatIfInput
+> &
+  PlannerTaskGeneration
+
+/**
+ * The Planner Alternative actual repair (Phase 5-B, `docs/PLANNER_SPEC.md`
+ * 9.2.19.8): the Production Plan screen's 「この候補を優先」, beside the legacy
+ * B8 `create_constrained_plan` (kept until Phase 6). The wire input is the
+ * caller input only - fresh PlannerInput, this decision, the displayed Draft's
+ * lineage; the extent and the trial bounds are supplied inside the Worker by
+ * the Production adapter. It only calculates: saving the artifact is the
+ * Application / Persistence boundary.
+ */
+export type PlannerAlternativeRepairWorkerRequest = WorkerTaskRequest<
+  'create_planner_alternative_repair',
+  PlannerAlternativeRepairInput
 > &
   PlannerTaskGeneration
 
@@ -185,18 +203,25 @@ export type PlannerAlternativeComparisonWorkerResultResponse = WorkerResultRespo
 > &
   PlannerTaskGeneration
 
+export type PlannerAlternativeRepairWorkerResultResponse = WorkerResultResponse<
+  'create_planner_alternative_repair_result',
+  PlannerAlternativeRepairCalculationResult
+> &
+  PlannerTaskGeneration
+
 export type PlannerWorkerErrorResponse = Extract<
   PlannerWorkerResponse,
   { type: 'error' }
 > &
   PlannerTaskGeneration
 
-/** All five Planner request kinds share one task namespace. */
+/** All six Planner request kinds share one task namespace. */
 export type PlannerWorkerProtocolRequest =
   | PlannerOrdinaryWorkerRequest
   | PlannerConstrainedWorkerRequest
   | PlannerWhatIfWorkerRequest
   | PlannerAlternativeComparisonWorkerRequest
+  | PlannerAlternativeRepairWorkerRequest
   | PlannerInteractionWorkerRequest
   | PlannerWorkerCancelRequest
 
@@ -206,5 +231,6 @@ export type PlannerWorkerProtocolResponse =
   | PlannerConstrainedWorkerResultResponse
   | PlannerWhatIfWorkerResultResponse
   | PlannerAlternativeComparisonWorkerResultResponse
+  | PlannerAlternativeRepairWorkerResultResponse
   | PlannerInteractionWorkerResultResponse
   | PlannerWorkerErrorResponse

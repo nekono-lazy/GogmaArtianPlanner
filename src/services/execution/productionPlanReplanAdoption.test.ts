@@ -465,6 +465,31 @@ describe('replan adoption', () => {
       expect((await database.productionPlans.get(draft.id))?.status).toBe('active')
     }))
 
+  it('starts the adopted Plan with no repair chain and keeps the running Plan lineage as it was', () =>
+    withDatabase(async (database) => {
+      const harness = await running(database, { confirmedSteps: 1 })
+      // The running Plan was a repaired Draft: its lineage stays audit data.
+      const lineage = {
+        decisions: [{
+          conflictKind: 'same_gogma_counter' as const,
+          fixedBuildListEntryId: harness.fixture.plan.selectedBuildListEntryIds[0],
+          fixedTargetWeaponId: harness.fixture.plan.steps[0].targetWeaponId as never,
+          invalidatedRoutes: [],
+        }],
+      }
+      await database.productionPlans.update(harness.fixture.plan.id, { conflictRepairLineage: lineage })
+      const preview = await previewOf(harness)
+      expect(previewPlan(preview).conflictRepairLineage).toBeNull()
+
+      const result = await adopt(harness, preview)
+
+      expect(result.kind).toBe('adopted')
+      if (result.kind !== 'adopted') return
+      expect(result.newPlan.conflictRepairLineage).toBeNull()
+      expect(result.oldPlan.conflictRepairLineage).toEqual(lineage)
+      expect((await database.productionPlans.get(harness.fixture.plan.id))?.conflictRepairLineage).toEqual(lineage)
+    }))
+
   it('adopts from an active Plan with no confirmed Step, replacing it with a new Plan ID', () =>
     withDatabase(async (database) => {
       const harness = await running(database)
@@ -482,7 +507,7 @@ describe('replan adoption', () => {
       ].sort((a, b) => a.id.localeCompare(b.id)))
     }))
 
-  it.each([13, 14])('replans a running schema %i Plan from the current state through the schema 15 scheduler', (appSchemaVersion) =>
+  it.each([13, 14, 15])('replans a running schema %i Plan from the current state through the schema 16 scheduler', (appSchemaVersion) =>
     withDatabase(async (database) => {
       // Issue #103 Phase C / Issue #129: the running Plan was calculated under
       // an older schema and is never executed under 15; the way on is a new
@@ -508,7 +533,7 @@ describe('replan adoption', () => {
       expect(fullRuns.scheduler).toBeGreaterThan(0)
       expect(fullRuns.beam).toBe(0)
       const draft = previewPlan(preview)
-      expect(draft.calculationContext.appSchemaVersion).toBe(15)
+      expect(draft.calculationContext.appSchemaVersion).toBe(16)
 
       const result = await adopt(harness, preview)
 
@@ -520,7 +545,7 @@ describe('replan adoption', () => {
       })
       expect(await database.productionPlans.get(draft.id)).toMatchObject({
         status: 'active',
-        calculationContext: { appSchemaVersion: 15 },
+        calculationContext: { appSchemaVersion: 16 },
       })
     }))
 
@@ -598,9 +623,9 @@ describe('replan adoption', () => {
     }))
 
   it('moves no version authority', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(15)
-    expect(DATABASE_SCHEMA_VERSION).toBe(9)
-    expect(EXPORT_SCHEMA_VERSION).toBe(12)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(16)
+    expect(DATABASE_SCHEMA_VERSION).toBe(10)
+    expect(EXPORT_SCHEMA_VERSION).toBe(13)
   })
 })
 

@@ -969,6 +969,18 @@ keeps version 12 / 13 / 14 Candidates and BuildListEntries usable (version 1..11
 never a Plan exception). `DATABASE_SCHEMA_VERSION` 9, `ExportRoot.schemaVersion` 12,
 `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2, `PRODUCTION_RNG_ENGINE_VERSION`
 `production-rng:c5-e7` and Master `dataVersion` 4 are unchanged.
+Issue #136 / #101 Phase 5-B (the Planner Alternative Production routing and the repair lineage;
+`docs/PLANNER_SPEC.md` 9.2.19.15, `docs/DATA_MODEL.md` 11.1.1) switched the Production Plan screen's
+「比較する」 and 「この候補を優先」 together to the Planner Alternative scenario. For the same PlannerInput
+and decision the saved Plan (accepted replacements, Conflicts, the expanded decision, the Targets left
+unplanned) can differ and a persisted Plan records no generation strategy, so
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` moved to **16**: every version 1..15 ProductionPlan fails closed
+with `calculation_context_changed` (no read migration, no in-place rewrite), while the explicit
+build-result exception `16 -> [12, 13, 14, 15]` keeps version 12..15 Candidates and BuildListEntries
+usable (version 1..11 stay incompatible, never a Plan exception). The persisted
+`ProductionPlan.conflictRepairLineage` moved `DATABASE_SCHEMA_VERSION` to **10** and
+`ExportRoot.schemaVersion` to **13**; `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2,
+`PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7` and Master `dataVersion` 4 are unchanged.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -999,14 +1011,15 @@ PlanStep `executionEffects`, reserve and zero-operation completion semantics) mo
 it to 12, the Plan start effect (existing-weapon Target links at `draft -> active`
 instead of at the first physical Step) moved it to 13, and the Production Planner
 strategy switch from the Beam Search to the deterministic scheduler (Issue #103 Phase C)
-moved it to 14, and the Normal Counter-advance fast-forward (Issue #129) moved it to the
-current **15**, defined
+moved it to 14, the Normal Counter-advance fast-forward (Issue #129) moved it to 15, and
+the Planner Alternative Production routing (Issue #136 / #101 Phase 5-B) moved it to the
+current **16**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
 drop a hard constraint, so version 10 artifacts fail closed like every earlier one.
 Search, BuildList, Planner, and benchmark runtime creators share this authority.
-Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename, to 5 for the Execution lifecycle persisted state, to 6 for the ProductionPlan lifecycle metadata, to 7 for the Identification provenance, to 8 for the Draft lifecycle (every accumulated `draft` Plan deleted; `ExportRoot.schemaVersion` 11, `RngState.schemaVersion` 2), and to the current 9 for the AppSettings Candidate Search defaults (Issue #125; `ExportRoot.schemaVersion` 12, `AppSettings.schemaVersion` 2); the Dexie version is independent of
+Dexie separately moved to `DATABASE_SCHEMA_VERSION = 4` for the persisted status rename, to 5 for the Execution lifecycle persisted state, to 6 for the ProductionPlan lifecycle metadata, to 7 for the Identification provenance, to 8 for the Draft lifecycle (every accumulated `draft` Plan deleted; `ExportRoot.schemaVersion` 11, `RngState.schemaVersion` 2), to 9 for the AppSettings Candidate Search defaults (Issue #125; `ExportRoot.schemaVersion` 12, `AppSettings.schemaVersion` 2), and to the current 10 for `ProductionPlan.conflictRepairLineage` (Issue #136 / #101 Phase 5-B; `ExportRoot.schemaVersion` 13); the Dexie version is independent of
 `AppSettings.schemaVersion` (current 2); gameVersion, Master Data version,
 and `CONSTRAINED_ROUTE_POLICY_VERSION`
 remain unchanged. `PRODUCTION_RNG_ENGINE_VERSION` is
@@ -1033,7 +1046,7 @@ Gogma Reset prediction output and moved it to the current
 CalculationContext staleness boundary for all of them. `DATABASE_SCHEMA_VERSION` stays 4 at the checkpoint boundary and at the lane
 boundary, while `ExportRoot.schemaVersion` moved to 5 with the checkpoint entity
 shape, to 6 with the lane entity shape, to 7 with the Execution lifecycle persisted
-state, and later to the current 11 (see the Calculation Context paragraphs above).
+state, and later to the current 13 (see the Calculation Context paragraphs above).
 Version 1 BuildCandidate, BuildListEntry, and ProductionPlan
 calculations are incompatible with any later version and must not be reused as current
 results. Existing staleness checks mark old BuildListEntry records with
@@ -1044,7 +1057,7 @@ current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..14 ProductionPlans are incompatible with version 15, Draft or active alike, while version 12, 13 and 14 Candidates and BuildListEntries stay usable under 15 through the explicit build-result exception `15 -> [12, 13, 14]` (the version 15 change is the Planner's Normal Counter-advance fast-forward only; version 1..11 stay incompatible; never a range check, never a Plan exception, never a read migration or an in-place version rewrite of a version 14 Plan). Historically, all version 1..13 ProductionPlans are incompatible with version 14, Draft or active alike, while version 12 and 13 Candidates and BuildListEntries stay usable under 14 through the explicit build-result exception `14 -> [12, 13]` (the version 14 change is the Production Planner strategy only; version 1..11 stay incompatible; never a range check such as "12 or later", never a Plan exception, never a read migration or an in-place version rewrite of a version 13 Plan). Historically, all version 1..12 ProductionPlans are incompatible with version 13, and all version 1..11 Candidates and BuildListEntries are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. The only build-result exception at this boundary is the explicit `13 -> [12]` one: the version 13 change is ProductionPlan execution only (the Plan start effect), so a version 12 Candidate or BuildListEntry stays usable under 13 when gameVersion, masterDataVersion and rngEngineVersion are equal and no ordinary stale reason applies. Never widen it to version 1..11, never apply it to a ProductionPlan, and never extend the historical 2..5 exception. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
+All version 1..15 ProductionPlans are incompatible with version 16, Draft or active alike, while version 12, 13, 14 and 15 Candidates and BuildListEntries stay usable under 16 through the explicit build-result exception `16 -> [12, 13, 14, 15]` (the version 16 change is the Production Plan screen's Conflict what-if / actual repair routing to the Planner Alternative scenario only; version 1..11 stay incompatible; never a range check, never a Plan exception, never a read migration or an in-place version rewrite of a version 15 Plan). Historically, all version 1..14 ProductionPlans are incompatible with version 15, Draft or active alike, while version 12, 13 and 14 Candidates and BuildListEntries stay usable under 15 through the explicit build-result exception `15 -> [12, 13, 14]` (the version 15 change is the Planner's Normal Counter-advance fast-forward only; version 1..11 stay incompatible; never a range check, never a Plan exception, never a read migration or an in-place version rewrite of a version 14 Plan). Historically, all version 1..13 ProductionPlans are incompatible with version 14, Draft or active alike, while version 12 and 13 Candidates and BuildListEntries stay usable under 14 through the explicit build-result exception `14 -> [12, 13]` (the version 14 change is the Production Planner strategy only; version 1..11 stay incompatible; never a range check such as "12 or later", never a Plan exception, never a read migration or an in-place version rewrite of a version 13 Plan). Historically, all version 1..12 ProductionPlans are incompatible with version 13, and all version 1..11 Candidates and BuildListEntries are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. The only build-result exception at this boundary is the explicit `13 -> [12]` one: the version 13 change is ProductionPlan execution only (the Plan start effect), so a version 12 Candidate or BuildListEntry stays usable under 13 when gameVersion, masterDataVersion and rngEngineVersion are equal and no ordinary stale reason applies. Never widen it to version 1..11, never apply it to a ProductionPlan, and never extend the historical 2..5 exception. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
 
 The v3 -> v4 Dexie migration converts only `OwnedGogma.status === 'material'` to
 `'unclassified'`. `practical` and `ideal` keep their values, a Normal Artian
@@ -3510,7 +3523,7 @@ corrections supersede only that historical calculation-version statement: the
 current version and the version 2 / version 3 artifact compatibility rules are
 defined in the Calculation Context section above.
 
-Issue #136 / #101 (specification only, not implemented; `docs/PLANNER_SPEC.md`
+Issue #136 / #101 (implemented through Phase 5-B; `docs/PLANNER_SPEC.md`
 9.2.19, `docs/SEARCH_SPEC.md` 5.6.8, design record
 `docs/PLANNER_CONFLICT_REPAIR_DESIGN.md`) fixed the replacement of this path.
 PR #137 measured that widening `ConstrainedEnumerationBounds` cannot solve the
@@ -3535,11 +3548,11 @@ actual repair share one kernel and stop one step deep; the saved Plan's
 conflicts are regenerated from the final full run (never an old list minus the
 resolved one), with the decision expanded over the invalidated Entry's conflicts
 when no replacement exists; the repair chain history lives in
-`ProductionPlan.conflictRepairLineage` (Phase 5). The legacy B8 path stays in
-Production until Phase 5 switches what-if and repair together. That PR moves
+`ProductionPlan.conflictRepairLineage` (Phase 5-B). The legacy B8 path stayed in
+Production until Phase 5-B switched what-if and repair together. That PR moved
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION` to 16 (build-result exception
 `16 -> [12, 13, 14, 15]`), `DATABASE_SCHEMA_VERSION` to 10 and
-`ExportRoot.schemaVersion` to 13; nothing moved yet.
+`ExportRoot.schemaVersion` to 13.
 Phase 3-A (`docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md`) added only the
 benchmark-only Browser Worker harness (`benchmark.html`, `pa3_benchmark_` protocol) and the
 execution-only `PlannerAlternativeSearchExecutionOptions.instrumentation` observer (settled work,
@@ -3628,6 +3641,39 @@ Unrelated resolutions and expired lineage decisions never supersede anything, an
 every resolution. Nothing is persisted: `ProductionPlan.conflictRepairLineage`, Persistence, the Worker /
 Client, Production routing, migrations and versions are Phase 5-B, which switches the what-if and the repair together.
 No version moved (15 / 9 / 12).
+Phase 5-B (Production routing, Persistence, lineage persistence and migrations) is complete, so Phase 5 is complete;
+Phase 6 (the legacy path) is next. `ProductionPlan.conflictRepairLineage: PlannerConflictRepairLineage | null` is a
+persisted field: `validateProductionPlan()` / `validatePlannerConflictRepairLineage()` check its structure, literals, ID
+forms and `outcome === 'replaced'` iff a replacement ID, and never its Entry / Target IDs as current foreign keys; a
+missing field is no current body. Plan generation writes `null` (the ordinary Planner, the replan Preview / adoption and
+every scenario run), every later transition (start, Execution, save point and Undo snapshots, Undo) keeps it, and only the
+actual repair save sets it. Dexie v9 -> v10 and the pure `migrateExportRootV12ToV13()` fill `null` into every Plan body -
+the table / `root.productionPlans`, save point Plans, Undo `productionPlanBefore` and the Plan of an Undo
+`executionSavePointBefore` - through one `fillProductionPlanConflictRepairLineage()`, never inferring a decision; a schema 12
+body already carrying the field fails closed. The Worker gained `create_planner_alternative_repair` /
+`_result` (wire input `{ plannerInput, decision, lineage }`), the Production adapter
+`createProductionPlannerAlternativeRepair()` passes `defaultPlannerAlternativeSearchExtent` /
+`defaultPlannerAlternativeTrialBounds` inside the Worker exactly as the what-if adapter does, and the Client gained
+`createPlannerAlternativeRepair()` on the shared requestId / generation / cancel / dispose namespace. Persistence gained
+`PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`: the artifact is
+never converted into a `PlannerOrchestrationResult`; `checkPersistablePlannerAlternativeRepairShape()` refuses a missing
+Plan, an `incomplete` run, an `invalid_conflict_resolution` warning, differing `conflicts` / `plan.conflicts`, malformed
+replacement pairing, an invalid lineage and a last decision whose `replaced` records differ from the replacements, and returns
+the Plan with the artifact lineage set exactly; the save shares the B8 boundary (in-transaction re-read, `O` still the Target's
+one Entry or `planner_state_changed`, generated ID collision, cardinality, Plan references through
+`checkProductionPlanBuildListEntryReferences()`, CalculationContext, Draft replacement, Plan-breaking guard and the save point
+restore that drops the result) but never requires a generated Entry to be selected - an accepted but unselected `G` still
+replaces `O` - while the B8 save keeps `checkProductionPlanBuildListReferences()` unchanged. `ProductionPlanPage` routes
+「比較する」 to `createPlannerAlternativeComparison()` (fresh input with the restored resolutions and
+`conflictResolutionPlannerOptions(displayed Plan)`, no bounds, prior fixed / excluded from
+`derivePlannerConflictRepairLineageContext(displayedPlan.conflictRepairLineage, freshInput.buildListEntries)`) and
+「この候補を優先」 to `createPlannerAlternativeRepair()` (its own fresh input, the decision unmerged - the Domain merges it - and
+the displayed lineage), then the repair save through `usePlanBreakingChangeApproval()`; it never calls
+`createWhatIfComparison()` / `createConstrainedPlan()`, which stay on the Client with the B8 / B9 Worker kinds and defaults
+until Phase 6 (the replan Preview and the Build List keep their own paths). A `not_persistable` repair or a typed preparation
+failure saves nothing and shows its typed comparison; the minimal presentation (`ProductionPlanAlternativeComparison`,
+`presentProductionPlanAlternative.ts`) tells the five no-result statuses, `adoptedInScenario` true / false / null and the four
+scenario statuses apart, in text. The Phase 7 / Issue #122 redesign is not done.
 
 ---
 
@@ -5132,12 +5178,21 @@ Relevant test areas include:
   sets it to null for every Target, removes `relatedTargetWeaponIds` from every
   current OwnedWeapon, never infers a preference from the removed list, and
   rewrites no BuildCandidate, BuildListEntry, ProductionPlan, or ExecutionHistory
-- `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 15`, schema 1..14 ProductionPlans (Draft and
-  active) failing closed under 15 and a schema 13 / 14 active Plan never executed, rewritten
-  or stale-migrated, schema 12 / 13 / 14 Candidates / BuildListEntries staying usable under 15
-  through the explicit `15 -> [12, 13, 14]` exception only while the other CalculationContext
-  fields match, schema 1..11 build results incompatible, and a future schema never
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 16`, schema 1..15 ProductionPlans (Draft and
+  active) failing closed under 16 and a schema 13 / 14 / 15 active Plan never executed, rewritten
+  or stale-migrated, schema 12 / 13 / 14 / 15 Candidates / BuildListEntries staying usable under 16
+  through the explicit `16 -> [12, 13, 14, 15]` exception only while the other CalculationContext
+  fields match, schema 1..11 build results incompatible, the historical `15 -> [12, 13, 14]`,
+  `14 -> [12, 13]` and `13 -> [12]` exceptions unchanged, and a future schema never
   inheriting the exception
+- `ProductionPlan.conflictRepairLineage` validated structurally only (literals, IDs, the
+  `replaced` iff replacement rule, never a current foreign key), Dexie v9 -> v10 and Export
+  12 -> 13 filling `null` into every Plan body (table, save point, Undo snapshot, Undo
+  snapshot save point) without inferring a decision, a schema 12 body carrying the field
+  refused, the Planner Alternative repair save replacing `O` with an accepted but unselected
+  `G` atomically with the Draft and its artifact lineage while the B8 save still refuses an
+  unselected generated Entry, and `ProductionPlanPage` calling only
+  `createPlannerAlternativeComparison()` / `createPlannerAlternativeRepair()`
 - Predicted Normal creation units reading `[false]` for `count = 1`, `[true, false]` for 2
   and `[true, true, false]` for 3, a blind creation `[false]`, a Normal creation never
   shareable, Counter-advance vs Counter-advance and production target vs Counter-advance
@@ -5149,7 +5204,8 @@ Relevant test areas include:
 - Production Plan generation, the Planner Worker, B8, B9 and the replan Preview running the
   deterministic scheduler with no injection and no strategy flag, and `beamWidth` never
   changing a Production result
-- `DATABASE_SCHEMA_VERSION = 9`, `ExportRoot.schemaVersion = 12`, `AppSettings.schemaVersion = 2` (Dexie v8 -> v9
+- `DATABASE_SCHEMA_VERSION = 10`, `ExportRoot.schemaVersion = 13` (the repair lineage), historically
+  `DATABASE_SCHEMA_VERSION = 9`, `ExportRoot.schemaVersion = 12`, `AppSettings.schemaVersion = 2` (Dexie v8 -> v9
   and Export 11 -> 12 filling the recommended `350 / 500 / 1500` into an AppSettings v1 record and keeping its
   other fields), `RngState.schemaVersion = 2`,
   historically `CURRENT_CALCULATION_APP_SCHEMA_VERSION = 13` with schema 1..12 ProductionPlans and

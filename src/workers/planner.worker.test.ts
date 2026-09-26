@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   CreateConstrainedProductionPlanCalculation,
   CreateProductionPlanCalculation,
+  PlannerAlternativeRepairCalculationResult,
+  PlannerAlternativeRepairInput,
   PlannerAlternativeWhatIfCalculationResult,
   PlannerAlternativeWhatIfInput,
   PlannerDependencies,
@@ -28,6 +30,7 @@ import {
 import {
   attachPlannerWorker,
   type CreatePlannerAlternativeComparisonCalculation,
+  type CreatePlannerAlternativeRepairCalculation,
   type CreatePlannerWhatIfComparisonCalculation,
   type PlannerWorkerCalculations,
 } from './planner.worker'
@@ -151,6 +154,12 @@ function failingPlannerAlternativeComparisonCalculation(): CreatePlannerAlternat
   })
 }
 
+function failingPlannerAlternativeRepairCalculation(): CreatePlannerAlternativeRepairCalculation {
+  return vi.fn(async () => {
+    throw new Error('Planner Alternative repair calculation must not run for this request.')
+  })
+}
+
 function failingPreparationCalculation() {
   return vi.fn((): PlannerInteractionPreparationResult => {
     throw new Error('Interaction preparation must not run for this request.')
@@ -218,6 +227,7 @@ describe('Planner Worker contract', () => {
       prepareInteraction: failingPreparationCalculation(),
       createWhatIfComparison: failingWhatIfCalculation(),
       createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
     })
 
     listener({ data: request })
@@ -251,6 +261,7 @@ describe('Planner Worker contract', () => {
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -324,6 +335,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         createConstrainedPlan,
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
         prepareInteraction: failingPreparationCalculation(),
       },
       dependencies,
@@ -377,6 +389,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -433,6 +446,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -467,6 +481,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -510,6 +525,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -590,6 +606,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -661,6 +678,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -711,6 +729,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -779,6 +798,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -849,6 +869,7 @@ describe('Planner Worker constrained request routing (B8-D1)', () => {
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: failingWhatIfCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -907,6 +928,7 @@ describe('Planner Worker what-if request routing (B9-C)', () => {
         createConstrainedPlan,
         createWhatIfComparison,
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
         prepareInteraction: failingPreparationCalculation(),
       },
       dependencies,
@@ -937,6 +959,7 @@ describe('Planner Worker what-if request routing (B9-C)', () => {
         createPlan: failingOrdinaryCalculation(),
         createConstrainedPlan: failingConstrainedCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: async () => {
           throw new Error('what-if prediction failed')
@@ -970,6 +993,7 @@ describe('Planner Worker what-if request routing (B9-C)', () => {
         createPlan: failingOrdinaryCalculation(),
         createConstrainedPlan: failingConstrainedCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: async (_request, _runtime, executionOptions) => {
           expect(executionOptions?.shouldCancel?.()).toBe(false)
@@ -1006,6 +1030,7 @@ describe('Planner Worker what-if request routing (B9-C)', () => {
         createPlan: failingOrdinaryCalculation(),
         createConstrainedPlan: failingConstrainedCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: async () => {
           throw new PlannerWhatIfCancelledError('unexpected current signal')
@@ -1043,6 +1068,7 @@ describe('Planner Worker what-if request routing (B9-C)', () => {
         },
         createConstrainedPlan: failingConstrainedCalculation(),
         createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
         prepareInteraction: failingPreparationCalculation(),
         createWhatIfComparison: async () => fixtureWhatIfResult,
       },
@@ -1102,6 +1128,7 @@ describe('Planner Worker interaction preparation (B10-B1)', () => {
       createConstrainedPlan: failingConstrainedCalculation(),
       createWhatIfComparison: failingWhatIfCalculation(),
       createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction: vi.fn(() => result),
     }
     const controller = attach(calculations, dependencies, responses)
@@ -1135,6 +1162,7 @@ describe('Planner Worker interaction preparation (B10-B1)', () => {
       createConstrainedPlan: failingConstrainedCalculation(),
       createWhatIfComparison: failingWhatIfCalculation(),
       createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction: () => { throw new Error('preparation prediction failure') },
     }, dependencies, responses)
     await controller.handleMessage({
@@ -1160,6 +1188,7 @@ describe('Planner Worker interaction preparation (B10-B1)', () => {
         return pending.promise
       },
       createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction,
     }, dependencies, responses)
     const requestId = 'planner.interaction.shared'
@@ -1237,6 +1266,7 @@ describe('Planner Worker Planner Alternative what-if routing (Phase 4-B)', () =>
       createConstrainedPlan: failingConstrainedCalculation(),
       createWhatIfComparison,
       createPlannerAlternativeComparison,
+      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction: failingPreparationCalculation(),
     }, dependencies, responses)
 
@@ -1263,6 +1293,7 @@ describe('Planner Worker Planner Alternative what-if routing (Phase 4-B)', () =>
       createConstrainedPlan: failingConstrainedCalculation(),
       createWhatIfComparison: async () => fixtureWhatIfResult,
       createPlannerAlternativeComparison,
+      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction: failingPreparationCalculation(),
     }, dependencies, responses)
     await controller.handleMessage({
@@ -1282,6 +1313,7 @@ describe('Planner Worker Planner Alternative what-if routing (Phase 4-B)', () =>
       createConstrainedPlan: failingConstrainedCalculation(),
       createWhatIfComparison: failingWhatIfCalculation(),
       createPlannerAlternativeComparison: async () => { throw new Error('alternative prediction failed') },
+      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction: failingPreparationCalculation(),
     }, dependencies, responses)
     await controller.handleMessage({
@@ -1307,6 +1339,7 @@ describe('Planner Worker Planner Alternative what-if routing (Phase 4-B)', () =>
         cancelledDuringCalculation = executionOptions?.shouldCancel?.() ?? false
         throw new PlannerAlternativeCancelledError()
       },
+      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction: failingPreparationCalculation(),
     }, dependencies, responses)
     await controller.handleMessage({
@@ -1331,6 +1364,7 @@ describe('Planner Worker Planner Alternative what-if routing (Phase 4-B)', () =>
         return legacy.promise
       },
       createPlannerAlternativeComparison: async () => fixturePlannerAlternativeResult,
+      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction: failingPreparationCalculation(),
     }, dependencies, responses)
     const requestId = 'planner.alternative.generation'
@@ -1350,5 +1384,98 @@ describe('Planner Worker Planner Alternative what-if routing (Phase 4-B)', () =>
     expect(responses).toEqual([{
       type: 'create_planner_alternative_comparison_result', requestId, generation: 2, result: fixturePlannerAlternativeResult,
     }])
+  })
+})
+
+describe('Planner Worker Planner Alternative actual repair routing (Phase 5-B)', () => {
+  function repairInput(input = fixture().input): PlannerAlternativeRepairInput {
+    return {
+      plannerInput: input,
+      decision: { conflictKey: 'conflict.planner-alternative.repair', selectedBuildListEntryId: input.buildListEntries[0].id },
+      lineage: null,
+    }
+  }
+
+  const repairResult: PlannerAlternativeRepairCalculationResult = {
+    status: 'invalid_prior_fixed_entry',
+    buildListEntryId: createValidBuildListEntry().id,
+    detail: 'fixture repair result',
+  }
+
+  it('routes only the repair request kind, verbatim, with no extent or bounds on the wire', async () => {
+    const { input, dependencies } = fixture()
+    const wire = repairInput(input)
+    const request: PlannerWorkerProtocolRequest = {
+      type: 'create_planner_alternative_repair', requestId: 'planner.repair.routing', generation: 1, input: wire,
+    }
+    expect(structuredClone(request)).toEqual(request)
+    expect(Object.keys(request.input).sort()).toEqual(['decision', 'lineage', 'plannerInput'])
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const createConstrainedPlan = failingConstrainedCalculation()
+    const createPlannerAlternativeComparison = failingPlannerAlternativeComparisonCalculation()
+    const createPlannerAlternativeRepair: CreatePlannerAlternativeRepairCalculation = vi.fn(
+      async (received, runtime, executionOptions) => {
+        expect(received).toBe(wire)
+        expect(runtime).toBe(dependencies)
+        expect(Object.keys(executionOptions ?? {}).sort()).toEqual(['shouldCancel', 'yieldControl'])
+        return repairResult
+      },
+    )
+    const controller = attach({
+      createPlan: failingOrdinaryCalculation(),
+      createConstrainedPlan,
+      createWhatIfComparison: failingWhatIfCalculation(),
+      createPlannerAlternativeComparison,
+      createPlannerAlternativeRepair,
+      prepareInteraction: failingPreparationCalculation(),
+    }, dependencies, responses)
+
+    await controller.handleMessage(request)
+
+    expect(createConstrainedPlan).not.toHaveBeenCalled()
+    expect(createPlannerAlternativeComparison).not.toHaveBeenCalled()
+    expect(createPlannerAlternativeRepair).toHaveBeenCalledOnce()
+    expect(responses).toEqual([{
+      type: 'create_planner_alternative_repair_result', requestId: 'planner.repair.routing', generation: 1, result: repairResult,
+    }])
+    expect(structuredClone(responses[0])).toEqual(responses[0])
+  })
+
+  it('cancels by generation and posts nothing for the cancelled repair', async () => {
+    const { dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const controller = attach({
+      createPlan: failingOrdinaryCalculation(),
+      createConstrainedPlan: failingConstrainedCalculation(),
+      createWhatIfComparison: failingWhatIfCalculation(),
+      createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+      createPlannerAlternativeRepair: async (_input, _runtime, executionOptions) => {
+        await controller.handleMessage({ type: 'cancel', requestId: 'planner.repair.cancel', generation: 1 })
+        expect(executionOptions?.shouldCancel?.()).toBe(true)
+        throw new PlannerAlternativeCancelledError()
+      },
+      prepareInteraction: failingPreparationCalculation(),
+    }, dependencies, responses)
+    await controller.handleMessage({
+      type: 'create_planner_alternative_repair', requestId: 'planner.repair.cancel', generation: 1, input: repairInput(),
+    })
+    expect(responses).toEqual([])
+  })
+
+  it('reports an unexpected repair failure through the shared error response', async () => {
+    const { dependencies } = fixture()
+    const responses: PlannerWorkerProtocolResponse[] = []
+    const controller = attach({
+      createPlan: failingOrdinaryCalculation(),
+      createConstrainedPlan: failingConstrainedCalculation(),
+      createWhatIfComparison: failingWhatIfCalculation(),
+      createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
+      createPlannerAlternativeRepair: async () => { throw new Error('repair prediction failed') },
+      prepareInteraction: failingPreparationCalculation(),
+    }, dependencies, responses)
+    await controller.handleMessage({
+      type: 'create_planner_alternative_repair', requestId: 'planner.repair.error', generation: 1, input: repairInput(),
+    })
+    expect(responses).toEqual([{ type: 'error', requestId: 'planner.repair.error', generation: 1, message: 'repair prediction failed' }])
   })
 })

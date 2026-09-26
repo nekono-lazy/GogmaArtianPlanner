@@ -28,6 +28,7 @@ import {
   createValidRngState,
   createValidTargetWeapon,
 } from '../../test/fixtures/domainData'
+import { withoutConflictRepairLineage } from '../../test/fixtures/dataTransfer'
 
 const IDENTIFIED_AT = '2026-09-18T00:00:00.000Z'
 
@@ -50,7 +51,7 @@ function exportRoot(): ExportRoot {
   const plan = createValidProductionPlan()
   const history = createValidExecutionHistory()
   return {
-    schemaVersion: 12,
+    schemaVersion: 13,
     appName: 'mh-wilds-gogma-artian-planner',
     exportedAt: DOMAIN_FIXTURE_TIME,
     rngState: { ...createValidRngState(), lastIdentifiedAt: IDENTIFIED_AT },
@@ -86,7 +87,7 @@ function stripProvenance<T extends Record<string, unknown>>(body: T, rngState = 
 function schema9Root(): ExportRootV9 {
   const root = exportRoot()
   const history = root.executionHistory[0]
-  return {
+  return withoutConflictRepairLineage({
     ...root,
     schemaVersion: 9,
     settings: (() => {
@@ -112,7 +113,7 @@ function schema9Root(): ExportRootV9 {
         executionSavePointBefore: schema9SavePointBefore(),
       },
     }],
-  }
+  })
 }
 
 /** A save point inside an Undo snapshot as schema 9 stored it: no provenance anywhere. */
@@ -227,7 +228,7 @@ describe('Export schema 9 -> 10', () => {
     const root = exportRoot()
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(root)))
     expect(imported).toEqual({ ok: true, root })
-    expect(EXPORT_SCHEMA_VERSION).toBe(12)
+    expect(EXPORT_SCHEMA_VERSION).toBe(13)
   })
 
   it('fills null provenance and record schema 2 in the root, the save points and the Undo snapshots, and infers nothing', () => {
@@ -247,7 +248,12 @@ describe('Export schema 9 -> 10', () => {
     expect(nested?.rngState).toEqual({ ...createValidRngState(), lastIdentifiedAt: null })
     expect(nested?.rngState.schemaVersion).toBe(2)
     expect(nested?.normalCounters).toEqual([{ ...createValidNormalArtianCounter(), lastIdentifiedAt: null }])
-    expect(validateExecutionHistory(migrated.root.executionHistory[0]).issues).toEqual([])
+    // A schema 10 body carries no `conflictRepairLineage` yet: only the later
+    // schema 12 -> 13 step adds it, so that one issue belongs to the next step.
+    expect(
+      validateExecutionHistory(migrated.root.executionHistory[0]).issues
+        .filter(({ path }) => !path.endsWith('.conflictRepairLineage')),
+    ).toEqual([])
     // Every other entity is untouched.
     expect(migrated.root.productionPlans).toEqual(legacy.productionPlans)
     expect(migrated.root.buildListEntries).toEqual(legacy.buildListEntries)
@@ -255,7 +261,7 @@ describe('Export schema 9 -> 10', () => {
     expect(legacy.schemaVersion).toBe(9)
     // The whole import chain accepts the schema 9 root.
     const imported = prepareExportRootForImport(JSON.parse(JSON.stringify(legacy)))
-    expect(imported.ok && imported.root.schemaVersion).toBe(12)
+    expect(imported.ok && imported.root.schemaVersion).toBe(13)
     expect(imported.ok && imported.root.rngState?.lastIdentifiedAt).toBeNull()
   })
 

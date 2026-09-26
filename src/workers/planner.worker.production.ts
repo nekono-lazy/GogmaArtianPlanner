@@ -1,4 +1,5 @@
 import {
+  createPlannerAlternativeRepair,
   createPlannerAlternativeWhatIfComparison,
   createProductionPlan,
   createProductionPlanWithConstrainedSearch,
@@ -19,6 +20,7 @@ import {
 } from '../domain/search'
 import type {
   CreatePlannerAlternativeComparisonCalculation,
+  CreatePlannerAlternativeRepairCalculation,
   CreatePlannerWhatIfComparisonCalculation,
   PlannerWorkerCalculations,
   PreparePlannerInteractionCalculation,
@@ -80,12 +82,32 @@ export const createProductionPlannerWhatIfComparison: CreatePlannerWhatIfCompari
  * authority rather than restated. Scenario composition, Route summaries and
  * the typed result all stay in the Domain.
  *
- * No Production UI calls it yet: the Production what-if path is still the
- * legacy `createProductionPlannerWhatIfComparison()` until Phase 5.
+ * Since Phase 5-B it is the Production Plan screen's 「比較する」; the legacy
+ * `createProductionPlannerWhatIfComparison()` stays wired until Phase 6.
  */
 export const createProductionPlannerAlternativeComparison: CreatePlannerAlternativeComparisonCalculation =
   (input, dependencies, executionOptions) =>
     createPlannerAlternativeWhatIfComparison(
+      {
+        ...input,
+        extent: { ...defaultPlannerAlternativeSearchExtent },
+        bounds: { ...defaultPlannerAlternativeTrialBounds },
+      },
+      dependencies,
+      { executionOptions },
+    )
+
+/**
+ * The Production Planner Alternative actual repair (Phase 5-B,
+ * `docs/PLANNER_SPEC.md` 9.2.19.8 / 9.2.19.12): 「この候補を優先」. Exactly the
+ * what-if's Production caller contract - the Phase 3-C extent and trial
+ * bounds, each imported from its Domain authority and passed explicitly - so a
+ * preview and the repair it previews run the same scenario semantics. Saving
+ * the artifact stays the Application / Persistence boundary.
+ */
+export const createProductionPlannerAlternativeRepair: CreatePlannerAlternativeRepairCalculation =
+  (input, dependencies, executionOptions) =>
+    createPlannerAlternativeRepair(
       {
         ...input,
         extent: { ...defaultPlannerAlternativeSearchExtent },
@@ -137,5 +159,6 @@ export function createProductionPlannerWorkerCalculations(): PlannerWorkerCalcul
     createConstrainedPlan: createProductionConstrainedPlan,
     createWhatIfComparison: createProductionPlannerWhatIfComparison,
     createPlannerAlternativeComparison: createProductionPlannerAlternativeComparison,
+    createPlannerAlternativeRepair: createProductionPlannerAlternativeRepair,
   }
 }
