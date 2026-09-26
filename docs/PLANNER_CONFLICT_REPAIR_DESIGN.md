@@ -420,16 +420,15 @@ Master dataVersion                      4
    Build Listから消えた後に通常Plannerがstall dropしたときの表示（Phase 5または#122）。Domain上は既存の
    stall drop / `rejectedBuildListEntries` で扱い、新しいstale理由を作らない
 6. repair結果とlineageの保存を既存 `savePlannerOrchestrationResult()` へ載せる具体的なresult型（Phase 5）
-7. **Phase 4-Bで実装した読み方（設計レビューで確認する事項）**。正式仕様の意味は変えていないが、実装上の読み方を記録する。
-   - `unplannedTargetWeaponIds` の「このPlanで完成しない」は、final scenario Planのどの `PlanStep.executionEffects.targetCompletions`
-     にも現れないplanning Target（`PlannerInitialContext.planningTargetIds`）とした。Production Plan画面の完成予定数
-     （`createProductionPlanSummary().plannedCompletionTargetCount`）と同じauthorityである。Plan開始前から理想品を所持して
-     Planner上は完了扱いになるTargetがStepを持たない場合も「完成しない」側に入る
-   - 決定の展開（PLANNER_SPEC 9.2.19.9）は、`checkpointParticipants` が空でないConflict（および判定が `undefined` のConflict）
-     には適用しない。選択済みcheckpointのConflictは勝者選択で解決できない（9.5）ため、展開すると無効なresolutionになる。
-     そのConflictは未解決のまま `remainingConflicts` / `introducedConflicts` に残る
-   - found replacementが0件のscenario run（9.2.19.8.1のケースA）のpreflightは、fixed constraintを作ったのと同じ入力に対する
-     再対応付けなので失敗しない前提とし、失敗した場合は結果を推測せずinvariant errorとしてthrowする
+7. **Phase 4-Bで確定した実装上の読み方**（**確定済み**。normativeな記述は [PLANNER_SPEC.md](./PLANNER_SPEC.md) にあり、
+   本項はその経緯の記録である。矛盾した場合は正式仕様が優先する）。
+   - `unplannedTargetWeaponIds`: final scenario Planのどの `PlanStep.executionEffects.targetCompletions` にも現れない
+     planning Target（`PlannerInitialContext.planningTargetIds`）。Production Plan画面の完成予定数と同じauthority
+     （正式仕様: PLANNER_SPEC 9.2.19.13「`unplannedTargetWeaponIds` の意味」）
+   - 決定の展開はcheckpoint Conflict（`checkpointParticipants` が空でない、または `undefined`）へ適用しない。9.5.1への例外を
+     作らず、そのConflictは未解決Conflictとして分類に残る（正式仕様: PLANNER_SPEC 9.2.19.9 / 9.2.19.13）
+   - found replacementが0件のscenario run（ケースA）のpreflight失敗は、typed outcomeを推測せずinvariant violationとして
+     throwする（正式仕様: PLANNER_SPEC 9.2.19.8.1）
 
 ---
 

@@ -11,6 +11,8 @@ import {
   candidateStableKey,
   CandidateSearchError,
   normalizePlannerAlternativeExcludedRouteKeys,
+  PlannerAlternativeSearchError,
+  validatePlannerAlternativeSearchExtent,
   visitPlannerAlternativeCandidates,
 } from '../../search'
 import type {
@@ -228,6 +230,27 @@ export type PlannerAlternativeKernelPreparationResult =
   | { status: 'ready'; prepared: PreparedPlannerAlternativeKernel }
   | PlannerAlternativeKernelPreparationFailure
 
+/**
+ * The request-entry extent check (`docs/PLANNER_SPEC.md` 9.2.19.12): the extent
+ * is caller-required, so it is refused before any preparation - not only when
+ * a Target's search reaches the Search Domain, which a checkpoint-blocked
+ * Target or a spent budget never does. The rule itself is the Search Domain's
+ * `validatePlannerAlternativeSearchExtent()`; no value is substituted,
+ * completed or clamped.
+ */
+function assertPlannerAlternativeRequestExtent(extent: PlannerAlternativeSearchExtent): void {
+  if (typeof extent !== 'object' || extent === null) {
+    throw new PlannerAlternativeSearchError('invalid_input', 'extent: a PlannerAlternativeSearchExtent is required.')
+  }
+  const issues = validatePlannerAlternativeSearchExtent(extent)
+  if (issues.length > 0) {
+    throw new PlannerAlternativeSearchError(
+      'invalid_input',
+      issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
+    )
+  }
+}
+
 function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
@@ -254,13 +277,15 @@ type TrialOutcome =
  * scenario-only `createPlannerConflictWorks()`), so the fixed side is only ever
  * an explicit choice - never a recommendation, a priority or a score.
  *
- * Invalid bounds throw; every other failure is typed.
+ * Invalid bounds or extent throw at this entry, whether or not any Target is
+ * later searched; every other failure is typed.
  */
 export function preparePlannerAlternativeKernel(
   request: PlannerAlternativeKernelRequest,
   dependencies: PlannerDependencies,
 ): PlannerAlternativeKernelPreparationResult {
   assertPlannerAlternativeTrialBounds(request.bounds)
+  assertPlannerAlternativeRequestExtent(request.extent)
   const prepared = preparePlannerWhatIfScenario(
     {
       plannerInput: request.plannerInput,
@@ -325,6 +350,7 @@ export async function runPreparedPlannerAlternativeKernel(
   options: PlannerAlternativeKernelOptions = {},
 ): Promise<PlannerAlternativeKernelCompletedResult> {
   assertPlannerAlternativeTrialBounds(request.bounds)
+  assertPlannerAlternativeRequestExtent(request.extent)
   const { scenario, explicitDecisionBuildListEntryIds } = preparedKernel
   const { entriesById } = scenario.initialContext
   const budget = options.fullRunBudget ?? createPlannerAlternativeFullRunBudget(request.bounds)

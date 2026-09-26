@@ -5,6 +5,7 @@ import {
   practicalBonuses,
 } from '../../../test/fixtures/constrainedEnumeration'
 import {
+  checkpointMixedEntry,
   ORCHESTRATION_SOURCE_A,
   ORCHESTRATION_SOURCE_B,
   orchestrationEntry,
@@ -24,7 +25,7 @@ import type {
   RestorationBonusSet,
   TargetWeapon,
 } from '../../models/publicTypes'
-import { candidateStableKey } from '../../search'
+import { candidateStableKey, PlannerAlternativeSearchError } from '../../search'
 import { preparePlannerInitialContext } from '../plannerInitialContext'
 import {
   runPlannerAlternativeKernel,
@@ -342,6 +343,31 @@ describe('Planner Alternative what-if: fail closed', () => {
       built.dependencies,
     )
     expect(prior).toMatchObject({ status: 'invalid_prior_fixed_entry' })
+  })
+
+  it('refuses an invalid extent even when the only Target is checkpoint-blocked and never searched', async () => {
+    const a = ownSkillTarget(TARGET_A, SOURCE_A_SKILL, 5)
+    const b = skillConstrainedTarget(TARGET_B, { priority: 1 })
+    const sourceB = orchestrationSource(ORCHESTRATION_SOURCE_B, { restorationBonuses: practicalBonuses(), seriesSkillId: SOURCE_B_SKILL })
+    const blockedParts = (): Parts => ({
+      targets: [a, b],
+      ownedWeapons: [orchestrationSource(ORCHESTRATION_SOURCE_A, { seriesSkillId: SOURCE_A_SKILL }), sourceB],
+      entries: [
+        orchestrationEntry(ENTRY_A, a, resetRoute(ORCHESTRATION_SOURCE_A), { finalBonuses: idealBonuses(), seriesSkillId: SOURCE_A_SKILL }),
+        checkpointMixedEntry(ENTRY_B, b, ORCHESTRATION_SOURCE_B, sourceB, { select: true }),
+      ],
+    })
+    const valid = await compare(scenario(blockedParts()))
+    expect(valid.alternatives[0].outcome).toEqual({ status: 'blocked_by_selected_checkpoint' })
+
+    const built = scenario(blockedParts())
+    for (const extent of [
+      { maxNormalAdvance: 1, maxGogmaAdvance: 5 } as never,
+      { maxNormalAdvance: 0, maxGogmaAdvance: 5, maxSkillAdvance: 2 },
+    ]) {
+      await expect(createPlannerAlternativeWhatIfComparison(request(built, { extent }), built.dependencies))
+        .rejects.toBeInstanceOf(PlannerAlternativeSearchError)
+    }
   })
 
   it('takes no default for missing or partial extent and bounds', async () => {

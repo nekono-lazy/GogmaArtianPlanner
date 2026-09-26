@@ -26,9 +26,10 @@ import type {
   RouteOperation,
   TargetWeapon,
 } from '../../models/publicTypes'
-import { candidateStableKey } from '../../search'
+import { candidateStableKey, PlannerAlternativeSearchError } from '../../search'
 import { preparePlannerInitialContext } from '../plannerInitialContext'
 import {
+  preparePlannerAlternativeKernel,
   runPlannerAlternativeKernel,
   type PlannerAlternativeKernelRequest,
   type PlannerAlternativeKernelResult,
@@ -418,6 +419,50 @@ describe('Planner Alternative kernel: fail closed and determinism', () => {
     expect(b0.outcome).toEqual({ status: 'blocked_by_selected_checkpoint' })
     expect(b0.search).toBeNull()
     expect(b0.reservation).toBeNull()
+  })
+
+  it('validates the extent at the request entry even when no Target ever reaches the Search Domain', async () => {
+    const a = targetA()
+    const b = skillConstrainedTarget(TARGET_B, { priority: 1 })
+    const sourceB = orchestrationSource(ORCHESTRATION_SOURCE_B, { restorationBonuses: practicalBonuses(), seriesSkillId: SOURCE_B_SKILL })
+    const blockedParts = (): Parts => ({
+      targets: [a, b],
+      ownedWeapons: [orchestrationSource(ORCHESTRATION_SOURCE_A, { seriesSkillId: SOURCE_A_SKILL }), sourceB],
+      entries: [
+        orchestrationEntry(ENTRY_A, a, resetRoute(ORCHESTRATION_SOURCE_A), { finalBonuses: idealBonuses(), seriesSkillId: SOURCE_A_SKILL }),
+        checkpointMixedEntry(ENTRY_B, b, ORCHESTRATION_SOURCE_B, sourceB, { select: true }),
+      ],
+    })
+    // The valid extent: the only Target is checkpoint-blocked, so nothing is searched.
+    const valid = scenario(blockedParts())
+    const search = vi.spyOn(valid.engine, 'predictGogmaBonus')
+    const blocked = targetOf(await runPlannerAlternativeKernel(request(valid), valid.dependencies), TARGET_B)
+    expect(blocked.outcome).toEqual({ status: 'blocked_by_selected_checkpoint' })
+    expect(blocked.search).toBeNull()
+    expect(search).not.toHaveBeenCalled()
+
+    const extent = { maxNormalAdvance: 1, maxGogmaAdvance: 5, maxSkillAdvance: 2 }
+    for (const [invalid, path] of [
+      [{ maxGogmaAdvance: 5, maxSkillAdvance: 2 }, 'extent.maxNormalAdvance'],
+      [{ maxNormalAdvance: 1, maxSkillAdvance: 2 }, 'extent.maxGogmaAdvance'],
+      [{ maxNormalAdvance: 1, maxGogmaAdvance: 5 }, 'extent.maxSkillAdvance'],
+      [{ ...extent, maxNormalAdvance: 0 }, 'extent.maxNormalAdvance'],
+      [{ ...extent, maxGogmaAdvance: -1 }, 'extent.maxGogmaAdvance'],
+      [{ ...extent, maxSkillAdvance: 1.5 }, 'extent.maxSkillAdvance'],
+      [undefined, 'extent'],
+    ] as const) {
+      const built = scenario(blockedParts())
+      const error = await runPlannerAlternativeKernel(
+        request(built, { extent: invalid as never }),
+        built.dependencies,
+      ).then(() => null, (caught: unknown) => caught)
+      expect(error).toBeInstanceOf(PlannerAlternativeSearchError)
+      expect(error).toMatchObject({ code: 'invalid_input' })
+      expect((error as Error).message).toContain(path)
+      // Refused before any preparation, not repaired or defaulted.
+      expect(() => preparePlannerAlternativeKernel(request(built, { extent: invalid as never }), built.dependencies))
+        .toThrow(PlannerAlternativeSearchError)
+    }
   })
 
   it('refuses a prior fixed Entry that is not a valid Entry of the input', async () => {

@@ -4168,7 +4168,7 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 
 ### 9.2.19 Planner Alternative Searchと1段の競合repair（Issue #136 / #101）
 
-実装状態: **Phase 3まで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
+実装状態: **Phase 4-Bまで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
 9.2.19.16のPhaseに従って段階的に行う。Phase 1（Phase 1-A: modern Search基盤のcomposition seam、Phase 1-B: Search Domain
 APIと空reservationでの基本consumer経路、Phase 1-C: 空reservationでの探索完全性。[SEARCH_SPEC.md](./SEARCH_SPEC.md)
 5.6.8の実装状態を参照）は実装済みである。Phase 2も実装済みである: fixed Route集合からのreservation導出
@@ -4616,6 +4616,12 @@ final scenario resultの確定。
   accepted replacement集合はB2 + C2のままであり、E2はB2 + C2へ追加する形で評価する
 - ケースDで最後のE2がrejectになった場合は、current scenario resultであるB2 + C2のadoption runの結果が最終accepted
   replacement集合を評価済みなので、それをfinal scenario resultとして再利用する
+- ケースAのscenario runの前のpreflight（今回の決定をmergeした入力にreplacementなしで、全explicit resolutionを
+  再対応付けする）が失敗した場合は、`no_plan`、`stopped_by_...` などのtyped outcomeを推測して返さず、内部invariant
+  violationとしてthrowしてfail closedする。ケースAのpreflightは、すでに固定制約（9.2.3.1）を構築できた同一scenario
+  入力に対する再対応付けであり、通常のユーザー入力で起こるscenario outcomeではないためである。これは
+  adoption runのpreflight・再対応付けの失敗（今回のreplacementのrejectとして扱い、budgetを消費しない）とは別であり、
+  そちらの扱いは変えない
 - 途中でrequest-globalな `maxPlannerReruns`（9.2.19.12）が尽き、必要なadoption run（またはケースAのscenario run）を
   開始できない場合、scenario compositionはそこで止まる。`scenario` は `stopped_by_planner_rerun_bound` とし、
   scenario Plan・`scenarioOperationCount`・Conflict分類を返さない。そのとき採否を評価できなかったfound replacementの
@@ -4642,6 +4648,12 @@ Planner route commitment
   participant集合が「今回のfixed Entry」と「今回の決定で無効化したEntry」だけからなるものすべてに、fixed Entryを
   選択するresolutionを適用する。それらはpendingのユーザー判断ではなく「fixed側を選択済み」として保存する
   （`selectedBuildListEntryId = fixed Entry`）。他のEntryを含むConflictには展開しない
+- 決定の展開は、既存のcheckpoint契約（9.5.1）の範囲でだけ行う。`checkpointParticipants` が1件以上ある
+  Conflict（選択済みcheckpointが関係するConflict）は汎用の `PlannerConflictResolution` で解決できないので、
+  participant集合が上記の条件を満たしても展開しない。`checkpointParticipants === undefined`（legacy等でcheckpoint
+  判定のauthorityが無いConflict）も、「checkpointが関係しない」と推測せず展開しない（fail closed）。展開しなかった
+  そのConflictは `selectedBuildListEntryId = null` の未解決Conflictのまま残り、9.2.19.13の分類で
+  `introducedConflicts` / `remainingConflicts` のどちらかに入る。9.5.1への新しい例外は作らない
 - 展開したresolutionは次回以降、9.2.4.14の「表示中Planのexplicit resolution復元」でそのまま復元される
 - 新たに発生したConflict（replacementと非固定Entryの競合を含む）は `selectedBuildListEntryId = null` の
   通常のConflictであり、次の通常のユーザー判断になる
@@ -4899,9 +4911,25 @@ interface PlannerAlternativeRouteSummary {
   `no_plan` と `stopped_by_planner_rerun_bound` も値を持たない
 - actual repair（9.2.19.8）でも同じ `scenario` を返す。そのときのscenario Planは保存するPlanそのものである
 
+`unplannedTargetWeaponIds` の意味（固定する）。
+
+- 対象集合は、scenarioの準備（今回の決定をmergeした入力）の `PlannerInitialContext.planningTargetIds`（4.1のplanning
+  Target）である。planning Targetでない有効Targetは含めない
+- final scenario Planの `steps[].executionEffects.targetCompletions` のどこにも `targetWeaponId` が現れないplanning
+  Targetを、このPlanで完成しないTarget（unplanned）とする。完成するかどうかのauthorityは、Execution時にTargetを
+  `completed` にするStepのtarget completion effect（16.3 / 16.13）だけである
+- Production Plan画面の完成予定Target数（`executionEffects.targetCompletions` の集計）と同じauthorityを使う。
+  `selectedBuildListEntryIds` の件数、Target件数、`termination.completedTargetCount`、Plannerの探索状態上の
+  `hasIdeal` などから推測しない
+- 操作0のEntry（`existing_gogma_current`）はPlanの `confirm_owned_ideal` Stepがtarget completion effectを持つので、
+  このPlanで完成するTargetである。Plan開始前から所持武器が理想条件を満たしていても、そのTargetを完成させるStepが
+  final scenario Planに無ければ、このPlanはそのTargetを `completed` にしない（Target完了は16.13の完成効果、または
+  目標武器画面の直接完了で行う）ので、unplannedに入る
+
 `introducedConflicts` / `remainingConflicts` の分類（固定する）。
 
 - final scenario resultの最新Conflict（9.2.19.9の再生成・決定の展開を適用したもの）だけから分類する。
+  9.2.19.9でcheckpoint契約（9.5.1）により展開しなかったConflictも、未解決Conflictとしてこの分類に入る。
   旧Planや表示中PlanのConflict IDとの差分で判定しない（replacementでparticipant集合が変わると同じ物理的競合でも
   `PlanConflict.id` が変わるため）
 - `introducedConflicts` は、最終accepted replacement集合のgenerated Entryをparticipantに含む未解決Conflictである
