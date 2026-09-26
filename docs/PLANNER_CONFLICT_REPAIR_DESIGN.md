@@ -12,9 +12,9 @@ runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #1
                          held / blocked traversal、排他OwnedWeapon、held-aware到達量、新kernelのmaterializer、full Planner trialと
                          found判定（route commitmentの暫定帰結evidenceによる9.2.19.6の完全判定）、Issue #101のDomain
                          acceptance）。探索のlazy性はoperation cost層単位（same-cost closure。SEARCH_SPEC 5.6.8）で
-                         確定しており、同じcost層のheld位置・state数による実コストはPhase 3で測る。Phase 3以降
-                         （benchmarkとProduction default、what-if /
-                         repair接続、lineage永続化、Production routing切替）は未実装
+                         確定している。Phase 3（benchmark harness #144、real Browser Worker測定 #145、Production default確定
+                         Phase 3-C: extent 4 / 235 / 4、試行上限 2 / 8。PLANNER_SPEC 9.2.19.12）も完了した。Phase 4以降
+                         （what-if / repair接続、lineage永続化、Production routing切替）は未実装
 Production behavior:     変更していない（画面経路はlegacyのB8のまま）
 schema / version:        変更していない（10章）
 ```
@@ -385,7 +385,9 @@ Master dataVersion                      4
 3. 軸外pairのlazy評価で追加の安全上限が必要か（Phase 3の実測で判断。不要ならextentと試行上限だけにする）。同じcost層の
    held位置・state数によるtime-to-firstのコストも同じくPhase 3で測る。探索のlazy性がoperation cost層単位（same-cost closure）
    であること自体はPhase 2で確定しており（SEARCH_SPEC 5.6.8）、6キー順序と `candidateStableKey` は変えない
-4. extent / 試行上限のProduction default（Phase 3）
+4. extent / 試行上限のProduction default（Phase 3）。Phase 3-Cで確定済み: `defaultPlannerAlternativeSearchExtent = 4 / 235 / 4`、
+   `defaultPlannerAlternativeTrialBounds = 2 / 8`（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8、[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+   9.2.19.12）。Phase 3-Cでは軸外pair専用の追加安全上限を設けていない
 5. 外部進行に依存するgenerated Entry（fixed Routeが先に進めることを前提にしたRoute）を、fixed Entryが
    Build Listから消えた後に通常Plannerがstall dropしたときの表示（Phase 5または#122）。Domain上は既存の
    stall drop / `rejectedBuildListEntries` で扱い、新しいstale理由を作らない

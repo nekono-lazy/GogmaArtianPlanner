@@ -35,7 +35,9 @@ import type {
  * Alternative Search's own authority: they are never read from
  * `CandidateSearchSettings`, `AppSettings.candidateSearchDefaults`,
  * `recommendedCandidateSearchDefaults` or `defaultConstrainedEnumerationBounds`.
- * Every value is caller-supplied; there is no Production default yet (Phase 3).
+ * Every value is caller-supplied: the Domain never substitutes, clamps or
+ * completes one. `defaultPlannerAlternativeSearchExtent` is the value a
+ * Production caller passes explicitly (Phase 3-C).
  */
 export interface PlannerAlternativeSearchExtent {
   /**
@@ -53,6 +55,32 @@ export interface PlannerAlternativeSearchExtent {
    * the ordinary maximum Reset Skills count.
    */
   maxSkillAdvance: number
+}
+
+/**
+ * The Production default extent, decided in Phase 3-C from the Phase 3-B real
+ * Browser Worker measurements (`docs/SEARCH_SPEC.md` 5.6.8,
+ * `docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md` 12 / 13).
+ *
+ * - Normal 4: a fixed Route's production target can hold and block the Normal
+ *   origin, so an extent of 1 cannot move the losing Target's own production
+ *   target to a later position. 4 is the smallest measured value above 1
+ *   (Issue #101: about 2.8 s / 1.2 GB) and stays far from the measured
+ *   16 (about 11 s / 4 GB) and 40 (V8 out of memory). It is a design choice
+ *   for short held / blocked chains, not a guarantee for an arbitrarily long one.
+ * - Gogma 235: the measured Issue #101 threshold (220 finds no Candidate; 235
+ *   finds the Fire Alternative; 240 / 300 / 350 add no known semantic benefit).
+ * - Skill 4: an existing Gogma's Reset Skills or a conversion must be able to
+ *   move past a held and blocked Skill origin; 4 leaves room for a short
+ *   held / blocked chain. No semantic benefit of a larger value was observed.
+ *
+ * Callers explicitly pass it (for example as a spread copy); it is never an
+ * implicit Domain fallback, a field-completion target or a clamp.
+ */
+export const defaultPlannerAlternativeSearchExtent: PlannerAlternativeSearchExtent = {
+  maxNormalAdvance: 4,
+  maxGogmaAdvance: 235,
+  maxSkillAdvance: 4,
 }
 
 /** The held and blocked positions of one Counter stream (`blocked ⊆ held`). */

@@ -96,7 +96,7 @@ function positions(operations: readonly RouteOperation[], stream: 'skill' | 'gog
 }
 
 describe('Planner Alternative benchmark-only grids', () => {
-  it('keeps the Issue #101 Gogma threshold 235 and states no Production default', () => {
+  it('keeps the Issue #101 Gogma threshold 235 and the historical Phase 3-B grids', () => {
     expect(BENCHMARK_ONLY_EXTENT_GRID.gogma).toContain(235)
     expect(BENCHMARK_ONLY_EXTENT_GRID.normal).toEqual([1, 4, 16, 40, 80])
     expect(BENCHMARK_ONLY_EXTENT_GRID.skill).toEqual([1, 2, 4, 8, 16, 32, 64])

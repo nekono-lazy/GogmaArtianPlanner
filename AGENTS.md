@@ -3553,7 +3553,18 @@ measurement (this does not prove that one trial suffices).
 Phase 3-B measurement is completed: the real Browser Worker records (Chrome 153, build `527d2af`)
 are in `docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md` 12, with the raw evidence kept
 locally as the ignored `PLANNER_ALTERNATIVE_PHASE3B_BROWSER_RAW_RESULTS.json`. It changed no code,
-semantics or version and decided no default; Phase 3-C (the Production defaults) is pending.
+semantics or version and decided no default.
+Phase 3-C is completed (so Phase 3 is complete): from the Phase 3-B evidence it fixed
+`defaultPlannerAlternativeSearchExtent = { maxNormalAdvance: 4, maxGogmaAdvance: 235, maxSkillAdvance: 4 }`
+in the Search Domain (`plannerAlternativeTypes.ts`) and
+`defaultPlannerAlternativeTrialBounds = { maxCandidateTrialsPerTarget: 2, maxPlannerReruns: 8 }` in
+the Planner Domain (`plannerAlternativeTrial.ts`); `docs/SEARCH_SPEC.md` 5.6.8,
+`docs/PLANNER_SPEC.md` 9.2.19.12 and the benchmark record 13 hold the rationale (Gogma 235 is the
+measured Issue #101 threshold; Normal 4 / Skill 4 / trials 2 / reruns 8 are design judgements, not
+measured thresholds). The Domain APIs keep extent and bounds caller-required - no fallback, no
+partial completion, no clamp - and the benchmark keeps its `BENCHMARK_ONLY_*` conditions. The
+defaults are wired to no Worker, Client, UI or repair yet: Phase 4 is pending, Production routing has
+not switched, and no version moved.
 
 ---
 

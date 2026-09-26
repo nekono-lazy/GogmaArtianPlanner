@@ -1534,9 +1534,39 @@ held位置があるstreamではown operation数が位置の深さと一致しな
 
 `PlannerAlternativeSearchExtent` の3値は3.1の `maxNormalAdvance` / `maxGogmaAdvance` / `maxSkillAdvance` と
 同じ意味（originからのCounter位置window）を持つ（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.12）。held位置も
-windowの位置として数える。Production default値はruntime実装後のBrowser Worker benchmarkで決め、
-`CandidateSearchSettings`、`AppSettings.candidateSearchDefaults`、`defaultConstrainedEnumerationBounds` を
-authorityにしない。
+windowの位置として数える。`CandidateSearchSettings`、`AppSettings.candidateSearchDefaults`、
+`defaultConstrainedEnumerationBounds` をauthorityにしない。
+
+Production default値はPhase 3-Cで、Phase 3-Bの実Browser Worker測定
+（[PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md](./PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md) 12 / 13）
+から次のとおり確定した。定義場所はSearch Domain（`src/domain/search/alternative/plannerAlternativeTypes.ts`）である。
+
+```ts
+export const defaultPlannerAlternativeSearchExtent: PlannerAlternativeSearchExtent = {
+  maxNormalAdvance: 4,
+  maxGogmaAdvance: 235,
+  maxSkillAdvance: 4,
+}
+```
+
+- **Normal 4**: fixed Routeのproduction targetがNormal originをheld + blockedにすると、losing Targetは自分の
+  production targetをorigin位置へ置けず、後方位置（origin + 1以降）へ逃がす必要がある（本節のblocked位置規則）。
+  1ではこの基本的なrepairを探索できない場合がある。4はPhase 3-Bで測定した1より広い最小のgrid値（Issue #101 /
+  Gogma 235 / Skill 1で worker 約2.8秒、renderer private memory 約1.2 GB）であり、測定済みの16（約11秒 / 約4 GB）と
+  40（V8 OOM / Browser crash）から十分離れている。Normal extentはsame-cost closureのRoute base数を直接増やすため
+  広げ過ぎない。短いheld / blocked連鎖への余裕として採用した設計判断であり、任意の長さのblocked Normal列を保証しない
+- **Gogma 235**: Issue #101 real fixtureの実測境界。220ではCandidateなし（stopped by extent）、235でFire
+  Alternative（Gogma origin 55、Reset 56..289、`estimatedGogmaAdvance = 235`）が見つかる。240 / 300 / 350では最初の
+  Candidateが235と同一で、既知のsemantic benefitがなく、Idealが無い入力ではextent拡大分だけcostが増える
+- **Skill 4**: 既存巨戟のReset Skillsや巨戟化は、fixed RouteがSkill originをheld + blockedにしたとき次のSkill位置へ
+  operationを置く必要がある（held traversal）。1ではorigin位置だけのwindowになり狭い場合がある。4はblocked originの
+  次位置と短いheld / blocked連鎖への余裕を持たせる小さい値である。Phase 3-BのIssue #101ではSkill 1..64で最初の
+  Candidate / costに差がなく、より大きい値のsemantic benefitは観測していないため広げない
+
+Domain API（`visitPlannerAlternativeCandidates()` の `PlannerAlternativeSearchInput.extent`）はcaller必須指定の
+ままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの定数を明示的に渡す
+（Phase 4のrouting接続で行う）。benchmarkの `BENCHMARK_ONLY_*` gridとsanity値はPhase 3-Bのhistorical
+measurement conditionとして維持し、このdefaultを読まない。
 
 #### 出力とidentity
 
@@ -2738,6 +2768,9 @@ zero Ideal lane不変、不正reservationの拒否、#104非適用（offset 0が
 順序が6キー（最後の `candidateStableKey`）で決まりCounter位置順と一致しないことのcharacterization testと、Issue #101
 fixtureのacceptance（Planner側、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 15.9.2）を実装済みである。Phase 3-Aで、execution-only instrumentationの有無で `candidateStableKey` 列・summary・
 prediction呼び出し回数が変わらないこと、Production callerがinstrumentationを渡さないことのtestを追加した。
+Phase 3-Cで、`defaultPlannerAlternativeSearchExtent` が 4 / 235 / 4 でありextent validationを通ること、extentの
+欠損・一部欠損をdefaultで補完せず拒否すること、defaultをSearch / Planner Domain以外（benchmarkを含む）で定義・
+参照しないことのtestを追加した。
 
 - `searchCandidates()` とは別のAPIであり、Conflict DTO、`PlannerConflictResolution`、Planner試行上限を受け取らない
 - 空reservation・空除外集合で、extentを同じ3値の `CandidateSearchSettings`・route filterなしの通常Candidate

@@ -12,10 +12,13 @@ import type {
 import {
   assertPlannerAlternativeTrialBounds,
   createPlannerAlternativeFullRunBudget,
+  defaultPlannerAlternativeTrialBounds,
   judgePlannerAlternativeTrial,
   PlannerAlternativeRerunLimitError,
   PlannerAlternativeTrialBoundsError,
+  type PlannerAlternativeTrialBounds,
   type PlannerAlternativeTrialJudgeContext,
+  validatePlannerAlternativeTrialBounds,
 } from './plannerAlternativeTrial'
 
 /*
@@ -205,8 +208,22 @@ describe('trial bounds and the full-run budget (PLANNER_SPEC 9.2.19.12)', () => 
     { maxCandidateTrialsPerTarget: 1, maxPlannerReruns: 1.5 },
     { maxCandidateTrialsPerTarget: Number.NaN, maxPlannerReruns: 1 },
     { maxCandidateTrialsPerTarget: 1, maxPlannerReruns: -1 },
+    // Partial bounds are never completed from the Production default.
+    { maxCandidateTrialsPerTarget: 2 } as PlannerAlternativeTrialBounds,
+    { maxPlannerReruns: 8 } as PlannerAlternativeTrialBounds,
   ])('fails closed on %o without repairing it', (bounds) => {
     expect(() => assertPlannerAlternativeTrialBounds(bounds)).toThrow(PlannerAlternativeTrialBoundsError)
+  })
+
+  it('never falls back to the Production default for missing bounds', () => {
+    expect(() => assertPlannerAlternativeTrialBounds(undefined as never)).toThrow()
+    expect(() => createPlannerAlternativeFullRunBudget(undefined as never)).toThrow()
+  })
+
+  it('has the Production default 2 / 8, which passes the bounds validation (Phase 3-C)', () => {
+    expect(defaultPlannerAlternativeTrialBounds).toEqual({ maxCandidateTrialsPerTarget: 2, maxPlannerReruns: 8 })
+    expect(validatePlannerAlternativeTrialBounds(defaultPlannerAlternativeTrialBounds))
+      .toEqual({ isValid: true, issues: [] })
   })
 
   it('counts every full run it allows and refuses the one beyond the limit', () => {

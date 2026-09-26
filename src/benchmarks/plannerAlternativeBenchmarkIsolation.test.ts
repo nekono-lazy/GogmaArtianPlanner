@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 /*
  * Planner Alternative Phase 3-A is benchmark-only: nothing Production reaches
- * it, the Production Worker protocol carries none of it, the instrumentation
- * seam is passed by no Production caller, and no Production default exists
- * yet (Phase 3-C decides them from the real Browser Worker measurements).
+ * it, the Production Worker protocol carries none of it, and the
+ * instrumentation seam is passed by no Production caller. Phase 3-C decided the
+ * Production defaults in the Search / Planner Domain authorities; the
+ * benchmark keeps its own caller-supplied `BENCHMARK_ONLY_*` measurement
+ * conditions and never reads those defaults.
  */
 
 const production = {
@@ -59,9 +61,25 @@ describe('Planner Alternative Phase 3-A benchmark isolation', () => {
     expect(production['../domain/planner/alternative/plannerAlternativeKernel.ts']).not.toContain('instrumentation')
   })
 
-  it('defines no Production extent or trial bound default yet', () => {
-    const offenders = productionPaths.filter((path) =>
-      /defaultPlannerAlternative(?:SearchExtent|TrialBounds|Extent|Bounds)\b/.test(production[path]))
-    expect(offenders).toEqual([])
+  it('defines the Production defaults only in the Search / Planner Domain authorities', () => {
+    const definers = productionPaths.filter((path) =>
+      /export const defaultPlannerAlternative(?:SearchExtent|TrialBounds|Extent|Bounds)\b/.test(production[path]))
+    expect(definers.sort()).toEqual([
+      '../domain/planner/alternative/plannerAlternativeTrial.ts',
+      '../domain/search/alternative/plannerAlternativeTypes.ts',
+    ])
+  })
+
+  it('keeps the benchmark measurement conditions apart from the Production defaults', () => {
+    const benchmark = import.meta.glob('./plannerAlternative*.ts', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>
+    const sources = Object.entries(benchmark).filter(([path]) => !/\.test\.ts$/.test(path))
+    expect(sources.map(([path]) => path)).toContain('./plannerAlternativeBenchmarkFixtures.ts')
+    for (const [path, source] of sources) {
+      expect(source, path).not.toMatch(/defaultPlannerAlternative(?:SearchExtent|TrialBounds)\b/)
+    }
   })
 })

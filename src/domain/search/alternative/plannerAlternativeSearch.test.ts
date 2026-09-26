@@ -22,7 +22,9 @@ import { CandidateSearchError, type CandidateSearchInput } from '../searchTypes'
 import { createTargetSkillStream } from '../skillStream'
 import { TargetSearchScheduler } from '../targetSearchScheduler'
 import { visitPlannerAlternativeCandidates } from './plannerAlternativeSearch'
+import { validatePlannerAlternativeSearchExtent } from './plannerAlternativeValidation'
 import {
+  defaultPlannerAlternativeSearchExtent,
   emptyPlannerAlternativeReservation,
   PlannerAlternativeSearchError,
   type PlannerAlternativeCandidate,
@@ -189,10 +191,25 @@ describe('Planner Alternative Search API boundary (SEARCH_SPEC 5.6.8)', () => {
       { maxNormalAdvance: 0, maxGogmaAdvance: 5, maxSkillAdvance: 5 },
       { maxNormalAdvance: 5, maxGogmaAdvance: 1.5, maxSkillAdvance: 5 },
       { maxNormalAdvance: 5, maxGogmaAdvance: 5, maxSkillAdvance: -1 },
+      // A partial extent is never completed from the Production default.
+      { maxNormalAdvance: 5, maxGogmaAdvance: 5 } as PlannerAlternativeSearchInput['extent'],
     ]) {
       await expect(collect(alternativeInput(f.input, { extent }), f.engine))
         .rejects.toMatchObject({ name: 'PlannerAlternativeSearchError', code: 'invalid_input' })
     }
+    expect(f.calls).toEqual([])
+  })
+})
+
+describe('Production default extent (SEARCH_SPEC 5.6.8, Phase 3-C)', () => {
+  it('is exactly Normal 4 / Gogma 235 / Skill 4 and passes the extent validation', () => {
+    expect(defaultPlannerAlternativeSearchExtent).toEqual({ maxNormalAdvance: 4, maxGogmaAdvance: 235, maxSkillAdvance: 4 })
+    expect(validatePlannerAlternativeSearchExtent(defaultPlannerAlternativeSearchExtent)).toEqual([])
+  })
+
+  it('is never a fallback for a missing extent', async () => {
+    const f = fixture()
+    await expect(collect(alternativeInput(f.input, { extent: undefined as never }), f.engine)).rejects.toThrow()
     expect(f.calls).toEqual([])
   })
 })

@@ -12,9 +12,10 @@ import type {
 /**
  * The caller-supplied trial bounds of one Planner Alternative kernel request
  * (`docs/PLANNER_SPEC.md` 9.2.19.12): the what-if `PlannerWhatIfBounds`
- * meanings, shared by the what-if and the actual repair kernel. There is no
- * Production default yet (Phase 3): the Domain never substitutes, clamps or
- * completes a value.
+ * meanings, shared by the what-if and the actual repair kernel. The Domain
+ * never substitutes, clamps or completes a value;
+ * `defaultPlannerAlternativeTrialBounds` is the value a Production caller
+ * passes explicitly (Phase 3-C).
  */
 export interface PlannerAlternativeTrialBounds {
   /** Candidate trials per non-fixed Target before that Target stops. */
@@ -26,6 +27,30 @@ export interface PlannerAlternativeTrialBounds {
    * never counted.
    */
   maxPlannerReruns: number
+}
+
+/**
+ * The Production default trial bounds, decided in Phase 3-C
+ * (`docs/PLANNER_SPEC.md` 9.2.19.12,
+ * `docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md` 12 / 13).
+ *
+ * - Candidate trials 2: Phase 3-B found no Production workload whose first
+ *   Candidate is rejected and whose second is found, so 2 is not a measured
+ *   semantic threshold; neither is 1 proven sufficient. 2 keeps one fallback
+ *   trial as a safety bound (one Issue #101 trial took about 0.36 s).
+ * - Planner reruns 8: in the Phase 3-B `kernel_multi_target` fixture 1 rerun
+ *   stops the second Target and 2 or more complete both; an unused cap costs
+ *   nothing because only the runs needed start. 8 is a Production safety bound
+ *   with headroom for several non-fixed Targets, second trials and
+ *   runtime-unsupported retries sharing the request-global budget; the fixture
+ *   itself needed 2. It is decided independently of `defaultPlannerWhatIfBounds`.
+ *
+ * Callers explicitly pass it (for example as a spread copy); it is never an
+ * implicit Domain fallback, a field-completion target or a clamp.
+ */
+export const defaultPlannerAlternativeTrialBounds: PlannerAlternativeTrialBounds = {
+  maxCandidateTrialsPerTarget: 2,
+  maxPlannerReruns: 8,
 }
 
 function positiveIntegerIssue(value: number, path: string): DomainValidationIssue | null {
