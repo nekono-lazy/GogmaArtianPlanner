@@ -201,12 +201,43 @@ export function skillAmendmentResults(
   }))
 }
 
+/**
+ * One completed depth of one held-aware Skill stream
+ * (`readReservedDepth()`), as aggregate counts only.
+ *
+ * Observation only (Planner Alternative Search Phase 3 benchmark,
+ * `docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md`): it is reported after
+ * the depth was generated and published, carries no state content, and no
+ * search decision reads it back.
+ */
+export interface ReservedSkillDepthObservation {
+  /** 0-based creation order of this held-aware stream inside the Skill stream. */
+  streamIndex: number
+  startSkillCounter: number
+  /** Own Reset Skills operations of every state of this depth. */
+  depth: number
+  /** `(frontier state, legal position)` pairs visited, duplicates included. */
+  transitions: number
+  /** States published at this depth (one per absolute position). */
+  states: number
+  /** Distinct absolute positions of those states; equal to `states` by construction. */
+  absolutePositions: number
+}
+
+export type ReservedSkillDepthObserver = (observation: ReservedSkillDepthObservation) => void
+
 export function createTargetSkillStream(
   target: TargetWeapon,
   input: SkillStreamInput,
   engine: RngEngine,
   execution: SearchExecutionContext,
   isSkillPredictionSupported: () => boolean,
+  /**
+   * Execution-only observer of the held-aware depths (Planner Alternative
+   * Search instrumentation). It never changes a prediction, a state, an order
+   * or a termination; absent in every Production call.
+   */
+  observeReservedDepth?: ReservedSkillDepthObserver,
 ): TargetSkillStream {
   const predictions = new Map<number, SkillPredictionResult>()
   const sets = new Map<number, { steps: SkillStreamStep[]; solutions: SkillStreamSolution[]; counter: number }>()
@@ -257,6 +288,7 @@ export function createTargetSkillStream(
 
   const reservation = input.reservation ?? EMPTY_COUNTER_RESERVATION
   interface ReservedSet {
+    index: number
     depths: ReservedSkillState[][]
     frontier: ReservedSkillState[]
     done: boolean
@@ -269,6 +301,7 @@ export function createTargetSkillStream(
     let set = reservedSets.get(startSkillCounter)
     if (!set) {
       set = {
+        index: reservedSets.size,
         depths: [],
         frontier: [{ nextFrom: startSkillCounter, node: null }],
         done: false,
@@ -320,8 +353,10 @@ export function createTargetSkillStream(
     const limit = reservedSkillPositionLimit(origin, startSkillCounter, input.maxSkillAdvance)
     while (!set.done && set.depths.length < through) {
       const generated = new Map<number, ReservedSkillState>()
+      let transitions = 0
       for (const state of set.frontier) {
         const { positions } = await reservedWindow(set, state.nextFrom, limit)
+        transitions += positions.length
         for (const position of positions) {
           if (generated.has(position)) continue
           await execution.checkpoint()
@@ -349,6 +384,14 @@ export function createTargetSkillStream(
         .sort(([left], [right]) => left - right)
         .map(([, state]) => state)
       set.depths.push(set.frontier)
+      observeReservedDepth?.({
+        streamIndex: set.index,
+        startSkillCounter,
+        depth: set.depths.length,
+        transitions,
+        states: generated.size,
+        absolutePositions: generated.size,
+      })
     }
     return set
   }

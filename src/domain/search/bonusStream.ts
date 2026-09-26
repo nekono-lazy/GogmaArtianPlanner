@@ -329,12 +329,45 @@ function compareRepresentative(
   )
 }
 
+/**
+ * One completed depth of one held-aware Bonus stream (`readReservedDepth()`),
+ * as aggregate counts only.
+ *
+ * Observation only (Planner Alternative Search Phase 3 benchmark,
+ * `docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md`): it is reported after
+ * the depth was generated, published and reduced, carries no state content,
+ * and no search decision reads it back.
+ */
+export interface ReservedGogmaDepthObservation {
+  /** 0-based creation order of this held-aware stream inside the Bonus stream. */
+  streamIndex: number
+  startGogmaCounter: number
+  /** Own amendments of every state of this depth. */
+  depth: number
+  /** States generated and published at this depth, before the frontier reduction. */
+  generatedStates: number
+  /** Frontier states after the per-position family layout reduction. */
+  frontierStates: number
+  /** Distinct absolute positions (after the last own amendment) of the generated states. */
+  absolutePositions: number
+  /** Distinct Keep family layouts of the generated states. */
+  familyLayouts: number
+}
+
+export type ReservedGogmaDepthObserver = (observation: ReservedGogmaDepthObservation) => void
+
 export function createTargetBonusStream(
   target: TargetWeapon,
   input: BonusStreamInput,
   engine: RngEngine,
   execution: SearchExecutionContext,
   predictionSupport: SearchPredictionSupport,
+  /**
+   * Execution-only observer of the held-aware depths (Planner Alternative
+   * Search instrumentation). It never changes a prediction, a state, an order
+   * or a termination; absent in every Production call.
+   */
+  observeReservedDepth?: ReservedGogmaDepthObserver,
 ): TargetBonusStream {
   const resetPredictions = new Map<number, RestorationBonusSet>()
   const keepPredictions = new Map<string, RestorationBonusSet>()
@@ -551,6 +584,7 @@ export function createTargetBonusStream(
     nextFrom: number
   }
   interface ReservedSet {
+    index: number
     depths: ReservedBonusStreamSolution[][]
     frontier: ReservedBonusState[]
     done: boolean
@@ -578,6 +612,7 @@ export function createTargetBonusStream(
     let set = reservedSets.get(key)
     if (!set) {
       set = {
+        index: reservedSets.size,
         depths: [],
         frontier: [{
           depth: 0,
@@ -721,6 +756,17 @@ export function createTargetBonusStream(
         if (!current || compareReservedRepresentative(state, current) < 0) byKey.set(key, state)
       }
       set.frontier = [...byKey.values()].sort(compareReservedFrontier)
+      if (observeReservedDepth !== undefined) {
+        observeReservedDepth({
+          streamIndex: set.index,
+          startGogmaCounter: base.startGogmaCounter,
+          depth,
+          generatedStates: generated.length,
+          frontierStates: set.frontier.length,
+          absolutePositions: new Set(generated.map((state) => state.position)).size,
+          familyLayouts: new Set(generated.map((state) => state.familyLayoutKey)).size,
+        })
+      }
     }
     return set
   }

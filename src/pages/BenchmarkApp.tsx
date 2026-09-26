@@ -4,6 +4,7 @@ import { Button, Stack } from '@mui/material'
 import { CandidateSearchBenchmarkPage } from './CandidateSearchBenchmarkPage'
 import { ConstrainedEnumerationBenchmarkPage } from './ConstrainedEnumerationBenchmarkPage'
 import { Issue101ConstrainedResearchBenchmarkPage } from './Issue101ConstrainedResearchBenchmarkPage'
+import { PlannerAlternativeBenchmarkPage } from './PlannerAlternativeBenchmarkPage'
 import { PlannerOrchestrationBenchmarkPage } from './PlannerOrchestrationBenchmarkPage'
 import { SkillIdentificationBenchmarkPage } from './SkillIdentificationBenchmarkPage'
 
@@ -14,6 +15,7 @@ type BenchmarkId =
   | 'b8-planner-orchestration'
   | 'b9-what-if'
   | 'issue101-constrained-research'
+  | 'planner-alternative-phase3'
 
 /**
  * Isolated benchmark shell. The C5-E2C8 Skill Identification harness stays the
@@ -27,6 +29,8 @@ type BenchmarkId =
  * `docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`.
  * Issue #101 adds its constrained re-search harness beside the others; none of
  * the existing harnesses changes.
+ * Planner Alternative Search Phase 3-A adds its Browser Worker harness
+ * (`docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md`); C5 stays the default.
  */
 export function BenchmarkApp() {
   const [benchmark, setBenchmark] = useState<BenchmarkId>('c8-skill-identification')
@@ -69,6 +73,12 @@ export function BenchmarkApp() {
         >
           Issue 101 Constrained Re-search
         </Button>
+        <Button
+          variant={benchmark === 'planner-alternative-phase3' ? 'contained' : 'outlined'}
+          onClick={() => setBenchmark('planner-alternative-phase3')}
+        >
+          Planner Alternative Phase 3
+        </Button>
       </Stack>
       {benchmark === 'b9-what-if' && <PlannerWhatIfBenchmarkPage />}
       {benchmark === 'c8-skill-identification' && <SkillIdentificationBenchmarkPage />}
@@ -82,6 +92,7 @@ export function BenchmarkApp() {
       {benchmark === 'issue101-constrained-research' && (
         <Issue101ConstrainedResearchBenchmarkPage />
       )}
+      {benchmark === 'planner-alternative-phase3' && <PlannerAlternativeBenchmarkPage />}
     </Stack>
   )
 }

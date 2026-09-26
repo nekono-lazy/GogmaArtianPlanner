@@ -352,6 +352,9 @@ describe('Issue #101 benchmark isolation', () => {
       /^\.\.\/pages\/BenchmarkApp(\.test)?\.tsx$/,
       /^\.\.\/pages\/Issue101ConstrainedResearchBenchmarkPage\.tsx$/,
       /^\.\.\/workers\/issue101ConstrainedResearch\.worker\.benchmark(\.entry)?\.ts$/,
+      // The Planner Alternative Phase 3-A harness reuses the Issue #101 fixture and route summary.
+      /^\.\.\/pages\/PlannerAlternativeBenchmarkPage\.tsx$/,
+      /^\.\.\/workers\/plannerAlternative\.worker\.benchmark(\.entry)?\.ts$/,
       /\.test\.tsx?$/,
     ]
     const offenders = paths.filter(
