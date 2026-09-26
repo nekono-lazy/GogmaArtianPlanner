@@ -265,6 +265,7 @@ describe('continuation past the canonical Ideal', () => {
       targetWeaponId: f.input.targetWeaponId,
       summary: { deliveredCandidates: 6, excludedCandidates: 0, exhausted: false, stoppedByExtent: true },
       stoppedByConsumer: false,
+      skippedExcludedRouteKeys: [],
     })
   })
 

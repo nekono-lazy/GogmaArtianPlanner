@@ -201,6 +201,16 @@ export interface PlannerAlternativeSearchExecution {
   targetWeaponId: TargetWeaponId
   summary: PlannerAlternativeSearchSummary
   stoppedByConsumer: boolean
+  /**
+   * The `candidateStableKey`s of the Candidates this search actually reached
+   * and skipped because they are in `excludedRouteKeys`, in skip order and each
+   * once (its length is `summary.excludedCandidates`). A key of
+   * `excludedRouteKeys` the search never reached is absent. Neutral execution
+   * data: the Search Domain gives no key a meaning of its own, and a caller
+   * that tells its exclusions apart (the Planner's repair lineage,
+   * `docs/PLANNER_SPEC.md` 9.2.19.13) does so on its side.
+   */
+  skippedExcludedRouteKeys: string[]
 }
 
 export type PlannerAlternativeSearchErrorCode =

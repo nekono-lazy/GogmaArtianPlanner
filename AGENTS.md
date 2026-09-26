@@ -3563,8 +3563,8 @@ the Planner Domain (`plannerAlternativeTrial.ts`); `docs/SEARCH_SPEC.md` 5.6.8,
 measured Issue #101 threshold; Normal 4 / Skill 4 / trials 2 / reruns 8 are design judgements, not
 measured thresholds). The Domain APIs keep extent and bounds caller-required - no fallback, no
 partial completion, no clamp - and the benchmark keeps its `BENCHMARK_ONLY_*` conditions. The
-defaults are wired to no Worker, Client, UI or repair yet: Phase 4-A (below) is complete, the Phase 4-B
-runtime connection is pending, Production routing has not switched, and no version moved.
+defaults are wired only to the Phase 4-B what-if Production Worker adapter (below), to no Client, UI or
+repair; Production routing has not switched, and no version moved.
 Phase 4 is split into 4-A and 4-B. Phase 4-A (docs-only; `docs/PLANNER_SPEC.md` 9.2.19.8.1 / 9.2.19.12 /
 9.2.19.13) fixed the scenario composition: individual trials stay independent from one baseline; found
 replacements are adopted monotonically in stable Target order, the first one reusing its individual trial
@@ -3578,9 +3578,25 @@ counting only started full Planner runs; reaching it is no failure until one mor
 composition), never collapsing an unevaluated one into `false`. `excludedByRepairLineageCount` counts
 only Candidates actually skipped for an active prior repair lineage key - not the current invalidated
 Route, not the stored key count - while the Search summary's `excludedCandidates` stays the total.
-Phase 4-B (the what-if runtime connection: Planner Alternative What-if Calculation above the unchanged
-`runPlannerAlternativeKernel()`, typed result, Route summary, shared budget, Worker protocol, Production
-adapter, Client) is next; Production UI routing still switches only in Phase 5. No version moved.
+Phase 4-B (the what-if runtime connection) is complete. `createPlannerAlternativeWhatIfComparison()`
+(`src/domain/planner/alternative/plannerAlternativeWhatIf.ts`) sits above the kernel, which stays the
+Target-level search / individual trial / found authority: `preparePlannerAlternativeKernel()` +
+`runPreparedPlannerAlternativeKernel()` split the unchanged `runPlannerAlternativeKernel()`, and its runtime-only
+option `fullRunBudget` takes the request's one `createPlannerAlternativeFullRunBudget()` so the kernel trials,
+adoption runs, the case-A final run and every runtime-unsupported retry share it through one full run path
+(`createPlannerAlternativeFullRunner()`); without the option the kernel keeps creating its own budget. The
+composition reuses the first found trial, runs one adoption per later found replacement, judges it with the
+unchanged `judgePlannerAlternativeTrial()` over every accepted generated Entry, and returns the typed
+`PlannerAlternativeComparison` (Route summary as a pure Candidate projection, `adoptedInScenario`
+`true` / `false` / `null`, `scenarioOperationCount = steps.length`, Conflicts classified from the final result
+after the 9.2.19.9 expansion). The Search Domain only adds the neutral
+`PlannerAlternativeSearchExecution.skippedExcludedRouteKeys`; the Planner counts the prior lineage keys among
+them. The Worker adds `create_planner_alternative_comparison` / `_result` beside the unchanged legacy
+`create_what_if_comparison`, the Production adapter `createProductionPlannerAlternativeComparison()` passes
+`defaultPlannerAlternativeSearchExtent` / `defaultPlannerAlternativeTrialBounds` inside the Worker, and the Client
+adds `createPlannerAlternativeComparison()` beside the unchanged `createWhatIfComparison()`. Nothing is persisted;
+`ProductionPlanPage` still calls only the legacy what-if, so Production UI routing still switches only in Phase 5.
+No version moved (15 / 9 / 12).
 
 ---
 

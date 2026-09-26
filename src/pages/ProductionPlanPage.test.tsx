@@ -178,6 +178,7 @@ function plannerClient(
     createPlan: vi.fn(),
     createConstrainedPlan: vi.fn(),
     createWhatIfComparison: vi.fn(createWhatIfComparison),
+    createPlannerAlternativeComparison: vi.fn(),
     prepareInteraction: vi.fn(prepareInteraction),
     cancelPlan: vi.fn(),
     dispose: vi.fn(),
@@ -548,6 +549,8 @@ describe('ProductionPlanPage', () => {
     await user.click(compare)
 
     await waitFor(() => expect(client.createWhatIfComparison).toHaveBeenCalledOnce())
+    // 「比較する」 stays on the legacy B9 path until Phase 5 switches the routing.
+    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
     expect(deps.createInput).toHaveBeenCalledTimes(2)
     expect(deps.createWorkerClient).toHaveBeenCalledOnce()
     expect(client.prepareInteraction).toHaveBeenCalledTimes(2)

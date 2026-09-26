@@ -94,6 +94,7 @@ function createPlannerClient(
     // B8-D2b: the page uses the constrained API only.
     createConstrainedPlan: vi.fn(async () => result),
     createWhatIfComparison: vi.fn(),
+    createPlannerAlternativeComparison: vi.fn(),
     prepareInteraction: vi.fn(),
     cancelPlan: vi.fn(),
     dispose: vi.fn(),

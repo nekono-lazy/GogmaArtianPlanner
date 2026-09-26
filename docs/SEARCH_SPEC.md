@@ -1448,7 +1448,11 @@ held 位置で自分のoperationが無い場合、武器状態（Bonus 5枠、sc
 - 除外key（`excludedRouteKeys`）と一致するCandidateは返さずに次へ進み、除外件数をsummaryへ数える。この件数
   （`excludedCandidates`）は `excludedRouteKeys` 全体によって実際にskipしたCandidate数（total）である。Planner側の
   typed resultの `excludedByRepairLineageCount` は、そのうちprior repair lineage由来のkeyに一致したCandidate数だけを
-  表す別semanticである（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.13）
+  表す別semanticである（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.13）。Phase 4-Bで、search executionはsummaryの外に
+  `skippedExcludedRouteKeys`（実際に到達して除外keyに一致したためskipしたCandidateの `candidateStableKey`。skip順、各1回、
+  長さは `excludedCandidates` と一致。到達しなかった除外keyは含まない）を返すようにした。これはneutralなexecution dataで
+  あり、Search Domainはどのkeyがlineage由来か・今回の無効化Routeかを知らない。区別と集計はPlanner側で行う。
+  delivery・順序・summary・prediction呼び出しは変えない
 - 終了はconsumer stop、extent内の探索完了（exhausted）、extent到達で未確認が残った（stopped by extent）、
   cancelのいずれかであり、exhaustedとextent到達を区別する（5.6.7の `exhausted` / `stoppedByBound` と同じ原則）
 
@@ -1571,7 +1575,8 @@ export const defaultPlannerAlternativeSearchExtent: PlannerAlternativeSearchExte
 
 Domain API（`visitPlannerAlternativeCandidates()` の `PlannerAlternativeSearchInput.extent`）はcaller必須指定の
 ままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの定数を明示的に渡す
-（Phase 4-Bのruntime接続で行う。Phase 4-Aでは配線せず、Production UI routingの切替自体はPhase 5で行う）。
+（Phase 4-Bで、what-ifのProduction Worker adapterがWorker境界内でこの定数をimportして渡すよう配線した。Production UI
+routingの切替自体はPhase 5で行う）。
 benchmarkの `BENCHMARK_ONLY_*` gridとsanity値はPhase 3-Bのhistorical
 measurement conditionとして維持し、このdefaultを読まない。
 

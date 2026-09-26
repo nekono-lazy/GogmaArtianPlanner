@@ -11,6 +11,8 @@ import {
   candidateStableKey,
   CandidateSearchError,
   normalizePlannerAlternativeExcludedRouteKeys,
+  PlannerAlternativeSearchError,
+  validatePlannerAlternativeSearchExtent,
   visitPlannerAlternativeCandidates,
 } from '../../search'
 import type {
@@ -19,7 +21,6 @@ import type {
   PlannerAlternativeSearchExtent,
   PlannerAlternativeSearchSummary,
 } from '../../search'
-import { createProductionPlanWithObserver } from '../productionPlanGeneration'
 import type {
   PlannerConflictResolution,
   PlannerDependencies,
@@ -28,7 +29,6 @@ import type {
   PlannerResult,
   PlannerRouteCommitmentEvidence,
   PlannerRunBuildListContext,
-  ProductionPlanGenerationObserver,
 } from '../plannerTypes'
 import type { GeneratedBuildListEntryResult } from '../constrained/constrainedMaterializer'
 import { preparePlannerReplacementConflictPreflight } from '../constrained/plannerAugmentedPreflight'
@@ -42,12 +42,16 @@ import {
   createPlannerAlternativeMaterializer,
   type PlannerAlternativeMaterializer,
 } from './plannerAlternativeMaterializer'
+import {
+  createPlannerAlternativeFullRunner,
+  PlannerAlternativeCancelledError,
+} from './plannerAlternativeFullRun'
 import { derivePlannerAlternativeReservation } from './plannerAlternativeReservation'
 import {
   assertPlannerAlternativeTrialBounds,
   createPlannerAlternativeFullRunBudget,
   judgePlannerAlternativeTrial,
-  PlannerAlternativeRerunLimitError,
+  type PlannerAlternativeFullRunBudget,
   type PlannerAlternativeTrialBounds,
   type PlannerAlternativeTrialRejectionReason,
 } from './plannerAlternativeTrial'
@@ -69,7 +73,10 @@ import {
  *
  * It is the shared calculation the Phase 4 what-if and the Phase 5 actual
  * repair both stand on; it composes no scenario Plan, persists nothing, and
- * has no Production routing, Worker message or default of its own.
+ * has no Production routing, Worker message or default of its own. The
+ * scenario composition (9.2.19.8.1) belongs to the calculation above it
+ * (`createPlannerAlternativeWhatIfComparison()`), which shares its request's
+ * one rerun budget with this kernel through `PlannerAlternativeKernelOptions`.
  */
 
 /** Earlier decisions' Route exclusions of one Target (the repair lineage, Phase 5). */
@@ -101,14 +108,14 @@ export interface PlannerAlternativeKernelRequest {
 
 export interface PlannerAlternativeKernelOptions {
   executionOptions?: PlannerExecutionOptions
-}
-
-/** A cancelled kernel request. It is never an outcome. */
-export class PlannerAlternativeCancelledError extends Error {
-  constructor(message = 'The Planner Alternative calculation was cancelled.') {
-    super(message)
-    this.name = 'PlannerAlternativeCancelledError'
-  }
+  /**
+   * The request-global `maxPlannerReruns` budget (`docs/PLANNER_SPEC.md`
+   * 9.2.19.12), when a calculation above the kernel shares one budget between
+   * the kernel's individual trials and its own full Planner runs. Its limit
+   * must be `request.bounds.maxPlannerReruns`. Absent, the kernel creates its
+   * own budget from `request.bounds`, exactly as a kernel-only request.
+   */
+  fullRunBudget?: PlannerAlternativeFullRunBudget
 }
 
 export interface PlannerAlternativeFound {
@@ -169,7 +176,16 @@ export interface PlannerAlternativeKernelTargetResult {
   search: (PlannerAlternativeSearchSummary & { stoppedByConsumer: boolean }) | null
   /** Every trial in order; a rejected Candidate is never recorded as a lineage exclusion. */
   trials: PlannerAlternativeKernelTrialRecord[]
+  /**
+   * The `candidateStableKey`s this Target's search actually reached and skipped
+   * because they are in `excludedRouteKeys`, each once
+   * (`PlannerAlternativeSearchExecution.skippedExcludedRouteKeys`). Empty when
+   * the Target was not searched.
+   */
+  skippedExcludedRouteKeys: string[]
 }
+
+export type PlannerAlternativeKernelCompletedResult = Extract<PlannerAlternativeKernelResult, { status: 'completed' }>
 
 export type PlannerAlternativeKernelResult =
   | {
@@ -181,15 +197,59 @@ export type PlannerAlternativeKernelResult =
       explicitDecisionBuildListEntryIds: BuildListEntryId[]
       /** In the stable `createPlannerConflictWorks()` order. */
       targets: PlannerAlternativeKernelTargetResult[]
-      /** Full Planner runs started. */
+      /** Full Planner runs this kernel started (its share of a shared budget). */
       plannerRerunsUsed: number
     }
+  | PlannerAlternativeKernelPreparationFailure
+
+/** A prior fixed Entry that is not a valid Entry of the current input: nothing is inferred. */
+export interface PlannerAlternativeInvalidPriorFixedEntryResult {
+  status: 'invalid_prior_fixed_entry'
+  buildListEntryId: BuildListEntryId
+  detail: string
+}
+
+export type PlannerAlternativeKernelPreparationFailure =
   | PlannerWhatIfFailureResult
-  | {
-      status: 'invalid_prior_fixed_entry'
-      buildListEntryId: BuildListEntryId
-      detail: string
-    }
+  | PlannerAlternativeInvalidPriorFixedEntryResult
+
+/**
+ * Everything one kernel request needs before its first search: the what-if
+ * preparation (9.2.4.5 merge, initial context, every valid explicit resolution
+ * as a fixed constraint, the decision's own constraint, the scenario-only
+ * conflict works) and the explicit decision Entries. A calculation above the
+ * kernel reads the same preparation instead of preparing the input twice.
+ */
+export interface PreparedPlannerAlternativeKernel {
+  scenario: PreparedPlannerWhatIfScenario
+  /** This decision's fixed Entry and every Entry a valid explicit resolution selects. */
+  explicitDecisionBuildListEntryIds: BuildListEntryId[]
+}
+
+export type PlannerAlternativeKernelPreparationResult =
+  | { status: 'ready'; prepared: PreparedPlannerAlternativeKernel }
+  | PlannerAlternativeKernelPreparationFailure
+
+/**
+ * The request-entry extent check (`docs/PLANNER_SPEC.md` 9.2.19.12): the extent
+ * is caller-required, so it is refused before any preparation - not only when
+ * a Target's search reaches the Search Domain, which a checkpoint-blocked
+ * Target or a spent budget never does. The rule itself is the Search Domain's
+ * `validatePlannerAlternativeSearchExtent()`; no value is substituted,
+ * completed or clamped.
+ */
+function assertPlannerAlternativeRequestExtent(extent: PlannerAlternativeSearchExtent): void {
+  if (typeof extent !== 'object' || extent === null) {
+    throw new PlannerAlternativeSearchError('invalid_input', 'extent: a PlannerAlternativeSearchExtent is required.')
+  }
+  const issues = validatePlannerAlternativeSearchExtent(extent)
+  if (issues.length > 0) {
+    throw new PlannerAlternativeSearchError(
+      'invalid_input',
+      issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
+    )
+  }
+}
 
 function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
@@ -209,7 +269,7 @@ type TrialOutcome =
   | { status: 'rerun_bound' }
 
 /**
- * Runs the kernel for one decision.
+ * Prepares one kernel request.
  *
  * Preparation reuses the what-if preparation unchanged (`preparePlannerWhatIfScenario()`:
  * the 9.2.4.5 merge, `preparePlannerInitialContext()`, every valid explicit
@@ -217,15 +277,15 @@ type TrialOutcome =
  * scenario-only `createPlannerConflictWorks()`), so the fixed side is only ever
  * an explicit choice - never a recommendation, a priority or a score.
  *
- * Invalid bounds or extent throw; every other failure is typed. Cancellation
- * throws `PlannerAlternativeCancelledError` and returns no partial result.
+ * Invalid bounds or extent throw at this entry, whether or not any Target is
+ * later searched; every other failure is typed.
  */
-export async function runPlannerAlternativeKernel(
+export function preparePlannerAlternativeKernel(
   request: PlannerAlternativeKernelRequest,
   dependencies: PlannerDependencies,
-  options: PlannerAlternativeKernelOptions = {},
-): Promise<PlannerAlternativeKernelResult> {
+): PlannerAlternativeKernelPreparationResult {
   assertPlannerAlternativeTrialBounds(request.bounds)
+  assertPlannerAlternativeRequestExtent(request.extent)
   const prepared = preparePlannerWhatIfScenario(
     {
       plannerInput: request.plannerInput,
@@ -250,25 +310,58 @@ export async function runPlannerAlternativeKernel(
     }
   }
 
-  const explicitDecisionBuildListEntryIds = sortedUnique(
-    scenario.fixedConstraints.map(({ fixedBuildListEntryId }) => fixedBuildListEntryId),
-  )
-  const budget = createPlannerAlternativeFullRunBudget(request.bounds)
-  const executionOptions = options.executionOptions
-  let cancelledPlannerRun = false
-  const readCancelledPlannerRun = (): boolean => cancelledPlannerRun
-  // The route commitment evidence of the last full run of one Plan
-  // generation: the run the Plan (after any runtime-unsupported retry) is
-  // built from. Reset before every generation.
-  let lastRouteCommitment: PlannerRouteCommitmentEvidence | null = null
-  const readLastRouteCommitment = (): PlannerRouteCommitmentEvidence | null => lastRouteCommitment
-  const observer: ProductionPlanGenerationObserver = {
-    beforePlannerRun: () => budget.beforePlannerRun(),
-    afterPlannerRun: (runResult) => {
-      if (runResult.cancelled) cancelledPlannerRun = true
-      lastRouteCommitment = runResult.routeCommitment ?? null
+  return {
+    status: 'ready',
+    prepared: {
+      scenario,
+      explicitDecisionBuildListEntryIds: sortedUnique(
+        scenario.fixedConstraints.map(({ fixedBuildListEntryId }) => fixedBuildListEntryId),
+      ),
     },
   }
+}
+
+/**
+ * Runs the kernel for one decision: `preparePlannerAlternativeKernel()`, then
+ * `runPreparedPlannerAlternativeKernel()`.
+ *
+ * Invalid bounds or extent throw; every other failure is typed. Cancellation
+ * throws `PlannerAlternativeCancelledError` and returns no partial result.
+ */
+export async function runPlannerAlternativeKernel(
+  request: PlannerAlternativeKernelRequest,
+  dependencies: PlannerDependencies,
+  options: PlannerAlternativeKernelOptions = {},
+): Promise<PlannerAlternativeKernelResult> {
+  const preparation = preparePlannerAlternativeKernel(request, dependencies)
+  if (preparation.status !== 'ready') return preparation
+  return runPreparedPlannerAlternativeKernel(preparation.prepared, request, dependencies, options)
+}
+
+/**
+ * Searches and trials every non-fixed Target of a prepared request, each
+ * independently from the same baseline (9.2.19.7). `preparedKernel` must come
+ * from `preparePlannerAlternativeKernel()` over the same `request`.
+ */
+export async function runPreparedPlannerAlternativeKernel(
+  preparedKernel: PreparedPlannerAlternativeKernel,
+  request: PlannerAlternativeKernelRequest,
+  dependencies: PlannerDependencies,
+  options: PlannerAlternativeKernelOptions = {},
+): Promise<PlannerAlternativeKernelCompletedResult> {
+  assertPlannerAlternativeTrialBounds(request.bounds)
+  assertPlannerAlternativeRequestExtent(request.extent)
+  const { scenario, explicitDecisionBuildListEntryIds } = preparedKernel
+  const { entriesById } = scenario.initialContext
+  const budget = options.fullRunBudget ?? createPlannerAlternativeFullRunBudget(request.bounds)
+  if (budget.limit !== request.bounds.maxPlannerReruns) {
+    throw new Error(
+      `Planner Alternative invariant violated: the shared rerun budget limit ${budget.limit} is not the request's maxPlannerReruns ${request.bounds.maxPlannerReruns}.`,
+    )
+  }
+  const usedAtStart = budget.used
+  const executionOptions = options.executionOptions
+  const runner = createPlannerAlternativeFullRunner(budget, dependencies, executionOptions)
 
   const targets: PlannerAlternativeKernelTargetResult[] = []
   for (const work of scenario.works) targets.push(await runTarget(work))
@@ -279,7 +372,7 @@ export async function runPlannerAlternativeKernel(
     fixedTargetWeaponId: scenario.scenarioConstraint.fixedTargetWeaponId,
     explicitDecisionBuildListEntryIds,
     targets,
-    plannerRerunsUsed: budget.used,
+    plannerRerunsUsed: budget.used - usedAtStart,
   }
 
   function invalidatedEntryOf(targetWeaponId: TargetWeaponId): BuildListEntry {
@@ -315,11 +408,11 @@ export async function runPlannerAlternativeKernel(
     if (work.blockedBySelectedCheckpoint) {
       // A selected checkpoint is a hard constraint on this Target's Route: no
       // alternative is searched, materialized or trialled (9.5.2).
-      return { ...base, reservation: null, outcome: { status: 'blocked_by_selected_checkpoint' }, search: null, trials: [] }
+      return { ...base, reservation: null, outcome: { status: 'blocked_by_selected_checkpoint' }, search: null, trials: [], skippedExcludedRouteKeys: [] }
     }
     if (budget.exhausted) {
       // No full Planner run is left to judge anything for this Target.
-      return { ...base, reservation: null, outcome: { status: 'stopped_by_planner_rerun_bound' }, search: null, trials: [] }
+      return { ...base, reservation: null, outcome: { status: 'stopped_by_planner_rerun_bound' }, search: null, trials: [], skippedExcludedRouteKeys: [] }
     }
     const reservation = derivePlannerAlternativeReservation(
       fixedRouteBuildListEntryIds.map((id) => entriesById.get(id) as BuildListEntry),
@@ -402,6 +495,7 @@ export async function runPlannerAlternativeKernel(
       outcome: settled,
       search: { ...execution.summary, stoppedByConsumer: execution.stoppedByConsumer },
       trials,
+      skippedExcludedRouteKeys: [...execution.skippedExcludedRouteKeys],
     }
   }
 
@@ -446,14 +540,16 @@ export async function runPlannerAlternativeKernel(
       return { status: 'rejected', generatedBuildListEntryId: generated.entry.id, record: { status: 'rejected', reason: 'preflight_refused' } }
     }
     const runContext: PlannerRunBuildListContext = { kind: 'temporary_replacement', replacements }
-    const run = await runFullPlanner(preflight.resolvedInput, runContext)
+    // A blocked full run is a typed stop. Every other failure - Plan generation
+    // (a Trace Replay failure included), prediction, Planner or Search
+    // invariant - propagates unchanged, never becoming a rejection.
+    const run = await runner.run(preflight.resolvedInput, runContext)
     if (run === 'rerun_budget_reached') return { status: 'rerun_bound' }
-    const routeCommitment = readLastRouteCommitment()
-    const verdict = judgePlannerAlternativeTrial(run, {
+    const verdict = judgePlannerAlternativeTrial(run.result, {
       generatedBuildListEntryId: generated.entry.id,
       explicitDecisionBuildListEntryIds,
       fixedRouteBuildListEntryIds,
-      routeCommitment,
+      routeCommitment: run.routeCommitment,
     })
     if (verdict.status === 'rejected') {
       return { status: 'rejected', generatedBuildListEntryId: generated.entry.id, record: verdict }
@@ -465,37 +561,10 @@ export async function runPlannerAlternativeKernel(
         candidate,
         generated,
         replacement: resolved.replacement,
-        trialResult: run,
-        trialRouteCommitment: routeCommitment,
+        trialResult: run.result,
+        trialRouteCommitment: run.routeCommitment,
         generatedSelected: verdict.generatedSelected,
       },
     }
-  }
-
-  async function runFullPlanner(
-    planInput: PlannerInput,
-    buildListContext: PlannerRunBuildListContext,
-  ): Promise<PlannerResult | 'rerun_budget_reached'> {
-    cancelledPlannerRun = false
-    lastRouteCommitment = null
-    let result: PlannerResult
-    try {
-      result = await createProductionPlanWithObserver(
-        planInput,
-        dependencies,
-        executionOptions,
-        observer,
-        buildListContext,
-      )
-    } catch (error) {
-      // A blocked full run is a typed stop. Every other failure - Plan
-      // generation (a Trace Replay failure included), prediction, Planner or
-      // Search invariant - propagates unchanged, never becoming a rejection.
-      if (error instanceof PlannerAlternativeRerunLimitError) return 'rerun_budget_reached'
-      throw error
-    }
-    // A cancelled run returns a safe `plan: null` result, which is no verdict.
-    if (readCancelledPlannerRun()) throw new PlannerAlternativeCancelledError()
-    return result
   }
 }

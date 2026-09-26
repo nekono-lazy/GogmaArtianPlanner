@@ -26,15 +26,16 @@ import type {
   RouteOperation,
   TargetWeapon,
 } from '../../models/publicTypes'
-import { candidateStableKey } from '../../search'
+import { candidateStableKey, PlannerAlternativeSearchError } from '../../search'
 import { preparePlannerInitialContext } from '../plannerInitialContext'
 import {
+  preparePlannerAlternativeKernel,
   runPlannerAlternativeKernel,
   type PlannerAlternativeKernelRequest,
   type PlannerAlternativeKernelResult,
   type PlannerAlternativeKernelTargetResult,
 } from './plannerAlternativeKernel'
-import { judgePlannerAlternativeTrial } from './plannerAlternativeTrial'
+import { createPlannerAlternativeFullRunBudget, judgePlannerAlternativeTrial } from './plannerAlternativeTrial'
 
 /*
  * The Phase 2 Planner Alternative kernel end to end: preparation, reservation,
@@ -337,6 +338,8 @@ describe('Planner Alternative kernel: bounds and exclusions (PLANNER_SPEC 9.2.19
     const b = targetOf(result, TARGET_B)
     expect(b.outcome.status).toBe('found')
     expect(b.search?.excludedCandidates).toBe(1)
+    // The Search Domain's neutral record of what it actually skipped.
+    expect(b.skippedExcludedRouteKeys).toEqual([firstKey])
     expect(b.trials.map(({ candidateKey }) => candidateKey)).not.toContain(firstKey)
     expect(b.excludedRouteKeys).toContain(firstKey)
   })
@@ -356,6 +359,34 @@ describe('Planner Alternative kernel: bounds and exclusions (PLANNER_SPEC 9.2.19
     const outcomes = completed(result).targets.map(({ targetWeaponId, outcome, search }) => [targetWeaponId, outcome.status, search === null])
     expect(outcomes).toContainEqual([TARGET_C, 'stopped_by_planner_rerun_bound', true])
     expect(completed(result).plannerRerunsUsed).toBe(1)
+  })
+
+  it('consumes a shared request-global budget when one is given, and its own otherwise', async () => {
+    const own = scenario(parts())
+    expect(completed(await runPlannerAlternativeKernel(request(own), own.dependencies)).plannerRerunsUsed).toBe(1)
+
+    // A calculation above the kernel already started 7 of 8 runs: the trial takes the last one.
+    const shared = createPlannerAlternativeFullRunBudget({ maxCandidateTrialsPerTarget: 4, maxPlannerReruns: 8 })
+    for (let run = 0; run < 7; run += 1) shared.beforePlannerRun()
+    const built = scenario(parts())
+    const result = completed(await runPlannerAlternativeKernel(request(built), built.dependencies, { fullRunBudget: shared }))
+    expect(result.plannerRerunsUsed).toBe(1)
+    expect(shared.used).toBe(8)
+    expect(targetOf(result, TARGET_B).outcome.status).toBe('found')
+
+    // Spent before the kernel starts: the Target stops without a search.
+    const spent = scenario(parts())
+    const stopped = targetOf(await runPlannerAlternativeKernel(request(spent), spent.dependencies, { fullRunBudget: shared }), TARGET_B)
+    expect(stopped.outcome).toEqual({ status: 'stopped_by_planner_rerun_bound' })
+    expect(stopped.search).toBeNull()
+    expect(stopped.skippedExcludedRouteKeys).toEqual([])
+  })
+
+  it('refuses a shared budget whose limit is not the request maxPlannerReruns', async () => {
+    const built = scenario(parts())
+    await expect(runPlannerAlternativeKernel(request(built), built.dependencies, {
+      fullRunBudget: createPlannerAlternativeFullRunBudget({ maxCandidateTrialsPerTarget: 4, maxPlannerReruns: 3 }),
+    })).rejects.toThrow('maxPlannerReruns')
   })
 
   it('separates an exhausted extent from an extent stop', async () => {
@@ -388,6 +419,50 @@ describe('Planner Alternative kernel: fail closed and determinism', () => {
     expect(b0.outcome).toEqual({ status: 'blocked_by_selected_checkpoint' })
     expect(b0.search).toBeNull()
     expect(b0.reservation).toBeNull()
+  })
+
+  it('validates the extent at the request entry even when no Target ever reaches the Search Domain', async () => {
+    const a = targetA()
+    const b = skillConstrainedTarget(TARGET_B, { priority: 1 })
+    const sourceB = orchestrationSource(ORCHESTRATION_SOURCE_B, { restorationBonuses: practicalBonuses(), seriesSkillId: SOURCE_B_SKILL })
+    const blockedParts = (): Parts => ({
+      targets: [a, b],
+      ownedWeapons: [orchestrationSource(ORCHESTRATION_SOURCE_A, { seriesSkillId: SOURCE_A_SKILL }), sourceB],
+      entries: [
+        orchestrationEntry(ENTRY_A, a, resetRoute(ORCHESTRATION_SOURCE_A), { finalBonuses: idealBonuses(), seriesSkillId: SOURCE_A_SKILL }),
+        checkpointMixedEntry(ENTRY_B, b, ORCHESTRATION_SOURCE_B, sourceB, { select: true }),
+      ],
+    })
+    // The valid extent: the only Target is checkpoint-blocked, so nothing is searched.
+    const valid = scenario(blockedParts())
+    const search = vi.spyOn(valid.engine, 'predictGogmaBonus')
+    const blocked = targetOf(await runPlannerAlternativeKernel(request(valid), valid.dependencies), TARGET_B)
+    expect(blocked.outcome).toEqual({ status: 'blocked_by_selected_checkpoint' })
+    expect(blocked.search).toBeNull()
+    expect(search).not.toHaveBeenCalled()
+
+    const extent = { maxNormalAdvance: 1, maxGogmaAdvance: 5, maxSkillAdvance: 2 }
+    for (const [invalid, path] of [
+      [{ maxGogmaAdvance: 5, maxSkillAdvance: 2 }, 'extent.maxNormalAdvance'],
+      [{ maxNormalAdvance: 1, maxSkillAdvance: 2 }, 'extent.maxGogmaAdvance'],
+      [{ maxNormalAdvance: 1, maxGogmaAdvance: 5 }, 'extent.maxSkillAdvance'],
+      [{ ...extent, maxNormalAdvance: 0 }, 'extent.maxNormalAdvance'],
+      [{ ...extent, maxGogmaAdvance: -1 }, 'extent.maxGogmaAdvance'],
+      [{ ...extent, maxSkillAdvance: 1.5 }, 'extent.maxSkillAdvance'],
+      [undefined, 'extent'],
+    ] as const) {
+      const built = scenario(blockedParts())
+      const error = await runPlannerAlternativeKernel(
+        request(built, { extent: invalid as never }),
+        built.dependencies,
+      ).then(() => null, (caught: unknown) => caught)
+      expect(error).toBeInstanceOf(PlannerAlternativeSearchError)
+      expect(error).toMatchObject({ code: 'invalid_input' })
+      expect((error as Error).message).toContain(path)
+      // Refused before any preparation, not repaired or defaulted.
+      expect(() => preparePlannerAlternativeKernel(request(built, { extent: invalid as never }), built.dependencies))
+        .toThrow(PlannerAlternativeSearchError)
+    }
   })
 
   it('refuses a prior fixed Entry that is not a valid Entry of the input', async () => {

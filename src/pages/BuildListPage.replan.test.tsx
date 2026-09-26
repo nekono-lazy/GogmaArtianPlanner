@@ -110,6 +110,7 @@ function workerClient(result: PlannerOrchestrationResult = orchestrationResult()
     createPlan: vi.fn(),
     createConstrainedPlan: vi.fn(async () => result),
     createWhatIfComparison: vi.fn(),
+    createPlannerAlternativeComparison: vi.fn(),
     prepareInteraction: vi.fn(),
     cancelPlan: vi.fn(),
     dispose: vi.fn(),

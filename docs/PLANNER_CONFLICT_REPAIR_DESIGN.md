@@ -7,7 +7,7 @@ Refs #136 / #101 / #122
 ## Status
 
 ```text
-正式仕様への反映:        完了（本PR。下記のnormative節）
+正式仕様への反映:        完了（本文書を追加したdocs-onlyの設計PR #138。下記のnormative節。以後の各Phaseで状態を同期）
 runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #140、Phase 1-C: #141、Phase 2: reservation導出、
                          held / blocked traversal、排他OwnedWeapon、held-aware到達量、新kernelのmaterializer、full Planner trialと
                          found判定（route commitmentの暫定帰結evidenceによる9.2.19.6の完全判定）、Issue #101のDomain
@@ -16,9 +16,12 @@ runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #1
                          Phase 3-C: extent 4 / 235 / 4、試行上限 2 / 8。PLANNER_SPEC 9.2.19.12）も完了した。Phase 4は
                          4-A / 4-Bに分割し、Phase 4-A（docs-only。scenario compositionのrun再利用規則、request-globalな
                          maxPlannerReruns、excludedByRepairLineageCount、adoptedInScenarioの未評価状態。PLANNER_SPEC
-                         9.2.19.8.1 / 9.2.19.12 / 9.2.19.13）で正式仕様を確定した。Phase 4-B以降（what-ifのruntime接続、
-                         repair接続、lineage永続化、Production routing切替）は未実装
-Production behavior:     変更していない（画面経路はlegacyのB8のまま）
+                         9.2.19.8.1 / 9.2.19.12 / 9.2.19.13）で正式仕様を確定した。Phase 4-B（what-ifのruntime接続:
+                         Planner Alternative What-if Calculation、scenario composition、request-globalなrerun budget、
+                         typed result / Route summary、新Worker request kind、Production Worker adapter、
+                         PlannerWorkerClient.createPlannerAlternativeComparison()）も実装した。Phase 5以降（repair接続、
+                         lineage永続化、Production routing切替）は未実装
+Production behavior:     変更していない（画面経路はlegacyのB8 / B9のまま。新Client APIはUIから呼ばれない）
 schema / version:        変更していない（10章）
 ```
 
@@ -42,7 +45,10 @@ normativeな契約は次の正式仕様にだけ置き、この文書はそれ�
 - B9 what-if「比較する」: 上記と同じ探索semanticsで、1段先までをpreviewする
 - Issue #122: 後続のPresentation改善へ渡すtyped dataを先に定義する
 
-本PRは仕様整理だけであり、コード、Worker protocol、UI、永続化、migration、benchmark、version値を変更しない。
+本文書は複数Phaseを通して更新する設計記録である。本文書を追加した設計PR（#138）と、scenario compositionの規則を
+確定したPhase 4-A（#147）はdocs-onlyであり、コード、Worker protocol、UI、永続化、migration、benchmark、version値を
+変更しなかった。Phase 4-Bではwhat-ifのruntime経路（Domain calculation、Worker protocol、Production Worker adapter、
+PlannerWorkerClient API）を実装したが、Production UI routing、永続化、schema / version値は変更していない。
 
 ---
 
@@ -111,8 +117,8 @@ pruning."** と明記された初回Search専用のdominanceである（[SEARCH_
 
 reservation下ではその前提（「offset 0のbaseが後方offsetと同じ未来へ同costで到達する」）が崩れ得る。
 例えばoffset 0のproduction target位置がfixed Routeにblockされていれば、後方offsetは劣後しない。
-したがって本PRでは流用を仕様化しない。安全なdominanceが証明できる場合だけ、後続PRで証明とbenchmarkを
-添えて別途採用する。
+したがって設計PR（#138）では流用を仕様化しなかった（Phase 4-Bまでの実装も流用していない）。安全なdominanceが
+証明できる場合だけ、後続PRで証明とbenchmarkを添えて別途採用する。
 
 ---
 
@@ -156,7 +162,8 @@ Gogma
 ```
 
 結果として「Normal 0で1本作成 → Skill 342で巨戟化 → Gogma 56〜289でReset」のようなRouteが候補になる
-（具体的なIdeal位置はRuntime実装で確認する。本PRは主張しない）。
+（設計PR #138の時点では具体的なIdeal位置を主張せず、runtime実装で確認するとした。Phase 2のIssue #101 acceptanceで、
+Normal 0 / Skill 342で巨戟化 / Gogma 56〜289のResetとなることを現行Production RNG実装での実測として確認している）。
 
 Normalの `create_normal_artian` は1 operationで連続forge範囲を表すので、canonical表現を固定した
 （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.4、[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8）。production targetより
@@ -325,7 +332,9 @@ Searchから手動置換すれば、そのTargetの履歴は失効する。恒�
   （PLANNER_SPEC 9.2.19.13。Search summaryのtotal除外件数 `excludedCandidates` とは別semantic）
 - 代替がscenario compositionで採用されたか（採用 / 不採用 / 上限による未評価）
 
-本PRはUIを変更しない。
+Phase 4-BではUIを変更していない。Phase 4-B完了時点でも、上記のtyped dataはDomain / Worker / Clientまでで返すだけであり、
+Production UI routingはlegacy経路のまま（`ProductionPlanPage` の「比較する」は旧 `createWhatIfComparison()` を呼び、
+新しい `createPlannerAlternativeComparison()` を呼ばない）とする。表示の切替はPhase 5、Presentation改善はPhase 7で行う。
 
 ---
 
@@ -345,7 +354,8 @@ Searchから手動置換すれば、そのTargetの履歴は失効する。恒�
 
 ## 10. version方針
 
-本PRはdocs-onlyであり、次を変更しない。
+設計PR（#138）とPhase 1〜4（4-A / 4-Bを含む）ではversionを変更しない。Phase 4-B完了時点の値は次のとおりである。
+version更新はPhase 5のactual repair・lineage永続化・Production routing切替と合わせて行う。
 
 ```text
 CURRENT_CALCULATION_APP_SCHEMA_VERSION  15
@@ -417,13 +427,28 @@ Master dataVersion                      4
    Build Listから消えた後に通常Plannerがstall dropしたときの表示（Phase 5または#122）。Domain上は既存の
    stall drop / `rejectedBuildListEntries` で扱い、新しいstale理由を作らない
 6. repair結果とlineageの保存を既存 `savePlannerOrchestrationResult()` へ載せる具体的なresult型（Phase 5）
+7. **Phase 4-Bで確定した実装上の読み方**（**確定済み**。normativeな記述は [PLANNER_SPEC.md](./PLANNER_SPEC.md) にあり、
+   本項はその経緯の記録である。矛盾した場合は正式仕様が優先する）。
+   - `unplannedTargetWeaponIds`: final scenario Planのどの `PlanStep.executionEffects.targetCompletions` にも現れない
+     planning Target（`PlannerInitialContext.planningTargetIds`）。Production Plan画面の完成予定数と同じauthority
+     （正式仕様: PLANNER_SPEC 9.2.19.13「`unplannedTargetWeaponIds` の意味」）
+   - 決定の展開はcheckpoint Conflict（`checkpointParticipants` が空でない、または `undefined`）へ適用しない。9.5.1への例外を
+     作らず、そのConflictは未解決Conflictとして分類に残る（正式仕様: PLANNER_SPEC 9.2.19.9 / 9.2.19.13）
+   - found replacementが0件のscenario run（ケースA）のpreflight失敗は、typed outcomeを推測せずinvariant violationとして
+     throwする（正式仕様: PLANNER_SPEC 9.2.19.8.1）
 
 ---
 
-## 13. 本PRで変更していないもの
+## 13. Phase 4-Bで変更していないもの
+
+Phase 4-BはDomain calculation、Search executionのneutralなskip記録、Worker protocol、Production Worker adapter、
+PlannerWorkerClient APIとそのtestを変更した。次は変更していない。
 
 ```text
-src/**、テスト、Worker protocol、UI、Dexie schema、migration、Export / Import
+Production UI routing（ProductionPlanPageの「比較する」はlegacy B9のwhat-if経路のまま）
+actual repair（「この候補を優先」はlegacy B8経路のまま）
+repair lineageの永続化（ProductionPlan.conflictRepairLineageは未追加）
+Dexie schema、migration、Export / Import schema、各version値（10章）
 defaultConstrainedEnumerationBounds     40 / 30 / 100 / 500
 defaultPlannerOrchestrationBounds       2 / 1 / 4
 defaultPlannerWhatIfBounds              2 / 8
