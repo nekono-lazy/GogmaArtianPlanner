@@ -138,8 +138,10 @@ interface BonusChannel extends Channel<EvaluatedBonusSolution> {
  * `initial_candidate_search` retains the first position of each stream result
  * and composes the Cross axes only. `planner_alternative` (SEARCH_SPEC 5.6.8)
  * publishes every stream position and composes every Ideal pair through
- * `createLazyIdealCross()`, one pending cell per row, so the Cartesian product
- * is still never materialized ahead of the lower bound. The streams and their
+ * `createLazyIdealCross()`, one pending cell per row and one queued wake-up
+ * step per waiting row resumed, so the Cartesian product is still never
+ * materialized ahead of the lower bound and no long synchronous expansion runs
+ * between two checkpoints. The streams and their
  * prediction memos are shared by both.
  */
 export class TargetSearchScheduler {
@@ -204,13 +206,21 @@ export class TargetSearchScheduler {
     // The initial Search composes the Cross axes only (SEARCH_SPEC 5.5.4); the
     // Planner Alternative policy composes every Ideal pair, lazily (5.6.8).
     const cross = this.policy === 'planner_alternative'
-      ? createLazyIdealCross((bonus, skill, onSettled) => {
-        const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
-        const settle = settleComposition(bonus, skill, cost)
-        this.queue.enqueue({ lowerBound: cost, settle: async () => {
-          await settle()
-          onSettled()
-        } })
+      ? createLazyIdealCross({
+        open: (bonus, skill, onSettled) => {
+          const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
+          const settle = settleComposition(bonus, skill, cost)
+          this.queue.enqueue({ lowerBound: cost, settle: async () => {
+            await settle()
+            onSettled()
+          } })
+        },
+        // One waiting row per work item, so resuming many rows passes the
+        // ordinary `step()` checkpoint between any two of them.
+        wake: (bonus, skill, resume) => {
+          const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
+          this.queue.enqueue({ lowerBound: cost, settle: resume })
+        },
       })
       : createDeltaCross((bonus, skill) => {
         const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount

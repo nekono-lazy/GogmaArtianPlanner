@@ -473,6 +473,87 @@ describe('cancellation and Worker yield inside long stream and pair work', () =>
   })
 })
 
+describe('waiting row wake-up stays cancellable and yields (SEARCH_SPEC 5.6.8)', () => {
+  // Every Reset is an Ideal Bonus row, but the only Ideal Skill is the last
+  // Reset Skills position (Skill 406 = the existing Gogma's depth 400). Its
+  // lower bound is 400, so about 400 rows per Route base wait for that one
+  // column when it arrives.
+  const ARRIVAL = 'skill:406'
+  const waitingRows = () => frontierFixture({
+    extent: 400,
+    owned: [{ bonuses: 'practical', idealSkill: false }],
+    resetIdealAt: () => true,
+    skillIdealAt: (skill) => skill === 406,
+  })
+
+  /**
+   * Logs every queued work item, scheduler checkpoint and Worker yield, marking
+   * the work queued once the Skill column arrived: that is the waiting row
+   * wake-up (and the cells it opens).
+   */
+  function instrument(calls: string[]) {
+    const events: string[] = []
+    let arrived = false
+    const note = () => { arrived ||= calls.includes(ARRIVAL) }
+    const enqueue = SearchWorkQueue.prototype.enqueue
+    vi.spyOn(SearchWorkQueue.prototype, 'enqueue').mockImplementation(function (this: SearchWorkQueue, work) {
+      note()
+      events.push(arrived ? 'expand' : 'enqueue')
+      return enqueue.call(this, work)
+    })
+    const longestRun = (breaker: string) => {
+      let longest = 0
+      let run = 0
+      for (const event of events) {
+        if (event === 'expand') longest = Math.max(longest, ++run)
+        else if (event === breaker) run = 0
+      }
+      return longest
+    }
+    return { events, arrived: () => arrived, longestRun }
+  }
+
+  it('observes cancellation before every waiting row was resumed', async () => {
+    const { input, engine, calls } = waitingRows()
+    const log = instrument(calls)
+    let checksAfterArrival = 0
+    await expect(collect(input, engine, Infinity, {
+      shouldCancel: () => {
+        log.events.push('check')
+        if (log.arrived()) checksAfterArrival += 1
+        return checksAfterArrival > 3
+      },
+    })).rejects.toSatisfy((error) => error instanceof CandidateSearchError && error.code === 'cancelled')
+
+    // Hundreds of rows were waiting for the column ...
+    const resetsBeforeArrival = calls.slice(0, calls.indexOf(ARRIVAL)).filter((call) => call.startsWith('reset:'))
+    expect(resetsBeforeArrival.length).toBeGreaterThanOrEqual(399)
+    // ... yet the cancel was observed after a handful of wake-up steps, not
+    // after a synchronous pass over all of them.
+    const expanded = log.events.filter((event) => event === 'expand').length
+    expect(expanded).toBeGreaterThan(0)
+    expect(expanded).toBeLessThan(20)
+  })
+
+  it('passes a checkpoint and yields to the Worker while resuming the waiting rows', async () => {
+    const { input, engine, calls } = waitingRows()
+    const log = instrument(calls)
+    const { candidates } = await collect(input, engine, 120, {
+      shouldCancel: () => { log.events.push('check'); return false },
+      yieldControl: async () => { log.events.push('yield') },
+    })
+    expect(candidates).toHaveLength(120)
+    const afterArrival = log.events.slice(log.events.indexOf('expand'))
+    expect(afterArrival.filter((event) => event === 'expand').length).toBeGreaterThanOrEqual(120)
+    // Never more than a few wake-up / cell items between two checkpoints, and
+    // the Worker is yielded to inside the wake-up, well before a whole batch
+    // of roughly 400 rows could be expanded without one.
+    expect(log.longestRun('check')).toBeLessThanOrEqual(4)
+    expect(afterArrival).toContain('yield')
+    expect(log.longestRun('yield')).toBeLessThan(200)
+  })
+})
+
 describe('prediction independence (SEARCH_SPEC 3.1 / 5.6.8)', () => {
   const base: FrontierFixtureOptions = {
     normalCounter: true,
