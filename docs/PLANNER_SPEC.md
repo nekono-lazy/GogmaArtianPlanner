@@ -4168,7 +4168,7 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 
 ### 9.2.19 Planner Alternative Searchと1段の競合repair（Issue #136 / #101）
 
-実装状態: **Phase 4-Bまで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
+実装状態: **Phase 5-Aまで部分実装**。本節はdocs-onlyのPRで確定した正式契約であり、runtime実装は
 9.2.19.16のPhaseに従って段階的に行う。Phase 1（Phase 1-A: modern Search基盤のcomposition seam、Phase 1-B: Search Domain
 APIと空reservationでの基本consumer経路、Phase 1-C: 空reservationでの探索完全性。[SEARCH_SPEC.md](./SEARCH_SPEC.md)
 5.6.8の実装状態を参照）は実装済みである。Phase 2も実装済みである: fixed Route集合からのreservation導出
@@ -4193,9 +4193,22 @@ final run・各run内のruntime-unsupported retryで共有）、9.2.19.13のtype
 `create_what_if_comparison` と並行する新しい request kind（`create_planner_alternative_comparison` /
 `create_planner_alternative_comparison_result`）、Production Worker adapter（`createProductionPlannerAlternativeComparison()`、
 extent / 試行上限のProduction defaultをWorker境界内で明示的に渡す）、`PlannerWorkerClient.createPlannerAlternativeComparison()`
-である。Phase 5〜7（actual repair、lineage永続化、Production routing切替とversion更新、legacy pathの整理、Presentation）は
-未実装であり、Plannerの画面経路は本節の契約をまだ使っていない（Production UI routingはlegacyのB8 / B9経路のまま。
-`ProductionPlanPage` は旧 `createWhatIfComparison()` を呼び、新しいClient APIを呼ばない）。
+である。Phase 5は5-A / 5-Bに分ける。Phase 5-A（actual repairのPure Domain計算）も実装済みである: what-ifとactual repairの
+共通scenario core（`runPlannerAlternativeScenario()`、`src/domain/planner/alternative/plannerAlternativeScenario.ts`。Kernelの準備と
+individual trial、9.2.19.8.1のscenario composition、request-globalなrerun budget、9.2.19.9の決定の展開の唯一のauthority
+`expandPlannerAlternativeDecision()`、9.2.19.13のtyped comparison）の上に、what-if（`createPlannerAlternativeWhatIfComparison()`、
+外部契約と結果はPhase 4-Bのまま）とactual repair（`createPlannerAlternativeRepair()`、`plannerAlternativeRepair.ts`）を置く。
+actual repairはwhat-ifと同じtyped comparisonを返し、保存可能なfinal scenario Planがある場合だけ、Phase 5-BがPersistenceへ
+渡すPure Domain artifact（決定を展開したfinal `PlannerResult`（`conflicts` と `plan.conflicts` は同じ展開後の集合）、
+accepted replacement集合のgenerated Entryと `O -> G` のreplacement metadata、次に保存すべきrepair lineage）を返す。
+accepted replacementはscenario compositionのaccepted集合をauthorityとし、final Planでselectedであることを要求しない
+（9.2.19.6の条件4後半）。repair lineageのDomain型（`PlannerConflictRepairLineage` 等、[DATA_MODEL.md](./DATA_MODEL.md)
+11.1.1）と、有効なlineageの導出（`derivePlannerConflictRepairLineageContext()`: Target単位の失効、fixed Entryの失効、
+prior fixed Entry / prior除外Route key、次のlineageへ引き継ぐ決定）・outcome写像・決定の追記（`plannerConflictRepairLineage.ts`）も
+Phase 5-Aで実装した。Phase 5-B〜7（lineage永続化とmigration、Persistence、Worker / Client、Production routing切替と
+version更新、legacy pathの整理、Presentation）は未実装であり、Plannerの画面経路は本節の契約をまだ使っていない
+（Production UI routingはlegacyのB8 / B9経路のまま。`ProductionPlanPage` は旧 `createWhatIfComparison()` を呼び、
+新しいClient APIを呼ばない。actual repairはどのWorker・Client・画面からも呼ばれない）。
 
 9.2.19.6の条件4の後半（`G` が選ばれない理由が、fixed Route集合外Entryとの未解決競合の暫定帰結だけであること）は、
 Planの記録（`plan.rejectedBuildListEntries` 等）からは「`G` が暫定帰結で負けた後に勝者がstallで落ちた」と「`G` が
@@ -4717,7 +4730,69 @@ Target単位の失効。lineageのTarget Bに関する記録は、Bの現在Buil
 
 fixed Entryの失効。lineageの以前の決定のfixed Entryは、現在Build Listに同じIDで存在し、その後の決定で
 無効化されていない間だけfixed Route集合に入る（9.2.19.3）。後の決定で以前のfixed Entryが負けた場合、
-最新の決定が優先し、そのEntryのRouteは無効化Routeとして記録する。
+最新の決定が優先し、そのEntryのRouteは無効化Routeとして記録する。「その後の決定」には今回の決定も含む:
+今回の決定が無効化するEntry（今回のConflictの非固定participantのEntry）は、lineageで以前固定されていても
+今回のrequestのfixed Route集合に入れない（Phase 5-Aの実装では、Kernelが
+`runPreparedPlannerAlternativeKernel()` でcallerの `priorFixedBuildListEntryIds` から今回の無効化Entryを除く）。
+
+**supersededされるprior fixed resolution**（固定する）。以前のrepair decisionでfixedになったEntryは、lineageだけでなく、
+表示中Draftの `PlanConflict.selectedBuildListEntryId` から復元されたexplicit resolution（9.2.4.14）としても今回の
+`PlannerInput.conflictResolutions` に残る。最新の決定が優先するためには、fixed Route集合だけでなくそのresolutionも
+今回のrequestから外す必要がある。
+
+```text
+superseded prior fixed Entry
+  = 現在有効なactive lineage contextのprior fixed Entry（上記の失効規則を適用したもの）
+    ∩ 今回の決定が無効化するEntry（今回のConflictの非固定participant Targetの現在Entry）
+```
+
+- superseded prior fixed Entryを `selectedBuildListEntryId` とする復元済みexplicit resolutionは、今回のrequestでは
+  supersedeされ、fixed constraint、明示決定Entry（9.2.19.6）、replacement preflightの再対応付け（9.2.3.1）の対象に
+  しない。そのresolutionは以前のrepair decisionがそのRouteをfixedした結果であり、今回の後続の決定でそのEntryの現在Route
+  自体が負けたため、以前のfixed decisionを今回のrequestで同時に要求できないからである。同じsuperseded prior fixed Entryを
+  選択するresolutionが複数のConflictにある場合は、同じRoute単位のprior decisionの結果としてすべてsupersedeする
+- supersedeは今回の決定のmerge（9.2.4.5: 同じ `conflictKey` は置換、他は維持、無ければ追加）の前に、今回の決定と同じ
+  `conflictKey` 以外のresolutionについてだけ行う。今回の決定自身と同じ `conflictKey` のresolutionは従来どおりmergeで
+  置換される。mergeの一般契約は変えない
+- 保持するもの: 今回の決定で無効化されないEntryを選択するresolution、active lineageのprior fixed EntryではないEntryを
+  選択するresolution、今回の決定そのもの。`selectedBuildListEntryId` が一致するというだけで広くresolutionを削除しない
+- 失効したlineage（Target単位・fixed Entryの失効で現在有効でない記録）はsupersedeのauthorityにしない。authorityは
+  現在有効なactive lineage contextのprior fixed Entryだけであり、lineageの無いrequest（通常のwhat-ifを含む）では
+  何もsupersedeしない
+- supersedeはshared scenario preparationの意味であり、what-ifとactual repairで共通である。Phase 5-Aの実装では
+  `preparePlannerAlternativeKernel()` が、callerのprior fixed Entry（`priorFixedBuildListEntryIds`、active lineage contextから
+  導出したもの）と今回の無効化Entryからsuperseded resolutionを求め、それを除いた実効入力でscenarioを準備する
+  （`PreparedPlannerAlternativeKernel.supersededConflictResolutions`）。full Planner runではなく、`maxPlannerReruns` を
+  消費しない。individual trial、scenario composition、run再利用の規則は変えない
+
+決定のoutcomeの記録（固定する）。今回の決定の `invalidatedRoutes` は、今回のConflictの直接participant Target
+（9.2.19.8手順3のstable order）ごとに1件であり、`invalidatedRouteKey` はその時点の無効化Entryの現在Routeの
+`candidateStableKey()` である（Route summaryや文字列から再構築しない）。`outcome` と
+`replacementBuildListEntryId` は、individual trialのoutcomeとscenario composition（9.2.19.8.1）での採否から
+次の表だけで決める（[DATA_MODEL.md](./DATA_MODEL.md) 11.1.1）。
+
+| individual trialのoutcome / scenarioでの採否 | lineageの `outcome` | `replacementBuildListEntryId` |
+| --- | --- | --- |
+| `found` かつ `adoptedInScenario = true` | `replaced` | accepted replacementのgenerated Entry ID |
+| `found` かつ `adoptedInScenario = false` | `rejected_by_scenario_composition` | `null` |
+| `not_found_within_search_extent` | 同じstatus | `null` |
+| `stopped_by_search_extent_bound` | 同じstatus | `null` |
+| `stopped_by_candidate_trial_bound` | 同じstatus | `null` |
+| `stopped_by_planner_rerun_bound` | 同じstatus | `null` |
+| `blocked_by_selected_checkpoint` | 同じstatus | `null` |
+
+- `replaced` のauthorityはscenario compositionのaccepted replacement集合だけであり、final scenario Planで
+  そのgenerated Entryがselectedかどうかを条件にしない（9.2.19.6の条件4後半でacceptedになったreplacementを含む）
+- `rejected_by_scenario_composition` は、individual trialではfoundだったが、scenario compositionで評価した結果
+  （adoption runのpreflight・再対応付けの失敗、またはaccepted判定の不成立）最終accepted集合へ採用しなかった
+  ことを表す。rejectしたreplacementのgenerated Entry IDやCandidateのkeyは記録しない（9.2.19.10）
+- `adoptedInScenario = null` によって `scenario` が `stopped_by_planner_rerun_bound` になりfinal scenario resultを
+  確定できない場合、actual repairは何も保存しないので、そのrequestの新しいlineageも保存対象として確定しない。
+  推測したlineageだけを返して後から保存する設計にしない
+
+lineageの失効による整理。次のrepair保存でlineageを引き継ぐとき、上記のTarget単位の失効で無効になった記録を
+落とす。その結果、有効なTarget記録が1件も残らず、fixed Entryも有効でない決定は、fixed Route集合にも除外集合にも
+寄与しないので決定ごと落とす。残る決定と記録は元の順序を保つ（[DATA_MODEL.md](./DATA_MODEL.md) 11.1.1）。
 
 lineageは保存済みPlanの監査・chain継続用の値であり、どのstatusのPlanでもcurrent foreign keyとしては
 検証しない（Draft本体と同じ扱い。[DATA_MODEL.md](./DATA_MODEL.md) 11.1 / 15.2）。構造・literal・
@@ -4813,7 +4888,9 @@ interface PlannerAlternativeSearchExtent {
     caller必須指定のままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの2定数を
     明示的に渡す（Phase 4-Bで、what-ifのProduction Worker adapter `createProductionPlannerAlternativeComparison()`
     がWorker境界内で `defaultPlannerAlternativeSearchExtent` と `defaultPlannerAlternativeTrialBounds` を各Domain authorityから
-    importして渡すよう配線した。Worker request・Client・Application callerはどちらも持たない。actual repairへの配線はPhase 5）
+    importして渡すよう配線した。Worker request・Client・Application callerはどちらも持たない。Phase 5-Aのactual repair
+    `createPlannerAlternativeRepair()` もextent / boundsをcaller必須で受け取り、Domain内でdefaultへfallbackしない。
+    actual repairのProduction Worker adapterへの配線はPhase 5-B）
 - 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
 - extentは探索範囲の上限であり、探索の進め方はoperation cost層単位のlazy探索である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8
   「cost層単位のlazy性」）。代替探索はextent全体をupfront solveせず、最初のCandidateまでにsettle / solveするworkはそのCandidateのcost層までに
@@ -5040,7 +5117,10 @@ interface PlannerAlternativeRouteSummary {
 - **Phase 1〜4**（Search Domain API、reservation、benchmark、Phase 4-Aのdocs-only仕様確定、Phase 4-Bのwhat-ifの
   Domain / Worker contract）は永続shapeもProduction Plan生成も変えないので、どのversionも動かさない。what-ifの
   resultは永続化しない
-- **Phase 5**（actual repairの新semantics、Production routing切替、lineage永続化）
+- **Phase 5-A**（actual repairとlineageのPure Domain計算、what-if / actual repair共通のscenario core）は永続shape、
+  Worker protocol、Production routing、Production Plan生成を変えないので、どのversionも動かさない。lineageのDomain型は
+  追加するが、`ProductionPlan` の永続shapeへは接続しない
+- **Phase 5-B**（actual repairの新semanticsのProduction routing切替、lineage永続化）
   - `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を16へ上げる。同じPlannerInputと決定から保存されるPlan
     （採用replacement、Conflict、決定の展開、不採用記録）が変わり、保存済みPlanは生成方式を記録しないため。
     version 1..15のProductionPlanは下書き・実行中を問わず `calculation_context_changed` でfail closedし、
@@ -5063,7 +5143,7 @@ interface PlannerAlternativeRouteSummary {
 #### 9.2.19.16 phase分割
 
 依存関係を確認したうえで、次の7 Phaseとする（理由は
-[PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md) 11章）。Phase 4は4-A / 4-Bに分ける。
+[PLANNER_CONFLICT_REPAIR_DESIGN.md](./PLANNER_CONFLICT_REPAIR_DESIGN.md) 11章）。Phase 4は4-A / 4-B、Phase 5は5-A / 5-Bに分ける。
 
 ```text
 Phase 1  modern Search基盤を使うPlanner Alternative SearchのSearch Domain API
@@ -5079,8 +5159,12 @@ Phase 4-B  B9 what-if「比較する」のPlanner Alternative Kernel runtime接�
            Calculation、typed result、PlannerAlternativeRouteSummary、shared rerun budgetの接続、
            scenario composition、Worker protocol、Production adapter、PlannerWorkerClient API、
            Domain / Worker / Client test。Production UI routingはまだ旧経路（切替はPhase 5）
-Phase 5  「この候補を優先」のactual repair、Conflict再生成と決定の展開、lineage永続化、
-         what-if / repair両方のProduction routing切替、version更新（9.2.19.15）
+Phase 5-A  「この候補を優先」のactual repairのPure Domain計算、what-if / actual repair共通のscenario core、
+           Conflict再生成と決定の展開の保存可能Planへの反映、repair lineageのPure Domain計算（有効lineageの導出、
+           outcome写像、決定の追記）、正式仕様の補完（lineage outcome `rejected_by_scenario_composition`）。
+           Production routing・Persistence・Worker protocol・UI・migration・versionは変えない
+Phase 5-B  lineage永続化とmigration、Persistence（artifactの保存時再validation、Plan-breaking guard）、
+           Worker / Client、what-if / repair両方のProduction routing切替、version更新（9.2.19.15）
 Phase 6  legacy constrained pathの削除またはtest oracle化
 Phase 7  #122 Presentation改善
 ```
@@ -5112,6 +5196,10 @@ authorityのまま維持し、scenario compositionはKernelへ混在させず、
 accepted集合の全generated Entryへ適用して判定し、判定authorityを複製しない。Worker / Client は旧B9 経路と並行する
 新しいrequest kindとmethodであり、Phase 4-BでもProduction UI routingは切り替えない（legacyのB8 / B9経路のまま）。
 what-ifとactual repairのProduction routing切替はPhase 5で同時に行う。Phase 4-Bはversionを動かさない（9.2.19.15）。
+Phase 5は5-A / 5-Bに分けた。**Phase 5-A**（actual repairとlineageのPure Domain計算）は完了した。scenario compositionは
+what-ifから共通scenario core（`runPlannerAlternativeScenario()`）へ移し、what-ifとactual repairはその上の2つのprojectionである
+（what-ifの外部契約・run数・budget semanticsはPhase 4-Bのまま）。**Phase 5-B**でPersistence・Worker / Client・Production routingを
+what-ifとactual repairの両方について同時に切り替え、versionを更新する。Phase 5全体はまだ完了していない。
 `maxPlannerReruns` は複数Targetが1つのbudgetを共有するrerun-pressure workloadで実測する。`maxCandidateTrialsPerTarget` は、
 現行semanticsで「Candidate 1がtrialでreject、後続Candidateがfound」となるProduction workloadを確認できていないため、
 semantic thresholdをPhase 3-Bの実測対象とせず、1 trialあたりの実コストと安全弁としての役割からPhase 3-Cで設計判断する

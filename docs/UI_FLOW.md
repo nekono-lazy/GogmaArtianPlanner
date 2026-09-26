@@ -1723,7 +1723,7 @@ PlanStep表示。
 
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19で、「比較する」を1段previewとし、「この候補を優先」をRoute単位の
 決定と1段repairにする正式契約を確定した。**現在のUIは11.2〜11.4のままであり、本節はUIを変更しない。**
-Domain / Worker側の切替はPhase 5、表示の作り込みはIssue #122（Phase 7）で行う。本節は、それまでに
+Domain / Worker側の切替はPhase 5（Domain計算はPhase 5-Aで実装済み、Production routingの切替はPhase 5-B）、表示の作り込みはIssue #122（Phase 7）で行う。本節は、それまでに
 Domainが返すtyped dataと、どの表示でも守る最低限の意味だけを定める。
 
 後続UIが使えるtyped data（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.13）。

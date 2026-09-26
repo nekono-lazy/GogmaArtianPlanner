@@ -74,6 +74,10 @@ const SOURCE_C = 'owned.kernel.c'
 const ENTRY_A = 'build-list.kernel.a' as BuildListEntryId
 const ENTRY_B = 'build-list.kernel.b' as BuildListEntryId
 const ENTRY_C = 'build-list.kernel.c' as BuildListEntryId
+const TARGET_D = 'target.kernel.d'
+const SOURCE_D = 'owned.kernel.d'
+const ENTRY_D = 'build-list.kernel.d' as BuildListEntryId
+const SOURCE_D_SKILL = 'series_skill.fixture.d-source'
 const SOURCE_A_SKILL = 'series_skill.fixture.z'
 const SOURCE_B_SKILL = 'series_skill.fixture.b-source'
 const SOURCE_C_SKILL = 'series_skill.fixture.c-source'
@@ -472,6 +476,46 @@ describe('Planner Alternative kernel: fail closed and determinism', () => {
       built.dependencies,
     )
     expect(result).toMatchObject({ status: 'invalid_prior_fixed_entry', buildListEntryId: 'build-list.kernel.missing' })
+  })
+
+  it('leaves a prior fixed Entry this decision invalidates out of every Target fixed Route set (latest decision wins)', async () => {
+    // D contends for the same Gogma 10 as A and B: one conflict, A fixed, B and D invalidated.
+    const d = ownSkillTarget(TARGET_D, SOURCE_D_SKILL, 2)
+    const base = parts()
+    const built = scenario({
+      targets: [...base.targets, d],
+      ownedWeapons: [...base.ownedWeapons, orchestrationSource(SOURCE_D, { seriesSkillId: SOURCE_D_SKILL })],
+      entries: [...base.entries, orchestrationEntry(ENTRY_D, d, resetRoute(SOURCE_D), { finalBonuses: idealBonuses(), seriesSkillId: SOURCE_D_SKILL })],
+    })
+    const conflictKey = gogmaConflictKey(built)
+    const prepared = preparePlannerInitialContext(built.input, built.dependencies)
+    if (prepared.status !== 'ready') throw new Error('fixture not ready')
+    expect(prepared.context.initialConflictDetection.conflicts.find(({ id }) => id === conflictKey)?.buildListEntryIds)
+      .toEqual(expect.arrayContaining([ENTRY_A, ENTRY_B, ENTRY_D]))
+
+    // An earlier decision fixed D; this one prefers A over D.
+    const result = completed(await runPlannerAlternativeKernel(
+      request(built, { priorFixedBuildListEntryIds: [ENTRY_D] }),
+      built.dependencies,
+    ))
+    expect(result.targets.map(({ targetWeaponId }) => targetWeaponId).sort()).toEqual([TARGET_B, TARGET_D].sort())
+    for (const target of result.targets) expect(target.fixedRouteBuildListEntryIds).toEqual([ENTRY_A])
+
+    // A prior fixed Entry the decision leaves alone stays fixed for every Target.
+    const withoutD = scenario(withUnfixedC(parts()))
+    const kept = completed(await runPlannerAlternativeKernel(
+      request(withoutD, { priorFixedBuildListEntryIds: [ENTRY_C] }),
+      withoutD.dependencies,
+    ))
+    expect(kept.targets.map(({ fixedRouteBuildListEntryIds }) => fixedRouteBuildListEntryIds)).toEqual([[ENTRY_A, ENTRY_C].sort()])
+  })
+
+  it('records the invalidated Route key of every Target, searched or not', async () => {
+    const built = scenario(parts())
+    const b = targetOf(await runPlannerAlternativeKernel(request(built), built.dependencies), TARGET_B)
+    const entryB = built.input.buildListEntries.find(({ id }) => id === ENTRY_B)!
+    expect(b.invalidatedRouteKey).toBe(candidateStableKey(entryB.candidateSnapshot))
+    expect(b.excludedRouteKeys).toContain(b.invalidatedRouteKey)
   })
 
   it('passes an invalid decision through as the typed preparation failure', async () => {
