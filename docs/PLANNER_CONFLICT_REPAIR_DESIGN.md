@@ -19,9 +19,12 @@ runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #1
                          9.2.19.8.1 / 9.2.19.12 / 9.2.19.13）で正式仕様を確定した。Phase 4-B（what-ifのruntime接続:
                          Planner Alternative What-if Calculation、scenario composition、request-globalなrerun budget、
                          typed result / Route summary、新Worker request kind、Production Worker adapter、
-                         PlannerWorkerClient.createPlannerAlternativeComparison()）も実装した。Phase 5以降（repair接続、
-                         lineage永続化、Production routing切替）は未実装
-Production behavior:     変更していない（画面経路はlegacyのB8 / B9のまま。新Client APIはUIから呼ばれない）
+                         PlannerWorkerClient.createPlannerAlternativeComparison()）も実装した。Phase 5は5-A / 5-Bに分割し、
+                         Phase 5-A（actual repairとrepair lineageのPure Domain計算、what-if / actual repair共通のscenario core、
+                         lineage outcome `rejected_by_scenario_composition` の正式仕様補完）を実装した。Phase 5-B以降
+                         （lineage永続化とmigration、Persistence、Worker / Client、Production routing切替、version更新）は未実装
+Production behavior:     変更していない（画面経路はlegacyのB8 / B9のまま。新Client APIはUIから呼ばれない。actual repairは
+                         Domain APIだけであり、Worker・Client・画面から呼ばれない）
 schema / version:        変更していない（10章）
 ```
 
@@ -354,8 +357,8 @@ Production UI routingはlegacy経路のまま（`ProductionPlanPage` の「比�
 
 ## 10. version方針
 
-設計PR（#138）とPhase 1〜4（4-A / 4-Bを含む）ではversionを変更しない。Phase 4-B完了時点の値は次のとおりである。
-version更新はPhase 5のactual repair・lineage永続化・Production routing切替と合わせて行う。
+設計PR（#138）、Phase 1〜4（4-A / 4-Bを含む）とPhase 5-Aではversionを変更しない。Phase 5-A完了時点の値は次のとおりである。
+version更新はPhase 5-Bのlineage永続化・Production routing切替と合わせて行う。
 
 ```text
 CURRENT_CALCULATION_APP_SCHEMA_VERSION  15
@@ -371,7 +374,8 @@ Master dataVersion                      4
 
 - Phase 1〜4（Search Domain API、reservation、benchmark、what-if Domain / Worker contract）は永続shapeも
   Production Plan生成も変えないのでversionを動かさない
-- Phase 5（actual repair + lineage永続化 + Production routing切替）で
+- Phase 5-A（actual repairとlineageのPure Domain計算）もversionを動かさない
+- Phase 5-B（lineage永続化 + Production routing切替）で
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 15 → 16（build-result互換例外 `16 -> [12, 13, 14, 15]`）、
   `DATABASE_SCHEMA_VERSION` 9 → 10、`ExportRoot.schemaVersion` 12 → 13
 
@@ -400,7 +404,8 @@ Master dataVersion                      4
 | 3 | 実Browser Worker benchmark（Issue #101実ケース、no-Ideal worst case、長いheld run、cancel / responsiveness、time to first Candidate、same-cost closureでsettleしたwork数、held run長に対するコスト、Skill / Gogmaのheld state数とfamily layout数、prediction呼び出し数、Candidate trial数、full Planner rerun数）。extent defaultとwhat-if / repairの試行上限default決定 | 2 | Production behaviorなし（benchmark基盤と、Search / Planner DomainのProduction default定数。routing未接続）/ なし |
 | 4-A | docs-onlyの正式仕様明確化（scenario compositionのmonotonic adoption run規則、trial / adoption / final resultの再利用規則、request-globalな `maxPlannerReruns`、`excludedByRepairLineageCount`、`adoptedInScenario` の未評価semantic）。runtime code・Worker・routing・schema・UIは変えない | 3 | なし / なし |
 | 4-B | B9 what-if「比較する」のPlanner Alternative Kernel runtime接続（Planner Alternative What-if Calculation、scenario compositionと `scenarioOperationCount`、`PlannerAlternativeRouteSummary` を含むtyped result、shared rerun budget接続、Worker protocol、Production adapter、PlannerWorkerClient API、Domain / Worker / Client test）。Production UI routingはまだ旧経路 | 4-A | なし / なし |
-| 5 | 「この候補を優先」のactual repair（Route単位の決定、決定の展開、Conflict再生成、lineage永続化、migration）と、what-if / repair両方のProduction routing切替 | 4-B | あり / calc 16、DB 10、Export 13 |
+| 5-A | 「この候補を優先」のactual repairのPure Domain計算（Route単位の決定、what-ifと共通のscenario core、決定の展開を保存可能Planへ反映、accepted replacement / lineageを含むPersistence用artifact）、repair lineageのPure Domain計算、lineage outcome `rejected_by_scenario_composition` の正式仕様補完 | 4-B | なし / なし |
+| 5-B | lineage永続化とmigration、Persistence（artifactの保存時再validation、Plan-breaking guard）、Worker / Client、what-if / repair両方のProduction routing切替 | 5-A | あり / calc 16、DB 10、Export 13 |
 | 6 | legacy constrained path（B8 enumeration / orchestration、関連bounds・warning・benchmark page）の削除またはtest oracle化 | 5 | なし / なし（永続shapeに触れる場合は別途判断） |
 | 7 | #122 Presentation改善（Conflict / what-if / repair結果の表示） | 5（4-Bのtyped dataを使う） | UIのみ / なし |
 
@@ -426,7 +431,13 @@ Master dataVersion                      4
 5. 外部進行に依存するgenerated Entry（fixed Routeが先に進めることを前提にしたRoute）を、fixed Entryが
    Build Listから消えた後に通常Plannerがstall dropしたときの表示（Phase 5または#122）。Domain上は既存の
    stall drop / `rejectedBuildListEntries` で扱い、新しいstale理由を作らない
-6. repair結果とlineageの保存を既存 `savePlannerOrchestrationResult()` へ載せる具体的なresult型（Phase 5）
+6. repair結果とlineageの保存を既存 `savePlannerOrchestrationResult()` へ載せる具体的なresult型（Phase 5）。
+   **Phase 5-Aで決めたDomain側の形**: `createPlannerAlternativeRepair()` は `comparison`（what-ifと同じtyped comparison）と
+   `persistence`（`persistable` のとき `PlannerAlternativeRepairArtifact`、そうでなければtypedな `not_persistable` 理由）を返す。
+   artifactは決定を展開したfinal `PlannerResult`（`plan` 非null）、accepted replacementのgenerated Entryと
+   `BuildListEntryReplacement`、次のrepair lineageを持つ。旧B8の `PlannerOrchestrationResult` の「generated Entryはfinal Planで
+   selected」という契約はPlanner Alternativeへ流用しない（accepted replacementがfinal Planでnon-selectedになり得るため。
+   PLANNER_SPEC 9.2.19.6）。Persistence側でこのartifactをどう検証・保存するかはPhase 5-Bで決める
 7. **Phase 4-Bで確定した実装上の読み方**（**確定済み**。normativeな記述は [PLANNER_SPEC.md](./PLANNER_SPEC.md) にあり、
    本項はその経緯の記録である。矛盾した場合は正式仕様が優先する）。
    - `unplannedTargetWeaponIds`: final scenario Planのどの `PlanStep.executionEffects.targetCompletions` にも現れない
@@ -436,18 +447,36 @@ Master dataVersion                      4
      作らず、そのConflictは未解決Conflictとして分類に残る（正式仕様: PLANNER_SPEC 9.2.19.9 / 9.2.19.13）
    - found replacementが0件のscenario run（ケースA）のpreflight失敗は、typed outcomeを推測せずinvariant violationとして
      throwする（正式仕様: PLANNER_SPEC 9.2.19.8.1）
+8. **Phase 5-Aで補完した仕様と判断**（**確定済み**。normativeな記述は [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.11と
+   [DATA_MODEL.md](./DATA_MODEL.md) 11.1.1にあり、本項はその経緯の記録である）。
+   - Phase 4-A / 4-Bで「individual trialではfound、scenario compositionでは `adoptedInScenario = false`」が正式に存在するように
+     なったが、lineageの `PlannerConflictRepairOutcomeStatus` にはそれを表すstatusが無かった。既存statusへ押し込まず、
+     `rejected_by_scenario_composition`（`replacementBuildListEntryId = null`）を追加し、individual outcome / scenario採否から
+     lineage outcomeへの写像を表で固定した。preflight・再対応付け失敗によるrejectとaccepted判定不成立によるrejectは細分化しない。
+     `adoptedInScenario = null` はscenarioが `stopped_by_planner_rerun_bound` のときだけ起こり、そのとき何も保存しないので
+     lineageにも写さない
+   - Target単位の失効で記録を落とした結果、有効なTarget記録が無く、fixed Entryも有効でない決定は、fixed Route集合にも除外集合にも
+     寄与しないので決定ごと落とす（fixed Entryが有効なら、記録が空でも決定を残す）
+   - 「後の決定で以前のfixed Entryが負けた場合は最新の決定が優先する」の「後の決定」には今回の決定も含むので、今回の決定が
+     無効化するEntryはlineage由来のprior fixed Entryであってもfixed Route集合へ入れない。Kernel
+     （`runPreparedPlannerAlternativeKernel()`）がこれを行い、what-ifとactual repairで共通になる
 
 ---
 
-## 13. Phase 4-Bで変更していないもの
+## 13. Phase 5-Aで変更していないもの
 
 Phase 4-BはDomain calculation、Search executionのneutralなskip記録、Worker protocol、Production Worker adapter、
-PlannerWorkerClient APIとそのtestを変更した。次は変更していない。
+PlannerWorkerClient APIとそのtestを変更した。Phase 5-Aはwhat-if / actual repair共通のscenario core、actual repairと
+repair lineageのPure Domain計算、repair lineageのDomain型、Kernelの無効化Route key返却と「今回の決定が無効化するprior fixed
+Entryをfixed Route集合から外す」処理、それらのDomain testと正式仕様（lineage outcome `rejected_by_scenario_composition`）を
+変更した。次は変更していない。
 
 ```text
 Production UI routing（ProductionPlanPageの「比較する」はlegacy B9のwhat-if経路のまま）
-actual repair（「この候補を優先」はlegacy B8経路のまま）
-repair lineageの永続化（ProductionPlan.conflictRepairLineageは未追加）
+「この候補を優先」のProduction経路（legacy B8経路のまま。新actual repairはDomain APIだけ）
+Worker request / response protocol、PlannerWorkerClient、Production Worker adapter
+savePlannerOrchestrationResult()、Persistence repository
+repair lineageの永続化（ProductionPlan.conflictRepairLineageは未追加。validator / migrationへ接続しない）
 Dexie schema、migration、Export / Import schema、各version値（10章）
 defaultConstrainedEnumerationBounds     40 / 30 / 100 / 500
 defaultPlannerOrchestrationBounds       2 / 1 / 4

@@ -33,9 +33,9 @@ import {
 } from './plannerAlternativeKernel'
 import {
   createPlannerAlternativeWhatIfComparison,
-  type PlannerAlternativeComparison,
   type PlannerAlternativeWhatIfRequest,
 } from './plannerAlternativeWhatIf'
+import type { PlannerAlternativeComparison } from './plannerAlternativeComparison'
 
 /*
  * The Planner Alternative What-if Calculation end to end over the real kernel,

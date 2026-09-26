@@ -74,8 +74,9 @@ import {
  * It is the shared calculation the Phase 4 what-if and the Phase 5 actual
  * repair both stand on; it composes no scenario Plan, persists nothing, and
  * has no Production routing, Worker message or default of its own. The
- * scenario composition (9.2.19.8.1) belongs to the calculation above it
- * (`createPlannerAlternativeWhatIfComparison()`), which shares its request's
+ * scenario composition (9.2.19.8.1) belongs to the shared scenario core above
+ * it (`runPlannerAlternativeScenario()`, under both the what-if and the actual
+ * repair), which shares its request's
  * one rerun budget with this kernel through `PlannerAlternativeKernelOptions`.
  */
 
@@ -97,7 +98,9 @@ export interface PlannerAlternativeKernelRequest {
   /**
    * Fixed Entries of earlier decisions that are still valid (repair lineage,
    * 9.2.19.11), filtered by the caller. Each must be a valid Entry of the
-   * current input; none is inferred or substituted.
+   * current input; none is inferred or substituted. An Entry this decision
+   * itself invalidates loses to it (the latest decision wins) and is left out
+   * of every fixed Route set of this request.
    */
   priorFixedBuildListEntryIds: readonly BuildListEntryId[]
   /** Routes earlier decisions invalidated, per Target (9.2.19.10). */
@@ -165,6 +168,11 @@ export interface PlannerAlternativeKernelTargetResult {
   targetWeaponId: TargetWeaponId
   /** The Target's current Entry `O`, whose Route this decision invalidates. */
   invalidatedBuildListEntryId: BuildListEntryId
+  /**
+   * `candidateStableKey()` of `O`'s current Route: the key a repair lineage
+   * records for this decision (9.2.19.11), never rebuilt from a Route summary.
+   */
+  invalidatedRouteKey: string
   /** The fixed Route set reserved against: explicit decision and prior fixed Entries, without `O`. */
   fixedRouteBuildListEntryIds: BuildListEntryId[]
   /** `null` when the Target was not searched. */
@@ -257,6 +265,23 @@ function compareStableStrings(left: string, right: string): number {
 
 function sortedUnique<T extends string>(values: readonly T[]): T[] {
   return [...new Set(values)].sort(compareStableStrings)
+}
+
+/**
+ * The current Entry `O` of one non-fixed Target of the decision: the one Entry
+ * whose Route the decision invalidates. Exactly one searchable Entry per
+ * Target, or the preparation broke an invariant.
+ */
+function invalidatedEntryOf(scenario: PreparedPlannerWhatIfScenario, targetWeaponId: TargetWeaponId): BuildListEntry {
+  const entries = scenario.initialContext.allSearchEntries.filter(
+    (entry) => entry.targetWeaponId === targetWeaponId,
+  )
+  if (entries.length !== 1) {
+    throw new Error(
+      `Planner Alternative invariant violated: TargetWeapon '${targetWeaponId}' holds ${entries.length} searchable BuildListEntries; exactly one is its current Route.`,
+    )
+  }
+  return entries[0]
 }
 
 type TrialOutcome =
@@ -362,6 +387,13 @@ export async function runPreparedPlannerAlternativeKernel(
   const usedAtStart = budget.used
   const executionOptions = options.executionOptions
   const runner = createPlannerAlternativeFullRunner(budget, dependencies, executionOptions)
+  // 9.2.19.11: a prior fixed Entry this very decision invalidates is no longer
+  // fixed - the latest decision wins - so no Target's search reserves its Route.
+  const invalidatedByDecision = new Set(
+    scenario.works.map(({ targetWeaponId }) => invalidatedEntryOf(scenario, targetWeaponId).id),
+  )
+  const priorFixedBuildListEntryIds = request.priorFixedBuildListEntryIds
+    .filter((id) => !invalidatedByDecision.has(id))
 
   const targets: PlannerAlternativeKernelTargetResult[] = []
   for (const work of scenario.works) targets.push(await runTarget(work))
@@ -375,26 +407,15 @@ export async function runPreparedPlannerAlternativeKernel(
     plannerRerunsUsed: budget.used - usedAtStart,
   }
 
-  function invalidatedEntryOf(targetWeaponId: TargetWeaponId): BuildListEntry {
-    const entries = scenario.initialContext.allSearchEntries.filter(
-      (entry) => entry.targetWeaponId === targetWeaponId,
-    )
-    if (entries.length !== 1) {
-      throw new Error(
-        `Planner Alternative invariant violated: TargetWeapon '${targetWeaponId}' holds ${entries.length} searchable BuildListEntries; exactly one is its current Route.`,
-      )
-    }
-    return entries[0]
-  }
-
   async function runTarget(work: PlannerConflictWork): Promise<PlannerAlternativeKernelTargetResult> {
-    const invalidated = invalidatedEntryOf(work.targetWeaponId)
+    const invalidated = invalidatedEntryOf(scenario, work.targetWeaponId)
     const fixedRouteBuildListEntryIds = sortedUnique([
       ...explicitDecisionBuildListEntryIds,
-      ...request.priorFixedBuildListEntryIds,
+      ...priorFixedBuildListEntryIds,
     ]).filter((id) => id !== invalidated.id)
+    const invalidatedRouteKey = candidateStableKey(invalidated.candidateSnapshot)
     const excludedRouteKeys = normalizePlannerAlternativeExcludedRouteKeys([
-      candidateStableKey(invalidated.candidateSnapshot),
+      invalidatedRouteKey,
       ...request.priorExcludedRoutes
         .filter(({ targetWeaponId }) => targetWeaponId === work.targetWeaponId)
         .flatMap(({ routeKeys }) => routeKeys),
@@ -402,6 +423,7 @@ export async function runPreparedPlannerAlternativeKernel(
     const base = {
       targetWeaponId: work.targetWeaponId,
       invalidatedBuildListEntryId: invalidated.id,
+      invalidatedRouteKey,
       fixedRouteBuildListEntryIds,
       excludedRouteKeys,
     }

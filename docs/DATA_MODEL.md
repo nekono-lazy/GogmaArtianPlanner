@@ -1688,11 +1688,13 @@ statusの意味（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.2）。
 - Candidate SnapshotをProductionPlanへ埋め込まない。Snapshotの保持場所は
   BuildListEntryのままとする
 
-### 11.1.1 conflictRepairLineage（仕様確定・未実装、Phase 5で追加）
+### 11.1.1 conflictRepairLineage（仕様確定・永続field未実装、Phase 5-Bで追加）
 
 競合repair chain（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.11）の履歴。Issue #136 / #101の正式仕様で
-field名とshapeを確定した。**現行schemaにはまだ存在しない。** 追加はactual repairを実装する
-Phase 5で行い、そのとき `DATABASE_SCHEMA_VERSION` 9 → 10、`ExportRoot.schemaVersion` 12 → 13、
+field名とshapeを確定した。**現行schemaにはまだ存在しない。** Phase 5-Aで下記の `PlannerConflictRepairLineage`
+以下の型をDomain型（`src/domain/models/planning.ts`）として追加し、lineageのPure Domain計算（有効なlineageの導出と
+次のlineageの生成）を実装したが、`ProductionPlan` の永続shape、validator、migrationには接続していない。
+`ProductionPlan.conflictRepairLineage` の追加はPhase 5-Bで行い、そのとき `DATABASE_SCHEMA_VERSION` 9 → 10、`ExportRoot.schemaVersion` 12 → 13、
 `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 15 → 16とする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.15）。
 
 ```ts
@@ -1723,12 +1725,38 @@ export interface PlannerConflictRepairInvalidatedRoute {
 
 export type PlannerConflictRepairOutcomeStatus =
   | "replaced"
+  | "rejected_by_scenario_composition"
   | "not_found_within_search_extent"
   | "stopped_by_search_extent_bound"
   | "stopped_by_candidate_trial_bound"
   | "stopped_by_planner_rerun_bound"
   | "blocked_by_selected_checkpoint";
 ```
+
+`outcome` は、そのTargetのindividual trialのoutcomeとscenario composition（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+9.2.19.8.1）での採否（`adoptedInScenario`、9.2.19.13）から次の表だけで決める。
+
+| individual trialのoutcome / scenarioでの採否 | `outcome` | `replacementBuildListEntryId` |
+| --- | --- | --- |
+| `found` かつ `adoptedInScenario = true` | `replaced` | accepted replacementのgenerated Entry ID |
+| `found` かつ `adoptedInScenario = false` | `rejected_by_scenario_composition` | `null` |
+| `not_found_within_search_extent` | 同じstatus | `null` |
+| `stopped_by_search_extent_bound` | 同じstatus | `null` |
+| `stopped_by_candidate_trial_bound` | 同じstatus | `null` |
+| `stopped_by_planner_rerun_bound` | 同じstatus | `null` |
+| `blocked_by_selected_checkpoint` | 同じstatus | `null` |
+
+- `rejected_by_scenario_composition` は、individual trialではfoundになったreplacementが存在したが、他のaccepted
+  replacementとのscenario compositionで評価した結果、最終accepted replacement集合へ採用しなかったことを表す。
+  adoption runのreplacement preflight・explicit resolution再対応付けの失敗によるrejectと、adoption runを行ったが
+  accepted判定を満たさなかったrejectの両方を含み、これ以上細分化したstatusを持たない。trialで不採用になった
+  replacementのgenerated Entry IDは保存しない
+- `replaced` の条件はscenario compositionのaccepted replacement集合だけである。そのgenerated Entryがfinal
+  scenario Planで `selectedBuildListEntryIds` に含まれるかは問わない（fixed Route集合外Entryとの未解決競合の
+  暫定帰結で非採用のままacceptedになり得る。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.6）
+- `adoptedInScenario = null`（未評価）はlineageへ写さない。未評価のfound replacementが残るのは `scenario` が
+  `stopped_by_planner_rerun_bound` のときだけであり、そのときfinal scenario resultが無いのでactual repairは何も
+  保存せず、lineageも保存対象として確定しない
 
 不変条件。
 
@@ -1738,13 +1766,15 @@ export type PlannerConflictRepairOutcomeStatus =
 - `outcome = "replaced"` のときだけ `replacementBuildListEntryId` は非null
 - Targetの記録は、そのTargetの現在Build List Entryが最後に記録したEntry（`replacementBuildListEntryId`、
   nullなら `invalidatedBuildListEntryId`）と同じIDである間だけ有効であり、そうでなくなった記録は次のrepair保存で
-  落とす（手動置換でのreset）
+  落とす（手動置換でのreset）。記録を落とした結果、有効なTarget記録が1件も残らず、かつfixed Entryも有効でない
+  （現在のBuild Listに無い、または後の決定で無効化された）決定は、fixed Route集合にも除外集合にも寄与しないので
+  次のrepair保存で決定ごと落とす。どちらかが残る決定は、残った記録だけを元の順序で保持する
 - 除外に使うのは `invalidatedRouteKey` だけであり、trialで不採用になったCandidateは記録しない
 - Entry IDはどのstatusのPlanでもcurrent foreign keyとして検証しない（Draft本体と同じ。15.2）。構造、literal、
   ID形式、`decisions` の配列形状だけを検証する
 - Candidate identity、hash、`PlanningInputSnapshot`、`ExpectedPlanState`、staleness、Execution semantics、
   Plan-breaking判定へ入れない
-- Phase 5のmigrationは既存の全ProductionPlan本体（ゲーム内セーブ地点snapshotとUndo snapshot内のPlan本体を含む）
+- Phase 5-Bのmigrationは既存の全ProductionPlan本体（ゲーム内セーブ地点snapshotとUndo snapshot内のPlan本体を含む）
   へ `conflictRepairLineage = null` だけを補い、過去の決定を推測しない
 
 ## 11.2 PlanningInputSnapshot

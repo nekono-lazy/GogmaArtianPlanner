@@ -30,8 +30,8 @@ import type { PlannerAlternativeFullRunBudget } from './plannerAlternativeTrial'
 import {
   createPlannerAlternativeWhatIfComparison,
   type PlannerAlternativeWhatIfRequest,
-  type PlannerAlternativeComparison,
 } from './plannerAlternativeWhatIf'
+import type { PlannerAlternativeComparison } from './plannerAlternativeComparison'
 
 /*
  * The scenario composition of `docs/PLANNER_SPEC.md` 9.2.19.8.1 and the typed
@@ -239,6 +239,7 @@ function kernelTarget(target: string, outcome: PlannerAlternativeKernelOutcome, 
   return {
     targetWeaponId: targetId(target),
     invalidatedBuildListEntryId: entryOf(target),
+    invalidatedRouteKey: `route.${target}`,
     fixedRouteBuildListEntryIds: [FIXED],
     reservation: null,
     excludedRouteKeys: [],

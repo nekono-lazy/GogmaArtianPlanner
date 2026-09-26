@@ -303,6 +303,52 @@ export interface PlanConflict {
   checkpointParticipants?: PlanConflictCheckpointParticipant[]
 }
 
+/**
+ * How one direct participant Target of a repair decision ended
+ * (`docs/DATA_MODEL.md` 11.1.1, `docs/PLANNER_SPEC.md` 9.2.19.11): `replaced`
+ * for a replacement the scenario composition accepted, whether or not the
+ * final Plan selects it; `rejected_by_scenario_composition` for one its
+ * individual trial found but the composition did not accept; otherwise the
+ * individual outcome itself.
+ */
+export type PlannerConflictRepairOutcomeStatus =
+  | 'replaced'
+  | 'rejected_by_scenario_composition'
+  | 'not_found_within_search_extent'
+  | 'stopped_by_search_extent_bound'
+  | 'stopped_by_candidate_trial_bound'
+  | 'stopped_by_planner_rerun_bound'
+  | 'blocked_by_selected_checkpoint'
+
+export interface PlannerConflictRepairInvalidatedRoute {
+  targetWeaponId: TargetWeaponId
+  /** The Entry whose current Route the decision invalidated. */
+  invalidatedBuildListEntryId: BuildListEntryId
+  /** That Route's `candidateStableKey()`: the only key a later exclusion reads. */
+  invalidatedRouteKey: string
+  /** The accepted replacement; non-null exactly when `outcome === 'replaced'`. */
+  replacementBuildListEntryId: BuildListEntryId | null
+  outcome: PlannerConflictRepairOutcomeStatus
+}
+
+export interface PlannerConflictRepairDecision {
+  conflictKind: ConflictKind
+  fixedBuildListEntryId: BuildListEntryId
+  fixedTargetWeaponId: TargetWeaponId
+  /** One per direct participant Target, in the stable Target order. */
+  invalidatedRoutes: PlannerConflictRepairInvalidatedRoute[]
+}
+
+/**
+ * The repair chain of a Draft (`docs/DATA_MODEL.md` 11.1.1). Phase 5-A adds the
+ * Domain type and its pure calculation only; `ProductionPlan` does not carry it
+ * yet (Phase 5-B).
+ */
+export interface PlannerConflictRepairLineage {
+  /** In decision order: the first 「この候補を優先」 first. */
+  decisions: PlannerConflictRepairDecision[]
+}
+
 export interface RejectedBuildListEntry {
   buildListEntryId: BuildListEntryId
   reason:

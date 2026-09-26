@@ -3597,6 +3597,31 @@ them. The Worker adds `create_planner_alternative_comparison` / `_result` beside
 adds `createPlannerAlternativeComparison()` beside the unchanged `createWhatIfComparison()`. Nothing is persisted;
 `ProductionPlanPage` still calls only the legacy what-if, so Production UI routing still switches only in Phase 5.
 No version moved (15 / 9 / 12).
+Phase 5 is split into 5-A and 5-B. Phase 5-A (the actual repair and repair lineage as pure Domain calculation) is
+complete. The scenario composition moved out of the what-if into one shared scenario core,
+`runPlannerAlternativeScenario()` (`src/domain/planner/alternative/plannerAlternativeScenario.ts`: kernel preparation
+and individual trials, the 9.2.19.8.1 composition with its one request-global budget, the 9.2.19.9 decision
+expansion through the single authority `expandPlannerAlternativeDecision()`, and the typed comparison); the what-if
+(`createPlannerAlternativeWhatIfComparison()`, external contract, run counts and budget semantics unchanged) and the
+actual repair (`createPlannerAlternativeRepair()`, `plannerAlternativeRepair.ts`) are two projections of it, so for
+the same request they return the same comparison. The repair additionally returns
+`persistence: persistable | not_persistable` - an artifact only for an evaluated final scenario Plan without an
+`invalid_conflict_resolution` warning (never for `no_plan`, the plan-step bound, the rerun bound or a preparation
+failure): the final `PlannerResult` with the decision expanded (`conflicts` and `plan.conflicts` the same list), the
+accepted replacements' generated Entries and `BuildListEntryReplacement`s - the accepted set is the authority, never
+the final Plan's selection, so an accepted `G` left unselected by a provisional outcome against an Entry outside the
+fixed Route set is still saved (the B8 "generated Entry must be selected" contract is not reused) - and the next
+repair lineage. The lineage Domain types (`PlannerConflictRepairLineage` etc., `src/domain/models/planning.ts`) and
+`derivePlannerConflictRepairLineageContext()` / `plannerConflictRepairOutcomeOf()` /
+`appendPlannerConflictRepairDecision()` (`plannerConflictRepairLineage.ts`) implement 9.2.19.11: Target-level expiry,
+fixed Entry expiry, the prior fixed Entries and prior excluded Route keys (shared with a future what-if caller), and
+the next lineage. The formal spec gained the lineage outcome `rejected_by_scenario_composition` (found individually,
+not accepted by the composition; `replacementBuildListEntryId = null`), the outcome mapping table, and the pruning
+of a decision with no valid record and no valid fixed Entry. The kernel now returns each Target's
+`invalidatedRouteKey` and leaves a prior fixed Entry the current decision invalidates out of every fixed Route set
+(the latest decision wins). Nothing is persisted: `ProductionPlan.conflictRepairLineage`, Persistence, the Worker /
+Client, Production routing, migrations and versions are Phase 5-B, which switches the what-if and the repair together.
+No version moved (15 / 9 / 12).
 
 ---
 
