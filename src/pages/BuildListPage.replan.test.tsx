@@ -106,10 +106,6 @@ function workerClient(result: PlannerResult = plannerResult()): PlannerWorkerCli
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     // Phase 6-A: the replan Preview is an ordinary Planner run.
     createPlan: vi.fn(async () => result),
-    createConstrainedPlan: vi.fn(async () => {
-      throw new Error('The replan Preview never runs the legacy constrained Planner path.')
-    }),
-    createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
     createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(),
@@ -258,7 +254,9 @@ describe('BuildListPage replan entry', () => {
     expect(await screen.findByRole('heading', { name: PREVIEW_TITLE })).toBeInTheDocument()
     expect(replan.prepareProductionPlanReplanPreview).toHaveBeenCalledExactlyOnceWith({ runningPlanId: plan.id })
     expect(client.createPlan).toHaveBeenCalledOnce()
-    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    // The ordinary Planner is the only calculation this path reaches.
+    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
+    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
     const call = vi.mocked(client.createPlan).mock.calls[0]
     // The ordinary run: no orchestration bounds reach the Client.
     expect(call).toHaveLength(2)

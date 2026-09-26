@@ -1,5 +1,4 @@
 import type {
-  CreateConstrainedProductionPlanCalculation,
   CreateProductionPlanCalculation,
   PlannerAlternativeRepairCalculationResult,
   PlannerAlternativeRepairInput,
@@ -8,8 +7,6 @@ import type {
   PlannerDependencies,
   PlannerExecutionOptions,
   PlannerInput,
-  PlannerWhatIfCalculationResult,
-  PlannerWhatIfRequest,
 } from '../domain/planner'
 import type {
   PlannerInteractionPreparationResult,
@@ -23,28 +20,21 @@ export type PlannerWorkerPostMessage = (
 export type PlannerDependenciesFactory = () => PlannerDependencies
 
 /**
- * The six Planner calculations this Worker routes to.
+ * The four Planner calculations this Worker routes to.
  *
- * All six are injected, so the controller performs no full Planner run, no Candidate
- * enumeration, no materialization, no preflight, no Trace Replay, and no
- * adoption of its own: B8-C and the Planner Alternative Domain own all of
- * that, and the Production adapter composes it.
+ * All four are injected, so the controller performs no full Planner run, no
+ * Candidate search, no preflight, no Trace Replay, and no adoption of its own:
+ * the ordinary Planner and the Planner Alternative Domain own all of that, and
+ * the Production adapter composes it. The legacy B8 constrained re-search and
+ * B9 what-if calculations are no longer Worker calculations (Phase 6-B1,
+ * `docs/PLANNER_SPEC.md` 9.2.19.16).
  */
 export interface PlannerWorkerCalculations {
   createPlan: CreateProductionPlanCalculation
-  createConstrainedPlan: CreateConstrainedProductionPlanCalculation
-  createWhatIfComparison: CreatePlannerWhatIfComparisonCalculation
   createPlannerAlternativeComparison: CreatePlannerAlternativeComparisonCalculation
   createPlannerAlternativeRepair: CreatePlannerAlternativeRepairCalculation
   prepareInteraction: PreparePlannerInteractionCalculation
 }
-
-/** Worker-facing B9 calculation shape; Domain runtime options stay off the wire. */
-export type CreatePlannerWhatIfComparisonCalculation = (
-  request: PlannerWhatIfRequest,
-  dependencies: PlannerDependencies,
-  executionOptions?: PlannerExecutionOptions,
-) => Promise<PlannerWhatIfCalculationResult>
 
 /**
  * Worker-facing Planner Alternative what-if calculation shape (Phase 4-B). The
@@ -169,31 +159,6 @@ export function createPlannerWorkerController(
               requestId,
               generation,
               result: await calculations.createPlan(
-                request.input,
-                dependencies,
-                executionOptions(requestId, generation),
-              ),
-            }
-            break
-          case 'create_constrained_plan':
-            response = {
-              type: 'create_constrained_plan_result',
-              requestId,
-              generation,
-              result: await calculations.createConstrainedPlan(
-                request.input.plannerInput,
-                request.input.orchestrationBounds,
-                dependencies,
-                executionOptions(requestId, generation),
-              ),
-            }
-            break
-          case 'create_what_if_comparison':
-            response = {
-              type: 'create_what_if_comparison_result',
-              requestId,
-              generation,
-              result: await calculations.createWhatIfComparison(
                 request.input,
                 dependencies,
                 executionOptions(requestId, generation),

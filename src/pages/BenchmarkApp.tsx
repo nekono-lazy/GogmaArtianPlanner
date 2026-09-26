@@ -1,19 +1,15 @@
 import { useState } from 'react'
-import { PlannerWhatIfBenchmarkPage } from './PlannerWhatIfBenchmarkPage'
 import { Button, Stack } from '@mui/material'
 import { CandidateSearchBenchmarkPage } from './CandidateSearchBenchmarkPage'
 import { ConstrainedEnumerationBenchmarkPage } from './ConstrainedEnumerationBenchmarkPage'
 import { Issue101ConstrainedResearchBenchmarkPage } from './Issue101ConstrainedResearchBenchmarkPage'
 import { PlannerAlternativeBenchmarkPage } from './PlannerAlternativeBenchmarkPage'
-import { PlannerOrchestrationBenchmarkPage } from './PlannerOrchestrationBenchmarkPage'
 import { SkillIdentificationBenchmarkPage } from './SkillIdentificationBenchmarkPage'
 
 type BenchmarkId =
   | 'c8-skill-identification'
   | 'b5-candidate-search'
   | 'b8-constrained-enumeration'
-  | 'b8-planner-orchestration'
-  | 'b9-what-if'
   | 'issue101-constrained-research'
   | 'planner-alternative-phase3'
 
@@ -31,6 +27,11 @@ type BenchmarkId =
  * the existing harnesses changes.
  * Planner Alternative Search Phase 3-A adds its Browser Worker harness
  * (`docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md`); C5 stays the default.
+ * Planner Alternative Phase 6-B1 removed the B8 Planner orchestration and B9
+ * what-if harnesses together with the legacy Production Planner Worker request
+ * kinds they measured (`docs/PLANNER_SPEC.md` 9.2.19.16); their measurements
+ * stay recorded in `docs/B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md`
+ * and `docs/B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md`.
  */
 export function BenchmarkApp() {
   const [benchmark, setBenchmark] = useState<BenchmarkId>('c8-skill-identification')
@@ -56,18 +57,6 @@ export function BenchmarkApp() {
           B8 Constrained Enumeration
         </Button>
         <Button
-          variant={benchmark === 'b8-planner-orchestration' ? 'contained' : 'outlined'}
-          onClick={() => setBenchmark('b8-planner-orchestration')}
-        >
-          B8 Planner Orchestration
-        </Button>
-        <Button
-          variant={benchmark === 'b9-what-if' ? 'contained' : 'outlined'}
-          onClick={() => setBenchmark('b9-what-if')}
-        >
-          B9 What-if
-        </Button>
-        <Button
           variant={benchmark === 'issue101-constrained-research' ? 'contained' : 'outlined'}
           onClick={() => setBenchmark('issue101-constrained-research')}
         >
@@ -80,14 +69,10 @@ export function BenchmarkApp() {
           Planner Alternative Phase 3
         </Button>
       </Stack>
-      {benchmark === 'b9-what-if' && <PlannerWhatIfBenchmarkPage />}
       {benchmark === 'c8-skill-identification' && <SkillIdentificationBenchmarkPage />}
       {benchmark === 'b5-candidate-search' && <CandidateSearchBenchmarkPage />}
       {benchmark === 'b8-constrained-enumeration' && (
         <ConstrainedEnumerationBenchmarkPage />
-      )}
-      {benchmark === 'b8-planner-orchestration' && (
-        <PlannerOrchestrationBenchmarkPage />
       )}
       {benchmark === 'issue101-constrained-research' && (
         <Issue101ConstrainedResearchBenchmarkPage />

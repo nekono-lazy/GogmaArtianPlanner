@@ -7,7 +7,6 @@ import type {
 } from '../domain/models/publicTypes'
 import {
   defaultPlannerOptions,
-  defaultPlannerOrchestrationBounds,
   preparePlannerInitialContext,
   type PlannerInput,
 } from '../domain/planner'
@@ -215,7 +214,7 @@ describe('Production Planner Worker composition', () => {
 })
 
 describe('Production Planner Worker posts no progress (Issue #103 Phase D-2a)', () => {
-  it('answers the ordinary, constrained and what-if requests with their result alone', async () => {
+  it('answers the ordinary and Planner Alternative requests with their result alone', async () => {
     const scenario = () => {
       const found = plannerSchedulerCatalogue().find(({ id }) => id === 'J-same-owned-weapon')
       if (!found) throw new Error('Missing catalogue scenario.')
@@ -239,29 +238,31 @@ describe('Production Planner Worker posts no progress (Issue #103 Phase D-2a)', 
     expect(ordinary.map(({ type }) => type)).toEqual(['create_plan_result'])
     const planResult = ordinary[0].type === 'create_plan_result' ? ordinary[0].result : null
     expect(planResult?.conflicts).toHaveLength(1)
+    const decision = {
+      conflictKey: planResult!.conflicts[0].id,
+      selectedBuildListEntryId: planResult!.conflicts[0].buildListEntryIds[1],
+    }
 
-    const constrained = await run({
-      type: 'create_constrained_plan',
-      requestId: 'd2a.constrained',
-      generation: 1,
-      input: { plannerInput: input, orchestrationBounds: defaultPlannerOrchestrationBounds },
-    })
-    expect(constrained.map(({ type }) => type)).toEqual(['create_constrained_plan_result'])
-
-    const whatIf = await run({
-      type: 'create_what_if_comparison',
-      requestId: 'd2a.what-if',
+    const comparison = await run({
+      type: 'create_planner_alternative_comparison',
+      requestId: 'd2a.alternative-comparison',
       generation: 1,
       input: {
         plannerInput: input,
-        scenarioResolution: {
-          conflictKey: planResult!.conflicts[0].id,
-          selectedBuildListEntryId: planResult!.conflicts[0].buildListEntryIds[1],
-        },
-        bounds: { maxCandidateTrialsPerTarget: 1, maxPlannerReruns: 4 },
+        scenarioResolution: decision,
+        priorFixedBuildListEntryIds: [],
+        priorExcludedRoutes: [],
       },
     })
-    expect(whatIf.map(({ type }) => type)).toEqual(['create_what_if_comparison_result'])
+    expect(comparison.map(({ type }) => type)).toEqual(['create_planner_alternative_comparison_result'])
+
+    const repair = await run({
+      type: 'create_planner_alternative_repair',
+      requestId: 'd2a.alternative-repair',
+      generation: 1,
+      input: { plannerInput: input, decision, lineage: null },
+    })
+    expect(repair.map(({ type }) => type)).toEqual(['create_planner_alternative_repair_result'])
   })
 })
 

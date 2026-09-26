@@ -23,17 +23,21 @@ runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #1
                          Phase 5-A（actual repairとrepair lineageのPure Domain計算、what-if / actual repair共通のscenario core、
                          lineage outcome `rejected_by_scenario_composition` の正式仕様補完）とPhase 5-B（lineage永続化と
                          migration、Planner Alternative専用Persistence、actual repair Worker / Client、what-ifとactual repair
-                         のProduction routing同時切替、version更新）を実装した。Phase 5は完了。Phase 6は6-A / 6-Bに分割し、
+                         のProduction routing同時切替、version更新）を実装した。Phase 5は完了。Phase 6は6-A / 6-B1 / 6-B2に分割し、
                          Phase 6-A（作成リストの通常Plannerと実行中Planの再計画PreviewをB8のcreateConstrainedPlan()から
                          ordinary PlannerのcreatePlan()へ切替、ordinary Planner用Persistence savePlannerResult()、再計画Preview /
-                         採用からのgenerated replacement契約の除去、B8 parity test）を実装した。次はPhase 6-B（consumer再監査の
-                         うえでのlegacy B8 / B9実装の削除またはtest oracle化）、その後Phase 7（#122 Presentation）
+                         採用からのgenerated replacement契約の除去、B8 parity test）とPhase 6-B1（deadになったB8 / B9の
+                         Worker request kind・PlannerWorkerClient method・Production Worker adapter・Browser benchmark
+                         runtime / page・旧B9 Presentationの削除）を実装した。次はPhase 6-B2（共有primitiveの中立化と、
+                         legacy B8 / B9 Domain実装・bounds・warning・B8保存API・fixtureの削除またはtest oracle化）、
+                         その後Phase 7（#122 Presentation）
 Production behavior:     Phase 5-Bで切替済み（生産計画画面の「比較する」はcreatePlannerAlternativeComparison()、
                          「この候補を優先」はcreatePlannerAlternativeRepair() + savePlannerAlternativeRepair()）。Phase 6-Aで
-                         作成リストの通常Plannerと再計画PreviewもcreatePlan()へ切替済み。旧B8 / B9の実装はPhase 6-Bまで
-                         残るが、通常のApplication runtimeからは呼ばない（consumerはbenchmark / testだけ）
+                         作成リストの通常Plannerと再計画PreviewもcreatePlan()へ切替済み。Phase 6-B1で旧B8 / B9の
+                         Worker / Client / Production adapter / Browser benchmark runtimeを削除した。旧B8 / B9のDomain
+                         計算本体はPhase 6-B2まで残るが、通常のApplication runtimeからは呼ばない（consumerはtestだけ）
 schema / version:        Phase 5-Bで更新（calculation 16、Dexie 10、Export 13。10章）。Phase 6-Aでcalculationだけ17へ更新
-                         （Dexie 10、Export 13は不変）
+                         （Dexie 10、Export 13は不変）。Phase 6-B1はどのversionも変えない
 ```
 
 この文書はtask-specificな **設計記録** である。背景、方式選定の理由、後続PRの分割を記録する。
@@ -361,7 +365,8 @@ lineage除外件数）であり、Presentation改善はPhase 7で行う。
   B8 orchestrationの **反復方式**（全explicit resolutionごとのwork → 今回決定したConflictの直接participantだけ）である
 - 旧B8 constrained enumeration / orchestrationは削除せず、Phase 5のProduction routing切替までlegacy
   implementationとして残った。Phase 5-Bで切り替えた後も実装は残っており、Phase 6-Aで残るProduction consumer
-  （作成リストの通常Plannerと再計画Preview）をordinary Plannerへ移した。削除またはtest oracle化はPhase 6-Bで判断する
+  （作成リストの通常Plannerと再計画Preview）をordinary Plannerへ移した。Phase 6-B1でdeadになったWorker / Client /
+  Production adapter / Browser benchmark runtimeを削除した。Domain実装の削除またはtest oracle化はPhase 6-B2で判断する
 
 ---
 
@@ -395,6 +400,8 @@ Master dataVersion                      4
   ためである（PLANNER_SPEC 9.2.7 / 9.2.19.15）。永続shapeは変えないので `DATABASE_SCHEMA_VERSION` 10、
   `ExportRoot.schemaVersion` 13のまま（実施済み）。Phase 6-A完了時点の値は calculation 17 / Dexie 10 / Export 13 /
   AppSettings 2 / RngState 2 / `production-rng:c5-e7` / Master 4 である
+- Phase 6-B1（deadになったlegacy Worker / Client / Production adapter / benchmark runtimeの削除）はProduction semanticsも
+  永続shapeも変えないので、どのversionも動かさない（上記Phase 6-A完了時点の値のまま。migrationなし）
 
 ---
 
@@ -540,3 +547,21 @@ observable Planner calculation semanticsの変更として `CURRENT_CALCULATION_
 `defaultConstrainedEnumerationBounds` / `defaultPlannerOrchestrationBounds` / `defaultPlannerWhatIfBounds`、B8専用warning kind、
 B8の保存API（`savePlannerOrchestrationResult()` / `inspectPlannerOrchestrationResultSave()`）、B8 / B9 / Issue #101の
 benchmark harness / page / 記録、`constrained/` 配下の共有primitiveの配置、Dexie / Exportほかcalculation以外のversion値とmigration。
+
+Phase 6-Bは6-B1 / 6-B2に分けた（PLANNER_SPEC 9.2.19.14 / 9.2.19.16）。理由: Phase 6-A後のimport graphでは通常Application
+runtimeからlegacy B8 / B9のconsumerは消えたが、Planner Alternativeは `src/domain/planner/constrained/` 配下の
+`plannerAugmentedPreflight`、`plannerWhatIfScenario`、`PlannerConflictWork` 関連、deterministic materializerの共通core、
+constrained search originの正規化 / Target解決を今もimportしている。public runtime surfaceの削除とDomain構造の変更を同じPRにすると
+レビュー範囲が広がるため、先にProductionから完全にdeadになった部分だけを削除する。**Phase 6-B1**で削除したもの: Worker protocolの
+`create_constrained_plan` / `create_constrained_plan_result` と `create_what_if_comparison` / `create_what_if_comparison_result`
+（`PlannerConstrainedWorkerTaskInput` 等の型を含む）、`PlannerWorkerClient.createConstrainedPlan()` / `createWhatIfComparison()`
+（pending variant、応答分岐、unavailable client実装を含む）、Worker controllerの2つのcalculation branch、Production Worker adapterの
+`createProductionConstrainedPlan()` / `createProductionPlannerWhatIfComparison()`、B8 Planner orchestrationとB9 what-ifのBrowser
+benchmark runtime / page（`PlannerOrchestrationBenchmarkPage`、`PlannerWhatIfBenchmarkPage`、`plannerOrchestrationBrowserBenchmark`、
+`plannerWhatIfBrowserBenchmark`、Benchmark shellの2つのharness）、non-test consumerが0件だった旧B9 Presentation
+（`ProductionPlanWhatIfComparison`、`presentProductionPlanWhatIf`）。Phase 6-B1で変更していないもの: B8 / B9のDomain計算本体
+（`plannerConstrainedOrchestration.ts`、`plannerWhatIfCalculation.ts`）、`defaultConstrainedEnumerationBounds` /
+`defaultPlannerOrchestrationBounds` / `defaultPlannerWhatIfBounds`、B8 / B9専用warning kindとlabel、B8の保存API、共有primitiveの
+名前と配置、B8 / B9 benchmark fixtureとoutcome helper、Issue #101 research harness / fixture、Phase 6-Aのparity / retry境界test、
+Constrained Enumeration benchmark（Search Domain benchmarkであり、Worker wireの削除とは別責務）、historical benchmark記録、全version。
+**Phase 6-B2**で、これらをconsumer監査のうえで削除するかtest oracleとして残すかを決め、共有primitiveを中立なmoduleへ整理する。

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  createProductionPlan,
   defaultPlannerAlternativeTrialBounds,
   defaultPlannerOptions,
 } from '../domain/planner'
@@ -9,15 +10,16 @@ import type {
   PlannerAlternativeWhatIfCalculationResult,
   PlannerAlternativeWhatIfInput,
   PlannerInput,
-  PlannerWhatIfRequest,
 } from '../domain/planner'
 import { defaultPlannerAlternativeSearchExtent } from '../domain/search'
 import { createCandidateSearchInput } from '../test/fixtures/candidateSearch'
 import {
-  createProductionConstrainedPlan,
+  ProductionRngEngine,
+  PRODUCTION_RNG_ENGINE_VERSION,
+} from '../domain/rng/production/productionRngEngine'
+import {
   createProductionPlannerAlternativeComparison,
   createProductionPlannerAlternativeRepair,
-  createProductionPlannerWhatIfComparison,
   createProductionPlannerWorkerCalculations,
   createProductionPlannerWorkerDependencies,
 } from './planner.worker.production'
@@ -31,6 +33,7 @@ const domain = vi.hoisted(() => ({
   createPlannerAlternativeWhatIfComparison: vi.fn(),
   createPlannerAlternativeRepair: vi.fn(),
   createPlannerWhatIfComparison: vi.fn(),
+  createProductionPlanWithConstrainedSearch: vi.fn(),
 }))
 
 vi.mock('../domain/planner', async (importOriginal) => {
@@ -39,7 +42,10 @@ vi.mock('../domain/planner', async (importOriginal) => {
     ...actual,
     createPlannerAlternativeWhatIfComparison: domain.createPlannerAlternativeWhatIfComparison,
     createPlannerAlternativeRepair: domain.createPlannerAlternativeRepair,
+    // The legacy B8 / B9 Domain calculations stay in the Domain until Phase
+    // 6-B2; replaced here only to prove no Production adapter reaches them.
     createPlannerWhatIfComparison: domain.createPlannerWhatIfComparison,
+    createProductionPlanWithConstrainedSearch: domain.createProductionPlanWithConstrainedSearch,
   }
 })
 
@@ -120,31 +126,13 @@ describe('Production Planner Alternative what-if Worker adapter (Phase 4-B)', ()
     expect(domain.createPlannerWhatIfComparison).not.toHaveBeenCalled()
   })
 
-  it('wires the new calculation beside the unchanged legacy what-if calculation', async () => {
-    const calculations = createProductionPlannerWorkerCalculations()
-    expect(calculations.createPlannerAlternativeComparison).toBe(createProductionPlannerAlternativeComparison)
-    expect(calculations.createWhatIfComparison).toBe(createProductionPlannerWhatIfComparison)
-
-    domain.createPlannerAlternativeWhatIfComparison.mockClear()
-    domain.createPlannerWhatIfComparison.mockResolvedValue({
-      status: 'planner_input_not_ready', issues: [], warnings: [], excludedBuildListEntries: [],
-    })
-    const legacyRequest: PlannerWhatIfRequest = {
-      plannerInput: plannerInput(),
-      scenarioResolution: { conflictKey: 'conflict.legacy', selectedBuildListEntryId: 'build-list.legacy' as never },
-      bounds: { maxCandidateTrialsPerTarget: 2, maxPlannerReruns: 8 },
-    }
-    await createProductionPlannerWhatIfComparison(legacyRequest, createProductionPlannerWorkerDependencies())
-    expect(domain.createPlannerWhatIfComparison).toHaveBeenCalledOnce()
-    expect(domain.createPlannerAlternativeWhatIfComparison).not.toHaveBeenCalled()
-  })
-
   it('passes the same Domain Production extent and trial bounds to the actual repair, and the wire input unchanged', async () => {
     const result: PlannerAlternativeRepairCalculationResult = {
       status: 'invalid_prior_fixed_entry',
       buildListEntryId: 'build-list.production.prior' as never,
       detail: 'fixture',
     }
+    domain.createPlannerAlternativeWhatIfComparison.mockClear()
     domain.createPlannerAlternativeRepair.mockResolvedValue(result)
     const input: PlannerAlternativeRepairInput = {
       plannerInput: plannerInput(),
@@ -173,15 +161,67 @@ describe('Production Planner Alternative what-if Worker adapter (Phase 4-B)', ()
     expect(domain.createPlannerAlternativeWhatIfComparison).not.toHaveBeenCalled()
   })
 
-  it('wires the actual repair beside the unchanged legacy constrained Planner', () => {
-    const calculations = createProductionPlannerWorkerCalculations()
-    expect(calculations.createPlannerAlternativeRepair).toBe(createProductionPlannerAlternativeRepair)
-    expect(calculations.createConstrainedPlan).toBe(createProductionConstrainedPlan)
-  })
-
   it('exports no Planner Alternative default of its own', async () => {
     const productionModule = await import('./planner.worker.production')
     expect(productionModule).not.toHaveProperty('defaultPlannerAlternativeSearchExtent')
     expect(productionModule).not.toHaveProperty('defaultPlannerAlternativeTrialBounds')
+  })
+})
+
+describe('Production Planner Worker calculations (Phase 6-B1)', () => {
+  it('wires exactly the four current calculations to their Production authorities', () => {
+    const calculations = createProductionPlannerWorkerCalculations()
+    expect(Object.keys(calculations).sort()).toEqual([
+      'createPlan',
+      'createPlannerAlternativeComparison',
+      'createPlannerAlternativeRepair',
+      'prepareInteraction',
+    ])
+    expect(calculations.createPlan).toBe(createProductionPlan)
+    expect(calculations.createPlannerAlternativeComparison).toBe(createProductionPlannerAlternativeComparison)
+    expect(calculations.createPlannerAlternativeRepair).toBe(createProductionPlannerAlternativeRepair)
+    expect(calculations).not.toHaveProperty('createConstrainedPlan')
+    expect(calculations).not.toHaveProperty('createWhatIfComparison')
+  })
+
+  it('exports no legacy B8 / B9 adapter and no legacy bounds default', async () => {
+    const productionModule = await import('./planner.worker.production')
+    expect(Object.keys(productionModule).sort()).toEqual([
+      'createProductionPlannerAlternativeComparison',
+      'createProductionPlannerAlternativeRepair',
+      'createProductionPlannerRngEngine',
+      'createProductionPlannerWorkerCalculations',
+      'createProductionPlannerWorkerDependencies',
+    ])
+    expect(productionModule).not.toHaveProperty('defaultPlannerOrchestrationBounds')
+    expect(productionModule).not.toHaveProperty('defaultPlannerWhatIfBounds')
+    expect(productionModule).not.toHaveProperty('defaultConstrainedEnumerationBounds')
+  })
+
+  it('reaches no legacy B8 / B9 Domain calculation through any current adapter', async () => {
+    domain.createPlannerAlternativeWhatIfComparison.mockResolvedValue({
+      status: 'invalid_prior_fixed_entry', buildListEntryId: 'build-list.production.prior' as never, detail: 'fixture',
+    })
+    domain.createPlannerAlternativeRepair.mockResolvedValue({
+      status: 'invalid_prior_fixed_entry', buildListEntryId: 'build-list.production.prior' as never, detail: 'fixture',
+    })
+    domain.createPlannerWhatIfComparison.mockClear()
+    domain.createProductionPlanWithConstrainedSearch.mockClear()
+    const dependencies = createProductionPlannerWorkerDependencies()
+    await createProductionPlannerAlternativeComparison(alternativeInput(), dependencies)
+    await createProductionPlannerAlternativeRepair({
+      plannerInput: plannerInput(),
+      decision: { conflictKey: 'conflict.production.repair', selectedBuildListEntryId: 'build-list.production.repair' as never },
+      lineage: null,
+    }, dependencies)
+    createProductionPlannerWorkerCalculations().prepareInteraction(plannerInput(), dependencies)
+    expect(domain.createPlannerWhatIfComparison).not.toHaveBeenCalled()
+    expect(domain.createProductionPlanWithConstrainedSearch).not.toHaveBeenCalled()
+  })
+
+  it('keeps the Production RNG Engine unchanged', () => {
+    const dependencies = createProductionPlannerWorkerDependencies()
+    expect(dependencies.rngEngine).toBeInstanceOf(ProductionRngEngine)
+    expect(dependencies.rngEngine.version).toBe(PRODUCTION_RNG_ENGINE_VERSION)
   })
 })

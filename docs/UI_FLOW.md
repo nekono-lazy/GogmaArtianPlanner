@@ -1614,7 +1614,8 @@ checkpoint関与の判定はcurrent preparationの `checkpointParticipants` か�
 - 表示中Draftの `conflictRepairLineage` から `derivePlannerConflictRepairLineageContext()`（fresh inputの
   `buildListEntries` で失効判定）を使ってprior fixed Entryとprior除外Route keyを渡す。lineageが `null` なら空である。
   失効判定をUIで再実装しない。what-ifはlineageを読むだけで更新・保存しない
-- 旧 `createWhatIfComparison()`（B9、`defaultPlannerWhatIfBounds`）は生産計画画面から呼ばない（実装はPhase 6-Bまで残る）
+- 旧 `createWhatIfComparison()`（B9、`defaultPlannerWhatIfBounds`）は生産計画画面から呼ばない（Client method・Worker request kindは
+  Phase 6-B1で削除した。B9のDomain計算本体はPhase 6-B2まで残る）
 
 表示中Planから復元するのは `conflicts[].selectedBuildListEntryId !== null` の選択だけである。
 `recommendedBuildListEntryId`、Planner score、Beam bestState、Target priority、
@@ -1700,7 +1701,8 @@ Planner Alternative actual repair（`PlannerWorkerClient.createPlannerAlternativ
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.8、Phase 5-B以降のProduction routing）を最初から実行する。requestは
 `plannerInput`（復元したexplicit resolution付き。今回の決定のmergeはDomainが行う）/ `decision` / `lineage`（表示中Draftの
 `conflictRepairLineage`）だけを持ち、探索範囲と試行上限はProduction Worker adapterがWorker内で渡す。旧
-`createConstrainedPlan()`（B8、`defaultPlannerOrchestrationBounds = 2 / 1 / 4`）は生産計画画面から呼ばない（実装はPhase 6-Bまで残る）。
+`createConstrainedPlan()`（B8、`defaultPlannerOrchestrationBounds = 2 / 1 / 4`）は生産計画画面から呼ばない（Client method・Worker
+request kindはPhase 6-B1で削除した。B8のDomain計算本体はPhase 6-B2まで残る）。
 
 この再計算の `PlannerInput.options` はfresh inputの `defaultPlannerOptions` のままにせず、
 Application callerが `conflictResolutionPlannerOptions(表示中Plan)`

@@ -155,10 +155,6 @@ function workerClient(
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     // Phase 6-A: the replan Preview is an ordinary Planner run.
     createPlan: vi.fn(createPlan),
-    createConstrainedPlan: vi.fn(async () => {
-      throw new Error('The replan Preview never runs the legacy constrained Planner path.')
-    }),
-    createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
     createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(async () => readyPreparation),
@@ -289,7 +285,8 @@ describe('ProductionPlanPage replan Preview', () => {
     // The Preview input is exactly the runtime's request: token and current-state input.
     const request = await vi.mocked(deps.replan.prepareProductionPlanReplanPreview).mock.results[0].value
     expect(client.createPlan).toHaveBeenCalledOnce()
-    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
+    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
     const call = vi.mocked(client.createPlan).mock.calls[0]
     // The ordinary run: no orchestration bounds reach the Client.
     expect(call).toHaveLength(2)

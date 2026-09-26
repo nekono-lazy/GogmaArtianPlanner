@@ -2,26 +2,19 @@ import {
   createPlannerAlternativeRepair,
   createPlannerAlternativeWhatIfComparison,
   createProductionPlan,
-  createProductionPlanWithConstrainedSearch,
   createProductionPlannerDependencies,
-  createPlannerWhatIfComparison,
   defaultPlannerAlternativeTrialBounds,
   preparePlannerInitialContext,
-  type CreateConstrainedProductionPlanCalculation,
   type PlannerDependencies,
 } from '../domain/planner'
 import {
   ProductionRngEngine,
 } from '../domain/rng/production/productionRngEngine'
 import type { RngEngine } from '../domain/rng/rngEngine'
-import {
-  defaultConstrainedEnumerationBounds,
-  defaultPlannerAlternativeSearchExtent,
-} from '../domain/search'
+import { defaultPlannerAlternativeSearchExtent } from '../domain/search'
 import type {
   CreatePlannerAlternativeComparisonCalculation,
   CreatePlannerAlternativeRepairCalculation,
-  CreatePlannerWhatIfComparisonCalculation,
   PlannerWorkerCalculations,
   PreparePlannerInteractionCalculation,
 } from './planner.worker'
@@ -37,44 +30,6 @@ export function createProductionPlannerWorkerDependencies(): PlannerDependencies
 }
 
 /**
- * The Production Planner-driven constrained re-search calculation
- * (PLANNER_SPEC 9.2.6, 9.2.16).
- *
- * Only two things happen here, and neither invents a bound:
- *
- * - `defaultConstrainedEnumerationBounds` - the B8-B2 Browser Worker benchmark
- *   result, imported from its Search Domain authority rather than restated - is
- *   passed explicitly as the enumeration extent.
- * - The caller's `PlannerOrchestrationBounds` is forwarded unchanged: no
- *   default substitution, no clamping, and no field-wise completion. The
- *   Production default now exists as `defaultPlannerOrchestrationBounds`
- *   (B8-E2b, `2 / 1 / 4`), but this adapter still forwards the caller-supplied
- *   wire value unchanged. Application callers decide when to use the Production
- *   default; the Worker never overrides what the request carried.
- */
-export const createProductionConstrainedPlan: CreateConstrainedProductionPlanCalculation =
-  (input, orchestrationBounds, dependencies, executionOptions) =>
-    createProductionPlanWithConstrainedSearch(input, dependencies, {
-      enumerationBounds: defaultConstrainedEnumerationBounds,
-      orchestrationBounds,
-      executionOptions,
-    })
-
-/**
- * Supplies only the Search-domain enumeration extent inside the Worker.
- * `request.bounds` remains caller-required and is forwarded without repair,
- * clamping, completion, or default substitution. The B9-B2c Production value
- * `defaultPlannerWhatIfBounds` (2 / 8) is for explicit Application caller use;
- * this adapter never injects it.
- */
-export const createProductionPlannerWhatIfComparison: CreatePlannerWhatIfComparisonCalculation =
-  (request, dependencies, executionOptions) =>
-    createPlannerWhatIfComparison(request, dependencies, {
-      enumerationBounds: defaultConstrainedEnumerationBounds,
-      executionOptions,
-    })
-
-/**
  * The Production Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md`
  * 9.2.19.7 / 9.2.19.12). The Domain calculation keeps extent and trial bounds
  * caller-required; this adapter is that caller inside the Worker boundary and
@@ -82,8 +37,8 @@ export const createProductionPlannerWhatIfComparison: CreatePlannerWhatIfCompari
  * authority rather than restated. Scenario composition, Route summaries and
  * the typed result all stay in the Domain.
  *
- * Since Phase 5-B it is the Production Plan screen's 「比較する」; the legacy
- * `createProductionPlannerWhatIfComparison()` stays wired until Phase 6.
+ * Since Phase 5-B it is the Production Plan screen's 「比較する」; Phase 6-B1
+ * removed the legacy B9 what-if adapter, so it is the only comparison adapter.
  */
 export const createProductionPlannerAlternativeComparison: CreatePlannerAlternativeComparisonCalculation =
   (input, dependencies, executionOptions) =>
@@ -156,8 +111,6 @@ export function createProductionPlannerWorkerCalculations(): PlannerWorkerCalcul
   return {
     prepareInteraction: prepareProductionPlannerInteraction,
     createPlan: createProductionPlan,
-    createConstrainedPlan: createProductionConstrainedPlan,
-    createWhatIfComparison: createProductionPlannerWhatIfComparison,
     createPlannerAlternativeComparison: createProductionPlannerAlternativeComparison,
     createPlannerAlternativeRepair: createProductionPlannerAlternativeRepair,
   }

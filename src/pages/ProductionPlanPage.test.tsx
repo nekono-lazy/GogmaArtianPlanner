@@ -195,8 +195,6 @@ function plannerClient(
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     createPlan: vi.fn(),
-    createConstrainedPlan: vi.fn(),
-    createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(createPlannerAlternativeComparison),
     createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(prepareInteraction),
@@ -586,9 +584,9 @@ describe('ProductionPlanPage', () => {
     await user.click(compare)
 
     await waitFor(() => expect(client.createPlannerAlternativeComparison).toHaveBeenCalledOnce())
-    // Phase 5-B: 「比較する」 runs the Planner Alternative what-if; the legacy
-    // B9 Client method is never reached from this page.
-    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    // Phase 5-B: 「比較する」 runs the Planner Alternative what-if only (the
+    // legacy B9 Client method was removed in Phase 6-B1).
+    expect(client.createPlan).not.toHaveBeenCalled()
     expect(deps.createInput).toHaveBeenCalledTimes(2)
     expect(deps.createWorkerClient).toHaveBeenCalledOnce()
     expect(client.prepareInteraction).toHaveBeenCalledTimes(2)
@@ -629,7 +627,7 @@ describe('ProductionPlanPage', () => {
     pending.resolve(result)
     expect(await screen.findByText('必要操作数: 12')).toBeInTheDocument()
     expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
     // Nothing of a what-if is persisted.
     expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
   })
@@ -1102,9 +1100,8 @@ describe('ProductionPlanPage explicit selection', () => {
       selectedBuildListEntryId: fixture.secondEntry.id,
     })
     expect(request.lineage).toEqual(fixture.plan.conflictRepairLineage)
-    // Neither the legacy B8 constrained Planner nor any what-if is run.
-    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
-    expect(client.createWhatIfComparison).not.toHaveBeenCalled()
+    // Neither the ordinary Planner nor the what-if is run (the legacy B8 / B9
+    // Client methods were removed in Phase 6-B1).
     expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
     expect(client.createPlan).not.toHaveBeenCalled()
     expect(fresh).toEqual(beforeInput)
@@ -1160,7 +1157,7 @@ describe('ProductionPlanPage explicit selection', () => {
     expect(fixture.plan).toEqual(before)
     expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce()
     expect(client.createPlan).not.toHaveBeenCalled()
-    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
   })
 
@@ -1207,7 +1204,7 @@ describe('ProductionPlanPage explicit selection', () => {
     expect(await screen.findByText(text)).toBeInTheDocument()
     expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
     expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce()
-    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
   })
 
   it('saves the full result with a rebuilt current context and navigates only to the saved Plan, then reloads', async () => {

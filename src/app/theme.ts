@@ -164,7 +164,7 @@ export function createAppTheme(mode: ThemeMode): Theme {
       // CardHeader) as compact, label-grade headings that mirror subtitle1 /
       // subtitle2; on small screens they are not larger than body1, so a deeper
       // semantic heading should pair `component="h4"` with an h2 / h3 / subtitle
-      // variant, as ProductionPlanWhatIfComparison already does.
+      // variant, as ProductionPlanAlternativeComparison already does.
       h4: { fontSize: '0.9375rem', fontWeight: 600, lineHeight: headingLineHeight },
       h5: { fontSize: '0.875rem', fontWeight: 600, lineHeight: headingLineHeight },
       h6: { fontSize: '0.8125rem', fontWeight: 600, lineHeight: headingLineHeight },

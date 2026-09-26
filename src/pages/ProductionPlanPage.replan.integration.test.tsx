@@ -92,10 +92,6 @@ function realPlannerClient(fixture: ExecutionFixture): PlannerWorkerClient {
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     createPlan: vi.fn((_, input) => createProductionPlan(input, fixture.built.dependencies, undefined)),
-    createConstrainedPlan: vi.fn(async () => {
-      throw new Error('The replan Preview never runs the legacy constrained Planner path.')
-    }),
-    createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
     createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(async () => ({
@@ -328,7 +324,8 @@ describe('ProductionPlanPage replan Preview over the real runtime', () => {
       expect(screen.queryByRole('heading', { name: PREVIEW_TITLE })).not.toBeInTheDocument()
       // No automatic re-Preview.
       expect(harness.client.createPlan).toHaveBeenCalledOnce()
-      expect(harness.client.createConstrainedPlan).not.toHaveBeenCalled()
+      expect(harness.client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
+      expect(harness.client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
     }))
 
   it('adopts after a Plan-independent Target was added, because the runtime judges dependencies only', () =>

@@ -2,6 +2,13 @@
 
 作成日: 2026-09-08
 
+> **現状（Issue #136 / #101 Phase 6-B1）:** 本書は過去の設計判断と実測の記録である。本書が計測した
+> Production Worker経路（`PlannerWorkerClient.createConstrainedPlan()`、Worker request kind `create_constrained_plan`、
+> `createProductionConstrainedPlan()`）と、本書のharness（`plannerOrchestrationBrowserBenchmark.ts`、
+> `PlannerOrchestrationBenchmarkPage.tsx`、Benchmark shellの「B8 Planner Orchestration」）はPhase 6-B1で削除した
+> （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14 / 9.2.19.16）。B8 orchestrationのDomain計算本体、
+> `defaultPlannerOrchestrationBounds` とfixtureはPhase 6-B2で整理するまで残る。以下の手順・数値は当時のまま変更しない。
+
 ## Status
 
 ```text

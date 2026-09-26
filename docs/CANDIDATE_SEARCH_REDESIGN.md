@@ -17,6 +17,11 @@
 - Phase Bのタスク分割
 - B1 / B2実装時に残る設計判断
 
+各Phaseの節は当時の実装を記録したものであり、現在の実装状態を表さない。特にB8 / B9のProduction Planner Worker経路
+（`createConstrainedPlan()` / `createWhatIfComparison()`、Production adapter、Browser benchmark harness / page）と
+`ProductionPlanWhatIfComparison` はIssue #136 / #101 Phase 6-B1で削除した（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+9.2.19.14 / 9.2.19.16）。記録本文は書き換えない。
+
 ---
 
 ## 1. Phase Aで確認した実装事実

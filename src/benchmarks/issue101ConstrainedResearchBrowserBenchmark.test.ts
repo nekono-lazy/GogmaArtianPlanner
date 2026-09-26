@@ -336,7 +336,7 @@ describe('Issue #101 orchestration observation', () => {
 })
 
 describe('Issue #101 benchmark isolation', () => {
-  it('is reachable from no Production module and leaves the Production adapter default in place', () => {
+  it('is reachable from no Production module and leaves the Production adapter defaults in place', () => {
     const sources = {
       ...import.meta.glob('../{app,components,db,domain,services,stores,workers,pages}/**/*.{ts,tsx}', {
         query: '?raw',
@@ -363,8 +363,14 @@ describe('Issue #101 benchmark isolation', () => {
         /issue101|Issue101/.test(sources[path]),
     )
     expect(offenders).toEqual([])
+    // The Production adapter supplies the Planner Alternative extent; since
+    // Phase 6-B1 it has no legacy B8 / B9 adapter and so injects no
+    // constrained enumeration bound at all (`docs/PLANNER_SPEC.md` 9.2.19.16).
     expect(sources['../workers/planner.worker.production.ts']).toContain(
-      'enumerationBounds: defaultConstrainedEnumerationBounds',
+      'extent: { ...defaultPlannerAlternativeSearchExtent }',
+    )
+    expect(sources['../workers/planner.worker.production.ts']).not.toContain(
+      'defaultConstrainedEnumerationBounds',
     )
   })
 })
