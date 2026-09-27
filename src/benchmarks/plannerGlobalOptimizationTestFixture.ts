@@ -8,12 +8,17 @@ import { searchCandidates } from '../domain/search/candidateSearch'
 import type { PlannerInput } from '../domain/planner/plannerTypes'
 import { GLOBAL_RESEARCH_TIME } from './plannerGlobalOptimizationResearch'
 
-export async function globalResearchFixture() {
+/** `extraTargets` (Phase 1-E tests) adds Targets c, d, ... of the same weapon type; the default fixture is unchanged. */
+export async function globalResearchFixture(options: { extraTargets?: number } = {}) {
   const search = createCandidateSearchInput()
   search.ownedWeapons = []
   search.calculationContext.appSchemaVersion = CURRENT_CALCULATION_APP_SCHEMA_VERSION
   const first = search.targetWeapons[0]
   search.targetWeapons.push({ ...structuredClone(first), id: targetWeaponId('target.fixture.b'), elementId: 'element.fixture.b' })
+  for (let i = 0; i < (options.extraTargets ?? 0); i++) {
+    const suffix = String.fromCharCode(99 + i)
+    search.targetWeapons.push({ ...structuredClone(first), id: targetWeaponId(`target.fixture.${suffix}`), elementId: `element.fixture.${suffix}` })
+  }
   const bonuses = createRestorationBonusSet()
   const fixtures: FakeRngFixtures = {
     version: 'global-research', capabilities: { supportsNormalArtianPrediction: true, supportsGogmaPrediction: true, supportsSkillPrediction: true, supportsKeepBonusesPrediction: false },

@@ -191,7 +191,10 @@ export interface ExtentFallbackMeasurement {
   baseExtent: CandidateSearchSettings
   extent: CandidateSearchSettings
   searchRunId: string
-  status: 'searching' | 'found' | 'not_found_within_extent' | 'unavailable' | 'search_error' | 'materialization_blocked' | 'projection_failed' | 'cancelled' | 'time_budget_reached'
+  /** `episode_limit_reached`: Phase 1-E bound; the fallback Search never started and the Target is not treated as absent. */
+  status: 'searching' | 'found' | 'not_found_within_extent' | 'unavailable' | 'search_error' | 'materialization_blocked' | 'projection_failed' | 'cancelled' | 'time_budget_reached' | 'episode_limit_reached'
+  /** hashStableValue() of the fallback request (FNV-1a fingerprint, not SHA-256): one fallback per request and attempt. */
+  requestFingerprint: string
   /** Which stop ended a cancelled Search: this fallback's own budget, the attempt budget or an external cancel. */
   stoppedBy: 'fallback_budget' | 'attempt_budget' | 'external_cancel' | null
   timeBudgetMs: number
@@ -214,6 +217,8 @@ export interface ExtentFallbackMeasurement {
 export interface GlobalResearchExtentFallback {
   strategy: string
   timeBudgetMs: number
+  /** Phase 1-E: fallback Searches allowed in one attempt. Absent = unbounded (Phase 1-D). Reaching it blocks the attempt. */
+  maxEpisodes?: number
   request(measurement: SearchMeasurement): { axis: string; extent: CandidateSearchSettings } | null
 }
 
@@ -257,7 +262,7 @@ export interface GlobalResearchReport {
   stage: 'baseline' | 'retained_prefix' | 'discovery' | 'final_planner' | 'finished'
   error: string | null
   /** Phase 1-D only. Fallback Search time is inside `searchElapsedMs` too. */
-  extentFallback?: { strategy: string; searches: number; searchElapsedMs: number }
+  extentFallback?: { strategy: string; searches: number; searchElapsedMs: number; maxEpisodes?: number }
 }
 
 export interface GlobalResearchOptions extends PlannerExecutionOptions {
@@ -304,9 +309,12 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
   if (options.failedFirstTargetIds?.length) report.algorithm = 'phase1a-observed-failed-first-v1'
   if (options.extentFallback) {
     if (!Number.isFinite(options.extentFallback.timeBudgetMs) || options.extentFallback.timeBudgetMs < 0) throw new Error('Invalid fallback budget')
+    const max = options.extentFallback.maxEpisodes
+    if (max !== undefined && (!Number.isSafeInteger(max) || max < 0)) throw new Error('Invalid fallback episode limit')
     report.algorithm = `phase1d-extent-fallback-v1:${options.extentFallback.strategy}`
-    report.extentFallback = { strategy: options.extentFallback.strategy, searches: 0, searchElapsedMs: 0 }
+    report.extentFallback = { strategy: options.extentFallback.strategy, searches: 0, searchElapsedMs: 0, ...(max !== undefined ? { maxEpisodes: max } : {}) }
   }
+  const fallbackRequests = new Set<string>()
   const publish = () => { report.totalElapsedMs = nowMs() - start; options.onProgress?.(structuredClone(report)) }
   const cancelled = () => { if (shouldCancel()) throw new CandidateSearchError('cancelled', 'Research cancelled or budget reached.') }
   const fullRun = async (runInput: PlannerInput) => {
@@ -414,12 +422,24 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
         if (!request || !options.extentFallback) { publish(); continue }
         // Same projected snapshot, new request identity for the new extent; nothing is carried from the base Search.
         const fallbackInput = globalResearchSearchInput(projected, originTarget, { ...request.extent })
+        const requestFingerprint = hashStableValue(fallbackInput)
+        // Each Target is searched once per attempt, so a repeated request is an invariant failure, never a second episode.
+        if (fallbackRequests.has(requestFingerprint)) throw new Error('Duplicate extent fallback request within one attempt.')
+        fallbackRequests.add(requestFingerprint)
         fallback = { strategy: options.extentFallback.strategy, axis: request.axis, baseExtent: { ...extent }, extent: { ...fallbackInput.settings },
-          searchRunId: fallbackInput.searchRunId, status: 'searching', stoppedBy: null, timeBudgetMs: options.extentFallback.timeBudgetMs, elapsedMs: 0,
+          searchRunId: fallbackInput.searchRunId, requestFingerprint, status: 'searching', stoppedBy: null, timeBudgetMs: options.extentFallback.timeBudgetMs, elapsedMs: 0,
           applicationPlannerMs: 0, routeKind: null, estimatedOperationCount: null, advances: null, observedPredictionReach: { normal: 0, gogma: 0, skill: 0 },
           predictionBoundaryReached: { normal: false, gogma: false, skillExisting: false, skillConversion: false }, searchedRoutes: [], skippedRoutes: [],
           generatedEntryId: null, generatedCandidateId: null, error: null }
         measurement.fallback = fallback
+        const maxEpisodes = options.extentFallback.maxEpisodes
+        if (maxEpisodes !== undefined && report.extentFallback!.searches >= maxEpisodes) {
+          // Bounded: the Search is not started, and the Target is not silently left without a Candidate.
+          fallback.status = 'episode_limit_reached'
+          publish()
+          report.status = 'blocked'
+          throw new ExtentFallbackBlocked('Extent fallback episode limit reached; not a bounded no-match.')
+        }
         publish()
         const fallbackStart = nowMs(), budget = options.extentFallback.timeBudgetMs
         let fallbackDeadline = false
