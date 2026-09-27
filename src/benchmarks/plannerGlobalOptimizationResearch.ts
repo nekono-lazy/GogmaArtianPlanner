@@ -7,6 +7,7 @@ import type { BuildCandidate, BuildListEntry, OwnedWeaponId, PlanStepId, Product
 import { validateExportRootForFullReplacement } from '../services/dataTransfer/importExportValidation'
 import { createProductionPlanWithObserver } from '../domain/planner/productionPlanGeneration'
 import { comparePlannerEntryPriority } from '../domain/planner/plannerEntryPriority'
+import { replayPlannerSearchTrace } from '../domain/planner/plannerTraceReplay'
 import { validatePlannerInput } from '../domain/planner/plannerValidation'
 import { hasIntermediateStateSelection } from '../domain/planner/plannerCheckpoints'
 import { createPlannerStartSearchOrigin, normalizePlannerSearchOrigin } from '../domain/planner/replacement/plannerSearchOrigin'
@@ -98,7 +99,7 @@ export interface SearchMeasurement {
   originalEntryId: string
   generatedEntryId: string | null
   generatedCandidateId: string | null
-  status: 'searching' | 'found' | 'not_found_within_extent' | 'unavailable' | 'search_error' | 'materialization_blocked' | 'projection_failed' | 'checkpoint_blocked' | 'cancelled'
+  status: 'searching' | 'found' | 'not_found_within_extent' | 'unavailable' | 'search_error' | 'materialization_blocked' | 'projection_failed' | 'checkpoint_blocked' | 'cancelled' | 'time_budget_reached'
   elapsedMs: number
   applicationPlannerMs: number
   routeKind: string | null
@@ -141,7 +142,7 @@ function summarizePlanner(result: PlannerResult, elapsedMs: number, fullRuns: nu
 
 export interface GlobalResearchReport {
   algorithm: string
-  status: 'completed' | 'partial' | 'blocked' | 'cancelled' | 'error'
+  status: 'completed' | 'partial' | 'blocked' | 'cancelled' | 'error' | 'time_budget_reached'
   inputTargetCount: number
   inputEntryCount: number
   planningTargetCount: number
@@ -171,6 +172,9 @@ export interface GlobalResearchOptions extends PlannerExecutionOptions {
   onSearchInput?: (input: CandidateSearchInput) => void
   /** Observed failures supplied by the caller, never an oracle or an embedded ID. */
   failedFirstTargetIds?: readonly string[]
+  /** Phase 1-C: complete independent state, never a previous projected input. */
+  attempt?: { retainedEntryIds: readonly string[]; pendingTargetIds: readonly string[] }
+  timeBudgetMs?: number
 }
 
 export function orderGlobalResearchPending<T extends { targetWeaponId: string }>(pending: readonly T[], failedIds: readonly string[] = []): T[] {
@@ -182,6 +186,13 @@ export function orderGlobalResearchPending<T extends { targetWeaponId: string }>
 export async function runGlobalPlannerResearch(input: PlannerInput, dependencies: PlannerDependencies, options: GlobalResearchOptions = {}) {
   const nowMs = options.nowMs ?? (() => performance.now())
   const start = nowMs()
+  if (options.timeBudgetMs !== undefined && (!Number.isFinite(options.timeBudgetMs) || options.timeBudgetMs < 0)) throw new Error('Invalid attempt budget')
+  let timedOut = false
+  const shouldCancel = () => {
+    if (options.shouldCancel?.()) return true
+    if (options.timeBudgetMs !== undefined && nowMs() - start >= options.timeBudgetMs) timedOut = true
+    return timedOut
+  }
   const extent = { ...(options.extent ?? GLOBAL_RESEARCH_EXTENT) }
   const original = structuredClone(input)
   const report: GlobalResearchReport = { algorithm: 'phase0-sequential-v1', status: 'partial', inputTargetCount: input.targetWeapons.length,
@@ -189,7 +200,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
     retainedOriginalEntryIds: [], searches: [], generatedReplacementCount: 0, plannerFullRunCount: 0, searchElapsedMs: 0, plannerElapsedMs: 0, totalElapsedMs: 0, stage: 'baseline', error: null }
   if (options.failedFirstTargetIds?.length) report.algorithm = 'phase1a-observed-failed-first-v1'
   const publish = () => { report.totalElapsedMs = nowMs() - start; options.onProgress?.(structuredClone(report)) }
-  const cancelled = () => { if (options.shouldCancel?.()) throw new CandidateSearchError('cancelled', 'Research cancelled.') }
+  const cancelled = () => { if (shouldCancel()) throw new CandidateSearchError('cancelled', 'Research cancelled or budget reached.') }
   const fullRun = async (runInput: PlannerInput) => {
     cancelled()
     const started = nowMs(), countBefore = report.plannerFullRunCount
@@ -197,7 +208,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
     let result: PlannerResult
     let elapsedMs: number
     try {
-      result = await createProductionPlanWithObserver(runInput, dependencies, options, {
+      result = await createProductionPlanWithObserver(runInput, dependencies, { ...options, shouldCancel }, {
         beforePlannerRun: () => { report.plannerFullRunCount += 1 }, afterPlannerRun: value => { observed = value },
       })
     } finally {
@@ -218,7 +229,8 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
     if (!validation.isValid) throw new Error(`Original Planner validation failed: ${JSON.stringify(validation.issues)}`)
     const state = baseline.observed?.bestState
     if (!baseline.result.plan || !state || baseline.result.termination.status === 'incomplete') throw new Error('Baseline has no usable untruncated Plan.')
-    const kept = new Set([...baseline.result.plan.selectedBuildListEntryIds, ...state.trace.flatMap(action => [action.primaryBuildListEntryId, ...action.progressedBuildListEntryIds])])
+    const kept = new Set(options.attempt?.retainedEntryIds ?? [...baseline.result.plan.selectedBuildListEntryIds, ...state.trace.flatMap(action => [action.primaryBuildListEntryId, ...action.progressedBuildListEntryIds])])
+    if ([...kept].some(id => !validation.validBuildListEntries.some(v => v.entry.id === id))) throw new Error('Unknown or invalid retained Entry.')
     const retainedEntries = original.buildListEntries.filter(entry => kept.has(entry.id))
     report.retainedOriginalEntryIds = retainedEntries.map(entry => entry.id).sort()
     const retainedInput = { ...original, buildListEntries: retainedEntries }
@@ -228,16 +240,27 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
     const retained = await fullRun(retainedInput)
     report.retained = retained.summary
     publish()
-    if (!retained.result.plan || retained.result.termination.status !== 'completed' || retained.result.conflicts.length || retained.summary.rejected) {
+    const emptyPrefix = retainedEntries.length === 0 && retained.observed?.bestState &&
+      retained.result.termination.completedTargetCount === 0 && retained.result.termination.totalTargetCount === 0 &&
+      replayPlannerSearchTrace(retainedInput, retained.observed.bestState, dependencies.rngEngine).isValid
+    if ((!retained.result.plan && !emptyPrefix) || (!emptyPrefix && retained.result.termination.status !== 'completed') || retained.result.conflicts.length || retained.summary.rejected ||
+      retained.result.termination.completedTargetCount !== new Set(retainedEntries.map(e => e.targetWeaponId)).size) {
       report.status = 'blocked'
       throw new Error('The selected/progressed retention hypothesis did not yield a complete conflict-free prefix.')
     }
-    let projected = projectGlobalResearchPlan(retainedInput, retained.result.plan, dependencies)
+    if (emptyPrefix) report.retained.traceReplay = 'passed'
+    let projected = retained.result.plan ? projectGlobalResearchPlan(retainedInput, retained.result.plan, dependencies) : { ...structuredClone(original), buildListEntries: [], conflictResolutions: [] }
     report.stage = 'discovery'
     const targets = new Map(original.targetWeapons.map(t => [t.id, t]))
     const pending = validation.validBuildListEntries.map(v => v.entry).filter(entry => !kept.has(entry.id))
       .sort((a, b) => comparePlannerEntryPriority(a, b, targets, original.buildListEntries))
-    for (const oldEntry of orderGlobalResearchPending(pending, options.failedFirstTargetIds)) {
+    let ordered = orderGlobalResearchPending(pending, options.failedFirstTargetIds)
+    if (options.attempt) {
+      const ids = options.attempt.pendingTargetIds
+      if (ids.length !== pending.length || new Set(ids).size !== ids.length || ids.some(id => !pending.some(e => e.targetWeaponId === id))) throw new Error('Attempt order must contain every pending Target exactly once.')
+      ordered = ids.map(id => pending.find(e => e.targetWeaponId === id)!)
+    }
+    for (const oldEntry of ordered) {
       cancelled()
       const measurement: SearchMeasurement = { targetId: oldEntry.targetWeaponId, originalEntryId: oldEntry.id,
         generatedEntryId: null, generatedCandidateId: null, status: 'searching', elapsedMs: 0, applicationPlannerMs: 0,
@@ -251,7 +274,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
       options.onSearchInput?.(structuredClone(searchInput))
       const raw = options.rawBlocks?.beginSearch(searchInput.targetWeaponId)
       const engine = observeGlobalResearchReach(raw?.engine ?? dependencies.rngEngine, searchInput, measurement.observedPredictionReach)
-      const execution = { shouldCancel: options.shouldCancel, yieldControl: options.yieldControl, now: () => GLOBAL_RESEARCH_TIME, nowMs }
+      const execution = { shouldCancel, yieldControl: options.yieldControl, now: () => GLOBAL_RESEARCH_TIME, nowMs }
       const observed = options.profiler?.begin(engine, execution, nowMs)
       if (observed) measurement.profile = observed.profile
       const searchStart = nowMs()
@@ -259,9 +282,9 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
       try {
         found = await searchCandidates(searchInput, observed?.engine ?? engine, observed?.execution ?? execution)
       } catch (error) {
-        measurement.status = error instanceof CandidateSearchError && error.code === 'cancelled' ? 'cancelled' : 'search_error'
+        measurement.status = error instanceof CandidateSearchError && error.code === 'cancelled' ? timedOut ? 'time_budget_reached' : 'cancelled' : 'search_error'
         measurement.error = error instanceof Error ? error.message : String(error)
-        if (measurement.status === 'cancelled') throw error
+        if (measurement.status === 'cancelled' || measurement.status === 'time_budget_reached') throw error
         continue
       } finally {
         raw?.end()
@@ -313,7 +336,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
       final.summary.conflicts === 0 && final.summary.rejected === 0 ? 'completed' : 'partial'
     report.stage = 'finished'
   } catch (error) {
-    if (error instanceof CandidateSearchError && error.code === 'cancelled') report.status = 'cancelled'
+    if (error instanceof CandidateSearchError && error.code === 'cancelled') report.status = timedOut ? 'time_budget_reached' : 'cancelled'
     else if (report.status !== 'blocked') report.status = 'error'
     report.error = error instanceof Error ? error.message : String(error)
   }

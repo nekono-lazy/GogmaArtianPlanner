@@ -164,6 +164,13 @@ describe('Phase 1-B raw block boundary', () => {
     expect(await run('run')).toEqual(off)
     expect(off.generatedEntries.length, JSON.stringify(off.report)).toBeGreaterThan(0)
     expect(off.report.final?.traceReplay).toBe('passed')
+    for (const mode of ['off', 'per-search'] as const) {
+      const explicit = await runGlobalPlannerResearch(input, globalResearchDependencies(new ProductionRngEngine()), {
+        extent: search.settings, nowMs: () => 0, rawBlocks: new GlobalRawBlockResearch(mode),
+        attempt: { retainedEntryIds: off.report.retainedOriginalEntryIds, pendingTargetIds: off.report.searches.map(s => s.targetId) },
+      })
+      expect(explicit).toEqual(off)
+    }
   })
 
   it('keeps cancellation and deadline classifications on the existing Search checkpoint', async () => {
