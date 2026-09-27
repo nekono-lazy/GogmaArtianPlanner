@@ -579,7 +579,10 @@ what-if scenario preparation（`preparePlannerConflictScenario()` / `PreparedPla
 検査はlegacy wrapper `preparePlannerWhatIfScenario()` 側に残し、Planner Alternativeは同じ規則の自前のbounds検査を先に行う）と
 prepare段階のtyped failure（`PlannerConflictScenarioFailureResult`。B9の型名はそのaliasとして残る）、Planner-start Search origin
 の作成 / 正規化 / Target解決（`createPlannerStartSearchOrigin()` / `normalizePlannerSearchOrigin()` /
-`resolvePlannerSearchOriginTarget()`）、deterministic materializerの共通core（失敗型は `PlannerMaterializationError`）。
+`resolvePlannerSearchOriginTarget()`）、deterministic materializerの共通core。materialization errorもneutral moduleへ移したが、
+runtime contractは維持した: constructorと `Error.name` は旧 `ConstrainedMaterializationError` のまま、code・message・`instanceof`
+も不変であり、neutral名 `PlannerMaterializationError` は同一constructorのaliasである。旧import pathはPhase 6-B2bまで
+compatibility facadeとして残す。
 B8 route policy / search identity、B8 materializer adapter、B8 orchestration、B9 what-if計算、bounds / default、warning kind、
 B8保存API、Issue #101 research harness、Phase 6-Aのparity / retry境界test、B8 / B9 benchmark fixtureはlegacy側に残し、neutral
 moduleをimportする形へ変えた。Planner Alternativeのproduction runtimeから `../constrained/` へのimportは0件であり、

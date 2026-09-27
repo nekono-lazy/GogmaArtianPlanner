@@ -27,7 +27,7 @@ import type {
   ConstrainedSearchOrigin,
 } from '../../search'
 import type { PlannerClock } from '../plannerTypes'
-import { PlannerMaterializationError } from './plannerMaterializationErrors'
+import { ConstrainedMaterializationError } from './plannerMaterializationErrors'
 
 /** One materialized generated Entry and the Candidate snapshot it carries. */
 export interface GeneratedBuildListEntryResult {
@@ -167,7 +167,7 @@ export function createDeterministicMaterializer<TSource extends DeterministicMat
     createdAt: ISODateTimeString,
   ): BuildCandidate {
     if (source.targetWeaponId !== target.id) {
-      throw new PlannerMaterializationError(
+      throw new ConstrainedMaterializationError(
         'target_mismatch',
         `The materialized Candidate targets "${source.targetWeaponId}", not "${target.id}".`,
       )
@@ -222,7 +222,7 @@ export function createDeterministicMaterializer<TSource extends DeterministicMat
     })
     const valid = validateBuildCandidate(candidate, context.origin.ownedWeapons)
     if (!valid.isValid) {
-      throw new PlannerMaterializationError(
+      throw new ConstrainedMaterializationError(
         'invalid_candidate',
         valid.issues.map(({ path, message }) => `${path}: ${message}`).join('\n'),
       )
@@ -284,7 +284,7 @@ export function createDeterministicMaterializer<TSource extends DeterministicMat
           (entry) => !isCurrentSemanticMatch(entry, candidate, meaningFingerprint),
         )
       ) {
-        throw new PlannerMaterializationError(
+        throw new ConstrainedMaterializationError(
           'generated_entry_id_collision',
           `BuildListEntry "${entryId}" already exists with different current semantic content.`,
         )

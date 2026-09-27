@@ -14,7 +14,7 @@ import {
 } from '../../search'
 import type { ConstrainedSearchOrigin } from '../../search'
 import type { PlannerInput } from '../plannerTypes'
-import { PlannerMaterializationError } from './plannerMaterializationErrors'
+import { ConstrainedMaterializationError } from './plannerMaterializationErrors'
 
 /**
  * The Planner-start Search / RNG origin (PLANNER_SPEC 9.2.1, 9.2.9): building
@@ -61,7 +61,7 @@ export function resolvePlannerSearchOriginTarget(
 ): TargetWeapon {
   const target = origin.targetWeapons.find(({ id }) => id === targetWeaponId)
   if (!target) {
-    throw new PlannerMaterializationError(
+    throw new ConstrainedMaterializationError(
       'target_mismatch',
       `TargetWeapon '${targetWeaponId}' is not part of the constrained search origin.`,
     )

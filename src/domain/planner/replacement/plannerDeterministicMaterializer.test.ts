@@ -165,7 +165,7 @@ describe('deterministic materialization core', () => {
     }
     expect(() => materializer().materializeCandidate(foreign)).toThrowError(
       expect.objectContaining({
-        name: 'PlannerMaterializationError',
+        name: 'ConstrainedMaterializationError',
         code: 'target_mismatch',
       }) as unknown as Error,
     )

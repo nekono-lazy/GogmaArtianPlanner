@@ -3,7 +3,7 @@ import {
   CONSTRAINED_ROUTE_POLICY_VERSION,
   createConstrainedSearchIdentity,
 } from './constrainedSearchIdentity'
-import { PlannerMaterializationError } from '../replacement/plannerMaterializationErrors'
+import { ConstrainedMaterializationError } from './constrainedMaterializationErrors'
 import type { ConstrainedSearchOrigin } from '../../search'
 import {
   constrainedBounds,
@@ -68,7 +68,7 @@ describe('constrained search identity composition', () => {
         targetWeaponId: targetWeaponId('target.fixture.missing'),
         bounds: constrainedBounds(),
       }),
-    ).toThrowError(PlannerMaterializationError)
+    ).toThrowError(ConstrainedMaterializationError)
   })
 })
 

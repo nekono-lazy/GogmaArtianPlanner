@@ -5277,8 +5277,14 @@ interface PlannerAlternativeRouteSummary {
     `PLANNER_ALTERNATIVE_ROUTE_POLICY_VERSION` / `createPlannerAlternativeSearchIdentity()` は `alternative/` に残る
   - deterministic materializerの共通core（`plannerDeterministicMaterializer.ts`）: `GeneratedBuildListEntryResult`、
     `DeterministicMaterializationSource`、`DeterministicMaterializer`、`createDeterministicMaterializer()`。B8 adapter
-    `createConstrainedMaterializer()` はlegacy側に残る。失敗型は `PlannerMaterializationError`（旧
-    `ConstrainedMaterializationError`。code・messageは不変）
+    `createConstrainedMaterializer()` はlegacy側に残る
+  - materialization error（`plannerMaterializationErrors.ts`）: runtime contractは移動前のまま維持する。constructorは
+    旧 `ConstrainedMaterializationError` の1つだけであり、`Error.name` / `constructor.name` は
+    `'ConstrainedMaterializationError'`、code（`target_mismatch` / `invalid_candidate` / `generated_entry_id_collision`）と
+    messageは不変である（`resolvePlannerSearchOriginTarget()` のTarget不在も同じerrorでthrowする）。neutral moduleは
+    `PlannerMaterializationError` / `PlannerMaterializationErrorCode` も提供するが、これは同一constructor / 同一型のaliasであり
+    別classではないので、`instanceof` はどちらの名前でも成立する。旧import path
+    `constrained/constrainedMaterializationErrors.ts` はPhase 6-B2bまでcompatibility facadeとして同じconstructorを再exportする
 - 依存方向は「Planner Alternative -> neutral module」「legacy B8 / B9 -> neutral module」であり、neutral moduleはどちらにも
   依存しない。Planner Alternativeのproduction runtime（`src/domain/planner/alternative/*.ts`）から `../constrained/` への
   importは0件である。責務・配置の整理だけであり、Planner Alternative Searchのsemantics、reservation、Candidate順序、

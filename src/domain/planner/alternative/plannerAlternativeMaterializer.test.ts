@@ -18,7 +18,10 @@ import {
   type PlannerAlternativeCandidate,
   type PlannerAlternativeReservation,
 } from '../../search'
-import { PlannerMaterializationError } from '../replacement/plannerMaterializationErrors'
+import {
+  ConstrainedMaterializationError,
+  PlannerMaterializationError,
+} from '../replacement/plannerMaterializationErrors'
 import {
   createPlannerAlternativeMaterializer,
   createPlannerAlternativeSearchIdentity,
@@ -149,5 +152,17 @@ describe('Planner Alternative materializer (PLANNER_SPEC 9.2.13 / 9.2.19.6)', ()
     divergent.targetDefinitionHash = 'target-definition.other'
     expect(() => materializer.materializeBuildListEntry(candidates[0], [divergent]))
       .toThrow(PlannerMaterializationError)
+    // The neutral name is an alias of the legacy constructor: the runtime error
+    // identity is unchanged by Phase 6-B2a.
+    let thrown: unknown = null
+    try {
+      materializer.materializeBuildListEntry(candidates[0], [divergent])
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(PlannerMaterializationError)
+    expect(thrown).toBeInstanceOf(ConstrainedMaterializationError)
+    expect((thrown as Error).name).toBe('ConstrainedMaterializationError')
+    expect((thrown as ConstrainedMaterializationError).code).toBe('generated_entry_id_collision')
   })
 })

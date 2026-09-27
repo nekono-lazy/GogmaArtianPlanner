@@ -3766,8 +3766,13 @@ typed failures `PlannerConflictScenarioFailureResult` with unchanged literals), 
 `createPlannerStartSearchOrigin()`, `normalizePlannerSearchOrigin()`, `resolvePlannerSearchOriginTarget()`, formerly
 `createConstrainedSearchOriginFromPlannerInput()` / `normalizeConstrainedSearchOrigin()` / `resolveConstrainedTarget()`) and the
 deterministic materializer core (`plannerDeterministicMaterializer.ts`: `GeneratedBuildListEntryResult`,
-`DeterministicMaterializationSource`, `DeterministicMaterializer`, `createDeterministicMaterializer()`; its error is
-`PlannerMaterializationError`, formerly `ConstrainedMaterializationError`, same codes and messages). The shared scenario preparation
+`DeterministicMaterializationSource`, `DeterministicMaterializer`, `createDeterministicMaterializer()`). The materialization error moved
+into `replacement/plannerMaterializationErrors.ts` with its runtime contract intact: the one constructor is still
+`ConstrainedMaterializationError` (`name` / `constructor.name` `'ConstrainedMaterializationError'`, the codes `target_mismatch` /
+`invalid_candidate` / `generated_entry_id_collision` and every message unchanged, also for `resolvePlannerSearchOriginTarget()`), the
+neutral `PlannerMaterializationError` / `PlannerMaterializationErrorCode` are aliases of that same constructor and type (never a second
+class, so `instanceof` holds under either name), and the legacy path `constrained/constrainedMaterializationErrors.ts` stays a
+compatibility facade re-exporting it until Phase 6-B2b. The shared scenario preparation
 checks no bounds: the Planner Alternative kernel asserts its own trial bounds (the same positive-integer rule) first, and the legacy B9
 `preparePlannerWhatIfScenario()` stays as a wrapper that asserts `PlannerWhatIfBounds` and delegates; `PlannerWhatIfFailureResult` and
 its members are aliases of the shared types. The legacy side keeps `CONSTRAINED_ROUTE_POLICY_VERSION` / `createConstrainedSearchIdentity()`,

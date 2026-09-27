@@ -8,7 +8,10 @@ import {
 } from '../../../test/fixtures/constrainedEnumeration'
 import { fixture, target } from '../../../test/fixtures/plannerBeam'
 import { targetWeaponId } from '../../../test/fixtures/domainData'
-import { PlannerMaterializationError } from './plannerMaterializationErrors'
+import {
+  ConstrainedMaterializationError,
+  PlannerMaterializationError,
+} from './plannerMaterializationErrors'
 import {
   createPlannerStartSearchOrigin,
   normalizePlannerSearchOrigin,
@@ -61,10 +64,18 @@ describe('Planner-start Search origin', () => {
     expect(() =>
       resolvePlannerSearchOriginTarget(origin, targetWeaponId('target.fixture.missing')),
     ).toThrowError(PlannerMaterializationError)
+    // The legacy runtime contract of the former `resolveConstrainedTarget()`.
+    expect(() =>
+      resolvePlannerSearchOriginTarget(origin, targetWeaponId('target.fixture.missing')),
+    ).toThrowError(ConstrainedMaterializationError)
     expect(() =>
       resolvePlannerSearchOriginTarget(origin, targetWeaponId('target.fixture.missing')),
     ).toThrowError(
-      expect.objectContaining({ code: 'target_mismatch' }) as unknown as Error,
+      expect.objectContaining({
+        name: 'ConstrainedMaterializationError',
+        code: 'target_mismatch',
+        message: "TargetWeapon 'target.fixture.missing' is not part of the constrained search origin.",
+      }) as unknown as Error,
     )
   })
 })

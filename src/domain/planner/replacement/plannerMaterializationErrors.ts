@@ -1,15 +1,22 @@
 /**
  * Failure modes of the shared deterministic materializer
  * (`createDeterministicMaterializer()`) and of resolving a Target from a
- * Planner-start Search origin (Phase 6-B2a; formerly
- * `PlannerMaterializationError` of the B8-C2 materializer, with the same
- * codes and messages).
+ * Planner-start Search origin.
  *
- * Every one of them fails closed: no partially built Candidate, no fallback to
- * a random ID, and no overwrite of an existing BuildListEntry. The caller reads
+ * Phase 6-B2a moved this module from the legacy B8-C2 materializer
+ * (`../constrained/constrainedMaterializationErrors`, kept as a compatibility
+ * facade until Phase 6-B2b) without changing its runtime contract: the one
+ * constructor is still `ConstrainedMaterializationError`, so a thrown error
+ * keeps its `instanceof`, its `name` / `constructor.name`
+ * (`'ConstrainedMaterializationError'`), its `code` and its message.
+ * `PlannerMaterializationError` is the neutral alias of that very constructor,
+ * never a second class.
+ *
+ * Every failure fails closed: no partially built Candidate, no fallback to a
+ * random ID, and no overwrite of an existing BuildListEntry. The caller reads
  * `code`, never the message text.
  */
-export type PlannerMaterializationErrorCode =
+export type ConstrainedMaterializationErrorCode =
   /** The Target is missing from the origin, or the Candidate names another one. */
   | 'target_mismatch'
   /** The materialized `BuildCandidate` failed `validateBuildCandidate()`. */
@@ -21,12 +28,22 @@ export type PlannerMaterializationErrorCode =
    */
   | 'generated_entry_id_collision'
 
-export class PlannerMaterializationError extends Error {
-  readonly code: PlannerMaterializationErrorCode
+export class ConstrainedMaterializationError extends Error {
+  readonly code: ConstrainedMaterializationErrorCode
 
-  constructor(code: PlannerMaterializationErrorCode, message: string) {
+  constructor(code: ConstrainedMaterializationErrorCode, message: string) {
     super(message)
-    this.name = 'PlannerMaterializationError'
+    this.name = 'ConstrainedMaterializationError'
     this.code = code
   }
 }
+
+/** The neutral name of `ConstrainedMaterializationErrorCode`; the same type. */
+export type PlannerMaterializationErrorCode = ConstrainedMaterializationErrorCode
+
+/**
+ * The neutral name of `ConstrainedMaterializationError`: the same constructor,
+ * so `instanceof` holds under either name and `name` stays
+ * `'ConstrainedMaterializationError'`.
+ */
+export { ConstrainedMaterializationError as PlannerMaterializationError }
