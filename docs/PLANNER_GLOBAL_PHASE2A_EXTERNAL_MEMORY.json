@@ -1,1270 +1,1288 @@
 {
  "note": "Phase 2-A external observations collected by the CDP measurement driver (not by the page). Scopes: workerHeap = CDP Runtime.getHeapUsage on the auto-attached benchmark Worker target (that Worker isolate JS heap, sampled about every 2 s, includes not-yet-collected garbage); os = Windows process memory of the Chrome renderer processes of the measurement profile (PrivateMemorySize64 / WorkingSet64 / PeakWorkingSet64, sampled about every 5 s; PeakWorkingSet64 is the process-lifetime peak, so it can include earlier runs in the same renderer). atMs = driver ms since the task started (not Worker-local).",
+ "measuredHead": "d61122649707797d9c746c5be3f4b6198c11c7cb",
  "runs": {
   "08-memory-normal": {
    "recordId": "pg2a-record-10",
    "workerHeap": [
     {
-     "atMs": 14474,
-     "usedSize": 1090680,
-     "totalSize": 4718592,
+     "atMs": 16479,
+     "usedSize": 1075996,
+     "totalSize": 5505024,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 16502,
-     "usedSize": 1090680,
-     "totalSize": 4718592,
+     "atMs": 18918,
+     "usedSize": 1075996,
+     "totalSize": 5505024,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 18971,
-     "usedSize": 1090680,
-     "totalSize": 4718592,
+     "atMs": 20929,
+     "usedSize": 1075996,
+     "totalSize": 5505024,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 20991,
-     "usedSize": 1090680,
-     "totalSize": 4718592,
+     "atMs": 22934,
+     "usedSize": 1075996,
+     "totalSize": 5505024,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 23014,
-     "usedSize": 1090680,
-     "totalSize": 4718592,
+     "atMs": 25386,
+     "usedSize": 1075996,
+     "totalSize": 5505024,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 25458,
-     "usedSize": 1090680,
-     "totalSize": 4718592,
+     "atMs": 27403,
+     "usedSize": 1075996,
+     "totalSize": 5505024,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 27484,
-     "usedSize": 1090680,
-     "totalSize": 4718592,
-     "backingStorageSize": 388070
-    },
-    {
-     "atMs": 29948,
-     "usedSize": 682048,
+     "atMs": 29841,
+     "usedSize": 681576,
      "totalSize": 2621440,
      "backingStorageSize": 387959
     },
     {
-     "atMs": 31968,
-     "usedSize": 138714308,
-     "totalSize": 207880192,
+     "atMs": 31856,
+     "usedSize": 681576,
+     "totalSize": 2621440,
+     "backingStorageSize": 387959
+    },
+    {
+     "atMs": 33879,
+     "usedSize": 207418764,
+     "totalSize": 267911168,
      "backingStorageSize": 387894
     },
     {
-     "atMs": 33984,
-     "usedSize": 207074956,
-     "totalSize": 286261248,
+     "atMs": 36366,
+     "usedSize": 366968564,
+     "totalSize": 446615552,
      "backingStorageSize": 387894
     },
     {
-     "atMs": 36488,
-     "usedSize": 471650508,
-     "totalSize": 552599552,
+     "atMs": 38388,
+     "usedSize": 574524408,
+     "totalSize": 622776320,
      "backingStorageSize": 387894
     },
     {
-     "atMs": 38511,
-     "usedSize": 313479584,
-     "totalSize": 761790464,
+     "atMs": 40861,
+     "usedSize": 347540328,
+     "totalSize": 768163840,
      "backingStorageSize": 387894
     },
     {
-     "atMs": 41017,
-     "usedSize": 399880504,
-     "totalSize": 765374464,
+     "atMs": 42888,
+     "usedSize": 421804820,
+     "totalSize": 780988416,
      "backingStorageSize": 582430
     },
     {
-     "atMs": 43041,
-     "usedSize": 439573668,
-     "totalSize": 783007744,
+     "atMs": 44909,
+     "usedSize": 518695124,
+     "totalSize": 782602240,
      "backingStorageSize": 1008981
     },
     {
-     "atMs": 45058,
-     "usedSize": 580245076,
-     "totalSize": 785002496,
-     "backingStorageSize": 1277718
-    },
-    {
-     "atMs": 47564,
-     "usedSize": 700871104,
-     "totalSize": 786518016,
+     "atMs": 47453,
+     "usedSize": 687407856,
+     "totalSize": 784936960,
      "backingStorageSize": 1532596
     },
     {
-     "atMs": 49588,
-     "usedSize": 723281336,
-     "totalSize": 790097920,
+     "atMs": 49469,
+     "usedSize": 719478300,
+     "totalSize": 787963904,
      "backingStorageSize": 1532596
     },
     {
-     "atMs": 52093,
-     "usedSize": 835584072,
-     "totalSize": 902479872,
+     "atMs": 51939,
+     "usedSize": 817194828,
+     "totalSize": 884383744,
      "backingStorageSize": 1944405
     },
     {
-     "atMs": 54123,
-     "usedSize": 943019604,
-     "totalSize": 1027686400,
+     "atMs": 53943,
+     "usedSize": 899663820,
+     "totalSize": 978567168,
      "backingStorageSize": 2423587
     },
     {
-     "atMs": 56150,
-     "usedSize": 1002760344,
-     "totalSize": 1065709568,
+     "atMs": 55966,
+     "usedSize": 985894420,
+     "totalSize": 1053450240,
      "backingStorageSize": 2423587
     },
     {
-     "atMs": 58666,
-     "usedSize": 128282180,
-     "totalSize": 703655936,
+     "atMs": 58450,
+     "usedSize": 1019134744,
+     "totalSize": 1084309504,
+     "backingStorageSize": 2423587
+    },
+    {
+     "atMs": 60466,
+     "usedSize": 1030847272,
+     "totalSize": 1105625088,
+     "backingStorageSize": 2423587
+    },
+    {
+     "atMs": 62954,
+     "usedSize": 272196076,
+     "totalSize": 942952448,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 60694,
-     "usedSize": 148751220,
-     "totalSize": 706883584,
-     "backingStorageSize": 387901
-    },
-    {
-     "atMs": 63227,
-     "usedSize": 338064772,
-     "totalSize": 707854336,
+     "atMs": 64970,
+     "usedSize": 475601144,
+     "totalSize": 944156672,
      "backingStorageSize": 871254
     },
     {
-     "atMs": 65258,
-     "usedSize": 207601880,
-     "totalSize": 562704384,
-     "backingStorageSize": 387901
+     "atMs": 66982,
+     "usedSize": 95285940,
+     "totalSize": 649068544,
+     "backingStorageSize": 491522
     },
     {
-     "atMs": 67275,
-     "usedSize": 344170776,
-     "totalSize": 565063680,
-     "backingStorageSize": 832615
+     "atMs": 69475,
+     "usedSize": 260224964,
+     "totalSize": 652288000,
+     "backingStorageSize": 602195
     },
     {
-     "atMs": 69769,
-     "usedSize": 122091260,
-     "totalSize": 472027136,
-     "backingStorageSize": 387901
+     "atMs": 71493,
+     "usedSize": 296416192,
+     "totalSize": 655249408,
+     "backingStorageSize": 860104
     },
     {
-     "atMs": 71797,
-     "usedSize": 202525244,
-     "totalSize": 474988544,
-     "backingStorageSize": 645810
+     "atMs": 73987,
+     "usedSize": 216074664,
+     "totalSize": 503570432,
+     "backingStorageSize": 617051
     },
     {
-     "atMs": 74314,
-     "usedSize": 88003144,
-     "totalSize": 410406912,
-     "backingStorageSize": 387901
+     "atMs": 76001,
+     "usedSize": 253905336,
+     "totalSize": 505978880,
+     "backingStorageSize": 617051
     },
     {
-     "atMs": 76341,
-     "usedSize": 104180332,
-     "totalSize": 412815360,
-     "backingStorageSize": 387901
+     "atMs": 78015,
+     "usedSize": 268445300,
+     "totalSize": 508735488,
+     "backingStorageSize": 617051
     },
     {
-     "atMs": 78368,
-     "usedSize": 132170108,
-     "totalSize": 415571968,
-     "backingStorageSize": 387901
+     "atMs": 80497,
+     "usedSize": 325409784,
+     "totalSize": 449216512,
+     "backingStorageSize": 693412
     },
     {
-     "atMs": 80899,
-     "usedSize": 69399712,
-     "totalSize": 356253696,
-     "backingStorageSize": 387901
-    },
-    {
-     "atMs": 82917,
-     "usedSize": 106232744,
-     "totalSize": 255668224,
+     "atMs": 82517,
+     "usedSize": 128416444,
+     "totalSize": 429703168,
      "backingStorageSize": 459691
     },
     {
-     "atMs": 85419,
-     "usedSize": 113250960,
-     "totalSize": 258416640,
-     "backingStorageSize": 387901
-    },
-    {
-     "atMs": 87438,
-     "usedSize": 207064596,
-     "totalSize": 270106624,
+     "atMs": 85005,
+     "usedSize": 95558228,
+     "totalSize": 381165568,
      "backingStorageSize": 580168
     },
     {
-     "atMs": 89469,
-     "usedSize": 175516792,
-     "totalSize": 280117248,
+     "atMs": 87014,
+     "usedSize": 117377780,
+     "totalSize": 228941824,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 92002,
-     "usedSize": 220430748,
-     "totalSize": 285536256,
+     "atMs": 89031,
+     "usedSize": 178132060,
+     "totalSize": 247087104,
      "backingStorageSize": 389141
     },
     {
-     "atMs": 94030,
-     "usedSize": 241788972,
-     "totalSize": 338952192,
+     "atMs": 91510,
+     "usedSize": 277701044,
+     "totalSize": 322760704,
+     "backingStorageSize": 389141
+    },
+    {
+     "atMs": 93528,
+     "usedSize": 239692384,
+     "totalSize": 328204288,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 96557,
-     "usedSize": 268203104,
-     "totalSize": 342224896,
+     "atMs": 96015,
+     "usedSize": 108565552,
+     "totalSize": 275062784,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 98583,
-     "usedSize": 312551968,
-     "totalSize": 354131968,
+     "atMs": 98033,
+     "usedSize": 124022964,
+     "totalSize": 277843968,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 100613,
-     "usedSize": 184675680,
-     "totalSize": 342720512,
-     "backingStorageSize": 387901
+     "atMs": 100039,
+     "usedSize": 319987448,
+     "totalSize": 389214208,
+     "backingStorageSize": 890676
     },
     {
-     "atMs": 103172,
-     "usedSize": 240559676,
-     "totalSize": 437518336,
+     "atMs": 102528,
+     "usedSize": 332320976,
+     "totalSize": 381419520,
      "backingStorageSize": 408296
     },
     {
-     "atMs": 105193,
-     "usedSize": 447221080,
-     "totalSize": 601882624,
+     "atMs": 104540,
+     "usedSize": 463000308,
+     "totalSize": 520617984,
      "backingStorageSize": 408296
     },
     {
-     "atMs": 107674,
-     "usedSize": 460027332,
-     "totalSize": 601882624,
+     "atMs": 106993,
+     "usedSize": 476261148,
+     "totalSize": 521666560,
      "backingStorageSize": 408296
     },
     {
-     "atMs": 109701,
-     "usedSize": 498387716,
-     "totalSize": 602144768,
+     "atMs": 109000,
+     "usedSize": 519473664,
+     "totalSize": 577241088,
      "backingStorageSize": 408296
     },
     {
-     "atMs": 111730,
-     "usedSize": 342338352,
-     "totalSize": 433324032,
+     "atMs": 111021,
+     "usedSize": 502371312,
+     "totalSize": 557056000,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 114228,
-     "usedSize": 748464144,
-     "totalSize": 794558464,
+     "atMs": 113506,
+     "usedSize": 941592732,
+     "totalSize": 990904320,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 116250,
-     "usedSize": 1197620780,
-     "totalSize": 1245446144,
+     "atMs": 115533,
+     "usedSize": 1437129764,
+     "totalSize": 1474822144,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 118751,
-     "usedSize": 1788717764,
-     "totalSize": 1837629440,
+     "atMs": 117999,
+     "usedSize": 1832389964,
+     "totalSize": 1869873152,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 120771,
-     "usedSize": 1830645312,
-     "totalSize": 1875902464,
+     "atMs": 120031,
+     "usedSize": 1802435128,
+     "totalSize": 1872232448,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 122798,
-     "usedSize": 1859155772,
-     "totalSize": 1933848576,
+     "atMs": 122036,
+     "usedSize": 1858491264,
+     "totalSize": 1928712192,
      "backingStorageSize": 82597709
     },
     {
-     "atMs": 125257,
-     "usedSize": 1859155784,
-     "totalSize": 1933848576,
+     "atMs": 124485,
+     "usedSize": 1858491276,
+     "totalSize": 1928712192,
      "backingStorageSize": 82597709
     },
     {
-     "atMs": 127286,
-     "usedSize": 1859155784,
-     "totalSize": 1933848576,
+     "atMs": 126496,
+     "usedSize": 1858491276,
+     "totalSize": 1928712192,
      "backingStorageSize": 82597709
     },
     {
-     "atMs": 129733,
-     "usedSize": 1859155784,
-     "totalSize": 1933848576,
+     "atMs": 128932,
+     "usedSize": 1858491276,
+     "totalSize": 1928712192,
      "backingStorageSize": 82597709
     },
     {
-     "atMs": 131749,
-     "usedSize": 1859155784,
-     "totalSize": 1933848576,
+     "atMs": 130951,
+     "usedSize": 1858491276,
+     "totalSize": 1928712192,
      "backingStorageSize": 82597709
     },
     {
-     "atMs": 133764,
-     "usedSize": 1859155784,
-     "totalSize": 1933848576,
+     "atMs": 132970,
+     "usedSize": 1858491276,
+     "totalSize": 1928712192,
      "backingStorageSize": 82597709
     },
     {
-     "atMs": 136205,
-     "usedSize": 1859155784,
-     "totalSize": 1933848576,
+     "atMs": 135404,
+     "usedSize": 1858491276,
+     "totalSize": 1928712192,
      "backingStorageSize": 82597709
     },
     {
-     "atMs": 138221,
-     "usedSize": 1859155784,
-     "totalSize": 1933848576,
-     "backingStorageSize": 82597709
+     "atMs": 137420,
+     "usedSize": 3646604,
+     "totalSize": 120061952,
+     "backingStorageSize": 387901
     }
    ],
    "os": [
     {
-     "atMs": 1012,
+     "atMs": 1013,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 344088576,
-       "workingSetBytes": 387420160,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 552476672,
+       "workingSetBytes": 601157632,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 6520,
+     "atMs": 6542,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 101482496,
-       "workingSetBytes": 150163456,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 451010560,
+       "workingSetBytes": 499740672,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 12019,
+     "atMs": 12012,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97955840,
-       "workingSetBytes": 147255296,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 99905536,
+       "workingSetBytes": 150155264,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 17515,
+     "atMs": 17483,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 103018496,
-       "workingSetBytes": 150822912,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 100712448,
+       "workingSetBytes": 147746816,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 23014,
+     "atMs": 22934,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 100655104,
-       "workingSetBytes": 148529152,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 98344960,
+       "workingSetBytes": 145453056,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 28500,
+     "atMs": 28406,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 99852288,
-       "workingSetBytes": 148238336,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 98344960,
+       "workingSetBytes": 145453056,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 33984,
+     "atMs": 33879,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 903806976,
-       "workingSetBytes": 950738944,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 600088576,
+       "workingSetBytes": 644591616,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 39523,
+     "atMs": 39395,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1053200384,
-       "workingSetBytes": 1098321920,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1652715520,
+       "workingSetBytes": 1695461376,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 45058,
+     "atMs": 44909,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1304965120,
-       "workingSetBytes": 1348038656,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1244893184,
+       "workingSetBytes": 1287446528,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 50604,
+     "atMs": 50472,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1574170624,
-       "workingSetBytes": 1615626240,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1387372544,
+       "workingSetBytes": 1429307392,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 56150,
+     "atMs": 55966,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1936019456,
-       "workingSetBytes": 1974620160,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1906835456,
+       "workingSetBytes": 1945751552,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 61706,
+     "atMs": 61469,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1268142080,
-       "workingSetBytes": 1313198080,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1989099520,
+       "workingSetBytes": 2026733568,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 67275,
+     "atMs": 66982,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1504239616,
-       "workingSetBytes": 1549029376,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1374064640,
+       "workingSetBytes": 1421029376,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 72808,
+     "atMs": 72510,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82968576,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 752590848,
-       "workingSetBytes": 800866304,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 938246144,
+       "workingSetBytes": 984080384,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 78368,
+     "atMs": 78015,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82833408,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 754032640,
-       "workingSetBytes": 801542144,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 951873536,
+       "workingSetBytes": 996700160,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 83930,
+     "atMs": 83533,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82571264,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 787410944,
-       "workingSetBytes": 834342912,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 852455424,
+       "workingSetBytes": 898768896,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 89469,
+     "atMs": 89031,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82571264,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 607645696,
-       "workingSetBytes": 655339520,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 637693952,
+       "workingSetBytes": 684662784,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 95042,
+     "atMs": 94535,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 784461824,
-       "workingSetBytes": 831537152,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 707137536,
+       "workingSetBytes": 753799168,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 100613,
+     "atMs": 100039,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 631230464,
-       "workingSetBytes": 677949440,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 687443968,
+       "workingSetBytes": 733982720,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 106201,
+     "atMs": 105545,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1271644160,
-       "workingSetBytes": 1308270592,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1239900160,
+       "workingSetBytes": 1286078464,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 111730,
+     "atMs": 111021,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1981153280,
-       "workingSetBytes": 2027204608,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1915793408,
+       "workingSetBytes": 1963257856,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 117265,
+     "atMs": 116548,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 2963021824,
-       "workingSetBytes": 3009347584,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 3957690368,
+       "workingSetBytes": 4002672640,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 122798,
+     "atMs": 122036,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 3892207616,
-       "workingSetBytes": 3932094464,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 4229525504,
+       "workingSetBytes": 4268138496,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 128287,
+     "atMs": 127504,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 3892256768,
-       "workingSetBytes": 3932151808,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 4229648384,
+       "workingSetBytes": 4268216320,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 133764,
+     "atMs": 132970,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 3892256768,
-       "workingSetBytes": 3932151808,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 4229648384,
+       "workingSetBytes": 4268154880,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 139224,
+     "atMs": 138439,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 221057024,
-       "workingSetBytes": 271065088,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 105623552,
+       "workingSetBytes": 153034752,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 144740,
+     "atMs": 143898,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 221057024,
-       "workingSetBytes": 271065088,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 98320384,
+       "workingSetBytes": 145944576,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 150212,
+     "atMs": 149355,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 221057024,
-       "workingSetBytes": 271065088,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 98320384,
+       "workingSetBytes": 145944576,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36741120,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 155701,
+     "atMs": 154828,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 221057024,
-       "workingSetBytes": 271065088,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89882624,
+       "workingSetBytes": 140623872,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 161196,
+     "atMs": 160292,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93257728,
-       "workingSetBytes": 144318464,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89911296,
+       "workingSetBytes": 140406784,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 166697,
+     "atMs": 165763,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93257728,
-       "workingSetBytes": 144318464,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89911296,
+       "workingSetBytes": 140410880,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 172187,
+     "atMs": 171203,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93257728,
-       "workingSetBytes": 144318464,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89911296,
+       "workingSetBytes": 140414976,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 177691,
+     "atMs": 176674,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93257728,
-       "workingSetBytes": 144318464,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89911296,
+       "workingSetBytes": 140419072,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 183185,
+     "atMs": 182119,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93257728,
-       "workingSetBytes": 144318464,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89911296,
+       "workingSetBytes": 140423168,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 188674,
+     "atMs": 187572,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93257728,
-       "workingSetBytes": 144318464,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89911296,
+       "workingSetBytes": 140427264,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 194147,
+     "atMs": 193019,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93257728,
-       "workingSetBytes": 144318464,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89911296,
+       "workingSetBytes": 140431360,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 199610,
+     "atMs": 198478,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93224960,
-       "workingSetBytes": 144310272,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89878528,
+       "workingSetBytes": 140431360,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 205112,
+     "atMs": 203951,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93224960,
-       "workingSetBytes": 144310272,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89878528,
+       "workingSetBytes": 140435456,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 210591,
+     "atMs": 209398,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93224960,
-       "workingSetBytes": 144310272,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89878528,
+       "workingSetBytes": 140439552,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32804864,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 216073,
+     "atMs": 214858,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 93224960,
-       "workingSetBytes": 144310272,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 89878528,
+       "workingSetBytes": 140443648,
+       "peakWorkingSetBytes": 4669546496
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36773888,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
+      }
+     ]
+    },
+    {
+     "atMs": 220335,
+     "renderers": [
+      {
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82567168,
+       "peakWorkingSetBytes": 98611200
+      },
+      {
+       "pid": 12228,
+       "privateBytes": 87023616,
+       "workingSetBytes": 137674752,
+       "peakWorkingSetBytes": 4669546496
+      },
+      {
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     }
@@ -1274,1312 +1292,1382 @@
    "recordId": "pg2a-record-15",
    "workerHeap": [
     {
-     "atMs": 20893,
-     "usedSize": 1062548,
+     "atMs": 20899,
+     "usedSize": 1075076,
      "totalSize": 4718592,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 22920,
-     "usedSize": 1062548,
+     "atMs": 22906,
+     "usedSize": 1075076,
      "totalSize": 4718592,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 25379,
-     "usedSize": 1062548,
+     "atMs": 25350,
+     "usedSize": 1075076,
      "totalSize": 4718592,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 27394,
-     "usedSize": 1062548,
+     "atMs": 27380,
+     "usedSize": 1075076,
      "totalSize": 4718592,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 29842,
-     "usedSize": 1062548,
+     "atMs": 29817,
+     "usedSize": 1075076,
      "totalSize": 4718592,
      "backingStorageSize": 388070
     },
     {
-     "atMs": 31857,
-     "usedSize": 682048,
-     "totalSize": 2621440,
-     "backingStorageSize": 387959
-    },
-    {
-     "atMs": 33887,
-     "usedSize": 141445228,
-     "totalSize": 186908672,
+     "atMs": 31838,
+     "usedSize": 121980060,
+     "totalSize": 185597952,
      "backingStorageSize": 387894
     },
     {
-     "atMs": 36392,
-     "usedSize": 304809020,
-     "totalSize": 364642304,
+     "atMs": 33855,
+     "usedSize": 206707112,
+     "totalSize": 316932096,
      "backingStorageSize": 387894
     },
     {
-     "atMs": 38400,
-     "usedSize": 489309048,
-     "totalSize": 552861696,
+     "atMs": 36354,
+     "usedSize": 481899904,
+     "totalSize": 553385984,
      "backingStorageSize": 387894
     },
     {
-     "atMs": 40903,
-     "usedSize": 331216320,
-     "totalSize": 786432000,
+     "atMs": 38374,
+     "usedSize": 788139424,
+     "totalSize": 829423616,
      "backingStorageSize": 387894
     },
     {
-     "atMs": 42927,
-     "usedSize": 392718772,
-     "totalSize": 790278144,
+     "atMs": 40870,
+     "usedSize": 869188072,
+     "totalSize": 930762752,
      "backingStorageSize": 582430
     },
     {
-     "atMs": 44954,
-     "usedSize": 432968184,
-     "totalSize": 807317504,
-     "backingStorageSize": 582430
+     "atMs": 42880,
+     "usedSize": 913680008,
+     "totalSize": 968355840,
+     "backingStorageSize": 1008981
     },
     {
-     "atMs": 47490,
-     "usedSize": 586949532,
-     "totalSize": 810663936,
-     "backingStorageSize": 1277718
+     "atMs": 44911,
+     "usedSize": 202088112,
+     "totalSize": 639238144,
+     "backingStorageSize": 656638
     },
     {
-     "atMs": 49514,
-     "usedSize": 678683592,
-     "totalSize": 811962368,
-     "backingStorageSize": 1532596
+     "atMs": 47383,
+     "usedSize": 292307132,
+     "totalSize": 641863680,
+     "backingStorageSize": 911516
     },
     {
-     "atMs": 52038,
-     "usedSize": 711899492,
-     "totalSize": 814723072,
-     "backingStorageSize": 1532596
-    },
-    {
-     "atMs": 54067,
-     "usedSize": 826895664,
-     "totalSize": 901414912,
-     "backingStorageSize": 1944405
-    },
-    {
-     "atMs": 56082,
-     "usedSize": 957045656,
-     "totalSize": 1027145728,
-     "backingStorageSize": 2423587
-    },
-    {
-     "atMs": 58572,
-     "usedSize": 1016339664,
-     "totalSize": 1070350336,
-     "backingStorageSize": 2423587
-    },
-    {
-     "atMs": 60595,
-     "usedSize": 1014597164,
-     "totalSize": 1094094848,
-     "backingStorageSize": 2423587
-    },
-    {
-     "atMs": 63094,
-     "usedSize": 1031761752,
-     "totalSize": 1117765632,
-     "backingStorageSize": 2423587
-    },
-    {
-     "atMs": 65120,
-     "usedSize": 312062232,
-     "totalSize": 783568896,
+     "atMs": 49389,
+     "usedSize": 119011160,
+     "totalSize": 478490624,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 67148,
-     "usedSize": 73773860,
-     "totalSize": 591339520,
+     "atMs": 51867,
+     "usedSize": 251371376,
+     "totalSize": 481349632,
+     "backingStorageSize": 1078941
+    },
+    {
+     "atMs": 53884,
+     "usedSize": 88915780,
+     "totalSize": 255209472,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 69659,
-     "usedSize": 121051768,
-     "totalSize": 319524864,
-     "backingStorageSize": 491522
-    },
-    {
-     "atMs": 71679,
-     "usedSize": 131610060,
-     "totalSize": 247631872,
+     "atMs": 55895,
+     "usedSize": 129430936,
+     "totalSize": 257638400,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 74202,
-     "usedSize": 230457976,
-     "totalSize": 296992768,
-     "backingStorageSize": 679039
-    },
-    {
-     "atMs": 76230,
-     "usedSize": 78548368,
-     "totalSize": 209604608,
+     "atMs": 58387,
+     "usedSize": 136084068,
+     "totalSize": 260411392,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 78258,
-     "usedSize": 123967084,
-     "totalSize": 212013056,
+     "atMs": 60406,
+     "usedSize": 180896984,
+     "totalSize": 261799936,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 80756,
-     "usedSize": 172759512,
-     "totalSize": 238886912,
+     "atMs": 62907,
+     "usedSize": 196324748,
+     "totalSize": 412614656,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 82772,
-     "usedSize": 320447568,
-     "totalSize": 378699776,
-     "backingStorageSize": 693412
+     "atMs": 64931,
+     "usedSize": 297110140,
+     "totalSize": 415641600,
+     "backingStorageSize": 728994
     },
     {
-     "atMs": 85275,
-     "usedSize": 176637176,
-     "totalSize": 257736704,
-     "backingStorageSize": 459691
+     "atMs": 66950,
+     "usedSize": 432424352,
+     "totalSize": 494161920,
+     "backingStorageSize": 943288
     },
     {
-     "atMs": 87302,
-     "usedSize": 88942140,
-     "totalSize": 197926912,
-     "backingStorageSize": 580168
+     "atMs": 69431,
+     "usedSize": 480936064,
+     "totalSize": 542408704,
+     "backingStorageSize": 1201197
     },
     {
-     "atMs": 89327,
-     "usedSize": 111662448,
-     "totalSize": 199847936,
+     "atMs": 71437,
+     "usedSize": 81013704,
+     "totalSize": 368545792,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 91847,
-     "usedSize": 196948836,
-     "totalSize": 263258112,
+     "atMs": 73956,
+     "usedSize": 108572428,
+     "totalSize": 373760000,
+     "backingStorageSize": 387901
+    },
+    {
+     "atMs": 75964,
+     "usedSize": 265021832,
+     "totalSize": 305733632,
+     "backingStorageSize": 387901
+    },
+    {
+     "atMs": 77971,
+     "usedSize": 124768016,
+     "totalSize": 371773440,
+     "backingStorageSize": 558164
+    },
+    {
+     "atMs": 80479,
+     "usedSize": 169089296,
+     "totalSize": 269119488,
+     "backingStorageSize": 407553
+    },
+    {
+     "atMs": 82488,
+     "usedSize": 71832444,
+     "totalSize": 205402112,
+     "backingStorageSize": 387901
+    },
+    {
+     "atMs": 84957,
+     "usedSize": 162045120,
+     "totalSize": 220499968,
+     "backingStorageSize": 387901
+    },
+    {
+     "atMs": 86986,
+     "usedSize": 179863888,
+     "totalSize": 232640512,
      "backingStorageSize": 389141
     },
     {
-     "atMs": 93875,
-     "usedSize": 361175032,
-     "totalSize": 425521152,
+     "atMs": 89006,
+     "usedSize": 350503672,
+     "totalSize": 418619392,
      "backingStorageSize": 389141
     },
     {
-     "atMs": 96412,
-     "usedSize": 281543340,
-     "totalSize": 471388160,
+     "atMs": 91521,
+     "usedSize": 396818400,
+     "totalSize": 510709760,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 98436,
-     "usedSize": 518296756,
-     "totalSize": 574496768,
+     "atMs": 93540,
+     "usedSize": 537634084,
+     "totalSize": 593895424,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 100464,
-     "usedSize": 672249500,
-     "totalSize": 732569600,
+     "atMs": 96060,
+     "usedSize": 218048108,
+     "totalSize": 676995072,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 103025,
-     "usedSize": 514622860,
-     "totalSize": 734932992,
+     "atMs": 98077,
+     "usedSize": 695507500,
+     "totalSize": 748560384,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 105048,
-     "usedSize": 484808020,
-     "totalSize": 778444800,
+     "atMs": 100098,
+     "usedSize": 580777296,
+     "totalSize": 764551168,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 107590,
-     "usedSize": 673671872,
-     "totalSize": 812785664,
+     "atMs": 102613,
+     "usedSize": 574420200,
+     "totalSize": 805969920,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 109605,
-     "usedSize": 374937584,
-     "totalSize": 837541888,
-     "backingStorageSize": 470220
+     "atMs": 104646,
+     "usedSize": 821912960,
+     "totalSize": 871505920,
+     "backingStorageSize": 389141
     },
     {
-     "atMs": 111632,
-     "usedSize": 384048792,
-     "totalSize": 840228864,
-     "backingStorageSize": 470220
-    },
-    {
-     "atMs": 114152,
-     "usedSize": 478152188,
-     "totalSize": 842993664,
-     "backingStorageSize": 470220
-    },
-    {
-     "atMs": 116176,
-     "usedSize": 746518628,
-     "totalSize": 843485184,
-     "backingStorageSize": 712979
-    },
-    {
-     "atMs": 118667,
-     "usedSize": 226196152,
-     "totalSize": 482082816,
+     "atMs": 107112,
+     "usedSize": 90250764,
+     "totalSize": 202858496,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 120679,
-     "usedSize": 252747024,
-     "totalSize": 482082816,
+     "atMs": 109132,
+     "usedSize": 123398848,
+     "totalSize": 205312000,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 122706,
-     "usedSize": 280940784,
-     "totalSize": 397148160,
+     "atMs": 111142,
+     "usedSize": 246318896,
+     "totalSize": 312143872,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 125193,
-     "usedSize": 699190076,
-     "totalSize": 742916096,
+     "atMs": 113628,
+     "usedSize": 305272556,
+     "totalSize": 421789696,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 127222,
-     "usedSize": 1164950072,
-     "totalSize": 1220018176,
+     "atMs": 115647,
+     "usedSize": 45394860,
+     "totalSize": 188219392,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 129714,
-     "usedSize": 1566225980,
-     "totalSize": 1614544896,
+     "atMs": 118098,
+     "usedSize": 175388456,
+     "totalSize": 223346688,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 131738,
-     "usedSize": 1553730208,
-     "totalSize": 1616642048,
+     "atMs": 120117,
+     "usedSize": 505157612,
+     "totalSize": 562036736,
      "backingStorageSize": 387901
     },
     {
-     "atMs": 133767,
-     "usedSize": 1592614420,
-     "totalSize": 1666465792,
+     "atMs": 122125,
+     "usedSize": 836206944,
+     "totalSize": 882638848,
+     "backingStorageSize": 387901
+    },
+    {
+     "atMs": 124590,
+     "usedSize": 1406653928,
+     "totalSize": 1452277760,
+     "backingStorageSize": 387901
+    },
+    {
+     "atMs": 126622,
+     "usedSize": 1569115524,
+     "totalSize": 1618739200,
+     "backingStorageSize": 387901
+    },
+    {
+     "atMs": 129084,
+     "usedSize": 1592852860,
+     "totalSize": 1670135808,
      "backingStorageSize": 72886921
     },
     {
-     "atMs": 136200,
-     "usedSize": 1592614420,
-     "totalSize": 1666465792,
+     "atMs": 131095,
+     "usedSize": 1592852860,
+     "totalSize": 1670135808,
      "backingStorageSize": 72886921
     },
     {
-     "atMs": 138232,
-     "usedSize": 1592614420,
-     "totalSize": 1666465792,
+     "atMs": 133104,
+     "usedSize": 1592852860,
+     "totalSize": 1670135808,
      "backingStorageSize": 72886921
     },
     {
-     "atMs": 140677,
-     "usedSize": 1592614420,
-     "totalSize": 1666465792,
+     "atMs": 135545,
+     "usedSize": 1592852860,
+     "totalSize": 1670135808,
      "backingStorageSize": 72886921
     },
     {
-     "atMs": 142696,
-     "usedSize": 1592614420,
-     "totalSize": 1666465792,
+     "atMs": 137573,
+     "usedSize": 1592852860,
+     "totalSize": 1670135808,
      "backingStorageSize": 72886921
     },
     {
-     "atMs": 144722,
-     "usedSize": 1592614420,
-     "totalSize": 1666465792,
+     "atMs": 140011,
+     "usedSize": 1592852860,
+     "totalSize": 1670135808,
      "backingStorageSize": 72886921
+    },
+    {
+     "atMs": 142043,
+     "usedSize": 3695384,
+     "totalSize": 60030976,
+     "backingStorageSize": 72886921
+    },
+    {
+     "atMs": 144073,
+     "usedSize": 3695384,
+     "totalSize": 60030976,
+     "backingStorageSize": 72886921
+    },
+    {
+     "atMs": 146518,
+     "usedSize": 3695384,
+     "totalSize": 60030976,
+     "backingStorageSize": 72886921
+    },
+    {
+     "atMs": 148547,
+     "usedSize": 3576304,
+     "totalSize": 7602176,
+     "backingStorageSize": 387901
+    },
+    {
+     "atMs": 151045,
+     "usedSize": 2982336,
+     "totalSize": 4718592,
+     "backingStorageSize": 387901
+    },
+    {
+     "atMs": 153049,
+     "usedSize": 2982336,
+     "totalSize": 4718592,
+     "backingStorageSize": 387901
     }
    ],
    "os": [
     {
-     "atMs": 1012,
+     "atMs": 1004,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1815453696,
-       "workingSetBytes": 1860984832,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1815511040,
+       "workingSetBytes": 1860853760,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 6501,
+     "atMs": 6474,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1815453696,
-       "workingSetBytes": 1860984832,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1815511040,
+       "workingSetBytes": 1860853760,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 11975,
+     "atMs": 11954,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1815453696,
-       "workingSetBytes": 1860984832,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1815511040,
+       "workingSetBytes": 1860853760,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 17437,
+     "atMs": 17452,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1815453696,
-       "workingSetBytes": 1860984832,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1815511040,
+       "workingSetBytes": 1860853760,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 22920,
+     "atMs": 22906,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 111857664,
-       "workingSetBytes": 160284672,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 110788608,
+       "workingSetBytes": 158830592,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 28408,
+     "atMs": 28382,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 111857664,
-       "workingSetBytes": 160284672,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 107634688,
+       "workingSetBytes": 155840512,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 33887,
+     "atMs": 33855,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 413261824,
-       "workingSetBytes": 450347008,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 873762816,
+       "workingSetBytes": 921190400,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 39411,
+     "atMs": 39389,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1362120704,
-       "workingSetBytes": 1405386752,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1642262528,
+       "workingSetBytes": 1686122496,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 44954,
+     "atMs": 44911,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1104674816,
-       "workingSetBytes": 1148309504,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1330974720,
+       "workingSetBytes": 1375825920,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 50529,
+     "atMs": 50394,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1352798208,
-       "workingSetBytes": 1395552256,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1290567680,
+       "workingSetBytes": 1337561088,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 56082,
+     "atMs": 55895,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1848401920,
-       "workingSetBytes": 1888456704,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 838909952,
+       "workingSetBytes": 885125120,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 61603,
+     "atMs": 61413,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1926037504,
-       "workingSetBytes": 1964875776,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 914296832,
+       "workingSetBytes": 960020480,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 67148,
+     "atMs": 66950,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 986820608,
-       "workingSetBytes": 1034391552,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 918093824,
+       "workingSetBytes": 961548288,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 72696,
+     "atMs": 72454,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 993931264,
-       "workingSetBytes": 1040551936,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 876609536,
+       "workingSetBytes": 922591232,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 78258,
+     "atMs": 77971,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 400052224,
-       "workingSetBytes": 448176128,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 916267008,
+       "workingSetBytes": 962482176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 83787,
+     "atMs": 83490,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 605188096,
-       "workingSetBytes": 653451264,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 626769920,
+       "workingSetBytes": 673558528,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 89327,
+     "atMs": 89006,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 383533056,
-       "workingSetBytes": 431255552,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 741203968,
+       "workingSetBytes": 787058688,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 94889,
+     "atMs": 94552,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 760279040,
-       "workingSetBytes": 807084032,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 971796480,
+       "workingSetBytes": 1018396672,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 100464,
+     "atMs": 100098,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1001496576,
-       "workingSetBytes": 1047900160,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1059598336,
+       "workingSetBytes": 1105981440,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 106065,
+     "atMs": 105648,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1125060608,
-       "workingSetBytes": 1171296256,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1107546112,
+       "workingSetBytes": 1154617344,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 111632,
+     "atMs": 111142,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1210585088,
-       "workingSetBytes": 1255833600,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1185955840,
+       "workingSetBytes": 1229746176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 117193,
+     "atMs": 116651,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1146363904,
-       "workingSetBytes": 1193332736,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1128022016,
+       "workingSetBytes": 1175228416,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 122706,
+     "atMs": 122125,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1861345280,
-       "workingSetBytes": 1907023872,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 2059952128,
+       "workingSetBytes": 2107056128,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 128238,
+     "atMs": 127629,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 3138756608,
-       "workingSetBytes": 3184717824,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 3803533312,
+       "workingSetBytes": 3849621504,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 133767,
+     "atMs": 133104,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 3394920448,
-       "workingSetBytes": 3435085824,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 2587623424,
+       "workingSetBytes": 2628333568,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 139247,
+     "atMs": 138575,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 3394920448,
-       "workingSetBytes": 3435085824,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 2587623424,
+       "workingSetBytes": 2628333568,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 144722,
+     "atMs": 144073,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 3379703808,
-       "workingSetBytes": 3423551488,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 1915301888,
+       "workingSetBytes": 1961025536,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 150190,
+     "atMs": 149624,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 1793708032,
-       "workingSetBytes": 1840472064,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 104706048,
+       "workingSetBytes": 153559040,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 155679,
+     "atMs": 155055,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97959936,
-       "workingSetBytes": 148836352,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 97243136,
+       "workingSetBytes": 146763776,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 161153,
+     "atMs": 160525,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97959936,
-       "workingSetBytes": 148836352,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 97243136,
+       "workingSetBytes": 146767872,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 166614,
+     "atMs": 165996,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97959936,
-       "workingSetBytes": 148836352,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 97243136,
+       "workingSetBytes": 146771968,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 172098,
+     "atMs": 171458,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97959936,
-       "workingSetBytes": 148836352,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 177531,
+     "atMs": 176927,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97959936,
-       "workingSetBytes": 148836352,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 183009,
+     "atMs": 182391,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97959936,
-       "workingSetBytes": 148836352,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 188500,
+     "atMs": 187862,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97959936,
-       "workingSetBytes": 148836352,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 193971,
+     "atMs": 193331,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97959936,
-       "workingSetBytes": 148836352,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 199441,
+     "atMs": 198851,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97927168,
-       "workingSetBytes": 148819968,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 204920,
+     "atMs": 204299,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97927168,
-       "workingSetBytes": 148819968,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 210391,
+     "atMs": 209779,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97927168,
-       "workingSetBytes": 148819968,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 215881,
+     "atMs": 215230,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97927168,
-       "workingSetBytes": 148819968,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 221370,
+     "atMs": 220680,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97927168,
-       "workingSetBytes": 148819968,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     },
     {
-     "atMs": 226844,
+     "atMs": 226129,
      "renderers": [
       {
-       "pid": 45368,
-       "privateBytes": 39284736,
-       "workingSetBytes": 83759104,
-       "peakWorkingSetBytes": 93159424
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
       },
       {
-       "pid": 36572,
-       "privateBytes": 97927168,
-       "workingSetBytes": 148819968,
-       "peakWorkingSetBytes": 4796846080
+       "pid": 12228,
+       "privateBytes": 95145984,
+       "workingSetBytes": 145330176,
+       "peakWorkingSetBytes": 4764295168
       },
       {
-       "pid": 31408,
-       "privateBytes": 19156992,
-       "workingSetBytes": 36777984,
-       "peakWorkingSetBytes": 37146624
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
+      }
+     ]
+    },
+    {
+     "atMs": 231577,
+     "renderers": [
+      {
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
+      },
+      {
+       "pid": 12228,
+       "privateBytes": 95113216,
+       "workingSetBytes": 145313792,
+       "peakWorkingSetBytes": 4764295168
+      },
+      {
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
+      }
+     ]
+    },
+    {
+     "atMs": 237059,
+     "renderers": [
+      {
+       "pid": 26968,
+       "privateBytes": 37474304,
+       "workingSetBytes": 82563072,
+       "peakWorkingSetBytes": 98611200
+      },
+      {
+       "pid": 12228,
+       "privateBytes": 95113216,
+       "workingSetBytes": 145313792,
+       "peakWorkingSetBytes": 4764295168
+      },
+      {
+       "pid": 38772,
+       "privateBytes": 15720448,
+       "workingSetBytes": 32837632,
+       "peakWorkingSetBytes": 33042432
       }
      ]
     }
@@ -2587,35 +2675,35 @@
   }
  },
  "driverLog": [
-  "[2026-09-27T11:51:41.741Z] START 01-control globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.control('measurement')) cpuLoadPercent 31",
-  "[2026-09-27T11:53:01.919Z] DONE 01-control \"pg2a-record-1\" 80.2 s",
-  "[2026-09-27T11:53:03.283Z] END 01-control cpuLoadPercent 36",
-  "[2026-09-27T11:53:04.699Z] START 02-normal-series globalThis.plannerGlobalBrowserBenchmark.runSeries(globalThis.plannerGlobalBrowserBenchmark.workloads.normalWinner(), 1, 3) cpuLoadPercent 25",
-  "[2026-09-27T11:59:00.413Z] DONE 02-normal-series [\"pg2a-record-2\",\"pg2a-record-3\",\"pg2a-record-4\",\"pg2a-record-5\"] 355.7 s",
-  "[2026-09-27T11:59:01.750Z] END 02-normal-series cpuLoadPercent 27",
-  "[2026-09-27T11:59:03.188Z] START 04-cache-off globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.normalCacheOff()) cpuLoadPercent 46",
-  "[2026-09-27T12:03:18.681Z] DONE 04-cache-off \"pg2a-record-6\" 255.5 s",
-  "[2026-09-27T12:03:20.025Z] END 04-cache-off cpuLoadPercent 20",
-  "[2026-09-27T12:03:21.462Z] START 05-responsiveness globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.responsiveness()) cpuLoadPercent 33",
-  "[2026-09-27T12:04:56.666Z] DONE 05-responsiveness \"pg2a-record-7\" 95.2 s",
-  "[2026-09-27T12:04:57.986Z] END 05-responsiveness cpuLoadPercent 47",
-  "[2026-09-27T12:04:59.444Z] START 06-cancel-base globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.cancelBaseSearch()) cpuLoadPercent 42",
-  "[2026-09-27T12:05:14.475Z] DONE 06-cancel-base \"pg2a-record-8\" 15.0 s",
-  "[2026-09-27T12:05:15.798Z] END 06-cancel-base cpuLoadPercent 20",
-  "[2026-09-27T12:05:17.269Z] START 07-cancel-fallback globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.cancelFallback()) cpuLoadPercent 17",
-  "[2026-09-27T12:06:22.371Z] DONE 07-cancel-fallback \"pg2a-record-9\" 65.1 s",
-  "[2026-09-27T12:06:23.707Z] END 07-cancel-fallback cpuLoadPercent 30",
-  "[2026-09-27T12:06:25.177Z] START 08-memory-normal globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.memory('normal')) cpuLoadPercent 16",
-  "[2026-09-27T12:10:04.727Z] DONE 08-memory-normal \"pg2a-record-10\" 219.5 s",
-  "[2026-09-27T12:10:06.043Z] END 08-memory-normal cpuLoadPercent 23",
-  "[2026-09-27T12:10:07.504Z] START 09-controller globalThis.plannerGlobalBrowserBenchmark.runController({ label: 'phase1e-controller' }) cpuLoadPercent 34",
-  "[2026-09-27T12:16:13.141Z] DONE 09-controller \"pg2a-controller-1\" 365.6 s",
-  "[2026-09-27T12:16:14.475Z] END 09-controller cpuLoadPercent 14",
-  "[2026-09-27T12:16:36.119Z] START 10-memory-gogma globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.memory('gogma')) cpuLoadPercent 23",
-  "[2026-09-27T12:20:24.410Z] DONE 10-memory-gogma \"pg2a-record-15\" 228.3 s",
-  "[2026-09-27T12:20:25.740Z] END 10-memory-gogma cpuLoadPercent 17",
-  "[2026-09-27T12:20:27.234Z] START 11-profiler-normal globalThis.plannerGlobalBrowserBenchmark.runAttempt({ ...globalThis.plannerGlobalBrowserBenchmark.workloads.normalWinner('probe'), label: 'normal-2x-fallback-profiler-on', profiler: true }) cpuLoadPercent 19",
-  "[2026-09-27T12:22:07.440Z] DONE 11-profiler-normal \"pg2a-record-16\" 100.2 s",
-  "[2026-09-27T12:22:08.760Z] END 11-profiler-normal cpuLoadPercent 10"
+  "[2026-09-27T14:52:51.766Z] START 01-control globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.control('measurement')) cpuLoadPercent 12",
+  "[2026-09-27T14:54:11.953Z] DONE 01-control \"pg2a-record-1\" 80.2 s",
+  "[2026-09-27T14:54:13.276Z] END 01-control cpuLoadPercent 34",
+  "[2026-09-27T14:54:14.686Z] START 02-normal-series globalThis.plannerGlobalBrowserBenchmark.runSeries(globalThis.plannerGlobalBrowserBenchmark.workloads.normalWinner(), 1, 3) cpuLoadPercent 19",
+  "[2026-09-27T15:00:05.335Z] DONE 02-normal-series [\"pg2a-record-2\",\"pg2a-record-3\",\"pg2a-record-4\",\"pg2a-record-5\"] 350.6 s",
+  "[2026-09-27T15:00:06.654Z] END 02-normal-series cpuLoadPercent 10",
+  "[2026-09-27T15:00:08.055Z] START 04-cache-off globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.normalCacheOff()) cpuLoadPercent 15",
+  "[2026-09-27T15:04:13.515Z] DONE 04-cache-off \"pg2a-record-6\" 245.5 s",
+  "[2026-09-27T15:04:14.826Z] END 04-cache-off cpuLoadPercent 12",
+  "[2026-09-27T15:04:16.226Z] START 05-responsiveness globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.responsiveness()) cpuLoadPercent 8",
+  "[2026-09-27T15:05:46.370Z] DONE 05-responsiveness \"pg2a-record-7\" 90.1 s",
+  "[2026-09-27T15:05:47.693Z] END 05-responsiveness cpuLoadPercent 28",
+  "[2026-09-27T15:05:49.128Z] START 06-cancel-base globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.cancelBaseSearch()) cpuLoadPercent 38",
+  "[2026-09-27T15:06:04.164Z] DONE 06-cancel-base \"pg2a-record-8\" 15.0 s",
+  "[2026-09-27T15:06:05.475Z] END 06-cancel-base cpuLoadPercent 17",
+  "[2026-09-27T15:06:06.918Z] START 07-cancel-fallback globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.cancelFallback()) cpuLoadPercent 14",
+  "[2026-09-27T15:07:12.000Z] DONE 07-cancel-fallback \"pg2a-record-9\" 65.1 s",
+  "[2026-09-27T15:07:13.713Z] END 07-cancel-fallback cpuLoadPercent 14",
+  "[2026-09-27T15:07:15.144Z] START 08-memory-normal globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.memory('normal')) cpuLoadPercent 10",
+  "[2026-09-27T15:10:55.913Z] DONE 08-memory-normal \"pg2a-record-10\" 220.3 s",
+  "[2026-09-27T15:10:57.216Z] END 08-memory-normal cpuLoadPercent 23",
+  "[2026-09-27T15:10:58.672Z] START 09-controller globalThis.plannerGlobalBrowserBenchmark.runController({ label: 'phase1e-controller' }) cpuLoadPercent 33",
+  "[2026-09-27T15:16:44.363Z] DONE 09-controller \"pg2a-controller-1\" 345.7 s",
+  "[2026-09-27T15:16:45.707Z] END 09-controller cpuLoadPercent 8",
+  "[2026-09-27T15:16:47.164Z] START 10-memory-gogma globalThis.plannerGlobalBrowserBenchmark.runAttempt(globalThis.plannerGlobalBrowserBenchmark.workloads.memory('gogma')) cpuLoadPercent 10",
+  "[2026-09-27T15:20:45.657Z] DONE 10-memory-gogma \"pg2a-record-15\" 238.5 s",
+  "[2026-09-27T15:20:46.971Z] END 10-memory-gogma cpuLoadPercent 18",
+  "[2026-09-27T15:20:48.423Z] START 11-profiler-normal globalThis.plannerGlobalBrowserBenchmark.runAttempt({ ...globalThis.plannerGlobalBrowserBenchmark.workloads.normalWinner('probe'), label: 'normal-2x-fallback-profiler-on', profiler: true }) cpuLoadPercent 11",
+  "[2026-09-27T15:22:23.593Z] DONE 11-profiler-normal \"pg2a-record-16\" 95.2 s",
+  "[2026-09-27T15:22:24.907Z] END 11-profiler-normal cpuLoadPercent 19"
  ]
 }
