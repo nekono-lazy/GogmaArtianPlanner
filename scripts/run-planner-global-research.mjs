@@ -3,7 +3,8 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { lstatSync, openSync, writeSync, closeSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createHash } from 'node:crypto'
-import { cpus, totalmem } from 'node:os'
+import { execFileSync } from 'node:child_process'
+import { cpus, totalmem, release } from 'node:os'
 import { createServer } from 'vite'
 
 const args = process.argv.slice(2)
@@ -26,6 +27,8 @@ const observedReportPath = option('--observed-report')
 const routeFilter = option('--route-filter') ?? 'all'
 const timeBudgetMs = Number(option('--time-budget-ms') ?? 180000)
 const yieldMode = option('--yield-mode') ?? 'timer'
+const rawCacheMode = option('--raw-block-cache')
+if (rawCacheMode !== undefined && !['off', 'per-search'].includes(rawCacheMode)) throw new Error('Invalid raw block cache mode.')
 if (!['timer', 'immediate'].includes(yieldMode)) throw new Error('Invalid Node yield mode.')
 const yieldControl = () => new Promise(resolveYield => yieldMode === 'immediate' ? setImmediate(resolveYield) : setTimeout(resolveYield, 0))
 if (!['phase0', 'failed-first'].includes(strategy) || !['all', 'normal_artian', 'existing_gogma'].includes(routeFilter)) throw new Error('Invalid research strategy or route filter.')
@@ -57,8 +60,29 @@ try {
   const environment = { runtime: 'Node (not Browser Worker)', node: process.version, platform: process.platform, arch: process.arch,
     cpu: cpus()[0]?.model ?? null, logicalCpuCount: cpus().length, totalMemoryBytes: totalmem(),
     exportSha256: createHash('sha256').update(raw).digest('hex'), maxPlanSteps, extent: module.GLOBAL_RESEARCH_EXTENT }
+  const sha = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
+  let rawBlocks
+  const searchEvidence = []
+  const observeSearchResult = result => {
+    if (result === null) { searchEvidence.push({ resultSha256: sha(null), candidateSha256: sha(null) }); return }
+    const { elapsedMs: _elapsedMs, ...semantic } = result
+    searchEvidence.push({ targetId: result.targetResult.targetWeaponId, resultSha256: sha(semantic), candidateSha256: sha(result.targetResult.candidate) })
+  }
+  if (rawCacheMode !== undefined) {
+    const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim()
+    const codePaths = ['src', 'scripts', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json']
+    if (git('diff', 'HEAD', '--', ...codePaths)) throw new Error('Commit benchmark-affecting changes before measuring raw blocks.')
+    const files = git('ls-files', '--', ...codePaths).split(/\r?\n/)
+    const hash = createHash('sha256')
+    for (const file of files) { hash.update(file + '\0'); hash.update(await readFile(file)); hash.update('\0') }
+    Object.assign(environment, { repositoryHead: git('rev-parse', 'HEAD'), benchmarkCodeSha256: hash.digest('hex'),
+      rngEngineVersion: new ProductionRngEngine().version, osRelease: release(), benchmarkMode: focusPath ? 'focused' : strategy,
+      cacheMode: rawCacheMode, yieldMode, routeFilter, cacheScope: 'Candidate Search only; Planner and Replay always use default ProductionRngEngine' })
+    const { GlobalRawBlockResearch } = await server.ssrLoadModule('/src/benchmarks/plannerGlobalRawBlocks.ts')
+    rawBlocks = new GlobalRawBlockResearch(rawCacheMode)
+  }
   const { GlobalSearchProfiler } = await server.ssrLoadModule('/src/benchmarks/plannerGlobalOptimizationProfile.ts')
-  const profiler = profileEnabled ? new GlobalSearchProfiler() : undefined
+  const profiler = profileEnabled || rawBlocks ? new GlobalSearchProfiler() : undefined
   let failedFirstTargetIds
   if (strategy === 'failed-first') {
     const observed = JSON.parse(await readFile(observedReportPath, 'utf8'))
@@ -78,11 +102,12 @@ try {
     const snapshot = selected[0].input
     const extent = { maxNormalAdvance: Number(option('--normal') ?? snapshot.settings.maxNormalAdvance),
       maxGogmaAdvance: Number(option('--gogma') ?? snapshot.settings.maxGogmaAdvance), maxSkillAdvance: Number(option('--skill') ?? snapshot.settings.maxSkillAdvance) }
+    if (rawBlocks) Object.assign(environment, { extent, snapshotSha256: sha(snapshot), timeBudgetMs })
     const { runGlobalResearchFocus } = await server.ssrLoadModule('/src/benchmarks/plannerGlobalOptimizationFocus.ts')
     focus = await runGlobalResearchFocus(snapshot, new ProductionRngEngine(), { extent, routeFilter, timeBudgetMs,
-      shouldCancel: () => cancelledAt !== null, yieldControl })
+      shouldCancel: () => cancelledAt !== null, yieldControl, rawBlocks, onResult: rawBlocks ? observeSearchResult : undefined })
   } else result = await module.runGlobalPlannerResearch(input, module.globalResearchDependencies(new ProductionRngEngine()), {
-    profiler, failedFirstTargetIds,
+    profiler, failedFirstTargetIds, rawBlocks, onSearchResult: rawBlocks ? observeSearchResult : undefined,
     onSearchInput: captureFd === null ? undefined : searchInput => writeSync(captureFd, JSON.stringify({ exportSha256: environment.exportSha256, input: searchInput }) + '\n'),
     shouldCancel: () => cancelledAt !== null,
     yieldControl,
@@ -97,6 +122,12 @@ try {
     },
   })
   const record = { environment, ...(focus ? { focus } : { report: result.report }),
+    ...(rawBlocks ? { phase1b: { rawBlocks: rawBlocks.profiles, searchEvidence,
+      generatedEntries: result?.generatedEntries.map(entry => ({ id: entry.id, candidateSha256: sha(entry.candidateSnapshot), entrySha256: sha(entry) })) ?? [],
+      finalSelectedEntryIds: result?.finalResult?.plan?.selectedBuildListEntryIds ?? [],
+      planSha256: sha(result?.finalResult?.plan ?? null), finalResultSha256: sha(result?.finalResult ?? null),
+      resultSha256: sha({ finalResult: result?.finalResult ?? null, generatedEntries: result?.generatedEntries ?? [] }),
+      cacheLimit: rawBlocks.maxEntries } } : {}),
     ...(profileEnabled || focus || strategy !== 'phase0' || yieldMode !== 'timer' ? { phase1: { strategy, yieldMode, failedFirstTargetIds: failedFirstTargetIds ?? [], predictionReuse: profiler?.summary() ?? null,
       resultSha256: result ? createHash('sha256').update(JSON.stringify({ finalResult: result.finalResult, generatedEntries: result.generatedEntries })).digest('hex') : null } } : {}),
     memory: { maxRssKiB: process.resourceUsage().maxRSS, ...process.memoryUsage(), scope: 'whole Node process, includes Vite loader and Export parsing' },

@@ -159,8 +159,8 @@ const sources = import.meta.glob('../**/*.{ts,tsx}', { query: '?raw', import: 'd
 it('has no incoming Production import and adds no persistence or legacy orchestration dependency', () => {
   const production = Object.entries(sources).filter(([path]) => path.startsWith('../') && !/benchmarks|\.test\.|\/test\//.test(path))
   expect(production.length).toBeGreaterThan(100)
-  expect(production.filter(([, source]) => /plannerGlobalOptimization/.test(source))).toEqual([])
-  for (const [path, source] of Object.entries(sources).filter(([path]) => /plannerGlobalOptimization/.test(path) && !path.includes('.test.'))) {
+  expect(production.filter(([, source]) => /plannerGlobal(?:Optimization|RawBlocks)/.test(source))).toEqual([])
+  for (const [path, source] of Object.entries(sources).filter(([path]) => /plannerGlobal(?:Optimization|RawBlocks)/.test(path) && !path.includes('.test.'))) {
     expect(source, path).not.toMatch(/from ['"][^'"]*(?:\/db\/|planner\/constrained\/|importExportService|createConstrainedPlan)/)
   }
 })
