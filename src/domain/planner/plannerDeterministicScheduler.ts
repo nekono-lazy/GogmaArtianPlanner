@@ -109,8 +109,8 @@ import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
  *
  * Since Issue #103 Phase C this is the Production full Planner run:
  * `createProductionPlanWithObserver()` runs it for the ordinary Planner, the
- * Planner Worker, B8 / B9 and the replan Preview. The Beam Search stays a
- * test / parity regression oracle only.
+ * Planner Worker, the Planner Alternative trials and the replan Preview. The
+ * Beam Search stays a test / parity regression oracle only.
  */
 
 /**
@@ -1066,7 +1066,7 @@ export function createPlannerDeterministicScheduleRun(
  * `PlannerOptions` carries nothing else (Phase D-2a).
  *
  * `buildListContext` follows the full-run contract: `persisted`, or
- * `temporary_replacement` for the replacement set of a B8 / what-if trial.
+ * `temporary_replacement` for the replacement set of a Planner Alternative trial.
  */
 export async function runPlannerDeterministicSchedule(
   input: PlannerInput,

@@ -194,8 +194,9 @@ export function collectReferencedOwnedWeaponIds(
  * weapon type, or element still does.
  *
  * Exported so a caller that needs the same per-weapon semantics for a different
- * stable value - the B8 deterministic constrained search identity - reuses this
- * authority instead of writing a second normalization.
+ * stable value - the Planner-start Search origin normalization of the Planner
+ * Alternative search identity - reuses this authority instead of writing a
+ * second normalization.
  */
 export function normalizeReferencedOwnedWeapon(weapon: OwnedWeapon) {
   const common = {

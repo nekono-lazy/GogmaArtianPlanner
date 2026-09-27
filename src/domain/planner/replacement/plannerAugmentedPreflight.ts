@@ -33,8 +33,8 @@ import {
 /**
  * The initial conflict preflight (PLANNER_SPEC 9.2.3.1; introduced by B8-C3b,
  * a shared Planner Domain primitive since Phase 6-B2a, PLANNER_SPEC 9.2.19.16).
- * The Planner Alternative trial and the legacy B8 constrained re-search both
- * run it; neither owns it.
+ * The Planner Alternative trial runs it; the legacy B8 constrained re-search
+ * that also ran it was removed in Phase 6-B2b.
  *
  * It runs the ordinary Planner's own validation / initial state / Route unit
  * plan / conflict detection path over an augmented `PlannerInput`, then re-maps

@@ -20,8 +20,6 @@ import {
   type PlannerDependencies,
   type PlannerInput,
 } from '../../domain/planner/plannerTypes'
-import type { PlannerOrchestrationBounds } from '../../domain/planner/constrained/plannerOrchestrationBounds'
-import type { ConstrainedEnumerationBounds } from '../../domain/search'
 import {
   buildListEntryId,
   candidateId,
@@ -46,13 +44,16 @@ import {
 } from './constrainedEnumeration'
 
 /**
- * Deterministic fixtures for the B8-C4b Planner constrained-search
- * orchestration.
+ * Deterministic multi-Target Planner fixtures, first written for the B8-C4b
+ * constrained-search orchestration (removed in Phase 6-B2b) and now shared by
+ * the ordinary Planner, Execution, checkpoint, scheduler and Planner
+ * Alternative tests.
  *
  * They deliberately reuse the B8-B1 constrained enumeration fixtures, so one
- * Fake Engine answers both the constrained enumerator and the ordinary Planner
- * / Trace Replay over the same origin snapshot. Every prediction remains an
- * explicit fixture entry; no Production RNG behavior is implied.
+ * Fake Engine answers both the Search side (constrained enumeration, Planner
+ * Alternative Search) and the ordinary Planner / Trace Replay over the same
+ * origin snapshot. Every prediction remains an explicit fixture entry; no
+ * Production RNG behavior is implied.
  */
 
 export const ORCHESTRATION_SOURCE_A = 'owned.orchestration.a'
@@ -536,29 +537,6 @@ export function orchestrationScenario(
     origin,
     engine,
     idCounts,
-  }
-}
-
-export function orchestrationBounds(
-  overrides: Partial<PlannerOrchestrationBounds> = {},
-): PlannerOrchestrationBounds {
-  return {
-    maxCandidateTrialsPerConflict: 8,
-    maxGeneratedBuildListEntries: 4,
-    maxPlannerReruns: 16,
-    ...overrides,
-  }
-}
-
-export function orchestrationEnumerationBounds(
-  overrides: Partial<ConstrainedEnumerationBounds> = {},
-): ConstrainedEnumerationBounds {
-  return {
-    maxNormalForgeCount: 1,
-    maxGogmaAdvance: 3,
-    maxSkillResetCount: 2,
-    maxOffAxisPairEvaluations: 0,
-    ...overrides,
   }
 }
 

@@ -12,8 +12,8 @@ import {
  *
  * A shared Planner Domain primitive since Phase 6-B2a (PLANNER_SPEC
  * 9.2.19.16): the Planner Alternative kernel reads the scenario-only works of
- * `preparePlannerConflictScenario()`, and the legacy B8 constrained re-search
- * builds them for every fixed constraint. Neither owns it.
+ * `preparePlannerConflictScenario()`. The legacy B8 constrained re-search that
+ * also built them was removed in Phase 6-B2b.
  */
 
 /** One Target that must be re-searched because of one fixed conflict choice. */

@@ -203,15 +203,6 @@ export const plannerWarningLabels: Record<PlannerWarningKind, string> = {
   all_targets_already_satisfied: 'すべての目標武器をすでに満たしています',
   invalid_conflict_resolution: '選択した競合解決を現在の状態へ適用できません',
   max_steps_reached: '計画ステップ数の上限に到達しました',
-  max_candidate_trials_per_conflict_reached:
-    '1つの競合について試行できる候補数の上限に到達しました',
-  max_generated_build_list_entries_reached:
-    '再検索で追加できるビルドリスト項目数の上限に到達しました',
-  max_planner_reruns_reached: 'Plannerの再実行回数の上限に到達しました',
-  constrained_enumeration_bound_reached:
-    '再検索の探索範囲の上限に到達したため、候補の探索を打ち切りました',
-  selected_checkpoint_blocks_constrained_search:
-    '途中採用する状態を選択した目標武器は再検索で別ルートへ置き換えません。作成リストで途中採用する状態を変更または解除してください',
   multiple_selected_checkpoint_entries:
     '同じ目標武器に途中採用する状態を選択した候補が2件以上あります。作成リストで片方の選択を解除してください',
   selected_checkpoint_target_already_ideal:

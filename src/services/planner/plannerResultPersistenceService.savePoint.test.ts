@@ -16,8 +16,8 @@ import type {
 } from '../../domain/models/publicTypes'
 import {
   createProductionPlan,
+  type PlannerAlternativeRepairArtifact,
   type PlannerInput,
-  type PlannerOrchestrationResult,
 } from '../../domain/planner'
 import { productionPlanId } from '../../test/fixtures/domainData'
 import { IDEAL_SERIES_SKILL_ID } from '../../test/fixtures/constrainedEnumeration'
@@ -40,17 +40,22 @@ import {
 import { PlannerResultPersistenceService } from './plannerResultPersistenceService'
 
 /**
- * A Planner result save that breaks the `active` Plan, with the 16.10 save
- * point choice (`docs/PLANNER_SPEC.md` 9.2.18 / 16.10): 「現在地点を維持」 saves
- * the result and abandons the Plan, 「最後のゲーム内セーブ地点へ戻す」 restores the
- * save point and drops the result - it was calculated before the restore - and
- * 「キャンセル」 never calls the save.
+ * A Planner Alternative repair save that breaks the `active` Plan, with the
+ * 16.10 save point choice (`docs/PLANNER_SPEC.md` 9.2.18 / 16.10): 「現在地点を
+ * 維持」 saves the repair and abandons the Plan, 「最後のゲーム内セーブ地点へ戻す」
+ * restores the save point and drops the repair - it was calculated before the
+ * restore - and 「キャンセル」 never calls the save.
+ *
+ * The legacy B8 orchestration save ran these cases until Phase 6-B2b removed
+ * it; the repair save shares the very same guarded boundary.
  */
 
 const SAVE_NOW = '2026-09-24T12:00:00.000Z'
 const GENERATED_ENTRY_ID = 'build-list.generated.replacement'
 const GENERATED_SOURCE_ID = 'owned.replacement.source'
 const OLD_DRAFT_ID = 'plan.replacement.old-draft'
+/** The displayed Draft the repair was calculated from. */
+const SOURCE_DRAFT_ID = productionPlanId(OLD_DRAFT_ID)
 
 interface Scenario {
   database: AppDatabase
@@ -62,7 +67,7 @@ interface Scenario {
   replaced: BuildListEntry
   generated: BuildListEntry
   newDraftId: string
-  result: PlannerOrchestrationResult
+  artifact: PlannerAlternativeRepairArtifact
   context: PlannerInput['calculationContext']
 }
 
@@ -81,8 +86,9 @@ async function currentInput(database: AppDatabase, fixture: ExecutionFixture): P
 
 /**
  * A running new-Normal Plan with a save point and one confirmed Step after it
- * (so the 16.10 choice is asked), a previous Draft beside it, and a Planner
- * result whose generated Entry replaces the Entry the running Plan depends on.
+ * (so the 16.10 choice is asked), the source Draft beside it, and a Planner
+ * Alternative repair whose accepted replacement replaces the Entry the running
+ * Plan depends on.
  */
 async function scenario(database: AppDatabase): Promise<Scenario> {
   const fixture = await newNormalFixture(3)
@@ -92,10 +98,10 @@ async function scenario(database: AppDatabase): Promise<Scenario> {
   const first = await confirmCurrent(execution, database, fixture.plan)
   const savePoint = await execution.recordExecutionSavePoint({ planId: fixture.plan.id })
   await confirmCurrent(execution, database, fixture.plan)
-  await database.productionPlans.put({ ...structuredClone(fixture.plan), id: productionPlanId(OLD_DRAFT_ID), status: 'draft' })
+  await database.productionPlans.put({ ...structuredClone(fixture.plan), id: SOURCE_DRAFT_ID, status: 'draft' })
 
-  // The alternate Route a constrained re-search found for the running Plan's
-  // Target: one Reset on another weapon that already holds the Ideal Skill.
+  // The alternate Route a Route replacement search found for the running
+  // Plan's Target: one Reset on another weapon that already holds the Ideal Skill.
   await database.ownedWeapons.put(orchestrationSource(GENERATED_SOURCE_ID, { seriesSkillId: IDEAL_SERIES_SKILL_ID }))
   const input = await currentInput(database, fixture)
   const replaced = input.buildListEntries.find(({ id }) => id === fixture.plan.selectedBuildListEntryIds[0]) as BuildListEntry
@@ -114,10 +120,24 @@ async function scenario(database: AppDatabase): Promise<Scenario> {
     replacedBuildListEntryId: replaced.id,
     generatedBuildListEntryId: generated.id,
   }
-  const result: PlannerOrchestrationResult = {
-    ...planned,
+  const artifact: PlannerAlternativeRepairArtifact = {
+    plannerResult: { ...planned, plan: planned.plan as ProductionPlan },
     generatedBuildListEntries: [generated],
     generatedBuildListEntryReplacements: [replacement],
+    conflictRepairLineage: {
+      decisions: [{
+        conflictKind: 'same_skill_counter',
+        fixedBuildListEntryId: 'build-list.fixed.other' as BuildListEntry['id'],
+        fixedTargetWeaponId: 'target.fixed.other' as TargetWeapon['id'],
+        invalidatedRoutes: [{
+          targetWeaponId: replaced.targetWeaponId,
+          invalidatedBuildListEntryId: replaced.id,
+          invalidatedRouteKey: 'route.key.replaced',
+          replacementBuildListEntryId: generated.id,
+          outcome: 'replaced',
+        }],
+      }],
+    },
   }
   return {
     database,
@@ -129,7 +149,7 @@ async function scenario(database: AppDatabase): Promise<Scenario> {
     replaced,
     generated,
     newDraftId: (planned.plan as ProductionPlan).id,
-    result,
+    artifact,
     context: structuredClone(fixture.built.input.calculationContext),
   }
 }
@@ -155,13 +175,13 @@ async function planIds(database: AppDatabase): Promise<string[]> {
   return (await database.productionPlans.toArray()).map(({ id }) => id).sort()
 }
 
-describe('Planner result save with the 16.10 save point choice (PLANNER_SPEC 9.2.18 / 16.10)', () => {
+describe('Planner Alternative repair save with the 16.10 save point choice (PLANNER_SPEC 9.2.18 / 16.10)', () => {
   it('asks for the approval and the save point choice, writing nothing', () =>
     withDatabase(async (database) => {
       const s = await scenario(database)
       const before = await dump(database)
 
-      const inspection = await s.service.inspectPlannerOrchestrationResultSave(s.result, s.context)
+      const inspection = await s.service.inspectPlannerAlternativeRepairSave(s.artifact, s.context, SOURCE_DRAFT_ID)
 
       expect(inspection).toMatchObject({
         approvalRequired: true,
@@ -177,11 +197,12 @@ describe('Planner result save with the 16.10 save point choice (PLANNER_SPEC 9.2
   it('「現在地点を維持」: replaces O with G, replaces the Draft and abandons the Plan in one transaction', () =>
     withDatabase(async (database) => {
       const s = await scenario(database)
-      const inspection = await s.service.inspectPlannerOrchestrationResultSave(s.result, s.context)
+      const inspection = await s.service.inspectPlannerAlternativeRepairSave(s.artifact, s.context, SOURCE_DRAFT_ID)
 
-      const outcome = await s.service.savePlannerOrchestrationResult(
-        s.result,
+      const outcome = await s.service.savePlannerAlternativeRepair(
+        s.artifact,
         s.context,
+        SOURCE_DRAFT_ID,
         approvalOf(inspection, 'keep_current'),
       )
 
@@ -194,17 +215,20 @@ describe('Planner result save with the 16.10 save point choice (PLANNER_SPEC 9.2
         status: 'abandoned',
         abandonmentReason: 'breaking_change_approved',
       })
+      expect((await database.productionPlans.get(s.newDraftId))?.conflictRepairLineage)
+        .toEqual(s.artifact.conflictRepairLineage)
       expect(await database.executionSavePoints.count()).toBe(0)
     }))
 
   it('「最後のゲーム内セーブ地点へ戻す」: restores exactly as the restore authority does and saves nothing of the result', () =>
     withDatabase(async (database) => {
       const s = await scenario(database)
-      const inspection = await s.service.inspectPlannerOrchestrationResultSave(s.result, s.context)
+      const inspection = await s.service.inspectPlannerAlternativeRepairSave(s.artifact, s.context, SOURCE_DRAFT_ID)
 
-      const outcome = await s.service.savePlannerOrchestrationResult(
-        s.result,
+      const outcome = await s.service.savePlannerAlternativeRepair(
+        s.artifact,
         s.context,
+        SOURCE_DRAFT_ID,
         approvalOf(inspection, 'restore_save_point'),
       )
 
@@ -218,8 +242,8 @@ describe('Planner result save with the 16.10 save point choice (PLANNER_SPEC 9.2
       if (outcome.kind !== 'save_point_restored_recalculation_required') return
       expect(outcome.deletedExecutionHistoryIds).toHaveLength(1)
 
-      // Nothing of the pre-restore result: O kept, no G, the old Draft kept,
-      // no new Draft, and the Plan not abandoned.
+      // Nothing of the pre-restore repair: O kept, no G, the source Draft kept,
+      // no new Draft or lineage, and the Plan not abandoned.
       const ids = await entryIds(database)
       expect(ids).toContain(s.replaced.id)
       expect(ids).not.toContain(GENERATED_ENTRY_ID)
@@ -245,7 +269,7 @@ describe('Planner result save with the 16.10 save point choice (PLANNER_SPEC 9.2
     withDatabase(async (database) => {
       const s = await scenario(database)
       const before = await dump(database)
-      await s.service.inspectPlannerOrchestrationResultSave(s.result, s.context)
+      await s.service.inspectPlannerAlternativeRepairSave(s.artifact, s.context, SOURCE_DRAFT_ID)
       // Cancelling ends the pending change without any further call.
       expect(await dump(database)).toEqual(before)
       expect(await entryIds(database)).toContain(s.replaced.id)
@@ -254,14 +278,14 @@ describe('Planner result save with the 16.10 save point choice (PLANNER_SPEC 9.2
   it('refuses a stale approval without restoring or saving anything', () =>
     withDatabase(async (database) => {
       const s = await scenario(database)
-      const inspection = await s.service.inspectPlannerOrchestrationResultSave(s.result, s.context)
+      const inspection = await s.service.inspectPlannerAlternativeRepairSave(s.artifact, s.context, SOURCE_DRAFT_ID)
       // The running Plan moved on after the warning was shown.
       const moved = { ...(await currentPlan(database, s.fixture.plan)), updatedAt: '2026-09-24T11:00:00.000Z' }
       await database.productionPlans.put(moved)
       const before = await dump(database)
 
       for (const decision of ['restore_save_point', 'keep_current'] as const) {
-        await expect(s.service.savePlannerOrchestrationResult(s.result, s.context, approvalOf(inspection, decision)))
+        await expect(s.service.savePlannerAlternativeRepair(s.artifact, s.context, SOURCE_DRAFT_ID, approvalOf(inspection, decision)))
           .rejects.toMatchObject({ code: 'plan_breaking_change_state_changed' })
         expect(await dump(database)).toEqual(before)
       }
@@ -270,11 +294,11 @@ describe('Planner result save with the 16.10 save point choice (PLANNER_SPEC 9.2
   it('refuses a restore naming a save point other than the stored one', () =>
     withDatabase(async (database) => {
       const s = await scenario(database)
-      const inspection = await s.service.inspectPlannerOrchestrationResultSave(s.result, s.context)
+      const inspection = await s.service.inspectPlannerAlternativeRepairSave(s.artifact, s.context, SOURCE_DRAFT_ID)
       const approval = approvalOf(inspection, 'restore_save_point')
       const before = await dump(database)
 
-      const error = await s.service.savePlannerOrchestrationResult(s.result, s.context, {
+      const error = await s.service.savePlannerAlternativeRepair(s.artifact, s.context, SOURCE_DRAFT_ID, {
         ...approval,
         savePointDecision: { kind: 'restore_save_point', recordedAt: '2026-01-01T00:00:00.000Z' },
       }).catch((caught: unknown) => caught)
@@ -286,7 +310,7 @@ describe('Planner result save with the 16.10 save point choice (PLANNER_SPEC 9.2
   it('rolls the whole restore back when a restore write fails', () =>
     withDatabase(async (database) => {
       const s = await scenario(database)
-      const inspection = await s.service.inspectPlannerOrchestrationResultSave(s.result, s.context)
+      const inspection = await s.service.inspectPlannerAlternativeRepairSave(s.artifact, s.context, SOURCE_DRAFT_ID)
       const before = await dump(database)
       // The history deletion is the restore's last write; RNG, Counters,
       // weapons and the Plan were already written in the same transaction.
@@ -294,9 +318,10 @@ describe('Planner result save with the 16.10 save point choice (PLANNER_SPEC 9.2
         throw new Error('storage failure')
       })
 
-      const error = await s.service.savePlannerOrchestrationResult(
-        s.result,
+      const error = await s.service.savePlannerAlternativeRepair(
+        s.artifact,
         s.context,
+        SOURCE_DRAFT_ID,
         approvalOf(inspection, 'restore_save_point'),
       ).catch((caught: unknown) => caught)
       expect(error).toBeInstanceOf(RepositoryError)

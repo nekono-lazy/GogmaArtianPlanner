@@ -115,6 +115,8 @@ rarity 8 Normal Counter 0、火 / 龍、Ideal = 斬れ味・装填強化EX ×1 +
 抽選不能）を `createIssue101NoIdealEnumerationInput()` のorigin / Targetのまま使う。`issue101_no_ideal`（空
 reservation）と `issue101_no_ideal_dragon_fixed`（Dragon reservation）がある。Candidateは出ず、consumer stopも
 無いので、extent終端までのtraversal cost、state growth、prediction growthを測る。
+（Phase 6-B2bでIssue #101 research harnessを削除した際、このorigin / Targetは同じ値のまま
+`src/benchmarks/issue101PlannerAlternativeFixtures.ts` の `createIssue101NoIdealSearchOrigin()` へ移した。計測値は不変である。）
 
 ### 5.3 long Skill held / long Gogma held（synthetic Production benchmark fixture）
 

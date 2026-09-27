@@ -42,41 +42,43 @@ import {
   checkGeneratedBuildListEntriesFresh,
   checkPersistableOrdinaryPlannerResultShape,
   checkPersistablePlannerAlternativeRepairShape,
-  checkPersistablePlannerResultShape,
   checkPlannerRunTerminationPersistable,
   checkProductionPlanBuildListEntryReferences,
-  checkProductionPlanBuildListReferences,
   collectProductionPlanDependentTargetWeaponIds,
   createPlanningBuildListEntriesHash,
   createPlanningTargetWeaponsHash,
   prepareFinalReplacementBuildList,
   type PlannerAlternativeRepairArtifact,
-  type PlannerOrchestrationResult,
   type PlannerResult,
   type PlannerResultPersistenceIssue,
-  type PlannerRunTermination,
 } from '../../domain/planner'
 import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
 
 /**
- * The save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18.
+ * The save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18. Two Planner results
+ * are saved, each through its own entry points (Phase 6 complete, 9.2.19.16):
  *
- * The ordinary Planner result (`createPlan()`, Phase 6-A) is saved through
- * `savePlannerResult()`: it carries no generated BuildListEntry and no
- * replacement, so the save re-validates the Plan against the current Build
- * List exactly as it is, replaces the previous Draft with the new one, and
- * never writes a BuildListEntry. It shares every check below with the B8
- * orchestration save, which keeps its own entry points until Phase 6-B.
+ * - The ordinary Planner result (`createPlan()`, Phase 6-A) is saved through
+ *   `savePlannerResult()`: it carries no generated BuildListEntry and no
+ *   replacement, so the save re-validates the Plan against the current Build
+ *   List exactly as it is, replaces the previous Draft with the new one, and
+ *   never writes a BuildListEntry.
+ * - The Planner Alternative actual repair (「この候補を優先」,
+ *   `docs/PLANNER_SPEC.md` 9.2.19.8 / 9.2.19.11) is saved through
+ *   `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`.
+ *   Its accepted replacement set is the authority, so a generated Entry the
+ *   final Plan does not select is still saved, and the Draft is stored with
+ *   `conflictRepairLineage` set exactly to the artifact's lineage.
  *
- * A `PlannerOrchestrationResult` is a pure calculation over the snapshot the
- * Planner Worker was handed. Persisting it therefore re-reads the current state
- * *inside* the same Dexie read-write transaction that writes, re-validates the
- * Plan against that state with the existing snapshot authorities, and only then
- * deletes the previous Draft, replaces each Entry the Planner replaced with its
- * generated BuildListEntry and adds the new Draft together. There is no window
- * between the check and the write, and no partial save: either the previous
- * Draft is gone, every replaced Entry is gone, every generated Entry and the
- * new Plan are stored, or nothing changed and the previous Draft survives.
+ * Both are pure calculations over the snapshot the Planner Worker was handed.
+ * Persisting one therefore re-reads the current state *inside* the same Dexie
+ * read-write transaction that writes, re-validates the Plan against that state
+ * with the existing snapshot authorities, and only then deletes the previous
+ * Draft, replaces each Entry the repair replaced with its generated
+ * BuildListEntry and adds the new Draft together. There is no window between
+ * the check and the write, and no partial save: either the previous Draft is
+ * gone, every replaced Entry is gone, every generated Entry and the new Plan
+ * are stored, or nothing changed and the previous Draft survives.
  *
  * A generated Entry replaces the persisted Entry `O` of its Target
  * (`docs/PLANNER_SPEC.md` 9.2.18). The transaction deletes that `O` only after
@@ -86,7 +88,7 @@ import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
  * is a dependency of the `active` Plan the save is refused without the user's
  * approval, and with it ends that Plan (`breaking_change_approved`) in the same
  * transaction. A Draft, stale or ended Plan referencing `O` never needs one.
- * Without any replacement the save never breaks a Plan, exactly as before.
+ * Without any replacement the save never breaks a Plan.
  *
  * The result was calculated from the state before any save point restore, so
  * choosing 「最後のゲーム内セーブ地点へ戻す」 in that approval never saves it over
@@ -106,22 +108,13 @@ import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
  * whole collection in the same transaction before any Draft is deleted
  * (`production_plan_id_conflict`).
  *
- * It re-runs nothing. The full Planner run, Trace Replay, constrained enumeration and
- * Candidate trials stay the Worker's authority, so no `RngEngine` is created on
- * the main thread. Save time only compares the finished Plan against current
- * persisted state.
+ * It re-runs nothing. The full Planner run, Trace Replay, Planner Alternative
+ * Search and Candidate trials stay the Worker's authority, so no `RngEngine` is
+ * created on the main thread. Save time only compares the finished Plan against
+ * current persisted state.
  *
- * The Planner Alternative actual repair (「この候補を優先」, `docs/PLANNER_SPEC.md`
- * 9.2.19.8 / 9.2.19.11) has its own entry points,
- * `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`.
- * They share this whole boundary - the in-transaction re-read, the snapshot
- * checks, the atomic Entry replacement, the Draft replacement, the
- * Plan-breaking guard and the save point restore that drops the result - with
- * two differences only: the artifact's accepted replacement set is the
- * authority, so a generated Entry the final Plan does not select is still
- * saved (the B8 "every generated Entry is selected" check does not apply), and
- * the Draft is stored with `conflictRepairLineage` set exactly to the
- * artifact's lineage. The B8 orchestration save keeps its own contract.
+ * The legacy B8 orchestration save shared this boundary until Phase 6-B2b
+ * removed it; its "every generated Entry is selected" check went with it.
  */
 
 /** The repositories the save-time transaction reads and writes through. */
@@ -157,7 +150,7 @@ const systemClock = { now: (): ISODateTimeString => new Date().toISOString() }
 /**
  * How one Planner result save ended (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18).
  *
- * - `saved`: the new Draft, its generated Entries and their replacements are
+ * - `saved`: the new Draft, any generated Entries and their replacements are
  *   stored, and any running Plan the user approved breaking is abandoned
  * - `no_plan`: the calculation produced no Plan; nothing was written and the
  *   previous Draft is kept
@@ -180,9 +173,6 @@ export type PlannerResultSaveOutcome =
       deletedExecutionHistoryIds: ExecutionHistoryId[]
     }
 
-/** The B8 orchestration save's outcome: the same union, kept until Phase 6-B. */
-export type PlannerOrchestrationResultSaveOutcome = PlannerResultSaveOutcome
-
 /**
  * How one Planner Alternative actual repair save ended. A repair artifact
  * always carries its final scenario Plan, so there is no `no_plan`: an
@@ -202,8 +192,8 @@ function stateChanged(message: string): RepositoryError {
 }
 
 /**
- * The orchestration result itself is not persistable. Re-running the Planner
- * over unchanged state would fail the same way, so this is not retryable.
+ * The Planner result itself is not persistable. Re-running the Planner over
+ * unchanged state would fail the same way, so this is not retryable.
  */
 function resultInvalid(message: string): RepositoryError {
   return new RepositoryError('planner_result_invalid', message)
@@ -255,17 +245,10 @@ interface PersistablePlannerResult {
   generatedEntries: readonly BuildListEntry[]
   replacements: readonly BuildListEntryReplacement[]
   /**
-   * The B8 orchestration contract that the final Plan selects every generated
-   * Entry. `false` for a Planner Alternative repair, whose accepted replacement
-   * set is the authority (`docs/PLANNER_SPEC.md` 9.2.19.6), and for an
-   * ordinary Planner result, which generates no Entry at all.
-   */
-  requireGeneratedEntriesSelected: boolean
-  /**
    * The Draft a Planner Alternative repair was calculated from: the one Draft
    * the save must still find current (`docs/PLANNER_SPEC.md` 9.2.15). `null`
-   * for an ordinary or B8 orchestration result, which starts a new chain and
-   * inherits nothing from the displayed Draft.
+   * for an ordinary result, which starts a new chain and inherits nothing from
+   * the displayed Draft.
    */
   expectedSourceDraftId: ProductionPlanId | null
 }
@@ -296,7 +279,7 @@ export class PlannerResultPersistenceService {
    * Plan returns `no_plan` and keeps the previous Draft. Otherwise the Plan
    * must be a draft without a repair lineage that passes Domain validation,
    * and inside one transaction it is re-validated against the current state
-   * with the snapshot authorities of the B8 save - CalculationContext,
+   * with the shared snapshot authorities - CalculationContext,
    * `initialExecutionState`, the Target and Build List hashes, every
    * BuildListEntry reference and a free Plan ID - before the previous Draft is
    * deleted and the new one added. The Build List is read, never written: an
@@ -310,53 +293,6 @@ export class PlannerResultPersistenceService {
     approval: PlanBreakingChangeApproval | null = null,
   ): Promise<PlannerResultSaveOutcome> {
     const persistable = this.persistableOrdinaryResult(result)
-    if (persistable === null) return { kind: 'no_plan' }
-    return this.saveGuarded(persistable, currentCalculationContext, approval)
-  }
-
-  /**
-   * Reads whether saving the result needs the Plan-breaking approval
-   * (`docs/PLANNER_SPEC.md` 16.6 / 9.2.18, `docs/UI_FLOW.md` 16.3) and what the
-   * warning and the 16.10 save point choice must show. It writes nothing, and
-   * refuses a result the save would refuse. A result with no Plan never needs
-   * one.
-   */
-  async inspectPlannerOrchestrationResultSave(
-    result: PlannerOrchestrationResult,
-    currentCalculationContext: CalculationContext,
-  ): Promise<PlanBreakingChangeInspection> {
-    const persistable = this.persistableResult(result)
-    if (persistable === null) return { approvalRequired: false }
-    return this.guard(currentCalculationContext).inspect(
-      this.saveMutation(persistable, currentCalculationContext),
-    )
-  }
-
-  /**
-   * Saves the generated BuildListEntries - each replacing the persisted Entry
-   * it was calculated to replace - and the ProductionPlan atomically,
-   * replacing the previous Draft in the same transaction.
-   *
-   * Returns `saved` with the stored Plan, or `no_plan` when the calculation
-   * produced no Plan (the previous Draft is then kept). An approval whose 16.10
-   * decision restores the save point returns
-   * `save_point_restored_recalculation_required`: the restore, and nothing of
-   * this result, is written in one transaction. Every failure throws and writes nothing
-   * - the previous Draft, the Build List, the running Plan and every other
-   * table stay as they were: `planner_state_changed` means the current state
-   * moved under the calculation (a replaced Entry that is no longer its
-   * Target's one persisted Entry included), `planner_result_invalid` means the
-   * result violates an invariant it must satisfy to be persisted,
-   * `validation_failed` means Domain validation rejected the Plan or an Entry,
-   * and `plan_breaking_change_approval_required` means a replacement breaks the
-   * `active` Plan and `approval` was not given.
-   */
-  async savePlannerOrchestrationResult(
-    result: PlannerOrchestrationResult,
-    currentCalculationContext: CalculationContext,
-    approval: PlanBreakingChangeApproval | null = null,
-  ): Promise<PlannerOrchestrationResultSaveOutcome> {
-    const persistable = this.persistableResult(result)
     if (persistable === null) return { kind: 'no_plan' }
     return this.saveGuarded(persistable, currentCalculationContext, approval)
   }
@@ -386,12 +322,21 @@ export class PlannerResultPersistenceService {
    * in one transaction: every accepted replacement deletes its Target's `O` and
    * adds its generated `G` - whether or not the final Plan selects `G` - the
    * previous Draft is deleted, and the new Draft is added with
-   * `conflictRepairLineage` set exactly to the artifact's lineage. The
-   * in-transaction re-validation, the Plan-breaking guard and every failure are
-   * those of `savePlannerOrchestrationResult()`: nothing is written on any
-   * refusal, and an approval that restores the game save point writes the
-   * restore alone and returns `save_point_restored_recalculation_required`
-   * (no Entry, Draft or lineage of this artifact is saved).
+   * `conflictRepairLineage` set exactly to the artifact's lineage.
+   *
+   * Every failure throws and writes nothing - the previous Draft, the Build
+   * List, the running Plan and every other table stay as they were:
+   * `planner_state_changed` means the current state moved under the
+   * calculation (a replaced Entry that is no longer its Target's one persisted
+   * Entry, or a source Draft that is no longer current, included),
+   * `planner_result_invalid` means the artifact violates an invariant it must
+   * satisfy to be persisted, `validation_failed` means Domain validation
+   * rejected the Plan, an Entry or the lineage, and
+   * `plan_breaking_change_approval_required` means a replacement breaks the
+   * `active` Plan and `approval` was not given. An approval that restores the
+   * game save point writes the restore alone and returns
+   * `save_point_restored_recalculation_required` (no Entry, Draft or lineage of
+   * this artifact is saved).
    *
    * `expectedSourceDraftId` is the Draft the artifact was calculated from - the
    * Draft the user acted on, whose lineage the artifact continues. Inside the
@@ -459,37 +404,6 @@ export class PlannerResultPersistenceService {
   }
 
   /**
-   * The result-shape invariants that do not depend on current persisted state,
-   * or `null` for a result with no Plan.
-   */
-  private persistableResult(result: PlannerOrchestrationResult): PersistablePlannerResult | null {
-    const { plan } = result
-    const generatedEntries = result.generatedBuildListEntries
-    const replacements = result.generatedBuildListEntryReplacements
-
-    if (plan === null) {
-      // PLANNER_SPEC 9.2.14: no Plan means no adopted Entry and no
-      // replacement. A non-empty list here breaks the orchestration invariant,
-      // so nothing is written and no Entry is salvaged on its own.
-      const replacementCount = Array.isArray(replacements) ? replacements.length : 0
-      if (generatedEntries.length > 0 || replacementCount > 0) {
-        throw resultInvalid(
-          `The Planner returned no Plan but ${generatedEntries.length} generated BuildListEntries and ${replacementCount} BuildListEntry replacements. No Entry may be persisted without its Plan.`,
-        )
-      }
-      return null
-    }
-    this.assertPersistableResultShape(plan, generatedEntries, result.termination, replacements)
-    return {
-      plan,
-      generatedEntries,
-      replacements,
-      requireGeneratedEntriesSelected: true,
-      expectedSourceDraftId: null,
-    }
-  }
-
-  /**
    * The result-shape invariants of an ordinary Planner result, or `null` for a
    * finished run with no Plan. It carries no generated Entry and no
    * replacement, so the shared save boundary runs with empty sets.
@@ -501,13 +415,7 @@ export class PlannerResultPersistenceService {
     const { plan } = result
     if (plan === null) return null
     throwIssue(checkPersistableOrdinaryPlannerResultShape(plan, result.termination))
-    return {
-      plan,
-      generatedEntries: [],
-      replacements: [],
-      requireGeneratedEntriesSelected: false,
-      expectedSourceDraftId: null,
-    }
+    return { plan, generatedEntries: [], replacements: [], expectedSourceDraftId: null }
   }
 
   /** The artifact-shape invariants of a Planner Alternative repair; the Plan carries its lineage. */
@@ -520,7 +428,7 @@ export class PlannerResultPersistenceService {
       throwIssue(checked.issue)
       throw resultInvalid('The Planner Alternative repair artifact is not persistable.')
     }
-    return { ...checked.repair, requireGeneratedEntriesSelected: false, expectedSourceDraftId }
+    return { ...checked.repair, expectedSourceDraftId }
   }
 
   private guard(currentCalculationContext: CalculationContext): PlanBreakingChangeGuard {
@@ -580,22 +488,6 @@ export class PlannerResultPersistenceService {
         `The repair was calculated from Draft '${expectedSourceDraftId}', but the current Draft is ${drafts.length === 0 ? 'missing' : `'${drafts[0].id}'`}; another change moved the repair chain on after the calculation.`,
       )
     }
-  }
-
-  /** Result-shape invariants that do not depend on current persisted state. */
-  private assertPersistableResultShape(
-    plan: ProductionPlan,
-    generatedEntries: readonly BuildListEntry[],
-    termination: PlannerRunTermination,
-    replacements: readonly BuildListEntryReplacement[] | undefined,
-  ): asserts replacements is readonly BuildListEntryReplacement[] {
-    // PLANNER_SPEC 7.2.1 / 9.2.15 / 9.2.18, shared with the replan adoption
-    // (16.8): an incomplete search, a non-draft Plan, duplicated generated
-    // Entry IDs, malformed replacement metadata, or a Domain-invalid Plan /
-    // Entry is never persisted. B8-D2a stores a freshly calculated Draft;
-    // activation and the single-active-Plan constraint stay the existing
-    // Application concerns.
-    throwIssue(checkPersistablePlannerResultShape(plan, generatedEntries, termination, replacements))
   }
 
   private currentState(base: PlanGuardedMutationBase): PlannerSaveCurrentState {
@@ -707,19 +599,15 @@ export class PlannerResultPersistenceService {
 
   /**
    * Every BuildListEntry the Plan references must exist in the final set - for
-   * an ordinary result, the current Build List itself; the B8 orchestration
-   * result additionally selects every generated Entry.
+   * an ordinary result, the current Build List itself; for a repair, the
+   * replacement set. A repair's generated Entry need not be selected by the
+   * final Plan: the accepted replacement set is the authority (9.2.19.6).
    */
   private assertPlanReferences(
     persistable: PersistablePlannerResult,
     finalEntries: readonly BuildListEntry[],
   ) {
-    const { plan, generatedEntries } = persistable
-    throwIssue(
-      persistable.requireGeneratedEntriesSelected
-        ? checkProductionPlanBuildListReferences(plan, generatedEntries, finalEntries)
-        : checkProductionPlanBuildListEntryReferences(plan, finalEntries),
-    )
+    throwIssue(checkProductionPlanBuildListEntryReferences(persistable.plan, finalEntries))
   }
 }
 

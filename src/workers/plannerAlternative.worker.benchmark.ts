@@ -13,7 +13,7 @@ import {
   observePlannerAlternativeKernelDependencies,
   summarizePlannerAlternativeKernelResult,
 } from '../benchmarks/plannerAlternativeBenchmarkInstrumentation'
-import { summarizeIssue101Route } from '../benchmarks/issue101RouteSummary'
+import { summarizeIssue101Route, type Issue101RouteSummary } from '../benchmarks/issue101RouteSummary'
 import { hashStableValue } from '../domain/models/publicTypes'
 import {
   assertPlannerAlternativeTrialBounds,
@@ -29,7 +29,6 @@ import {
   visitPlannerAlternativeCandidates,
   type PlannerAlternativeSearchExtent,
 } from '../domain/search'
-import type { Issue101RouteSummary } from '../benchmarks/issue101ConstrainedResearchProtocol'
 import { benchmarkWorkerYield } from './constrainedEnumeration.worker.benchmark'
 
 /**

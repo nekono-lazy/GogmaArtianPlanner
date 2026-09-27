@@ -195,6 +195,28 @@ describe('Planner contracts', () => {
     } as unknown as PlannerWarning).isValid).toBe(false)
   })
 
+  it('holds exactly the current warning taxonomy, with no legacy B8 orchestration kind (Phase 6-B2b)', () => {
+    // The Planner Alternative reports its bound stops and a checkpoint-blocked
+    // Target as typed comparison outcomes; no warning kind stands for them.
+    expect([...plannerWarningKinds]).toEqual([
+      'no_build_list_entries',
+      'rng_state_missing',
+      'rng_prediction_unsupported',
+      'protected_weapon_required',
+      'build_list_entry_stale',
+      'calculation_context_incompatible',
+      'all_targets_already_satisfied',
+      'invalid_conflict_resolution',
+      'max_steps_reached',
+      'multiple_selected_checkpoint_entries',
+      'selected_checkpoint_target_already_ideal',
+      'selected_checkpoint_fixes_target_entry',
+      'invalid_checkpoint_selection',
+      'duplicate_build_list_entries_for_target',
+      'completed_target_excluded',
+    ])
+  })
+
   it('accepts the concrete prediction unsupported warning taxonomy', () => {
     expect(validatePlannerWarning({
       kind: 'rng_prediction_unsupported',

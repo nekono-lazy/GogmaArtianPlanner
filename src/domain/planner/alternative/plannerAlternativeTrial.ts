@@ -11,8 +11,9 @@ import type {
 
 /**
  * The caller-supplied trial bounds of one Planner Alternative kernel request
- * (`docs/PLANNER_SPEC.md` 9.2.19.12): the what-if `PlannerWhatIfBounds`
- * meanings, shared by the what-if and the actual repair kernel. The Domain
+ * (`docs/PLANNER_SPEC.md` 9.2.19.12): the trial and rerun meanings of the
+ * former B9 what-if bounds (removed in Phase 6-B2b), shared by the what-if and
+ * the actual repair kernel. The Domain
  * never substitutes, clamps or completes a value;
  * `defaultPlannerAlternativeTrialBounds` is the value a Production caller
  * passes explicitly (Phase 3-C).
@@ -43,7 +44,8 @@ export interface PlannerAlternativeTrialBounds {
  *   nothing because only the runs needed start. 8 is a Production safety bound
  *   with headroom for several non-fixed Targets, second trials and
  *   runtime-unsupported retries sharing the request-global budget; the fixture
- *   itself needed 2. It is decided independently of `defaultPlannerWhatIfBounds`.
+ *   itself needed 2. It was decided independently of the former B9 what-if
+ *   default (removed in Phase 6-B2b).
  *
  * Callers explicitly pass it (for example as a spread copy); it is never an
  * implicit Domain fallback, a field-completion target or a clamp.

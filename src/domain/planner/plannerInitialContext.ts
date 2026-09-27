@@ -48,9 +48,9 @@ function compareStableStrings(left: string, right: string): number {
 
 /**
  * Everything a full Planner run (the Production scheduler or the Beam Search
- * oracle) and the B8 augmented preflight need
- * before the first expansion. It carries no B8-specific field and applies no
- * B8-specific conflict shortcut.
+ * oracle) and the augmented / replacement preflight need before the first
+ * expansion. It carries no preflight-specific field and applies no
+ * preflight-specific conflict shortcut.
  */
 export interface PlannerInitialContext {
   validBuildListEntries: readonly ValidatedBuildListEntry[]
@@ -78,7 +78,7 @@ export interface PlannerInitialContext {
    * unique planning-eligible Targets of the valid BuildListEntries, in stable
    * ID order. This is the run's one Target authority - completion, typed
    * termination, scoring, Target satisfaction, conflict detection, checkpoint
-   * requirements, constrained re-search and what-if all read it. It is never
+   * requirements and the Planner Alternative all read it. It is never
    * every active Target of `PlannerInput.targetWeapons`: a Target with no valid
    * Entry is not a goal of this run (`docs/PLANNER_SPEC.md` 4 / 7.2.1).
    */
@@ -91,7 +91,7 @@ export interface PlannerInitialContext {
   /**
    * The Target-wide required checkpoint Entries of this run, derived from every
    * valid BuildListEntry (`docs/PLANNER_SPEC.md` 7.5.6). Relevance, completion,
-   * scoring, termination, constrained re-search and what-if all read this one
+   * scoring, termination and the Planner Alternative all read this one
    * map; none of them re-derives it from a conflict's participants.
    */
   checkpointRequirements: PlannerCheckpointRequirements
@@ -113,7 +113,7 @@ export type PlannerInitialContextResult =
  * initial relevant-entry selection, and initial PlanConflict detection path.
  *
  * `buildListContext` is the Build List cardinality contract of `input`
- * (`PlannerBuildListContext`); only a B8 / what-if trial passes a temporary
+ * (`PlannerBuildListContext`); only a Planner Alternative trial passes a temporary
  * one - `temporary_augmented` for its conflict preflight, and
  * `temporary_replacement` for the replacement set.
  *

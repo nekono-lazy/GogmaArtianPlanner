@@ -31,9 +31,9 @@ const CLOCK_A = clockAt('2026-09-01T00:00:00.000Z')
 const CLOCK_B = clockAt('2027-03-04T05:06:07.000Z')
 
 /**
- * The B8 constrained search identity of this very fixture
- * (`createConstrainedSearchIdentity()` over `constrainedBounds()`), pinned as
- * a literal so the core is tested without the legacy adapter.
+ * The B8 constrained search identity of this very fixture (the legacy B8
+ * identity over `constrainedBounds()`, removed with its adapter in Phase
+ * 6-B2b), pinned as a literal so the core is tested with any search identity.
  */
 const B8_SEARCH_IDENTITY = 'constrained-search.fnv1a32-cdf1a4d6'
 /** The Planner Alternative search identity the pin test below uses. */

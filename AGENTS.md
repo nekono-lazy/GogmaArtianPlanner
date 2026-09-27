@@ -2195,10 +2195,10 @@ moves, or empties on its own. Two rules follow, both Domain authority and never 
   opportunity, no "same performance, other Route", no empty selection.
   `createPlannerConflictWorks()` takes the run's `PlannerCheckpointRequirements`,
   `PlannerConflictWork.blockedBySelectedCheckpoint` skips the enumeration, the
-  conflict is returned as it is with the warning
-  `selected_checkpoint_blocks_constrained_search`, and what-if answers
-  `blocked_by_selected_checkpoint`. A Target with no selection is re-searched
-  exactly as before
+  conflict is returned as it is, and the Planner Alternative answers the typed
+  outcome `blocked_by_selected_checkpoint` (the legacy B8 warning
+  `selected_checkpoint_blocks_constrained_search` was removed with B8 in Phase
+  6-B2b). A Target with no selection is re-searched exactly as before
 
 ---
 
@@ -3291,6 +3291,16 @@ initial policy stands.
 
 ## Planner-driven Constrained Re-search
 
+Current state: the Planner side of this section (the B8 orchestration and the B9
+what-if built on it) was replaced by the Planner Alternative (Issue #136 / #101,
+see the end of this section) and removed in Phase 6-B2b; only the Search Domain
+constrained enumerator and `defaultConstrainedEnumerationBounds` remain, for the
+Search Domain benchmark / tests. The rules below that the Planner Alternative
+kept (fixed constraints, re-association, the preflight authority, deterministic
+generated Entry identity, the replacement and Persistence boundary) stay
+binding through `src/domain/planner/replacement/` and the Planner Alternative;
+the B8 / B9 API names are a record.
+
 B8-A fixed the formal contract in `docs/PLANNER_SPEC.md` 9.2 and
 `docs/SEARCH_SPEC.md` 5.6.7. `docs/CANDIDATE_SEARCH_REDESIGN.md` 4.2 is the
 design record, not specification authority. B8-A changed specification documents
@@ -3696,8 +3706,9 @@ failure saves nothing and shows its typed comparison; the minimal presentation (
 `presentProductionPlanAlternative.ts`) tells the five no-result statuses, `adoptedInScenario` true / false / null and the four
 scenario statuses apart, in text. The Phase 7 / Issue #122 redesign is not done.
 Phase 6 is split into 6-A, 6-B1, 6-B2a and 6-B2b (`docs/PLANNER_SPEC.md` 9.2.19.14 / 9.2.19.16). Phase 6-A (the Production consumers'
-separation from the legacy B8 path) and Phase 6-B1 (the dead public runtime surface removal, below) are complete; Phase 6 as a
-whole is not complete until 6-B2b. After Phase 5-B the Build List's ordinary 「生産計画を作成」 and the
+separation from the legacy B8 path), Phase 6-B1 (the dead public runtime surface removal), Phase 6-B2a (the shared primitive
+neutralization) and Phase 6-B2b (the legacy Domain removal) are complete, so **Phase 6 is complete**; Phase 7 (Issue #122
+Presentation) is next. After Phase 5-B the Build List's ordinary 「生産計画を作成」 and the
 running Plan's replan Preview (16.8) still called `createConstrainedPlan()` with `defaultPlannerOrchestrationBounds`, but both hand
 the Planner a fresh current-state input with `conflictResolutions = []` - neither restores a saved Plan's resolution, baseSnapshot,
 past input or repair lineage - so by 9.2.7 B8 only ran its initial ordinary Planner run and returned it. Both now call the ordinary
@@ -3771,8 +3782,8 @@ into `replacement/plannerMaterializationErrors.ts` with its runtime contract int
 `ConstrainedMaterializationError` (`name` / `constructor.name` `'ConstrainedMaterializationError'`, the codes `target_mismatch` /
 `invalid_candidate` / `generated_entry_id_collision` and every message unchanged, also for `resolvePlannerSearchOriginTarget()`), the
 neutral `PlannerMaterializationError` / `PlannerMaterializationErrorCode` are aliases of that same constructor and type (never a second
-class, so `instanceof` holds under either name), and the legacy path `constrained/constrainedMaterializationErrors.ts` stays a
-compatibility facade re-exporting it until Phase 6-B2b. The shared scenario preparation
+class, so `instanceof` holds under either name), and the legacy path `constrained/constrainedMaterializationErrors.ts` stayed a
+compatibility facade re-exporting it until Phase 6-B2b removed it. The shared scenario preparation
 checks no bounds: the Planner Alternative kernel asserts its own trial bounds (the same positive-integer rule) first, and the legacy B9
 `preparePlannerWhatIfScenario()` stays as a wrapper that asserts `PlannerWhatIfBounds` and delegates; `PlannerWhatIfFailureResult` and
 its members are aliases of the shared types. The legacy side keeps `CONSTRAINED_ROUTE_POLICY_VERSION` / `createConstrainedSearchIdentity()`,
@@ -3784,8 +3795,44 @@ imports the neutral module. The Planner Alternative production runtime (`src/dom
 (its `build-list.constrained.` prefix is part of the value and stays), the generated Candidate IDs, both search identities,
 `candidateStableKey`, `targetDefinitionHash`, `searchStateHash` and `referencedOwnedWeaponsHash` are unchanged (pinned by tests), and
 Production routing, the Worker protocol, the UI and every version (17 / 10 / 13) are unchanged, with no migration. The Search Domain
-names `ConstrainedSearchOrigin` / `ConstrainedCandidate` are the Search Domain's and are left to the Search-side cleanup. Phase 6-B2b
-re-audits what is left under `constrained/` - legacy consumers only - and deletes the legacy Domain path or keeps it as a test oracle.
+names `ConstrainedSearchOrigin` / `ConstrainedCandidate` are the Search Domain's and are left to the Search-side cleanup.
+Phase 6-B2b (complete; `docs/PLANNER_SPEC.md` 9.2.19.14 / 9.2.19.16) re-audited what was left under `src/domain/planner/constrained/`
+- legacy consumers only - and deleted it rather than keep it as a test oracle, so that folder no longer exists: the B8 orchestration
+(`createProductionPlanWithConstrainedSearch()`, `PlannerOrchestrationResult`, `PlannerConstrainedOrchestrationOptions`,
+`CreateConstrainedProductionPlanCalculation`, `isPlannerConflictWorkSatisfied()` / `isConstrainedTrialAdoptable()`, the B8 full-run
+budget, `createConstrainedMaterializer()`, `CONSTRAINED_ROUTE_POLICY_VERSION` / `createConstrainedSearchIdentity()`), the B9 what-if
+calculation (`createPlannerWhatIfComparison()`, `PlannerWhatIfCalculationResult` and its request / comparison / outcome / distance types,
+the B9 rerun budget, the wrapper `preparePlannerWhatIfScenario()`), `PlannerOrchestrationBounds` / `defaultPlannerOrchestrationBounds`
+and `PlannerWhatIfBounds` / `defaultPlannerWhatIfBounds`, the five B8-only `PlannerWarningKind`s (`max_candidate_trials_per_conflict_reached`,
+`max_generated_build_list_entries_reached`, `max_planner_reruns_reached`, `constrained_enumeration_bound_reached`,
+`selected_checkpoint_blocks_constrained_search`) and their labels (warnings are never persisted, so no migration), the B8 Persistence
+API (`savePlannerOrchestrationResult()` / `inspectPlannerOrchestrationResultSave()`, its outcome type, the shared save boundary's
+`requireGeneratedEntriesSelected` branch and the B8-only `checkProductionPlanBuildListReferences()` that required every generated Entry
+to be selected), the materialization error's legacy import path, the B8 / B9 benchmark fixtures and outcome helpers, the Issue #101
+constrained re-search research harness (page, Browser controller, protocol, Worker and its Benchmark shell tab), and the Phase 6-A
+parity / retry-boundary tests, which needed the legacy B8 implementation (the schema 17 reason and version history stay in the formal
+docs). The save-boundary cases those B8 API tests covered (current state re-validation, generated Entry freshness, write-failure
+atomicity, the guard's rollback, stale / ended Plans needing no approval, the 16.10 save point choice) moved to the ordinary and Planner
+Alternative save tests; the Normal Counter conflict what-if regression moved to `createPlannerAlternativeWhatIfComparison()` with the
+Production extent / trial bounds; the status-only search identity test now uses the Planner Alternative search identity. It kept: the
+shared primitives under `src/domain/planner/replacement/` (with `PlannerConflictWork.blockedBySelectedCheckpoint`, which the Planner
+Alternative reports as the typed outcome `blocked_by_selected_checkpoint`), `BuildListEntryReplacement`, the current save APIs
+`savePlannerResult()` and `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` with every shared replacement check,
+the save mutation, the source Draft CAS, the Plan-breaking guard and the save point restore, the materialization error runtime contract
+(the one constructor `ConstrainedMaterializationError`, its name, codes, messages and the `PlannerMaterializationError` alias), the Search
+Domain constrained enumerator (`ConstrainedSearchOrigin`, `ConstrainedCandidate`, `ConstrainedEnumerationBounds`,
+`visitConstrainedCandidates()`, `enumerateConstrainedCandidates()`) with `defaultConstrainedEnumerationBounds` and the Constrained
+Enumeration Browser benchmark (the Planner Alternative's shared shapes and the Search Domain benchmark / validation use them; their
+naming is the Search-side cleanup's), the Issue #101 real-case fixture (`createIssue101RealFixture()` and its RNG / Target constants, split
+into `src/benchmarks/issue101PlannerAlternativeFixtures.ts` with its Candidate / BuildListEntry / Conflict IDs pinned to the pre-move
+values; the research-only enumeration / orchestration sweep and the approximate owned-Dragon variant are gone), the shared test fixture
+`src/test/fixtures/plannerConstrainedOrchestration.ts` (only its zero-consumer B8 bounds helpers were removed), and the historical
+benchmark records. The only Production routing is Build List / replan Preview -> `createPlan()`, 「比較する」 ->
+`createPlannerAlternativeComparison()`, 「この候補を優先」 -> `createPlannerAlternativeRepair()`, availability ->
+`prepareInteraction()`, ordinary save -> `savePlannerResult()`, repair save -> `inspectPlannerAlternativeRepairSave()` /
+`savePlannerAlternativeRepair()`; no other legacy Planner path exists. No semantics, ID, hash, Worker protocol, UI or version moved
+(17 / 10 / 13, `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2, `production-rng:c5-e7`, Master `dataVersion` 4), and no
+migration was added.
 
 ---
 
@@ -3893,8 +3940,9 @@ carry a reached bound, because the last affordable expansion may be the one that
 completed it, and a run that never reached its Beam Search carries none.
 
 An `incomplete` result's `plan` stays populated in the Domain: `bestPartial` is
-still Beam Search diagnostics, and B8 `isConstrainedTrialAdoptable()` may still
-adopt a trial from a partial Plan. That internal contract is unchanged. What
+still Beam Search diagnostics (the B8 `isConstrainedTrialAdoptable()` that could
+adopt a trial from a partial Plan was removed in Phase 6-B2b; the Planner
+Alternative judges a trial by its own found rule). That internal contract is unchanged. What
 changes is outside the Domain: Persistence fails closed with
 `planner_result_invalid`, no generated BuildListEntry is salvaged on its own,
 the UI does not navigate to `/plans/{id}`, and the UI states which bound was
@@ -5297,9 +5345,11 @@ Relevant test areas include:
   fields match, schema 1..11 build results incompatible, the historical `16 -> [12, 13, 14, 15]`,
   `15 -> [12, 13, 14]`, `14 -> [12, 13]` and `13 -> [12]` exceptions unchanged, and a future schema
   (18) never inheriting the exception
-- Phase 6-A: with `conflictResolutions = []` the legacy B8 orchestration and the ordinary Planner
-  returning the same result in the representative ordinary cases, and a runtime-unsupported retry
-  needing a fifth full run giving legacy `plan = null` + `max_planner_reruns_reached` but an ordinary Plan
+- Phase 6-A (historical; the parity and retry-boundary tests were removed with the legacy B8
+  implementation in Phase 6-B2b, while the schema 17 boundary tests stay): with
+  `conflictResolutions = []` the legacy B8 orchestration and the ordinary Planner returned the same
+  result in the representative ordinary cases, and a runtime-unsupported retry needing a fifth full
+  run gave legacy `plan = null` + `max_planner_reruns_reached` but an ordinary Plan
 - Phase 6-B1: the Planner Worker protocol, controller, Production adapter and `PlannerWorkerClient` carrying exactly the
   four current calculations (`create_plan`, `create_planner_alternative_comparison`, `create_planner_alternative_repair`,
   `prepare_interaction`) plus `cancel` / `error`, no legacy B8 / B9 kind, method or adapter, and the Build List / replan
@@ -5308,6 +5358,13 @@ Relevant test areas include:
 - Phase 6-B2a: `src/domain/planner/alternative/*.ts` importing nothing from `../constrained/`, the shared primitives tested in
   `src/domain/planner/replacement/`, the legacy B8 / B9 adapters tested only for what they add, and the generated BuildListEntry ID,
   the B8 / Planner Alternative Candidate IDs and both search identities pinned to their pre-Phase 6-B2a values
+- Phase 6-B2b: no `src/domain/planner/constrained/` folder and no legacy B8 / B9 Planner symbol, bound / default, B8-only warning
+  kind or label, or B8 Persistence API left in `src`; the exact current `plannerWarningKinds` and one label per kind; the Planner
+  Domain barrel exporting no legacy calculation; the ordinary and Planner Alternative save tests covering current state
+  re-validation, generated Entry freshness, write-failure atomicity, the guard's rollback and the 16.10 save point choice; an accepted
+  but unselected `G` saved by the repair save; the materialization error runtime contract through the Planner barrel; the Normal
+  Counter production-target conflict compared through `createPlannerAlternativeWhatIfComparison()`; and the Issue #101 real-case
+  fixture keeping its pinned Candidate / BuildListEntry / Conflict IDs
 - `ProductionPlan.conflictRepairLineage` validated structurally only (literals, IDs, the
   `replaced` iff replacement rule, never a current foreign key), Dexie v9 -> v10 and Export
   12 -> 13 filling `null` into every Plan body (table, save point, Undo snapshot, Undo
@@ -5347,7 +5404,9 @@ Relevant test areas include:
 - `ProductionPlanRepository` adding a first Draft, refusing a second different Draft through
   `add` and `put` (`draft_plan_conflict`), allowing a `put` of the same Draft ID, accepting a
   Draft beside an active Plan, and keeping the running-Plan invariant unchanged
-- `savePlannerOrchestrationResult()` replacing the previous Draft (and every accumulated
+- The Planner result save (the ordinary `savePlannerResult()`, and the Planner Alternative repair
+  save for generated Entries; the B8 `savePlannerOrchestrationResult()` that first carried these
+  cases was removed in Phase 6-B2b) replacing the previous Draft (and every accumulated
   legacy Draft) with the new one and its generated Entries in one transaction, keeping the
   previous Draft with no new Plan and no partial Entry when the save-time validation refuses
   the result, when a generated Entry write fails or when the new Plan write fails, keeping

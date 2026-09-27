@@ -21,7 +21,7 @@ import {
   ISSUE_101_DRAGON_TARGET_ID,
   ISSUE_101_FIRE_TARGET_ID,
   type Issue101RealFixture,
-} from './issue101ConstrainedResearchFixtures'
+} from './issue101PlannerAlternativeFixtures'
 import { summarizeIssue101Route } from './issue101RouteSummary'
 
 /*

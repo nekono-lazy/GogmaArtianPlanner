@@ -330,8 +330,8 @@ export function preparePlannerAlternativeKernel(
 ): PlannerAlternativeKernelPreparationResult {
   assertPlannerAlternativeTrialBounds(request.bounds)
   assertPlannerAlternativeRequestExtent(request.extent)
-  // The trial bounds were asserted above with the same positive-integer rule
-  // the legacy B9 wrapper applied, so the shared preparation checks none.
+  // The trial bounds were asserted above with their positive-integer rule, so
+  // the shared preparation checks none.
   const prepareScenario = (plannerInput: PlannerInput) => preparePlannerConflictScenario(
     { plannerInput, scenarioResolution: request.decision },
     dependencies,

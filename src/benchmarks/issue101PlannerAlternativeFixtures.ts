@@ -11,7 +11,6 @@ import type {
   ElementId,
   NormalArtianCounter,
   OwnedGogmaArtianWeapon,
-  OwnedWeaponId,
   PlanConflict,
   RestorationBonusSet,
   RngState,
@@ -24,56 +23,43 @@ import {
   defaultPlannerOptions,
   preparePlannerInitialContext,
 } from '../domain/planner'
-import type { PlannerConflictResolution, PlannerInput } from '../domain/planner'
+import type { PlannerInput } from '../domain/planner'
 import { ProductionRngEngine } from '../domain/rng/production/productionRngEngine'
-import {
-  searchCandidates,
-  validateConstrainedEnumerationBounds,
-} from '../domain/search'
+import { searchCandidates } from '../domain/search'
 import type {
   CandidateSearchSettings,
-  ConstrainedCandidateSearchInput,
-  ConstrainedEnumerationBounds,
   ConstrainedSearchOrigin,
   SearchMasterSubset,
 } from '../domain/search'
 import { validateTargetIdealImpliesPractical } from '../domain/target'
 
 /**
- * Issue #101 constrained re-search benchmark fixtures.
+ * Issue #101 fixtures of the Planner Alternative tests and benchmark.
  *
- * Two different things live here and are kept apart on purpose:
- *
- * - **Issue #101 real case** (`issue101_real_*`): the RNG state recorded in the
- *   Issue (Base Seed 51231782, Skill Counter 341, Gogma Counter 55, Charge
- *   Blade Normal Counter 0) and the Issue's own Ideal (斬れ味・装填強化EX x1,
- *   属性強化EX x2, 属性強化II x2) for a Fire and a Dragon Charge Blade Target.
- *   The two BuildListEntries carry the Candidates the unmodified current
- *   Candidate Search returns for them - nothing about the Route is taken from
- *   the Issue text, so a later RNG / Search change shows up as a fixture
- *   change instead of being hidden by a hard-coded Route.
- * - **Production benchmark fixture** (`issue101_no_ideal`): the same RNG state
- *   and weapon, but a Fire Target whose Ideal the Production RNG can never
- *   produce (three 属性強化EX: the exact-ID repeat penalty of both Reset and
- *   Keep takes an EX candidate from 100 to 20 to 0, so a third EX of one type
- *   has zero weight). It exists only to measure the constrained enumeration's
- *   full traversal cost when no Ideal is inside the extent; it is not the
- *   Issue #101 case.
- *
- * - **Production benchmark fixture** (`issue101_approx_owned_dragon`): the
- *   Issue #101 real case with one difference - the Dragon side already holds
- *   the Gogma a Normal forged at Counter 206 and converted would be (a
- *   synthetic owned Gogma whose five `normal_artian` slots are the Production
- *   Normal prediction at Normal Counter 206). Its Candidate therefore performs
- *   no conversion, so the Fire alternative no longer collides with it at Skill
- *   Counter 341. It exists only so the time to an *adopted* Candidate can be
- *   measured; it is not the Issue #101 case (see
- *   `docs/ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md`).
+ * - **Issue #101 real case** (`createIssue101RealFixture()`): the RNG state
+ *   recorded in the Issue (Base Seed 51231782, Skill Counter 341, Gogma Counter
+ *   55, Charge Blade Normal Counter 0) and the Issue's own Ideal
+ *   (斬れ味・装填強化EX x1, 属性強化EX x2, 属性強化II x2) for a Fire and a Dragon
+ *   Charge Blade Target. The two BuildListEntries carry the Candidates the
+ *   unmodified current Candidate Search returns for them - nothing about the
+ *   Route is taken from the Issue text, so a later RNG / Search change shows up
+ *   as a fixture change instead of being hidden by a hard-coded Route.
+ * - **Production benchmark fixture** (`createIssue101NoIdealSearchOrigin()`):
+ *   the same RNG state and weapon, but a Fire Target whose Ideal the Production
+ *   RNG can never produce (three 属性強化EX: the exact-ID repeat penalty of both
+ *   Reset and Keep takes an EX candidate from 100 to 20 to 0, so a third EX of
+ *   one type has zero weight). It measures the full traversal cost when no
+ *   Ideal is inside the extent; it is not the Issue #101 case.
  *
  * Every Candidate comes from `searchCandidates()` with the unmodified
  * `ProductionRngEngine`, every Entry from `createBuildListEntry()`, and every
  * conflict key from `preparePlannerInitialContext()`. No Candidate result,
  * Counter position, or conflict key is hand-written.
+ *
+ * These fixtures were first built for the legacy B8 constrained re-search
+ * research harness (`docs/ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md`), which
+ * Phase 6-B2b removed together with its enumeration / orchestration sweep and
+ * the approximate owned-Dragon variant. The real case itself is unchanged.
  */
 
 export const ISSUE_101_BASE_SEED = '51231782'
@@ -96,34 +82,6 @@ export const ISSUE_101_CANDIDATE_SEARCH_SETTINGS: CandidateSearchSettings = {
   maxNormalAdvance: 350,
   maxGogmaAdvance: 500,
   maxSkillAdvance: 1500,
-}
-
-/** The historical B8-B2 Production enumeration default, the sweep baseline. */
-export const ISSUE_101_BASELINE_BOUNDS: ConstrainedEnumerationBounds = {
-  maxNormalForgeCount: 40,
-  maxGogmaAdvance: 30,
-  maxSkillResetCount: 100,
-  maxOffAxisPairEvaluations: 500,
-}
-
-/** The Gogma sweep this task measures; Normal / Skill / off-axis stay at baseline. */
-export const ISSUE_101_GOGMA_SWEEP = [30, 50, 100, 150, 200, 250, 350] as const
-
-export function issue101GogmaBounds(maxGogmaAdvance: number): ConstrainedEnumerationBounds {
-  return { ...ISSUE_101_BASELINE_BOUNDS, maxGogmaAdvance }
-}
-
-/**
- * Fails closed on invalid bounds with the existing Search Domain validator,
- * before any Worker is created. Nothing is repaired or clamped.
- */
-export function assertIssue101EnumerationBounds(bounds: ConstrainedEnumerationBounds): void {
-  const issues = validateConstrainedEnumerationBounds(bounds)
-  if (issues.length > 0) {
-    throw new RangeError(
-      `Invalid ConstrainedEnumerationBounds: ${issues.map(({ path, message }) => `${path}: ${message}`).join(' / ')}`,
-    )
-  }
 }
 
 const FIXTURE_TIME = '2026-09-25T00:00:00.000Z'
@@ -264,7 +222,7 @@ export function createIssue101Targets(): { fire: TargetWeapon; dragon: TargetWea
   }
 }
 
-export function createIssue101ConstrainedOrigin(
+export function createIssue101SearchOrigin(
   targetWeapons: readonly TargetWeapon[],
 ): ConstrainedSearchOrigin {
   const { master, context } = issue101Master()
@@ -278,81 +236,12 @@ export function createIssue101ConstrainedOrigin(
   }
 }
 
-/**
- * Which explicit `PlannerConflictResolution`s the orchestration input carries.
- * The fixed side is always the Dragon Entry (the Issue's example: 206 goes to
- * 龍, 火 looks for another Route), so the constrained re-search works on Fire.
- *
- * - `primary`: the user preferred Dragon on one conflict only - the
- *   `same_normal_counter` conflict the Issue names in the real case, and the
- *   one `same_gogma_counter` conflict in the approximate case.
- * - `all`: the user preferred Dragon on every initial conflict of the pair.
- *
- * This is a fixture choice made so a workload is reproducible; it never
- * stands in for a user decision in Production, and
- * `recommendedBuildListEntryId` is never read.
- */
-export type Issue101ResolutionScope = 'primary' | 'all'
-
-/** Which pair the orchestration fixture holds. */
-export type Issue101OrchestrationVariant = 'real' | 'approx_owned_dragon'
-
-export const ISSUE_101_APPROX_DRAGON_WEAPON_ID =
-  'owned.issue101.approx.dragon' as OwnedWeaponId
-/** The Normal Counter whose forge the synthetic Dragon Gogma stands for. */
-export const ISSUE_101_APPROX_DRAGON_NORMAL_COUNTER = 206
-/** Far outside every measured Skill horizon, so it never matches a Route result. */
-const APPROX_DRAGON_SKILL_COUNTER = 900
-
-/**
- * The synthetic owned Dragon Gogma of the approximate fixture: its five slots
- * are the Production Normal prediction at Charge Blade Normal Counter 206 with
- * `normal_artian` scope (what forging and converting that weapon leaves), and
- * its Skills a Production Skill prediction far away. Nothing is guessed.
- */
-export function createIssue101ApproxDragonWeapon(): OwnedGogmaArtianWeapon {
-  const { master } = issue101Master()
-  const engine = new ProductionRngEngine()
-  const skills = engine.predictSkills({
-    baseSeed: ISSUE_101_BASE_SEED,
-    skillCounter: APPROX_DRAGON_SKILL_COUNTER,
-    weaponTypeId: ISSUE_101_WEAPON_TYPE_ID,
-    elementId: DRAGON,
-    master,
-  })
-  return {
-    id: ISSUE_101_APPROX_DRAGON_WEAPON_ID,
-    kind: 'gogma',
-    name: 'Issue #101 benchmark: owned Dragon Gogma (Normal 206)',
-    weaponTypeId: ISSUE_101_WEAPON_TYPE_ID,
-    elementId: DRAGON,
-    restorationBonuses: engine.predictNormalArtian({
-      baseSeed: ISSUE_101_BASE_SEED,
-      weaponTypeId: ISSUE_101_WEAPON_TYPE_ID,
-      elementId: DRAGON,
-      rarity: V1_NORMAL_ARTIAN_RARITY,
-      normalCounter: ISSUE_101_APPROX_DRAGON_NORMAL_COUNTER,
-      master,
-    }),
-    restorationBonusScope: 'normal_artian',
-    seriesSkillId: skills.seriesSkillId,
-    groupSkillId: skills.groupSkillId,
-    status: 'unclassified',
-    isProtected: false,
-    executionInProgress: null,
-    memo: null,
-    createdAt: FIXTURE_TIME,
-    updatedAt: FIXTURE_TIME,
-  }
-}
-
 export interface Issue101RealFixture {
-  readonly variant: Issue101OrchestrationVariant
   readonly fireCandidate: BuildCandidate
   readonly dragonCandidate: BuildCandidate
   readonly fireEntry: BuildListEntry
   readonly dragonEntry: BuildListEntry
-  /** The ordinary Planner input: no resolution, so no constrained re-search. */
+  /** The ordinary Planner input, with no conflict resolution. */
   readonly plannerInput: PlannerInput
   readonly initialConflicts: readonly PlanConflict[]
 }
@@ -387,18 +276,15 @@ async function searchIdeal(
 }
 
 /**
- * Builds the Issue #101 real case (or its approximate variant) with the
- * current Production authorities. It runs two real Candidate Searches, so
- * callers cache it.
+ * Builds the Issue #101 real case with the current Production authorities. It
+ * runs two real Candidate Searches, so callers cache it.
  */
-export async function createIssue101RealFixture(
-  variant: Issue101OrchestrationVariant = 'real',
-): Promise<Issue101RealFixture> {
+export async function createIssue101RealFixture(): Promise<Issue101RealFixture> {
   const { master, context } = issue101Master()
   const engine = new ProductionRngEngine()
   const { fire, dragon } = createIssue101Targets()
   const targetWeapons = [fire, dragon]
-  const ownedWeapons = variant === 'real' ? [] : [createIssue101ApproxDragonWeapon()]
+  const ownedWeapons: OwnedGogmaArtianWeapon[] = []
   const fireCandidate = await searchIdeal(fire, targetWeapons, ownedWeapons, engine)
   const dragonCandidate = await searchIdeal(dragon, targetWeapons, ownedWeapons, engine)
   const fireEntry = createBuildListEntry(fireCandidate, fire, { createdAt: FIXTURE_TIME })
@@ -430,7 +316,6 @@ export async function createIssue101RealFixture(
     throw new Error('Issue #101 fixture: the Planner input is not ready.')
   }
   return {
-    variant,
     fireCandidate,
     dragonCandidate,
     fireEntry,
@@ -441,51 +326,13 @@ export async function createIssue101RealFixture(
 }
 
 /**
- * The orchestration input: the ordinary input plus explicit resolutions that
- * fix the Dragon Entry, built from the conflict keys the Planner itself
- * reported. Never a hand-written key.
+ * Production benchmark fixture only: the Search origin and the Target of an
+ * Ideal no extent can reach.
  */
-export function createIssue101OrchestrationInput(
-  fixture: Issue101RealFixture,
-  scope: Issue101ResolutionScope,
-): PlannerInput {
-  // The approximate variant has no Normal conflict: its Dragon side forges
-  // nothing, so `primary` there means the one Gogma conflict it does have.
-  const primaryKind =
-    fixture.variant === 'real' ? 'same_normal_counter' : 'same_gogma_counter'
-  const conflicts = fixture.initialConflicts.filter((conflict) =>
-    scope === 'all' ? true : conflict.kind === primaryKind,
-  )
-  if (conflicts.length === 0) {
-    throw new Error(`Issue #101 fixture: no initial conflict for resolution scope '${scope}'.`)
-  }
-  const conflictResolutions: PlannerConflictResolution[] = conflicts.map((conflict) => {
-    if (!conflict.buildListEntryIds.includes(fixture.dragonEntry.id)) {
-      throw new Error(`Issue #101 fixture: conflict '${conflict.id}' has no Dragon participant.`)
-    }
-    return { conflictKey: conflict.id, selectedBuildListEntryId: fixture.dragonEntry.id }
-  })
-  return { ...structuredClone(fixture.plannerInput), conflictResolutions }
-}
-
-/** The enumeration input for the Issue #101 real case: the Fire (yielding) Target. */
-export function createIssue101RealEnumerationInput(
-  bounds: ConstrainedEnumerationBounds,
-): ConstrainedCandidateSearchInput {
-  assertIssue101EnumerationBounds(bounds)
-  const { fire, dragon } = createIssue101Targets()
-  return {
-    origin: createIssue101ConstrainedOrigin([fire, dragon]),
-    targetWeaponId: fire.id,
-    bounds: { ...bounds },
-  }
-}
-
-/** Production benchmark fixture only: an Ideal no bound can reach. */
-export function createIssue101NoIdealEnumerationInput(
-  bounds: ConstrainedEnumerationBounds,
-): ConstrainedCandidateSearchInput {
-  assertIssue101EnumerationBounds(bounds)
+export function createIssue101NoIdealSearchOrigin(): {
+  origin: ConstrainedSearchOrigin
+  targetWeaponId: TargetWeaponId
+} {
   const { master } = issue101Master()
   const target = createTarget(
     'target.issue101.no_ideal' as TargetWeaponId,
@@ -495,22 +342,7 @@ export function createIssue101NoIdealEnumerationInput(
     master,
   )
   return {
-    origin: createIssue101ConstrainedOrigin([target]),
+    origin: createIssue101SearchOrigin([target]),
     targetWeaponId: target.id,
-    bounds: { ...bounds },
-  }
-}
-
-export type Issue101EnumerationWorkloadId = 'issue101_real_fire' | 'issue101_no_ideal'
-
-export function createIssue101EnumerationInput(
-  workloadId: Issue101EnumerationWorkloadId,
-  bounds: ConstrainedEnumerationBounds,
-): ConstrainedCandidateSearchInput {
-  switch (workloadId) {
-    case 'issue101_real_fire':
-      return createIssue101RealEnumerationInput(bounds)
-    case 'issue101_no_ideal':
-      return createIssue101NoIdealEnumerationInput(bounds)
   }
 }

@@ -30,18 +30,21 @@ runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #1
                          採用からのgenerated replacement契約の除去、B8 parity test）とPhase 6-B1（deadになったB8 / B9の
                          Worker request kind・PlannerWorkerClient method・Production Worker adapter・Browser benchmark
                          runtime / page・旧B9 Presentationの削除）とPhase 6-B2a（Planner Alternativeが使う共有primitiveの
-                         legacy constrained moduleからneutralな src/domain/planner/replacement/ への分離）を実装した。
-                         次はPhase 6-B2b（legacy B8 / B9 Domain実装・bounds・warning・B8保存API・fixtureの削除または
-                         test oracle化）、その後Phase 7（#122 Presentation）
+                         legacy constrained moduleからneutralな src/domain/planner/replacement/ への分離）とPhase 6-B2b
+                         （legacy B8 / B9 Domain実装・bounds / default・warning kind・B8保存API・B8 / B9 benchmark
+                         fixture・Issue #101 research harness・Phase 6-A parity testの削除）を実装した。Phase 6は完了。
+                         次はPhase 7（#122 Presentation）
 Production behavior:     Phase 5-Bで切替済み（生産計画画面の「比較する」はcreatePlannerAlternativeComparison()、
                          「この候補を優先」はcreatePlannerAlternativeRepair() + savePlannerAlternativeRepair()）。Phase 6-Aで
                          作成リストの通常Plannerと再計画PreviewもcreatePlan()へ切替済み。Phase 6-B1で旧B8 / B9の
                          Worker / Client / Production adapter / Browser benchmark runtimeを削除した。Phase 6-B2aで
                          Planner Alternativeの現役runtime authorityをlegacy moduleから切り離した（Production semantics
-                         は不変）。旧B8 / B9のDomain計算本体はPhase 6-B2bまで残るが、normal Application runtimeからの
-                         consumerは0件であり、残るconsumerはtest / benchmarkである
+                         は不変）。Phase 6-B2bで旧B8 / B9のDomain計算本体を削除し、src/domain/planner/constrained/ は
+                         存在しない。Production routingはcreatePlan() / createPlannerAlternativeComparison() /
+                         createPlannerAlternativeRepair() / prepareInteraction()、保存はsavePlannerResult() と
+                         inspectPlannerAlternativeRepairSave() / savePlannerAlternativeRepair() だけである
 schema / version:        Phase 5-Bで更新（calculation 16、Dexie 10、Export 13。10章）。Phase 6-Aでcalculationだけ17へ更新
-                         （Dexie 10、Export 13は不変）。Phase 6-B1 / 6-B2aはどのversionも変えない
+                         （Dexie 10、Export 13は不変）。Phase 6-B1 / 6-B2a / 6-B2bはどのversionも変えない
 ```
 
 この文書はtask-specificな **設計記録** である。背景、方式選定の理由、後続PRの分割を記録する。
@@ -371,7 +374,8 @@ lineage除外件数）であり、Presentation改善はPhase 7で行う。
   implementationとして残った。Phase 5-Bで切り替えた後も実装は残っており、Phase 6-Aで残るProduction consumer
   （作成リストの通常Plannerと再計画Preview）をordinary Plannerへ移した。Phase 6-B1でdeadになったWorker / Client /
   Production adapter / Browser benchmark runtimeを削除した。Phase 6-B2aで共有primitiveをneutral moduleへ分離した。
-  Domain実装の削除またはtest oracle化はPhase 6-B2bで判断する
+  Phase 6-B2bでPlanner側のDomain実装（B8 orchestration / B9 what-if）を削除した。Search Domainのconstrained enumeratorと
+  `defaultConstrainedEnumerationBounds` はSearch Domain benchmark / testのために残る
 
 ---
 
@@ -521,7 +525,7 @@ defaultPlannerOrchestrationBounds       2 / 1 / 4
 defaultPlannerWhatIfBounds              2 / 8
 defaultCandidateSearchSettings          （recommendedCandidateSearchDefaults 350 / 500 / 1500）
 defaultPlannerOptions                   maxPlanSteps 1000
-旧constrained enumeration / B8 orchestrationの実装（削除していない）
+旧constrained enumeration / B8 orchestrationの実装（削除していない。Phase 6-B2bでPlanner側を削除した）
 Issue #101 / #136 / #122（Closeしない）
 ```
 
@@ -581,11 +585,25 @@ prepare段階のtyped failure（`PlannerConflictScenarioFailureResult`。B9の�
 の作成 / 正規化 / Target解決（`createPlannerStartSearchOrigin()` / `normalizePlannerSearchOrigin()` /
 `resolvePlannerSearchOriginTarget()`）、deterministic materializerの共通core。materialization errorもneutral moduleへ移したが、
 runtime contractは維持した: constructorと `Error.name` は旧 `ConstrainedMaterializationError` のまま、code・message・`instanceof`
-も不変であり、neutral名 `PlannerMaterializationError` は同一constructorのaliasである。旧import pathはPhase 6-B2bまで
-compatibility facadeとして残す。
+も不変であり、neutral名 `PlannerMaterializationError` は同一constructorのaliasである。旧import pathはPhase 6-B2aでは
+compatibility facadeとして残した（Phase 6-B2bで削除）。
 B8 route policy / search identity、B8 materializer adapter、B8 orchestration、B9 what-if計算、bounds / default、warning kind、
 B8保存API、Issue #101 research harness、Phase 6-Aのparity / retry境界test、B8 / B9 benchmark fixtureはlegacy側に残し、neutral
 moduleをimportする形へ変えた。Planner Alternativeのproduction runtimeから `../constrained/` へのimportは0件であり、
 semantics、generated Entry / Candidate ID、search identity、各hash、Production routing、Worker protocol、UI、versionは変えていない
 （移動前後の値はtestで固定し、origin/mainとの結果比較でも一致を確認した）。**Phase 6-B2b**で、`constrained/` に残ったものが
-legacy consumerだけであることを再確認したうえで、それらを削除するかtest oracleとして残すかを決める。
+legacy consumerだけであることを再確認したうえで、test oracleとして残さず削除した（これでPhase 6は完了）。削除したもの:
+B8 orchestration（`createProductionPlanWithConstrainedSearch()`、`PlannerOrchestrationResult` ほか、B8のfull-run budget、B8
+materializer adapter、B8 route policy / search identity）、B9 what-if計算（`createPlannerWhatIfComparison()`、
+`PlannerWhatIfCalculationResult` ほか、B9 rerun budget、legacy wrapper `preparePlannerWhatIfScenario()`）、
+`defaultPlannerOrchestrationBounds` / `defaultPlannerWhatIfBounds`、B8専用warning kind 5種とそのlabel、B8保存API
+（`savePlannerOrchestrationResult()` / `inspectPlannerOrchestrationResultSave()`）と共有保存境界の
+`requireGeneratedEntriesSelected` 分岐・B8専用の `checkProductionPlanBuildListReferences()`、materialization errorの旧import path、
+B8 / B9 benchmark fixture / outcome helper、Issue #101 constrained re-search research harness（page / controller / protocol / Worker /
+Benchmark shellのtab）、Phase 6-Aのparity / retry境界test（schema 17の理由とversion履歴は正式仕様に残す）。B8 API経由の保存境界
+testはordinary保存とPlanner Alternative保存のtestへ移し、Normal Counter conflictのwhat-if regressionはPlanner Alternativeの
+what-ifへ移した。残したもの: 共有primitive（`src/domain/planner/replacement/`）、`BuildListEntryReplacement`、Search Domainの
+constrained enumeratorと `defaultConstrainedEnumerationBounds`（Planner Alternativeの共有shapeとSearch Domain benchmark / validationが
+使う。Search Domain側の型名・API整理は後続のSearch cleanup）、Constrained Enumeration benchmark、Issue #101実ケースfixture
+（`src/benchmarks/issue101PlannerAlternativeFixtures.ts` へ分離。Candidate / BuildListEntry / Conflict IDは移動前の値をtestで固定）、
+historical benchmark記録。semantics、ID / hash、Production routing、Worker protocol、UI、versionは変えていない。

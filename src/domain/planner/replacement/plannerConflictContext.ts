@@ -28,8 +28,8 @@ import {
  * constraint that a later preflight re-associates.
  *
  * It is a shared Planner Domain primitive (Phase 6-B2a, PLANNER_SPEC
- * 9.2.19.16): the Planner Alternative preflight / scenario preparation and the
- * legacy B8 / B9 path both stand on it, and neither owns it.
+ * 9.2.19.16): the Planner Alternative preflight / scenario preparation stands
+ * on it (the legacy B8 / B9 path that also did was removed in Phase 6-B2b).
  *
  * Everything in this module is Planner-Domain, transient, and non-persisted. It
  * is never embedded in a `ProductionPlan` and never handed to the Search Domain
@@ -82,8 +82,8 @@ export interface PlannerConflictParticipantContext {
   physicalActionKey: string
   /**
    * Whether this participant's BuildListEntry carries a selected compromise
-   * checkpoint. No Route replacement search (the Planner Alternative, or the
-   * legacy constrained re-search) ever replaces such an Entry's Route:
+   * checkpoint. No Route replacement search (the Planner Alternative) ever
+   * replaces such an Entry's Route:
    * any alternate Route would drop the checkpoint the user selected
    * (`docs/PLANNER_SPEC.md` 9.5.2).
    */

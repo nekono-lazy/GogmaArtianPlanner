@@ -23,7 +23,10 @@
 9.2.19.14 / 9.2.19.16）。また、本文が `src/domain/planner/constrained/` 配下として記録する共有primitive（conflict context、
 augmented preflight、what-if scenario preparation、conflict work、search originの作成 / 正規化、deterministic materializerの
 共通core）はPhase 6-B2aで `src/domain/planner/replacement/` へ移し、一部を改名した（`PlannerConstrainedConflictContext` ->
-`PlannerConflictContext`、`createConstrainedSearchOriginFromPlannerInput()` -> `createPlannerStartSearchOrigin()` など）。記録本文は
+`PlannerConflictContext`、`createConstrainedSearchOriginFromPlannerInput()` -> `createPlannerStartSearchOrigin()` など）。
+Phase 6-B2bで、Planner側のlegacy B8 orchestration / B9 what-ifのDomain実装（`src/domain/planner/constrained/`）、
+`defaultPlannerOrchestrationBounds` / `defaultPlannerWhatIfBounds`、B8専用warning kind、B8の保存API、Issue #101 research harnessを
+削除し、Phase 6を完了した。Search Domainのconstrained enumeratorと `defaultConstrainedEnumerationBounds` は残る。記録本文は
 書き換えない。
 
 ---

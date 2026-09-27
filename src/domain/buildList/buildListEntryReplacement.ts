@@ -18,12 +18,14 @@ function compareStableStrings(left: string, right: string): number {
  * BuildListEntry `G`.
  *
  * It is runtime metadata only - never a `BuildListEntry` field, never a
- * `PlannerInput` field, never persisted. Inside a B8 / what-if trial it names
- * which Entry of an augmented input is temporary and which persisted Entry it
- * stands in for; on a `PlannerOrchestrationResult` it carries the `G -> O`
- * pairing from the Planner Worker to the save-time transaction, which must see
- * that very `O` - and nothing else - still persisted for the Target before it
- * deletes it. Plain serializable data, so it survives the Worker boundary.
+ * `PlannerInput` field, never persisted. Inside a Planner Alternative trial it
+ * names which Entry of an augmented input is temporary and which persisted
+ * Entry it stands in for; on a Planner Alternative repair artifact it carries
+ * each accepted `O -> G` replacement from the Planner Worker to the save-time
+ * transaction, which must see that very `O` - and nothing else - still
+ * persisted for the Target before it deletes it. Plain serializable data, so
+ * it survives the Worker boundary. (The legacy B8 orchestration result carried
+ * it the same way until Phase 6-B2b removed that path.)
  */
 export interface BuildListEntryReplacement {
   targetWeaponId: TargetWeaponId
@@ -113,7 +115,7 @@ export function sortBuildListEntryReplacements(
  * `entries` is either a persisted collection (the generated Entries are then
  * added) or an augmented collection already holding them (they are then kept
  * where they are, never duplicated). It decides nothing and validates nothing
- * on its own: B8, B9, the ordinary Draft save and the replan adoption all call
+ * on its own: the Planner Alternative trial and the repair save call
  * `validateBuildListEntryReplacements()` on the side of it they hold.
  */
 export function applyBuildListEntryReplacements<T extends Pick<BuildListEntry, 'id'>>(

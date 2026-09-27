@@ -483,25 +483,15 @@ export type PlannerWarningKind =
   | 'calculation_context_incompatible'
   | 'all_targets_already_satisfied'
   | 'invalid_conflict_resolution'
+  /**
+   * The Production `maxPlanSteps` bound of a full Planner run. The Beam Search
+   * oracle's own `maxExpandedStates` bound has no warning kind: its typed
+   * `reachedLimits` alone reports it (Issue #103 Phase D-2b). The legacy B8
+   * orchestration stop kinds were removed with that path (Phase 6-B2b): the
+   * Planner Alternative reports its bound stops and a checkpoint-blocked Target
+   * as typed comparison outcomes, never as warnings (PLANNER_SPEC 9.2.19.13).
+   */
   | 'max_steps_reached'
-  /**
-   * B8 constrained-search orchestration only (PLANNER_SPEC 9.2.16). The four
-   * kinds below report an orchestration or enumeration stop, never silent
-   * exhaustion, and the ordinary `createProductionPlan()` path never produces
-   * them. They are deliberately separate from `max_steps_reached` (the
-   * Production `maxPlanSteps` bound of a single full Planner run) and mean
-   * something else entirely. The Beam Search oracle's own `maxExpandedStates`
-   * bound has no warning kind: its typed `reachedLimits` alone reports it
-   * (Issue #103 Phase D-2b).
-   */
-  | 'max_candidate_trials_per_conflict_reached'
-  | 'max_generated_build_list_entries_reached'
-  /**
-   * B8 constrained-search orchestration only (PLANNER_SPEC 9.5.2): a
-   * conflict participant Target was not re-searched because its BuildListEntry
-   * carries a selected compromise checkpoint that an alternate Route would drop.
-   */
-  | 'selected_checkpoint_blocks_constrained_search'
   /**
    * Planner input fail-closed reasons for selected checkpoints
    * (PLANNER_SPEC 7.5.6 / 7.5.7 / 7.5.8). The first two accompany a validation
@@ -533,8 +523,6 @@ export type PlannerWarningKind =
    * Ideal weapon (`docs/DATA_MODEL.md` 8.1).
    */
   | 'completed_target_excluded'
-  | 'max_planner_reruns_reached'
-  | 'constrained_enumeration_bound_reached'
 
 export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'no_build_list_entries',
@@ -546,11 +534,6 @@ export const plannerWarningKinds: readonly PlannerWarningKind[] = [
   'all_targets_already_satisfied',
   'invalid_conflict_resolution',
   'max_steps_reached',
-  'max_candidate_trials_per_conflict_reached',
-  'max_generated_build_list_entries_reached',
-  'max_planner_reruns_reached',
-  'constrained_enumeration_bound_reached',
-  'selected_checkpoint_blocks_constrained_search',
   'multiple_selected_checkpoint_entries',
   'selected_checkpoint_target_already_ideal',
   'selected_checkpoint_fixes_target_entry',
@@ -575,8 +558,8 @@ export interface PlannerResult {
    * search is a partial Planner artifact, not a finished production plan,
    * and Persistence and UI must be able to tell the two apart without reading
    * a warning message. When several full Planner runs ran - a
-   * runtime-unsupported retry, or a B8 Candidate trial - this is the one whose
-   * result was actually used.
+   * runtime-unsupported retry, or a Planner Alternative Candidate trial - this
+   * is the one whose result was actually used.
    */
   termination: PlannerRunTermination
 }
@@ -604,10 +587,10 @@ export interface PlannerDependencies {
  *
  * - `persisted`: an ordinary Planner input built from the persisted Build
  *   List - the Planner run, the replan Preview, the B10 interaction and the
- *   original input of a B8 / what-if request. At most one BuildListEntry per
+ *   original input of a Planner Alternative request. At most one BuildListEntry per
  *   planning Target; a legacy duplicate fails the whole input closed.
- * - `temporary_augmented`: the preflight input of a B8 constrained re-search
- *   or what-if trial. Each Target of `replacements` holds exactly its persisted
+ * - `temporary_augmented`: the preflight input of a Planner Alternative
+ *   trial. Each Target of `replacements` holds exactly its persisted
  *   Entry `O` and its temporary Entry `G` (persisted 0..1 + temporary 0..1);
  *   every other Target follows the persisted contract. `O` is there only so
  *   that the user's fixed constraints are re-associated against the conflicts
@@ -619,7 +602,7 @@ export interface PlannerDependencies {
  *   runs over it, so a Plan never records an Entry the adoption deletes.
  *
  * Which Entry is temporary is named only by `replacements`, runtime-only
- * metadata the constrained Domain orchestration creates. It is a Domain
+ * metadata the Planner Alternative trial creates. It is a Domain
  * calling-context parameter, never a `PlannerInput` field, never a
  * `BuildListEntry` field, never a Worker request field, and never persisted.
  */
@@ -673,9 +656,9 @@ export type CreateProductionPlanCalculation = (
  * `beforePlannerRun()` is called exactly once immediately before each full
  * Planner run that actually starts (the Production deterministic scheduler, or
  * the runner a test / benchmark injected), including the first one and every
- * runtime-unsupported retry. B8 orchestration counts those calls against
- * `maxPlannerReruns`; the initial conflict preflight is no full Planner run and
- * therefore never reaches this observer.
+ * runtime-unsupported retry. The Planner Alternative counts those calls against
+ * its request-global `maxPlannerReruns`; the initial conflict preflight is no
+ * full Planner run and therefore never reaches this observer.
  *
  * It is semantics-neutral: it must not change Plan generation behaviour. A
  * throw from it propagates unchanged to the caller and is never converted into
@@ -689,10 +672,10 @@ export interface ProductionPlanGenerationObserver {
    * before Trace Replay inspects its result.
    *
    * It is pure observation: nothing in Plan generation branches on it, and it
-   * cannot change which full Planner run starts next. B8 orchestration uses it
-   * so that, when a runtime-unsupported retry is refused by the
-   * `maxPlannerReruns` budget, it can still report the last completed run's
-   * conflicts and warnings with `plan: null` instead of assembling a
+   * cannot change which full Planner run starts next. The Planner Alternative
+   * full-run path (`createPlannerAlternativeFullRunner()`) uses it so that,
+   * when a runtime-unsupported retry is refused by the `maxPlannerReruns`
+   * budget, it can still read the last completed run instead of assembling a
    * ProductionPlan from a run whose Trace Replay never succeeded.
    */
   afterPlannerRun?(result: PlannerRunResult): void

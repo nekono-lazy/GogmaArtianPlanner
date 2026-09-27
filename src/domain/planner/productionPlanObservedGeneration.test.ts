@@ -11,11 +11,6 @@ import {
 import { createValidBuildListEntry } from '../../test/fixtures/domainData'
 import { runtimeUnsupportedFixture } from '../../test/fixtures/plannerRuntimeUnsupported'
 import {
-  createPlannerFullRunBudget,
-  PlannerOrchestrationLimitError,
-} from './constrained/plannerRerunBudget'
-import type { PlannerOrchestrationBounds } from './constrained/plannerOrchestrationBounds'
-import {
   createProductionPlan,
   createProductionPlanWithObserver,
 } from './productionPlanGeneration'
@@ -85,14 +80,6 @@ function countingObserver() {
         state.calls += 1
       },
     },
-  }
-}
-
-function bounds(maxPlannerReruns: number): PlannerOrchestrationBounds {
-  return {
-    maxCandidateTrialsPerConflict: 4,
-    maxGeneratedBuildListEntries: 3,
-    maxPlannerReruns,
   }
 }
 
@@ -184,80 +171,5 @@ describe('Observed Production plan generation boundary', () => {
       }),
     ).rejects.toBe(failure)
     expect(calls).toBe(2)
-  })
-})
-
-describe('maxPlannerReruns full Planner run budget', () => {
-  it('allows the initial ordinary full Planner run under a limit of 1', async () => {
-    const { input, dependencies } = singleBeamFixture()
-    const budget = createPlannerFullRunBudget(bounds(1))
-
-    const result = await createProductionPlanWithObserver(
-      input,
-      dependencies,
-      undefined,
-      budget,
-    )
-
-    expect(result.plan).not.toBeNull()
-    expect(budget.used).toBe(1)
-    expect(budget.limit).toBe(1)
-  })
-
-  it('rejects the retry full Planner run with a typed signal when the limit is 1', async () => {
-    const { input, dependencies } = runtimeUnsupportedFixture()
-    const budget = createPlannerFullRunBudget(bounds(1))
-
-    const rejection = await createProductionPlanWithObserver(
-      input,
-      dependencies,
-      undefined,
-      budget,
-    ).then(
-      () => null,
-      (error: unknown) => error,
-    )
-
-    expect(rejection).toBeInstanceOf(PlannerOrchestrationLimitError)
-    expect((rejection as PlannerOrchestrationLimitError).code).toBe(
-      'max_planner_reruns',
-    )
-    expect((rejection as PlannerOrchestrationLimitError).limit).toBe(1)
-    // The rejected execution never started, so it consumed no budget.
-    expect((rejection as PlannerOrchestrationLimitError).used).toBe(1)
-    expect(budget.used).toBe(1)
-  })
-
-  it('allows the same two-run fixture when the limit is 2', async () => {
-    const { input, dependencies } = runtimeUnsupportedFixture()
-    const budget = createPlannerFullRunBudget(bounds(2))
-
-    const result = await createProductionPlanWithObserver(
-      input,
-      dependencies,
-      undefined,
-      budget,
-    )
-
-    expect(result.plan).not.toBeNull()
-    expect(budget.used).toBe(2)
-  })
-
-  it('counts the initial ordinary full Planner run, so a later run is rejected in isolation', () => {
-    const budget = createPlannerFullRunBudget(bounds(2))
-
-    expect(budget.used).toBe(0)
-    budget.beforePlannerRun()
-    expect(budget.used).toBe(1)
-    budget.beforePlannerRun()
-    expect(budget.used).toBe(2)
-    expect(() => budget.beforePlannerRun()).toThrow(PlannerOrchestrationLimitError)
-    expect(budget.used).toBe(2)
-  })
-
-  it('fails closed on invalid bounds instead of assuming a Production default', () => {
-    expect(() => createPlannerFullRunBudget(bounds(0))).toThrow()
-    expect(() => createPlannerFullRunBudget(bounds(1.5))).toThrow()
-    expect(() => createPlannerFullRunBudget(bounds(Number.NaN))).toThrow()
   })
 })

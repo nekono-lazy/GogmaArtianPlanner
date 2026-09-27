@@ -1615,7 +1615,7 @@ checkpoint関与の判定はcurrent preparationの `checkpointParticipants` か�
   `buildListEntries` で失効判定）を使ってprior fixed Entryとprior除外Route keyを渡す。lineageが `null` なら空である。
   失効判定をUIで再実装しない。what-ifはlineageを読むだけで更新・保存しない
 - 旧 `createWhatIfComparison()`（B9、`defaultPlannerWhatIfBounds`）は生産計画画面から呼ばない（Client method・Worker request kindは
-  Phase 6-B1で削除した。B9のDomain計算本体はPhase 6-B2bまで残る）
+  Phase 6-B1で、B9のDomain計算本体と `defaultPlannerWhatIfBounds` はPhase 6-B2bで削除した）
 
 表示中Planから復元するのは `conflicts[].selectedBuildListEntryId !== null` の選択だけである。
 `recommendedBuildListEntryId`、Planner score、Beam bestState、Target priority、
@@ -1702,7 +1702,7 @@ Planner Alternative actual repair（`PlannerWorkerClient.createPlannerAlternativ
 `plannerInput`（復元したexplicit resolution付き。今回の決定のmergeはDomainが行う）/ `decision` / `lineage`（表示中Draftの
 `conflictRepairLineage`）だけを持ち、探索範囲と試行上限はProduction Worker adapterがWorker内で渡す。旧
 `createConstrainedPlan()`（B8、`defaultPlannerOrchestrationBounds = 2 / 1 / 4`）は生産計画画面から呼ばない（Client method・Worker
-request kindはPhase 6-B1で削除した。B8のDomain計算本体はPhase 6-B2bまで残る）。
+request kindはPhase 6-B1で、B8のDomain計算本体・`defaultPlannerOrchestrationBounds`・B8保存APIはPhase 6-B2bで削除した）。
 
 この再計算の `PlannerInput.options` はfresh inputの `defaultPlannerOptions` のままにせず、
 Application callerが `conflictResolutionPlannerOptions(表示中Plan)`
@@ -1726,8 +1726,10 @@ final scenario runの `termination.status === "incomplete"`（`stopped_by_plan_s
 final scenario resultのwarningsにtyped `warning.kind === 'invalid_conflict_resolution'` が1件でもあれば
 （actual repairは `not_persistable` / `invalid_conflict_resolution` を返す）、`plan !== null` でもfail closedとする。checkpoint競合へのresolutionはDomainがこのwarningで
 拒否するため、同じfail closedがそのまま適用される。選択済みcheckpointを持つTargetの
-Routeを置き換えられない場合の `selected_checkpoint_blocks_constrained_search` は
-再選択を促すwarningであり、Planの保存を妨げない。Persistenceを呼ばず、ProductionPlanも
+Routeを置き換えられない場合は、warningではなくTarget comparison / repair lineageのtyped outcome
+`blocked_by_selected_checkpoint`（11.3の表）として返り、作成リストでの変更または解除を案内する。これはPlanの保存を
+妨げない（旧B8が返していたwarning kind `selected_checkpoint_blocks_constrained_search` はPhase 6-B2bで削除し、現在は
+生成されない）。`invalid_conflict_resolution` の場合はPersistenceを呼ばず、ProductionPlanも
 generated BuildListEntryも保存せず、新Planへ遷移しない。表示中の旧Planを維持し、再選択または
 再計算を促す。warning.messageを解析せず、Planner推奨または別participantへfallbackせず、invalid
 resolutionを無視したordinary Planを保存しない。
