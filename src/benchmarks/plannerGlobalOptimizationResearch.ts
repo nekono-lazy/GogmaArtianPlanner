@@ -20,6 +20,7 @@ import { CandidateSearchError } from '../domain/search/searchTypes'
 import type { CandidateSearchInput, CandidateSearchResult, CandidateSearchSettings } from '../domain/search/searchTypes'
 import { projectGlobalResearchPlan } from './plannerGlobalOptimizationProjection'
 import type { GlobalSearchProfiler, SearchProfile } from './plannerGlobalOptimizationProfile'
+import type { GlobalRawBlockResearch } from './plannerGlobalRawBlocks'
 
 export const GLOBAL_RESEARCH_EXTENT: CandidateSearchSettings = { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 }
 export const GLOBAL_RESEARCH_TIME = '2026-09-27T00:00:00.000Z'
@@ -164,6 +165,8 @@ export interface GlobalResearchOptions extends PlannerExecutionOptions {
   nowMs?: () => number
   onProgress?: (report: GlobalResearchReport) => void
   profiler?: GlobalSearchProfiler
+  rawBlocks?: GlobalRawBlockResearch
+  onSearchResult?: (result: CandidateSearchResult) => void
   /** Copy only: observers cannot mutate the Search input. Never persisted by the app. */
   onSearchInput?: (input: CandidateSearchInput) => void
   /** Observed failures supplied by the caller, never an oracle or an embedded ID. */
@@ -246,7 +249,8 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
       const searchInput: CandidateSearchInput = { ...projected, searchRunId: `research.global.search.${hashStableValue({ target: oldEntry.targetWeaponId, origin: normalizePlannerSearchOrigin(projected, targets.get(oldEntry.targetWeaponId)!), extent })}`,
         targetWeaponId: oldEntry.targetWeaponId, routeFilter: 'all', settings: extent }
       options.onSearchInput?.(structuredClone(searchInput))
-      const engine = observeGlobalResearchReach(dependencies.rngEngine, searchInput, measurement.observedPredictionReach)
+      const raw = options.rawBlocks?.beginSearch(searchInput.targetWeaponId)
+      const engine = observeGlobalResearchReach(raw?.engine ?? dependencies.rngEngine, searchInput, measurement.observedPredictionReach)
       const execution = { shouldCancel: options.shouldCancel, yieldControl: options.yieldControl, now: () => GLOBAL_RESEARCH_TIME, nowMs }
       const observed = options.profiler?.begin(engine, execution, nowMs)
       if (observed) measurement.profile = observed.profile
@@ -260,6 +264,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
         if (measurement.status === 'cancelled') throw error
         continue
       } finally {
+        raw?.end()
         measurement.elapsedMs = nowMs() - searchStart
         report.searchElapsedMs += measurement.elapsedMs
         const reach = measurement.observedPredictionReach
@@ -268,6 +273,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
         publish()
       }
       measurement.searchedRoutes = found.targetResult.searchedRoutes
+      options.onSearchResult?.(structuredClone(found))
       measurement.skippedRoutes = found.targetResult.skippedRoutes
       const candidate = found.targetResult.candidate
       if (!candidate) { measurement.status = found.targetResult.searchedRoutes.length ? 'not_found_within_extent' : 'unavailable'; publish(); continue }

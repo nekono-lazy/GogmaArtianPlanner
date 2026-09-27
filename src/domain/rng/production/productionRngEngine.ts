@@ -15,6 +15,7 @@ import {
   type SkillPredictionResult,
 } from '../rngEngine'
 import { normalizeBaseSeed } from './baseSeed'
+import { readReferenceRngBlock } from './referencePrng'
 import type { KeepFamilyMasterSubset } from '../gogmaBonusFamily'
 import {
   ProductionGogmaResetAvailabilityError,
@@ -77,6 +78,13 @@ function hasUnreadableKeepFamily(currentBonuses: RestorationBonusSet, master: Ke
 export class ProductionRngEngine implements RngEngine {
   readonly version = PRODUCTION_RNG_ENGINE_VERSION
   readonly capabilities = { ...capabilities }
+
+  /** Internal raw-reader seam. Ordinary callers use the unchanged reference reader. */
+  private readonly readGogmaBlock: typeof readReferenceRngBlock
+
+  constructor(readGogmaBlock: typeof readReferenceRngBlock = readReferenceRngBlock) {
+    this.readGogmaBlock = readGogmaBlock
+  }
 
   normalizeSeed(input: string): NormalizedSeed {
     const trimmed = input.trim()
@@ -164,7 +172,7 @@ export class ProductionRngEngine implements RngEngine {
     }
     if (input.operation.type === 'reset_bonuses') {
       requireSupport(this.getPredictionSupport({ type: 'gogma_reset', weaponTypeId: input.weaponTypeId, elementId: input.elementId, master: input.master }), 'gogma_reset')
-      return predictProductionGogmaReset(base).bonuses
+      return predictProductionGogmaReset(base, this.readGogmaBlock).bonuses
     }
     requireSupport(this.getPredictionSupport({ type: 'gogma_keep', weaponTypeId: input.weaponTypeId, elementId: input.elementId, currentBonuses: input.operation.currentBonuses, master: input.master }), 'gogma_keep')
     // The reference predictor reads Gogma-side bonus types only, so the
@@ -173,7 +181,7 @@ export class ProductionRngEngine implements RngEngine {
     return predictReferenceGogmaKeep({
       ...base,
       currentBonuses: toReferenceKeepCurrentBonuses(input.operation.currentBonuses, input.master as KeepFamilyMasterSubset),
-    }).bonuses
+    }, this.readGogmaBlock).bonuses
   }
 
   advanceGogmaCounter(current: number, operation: GogmaOperation): number { void operation; return advanceOneCounter(current, 'Gogma counter') }

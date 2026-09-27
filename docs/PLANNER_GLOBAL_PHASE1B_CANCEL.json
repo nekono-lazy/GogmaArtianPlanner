@@ -1,0 +1,575 @@
+[
+  {
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "focused",
+      "cacheMode": "off",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+      "snapshotSha256": "24d9b5df59e10eb89ffb74093997e77aed8bbf5aefa1b8b6ef35a81b5446dfdf",
+      "timeBudgetMs": 180000
+    },
+    "focus": {
+      "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "snapshotFingerprint": "fnv1a32:cbd941ca",
+      "routeFilter": "all",
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "timeBudgetMs": 180000,
+      "status": "cancelled",
+      "error": "Candidate search was cancelled.",
+      "elapsedMs": 87.29639999999995,
+      "cancelResponseMs": 0.10829999999987194,
+      "routeKind": null,
+      "estimatedOperationCount": null,
+      "advances": null,
+      "candidateFingerprint": null,
+      "searchedRoutes": [],
+      "skippedRoutes": [],
+      "observedPredictionReach": {
+        "normal": 20,
+        "gogma": 20,
+        "skill": 21
+      },
+      "predictionBoundaryReached": {
+        "normal": false,
+        "gogma": false,
+        "skillExisting": false,
+        "skillConversion": false
+      },
+      "profile": {
+        "predictions": {
+          "normal": {
+            "calls": 20,
+            "elapsedMs": 1.17899999999986,
+            "uniqueInputs": 20,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "gogma": {
+            "calls": 218,
+            "elapsedMs": 62.25530000000049,
+            "uniqueInputs": 218,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "skill": {
+            "calls": 21,
+            "elapsedMs": 7.4980999999995674,
+            "uniqueInputs": 21,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          }
+        },
+        "keyObservationMs": 2.7376999999999043,
+        "settledWorkItems": 0,
+        "settledCountExact": false,
+        "progressEvents": 1,
+        "cancellationChecks": 306,
+        "checkpointCount": 300,
+        "yieldCount": 6,
+        "yieldElapsedMs": 0.7574000000001888,
+        "candidateIdentityCalls": 0
+      }
+    },
+    "phase1b": {
+      "rawBlocks": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "requests": 218,
+          "uniqueBlocks": 20,
+          "duplicateRequests": 198,
+          "theoreticalHitRatio": 0.908256880733945,
+          "hits": 0,
+          "misses": 218,
+          "failures": 0,
+          "evictions": 0,
+          "hitRatio": 0,
+          "readerElapsedMs": 58.41640000000075,
+          "missReadElapsedMs": 58.28120000000081,
+          "maxBlockIndex": 3172,
+          "blockIndexDistribution": {
+            "2048..4095": 218
+          },
+          "peakEntries": 0,
+          "rawUint32Count": 0,
+          "approximatePayloadBytes": 0
+        }
+      ],
+      "rawBlockSummary": {
+        "requests": 218,
+        "uniqueBlocks": 20,
+        "duplicateRequests": 198,
+        "theoreticalHitRatio": 0.908256880733945,
+        "hits": 0,
+        "hitRatio": 0,
+        "misses": 218,
+        "failures": 0,
+        "evictions": 0,
+        "readerElapsedMs": 58.41640000000075,
+        "missReadElapsedMs": 58.28120000000081,
+        "peakEntries": 0,
+        "rawUint32Count": 0,
+        "approximatePayloadBytes": 0,
+        "maxBlockIndex": 3172,
+        "blockIndexDistribution": {
+          "2048..4095": 218
+        }
+      },
+      "searchEvidence": [
+        {
+          "resultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        }
+      ],
+      "generatedEntries": [],
+      "finalSelectedEntryIds": [],
+      "planSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "finalResultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultSha256": "446a395b7e8380fa109bd7969e4f340e1169fd69b3aef1bcf288a48368b202ef",
+      "cacheLimit": 20000
+    },
+    "phase1": {
+      "strategy": "phase0",
+      "yieldMode": "immediate",
+      "failedFirstTargetIds": [],
+      "predictionReuse": {
+        "normal": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "gogma": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "skill": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        }
+      },
+      "resultSha256": null
+    },
+    "memory": {
+      "maxRssKiB": 401180,
+      "rss": 397135872,
+      "heapTotal": 310259712,
+      "heapUsed": 182662752,
+      "external": 24707845,
+      "arrayBuffers": 869214,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "cancel": {
+      "requested": true,
+      "responseMs": 2.6573000000000775
+    }
+  },
+  {
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "focused",
+      "cacheMode": "per-search",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+      "snapshotSha256": "24d9b5df59e10eb89ffb74093997e77aed8bbf5aefa1b8b6ef35a81b5446dfdf",
+      "timeBudgetMs": 180000
+    },
+    "focus": {
+      "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "snapshotFingerprint": "fnv1a32:cbd941ca",
+      "routeFilter": "all",
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "timeBudgetMs": 180000,
+      "status": "cancelled",
+      "error": "Candidate search was cancelled.",
+      "elapsedMs": 85.12289999999996,
+      "cancelResponseMs": 0.12249999999994543,
+      "routeKind": null,
+      "estimatedOperationCount": null,
+      "advances": null,
+      "candidateFingerprint": null,
+      "searchedRoutes": [],
+      "skippedRoutes": [],
+      "observedPredictionReach": {
+        "normal": 50,
+        "gogma": 49,
+        "skill": 50
+      },
+      "predictionBoundaryReached": {
+        "normal": false,
+        "gogma": false,
+        "skillExisting": false,
+        "skillConversion": false
+      },
+      "profile": {
+        "predictions": {
+          "normal": {
+            "calls": 50,
+            "elapsedMs": 1.844900000000166,
+            "uniqueInputs": 50,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "gogma": {
+            "calls": 1251,
+            "elapsedMs": 20.833699999996156,
+            "uniqueInputs": 1251,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "skill": {
+            "calls": 50,
+            "elapsedMs": 18.224900000000275,
+            "uniqueInputs": 50,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          }
+        },
+        "keyObservationMs": 8.73969999999963,
+        "settledWorkItems": 100,
+        "settledCountExact": false,
+        "progressEvents": 2,
+        "cancellationChecks": 1479,
+        "checkpointCount": 1450,
+        "yieldCount": 29,
+        "yieldElapsedMs": 2.730899999999565,
+        "candidateIdentityCalls": 0
+      }
+    },
+    "phase1b": {
+      "rawBlocks": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "requests": 1251,
+          "uniqueBlocks": 49,
+          "duplicateRequests": 1202,
+          "theoreticalHitRatio": 0.9608313349320543,
+          "hits": 1202,
+          "misses": 49,
+          "failures": 0,
+          "evictions": 0,
+          "hitRatio": 0.9608313349320543,
+          "readerElapsedMs": 13.180000000001996,
+          "missReadElapsedMs": 12.874900000000025,
+          "maxBlockIndex": 3201,
+          "blockIndexDistribution": {
+            "2048..4095": 1251
+          },
+          "peakEntries": 49,
+          "rawUint32Count": 490,
+          "approximatePayloadBytes": 1960
+        }
+      ],
+      "rawBlockSummary": {
+        "requests": 1251,
+        "uniqueBlocks": 49,
+        "duplicateRequests": 1202,
+        "theoreticalHitRatio": 0.9608313349320543,
+        "hits": 1202,
+        "hitRatio": 0.9608313349320543,
+        "misses": 49,
+        "failures": 0,
+        "evictions": 0,
+        "readerElapsedMs": 13.180000000001996,
+        "missReadElapsedMs": 12.874900000000025,
+        "peakEntries": 49,
+        "rawUint32Count": 490,
+        "approximatePayloadBytes": 1960,
+        "maxBlockIndex": 3201,
+        "blockIndexDistribution": {
+          "2048..4095": 1251
+        }
+      },
+      "searchEvidence": [
+        {
+          "resultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        }
+      ],
+      "generatedEntries": [],
+      "finalSelectedEntryIds": [],
+      "planSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "finalResultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultSha256": "446a395b7e8380fa109bd7969e4f340e1169fd69b3aef1bcf288a48368b202ef",
+      "cacheLimit": 20000
+    },
+    "phase1": {
+      "strategy": "phase0",
+      "yieldMode": "immediate",
+      "failedFirstTargetIds": [],
+      "predictionReuse": {
+        "normal": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "gogma": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "skill": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        }
+      },
+      "resultSha256": null
+    },
+    "memory": {
+      "maxRssKiB": 402952,
+      "rss": 402477056,
+      "heapTotal": 314716160,
+      "heapUsed": 232615472,
+      "external": 24707845,
+      "arrayBuffers": 869214,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "cancel": {
+      "requested": true,
+      "responseMs": 2.6194000000000415
+    }
+  },
+  {
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "focused",
+      "cacheMode": "run",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+      "snapshotSha256": "24d9b5df59e10eb89ffb74093997e77aed8bbf5aefa1b8b6ef35a81b5446dfdf",
+      "timeBudgetMs": 180000
+    },
+    "focus": {
+      "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "snapshotFingerprint": "fnv1a32:cbd941ca",
+      "routeFilter": "all",
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "timeBudgetMs": 180000,
+      "status": "cancelled",
+      "error": "Candidate search was cancelled.",
+      "elapsedMs": 83.9806000000001,
+      "cancelResponseMs": 0.11369999999999436,
+      "routeKind": null,
+      "estimatedOperationCount": null,
+      "advances": null,
+      "candidateFingerprint": null,
+      "searchedRoutes": [],
+      "skippedRoutes": [],
+      "observedPredictionReach": {
+        "normal": 43,
+        "gogma": 42,
+        "skill": 43
+      },
+      "predictionBoundaryReached": {
+        "normal": false,
+        "gogma": false,
+        "skillExisting": false,
+        "skillConversion": false
+      },
+      "profile": {
+        "predictions": {
+          "normal": {
+            "calls": 43,
+            "elapsedMs": 2.1126999999995633,
+            "uniqueInputs": 43,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "gogma": {
+            "calls": 929,
+            "elapsedMs": 20.84860000000083,
+            "uniqueInputs": 929,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "skill": {
+            "calls": 43,
+            "elapsedMs": 19.547099999999887,
+            "uniqueInputs": 43,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          }
+        },
+        "keyObservationMs": 7.894099999997593,
+        "settledWorkItems": 100,
+        "settledCountExact": false,
+        "progressEvents": 2,
+        "cancellationChecks": 1122,
+        "checkpointCount": 1100,
+        "yieldCount": 22,
+        "yieldElapsedMs": 2.803000000000111,
+        "candidateIdentityCalls": 0
+      }
+    },
+    "phase1b": {
+      "rawBlocks": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "requests": 929,
+          "uniqueBlocks": 42,
+          "duplicateRequests": 887,
+          "theoreticalHitRatio": 0.9547900968783638,
+          "hits": 887,
+          "misses": 42,
+          "failures": 0,
+          "evictions": 0,
+          "hitRatio": 0.9547900968783638,
+          "readerElapsedMs": 13.421199999999885,
+          "missReadElapsedMs": 13.119300000000067,
+          "maxBlockIndex": 3194,
+          "blockIndexDistribution": {
+            "2048..4095": 929
+          },
+          "peakEntries": 42,
+          "rawUint32Count": 420,
+          "approximatePayloadBytes": 1680
+        }
+      ],
+      "rawBlockSummary": {
+        "requests": 929,
+        "uniqueBlocks": 42,
+        "duplicateRequests": 887,
+        "theoreticalHitRatio": 0.9547900968783638,
+        "hits": 887,
+        "hitRatio": 0.9547900968783638,
+        "misses": 42,
+        "failures": 0,
+        "evictions": 0,
+        "readerElapsedMs": 13.421199999999885,
+        "missReadElapsedMs": 13.119300000000067,
+        "peakEntries": 42,
+        "rawUint32Count": 420,
+        "approximatePayloadBytes": 1680,
+        "maxBlockIndex": 3194,
+        "blockIndexDistribution": {
+          "2048..4095": 929
+        }
+      },
+      "searchEvidence": [
+        {
+          "resultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        }
+      ],
+      "generatedEntries": [],
+      "finalSelectedEntryIds": [],
+      "planSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "finalResultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultSha256": "446a395b7e8380fa109bd7969e4f340e1169fd69b3aef1bcf288a48368b202ef",
+      "cacheLimit": 20000
+    },
+    "phase1": {
+      "strategy": "phase0",
+      "yieldMode": "immediate",
+      "failedFirstTargetIds": [],
+      "predictionReuse": {
+        "normal": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "gogma": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "skill": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        }
+      },
+      "resultSha256": null
+    },
+    "memory": {
+      "maxRssKiB": 401896,
+      "rss": 400818176,
+      "heapTotal": 313667584,
+      "heapUsed": 216378112,
+      "external": 24707845,
+      "arrayBuffers": 869214,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "cancel": {
+      "requested": true,
+      "responseMs": 2.881399999999985
+    }
+  }
+]

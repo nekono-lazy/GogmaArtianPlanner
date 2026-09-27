@@ -50,7 +50,7 @@ function requireNonNegativeSafeInteger(value: number, label: string): void {
   }
 }
 
-function referenceGogmaBlock(input: ReferenceGogmaPredictionInput): {
+function referenceGogmaBlock(input: ReferenceGogmaPredictionInput, readBlock: typeof readReferenceRngBlock): {
   effectiveBlock: number
   rawValues: readonly number[]
 } {
@@ -60,7 +60,7 @@ function referenceGogmaBlock(input: ReferenceGogmaPredictionInput): {
     ? 0
     : input.gogmaCounter
   const seed = deriveGogmaSeed(input.baseSeed, input.weaponTypeId, input.elementId)
-  return { effectiveBlock, rawValues: readReferenceRngBlock(seed, effectiveBlock).values }
+  return { effectiveBlock, rawValues: readBlock(seed, effectiveBlock).values }
 }
 
 function predictReferenceGogmaSlots(
@@ -104,8 +104,8 @@ export function predictProductionGogmaResetSlotsFromRawValues(
 }
 
 /** Reset ignores the prior set and redraws all five slots from the fixed pool. */
-export function predictReferenceGogmaReset(input: ReferenceGogmaPredictionInput): ReferenceGogmaPredictionResult {
-  const { effectiveBlock, rawValues } = referenceGogmaBlock(input)
+export function predictReferenceGogmaReset(input: ReferenceGogmaPredictionInput, readBlock = readReferenceRngBlock): ReferenceGogmaPredictionResult {
+  const { effectiveBlock, rawValues } = referenceGogmaBlock(input, readBlock)
   return {
     bonuses: predictReferenceGogmaSlots(rawValues, () => REFERENCE_GOGMA_RESET_CANDIDATES),
     effectiveBlock,
@@ -121,8 +121,9 @@ export function predictReferenceGogmaReset(input: ReferenceGogmaPredictionInput)
  */
 export function predictProductionGogmaReset(
   input: ReferenceGogmaPredictionInput,
+  readBlock = readReferenceRngBlock,
 ): ReferenceGogmaPredictionResult {
-  const { effectiveBlock, rawValues } = referenceGogmaBlock(input)
+  const { effectiveBlock, rawValues } = referenceGogmaBlock(input, readBlock)
   const candidates = productionGogmaResetCandidatesForWeaponAndElement(
     input.weaponTypeId,
     input.elementId,
@@ -143,14 +144,14 @@ function requireReferenceKeepFamily(bonus: RestorationBonusSet[number]): Referen
 }
 
 /** Keep redraws every slot from the explicit current slot's reference family. */
-export function predictReferenceGogmaKeep(input: ReferenceGogmaKeepPredictionInput): ReferenceGogmaPredictionResult {
+export function predictReferenceGogmaKeep(input: ReferenceGogmaKeepPredictionInput, readBlock = readReferenceRngBlock): ReferenceGogmaPredictionResult {
   if (!Array.isArray(input.currentBonuses) || input.currentBonuses.length !== 5) {
     throw new RangeError('Keep current bonuses must contain exactly five slots')
   }
   // Keep reads only the family of each current slot; the draw pool itself
   // stays the unchanged reference family candidate order.
   const currentFamilies = input.currentBonuses.map(requireReferenceKeepFamily)
-  const { effectiveBlock, rawValues } = referenceGogmaBlock(input)
+  const { effectiveBlock, rawValues } = referenceGogmaBlock(input, readBlock)
   return {
     bonuses: predictReferenceGogmaSlots(
       rawValues,

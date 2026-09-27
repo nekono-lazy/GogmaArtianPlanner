@@ -3,6 +3,7 @@ import type { RngEngine } from '../domain/rng/rngEngine'
 import { searchCandidates } from '../domain/search/candidateSearch'
 import { CandidateSearchError, type CandidateSearchInput, type CandidateSearchResult, type CandidateRouteFilter, type CandidateSearchSettings } from '../domain/search/searchTypes'
 import { GlobalSearchProfiler } from './plannerGlobalOptimizationProfile'
+import type { GlobalRawBlockResearch } from './plannerGlobalRawBlocks'
 import { GLOBAL_RESEARCH_TIME, observeGlobalResearchReach } from './plannerGlobalOptimizationResearch'
 
 export interface FocusOptions {
@@ -12,6 +13,8 @@ export interface FocusOptions {
   shouldCancel?: () => boolean
   yieldControl?: () => Promise<void>
   nowMs?: () => number
+  rawBlocks?: GlobalRawBlockResearch
+  onResult?: (result: CandidateSearchResult | null) => void
 }
 
 /** Each experiment owns a deep copy. No prior Candidate, result, or changed
@@ -29,7 +32,8 @@ export async function runGlobalResearchFocus(snapshot: CandidateSearchInput, eng
   let cancelObservedAt: number | null = null
   const reach = { normal: 0, gogma: 0, skill: 0 }
   const profiler = new GlobalSearchProfiler()
-  const observed = profiler.begin(observeGlobalResearchReach(engine, input, reach), {
+  const raw = options.rawBlocks?.beginSearch(input.targetWeaponId)
+  const observed = profiler.begin(observeGlobalResearchReach(raw?.engine ?? engine, input, reach), {
     now: () => GLOBAL_RESEARCH_TIME, nowMs, yieldControl: options.yieldControl,
     shouldCancel: () => {
       if (options.shouldCancel?.()) { cancelObservedAt ??= nowMs(); return true }
@@ -47,9 +51,10 @@ export async function runGlobalResearchFocus(snapshot: CandidateSearchInput, eng
     status = caught instanceof CandidateSearchError && caught.code === 'cancelled'
       ? deadlineReachedAt !== null ? 'time_budget_reached' : 'cancelled' : 'search_error'
     error = caught instanceof Error ? caught.message : String(caught)
-  }
+  } finally { raw?.end() }
   const candidate = result?.targetResult.candidate ?? null
   const end = nowMs()
+  options.onResult?.(structuredClone(result))
   return {
     targetId: input.targetWeaponId, snapshotFingerprint: hashStableValue(snapshot), routeFilter: input.routeFilter, extent: input.settings,
     timeBudgetMs: options.timeBudgetMs, status, error, elapsedMs: end - start,
