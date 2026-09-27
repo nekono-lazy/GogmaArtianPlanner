@@ -9,39 +9,39 @@ import type {
   PlannerAlternativeWhatIfCalculationResult,
   PlannerAlternativeWhatIfInput,
   PlannerInput,
-  PlannerOrchestrationBounds,
-  PlannerOrchestrationResult,
   PlannerWarning,
-  PlannerWhatIfCalculationResult,
-  PlannerWhatIfRequest,
   PlannerWorkerRequest,
   PlannerWorkerResponse,
 } from '../domain/planner'
 import type { WorkerResultResponse, WorkerTaskRequest } from './contracts'
 
 /**
- * The B8-D1 Worker-layer protocol for Planner-driven constrained re-search
- * (PLANNER_SPEC 9.2.6, 14).
+ * The Worker-layer Planner protocol beside the ordinary `PlannerWorkerRequest`
+ * (PLANNER_SPEC 14, 9.2.19.7 / 9.2.19.8).
  *
- * It lives in the Worker layer rather than in `plannerTypes.ts` on purpose.
- * `PlannerOrchestrationResult` belongs to `domain/planner/constrained`, so
+ * It lives in the Worker layer rather than in `plannerTypes.ts` on purpose: the
+ * Planner Alternative results belong to `domain/planner/alternative`, so
  * declaring this protocol beside the ordinary `PlannerWorkerRequest` would make
- * the Planner foundation module import its own constrained sub-module. The
- * Domain never imports a Worker module, so the dependency only ever points
- * Worker -> Domain here.
+ * the Planner foundation module import its own sub-modules. The Domain never
+ * imports a Worker module, so the dependency only ever points Worker -> Domain
+ * here.
  *
- * The ordinary `create_plan` / `create_plan_result` protocol is untouched: this
- * is an additional request kind, and `cancel` and `error` stay shared between
- * both kinds. No request kind has a progress response (Issue #103 Phase D-2a):
- * the Production UI shows an indeterminate running state. The Domain request/response shapes are reused
- * verbatim and only extended with the wire-level task generation below.
+ * The calculation request kinds are `create_plan`,
+ * `create_planner_alternative_comparison`, `create_planner_alternative_repair`
+ * and `prepare_interaction`, and `cancel` and `error` stay shared between them.
+ * The legacy B8 constrained re-search and B9 what-if request kinds were removed
+ * in Phase 6-B1 (`docs/PLANNER_SPEC.md` 9.2.19.16) once no
+ * Production consumer sent them. No request kind has a progress response
+ * (Issue #103 Phase D-2a): the Production UI shows an indeterminate running
+ * state. The Domain request/response shapes are reused verbatim and only
+ * extended with the wire-level task generation below.
  */
 
 /**
  * The task instance a wire message belongs to.
  *
- * `requestId` stays the *logical* id, shared by the ordinary and constrained
- * kinds exactly as before. It cannot identify a running calculation on its own:
+ * `requestId` stays the *logical* id, shared by every request kind exactly as
+ * before. It cannot identify a running calculation on its own:
  * `postMessage()` is asynchronous, so re-using an id replaces the Client's
  * pending Promise while the Worker may still be running - and may still finish
  * - the calculation the replaced Promise belonged to. Its result would then
@@ -54,7 +54,7 @@ import type { WorkerResultResponse, WorkerTaskRequest } from './contracts'
  * an error.
  *
  * It is runtime-only wire metadata: a plain number, never part of
- * `PlannerInput`, `PlannerResult`, `PlannerOrchestrationResult`, any Domain
+ * `PlannerInput`, `PlannerResult`, a Planner Alternative result, any Domain
  * entity, or persistence.
  */
 export interface PlannerTaskGeneration {
@@ -108,48 +108,18 @@ export type PlannerInteractionWorkerResultResponse = WorkerResultResponse<
 > &
   PlannerTaskGeneration
 
-/**
- * Everything the constrained request structured-clones.
- *
- * `PlannerOrchestrationBounds` is caller-required (PLANNER_SPEC 9.2.16). B8-E2b
- * decided a Production default (`defaultPlannerOrchestrationBounds`), but the
- * Worker never applies it, so the bounds must still cross the Worker boundary
- * explicitly. `ConstrainedEnumerationBounds` deliberately does *not*
- * appear here - the Production Worker adapter supplies the B8-B2
- * `defaultConstrainedEnumerationBounds` inside the Worker boundary, so an
- * Application caller never restates a Search-domain extent.
- */
-export interface PlannerConstrainedWorkerTaskInput {
-  plannerInput: PlannerInput
-  orchestrationBounds: PlannerOrchestrationBounds
-}
-
 export type PlannerOrdinaryWorkerRequest = Extract<
   PlannerWorkerRequest,
   { type: 'create_plan' }
 > &
   PlannerTaskGeneration
 
-export type PlannerConstrainedWorkerRequest = WorkerTaskRequest<
-  'create_constrained_plan',
-  PlannerConstrainedWorkerTaskInput
-> &
-  PlannerTaskGeneration
-
-/** The B9 public request crosses the wire verbatim; enumeration bounds do not. */
-export type PlannerWhatIfWorkerRequest = WorkerTaskRequest<
-  'create_what_if_comparison',
-  PlannerWhatIfRequest
-> &
-  PlannerTaskGeneration
-
 /**
  * The Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md` 9.2.19.7):
- * a separate request kind from the legacy B9 `create_what_if_comparison`. It
- * is the Production Plan screen's 「比較する」 since Phase 5-B; the legacy kind
- * stays until Phase 6. The extent and the trial bounds do not cross the wire:
- * the Production Worker adapter supplies the Domain defaults inside the Worker
- * boundary (9.2.19.12).
+ * the Production Plan screen's 「比較する」 since Phase 5-B, and its only
+ * comparison request since Phase 6-B1 removed the legacy B9 what-if kind. The
+ * extent and the trial bounds do not cross the wire: the Production Worker
+ * adapter supplies the Domain defaults inside the Worker boundary (9.2.19.12).
  */
 export type PlannerAlternativeComparisonWorkerRequest = WorkerTaskRequest<
   'create_planner_alternative_comparison',
@@ -159,8 +129,8 @@ export type PlannerAlternativeComparisonWorkerRequest = WorkerTaskRequest<
 
 /**
  * The Planner Alternative actual repair (Phase 5-B, `docs/PLANNER_SPEC.md`
- * 9.2.19.8): the Production Plan screen's 「この候補を優先」, beside the legacy
- * B8 `create_constrained_plan` (kept until Phase 6). The wire input is the
+ * 9.2.19.8): the Production Plan screen's 「この候補を優先」 (the legacy B8
+ * constrained re-search kind was removed in Phase 6-B1). The wire input is the
  * caller input only - fresh PlannerInput, this decision, the displayed Draft's
  * lineage; the extent and the trial bounds are supplied inside the Worker by
  * the Production adapter. It only calculates: saving the artifact is the
@@ -185,18 +155,6 @@ export type PlannerOrdinaryWorkerResultResponse = Extract<
 > &
   PlannerTaskGeneration
 
-export type PlannerConstrainedWorkerResultResponse = WorkerResultResponse<
-  'create_constrained_plan_result',
-  PlannerOrchestrationResult
-> &
-  PlannerTaskGeneration
-
-export type PlannerWhatIfWorkerResultResponse = WorkerResultResponse<
-  'create_what_if_comparison_result',
-  PlannerWhatIfCalculationResult
-> &
-  PlannerTaskGeneration
-
 export type PlannerAlternativeComparisonWorkerResultResponse = WorkerResultResponse<
   'create_planner_alternative_comparison_result',
   PlannerAlternativeWhatIfCalculationResult
@@ -215,11 +173,9 @@ export type PlannerWorkerErrorResponse = Extract<
 > &
   PlannerTaskGeneration
 
-/** All six Planner request kinds share one task namespace. */
+/** The four Planner calculation request kinds and `cancel` share one task namespace. */
 export type PlannerWorkerProtocolRequest =
   | PlannerOrdinaryWorkerRequest
-  | PlannerConstrainedWorkerRequest
-  | PlannerWhatIfWorkerRequest
   | PlannerAlternativeComparisonWorkerRequest
   | PlannerAlternativeRepairWorkerRequest
   | PlannerInteractionWorkerRequest
@@ -228,8 +184,6 @@ export type PlannerWorkerProtocolRequest =
 /** All Planner results share the existing `error` response; there is no progress response. */
 export type PlannerWorkerProtocolResponse =
   | PlannerOrdinaryWorkerResultResponse
-  | PlannerConstrainedWorkerResultResponse
-  | PlannerWhatIfWorkerResultResponse
   | PlannerAlternativeComparisonWorkerResultResponse
   | PlannerAlternativeRepairWorkerResultResponse
   | PlannerInteractionWorkerResultResponse

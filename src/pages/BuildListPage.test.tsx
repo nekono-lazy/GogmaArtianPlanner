@@ -84,10 +84,6 @@ function createPlannerClient(
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     // Phase 6-A: the page runs the ordinary Planner only.
     createPlan: vi.fn(async () => result),
-    createConstrainedPlan: vi.fn(async () => {
-      throw new Error('The Build List never runs the legacy constrained Planner path.')
-    }),
-    createWhatIfComparison: vi.fn(),
     createPlannerAlternativeComparison: vi.fn(),
     createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(),
@@ -215,8 +211,10 @@ describe('BuildListPage', () => {
       rngEngineVersion: client.engineVersion,
     }))
     expect(client.createPlan).toHaveBeenCalledOnce()
-    // Phase 6-A: the legacy B8 orchestration is no longer part of this page's path.
-    expect(client.createConstrainedPlan).not.toHaveBeenCalled()
+    // Phase 6-A: the ordinary Planner is the only calculation this page's path
+    // reaches (the legacy B8 Client method was removed in Phase 6-B1).
+    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
+    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
 
     const call = vi.mocked(client.createPlan).mock.calls[0]
     // No orchestration bounds and no progress callback reach the Client.

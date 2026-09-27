@@ -1046,7 +1046,9 @@ B8-Aで確定した契約である。実装はB8-B1で行う。Planner側の契�
 時間を払い、巨戟化を常にorigin Skill Counterで組み立てるため共有Skill位置の競合を解決できないことが確認された。
 本節は5.6.8のPlanner Alternative Searchへ段階的に置き換える対象であり、Production routingを切り替えるまで
 （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14のPhase 5）はlegacy implementationとしてそのまま動作した。Phase 5-Bで
-生産計画画面の「比較する」と「この候補を優先」は5.6.8へ切り替わった。本節の実装はPhase 6で削除またはtest oracle化するまで残る。
+生産計画画面の「比較する」と「この候補を優先」は5.6.8へ切り替わった。Phase 6-B1でB8 / B9のPlanner Worker / Client経路と
+Browser benchmark runtimeを削除した。本節の実装（Search Domainのconstrained enumeratorとそのBrowser benchmark）はPhase 6-B2で
+削除またはtest oracle化するまで残る。
 本節のboundsを拡大して新機能のauthorityにしない。
 
 #### 境界

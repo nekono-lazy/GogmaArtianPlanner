@@ -1,23 +1,38 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateBuildListEntryStaleness } from '../domain/buildList'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
-import { createProductionPlannerDependencies, preparePlannerInitialContext, validatePlannerInput } from '../domain/planner'
+import {
+  createPlannerWhatIfComparison,
+  createProductionPlannerDependencies,
+  preparePlannerInitialContext,
+  validatePlannerInput,
+  type PlannerWhatIfRequest,
+} from '../domain/planner'
 import { preparePlannerWhatIfScenario } from '../domain/planner/constrained/plannerWhatIfScenario'
 import { ProductionRngEngine } from '../domain/rng/production/productionRngEngine'
 import { defaultConstrainedEnumerationBounds, enumerateConstrainedCandidates } from '../domain/search'
 import { validateTargetIdealImpliesPractical } from '../domain/target'
-import { createProductionPlannerWhatIfComparison } from '../workers/planner.worker.production'
 import { createPlannerWhatIfBenchmarkFixture, plannerWhatIfBenchmarkWorkloads } from './plannerWhatIfBenchmarkFixtures'
 import { createPlannerWhatIfBenchmarkOutcome } from './plannerWhatIfBenchmarkOutcome'
 
 const dependencies = () => createProductionPlannerDependencies(new ProductionRngEngine())
+/**
+ * The B9 Domain calculation with the Production enumeration extent, exactly as
+ * the Production Worker adapter supplied it until Phase 6-B1 removed that
+ * adapter (`docs/PLANNER_SPEC.md` 9.2.19.16). The B9 Domain calculation and
+ * these fixtures stay until Phase 6-B2.
+ */
+const runB9WhatIfComparison = (request: PlannerWhatIfRequest) =>
+  createPlannerWhatIfComparison(request, dependencies(), {
+    enumerationBounds: defaultConstrainedEnumerationBounds,
+  })
 const bounds = (trials: number, reruns: number) => ({ maxCandidateTrialsPerTarget: trials, maxPlannerReruns: reruns })
 function request(id: string, trials: number, reruns: number) {
   const fixture = createPlannerWhatIfBenchmarkFixture(id)
   return { plannerInput: fixture.plannerInput, scenarioResolution: fixture.scenarioResolution, bounds: bounds(trials, reruns) }
 }
 async function calculate(id: string, trials: number, reruns: number) {
-  const result = await createProductionPlannerWhatIfComparison(request(id, trials, reruns), dependencies())
+  const result = await runB9WhatIfComparison(request(id, trials, reruns))
   expect(result.status).toBe('completed')
   if (result.status !== 'completed') throw new Error(`Fixture failed: ${result.status}`)
   return result
@@ -149,7 +164,7 @@ describe('B9 Production-valid benchmark fixtures', () => {
     const prepared = preparePlannerWhatIfScenario(input, dependencies())
     if (prepared.status !== 'ready') throw new Error('Invalid scenario')
     expect(prepared.scenario.fixedConstraints).toHaveLength(2)
-    const result = await createProductionPlannerWhatIfComparison(input, dependencies())
+    const result = await runB9WhatIfComparison(input)
     expect(result.status).toBe('completed')
     expect(input).toEqual(before)
     const outcome = createPlannerWhatIfBenchmarkOutcome(result)

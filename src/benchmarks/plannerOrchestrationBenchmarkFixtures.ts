@@ -49,6 +49,13 @@ import {
 /**
  * B8-E1 Planner orchestration Browser benchmark fixtures.
  *
+ * Phase 6-B1 (`docs/PLANNER_SPEC.md` 9.2.19.16) removed the Browser harness
+ * and the Production Worker request kind these fixtures were measured through;
+ * the recorded measurements stay in
+ * `docs/B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md`. The fixtures stay
+ * as Domain test input of the B8 orchestration until Phase 6-B2 decides the
+ * fate of that Domain calculation.
+ *
  * Every workload is Production-valid: the RNG state constants are the B5 /
  * B8-B2 ones, and every restoration bonus set, Skill pair, and Candidate result
  * in a fixture comes from the unmodified `ProductionRngEngine`. No Fake Engine
@@ -194,7 +201,8 @@ function targetSpec(
  * Two Targets whose Routes touch disjoint streams - one Gogma amendment at the
  * starting Gogma Counter, one conversion at the starting Normal and Skill
  * positions - so the initial Planner run detects no conflict at all, and no
- * explicit resolution exists. `createConstrainedPlan()` therefore performs
+ * explicit resolution exists. The B8 orchestration
+ * (`createProductionPlanWithConstrainedSearch()`) therefore performs
  * exactly one ordinary Production Planner run and stops: no enumeration, no
  * materialization, no preflight, no rerun, and no B8 orchestration warning.
  */

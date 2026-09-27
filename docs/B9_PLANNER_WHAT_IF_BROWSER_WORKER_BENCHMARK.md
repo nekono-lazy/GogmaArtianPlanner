@@ -2,6 +2,14 @@
 
 作成日: 2026-09-09
 
+> **現状（Issue #136 / #101 Phase 6-B1）:** 本書は過去の設計判断と実測の記録である。本書が計測した
+> Production Worker経路（`PlannerWorkerClient.createWhatIfComparison()`、Worker request kind `create_what_if_comparison`、
+> `createProductionPlannerWhatIfComparison()`）と、本書のharness（`plannerWhatIfBrowserBenchmark.ts`、
+> `PlannerWhatIfBenchmarkPage.tsx`、Benchmark shellの「B9 What-if」）はPhase 6-B1で削除した
+> （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14 / 9.2.19.16）。「比較する」は現在Planner Alternative
+> （`createPlannerAlternativeComparison()`）である。B9 what-ifのDomain計算本体、`defaultPlannerWhatIfBounds` とfixtureは
+> Phase 6-B2で整理するまで残る。以下の手順・数値は当時のまま変更しない。
+
 ## Status
 
 ```text

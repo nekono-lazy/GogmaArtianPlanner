@@ -3657,7 +3657,7 @@ every resolution. Nothing is persisted: `ProductionPlan.conflictRepairLineage`, 
 Client, Production routing, migrations and versions are Phase 5-B, which switches the what-if and the repair together.
 No version moved (15 / 9 / 12).
 Phase 5-B (Production routing, Persistence, lineage persistence and migrations) is complete, so Phase 5 is complete;
-Phase 6 (the legacy path) followed, split into 6-A and 6-B (see below). `ProductionPlan.conflictRepairLineage: PlannerConflictRepairLineage | null` is a
+Phase 6 (the legacy path) followed, split into 6-A, 6-B1 and 6-B2 (see below). `ProductionPlan.conflictRepairLineage: PlannerConflictRepairLineage | null` is a
 persisted field: `validateProductionPlan()` / `validatePlannerConflictRepairLineage()` check its structure, literals, ID
 forms and `outcome === 'replaced'` iff a replacement ID, and never its Entry / Target IDs as current foreign keys; a
 missing field is no current body. Plan generation writes `null` (the ordinary Planner, the replan Preview / adoption and
@@ -3690,13 +3690,14 @@ body comparison), the Worker request carries no source ID, and the B8 save has n
 `derivePlannerConflictRepairLineageContext(displayedPlan.conflictRepairLineage, freshInput.buildListEntries)`) and
 「この候補を優先」 to `createPlannerAlternativeRepair()` (its own fresh input, the decision unmerged - the Domain merges it - and
 the displayed lineage), then the repair save through `usePlanBreakingChangeApproval()`; it never calls
-`createWhatIfComparison()` / `createConstrainedPlan()`, which stay on the Client with the B8 / B9 Worker kinds and defaults
-until Phase 6 (the replan Preview and the Build List keep their own paths). A `not_persistable` repair or a typed preparation
+`createWhatIfComparison()` / `createConstrainedPlan()`, which stayed on the Client with the B8 / B9 Worker kinds and defaults
+until Phase 6-B1 removed them (the replan Preview and the Build List kept their own paths until Phase 6-A). A `not_persistable` repair or a typed preparation
 failure saves nothing and shows its typed comparison; the minimal presentation (`ProductionPlanAlternativeComparison`,
 `presentProductionPlanAlternative.ts`) tells the five no-result statuses, `adoptedInScenario` true / false / null and the four
 scenario statuses apart, in text. The Phase 7 / Issue #122 redesign is not done.
-Phase 6 is split into 6-A and 6-B (`docs/PLANNER_SPEC.md` 9.2.19.16). Phase 6-A (the Production consumers' separation from the
-legacy B8 path) is complete; Phase 6 as a whole is not. After Phase 5-B the Build List's ordinary 「生産計画を作成」 and the
+Phase 6 is split into 6-A, 6-B1 and 6-B2 (`docs/PLANNER_SPEC.md` 9.2.19.14 / 9.2.19.16). Phase 6-A (the Production consumers'
+separation from the legacy B8 path) and Phase 6-B1 (the dead public runtime surface removal, below) are complete; Phase 6 as a
+whole is not complete until 6-B2. After Phase 5-B the Build List's ordinary 「生産計画を作成」 and the
 running Plan's replan Preview (16.8) still called `createConstrainedPlan()` with `defaultPlannerOrchestrationBounds`, but both hand
 the Planner a fresh current-state input with `conflictResolutions = []` - neither restores a saved Plan's resolution, baseSnapshot,
 past input or repair lineage - so by 9.2.7 B8 only ran its initial ordinary Planner run and returned it. Both now call the ordinary
@@ -3727,8 +3728,33 @@ never ported to the ordinary Planner to fake parity. The Production Plan screen'
 enumeration / orchestration and B9 what-if calculations, `defaultConstrainedEnumerationBounds` / `defaultPlannerOrchestrationBounds` /
 `defaultPlannerWhatIfBounds`, the B8-only warning kinds, `savePlannerOrchestrationResult()` / `inspectPlannerOrchestrationResultSave()`,
 the B8 / B9 / Issue #101 benchmark harnesses / pages / records and the shared primitives under `constrained/` all stay, but no ordinary
-Application runtime path calls them any more (their consumers are benchmarks and tests). Phase 6-B re-audits those consumers and then
-deletes the legacy path or keeps it as a test oracle, relocating the shared primitives by the actual import graph.
+Application runtime path calls them any more (their consumers are benchmarks and tests).
+Phase 6-B is split into 6-B1 and 6-B2 because the Planner Alternative still imports shared primitives from
+`src/domain/planner/constrained/` (`plannerAugmentedPreflight`, `plannerWhatIfScenario`, the `PlannerConflictWork` helpers, the
+deterministic materializer core, the constrained search origin normalization / Target resolution), so removing the public runtime
+surface and reorganizing the Domain never share one PR. Phase 6-B1 (complete) re-audited the local import graph - no normal
+Application runtime consumer of the legacy B8 / B9 path - and removed only what Production no longer reaches: the Worker kinds
+`create_constrained_plan` / `create_constrained_plan_result` and `create_what_if_comparison` / `create_what_if_comparison_result`
+(with `PlannerConstrainedWorkerTaskInput` and the request / response types), `PlannerWorkerClient.createConstrainedPlan()` /
+`createWhatIfComparison()` (pending variants, response branches, unavailable-client entries), the two Worker controller branches and
+`CreatePlannerWhatIfComparisonCalculation`, the Production adapters `createProductionConstrainedPlan()` /
+`createProductionPlannerWhatIfComparison()`, the B8 Planner orchestration and B9 what-if Browser benchmark runtime / pages
+(`plannerOrchestrationBrowserBenchmark`, `plannerWhatIfBrowserBenchmark`, `PlannerOrchestrationBenchmarkPage`,
+`PlannerWhatIfBenchmarkPage`, the two Benchmark shell harnesses) and the dead legacy B9 presentation (`ProductionPlanWhatIfComparison`,
+`presentProductionPlanWhatIf`, no non-test consumer). The Production Planner Worker calculations are now exactly `createPlan`,
+`createPlannerAlternativeComparison`, `createPlannerAlternativeRepair` and `prepareInteraction`, and the only Production routing is
+Build List / replan Preview -> `createPlan()`, 「比較する」 -> `createPlannerAlternativeComparison()`, 「この候補を優先」 ->
+`createPlannerAlternativeRepair()`, availability -> `prepareInteraction()`; the requestId / generation / stale response / cancel /
+error / unavailable (no main-thread fallback) semantics are unchanged. Phase 6-B1 kept, for 6-B2: the B8 / B9 Domain calculations
+(`plannerConstrainedOrchestration.ts`, `plannerWhatIfCalculation.ts`, `PlannerOrchestrationResult`, `PlannerWhatIfCalculationResult`,
+`CreateConstrainedProductionPlanCalculation`), `defaultConstrainedEnumerationBounds` / `defaultPlannerOrchestrationBounds` /
+`defaultPlannerWhatIfBounds`, the B8 / B9 warning kinds and labels, `savePlannerOrchestrationResult()` /
+`inspectPlannerOrchestrationResultSave()`, the shared primitives with their names and locations, the B8 / B9 benchmark fixtures and
+outcome helpers, the Issue #101 research harness / fixtures, the Constrained Enumeration benchmark (a Search Domain benchmark), the
+Phase 6-A parity and retry-boundary tests, and the historical benchmark records (which only gained a current-state note). It moved no
+version (17 / 10 / 13, `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2, `production-rng:c5-e7`, Master `dataVersion` 4)
+and added no migration. Phase 6-B2 re-audits the remaining consumers, deletes the legacy Domain path or keeps it as a test oracle, and
+moves the shared primitives into neutral modules by the actual import graph.
 
 ---
 
@@ -5243,6 +5269,11 @@ Relevant test areas include:
 - Phase 6-A: with `conflictResolutions = []` the legacy B8 orchestration and the ordinary Planner
   returning the same result in the representative ordinary cases, and a runtime-unsupported retry
   needing a fifth full run giving legacy `plan = null` + `max_planner_reruns_reached` but an ordinary Plan
+- Phase 6-B1: the Planner Worker protocol, controller, Production adapter and `PlannerWorkerClient` carrying exactly the
+  four current calculations (`create_plan`, `create_planner_alternative_comparison`, `create_planner_alternative_repair`,
+  `prepare_interaction`) plus `cancel` / `error`, no legacy B8 / B9 kind, method or adapter, and the Build List / replan
+  Preview / 「比較する」 / 「この候補を優先」 routing reaching only `createPlan()` / `createPlannerAlternativeComparison()` /
+  `createPlannerAlternativeRepair()`
 - `ProductionPlan.conflictRepairLineage` validated structurally only (literals, IDs, the
   `replaced` iff replacement rule, never a current foreign key), Dexie v9 -> v10 and Export
   12 -> 13 filling `null` into every Plan body (table, save point, Undo snapshot, Undo

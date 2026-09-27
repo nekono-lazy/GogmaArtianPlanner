@@ -6,11 +6,7 @@ import type {
   PlannerAlternativeWhatIfCalculationResult,
   PlannerAlternativeWhatIfInput,
   PlannerExecutionOptions,
-  PlannerOrchestrationBounds,
-  PlannerOrchestrationResult,
   PlannerResult,
-  PlannerWhatIfCalculationResult,
-  PlannerWhatIfRequest,
 } from '../../domain/planner'
 import { UnavailableRngEngine } from '../../domain/rng/unavailableRngEngine'
 import {
@@ -74,34 +70,6 @@ function plannerInput(): PlannerInput {
   }
 }
 
-/** Caller-required, exactly as PLANNER_SPEC 9.2.16 keeps them until B8-E. */
-const orchestrationBounds: PlannerOrchestrationBounds = {
-  maxCandidateTrialsPerConflict: 5,
-  maxGeneratedBuildListEntries: 2,
-  maxPlannerReruns: 9,
-}
-
-function whatIfRequest(input = plannerInput()): PlannerWhatIfRequest {
-  return {
-    plannerInput: input,
-    scenarioResolution: {
-      conflictKey: 'conflict.what-if.client',
-      selectedBuildListEntryId: 'build-list.what-if.client' as never,
-    },
-    bounds: {
-      maxCandidateTrialsPerTarget: 4,
-      maxPlannerReruns: 10,
-    },
-  }
-}
-
-const whatIfResult: PlannerWhatIfCalculationResult = {
-  status: 'planner_input_not_ready',
-  issues: [],
-  warnings: [],
-  excludedBuildListEntries: [],
-}
-
 describe('PlannerWorkerClient', () => {
   it('uses the Production RNG version for the production Worker client', () => {
     vi.stubGlobal('Worker', FakeWorker)
@@ -122,17 +90,19 @@ describe('PlannerWorkerClient', () => {
       await expect(client.createPlan('planner.unavailable', plannerInput()))
         .rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
       // Same explicit unavailable error, never a main-thread fallback.
-      await expect(client.createConstrainedPlan(
-        'planner.unavailable.constrained',
-        plannerInput(),
-        orchestrationBounds,
-      )).rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
       await expect(client.prepareInteraction('planner.unavailable.interaction', plannerInput()))
         .rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
-      await expect(client.createWhatIfComparison(
-        'planner.unavailable.what-if',
-        whatIfRequest(),
+      await expect(client.createPlannerAlternativeComparison(
+        'planner.unavailable.alternative',
+        plannerAlternativeInput(),
       )).rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
+      await expect(client.createPlannerAlternativeRepair(
+        'planner.unavailable.repair',
+        plannerAlternativeRepairInput(),
+      )).rejects.toBeInstanceOf(ProductionPlannerWorkerUnavailableError)
+      // The legacy B8 / B9 entries were removed in Phase 6-B1.
+      expect(client).not.toHaveProperty('createConstrainedPlan')
+      expect(client).not.toHaveProperty('createWhatIfComparison')
     } finally {
       vi.unstubAllGlobals()
     }
@@ -144,8 +114,9 @@ describe('PlannerWorkerClient', () => {
     const input = plannerInput()
     // Issue #103 Phase D-2a: the Production entry points take no callbacks.
     expect(client.createPlan).toHaveLength(2)
-    expect(client.createConstrainedPlan).toHaveLength(3)
-    expect(client.createWhatIfComparison).toHaveLength(2)
+    expect(client.createPlannerAlternativeComparison).toHaveLength(2)
+    expect(client.createPlannerAlternativeRepair).toHaveLength(2)
+    expect(client.prepareInteraction).toHaveLength(2)
     const promise = client.createPlan('planner.request', input)
     expect(worker.posted[0]).toEqual({
       type: 'create_plan',
@@ -201,6 +172,21 @@ describe('PlannerWorkerClient', () => {
     })
   })
 
+  it('exposes exactly the current entry points and no legacy B8 / B9 method (Phase 6-B1)', () => {
+    const client = createPlannerWorkerClient(new FakeWorker(), 'fixture')
+    expect(Object.keys(client).sort()).toEqual([
+      'cancelPlan',
+      'createPlan',
+      'createPlannerAlternativeComparison',
+      'createPlannerAlternativeRepair',
+      'dispose',
+      'engineVersion',
+      'prepareInteraction',
+    ])
+    expect(Object.keys(createUnavailablePlannerWorkerClient()).sort()).toEqual(Object.keys(client).sort())
+    client.dispose()
+  })
+
   it('converts the Worker error response to a fatal client rejection', async () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
@@ -212,170 +198,6 @@ describe('PlannerWorkerClient', () => {
       message: 'prediction failed',
     })
     await expect(promise).rejects.toThrow('prediction failed')
-  })
-})
-
-describe('PlannerWorkerClient what-if comparison (B9-C)', () => {
-  it('posts the exact request and resolves the what-if result', async () => {
-    const worker = new FakeWorker()
-    const client = createPlannerWorkerClient(worker, 'fixture')
-    const request = whatIfRequest()
-    const promise = client.createWhatIfComparison(
-      'planner.what-if.client',
-      request,
-    )
-
-    expect(worker.posted[0]).toEqual({
-      type: 'create_what_if_comparison',
-      requestId: 'planner.what-if.client',
-      generation: 1,
-      input: request,
-    })
-    const posted = worker.posted[0]
-    expect(posted.type === 'create_what_if_comparison' && posted.input).toBe(request)
-    expect(Object.keys(request).sort()).toEqual([
-      'bounds',
-      'plannerInput',
-      'scenarioResolution',
-    ])
-    expect(request).not.toHaveProperty('enumerationBounds')
-
-    worker.emit({
-      type: 'create_what_if_comparison_result',
-      requestId: 'planner.what-if.client',
-      generation: 1,
-      result: whatIfResult,
-    })
-
-    await expect(promise).resolves.toBe(whatIfResult)
-  })
-
-  it('uses the shared cancel and error paths', async () => {
-    const worker = new FakeWorker()
-    const client = createPlannerWorkerClient(worker, 'fixture')
-    const cancelled = client.createWhatIfComparison(
-      'planner.what-if.cancel',
-      whatIfRequest(),
-    )
-    client.cancelPlan('planner.what-if.cancel')
-    await expect(cancelled).rejects.toBeInstanceOf(PlannerCancelledError)
-    expect(worker.posted.at(-1)).toEqual({
-      type: 'cancel',
-      requestId: 'planner.what-if.cancel',
-      generation: 1,
-    })
-
-    const failed = client.createWhatIfComparison(
-      'planner.what-if.error',
-      whatIfRequest(),
-    )
-    worker.emit({
-      type: 'error',
-      requestId: 'planner.what-if.error',
-      generation: 2,
-      message: 'what-if Worker failed',
-    })
-    await expect(failed).rejects.toThrow('what-if Worker failed')
-  })
-
-  it('rejects current wrong result discriminants but ignores a stale wrong discriminant', async () => {
-    const worker = new FakeWorker()
-    const client = createPlannerWorkerClient(worker, 'fixture')
-    const first = client.createWhatIfComparison(
-      'planner.what-if.mismatch',
-      whatIfRequest(),
-    )
-    worker.emit({
-      type: 'create_plan_result',
-      requestId: 'planner.what-if.mismatch',
-      generation: 1,
-      result: {
-      plan: null,
-      conflicts: [],
-      warnings: [],
-      termination: exhaustedPlannerTermination(),
-    },
-    })
-    await expect(first).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
-
-    const second = client.createWhatIfComparison(
-      'planner.what-if.mismatch.constrained',
-      whatIfRequest(),
-    )
-    worker.emit({
-      type: 'create_constrained_plan_result',
-      requestId: 'planner.what-if.mismatch.constrained',
-      generation: 2,
-      result: {
-        plan: null,
-        conflicts: [],
-        warnings: [],
-        termination: completedPlannerTermination(),
-        generatedBuildListEntries: [],
-        generatedBuildListEntryReplacements: [],
-      },
-    })
-    await expect(second).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
-
-    const stale = client.createWhatIfComparison(
-      'planner.what-if.stale',
-      whatIfRequest(),
-    )
-    const current = client.createConstrainedPlan(
-      'planner.what-if.stale',
-      plannerInput(),
-      orchestrationBounds,
-    )
-    await expect(stale).rejects.toBeInstanceOf(PlannerCancelledError)
-    worker.emit({
-      type: 'create_plan_result',
-      requestId: 'planner.what-if.stale',
-      generation: 3,
-      result: {
-      plan: null,
-      conflicts: [],
-      warnings: [],
-      termination: exhaustedPlannerTermination(),
-    },
-    })
-    const constrainedResult: PlannerOrchestrationResult = {
-      plan: null,
-      conflicts: [],
-      warnings: [],
-      termination: completedPlannerTermination(),
-      generatedBuildListEntries: [],
-      generatedBuildListEntryReplacements: [],
-    }
-    worker.emit({
-      type: 'create_constrained_plan_result',
-      requestId: 'planner.what-if.stale',
-      generation: 4,
-      result: constrainedResult,
-    })
-    await expect(current).resolves.toEqual(constrainedResult)
-  })
-
-  it('participates in duplicate requestId replacement and dispose semantics', async () => {
-    const worker = new FakeWorker()
-    const client = createPlannerWorkerClient(worker, 'fixture')
-    const ordinary = client.createPlan('planner.what-if.shared', plannerInput())
-    const whatIf = client.createWhatIfComparison(
-      'planner.what-if.shared',
-      whatIfRequest(),
-    )
-    await expect(ordinary).rejects.toBeInstanceOf(PlannerCancelledError)
-    expect(worker.posted.map(({ type, generation }) => ({ type, generation })))
-      .toEqual([
-        { type: 'create_plan', generation: 1 },
-        { type: 'create_what_if_comparison', generation: 2 },
-      ])
-
-    client.dispose()
-    await expect(whatIf).rejects.toBeInstanceOf(PlannerCancelledError)
-    await expect(client.createWhatIfComparison(
-      'planner.what-if.disposed',
-      whatIfRequest(),
-    )).rejects.toThrow('Planner Worker Client is disposed.')
   })
 })
 
@@ -539,31 +361,31 @@ describe('PlannerWorkerClient Planner Alternative comparison (Phase 4-B)', () =>
     await expect(promise).resolves.toBe(plannerAlternativeResult)
   })
 
-  it('fails closed on the legacy what-if result, and the legacy request on the new result', async () => {
+  it('fails closed on another kind of result, and another kind of request on its result', async () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
     const alternative = client.createPlannerAlternativeComparison('planner.alternative.mismatch', plannerAlternativeInput())
     worker.emit({
-      type: 'create_what_if_comparison_result',
+      type: 'create_plan_result',
       requestId: 'planner.alternative.mismatch',
       generation: 1,
-      result: whatIfResult,
+      result: ordinaryResult,
     })
     await expect(alternative).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
     await expect(alternative).rejects.toMatchObject({
-      receivedResultType: 'create_what_if_comparison_result',
+      receivedResultType: 'create_plan_result',
       expectedResultType: 'create_planner_alternative_comparison_result',
     })
 
-    const legacy = client.createWhatIfComparison('planner.legacy.mismatch', whatIfRequest())
-    expect(worker.posted.at(-1)).toMatchObject({ type: 'create_what_if_comparison', generation: 2 })
+    const ordinary = client.createPlan('planner.ordinary.mismatch', plannerInput())
+    expect(worker.posted.at(-1)).toMatchObject({ type: 'create_plan', generation: 2 })
     worker.emit({
       type: 'create_planner_alternative_comparison_result',
-      requestId: 'planner.legacy.mismatch',
+      requestId: 'planner.ordinary.mismatch',
       generation: 2,
       result: plannerAlternativeResult,
     })
-    await expect(legacy).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
+    await expect(ordinary).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
   })
 
   it('ignores a stale generation of the same request id and resolves the current one', async () => {
@@ -573,7 +395,7 @@ describe('PlannerWorkerClient Planner Alternative comparison (Phase 4-B)', () =>
     const second = client.createPlannerAlternativeComparison('planner.alternative.shared', plannerAlternativeInput())
     await expect(first).rejects.toBeInstanceOf(PlannerCancelledError)
     // The superseded task finishes late, even with a wrong discriminant: stale, not an error.
-    worker.emit({ type: 'create_what_if_comparison_result', requestId: 'planner.alternative.shared', generation: 1, result: whatIfResult })
+    worker.emit({ type: 'create_planner_alternative_repair_result', requestId: 'planner.alternative.shared', generation: 1, result: plannerAlternativeRepairResult })
     worker.emit({
       type: 'create_planner_alternative_comparison_result',
       requestId: 'planner.alternative.shared',
@@ -621,52 +443,11 @@ describe('PlannerWorkerClient Planner Alternative comparison (Phase 4-B)', () =>
   })
 })
 
-describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
-  it('posts the constrained request with the exact caller orchestration bounds', async () => {
-    const worker = new FakeWorker()
-    const client = createPlannerWorkerClient(worker, 'fixture')
-    const input = plannerInput()
-    const promise = client.createConstrainedPlan(
-      'planner.constrained',
-      input,
-      orchestrationBounds,
-    )
-    expect(worker.posted[0]).toEqual({
-      type: 'create_constrained_plan',
-      requestId: 'planner.constrained',
-      generation: 1,
-      input: { plannerInput: input, orchestrationBounds },
-    })
-    const posted = worker.posted[0]
-    expect(posted.type === 'create_constrained_plan' && posted.input.orchestrationBounds)
-      .toBe(orchestrationBounds)
-    // Search enumeration bounds never cross this boundary.
-    expect(posted).not.toHaveProperty('input.enumerationBounds')
-    const result = {
-      plan: createValidProductionPlan(),
-      conflicts: [],
-      warnings: [],
-      termination: completedPlannerTermination(),
-      generatedBuildListEntries: [createValidBuildListEntry()],
-      generatedBuildListEntryReplacements: [],
-    }
-    worker.emit({
-      type: 'create_constrained_plan_result',
-      requestId: 'planner.constrained',
-      generation: 1,
-      result,
-    })
-    await expect(promise).resolves.toEqual(result)
-  })
-
+describe('PlannerWorkerClient shared request namespace', () => {
   it('resolves the typed termination unchanged instead of rebuilding it', async () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
-    const promise = client.createConstrainedPlan(
-      'planner.constrained.termination',
-      plannerInput(),
-      orchestrationBounds,
-    )
+    const promise = client.createPlan('planner.ordinary.termination', plannerInput())
     const termination = incompletePlannerTermination(['max_plan_steps'], {
       limits: { maxPlanSteps: 300 },
       expandedStates: 300,
@@ -674,8 +455,8 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       totalTargetCount: 2,
     })
     worker.emit({
-      type: 'create_constrained_plan_result',
-      requestId: 'planner.constrained.termination',
+      type: 'create_plan_result',
+      requestId: 'planner.ordinary.termination',
       generation: 1,
       result: {
         plan: createValidProductionPlan(),
@@ -687,75 +468,34 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
           message: 'Planner reached maxPlanSteps (300).',
         }],
         termination,
-        generatedBuildListEntries: [],
-        generatedBuildListEntryReplacements: [],
       },
     })
     await expect(promise).resolves.toMatchObject({ termination })
   })
 
-  it('cancels a constrained request through the same cancelPlan path', async () => {
-    const worker = new FakeWorker()
-    const client = createPlannerWorkerClient(worker, 'fixture')
-    const promise = client.createConstrainedPlan(
-      'planner.constrained.cancel',
-      plannerInput(),
-      orchestrationBounds,
-    )
-    client.cancelPlan('planner.constrained.cancel')
-    await expect(promise).rejects.toBeInstanceOf(PlannerCancelledError)
-    expect(worker.posted.at(-1)).toEqual({
-      type: 'cancel',
-      requestId: 'planner.constrained.cancel',
-      generation: 1,
-    })
-  })
-
-  it('rejects a constrained request through the shared Worker error response', async () => {
-    const worker = new FakeWorker()
-    const client = createPlannerWorkerClient(worker, 'fixture')
-    const promise = client.createConstrainedPlan(
-      'planner.constrained.error',
-      plannerInput(),
-      orchestrationBounds,
-    )
-    worker.emit({
-      type: 'error',
-      requestId: 'planner.constrained.error',
-      generation: 1,
-      message: 'constrained enumeration failed',
-    })
-    await expect(promise).rejects.toThrow('constrained enumeration failed')
-  })
-
-  it('rejects both pending requests on dispose and refuses later calls', async () => {
+  it('rejects every pending request kind on dispose and refuses later calls', async () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
     const ordinary = client.createPlan('planner.dispose.ordinary', plannerInput())
-    const constrained = client.createConstrainedPlan(
-      'planner.dispose.constrained',
-      plannerInput(),
-      orchestrationBounds,
+    const repair = client.createPlannerAlternativeRepair(
+      'planner.dispose.repair',
+      plannerAlternativeRepairInput(),
     )
     client.dispose()
     await expect(ordinary).rejects.toBeInstanceOf(PlannerCancelledError)
-    await expect(constrained).rejects.toBeInstanceOf(PlannerCancelledError)
+    await expect(repair).rejects.toBeInstanceOf(PlannerCancelledError)
     expect(worker.terminate).toHaveBeenCalledOnce()
-    await expect(client.createConstrainedPlan(
-      'planner.dispose.after',
-      plannerInput(),
-      orchestrationBounds,
-    )).rejects.toThrow('Planner Worker Client is disposed.')
+    await expect(client.createPlan('planner.dispose.after', plannerInput()))
+      .rejects.toThrow('Planner Worker Client is disposed.')
   })
 
-  it('keeps the existing duplicate requestId semantics across both request kinds', async () => {
+  it('keeps the existing duplicate requestId semantics across request kinds', async () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
     const first = client.createPlan('planner.shared.id', plannerInput())
-    const second = client.createConstrainedPlan(
+    const second = client.createPlannerAlternativeRepair(
       'planner.shared.id',
-      plannerInput(),
-      orchestrationBounds,
+      plannerAlternativeRepairInput(),
     )
     await expect(first).rejects.toBeInstanceOf(PlannerCancelledError)
     // One logical id, two task instances.
@@ -764,60 +504,44 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
         { requestId: 'planner.shared.id', generation: 1 },
         { requestId: 'planner.shared.id', generation: 2 },
       ])
-    const result = {
-      plan: null,
-      conflicts: [],
-      warnings: [],
-      termination: completedPlannerTermination(),
-      generatedBuildListEntries: [],
-      generatedBuildListEntryReplacements: [],
-    }
     worker.emit({
-      type: 'create_constrained_plan_result',
+      type: 'create_planner_alternative_repair_result',
       requestId: 'planner.shared.id',
       generation: 2,
-      result,
+      result: plannerAlternativeRepairResult,
     })
-    await expect(second).resolves.toEqual(result)
+    await expect(second).resolves.toBe(plannerAlternativeRepairResult)
   })
 
   it('fails closed when a result discriminant does not match the pending request kind', async () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
-    const constrained = client.createConstrainedPlan(
-      'planner.mismatch.constrained',
-      plannerInput(),
-      orchestrationBounds,
+    const repair = client.createPlannerAlternativeRepair(
+      'planner.mismatch.repair',
+      plannerAlternativeRepairInput(),
     )
     // Same id and same generation, so this really is a current-instance
-    // protocol violation: an ordinary result carries no
-    // `generatedBuildListEntries`, and resolving it would lose them.
+    // protocol violation: an ordinary result carries no repair persistence,
+    // and resolving it would hand the caller the wrong shape.
     worker.emit({
       type: 'create_plan_result',
-      requestId: 'planner.mismatch.constrained',
+      requestId: 'planner.mismatch.repair',
       generation: 1,
-      result: {
-      plan: createValidProductionPlan(),
-      conflicts: [],
-      warnings: [],
-      termination: completedPlannerTermination(),
-    },
-    })
-    await expect(constrained).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
-
-    const ordinary = client.createPlan('planner.mismatch.ordinary', plannerInput())
-    worker.emit({
-      type: 'create_constrained_plan_result',
-      requestId: 'planner.mismatch.ordinary',
-      generation: 2,
       result: {
         plan: createValidProductionPlan(),
         conflicts: [],
         warnings: [],
         termination: completedPlannerTermination(),
-        generatedBuildListEntries: [createValidBuildListEntry()],
-        generatedBuildListEntryReplacements: [],
       },
+    })
+    await expect(repair).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
+
+    const ordinary = client.createPlan('planner.mismatch.ordinary', plannerInput())
+    worker.emit({
+      type: 'create_planner_alternative_repair_result',
+      requestId: 'planner.mismatch.ordinary',
+      generation: 2,
+      result: plannerAlternativeRepairResult,
     })
     await expect(ordinary).rejects.toBeInstanceOf(PlannerWorkerProtocolError)
   })
@@ -826,10 +550,9 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
     const ordinary = client.createPlan('planner.stale.discriminant', plannerInput())
-    const constrained = client.createConstrainedPlan(
+    const repair = client.createPlannerAlternativeRepair(
       'planner.stale.discriminant',
-      plannerInput(),
-      orchestrationBounds,
+      plannerAlternativeRepairInput(),
     )
     await expect(ordinary).rejects.toBeInstanceOf(PlannerCancelledError)
 
@@ -840,27 +563,19 @@ describe('PlannerWorkerClient constrained plan (B8-D1)', () => {
       requestId: 'planner.stale.discriminant',
       generation: 1,
       result: {
-      plan: createValidProductionPlan(),
-      conflicts: [],
-      warnings: [],
-      termination: completedPlannerTermination(),
-    },
+        plan: createValidProductionPlan(),
+        conflicts: [],
+        warnings: [],
+        termination: completedPlannerTermination(),
+      },
     })
-    const result = {
-      plan: null,
-      conflicts: [],
-      warnings: [],
-      termination: completedPlannerTermination(),
-      generatedBuildListEntries: [],
-      generatedBuildListEntryReplacements: [],
-    }
     worker.emit({
-      type: 'create_constrained_plan_result',
+      type: 'create_planner_alternative_repair_result',
       requestId: 'planner.stale.discriminant',
       generation: 2,
-      result,
+      result: plannerAlternativeRepairResult,
     })
-    await expect(constrained).resolves.toEqual(result)
+    await expect(repair).resolves.toBe(plannerAlternativeRepairResult)
   })
 })
 
@@ -934,9 +649,9 @@ function deferred<T>(): Deferred<T> {
 function integration() {
   const worker = new DeliveryControlledWorker()
   const ordinaryCalls: PlannerExecutionOptions[] = []
-  const constrainedCalls: PlannerExecutionOptions[] = []
+  const repairCalls: PlannerExecutionOptions[] = []
   const ordinaryResults: Deferred<PlannerResult>[] = []
-  const constrainedResults: Deferred<PlannerOrchestrationResult>[] = []
+  const repairResults: Deferred<PlannerAlternativeRepairCalculationResult>[] = []
   const calculations: PlannerWorkerCalculations = {
     createPlan: async (_input, _dependencies, executionOptions) => {
       ordinaryCalls.push(executionOptions ?? {})
@@ -944,26 +659,15 @@ function integration() {
       ordinaryResults.push(pending)
       return pending.promise
     },
-    createConstrainedPlan: async (
-      _input,
-      _bounds,
-      _dependencies,
-      executionOptions,
-    ) => {
-      constrainedCalls.push(executionOptions ?? {})
-      const pending = deferred<PlannerOrchestrationResult>()
-      constrainedResults.push(pending)
+    createPlannerAlternativeRepair: async (_input, _dependencies, executionOptions) => {
+      repairCalls.push(executionOptions ?? {})
+      const pending = deferred<PlannerAlternativeRepairCalculationResult>()
+      repairResults.push(pending)
       return pending.promise
     },
     prepareInteraction: () => interactionResult,
-    createWhatIfComparison: async () => {
-      throw new Error('What-if calculation was not expected in this integration fixture.')
-    },
     createPlannerAlternativeComparison: async () => {
       throw new Error('Planner Alternative what-if calculation was not expected in this integration fixture.')
-    },
-    createPlannerAlternativeRepair: async () => {
-      throw new Error('Planner Alternative repair calculation was not expected in this integration fixture.')
     },
   }
   const dependencies = {
@@ -987,9 +691,9 @@ function integration() {
     client,
     controller,
     ordinaryCalls,
-    constrainedCalls,
+    repairCalls,
     ordinaryResults,
-    constrainedResults,
+    repairResults,
   }
 }
 
@@ -1006,16 +710,7 @@ const ordinaryResult: PlannerResult = {
       warnings: [],
       termination: exhaustedPlannerTermination(),
     }
-const constrainedResult: PlannerOrchestrationResult = {
-  plan: null,
-  conflicts: [],
-  warnings: [],
-  termination: completedPlannerTermination(),
-  generatedBuildListEntries: [],
-  generatedBuildListEntryReplacements: [],
-}
-
-describe('Planner Worker / Client task generation across an asynchronous boundary (B8-D1)', () => {
+describe('Planner Worker / Client task generation across an asynchronous boundary', () => {
   it('ignores a superseded ordinary result that arrives before the replacement task is delivered', async () => {
     const session = integration()
     // 1. The ordinary task reaches the Worker and starts.
@@ -1023,16 +718,15 @@ describe('Planner Worker / Client task generation across an asynchronous boundar
     const ordinaryRun = session.worker.deliverToWorker()
     expect(session.ordinaryCalls).toHaveLength(1)
 
-    // 2. The Client replaces its pending Promise, but the constrained task is
+    // 2. The Client replaces its pending Promise, but the repair task is
     //    still in flight to the Worker.
-    const constrained = session.client.createConstrainedPlan(
+    const repair = session.client.createPlannerAlternativeRepair(
       'planner.race',
-      plannerInput(),
-      orchestrationBounds,
+      plannerAlternativeRepairInput(),
     )
     await expect(ordinary).rejects.toBeInstanceOf(PlannerCancelledError)
     expect(session.worker.toWorker).toHaveLength(1)
-    expect(session.constrainedCalls).toHaveLength(0)
+    expect(session.repairCalls).toHaveLength(0)
 
     // 3. The superseded ordinary calculation finishes first. The Worker still
     //    holds generation 1 as current, so it does post the result.
@@ -1051,45 +745,44 @@ describe('Planner Worker / Client task generation across an asynchronous boundar
       }),
     ])
 
-    // 4. It reaches the Client, whose live pending request is the constrained
-    //    one. The generation mismatch makes it stale, not a protocol violation.
+    // 4. It reaches the Client, whose live pending request is the repair one.
+    //    The generation mismatch makes it stale, not a protocol violation.
     let settled = false
-    void constrained.then(() => { settled = true }, () => { settled = true })
+    void repair.then(() => { settled = true }, () => { settled = true })
     session.worker.deliverToClient()
     await settleMicrotasks()
     // 5.
     expect(settled).toBe(false)
 
     // 6-8. The replacement task finally reaches the Worker and completes.
-    const constrainedRun = session.worker.deliverToWorker()
-    expect(session.constrainedCalls).toHaveLength(1)
-    session.constrainedResults[0].resolve(constrainedResult)
-    await constrainedRun
+    const repairRun = session.worker.deliverToWorker()
+    expect(session.repairCalls).toHaveLength(1)
+    session.repairResults[0].resolve(plannerAlternativeRepairResult)
+    await repairRun
     session.worker.deliverToClient()
-    await expect(constrained).resolves.toEqual(constrainedResult)
+    await expect(repair).resolves.toEqual(plannerAlternativeRepairResult)
   })
 
-  it('ignores a superseded constrained result and error that arrive before the replacement task is delivered', async () => {
+  it('ignores a superseded repair result and error that arrive before the replacement task is delivered', async () => {
     const session = integration()
-    const constrained = session.client.createConstrainedPlan(
+    const repair = session.client.createPlannerAlternativeRepair(
       'planner.race.reverse',
-      plannerInput(),
-      orchestrationBounds,
+      plannerAlternativeRepairInput(),
     )
-    const constrainedRun = session.worker.deliverToWorker()
+    const repairRun = session.worker.deliverToWorker()
     const ordinary = session.client.createPlan('planner.race.reverse', plannerInput())
-    await expect(constrained).rejects.toBeInstanceOf(PlannerCancelledError)
+    await expect(repair).rejects.toBeInstanceOf(PlannerCancelledError)
 
-    // The superseded constrained calculation fails while the Worker still
-    // holds its generation, so its error response is posted.
-    session.constrainedResults[0].reject(new Error('superseded constrained failure'))
-    await constrainedRun
+    // The superseded repair calculation fails while the Worker still holds
+    // its generation, so its error response is posted.
+    session.repairResults[0].reject(new Error('superseded repair failure'))
+    await repairRun
     expect(session.worker.toClient).toEqual([
       {
         type: 'error',
         requestId: 'planner.race.reverse',
         generation: 1,
-        message: 'superseded constrained failure',
+        message: 'superseded repair failure',
       },
     ])
 
@@ -1111,10 +804,9 @@ describe('Planner Worker / Client task generation across an asynchronous boundar
     const session = integration()
     const ordinary = session.client.createPlan('planner.race.progress', plannerInput())
     const ordinaryRun = session.worker.deliverToWorker()
-    const constrained = session.client.createConstrainedPlan(
+    const repair = session.client.createPlannerAlternativeRepair(
       'planner.race.progress',
-      plannerInput(),
-      orchestrationBounds,
+      plannerAlternativeRepairInput(),
     )
     await expect(ordinary).rejects.toBeInstanceOf(PlannerCancelledError)
 
@@ -1128,29 +820,28 @@ describe('Planner Worker / Client task generation across an asynchronous boundar
     // The superseded task's result is stale and ignored by the Client.
     session.worker.deliverToClient()
 
-    const constrainedRun = session.worker.deliverToWorker()
-    expect(Object.keys(session.constrainedCalls[0]).sort()).toEqual(['shouldCancel', 'yieldControl'])
+    const repairRun = session.worker.deliverToWorker()
+    expect(Object.keys(session.repairCalls[0]).sort()).toEqual(['shouldCancel', 'yieldControl'])
     expect(session.worker.toClient).toEqual([])
 
-    session.constrainedResults[0].resolve(constrainedResult)
-    await constrainedRun
+    session.repairResults[0].resolve(plannerAlternativeRepairResult)
+    await repairRun
     session.worker.deliverToClient()
-    await expect(constrained).resolves.toEqual(constrainedResult)
+    await expect(repair).resolves.toEqual(plannerAlternativeRepairResult)
   })
 
   it('never lets a cancel for a superseded instance stop the replacement task', async () => {
     const session = integration()
-    const constrained = session.client.createConstrainedPlan(
+    const repair = session.client.createPlannerAlternativeRepair(
       'planner.race.cancel',
-      plannerInput(),
-      orchestrationBounds,
+      plannerAlternativeRepairInput(),
     )
-    const constrainedRun = session.worker.deliverToWorker()
+    const repairRun = session.worker.deliverToWorker()
 
     // Cancel generation 1, then immediately start generation 2. Both messages
     // are queued; the task is delivered first, so the cancel arrives late.
     session.client.cancelPlan('planner.race.cancel')
-    await expect(constrained).rejects.toBeInstanceOf(PlannerCancelledError)
+    await expect(repair).rejects.toBeInstanceOf(PlannerCancelledError)
     const ordinary = session.client.createPlan('planner.race.cancel', plannerInput())
     expect(session.worker.toWorker.map(({ type, generation }) => ({ type, generation })))
       .toEqual([
@@ -1163,10 +854,10 @@ describe('Planner Worker / Client task generation across an asynchronous boundar
     expect(session.controller.isCancelled('planner.race.cancel')).toBe(false)
     expect(session.ordinaryCalls[0].shouldCancel?.()).toBe(false)
     // The superseded instance is still cancelled.
-    expect(session.constrainedCalls[0].shouldCancel?.()).toBe(true)
+    expect(session.repairCalls[0].shouldCancel?.()).toBe(true)
 
-    session.constrainedResults[0].resolve(constrainedResult)
-    await constrainedRun
+    session.repairResults[0].resolve(plannerAlternativeRepairResult)
+    await repairRun
     session.ordinaryResults[0].resolve(ordinaryResult)
     await ordinaryRun
     session.worker.toClient.forEach(() => session.worker.deliverToClient())
@@ -1210,7 +901,7 @@ describe('PlannerWorkerClient interaction preparation (B10-B1)', () => {
     client.dispose()
   })
 
-  it.each(['create_plan_result', 'create_constrained_plan_result', 'create_what_if_comparison_result'] as const)(
+  it.each(['create_plan_result', 'create_planner_alternative_comparison_result', 'create_planner_alternative_repair_result'] as const)(
     'rejects the current wrong discriminant %s',
     async (type) => {
       const worker = new FakeWorker()
@@ -1219,10 +910,10 @@ describe('PlannerWorkerClient interaction preparation (B10-B1)', () => {
       const identity = { requestId: 'interaction.mismatch', generation: 1 }
       if (type === 'create_plan_result') {
         worker.emit({ type, ...identity, result: ordinaryResult })
-      } else if (type === 'create_constrained_plan_result') {
-        worker.emit({ type, ...identity, result: constrainedResult })
+      } else if (type === 'create_planner_alternative_comparison_result') {
+        worker.emit({ type, ...identity, result: plannerAlternativeResult })
       } else {
-        worker.emit({ type, ...identity, result: whatIfResult })
+        worker.emit({ type, ...identity, result: plannerAlternativeRepairResult })
       }
       await expect(promise).rejects.toMatchObject({
         name: 'PlannerWorkerProtocolError',
@@ -1271,29 +962,29 @@ describe('PlannerWorkerClient interaction preparation (B10-B1)', () => {
     client.dispose()
   })
 
-  it('shares the namespace with a replacing what-if request', async () => {
+  it('shares the namespace with a replacing Planner Alternative comparison', async () => {
     const worker = new FakeWorker()
     const client = createPlannerWorkerClient(worker, 'fixture')
-    const preparation = client.prepareInteraction('interaction.what-if', plannerInput())
-    const comparison = client.createWhatIfComparison('interaction.what-if', whatIfRequest())
+    const preparation = client.prepareInteraction('interaction.alternative', plannerInput())
+    const comparison = client.createPlannerAlternativeComparison('interaction.alternative', plannerAlternativeInput())
     await expect(preparation).rejects.toBeInstanceOf(PlannerCancelledError)
     let settled = false
     void comparison.then(() => { settled = true }, () => { settled = true })
     worker.emit({
-      type: 'prepare_interaction_result', requestId: 'interaction.what-if',
+      type: 'prepare_interaction_result', requestId: 'interaction.alternative',
       generation: 1, result: interactionResult,
     })
     await settleMicrotasks()
     expect(settled).toBe(false)
     expect(worker.posted.map(({ type, generation }) => ({ type, generation }))).toEqual([
       { type: 'prepare_interaction', generation: 1 },
-      { type: 'create_what_if_comparison', generation: 2 },
+      { type: 'create_planner_alternative_comparison', generation: 2 },
     ])
     worker.emit({
-      type: 'create_what_if_comparison_result', requestId: 'interaction.what-if',
-      generation: 2, result: whatIfResult,
+      type: 'create_planner_alternative_comparison_result', requestId: 'interaction.alternative',
+      generation: 2, result: plannerAlternativeResult,
     })
-    await expect(comparison).resolves.toBe(whatIfResult)
+    await expect(comparison).resolves.toBe(plannerAlternativeResult)
     client.dispose()
   })
 
@@ -1314,13 +1005,13 @@ describe('PlannerWorkerClient interaction preparation (B10-B1)', () => {
     expect(worker.posted).toHaveLength(2)
   })
 
-  it('ignores a constrained result before the replacing preparation reaches the Worker', async () => {
+  it('ignores a repair result before the replacing preparation reaches the Worker', async () => {
     const session = integration()
-    const old = session.client.createConstrainedPlan('interaction.race', plannerInput(), orchestrationBounds)
+    const old = session.client.createPlannerAlternativeRepair('interaction.race', plannerAlternativeRepairInput())
     const oldRun = session.worker.deliverToWorker()
     const current = session.client.prepareInteraction('interaction.race', plannerInput())
     await expect(old).rejects.toBeInstanceOf(PlannerCancelledError)
-    session.constrainedResults[0].resolve(constrainedResult)
+    session.repairResults[0].resolve(plannerAlternativeRepairResult)
     await oldRun
     let settled = false
     void current.then(() => { settled = true }, () => { settled = true })

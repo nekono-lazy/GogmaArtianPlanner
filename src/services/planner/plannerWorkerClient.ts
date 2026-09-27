@@ -4,11 +4,7 @@ import type {
   PlannerAlternativeWhatIfCalculationResult,
   PlannerAlternativeWhatIfInput,
   PlannerInput,
-  PlannerOrchestrationBounds,
-  PlannerOrchestrationResult,
   PlannerResult,
-  PlannerWhatIfCalculationResult,
-  PlannerWhatIfRequest,
 } from '../../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
 import type {
@@ -35,10 +31,10 @@ export class ProductionPlannerWorkerUnavailableError extends Error {
  * A Worker result whose discriminant does not match the pending request's
  * expected result type, for the pending request's own task generation.
  *
- * The ordinary and constrained requests share one pending id namespace, so a
- * `create_plan_result` must never resolve a `createConstrainedPlan()` Promise
- * and vice versa: `PlannerOrchestrationResult.generatedBuildListEntries` would
- * silently be missing. This fails closed instead.
+ * Every request kind shares one pending id namespace, so a `create_plan_result`
+ * must never resolve a `createPlannerAlternativeRepair()` Promise and vice
+ * versa: the result shapes differ and a caller would silently read the wrong
+ * one. This fails closed instead.
  *
  * A response carrying a *different* generation is a stale message from a
  * superseded task instance, not a protocol violation, and is ignored silently
@@ -70,45 +66,13 @@ export interface PlannerWorkerClient {
     input: PlannerInput,
   ): Promise<PlannerResult>
   /**
-   * The B8-D1 Planner-driven constrained re-search entry point.
-   *
-   * Legacy since Issue #136 / #101 Phase 6-A: no ordinary Application runtime
-   * path calls it any more (the Build List and the replan Preview use
-   * `createPlan()`, the Production Plan screen the Planner Alternative
-   * entries). It stays for benchmarks and tests until Phase 6-B.
-   *
-   * `orchestrationBounds` is caller-required: this client applies no default
-   * and no clamping. B8-E2b decided the Production value
-   * (`defaultPlannerOrchestrationBounds`, `2 / 1 / 4`), but choosing to pass it
-   * belongs to the Application caller, not here.
-   * `ConstrainedEnumerationBounds` is not a
-   * parameter - the Production Worker adapter passes the B8-B2
-   * `defaultConstrainedEnumerationBounds` inside the Worker boundary.
-   *
-   * It only calculates. Persisting the returned Plan together with
-   * `generatedBuildListEntries` in one transaction is B8-D2's Application /
-   * Persistence responsibility (PLANNER_SPEC 9.2.15).
-   */
-  createConstrainedPlan(
-    requestId: string,
-    input: PlannerInput,
-    orchestrationBounds: PlannerOrchestrationBounds,
-  ): Promise<PlannerOrchestrationResult>
-  /**
-   * B9 transient calculation; the complete caller-required request is wired
-   * verbatim. Legacy like `createConstrainedPlan()`: no ordinary Application
-   * runtime path calls it; it stays until Phase 6-B.
-   */
-  createWhatIfComparison(
-    requestId: string,
-    request: PlannerWhatIfRequest,
-  ): Promise<PlannerWhatIfCalculationResult>
-  /**
    * The Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md`
    * 9.2.19.7): a transient calculation, the Production Plan screen's
-   * 「比較する」 since Phase 5-B. The legacy `createWhatIfComparison()` stays
-   * until Phase 6. The extent and the trial bounds are not parameters: the
-   * Production Worker adapter supplies them inside the Worker boundary.
+   * 「比較する」 since Phase 5-B; the legacy B8 constrained re-search and B9
+   * what-if entries were removed in Phase 6-B1 (`docs/PLANNER_SPEC.md`
+   * 9.2.19.16). The extent and the trial bounds are not
+   * parameters: the Production Worker adapter supplies them inside the Worker
+   * boundary.
    */
   createPlannerAlternativeComparison(
     requestId: string,
@@ -174,14 +138,6 @@ type PendingPlan =
       resolve: (result: PlannerResult) => void
     })
   | (PendingPlanIdentity & {
-      expectedResultType: 'create_constrained_plan_result'
-      resolve: (result: PlannerOrchestrationResult) => void
-    })
-  | (PendingPlanIdentity & {
-      expectedResultType: 'create_what_if_comparison_result'
-      resolve: (result: PlannerWhatIfCalculationResult) => void
-    })
-  | (PendingPlanIdentity & {
       expectedResultType: 'create_planner_alternative_comparison_result'
       resolve: (result: PlannerAlternativeWhatIfCalculationResult) => void
     })
@@ -214,20 +170,6 @@ export function createPlannerWorkerClient(
     if (
       data.type === 'create_plan_result' &&
       current.expectedResultType === 'create_plan_result'
-    ) {
-      current.resolve(data.result)
-      return
-    }
-    if (
-      data.type === 'create_constrained_plan_result' &&
-      current.expectedResultType === 'create_constrained_plan_result'
-    ) {
-      current.resolve(data.result)
-      return
-    }
-    if (
-      data.type === 'create_what_if_comparison_result' &&
-      current.expectedResultType === 'create_what_if_comparison_result'
     ) {
       current.resolve(data.result)
       return
@@ -284,48 +226,6 @@ export function createPlannerWorkerClient(
           reject,
         })
         worker.postMessage({ type: 'create_plan', requestId, generation, input })
-      })
-    },
-    createConstrainedPlan: (requestId, input, orchestrationBounds) => {
-      if (disposed) {
-        return Promise.reject(new Error('Planner Worker Client is disposed.'))
-      }
-      const generation = claimRequestId(requestId)
-      return new Promise<PlannerOrchestrationResult>((resolve, reject) => {
-        pending.set(requestId, {
-          requestId,
-          generation,
-          expectedResultType: 'create_constrained_plan_result',
-          resolve,
-          reject,
-        })
-        worker.postMessage({
-          type: 'create_constrained_plan',
-          requestId,
-          generation,
-          input: { plannerInput: input, orchestrationBounds },
-        })
-      })
-    },
-    createWhatIfComparison: (requestId, request) => {
-      if (disposed) {
-        return Promise.reject(new Error('Planner Worker Client is disposed.'))
-      }
-      const generation = claimRequestId(requestId)
-      return new Promise<PlannerWhatIfCalculationResult>((resolve, reject) => {
-        pending.set(requestId, {
-          requestId,
-          generation,
-          expectedResultType: 'create_what_if_comparison_result',
-          resolve,
-          reject,
-        })
-        worker.postMessage({
-          type: 'create_what_if_comparison',
-          requestId,
-          generation,
-          input: request,
-        })
       })
     },
     createPlannerAlternativeComparison: (requestId, input) => {
@@ -419,11 +319,7 @@ export function createUnavailablePlannerWorkerClient(): PlannerWorkerClient {
     engineVersion: 'production-engine-unavailable',
     createPlan: () => Promise.reject(new ProductionPlannerWorkerUnavailableError()),
     // The same explicit unavailable error, never a main-thread fallback
-    // calculation and never a substituted orchestration bound.
-    createConstrainedPlan: () =>
-      Promise.reject(new ProductionPlannerWorkerUnavailableError()),
-    createWhatIfComparison: () =>
-      Promise.reject(new ProductionPlannerWorkerUnavailableError()),
+    // calculation.
     createPlannerAlternativeComparison: () =>
       Promise.reject(new ProductionPlannerWorkerUnavailableError()),
     createPlannerAlternativeRepair: () =>
