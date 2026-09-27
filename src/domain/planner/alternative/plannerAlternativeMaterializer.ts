@@ -28,8 +28,9 @@ import type { PlannerClock } from '../plannerTypes'
  * Cross-only or #104 reduction.
  *
  * Versioned so a future policy change yields a different search identity
- * instead of silently reusing this one. It is unrelated to the B8
- * `CONSTRAINED_ROUTE_POLICY_VERSION` and to `PRODUCTION_RNG_ENGINE_VERSION`.
+ * instead of silently reusing this one. It is unrelated to the route policy
+ * token of the legacy B8 constrained search identity (removed in Phase 6-B2b)
+ * and to `PRODUCTION_RNG_ENGINE_VERSION`.
  */
 export const PLANNER_ALTERNATIVE_ROUTE_POLICY_VERSION = 'planner-alternative-route-policy:v1'
 
@@ -54,7 +55,7 @@ function normalizeCalculationContext(context: CalculationContext) {
  * The deterministic search identity of one Planner Alternative Search
  * (`docs/PLANNER_SPEC.md` 9.2.13 / `docs/SEARCH_SPEC.md` 5.6.8), composed from
  * the TargetWeapon ID, the normalized Planner-start Search / RNG origin (the
- * same normalization as the B8 identity), the `CalculationContext`, the
+ * normalization the removed B8 identity also used), the `CalculationContext`, the
  * extent, the normalized reservation, the normalized `excludedRouteKeys` and
  * the route policy token.
  *
@@ -98,7 +99,7 @@ export type PlannerAlternativeMaterializer = DeterministicMaterializer<PlannerAl
  * same extraction an ordinary Candidate uses and nothing is predicted again.
  * The generated Entry ID, same-semantic reuse, collision refusal and staleness
  * are the shared core's (`../replacement/plannerDeterministicMaterializer`),
- * exactly as for a legacy B8 Entry.
+ * exactly as they were for the removed legacy B8 Entry.
  */
 export function createPlannerAlternativeMaterializer(
   context: PlannerAlternativeMaterializationContext,

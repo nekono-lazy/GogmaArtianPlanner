@@ -5,7 +5,6 @@ import { BenchmarkApp } from './BenchmarkApp'
 vi.mock('./SkillIdentificationBenchmarkPage', () => ({ SkillIdentificationBenchmarkPage: () => <div>C5 harness</div> }))
 vi.mock('./CandidateSearchBenchmarkPage', () => ({ CandidateSearchBenchmarkPage: () => <div>B5 harness</div> }))
 vi.mock('./ConstrainedEnumerationBenchmarkPage', () => ({ ConstrainedEnumerationBenchmarkPage: () => <div>B8 enumeration harness</div> }))
-vi.mock('./Issue101ConstrainedResearchBenchmarkPage', () => ({ Issue101ConstrainedResearchBenchmarkPage: () => <div>Issue 101 harness</div> }))
 vi.mock('./PlannerAlternativeBenchmarkPage', () => ({ PlannerAlternativeBenchmarkPage: () => <div>Planner Alternative harness</div> }))
 
 describe('BenchmarkApp', () => {
@@ -17,7 +16,6 @@ describe('BenchmarkApp', () => {
     for (const [button, content] of [
       ['B5 Candidate Search', 'B5 harness'],
       ['B8 Constrained Enumeration', 'B8 enumeration harness'],
-      ['Issue 101 Constrained Re-search', 'Issue 101 harness'],
       ['Planner Alternative Phase 3', 'Planner Alternative harness'],
       ['C5-E2C8 Skill Identification', 'C5 harness'],
     ]) {
@@ -29,7 +27,7 @@ describe('BenchmarkApp', () => {
   it('no longer offers the removed Issue 103 Planner Search harness', () => {
     render(<BenchmarkApp />)
     expect(screen.queryByRole('button', { name: 'Issue 103 Planner Search' })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button')).toHaveLength(5)
+    expect(screen.getAllByRole('button')).toHaveLength(4)
   })
 
   it('no longer offers the B8 Planner orchestration or B9 what-if harness (Phase 6-B1)', () => {
@@ -39,5 +37,12 @@ describe('BenchmarkApp', () => {
     // The Search-domain constrained enumeration harness is a different
     // responsibility and stays.
     expect(screen.getByRole('button', { name: 'B8 Constrained Enumeration' })).toBeInTheDocument()
+  })
+
+  it('no longer offers the Issue #101 constrained re-search harness (Phase 6-B2b)', () => {
+    render(<BenchmarkApp />)
+    expect(screen.queryByRole('button', { name: 'Issue 101 Constrained Re-search' })).not.toBeInTheDocument()
+    // The Planner Alternative harness keeps measuring the Issue #101 real case.
+    expect(screen.getByRole('button', { name: 'Planner Alternative Phase 3' })).toBeInTheDocument()
   })
 })

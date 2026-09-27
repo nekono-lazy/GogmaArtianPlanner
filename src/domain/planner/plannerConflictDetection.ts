@@ -41,7 +41,7 @@ export function conflictInvolvesSelectedCheckpoint(
  * conflict it names, or `null` when it can.
  *
  * This is the single Domain authority every consumer shares - initial
- * detection, the Beam Search's final warnings, and the constrained re-search
+ * detection, the full run's final warnings, and the Planner Alternative
  * fixed-constraint preparation - so a refused resolution is refused the same
  * way everywhere and can never reach a Beam Search through another door.
  */

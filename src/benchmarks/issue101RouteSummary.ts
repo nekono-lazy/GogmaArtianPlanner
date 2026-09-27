@@ -1,5 +1,25 @@
 import type { BuildRoute } from '../domain/models/publicTypes'
-import type { Issue101RouteSummary } from './issue101ConstrainedResearchProtocol'
+
+/**
+ * A Route summary the Planner Alternative tests and benchmark record instead
+ * of the Route itself. Pure projection of the Route and its estimates.
+ */
+export interface Issue101RouteSummary {
+  readonly kind: string
+  readonly operationCount: number
+  /** `create_normal_artian.count`, or null for a Route that forges nothing. */
+  readonly normalForgeCount: number | null
+  readonly normalCounterBefore: number | null
+  readonly conversionSkillCounter: number | null
+  readonly resetBonusesCount: number
+  readonly keepBonusesCount: number
+  readonly resetSkillsCount: number
+  readonly firstGogmaCounter: number | null
+  readonly lastGogmaCounter: number | null
+  readonly estimatedGogmaAdvance: number
+  readonly estimatedSkillAdvance: number
+  readonly estimatedNormalAdvance: number | null
+}
 
 /** Summarizes a Route without retaining it. */
 export function summarizeIssue101Route(

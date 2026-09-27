@@ -27,9 +27,9 @@ import type { PlannerAlternativeRepairArtifact } from './alternative'
 import type { PlannerRunTermination } from './plannerTypes'
 
 /**
- * The pure save-time checks a Planner orchestration result must pass before it
- * is persisted (`docs/PLANNER_SPEC.md` 9.2.15), shared by the ordinary Planner
- * result save and the replan adoption (16.8).
+ * The pure save-time checks a Planner result must pass before it is persisted
+ * (`docs/PLANNER_SPEC.md` 9.2.15), shared by the ordinary Planner result save,
+ * the Planner Alternative repair save and the replan adoption (16.8).
  *
  * Each check returns the first issue it finds, or `null`. It never throws, so
  * each caller maps an issue onto its own error boundary: the ordinary save onto
@@ -69,7 +69,9 @@ export function checkPlannerRunTerminationPersistable(
 }
 
 /**
- * The result-shape invariants that do not depend on current persisted state:
+ * The result-shape invariants of a replacement-bearing Planner result - the
+ * Planner Alternative actual repair (`checkPersistablePlannerAlternativeRepairShape()`)
+ * - that do not depend on current persisted state:
  * a completed / exhausted search, a draft Plan, unique generated Entry IDs,
  * exactly one replacement per generated Entry naming its own Target
  * (`docs/PLANNER_SPEC.md` 9.2.18), and Domain-valid Plan and Entries. A
@@ -86,7 +88,7 @@ export function checkPersistablePlannerResultShape(
   if (truncated !== null) return truncated
   if (plan.status !== 'draft') {
     return resultInvalid(
-      `A Planner orchestration result must be saved as a draft ProductionPlan, but its status is '${plan.status}'.`,
+      `A replacement-bearing Planner result must be saved as a draft ProductionPlan, but its status is '${plan.status}'.`,
     )
   }
   const duplicated = generatedEntries
@@ -121,9 +123,9 @@ export function checkPersistablePlannerResultShape(
  * (`createPlan()`, `docs/PLANNER_SPEC.md` 9.2.15 / 16.8, Phase 6-A) that do not
  * depend on current persisted state: a completed / exhausted run, a draft Plan,
  * no repair lineage, and a Domain-valid Plan. An ordinary run carries no
- * generated BuildListEntry and no replacement, so nothing of the B8
- * orchestration contract applies; its Plan is saved over - or, for a replan,
- * started against - the current Build List exactly as it is.
+ * generated BuildListEntry and no replacement, so none of the replacement
+ * checks applies; its Plan is saved over - or, for a replan, started against -
+ * the current Build List exactly as it is.
  *
  * Only the Planner Alternative actual repair ever stores a lineage
  * (`docs/DATA_MODEL.md` 11.1.1), so an ordinary Plan carrying one is refused
@@ -202,8 +204,9 @@ export type FinalReplacementBuildListResult =
 /**
  * The **final replacement set** a Planner result is persisted into
  * (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18): the current persisted Entries,
- * minus each replaced `O`, plus each generated `G`. Shared by the ordinary
- * Draft save and the replan adoption, it refuses - before any write - a
+ * minus each replaced `O`, plus each generated `G`. Used by the shared Draft
+ * save boundary (the ordinary result, with no replacement, and the Planner
+ * Alternative repair), it refuses - before any write - a
  * generated ID that is already persisted (never overwritten), a Target whose
  * persisted Entry is no longer exactly the expected `O`, and a final set in
  * which a replaced Target does not hold exactly its `G`
@@ -269,42 +272,15 @@ export function checkGeneratedBuildListEntriesFresh(
 }
 
 /**
- * Every BuildListEntry the Plan references exists in the final replacement set
- * (`prepareFinalReplacementBuildList()`), each Candidate-derived Step carries
- * its Entry Snapshot's Candidate ID, and every generated Entry is selected by
- * the final Plan (PLANNER_SPEC 9.2.14 / 9.2.18). A replaced Entry `O` is not
- * part of that set, so a Plan still naming it anywhere - a selected Entry, a
- * Step, a conflict participant, recommendation or selection, a rejection - is
- * refused.
- *
- * The "every generated Entry is selected" half is the B8 orchestration
- * contract. The Planner Alternative actual repair does not have it (an
- * accepted replacement may be unselected, 9.2.19.6), so it checks only
- * `checkProductionPlanBuildListEntryReferences()`.
- */
-export function checkProductionPlanBuildListReferences(
-  plan: ProductionPlan,
-  generatedEntries: readonly BuildListEntry[],
-  finalEntries: readonly BuildListEntry[],
-): PlannerResultPersistenceIssue | null {
-  const references = checkProductionPlanBuildListEntryReferences(plan, finalEntries)
-  if (references !== null) return references
-  const selected = new Set(plan.selectedBuildListEntryIds)
-  const unselected = generatedEntries.find(({ id }) => !selected.has(id))
-  if (unselected) {
-    return resultInvalid(
-      `Generated BuildListEntry '${unselected.id}' is not selected by the final ProductionPlan.`,
-    )
-  }
-  return null
-}
-
-/**
  * Every BuildListEntry the Plan references - a selected Entry, a Step, a
  * conflict participant, recommendation or selection, a rejection - exists in
  * the final replacement set, and each Candidate-derived Step carries its Entry
  * Snapshot's Candidate ID. A replaced Entry `O` is not part of that set, so a
- * Plan still naming it anywhere is refused.
+ * Plan still naming it anywhere is refused. A generated Entry need not be
+ * selected: a Planner Alternative repair saves its accepted replacement set
+ * whether or not the final Plan selects each `G` (9.2.19.6). (The legacy B8
+ * save additionally required every generated Entry to be selected; that check
+ * was removed with it in Phase 6-B2b.)
  */
 export function checkProductionPlanBuildListEntryReferences(
   plan: ProductionPlan,
@@ -415,8 +391,7 @@ function replacementIdentity(targetWeaponId: string, replaced: string, generated
  * `conflictRepairLineage` set exactly to the artifact's lineage - never a
  * lineage rebuilt from persisted state or the Plan's Conflicts. It does not
  * require a generated Entry to be selected by the Plan: the accepted
- * replacement set is the authority (9.2.19.6), unlike the B8 contract of
- * `checkProductionPlanBuildListReferences()`.
+ * replacement set is the authority (9.2.19.6).
  */
 export function checkPersistablePlannerAlternativeRepairShape(
   artifact: PlannerAlternativeRepairArtifact,

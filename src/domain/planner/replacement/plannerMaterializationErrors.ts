@@ -3,14 +3,13 @@
  * (`createDeterministicMaterializer()`) and of resolving a Target from a
  * Planner-start Search origin.
  *
- * Phase 6-B2a moved this module from the legacy B8-C2 materializer
- * (`../constrained/constrainedMaterializationErrors`, kept as a compatibility
- * facade until Phase 6-B2b) without changing its runtime contract: the one
- * constructor is still `ConstrainedMaterializationError`, so a thrown error
- * keeps its `instanceof`, its `name` / `constructor.name`
- * (`'ConstrainedMaterializationError'`), its `code` and its message.
- * `PlannerMaterializationError` is the neutral alias of that very constructor,
- * never a second class.
+ * Phase 6-B2a moved this module from the legacy B8-C2 materializer without
+ * changing its runtime contract, and Phase 6-B2b removed the legacy import path
+ * that re-exported it: the one constructor is still
+ * `ConstrainedMaterializationError`, so a thrown error keeps its `instanceof`,
+ * its `name` / `constructor.name` (`'ConstrainedMaterializationError'`), its
+ * `code` and its message. `PlannerMaterializationError` is the neutral alias of
+ * that very constructor, never a second class.
  *
  * Every failure fails closed: no partially built Candidate, no fallback to a
  * random ID, and no overwrite of an existing BuildListEntry. The caller reads

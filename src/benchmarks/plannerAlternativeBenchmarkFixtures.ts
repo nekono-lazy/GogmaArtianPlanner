@@ -33,15 +33,14 @@ import {
 } from '../domain/search'
 import { validateTargetIdealImpliesPractical } from '../domain/target'
 import {
-  createIssue101NoIdealEnumerationInput,
+  createIssue101NoIdealSearchOrigin,
   createIssue101RealFixture,
   ISSUE_101_BASE_SEED,
-  ISSUE_101_BASELINE_BOUNDS,
   ISSUE_101_GOGMA_COUNTER,
   ISSUE_101_SKILL_COUNTER,
   ISSUE_101_WEAPON_TYPE_ID,
   type Issue101RealFixture,
-} from './issue101ConstrainedResearchFixtures'
+} from './issue101PlannerAlternativeFixtures'
 
 /**
  * Planner Alternative Search Phase 3-A benchmark fixtures
@@ -294,16 +293,15 @@ export function createIssue101KernelRequest(
 
 /**
  * The no-Ideal workload: the existing Issue #101 unreachable-Ideal fixture
- * (origin and Target from `createIssue101NoIdealEnumerationInput()`, whose
- * constrained bounds argument only satisfies that helper and is discarded),
- * searched by Planner Alternative Search under the given reservation.
+ * (origin and Target from `createIssue101NoIdealSearchOrigin()`), searched by
+ * Planner Alternative Search under the given reservation.
  */
 export function createIssue101NoIdealSearchInput(
   extent: PlannerAlternativeSearchExtent,
   reservation: PlannerAlternativeReservation = emptyPlannerAlternativeReservation,
 ): PlannerAlternativeSearchInput {
   assertPlannerAlternativeBenchmarkExtent(extent)
-  const { origin, targetWeaponId } = createIssue101NoIdealEnumerationInput(ISSUE_101_BASELINE_BOUNDS)
+  const { origin, targetWeaponId } = createIssue101NoIdealSearchOrigin()
   return {
     origin,
     targetWeaponId,

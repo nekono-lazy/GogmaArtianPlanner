@@ -36,7 +36,7 @@ import {
   ISSUE_101_GOGMA_COUNTER,
   ISSUE_101_SKILL_COUNTER,
   ISSUE_101_WEAPON_TYPE_ID,
-} from './issue101ConstrainedResearchFixtures'
+} from './issue101PlannerAlternativeFixtures'
 import {
   assertPlannerAlternativeBenchmarkExtent,
   assertPlannerAlternativeBenchmarkTrialBounds,

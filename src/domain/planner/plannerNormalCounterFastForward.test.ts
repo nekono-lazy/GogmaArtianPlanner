@@ -20,8 +20,12 @@ import {
 import type { OrchestrationScenario } from '../../test/fixtures/plannerConstrainedOrchestration'
 import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
 import { createPlannerConflictContexts } from './replacement/plannerConflictContext'
-import { createPlannerWhatIfComparison } from './constrained/plannerWhatIfCalculation'
-import { orchestrationEnumerationBounds } from '../../test/fixtures/plannerConstrainedOrchestration'
+import { defaultPlannerAlternativeSearchExtent } from '../search'
+import {
+  createPlannerAlternativeWhatIfComparison,
+  defaultPlannerAlternativeTrialBounds,
+  derivePlannerConflictRepairLineageContext,
+} from './alternative'
 import { createPlanConflictId } from './conflictKey'
 import { detectPlannerConflicts } from './plannerConflictDetection'
 import { runPlannerDeterministicSchedule } from './plannerDeterministicScheduler'
@@ -444,7 +448,7 @@ describe('Beam Search oracle over shared Normal Counter prefixes', () => {
   })
 })
 
-describe('Constrained re-search and what-if over Normal Counter conflicts', () => {
+describe('Conflict contexts and the Planner Alternative comparison over Normal Counter conflicts', () => {
   it('gives the constrained conflict context no Counter-advance Normal conflict', () => {
     const { scenario } = twoForgeRoutes(2, 3)
     const prepared = preparePlannerInitialContext(scenario.input, scenario.dependencies)
@@ -469,24 +473,33 @@ describe('Constrained re-search and what-if over Normal Counter conflicts', () =
       .toEqual([entryA.id, entryB.id].sort())
   })
 
-  it('answers a what-if for the production-target Normal conflict', async () => {
-    const { builder, entryA, targetB } = twoForgeRoutes(3, 3)
+  it('compares the production-target Normal conflict through Planner Alternative, re-searching only the other Target', async () => {
+    const { builder, entryA, targetA, targetB } = twoForgeRoutes(3, 3)
     const first = builder.build()
     const baseline = await runPlannerDeterministicSchedule(first.input, first.dependencies)
     const conflict = baseline.conflicts.find(({ kind }) => kind === 'same_normal_counter')!
-    const result = await createPlannerWhatIfComparison(
+    expect(conflict.buildListEntryIds).toContain(entryA.id)
+    // A fresh Draft carries no repair lineage, so no prior fixed Entry or
+    // excluded Route applies (9.2.19.11).
+    const lineage = derivePlannerConflictRepairLineageContext(null, first.input.buildListEntries)
+    const result = await createPlannerAlternativeWhatIfComparison(
       {
         plannerInput: first.input,
         scenarioResolution: { conflictKey: conflict.id, selectedBuildListEntryId: entryA.id },
-        bounds: { maxCandidateTrialsPerTarget: 2, maxPlannerReruns: 8 },
+        priorFixedBuildListEntryIds: lineage.priorFixedBuildListEntryIds,
+        priorExcludedRoutes: lineage.priorExcludedRoutes,
+        extent: defaultPlannerAlternativeSearchExtent,
+        bounds: defaultPlannerAlternativeTrialBounds,
       },
       first.dependencies,
-      { enumerationBounds: orchestrationEnumerationBounds() },
     )
     expect(result.status).toBe('completed')
     if (result.status !== 'completed') return
+    expect(result.comparison.conflictKey).toBe(conflict.id)
     expect(result.comparison.fixedBuildListEntryId).toBe(entryA.id)
-    expect(result.comparison.alternatives.map(({ targetWeaponId }) => targetWeaponId)).toEqual([targetB.id])
+    expect(result.comparison.fixedTargetWeaponId).toBe(targetA.id)
+    expect(result.comparison.alternatives.map(({ alternativeTargetWeaponId }) => alternativeTargetWeaponId))
+      .toEqual([targetB.id])
   })
 })
 

@@ -368,7 +368,7 @@ function currentEntryEligibility(
  * Validates one Planner input against the current state.
  *
  * `buildListContext` defaults to the ordinary `persisted` contract, so every
- * caller that does not explicitly declare a B8 / what-if trial input gets the
+ * caller that does not explicitly declare a Planner Alternative trial input gets the
  * Build List cardinality fail-closed check (`docs/PLANNER_SPEC.md` 4.1). A
  * trial input gets the same check on its persisted side plus the temporary
  * contract of its replacements (9.2.18).
@@ -436,7 +436,7 @@ export function validatePlannerInput(
   // excluded) is not planned, so its duplicate chooses nothing here and is left
   // to the Build List.
   //
-  // A B8 / what-if trial input (`docs/PLANNER_SPEC.md` 9.2.18) is checked the
+  // A Planner Alternative trial input (`docs/PLANNER_SPEC.md` 9.2.18) is checked the
   // same way on its persisted side - its temporary Entries set aside - and each
   // Target of its replacements must hold exactly `O` + `G` (the preflight's
   // augmented input) or exactly `G` (the replacement set). Temporary 2+,

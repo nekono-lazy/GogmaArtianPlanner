@@ -198,8 +198,8 @@ export function checkpointConditionMatchFor(entry: BuildListEntry): CompromiseCo
  * its checkpoint and secured its Ideal Candidate, and no other Entry of the
  * Target is adopted as an alternative finishing Route. The map is derived from
  * the whole set of valid BuildListEntries of the run - never from a conflict's
- * participants alone - so constrained re-search and what-if read the same
- * authority the Beam Search does.
+ * participants alone - so the Planner Alternative reads the same authority
+ * the scheduler and the Beam Search oracle do.
  */
 export interface PlannerCheckpointRequirements {
   requiredEntryIdByTargetId: ReadonlyMap<TargetWeaponId, BuildListEntryId>

@@ -1047,8 +1047,13 @@ B8-Aで確定した契約である。実装はB8-B1で行う。Planner側の契�
 本節は5.6.8のPlanner Alternative Searchへ段階的に置き換える対象であり、Production routingを切り替えるまで
 （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14のPhase 5）はlegacy implementationとしてそのまま動作した。Phase 5-Bで
 生産計画画面の「比較する」と「この候補を優先」は5.6.8へ切り替わった。Phase 6-B1でB8 / B9のPlanner Worker / Client経路と
-Browser benchmark runtimeを削除した。本節の実装（Search Domainのconstrained enumeratorとそのBrowser benchmark）はPhase 6-B2bで
-削除またはtest oracle化するまで残る。
+Browser benchmark runtimeを削除した。Phase 6-B2bで、本節のenumeratorを使っていたPlanner側のB8 orchestration / B9 what-if、
+`defaultPlannerOrchestrationBounds` / `defaultPlannerWhatIfBounds`、B8専用warning kind、Issue #101 constrained re-search
+research harnessを削除し、Phase 6を完了した。本節の実装（Search Domainのconstrained enumerator
+`visitConstrainedCandidates()` / `enumerateConstrainedCandidates()`、`ConstrainedSearchOrigin` / `ConstrainedCandidate` /
+`ConstrainedEnumerationBounds`、`defaultConstrainedEnumerationBounds`、B8-B2 Constrained EnumerationのBrowser benchmark）は、
+Planner Alternativeの共有shapeが型を使い、Search Domain benchmark / validationがenumeratorとdefaultを使うため残る。
+これはどのProduction Plannerも使わず、Search Domain側の型名・APIの整理は後続のSearch cleanupで扱う。
 本節のboundsを拡大して新機能のauthorityにしない。
 
 #### 境界
@@ -1253,7 +1258,9 @@ Worker benchmarkから決定する。orchestration側boundsのProduction default
 
 **B8-B2で決定済み。** 実測記録は
 [B8_CONSTRAINED_ENUMERATION_BROWSER_WORKER_BENCHMARK.md](./B8_CONSTRAINED_ENUMERATION_BROWSER_WORKER_BENCHMARK.md)
-にある。
+にある。この値はB8 orchestration / B9 what-ifのProduction enumeration defaultであった（historical）。両計算は
+Phase 6-B2bで削除し、現在の値はSearch Domainのconstrained enumerator benchmark / testのためだけに残る。現在の
+Production Planner（Planner Alternative）のauthorityではない（5.6.8）。
 
 ```ts
 export const defaultConstrainedEnumerationBounds: ConstrainedEnumerationBounds = {

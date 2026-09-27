@@ -504,14 +504,14 @@ export function collectRequiredMaterials(
  * (PLANNER_SPEC 9.2.16).
  *
  * This is the single implementation. Ordinary `createProductionPlan()`
- * delegates here without an observer, and B8 constrained-search orchestration
- * delegates here with one, so the two paths can never drift apart.
+ * delegates here without an observer, and the Planner Alternative full-run
+ * path delegates here with one, so the two paths can never drift apart.
  *
  * The full Planner run is the deterministic scheduler
  * (`runPlannerDeterministicSchedule()`, Issue #103 Phase C): this is the one
- * place Production chooses it, so the ordinary Planner, B8 constrained
- * re-search, B9 what-if, the replan Preview and the runtime-unsupported retry
- * all run the same strategy.
+ * place Production chooses it, so the ordinary Planner, the Planner
+ * Alternative trials, the replan Preview and the runtime-unsupported retry all
+ * run the same strategy.
  *
  * `observer.beforePlannerRun()` is called once immediately before each full
  * Planner run that actually starts: the first one, and
@@ -523,7 +523,7 @@ export function collectRequiredMaterials(
  *
  * `buildListContext` is the Build List cardinality contract of `input`
  * (`PlannerBuildListContext`): the ordinary `persisted` default, or
- * `temporary_replacement` for the replacement set of a B8 / what-if trial
+ * `temporary_replacement` for the replacement set of a Planner Alternative trial
  * (`docs/PLANNER_SPEC.md` 9.2.18). A trial's augmented preflight input is
  * never a full Planner run, so its context is not accepted here.
  */
@@ -603,8 +603,8 @@ export interface PlannerFullRunObserverOf<TResult> {
  *
  * Only the full run is replaced; everything after it is the one shared tail,
  * `generatePlanFromFullRun()`. `observer.beforePlannerRun()` /
- * `afterPlannerRun()` wrap every full run exactly as before, so the B8 /
- * what-if rerun budgets keep counting full Planner runs.
+ * `afterPlannerRun()` wrap every full run exactly as before, so the Planner
+ * Alternative rerun budget keeps counting full Planner runs.
  *
  * Production never calls this with anything but
  * `runPlannerDeterministicSchedule` (through `createProductionPlanWithObserver()`);

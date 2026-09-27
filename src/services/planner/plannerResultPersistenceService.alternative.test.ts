@@ -90,6 +90,10 @@ interface ScenarioOptions {
    * provisional outcome to an Entry outside the fixed Route set (9.2.19.6).
    */
   unselectFirstGenerated?: boolean
+  /** Applied before the Plan snapshot is built, so the snapshot stays consistent. */
+  adjustGenerated?: (entries: BuildListEntry[]) => void
+  /** Makes the Dexie write of this BuildListEntry ID fail inside the save. */
+  failEntryWriteId?: string
 }
 
 function lineageFor(
@@ -186,6 +190,7 @@ async function withScenario(
     }))
     const owned = [sourceWeapon('owned.fixture.a'), sourceWeapon('owned.fixture.b')]
     const { input } = fixture([targetA, targetB], [...persisted, ...generated], owned)
+    options.adjustGenerated?.(generated)
     // The final scenario run is calculated over the replacement set.
     const finalSet = [...persisted.slice(count), ...generated]
     input.buildListEntries = finalSet
@@ -217,6 +222,12 @@ async function withScenario(
     for (const goal of input.targetWeapons) await seedRepositories.targetWeapons.putTargetWeapon(goal)
     for (const entry of persisted) await seedRepositories.buildListEntries.putBuildListEntry(entry)
     await database.productionPlans.put({ ...createValidProductionPlan(), id: productionPlanId(OLD_DRAFT_ID) })
+    if (options.failEntryWriteId !== undefined) {
+      const failing = options.failEntryWriteId
+      database.buildListEntries.hook('creating', (_key, record) => {
+        if (record.id === failing) throw new Error('fixture Entry write failure')
+      })
+    }
 
     await run({
       database,
@@ -279,18 +290,6 @@ describe('PlannerResultPersistenceService Planner Alternative repair save', () =
       }])
     }, { unselectFirstGenerated: true }))
 
-  it('keeps the B8 contract separate: the same unselected Entry as an orchestration result is refused', () =>
-    withScenario(async ({ database, service, context, artifact, entryIds }) => {
-      const before = await dump(database)
-      await expect(service.savePlannerOrchestrationResult({
-        ...artifact.plannerResult,
-        generatedBuildListEntries: artifact.generatedBuildListEntries,
-        generatedBuildListEntryReplacements: artifact.generatedBuildListEntryReplacements,
-      }, context)).rejects.toMatchObject({ code: 'planner_result_invalid' })
-      expect(await dump(database)).toEqual(before)
-      expect(await entryIds()).not.toContain('build-list.generated.0')
-    }, { unselectFirstGenerated: true }))
-
   it('refuses a replaced O that changed after the calculation and writes nothing', () =>
     withScenario(async ({ database, service, context, artifact, persisted }) => {
       // The user replaced the Target's Entry while the Worker calculated.
@@ -319,6 +318,9 @@ describe('PlannerResultPersistenceService Planner Alternative repair save', () =
     ['a replacement for another Target', (a: PlannerAlternativeRepairArtifact) => {
       a.generatedBuildListEntryReplacements[0].targetWeaponId = 'target.fixture.b' as TargetWeapon['id']
     }],
+    ['no replacement metadata at all', (a: PlannerAlternativeRepairArtifact) => {
+      a.generatedBuildListEntryReplacements = undefined as never
+    }],
     ['an incomplete final run', (a: PlannerAlternativeRepairArtifact) => {
       a.plannerResult.termination = incompletePlannerTermination(['max_plan_steps'])
     }],
@@ -334,6 +336,13 @@ describe('PlannerResultPersistenceService Planner Alternative repair save', () =
     }],
     ['a Plan that still names the replaced O', (a: PlannerAlternativeRepairArtifact) => {
       a.plannerResult.plan.selectedBuildListEntryIds = [...a.plannerResult.plan.selectedBuildListEntryIds, 'build-list.persisted.a' as BuildListEntry['id']]
+    }],
+    ['a Plan that still rejects the replaced O', (a: PlannerAlternativeRepairArtifact) => {
+      a.plannerResult.plan.rejectedBuildListEntries = [{
+        buildListEntryId: 'build-list.persisted.a' as BuildListEntry['id'],
+        reason: 'resource_conflict',
+        detail: 'fixture',
+      }]
     }],
   ] as const)('refuses an artifact with %s as planner_result_invalid and writes nothing', (_label, corrupt) =>
     withScenario(async ({ database, service, context, artifact }) => {
@@ -410,6 +419,119 @@ describe('PlannerResultPersistenceService Planner Alternative repair save', () =
       const stored = await database.productionPlans.get('plan.alternative.repaired')
       expect(stored?.conflictRepairLineage).toEqual(artifact.conflictRepairLineage)
     }))
+})
+
+/**
+ * The shared save boundary a repair goes through (`docs/PLANNER_SPEC.md` 9.2.15
+ * / 9.2.18): the generated Entries are re-validated against the current state,
+ * and every write - the Entry replacements, the Draft replacement and any Plan
+ * abandonment - commits or rolls back as one transaction.
+ */
+describe('PlannerResultPersistenceService Planner Alternative repair save boundary', () => {
+  function runningPlanOver(
+    plan: ProductionPlan,
+    entries: readonly BuildListEntry[],
+    status: 'active' | 'stale' | 'completed' | 'abandoned',
+  ): ProductionPlan {
+    const base = buildPlan(plan.baseSnapshot, plan.calculationContext, entries)
+    return {
+      ...base,
+      id: productionPlanId('plan.running.p1'),
+      status,
+      recalculationReasons: status === 'stale' ? ['build_list_changed'] : [],
+      abandonmentReason: status === 'abandoned' ? 'user_abandoned' : null,
+      abandonedAt: status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null,
+      completedAt: status === 'completed' ? DOMAIN_FIXTURE_TIME : null,
+      currentStepId: status === 'completed' ? null : base.currentStepId,
+      steps: status === 'completed'
+        ? base.steps.map((step) => ({ ...step, isCompleted: true, completedAt: DOMAIN_FIXTURE_TIME }))
+        : base.steps,
+    }
+  }
+
+  const PERSISTED_ENTRY_IDS = ['build-list.persisted.a', 'build-list.persisted.b']
+
+  it('never writes a generated Candidate into the BuildCandidate table', () =>
+    withScenario(async ({ database, service, context, artifact }) => {
+      await service.savePlannerAlternativeRepair(artifact, context, SOURCE_DRAFT_ID)
+      expect(await database.buildCandidates.count()).toBe(0)
+    }))
+
+  it('recomputes generated Entry staleness instead of trusting its stored flags', () =>
+    withScenario(async ({ database, service, context, artifact }) => {
+      const before = await dump(database)
+      await expect(service.savePlannerAlternativeRepair(artifact, context, SOURCE_DRAFT_ID)).rejects.toMatchObject({
+        code: 'planner_state_changed',
+        message: expect.stringContaining('rng_state_changed'),
+      })
+      expect(await dump(database)).toEqual(before)
+    }, {
+      adjustGenerated: (entries) => {
+        // The Entry still claims `isStale: false`, but its own Search hash no
+        // longer matches its route against current RNG state.
+        entries[0].searchStateHash = 'hash.fixture.divergent-search-state'
+        entries[0].candidateSnapshot.searchStateHash = entries[0].searchStateHash
+      },
+    }))
+
+  it('rolls the Entry replacement and the Draft replacement back when the Plan write fails', () =>
+    withScenario(async ({ database, service, context, artifact, entryIds }) => {
+      const taken = { ...createValidProductionPlan(), id: artifact.plannerResult.plan.id, status: 'active' as const }
+      await database.productionPlans.put(taken)
+      await expect(service.savePlannerAlternativeRepair(artifact, context, SOURCE_DRAFT_ID))
+        .rejects.toMatchObject({ code: 'production_plan_id_conflict' })
+      expect(await entryIds()).toEqual(PERSISTED_ENTRY_IDS)
+      expect(await database.productionPlans.get(taken.id)).toEqual(taken)
+      expect(await database.productionPlans.get(SOURCE_DRAFT_ID)).toBeDefined()
+    }))
+
+  it('rolls every replacement and the Draft deletion back when a later Entry write fails', () =>
+    withScenario(async ({ database, service, context, artifact, entryIds, planIds }) => {
+      const before = await dump(database)
+      await expect(service.savePlannerAlternativeRepair(artifact, context, SOURCE_DRAFT_ID)).rejects.toBeInstanceOf(Error)
+      expect(await entryIds()).toEqual(PERSISTED_ENTRY_IDS)
+      expect(await planIds()).toEqual([OLD_DRAFT_ID])
+      expect(await dump(database)).toEqual(before)
+    }, { replacementCount: 2, failEntryWriteId: 'build-list.generated.1' }))
+
+  it('rolls the abandonment and the replacement back together when a later write fails', () =>
+    withScenario(async ({ database, service, context, artifact, persisted, entryIds }) => {
+      const plan = artifact.plannerResult.plan
+      const active = runningPlanOver(plan, persisted, 'active')
+      await database.productionPlans.put(active)
+      const inspection = await service.inspectPlannerAlternativeRepairSave(artifact, context, SOURCE_DRAFT_ID)
+      if (!inspection.approvalRequired) throw new Error('Expected an approval.')
+      // The new Plan's ID is taken after the inspection, which fails the last
+      // write of the approved save.
+      const taken = { ...runningPlanOver(plan, persisted, 'completed'), id: plan.id }
+      await database.productionPlans.put(taken)
+
+      await expect(service.savePlannerAlternativeRepair(artifact, context, SOURCE_DRAFT_ID, {
+        observedPlan: inspection.observedPlan,
+        savePointDecision: null,
+      })).rejects.toMatchObject({ code: 'production_plan_id_conflict' })
+      expect(await entryIds()).toEqual(PERSISTED_ENTRY_IDS)
+      expect(await database.productionPlans.get(active.id)).toEqual(active)
+      expect(await database.productionPlans.get(plan.id)).toEqual(taken)
+      expect(await database.productionPlans.get(SOURCE_DRAFT_ID)).toBeDefined()
+    }))
+
+  it.each(['stale', 'completed', 'abandoned'] as const)(
+    'needs no approval when only a %s Plan references the replaced Entry',
+    (status) =>
+      withScenario(async ({ database, service, context, artifact, persisted, entryIds }) => {
+        const historical = runningPlanOver(artifact.plannerResult.plan, persisted, status)
+        await database.productionPlans.put(historical)
+
+        expect(await service.inspectPlannerAlternativeRepairSave(artifact, context, SOURCE_DRAFT_ID))
+          .toEqual({ approvalRequired: false })
+        const outcome = await service.savePlannerAlternativeRepair(artifact, context, SOURCE_DRAFT_ID)
+        expect(outcome).toMatchObject({ kind: 'saved', plan: { id: artifact.plannerResult.plan.id } })
+        expect(await entryIds()).toEqual(['build-list.generated.0', 'build-list.persisted.b'])
+        // The historical Plan keeps its now-deleted reference as persisted.
+        expect(await database.productionPlans.get(historical.id)).toEqual(historical)
+      }),
+  )
 })
 
 /**
@@ -513,17 +635,6 @@ describe('PlannerResultPersistenceService Planner Alternative repair save and it
       await expect(service.savePlannerAlternativeRepair(artifact, context, SOURCE_DRAFT_ID))
         .rejects.toMatchObject({ code: 'draft_plan_conflict' })
       expect(await dump(database)).toEqual(before)
-    }, { replacementCount: 0 }))
-
-  it('leaves the B8 orchestration save without a source Draft check', () =>
-    withScenario(async ({ database, service, context, artifact }) => {
-      await database.productionPlans.delete(SOURCE_DRAFT_ID)
-      const outcome = await service.savePlannerOrchestrationResult({
-        ...artifact.plannerResult,
-        generatedBuildListEntries: artifact.generatedBuildListEntries,
-        generatedBuildListEntryReplacements: artifact.generatedBuildListEntryReplacements,
-      }, context)
-      expect(outcome.kind).toBe('saved')
     }, { replacementCount: 0 }))
 })
 

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Button, Stack } from '@mui/material'
 import { CandidateSearchBenchmarkPage } from './CandidateSearchBenchmarkPage'
 import { ConstrainedEnumerationBenchmarkPage } from './ConstrainedEnumerationBenchmarkPage'
-import { Issue101ConstrainedResearchBenchmarkPage } from './Issue101ConstrainedResearchBenchmarkPage'
 import { PlannerAlternativeBenchmarkPage } from './PlannerAlternativeBenchmarkPage'
 import { SkillIdentificationBenchmarkPage } from './SkillIdentificationBenchmarkPage'
 
@@ -10,7 +9,6 @@ type BenchmarkId =
   | 'c8-skill-identification'
   | 'b5-candidate-search'
   | 'b8-constrained-enumeration'
-  | 'issue101-constrained-research'
   | 'planner-alternative-phase3'
 
 /**
@@ -32,6 +30,11 @@ type BenchmarkId =
  * kinds they measured (`docs/PLANNER_SPEC.md` 9.2.19.16); their measurements
  * stay recorded in `docs/B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md`
  * and `docs/B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md`.
+ * Phase 6-B2b removed the Issue #101 constrained re-search harness together
+ * with the legacy B8 / B9 Planner Domain it measured; its measurements stay
+ * recorded in `docs/ISSUE_101_CONSTRAINED_RESEARCH_BENCHMARK.md`, and the
+ * Issue #101 real case lives on as a Planner Alternative fixture. The B8
+ * constrained enumeration harness is a Search Domain benchmark and stays.
  */
 export function BenchmarkApp() {
   const [benchmark, setBenchmark] = useState<BenchmarkId>('c8-skill-identification')
@@ -57,12 +60,6 @@ export function BenchmarkApp() {
           B8 Constrained Enumeration
         </Button>
         <Button
-          variant={benchmark === 'issue101-constrained-research' ? 'contained' : 'outlined'}
-          onClick={() => setBenchmark('issue101-constrained-research')}
-        >
-          Issue 101 Constrained Re-search
-        </Button>
-        <Button
           variant={benchmark === 'planner-alternative-phase3' ? 'contained' : 'outlined'}
           onClick={() => setBenchmark('planner-alternative-phase3')}
         >
@@ -73,9 +70,6 @@ export function BenchmarkApp() {
       {benchmark === 'b5-candidate-search' && <CandidateSearchBenchmarkPage />}
       {benchmark === 'b8-constrained-enumeration' && (
         <ConstrainedEnumerationBenchmarkPage />
-      )}
-      {benchmark === 'issue101-constrained-research' && (
-        <Issue101ConstrainedResearchBenchmarkPage />
       )}
       {benchmark === 'planner-alternative-phase3' && <PlannerAlternativeBenchmarkPage />}
     </Stack>

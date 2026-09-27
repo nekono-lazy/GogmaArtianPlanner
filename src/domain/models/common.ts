@@ -334,7 +334,9 @@ export interface KnownValue<T> {
 // the runtime-unsupported retries inside that initial ordinary run, and the
 // ordinary `createPlan()` has no such budget: an input that needs more than 4
 // full runs of runtime-unsupported retries stopped with `plan = null` and
-// `max_planner_reruns_reached` on the old path, while the new path keeps
+// the B8 rerun-limit warning on the old path (the literal is recorded in
+// `docs/PLANNER_SPEC.md` 9.2.19.15; the path itself was removed in Phase
+// 6-B2b), while the new path keeps
 // excluding the unsupported Entries and can still produce a Plan. The Plan's
 // existence, its selected and rejected Entries, warnings, Steps, completed
 // Targets and required materials can therefore differ for the same

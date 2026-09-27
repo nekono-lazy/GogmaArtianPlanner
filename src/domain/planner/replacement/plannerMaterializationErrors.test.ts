@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import * as legacyFacade from '../constrained/constrainedMaterializationErrors'
 import * as plannerBarrel from '..'
 import {
   ConstrainedMaterializationError,
@@ -8,14 +7,13 @@ import {
 
 /**
  * Phase 6-B2a moved the materialization error into the shared module without
- * changing its runtime contract: one constructor, reachable under the legacy
- * name, the neutral alias, the legacy import path and the Planner barrel.
+ * changing its runtime contract, and Phase 6-B2b removed its legacy import
+ * path: one constructor, reachable under the legacy name, the neutral alias
+ * and the Planner barrel.
  */
-describe('materialization error runtime contract (Phase 6-B2a)', () => {
+describe('materialization error runtime contract (Phase 6-B2a / 6-B2b)', () => {
   it('exposes one constructor under the neutral alias and every import path', () => {
     expect(PlannerMaterializationError).toBe(ConstrainedMaterializationError)
-    expect(legacyFacade.ConstrainedMaterializationError).toBe(ConstrainedMaterializationError)
-    expect(legacyFacade.PlannerMaterializationError).toBe(ConstrainedMaterializationError)
     expect(plannerBarrel.ConstrainedMaterializationError).toBe(ConstrainedMaterializationError)
     expect(plannerBarrel.PlannerMaterializationError).toBe(ConstrainedMaterializationError)
   })

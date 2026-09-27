@@ -18,14 +18,14 @@ import type {
   RouteOperation,
 } from './publicTypes'
 import * as domainRules from './domainRules'
-import { createConstrainedSearchIdentity } from '../planner/constrained/constrainedSearchIdentity'
+import { createPlannerAlternativeSearchIdentity } from '../planner/alternative/plannerAlternativeMaterializer'
+import { defaultPlannerAlternativeSearchExtent, emptyPlannerAlternativeReservation } from '../search'
 import * as simulatedInventory from '../planner/simulatedInventory'
 import { plannerWarningKinds } from '../planner/plannerTypes'
 import { planStepOperationLabels } from '../../presentation/labels'
 import { createInitialPlannerSearchState } from '../planner/plannerInitialState'
 import { evaluateBuildListEntryStaleness } from '../buildList'
 import {
-  constrainedBounds,
   createConstrainedSearchOrigin,
   gogmaWeapon,
 } from '../../test/fixtures/constrainedEnumeration'
@@ -148,15 +148,17 @@ describe('status is excluded from every semantic hash and calculation identity',
     ).not.toBe(before.ownedWeaponsHash)
   })
 
-  it('leaves the constrained search identity unchanged for a status-only change', () => {
+  it('leaves the Planner Alternative search identity unchanged for a status-only change', () => {
     const build = (overrides: Partial<OwnedGogmaArtianWeapon>) => {
       const origin = createConstrainedSearchOrigin({
         ownedWeapons: [gogmaWeapon('owned.status.identity', overrides)],
       })
-      return createConstrainedSearchIdentity({
+      return createPlannerAlternativeSearchIdentity({
         origin,
         targetWeaponId: origin.targetWeapons[0].id,
-        bounds: constrainedBounds(),
+        extent: defaultPlannerAlternativeSearchExtent,
+        reservation: emptyPlannerAlternativeReservation,
+        excludedRouteKeys: [],
       })
     }
     const before = build({ status: 'unclassified' })

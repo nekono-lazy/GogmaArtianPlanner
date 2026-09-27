@@ -32,8 +32,6 @@ import {
 const domain = vi.hoisted(() => ({
   createPlannerAlternativeWhatIfComparison: vi.fn(),
   createPlannerAlternativeRepair: vi.fn(),
-  createPlannerWhatIfComparison: vi.fn(),
-  createProductionPlanWithConstrainedSearch: vi.fn(),
 }))
 
 vi.mock('../domain/planner', async (importOriginal) => {
@@ -42,10 +40,6 @@ vi.mock('../domain/planner', async (importOriginal) => {
     ...actual,
     createPlannerAlternativeWhatIfComparison: domain.createPlannerAlternativeWhatIfComparison,
     createPlannerAlternativeRepair: domain.createPlannerAlternativeRepair,
-    // The legacy B8 / B9 Domain calculations stay in the Domain until Phase
-    // 6-B2b; replaced here only to prove no Production adapter reaches them.
-    createPlannerWhatIfComparison: domain.createPlannerWhatIfComparison,
-    createProductionPlanWithConstrainedSearch: domain.createProductionPlanWithConstrainedSearch,
   }
 })
 
@@ -123,7 +117,6 @@ describe('Production Planner Alternative what-if Worker adapter (Phase 4-B)', ()
     expect(input).toEqual(before)
     expect(request.extent).not.toBe(defaultPlannerAlternativeSearchExtent)
     expect(request.bounds).not.toBe(defaultPlannerAlternativeTrialBounds)
-    expect(domain.createPlannerWhatIfComparison).not.toHaveBeenCalled()
   })
 
   it('passes the same Domain Production extent and trial bounds to the actual repair, and the wire input unchanged', async () => {
@@ -193,30 +186,21 @@ describe('Production Planner Worker calculations (Phase 6-B1)', () => {
       'createProductionPlannerWorkerCalculations',
       'createProductionPlannerWorkerDependencies',
     ])
-    expect(productionModule).not.toHaveProperty('defaultPlannerOrchestrationBounds')
-    expect(productionModule).not.toHaveProperty('defaultPlannerWhatIfBounds')
     expect(productionModule).not.toHaveProperty('defaultConstrainedEnumerationBounds')
   })
 
-  it('reaches no legacy B8 / B9 Domain calculation through any current adapter', async () => {
-    domain.createPlannerAlternativeWhatIfComparison.mockResolvedValue({
-      status: 'invalid_prior_fixed_entry', buildListEntryId: 'build-list.production.prior' as never, detail: 'fixture',
-    })
-    domain.createPlannerAlternativeRepair.mockResolvedValue({
-      status: 'invalid_prior_fixed_entry', buildListEntryId: 'build-list.production.prior' as never, detail: 'fixture',
-    })
-    domain.createPlannerWhatIfComparison.mockClear()
-    domain.createProductionPlanWithConstrainedSearch.mockClear()
-    const dependencies = createProductionPlannerWorkerDependencies()
-    await createProductionPlannerAlternativeComparison(alternativeInput(), dependencies)
-    await createProductionPlannerAlternativeRepair({
-      plannerInput: plannerInput(),
-      decision: { conflictKey: 'conflict.production.repair', selectedBuildListEntryId: 'build-list.production.repair' as never },
-      lineage: null,
-    }, dependencies)
-    createProductionPlannerWorkerCalculations().prepareInteraction(plannerInput(), dependencies)
-    expect(domain.createPlannerWhatIfComparison).not.toHaveBeenCalled()
-    expect(domain.createProductionPlanWithConstrainedSearch).not.toHaveBeenCalled()
+  it('finds no legacy B8 / B9 Domain calculation or bounds default in the Planner Domain (Phase 6-B2b)', async () => {
+    const plannerDomain = await vi.importActual<Record<string, unknown>>('../domain/planner')
+    // Matched by shape, so the removed names appear nowhere in the source tree.
+    const legacy = Object.keys(plannerDomain).filter((name) =>
+      /Orchestration|PlannerWhatIf|^createConstrained|ConstrainedSearchIdentity|CONSTRAINED_ROUTE_POLICY/.test(name))
+    expect(legacy).toEqual([])
+    // The current Planner Alternative calculations and the neutral replacement
+    // primitives stay.
+    expect(plannerDomain).toHaveProperty('createPlannerAlternativeWhatIfComparison')
+    expect(plannerDomain).toHaveProperty('createPlannerAlternativeRepair')
+    expect(plannerDomain).toHaveProperty('createDeterministicMaterializer')
+    expect(plannerDomain).toHaveProperty('ConstrainedMaterializationError')
   })
 
   it('keeps the Production RNG Engine unchanged', () => {

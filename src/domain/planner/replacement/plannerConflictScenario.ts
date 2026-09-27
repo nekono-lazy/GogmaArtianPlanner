@@ -33,9 +33,8 @@ import { createPlannerStartSearchOrigin } from './plannerSearchOrigin'
  *
  * Introduced by B9-B1a as the what-if preparation, and a shared Planner Domain
  * primitive since Phase 6-B2a (PLANNER_SPEC 9.2.19.16): the Planner
- * Alternative kernel prepares every what-if and actual repair request with it,
- * and the legacy B9 what-if wraps it with its own bounds check
- * (`preparePlannerWhatIfScenario()`). Neither owns it.
+ * Alternative kernel prepares every what-if and actual repair request with it.
+ * The legacy B9 what-if wrapper that also used it was removed in Phase 6-B2b.
  *
  * It reuses the existing Planner authority end to end -
  * `preparePlannerInitialContext()`, `createPlannerConflictContexts()`,
@@ -98,8 +97,8 @@ export interface PreparedPlannerConflictScenario {
  * (PLANNER_SPEC 9.2.4.11).
  *
  * These are control authority. A caller branches on `status` and `reason`, and
- * never on message text. The literals are unchanged from the B9 what-if
- * contract that introduced them.
+ * never on message text. The literals are unchanged from the (removed) B9
+ * what-if contract that introduced them.
  */
 export type PlannerConflictScenarioInvalidFixedResolutionReason =
   /**

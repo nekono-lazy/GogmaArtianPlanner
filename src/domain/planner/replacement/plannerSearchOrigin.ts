@@ -22,10 +22,10 @@ import { ConstrainedMaterializationError } from './plannerMaterializationErrors'
  * the stable value a deterministic search identity hashes.
  *
  * A shared Planner Domain primitive since Phase 6-B2a (PLANNER_SPEC 9.2.19.16):
- * the Planner Alternative search identity and the legacy B8 constrained search
- * identity both normalize the origin here, and each keeps only its own route
- * policy token. The origin value itself is the Search Domain's
- * `ConstrainedSearchOrigin` shape.
+ * the Planner Alternative search identity normalizes the origin here and keeps
+ * only its own route policy token (the legacy B8 constrained search identity
+ * that shared it was removed in Phase 6-B2b). The origin value itself is the
+ * Search Domain's `ConstrainedSearchOrigin` shape.
  */
 
 function compareIds(left: string, right: string): number {

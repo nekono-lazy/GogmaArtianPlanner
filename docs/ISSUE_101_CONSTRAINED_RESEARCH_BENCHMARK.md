@@ -2,6 +2,16 @@
 
 実施日: 2026-09-25（計測セッション2回、JST 23:47〜翌0:55）
 
+> **現状（Issue #136 / #101 Phase 6-B2b、Phase 6完了）:** 本書は過去の調査と実測の記録である。本書のresearch harness
+> （`Issue101ConstrainedResearchBenchmarkPage.tsx`、`issue101ConstrainedResearchBrowserBenchmark.ts`、
+> `issue101ConstrainedResearchProtocol.ts`、`issue101ConstrainedResearch.worker.benchmark.ts`、Benchmark shellの
+> 「Issue 101 Constrained Re-search」）と、それが計測したlegacy B8 orchestrationはPhase 6-B2bで削除した
+> （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14 / 9.2.19.16）。research専用のenumeration / orchestration sweepと近似所持Dragon
+> variantも削除した。Issue #101の実ケースfixture（`createIssue101RealFixture()` とRNG / Target定数）はPlanner Alternativeの
+> test / benchmarkが使うため、`src/benchmarks/issue101PlannerAlternativeFixtures.ts` として別moduleで継続する（Candidate /
+> BuildListEntry / Conflict IDは移動前の値のまま）。計測結果はhistorical recordとして保持し、以下の手順・数値・API名は当時の
+> まま変更しない。
+
 Refs #101
 
 ## Status

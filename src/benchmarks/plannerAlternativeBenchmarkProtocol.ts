@@ -7,7 +7,7 @@ import type {
   PlannerAlternativeSearchInput,
   PlannerAlternativeSearchSummary,
 } from '../domain/search'
-import type { Issue101RouteSummary } from './issue101ConstrainedResearchProtocol'
+import type { Issue101RouteSummary } from './issue101RouteSummary'
 
 /**
  * Planner Alternative Search Phase 3-A benchmark-only Worker protocol

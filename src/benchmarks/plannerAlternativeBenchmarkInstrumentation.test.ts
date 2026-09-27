@@ -11,7 +11,7 @@ import {
   visitPlannerAlternativeCandidates,
   type PlannerAlternativeSearchInput,
 } from '../domain/search'
-import { ISSUE_101_GOGMA_COUNTER, ISSUE_101_SKILL_COUNTER } from './issue101ConstrainedResearchFixtures'
+import { ISSUE_101_GOGMA_COUNTER, ISSUE_101_SKILL_COUNTER } from './issue101PlannerAlternativeFixtures'
 import { summarizeIssue101Route } from './issue101RouteSummary'
 import {
   createCountingRngEngine,

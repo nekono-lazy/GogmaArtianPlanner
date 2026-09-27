@@ -88,8 +88,8 @@ function deterministicCandidateId(
  * reused here. One semantic content therefore has one generated Entry ID.
  *
  * The `build-list.constrained.` prefix is part of the ID value itself. It is
- * kept exactly as B8 introduced it, whichever adapter materializes the Entry:
- * changing it would change every generated Entry ID.
+ * kept exactly as B8 introduced it, although the B8 adapter was removed in
+ * Phase 6-B2b: changing it would change every generated Entry ID.
  */
 function deterministicEntryId(
   candidate: BuildCandidate,
@@ -127,11 +127,10 @@ export interface DeterministicMaterializationCoreContext {
 
 /**
  * The shared deterministic materialization core (PLANNER_SPEC 9.2.13): the
- * Planner Alternative adapter (`createPlannerAlternativeMaterializer()`) and
- * the legacy B8 constrained adapter (`createConstrainedMaterializer()`) differ
- * only in the search identity they pass and in whether their source carries
- * observational traces. A shared Planner Domain primitive since Phase 6-B2a
- * (PLANNER_SPEC 9.2.19.16); neither adapter owns it.
+ * Planner Alternative adapter (`createPlannerAlternativeMaterializer()`) passes
+ * its own search identity and Candidate ID prefix. A shared Planner Domain
+ * primitive since Phase 6-B2a (PLANNER_SPEC 9.2.19.16); the legacy B8
+ * constrained adapter that also used it was removed in Phase 6-B2b.
  *
  * It converts one transient semantic result into `BuildCandidate` shape and,
  * when the Planner needs it as trial input, into a generated `BuildListEntry`

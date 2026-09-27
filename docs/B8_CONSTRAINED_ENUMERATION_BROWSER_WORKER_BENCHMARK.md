@@ -2,6 +2,14 @@
 
 実施日: 2026-09-07
 
+> **現状（Issue #136 / #101 Phase 6-B2b、Phase 6完了）:** 本書は過去の設計判断と実測の記録である。本書が計測した
+> Search Domainのconstrained enumerator（`visitConstrainedCandidates()` / `enumerateConstrainedCandidates()`）、
+> `defaultConstrainedEnumerationBounds`、本書のBrowser benchmark harnessは現在も残る。一方、このdefaultをProduction
+> enumeration boundsとして使っていたPlanner側のB8 orchestration / B9 what-ifはPhase 6-B2bで削除した
+> （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14 / 9.2.19.16）。現在の「比較する」「この候補を優先」はPlanner
+> Alternative（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8）であり、このdefaultをauthorityにしない。以下の手順・数値・API名は
+> 当時のまま変更しない。
+
 ## Status
 
 - B8-B2 実Browser Worker性能検証: 完了

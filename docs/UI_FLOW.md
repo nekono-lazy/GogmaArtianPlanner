@@ -1298,9 +1298,9 @@ Production terminationの `reachedLimits` は型上 `max_plan_steps` だけで�
 （Phase 6-A。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.7 / 9.2.19.16）。入力はcurrent persisted stateから作るfresh
 PlannerInputで、`PlannerInput.options` にはユーザーが詳細設定で確認した `maxPlanSteps` をApplication callerが
 設定する。保存済みPlanのexplicit resolutionを復元しない（`conflictResolutions = []`）ため、legacy B8の
-`createConstrainedPlan()` / `defaultPlannerOrchestrationBounds` は呼ばない。返る `PlannerResult` をそのまま
-`plannerResultPersistenceService.savePlannerResult()` へ渡す（generated Entryの空fieldを付けた
-`PlannerOrchestrationResult` へ変換しない）。
+`createConstrainedPlan()` / `defaultPlannerOrchestrationBounds` は呼ばない（どちらもPhase 6-B1 / 6-B2bで削除済み）。
+返る `PlannerResult` をそのまま `plannerResultPersistenceService.savePlannerResult()` へ渡す（generated Entryの空fieldを
+付けた旧B8の `PlannerOrchestrationResult`（Phase 6-B2bで削除済み）へ変換しない）。
 
 `savePlannerResult()` が保存済みProductionPlan（`saved`）を返した場合だけ、その保存済みPlanの
 `/plans/:planId` へ遷移する。
@@ -1615,7 +1615,7 @@ checkpoint関与の判定はcurrent preparationの `checkpointParticipants` か�
   `buildListEntries` で失効判定）を使ってprior fixed Entryとprior除外Route keyを渡す。lineageが `null` なら空である。
   失効判定をUIで再実装しない。what-ifはlineageを読むだけで更新・保存しない
 - 旧 `createWhatIfComparison()`（B9、`defaultPlannerWhatIfBounds`）は生産計画画面から呼ばない（Client method・Worker request kindは
-  Phase 6-B1で削除した。B9のDomain計算本体はPhase 6-B2bまで残る）
+  Phase 6-B1で、B9のDomain計算本体と `defaultPlannerWhatIfBounds` はPhase 6-B2bで削除した）
 
 表示中Planから復元するのは `conflicts[].selectedBuildListEntryId !== null` の選択だけである。
 `recommendedBuildListEntryId`、Planner score、Beam bestState、Target priority、
@@ -1702,7 +1702,7 @@ Planner Alternative actual repair（`PlannerWorkerClient.createPlannerAlternativ
 `plannerInput`（復元したexplicit resolution付き。今回の決定のmergeはDomainが行う）/ `decision` / `lineage`（表示中Draftの
 `conflictRepairLineage`）だけを持ち、探索範囲と試行上限はProduction Worker adapterがWorker内で渡す。旧
 `createConstrainedPlan()`（B8、`defaultPlannerOrchestrationBounds = 2 / 1 / 4`）は生産計画画面から呼ばない（Client method・Worker
-request kindはPhase 6-B1で削除した。B8のDomain計算本体はPhase 6-B2bまで残る）。
+request kindはPhase 6-B1で、B8のDomain計算本体・`defaultPlannerOrchestrationBounds`・B8保存APIはPhase 6-B2bで削除した）。
 
 この再計算の `PlannerInput.options` はfresh inputの `defaultPlannerOptions` のままにせず、
 Application callerが `conflictResolutionPlannerOptions(表示中Plan)`
@@ -1726,8 +1726,10 @@ final scenario runの `termination.status === "incomplete"`（`stopped_by_plan_s
 final scenario resultのwarningsにtyped `warning.kind === 'invalid_conflict_resolution'` が1件でもあれば
 （actual repairは `not_persistable` / `invalid_conflict_resolution` を返す）、`plan !== null` でもfail closedとする。checkpoint競合へのresolutionはDomainがこのwarningで
 拒否するため、同じfail closedがそのまま適用される。選択済みcheckpointを持つTargetの
-Routeを置き換えられない場合の `selected_checkpoint_blocks_constrained_search` は
-再選択を促すwarningであり、Planの保存を妨げない。Persistenceを呼ばず、ProductionPlanも
+Routeを置き換えられない場合は、warningではなくTarget comparison / repair lineageのtyped outcome
+`blocked_by_selected_checkpoint`（11.3の表）として返り、作成リストでの変更または解除を案内する。これはPlanの保存を
+妨げない（旧B8が返していたwarning kind `selected_checkpoint_blocks_constrained_search` はPhase 6-B2bで削除し、現在は
+生成されない）。`invalid_conflict_resolution` の場合はPersistenceを呼ばず、ProductionPlanも
 generated BuildListEntryも保存せず、新Planへ遷移しない。表示中の旧Planを維持し、再選択または
 再計算を促す。warning.messageを解析せず、Planner推奨または別participantへfallbackせず、invalid
 resolutionを無視したordinary Planを保存しない。
@@ -2567,7 +2569,7 @@ Preview。
 - 入力は現在の確定済みRNG状態・通常アーティアCounter・所持武器、最新の目標武器、最新の作成リストである。
   実行中Planの `baseSnapshot`・過去の入力・Conflict resolutionは使わない
 - 計算は作成リストの通常Plannerと同じordinary Planner（`PlannerWorkerClient.createPlan()`、Phase 6-A）であり、
-  legacy B8の `createConstrainedPlan()` は呼ばない。Preview結果は `PlannerResult` で、作成リスト項目を生成しない
+  legacy B8の `createConstrainedPlan()`（Phase 6-B1で削除済み）は呼ばない。Preview結果は `PlannerResult` で、作成リスト項目を生成しない
   （「この試算は新しい作成リスト項目を…生成しました」のような案内は出さない）
 - 通常のPlanner実行と同じ計算中表示（数値の進捗率なし、10.0）、キャンセル、探索未完了表示（10.1）を使う
 - Preview中は現在のPlanを実行中のまま変更せず、Execution Navigatorの現在Step、RNG状態、所持武器、
@@ -2773,7 +2775,7 @@ export interface SearchUiState {
 - 「比較する」は `createPlannerAlternativeComparison()` だけを呼び（旧 `createWhatIfComparison()` を呼ばない）、
   表示中Draftのlineageから導いたprior fixed Entry / prior除外Route keyを渡す
 - 明示選択後はfresh PlannerInput、決定、表示中Draftのlineageで `createPlannerAlternativeRepair()` を実行し
-  （旧 `createConstrainedPlan()` を呼ばない）、what-if結果をPlan生成へ流用しない
+  （旧 `createConstrainedPlan()` は呼ばない。Phase 6-B1で削除済み）、what-if結果をPlan生成へ流用しない
 - actual repairが `not_persistable`（`invalid_conflict_resolution` を含む）または準備段階のtyped failureなら、
   persistenceを呼ばず、Entry / Planを保存せず、遷移せず、旧Planを維持する
 - 新Plan・accepted replacementのgenerated BuildListEntry・lineageをPlanner Alternative専用のatomic persistence境界で

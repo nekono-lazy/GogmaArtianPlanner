@@ -10,14 +10,14 @@ import type { BuildListEntryReplacement } from '../buildList'
 import {
   checkBuildListEntryReplacementsCurrent,
   checkPersistablePlannerResultShape,
-  checkProductionPlanBuildListReferences,
+  checkProductionPlanBuildListEntryReferences,
   prepareFinalReplacementBuildList,
 } from './plannerResultPersistenceValidation'
 
 /**
  * The shared save-time checks of a Planner result that replaces persisted
- * Entries (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18), used by the ordinary Draft
- * save and the replan adoption alike.
+ * Entries (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18), used by the Planner
+ * Alternative repair save.
  */
 function entry(id: string, targetWeaponId: string): BuildListEntry {
   const base = createValidBuildListEntry()
@@ -83,11 +83,17 @@ describe('prepareFinalReplacementBuildList', () => {
   })
 })
 
-describe('checkProductionPlanBuildListReferences over the final replacement set', () => {
+describe('checkProductionPlanBuildListEntryReferences over the final replacement set', () => {
   const finalEntries = [A, G]
 
   it('accepts a Plan over the replacement set', () => {
-    expect(checkProductionPlanBuildListReferences(planOver(finalEntries), [G], finalEntries)).toBeNull()
+    expect(checkProductionPlanBuildListEntryReferences(planOver(finalEntries), finalEntries)).toBeNull()
+  })
+
+  it('accepts a Plan that does not select the generated Entry: the replacement set is the authority', () => {
+    // A Planner Alternative repair may save an accepted `G` its final Plan left
+    // unselected (9.2.19.6); no check requires every generated Entry to be selected.
+    expect(checkProductionPlanBuildListEntryReferences(planOver([A]), finalEntries)).toBeNull()
   })
 
   it('refuses a Plan still naming the replaced Entry anywhere', () => {
@@ -118,7 +124,7 @@ describe('checkProductionPlanBuildListReferences over the final replacement set'
       },
     ]
     variants.forEach((variant) => {
-      expect(checkProductionPlanBuildListReferences(variant, [G], finalEntries))
+      expect(checkProductionPlanBuildListEntryReferences(variant, finalEntries))
         .toMatchObject({ kind: 'result_invalid', message: expect.stringContaining(O.id) })
     })
   })

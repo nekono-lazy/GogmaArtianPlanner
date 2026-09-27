@@ -1468,10 +1468,13 @@ deriveBuildListEntryStaleReasons(
   `resolveBuildListEntryReplacement()` / `applyBuildListEntryReplacements()` /
   `validateBuildListEntryReplacements()` / `validateGeneratedBuildListEntryReplacements()` /
   `validateReplacedBuildListCardinality()`）。正式採用したgenerated Entryは失う側Targetの元Entryを置換し、
-  `PlannerOrchestrationResult.generatedBuildListEntryReplacements`（runtime-only、永続化しない）が
-  「generated Entry → 置換対象の元Entry」の対応をWorkerから保存transactionまで運ぶ。保存は
-  `PlannerResultPersistenceService` / 再計画採用のいずれも、transaction内で元Entryが今もそのTargetの
-  唯一の永続Entryであることを確認してから置換する。Phase 0-3以前の採用で元Entryの横に保存された
+  Planner Alternative actual repairの `PlannerAlternativeRepairArtifact.generatedBuildListEntryReplacements`
+  （runtime-only、永続化しない）が「置換対象の元Entry → generated Entry」の対応をWorkerから保存transactionまで運ぶ。
+  保存（`PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`）は、
+  transaction内で元Entryが今もそのTargetの唯一の永続Entryであることを確認してから置換する（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+  9.2.15 / 9.2.18）。ordinary Plannerの保存（`savePlannerResult()`）と再計画採用はPhase 6-A以降generated Entryを持たず、
+  置換しない。Phase 6-B2b以前のhistorical contractでは旧B8の `PlannerOrchestrationResult.generatedBuildListEntryReplacements`
+  が同じ役割を持ち、再計画採用も置換していた（同型と旧B8保存APIはPhase 6-B2bで削除した）。Phase 0-3以前の採用で元Entryの横に保存された
   generated Entryは、下記のlegacy duplicateとして扱う（自動整理しない）
 
 #### collection invariant
@@ -1572,14 +1575,15 @@ B8-Aで、BuildListEntryの生成主体を次の2つへ拡張した。契約本�
 - 生成主体を表す永続provenance fieldを追加しない
 - `ProductionPlan` へembedded Candidate Snapshotを追加しない
 - Candidate table等の新しい永続entityを追加しない
-- constrained enumerationで発見した全Candidateを保存しない。最終augmented
-  PlannerInputへ正式採用したEntryだけを、生成された `ProductionPlan` と同一
+- 代替探索（現在はPlanner Alternative Search。Phase 6-B2b以前は旧B8のconstrained enumeration）で発見した全Candidateを
+  保存しない。正式採用（accepted replacement）したEntryだけを、生成された `ProductionPlan` と同一
   Dexie transactionで保存する
 - ProductionPlanが生成されない場合、generated Entryを永続化しない
 - 正式採用したgenerated Entryは、失う側Targetの元Entryに追加せず、元Entryを **置換** して同一
   transactionで保存する。永続Build Listは採用後も1 Targetにつき1件である
   （9.4.1、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18、Phase 0-3で実装済み）。どの元Entryを置換するかは
-  runtime-onlyの `PlannerOrchestrationResult.generatedBuildListEntryReplacements` が表し、
+  runtime-onlyの `PlannerAlternativeRepairArtifact.generatedBuildListEntryReplacements` が表し（Phase 6-B2b以前の
+  historical contractでは旧B8の `PlannerOrchestrationResult.generatedBuildListEntryReplacements`）、
   BuildListEntryへprovenance fieldを追加しない
 
 generated BuildListEntry IDは、少なくとも次から安定生成する。
@@ -2705,9 +2709,11 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   `initialExecutionState`、Target / Build List hash、Planの全BuildListEntry参照、新Plan IDの非衝突）、旧Draft全削除、
   新Draft追加を行い、BuildListEntryは書き換えない。`incomplete` は何も書かず、`plan === null` は旧Draftを維持する。
   ordinary resultのPlanは `conflictRepairLineage === null` でなければならない
-- 以下のgenerated Entryを含む保存はlegacy B8 orchestrationと「この候補を優先」の契約であり、B8の保存API
-  （`savePlannerOrchestrationResult()`）はPhase 6-B2bまで残るが、通常のApplication runtimeからは呼ばない
-  （B8のWorker / Client経路はPhase 6-B1で削除済み）
+- 以下のgenerated Entryを含む保存は「この候補を優先」（Planner Alternative actual repair）の契約である。legacy B8
+  orchestrationも同じ保存境界を使っていたが、B8の保存API（`savePlannerOrchestrationResult()` /
+  `inspectPlannerOrchestrationResultSave()`）はPhase 6-B2bで削除した（B8のWorker / Client経路はPhase 6-B1で削除済み）。
+  現在の保存APIは上記のordinary `savePlannerResult()` と、下記のactual repair用
+  `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` だけである
 
 - Planner-generated BuildListEntry群と `ProductionPlan` を1つのDexie
   read-write transactionで保存する
@@ -2731,7 +2737,7 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   削除しない）。置換後の永続予定集合は `validateBuildListCardinality()` で検証する。元Entryが `active` Planの
   Plan依存Entryなら、保存全体を1つのguarded mutationとして既存Plan-breaking guardで判定し、承認が無ければ
   `plan_breaking_change_approval_required` で何も保存しない（事前確認は
-  `inspectPlannerOrchestrationResultSave()`）。承認時（「現在地点を維持」または選択なし）はEntry置換・旧Draft削除・
+  `inspectPlannerAlternativeRepairSave()`。Phase 6-B2bまではB8の `inspectPlannerOrchestrationResultSave()` もあった）。承認時（「現在地点を維持」または選択なし）はEntry置換・旧Draft削除・
   新Draft追加・active Planの `abandoned`（`breaking_change_approved`）を同一transactionで行う。承認で
   「最後のゲーム内セーブ地点へ戻す」を選んだ場合はセーブ地点復元だけを行い、復元前に計算したPlanner resultは
   保存しない（Entry・Draft・Planを変更せず、復元後の状態からの再計算を求める。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.10）。元Entryを参照するのがDraft / stale /
@@ -2740,14 +2746,15 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` で同じtransaction境界（再読込・再validation、
   `O` がTargetのちょうど1件の現在Entryであることの確認、generated ID衝突の拒否、cardinality、Plan参照、旧Draftの置換、
   Plan-breaking guardとセーブ地点復元時の不保存）を使う。違いは2点だけである: accepted replacement集合がauthorityなので、
-  final Planで非選択のgenerated Entryも `O` を置換して保存する（B8の「generated Entryはselected」検査は適用しない）。
+  final Planで非選択のgenerated Entryも `O` を置換して保存する（B8の「generated Entryはselected」検査は適用しない。
+  この検査はB8保存APIとともにPhase 6-B2bで削除した）。
   新Draftの `conflictRepairLineage`（11.1.1）はartifactのlineageをそのまま設定し、Entry置換・旧Draft削除・lineage付き新Draft
   追加（・必要ならactive Planの `breaking_change_approved`）を1 transactionで行う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）
 - actual repairは表示中Draftのlineageを継承してartifactを計算するため、保存transaction内でcurrent Draftがちょうど1件かつ
   計算元のsource Draft ID（`expectedSourceDraftId`、画面が操作開始時に表示していたDraftのID）と一致することを再確認する。
   一致しなければ（Draftが削除・開始済み、または別repairで置換済み）`planner_state_changed` で何も保存しない（Draftが2件以上なら
-  `draft_plan_conflict`）。inspection成功後でもapply時に再確認し、replacementが0件でも確認する。B8の通常Planner保存には
-  適用しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）
+  `draft_plan_conflict`）。inspection成功後でもapply時に再確認し、replacementが0件でも確認する。ordinary Planner結果の保存
+  （`savePlannerResult()`）には適用しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）
 - `plannerResult.conflicts` と `plan.conflicts` は順序を含めたPlanConflict全体の構造一致を要求し、IDだけの比較にしない。
   不一致のartifactは `planner_result_invalid` で何も保存しない
 

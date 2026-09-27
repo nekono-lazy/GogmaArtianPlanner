@@ -21,7 +21,7 @@ import {
   ISSUE_101_NORMAL_COUNTER,
   ISSUE_101_SKILL_COUNTER,
   type Issue101RealFixture,
-} from './issue101ConstrainedResearchFixtures'
+} from './issue101PlannerAlternativeFixtures'
 import { summarizeIssue101Route } from './issue101RouteSummary'
 
 /*
