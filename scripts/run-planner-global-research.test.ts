@@ -76,3 +76,33 @@ it('requires observed failures for failed-first, and an explicit snapshot for fo
   expectRefusal(input, output, 'Duplicate research option', ['--time-budget-ms', '180000', '--time-budget-ms', '100'])
   expect(existsSync(progress)).toBe(false)
 })
+
+// Each guard is a separate synchronous child process; allow for a loaded machine.
+const SPAWN_TEST_TIMEOUT_MS = 30000
+
+it('guards Phase 1-D probe option combinations before reading the Export', () => {
+  const { input, output, progress } = fixture()
+  expectRefusal(input, output, 'are required together', ['--probe-snapshot', 'x.local', '--probe-axis', 'normal'])
+  expectRefusal(input, output, 'A probe runs one captured Search only', ['--probe-snapshot', 'x.local', '--probe-target', 't', '--probe-axis', 'gogma', '--extent-fallback', 'gogma'])
+  expectRefusal(input, output, 'A probe runs one captured Search only', ['--probe-snapshot', 'x.local', '--probe-target', 't', '--probe-axis', 'gogma', '--attempt-state', 's.local'])
+  expectRefusal(input, output, 'Invalid probe axis', ['--probe-snapshot', 'x.local', '--probe-target', 't', '--probe-axis', 'all'])
+  expect(existsSync(progress)).toBe(false)
+}, SPAWN_TEST_TIMEOUT_MS)
+
+it('guards Phase 1-D fallback options before reading the Export', () => {
+  const { input, output, progress } = fixture()
+  expectRefusal(input, output, 'Invalid fallback axis', ['--extent-fallback', 'every'])
+  expectRefusal(input, output, 'Invalid fallback bounds', ['--extent-fallback', 'normal', '--fallback-budget-ms', '-1'])
+  expectRefusal(input, output, 'requires --extent-fallback', ['--cancel-after-fallback-start-ms', '10'])
+  expect(existsSync(progress)).toBe(false)
+}, SPAWN_TEST_TIMEOUT_MS)
+
+it('refuses Phase 1-D no-match capture collisions and existing captures', () => {
+  const { input, output, progress } = fixture()
+  expectRefusal(input, output, 'must be distinct', ['--capture-no-match', input])
+  const capture = `${output}.nomatch.local`
+  writeFileSync(capture, 'existing snapshot')
+  expectRefusal(input, output, 'Capture already exists', ['--capture-no-match', capture])
+  expect(readFileSync(capture, 'utf8')).toBe('existing snapshot')
+  expect(existsSync(progress)).toBe(false)
+}, SPAWN_TEST_TIMEOUT_MS)

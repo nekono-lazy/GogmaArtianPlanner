@@ -30,6 +30,12 @@ const routeFilter = option('--route-filter') ?? 'all'
 const timeBudgetMs = Number(option('--time-budget-ms') ?? 180000)
 const yieldMode = option('--yield-mode') ?? 'timer'
 const rawCacheMode = option('--raw-block-cache')
+// Phase 1-D (Research only): bounded no-match capture, same-snapshot single-axis probe, generic fallback.
+const noMatchCapturePath = option('--capture-no-match')
+const probePath = option('--probe-snapshot'), probeTarget = option('--probe-target'), probeAxis = option('--probe-axis')
+const fallbackAxis = option('--extent-fallback')
+const fallbackBudgetMs = Number(option('--fallback-budget-ms') ?? 180000)
+const cancelAfterFallbackStartMs = option('--cancel-after-fallback-start-ms') === undefined ? null : Number(option('--cancel-after-fallback-start-ms'))
 if (rawCacheMode !== undefined && !['off', 'per-search', 'run'].includes(rawCacheMode)) throw new Error('Invalid raw block cache mode.')
 if (!['timer', 'immediate'].includes(yieldMode)) throw new Error('Invalid Node yield mode.')
 const yieldControl = () => new Promise(resolveYield => yieldMode === 'immediate' ? setImmediate(resolveYield) : setTimeout(resolveYield, 0))
@@ -38,20 +44,27 @@ if (strategy === 'failed-first' && !observedReportPath) throw new Error('failed-
 if (Boolean(focusPath) !== Boolean(focusTarget)) throw new Error('--focus-inputs and --focus-target are required together.')
 if (focusPath && (capturePath || strategy !== 'phase0')) throw new Error('Focused Search cannot capture a global run or change its order.')
 if (!Number.isFinite(timeBudgetMs) || timeBudgetMs < 0) throw new Error('Invalid focus time budget.')
+if ([probePath, probeTarget, probeAxis].some(Boolean) && ![probePath, probeTarget, probeAxis].every(Boolean)) throw new Error('--probe-snapshot, --probe-target and --probe-axis are required together.')
+if (probePath && (focusPath || capturePath || noMatchCapturePath || fallbackAxis || strategy !== 'phase0' || attemptPath)) throw new Error('A probe runs one captured Search only.')
+if (fallbackAxis !== undefined && !['normal', 'gogma', 'skill'].includes(fallbackAxis)) throw new Error('Invalid fallback axis.')
+if (probeAxis !== undefined && !['normal', 'gogma', 'skill'].includes(probeAxis)) throw new Error('Invalid probe axis.')
+if (!Number.isFinite(fallbackBudgetMs) || fallbackBudgetMs < 0 || (cancelAfterFallbackStartMs !== null && (!Number.isFinite(cancelAfterFallbackStartMs) || cancelAfterFallbackStartMs < 0))) throw new Error('Invalid fallback bounds.')
+if (cancelAfterFallbackStartMs !== null && !fallbackAxis) throw new Error('--cancel-after-fallback-start-ms requires --extent-fallback.')
 if (!Number.isSafeInteger(maxPlanSteps) || maxPlanSteps < 1 || (cancelAfterMs !== null && (!Number.isFinite(cancelAfterMs) || cancelAfterMs < 0))) throw new Error('Invalid research bounds.')
 // Refuse an existing output before opening progress evidence or starting Research.
 // Keep the final exclusive write too: another process may create it during the run.
 if (lstatSync(outputPath, { throwIfNoEntry: false }) !== undefined) throw new Error(`Output already exists: ${resolve(outputPath)}`)
-const reads = [inputPath, focusPath, observedReportPath, attemptPath].filter(Boolean).map(p => resolve(p).toLowerCase())
-const writes = [outputPath, `${outputPath}.progress.local`, capturePath].filter(Boolean).map(p => resolve(p).toLowerCase())
+const reads = [inputPath, focusPath, observedReportPath, attemptPath, probePath].filter(Boolean).map(p => resolve(p).toLowerCase())
+const writes = [outputPath, `${outputPath}.progress.local`, capturePath, noMatchCapturePath].filter(Boolean).map(p => resolve(p).toLowerCase())
 if (new Set(writes).size !== writes.length || writes.some(p => reads.includes(p))) throw new Error('Research output paths must be distinct from every input and output.')
-if (capturePath && lstatSync(capturePath, { throwIfNoEntry: false }) !== undefined) throw new Error('Capture already exists.')
+if ([capturePath, noMatchCapturePath].some(p => p && lstatSync(p, { throwIfNoEntry: false }) !== undefined)) throw new Error('Capture already exists.')
 // Append-only progress evidence survives a killed process / out-of-memory failure.
 // Exclusive creation prevents overwriting another run's evidence.
 const progressFd = openSync(`${outputPath}.progress.local`, 'wx')
 const captureFd = capturePath ? openSync(capturePath, 'wx') : null
+const noMatchFd = noMatchCapturePath ? openSync(noMatchCapturePath, 'wx') : null
 const server = await createServer({ configFile: false, server: { middlewareMode: true, watch: null }, appType: 'custom' })
-let timer, cancelledAt = null
+let timer, fallbackCancelTimer, cancelledAt = null
 const cancel = () => { cancelledAt ??= performance.now() }
 process.on('SIGINT', cancel)
 try {
@@ -81,7 +94,7 @@ try {
     const hash = createHash('sha256')
     for (const file of files) { hash.update(file + '\0'); hash.update(await readFile(file)); hash.update('\0') }
     Object.assign(environment, { repositoryHead: git('rev-parse', 'HEAD'), benchmarkCodeSha256: hash.digest('hex'),
-      rngEngineVersion: new ProductionRngEngine().version, osRelease: release(), benchmarkMode: focusPath ? 'focused' : strategy,
+      rngEngineVersion: new ProductionRngEngine().version, osRelease: release(), benchmarkMode: probePath ? 'phase1d-probe' : focusPath ? 'focused' : fallbackAxis ? `phase1d-${fallbackAxis}-fallback` : strategy,
       cacheMode: rawCacheMode, yieldMode, routeFilter, cacheScope: 'Candidate Search only; Planner and Replay always use default ProductionRngEngine' })
     const { GlobalRawBlockResearch } = await server.ssrLoadModule('/src/benchmarks/plannerGlobalRawBlocks.ts')
     rawBlocks = new GlobalRawBlockResearch(rawCacheMode)
@@ -100,7 +113,22 @@ try {
   if (cancelAfterMs !== null) timer = setTimeout(cancel, cancelAfterMs)
   let result
   let focus
-  if (focusPath) {
+  let probe
+  const fallbackSearchEvidence = [], noMatchCaptures = []
+  const probeModule = probePath || fallbackAxis ? await server.ssrLoadModule('/src/benchmarks/plannerGlobalOptimizationExtentProbe.ts') : null
+  if (probePath) {
+    const records = (await readFile(probePath, 'utf8')).trim().split(/\r?\n/).map(line => JSON.parse(line))
+    const selected = records.filter(r => r.capture.searchInput.targetWeaponId === probeTarget)
+    if (selected.length !== 1 || selected[0].exportSha256 !== environment.exportSha256) throw new Error('Probe snapshot missing, ambiguous, or from another Export.')
+    const capture = selected[0].capture
+    if (selected[0].snapshotSha256 !== sha(capture.searchInput)) throw new Error('Probe snapshot SHA differs from its capture record.')
+    Object.assign(environment, { probeAxis, timeBudgetMs, snapshotSha256: selected[0].snapshotSha256, baseExtent: capture.measurement.extent,
+      probeExtent: probeModule.singleAxisProbeExtent(capture.measurement.extent, probeAxis) })
+    probe = await probeModule.runGlobalExtentProbe(input, capture, probeAxis, module.globalResearchDependencies(new ProductionRngEngine()), {
+      timeBudgetMs, shouldCancel: () => cancelledAt !== null, yieldControl, rawBlocks, profiler: new GlobalSearchProfiler(),
+      onResult: rawBlocks ? observeSearchResult : undefined })
+    probe.candidateSha256 = rawBlocks ? searchEvidence.at(-1)?.candidateSha256 ?? null : null
+  } else if (focusPath) {
     const records = (await readFile(focusPath, 'utf8')).trim().split(/\r?\n/).map(line => JSON.parse(line))
     const selected = records.filter(r => r.input.targetWeaponId === focusTarget)
     if (selected.length !== 1 || selected[0].exportSha256 !== environment.exportSha256) throw new Error('Focus snapshot missing, ambiguous, or from another Export.')
@@ -114,12 +142,28 @@ try {
   } else result = await module.runGlobalPlannerResearch(input, module.globalResearchDependencies(new ProductionRngEngine()), {
     profiler, failedFirstTargetIds, rawBlocks, onSearchResult: rawBlocks ? observeSearchResult : undefined,
     attempt: attemptState, extent: attemptState?.extent,
+    extentFallback: fallbackAxis ? probeModule.createSingleAxisExtentFallback(fallbackAxis, fallbackBudgetMs) : undefined,
+    onFallbackSearchResult: fallbackAxis ? (found, fallback) => {
+      const semantic = { ...found }
+      delete semantic.elapsedMs
+      fallbackSearchEvidence.push({ targetId: found.targetResult.targetWeaponId, axis: fallback.axis, extent: fallback.extent, searchRunId: fallback.searchRunId,
+        resultSha256: sha(semantic), candidateSha256: sha(found.targetResult.candidate) })
+    } : undefined,
+    onBoundedNoMatch: noMatchFd === null ? undefined : capture => {
+      const snapshotSha256 = sha(capture.searchInput)
+      noMatchCaptures.push({ searchIndex: capture.searchIndex, targetId: capture.searchInput.targetWeaponId, snapshotSha256, baseSearchRunId: capture.searchInput.searchRunId,
+        baseBoundary: capture.measurement.predictionBoundaryReached, baseReach: capture.measurement.observedPredictionReach, baseExtent: capture.measurement.extent })
+      writeSync(noMatchFd, JSON.stringify({ exportSha256: environment.exportSha256, snapshotSha256, capture }) + '\n')
+    },
     timeBudgetMs: option('--attempt-budget-ms') === undefined ? undefined : Number(option('--attempt-budget-ms')),
     onSearchInput: captureFd === null ? undefined : searchInput => writeSync(captureFd, JSON.stringify({ exportSha256: environment.exportSha256, input: searchInput }) + '\n'),
     shouldCancel: () => cancelledAt !== null,
     yieldControl,
     onProgress: report => {
       latest = report
+      if (cancelAfterFallbackStartMs !== null && fallbackCancelTimer === undefined && report.searches.some(s => s.fallback?.status === 'searching')) {
+        fallbackCancelTimer = setTimeout(cancel, cancelAfterFallbackStartMs)
+      }
       const stage = `${report.stage}: ${report.baseline?.selected ?? '-'} / ${report.retained?.selected ?? '-'} / ${report.searches.length} searches / ${report.generatedReplacementCount} replacements / ${report.status}`
       if (stage !== lastStage) {
         console.error(stage)
@@ -131,7 +175,11 @@ try {
     },
   })
   const signals = result ? retryModule.collectRetrySignals(input, result.report, result.finalResult, result.generatedEntries) : null
-  const record = { environment, ...(focus ? { focus } : { report: result.report }),
+  const record = { environment, ...(probe ? { probe } : focus ? { focus } : { report: result.report }),
+    ...(result && (fallbackAxis || noMatchCapturePath) ? { phase1d: { extentFallback: fallbackAxis ? probeModule.createSingleAxisExtentFallback(fallbackAxis, fallbackBudgetMs).strategy : null,
+      fallbackBudgetMs: fallbackAxis ? fallbackBudgetMs : null, noMatchCaptures, fallbackSearchEvidence,
+      fallbacks: result.report.searches.flatMap((s, searchIndex) => s.fallback ? [{ searchIndex, targetId: s.targetId, baseStatus: s.status, targetOutcome: s.targetOutcome ?? null,
+        fallback: { ...s.fallback, profile: undefined } }] : []) } } : {}),
     ...(result ? { phase1c: { signals, stop: retryModule.classifyAttempt(result.report, signals),
       priorityEntries: retryModule.stableResearchEntries(input).map(e => ({ id: e.id, targetWeaponId: e.targetWeaponId })),
       attemptState: attemptState ?? null } } : {}),
@@ -148,12 +196,14 @@ try {
   }
   rawBlocks?.endRun()
   await writeFile(outputPath, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' })
-  console.log(JSON.stringify({ output: resolve(outputPath), ...(focus ? { focus } : { report: latest }) }, null, 2))
-  if (result?.report.status === 'error' || focus?.status === 'search_error') process.exitCode = 1
+  console.log(JSON.stringify({ output: resolve(outputPath), ...(probe ? { probe: { ...probe, profile: undefined } } : focus ? { focus } : { report: latest }) }, null, 2))
+  if (result?.report.status === 'error' || focus?.status === 'search_error' || probe?.status === 'search_error') process.exitCode = 1
 } finally {
   clearTimeout(timer)
+  clearTimeout(fallbackCancelTimer)
   process.off('SIGINT', cancel)
   closeSync(progressFd)
   if (captureFd !== null) closeSync(captureFd)
+  if (noMatchFd !== null) closeSync(noMatchFd)
   await server.close()
 }
