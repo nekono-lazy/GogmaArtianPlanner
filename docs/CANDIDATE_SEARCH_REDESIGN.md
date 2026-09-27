@@ -20,7 +20,11 @@
 各Phaseの節は当時の実装を記録したものであり、現在の実装状態を表さない。特にB8 / B9のProduction Planner Worker経路
 （`createConstrainedPlan()` / `createWhatIfComparison()`、Production adapter、Browser benchmark harness / page）と
 `ProductionPlanWhatIfComparison` はIssue #136 / #101 Phase 6-B1で削除した（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
-9.2.19.14 / 9.2.19.16）。記録本文は書き換えない。
+9.2.19.14 / 9.2.19.16）。また、本文が `src/domain/planner/constrained/` 配下として記録する共有primitive（conflict context、
+augmented preflight、what-if scenario preparation、conflict work、search originの作成 / 正規化、deterministic materializerの
+共通core）はPhase 6-B2aで `src/domain/planner/replacement/` へ移し、一部を改名した（`PlannerConstrainedConflictContext` ->
+`PlannerConflictContext`、`createConstrainedSearchOriginFromPlannerInput()` -> `createPlannerStartSearchOrigin()` など）。記録本文は
+書き換えない。
 
 ---
 

@@ -20,7 +20,7 @@ const dependencies = () => createProductionPlannerDependencies(new ProductionRng
  * The B9 Domain calculation with the Production enumeration extent, exactly as
  * the Production Worker adapter supplied it until Phase 6-B1 removed that
  * adapter (`docs/PLANNER_SPEC.md` 9.2.19.16). The B9 Domain calculation and
- * these fixtures stay until Phase 6-B2.
+ * these fixtures stay until Phase 6-B2b.
  */
 const runB9WhatIfComparison = (request: PlannerWhatIfRequest) =>
   createPlannerWhatIfComparison(request, dependencies(), {

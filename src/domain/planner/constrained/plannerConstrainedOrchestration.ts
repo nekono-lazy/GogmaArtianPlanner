@@ -9,16 +9,12 @@ import {
   type BuildListEntryReplacement,
 } from '../../buildList'
 import { visitConstrainedCandidates } from '../../search'
-import type {
-  ConstrainedEnumerationBounds,
-  ConstrainedSearchOrigin,
-} from '../../search'
+import type { ConstrainedEnumerationBounds } from '../../search'
 import {
   preparePlannerInitialContext,
 } from '../plannerInitialContext'
 import { createProductionPlanWithObserver } from '../productionPlanGeneration'
 import { createUnsearchedPlannerTermination, plannerRunLimits } from '../plannerTermination'
-import type { PlannerCheckpointRequirements } from '../plannerCheckpoints'
 import type {
   PlannerRunResult,
   PlannerDependencies,
@@ -29,15 +25,18 @@ import type {
   PlannerWarning,
   ProductionPlanGenerationObserver,
 } from '../plannerTypes'
-import { preparePlannerReplacementConflictPreflight } from './plannerAugmentedPreflight'
+import { preparePlannerReplacementConflictPreflight } from '../replacement/plannerAugmentedPreflight'
 import {
-  createPlannerConstrainedConflictContexts,
-  plannerConflictResourceKey,
+  createPlannerConflictContexts,
   preparePlannerFixedConflictConstraints,
-  type PlannerConstrainedConflictContext,
   type PlannerFixedConflictConstraint,
   type PlannerFixedConstraintFailure,
-} from './plannerConflictContext'
+} from '../replacement/plannerConflictContext'
+import {
+  createPlannerConflictWorks,
+  type PlannerConflictWork,
+} from '../replacement/plannerConflictWork'
+import { createPlannerStartSearchOrigin } from '../replacement/plannerSearchOrigin'
 import { createConstrainedMaterializer } from './constrainedMaterializer'
 import type { PlannerOrchestrationBounds } from './plannerOrchestrationBounds'
 import {
@@ -68,6 +67,13 @@ import {
  * trial produces - its Steps, conflicts, rejections and PlanningInputSnapshot -
  * never records an Entry the adoption deletes. Nothing here writes to
  * persistence, touches a Worker, or reads React state: B8-D owns all of that.
+ *
+ * Since Phase 6-B2a (PLANNER_SPEC 9.2.19.16) the conflict contexts, fixed
+ * constraints, preflight, conflict works and Planner-start Search origin it
+ * uses are the shared Planner Domain primitives of `../replacement/`; this
+ * module keeps only the legacy B8 orchestration itself. No normal Application
+ * runtime path calls it any more (Phase 6-A / 6-B1); its remaining consumers
+ * are tests and benchmarks.
  */
 
 export interface PlannerConstrainedOrchestrationOptions {
@@ -103,14 +109,17 @@ export interface PlannerOrchestrationResult extends PlannerResult {
 /**
  * The constrained counterpart of `CreateProductionPlanCalculation`.
  *
- * The Planner Worker controller depends on this signature rather than on
- * `createProductionPlanWithConstrainedSearch()` itself, so the controller stays
- * pure message routing and reimplements none of the B8-C orchestration.
+ * Up to Phase 6-B1 the Planner Worker controller depended on this signature
+ * rather than on `createProductionPlanWithConstrainedSearch()` itself, so the
+ * controller stayed pure message routing and reimplemented none of the B8-C
+ * orchestration. Phase 6-B1 removed that Worker branch and its Production
+ * adapter; the signature has no Production consumer left.
  *
  * `PlannerOrchestrationBounds` is an explicit parameter because it is
  * caller-required (PLANNER_SPEC 9.2.16). `ConstrainedEnumerationBounds` is
  * deliberately absent: the adapter that fulfils this signature chooses it - the
- * Production one passes `defaultConstrainedEnumerationBounds` explicitly.
+ * Production adapter did so, until Phase 6-B1, by passing
+ * `defaultConstrainedEnumerationBounds` explicitly.
  */
 export type CreateConstrainedProductionPlanCalculation = (
   input: PlannerInput,
@@ -118,24 +127,6 @@ export type CreateConstrainedProductionPlanCalculation = (
   dependencies: PlannerDependencies,
   options?: PlannerExecutionOptions,
 ) => Promise<PlannerOrchestrationResult>
-
-/** One Target that must be re-searched because of one fixed conflict choice. */
-export interface PlannerConflictWork {
-  /** The `PlanConflict.id` of the original input; a diagnostic and budget key. */
-  originalConflictId: string
-  constraint: PlannerFixedConflictConstraint
-  targetWeaponId: TargetWeaponId
-  /**
-   * This Target has a required checkpoint Entry somewhere in the current
-   * Planner input - not necessarily among this conflict's participants. No
-   * constrained Route replacement is attempted for the Target: an alternate
-   * Route would bypass that checkpoint, and the Planner never drops, moves, or
-   * empties a selection (`docs/PLANNER_SPEC.md` 9.5.2). The conflict stays a
-   * conflict until the Build List selection changes.
-   */
-  blockedBySelectedCheckpoint: boolean
-  orderKey: string
-}
 
 function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
@@ -148,88 +139,6 @@ function dedupeWarnings(warnings: readonly PlannerWarning[]): PlannerWarning[] {
         (candidate) =>
           candidate.kind === warning.kind && candidate.message === warning.message,
       ) === index,
-  )
-}
-
-/**
- * The Planner-start Search / RNG snapshot (PLANNER_SPEC 9.2.1, 9.2.9).
- *
- * It is built once, from the *original* Planner input, and reused by every
- * enumeration. It is never rebuilt from an adopted Planner state, from a full
- * Planner run bestState, or from `conflictingCounter + 1`, and it needs no
- * historical UI Candidate Search request: it carries no `searchRunId`,
- * `routeFilter`, or `settings`.
- */
-export function createConstrainedSearchOriginFromPlannerInput(
-  input: PlannerInput,
-): ConstrainedSearchOrigin {
-  return {
-    rngState: structuredClone(input.rngState),
-    normalCounters: structuredClone(input.normalCounters),
-    ownedWeapons: structuredClone(input.ownedWeapons),
-    targetWeapons: structuredClone(input.targetWeapons),
-    master: structuredClone(input.master),
-    calculationContext: structuredClone(input.calculationContext),
-  }
-}
-
-/**
- * The Targets a constrained re-search may work on, one per
- * `(fixed constraint, non-fixed participant Target)` pair.
- *
- * The fixed side never yields: a participant carrying the fixed BuildListEntry
- * ID, and any participant of the fixed Target itself, is excluded. One Target
- * participating through several Route units or several Entries produces one
- * work item. The order is a stable semantic key, so the caller's array order,
- * the participant order, and Map insertion order cannot change the outcome.
- */
-export function createPlannerConflictWorks(
-  constraints: readonly PlannerFixedConflictConstraint[],
-  conflictContexts: readonly PlannerConstrainedConflictContext[],
-  checkpointRequirements: PlannerCheckpointRequirements,
-): PlannerConflictWork[] {
-  const contextById = new Map(
-    conflictContexts.map((context) => [context.conflictId, context]),
-  )
-  const works: PlannerConflictWork[] = []
-  const seen = new Set<string>()
-  constraints.forEach((constraint) => {
-    const context = contextById.get(constraint.originalConflictId)
-    if (context === undefined) return
-    context.participants.forEach((participant) => {
-      if (participant.buildListEntryId === constraint.fixedBuildListEntryId) return
-      if (participant.targetWeaponId === constraint.fixedTargetWeaponId) return
-      const dedupeKey = `${constraint.originalConflictId}\u0000${participant.targetWeaponId}`
-      if (seen.has(dedupeKey)) return
-      seen.add(dedupeKey)
-      works.push({
-        originalConflictId: constraint.originalConflictId,
-        constraint,
-        targetWeaponId: participant.targetWeaponId,
-        // Target-wide, from the whole valid Entry set of the run: a required
-        // checkpoint Entry of this Target blocks its re-search even when the
-        // participant here is another, selection-free Entry. The participant
-        // flag is kept as a second, narrower witness of the same fact.
-        blockedBySelectedCheckpoint:
-          checkpointRequirements.requiredEntryIdByTargetId.has(
-            participant.targetWeaponId,
-          ) ||
-          context.participants.some(
-            (other) =>
-              other.targetWeaponId === participant.targetWeaponId &&
-              other.hasSelectedCheckpoints,
-          ),
-        orderKey: [
-          plannerConflictResourceKey(constraint.resourceIdentity),
-          constraint.fixedBuildListEntryId,
-          participant.targetWeaponId,
-          constraint.originalConflictId,
-        ].join('\u0000'),
-      })
-    })
-  })
-  return works.sort((left, right) =>
-    compareStableStrings(left.orderKey, right.orderKey),
   )
 }
 
@@ -501,7 +410,7 @@ export async function createProductionPlanWithConstrainedSearch(
   if (prepared.status !== 'ready') {
     return finish(currentPlannerResult, adoptedEntries, adoptedReplacements)
   }
-  const originalContexts = createPlannerConstrainedConflictContexts(prepared.context)
+  const originalContexts = createPlannerConflictContexts(prepared.context)
   const fixedPreparation = preparePlannerFixedConflictConstraints(
     prepared.context,
     originalContexts,
@@ -522,7 +431,7 @@ export async function createProductionPlanWithConstrainedSearch(
     return finish(currentPlannerResult, adoptedEntries, adoptedReplacements)
   }
 
-  const origin = createConstrainedSearchOriginFromPlannerInput(input)
+  const origin = createPlannerStartSearchOrigin(input)
   const works = createPlannerConflictWorks(
     fixedConstraints,
     originalContexts,

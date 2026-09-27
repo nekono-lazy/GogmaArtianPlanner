@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { belowPracticalBonuses } from '../../../test/fixtures/constrainedEnumeration'
+import {
+  belowPracticalBonuses,
+  createConstrainedSearchOrigin,
+} from '../../../test/fixtures/constrainedEnumeration'
 import {
   ORCHESTRATION_SOURCE_A,
   ORCHESTRATION_SOURCE_B,
@@ -15,7 +18,10 @@ import {
   type PlannerAlternativeCandidate,
   type PlannerAlternativeReservation,
 } from '../../search'
-import { ConstrainedMaterializationError } from '../constrained/constrainedMaterializationErrors'
+import {
+  ConstrainedMaterializationError,
+  PlannerMaterializationError,
+} from '../replacement/plannerMaterializationErrors'
 import {
   createPlannerAlternativeMaterializer,
   createPlannerAlternativeSearchIdentity,
@@ -87,6 +93,21 @@ describe('Planner Alternative deterministic search identity (PLANNER_SPEC 9.2.13
   })
 })
 
+describe('Planner Alternative search identity: pinned value (Phase 6-B2a)', () => {
+  it('keeps the identity the pre-Phase 6-B2a implementation derived', () => {
+    // Moving the origin normalization into the shared Planner Domain module
+    // must not change the identity, and so no Candidate ID derived from it.
+    const origin = createConstrainedSearchOrigin()
+    expect(createPlannerAlternativeSearchIdentity({
+      origin,
+      targetWeaponId: origin.targetWeapons[0].id,
+      extent: { maxNormalAdvance: 1, maxGogmaAdvance: 5, maxSkillAdvance: 2 },
+      reservation: emptyPlannerAlternativeReservation,
+      excludedRouteKeys: ['x'],
+    })).toBe('planner-alternative-search.fnv1a32-c5e12f20')
+  })
+})
+
 describe('Planner Alternative materializer (PLANNER_SPEC 9.2.13 / 9.2.19.6)', () => {
   it('carries the observational traces and derives the intermediate states from them', async () => {
     const { candidates, context } = await setup()
@@ -130,6 +151,18 @@ describe('Planner Alternative materializer (PLANNER_SPEC 9.2.13 / 9.2.19.6)', ()
     const divergent = structuredClone(entry)
     divergent.targetDefinitionHash = 'target-definition.other'
     expect(() => materializer.materializeBuildListEntry(candidates[0], [divergent]))
-      .toThrow(ConstrainedMaterializationError)
+      .toThrow(PlannerMaterializationError)
+    // The neutral name is an alias of the legacy constructor: the runtime error
+    // identity is unchanged by Phase 6-B2a.
+    let thrown: unknown = null
+    try {
+      materializer.materializeBuildListEntry(candidates[0], [divergent])
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(PlannerMaterializationError)
+    expect(thrown).toBeInstanceOf(ConstrainedMaterializationError)
+    expect((thrown as Error).name).toBe('ConstrainedMaterializationError')
+    expect((thrown as ConstrainedMaterializationError).code).toBe('generated_entry_id_collision')
   })
 })

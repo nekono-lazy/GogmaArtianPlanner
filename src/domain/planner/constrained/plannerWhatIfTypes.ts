@@ -1,16 +1,19 @@
 import type {
   BuildListEntryId,
-  DomainValidationIssue,
   TargetWeaponId,
 } from '../../models/publicTypes'
 import type { ConstrainedEnumerationBounds } from '../../search'
 import type {
-  ExcludedBuildListEntry,
   PlannerConflictResolution,
   PlannerExecutionOptions,
   PlannerInput,
-  PlannerWarning,
 } from '../plannerTypes'
+import type {
+  PlannerConflictScenarioFailureResult,
+  PlannerConflictScenarioInputNotReadyResult,
+  PlannerConflictScenarioInvalidFixedResolutionReason,
+  PlannerConflictScenarioInvalidFixedResolutionResult,
+} from '../replacement/plannerConflictScenario'
 import type { PlannerWhatIfBounds } from './plannerWhatIfBounds'
 
 /**
@@ -26,9 +29,8 @@ import type { PlannerWhatIfBounds } from './plannerWhatIfBounds'
  * The public what-if request (PLANNER_SPEC 9.2.4.5).
  *
  * `scenarioResolution` is the single virtual fixed authority. It is a plain
- * `PlannerConflictResolution`, so a caller never assembles a B8 transient DTO
- * such as `PlannerConstrainedConflictContext` or
- * `PlannerFixedConflictConstraint`.
+ * `PlannerConflictResolution`, so a caller never assembles a transient DTO
+ * such as `PlannerConflictContext` or `PlannerFixedConflictConstraint`.
  *
  * `ConstrainedEnumerationBounds` is deliberately absent: the only bounds an
  * Application or Worker request carries are `PlannerWhatIfBounds`. The Search
@@ -46,9 +48,11 @@ export interface PlannerWhatIfRequest {
  * The Domain-calculation options of PLANNER_SPEC 9.2.4.5 / 9.2.4.10.
  *
  * `enumerationBounds` is caller-required. The Domain performs no default
- * substitution, fallback, clamp, or field-wise completion; the Production
- * Worker adapter is what passes `defaultConstrainedEnumerationBounds`
- * explicitly inside the Worker boundary.
+ * substitution, fallback, clamp, or field-wise completion; until Phase 6-B1
+ * the Production Worker adapter was what passed
+ * `defaultConstrainedEnumerationBounds` explicitly inside the Worker boundary.
+ * Phase 6-B1 removed that adapter; the remaining callers are tests and
+ * benchmarks, which pass their own bounds.
  */
 export interface PlannerWhatIfCalculationOptions {
   enumerationBounds: ConstrainedEnumerationBounds
@@ -132,63 +136,18 @@ export interface PlannerWhatIfComparison {
 }
 
 /**
- * Why the scenario fixed constraint could not be built safely
- * (PLANNER_SPEC 9.2.4.11).
- *
- * These are control authority. A caller branches on `status` and `reason`, and
- * never on message text.
+ * The preparation failures the legacy B9 what-if shares with the Planner
+ * Alternative (PLANNER_SPEC 9.2.4.11). Since Phase 6-B2a they are defined once,
+ * by the shared scenario preparation of `../replacement/plannerConflictScenario`
+ * (`PlannerConflictScenario*`); these legacy names are aliases of the very
+ * same types, with the same literals, so no B9 result changes.
  */
 export type PlannerWhatIfInvalidFixedResolutionReason =
-  /**
-   * `validatePlannerInput()` did not keep the scenario resolution's exact
-   * (conflictKey, selectedBuildListEntryId) pair among its valid resolutions,
-   * e.g. because the selected Entry is missing, stale, or otherwise excluded.
-   */
-  | 'scenario_resolution_not_valid'
-  /**
-   * At least one valid explicit resolution - the scenario's own included -
-   * could not be turned into a fixed constraint. All-or-nothing, exactly like
-   * B8: a partial fixed set is never used.
-   */
-  | 'fixed_constraints_unresolved'
-  /**
-   * The prepared constraints carry no unique constraint matching the scenario
-   * resolution, so the what-if subject is unknown. No substitute is chosen.
-   */
-  | 'scenario_constraint_missing'
-
-/** The Planner input itself is not usable, before any what-if work starts. */
-export interface PlannerWhatIfInputNotReadyResult {
-  status: 'planner_input_not_ready'
-  issues: DomainValidationIssue[]
-  warnings: PlannerWarning[]
-  excludedBuildListEntries: ExcludedBuildListEntry[]
-}
-
-/**
- * The scenario fixed constraint is unknown, so no comparison is started.
- *
- * No alternative fixed Entry is ever inferred from
- * `PlanConflict.recommendedBuildListEntryId`, a full Planner run bestState
- * participant, Target priority, Candidate score, Candidate category, or
- * Candidate similarity (PLANNER_SPEC 9.2.7).
- *
- * `conflictKey` and `selectedBuildListEntryId` identify the resolution that
- * failed; for `fixed_constraints_unresolved` they name the first failure in the
- * stable conflictKey order the fixed-constraint preparation reports. `detail`
- * is human-readable diagnostics only and is never a control authority.
- */
-export interface PlannerWhatIfInvalidFixedResolutionResult {
-  status: 'invalid_fixed_resolution'
-  reason: PlannerWhatIfInvalidFixedResolutionReason
-  conflictKey: string
-  selectedBuildListEntryId: BuildListEntryId
-  detail: string
-}
-
-export type PlannerWhatIfFailureResult =
-  | PlannerWhatIfInputNotReadyResult
-  | PlannerWhatIfInvalidFixedResolutionResult
+  PlannerConflictScenarioInvalidFixedResolutionReason
+export type PlannerWhatIfInputNotReadyResult = PlannerConflictScenarioInputNotReadyResult
+export type PlannerWhatIfInvalidFixedResolutionResult =
+  PlannerConflictScenarioInvalidFixedResolutionResult
+export type PlannerWhatIfFailureResult = PlannerConflictScenarioFailureResult
 
 /**
  * The whole what-if calculation result. Failures are typed values, not thrown

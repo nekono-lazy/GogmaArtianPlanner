@@ -28,7 +28,7 @@ import {
  * removed the Browser harness and the Production Worker request kind they were
  * measured through; the recorded measurements stay in
  * `docs/B9_PLANNER_WHAT_IF_BROWSER_WORKER_BENCHMARK.md`. The fixtures stay as
- * Domain test input of the B9 calculation until Phase 6-B2.
+ * Domain test input of the B9 calculation until Phase 6-B2b.
  */
 
 /** Measurement grid only. These values are NOT Production defaults. */

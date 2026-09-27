@@ -20,18 +20,16 @@ import {
 import {
   preparePlannerAugmentedConflictPreflight,
   preparePlannerReplacementConflictPreflight,
-} from './plannerAugmentedPreflight'
-import type { PlannerFixedConflictConstraint } from './plannerConflictContext'
-import type { PlannerConflictWork } from './plannerConstrainedOrchestration'
+} from '../replacement/plannerAugmentedPreflight'
+import type { PlannerFixedConflictConstraint } from '../replacement/plannerConflictContext'
+import type { PreparedPlannerConflictScenario } from '../replacement/plannerConflictScenario'
+import type { PlannerConflictWork } from '../replacement/plannerConflictWork'
 import {
   createPlannerWhatIfFullRunBudget,
   PlannerWhatIfRerunLimitError,
   type PlannerWhatIfFullRunBudget,
 } from './plannerWhatIfRerunBudget'
-import {
-  preparePlannerWhatIfScenario,
-  type PreparedPlannerWhatIfScenario,
-} from './plannerWhatIfScenario'
+import { preparePlannerWhatIfScenario } from './plannerWhatIfScenario'
 import type {
   PlannerWhatIfCalculationOptions,
   PlannerWhatIfCalculationResult,
@@ -159,7 +157,7 @@ export async function createPlannerWhatIfComparison(
 ): Promise<PlannerWhatIfCalculationResult> {
   const prepared = preparePlannerWhatIfScenario(request, dependencies)
   if (prepared.status !== 'ready') return prepared
-  const scenario: PreparedPlannerWhatIfScenario = prepared.scenario
+  const scenario: PreparedPlannerConflictScenario = prepared.scenario
   const budget = createPlannerWhatIfFullRunBudget(request.bounds)
   const maxTrials = request.bounds.maxCandidateTrialsPerTarget
   const executionOptions = options.executionOptions

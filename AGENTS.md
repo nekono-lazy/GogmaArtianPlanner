@@ -3657,7 +3657,7 @@ every resolution. Nothing is persisted: `ProductionPlan.conflictRepairLineage`, 
 Client, Production routing, migrations and versions are Phase 5-B, which switches the what-if and the repair together.
 No version moved (15 / 9 / 12).
 Phase 5-B (Production routing, Persistence, lineage persistence and migrations) is complete, so Phase 5 is complete;
-Phase 6 (the legacy path) followed, split into 6-A, 6-B1 and 6-B2 (see below). `ProductionPlan.conflictRepairLineage: PlannerConflictRepairLineage | null` is a
+Phase 6 (the legacy path) followed, split into 6-A, 6-B1, 6-B2a and 6-B2b (see below). `ProductionPlan.conflictRepairLineage: PlannerConflictRepairLineage | null` is a
 persisted field: `validateProductionPlan()` / `validatePlannerConflictRepairLineage()` check its structure, literals, ID
 forms and `outcome === 'replaced'` iff a replacement ID, and never its Entry / Target IDs as current foreign keys; a
 missing field is no current body. Plan generation writes `null` (the ordinary Planner, the replan Preview / adoption and
@@ -3695,9 +3695,9 @@ until Phase 6-B1 removed them (the replan Preview and the Build List kept their 
 failure saves nothing and shows its typed comparison; the minimal presentation (`ProductionPlanAlternativeComparison`,
 `presentProductionPlanAlternative.ts`) tells the five no-result statuses, `adoptedInScenario` true / false / null and the four
 scenario statuses apart, in text. The Phase 7 / Issue #122 redesign is not done.
-Phase 6 is split into 6-A, 6-B1 and 6-B2 (`docs/PLANNER_SPEC.md` 9.2.19.14 / 9.2.19.16). Phase 6-A (the Production consumers'
+Phase 6 is split into 6-A, 6-B1, 6-B2a and 6-B2b (`docs/PLANNER_SPEC.md` 9.2.19.14 / 9.2.19.16). Phase 6-A (the Production consumers'
 separation from the legacy B8 path) and Phase 6-B1 (the dead public runtime surface removal, below) are complete; Phase 6 as a
-whole is not complete until 6-B2. After Phase 5-B the Build List's ordinary 「生産計画を作成」 and the
+whole is not complete until 6-B2b. After Phase 5-B the Build List's ordinary 「生産計画を作成」 and the
 running Plan's replan Preview (16.8) still called `createConstrainedPlan()` with `defaultPlannerOrchestrationBounds`, but both hand
 the Planner a fresh current-state input with `conflictResolutions = []` - neither restores a saved Plan's resolution, baseSnapshot,
 past input or repair lineage - so by 9.2.7 B8 only ran its initial ordinary Planner run and returned it. Both now call the ordinary
@@ -3753,8 +3753,39 @@ error / unavailable (no main-thread fallback) semantics are unchanged. Phase 6-B
 outcome helpers, the Issue #101 research harness / fixtures, the Constrained Enumeration benchmark (a Search Domain benchmark), the
 Phase 6-A parity and retry-boundary tests, and the historical benchmark records (which only gained a current-state note). It moved no
 version (17 / 10 / 13, `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2, `production-rng:c5-e7`, Master `dataVersion` 4)
-and added no migration. Phase 6-B2 re-audits the remaining consumers, deletes the legacy Domain path or keeps it as a test oracle, and
-moves the shared primitives into neutral modules by the actual import graph.
+and added no migration. Phase 6-B2 is split into 6-B2a and 6-B2b, so cutting the Planner Alternative's live runtime authority off the
+legacy modules and deleting the legacy bodies never share one PR. Phase 6-B2a (complete) re-audited the local import graph and moved
+every shared primitive the Planner Alternative imported from `src/domain/planner/constrained/` into the neutral Planner Domain module
+`src/domain/planner/replacement/` (its own barrel; it depends on neither side): the conflict context / fixed constraint
+(`plannerConflictContext.ts`; `PlannerConstrainedConflictContext` became `PlannerConflictContext` and
+`createPlannerConstrainedConflictContexts()` became `createPlannerConflictContexts()`), the augmented / replacement preflight
+(`plannerAugmentedPreflight.ts`), `PlannerConflictWork` / `createPlannerConflictWorks()` (`plannerConflictWork.ts`, a module separate
+from `createProductionPlanWithConstrainedSearch()`), the scenario preparation (`plannerConflictScenario.ts`:
+`preparePlannerConflictScenario()`, `PreparedPlannerConflictScenario`, `mergePlannerConflictScenarioResolution()` and the prepare-stage
+typed failures `PlannerConflictScenarioFailureResult` with unchanged literals), the Planner-start Search origin (`plannerSearchOrigin.ts`:
+`createPlannerStartSearchOrigin()`, `normalizePlannerSearchOrigin()`, `resolvePlannerSearchOriginTarget()`, formerly
+`createConstrainedSearchOriginFromPlannerInput()` / `normalizeConstrainedSearchOrigin()` / `resolveConstrainedTarget()`) and the
+deterministic materializer core (`plannerDeterministicMaterializer.ts`: `GeneratedBuildListEntryResult`,
+`DeterministicMaterializationSource`, `DeterministicMaterializer`, `createDeterministicMaterializer()`). The materialization error moved
+into `replacement/plannerMaterializationErrors.ts` with its runtime contract intact: the one constructor is still
+`ConstrainedMaterializationError` (`name` / `constructor.name` `'ConstrainedMaterializationError'`, the codes `target_mismatch` /
+`invalid_candidate` / `generated_entry_id_collision` and every message unchanged, also for `resolvePlannerSearchOriginTarget()`), the
+neutral `PlannerMaterializationError` / `PlannerMaterializationErrorCode` are aliases of that same constructor and type (never a second
+class, so `instanceof` holds under either name), and the legacy path `constrained/constrainedMaterializationErrors.ts` stays a
+compatibility facade re-exporting it until Phase 6-B2b. The shared scenario preparation
+checks no bounds: the Planner Alternative kernel asserts its own trial bounds (the same positive-integer rule) first, and the legacy B9
+`preparePlannerWhatIfScenario()` stays as a wrapper that asserts `PlannerWhatIfBounds` and delegates; `PlannerWhatIfFailureResult` and
+its members are aliases of the shared types. The legacy side keeps `CONSTRAINED_ROUTE_POLICY_VERSION` / `createConstrainedSearchIdentity()`,
+the B8 adapter `createConstrainedMaterializer()`, `isPlannerConflictWorkSatisfied()` / `isConstrainedTrialAdoptable()`, the B8
+orchestration, the B9 what-if calculation, its distance / comparison / bounds types, every bound / default, the B8 / B9 warning kinds,
+the B8 Persistence API, the Issue #101 research harness, the Phase 6-A parity / retry-boundary tests and the benchmark fixtures, and now
+imports the neutral module. The Planner Alternative production runtime (`src/domain/planner/alternative/*.ts`) has zero imports from
+`../constrained/`, and its presentation / benchmark consumers name the neutral types. No semantics moved: the generated BuildListEntry ID
+(its `build-list.constrained.` prefix is part of the value and stays), the generated Candidate IDs, both search identities,
+`candidateStableKey`, `targetDefinitionHash`, `searchStateHash` and `referencedOwnedWeaponsHash` are unchanged (pinned by tests), and
+Production routing, the Worker protocol, the UI and every version (17 / 10 / 13) are unchanged, with no migration. The Search Domain
+names `ConstrainedSearchOrigin` / `ConstrainedCandidate` are the Search Domain's and are left to the Search-side cleanup. Phase 6-B2b
+re-audits what is left under `constrained/` - legacy consumers only - and deletes the legacy Domain path or keeps it as a test oracle.
 
 ---
 
@@ -5274,6 +5305,9 @@ Relevant test areas include:
   `prepare_interaction`) plus `cancel` / `error`, no legacy B8 / B9 kind, method or adapter, and the Build List / replan
   Preview / 「比較する」 / 「この候補を優先」 routing reaching only `createPlan()` / `createPlannerAlternativeComparison()` /
   `createPlannerAlternativeRepair()`
+- Phase 6-B2a: `src/domain/planner/alternative/*.ts` importing nothing from `../constrained/`, the shared primitives tested in
+  `src/domain/planner/replacement/`, the legacy B8 / B9 adapters tested only for what they add, and the generated BuildListEntry ID,
+  the B8 / Planner Alternative Candidate IDs and both search identities pinned to their pre-Phase 6-B2a values
 - `ProductionPlan.conflictRepairLineage` validated structurally only (literals, IDs, the
   `replaced` iff replacement rule, never a current foreign key), Dexie v9 -> v10 and Export
   12 -> 13 filling `null` into every Plan body (table, save point, Undo snapshot, Undo

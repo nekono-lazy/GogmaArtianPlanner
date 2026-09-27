@@ -7,7 +7,7 @@
 > `createProductionConstrainedPlan()`）と、本書のharness（`plannerOrchestrationBrowserBenchmark.ts`、
 > `PlannerOrchestrationBenchmarkPage.tsx`、Benchmark shellの「B8 Planner Orchestration」）はPhase 6-B1で削除した
 > （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14 / 9.2.19.16）。B8 orchestrationのDomain計算本体、
-> `defaultPlannerOrchestrationBounds` とfixtureはPhase 6-B2で整理するまで残る。以下の手順・数値は当時のまま変更しない。
+> `defaultPlannerOrchestrationBounds` とfixtureはPhase 6-B2bで整理するまで残る（共有primitiveはPhase 6-B2aで `src/domain/planner/replacement/` へ移した）。以下の手順・数値は当時のまま変更しない。
 
 ## Status
 

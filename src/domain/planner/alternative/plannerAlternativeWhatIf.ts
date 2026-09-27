@@ -29,8 +29,9 @@ import type { PlannerAlternativeTrialBounds } from './plannerAlternativeTrial'
  * It is transient: it persists no BuildListEntry, ProductionPlan, resolution,
  * comparison or repair lineage, and it never re-searches a Conflict the
  * scenario introduces (one-step preview). It is a separate calculation from the
- * legacy B9 `createPlannerWhatIfComparison()`, which stays the Production UI
- * path until Phase 5-B.
+ * legacy B9 `createPlannerWhatIfComparison()`, which was the Production UI
+ * path until Phase 5-B and has no normal Application runtime consumer since
+ * (its remaining consumers are tests and benchmarks).
  */
 
 /**

@@ -27,9 +27,9 @@ import type {
   PlannerInput,
 } from '../plannerTypes'
 import {
-  createPlannerConstrainedConflictContexts,
+  createPlannerConflictContexts,
   preparePlannerFixedConflictConstraints,
-  type PlannerConstrainedConflictContext,
+  type PlannerConflictContext,
   type PlannerFixedConflictConstraint,
 } from './plannerConflictContext'
 import {
@@ -67,8 +67,8 @@ function readyContext(built: Scenario): PlannerInitialContext {
   return prepared.context
 }
 
-function contextsOf(built: Scenario): PlannerConstrainedConflictContext[] {
-  return createPlannerConstrainedConflictContexts(readyContext(built))
+function contextsOf(built: Scenario): PlannerConflictContext[] {
+  return createPlannerConflictContexts(readyContext(built))
 }
 
 /**
@@ -79,13 +79,13 @@ function originalConstraints(
   targets: TargetWeapon[],
   entries: BuildListEntry[],
   ownedWeapons: OwnedWeapon[],
-  select: (contexts: PlannerConstrainedConflictContext[]) => PlannerConflictResolution[],
+  select: (contexts: PlannerConflictContext[]) => PlannerConflictResolution[],
 ): { constraints: PlannerFixedConflictConstraint[]; conflictIds: string[] } {
   const detected = contextsOf(scenario(targets, entries, ownedWeapons))
   const resolutions = select(detected)
   const built = scenario(targets, entries, ownedWeapons, resolutions)
   const context = readyContext(built)
-  const contexts = createPlannerConstrainedConflictContexts(context)
+  const contexts = createPlannerConflictContexts(context)
   const prepared = preparePlannerFixedConflictConstraints(context, contexts)
   if (prepared.status !== 'ready') {
     throw new Error('Expected ready fixed constraints from the original input.')
@@ -654,7 +654,7 @@ describe('B8-C3b zero and multiple current conflict matches', () => {
     const two = gogmaScenario(suffix, ['first', 'second'])
     const built = scenario(two.targets, two.entries, two.sources)
     const context = readyContext(built)
-    const contexts = createPlannerConstrainedConflictContexts(context)
+    const contexts = createPlannerConflictContexts(context)
     return { two, context, contexts }
   }
 
@@ -688,7 +688,7 @@ describe('B8-C3b zero and multiple current conflict matches', () => {
     }
     const result = reassociatePlannerFixedConstraints(
       withOutsider,
-      createPlannerConstrainedConflictContexts(withOutsider),
+      createPlannerConflictContexts(withOutsider),
       [constraint],
     )
     expect(result.status).toBe('unresolved')
@@ -700,7 +700,7 @@ describe('B8-C3b zero and multiple current conflict matches', () => {
 
   it('reports current_conflict_ambiguous instead of picking one', () => {
     const { two, context, contexts } = baseline('ambiguous')
-    const duplicated: PlannerConstrainedConflictContext[] = [
+    const duplicated: PlannerConflictContext[] = [
       contexts[0],
       { ...contexts[0], conflictId: `${contexts[0].conflictId}:duplicate` },
     ]
@@ -769,7 +769,7 @@ describe('B8-C3b zero and multiple current conflict matches', () => {
     const [participant] = contexts[0].participants.filter(
       ({ buildListEntryId }) => buildListEntryId === fixed.entry.id,
     )
-    const mixed: PlannerConstrainedConflictContext[] = [{
+    const mixed: PlannerConflictContext[] = [{
       ...contexts[0],
       participants: [
         ...contexts[0].participants,
@@ -1102,7 +1102,7 @@ describe('replacement-set preflight (Phase 0-3)', () => {
     ]
     const original = scenario(targets, persisted, sources)
     const originalContext = readyContext(original)
-    const originalContexts = createPlannerConstrainedConflictContexts(originalContext)
+    const originalContexts = createPlannerConflictContexts(originalContext)
     const conflictAt = (counter: number) => {
       const found = originalContexts.find(({ counterBefore }) => counterBefore === counter)
       if (!found) throw new Error(`No conflict at ${counter}.`)
@@ -1116,7 +1116,7 @@ describe('replacement-set preflight (Phase 0-3)', () => {
     const resolvedContext = readyContext(resolved)
     const constraints = preparePlannerFixedConflictConstraints(
       resolvedContext,
-      createPlannerConstrainedConflictContexts(resolvedContext),
+      createPlannerConflictContexts(resolvedContext),
     )
     if (constraints.status !== 'ready') throw new Error('Expected ready fixed constraints.')
     const b2 = routeEntry('entry.pf.rs.b2', targets[1], resetRoute(sources[4].id, b2Counter))
@@ -1126,7 +1126,7 @@ describe('replacement-set preflight (Phase 0-3)', () => {
       b2,
       augmented,
       constraints: constraints.constraints,
-      originalContexts: createPlannerConstrainedConflictContexts(resolvedContext),
+      originalContexts: createPlannerConflictContexts(resolvedContext),
       replacements: [{
         targetWeaponId: targets[1].id,
         replacedBuildListEntryId: persisted[1].id,

@@ -194,7 +194,7 @@ export type PlannerAlternativeKernelResultSummary =
       readonly candidateTrials: number
       readonly targets: readonly PlannerAlternativeKernelTargetSummary[]
     }
-  /** A typed Kernel failure (`PlannerWhatIfFailureResult`, `invalid_prior_fixed_entry`). */
+  /** A typed Kernel failure (`PlannerConflictScenarioFailureResult`, `invalid_prior_fixed_entry`). */
   | { readonly status: 'failed'; readonly kernelStatus: string; readonly detail: string | null }
 
 export interface PlannerAlternativeKernelMeasurement {

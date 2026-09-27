@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   CONSTRAINED_ROUTE_POLICY_VERSION,
   createConstrainedSearchIdentity,
-  resolveConstrainedTarget,
 } from './constrainedSearchIdentity'
 import { ConstrainedMaterializationError } from './constrainedMaterializationErrors'
 import type { ConstrainedSearchOrigin } from '../../search'
@@ -70,86 +69,24 @@ describe('constrained search identity composition', () => {
         bounds: constrainedBounds(),
       }),
     ).toThrowError(ConstrainedMaterializationError)
-    expect(() =>
-      resolveConstrainedTarget(origin, targetWeaponId('target.fixture.missing')),
-    ).toThrowError(
-      expect.objectContaining({ code: 'target_mismatch' }) as unknown as Error,
-    )
   })
 })
 
-describe('constrained search identity: collection order is not semantic', () => {
+/*
+ * The origin normalization itself - collection order, irrelevant Targets and
+ * weapons, non-semantic fields, the semantic RNG / weapon / Target changes - is
+ * the shared primitive of `../replacement/plannerSearchOrigin.test.ts`
+ * (Phase 6-B2a). Below, only its reach into this legacy identity and the
+ * identity's own composition are checked.
+ */
+
+describe('constrained search identity: the shared normalization reaches it', () => {
   it('ignores OwnedWeapon array order', () => {
     const base = originWithWeapons()
     const reordered = createConstrainedSearchOrigin({
       ownedWeapons: [...base.ownedWeapons].reverse(),
     })
     expect(identity(reordered)).toBe(identity(base))
-  })
-
-  it('ignores Normal Counter array order and unrelated Normal Counters', () => {
-    const base = originWithWeapons()
-    const unrelated = {
-      ...base.normalCounters[0],
-      id: 'weapon.fixture.other:8',
-      weaponTypeId: 'weapon.fixture.other',
-      counter: 999,
-    }
-    const withUnrelated = createConstrainedSearchOrigin({
-      ownedWeapons: base.ownedWeapons,
-      normalCounters: [unrelated, ...base.normalCounters],
-    })
-    expect(identity(withUnrelated)).toBe(identity(base))
-  })
-
-  it('ignores other Targets kept in the origin snapshot', () => {
-    const base = originWithWeapons()
-    const other = { ...constrainedTarget(), id: targetWeaponId('target.fixture.b') }
-    const withExtra = createConstrainedSearchOrigin({
-      ownedWeapons: base.ownedWeapons,
-      extraTargetWeapons: [other],
-    })
-    expect(identity(withExtra)).toBe(identity(base))
-  })
-
-  it('ignores an OwnedWeapon that cannot be a Route source for this Target', () => {
-    const base = originWithWeapons()
-    const withForeign = createConstrainedSearchOrigin({
-      ownedWeapons: [
-        ...base.ownedWeapons,
-        gogmaWeapon('owned.constrained.foreign', {
-          weaponTypeId: 'weapon.fixture.other',
-        }),
-      ],
-    })
-    expect(identity(withForeign)).toBe(identity(base))
-  })
-
-  it('ignores a protected Owned Normal, which no conversion Route may consume', () => {
-    const base = originWithWeapons()
-    const withProtectedNormal = createConstrainedSearchOrigin({
-      ownedWeapons: [
-        ...base.ownedWeapons,
-        normalWeapon('owned.constrained.normal-protected', { isProtected: true }),
-      ],
-    })
-    expect(identity(withProtectedNormal)).toBe(identity(base))
-  })
-
-  it('ignores non-semantic OwnedWeapon and RngState fields', () => {
-    const base = originWithWeapons()
-    const renamed = createConstrainedSearchOrigin({
-      ownedWeapons: base.ownedWeapons.map((weapon) => ({
-        ...weapon,
-        name: '別名',
-        memo: 'changed',
-        updatedAt: '2027-01-01T00:00:00.000Z',
-      })),
-    })
-    renamed.rngState.baseSeed.source = 'observation'
-    renamed.rngState.notes = 'changed'
-    renamed.rngState.counterGate = { value: 54, isConfirmed: true, source: 'manual' }
-    expect(identity(renamed)).toBe(identity(base))
   })
 
   it('ignores the Master subset itself, whose identity is masterDataVersion', () => {
@@ -187,60 +124,15 @@ describe('constrained search identity: semantic changes', () => {
 
   it.each([
     [
-      'Base Seed value',
-      (origin: ConstrainedSearchOrigin) => {
-        origin.rngState.baseSeed.value = 'fixture-seed-other'
-      },
-    ],
-    [
-      'Base Seed confirmation',
-      (origin: ConstrainedSearchOrigin) => {
-        origin.rngState.baseSeed.isConfirmed = false
-      },
-    ],
-    [
       'Gogma Counter',
       (origin: ConstrainedSearchOrigin) => {
         origin.rngState.gogmaCounter.value = 99
       },
     ],
     [
-      'Skill Counter',
-      (origin: ConstrainedSearchOrigin) => {
-        origin.rngState.skillCounter.value = 99
-      },
-    ],
-    [
-      'the relevant Normal Counter',
-      (origin: ConstrainedSearchOrigin) => {
-        origin.normalCounters[0].counter = 99
-      },
-    ],
-    [
-      'the relevant Normal Counter confirmation',
-      (origin: ConstrainedSearchOrigin) => {
-        origin.normalCounters[0].isConfirmed = false
-      },
-    ],
-    [
-      'a relevant OwnedWeapon bonus slot',
-      (origin: ConstrainedSearchOrigin) => {
-        origin.ownedWeapons[0].restorationBonuses[0] = {
-          bonusTypeId: 'bonus_type.fixture.utility',
-          bonusRankId: 'bonus_rank.fixture.low',
-        }
-      },
-    ],
-    [
       'a relevant OwnedWeapon protection state',
       (origin: ConstrainedSearchOrigin) => {
         origin.ownedWeapons[0].isProtected = true
-      },
-    ],
-    [
-      'the Target definition',
-      (origin: ConstrainedSearchOrigin) => {
-        origin.targetWeapons[0].practicalBonusConditions[0].requiredExCount = 1
       },
     ],
     [
@@ -257,36 +149,6 @@ describe('constrained search identity: semantic changes', () => {
     const changed = originWithWeapons()
     mutate(changed)
     expect(identity(changed)).not.toBe(identity(base))
-  })
-
-  it('changes when an unprotected Owned Normal conversion source is added', () => {
-    const base = originWithWeapons()
-    const withNormal = createConstrainedSearchOrigin({
-      ownedWeapons: [
-        ...base.ownedWeapons,
-        normalWeapon('owned.constrained.normal-b'),
-      ],
-    })
-    expect(identity(withNormal)).not.toBe(identity(base))
-  })
-
-  it('changes when an Owned Normal conversion source becomes protected', () => {
-    const base = originWithWeapons()
-    const protectedNormal = createConstrainedSearchOrigin({
-      ownedWeapons: base.ownedWeapons.map((weapon) =>
-        weapon.kind === 'normal' ? { ...weapon, isProtected: true } : weapon,
-      ),
-    })
-    expect(protectedNormal.ownedWeapons.some(({ kind }) => kind === 'normal')).toBe(true)
-    expect(identity(protectedNormal)).not.toBe(identity(base))
-  })
-
-  it('changes when a relevant OwnedWeapon is removed', () => {
-    const base = originWithWeapons()
-    const removed = createConstrainedSearchOrigin({
-      ownedWeapons: [base.ownedWeapons[0]],
-    })
-    expect(identity(removed)).not.toBe(identity(base))
   })
 
   it.each([

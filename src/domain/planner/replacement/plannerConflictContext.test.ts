@@ -22,7 +22,7 @@ import {
 } from '../plannerInitialContext'
 import type { PlannerBuildListContext, PlannerConflictResolution } from '../plannerTypes'
 import {
-  createPlannerConstrainedConflictContexts,
+  createPlannerConflictContexts,
   plannerConflictResourceKey,
   preparePlannerFixedConflictConstraints,
   samePlannerConflictResource,
@@ -49,7 +49,7 @@ function contextsOf(
   entries: BuildListEntry[],
   ownedWeapons: OwnedWeapon[] = [],
 ) {
-  return createPlannerConstrainedConflictContexts(
+  return createPlannerConflictContexts(
     readyContext(targets, entries, ownedWeapons),
   )
 }
@@ -314,7 +314,7 @@ describe('B8-C3a conflict context authority', () => {
       [shared],
     )
     expect(context.initialConflictDetection.conflicts).toEqual([])
-    expect(createPlannerConstrainedConflictContexts(context)).toEqual([])
+    expect(createPlannerConflictContexts(context)).toEqual([])
   })
 
   it('derives participant fields from the existing Route units and Entries', () => {
@@ -337,7 +337,7 @@ describe('B8-C3a conflict context authority', () => {
       [firstEntry, secondEntry],
       [firstSource, secondSource],
     )
-    const [conflict] = createPlannerConstrainedConflictContexts(context)
+    const [conflict] = createPlannerConflictContexts(context)
     expect(conflict.participants).toEqual([
       {
         buildListEntryId: firstEntry.id,
@@ -456,7 +456,7 @@ describe('B8-C3a fixed conflict constraint extraction', () => {
       ownedWeapons,
       resolutions,
     )
-    const contexts = createPlannerConstrainedConflictContexts(context)
+    const contexts = createPlannerConflictContexts(context)
     return {
       context,
       contexts,
@@ -721,7 +721,7 @@ describe('B8-C3a duplicate BuildListEntry ID identity', () => {
       built.sources,
       [{ conflictKey, selectedBuildListEntryId: built.first.id }],
     )
-    const contexts = createPlannerConstrainedConflictContexts(context)
+    const contexts = createPlannerConflictContexts(context)
     return {
       built,
       conflictKey,
@@ -736,7 +736,7 @@ describe('B8-C3a duplicate BuildListEntry ID identity', () => {
     entries: BuildListEntry[],
     ownedWeapons: OwnedWeapon[],
   ): string {
-    const contexts = createPlannerConstrainedConflictContexts(
+    const contexts = createPlannerConflictContexts(
       readyContext(
         targets,
         entries.map((entry) => structuredClone(entry)),

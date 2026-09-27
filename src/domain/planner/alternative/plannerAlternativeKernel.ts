@@ -30,14 +30,14 @@ import type {
   PlannerRouteCommitmentEvidence,
   PlannerRunBuildListContext,
 } from '../plannerTypes'
-import type { GeneratedBuildListEntryResult } from '../constrained/constrainedMaterializer'
-import { preparePlannerReplacementConflictPreflight } from '../constrained/plannerAugmentedPreflight'
-import type { PlannerConflictWork } from '../constrained/plannerConstrainedOrchestration'
+import type { GeneratedBuildListEntryResult } from '../replacement/plannerDeterministicMaterializer'
+import { preparePlannerReplacementConflictPreflight } from '../replacement/plannerAugmentedPreflight'
+import type { PlannerConflictWork } from '../replacement/plannerConflictWork'
 import {
-  preparePlannerWhatIfScenario,
-  type PreparedPlannerWhatIfScenario,
-} from '../constrained/plannerWhatIfScenario'
-import type { PlannerWhatIfFailureResult } from '../constrained/plannerWhatIfTypes'
+  preparePlannerConflictScenario,
+  type PlannerConflictScenarioFailureResult,
+  type PreparedPlannerConflictScenario,
+} from '../replacement/plannerConflictScenario'
 import {
   createPlannerAlternativeMaterializer,
   type PlannerAlternativeMaterializer,
@@ -221,7 +221,7 @@ export interface PlannerAlternativeInvalidPriorFixedEntryResult {
 }
 
 export type PlannerAlternativeKernelPreparationFailure =
-  | PlannerWhatIfFailureResult
+  | PlannerConflictScenarioFailureResult
   | PlannerAlternativeInvalidPriorFixedEntryResult
 
 /**
@@ -236,7 +236,7 @@ export interface PreparedPlannerAlternativeKernel {
    * The what-if preparation of the effective input: the request input minus
    * the superseded prior fixed resolutions, with the decision merged in.
    */
-  scenario: PreparedPlannerWhatIfScenario
+  scenario: PreparedPlannerConflictScenario
   /** This decision's fixed Entry and every Entry an effective valid explicit resolution selects. */
   explicitDecisionBuildListEntryIds: BuildListEntryId[]
   /** Every Entry this decision invalidates: the current Entry of each non-fixed Target, in stable order. */
@@ -291,7 +291,7 @@ function sortedUnique<T extends string>(values: readonly T[]): T[] {
  * whose Route the decision invalidates. Exactly one searchable Entry per
  * Target, or the preparation broke an invariant.
  */
-function invalidatedEntryOf(scenario: PreparedPlannerWhatIfScenario, targetWeaponId: TargetWeaponId): BuildListEntry {
+function invalidatedEntryOf(scenario: PreparedPlannerConflictScenario, targetWeaponId: TargetWeaponId): BuildListEntry {
   const entries = scenario.initialContext.allSearchEntries.filter(
     (entry) => entry.targetWeaponId === targetWeaponId,
   )
@@ -315,7 +315,7 @@ type TrialOutcome =
 /**
  * Prepares one kernel request.
  *
- * Preparation reuses the what-if preparation unchanged (`preparePlannerWhatIfScenario()`:
+ * Preparation reuses the shared scenario preparation unchanged (`preparePlannerConflictScenario()`:
  * the 9.2.4.5 merge, `preparePlannerInitialContext()`, every valid explicit
  * resolution as a fixed constraint, the decision's own constraint, and the
  * scenario-only `createPlannerConflictWorks()`), so the fixed side is only ever
@@ -330,13 +330,15 @@ export function preparePlannerAlternativeKernel(
 ): PlannerAlternativeKernelPreparationResult {
   assertPlannerAlternativeTrialBounds(request.bounds)
   assertPlannerAlternativeRequestExtent(request.extent)
-  const prepareScenario = (plannerInput: PlannerInput) => preparePlannerWhatIfScenario(
-    { plannerInput, scenarioResolution: request.decision, bounds: request.bounds },
+  // The trial bounds were asserted above with the same positive-integer rule
+  // the legacy B9 wrapper applied, so the shared preparation checks none.
+  const prepareScenario = (plannerInput: PlannerInput) => preparePlannerConflictScenario(
+    { plannerInput, scenarioResolution: request.decision },
     dependencies,
   )
   const prepared = prepareScenario(request.plannerInput)
   if (prepared.status !== 'ready') return prepared
-  let scenario: PreparedPlannerWhatIfScenario = prepared.scenario
+  let scenario: PreparedPlannerConflictScenario = prepared.scenario
   const { entriesById } = scenario.initialContext
 
   // A prior fixed Entry is used only as it is: it must be a valid Entry of the
@@ -393,7 +395,7 @@ export function preparePlannerAlternativeKernel(
   }
 }
 
-function invalidatedBuildListEntryIdsOf(scenario: PreparedPlannerWhatIfScenario): BuildListEntryId[] {
+function invalidatedBuildListEntryIdsOf(scenario: PreparedPlannerConflictScenario): BuildListEntryId[] {
   return sortedUnique(scenario.works.map(({ targetWeaponId }) => invalidatedEntryOf(scenario, targetWeaponId).id))
 }
 

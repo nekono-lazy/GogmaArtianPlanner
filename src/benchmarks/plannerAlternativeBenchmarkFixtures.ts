@@ -15,7 +15,7 @@ import type {
 } from '../domain/models/publicTypes'
 import {
   assertPlannerAlternativeTrialBounds,
-  createConstrainedSearchOriginFromPlannerInput,
+  createPlannerStartSearchOrigin,
   derivePlannerAlternativeReservation,
   type PlannerAlternativeKernelRequest,
   type PlannerAlternativeTrialBounds,
@@ -247,7 +247,7 @@ export function createIssue101DragonFixedSearchInput(
 ): PlannerAlternativeSearchInput {
   assertPlannerAlternativeBenchmarkExtent(extent)
   return {
-    origin: createConstrainedSearchOriginFromPlannerInput(fixture.plannerInput),
+    origin: createPlannerStartSearchOrigin(fixture.plannerInput),
     targetWeaponId: fixture.fireEntry.targetWeaponId,
     extent: { ...extent },
     reservation: createIssue101DragonReservation(fixture),

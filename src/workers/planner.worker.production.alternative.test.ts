@@ -43,7 +43,7 @@ vi.mock('../domain/planner', async (importOriginal) => {
     createPlannerAlternativeWhatIfComparison: domain.createPlannerAlternativeWhatIfComparison,
     createPlannerAlternativeRepair: domain.createPlannerAlternativeRepair,
     // The legacy B8 / B9 Domain calculations stay in the Domain until Phase
-    // 6-B2; replaced here only to prove no Production adapter reaches them.
+    // 6-B2b; replaced here only to prove no Production adapter reaches them.
     createPlannerWhatIfComparison: domain.createPlannerWhatIfComparison,
     createProductionPlanWithConstrainedSearch: domain.createProductionPlanWithConstrainedSearch,
   }

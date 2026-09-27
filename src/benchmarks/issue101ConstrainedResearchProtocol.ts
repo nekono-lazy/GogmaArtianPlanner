@@ -13,10 +13,11 @@ import type {
  * `i101_benchmark_`, so it cannot collide with a Production message or with
  * the B8-B2 `b8_benchmark_` protocol.
  *
- * It exists because the Production Planner Worker fixes
- * `defaultConstrainedEnumerationBounds` inside its adapter, so the Issue #101
- * Gogma sweep cannot be measured through it. This Worker composes the very
- * same Production calculation - `createProductionPlanWithConstrainedSearch()`
+ * It exists because the Production Planner Worker fixed
+ * `defaultConstrainedEnumerationBounds` inside its adapter (until Phase 6-B1
+ * removed that adapter), so the Issue #101 Gogma sweep could not be measured
+ * through it. This Worker composes the same calculation the Production
+ * adapter ran - the legacy B8 `createProductionPlanWithConstrainedSearch()`
  * with the Production Planner dependencies and `ProductionRngEngine` - and only
  * lets the benchmark choose the enumeration bounds.
  *

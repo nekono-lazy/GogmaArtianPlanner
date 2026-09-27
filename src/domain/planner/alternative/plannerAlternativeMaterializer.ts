@@ -13,11 +13,11 @@ import type {
 import {
   createDeterministicMaterializer,
   type DeterministicMaterializer,
-} from '../constrained/constrainedMaterializer'
+} from '../replacement/plannerDeterministicMaterializer'
 import {
-  normalizeConstrainedSearchOrigin,
-  resolveConstrainedTarget,
-} from '../constrained/constrainedSearchIdentity'
+  normalizePlannerSearchOrigin,
+  resolvePlannerSearchOriginTarget,
+} from '../replacement/plannerSearchOrigin'
 import type { PlannerClock } from '../plannerTypes'
 
 /**
@@ -65,10 +65,10 @@ function normalizeCalculationContext(context: CalculationContext) {
 export function createPlannerAlternativeSearchIdentity(
   input: PlannerAlternativeSearchIdentityInput,
 ): string {
-  const target = resolveConstrainedTarget(input.origin, input.targetWeaponId)
+  const target = resolvePlannerSearchOriginTarget(input.origin, input.targetWeaponId)
   const suffix = hashStableValue({
     targetWeaponId: target.id,
-    origin: normalizeConstrainedSearchOrigin(input.origin, target),
+    origin: normalizePlannerSearchOrigin(input.origin, target),
     calculationContext: normalizeCalculationContext(input.origin.calculationContext),
     extent: {
       maxNormalAdvance: input.extent.maxNormalAdvance,
@@ -97,14 +97,15 @@ export type PlannerAlternativeMaterializer = DeterministicMaterializer<PlannerAl
  * `BuildCandidate` unchanged, so its intermediate state groups come from the
  * same extraction an ordinary Candidate uses and nothing is predicted again.
  * The generated Entry ID, same-semantic reuse, collision refusal and staleness
- * are the shared core's, exactly as for a B8 Entry.
+ * are the shared core's (`../replacement/plannerDeterministicMaterializer`),
+ * exactly as for a legacy B8 Entry.
  */
 export function createPlannerAlternativeMaterializer(
   context: PlannerAlternativeMaterializationContext,
 ): PlannerAlternativeMaterializer {
   return createDeterministicMaterializer<PlannerAlternativeCandidate>({
     origin: context.origin,
-    target: resolveConstrainedTarget(context.origin, context.targetWeaponId),
+    target: resolvePlannerSearchOriginTarget(context.origin, context.targetWeaponId),
     searchIdentity: createPlannerAlternativeSearchIdentity(context),
     candidateIdPrefix: 'candidate.planner-alternative.',
     clock: context.clock,

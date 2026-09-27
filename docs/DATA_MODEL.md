@@ -2706,7 +2706,7 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   新Draft追加を行い、BuildListEntryは書き換えない。`incomplete` は何も書かず、`plan === null` は旧Draftを維持する。
   ordinary resultのPlanは `conflictRepairLineage === null` でなければならない
 - 以下のgenerated Entryを含む保存はlegacy B8 orchestrationと「この候補を優先」の契約であり、B8の保存API
-  （`savePlannerOrchestrationResult()`）はPhase 6-B2まで残るが、通常のApplication runtimeからは呼ばない
+  （`savePlannerOrchestrationResult()`）はPhase 6-B2bまで残るが、通常のApplication runtimeからは呼ばない
   （B8のWorker / Client経路はPhase 6-B1で削除済み）
 
 - Planner-generated BuildListEntry群と `ProductionPlan` を1つのDexie

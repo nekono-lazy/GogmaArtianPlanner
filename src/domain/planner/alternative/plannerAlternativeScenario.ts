@@ -3,7 +3,7 @@ import type {
   PlanConflict,
   TargetWeaponId,
 } from '../../models/publicTypes'
-import { preparePlannerAugmentedConflictPreflight, preparePlannerReplacementConflictPreflight } from '../constrained/plannerAugmentedPreflight'
+import { preparePlannerAugmentedConflictPreflight, preparePlannerReplacementConflictPreflight } from '../replacement/plannerAugmentedPreflight'
 import type {
   PlannerDependencies,
   PlannerExecutionOptions,

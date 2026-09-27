@@ -30,10 +30,10 @@ import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracl
 import { hasIntermediateStateSelection } from './plannerCheckpoints'
 import { conflictResolutionRefusalReason } from './plannerConflictDetection'
 import {
-  createPlannerConstrainedConflictContexts,
+  createPlannerConflictContexts,
   preparePlannerFixedConflictConstraints,
   reassociatePlannerFixedConstraints,
-} from './constrained'
+} from './replacement'
 import type { PlannerConflictResolution } from './plannerTypes'
 
 const SOURCE_A = ownedWeaponId('owned.checkpoint.conflict.a')
@@ -259,7 +259,7 @@ describe('Compromise checkpoint conflicts', () => {
       expect(detected.selectedPhysicalActionKeysByConflictId.has(conflict.id)).toBe(false)
 
       // The constrained re-search fixed side refuses it too, all-or-nothing.
-      const contexts = createPlannerConstrainedConflictContexts(prepared.context)
+      const contexts = createPlannerConflictContexts(prepared.context)
       const fixed = preparePlannerFixedConflictConstraints(prepared.context, contexts)
       expect(fixed.status).toBe('unresolved')
       if (fixed.status !== 'unresolved') return
@@ -304,7 +304,7 @@ describe('Compromise checkpoint conflicts', () => {
       const { scenario, conflict } = collided()
       const prepared = preparePlannerInitialContext(scenario.input, scenario.dependencies)
       if (prepared.status !== 'ready') throw new Error(prepared.status)
-      const contexts = createPlannerConstrainedConflictContexts(prepared.context)
+      const contexts = createPlannerConflictContexts(prepared.context)
       const fixedEntry = scenario.input.buildListEntries[0]
       const current = contexts.find(({ conflictId }) => conflictId === conflict.id)
       if (!current) throw new Error('Fixture conflict context is missing.')
