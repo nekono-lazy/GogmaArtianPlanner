@@ -30,7 +30,8 @@ export interface RetrySignals {
   blockers: { targetId: string; classification: string }[]
 }
 export type StopReason = 'completed' | 'attempt_limit' | 'state_limit' | 'cycle_detected' | 'no_progress' | 'time_budget' | 'cancelled' |
-  'search_error' | 'materialization_blocked' | 'projection_failed' | 'checkpoint_blocked' | 'retained_prefix_invalid' | 'unavailable' | 'planner_incomplete' | 'attempt_error' | 'memory_limit' | 'process_error'
+  'search_error' | 'materialization_blocked' | 'projection_failed' | 'checkpoint_blocked' | 'retained_prefix_invalid' | 'unavailable' | 'planner_incomplete' | 'attempt_error' | 'memory_limit' | 'process_error' |
+  'extent_fallback_blocked'
 export interface AttemptSummary {
   attemptId: number
   strategy: string
@@ -61,10 +62,13 @@ export function collectRetrySignals(input: PlannerInput, report: GlobalResearchR
     participants: c.buildListEntryIds.map(id => ({ entryId: id as string, targetId: resolve(id).targetWeaponId as string,
       role: retained.has(id) ? 'retained' as const : generatedIds.has(id) ? 'generated' as const : 'pending_original' as const })),
   }))
-  return { notFound: report.searches.filter(s => s.status === 'not_found_within_extent').map(s => s.targetId),
+  // Phase 1-D: a base no-match a fallback resolved is not unresolved; any other fallback end is not a no-match.
+  const fallbackBlockers = report.searches.filter(s => s.fallback && s.fallback.status !== 'found' && s.fallback.status !== 'not_found_within_extent')
+    .map(s => ({ targetId: s.targetId, classification: `extent_fallback_${s.fallback!.status}` }))
+  return { notFound: report.searches.filter(s => s.status === 'not_found_within_extent' && s.fallback?.status !== 'found').map(s => s.targetId),
     resourceRejected: unique((result?.plan?.rejectedBuildListEntries ?? []).filter(e => e.reason === 'resource_conflict').map(e => resolve(e.buildListEntryId).targetWeaponId)),
     conflictTargets: unique(conflicts.flatMap(c => c.participants.map(p => p.targetId))), conflicts,
-    blockers: report.searches.filter(s => s.status !== 'found' && s.status !== 'not_found_within_extent').map(s => ({ targetId: s.targetId, classification: s.status })),
+    blockers: [...report.searches.filter(s => s.status !== 'found' && s.status !== 'not_found_within_extent').map(s => ({ targetId: s.targetId, classification: s.status as string })), ...fallbackBlockers],
   }
 }
 export function classifyAttempt(report: GlobalResearchReport, signals: RetrySignals): StopReason | null {
@@ -72,6 +76,7 @@ export function classifyAttempt(report: GlobalResearchReport, signals: RetrySign
   if (report.status === 'cancelled') return 'cancelled'
   if (report.status === 'blocked' && report.stage === 'retained_prefix') return 'retained_prefix_invalid'
   const blocker = signals.blockers[0]?.classification
+  if (blocker?.startsWith('extent_fallback_')) return 'extent_fallback_blocked'
   if (blocker) return blocker === 'time_budget_reached' ? 'time_budget' :
     ['search_error', 'materialization_blocked', 'projection_failed', 'checkpoint_blocked', 'cancelled', 'unavailable'].includes(blocker) ? blocker as StopReason : 'attempt_error'
   if (report.status === 'error') return 'attempt_error'
@@ -135,7 +140,8 @@ export async function runDiscoveryRetries(first: AttemptSummary, priorityEntries
     attempts.push(attempt)
     return attempt
   }
-  const finish = (stopReason: StopReason) => ({ stopReason, stageStops, cycleCount, attempts,
+  // Once a completed state exists, a later failed / OOM state never overwrites the outcome (PR #162 review).
+  const finish = (reason: StopReason) => ({ stopReason: attempts.some(a => a.stop === 'completed') ? 'completed' as const : reason, stageStops, cycleCount, attempts,
     bestAttemptId: [...attempts].sort(compareResearchAttempts)[0].attemptId })
   if (first.stop) return finish(first.stop)
   for (let i = 1; i < bounds.orderingAttempts; i++) {

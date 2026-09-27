@@ -3,7 +3,7 @@ import { createBuildListEntry, createTargetDefinitionHash, evaluateBuildListEntr
 import { loadMasterData } from '../domain/master/loadMasterData'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION, createReferencedOwnedWeaponsHash, hashStableValue,
   prepareExportRootForImport, validateBuildCandidate, validateBuildListEntry } from '../domain/models/publicTypes'
-import type { BuildCandidate, BuildListEntry, OwnedWeaponId, PlanStepId, ProductionPlanId } from '../domain/models/publicTypes'
+import type { BuildCandidate, BuildListEntry, OwnedWeaponId, PlanStepId, ProductionPlanId, TargetWeapon } from '../domain/models/publicTypes'
 import { validateExportRootForFullReplacement } from '../services/dataTransfer/importExportValidation'
 import { createProductionPlanWithObserver } from '../domain/planner/productionPlanGeneration'
 import { comparePlannerEntryPriority } from '../domain/planner/plannerEntryPriority'
@@ -25,6 +25,20 @@ import type { GlobalRawBlockResearch } from './plannerGlobalRawBlocks'
 
 export const GLOBAL_RESEARCH_EXTENT: CandidateSearchSettings = { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 }
 export const GLOBAL_RESEARCH_TIME = '2026-09-27T00:00:00.000Z'
+
+/** The projected state a Research Search starts from: a Search request minus its request fields. */
+export type GlobalResearchProjectedState = Omit<CandidateSearchInput, 'searchRunId' | 'targetWeaponId' | 'routeFilter' | 'settings'>
+
+/**
+ * The one Research Search request authority (Phase 0 formula, unchanged). Every extent - base,
+ * Phase 1-D probe or fallback - goes through it, so `searchRunId` always names the extent it ran
+ * with. Never overwrite `settings` of an existing request, and never rewrite a Candidate hash.
+ * `originTarget` is the Planner-start Target (the identity Phase 0 hashes), not the projected one.
+ */
+export function globalResearchSearchInput(projected: GlobalResearchProjectedState, originTarget: TargetWeapon, extent: CandidateSearchSettings): CandidateSearchInput {
+  return { ...projected, searchRunId: `research.global.search.${hashStableValue({ target: originTarget.id, origin: normalizePlannerSearchOrigin(projected, originTarget), extent })}`,
+    targetWeaponId: originTarget.id, routeFilter: 'all', settings: extent }
+}
 
 export function globalResearchDependencies(engine: RngEngine): PlannerDependencies {
   let plan = 0, step = 0, weapon = 0
@@ -112,6 +126,9 @@ export interface SearchMeasurement {
   searchedRoutes: CandidateSearchResult['targetResult']['searchedRoutes']
   skippedRoutes: CandidateSearchResult['targetResult']['skippedRoutes']
   error: string | null
+  /** Phase 1-D only: the fallback after this base bounded no-match. */
+  fallback?: ExtentFallbackMeasurement
+  targetOutcome?: 'resolved_by_extent_fallback' | 'unresolved_after_extent_fallback'
 }
 
 export function observeGlobalResearchReach(engine: RngEngine, input: CandidateSearchInput, reach: SearchMeasurement['observedPredictionReach']): RngEngine {
@@ -129,6 +146,86 @@ export function observeGlobalResearchReach(engine: RngEngine, input: CandidateSe
     },
   }
 }
+
+export function globalResearchBoundary(reach: SearchMeasurement['observedPredictionReach'], extent: CandidateSearchSettings): SearchMeasurement['predictionBoundaryReached'] {
+  return { normal: reach.normal >= extent.maxNormalAdvance, gogma: reach.gogma >= extent.maxGogmaAdvance,
+    skillExisting: reach.skill >= extent.maxSkillAdvance, skillConversion: reach.skill >= extent.maxSkillAdvance + 1 }
+}
+
+export interface GlobalResearchSearchRun {
+  result: CandidateSearchResult | null
+  /** A cancelled Search is never a bounded no-match; the caller decides which deadline it was. */
+  failure: 'cancelled' | 'search_error' | null
+  error: string | null
+  elapsedMs: number
+  observedPredictionReach: SearchMeasurement['observedPredictionReach']
+  predictionBoundaryReached: SearchMeasurement['predictionBoundaryReached']
+  profile?: SearchProfile
+}
+
+/** Phase 1-D: one ordinary Candidate Search under the Research observers (fallback and focused probe). */
+export async function runGlobalResearchSearch(input: CandidateSearchInput, engine: RngEngine, options: {
+  shouldCancel: () => boolean; yieldControl?: () => Promise<void>; nowMs: () => number; profiler?: GlobalSearchProfiler; rawBlocks?: GlobalRawBlockResearch
+}): Promise<GlobalResearchSearchRun> {
+  const reach = { normal: 0, gogma: 0, skill: 0 }
+  const raw = options.rawBlocks?.beginSearch(input.targetWeaponId)
+  const observedEngine = observeGlobalResearchReach(raw?.engine ?? engine, input, reach)
+  const execution = { shouldCancel: options.shouldCancel, yieldControl: options.yieldControl, now: () => GLOBAL_RESEARCH_TIME, nowMs: options.nowMs }
+  const observed = options.profiler?.begin(observedEngine, execution, options.nowMs)
+  const start = options.nowMs()
+  let result: CandidateSearchResult | null = null, failure: GlobalResearchSearchRun['failure'] = null, error: string | null = null
+  try {
+    result = await searchCandidates(input, observed?.engine ?? observedEngine, observed?.execution ?? execution)
+  } catch (caught) {
+    failure = caught instanceof CandidateSearchError && caught.code === 'cancelled' ? 'cancelled' : 'search_error'
+    error = caught instanceof Error ? caught.message : String(caught)
+  } finally { raw?.end() }
+  return { result, failure, error, elapsedMs: options.nowMs() - start, observedPredictionReach: reach,
+    predictionBoundaryReached: globalResearchBoundary(reach, input.settings), ...(observed ? { profile: observed.profile } : {}) }
+}
+
+/** Research diagnostic of a Phase 1-D extent fallback. It never overwrites the base Search status. */
+export interface ExtentFallbackMeasurement {
+  strategy: string
+  axis: string
+  baseExtent: CandidateSearchSettings
+  extent: CandidateSearchSettings
+  searchRunId: string
+  status: 'searching' | 'found' | 'not_found_within_extent' | 'unavailable' | 'search_error' | 'materialization_blocked' | 'projection_failed' | 'cancelled' | 'time_budget_reached'
+  /** Which stop ended a cancelled Search: this fallback's own budget, the attempt budget or an external cancel. */
+  stoppedBy: 'fallback_budget' | 'attempt_budget' | 'external_cancel' | null
+  timeBudgetMs: number
+  elapsedMs: number
+  applicationPlannerMs: number
+  routeKind: string | null
+  estimatedOperationCount: number | null
+  advances: SearchMeasurement['advances']
+  observedPredictionReach: SearchMeasurement['observedPredictionReach']
+  predictionBoundaryReached: SearchMeasurement['predictionBoundaryReached']
+  searchedRoutes: SearchMeasurement['searchedRoutes']
+  skippedRoutes: SearchMeasurement['skippedRoutes']
+  generatedEntryId: string | null
+  generatedCandidateId: string | null
+  error: string | null
+  profile?: SearchProfile
+}
+
+/** Research-only policy seam. `request` sees only the base bounded no-match measurement. */
+export interface GlobalResearchExtentFallback {
+  strategy: string
+  timeBudgetMs: number
+  request(measurement: SearchMeasurement): { axis: string; extent: CandidateSearchSettings } | null
+}
+
+/** The exact base request of a bounded no-match, for a same-snapshot probe in a new process. */
+export interface GlobalResearchNoMatchCapture {
+  searchIndex: number
+  originTarget: TargetWeapon
+  searchInput: CandidateSearchInput
+  measurement: SearchMeasurement
+}
+
+class ExtentFallbackBlocked extends Error {}
 
 function summarizePlanner(result: PlannerResult, elapsedMs: number, fullRuns: number) {
   return { ...result.termination, selected: result.plan?.selectedBuildListEntryIds.length ?? 0,
@@ -159,6 +256,8 @@ export interface GlobalResearchReport {
   totalElapsedMs: number
   stage: 'baseline' | 'retained_prefix' | 'discovery' | 'final_planner' | 'finished'
   error: string | null
+  /** Phase 1-D only. Fallback Search time is inside `searchElapsedMs` too. */
+  extentFallback?: { strategy: string; searches: number; searchElapsedMs: number }
 }
 
 export interface GlobalResearchOptions extends PlannerExecutionOptions {
@@ -175,6 +274,10 @@ export interface GlobalResearchOptions extends PlannerExecutionOptions {
   /** Phase 1-C: complete independent state, never a previous projected input. */
   attempt?: { retainedEntryIds: readonly string[]; pendingTargetIds: readonly string[] }
   timeBudgetMs?: number
+  /** Phase 1-D: Research-only single-axis fallback after a bounded no-match. Absent = Phase 0 / 1-C. */
+  extentFallback?: GlobalResearchExtentFallback
+  onBoundedNoMatch?: (capture: GlobalResearchNoMatchCapture) => void
+  onFallbackSearchResult?: (result: CandidateSearchResult, fallback: ExtentFallbackMeasurement) => void
 }
 
 export function orderGlobalResearchPending<T extends { targetWeaponId: string }>(pending: readonly T[], failedIds: readonly string[] = []): T[] {
@@ -199,6 +302,11 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
     inputEntryCount: input.buildListEntries.length, planningTargetCount: 0, inputFingerprint: hashStableValue(input), baseline: null, retained: null, final: null,
     retainedOriginalEntryIds: [], searches: [], generatedReplacementCount: 0, plannerFullRunCount: 0, searchElapsedMs: 0, plannerElapsedMs: 0, totalElapsedMs: 0, stage: 'baseline', error: null }
   if (options.failedFirstTargetIds?.length) report.algorithm = 'phase1a-observed-failed-first-v1'
+  if (options.extentFallback) {
+    if (!Number.isFinite(options.extentFallback.timeBudgetMs) || options.extentFallback.timeBudgetMs < 0) throw new Error('Invalid fallback budget')
+    report.algorithm = `phase1d-extent-fallback-v1:${options.extentFallback.strategy}`
+    report.extentFallback = { strategy: options.extentFallback.strategy, searches: 0, searchElapsedMs: 0 }
+  }
   const publish = () => { report.totalElapsedMs = nowMs() - start; options.onProgress?.(structuredClone(report)) }
   const cancelled = () => { if (shouldCancel()) throw new CandidateSearchError('cancelled', 'Research cancelled or budget reached.') }
   const fullRun = async (runInput: PlannerInput) => {
@@ -269,8 +377,8 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
       report.searches.push(measurement)
       if (hasIntermediateStateSelection(oldEntry)) { measurement.status = 'checkpoint_blocked'; measurement.error = 'Phase 0 does not transfer or clear selected checkpoints.'; publish(); continue }
       publish()
-      const searchInput: CandidateSearchInput = { ...projected, searchRunId: `research.global.search.${hashStableValue({ target: oldEntry.targetWeaponId, origin: normalizePlannerSearchOrigin(projected, targets.get(oldEntry.targetWeaponId)!), extent })}`,
-        targetWeaponId: oldEntry.targetWeaponId, routeFilter: 'all', settings: extent }
+      const originTarget = targets.get(oldEntry.targetWeaponId)!
+      const searchInput = globalResearchSearchInput(projected, originTarget, extent)
       options.onSearchInput?.(structuredClone(searchInput))
       const raw = options.rawBlocks?.beginSearch(searchInput.targetWeaponId)
       const engine = observeGlobalResearchReach(raw?.engine ?? dependencies.rngEngine, searchInput, measurement.observedPredictionReach)
@@ -290,38 +398,114 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
         raw?.end()
         measurement.elapsedMs = nowMs() - searchStart
         report.searchElapsedMs += measurement.elapsedMs
-        const reach = measurement.observedPredictionReach
-        measurement.predictionBoundaryReached = { normal: reach.normal >= extent.maxNormalAdvance, gogma: reach.gogma >= extent.maxGogmaAdvance,
-          skillExisting: reach.skill >= extent.maxSkillAdvance, skillConversion: reach.skill >= extent.maxSkillAdvance + 1 }
+        measurement.predictionBoundaryReached = globalResearchBoundary(measurement.observedPredictionReach, extent)
         publish()
       }
       measurement.searchedRoutes = found.targetResult.searchedRoutes
       options.onSearchResult?.(structuredClone(found))
       measurement.skippedRoutes = found.targetResult.skippedRoutes
-      const candidate = found.targetResult.candidate
-      if (!candidate) { measurement.status = found.targetResult.searchedRoutes.length ? 'not_found_within_extent' : 'unavailable'; publish(); continue }
-      measurement.routeKind = candidate.route.kind
-      measurement.estimatedOperationCount = candidate.estimatedOperationCount
-      measurement.advances = { normal: candidate.estimatedNormalAdvance, gogma: candidate.estimatedGogmaAdvance, skill: candidate.estimatedSkillAdvance }
+      let candidate = found.targetResult.candidate
+      let candidateInput = searchInput
+      let fallback: ExtentFallbackMeasurement | null = null
+      if (!candidate) {
+        measurement.status = found.targetResult.searchedRoutes.length ? 'not_found_within_extent' : 'unavailable'
+        if (measurement.status === 'not_found_within_extent') options.onBoundedNoMatch?.(structuredClone({ searchIndex: report.searches.length - 1, originTarget, searchInput, measurement }))
+        const request = measurement.status === 'not_found_within_extent' ? options.extentFallback?.request(structuredClone(measurement)) ?? null : null
+        if (!request || !options.extentFallback) { publish(); continue }
+        // Same projected snapshot, new request identity for the new extent; nothing is carried from the base Search.
+        const fallbackInput = globalResearchSearchInput(projected, originTarget, { ...request.extent })
+        fallback = { strategy: options.extentFallback.strategy, axis: request.axis, baseExtent: { ...extent }, extent: { ...fallbackInput.settings },
+          searchRunId: fallbackInput.searchRunId, status: 'searching', stoppedBy: null, timeBudgetMs: options.extentFallback.timeBudgetMs, elapsedMs: 0,
+          applicationPlannerMs: 0, routeKind: null, estimatedOperationCount: null, advances: null, observedPredictionReach: { normal: 0, gogma: 0, skill: 0 },
+          predictionBoundaryReached: { normal: false, gogma: false, skillExisting: false, skillConversion: false }, searchedRoutes: [], skippedRoutes: [],
+          generatedEntryId: null, generatedCandidateId: null, error: null }
+        measurement.fallback = fallback
+        publish()
+        const fallbackStart = nowMs(), budget = options.extentFallback.timeBudgetMs
+        let fallbackDeadline = false
+        const run = await runGlobalResearchSearch(fallbackInput, dependencies.rngEngine, { yieldControl: options.yieldControl, nowMs,
+          profiler: options.profiler, rawBlocks: options.rawBlocks,
+          shouldCancel: () => { if (shouldCancel()) return true; if (nowMs() - fallbackStart >= budget) fallbackDeadline = true; return fallbackDeadline } })
+        Object.assign(fallback, { elapsedMs: run.elapsedMs, observedPredictionReach: run.observedPredictionReach,
+          predictionBoundaryReached: run.predictionBoundaryReached, error: run.error, ...(run.profile ? { profile: run.profile } : {}) })
+        report.searchElapsedMs += run.elapsedMs
+        report.extentFallback!.searches += 1
+        report.extentFallback!.searchElapsedMs += run.elapsedMs
+        if (run.failure === 'cancelled') {
+          // A stopped fallback is neither a no-match nor a reason to continue without a Candidate.
+          fallback.stoppedBy = timedOut ? 'attempt_budget' : fallbackDeadline ? 'fallback_budget' : 'external_cancel'
+          fallback.status = fallback.stoppedBy === 'external_cancel' ? 'cancelled' : 'time_budget_reached'
+          publish()
+          if (fallback.stoppedBy !== 'fallback_budget') throw new CandidateSearchError('cancelled', 'Research cancelled or budget reached during extent fallback.')
+          report.status = 'blocked'
+          throw new ExtentFallbackBlocked('Extent fallback reached its Research time budget; not a bounded no-match.')
+        }
+        if (run.failure === 'search_error' || !run.result) {
+          fallback.status = 'search_error'
+          publish()
+          report.status = 'blocked'
+          throw new ExtentFallbackBlocked(`Extent fallback Search failed: ${run.error}`)
+        }
+        fallback.searchedRoutes = run.result.targetResult.searchedRoutes
+        fallback.skippedRoutes = run.result.targetResult.skippedRoutes
+        options.onFallbackSearchResult?.(structuredClone(run.result), structuredClone(fallback))
+        candidate = run.result.targetResult.candidate
+        if (!candidate) {
+          fallback.status = run.result.targetResult.searchedRoutes.length ? 'not_found_within_extent' : 'unavailable'
+          measurement.targetOutcome = 'unresolved_after_extent_fallback'
+          publish()
+          if (fallback.status === 'unavailable') { report.status = 'blocked'; throw new ExtentFallbackBlocked('Extent fallback searched no Route.') }
+          continue
+        }
+        candidateInput = fallbackInput
+        fallback.routeKind = candidate.route.kind
+        fallback.estimatedOperationCount = candidate.estimatedOperationCount
+        fallback.advances = { normal: candidate.estimatedNormalAdvance, gogma: candidate.estimatedGogmaAdvance, skill: candidate.estimatedSkillAdvance }
+      } else {
+        measurement.routeKind = candidate.route.kind
+        measurement.estimatedOperationCount = candidate.estimatedOperationCount
+        measurement.advances = { normal: candidate.estimatedNormalAdvance, gogma: candidate.estimatedGogmaAdvance, skill: candidate.estimatedSkillAdvance }
+      }
+      const chosen = candidate
       let entry: BuildListEntry
       try {
-        entry = materializeGlobalResearchCandidate(original, searchInput, candidate)
+        entry = materializeGlobalResearchCandidate(original, candidateInput, chosen)
         const check = validatePlannerInput({ ...original, buildListEntries: [entry] }, dependencies)
         if (!check.isValid || check.excludedBuildListEntries.length) throw new Error(JSON.stringify({ issues: check.issues, exclusions: check.excludedBuildListEntries.map(e => e.reason) }))
-      } catch (error) { measurement.status = 'materialization_blocked'; measurement.error = String(error); publish(); continue }
+      } catch (error) {
+        if (fallback) {
+          fallback.status = 'materialization_blocked'; fallback.error = String(error); publish()
+          report.status = 'blocked'; throw new ExtentFallbackBlocked('Extent fallback Candidate could not be materialized.')
+        }
+        measurement.status = 'materialization_blocked'; measurement.error = String(error); publish(); continue
+      }
       try {
         // Existing Planner + Replay applies each Route; no custom Route transition or RNG advance.
-        const target = projected.targetWeapons.find(t => t.id === candidate.targetWeaponId)!
-        const applicationInput = { ...projected, buildListEntries: [createBuildListEntry(candidate, target, { createdAt: GLOBAL_RESEARCH_TIME })] }
+        const target = projected.targetWeapons.find(t => t.id === chosen.targetWeaponId)!
+        const applicationInput = { ...projected, buildListEntries: [createBuildListEntry(chosen, target, { createdAt: GLOBAL_RESEARCH_TIME })] }
         const application = await fullRun(applicationInput)
-        measurement.applicationPlannerMs = application.summary.elapsedMs
+        if (fallback) fallback.applicationPlannerMs = application.summary.elapsedMs
+        else measurement.applicationPlannerMs = application.summary.elapsedMs
         if (!application.result.plan || application.result.termination.status !== 'completed' || application.result.conflicts.length || application.summary.rejected) throw new Error('Single Candidate full Planner did not complete.')
         projected = projectGlobalResearchPlan(applicationInput, application.result.plan, dependencies)
-      } catch (error) { cancelled(); measurement.status = 'projection_failed'; measurement.error = String(error); publish(); continue }
+      } catch (error) {
+        cancelled()
+        if (fallback) {
+          fallback.status = 'projection_failed'; fallback.error = String(error); publish()
+          report.status = 'blocked'; throw new ExtentFallbackBlocked('Extent fallback Candidate could not be projected.')
+        }
+        measurement.status = 'projection_failed'; measurement.error = String(error); publish(); continue
+      }
       replacements.set(oldEntry.id, entry)
       measurement.generatedEntryId = entry.id
       measurement.generatedCandidateId = entry.candidateId
-      measurement.status = 'found'
+      if (fallback) {
+        // The base bounded no-match stays recorded as such; the Target outcome is a separate diagnostic.
+        fallback.status = 'found'
+        fallback.generatedEntryId = entry.id
+        fallback.generatedCandidateId = entry.candidateId
+        measurement.targetOutcome = 'resolved_by_extent_fallback'
+      } else measurement.status = 'found'
       report.generatedReplacementCount = replacements.size
       publish()
     }
