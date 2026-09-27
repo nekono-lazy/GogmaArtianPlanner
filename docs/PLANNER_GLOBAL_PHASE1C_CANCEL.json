@@ -1,0 +1,579 @@
+{
+  "environment": {
+    "runtime": "Node (not Browser Worker)",
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "heapSizeLimitBytes": 8791261184,
+    "execArgv": [
+      "--max-old-space-size=8192"
+    ],
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "maxPlanSteps": 20000,
+    "extent": {
+      "maxNormalAdvance": 350,
+      "maxGogmaAdvance": 500,
+      "maxSkillAdvance": 1500
+    },
+    "repositoryHead": "49cc7cedde4b67780a61a63f5fb02063fb123cd4",
+    "benchmarkCodeSha256": "9e629a2354ad6491ef74c07715722cb39b971f9662320454ca131044ffb0a3bd",
+    "rngEngineVersion": "production-rng:c5-e7",
+    "osRelease": "10.0.26200",
+    "benchmarkMode": "phase0",
+    "cacheMode": "per-search",
+    "yieldMode": "immediate",
+    "routeFilter": "all",
+    "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine"
+  },
+  "report": {
+    "algorithm": "phase0-sequential-v1",
+    "status": "cancelled",
+    "inputTargetCount": 43,
+    "inputEntryCount": 43,
+    "planningTargetCount": 43,
+    "inputFingerprint": "fnv1a32:53b2ed88",
+    "baseline": {
+      "status": "exhausted",
+      "reachedLimits": [],
+      "limits": {
+        "maxPlanSteps": 20000
+      },
+      "expandedStates": 1485,
+      "completedTargetCount": 20,
+      "totalTargetCount": 43,
+      "selected": 20,
+      "conflicts": 21,
+      "conflictsByKind": {
+        "same_gogma_counter": 15,
+        "same_normal_counter": 1,
+        "same_owned_weapon_consumed": 2,
+        "same_skill_counter": 3
+      },
+      "rejected": 23,
+      "resourceConflictRejected": 23,
+      "steps": 1465,
+      "traceReplay": "passed",
+      "elapsedMs": 5489.2798999999995,
+      "fullRuns": 1,
+      "warnings": []
+    },
+    "retained": {
+      "status": "completed",
+      "reachedLimits": [],
+      "limits": {
+        "maxPlanSteps": 20000
+      },
+      "expandedStates": 1485,
+      "completedTargetCount": 20,
+      "totalTargetCount": 20,
+      "selected": 20,
+      "conflicts": 0,
+      "conflictsByKind": {},
+      "rejected": 0,
+      "resourceConflictRejected": 0,
+      "steps": 1465,
+      "traceReplay": "passed",
+      "elapsedMs": 4350.938400000001,
+      "fullRuns": 1,
+      "warnings": []
+    },
+    "final": null,
+    "retainedOriginalEntryIds": [
+      "build-list.fnv1a32-2fdb4406",
+      "build-list.fnv1a32-32e817d9",
+      "build-list.fnv1a32-35613e34",
+      "build-list.fnv1a32-462a2dfa",
+      "build-list.fnv1a32-50009b78",
+      "build-list.fnv1a32-54dd2b4e",
+      "build-list.fnv1a32-58a4e590",
+      "build-list.fnv1a32-61066e62",
+      "build-list.fnv1a32-66c25e3d",
+      "build-list.fnv1a32-7df2bbec",
+      "build-list.fnv1a32-8561c387",
+      "build-list.fnv1a32-85dc00cc",
+      "build-list.fnv1a32-92d87b90",
+      "build-list.fnv1a32-a1d13672",
+      "build-list.fnv1a32-a3d6817e",
+      "build-list.fnv1a32-b82c6259",
+      "build-list.fnv1a32-c1fe111c",
+      "build-list.fnv1a32-ccd01768",
+      "build-list.fnv1a32-d8c8e4a6",
+      "build-list.fnv1a32-e396d352"
+    ],
+    "searches": [
+      {
+        "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "originalEntryId": "build-list.fnv1a32-985daebb",
+        "generatedEntryId": "build-list.constrained.fnv1a32-6078b0f6",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-aa663be2",
+        "status": "found",
+        "elapsedMs": 788.3441000000003,
+        "applicationPlannerMs": 420.45470000000023,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 156,
+        "advances": {
+          "normal": null,
+          "gogma": 156,
+          "skill": 0
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 155,
+          "gogma": 156,
+          "skill": 155
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 155,
+              "elapsedMs": 5.546199999986129,
+              "uniqueInputs": 155,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 12330,
+              "elapsedMs": 52.13060000004589,
+              "uniqueInputs": 12330,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 155,
+              "elapsedMs": 17.203099999998813,
+              "uniqueInputs": 155,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 81.26619999999457,
+          "settledWorkItems": 781,
+          "settledCountExact": true,
+          "progressEvents": 9,
+          "cancellationChecks": 25332,
+          "checkpointCount": 24836,
+          "yieldCount": 496,
+          "yieldElapsedMs": 48.060800000026575,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "originalEntryId": "build-list.fnv1a32-f551db43",
+        "generatedEntryId": null,
+        "generatedCandidateId": null,
+        "status": "cancelled",
+        "elapsedMs": 720.2594000000008,
+        "applicationPlannerMs": 0,
+        "routeKind": null,
+        "estimatedOperationCount": null,
+        "advances": null,
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 144,
+          "gogma": 145,
+          "skill": 145
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [],
+        "skippedRoutes": [],
+        "error": "Candidate search was cancelled.",
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 144,
+              "elapsedMs": 4.6608999999916705,
+              "uniqueInputs": 144,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 10142,
+              "elapsedMs": 47.214900000142734,
+              "uniqueInputs": 10142,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 145,
+              "elapsedMs": 17.62910000001284,
+              "uniqueInputs": 145,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 75.89400000001115,
+          "settledWorkItems": 600,
+          "settledCountExact": false,
+          "progressEvents": 7,
+          "cancellationChecks": 20910,
+          "checkpointCount": 20500,
+          "yieldCount": 410,
+          "yieldElapsedMs": 44.45700000001307,
+          "candidateIdentityCalls": 0
+        }
+      }
+    ],
+    "generatedReplacementCount": 1,
+    "plannerFullRunCount": 3,
+    "searchElapsedMs": 1508.603500000001,
+    "plannerElapsedMs": 10260.673,
+    "totalElapsedMs": 15000.7452,
+    "stage": "discovery",
+    "error": "Candidate search was cancelled."
+  },
+  "phase1c": {
+    "signals": {
+      "notFound": [],
+      "resourceRejected": [],
+      "conflictTargets": [],
+      "conflicts": [],
+      "blockers": [
+        {
+          "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+          "classification": "cancelled"
+        }
+      ]
+    },
+    "stop": "cancelled",
+    "priorityEntries": [
+      {
+        "id": "build-list.fnv1a32-92d87b90",
+        "targetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a"
+      },
+      {
+        "id": "build-list.fnv1a32-d8c8e4a6",
+        "targetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85"
+      },
+      {
+        "id": "build-list.fnv1a32-2fdb4406",
+        "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91"
+      },
+      {
+        "id": "build-list.fnv1a32-b82c6259",
+        "targetWeaponId": "f5d20af4-86b4-4e3f-b9ad-80862917007d"
+      },
+      {
+        "id": "build-list.fnv1a32-e396d352",
+        "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2"
+      },
+      {
+        "id": "build-list.fnv1a32-66c25e3d",
+        "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00"
+      },
+      {
+        "id": "build-list.fnv1a32-985daebb",
+        "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f"
+      },
+      {
+        "id": "build-list.fnv1a32-f551db43",
+        "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad"
+      },
+      {
+        "id": "build-list.fnv1a32-50009b78",
+        "targetWeaponId": "155a6831-7ff7-42d7-abf5-6e5a186edca6"
+      },
+      {
+        "id": "build-list.fnv1a32-8aefc304",
+        "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae"
+      },
+      {
+        "id": "build-list.fnv1a32-61066e62",
+        "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c"
+      },
+      {
+        "id": "build-list.fnv1a32-dc0c3204",
+        "targetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0"
+      },
+      {
+        "id": "build-list.fnv1a32-df40f28f",
+        "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0"
+      },
+      {
+        "id": "build-list.fnv1a32-c1fe111c",
+        "targetWeaponId": "05e6b206-21d4-447d-86dd-f5a62ff8479e"
+      },
+      {
+        "id": "build-list.fnv1a32-ccd01768",
+        "targetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff"
+      },
+      {
+        "id": "build-list.fnv1a32-f1d0f468",
+        "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459"
+      },
+      {
+        "id": "build-list.fnv1a32-e5bf89b0",
+        "targetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92"
+      },
+      {
+        "id": "build-list.fnv1a32-0e8ede71",
+        "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294"
+      },
+      {
+        "id": "build-list.fnv1a32-85dc00cc",
+        "targetWeaponId": "aa4e67d8-cc57-487c-b0f0-6a8b36f13dbb"
+      },
+      {
+        "id": "build-list.fnv1a32-d952e728",
+        "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c"
+      },
+      {
+        "id": "build-list.fnv1a32-8561c387",
+        "targetWeaponId": "0d98b225-e5d4-4cd4-b8e9-4c62ba695893"
+      },
+      {
+        "id": "build-list.fnv1a32-bb36c5ca",
+        "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801"
+      },
+      {
+        "id": "build-list.fnv1a32-58a4e590",
+        "targetWeaponId": "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed"
+      },
+      {
+        "id": "build-list.fnv1a32-f21e3361",
+        "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58"
+      },
+      {
+        "id": "build-list.fnv1a32-35613e34",
+        "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf"
+      },
+      {
+        "id": "build-list.fnv1a32-c8772f02",
+        "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0"
+      },
+      {
+        "id": "build-list.fnv1a32-5923e1d5",
+        "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7"
+      },
+      {
+        "id": "build-list.fnv1a32-fd6caf7b",
+        "targetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17"
+      },
+      {
+        "id": "build-list.fnv1a32-462a2dfa",
+        "targetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e"
+      },
+      {
+        "id": "build-list.fnv1a32-a94b09cf",
+        "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a"
+      },
+      {
+        "id": "build-list.fnv1a32-3e076416",
+        "targetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7"
+      },
+      {
+        "id": "build-list.fnv1a32-798019f2",
+        "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea"
+      },
+      {
+        "id": "build-list.fnv1a32-d142f3e3",
+        "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49"
+      },
+      {
+        "id": "build-list.fnv1a32-6aac5fa0",
+        "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+      },
+      {
+        "id": "build-list.fnv1a32-a1d13672",
+        "targetWeaponId": "e4147de7-587c-4106-a47d-b09f8796464d"
+      },
+      {
+        "id": "build-list.fnv1a32-dd79ecce",
+        "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5"
+      },
+      {
+        "id": "build-list.fnv1a32-bbf8125e",
+        "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d"
+      },
+      {
+        "id": "build-list.fnv1a32-32e817d9",
+        "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73"
+      },
+      {
+        "id": "build-list.fnv1a32-54dd2b4e",
+        "targetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6"
+      },
+      {
+        "id": "build-list.fnv1a32-628e1ce0",
+        "targetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df"
+      },
+      {
+        "id": "build-list.fnv1a32-b4b4c72c",
+        "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+      },
+      {
+        "id": "build-list.fnv1a32-7df2bbec",
+        "targetWeaponId": "d453ca34-a142-4241-9dce-8551c96cb887"
+      },
+      {
+        "id": "build-list.fnv1a32-a3d6817e",
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c"
+      }
+    ],
+    "attemptState": null
+  },
+  "phase1b": {
+    "rawBlocks": [
+      {
+        "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "requests": 12330,
+        "uniqueBlocks": 156,
+        "duplicateRequests": 12174,
+        "theoreticalHitRatio": 0.9873479318734794,
+        "hits": 12174,
+        "misses": 156,
+        "failures": 0,
+        "evictions": 0,
+        "hitRatio": 0.9873479318734794,
+        "readerElapsedMs": 7.2849999999980355,
+        "missReadElapsedMs": 5.663599999987127,
+        "maxBlockIndex": 586,
+        "blockIndexDistribution": {
+          "256..511": 3589,
+          "512..1023": 8741
+        },
+        "peakEntries": 156,
+        "rawUint32Count": 1560,
+        "approximatePayloadBytes": 6240
+      },
+      {
+        "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "requests": 10142,
+        "uniqueBlocks": 145,
+        "duplicateRequests": 9997,
+        "theoreticalHitRatio": 0.9857030171563794,
+        "hits": 9997,
+        "misses": 145,
+        "failures": 0,
+        "evictions": 0,
+        "hitRatio": 0.9857030171563794,
+        "readerElapsedMs": 8.851700000086566,
+        "missReadElapsedMs": 7.339500000016415,
+        "maxBlockIndex": 731,
+        "blockIndexDistribution": {
+          "512..1023": 10142
+        },
+        "peakEntries": 145,
+        "rawUint32Count": 1450,
+        "approximatePayloadBytes": 5800
+      }
+    ],
+    "rawBlockSummary": {
+      "requests": 22472,
+      "uniqueBlocks": 301,
+      "duplicateRequests": 22171,
+      "theoreticalHitRatio": 0.9866055535777857,
+      "hits": 22171,
+      "hitRatio": 0.9866055535777857,
+      "misses": 301,
+      "failures": 0,
+      "evictions": 0,
+      "readerElapsedMs": 16.136700000084602,
+      "missReadElapsedMs": 13.003100000003542,
+      "peakEntries": 156,
+      "rawUint32Count": 1560,
+      "approximatePayloadBytes": 6240,
+      "maxBlockIndex": 731,
+      "blockIndexDistribution": {
+        "256..511": 3589,
+        "512..1023": 18883
+      }
+    },
+    "searchEvidence": [
+      {
+        "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "resultSha256": "d44aa195a89ddfebf9ddb639fe29314fa2c9374ec90df96ae75e33bd78befe5e",
+        "candidateSha256": "a6aed5cd51ebbe20d1929c8f037f5c09b22579f3bbeeb056fa47e35f2a1f30bc"
+      }
+    ],
+    "generatedEntries": [
+      {
+        "id": "build-list.constrained.fnv1a32-6078b0f6",
+        "candidateSha256": "70c9952484da1f2f9c1af43b6ec297c0d46f613056bd7f315235cb792af5bb0a",
+        "entrySha256": "1a798a46dc79367b146ed0e8a2d6d054d685049f00f1e13b1c5c05c1e80afee9"
+      }
+    ],
+    "finalSelectedEntryIds": [],
+    "planSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+    "finalResultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+    "resultSha256": "439686382114fd51996460d209ba9bb00fb710eb825fe0812add650a745ed7c9",
+    "cacheLimit": 20000
+  },
+  "phase1": {
+    "strategy": "phase0",
+    "yieldMode": "immediate",
+    "failedFirstTargetIds": [],
+    "predictionReuse": {
+      "normal": {
+        "calls": 299,
+        "uniqueInputs": 299,
+        "duplicateCalls": 0,
+        "theoreticalExactCacheHitRatio": 0
+      },
+      "gogma": {
+        "calls": 22472,
+        "uniqueInputs": 22472,
+        "duplicateCalls": 0,
+        "theoreticalExactCacheHitRatio": 0
+      },
+      "skill": {
+        "calls": 300,
+        "uniqueInputs": 300,
+        "duplicateCalls": 0,
+        "theoreticalExactCacheHitRatio": 0
+      }
+    },
+    "resultSha256": "439686382114fd51996460d209ba9bb00fb710eb825fe0812add650a745ed7c9"
+  },
+  "memory": {
+    "maxRssKiB": 1541420,
+    "rss": 1578414080,
+    "heapTotal": 1461862400,
+    "heapUsed": 1342570080,
+    "external": 24050184,
+    "arrayBuffers": 212663,
+    "scope": "whole Node process, includes Vite loader and Export parsing"
+  },
+  "cancel": {
+    "requested": true,
+    "responseMs": 3.2241999999987456
+  }
+}
