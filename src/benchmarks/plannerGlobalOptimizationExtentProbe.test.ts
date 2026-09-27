@@ -112,7 +112,8 @@ describe('Phase 1-D single-axis probe', () => {
       expect(r.baseExtent).toEqual(capture.measurement.extent)
       expect(r.probeExtent).toEqual(singleAxisProbeExtent(capture.measurement.extent, r.axis))
       expect(r.probeSearchRunId).not.toBe(capture.searchInput.searchRunId)
-      expect(r.snapshotSha256).toBe(records[0].snapshotSha256)
+      expect(r.snapshotFingerprint).toBe(records[0].snapshotFingerprint)
+      expect(r.snapshotFingerprint).toMatch(/^fnv1a32:/)
     }
     expect(new Set(records.map(r => r.probeSearchRunId)).size).toBe(3)
     const found = records[1]

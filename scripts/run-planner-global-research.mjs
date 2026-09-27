@@ -36,6 +36,9 @@ const probePath = option('--probe-snapshot'), probeTarget = option('--probe-targ
 const fallbackAxis = option('--extent-fallback')
 const fallbackBudgetMs = Number(option('--fallback-budget-ms') ?? 180000)
 const cancelAfterFallbackStartMs = option('--cancel-after-fallback-start-ms') === undefined ? null : Number(option('--cancel-after-fallback-start-ms'))
+// Phase 1-E (Research only): fallback episode bound per attempt, and a cooperative cancel file a controller can create.
+const fallbackMaxEpisodes = option('--fallback-max-episodes') === undefined ? undefined : Number(option('--fallback-max-episodes'))
+const cancelFile = option('--cancel-file')
 if (rawCacheMode !== undefined && !['off', 'per-search', 'run'].includes(rawCacheMode)) throw new Error('Invalid raw block cache mode.')
 if (!['timer', 'immediate'].includes(yieldMode)) throw new Error('Invalid Node yield mode.')
 const yieldControl = () => new Promise(resolveYield => yieldMode === 'immediate' ? setImmediate(resolveYield) : setTimeout(resolveYield, 0))
@@ -50,12 +53,14 @@ if (fallbackAxis !== undefined && !['normal', 'gogma', 'skill'].includes(fallbac
 if (probeAxis !== undefined && !['normal', 'gogma', 'skill'].includes(probeAxis)) throw new Error('Invalid probe axis.')
 if (!Number.isFinite(fallbackBudgetMs) || fallbackBudgetMs < 0 || (cancelAfterFallbackStartMs !== null && (!Number.isFinite(cancelAfterFallbackStartMs) || cancelAfterFallbackStartMs < 0))) throw new Error('Invalid fallback bounds.')
 if (cancelAfterFallbackStartMs !== null && !fallbackAxis) throw new Error('--cancel-after-fallback-start-ms requires --extent-fallback.')
+if (fallbackMaxEpisodes !== undefined && (!fallbackAxis || !Number.isSafeInteger(fallbackMaxEpisodes) || fallbackMaxEpisodes < 0)) throw new Error('--fallback-max-episodes requires --extent-fallback and a non-negative integer.')
 if (!Number.isSafeInteger(maxPlanSteps) || maxPlanSteps < 1 || (cancelAfterMs !== null && (!Number.isFinite(cancelAfterMs) || cancelAfterMs < 0))) throw new Error('Invalid research bounds.')
 // Refuse an existing output before opening progress evidence or starting Research.
 // Keep the final exclusive write too: another process may create it during the run.
 if (lstatSync(outputPath, { throwIfNoEntry: false }) !== undefined) throw new Error(`Output already exists: ${resolve(outputPath)}`)
 const reads = [inputPath, focusPath, observedReportPath, attemptPath, probePath].filter(Boolean).map(p => resolve(p).toLowerCase())
 const writes = [outputPath, `${outputPath}.progress.local`, capturePath, noMatchCapturePath].filter(Boolean).map(p => resolve(p).toLowerCase())
+if (cancelFile && [...reads, ...writes].includes(resolve(cancelFile).toLowerCase())) throw new Error('--cancel-file must be distinct from every input and output.')
 if (new Set(writes).size !== writes.length || writes.some(p => reads.includes(p))) throw new Error('Research output paths must be distinct from every input and output.')
 if ([capturePath, noMatchCapturePath].some(p => p && lstatSync(p, { throwIfNoEntry: false }) !== undefined)) throw new Error('Capture already exists.')
 // Append-only progress evidence survives a killed process / out-of-memory failure.
@@ -67,6 +72,8 @@ const server = await createServer({ configFile: false, server: { middlewareMode:
 let timer, fallbackCancelTimer, cancelledAt = null
 const cancel = () => { cancelledAt ??= performance.now() }
 process.on('SIGINT', cancel)
+// A killed Windows child writes no report; a controller cancels cooperatively by creating this file.
+const cancelFilePoll = cancelFile ? setInterval(() => { if (lstatSync(cancelFile, { throwIfNoEntry: false }) !== undefined) cancel() }, 100) : undefined
 try {
   const module = await server.ssrLoadModule('/src/benchmarks/plannerGlobalOptimizationResearch.ts')
   const { ProductionRngEngine } = await server.ssrLoadModule('/src/domain/rng/production/productionRngEngine.ts')
@@ -94,7 +101,7 @@ try {
     const hash = createHash('sha256')
     for (const file of files) { hash.update(file + '\0'); hash.update(await readFile(file)); hash.update('\0') }
     Object.assign(environment, { repositoryHead: git('rev-parse', 'HEAD'), benchmarkCodeSha256: hash.digest('hex'),
-      rngEngineVersion: new ProductionRngEngine().version, osRelease: release(), benchmarkMode: probePath ? 'phase1d-probe' : focusPath ? 'focused' : fallbackAxis ? `phase1d-${fallbackAxis}-fallback` : strategy,
+      rngEngineVersion: new ProductionRngEngine().version, osRelease: release(), benchmarkMode: probePath ? 'phase1d-probe' : focusPath ? 'focused' : fallbackAxis ? `phase1d-${fallbackAxis}-fallback${fallbackMaxEpisodes === undefined ? '' : `-max-episodes-${fallbackMaxEpisodes}`}` : strategy,
       cacheMode: rawCacheMode, yieldMode, routeFilter, cacheScope: 'Candidate Search only; Planner and Replay always use default ProductionRngEngine' })
     const { GlobalRawBlockResearch } = await server.ssrLoadModule('/src/benchmarks/plannerGlobalRawBlocks.ts')
     rawBlocks = new GlobalRawBlockResearch(rawCacheMode)
@@ -142,7 +149,7 @@ try {
   } else result = await module.runGlobalPlannerResearch(input, module.globalResearchDependencies(new ProductionRngEngine()), {
     profiler, failedFirstTargetIds, rawBlocks, onSearchResult: rawBlocks ? observeSearchResult : undefined,
     attempt: attemptState, extent: attemptState?.extent,
-    extentFallback: fallbackAxis ? probeModule.createSingleAxisExtentFallback(fallbackAxis, fallbackBudgetMs) : undefined,
+    extentFallback: fallbackAxis ? probeModule.createSingleAxisExtentFallback(fallbackAxis, fallbackBudgetMs, fallbackMaxEpisodes) : undefined,
     onFallbackSearchResult: fallbackAxis ? (found, fallback) => {
       const semantic = { ...found }
       delete semantic.elapsedMs
@@ -177,7 +184,7 @@ try {
   const signals = result ? retryModule.collectRetrySignals(input, result.report, result.finalResult, result.generatedEntries) : null
   const record = { environment, ...(probe ? { probe } : focus ? { focus } : { report: result.report }),
     ...(result && (fallbackAxis || noMatchCapturePath) ? { phase1d: { extentFallback: fallbackAxis ? probeModule.createSingleAxisExtentFallback(fallbackAxis, fallbackBudgetMs).strategy : null,
-      fallbackBudgetMs: fallbackAxis ? fallbackBudgetMs : null, noMatchCaptures, fallbackSearchEvidence,
+      fallbackBudgetMs: fallbackAxis ? fallbackBudgetMs : null, fallbackMaxEpisodes: fallbackMaxEpisodes ?? null, noMatchCaptures, fallbackSearchEvidence,
       fallbacks: result.report.searches.flatMap((s, searchIndex) => s.fallback ? [{ searchIndex, targetId: s.targetId, baseStatus: s.status, targetOutcome: s.targetOutcome ?? null,
         fallback: { ...s.fallback, profile: undefined } }] : []) } } : {}),
     ...(result ? { phase1c: { signals, stop: retryModule.classifyAttempt(result.report, signals),
@@ -201,6 +208,7 @@ try {
 } finally {
   clearTimeout(timer)
   clearTimeout(fallbackCancelTimer)
+  clearInterval(cancelFilePoll)
   process.off('SIGINT', cancel)
   closeSync(progressFd)
   if (captureFd !== null) closeSync(captureFd)

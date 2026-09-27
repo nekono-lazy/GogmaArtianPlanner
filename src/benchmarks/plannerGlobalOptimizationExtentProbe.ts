@@ -40,9 +40,10 @@ export function eligibleExtentAxes(boundary: SearchMeasurement['predictionBounda
 }
 
 /** Generic single-axis fallback: base bounded no-match + that axis' boundary evidence. Nothing else. */
-export function createSingleAxisExtentFallback(axis: ExtentAxis, timeBudgetMs: number): GlobalResearchExtentFallback {
+export function createSingleAxisExtentFallback(axis: ExtentAxis, timeBudgetMs: number, maxEpisodes?: number): GlobalResearchExtentFallback {
   if (!isExtentAxis(axis)) throw new Error('Invalid extent axis')
-  return { strategy: `${axis}-${EXTENT_PROBE_FACTOR}x-fallback`, timeBudgetMs,
+  // Phase 1-E adds only an episode bound; the strategy name and request rule stay the Phase 1-D ones.
+  return { strategy: `${axis}-${EXTENT_PROBE_FACTOR}x-fallback`, timeBudgetMs, ...(maxEpisodes !== undefined ? { maxEpisodes } : {}),
     request: measurement => measurement.status === 'not_found_within_extent' && eligibleExtentAxes(measurement.predictionBoundaryReached).includes(axis)
       ? { axis, extent: singleAxisProbeExtent(measurement.extent, axis) } : null }
 }
@@ -68,7 +69,8 @@ export function probeSearchInput(capture: GlobalResearchNoMatchCapture, extent: 
 export interface ExtentProbeRecord {
   targetId: string
   axis: ExtentAxis
-  snapshotSha256: string
+  /** hashStableValue() of the captured base request (FNV-1a fingerprint). Formerly misnamed `snapshotSha256`. */
+  snapshotFingerprint: string
   baseSearchRunId: string
   baseExtent: CandidateSearchSettings
   probeExtent: CandidateSearchSettings
@@ -141,7 +143,7 @@ export async function runGlobalExtentProbe(original: PlannerInput, capture: Glob
       } catch (error) { validation.status = 'projection_failed'; validation.error = String(error) }
     }
   }
-  return { targetId: snapshot.searchInput.targetWeaponId, axis, snapshotSha256: hashStableValue(capture.searchInput), baseSearchRunId: capture.searchInput.searchRunId,
+  return { targetId: snapshot.searchInput.targetWeaponId, axis, snapshotFingerprint: hashStableValue(capture.searchInput), baseSearchRunId: capture.searchInput.searchRunId,
     baseExtent: { ...snapshot.measurement.extent }, probeExtent: extent, probeSearchRunId: input.searchRunId, baseBoundary: snapshot.measurement.predictionBoundaryReached,
     status, error: run.error, timeBudgetMs: options.timeBudgetMs, elapsedMs: run.elapsedMs,
     observedPredictionReach: run.observedPredictionReach, predictionBoundaryReached: run.predictionBoundaryReached,
@@ -220,8 +222,8 @@ export const extentVariantSignature = (anchorSignature: string, strategy: string
 export class ExtentResearchLedger {
   private readonly probes = new Set<string>()
   private readonly variants = new Set<string>()
-  claimProbe(anchorSignature: string, snapshotSha256: string, axis: ExtentAxis): boolean {
-    const key = JSON.stringify({ anchorSignature, snapshotSha256, axis })
+  claimProbe(anchorSignature: string, snapshotKey: string, axis: ExtentAxis): boolean {
+    const key = JSON.stringify({ anchorSignature, snapshotKey, axis })
     if (this.probes.has(key)) return false
     if (this.probes.size >= PHASE1D_BOUNDS.maxProbes) throw new Error('Phase 1-D probe bound reached')
     this.probes.add(key)

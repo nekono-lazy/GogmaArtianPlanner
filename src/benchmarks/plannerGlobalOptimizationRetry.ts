@@ -31,7 +31,7 @@ export interface RetrySignals {
 }
 export type StopReason = 'completed' | 'attempt_limit' | 'state_limit' | 'cycle_detected' | 'no_progress' | 'time_budget' | 'cancelled' |
   'search_error' | 'materialization_blocked' | 'projection_failed' | 'checkpoint_blocked' | 'retained_prefix_invalid' | 'unavailable' | 'planner_incomplete' | 'attempt_error' | 'memory_limit' | 'process_error' |
-  'extent_fallback_blocked'
+  'extent_fallback_blocked' | 'fallback_episode_limit'
 export interface AttemptSummary {
   attemptId: number
   strategy: string
@@ -76,6 +76,7 @@ export function classifyAttempt(report: GlobalResearchReport, signals: RetrySign
   if (report.status === 'cancelled') return 'cancelled'
   if (report.status === 'blocked' && report.stage === 'retained_prefix') return 'retained_prefix_invalid'
   const blocker = signals.blockers[0]?.classification
+  if (blocker === 'extent_fallback_episode_limit_reached') return 'fallback_episode_limit'
   if (blocker?.startsWith('extent_fallback_')) return 'extent_fallback_blocked'
   if (blocker) return blocker === 'time_budget_reached' ? 'time_budget' :
     ['search_error', 'materialization_blocked', 'projection_failed', 'checkpoint_blocked', 'cancelled', 'unavailable'].includes(blocker) ? blocker as StopReason : 'attempt_error'
