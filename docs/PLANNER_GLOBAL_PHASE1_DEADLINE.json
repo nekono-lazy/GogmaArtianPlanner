@@ -1,0 +1,104 @@
+{
+  "environment": {
+    "runtime": "Node (not Browser Worker)",
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "maxPlanSteps": 20000,
+    "extent": {
+      "maxNormalAdvance": 350,
+      "maxGogmaAdvance": 500,
+      "maxSkillAdvance": 1500
+    }
+  },
+  "focus": {
+    "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+    "snapshotFingerprint": "fnv1a32:cbd941ca",
+    "routeFilter": "all",
+    "extent": {
+      "maxNormalAdvance": 350,
+      "maxGogmaAdvance": 500,
+      "maxSkillAdvance": 1500
+    },
+    "timeBudgetMs": 100,
+    "status": "time_budget_reached",
+    "error": "Candidate search was cancelled.",
+    "elapsedMs": 100.1834,
+    "cancelResponseMs": 0.18189999999992779,
+    "routeKind": null,
+    "estimatedOperationCount": null,
+    "advances": null,
+    "candidateFingerprint": null,
+    "searchedRoutes": [],
+    "skippedRoutes": [],
+    "observedPredictionReach": {
+      "normal": 23,
+      "gogma": 23,
+      "skill": 24
+    },
+    "predictionBoundaryReached": {
+      "normal": false,
+      "gogma": false,
+      "skillExisting": false,
+      "skillConversion": false
+    },
+    "profile": {
+      "predictions": {
+        "normal": {
+          "calls": 23,
+          "elapsedMs": 1.3161000000000058,
+          "uniqueInputs": 23,
+          "withinSearchDuplicateCalls": 0,
+          "previousSearchDuplicateCalls": 0
+        },
+        "gogma": {
+          "calls": 283,
+          "elapsedMs": 70.89239999999961,
+          "uniqueInputs": 283,
+          "withinSearchDuplicateCalls": 0,
+          "previousSearchDuplicateCalls": 0
+        },
+        "skill": {
+          "calls": 24,
+          "elapsedMs": 10.575400000000059,
+          "uniqueInputs": 24,
+          "withinSearchDuplicateCalls": 0,
+          "previousSearchDuplicateCalls": 0
+        }
+      },
+      "keyObservationMs": 3.013700000002359,
+      "settledWorkItems": 0,
+      "settledCountExact": false,
+      "progressEvents": 1,
+      "cancellationChecks": 384,
+      "checkpointCount": 377,
+      "yieldCount": 7,
+      "yieldElapsedMs": 0.9119999999999209,
+      "candidateIdentityCalls": 0
+    }
+  },
+  "phase1": {
+    "strategy": "phase0",
+    "yieldMode": "immediate",
+    "failedFirstTargetIds": [],
+    "predictionReuse": null,
+    "resultSha256": null
+  },
+  "memory": {
+    "maxRssKiB": 389756,
+    "rss": 396771328,
+    "heapTotal": 310259712,
+    "heapUsed": 180933744,
+    "external": 24706695,
+    "arrayBuffers": 869214,
+    "scope": "whole Node process, includes Vite loader and Export parsing"
+  },
+  "cancel": {
+    "requested": false,
+    "responseMs": null
+  }
+}

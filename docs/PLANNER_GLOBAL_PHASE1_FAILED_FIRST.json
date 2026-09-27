@@ -1,0 +1,2108 @@
+{
+  "environment": {
+    "runtime": "Node (not Browser Worker)",
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "maxPlanSteps": 20000,
+    "extent": {
+      "maxNormalAdvance": 350,
+      "maxGogmaAdvance": 500,
+      "maxSkillAdvance": 1500
+    }
+  },
+  "report": {
+    "algorithm": "phase1a-observed-failed-first-v1",
+    "status": "partial",
+    "inputTargetCount": 43,
+    "inputEntryCount": 43,
+    "planningTargetCount": 43,
+    "inputFingerprint": "fnv1a32:53b2ed88",
+    "baseline": {
+      "status": "exhausted",
+      "reachedLimits": [],
+      "limits": {
+        "maxPlanSteps": 20000
+      },
+      "expandedStates": 1485,
+      "completedTargetCount": 20,
+      "totalTargetCount": 43,
+      "selected": 20,
+      "conflicts": 21,
+      "conflictsByKind": {
+        "same_gogma_counter": 15,
+        "same_normal_counter": 1,
+        "same_owned_weapon_consumed": 2,
+        "same_skill_counter": 3
+      },
+      "rejected": 23,
+      "resourceConflictRejected": 23,
+      "steps": 1465,
+      "traceReplay": "passed",
+      "elapsedMs": 5046.7836,
+      "fullRuns": 1,
+      "warnings": []
+    },
+    "retained": {
+      "status": "completed",
+      "reachedLimits": [],
+      "limits": {
+        "maxPlanSteps": 20000
+      },
+      "expandedStates": 1485,
+      "completedTargetCount": 20,
+      "totalTargetCount": 20,
+      "selected": 20,
+      "conflicts": 0,
+      "conflictsByKind": {},
+      "rejected": 0,
+      "resourceConflictRejected": 0,
+      "steps": 1465,
+      "traceReplay": "passed",
+      "elapsedMs": 3713.2608999999993,
+      "fullRuns": 1,
+      "warnings": []
+    },
+    "final": {
+      "status": "exhausted",
+      "reachedLimits": [],
+      "limits": {
+        "maxPlanSteps": 20000
+      },
+      "expandedStates": 6256,
+      "completedTargetCount": 42,
+      "totalTargetCount": 43,
+      "selected": 42,
+      "conflicts": 2,
+      "conflictsByKind": {
+        "same_normal_counter": 1,
+        "same_skill_counter": 1
+      },
+      "rejected": 1,
+      "resourceConflictRejected": 1,
+      "steps": 6214,
+      "traceReplay": "passed",
+      "elapsedMs": 18260.516800000012,
+      "fullRuns": 1,
+      "warnings": []
+    },
+    "retainedOriginalEntryIds": [
+      "build-list.fnv1a32-2fdb4406",
+      "build-list.fnv1a32-32e817d9",
+      "build-list.fnv1a32-35613e34",
+      "build-list.fnv1a32-462a2dfa",
+      "build-list.fnv1a32-50009b78",
+      "build-list.fnv1a32-54dd2b4e",
+      "build-list.fnv1a32-58a4e590",
+      "build-list.fnv1a32-61066e62",
+      "build-list.fnv1a32-66c25e3d",
+      "build-list.fnv1a32-7df2bbec",
+      "build-list.fnv1a32-8561c387",
+      "build-list.fnv1a32-85dc00cc",
+      "build-list.fnv1a32-92d87b90",
+      "build-list.fnv1a32-a1d13672",
+      "build-list.fnv1a32-a3d6817e",
+      "build-list.fnv1a32-b82c6259",
+      "build-list.fnv1a32-c1fe111c",
+      "build-list.fnv1a32-ccd01768",
+      "build-list.fnv1a32-d8c8e4a6",
+      "build-list.fnv1a32-e396d352"
+    ],
+    "searches": [
+      {
+        "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+        "originalEntryId": "build-list.fnv1a32-bbf8125e",
+        "generatedEntryId": "build-list.constrained.fnv1a32-8f6c1b9c",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-3a76d436",
+        "status": "found",
+        "elapsedMs": 11924.812499999998,
+        "applicationPlannerMs": 1596.8474999999999,
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 1030,
+        "advances": {
+          "normal": 207,
+          "gogma": 1,
+          "skill": 822
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 350,
+          "gogma": 500,
+          "skill": 1029
+        },
+        "predictionBoundaryReached": {
+          "normal": true,
+          "gogma": true,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          },
+          {
+            "route": "existing_gogma_current",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_reset_bonuses",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_keep_bonuses",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_reset_skills",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_mixed",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 350,
+              "elapsedMs": 14.363100000000486,
+              "uniqueInputs": 350,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 103401,
+              "elapsedMs": 5876.216900000174,
+              "uniqueInputs": 103401,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 1029,
+              "elapsedMs": 145.63170000001446,
+              "uniqueInputs": 1029,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 657.0891000000884,
+          "settledWorkItems": 2379,
+          "settledCountExact": true,
+          "progressEvents": 25,
+          "cancellationChecks": 108946,
+          "checkpointCount": 106810,
+          "yieldCount": 2136,
+          "yieldElapsedMs": 504.4049999999206,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "originalEntryId": "build-list.fnv1a32-985daebb",
+        "generatedEntryId": "build-list.constrained.fnv1a32-1288faba",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-997efe41",
+        "status": "found",
+        "elapsedMs": 757.8031999999985,
+        "applicationPlannerMs": 228.7492999999995,
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 123,
+        "advances": {
+          "normal": 28,
+          "gogma": 32,
+          "skill": 63
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 122,
+          "gogma": 123,
+          "skill": 122
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 122,
+              "elapsedMs": 3.4307000000189873,
+              "uniqueInputs": 122,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 7842,
+              "elapsedMs": 291.13910000002943,
+              "uniqueInputs": 7842,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 122,
+              "elapsedMs": 20.747399999992922,
+              "uniqueInputs": 122,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 53.29799999975512,
+          "settledWorkItems": 583,
+          "settledCountExact": true,
+          "progressEvents": 7,
+          "cancellationChecks": 16134,
+          "checkpointCount": 15818,
+          "yieldCount": 316,
+          "yieldElapsedMs": 51.14729999997144,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "originalEntryId": "build-list.fnv1a32-f551db43",
+        "generatedEntryId": "build-list.constrained.fnv1a32-6beb971e",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-9b76d7ef",
+        "status": "found",
+        "elapsedMs": 605.0714000000007,
+        "applicationPlannerMs": 261.1345000000001,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 109,
+        "advances": {
+          "normal": null,
+          "gogma": 109,
+          "skill": 0
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 108,
+          "gogma": 109,
+          "skill": 108
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 108,
+              "elapsedMs": 2.1075999999738997,
+              "uniqueInputs": 108,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 6050,
+              "elapsedMs": 245.16109999984474,
+              "uniqueInputs": 6050,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 108,
+              "elapsedMs": 17.389299999991636,
+              "uniqueInputs": 108,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 41.429300000090734,
+          "settledWorkItems": 432,
+          "settledCountExact": true,
+          "progressEvents": 6,
+          "cancellationChecks": 12552,
+          "checkpointCount": 12306,
+          "yieldCount": 246,
+          "yieldElapsedMs": 41.6154000000206,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+        "originalEntryId": "build-list.fnv1a32-8aefc304",
+        "generatedEntryId": "build-list.constrained.fnv1a32-12273b41",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-98c008e2",
+        "status": "found",
+        "elapsedMs": 421.0185999999994,
+        "applicationPlannerMs": 222.4982999999993,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 91,
+        "advances": {
+          "normal": null,
+          "gogma": 91,
+          "skill": 0
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 90,
+          "gogma": 91,
+          "skill": 1
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 90,
+              "elapsedMs": 1.9080999999969208,
+              "uniqueInputs": 90,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 4308,
+              "elapsedMs": 196.73059999991528,
+              "uniqueInputs": 4308,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 1,
+              "elapsedMs": 0.1437999999980093,
+              "uniqueInputs": 1,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 27.963099999953556,
+          "settledWorkItems": 1178,
+          "settledCountExact": true,
+          "progressEvents": 13,
+          "cancellationChecks": 9149,
+          "checkpointCount": 8970,
+          "yieldCount": 179,
+          "yieldElapsedMs": 35.53319999999076,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "originalEntryId": "build-list.fnv1a32-dc0c3204",
+        "generatedEntryId": "build-list.constrained.fnv1a32-b93208a5",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-2da6a2a1",
+        "status": "found",
+        "elapsedMs": 120.78459999999905,
+        "applicationPlannerMs": 98.12640000000101,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 39,
+        "advances": {
+          "normal": null,
+          "gogma": 39,
+          "skill": 0
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 38,
+          "gogma": 39,
+          "skill": 39
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 38,
+              "elapsedMs": 1.2996999999922991,
+              "uniqueInputs": 38,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 898,
+              "elapsedMs": 43.41399999992427,
+              "uniqueInputs": 898,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 39,
+              "elapsedMs": 7.410100000004604,
+              "uniqueInputs": 39,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 6.718499999886262,
+          "settledWorkItems": 287,
+          "settledCountExact": true,
+          "progressEvents": 4,
+          "cancellationChecks": 3534,
+          "checkpointCount": 3465,
+          "yieldCount": 69,
+          "yieldElapsedMs": 10.720599999993283,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+        "originalEntryId": "build-list.fnv1a32-df40f28f",
+        "generatedEntryId": "build-list.constrained.fnv1a32-c9db2537",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-1ad6bbda",
+        "status": "found",
+        "elapsedMs": 2835.3727,
+        "applicationPlannerMs": 396.3856999999989,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 189,
+        "advances": {
+          "normal": null,
+          "gogma": 102,
+          "skill": 87
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 188,
+          "gogma": 189,
+          "skill": 189
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 188,
+              "elapsedMs": 8.778799999996409,
+              "uniqueInputs": 188,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 38
+            },
+            "gogma": {
+              "calls": 18226,
+              "elapsedMs": 1167.8909999999414,
+              "uniqueInputs": 18226,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 189,
+              "elapsedMs": 32.683900000032736,
+              "uniqueInputs": 189,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 39
+            }
+          },
+          "keyObservationMs": 128.06050000017785,
+          "settledWorkItems": 2527,
+          "settledCountExact": true,
+          "progressEvents": 27,
+          "cancellationChecks": 54933,
+          "checkpointCount": 53856,
+          "yieldCount": 1077,
+          "yieldElapsedMs": 179.74449999996432,
+          "candidateIdentityCalls": 2
+        }
+      },
+      {
+        "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+        "originalEntryId": "build-list.fnv1a32-f1d0f468",
+        "generatedEntryId": "build-list.constrained.fnv1a32-16b77264",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-1809dc94",
+        "status": "found",
+        "elapsedMs": 7389.032699999996,
+        "applicationPlannerMs": 656.7868999999992,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 269,
+        "advances": {
+          "normal": null,
+          "gogma": 269,
+          "skill": 0
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 268,
+          "gogma": 269,
+          "skill": 269
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 268,
+              "elapsedMs": 16.028400000042893,
+              "uniqueInputs": 268,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 35420,
+              "elapsedMs": 2687.7742000002872,
+              "uniqueInputs": 35420,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 269,
+              "elapsedMs": 56.951700000008714,
+              "uniqueInputs": 269,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 248.08889999939493,
+          "settledWorkItems": 3263,
+          "settledCountExact": true,
+          "progressEvents": 34,
+          "cancellationChecks": 140398,
+          "checkpointCount": 137646,
+          "yieldCount": 2752,
+          "yieldElapsedMs": 396.54530000003433,
+          "candidateIdentityCalls": 2
+        }
+      },
+      {
+        "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+        "originalEntryId": "build-list.fnv1a32-e5bf89b0",
+        "generatedEntryId": "build-list.constrained.fnv1a32-fe897825",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-fbfa190a",
+        "status": "found",
+        "elapsedMs": 786.1754000000001,
+        "applicationPlannerMs": 242.78390000000218,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 96,
+        "advances": {
+          "normal": null,
+          "gogma": 96,
+          "skill": 0
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 95,
+          "gogma": 96,
+          "skill": 96
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 95,
+              "elapsedMs": 2.8135000000038417,
+              "uniqueInputs": 95,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 4777,
+              "elapsedMs": 407.2692000000243,
+              "uniqueInputs": 4777,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 96,
+              "elapsedMs": 20.5421999999744,
+              "uniqueInputs": 96,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 33.042599999876984,
+          "settledWorkItems": 612,
+          "settledCountExact": true,
+          "progressEvents": 8,
+          "cancellationChecks": 14677,
+          "checkpointCount": 14390,
+          "yieldCount": 287,
+          "yieldElapsedMs": 47.4193999999552,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+        "originalEntryId": "build-list.fnv1a32-0e8ede71",
+        "generatedEntryId": "build-list.constrained.fnv1a32-5e5a1ab8",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-5fe75c5d",
+        "status": "found",
+        "elapsedMs": 6334.440000000002,
+        "applicationPlannerMs": 654.7381999999998,
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimatedOperationCount": 257,
+        "advances": {
+          "normal": null,
+          "gogma": 257,
+          "skill": 0
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 256,
+          "gogma": 257,
+          "skill": 257
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 256,
+              "elapsedMs": 12.856700000098499,
+              "uniqueInputs": 256,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 256
+            },
+            "gogma": {
+              "calls": 30724,
+              "elapsedMs": 3209.2690000001094,
+              "uniqueInputs": 30724,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 257,
+              "elapsedMs": 45.80679999994754,
+              "uniqueInputs": 257,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 257
+            }
+          },
+          "keyObservationMs": 215.18709999991552,
+          "settledWorkItems": 2498,
+          "settledCountExact": true,
+          "progressEvents": 26,
+          "cancellationChecks": 93856,
+          "checkpointCount": 92016,
+          "yieldCount": 1840,
+          "yieldElapsedMs": 231.74009999995178,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "originalEntryId": "build-list.fnv1a32-d952e728",
+        "generatedEntryId": "build-list.constrained.fnv1a32-f52abba6",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-5a4f7a14",
+        "status": "found",
+        "elapsedMs": 417.3267000000051,
+        "applicationPlannerMs": 167.3257999999987,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 62,
+        "advances": {
+          "normal": null,
+          "gogma": 53,
+          "skill": 9
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 61,
+          "gogma": 62,
+          "skill": 62
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 61,
+              "elapsedMs": 2.695900000020629,
+              "uniqueInputs": 61,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 2037,
+              "elapsedMs": 246.6248999999807,
+              "uniqueInputs": 2037,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 62,
+              "elapsedMs": 10.02450000000681,
+              "uniqueInputs": 62,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 17.057799999747658,
+          "settledWorkItems": 369,
+          "settledCountExact": true,
+          "progressEvents": 5,
+          "cancellationChecks": 6278,
+          "checkpointCount": 6155,
+          "yieldCount": 123,
+          "yieldElapsedMs": 25.565199999960896,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "originalEntryId": "build-list.fnv1a32-bb36c5ca",
+        "generatedEntryId": "build-list.constrained.fnv1a32-041df00d",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-865e37ba",
+        "status": "found",
+        "elapsedMs": 7337.106599999999,
+        "applicationPlannerMs": 697.4884999999995,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 274,
+        "advances": {
+          "normal": null,
+          "gogma": 271,
+          "skill": 3
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 273,
+          "gogma": 274,
+          "skill": 274
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 273,
+              "elapsedMs": 8.784000000086962,
+              "uniqueInputs": 273,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 35456,
+              "elapsedMs": 4615.745199999386,
+              "uniqueInputs": 35456,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 274,
+              "elapsedMs": 51.574599999970815,
+              "uniqueInputs": 274,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 255.38339999975142,
+          "settledWorkItems": 2656,
+          "settledCountExact": true,
+          "progressEvents": 28,
+          "cancellationChecks": 74033,
+          "checkpointCount": 72582,
+          "yieldCount": 1451,
+          "yieldElapsedMs": 203.91430000002583,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+        "originalEntryId": "build-list.fnv1a32-f21e3361",
+        "generatedEntryId": "build-list.constrained.fnv1a32-167fb8a3",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-f6e86109",
+        "status": "found",
+        "elapsedMs": 907.380799999999,
+        "applicationPlannerMs": 162.5780999999988,
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 94,
+        "advances": {
+          "normal": 77,
+          "gogma": 16,
+          "skill": 1
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 93,
+          "gogma": 94,
+          "skill": 94
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 93,
+              "elapsedMs": 2.105900000031397,
+              "uniqueInputs": 93,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 4559,
+              "elapsedMs": 631.7749000002441,
+              "uniqueInputs": 4559,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 94,
+              "elapsedMs": 15.77309999994759,
+              "uniqueInputs": 94,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 32.619399999806774,
+          "settledWorkItems": 525,
+          "settledCountExact": true,
+          "progressEvents": 7,
+          "cancellationChecks": 9495,
+          "checkpointCount": 9309,
+          "yieldCount": 186,
+          "yieldElapsedMs": 33.81130000005214,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+        "originalEntryId": "build-list.fnv1a32-c8772f02",
+        "generatedEntryId": "build-list.constrained.fnv1a32-bf94e325",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-f1cf8eb5",
+        "status": "found",
+        "elapsedMs": 1393.650800000003,
+        "applicationPlannerMs": 309.1394999999975,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 120,
+        "advances": {
+          "normal": null,
+          "gogma": 120,
+          "skill": 0
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 119,
+          "gogma": 120,
+          "skill": 119
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 119,
+              "elapsedMs": 4.072800000038114,
+              "uniqueInputs": 119,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 7178,
+              "elapsedMs": 963.9138999998249,
+              "uniqueInputs": 7178,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 119,
+              "elapsedMs": 23.361199999941164,
+              "uniqueInputs": 119,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 52.128699999899254,
+          "settledWorkItems": 564,
+          "settledCountExact": true,
+          "progressEvents": 7,
+          "cancellationChecks": 14921,
+          "checkpointCount": 14629,
+          "yieldCount": 292,
+          "yieldElapsedMs": 30.528399999893736,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+        "originalEntryId": "build-list.fnv1a32-5923e1d5",
+        "generatedEntryId": "build-list.constrained.fnv1a32-b618553c",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-d12f5543",
+        "status": "found",
+        "elapsedMs": 8020.080099999999,
+        "applicationPlannerMs": 658.6657999999879,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 273,
+        "advances": {
+          "normal": null,
+          "gogma": 215,
+          "skill": 58
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 272,
+          "gogma": 273,
+          "skill": 273
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 272,
+              "elapsedMs": 13.89200000002893,
+              "uniqueInputs": 272,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 268
+            },
+            "gogma": {
+              "calls": 34379,
+              "elapsedMs": 5289.594899999829,
+              "uniqueInputs": 34379,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 273,
+              "elapsedMs": 50.617299999932584,
+              "uniqueInputs": 273,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 256
+            }
+          },
+          "keyObservationMs": 254.89369999978226,
+          "settledWorkItems": 2203,
+          "settledCountExact": true,
+          "progressEvents": 24,
+          "cancellationChecks": 71933,
+          "checkpointCount": 70523,
+          "yieldCount": 1410,
+          "yieldElapsedMs": 282.79950000019744,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+        "originalEntryId": "build-list.fnv1a32-fd6caf7b",
+        "generatedEntryId": "build-list.constrained.fnv1a32-7cb78639",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-971ce0de",
+        "status": "found",
+        "elapsedMs": 566.8493999999919,
+        "applicationPlannerMs": 158.1533000000054,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 70,
+        "advances": {
+          "normal": null,
+          "gogma": 33,
+          "skill": 37
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 69,
+          "gogma": 70,
+          "skill": 70
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 69,
+              "elapsedMs": 3.713400000007823,
+              "uniqueInputs": 69,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 69
+            },
+            "gogma": {
+              "calls": 2690,
+              "elapsedMs": 418.0885000001581,
+              "uniqueInputs": 2690,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 70,
+              "elapsedMs": 11.10570000000007,
+              "uniqueInputs": 70,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 31
+            }
+          },
+          "keyObservationMs": 19.92430000011518,
+          "settledWorkItems": 472,
+          "settledCountExact": true,
+          "progressEvents": 6,
+          "cancellationChecks": 5706,
+          "checkpointCount": 5595,
+          "yieldCount": 111,
+          "yieldElapsedMs": 10.609299999952782,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+        "originalEntryId": "build-list.fnv1a32-a94b09cf",
+        "generatedEntryId": "build-list.constrained.fnv1a32-79b0d981",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-baea47c1",
+        "status": "found",
+        "elapsedMs": 3.3119000000006054,
+        "applicationPlannerMs": 10.267200000002049,
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimatedOperationCount": 2,
+        "advances": {
+          "normal": null,
+          "gogma": 2,
+          "skill": 0
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 1,
+          "gogma": 2,
+          "skill": 1
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 1,
+              "elapsedMs": 0.053200000009383075,
+              "uniqueInputs": 1,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 5,
+              "elapsedMs": 1.905300000013085,
+              "uniqueInputs": 5,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 1,
+              "elapsedMs": 0.16449999999895226,
+              "uniqueInputs": 1,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 0.4731000000028871,
+          "settledWorkItems": 4,
+          "settledCountExact": true,
+          "progressEvents": 2,
+          "cancellationChecks": 11,
+          "checkpointCount": 11,
+          "yieldCount": 0,
+          "yieldElapsedMs": 0,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+        "originalEntryId": "build-list.fnv1a32-3e076416",
+        "generatedEntryId": "build-list.constrained.fnv1a32-6ba948f2",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-ff245344",
+        "status": "found",
+        "elapsedMs": 28783.075899999996,
+        "applicationPlannerMs": 1115.0123999999923,
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 590,
+        "advances": {
+          "normal": 66,
+          "gogma": 73,
+          "skill": 451
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 350,
+          "gogma": 500,
+          "skill": 590
+        },
+        "predictionBoundaryReached": {
+          "normal": true,
+          "gogma": true,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 350,
+              "elapsedMs": 21.338499999939813,
+              "uniqueInputs": 350,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 61
+            },
+            "gogma": {
+              "calls": 103948,
+              "elapsedMs": 18324.992199998305,
+              "uniqueInputs": 103948,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 590,
+              "elapsedMs": 125.21990000002552,
+              "uniqueInputs": 590,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 759.7179999967339,
+          "settledWorkItems": 5429,
+          "settledCountExact": true,
+          "progressEvents": 56,
+          "cancellationChecks": 216102,
+          "checkpointCount": 211865,
+          "yieldCount": 4237,
+          "yieldElapsedMs": 385.1389999998646,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+        "originalEntryId": "build-list.fnv1a32-798019f2",
+        "generatedEntryId": "build-list.constrained.fnv1a32-819d3051",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-c2a0323b",
+        "status": "found",
+        "elapsedMs": 2174.2973000000056,
+        "applicationPlannerMs": 358.9591999999975,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 124,
+        "advances": {
+          "normal": null,
+          "gogma": 124,
+          "skill": 0
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 123,
+          "gogma": 124,
+          "skill": 124
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 123,
+              "elapsedMs": 6.315100000065286,
+              "uniqueInputs": 123,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 8172,
+              "elapsedMs": 1379.6004999994475,
+              "uniqueInputs": 8172,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 124,
+              "elapsedMs": 24.430699999909848,
+              "uniqueInputs": 124,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 60.57930000023043,
+          "settledWorkItems": 1090,
+          "settledCountExact": true,
+          "progressEvents": 12,
+          "cancellationChecks": 32261,
+          "checkpointCount": 31629,
+          "yieldCount": 632,
+          "yieldElapsedMs": 49.60849999997299,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+        "originalEntryId": "build-list.fnv1a32-d142f3e3",
+        "generatedEntryId": null,
+        "generatedCandidateId": null,
+        "status": "not_found_within_extent",
+        "elapsedMs": 26023.4427,
+        "applicationPlannerMs": 0,
+        "routeKind": null,
+        "estimatedOperationCount": null,
+        "advances": null,
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 350,
+          "gogma": 500,
+          "skill": 1501
+        },
+        "predictionBoundaryReached": {
+          "normal": true,
+          "gogma": true,
+          "skillExisting": true,
+          "skillConversion": true
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          },
+          {
+            "route": "existing_gogma_current",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_reset_bonuses",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_keep_bonuses",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_reset_skills",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_mixed",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 350,
+              "elapsedMs": 18.950700000001234,
+              "uniqueInputs": 350,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 103473,
+              "elapsedMs": 19613.669599998902,
+              "uniqueInputs": 103473,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 1501,
+              "elapsedMs": 471.3862000000081,
+              "uniqueInputs": 1501,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 786.3177000001597,
+          "settledWorkItems": 2350,
+          "settledCountExact": true,
+          "progressEvents": 25,
+          "cancellationChecks": 109470,
+          "checkpointCount": 107324,
+          "yieldCount": 2146,
+          "yieldElapsedMs": 294.1514000005118,
+          "candidateIdentityCalls": 0
+        }
+      },
+      {
+        "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+        "originalEntryId": "build-list.fnv1a32-6aac5fa0",
+        "generatedEntryId": "build-list.constrained.fnv1a32-15a0a7e6",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-374b32ee",
+        "status": "found",
+        "elapsedMs": 3903.093699999983,
+        "applicationPlannerMs": 343.96199999999953,
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 190,
+        "advances": {
+          "normal": 130,
+          "gogma": 37,
+          "skill": 23
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 189,
+          "gogma": 188,
+          "skill": 189
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          },
+          {
+            "route": "existing_gogma_current",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_reset_bonuses",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_keep_bonuses",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_reset_skills",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          },
+          {
+            "route": "existing_gogma_mixed",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Gogma weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 189,
+              "elapsedMs": 4.683700000037788,
+              "uniqueInputs": 189,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "gogma": {
+              "calls": 17229,
+              "elapsedMs": 3095.0871999996452,
+              "uniqueInputs": 17229,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 189,
+              "elapsedMs": 42.77540000024601,
+              "uniqueInputs": 189,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 149.81800000098883,
+          "settledWorkItems": 693,
+          "settledCountExact": true,
+          "progressEvents": 8,
+          "cancellationChecks": 18474,
+          "checkpointCount": 18112,
+          "yieldCount": 362,
+          "yieldElapsedMs": 57.838500000027125,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+        "originalEntryId": "build-list.fnv1a32-dd79ecce",
+        "generatedEntryId": "build-list.constrained.fnv1a32-ec2d3f52",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-204eef23",
+        "status": "found",
+        "elapsedMs": 11317.123900000006,
+        "applicationPlannerMs": 762.2776999999769,
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 284,
+        "advances": {
+          "normal": 13,
+          "gogma": 252,
+          "skill": 19
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 283,
+          "gogma": 284,
+          "skill": 284
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 283,
+              "elapsedMs": 17.769400000193855,
+              "uniqueInputs": 283,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 123
+            },
+            "gogma": {
+              "calls": 37511,
+              "elapsedMs": 7205.146499996597,
+              "uniqueInputs": 37511,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 284,
+              "elapsedMs": 68.29879999998957,
+              "uniqueInputs": 284,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 101
+            }
+          },
+          "keyObservationMs": 288.01840000390075,
+          "settledWorkItems": 2390,
+          "settledCountExact": true,
+          "progressEvents": 25,
+          "cancellationChecks": 115636,
+          "checkpointCount": 113369,
+          "yieldCount": 2267,
+          "yieldElapsedMs": 229.21510000093258,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+        "originalEntryId": "build-list.fnv1a32-628e1ce0",
+        "generatedEntryId": "build-list.constrained.fnv1a32-23475d87",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-643a6faf",
+        "status": "found",
+        "elapsedMs": 1881.1042999999772,
+        "applicationPlannerMs": 244.85249999997905,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 118,
+        "advances": {
+          "normal": null,
+          "gogma": 13,
+          "skill": 105
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 117,
+          "gogma": 118,
+          "skill": 118
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 117,
+              "elapsedMs": 4.143700000073295,
+              "uniqueInputs": 117,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 95
+            },
+            "gogma": {
+              "calls": 6992,
+              "elapsedMs": 1439.2038999998476,
+              "uniqueInputs": 6992,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            },
+            "skill": {
+              "calls": 118,
+              "elapsedMs": 25.11659999997937,
+              "uniqueInputs": 118,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 0
+            }
+          },
+          "keyObservationMs": 52.373400001000846,
+          "settledWorkItems": 586,
+          "settledCountExact": true,
+          "progressEvents": 7,
+          "cancellationChecks": 14748,
+          "checkpointCount": 14459,
+          "yieldCount": 289,
+          "yieldElapsedMs": 31.50040000010631,
+          "candidateIdentityCalls": 1
+        }
+      },
+      {
+        "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+        "originalEntryId": "build-list.fnv1a32-b4b4c72c",
+        "generatedEntryId": "build-list.constrained.fnv1a32-f735b8ac",
+        "generatedCandidateId": "candidate.research.global.fnv1a32-d7d49f8f",
+        "status": "found",
+        "elapsedMs": 17129.984099999972,
+        "applicationPlannerMs": 975.3705999999947,
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 345,
+        "advances": {
+          "normal": null,
+          "gogma": 263,
+          "skill": 82
+        },
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "observedPredictionReach": {
+          "normal": 344,
+          "gogma": 345,
+          "skill": 345
+        },
+        "predictionBoundaryReached": {
+          "normal": false,
+          "gogma": false,
+          "skillExisting": false,
+          "skillConversion": false
+        },
+        "searchedRoutes": [
+          "normal_artian_to_gogma",
+          "existing_gogma_current",
+          "existing_gogma_reset_bonuses",
+          "existing_gogma_keep_bonuses",
+          "existing_gogma_reset_skills",
+          "existing_gogma_mixed"
+        ],
+        "skippedRoutes": [
+          {
+            "route": "owned_normal_artian_to_gogma",
+            "reason": "no_owned_weapon_available",
+            "detail": "No compatible owned Normal Artian weapon is available."
+          }
+        ],
+        "error": null,
+        "profile": {
+          "predictions": {
+            "normal": {
+              "calls": 344,
+              "elapsedMs": 20.129600000247592,
+              "uniqueInputs": 344,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 270
+            },
+            "gogma": {
+              "calls": 53257,
+              "elapsedMs": 10951.870899995964,
+              "uniqueInputs": 53257,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 280
+            },
+            "skill": {
+              "calls": 345,
+              "elapsedMs": 91.4898000001267,
+              "uniqueInputs": 345,
+              "withinSearchDuplicateCalls": 0,
+              "previousSearchDuplicateCalls": 160
+            }
+          },
+          "keyObservationMs": 394.4728000003379,
+          "settledWorkItems": 4086,
+          "settledCountExact": true,
+          "progressEvents": 42,
+          "cancellationChecks": 162839,
+          "checkpointCount": 159647,
+          "yieldCount": 3192,
+          "yieldElapsedMs": 248.76619999922696,
+          "candidateIdentityCalls": 1
+        }
+      }
+    ],
+    "generatedReplacementCount": 22,
+    "plannerFullRunCount": 25,
+    "searchElapsedMs": 141032.33929999993,
+    "plannerElapsedMs": 37342.664599999945,
+    "totalElapsedMs": 184862.8457,
+    "stage": "finished",
+    "error": null
+  },
+  "phase1": {
+    "strategy": "failed-first",
+    "yieldMode": "immediate",
+    "failedFirstTargetIds": [
+      "813fb479-accd-454d-8fcd-fed51d4e891d"
+    ],
+    "predictionReuse": {
+      "normal": {
+        "calls": 4159,
+        "uniqueInputs": 2979,
+        "duplicateCalls": 1180,
+        "theoreticalExactCacheHitRatio": 0.2837220485693676
+      },
+      "gogma": {
+        "calls": 628532,
+        "uniqueInputs": 628252,
+        "duplicateCalls": 280,
+        "theoreticalExactCacheHitRatio": 0.0004454824893561505
+      },
+      "skill": {
+        "calls": 6154,
+        "uniqueInputs": 5310,
+        "duplicateCalls": 844,
+        "theoreticalExactCacheHitRatio": 0.13714657133571662
+      }
+    },
+    "resultSha256": "2242740c0eb6f161c62669c3a84748e41febbd8d509029686df76fca5c38cc1e"
+  },
+  "memory": {
+    "maxRssKiB": 3022012,
+    "rss": 3055017984,
+    "heapTotal": 2650857472,
+    "heapUsed": 2506744352,
+    "external": 24108788,
+    "arrayBuffers": 278199,
+    "scope": "whole Node process, includes Vite loader and Export parsing"
+  },
+  "cancel": {
+    "requested": false,
+    "responseMs": null
+  }
+}

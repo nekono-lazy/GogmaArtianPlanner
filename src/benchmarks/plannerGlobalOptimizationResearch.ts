@@ -19,6 +19,7 @@ import { createConstrainedCandidate } from '../domain/search/constrained/constra
 import { CandidateSearchError } from '../domain/search/searchTypes'
 import type { CandidateSearchInput, CandidateSearchResult, CandidateSearchSettings } from '../domain/search/searchTypes'
 import { projectGlobalResearchPlan } from './plannerGlobalOptimizationProjection'
+import type { GlobalSearchProfiler, SearchProfile } from './plannerGlobalOptimizationProfile'
 
 export const GLOBAL_RESEARCH_EXTENT: CandidateSearchSettings = { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 }
 export const GLOBAL_RESEARCH_TIME = '2026-09-27T00:00:00.000Z'
@@ -91,6 +92,7 @@ export function materializeGlobalResearchCandidate(originInput: PlannerInput, pr
 }
 
 export interface SearchMeasurement {
+  profile?: SearchProfile
   targetId: string
   originalEntryId: string
   generatedEntryId: string | null
@@ -110,7 +112,7 @@ export interface SearchMeasurement {
   error: string | null
 }
 
-function observeEngine(engine: RngEngine, input: CandidateSearchInput, reach: SearchMeasurement['observedPredictionReach']): RngEngine {
+export function observeGlobalResearchReach(engine: RngEngine, input: CandidateSearchInput, reach: SearchMeasurement['observedPredictionReach']): RngEngine {
   return { version: engine.version, capabilities: engine.capabilities,
     normalizeSeed: value => engine.normalizeSeed(value), getPredictionSupport: value => engine.getPredictionSupport(value),
     advanceGogmaCounter: (value, op) => engine.advanceGogmaCounter(value, op),
@@ -161,6 +163,16 @@ export interface GlobalResearchOptions extends PlannerExecutionOptions {
   extent?: CandidateSearchSettings
   nowMs?: () => number
   onProgress?: (report: GlobalResearchReport) => void
+  profiler?: GlobalSearchProfiler
+  /** Copy only: observers cannot mutate the Search input. Never persisted by the app. */
+  onSearchInput?: (input: CandidateSearchInput) => void
+  /** Observed failures supplied by the caller, never an oracle or an embedded ID. */
+  failedFirstTargetIds?: readonly string[]
+}
+
+export function orderGlobalResearchPending<T extends { targetWeaponId: string }>(pending: readonly T[], failedIds: readonly string[] = []): T[] {
+  const failures = new Set(failedIds)
+  return [...pending.filter(e => failures.has(e.targetWeaponId)), ...pending.filter(e => !failures.has(e.targetWeaponId))]
 }
 
 /** Baseline -> replayed retained prefix -> one canonical Search per missing Target -> full origin rerun. */
@@ -172,6 +184,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
   const report: GlobalResearchReport = { algorithm: 'phase0-sequential-v1', status: 'partial', inputTargetCount: input.targetWeapons.length,
     inputEntryCount: input.buildListEntries.length, planningTargetCount: 0, inputFingerprint: hashStableValue(input), baseline: null, retained: null, final: null,
     retainedOriginalEntryIds: [], searches: [], generatedReplacementCount: 0, plannerFullRunCount: 0, searchElapsedMs: 0, plannerElapsedMs: 0, totalElapsedMs: 0, stage: 'baseline', error: null }
+  if (options.failedFirstTargetIds?.length) report.algorithm = 'phase1a-observed-failed-first-v1'
   const publish = () => { report.totalElapsedMs = nowMs() - start; options.onProgress?.(structuredClone(report)) }
   const cancelled = () => { if (options.shouldCancel?.()) throw new CandidateSearchError('cancelled', 'Research cancelled.') }
   const fullRun = async (runInput: PlannerInput) => {
@@ -221,7 +234,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
     const targets = new Map(original.targetWeapons.map(t => [t.id, t]))
     const pending = validation.validBuildListEntries.map(v => v.entry).filter(entry => !kept.has(entry.id))
       .sort((a, b) => comparePlannerEntryPriority(a, b, targets, original.buildListEntries))
-    for (const oldEntry of pending) {
+    for (const oldEntry of orderGlobalResearchPending(pending, options.failedFirstTargetIds)) {
       cancelled()
       const measurement: SearchMeasurement = { targetId: oldEntry.targetWeaponId, originalEntryId: oldEntry.id,
         generatedEntryId: null, generatedCandidateId: null, status: 'searching', elapsedMs: 0, applicationPlannerMs: 0,
@@ -232,12 +245,15 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
       publish()
       const searchInput: CandidateSearchInput = { ...projected, searchRunId: `research.global.search.${hashStableValue({ target: oldEntry.targetWeaponId, origin: normalizePlannerSearchOrigin(projected, targets.get(oldEntry.targetWeaponId)!), extent })}`,
         targetWeaponId: oldEntry.targetWeaponId, routeFilter: 'all', settings: extent }
+      options.onSearchInput?.(structuredClone(searchInput))
+      const engine = observeGlobalResearchReach(dependencies.rngEngine, searchInput, measurement.observedPredictionReach)
+      const execution = { shouldCancel: options.shouldCancel, yieldControl: options.yieldControl, now: () => GLOBAL_RESEARCH_TIME, nowMs }
+      const observed = options.profiler?.begin(engine, execution, nowMs)
+      if (observed) measurement.profile = observed.profile
       const searchStart = nowMs()
       let found: CandidateSearchResult
       try {
-        found = await searchCandidates(searchInput, observeEngine(dependencies.rngEngine, searchInput, measurement.observedPredictionReach), {
-          shouldCancel: options.shouldCancel, yieldControl: options.yieldControl, now: () => GLOBAL_RESEARCH_TIME, nowMs,
-        })
+        found = await searchCandidates(searchInput, observed?.engine ?? engine, observed?.execution ?? execution)
       } catch (error) {
         measurement.status = error instanceof CandidateSearchError && error.code === 'cancelled' ? 'cancelled' : 'search_error'
         measurement.error = error instanceof Error ? error.message : String(error)
