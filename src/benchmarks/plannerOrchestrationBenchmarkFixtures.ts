@@ -53,7 +53,7 @@ import {
  * and the Production Worker request kind these fixtures were measured through;
  * the recorded measurements stay in
  * `docs/B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md`. The fixtures stay
- * as Domain test input of the B8 orchestration until Phase 6-B2 decides the
+ * as Domain test input of the B8 orchestration until Phase 6-B2b decides the
  * fate of that Domain calculation.
  *
  * Every workload is Production-valid: the RNG state constants are the B5 /

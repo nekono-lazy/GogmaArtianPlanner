@@ -22,7 +22,7 @@ import {
 import { preparePlannerInitialContext } from '../plannerInitialContext'
 import { runPlannerDeterministicSchedule } from '../plannerDeterministicScheduler'
 import { createProductionPlanWithSearchRunner } from '../productionPlanGeneration'
-import { createPlannerConstrainedConflictContexts } from './plannerConflictContext'
+import { createPlannerConflictContexts } from '../replacement/plannerConflictContext'
 import { createProductionPlanWithConstrainedSearch } from './plannerConstrainedOrchestration'
 
 /**
@@ -112,7 +112,7 @@ function gogmaConflictId(): string {
   const probe = orchestrationScenario({ targets, entries, ownedWeapons })
   const prepared = preparePlannerInitialContext(probe.input, probe.dependencies)
   if (prepared.status !== 'ready') throw new Error('Expected a ready Planner initial context.')
-  const conflict = createPlannerConstrainedConflictContexts(prepared.context).find(
+  const conflict = createPlannerConflictContexts(prepared.context).find(
     ({ kind, counterBefore }) => kind === 'same_gogma_counter' && counterBefore === CONFLICT_GOGMA_COUNTER,
   )
   if (!conflict) throw new Error('The fixture produced no Gogma Counter conflict.')

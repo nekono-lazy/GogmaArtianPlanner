@@ -27,7 +27,7 @@ import {
 } from '../../../test/fixtures/plannerConstrainedOrchestration'
 import { preparePlannerInitialContext } from '../plannerInitialContext'
 import type { PlannerConflictResolution } from '../plannerTypes'
-import { createPlannerConstrainedConflictContexts } from './plannerConflictContext'
+import { createPlannerConflictContexts } from '../replacement/plannerConflictContext'
 import type { PlannerWhatIfBounds } from './plannerWhatIfBounds'
 import { createPlannerWhatIfComparison } from './plannerWhatIfCalculation'
 import type {
@@ -164,7 +164,7 @@ function conflictIdOf(parts: Parts, kind: string): string {
   })
   const prepared = preparePlannerInitialContext(probe.input, probe.dependencies)
   if (prepared.status !== 'ready') throw new Error('Expected a ready Planner initial context.')
-  const context = createPlannerConstrainedConflictContexts(prepared.context).find((found) => found.kind === kind)
+  const context = createPlannerConflictContexts(prepared.context).find((found) => found.kind === kind)
   if (!context) throw new Error(`The fixture produced no ${kind} conflict.`)
   return context.conflictId
 }

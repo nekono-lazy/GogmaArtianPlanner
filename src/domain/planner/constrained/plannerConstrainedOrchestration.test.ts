@@ -42,21 +42,23 @@ import { createConstrainedMaterializer } from './constrainedMaterializer'
 import {
   preparePlannerAugmentedConflictPreflight,
   preparePlannerReplacementConflictPreflight,
-} from './plannerAugmentedPreflight'
+} from '../replacement/plannerAugmentedPreflight'
 import { applyBuildListEntryReplacements } from '../../buildList'
 import {
-  createPlannerConstrainedConflictContexts,
+  createPlannerConflictContexts,
   preparePlannerFixedConflictConstraints,
-  type PlannerConstrainedConflictContext,
+  type PlannerConflictContext,
   type PlannerFixedConflictConstraint,
-} from './plannerConflictContext'
+} from '../replacement/plannerConflictContext'
 import { PlannerOrchestrationBoundsError } from './plannerOrchestrationBounds'
 import {
   createPlannerConflictWorks,
+  type PlannerConflictWork,
+} from '../replacement/plannerConflictWork'
+import {
   createProductionPlanWithConstrainedSearch,
   isConstrainedTrialAdoptable,
   isPlannerConflictWorkSatisfied,
-  type PlannerConflictWork,
   type PlannerOrchestrationResult,
 } from './plannerConstrainedOrchestration'
 
@@ -195,12 +197,12 @@ function threeTargetParts(): TwoTargetParts {
   }
 }
 
-function contextsOf(built: OrchestrationScenario): PlannerConstrainedConflictContext[] {
+function contextsOf(built: OrchestrationScenario): PlannerConflictContext[] {
   const prepared = preparePlannerInitialContext(built.input, built.dependencies)
   if (prepared.status !== 'ready') {
     throw new Error(`Expected a ready Planner initial context: ${prepared.status}`)
   }
-  return createPlannerConstrainedConflictContexts(prepared.context)
+  return createPlannerConflictContexts(prepared.context)
 }
 
 /** The Target-wide required checkpoint Entries of the run (PLANNER_SPEC 7.5.6). */
@@ -246,10 +248,10 @@ function fixedScenario(
 /** The conflicts of the original validated input the fixed constraints come from. */
 function originalConflictContextsOf(
   built: OrchestrationScenario,
-): PlannerConstrainedConflictContext[] {
+): PlannerConflictContext[] {
   const prepared = preparePlannerInitialContext(built.input, built.dependencies)
   if (prepared.status !== 'ready') throw new Error('Expected a ready context.')
-  return createPlannerConstrainedConflictContexts(prepared.context)
+  return createPlannerConflictContexts(prepared.context)
 }
 
 function fixedConstraintsOf(
@@ -257,7 +259,7 @@ function fixedConstraintsOf(
 ): PlannerFixedConflictConstraint[] {
   const prepared = preparePlannerInitialContext(built.input, built.dependencies)
   if (prepared.status !== 'ready') throw new Error('Expected a ready context.')
-  const contexts = createPlannerConstrainedConflictContexts(prepared.context)
+  const contexts = createPlannerConflictContexts(prepared.context)
   const constraints = preparePlannerFixedConflictConstraints(
     prepared.context,
     contexts,
@@ -310,72 +312,8 @@ function constraint(
   }
 }
 
-describe('B8-C4b conflict work scheduling', () => {
-  it('creates one work per non-fixed participant Target and never for the fixed side', () => {
-    const parts = threeTargetParts()
-    const built = fixedScenario(parts)
-    const contexts = contextsOf(built)
-    const constraints = fixedConstraintsOf(built)
-    const works = createPlannerConflictWorks(constraints, contexts, requirementsOf(built))
-
-    expect(constraints).toHaveLength(1)
-    expect(works.map(({ targetWeaponId }) => targetWeaponId)).toEqual([
-      TARGET_B,
-      TARGET_C,
-    ])
-    // The fixed side never yields, so Target A is never re-searched.
-    expect(works.some(({ targetWeaponId }) => targetWeaponId === TARGET_A)).toBe(
-      false,
-    )
-    expect(
-      works.every(
-        ({ constraint: used }) => used.fixedBuildListEntryId === entryId(ENTRY_A),
-      ),
-    ).toBe(true)
-  })
-
-  it('produces the same works whatever order the contexts and constraints arrive in', () => {
-    const parts = threeTargetParts()
-    const built = fixedScenario(parts)
-    const contexts = contextsOf(built)
-    const constraints = fixedConstraintsOf(built)
-
-    const requirements = requirementsOf(built)
-    const forward = createPlannerConflictWorks(constraints, contexts, requirements)
-    const reversed = createPlannerConflictWorks(
-      [...constraints].reverse(),
-      [...contexts].reverse().map((context) => ({
-        ...context,
-        participants: [...context.participants].reverse(),
-      })),
-      requirements,
-    )
-
-    expect(reversed).toEqual(forward)
-  })
-
-  it('dedupes several participants of one Target into a single work', () => {
-    const parts = threeTargetParts()
-    const built = fixedScenario(parts)
-    const contexts = contextsOf(built)
-    const constraints = fixedConstraintsOf(built)
-    const conflict = contexts.find(({ conflictId }) =>
-      conflictId === constraints[0].originalConflictId,
-    )
-    if (!conflict) throw new Error('The fixed conflict is missing.')
-    const duplicated: PlannerConstrainedConflictContext = {
-      ...conflict,
-      participants: [...conflict.participants, ...conflict.participants],
-    }
-
-    const works = createPlannerConflictWorks(constraints, [duplicated], requirementsOf(built))
-
-    expect(works.map(({ targetWeaponId }) => targetWeaponId)).toEqual([
-      TARGET_B,
-      TARGET_C,
-    ])
-  })
-})
+// The conflict work derivation itself is the shared primitive of
+// `../replacement/plannerConflictWork.test.ts` (Phase 6-B2a).
 
 describe('B8-C4b work satisfaction', () => {
   function work(): PlannerConflictWork {

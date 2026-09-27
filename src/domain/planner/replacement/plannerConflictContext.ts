@@ -22,8 +22,14 @@ import {
 } from '../plannerRouteProgress'
 
 /**
- * The transient B8 orchestration view of one detected `PlanConflict`
- * (PLANNER_SPEC 9.2.3).
+ * The transient view of one detected `PlanConflict` (PLANNER_SPEC 9.2.3): the
+ * current Planner conflict projected onto its resource identity plus its
+ * participant contexts, and every explicit resolution held as a fixed Entry
+ * constraint that a later preflight re-associates.
+ *
+ * It is a shared Planner Domain primitive (Phase 6-B2a, PLANNER_SPEC
+ * 9.2.19.16): the Planner Alternative preflight / scenario preparation and the
+ * legacy B8 / B9 path both stand on it, and neither owns it.
  *
  * Everything in this module is Planner-Domain, transient, and non-persisted. It
  * is never embedded in a `ProductionPlan` and never handed to the Search Domain
@@ -76,14 +82,15 @@ export interface PlannerConflictParticipantContext {
   physicalActionKey: string
   /**
    * Whether this participant's BuildListEntry carries a selected compromise
-   * checkpoint. A constrained re-search never replaces such an Entry's Route:
+   * checkpoint. No Route replacement search (the Planner Alternative, or the
+   * legacy constrained re-search) ever replaces such an Entry's Route:
    * any alternate Route would drop the checkpoint the user selected
    * (`docs/PLANNER_SPEC.md` 9.5.2).
    */
   hasSelectedCheckpoints: boolean
 }
 
-export interface PlannerConstrainedConflictContext {
+export interface PlannerConflictContext {
   /** The `PlanConflict.id` detected right now; diagnostic only for re-mapping. */
   conflictId: string
   kind: ConflictKind
@@ -238,7 +245,7 @@ function participantContext(
  *
  * The authority is the existing `PlannerConflictDetectionResult`: its
  * `conflictIdsByUnitKey` is inverted with the existing `plannerRouteUnitKey()`.
- * No B8 grouping, no `usedCounters` shortcut, and no copy of the
+ * No grouping of its own, no `usedCounters` shortcut, and no copy of the
  * `detectPlannerConflicts()` internals (PLANNER_SPEC 9.2.11).
  */
 function participatingUnitsByConflictId(
@@ -274,9 +281,9 @@ function participatingUnitsByConflictId(
  * shareability rules accept produces no `PlanConflict`, and therefore no
  * context either.
  */
-export function createPlannerConstrainedConflictContexts(
+export function createPlannerConflictContexts(
   context: PlannerInitialContext,
-): PlannerConstrainedConflictContext[] {
+): PlannerConflictContext[] {
   const unitsByConflictId = participatingUnitsByConflictId(context)
   const fingerprintByEntryId = new Map<BuildListEntryId, string>()
   const fingerprintOf = (entry: BuildListEntry): string => {
@@ -335,7 +342,8 @@ export function createPlannerConstrainedConflictContexts(
  * One user-fixed Candidate, held as a transient constraint instead of as the
  * `conflictKey` it was selected under (PLANNER_SPEC 9.2.3.1 / 9.2.7).
  *
- * B8-C3b re-maps it onto the conflicts an augmented preflight detects, using
+ * The augmented / replacement preflight (`plannerAugmentedPreflight`, B8-C3b
+ * originally) re-maps it onto the conflicts it detects, using
  * `resourceIdentity` plus `fixedBuildListEntryId` participation. It carries no
  * provenance field and nothing that marks a generated Entry, because a
  * generated Entry is never promoted to the fixed side.
@@ -343,7 +351,7 @@ export function createPlannerConstrainedConflictContexts(
 export interface PlannerFixedConflictConstraint {
   /**
    * The `PlanConflict.id` the user selected under, kept for diagnostics only.
-   * B8-C3b must NOT reuse it as the current `conflictKey`: adding a generated
+   * The preflight must NOT reuse it as the current `conflictKey`: adding a generated
    * Entry changes the id of the same physical conflict, so `resourceIdentity`
    * is the re-mapping authority.
    */
@@ -413,7 +421,7 @@ function constraintFailure(
  * The source is `PlannerInitialContext.validConflictResolutions`, taken from the
  * validated original Planner input (9.2.3.1). Resolutions validation already
  * dropped are not revived, and no constraint is ever built from a generated
- * Entry of an augmented input: B8-C3b re-maps these constraints, it does not
+ * Entry of an augmented input: the preflight re-maps these constraints, it does not
  * create new ones from generated Entries.
  *
  * The selected BuildListEntry ID must name exactly one entry of
@@ -425,11 +433,11 @@ function constraintFailure(
  * Planner input rule.
  *
  * `conflictContexts` must be the result of
- * `createPlannerConstrainedConflictContexts(context)` for the same context.
+ * `createPlannerConflictContexts(context)` for the same context.
  */
 export function preparePlannerFixedConflictConstraints(
   context: PlannerInitialContext,
-  conflictContexts: readonly PlannerConstrainedConflictContext[],
+  conflictContexts: readonly PlannerConflictContext[],
 ): PlannerFixedConstraintPreparationResult {
   const conflictById = new Map(
     context.initialConflictDetection.conflicts.map((conflict) => [

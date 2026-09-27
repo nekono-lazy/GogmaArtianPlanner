@@ -22,16 +22,19 @@ import type {
   PlannerWarning,
 } from '../plannerTypes'
 import {
-  createPlannerConstrainedConflictContexts,
+  createPlannerConflictContexts,
   plannerConflictResourceKey,
   samePlannerConflictResource,
   type PlannerConflictResourceIdentity,
-  type PlannerConstrainedConflictContext,
+  type PlannerConflictContext,
   type PlannerFixedConflictConstraint,
 } from './plannerConflictContext'
 
 /**
- * The B8-C3b initial conflict preflight (PLANNER_SPEC 9.2.3.1).
+ * The initial conflict preflight (PLANNER_SPEC 9.2.3.1; introduced by B8-C3b,
+ * a shared Planner Domain primitive since Phase 6-B2a, PLANNER_SPEC 9.2.19.16).
+ * The Planner Alternative trial and the legacy B8 constrained re-search both
+ * run it; neither owns it.
  *
  * It runs the ordinary Planner's own validation / initial state / Route unit
  * plan / conflict detection path over an augmented `PlannerInput`, then re-maps
@@ -104,7 +107,7 @@ export type PlannerAugmentedConflictPreflightResult =
   | {
       status: 'ready'
       preflightContext: PlannerInitialContext
-      conflictContexts: PlannerConstrainedConflictContext[]
+      conflictContexts: PlannerConflictContext[]
       /** Complete, and rebuilt against the current `PlanConflict.id`s. */
       conflictResolutions: PlannerConflictResolution[]
       /** Fixed constraints a replacement fulfilled; empty outside a replacement set. */
@@ -181,7 +184,7 @@ interface ReplacementSatisfiedConstraint {
  */
 export interface PlannerReplacementSatisfaction {
   replacedBuildListEntryIds: readonly BuildListEntryId[]
-  originalConflictContexts: readonly PlannerConstrainedConflictContext[]
+  originalConflictContexts: readonly PlannerConflictContext[]
 }
 
 /**
@@ -244,7 +247,7 @@ function currentFixedEntry(
  */
 function reassociateConstraint(
   context: PlannerInitialContext,
-  conflictContexts: readonly PlannerConstrainedConflictContext[],
+  conflictContexts: readonly PlannerConflictContext[],
   constraint: PlannerFixedConflictConstraint,
   satisfaction: PlannerReplacementSatisfaction | null,
 ): ResolvedConstraint | ReplacementSatisfiedConstraint | PlannerConstraintReassociationFailure {
@@ -381,7 +384,7 @@ function keyCollisionFailures(
  */
 export function reassociatePlannerFixedConstraints(
   context: PlannerInitialContext,
-  conflictContexts: readonly PlannerConstrainedConflictContext[],
+  conflictContexts: readonly PlannerConflictContext[],
   fixedConstraints: readonly PlannerFixedConflictConstraint[],
   satisfaction: PlannerReplacementSatisfaction | null = null,
 ): PlannerConstraintReassociationResult {
@@ -491,7 +494,7 @@ function runConflictPreflight(
     }
   }
   const context = prepared.context
-  const conflictContexts = createPlannerConstrainedConflictContexts(context)
+  const conflictContexts = createPlannerConflictContexts(context)
   const reassociated = reassociatePlannerFixedConstraints(
     context,
     conflictContexts,
@@ -551,7 +554,7 @@ export function preparePlannerReplacementConflictPreflight(
   augmentedInput: PlannerInput,
   replacements: readonly BuildListEntryReplacement[],
   fixedConstraints: readonly PlannerFixedConflictConstraint[],
-  originalConflictContexts: readonly PlannerConstrainedConflictContext[],
+  originalConflictContexts: readonly PlannerConflictContext[],
   dependencies: PlannerDependencies,
 ): PlannerReplacementConflictPreflightResult {
   const augmentedPreflight = preparePlannerAugmentedConflictPreflight(

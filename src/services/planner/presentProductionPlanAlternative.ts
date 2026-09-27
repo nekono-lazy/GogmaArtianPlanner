@@ -1,7 +1,7 @@
 import type {
   PlannerAlternativeOutcome,
   PlannerAlternativeRepairNotPersistableReason,
-  PlannerWhatIfInvalidFixedResolutionReason,
+  PlannerConflictScenarioInvalidFixedResolutionReason,
 } from '../../domain/planner'
 
 /**
@@ -52,7 +52,7 @@ export function presentPlannerAlternativeAdoption(adoptedInScenario: boolean | n
 }
 
 export function presentPlannerAlternativeInvalidResolution(
-  reason: PlannerWhatIfInvalidFixedResolutionReason,
+  reason: PlannerConflictScenarioInvalidFixedResolutionReason,
 ): string {
   switch (reason) {
     case 'scenario_resolution_not_valid':

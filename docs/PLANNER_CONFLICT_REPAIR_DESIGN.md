@@ -23,21 +23,25 @@ runtime実装:             Phase 2まで実装（Phase 1-A: #139、Phase 1-B: #1
                          Phase 5-A（actual repairとrepair lineageのPure Domain計算、what-if / actual repair共通のscenario core、
                          lineage outcome `rejected_by_scenario_composition` の正式仕様補完）とPhase 5-B（lineage永続化と
                          migration、Planner Alternative専用Persistence、actual repair Worker / Client、what-ifとactual repair
-                         のProduction routing同時切替、version更新）を実装した。Phase 5は完了。Phase 6は6-A / 6-B1 / 6-B2に分割し、
+                         のProduction routing同時切替、version更新）を実装した。Phase 5は完了。Phase 6は6-A / 6-B1 / 6-B2a /
+                         6-B2bに分割し、
                          Phase 6-A（作成リストの通常Plannerと実行中Planの再計画PreviewをB8のcreateConstrainedPlan()から
                          ordinary PlannerのcreatePlan()へ切替、ordinary Planner用Persistence savePlannerResult()、再計画Preview /
                          採用からのgenerated replacement契約の除去、B8 parity test）とPhase 6-B1（deadになったB8 / B9の
                          Worker request kind・PlannerWorkerClient method・Production Worker adapter・Browser benchmark
-                         runtime / page・旧B9 Presentationの削除）を実装した。次はPhase 6-B2（共有primitiveの中立化と、
-                         legacy B8 / B9 Domain実装・bounds・warning・B8保存API・fixtureの削除またはtest oracle化）、
-                         その後Phase 7（#122 Presentation）
+                         runtime / page・旧B9 Presentationの削除）とPhase 6-B2a（Planner Alternativeが使う共有primitiveの
+                         legacy constrained moduleからneutralな src/domain/planner/replacement/ への分離）を実装した。
+                         次はPhase 6-B2b（legacy B8 / B9 Domain実装・bounds・warning・B8保存API・fixtureの削除または
+                         test oracle化）、その後Phase 7（#122 Presentation）
 Production behavior:     Phase 5-Bで切替済み（生産計画画面の「比較する」はcreatePlannerAlternativeComparison()、
                          「この候補を優先」はcreatePlannerAlternativeRepair() + savePlannerAlternativeRepair()）。Phase 6-Aで
                          作成リストの通常Plannerと再計画PreviewもcreatePlan()へ切替済み。Phase 6-B1で旧B8 / B9の
-                         Worker / Client / Production adapter / Browser benchmark runtimeを削除した。旧B8 / B9のDomain
-                         計算本体はPhase 6-B2まで残るが、通常のApplication runtimeからは呼ばない（consumerはtestだけ）
+                         Worker / Client / Production adapter / Browser benchmark runtimeを削除した。Phase 6-B2aで
+                         Planner Alternativeの現役runtime authorityをlegacy moduleから切り離した（Production semantics
+                         は不変）。旧B8 / B9のDomain計算本体はPhase 6-B2bまで残るが、normal Application runtimeからの
+                         consumerは0件であり、残るconsumerはtest / benchmarkである
 schema / version:        Phase 5-Bで更新（calculation 16、Dexie 10、Export 13。10章）。Phase 6-Aでcalculationだけ17へ更新
-                         （Dexie 10、Export 13は不変）。Phase 6-B1はどのversionも変えない
+                         （Dexie 10、Export 13は不変）。Phase 6-B1 / 6-B2aはどのversionも変えない
 ```
 
 この文書はtask-specificな **設計記録** である。背景、方式選定の理由、後続PRの分割を記録する。
@@ -366,7 +370,8 @@ lineage除外件数）であり、Presentation改善はPhase 7で行う。
 - 旧B8 constrained enumeration / orchestrationは削除せず、Phase 5のProduction routing切替までlegacy
   implementationとして残った。Phase 5-Bで切り替えた後も実装は残っており、Phase 6-Aで残るProduction consumer
   （作成リストの通常Plannerと再計画Preview）をordinary Plannerへ移した。Phase 6-B1でdeadになったWorker / Client /
-  Production adapter / Browser benchmark runtimeを削除した。Domain実装の削除またはtest oracle化はPhase 6-B2で判断する
+  Production adapter / Browser benchmark runtimeを削除した。Phase 6-B2aで共有primitiveをneutral moduleへ分離した。
+  Domain実装の削除またはtest oracle化はPhase 6-B2bで判断する
 
 ---
 
@@ -564,4 +569,20 @@ benchmark runtime / page（`PlannerOrchestrationBenchmarkPage`、`PlannerWhatIfB
 `defaultPlannerOrchestrationBounds` / `defaultPlannerWhatIfBounds`、B8 / B9専用warning kindとlabel、B8の保存API、共有primitiveの
 名前と配置、B8 / B9 benchmark fixtureとoutcome helper、Issue #101 research harness / fixture、Phase 6-Aのparity / retry境界test、
 Constrained Enumeration benchmark（Search Domain benchmarkであり、Worker wireの削除とは別責務）、historical benchmark記録、全version。
-**Phase 6-B2**で、これらをconsumer監査のうえで削除するかtest oracleとして残すかを決め、共有primitiveを中立なmoduleへ整理する。
+Phase 6-B2は6-B2a / 6-B2bに分けた（PLANNER_SPEC 9.2.19.14 / 9.2.19.16）。理由: Planner Alternativeの現役runtime authorityを
+legacy moduleから切り離す責務・配置の整理と、legacy本体の削除を同じPRにしないためである。**Phase 6-B2a**で、Planner
+Alternativeが `constrained/` から直接importしていた共有primitiveを、B8 / B9の責務から切り離してneutralな
+`src/domain/planner/replacement/` へ移した: conflict context / fixed constraint（`PlannerConstrainedConflictContext` は
+`PlannerConflictContext`、`createPlannerConstrainedConflictContexts()` は `createPlannerConflictContexts()` へ改名）、
+augmented / replacement preflight、`PlannerConflictWork` / `createPlannerConflictWorks()`（B8 orchestration本体とは別module）、
+what-if scenario preparation（`preparePlannerConflictScenario()` / `PreparedPlannerConflictScenario`。B9の `PlannerWhatIfBounds`
+検査はlegacy wrapper `preparePlannerWhatIfScenario()` 側に残し、Planner Alternativeは同じ規則の自前のbounds検査を先に行う）と
+prepare段階のtyped failure（`PlannerConflictScenarioFailureResult`。B9の型名はそのaliasとして残る）、Planner-start Search origin
+の作成 / 正規化 / Target解決（`createPlannerStartSearchOrigin()` / `normalizePlannerSearchOrigin()` /
+`resolvePlannerSearchOriginTarget()`）、deterministic materializerの共通core（失敗型は `PlannerMaterializationError`）。
+B8 route policy / search identity、B8 materializer adapter、B8 orchestration、B9 what-if計算、bounds / default、warning kind、
+B8保存API、Issue #101 research harness、Phase 6-Aのparity / retry境界test、B8 / B9 benchmark fixtureはlegacy側に残し、neutral
+moduleをimportする形へ変えた。Planner Alternativeのproduction runtimeから `../constrained/` へのimportは0件であり、
+semantics、generated Entry / Candidate ID、search identity、各hash、Production routing、Worker protocol、UI、versionは変えていない
+（移動前後の値はtestで固定し、origin/mainとの結果比較でも一致を確認した）。**Phase 6-B2b**で、`constrained/` に残ったものが
+legacy consumerだけであることを再確認したうえで、それらを削除するかtest oracleとして残すかを決める。

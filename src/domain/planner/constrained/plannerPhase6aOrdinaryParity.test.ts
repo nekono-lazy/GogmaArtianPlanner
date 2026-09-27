@@ -99,8 +99,8 @@ vi.mock('./constrainedMaterializer', async (importOriginal) => {
   }
 })
 
-vi.mock('./plannerAugmentedPreflight', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./plannerAugmentedPreflight')>()
+vi.mock('../replacement/plannerAugmentedPreflight', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../replacement/plannerAugmentedPreflight')>()
   return {
     ...actual,
     preparePlannerReplacementConflictPreflight: (

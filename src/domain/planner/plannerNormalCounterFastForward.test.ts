@@ -19,7 +19,7 @@ import {
 } from '../../test/fixtures/plannerScheduler'
 import type { OrchestrationScenario } from '../../test/fixtures/plannerConstrainedOrchestration'
 import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
-import { createPlannerConstrainedConflictContexts } from './constrained/plannerConflictContext'
+import { createPlannerConflictContexts } from './replacement/plannerConflictContext'
 import { createPlannerWhatIfComparison } from './constrained/plannerWhatIfCalculation'
 import { orchestrationEnumerationBounds } from '../../test/fixtures/plannerConstrainedOrchestration'
 import { createPlanConflictId } from './conflictKey'
@@ -449,14 +449,14 @@ describe('Constrained re-search and what-if over Normal Counter conflicts', () =
     const { scenario } = twoForgeRoutes(2, 3)
     const prepared = preparePlannerInitialContext(scenario.input, scenario.dependencies)
     if (prepared.status !== 'ready') throw new Error('The fixture context is not ready.')
-    expect(createPlannerConstrainedConflictContexts(prepared.context)).toEqual([])
+    expect(createPlannerConflictContexts(prepared.context)).toEqual([])
   })
 
   it('still builds a context for the production-target Normal conflict', () => {
     const { scenario, entryA, entryB } = twoForgeRoutes(3, 3)
     const prepared = preparePlannerInitialContext(scenario.input, scenario.dependencies)
     if (prepared.status !== 'ready') throw new Error('The fixture context is not ready.')
-    const contexts = createPlannerConstrainedConflictContexts(prepared.context)
+    const contexts = createPlannerConflictContexts(prepared.context)
     expect(contexts).toHaveLength(1)
     expect(contexts[0].resourceIdentity).toEqual({
       kind: 'same_normal_counter',

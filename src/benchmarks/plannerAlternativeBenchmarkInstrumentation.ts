@@ -196,7 +196,7 @@ export interface ObservedKernelDependencies {
 /**
  * Wraps the Production Planner dependencies of a Kernel run so its first
  * Candidate trial can be timed. The Kernel reads no clock before its first
- * materialization (preparation is `preparePlannerWhatIfScenario()`, which
+ * materialization (preparation is `preparePlannerConflictScenario()`, which
  * reads none); a materialization reads the clock once, and Plan generation
  * reads it once immediately before `productionPlanId()`. Every returned value
  * is the Production dependency's own.

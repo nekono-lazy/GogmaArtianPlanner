@@ -27,11 +27,12 @@ import { benchmarkWorkerYield } from './constrainedEnumeration.worker.benchmark'
  * Issue #101 benchmark-only Worker controller.
  *
  * `enumeration` calls `visitConstrainedCandidates()` directly. `orchestration`
- * calls the Production `createProductionPlanWithConstrainedSearch()` with the
- * Production Planner dependencies the caller supplies - exactly what the
- * Production Planner Worker adapter does - except that the enumeration bounds
- * come from the request instead of `defaultConstrainedEnumerationBounds`.
- * Nothing Production imports this module, and no Production module changed.
+ * calls the legacy B8 `createProductionPlanWithConstrainedSearch()` with the
+ * Production Planner dependencies the caller supplies - the calculation the
+ * Production Planner Worker adapter ran until Phase 6-B1 removed it - except
+ * that the enumeration bounds come from the request instead of
+ * `defaultConstrainedEnumerationBounds`. Nothing Production imports this
+ * module, and no Production module changed.
  *
  * The yield is the B8-B2 benchmark MessageChannel macrotask yield, reused
  * rather than copied again: a timer would measure its own clamp, and a

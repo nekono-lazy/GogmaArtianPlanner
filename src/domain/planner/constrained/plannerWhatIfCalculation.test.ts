@@ -37,8 +37,8 @@ import type {
   PlannerDependencies,
   PlannerInput,
 } from '../plannerTypes'
-import { createPlannerConstrainedConflictContexts } from './plannerConflictContext'
-import type { PlannerFixedConflictConstraint } from './plannerConflictContext'
+import { createPlannerConflictContexts } from '../replacement/plannerConflictContext'
+import type { PlannerFixedConflictConstraint } from '../replacement/plannerConflictContext'
 import { PlannerWhatIfBoundsError } from './plannerWhatIfBounds'
 import type { PlannerWhatIfBounds } from './plannerWhatIfBounds'
 import {
@@ -98,9 +98,9 @@ vi.mock('../productionPlanGeneration', async (importOriginal) => {
   }
 })
 
-vi.mock('./plannerAugmentedPreflight', async (importOriginal) => {
+vi.mock('../replacement/plannerAugmentedPreflight', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('./plannerAugmentedPreflight')>()
+    await importOriginal<typeof import('../replacement/plannerAugmentedPreflight')>()
   return {
     ...actual,
     preparePlannerAugmentedConflictPreflight: (
@@ -331,7 +331,7 @@ function detectedConflictIds(
     throw new Error(`Expected a ready Planner initial context: ${prepared.status}`)
   }
   const byKind: Record<string, string> = {}
-  createPlannerConstrainedConflictContexts(prepared.context).forEach(
+  createPlannerConflictContexts(prepared.context).forEach(
     ({ kind, conflictId }) => {
       byKind[kind] = conflictId
     },

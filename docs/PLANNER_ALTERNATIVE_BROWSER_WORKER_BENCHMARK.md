@@ -98,7 +98,7 @@ cacheする。Worker入力は毎回structured cloneされ、cache済みfixture�
 `createIssue101RealFixture()` をそのまま使う（Base Seed 51231782、Skill Counter 341、Gogma Counter 55、Charge Blade
 rarity 8 Normal Counter 0、火 / 龍、Ideal = 斬れ味・装填強化EX ×1 + 属性強化EX ×2 + 属性強化II ×2）。
 
-- **Search workload** `issue101_fire_dragon_fixed`: origin = `createConstrainedSearchOriginFromPlannerInput()`、
+- **Search workload** `issue101_fire_dragon_fixed`: origin = `createConstrainedSearchOriginFromPlannerInput()`（Phase 6-B2aで `createPlannerStartSearchOrigin()` へ改名。値は同じ）、
   reservation = `derivePlannerAlternativeReservation([Dragon Entry])`（Normal 0..206 held / 206 blocked、Skill 341
   held + blocked、Gogma 55 held + blocked）、`excludedRouteKeys` = Fire現在Routeの `candidateStableKey()`。
   Conflict DTOをSearch Domainへ渡さない
