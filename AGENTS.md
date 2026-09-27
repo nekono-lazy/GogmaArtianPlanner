@@ -340,7 +340,9 @@ the running Plan's token (`planId`, `status`, `currentStepId` - never `updatedAt
 PlannerInput built by the ordinary `createPlannerInput()` from the current persisted
 state; the running Plan, its `baseSnapshot` and its conflict resolutions are never
 Planner input. The caller runs the existing `PlannerWorkerClient.createConstrainedPlan()`
-with `defaultPlannerOrchestrationBounds` (no new Worker protocol) and bundles the result
+with `defaultPlannerOrchestrationBounds` (no new Worker protocol; historical - superseded by
+the ordinary `PlannerWorkerClient.createPlan()` in Phase 6-A, and both legacy names were
+removed in Phase 6-B1 / 6-B2b) and bundles the result
 into a transient, never-persisted `ProductionPlanReplanPreview`. Adoption re-checks, in
 one transaction, the token, an adoptable result (a Plan, no `incomplete` search, the
 ordinary save-time shape checks now shared through
@@ -556,7 +558,8 @@ invariant-breaking read offers neither, and no second independent Draft is ever 
 running Plan). The Preview input comes only from `prepareProductionPlanReplanPreview()` - never
 the page's `state.input`, the Plan's `baseSnapshot` or a Conflict preparation input - the
 calculation runs the existing `PlannerWorkerClient.createConstrainedPlan()` with
-`defaultPlannerOrchestrationBounds` on the hook's own Worker (the Build List writes its reviewed
+`defaultPlannerOrchestrationBounds` (historical - superseded by `PlannerWorkerClient.createPlan()` in
+Phase 6-A; both legacy names were removed in Phase 6-B1 / 6-B2b) on the hook's own Worker (the Build List writes its reviewed
 detail settings into `PlannerInput.options`; the Production Plan page passes the request as it
 is), and the result is bundled by `createProductionPlanReplanPreview()` and held in React memory
 only: never Dexie, never Export, never `savePlannerResult()`. A cancel (`cancelPlan()`, a notice
@@ -656,7 +659,9 @@ The Draft bound is an independent invariant: a Draft beside a running Plan is no
 *different* Draft exists (`draft_plan_conflict`; updating the stored Draft under its own ID is
 not a second Draft), `getDraftProductionPlan()` fails closed on two, and
 `deleteDraftProductionPlans()` is the replacement step:
-`PlannerResultPersistenceService.savePlannerOrchestrationResult()` now runs "delete every
+`PlannerResultPersistenceService.savePlannerOrchestrationResult()` (historical - removed in Phase
+6-B2b; the same Draft replacement now runs in the ordinary `savePlannerResult()` and the Planner
+Alternative `savePlannerAlternativeRepair()`) now runs "delete every
 Draft + add the generated BuildListEntries + add the new Draft" in its one transaction after
 every existing save-time check, so only a fully successful save replaces the previous Draft,
 and a refused state, an invalid result, a generated Entry collision, an Entry write failure or
@@ -2342,6 +2347,23 @@ ordinary input carries no conflict resolution, so B8 never runs there and it nee
 dialog. The replan adoption deletes `O` and adds `G` in its own transaction with
 `replan_adopted` and adds no further warning; choosing the save point restore still
 adopts and replaces nothing. No version moved (13 / 8 / 11).
+
+Current state (Phase 6 complete; the Phase 0-3 paragraph above is a historical implementation
+record and its B8 / B9 API names are superseded): the replacement contract of `docs/PLANNER_SPEC.md`
+9.2.18 is used only by the Planner Alternative - the 「比較する」 what-if trials and the 「この候補を優先」
+actual repair trials and save. The adoption metadata travels as
+`PlannerAlternativeRepairArtifact.generatedBuildListEntryReplacements` (one per accepted replacement,
+in the order of `generatedBuildListEntries`; no artifact at all when the repair is not persistable),
+never as the removed `PlannerOrchestrationResult.generatedBuildListEntryReplacements`. The save is
+`PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` /
+`savePlannerAlternativeRepair()` (with the source Draft ID; outcome `saved` or
+`save_point_restored_recalculation_required`, never `no_plan`), sharing `prepareFinalReplacementBuildList()`,
+`checkPersistablePlannerResultShape()`, the Plan-breaking guard and the save point exception above; it
+checks Plan references with `checkProductionPlanBuildListEntryReferences()` only, so an accepted but
+unselected `G` is still saved (the B8-only `checkProductionPlanBuildListReferences()` and
+`inspectPlannerOrchestrationResultSave()` / `savePlannerOrchestrationResult()` were removed in Phase
+6-B2b). The ordinary Planner save `savePlannerResult()` and the replan adoption carry no generated
+Entry since Phase 6-A and never replace an Entry. B8's `currentAugmentedInput` went with B8.
 
 ---
 

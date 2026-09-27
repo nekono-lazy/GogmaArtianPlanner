@@ -1298,9 +1298,9 @@ Production terminationの `reachedLimits` は型上 `max_plan_steps` だけで�
 （Phase 6-A。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.7 / 9.2.19.16）。入力はcurrent persisted stateから作るfresh
 PlannerInputで、`PlannerInput.options` にはユーザーが詳細設定で確認した `maxPlanSteps` をApplication callerが
 設定する。保存済みPlanのexplicit resolutionを復元しない（`conflictResolutions = []`）ため、legacy B8の
-`createConstrainedPlan()` / `defaultPlannerOrchestrationBounds` は呼ばない。返る `PlannerResult` をそのまま
-`plannerResultPersistenceService.savePlannerResult()` へ渡す（generated Entryの空fieldを付けた
-`PlannerOrchestrationResult` へ変換しない）。
+`createConstrainedPlan()` / `defaultPlannerOrchestrationBounds` は呼ばない（どちらもPhase 6-B1 / 6-B2bで削除済み）。
+返る `PlannerResult` をそのまま `plannerResultPersistenceService.savePlannerResult()` へ渡す（generated Entryの空fieldを
+付けた旧B8の `PlannerOrchestrationResult`（Phase 6-B2bで削除済み）へ変換しない）。
 
 `savePlannerResult()` が保存済みProductionPlan（`saved`）を返した場合だけ、その保存済みPlanの
 `/plans/:planId` へ遷移する。
@@ -2569,7 +2569,7 @@ Preview。
 - 入力は現在の確定済みRNG状態・通常アーティアCounter・所持武器、最新の目標武器、最新の作成リストである。
   実行中Planの `baseSnapshot`・過去の入力・Conflict resolutionは使わない
 - 計算は作成リストの通常Plannerと同じordinary Planner（`PlannerWorkerClient.createPlan()`、Phase 6-A）であり、
-  legacy B8の `createConstrainedPlan()` は呼ばない。Preview結果は `PlannerResult` で、作成リスト項目を生成しない
+  legacy B8の `createConstrainedPlan()`（Phase 6-B1で削除済み）は呼ばない。Preview結果は `PlannerResult` で、作成リスト項目を生成しない
   （「この試算は新しい作成リスト項目を…生成しました」のような案内は出さない）
 - 通常のPlanner実行と同じ計算中表示（数値の進捗率なし、10.0）、キャンセル、探索未完了表示（10.1）を使う
 - Preview中は現在のPlanを実行中のまま変更せず、Execution Navigatorの現在Step、RNG状態、所持武器、
@@ -2775,7 +2775,7 @@ export interface SearchUiState {
 - 「比較する」は `createPlannerAlternativeComparison()` だけを呼び（旧 `createWhatIfComparison()` を呼ばない）、
   表示中Draftのlineageから導いたprior fixed Entry / prior除外Route keyを渡す
 - 明示選択後はfresh PlannerInput、決定、表示中Draftのlineageで `createPlannerAlternativeRepair()` を実行し
-  （旧 `createConstrainedPlan()` を呼ばない）、what-if結果をPlan生成へ流用しない
+  （旧 `createConstrainedPlan()` は呼ばない。Phase 6-B1で削除済み）、what-if結果をPlan生成へ流用しない
 - actual repairが `not_persistable`（`invalid_conflict_resolution` を含む）または準備段階のtyped failureなら、
   persistenceを呼ばず、Entry / Planを保存せず、遷移せず、旧Planを維持する
 - 新Plan・accepted replacementのgenerated BuildListEntry・lineageをPlanner Alternative専用のatomic persistence境界で

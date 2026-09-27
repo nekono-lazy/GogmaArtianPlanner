@@ -930,16 +930,22 @@ pure helper（`src/services/planner/plannerRuntimeOptions.ts`）で導出し、`
   `max(1000, ceilTo500(表示中Plan.steps.length) + CONFLICT_RESOLUTION_MAX_PLAN_STEPS_MARGIN)`
   （margin = 500）。fresh `createPlannerInput()` の1000へ依存せず、BuildList画面の一時入力も
   参照しない。保存された新Draftの次の競合解決は、そのDraft自身のStep数から導出する
-- what-if比較の `defaultPlannerWhatIfBounds` と入力はこの導出の対象外とする
+- Planner Alternative（「比較する」what-if / 「この候補を優先」actual repair、9.2.19）の探索範囲
+  `PlannerAlternativeSearchExtent` と試行上限 `PlannerAlternativeTrialBounds` は `PlannerOptions.maxPlanSteps` とは
+  別のauthorityであり、この導出の対象外とする（Production Worker adapterが `defaultPlannerAlternativeSearchExtent` /
+  `defaultPlannerAlternativeTrialBounds` をWorker内で明示的に渡す、9.2.19.12）。一方、Planner Alternativeへ渡す
+  `plannerInput.options` 自体は上記の競合解決の導出（`conflictResolutionPlannerOptions(表示中Plan)`）を使う
+  （[UI_FLOW.md](./UI_FLOW.md) 11.2 / 11.4）。旧B9 what-ifの `defaultPlannerWhatIfBounds` はPhase 6-B2bで削除した
 - Worker Client、Worker、Domainはこれらを適用しない（Application callerがauthority）
 - `PlannerOptions` は引き続きruntime-onlyであり、ProductionPlan、`PlanningInputSnapshot`、
   AppSettings、IndexedDB、Export / Import、`CalculationContext` へ追加しない。Planner計算の意味は
   変わらないため、いずれのschema / calculation versionも変更せず、既存Planをstaleにしない
 
-`PlannerOptions` はB8 orchestration bounds
-（`maxCandidateTrialsPerConflict` / `maxGeneratedBuildListEntries` /
-`maxPlannerReruns`）およびB8 `ConstrainedEnumerationBounds`、B9 `PlannerWhatIfBounds`
-とは別物であり、混同しない。詳細設定が公開するのは `maxPlanSteps` だけである。
+`PlannerOptions` はPlanner Alternativeの `PlannerAlternativeSearchExtent` / `PlannerAlternativeTrialBounds`
+（`maxCandidateTrialsPerTarget` / `maxPlannerReruns`）、およびSearch Domainの `ConstrainedEnumerationBounds`
+とは別物であり、混同しない。詳細設定が公開するのは `maxPlanSteps` だけである。（Phase 6-B2b以前は、旧B8
+orchestration bounds（`maxCandidateTrialsPerConflict` / `maxGeneratedBuildListEntries` / `maxPlannerReruns`）と
+旧B9 `PlannerWhatIfBounds` とも別物であった。両boundsはPhase 6-B2bで削除した。）
 
 #### typed termination
 
@@ -1001,7 +1007,9 @@ statusの決定順序は次のとおりとする。
 
 Production結果型は中立名の `PlannerRunResult`（`PlannerRunResultOf<PlannerRunTermination>`）とし、
 `PlannerRunResult.termination` と `PlannerResult.termination` が保持する。
-`PlannerOrchestrationResult` は `PlannerResult` を継承するため同じ値を引き継ぐ。
+Planner Alternative actual repairの `PlannerAlternativeRepairArtifact.plannerResult`（9.2.19.8）も `PlannerResult` の
+`termination` をそのまま保持する。（Phase 6-B2b以前のhistorical contractでは、`PlannerResult` を継承する旧B8の
+`PlannerOrchestrationResult` も同じ値を引き継いでいた。同型はPhase 6-B2bで削除した。）
 `createProductionPlanWithObserver()`、`ProductionPlanGenerationObserver.afterPlannerRun()`、
 `createProductionPlanWithSearchRunner()` のrunner（`PlannerFullSearchRunner`）はいずれも
 `PlannerRunResult` だけを扱い、Production codeは `PlannerBeamSearchResult` を参照しない。
@@ -3653,6 +3661,14 @@ ordering、Planning input hashの意味へ使わない。`createdAt` をID生成
 
 ### 9.2.14 Orchestration結果
 
+> **Phase 6-B2b以前のhistorical contract。** 本節の `PlannerOrchestrationResult`、
+> `createProductionPlanWithConstrainedSearch()`、`PlannerConstrainedOrchestrationOptions` はPhase 6-B2bで削除した。
+> 現在、generated Entryと置換metadataを保存へ運ぶのはPlanner Alternative actual repairの
+> `PlannerAlternativeRepairArtifact`（`generatedBuildListEntries` / `generatedBuildListEntryReplacements` /
+> `conflictRepairLineage`、9.2.19.8 / 9.2.19.11）である。「正式採用したEntryだけを含む」「`plan === null` なら空」
+> 「非永続でProductionPlanへ埋め込まない」の規則は同artifactでも同じである（accepted集合がauthorityであり、final Planで
+> selectedであることは要求しない点だけが異なる、9.2.19.6）。
+
 Core `PlannerResult` の意味を変更せず、外側のorchestration resultを追加する。
 
 ```ts
@@ -3731,6 +3747,15 @@ Entryを重複追加せず、full Planner再実行も行わず、`generatedBuild
 
 ### 9.2.15 Persistence契約
 
+> **現在のauthority（Phase 6完了後）。** 本節の保存境界（transaction内のcurrent state再読込・再validation、確認項目、
+> 旧Draftのatomic replacement、generated Entryによる元Entryの置換、partial save禁止）は現行契約であり、ordinary Planner
+> resultの `PlannerResultPersistenceService.savePlannerResult()` と、Planner Alternative actual repairの
+> `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`（本節末尾）がこれを共有する。本節が
+> 「B8-D」「最終augmented PlannerInput」として述べる旧B8 orchestration resultの保存（`savePlannerOrchestrationResult()` /
+> `inspectPlannerOrchestrationResultSave()`）は **Phase 6-B2b以前のhistorical contract** であり、同APIはPhase 6-B2bで
+> 削除した。現在generated Entryを保存するのはactual repairだけであり、`PlanningInputSnapshot.buildListEntriesHash` は
+> repairのfinal scenario runの置換後集合を表す。
+
 Planner Domain / WorkerはIndexedDBへ直接アクセスしない。保存はB8-DのApplication /
 Persistence serviceが行う。
 
@@ -3788,7 +3813,7 @@ Active Plan単一制約、置換、破棄、再計算は従来どおりApplicati
 責務であり、B8で変更しない。
 
 **ordinary Planner resultの保存（Phase 6-A）。** 作成リストの通常「生産計画を作成」は
-ordinary Planner（`createPlan()`）の `PlannerResult` を、`PlannerOrchestrationResult` へ変換せず（空のgenerated field
+ordinary Planner（`createPlan()`）の `PlannerResult` を、旧B8の `PlannerOrchestrationResult`（Phase 6-B2bで削除済み）へ変換せず（空のgenerated field
 を付けたダミー変換もしない）、`PlannerResultPersistenceService.savePlannerResult(result, currentCalculationContext,
 approval?)` で保存する。ordinary resultはgenerated Entryもreplacementも持たないので、Build Listは読むだけで書かない。
 
@@ -3808,7 +3833,7 @@ approval?)` で保存する。ordinary resultはgenerated Entryもreplacementも
   actual repair用の2つだけである
 
 **Planner Alternative actual repairの保存（9.2.19.8、Phase 5-B）。** 「この候補を優先」のPure Domain artifact
-（`PlannerAlternativeRepairArtifact`）は `PlannerOrchestrationResult` へ変換せず、専用の
+（`PlannerAlternativeRepairArtifact`）は旧B8の `PlannerOrchestrationResult`（Phase 6-B2bで削除済み）へ変換せず、専用の
 `PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` で保存する
 （Phase 5-Bでは並存したB8の `savePlannerOrchestrationResult()` の意味を変えなかった。B8保存APIはPhase 6-B2bで削除した）。
 保存の境界は本節と9.2.18のものを共有する: transaction内の
@@ -3842,8 +3867,8 @@ Planが置換後Build Listだけを参照すること、CalculationContext、旧
   再確認する（確認はinspection・apply・セーブ地点復元で共通のsave mutationで行い、「最後のゲーム内セーブ地点へ戻す」が
   復元だけを書きartifactを保存しない既存挙動は変えない）。確認のauthorityはIDであり、Draft本体の全体比較はしない
   （その他の状態は上記のcurrent-state authorityで再検証する）。source Draft IDはApplication / Persistenceの保存authorityで
-  あり、Worker requestには含めない。B8の `savePlannerOrchestrationResult()`（新しいchainを始める通常Planner、lineage `null`）
-  にはこの確認を持ち込まない
+  あり、Worker requestには含めない。新しいchainを始めるordinary Plannerの `savePlannerResult()`（lineage `null`）には
+  この確認を持ち込まない（Phase 6-B2b以前は旧B8の `savePlannerOrchestrationResult()` にも持ち込まなかった。同APIは削除済み）
 
 ```text
 各replacement: O削除 + G追加 → 旧Draft削除 → lineage付き新Draft追加（→ 必要ならactive Planの breaking_change_approved）
@@ -3957,8 +3982,8 @@ Production default selected by B8-E2 Browser benchmark:
   maxCandidateTrialsPerConflict = 2
   maxGeneratedBuildListEntries  = 1
   maxPlannerReruns              = 4
-実装: defaultPlannerOrchestrationBounds
-      src/domain/planner/constrained/plannerOrchestrationBounds.ts
+実装: defaultPlannerOrchestrationBounds（historical。Phase 6-B2bで削除）
+      src/domain/planner/constrained/plannerOrchestrationBounds.ts（Phase 6-B2bで削除）
 記録: docs/B8_PLANNER_ORCHESTRATION_BROWSER_WORKER_BENCHMARK.md 10-11章
 ```
 
@@ -4143,28 +4168,41 @@ Phase 0-3より前は、正式採用したgenerated Entryを元Entryに **追加
 generated Entryを含むaugmented inputそのものでPlanを計算していた。その時期に保存されたlegacy duplicateは
 自動整理せず、通常Planner入力のfail closed（4.1）とBuild Listの整理案内で扱う。
 
+**現在のauthority（Phase 6完了後）。** 本節の置換契約を使うのはPlanner Alternative（「比較する」what-ifのtrialと
+「この候補を優先」actual repairのtrial・保存、9.2.19）だけである。本節の「constrained re-search（B8）」「what-if（B9）」
+「orchestration」の記述は、そのtrialと保存へ読み替える。旧B8 / B9の計算・保存API（`PlannerOrchestrationResult`、
+`inspectPlannerOrchestrationResultSave()` / `savePlannerOrchestrationResult()`）はPhase 6-B2bで削除しており、以下で
+それらを名指しする箇所は **Phase 6-B2b以前のhistorical contract** として明示する。ordinary Planner（作成リストの通常作成、
+再計画Preview / 採用）はgenerated Entryを持たず、置換を生じない（Phase 6-A）。
+
 実装の要点。
 
 - 置換の共通authorityは `src/domain/buildList/buildListEntryReplacement.ts`
   （`BuildListEntryReplacement`、`resolveBuildListEntryReplacement()` /
   `applyBuildListEntryReplacements()` / `validateBuildListEntryReplacements()` /
   `validateGeneratedBuildListEntryReplacements()` / `validateReplacedBuildListCardinality()`）である。
-  B8、B9、通常Draft保存、再計画採用は独自に元Entryの特定や置換後集合の作成をしない
+  Planner Alternativeのtrialとrepair保存は独自に元Entryの特定や置換後集合の作成をしない（Phase 6-B2b以前は
+  B8、B9、通常Draft保存、再計画採用も同じ規則に従っていた）
 - temporaryなEntryの識別はDomainの呼び出し文脈 `PlannerBuildListContext`
   （`persisted` / `temporary_augmented` / `temporary_replacement`、4.1）だけで表す。preflightの
   2段階は `preparePlannerReplacementConflictPreflight()` である
-- 採用結果は `PlannerOrchestrationResult.generatedBuildListEntryReplacements`
-  （generated Entryごとに1件、Target・置換対象の元Entry・generated Entryを持つserializableな
-  runtime metadata）でWorkerから保存transactionまで運ぶ。`plan === null` なら空である。永続化しない
-- 通常Draft保存の事前確認は `PlannerResultPersistenceService.inspectPlannerOrchestrationResultSave()`、
-  保存は `savePlannerOrchestrationResult(result, context, approval?)` であり、どちらも既存の
-  `PlanBreakingChangeGuard` を通る。B10の再計算保存はこの確認を既存の
-  `usePlanBreakingChangeApproval()` / `PlanBreakingChangeDialog` に接続する。通常のBuild List画面の
-  Planner入力は明示resolutionを持たずB8が動かないため置換を生じない（Serviceは単独でもfail closedする）
+- 採用結果は `PlannerAlternativeRepairArtifact.generatedBuildListEntryReplacements`
+  （accepted replacementごとに1件、Target・置換対象の元Entry・generated Entryを持つserializableな
+  runtime metadata。`generatedBuildListEntries` と同じ順序）でWorkerから保存transactionまで運ぶ。保存可能なartifactが
+  無い（`not_persistable`）場合は何も運ばない。永続化しない（Phase 6-B2b以前のhistorical contractでは
+  `PlannerOrchestrationResult.generatedBuildListEntryReplacements` が同じ役割を持ち、`plan === null` なら空だった）
+- 保存の事前確認は `PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave(artifact, context,
+  expectedSourceDraftId)`、保存は `savePlannerAlternativeRepair(artifact, context, expectedSourceDraftId, approval?)`
+  であり、どちらも既存の `PlanBreakingChangeGuard` を通る（source Draft CASは9.2.15末尾）。生産計画画面の
+  「この候補を優先」はこの確認を既存の `usePlanBreakingChangeApproval()` / `PlanBreakingChangeDialog` に接続する。
+  作成リストの通常Planner（`createPlan()`）とその保存 `savePlannerResult()` は置換を生じない（Build Listを書かない）。
+  Phase 6-B2b以前のhistorical contractでは、旧B8の `inspectPlannerOrchestrationResultSave()` /
+  `savePlannerOrchestrationResult(result, context, approval?)` がこの役割を持っていた（B10の再計算保存が接続していた）
 
 永続Build Listは1 Targetにつき最大1 Entryである（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）。本節は
 constrained re-search（B8）、what-if（B9）、再計画Preview / 採用（16.8）がこのinvariantとどう
-接続するかを定める。9.2.1〜9.2.17の固定authority、preflight、再対応付け、monotonic adoption、
+接続するかを定める（現在はPlanner Alternativeのtrial・repair保存へ読み替える。再計画Preview / 採用はPhase 6-A以降
+generated Entryを持たない。本節冒頭の「現在のauthority」を参照）。9.2.1〜9.2.17の固定authority、preflight、再対応付け、monotonic adoption、
 bounds、決定的IDの契約は、本節で明示した点を除いて変更しない。
 
 #### 永続invariantとtemporary augmented input
@@ -4248,15 +4286,19 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
   弱めるものではなく、snapshot authorityを守るために旧resultを捨てる規則である。再計画採用が復元で採用を中止する
   （16.8）のと同じ理由による。承認・Planの一致・16.10の選択・セーブ地点の `recordedAt` の検証と復元自体の
   fail-closed条件は通常の承認と同じで、失敗時は何も変更しない
-- 実装: `PlannerResultPersistenceService.savePlannerOrchestrationResult()` は `saved` / `no_plan` /
-  `save_point_restored_recalculation_required` のtyped outcomeを返す。復元の判定と書き込みは
+- 実装: `PlannerResultPersistenceService.savePlannerAlternativeRepair()` は `saved` /
+  `save_point_restored_recalculation_required` のtyped outcomeを返す（repair artifactは常にfinal scenario Planを持つので
+  `no_plan` は無い。ordinaryの `savePlannerResult()` は `saved` / `no_plan` / `save_point_restored_recalculation_required`
+  の型を共有する。Phase 6-B2b以前のhistorical contractでは旧B8の `savePlannerOrchestrationResult()` が `saved` / `no_plan` /
+  `save_point_restored_recalculation_required` を返していた）。復元の判定と書き込みは
   `preparePlanGuardedSavePointRestoreInsteadOfChange()`（承認と選択の検証は `preparePlanGuardedMutation()` と共有、
   復元は `prepareExecutionSavePointRestore()`）と `PlanBreakingChangeGuard.restoreSavePointInsteadOfChange()`
   （書き込みは `restoreExecutionSavePoint()` と共通の `writeExecutionSavePointRestore()`）であり、復元を独自に
   書き換える処理を持たない。通常のPlan-breaking変更（`PlanBreakingChangeGuard.apply()`）の意味は変えない
-- 再計画採用（16.8）では、旧実行中Planを `abandoned`（`replan_adopted`）にするのと同じtransactionで
-  置換する。旧実行中Planは採用で終了するため、`O` がそのPlan依存Entryであっても別の警告を追加しない。
-  他の実行中Planは存在し得ない（16.8の既存検証）
+- 再計画採用（16.8）: Phase 6-A以降の再計画Previewはordinary Planner resultであり、generated Entryもreplacementも
+  持たないので、採用はBuild Listを書き換えず置換しない。（Phase 6-A以前のhistorical contractでは、旧実行中Planを
+  `abandoned`（`replan_adopted`）にするのと同じtransactionで置換し、旧実行中Planは採用で終了するため `O` がその
+  Plan依存Entryであっても別の警告を追加しなかった。）
 - `O` を参照するBuildCandidate / TargetWeapon / OwnedWeaponをcascade deleteしない
 - generated Entryの `intermediateStateSelection` はmaterializerの既定値（両laneとも未選択、`planner`）
   である。`O` の途中採用状態・改善優先を引き継がない（checkpointを持つTargetはそもそも再検索しない、9.5.2）
@@ -4648,7 +4690,7 @@ resolutionが選択するEntryである（既存9.2.4.7の「全fixed Entry」�
 9. Planner Alternative専用の savePlannerAlternativeRepair() で、generated Entryによる元Entry置換、新Draft、
    lineageを1 transactionで保存する（9.2.15末尾 / 9.2.18。Plan-breaking guardも既存どおり。Phase 5-Bで
    B8の savePlannerOrchestrationResult() へ載せない専用APIとした。accepted replacementがfinal Planで
-   非選択でも保存するためである）
+   非選択でも保存するためである。旧B8の保存APIはPhase 6-B2bで削除した）
 ```
 
 - replacementが別Target Cと新たに競合しても、その競合をこの操作内で再帰的に解決しない。保存された新Planで、
@@ -5005,8 +5047,8 @@ interface PlannerAlternativeSearchExtent {
     fixture上必要だったのは2であり、8ではない。上限は必要なrunだけが開始されるため未使用分に追加costはなく、R = 2 / 4 / 8の
     finalist性能に差はなかった。複数の非固定Target、2件目のCandidate trial、runtime-unsupported retryが同じ
     request-global budgetを消費するため、fixtureを満たすだけの2ではなく、無制限相当にもしない8をProductionの安全弁として
-    採用した。既存 `defaultPlannerWhatIfBounds.maxPlannerReruns` と同値だが、その流用ではなくPlanner Alternative
-    Phase 3-Bの測定と設計判断から独立に決めた値である
+    採用した。旧B9の `defaultPlannerWhatIfBounds.maxPlannerReruns`（Phase 6-B2bで削除）と同値だったが、その流用ではなく
+    Planner Alternative Phase 3-Bの測定と設計判断から独立に決めた値である
   - Domain API（`runPlannerAlternativeKernel()` の `bounds` / `extent`、`createPlannerAlternativeFullRunBudget()`）は
     caller必須指定のままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの2定数を
     明示的に渡す（Phase 4-Bで、what-ifのProduction Worker adapter `createProductionPlannerAlternativeComparison()`
@@ -7412,8 +7454,9 @@ Planを壊す変更の承認）を行う場合、ゲーム側でユーザーが�
 - 「最後のゲーム内セーブ地点へ戻す」は16.9の復元を行ってから破棄操作を続ける。
   Planを壊す変更の承認では、復元 -> Plan破棄 -> 変更保存の順とする。
   再計画採用だけは16.8のとおり採用を中止する
-- 例外として、Planを壊す変更が **Planner result（`PlannerOrchestrationResult`）の保存** である場合
-  （9.2.18、generated Entryによる作成リスト置換）は、復元だけを行い変更を保存しない。Planner resultは復元前の
+- 例外として、Planを壊す変更が **Planner result（Planner Alternative actual repairの `PlannerAlternativeRepairArtifact`）の
+  保存** である場合（9.2.18、generated Entryによる作成リスト置換、`savePlannerAlternativeRepair()`。Phase 6-B2b以前は旧B8の
+  `PlannerOrchestrationResult` の保存も同じ扱いだった）は、復元だけを行い変更を保存しない。Planner resultは復元前の
   状態から計算したartifactであり、復元後の状態に対するauthorityではないため、変更を復元後の状態へ再適用しない。
   generated Entry / Entry置換 / Draft置換を書かず、Planも破棄せず（復元されたPlanのまま）、復元後の状態からの
   再計算を求める。snapshot検証は弱めない。RNG編集、Counter編集、所持武器・目標武器の編集、作成リストの手動変更

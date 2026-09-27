@@ -1468,10 +1468,13 @@ deriveBuildListEntryStaleReasons(
   `resolveBuildListEntryReplacement()` / `applyBuildListEntryReplacements()` /
   `validateBuildListEntryReplacements()` / `validateGeneratedBuildListEntryReplacements()` /
   `validateReplacedBuildListCardinality()`）。正式採用したgenerated Entryは失う側Targetの元Entryを置換し、
-  `PlannerOrchestrationResult.generatedBuildListEntryReplacements`（runtime-only、永続化しない）が
-  「generated Entry → 置換対象の元Entry」の対応をWorkerから保存transactionまで運ぶ。保存は
-  `PlannerResultPersistenceService` / 再計画採用のいずれも、transaction内で元Entryが今もそのTargetの
-  唯一の永続Entryであることを確認してから置換する。Phase 0-3以前の採用で元Entryの横に保存された
+  Planner Alternative actual repairの `PlannerAlternativeRepairArtifact.generatedBuildListEntryReplacements`
+  （runtime-only、永続化しない）が「置換対象の元Entry → generated Entry」の対応をWorkerから保存transactionまで運ぶ。
+  保存（`PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`）は、
+  transaction内で元Entryが今もそのTargetの唯一の永続Entryであることを確認してから置換する（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+  9.2.15 / 9.2.18）。ordinary Plannerの保存（`savePlannerResult()`）と再計画採用はPhase 6-A以降generated Entryを持たず、
+  置換しない。Phase 6-B2b以前のhistorical contractでは旧B8の `PlannerOrchestrationResult.generatedBuildListEntryReplacements`
+  が同じ役割を持ち、再計画採用も置換していた（同型と旧B8保存APIはPhase 6-B2bで削除した）。Phase 0-3以前の採用で元Entryの横に保存された
   generated Entryは、下記のlegacy duplicateとして扱う（自動整理しない）
 
 #### collection invariant
@@ -1572,14 +1575,15 @@ B8-Aで、BuildListEntryの生成主体を次の2つへ拡張した。契約本�
 - 生成主体を表す永続provenance fieldを追加しない
 - `ProductionPlan` へembedded Candidate Snapshotを追加しない
 - Candidate table等の新しい永続entityを追加しない
-- constrained enumerationで発見した全Candidateを保存しない。最終augmented
-  PlannerInputへ正式採用したEntryだけを、生成された `ProductionPlan` と同一
+- 代替探索（現在はPlanner Alternative Search。Phase 6-B2b以前は旧B8のconstrained enumeration）で発見した全Candidateを
+  保存しない。正式採用（accepted replacement）したEntryだけを、生成された `ProductionPlan` と同一
   Dexie transactionで保存する
 - ProductionPlanが生成されない場合、generated Entryを永続化しない
 - 正式採用したgenerated Entryは、失う側Targetの元Entryに追加せず、元Entryを **置換** して同一
   transactionで保存する。永続Build Listは採用後も1 Targetにつき1件である
   （9.4.1、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18、Phase 0-3で実装済み）。どの元Entryを置換するかは
-  runtime-onlyの `PlannerOrchestrationResult.generatedBuildListEntryReplacements` が表し、
+  runtime-onlyの `PlannerAlternativeRepairArtifact.generatedBuildListEntryReplacements` が表し（Phase 6-B2b以前の
+  historical contractでは旧B8の `PlannerOrchestrationResult.generatedBuildListEntryReplacements`）、
   BuildListEntryへprovenance fieldを追加しない
 
 generated BuildListEntry IDは、少なくとも次から安定生成する。
