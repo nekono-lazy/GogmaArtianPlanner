@@ -38,14 +38,16 @@ function fakeResult(stop: PlannerGlobalWorkerResult['stop'] = 'completed', statu
       plannerElapsedMs: 0, totalElapsedMs: 1, candidateSearches: 0, fallbackEpisodes: 0 }, rawBlockSummary: null, predictionProfile: null, workerHeapAfter: null }
 }
 /** A Worker that answers like the real controller: ready, accepted, then the given result. */
-function autoWorker(result: (message: { requestId: string; mode: string; fallbackAxis: string | null }) => PlannerGlobalWorkerResult | 'error' | 'crash') {
+function autoWorker(result: (message: { requestId: string; mode: string; fallbackAxis: string | null }) => PlannerGlobalWorkerResult | 'error' | 'crash' | 'crash_before_accepted') {
   const worker = new FakeWorker((message, w) => {
     const m = message as { type: string; requestId: string; pingId: number; mode: string; fallbackAxis: string | null }
     queueMicrotask(() => {
       if (m.type === 'pg2a_benchmark_ping') { w.emit({ type: 'pg2a_benchmark_pong', pingId: m.pingId }); return }
       if (m.type !== 'pg2a_benchmark_run') return
-      w.emit({ type: 'pg2a_benchmark_accepted', requestId: m.requestId, priorityEntries: [{ id: 'e1', targetWeaponId: 't1' }, { id: 'e2', targetWeaponId: 't2' }] })
       const r = result(m)
+      // A native Worker failure before `accepted`: no priority evidence reaches the main thread.
+      if (r === 'crash_before_accepted') { w.fail(); return }
+      w.emit({ type: 'pg2a_benchmark_accepted', requestId: m.requestId, priorityEntries: [{ id: 'e1', targetWeaponId: 't1' }, { id: 'e2', targetWeaponId: 't2' }] })
       if (r === 'crash') w.fail()
       else if (r === 'error') w.emit({ type: 'pg2a_benchmark_error', requestId: m.requestId, message: 'bad' })
       else w.emit({ type: 'pg2a_benchmark_result', requestId: m.requestId, result: r })
@@ -152,6 +154,37 @@ describe('Phase 2-A runner', () => {
     expect(controller.nonRetryableInitial).toEqual([{ axis: 'gogma', stop: 'process_error', status: 'error' }, { axis: 'skill', stop: 'attempt_error', status: 'error' }])
     expect(controller.outcome).toBe('not_completed')
     expect(runner.records().map(r => r.status)).toEqual(['completed', 'completed', 'worker_error', 'error'])
+  })
+
+  it('keeps an earlier completed winner when a later Worker fails before accepted, reusing the known priority for that failure only', async () => {
+    const runs: (string | null)[] = []
+    const runner = createPlannerGlobalBrowserRunner({ ...runnerDeps, createHarness: () => createPlannerGlobalBrowserHarness({ createWorker: () => autoWorker(m => {
+      runs.push(m.fallbackAxis)
+      return m.fallbackAxis === 'normal' ? fakeResult('completed', 'completed') : m.fallbackAxis === 'gogma' ? 'crash_before_accepted' : fakeResult(null, 'partial')
+    }) }) })
+    const controller = await runner.runController(input, { label: 'c' })
+    // The controller does not throw, and the skill axis still runs after the failure.
+    expect(controller.error).toBeNull()
+    expect(runs).toEqual([null, 'normal', 'gogma', 'skill'])
+    expect(controller).toMatchObject({ outcome: 'completed', initialSuccess: true, retryStarted: false, winner: { axis: 'normal', stage: 'initial' } })
+    expect(controller.nonRetryableInitial).toEqual([{ axis: 'gogma', stop: 'process_error', status: 'error' }])
+    const records = runner.records()
+    const gogma = records.find(r => r.label === 'c:gogma-initial')!
+    expect(gogma).toMatchObject({ status: 'worker_error', priorityEntries: null, result: null })
+    expect(controller.priorityReusedForRecordIds).toEqual([gogma.id])
+    // The failure stays a failure: not completed, not partial, not a no-match.
+    const gogmaRank = controller.ranking.find(r => r.axis === 'gogma')!
+    expect(gogmaRank).toMatchObject({ success: false, stop: 'process_error', final: null })
+    expect(controller.ranking.map(r => r.axis)).toEqual(['normal', 'skill', 'gogma'])
+  })
+
+  it('fails closed when no run has returned priority evidence yet (nothing is guessed)', async () => {
+    const runner = createPlannerGlobalBrowserRunner({ ...runnerDeps, createHarness: () => createPlannerGlobalBrowserHarness({ createWorker: () => autoWorker(() => 'crash_before_accepted') }) })
+    const controller = await runner.runController(input, { label: 'c' })
+    expect(controller.outcome).toBe('error')
+    expect(controller.error).toContain('produced no priority evidence')
+    expect(controller.priorityReusedForRecordIds).toEqual([])
+    expect(runner.records().map(r => r.status)).toEqual(['worker_error'])
   })
 
   it('arms a benchmark-only cancel on the fallback start and records ack, settle and late responses', async () => {

@@ -165,6 +165,8 @@ export interface PlannerGlobalControllerRecord {
   readonly winner: { readonly axis: string; readonly stage: string; readonly recordId: string; readonly semanticSha256: string | null } | null
   readonly ranking: readonly { readonly axis: string; readonly stage: string; readonly attemptId: number; readonly success: boolean; readonly final: unknown; readonly stop: string | null; readonly recordId: string }[]
   readonly recordIds: readonly string[]
+  /** Failed attempts (no `accepted`) handed to the controller with the priority of an earlier run of the same input. */
+  readonly priorityReusedForRecordIds: readonly string[]
   readonly retries: unknown
   readonly error: string | null
 }
@@ -362,12 +364,30 @@ export function createPlannerGlobalBrowserRunner(dependencies: PlannerGlobalRunn
     const recordOfAttempt = new Map<string, string>()
     const base = (axis: ExtentAxis | null, label: string, state: DiscoveryState | null) =>
       phase2aAttemptConfig(label, 'controller', axis, { attemptState: state, rawCache: options.rawCache ?? 'per-search' })
+    /**
+     * The stable ordinary Planner priority an earlier fresh run of the same original input already returned.
+     * A Worker that breaks before `accepted` returns none; its attempt is still a failure (process_error /
+     * attempt_error, never completed, partial or a no-match), and it is handed to the controller with this known
+     * priority so an earlier completed variant is never lost. Without any known priority nothing is guessed:
+     * the controller fails closed as before.
+     */
+    let knownPriority: PlannerGlobalWorkerResult['priorityEntries'] | null = null
+    const priorityReusedForRecordIds: string[] = []
     const execution = (record: PlannerGlobalBrowserRecord, meta: Parameters<typeof attemptFromRecord>[1]): Phase1EExecution<AttemptSummary & { recordId: string }> => {
       recordIds.push(record.id)
       const attempt = attemptFromRecord(record, meta)
-      const priorityEntries = record.result?.priorityEntries ?? record.priorityEntries
-      if (!priorityEntries) throw new Error(`Attempt ${record.label} produced no priority evidence: ${record.status} ${record.message ?? ''}`)
-      return { attempt, priorityEntries }
+      const own = record.result?.priorityEntries ?? record.priorityEntries
+      if (own) {
+        // A run's own priority stays authority; runPhase1EController still refuses one that differs.
+        knownPriority ??= structuredClone(own)
+        return { attempt, priorityEntries: own }
+      }
+      if (attempt.stop === 'completed' || (attempt.stop === null && attempt.report.status === 'partial')) {
+        throw new Error(`Attempt ${record.label} has a result but no priority evidence.`)
+      }
+      if (!knownPriority) throw new Error(`Attempt ${record.label} produced no priority evidence: ${record.status} ${record.message ?? ''}`)
+      priorityReusedForRecordIds.push(record.id)
+      return { attempt, priorityEntries: structuredClone(knownPriority) }
     }
     let firstNotified = false
     const notifyCompleted = (attempt: AttemptSummary, axis: ExtentAxis) => {
@@ -407,7 +427,7 @@ export function createPlannerGlobalBrowserRunner(dependencies: PlannerGlobalRunn
         semanticSha256: records.find(r => r.id === result!.winner!.attempt.recordId)?.result?.semanticSha256 ?? null } : null,
       ranking: (result?.ranking ?? []).map(v => ({ axis: v.axis, stage: v.stage, attemptId: v.attempt.attemptId, success: isGlobalPlanSuccess(v.outcome), final: v.outcome.final, stop: v.outcome.stop,
         recordId: recordId(v.axis, v.stage, v.attempt.attemptId) })),
-      recordIds, retries: result?.retries ?? [], error,
+      recordIds, priorityReusedForRecordIds, retries: result?.retries ?? [], error,
     }
     controllers.push(controllerRecord)
     notify()

@@ -200,16 +200,14 @@ describe('Phase 2-A benchmark Worker controller', () => {
     expect(result.stop).toBe('time_budget')
   })
 
-  it('yields through a MessageChannel macrotask, which lets a pending message event through where a microtask cannot', async () => {
-    const other = new MessageChannel()
-    let delivered = false
-    other.port1.onmessage = () => { delivered = true }
-    other.port2.postMessage('pending')
-    await Promise.resolve()
-    expect(delivered).toBe(false)
-    for (let i = 0; i < 5 && !delivered; i++) await plannerGlobalMessageChannelYield()
-    expect(delivered).toBe(true)
-    other.port1.close()
+  it('yields through a MessageChannel task: it resolves only after the already queued microtasks, never as a microtask', async () => {
+    // Deterministic: compares this yield's own resolution with a microtask, not the dispatch order of another MessagePort.
+    const order: string[] = []
+    const yielded = plannerGlobalMessageChannelYield().then(() => { order.push('message-channel') })
+    await Promise.resolve().then(() => { order.push('microtask') })
+    expect(order).toEqual(['microtask'])
+    await yielded
+    expect(order).toEqual(['microtask', 'message-channel'])
     await expect(plannerGlobalTimerYield()).resolves.toBeUndefined()
   })
 })
