@@ -28,7 +28,7 @@ const routeFilter = option('--route-filter') ?? 'all'
 const timeBudgetMs = Number(option('--time-budget-ms') ?? 180000)
 const yieldMode = option('--yield-mode') ?? 'timer'
 const rawCacheMode = option('--raw-block-cache')
-if (rawCacheMode !== undefined && !['off', 'per-search'].includes(rawCacheMode)) throw new Error('Invalid raw block cache mode.')
+if (rawCacheMode !== undefined && !['off', 'per-search', 'run'].includes(rawCacheMode)) throw new Error('Invalid raw block cache mode.')
 if (!['timer', 'immediate'].includes(yieldMode)) throw new Error('Invalid Node yield mode.')
 const yieldControl = () => new Promise(resolveYield => yieldMode === 'immediate' ? setImmediate(resolveYield) : setTimeout(resolveYield, 0))
 if (!['phase0', 'failed-first'].includes(strategy) || !['all', 'normal_artian', 'existing_gogma'].includes(routeFilter)) throw new Error('Invalid research strategy or route filter.')
@@ -122,7 +122,7 @@ try {
     },
   })
   const record = { environment, ...(focus ? { focus } : { report: result.report }),
-    ...(rawBlocks ? { phase1b: { rawBlocks: rawBlocks.profiles, searchEvidence,
+    ...(rawBlocks ? { phase1b: { rawBlocks: rawBlocks.profiles, rawBlockSummary: rawBlocks.summary(), searchEvidence,
       generatedEntries: result?.generatedEntries.map(entry => ({ id: entry.id, candidateSha256: sha(entry.candidateSnapshot), entrySha256: sha(entry) })) ?? [],
       finalSelectedEntryIds: result?.finalResult?.plan?.selectedBuildListEntryIds ?? [],
       planSha256: sha(result?.finalResult?.plan ?? null), finalResultSha256: sha(result?.finalResult ?? null),
@@ -133,6 +133,7 @@ try {
     memory: { maxRssKiB: process.resourceUsage().maxRSS, ...process.memoryUsage(), scope: 'whole Node process, includes Vite loader and Export parsing' },
     cancel: { requested: cancelledAt !== null, responseMs: cancelledAt === null ? null : performance.now() - cancelledAt },
   }
+  rawBlocks?.endRun()
   await writeFile(outputPath, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' })
   console.log(JSON.stringify({ output: resolve(outputPath), ...(focus ? { focus } : { report: latest }) }, null, 2))
   if (result?.report.status === 'error' || focus?.status === 'search_error') process.exitCode = 1

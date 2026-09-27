@@ -72,6 +72,7 @@ it('requires observed failures for failed-first, and an explicit snapshot for fo
   expectRefusal(input, output, 'requires --observed-report', ['--strategy', 'failed-first'])
   expectRefusal(input, output, 'are required together', ['--focus-target', 'arbitrary-id'])
   expectRefusal(input, output, 'Invalid Node yield mode', ['--yield-mode', 'microtask'])
+  expectRefusal(input, output, 'Invalid raw block cache mode', ['--raw-block-cache', 'session'])
   expectRefusal(input, output, 'Duplicate research option', ['--time-budget-ms', '180000', '--time-budget-ms', '100'])
   expect(existsSync(progress)).toBe(false)
 })

@@ -2,7 +2,7 @@
 import { ProductionRngEngine } from '../domain/rng/production/productionRngEngine'
 import { readReferenceRngBlock, REFERENCE_RNG_BLOCK_SIZE, type ReferenceRngBlock } from '../domain/rng/production/referencePrng'
 
-export type RawBlockCacheMode = 'off' | 'per-search'
+export type RawBlockCacheMode = 'off' | 'per-search' | 'run'
 
 export interface RawBlockProfile {
   targetId: string
@@ -13,6 +13,7 @@ export interface RawBlockProfile {
   hits: number
   misses: number
   failures: number
+  evictions: number
   hitRatio: number
   readerElapsedMs: number
   missReadElapsedMs: number
@@ -28,6 +29,9 @@ export interface RawBlockProfile {
 export class GlobalRawBlockResearch {
   readonly profiles: RawBlockProfile[] = []
   private active = false
+  private disposed = false
+  private readonly runCache = new Map<string, ReferenceRngBlock>()
+  private readonly runSeen = new Set<string>()
   readonly mode: RawBlockCacheMode
   readonly maxEntries: number
   private readonly underlying: typeof readReferenceRngBlock
@@ -40,15 +44,17 @@ export class GlobalRawBlockResearch {
   }
 
   beginSearch(targetId: string) {
+    if (this.disposed) throw new Error('Raw block Research run has ended')
     if (this.active) throw new Error('Raw block Research searches must be sequential')
     this.active = true
-    const cache = new Map<string, ReferenceRngBlock>()
+    const cache = this.mode === 'run' ? this.runCache : new Map<string, ReferenceRngBlock>()
     const seen = new Set<string>()
     let ended = false
     const profile: RawBlockProfile = { targetId, requests: 0, uniqueBlocks: 0, duplicateRequests: 0,
-      theoreticalHitRatio: 0, hits: 0, misses: 0, failures: 0, hitRatio: 0,
+      theoreticalHitRatio: 0, hits: 0, misses: 0, failures: 0, evictions: 0, hitRatio: 0,
       readerElapsedMs: 0, missReadElapsedMs: 0, maxBlockIndex: null, blockIndexDistribution: {},
-      peakEntries: 0, rawUint32Count: 0, approximatePayloadBytes: 0 }
+      peakEntries: cache.size, rawUint32Count: cache.size * REFERENCE_RNG_BLOCK_SIZE,
+      approximatePayloadBytes: cache.size * REFERENCE_RNG_BLOCK_SIZE * 4 }
     this.profiles.push(profile)
     const read: typeof readReferenceRngBlock = (seed, blockIndex) => {
       if (ended) throw new Error('Raw block Search lifetime has ended')
@@ -56,6 +62,7 @@ export class GlobalRawBlockResearch {
       const key = `${seed}:${blockIndex}`
       profile.requests++
       seen.add(key)
+      this.runSeen.add(key)
       profile.uniqueBlocks = seen.size
       profile.duplicateRequests = profile.requests - seen.size
       profile.theoreticalHitRatio = profile.duplicateRequests / profile.requests
@@ -76,7 +83,7 @@ export class GlobalRawBlockResearch {
         if (this.mode === 'off') return block // same reference, no mutation, no extra RNG call
         // Own and freeze both levels. Consumers cannot corrupt a subsequent hit.
         const immutable = Object.freeze({ blockIndex: block.blockIndex, values: Object.freeze([...block.values]) })
-        if (cache.size === this.maxEntries) cache.delete(cache.keys().next().value!) // FIFO: performance only
+        if (cache.size === this.maxEntries) { cache.delete(cache.keys().next().value!); profile.evictions++ } // FIFO: performance only
         cache.set(key, immutable)
         profile.peakEntries = Math.max(profile.peakEntries, cache.size)
         profile.rawUint32Count = profile.peakEntries * REFERENCE_RNG_BLOCK_SIZE
@@ -88,7 +95,33 @@ export class GlobalRawBlockResearch {
       }
     }
     return { engine: new ProductionRngEngine(read), read, profile, end: () => {
-      ended = true; this.active = false; cache.clear(); seen.clear()
+      if (ended) return
+      ended = true; this.active = false
+      if (this.mode !== 'run') cache.clear()
+      seen.clear()
     } }
+  }
+
+  summary() {
+    const sum = (key: 'requests' | 'hits' | 'misses' | 'failures' | 'evictions' | 'readerElapsedMs' | 'missReadElapsedMs') =>
+      this.profiles.reduce((total, profile) => total + profile[key], 0)
+    const requests = sum('requests'), hits = sum('hits')
+    const peakEntries = Math.max(0, ...this.profiles.map(p => p.peakEntries))
+    return { requests, uniqueBlocks: this.runSeen.size, duplicateRequests: requests - this.runSeen.size,
+      theoreticalHitRatio: requests ? (requests - this.runSeen.size) / requests : 0,
+      hits, hitRatio: requests ? hits / requests : 0, misses: sum('misses'), failures: sum('failures'), evictions: sum('evictions'),
+      readerElapsedMs: sum('readerElapsedMs'), missReadElapsedMs: sum('missReadElapsedMs'),
+      peakEntries, rawUint32Count: peakEntries * REFERENCE_RNG_BLOCK_SIZE,
+      approximatePayloadBytes: peakEntries * REFERENCE_RNG_BLOCK_SIZE * 4,
+      maxBlockIndex: this.profiles.reduce<number | null>((max, p) => p.maxBlockIndex === null ? max : Math.max(max ?? p.maxBlockIndex, p.maxBlockIndex), null),
+      blockIndexDistribution: this.profiles.reduce<Record<string, number>>((counts, p) => {
+        for (const [bucket, count] of Object.entries(p.blockIndexDistribution)) counts[bucket] = (counts[bucket] ?? 0) + count
+        return counts
+      }, {}) }
+  }
+
+  endRun() {
+    if (this.active) throw new Error('End the active Search before ending the run')
+    this.runCache.clear(); this.runSeen.clear(); this.disposed = true
   }
 }

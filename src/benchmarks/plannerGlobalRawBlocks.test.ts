@@ -87,7 +87,7 @@ describe('Phase 1-B raw block boundary', () => {
   })
 
   it('observes off without changing references and never caches or converts an exception', () => {
-    for (const mode of ['off', 'per-search'] as const) {
+    for (const mode of ['off', 'per-search', 'run'] as const) {
       const failure = new Error('raw failure'), block = readReferenceRngBlock(1, 0)
       const read = vi.fn<typeof readReferenceRngBlock>().mockImplementationOnce(() => { throw failure }).mockImplementationOnce(() => { throw failure }).mockReturnValue(block)
       const scope = new GlobalRawBlockResearch(mode, read, () => 0).beginSearch('test')
@@ -157,16 +157,17 @@ describe('Phase 1-B raw block boundary', () => {
       entries.push(createBuildListEntry(result.targetResult.candidate!, target, { createdAt: GLOBAL_RESEARCH_TIME }))
     }
     const input = { ...search, buildListEntries: entries, conflictResolutions: [], options: { maxPlanSteps: 1000 } }
-    const run = (mode: 'off' | 'per-search') => runGlobalPlannerResearch(input, globalResearchDependencies(new ProductionRngEngine()),
+    const run = (mode: 'off' | 'per-search' | 'run') => runGlobalPlannerResearch(input, globalResearchDependencies(new ProductionRngEngine()),
       { extent: search.settings, nowMs: () => 0, rawBlocks: new GlobalRawBlockResearch(mode) })
     const off = await run('off'), cached = await run('per-search')
     expect(cached).toEqual(off)
+    expect(await run('run')).toEqual(off)
     expect(off.generatedEntries.length, JSON.stringify(off.report)).toBeGreaterThan(0)
     expect(off.report.final?.traceReplay).toBe('passed')
   })
 
   it('keeps cancellation and deadline classifications on the existing Search checkpoint', async () => {
-    for (const mode of ['off', 'per-search'] as const) {
+    for (const mode of ['off', 'per-search', 'run'] as const) {
       const input = fixture(), rawBlocks = new GlobalRawBlockResearch(mode)
       let yields = 0
       const result = await runGlobalResearchFocus(input, new ProductionRngEngine(), { rawBlocks, timeBudgetMs: 1000, nowMs: () => 0,
@@ -175,5 +176,29 @@ describe('Phase 1-B raw block boundary', () => {
       expect(result.profile.yieldCount).toBe(1)
       expect((await runGlobalResearchFocus(input, new ProductionRngEngine(), { rawBlocks, timeBudgetMs: 0, nowMs: () => 0 })).status).toBe('time_budget_reached')
     }
+  })
+
+  it('shares run blocks across Searches, preserves results under eviction, and disposes the run', async () => {
+    const input = fixture(), research = new GlobalRawBlockResearch('run', readReferenceRngBlock, () => 0, 2)
+    const a = research.beginSearch('first'), value = a.read(1, 0); a.end()
+    const b = research.beginSearch('second')
+    expect(b.read(1, 0)).toBe(value)
+    expect(b.profile.hits).toBe(1)
+    b.read(1, 1); b.read(2, 0)
+    expect(b.read(1, 0)).toEqual(value)
+    expect(b.profile.evictions).toBe(2)
+    b.end()
+    const options = { now: () => GLOBAL_RESEARCH_TIME, nowMs: () => 0 }
+    const plain = await searchCandidates(input, new ProductionRngEngine(), options)
+    for (let i = 0; i < 2; i++) {
+      const scope = research.beginSearch(`search-${i}`)
+      expect(await searchCandidates(input, scope.engine, options)).toEqual(plain)
+      scope.end()
+    }
+    expect(research.summary().peakEntries).toBe(2)
+    research.endRun()
+    expect(() => research.beginSearch('after')).toThrow('run has ended')
+    const fresh = new GlobalRawBlockResearch('run').beginSearch('fresh')
+    fresh.read(1, 0); expect(fresh.profile.hits).toBe(0); fresh.end()
   })
 })
