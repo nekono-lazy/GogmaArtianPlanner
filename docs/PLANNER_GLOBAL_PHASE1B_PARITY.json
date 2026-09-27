@@ -1,0 +1,104 @@
+{
+  "comparisons": [
+    {
+      "name": "focused-0",
+      "passed": true,
+      "semanticSha256": "1d91ea832cd212c0162e69054ee4187aa3e18e2c165ec1bbb5211a93035da19f",
+      "measuredCommit": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "searchSpeedup": 4.85694555225152,
+      "totalSpeedup": null,
+      "peakRssDeltaKiB": -247280
+    },
+    {
+      "name": "focused-1",
+      "passed": true,
+      "semanticSha256": "735ce147b5c0188b8793021964b7ed2ddc8a682614bd41b17192cdadca9bb78d",
+      "measuredCommit": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "searchSpeedup": 5.149006554453346,
+      "totalSpeedup": null,
+      "peakRssDeltaKiB": -104656
+    },
+    {
+      "name": "focused-2",
+      "passed": true,
+      "semanticSha256": "828c84192b79f698beac81ee76caf519230dff46b245953de4615e8e3ff3494d",
+      "measuredCommit": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "searchSpeedup": 2.150098576636403,
+      "totalSpeedup": null,
+      "peakRssDeltaKiB": -427872
+    },
+    {
+      "name": "focused-3",
+      "passed": true,
+      "semanticSha256": "d0e583eb4c9fdc0e1b33a5f26062b0dd5cce096ffda5db46a1bd90007b6b566b",
+      "measuredCommit": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "searchSpeedup": 3.3094935040456317,
+      "totalSpeedup": null,
+      "peakRssDeltaKiB": -382528
+    },
+    {
+      "name": "focused-4",
+      "passed": true,
+      "semanticSha256": "56d00dcbc96113975af4bdee83795274d9b247b88911e7f1cca95e4187790315",
+      "measuredCommit": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "searchSpeedup": 3.001703242992253,
+      "totalSpeedup": null,
+      "peakRssDeltaKiB": -66232
+    },
+    {
+      "name": "phase0-per-search",
+      "passed": true,
+      "semanticSha256": "1f3c36f5f043fa17ac641d0e5b60b501d7339a566d82415745d5e674431f93c7",
+      "measuredCommit": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "searchSpeedup": 3.079055116792172,
+      "totalSpeedup": 2.1915538728558146,
+      "peakRssDeltaKiB": -2300
+    },
+    {
+      "name": "phase0-run",
+      "passed": true,
+      "semanticSha256": "1f3c36f5f043fa17ac641d0e5b60b501d7339a566d82415745d5e674431f93c7",
+      "measuredCommit": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "searchSpeedup": 3.3252899178553217,
+      "totalSpeedup": 2.322480521940283,
+      "peakRssDeltaKiB": 612
+    },
+    {
+      "name": "failed-first",
+      "passed": true,
+      "semanticSha256": "24aacbce0cd14f8dfe973e492ed0f345a43175f82ec9d2a4d03d4d508d0093ba",
+      "measuredCommit": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "searchSpeedup": 2.41290766149815,
+      "totalSpeedup": 1.6887127866405116,
+      "peakRssDeltaKiB": -397064
+    }
+  ],
+  "exclusions": [
+    "elapsed/clock fields ending Ms",
+    "memory",
+    "raw cache hit/miss observations",
+    "cache mode"
+  ],
+  "included": [
+    "complete Search result SHA-256 except elapsedMs",
+    "original input fingerprint",
+    "Search order/status",
+    "retained IDs",
+    "generated Candidate and Entry full SHA-256 and IDs",
+    "final selected IDs",
+    "complete Plan SHA-256",
+    "complete final PlannerResult SHA-256",
+    "termination",
+    "Trace Replay",
+    "prediction counts",
+    "work/checkpoint/yield counts"
+  ]
+}

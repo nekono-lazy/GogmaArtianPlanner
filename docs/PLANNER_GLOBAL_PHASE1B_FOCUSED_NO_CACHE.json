@@ -1,0 +1,1083 @@
+[
+  {
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "focused",
+      "cacheMode": "off",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+      "snapshotSha256": "24d9b5df59e10eb89ffb74093997e77aed8bbf5aefa1b8b6ef35a81b5446dfdf",
+      "timeBudgetMs": 180000
+    },
+    "focus": {
+      "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "snapshotFingerprint": "fnv1a32:cbd941ca",
+      "routeFilter": "all",
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "timeBudgetMs": 180000,
+      "status": "not_found_within_extent",
+      "error": null,
+      "elapsedMs": 33092.242399999996,
+      "cancelResponseMs": null,
+      "routeKind": null,
+      "estimatedOperationCount": null,
+      "advances": null,
+      "candidateFingerprint": null,
+      "searchedRoutes": [
+        "normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        {
+          "route": "owned_normal_artian_to_gogma",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Normal Artian weapon is available."
+        },
+        {
+          "route": "existing_gogma_current",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Gogma weapon is available."
+        },
+        {
+          "route": "existing_gogma_reset_bonuses",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Gogma weapon is available."
+        },
+        {
+          "route": "existing_gogma_keep_bonuses",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Gogma weapon is available."
+        },
+        {
+          "route": "existing_gogma_reset_skills",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Gogma weapon is available."
+        },
+        {
+          "route": "existing_gogma_mixed",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Gogma weapon is available."
+        }
+      ],
+      "observedPredictionReach": {
+        "normal": 350,
+        "gogma": 500,
+        "skill": 1501
+      },
+      "predictionBoundaryReached": {
+        "normal": true,
+        "gogma": true,
+        "skillExisting": true,
+        "skillConversion": true
+      },
+      "profile": {
+        "predictions": {
+          "normal": {
+            "calls": 350,
+            "elapsedMs": 20.99890000000528,
+            "uniqueInputs": 350,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "gogma": {
+            "calls": 99688,
+            "elapsedMs": 25727.758000000318,
+            "uniqueInputs": 99688,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "skill": {
+            "calls": 1501,
+            "elapsedMs": 461.5392999999907,
+            "uniqueInputs": 1501,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          }
+        },
+        "keyObservationMs": 913.4293999997685,
+        "settledWorkItems": 2350,
+        "settledCountExact": true,
+        "progressEvents": 25,
+        "cancellationChecks": 105609,
+        "checkpointCount": 103539,
+        "yieldCount": 2070,
+        "yieldElapsedMs": 244.20539999986772,
+        "candidateIdentityCalls": 0
+      }
+    },
+    "phase1b": {
+      "rawBlocks": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "requests": 99688,
+          "uniqueBlocks": 500,
+          "duplicateRequests": 99188,
+          "theoreticalHitRatio": 0.9949843511756681,
+          "hits": 0,
+          "misses": 99688,
+          "failures": 0,
+          "evictions": 0,
+          "hitRatio": 0,
+          "readerElapsedMs": 25131.915100000413,
+          "missReadElapsedMs": 25114.649500000578,
+          "maxBlockIndex": 3652,
+          "blockIndexDistribution": {
+            "2048..4095": 99688
+          },
+          "peakEntries": 0,
+          "rawUint32Count": 0,
+          "approximatePayloadBytes": 0
+        }
+      ],
+      "rawBlockSummary": {
+        "requests": 99688,
+        "uniqueBlocks": 500,
+        "duplicateRequests": 99188,
+        "theoreticalHitRatio": 0.9949843511756681,
+        "hits": 0,
+        "hitRatio": 0,
+        "misses": 99688,
+        "failures": 0,
+        "evictions": 0,
+        "readerElapsedMs": 25131.915100000413,
+        "missReadElapsedMs": 25114.649500000578,
+        "peakEntries": 0,
+        "rawUint32Count": 0,
+        "approximatePayloadBytes": 0,
+        "maxBlockIndex": 3652,
+        "blockIndexDistribution": {
+          "2048..4095": 99688
+        }
+      },
+      "searchEvidence": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "resultSha256": "48da9659af1c26c5a8bfb34944790eb205cd594e5e6cb693d08311436555ef6c",
+          "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        }
+      ],
+      "generatedEntries": [],
+      "finalSelectedEntryIds": [],
+      "planSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "finalResultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultSha256": "446a395b7e8380fa109bd7969e4f340e1169fd69b3aef1bcf288a48368b202ef",
+      "cacheLimit": 20000
+    },
+    "phase1": {
+      "strategy": "phase0",
+      "yieldMode": "immediate",
+      "failedFirstTargetIds": [],
+      "predictionReuse": {
+        "normal": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "gogma": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "skill": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        }
+      },
+      "resultSha256": null
+    },
+    "memory": {
+      "maxRssKiB": 1400400,
+      "rss": 1434013696,
+      "heapTotal": 1321447424,
+      "heapUsed": 866176560,
+      "external": 24116830,
+      "arrayBuffers": 278199,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "cancel": {
+      "requested": false,
+      "responseMs": null
+    }
+  },
+  {
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 700,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "focused",
+      "cacheMode": "off",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+      "snapshotSha256": "24d9b5df59e10eb89ffb74093997e77aed8bbf5aefa1b8b6ef35a81b5446dfdf",
+      "timeBudgetMs": 180000
+    },
+    "focus": {
+      "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "snapshotFingerprint": "fnv1a32:cbd941ca",
+      "routeFilter": "all",
+      "extent": {
+        "maxNormalAdvance": 700,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "timeBudgetMs": 180000,
+      "status": "found",
+      "error": null,
+      "elapsedMs": 34192.962,
+      "cancelResponseMs": null,
+      "routeKind": "normal_artian_to_gogma",
+      "estimatedOperationCount": 896,
+      "advances": {
+        "normal": 643,
+        "gogma": 1,
+        "skill": 252
+      },
+      "candidateFingerprint": "fnv1a32:37b97ddc",
+      "searchedRoutes": [
+        "normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        {
+          "route": "owned_normal_artian_to_gogma",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Normal Artian weapon is available."
+        },
+        {
+          "route": "existing_gogma_current",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Gogma weapon is available."
+        },
+        {
+          "route": "existing_gogma_reset_bonuses",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Gogma weapon is available."
+        },
+        {
+          "route": "existing_gogma_keep_bonuses",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Gogma weapon is available."
+        },
+        {
+          "route": "existing_gogma_reset_skills",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Gogma weapon is available."
+        },
+        {
+          "route": "existing_gogma_mixed",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Gogma weapon is available."
+        }
+      ],
+      "observedPredictionReach": {
+        "normal": 700,
+        "gogma": 500,
+        "skill": 895
+      },
+      "predictionBoundaryReached": {
+        "normal": true,
+        "gogma": true,
+        "skillExisting": false,
+        "skillConversion": false
+      },
+      "profile": {
+        "predictions": {
+          "normal": {
+            "calls": 700,
+            "elapsedMs": 52.61400000008007,
+            "uniqueInputs": 700,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "gogma": {
+            "calls": 100155,
+            "elapsedMs": 26766.03980000061,
+            "uniqueInputs": 100155,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "skill": {
+            "calls": 895,
+            "elapsedMs": 250.3253000000849,
+            "uniqueInputs": 895,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          }
+        },
+        "keyObservationMs": 968.0254999997154,
+        "settledWorkItems": 2562,
+        "settledCountExact": true,
+        "progressEvents": 27,
+        "cancellationChecks": 105685,
+        "checkpointCount": 103613,
+        "yieldCount": 2072,
+        "yieldElapsedMs": 242.46240000005992,
+        "candidateIdentityCalls": 1
+      }
+    },
+    "phase1b": {
+      "rawBlocks": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "requests": 100155,
+          "uniqueBlocks": 500,
+          "duplicateRequests": 99655,
+          "theoreticalHitRatio": 0.9950077380060905,
+          "hits": 0,
+          "misses": 100155,
+          "failures": 0,
+          "evictions": 0,
+          "hitRatio": 0,
+          "readerElapsedMs": 26159.11899999943,
+          "missReadElapsedMs": 26141.67239999979,
+          "maxBlockIndex": 3652,
+          "blockIndexDistribution": {
+            "2048..4095": 100155
+          },
+          "peakEntries": 0,
+          "rawUint32Count": 0,
+          "approximatePayloadBytes": 0
+        }
+      ],
+      "rawBlockSummary": {
+        "requests": 100155,
+        "uniqueBlocks": 500,
+        "duplicateRequests": 99655,
+        "theoreticalHitRatio": 0.9950077380060905,
+        "hits": 0,
+        "hitRatio": 0,
+        "misses": 100155,
+        "failures": 0,
+        "evictions": 0,
+        "readerElapsedMs": 26159.11899999943,
+        "missReadElapsedMs": 26141.67239999979,
+        "peakEntries": 0,
+        "rawUint32Count": 0,
+        "approximatePayloadBytes": 0,
+        "maxBlockIndex": 3652,
+        "blockIndexDistribution": {
+          "2048..4095": 100155
+        }
+      },
+      "searchEvidence": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "resultSha256": "7f551f1ffa9b19dd12606bb6936302d8d77e6a8a0e2e446a2b2d803e459020ef",
+          "candidateSha256": "7d5045bd80eac968720583d75c2e3fe9be8b0b18df78dcdd5bd70256b396c8a9"
+        }
+      ],
+      "generatedEntries": [],
+      "finalSelectedEntryIds": [],
+      "planSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "finalResultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultSha256": "446a395b7e8380fa109bd7969e4f340e1169fd69b3aef1bcf288a48368b202ef",
+      "cacheLimit": 20000
+    },
+    "phase1": {
+      "strategy": "phase0",
+      "yieldMode": "immediate",
+      "failedFirstTargetIds": [],
+      "predictionReuse": {
+        "normal": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "gogma": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "skill": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        }
+      },
+      "resultSha256": null
+    },
+    "memory": {
+      "maxRssKiB": 1267540,
+      "rss": 1295847424,
+      "heapTotal": 1185267712,
+      "heapUsed": 881193872,
+      "external": 24116830,
+      "arrayBuffers": 278199,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "cancel": {
+      "requested": false,
+      "responseMs": null
+    }
+  },
+  {
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "focused",
+      "cacheMode": "off",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+      "snapshotSha256": "61f1c04018e65bc30090fffccf0bc5a4372433a94a5d677f93bdac8fe2e5c51e",
+      "timeBudgetMs": 180000
+    },
+    "focus": {
+      "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+      "snapshotFingerprint": "fnv1a32:ed07a394",
+      "routeFilter": "all",
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "timeBudgetMs": 180000,
+      "status": "found",
+      "error": null,
+      "elapsedMs": 38671.359300000004,
+      "cancelResponseMs": null,
+      "routeKind": "existing_gogma_mixed",
+      "estimatedOperationCount": 783,
+      "advances": {
+        "normal": null,
+        "gogma": 76,
+        "skill": 707
+      },
+      "candidateFingerprint": "fnv1a32:f215d077",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "existing_gogma_current",
+        "existing_gogma_reset_bonuses",
+        "existing_gogma_keep_bonuses",
+        "existing_gogma_reset_skills",
+        "existing_gogma_mixed"
+      ],
+      "skippedRoutes": [
+        {
+          "route": "owned_normal_artian_to_gogma",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Normal Artian weapon is available."
+        }
+      ],
+      "observedPredictionReach": {
+        "normal": 350,
+        "gogma": 500,
+        "skill": 783
+      },
+      "predictionBoundaryReached": {
+        "normal": true,
+        "gogma": true,
+        "skillExisting": false,
+        "skillConversion": false
+      },
+      "profile": {
+        "predictions": {
+          "normal": {
+            "calls": 350,
+            "elapsedMs": 21.478300000008858,
+            "uniqueInputs": 350,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "gogma": {
+            "calls": 106153,
+            "elapsedMs": 20081.522999999255,
+            "uniqueInputs": 106153,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "skill": {
+            "calls": 783,
+            "elapsedMs": 119.53359999995837,
+            "uniqueInputs": 783,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          }
+        },
+        "keyObservationMs": 955.2708000009067,
+        "settledWorkItems": 9351,
+        "settledCountExact": true,
+        "progressEvents": 95,
+        "cancellationChecks": 323673,
+        "checkpointCount": 317327,
+        "yieldCount": 6346,
+        "yieldElapsedMs": 608.6853000000992,
+        "candidateIdentityCalls": 2
+      }
+    },
+    "phase1b": {
+      "rawBlocks": [
+        {
+          "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "requests": 106153,
+          "uniqueBlocks": 500,
+          "duplicateRequests": 105653,
+          "theoreticalHitRatio": 0.995289817527531,
+          "hits": 0,
+          "misses": 106153,
+          "failures": 0,
+          "evictions": 0,
+          "hitRatio": 0,
+          "readerElapsedMs": 19503.163500001443,
+          "missReadElapsedMs": 19487.519700000084,
+          "maxBlockIndex": 2555,
+          "blockIndexDistribution": {
+            "2048..4095": 106153
+          },
+          "peakEntries": 0,
+          "rawUint32Count": 0,
+          "approximatePayloadBytes": 0
+        }
+      ],
+      "rawBlockSummary": {
+        "requests": 106153,
+        "uniqueBlocks": 500,
+        "duplicateRequests": 105653,
+        "theoreticalHitRatio": 0.995289817527531,
+        "hits": 0,
+        "hitRatio": 0,
+        "misses": 106153,
+        "failures": 0,
+        "evictions": 0,
+        "readerElapsedMs": 19503.163500001443,
+        "missReadElapsedMs": 19487.519700000084,
+        "peakEntries": 0,
+        "rawUint32Count": 0,
+        "approximatePayloadBytes": 0,
+        "maxBlockIndex": 2555,
+        "blockIndexDistribution": {
+          "2048..4095": 106153
+        }
+      },
+      "searchEvidence": [
+        {
+          "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "resultSha256": "b7fc596b55e72ad6fba35f4a5ffb1971afef738e311add7e74f941d48987d630",
+          "candidateSha256": "86a337a7b431801d4cac5a56d2b50d9fb18f7b894dfc70121cb732acf9c035cf"
+        }
+      ],
+      "generatedEntries": [],
+      "finalSelectedEntryIds": [],
+      "planSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "finalResultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultSha256": "446a395b7e8380fa109bd7969e4f340e1169fd69b3aef1bcf288a48368b202ef",
+      "cacheLimit": 20000
+    },
+    "phase1": {
+      "strategy": "phase0",
+      "yieldMode": "immediate",
+      "failedFirstTargetIds": [],
+      "predictionReuse": {
+        "normal": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "gogma": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "skill": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        }
+      },
+      "resultSha256": null
+    },
+    "memory": {
+      "maxRssKiB": 2078516,
+      "rss": 2128404480,
+      "heapTotal": 1999245312,
+      "heapUsed": 1888351104,
+      "external": 24109938,
+      "arrayBuffers": 278199,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "cancel": {
+      "requested": false,
+      "responseMs": null
+    }
+  },
+  {
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "focused",
+      "cacheMode": "off",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+      "snapshotSha256": "c9919ec1f47ba6ca3d15a2446f7f7e4a1f0855485d712299b25fe22c6beb6c73",
+      "timeBudgetMs": 180000
+    },
+    "focus": {
+      "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+      "snapshotFingerprint": "fnv1a32:14e83104",
+      "routeFilter": "all",
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "timeBudgetMs": 180000,
+      "status": "found",
+      "error": null,
+      "elapsedMs": 42663.064000000006,
+      "cancelResponseMs": null,
+      "routeKind": "normal_artian_to_gogma",
+      "estimatedOperationCount": 581,
+      "advances": {
+        "normal": 98,
+        "gogma": 11,
+        "skill": 472
+      },
+      "candidateFingerprint": "fnv1a32:90a64d20",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "existing_gogma_current",
+        "existing_gogma_reset_bonuses",
+        "existing_gogma_keep_bonuses",
+        "existing_gogma_reset_skills",
+        "existing_gogma_mixed"
+      ],
+      "skippedRoutes": [
+        {
+          "route": "owned_normal_artian_to_gogma",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Normal Artian weapon is available."
+        }
+      ],
+      "observedPredictionReach": {
+        "normal": 350,
+        "gogma": 500,
+        "skill": 581
+      },
+      "predictionBoundaryReached": {
+        "normal": true,
+        "gogma": true,
+        "skillExisting": false,
+        "skillConversion": false
+      },
+      "profile": {
+        "predictions": {
+          "normal": {
+            "calls": 350,
+            "elapsedMs": 27.116500000017368,
+            "uniqueInputs": 350,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "gogma": {
+            "calls": 105944,
+            "elapsedMs": 29033.69750000021,
+            "uniqueInputs": 105944,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "skill": {
+            "calls": 581,
+            "elapsedMs": 181.620199999973,
+            "uniqueInputs": 581,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          }
+        },
+        "keyObservationMs": 997.83439999948,
+        "settledWorkItems": 6580,
+        "settledCountExact": true,
+        "progressEvents": 67,
+        "cancellationChecks": 220631,
+        "checkpointCount": 216305,
+        "yieldCount": 4326,
+        "yieldElapsedMs": 406.22119999993333,
+        "candidateIdentityCalls": 1
+      }
+    },
+    "phase1b": {
+      "rawBlocks": [
+        {
+          "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "requests": 105944,
+          "uniqueBlocks": 500,
+          "duplicateRequests": 105444,
+          "theoreticalHitRatio": 0.9952805255606736,
+          "hits": 0,
+          "misses": 105944,
+          "failures": 0,
+          "evictions": 0,
+          "hitRatio": 0,
+          "readerElapsedMs": 28424.407900000362,
+          "missReadElapsedMs": 28406.93219999928,
+          "maxBlockIndex": 3653,
+          "blockIndexDistribution": {
+            "2048..4095": 105944
+          },
+          "peakEntries": 0,
+          "rawUint32Count": 0,
+          "approximatePayloadBytes": 0
+        }
+      ],
+      "rawBlockSummary": {
+        "requests": 105944,
+        "uniqueBlocks": 500,
+        "duplicateRequests": 105444,
+        "theoreticalHitRatio": 0.9952805255606736,
+        "hits": 0,
+        "hitRatio": 0,
+        "misses": 105944,
+        "failures": 0,
+        "evictions": 0,
+        "readerElapsedMs": 28424.407900000362,
+        "missReadElapsedMs": 28406.93219999928,
+        "peakEntries": 0,
+        "rawUint32Count": 0,
+        "approximatePayloadBytes": 0,
+        "maxBlockIndex": 3653,
+        "blockIndexDistribution": {
+          "2048..4095": 105944
+        }
+      },
+      "searchEvidence": [
+        {
+          "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "resultSha256": "9cf775efdc635332bbaab5f3987e9f2faedeecc15ea61290c5bf4aa752d1ee32",
+          "candidateSha256": "9dad81970ce88e370733411047b5dc45567a523ddecf0bd69191e5e0cbfa5ae6"
+        }
+      ],
+      "generatedEntries": [],
+      "finalSelectedEntryIds": [],
+      "planSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "finalResultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultSha256": "446a395b7e8380fa109bd7969e4f340e1169fd69b3aef1bcf288a48368b202ef",
+      "cacheLimit": 20000
+    },
+    "phase1": {
+      "strategy": "phase0",
+      "yieldMode": "immediate",
+      "failedFirstTargetIds": [],
+      "predictionReuse": {
+        "normal": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "gogma": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "skill": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        }
+      },
+      "resultSha256": null
+    },
+    "memory": {
+      "maxRssKiB": 1876780,
+      "rss": 1921232896,
+      "heapTotal": 1587093504,
+      "heapUsed": 649359352,
+      "external": 24109938,
+      "arrayBuffers": 278199,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "cancel": {
+      "requested": false,
+      "responseMs": null
+    }
+  },
+  {
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "96739059ed603607018cc48c98cba662f76f46f8",
+      "benchmarkCodeSha256": "b3818a8a7f7349d2de7dfe719a5650113bf0945c2efffc62c0eb594a4b6afdd5",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "focused",
+      "cacheMode": "off",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+      "snapshotSha256": "4e7011078d06eb1ddfbdfb847825c03129d511bbaf578fd2bec89efa48574fe9",
+      "timeBudgetMs": 180000
+    },
+    "focus": {
+      "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+      "snapshotFingerprint": "fnv1a32:b9085d6f",
+      "routeFilter": "all",
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "timeBudgetMs": 180000,
+      "status": "found",
+      "error": null,
+      "elapsedMs": 36848.0085,
+      "cancelResponseMs": null,
+      "routeKind": "normal_artian_to_gogma",
+      "estimatedOperationCount": 593,
+      "advances": {
+        "normal": 69,
+        "gogma": 73,
+        "skill": 451
+      },
+      "candidateFingerprint": "fnv1a32:722285a9",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "existing_gogma_current",
+        "existing_gogma_reset_bonuses",
+        "existing_gogma_keep_bonuses",
+        "existing_gogma_reset_skills",
+        "existing_gogma_mixed"
+      ],
+      "skippedRoutes": [
+        {
+          "route": "owned_normal_artian_to_gogma",
+          "reason": "no_owned_weapon_available",
+          "detail": "No compatible owned Normal Artian weapon is available."
+        }
+      ],
+      "observedPredictionReach": {
+        "normal": 350,
+        "gogma": 500,
+        "skill": 593
+      },
+      "predictionBoundaryReached": {
+        "normal": true,
+        "gogma": true,
+        "skillExisting": false,
+        "skillConversion": false
+      },
+      "profile": {
+        "predictions": {
+          "normal": {
+            "calls": 350,
+            "elapsedMs": 22.94150000000309,
+            "uniqueInputs": 350,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "gogma": {
+            "calls": 103165,
+            "elapsedMs": 23993.708899999892,
+            "uniqueInputs": 103165,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          },
+          "skill": {
+            "calls": 593,
+            "elapsedMs": 134.9669999999461,
+            "uniqueInputs": 593,
+            "withinSearchDuplicateCalls": 0,
+            "previousSearchDuplicateCalls": 0
+          }
+        },
+        "keyObservationMs": 943.2837999996628,
+        "settledWorkItems": 4461,
+        "settledCountExact": true,
+        "progressEvents": 46,
+        "cancellationChecks": 214023,
+        "checkpointCount": 209827,
+        "yieldCount": 4196,
+        "yieldElapsedMs": 352.41619999994816,
+        "candidateIdentityCalls": 1
+      }
+    },
+    "phase1b": {
+      "rawBlocks": [
+        {
+          "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "requests": 103165,
+          "uniqueBlocks": 500,
+          "duplicateRequests": 102665,
+          "theoreticalHitRatio": 0.9951533950467697,
+          "hits": 0,
+          "misses": 103165,
+          "failures": 0,
+          "evictions": 0,
+          "hitRatio": 0,
+          "readerElapsedMs": 23416.273300000765,
+          "missReadElapsedMs": 23400.058799999646,
+          "maxBlockIndex": 3316,
+          "blockIndexDistribution": {
+            "2048..4095": 103165
+          },
+          "peakEntries": 0,
+          "rawUint32Count": 0,
+          "approximatePayloadBytes": 0
+        }
+      ],
+      "rawBlockSummary": {
+        "requests": 103165,
+        "uniqueBlocks": 500,
+        "duplicateRequests": 102665,
+        "theoreticalHitRatio": 0.9951533950467697,
+        "hits": 0,
+        "hitRatio": 0,
+        "misses": 103165,
+        "failures": 0,
+        "evictions": 0,
+        "readerElapsedMs": 23416.273300000765,
+        "missReadElapsedMs": 23400.058799999646,
+        "peakEntries": 0,
+        "rawUint32Count": 0,
+        "approximatePayloadBytes": 0,
+        "maxBlockIndex": 3316,
+        "blockIndexDistribution": {
+          "2048..4095": 103165
+        }
+      },
+      "searchEvidence": [
+        {
+          "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "resultSha256": "bbfec665029b047299c2bbd2e9e2a809346f1296397da85b35569e1a0e936349",
+          "candidateSha256": "26ae17b9ffe88a6df8512c2f267bb3d40e779ea1448778bc97cbc680adfc54d9"
+        }
+      ],
+      "generatedEntries": [],
+      "finalSelectedEntryIds": [],
+      "planSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "finalResultSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "resultSha256": "446a395b7e8380fa109bd7969e4f340e1169fd69b3aef1bcf288a48368b202ef",
+      "cacheLimit": 20000
+    },
+    "phase1": {
+      "strategy": "phase0",
+      "yieldMode": "immediate",
+      "failedFirstTargetIds": [],
+      "predictionReuse": {
+        "normal": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "gogma": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        },
+        "skill": {
+          "calls": 0,
+          "uniqueInputs": 0,
+          "duplicateCalls": 0,
+          "theoreticalExactCacheHitRatio": 0
+        }
+      },
+      "resultSha256": null
+    },
+    "memory": {
+      "maxRssKiB": 903520,
+      "rss": 925204480,
+      "heapTotal": 823906304,
+      "heapUsed": 698666944,
+      "external": 24116830,
+      "arrayBuffers": 278199,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "cancel": {
+      "requested": false,
+      "responseMs": null
+    }
+  }
+]
