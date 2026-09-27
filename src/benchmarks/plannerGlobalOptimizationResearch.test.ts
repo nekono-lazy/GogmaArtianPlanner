@@ -9,6 +9,7 @@ import { createProductionPlan } from '../domain/planner/productionPlanGeneration
 import { validatePlannerInput } from '../domain/planner/plannerValidation'
 import type { PlannerInput } from '../domain/planner/plannerTypes'
 import { globalResearchDependencies, GLOBAL_RESEARCH_TIME, materializeGlobalResearchCandidate, runGlobalPlannerResearch } from './plannerGlobalOptimizationResearch'
+import { GlobalSearchProfiler } from './plannerGlobalOptimizationProfile'
 
 async function fixture() {
   const search = createCandidateSearchInput()
@@ -54,6 +55,18 @@ describe('Global Planner Phase 0 Research', () => {
     const run = () => runGlobalPlannerResearch(input, globalResearchDependencies(engine), { extent: search.settings, nowMs: () => 0 })
     const a = await run(), b = await run()
     expect(a).toEqual(b)
+    const profiled = await runGlobalPlannerResearch(input, globalResearchDependencies(engine), {
+      extent: search.settings, nowMs: () => 0, profiler: new GlobalSearchProfiler(),
+      // The observation receives a copy, never write authority.
+      onSearchInput: snapshot => { snapshot.ownedWeapons.length = 0; snapshot.rngState.skillCounter.value = 999 },
+    })
+    expect(profiled.finalResult).toEqual(a.finalResult)
+    expect(profiled.generatedEntries).toEqual(a.generatedEntries)
+    for (const measurement of profiled.report.searches) {
+      expect(measurement.profile?.settledCountExact).toBe(true)
+      delete measurement.profile
+    }
+    expect(profiled.report).toEqual(a.report)
     expect(input).toEqual(before)
     expect(a.report.baseline?.steps).toBe(baseline.plan?.steps.length)
     expect(a.report.baseline?.conflicts).toBe(baseline.conflicts.length)

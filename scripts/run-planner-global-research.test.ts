@@ -14,9 +14,9 @@ function fixture() {
   return { directory, output, progress: `${output}.progress.local`, input: join(directory, 'missing-export.json') }
 }
 
-function expectRefusal(input: string, output: string, message: string) {
+function expectRefusal(input: string, output: string, message: string, extra: string[] = []) {
   // A missing Export proves these guards run before the Research input is read.
-  const result = spawnSync(process.execPath, [runner, '--export', input, '--output', output], { encoding: 'utf8', timeout: 5000 })
+  const result = spawnSync(process.execPath, [runner, '--export', input, '--output', output, ...extra], { encoding: 'utf8', timeout: 5000 })
   expect(result.error).toBeUndefined()
   expect(result.status).toBe(1)
   expect(result.stderr).toContain(message)
@@ -52,5 +52,26 @@ it('still refuses identical input and output paths without modifying the input',
   writeFileSync(output, 'original export')
   expectRefusal(output, output, 'Output must not overwrite the input Export.')
   expect(readFileSync(output, 'utf8')).toBe('original export')
+  expect(existsSync(progress)).toBe(false)
+})
+
+it('refuses capture collisions with the Export, output and existing capture', () => {
+  const { input, output, progress } = fixture()
+  expectRefusal(input, output, 'must be distinct', ['--capture-inputs', input])
+  expectRefusal(input, output, 'must be distinct', ['--capture-inputs', output])
+  expectRefusal(input, output, 'must be distinct', ['--capture-inputs', progress])
+  const capture = `${output}.capture.local`
+  writeFileSync(capture, 'existing snapshot')
+  expectRefusal(input, output, 'Capture already exists', ['--capture-inputs', capture])
+  expect(readFileSync(capture, 'utf8')).toBe('existing snapshot')
+  expect(existsSync(progress)).toBe(false)
+})
+
+it('requires observed failures for failed-first, and an explicit snapshot for focused Search', () => {
+  const { input, output, progress } = fixture()
+  expectRefusal(input, output, 'requires --observed-report', ['--strategy', 'failed-first'])
+  expectRefusal(input, output, 'are required together', ['--focus-target', 'arbitrary-id'])
+  expectRefusal(input, output, 'Invalid Node yield mode', ['--yield-mode', 'microtask'])
+  expectRefusal(input, output, 'Duplicate research option', ['--time-budget-ms', '180000', '--time-budget-ms', '100'])
   expect(existsSync(progress)).toBe(false)
 })

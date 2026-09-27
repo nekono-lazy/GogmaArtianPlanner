@@ -1,0 +1,2684 @@
+{
+  "selection": "Phase 0 elapsed top four plus actual not_found_within_extent Targets; full IDs read from raw report",
+  "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+  "records": [
+    {
+      "label": "family-0-all",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "snapshotFingerprint": "fnv1a32:ed07a394",
+          "routeFilter": "all",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 36049.020099999994,
+          "cancelResponseMs": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 783,
+          "advances": {
+            "normal": null,
+            "gogma": 76,
+            "skill": 707
+          },
+          "candidateFingerprint": "fnv1a32:f215d077",
+          "searchedRoutes": [
+            "normal_artian_to_gogma",
+            "existing_gogma_current",
+            "existing_gogma_reset_bonuses",
+            "existing_gogma_keep_bonuses",
+            "existing_gogma_reset_skills",
+            "existing_gogma_mixed"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 783
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 25.241800000013768,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 106153,
+                "elapsedMs": 19619.12880000013,
+                "uniqueInputs": 106153,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 783,
+                "elapsedMs": 115.46760000001836,
+                "uniqueInputs": 783,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 822.3774000000778,
+            "settledWorkItems": 9351,
+            "settledCountExact": true,
+            "progressEvents": 95,
+            "cancellationChecks": 323673,
+            "checkpointCount": 317327,
+            "yieldCount": 6346,
+            "yieldElapsedMs": 622.1064999999139,
+            "candidateIdentityCalls": 2
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1689244,
+          "rss": 1729789952,
+          "heapTotal": 1570455552,
+          "heapUsed": 974644144,
+          "external": 24108788,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-0-existing_gogma",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "snapshotFingerprint": "fnv1a32:ed07a394",
+          "routeFilter": "existing_gogma",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 27876.5484,
+          "cancelResponseMs": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 783,
+          "advances": {
+            "normal": null,
+            "gogma": 76,
+            "skill": 707
+          },
+          "candidateFingerprint": "fnv1a32:f215d077",
+          "searchedRoutes": [
+            "existing_gogma_current",
+            "existing_gogma_reset_bonuses",
+            "existing_gogma_keep_bonuses",
+            "existing_gogma_reset_skills",
+            "existing_gogma_mixed"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "normal_artian_to_gogma",
+              "reason": "disabled_by_filter",
+              "detail": "Normal Artian routes are disabled by routeFilter."
+            },
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "disabled_by_filter",
+              "detail": "Normal Artian routes are disabled by routeFilter."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 0,
+            "gogma": 500,
+            "skill": 783
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 0,
+                "elapsedMs": 0,
+                "uniqueInputs": 0,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 100658,
+                "elapsedMs": 17768.612900000637,
+                "uniqueInputs": 100658,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 783,
+                "elapsedMs": 121.74900000001435,
+                "uniqueInputs": 783,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 672.6171999994846,
+            "settledWorkItems": 1785,
+            "settledCountExact": true,
+            "progressEvents": 19,
+            "cancellationChecks": 206944,
+            "checkpointCount": 202887,
+            "yieldCount": 4057,
+            "yieldElapsedMs": 393.76819999998963,
+            "candidateIdentityCalls": 2
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1613516,
+          "rss": 1648635904,
+          "heapTotal": 1381777408,
+          "heapUsed": 988224400,
+          "external": 24108788,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-0-normal_artian",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "snapshotFingerprint": "fnv1a32:ed07a394",
+          "routeFilter": "normal_artian",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 24372.421400000003,
+          "cancelResponseMs": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 784,
+          "advances": {
+            "normal": 1,
+            "gogma": 76,
+            "skill": 707
+          },
+          "candidateFingerprint": "fnv1a32:21962bcd",
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "existing_gogma_current",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 783
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 22.67039999999986,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 105154,
+                "elapsedMs": 18028.027,
+                "uniqueInputs": 105154,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 783,
+                "elapsedMs": 107.22969999998122,
+                "uniqueInputs": 783,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 735.4401999997765,
+            "settledWorkItems": 7570,
+            "settledCountExact": true,
+            "progressEvents": 77,
+            "cancellationChecks": 116737,
+            "checkpointCount": 114449,
+            "yieldCount": 2288,
+            "yieldElapsedMs": 302.8047999999226,
+            "candidateIdentityCalls": 1
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1518184,
+          "rss": 1554624512,
+          "heapTotal": 1441288192,
+          "heapUsed": 577853520,
+          "external": 24115680,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-1-all",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "snapshotFingerprint": "fnv1a32:14e83104",
+          "routeFilter": "all",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 37480.4877,
+          "cancelResponseMs": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 581,
+          "advances": {
+            "normal": 98,
+            "gogma": 11,
+            "skill": 472
+          },
+          "candidateFingerprint": "fnv1a32:90a64d20",
+          "searchedRoutes": [
+            "normal_artian_to_gogma",
+            "existing_gogma_current",
+            "existing_gogma_reset_bonuses",
+            "existing_gogma_keep_bonuses",
+            "existing_gogma_reset_skills",
+            "existing_gogma_mixed"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 581
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 26.119399999992766,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 105944,
+                "elapsedMs": 26514.961399999025,
+                "uniqueInputs": 105944,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 581,
+                "elapsedMs": 163.55860000001553,
+                "uniqueInputs": 581,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 753.5941999996828,
+            "settledWorkItems": 6580,
+            "settledCountExact": true,
+            "progressEvents": 67,
+            "cancellationChecks": 220631,
+            "checkpointCount": 216305,
+            "yieldCount": 4326,
+            "yieldElapsedMs": 366.6201000000715,
+            "candidateIdentityCalls": 1
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1737328,
+          "rss": 1778925568,
+          "heapTotal": 1551704064,
+          "heapUsed": 767412696,
+          "external": 24108788,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-1-existing_gogma",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "snapshotFingerprint": "fnv1a32:14e83104",
+          "routeFilter": "existing_gogma",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 30400.2644,
+          "cancelResponseMs": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 761,
+          "advances": {
+            "normal": null,
+            "gogma": 289,
+            "skill": 472
+          },
+          "candidateFingerprint": "fnv1a32:6ee2c51d",
+          "searchedRoutes": [
+            "existing_gogma_current",
+            "existing_gogma_reset_bonuses",
+            "existing_gogma_keep_bonuses",
+            "existing_gogma_reset_skills",
+            "existing_gogma_mixed"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "normal_artian_to_gogma",
+              "reason": "disabled_by_filter",
+              "detail": "Normal Artian routes are disabled by routeFilter."
+            },
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "disabled_by_filter",
+              "detail": "Normal Artian routes are disabled by routeFilter."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 0,
+            "gogma": 500,
+            "skill": 761
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 0,
+                "elapsedMs": 0,
+                "uniqueInputs": 0,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 102159,
+                "elapsedMs": 24290.61689999994,
+                "uniqueInputs": 102159,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 761,
+                "elapsedMs": 206.31719999992993,
+                "uniqueInputs": 761,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 726.650799999705,
+            "settledWorkItems": 1262,
+            "settledCountExact": true,
+            "progressEvents": 14,
+            "cancellationChecks": 106267,
+            "checkpointCount": 104184,
+            "yieldCount": 2083,
+            "yieldElapsedMs": 208.11780000005183,
+            "candidateIdentityCalls": 1
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1409956,
+          "rss": 1443799040,
+          "heapTotal": 1330143232,
+          "heapUsed": 687744656,
+          "external": 24115680,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-1-normal_artian",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "snapshotFingerprint": "fnv1a32:14e83104",
+          "routeFilter": "normal_artian",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 33091.1986,
+          "cancelResponseMs": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 581,
+          "advances": {
+            "normal": 98,
+            "gogma": 11,
+            "skill": 472
+          },
+          "candidateFingerprint": "fnv1a32:90a64d20",
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "existing_gogma_current",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 580
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 25.239499999981604,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 105944,
+                "elapsedMs": 26556.533400000742,
+                "uniqueInputs": 105944,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 580,
+                "elapsedMs": 170.228400000021,
+                "uniqueInputs": 580,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 777.9559000001594,
+            "settledWorkItems": 5499,
+            "settledCountExact": true,
+            "progressEvents": 56,
+            "cancellationChecks": 114733,
+            "checkpointCount": 112484,
+            "yieldCount": 2249,
+            "yieldElapsedMs": 256.11380000007387,
+            "candidateIdentityCalls": 1
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1615396,
+          "rss": 1654169600,
+          "heapTotal": 1536446464,
+          "heapUsed": 499423544,
+          "external": 24108788,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-2-all",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "snapshotFingerprint": "fnv1a32:b9085d6f",
+          "routeFilter": "all",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 33239.3693,
+          "cancelResponseMs": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 593,
+          "advances": {
+            "normal": 69,
+            "gogma": 73,
+            "skill": 451
+          },
+          "candidateFingerprint": "fnv1a32:722285a9",
+          "searchedRoutes": [
+            "normal_artian_to_gogma",
+            "existing_gogma_current",
+            "existing_gogma_reset_bonuses",
+            "existing_gogma_keep_bonuses",
+            "existing_gogma_reset_skills",
+            "existing_gogma_mixed"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 593
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 21.865699999986873,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 103165,
+                "elapsedMs": 22474.788399999627,
+                "uniqueInputs": 103165,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 593,
+                "elapsedMs": 120.1016000000385,
+                "uniqueInputs": 593,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 707.4517000000909,
+            "settledWorkItems": 4461,
+            "settledCountExact": true,
+            "progressEvents": 46,
+            "cancellationChecks": 214023,
+            "checkpointCount": 209827,
+            "yieldCount": 4196,
+            "yieldElapsedMs": 372.0168999999752,
+            "candidateIdentityCalls": 1
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 914844,
+          "rss": 936800256,
+          "heapTotal": 836136960,
+          "heapUsed": 710934424,
+          "external": 24115680,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-2-existing_gogma",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "snapshotFingerprint": "fnv1a32:b9085d6f",
+          "routeFilter": "existing_gogma",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 27953.3749,
+          "cancelResponseMs": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 633,
+          "advances": {
+            "normal": null,
+            "gogma": 182,
+            "skill": 451
+          },
+          "candidateFingerprint": "fnv1a32:cce6045b",
+          "searchedRoutes": [
+            "existing_gogma_current",
+            "existing_gogma_reset_bonuses",
+            "existing_gogma_keep_bonuses",
+            "existing_gogma_reset_skills",
+            "existing_gogma_mixed"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "normal_artian_to_gogma",
+              "reason": "disabled_by_filter",
+              "detail": "Normal Artian routes are disabled by routeFilter."
+            },
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "disabled_by_filter",
+              "detail": "Normal Artian routes are disabled by routeFilter."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 0,
+            "gogma": 500,
+            "skill": 633
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 0,
+                "elapsedMs": 0,
+                "uniqueInputs": 0,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 101127,
+                "elapsedMs": 21906.784900000268,
+                "uniqueInputs": 101127,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 633,
+                "elapsedMs": 139.48959999999784,
+                "uniqueInputs": 633,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 719.7613999996072,
+            "settledWorkItems": 1134,
+            "settledCountExact": true,
+            "progressEvents": 13,
+            "cancellationChecks": 104953,
+            "checkpointCount": 102896,
+            "yieldCount": 2057,
+            "yieldElapsedMs": 269.79710000008413,
+            "candidateIdentityCalls": 1
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 791276,
+          "rss": 810266624,
+          "heapTotal": 713089024,
+          "heapUsed": 612726216,
+          "external": 24706695,
+          "arrayBuffers": 869214,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-2-normal_artian",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "snapshotFingerprint": "fnv1a32:b9085d6f",
+          "routeFilter": "normal_artian",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 27730.0482,
+          "cancelResponseMs": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 593,
+          "advances": {
+            "normal": 69,
+            "gogma": 73,
+            "skill": 451
+          },
+          "candidateFingerprint": "fnv1a32:722285a9",
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "existing_gogma_current",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 592
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 21.114399999998682,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 102665,
+                "elapsedMs": 21520.162500000457,
+                "uniqueInputs": 102665,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 592,
+                "elapsedMs": 119.11569999999415,
+                "uniqueInputs": 592,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 715.3791000000143,
+            "settledWorkItems": 3368,
+            "settledCountExact": true,
+            "progressEvents": 35,
+            "cancellationChecks": 109154,
+            "checkpointCount": 107014,
+            "yieldCount": 2140,
+            "yieldElapsedMs": 267.0772999999872,
+            "candidateIdentityCalls": 1
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 841388,
+          "rss": 820772864,
+          "heapTotal": 723816448,
+          "heapUsed": 604230240,
+          "external": 24115680,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-3-all",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+          "snapshotFingerprint": "fnv1a32:faf46b26",
+          "routeFilter": "all",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 12632.0183,
+          "cancelResponseMs": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 330,
+          "advances": {
+            "normal": null,
+            "gogma": 330,
+            "skill": 0
+          },
+          "candidateFingerprint": "fnv1a32:42684ce7",
+          "searchedRoutes": [
+            "normal_artian_to_gogma",
+            "existing_gogma_current",
+            "existing_gogma_reset_bonuses",
+            "existing_gogma_keep_bonuses",
+            "existing_gogma_reset_skills",
+            "existing_gogma_mixed"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 329,
+            "gogma": 330,
+            "skill": 330
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 329,
+                "elapsedMs": 19.866999999999507,
+                "uniqueInputs": 329,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 49119,
+                "elapsedMs": 5671.145899999881,
+                "uniqueInputs": 49119,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 330,
+                "elapsedMs": 44.65929999999969,
+                "uniqueInputs": 330,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 323.82149999998137,
+            "settledWorkItems": 4305,
+            "settledCountExact": true,
+            "progressEvents": 45,
+            "cancellationChecks": 196718,
+            "checkpointCount": 192861,
+            "yieldCount": 3857,
+            "yieldElapsedMs": 250.99340000003292,
+            "candidateIdentityCalls": 2
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 860216,
+          "rss": 871649280,
+          "heapTotal": 686620672,
+          "heapUsed": 402533520,
+          "external": 24115680,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-3-existing_gogma",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+          "snapshotFingerprint": "fnv1a32:faf46b26",
+          "routeFilter": "existing_gogma",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 10823.8515,
+          "cancelResponseMs": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 330,
+          "advances": {
+            "normal": null,
+            "gogma": 330,
+            "skill": 0
+          },
+          "candidateFingerprint": "fnv1a32:42684ce7",
+          "searchedRoutes": [
+            "existing_gogma_current",
+            "existing_gogma_reset_bonuses",
+            "existing_gogma_keep_bonuses",
+            "existing_gogma_reset_skills",
+            "existing_gogma_mixed"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "normal_artian_to_gogma",
+              "reason": "disabled_by_filter",
+              "detail": "Normal Artian routes are disabled by routeFilter."
+            },
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "disabled_by_filter",
+              "detail": "Normal Artian routes are disabled by routeFilter."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 0,
+            "gogma": 330,
+            "skill": 330
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 0,
+                "elapsedMs": 0,
+                "uniqueInputs": 0,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 47264,
+                "elapsedMs": 5516.637700000134,
+                "uniqueInputs": 47264,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 330,
+                "elapsedMs": 43.46949999999663,
+                "uniqueInputs": 330,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 314.22079999998414,
+            "settledWorkItems": 1322,
+            "settledCountExact": true,
+            "progressEvents": 15,
+            "cancellationChecks": 144296,
+            "checkpointCount": 141467,
+            "yieldCount": 2829,
+            "yieldElapsedMs": 212.4381000000219,
+            "candidateIdentityCalls": 2
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1232600,
+          "rss": 1262182400,
+          "heapTotal": 1151221760,
+          "heapUsed": 1056646920,
+          "external": 24115680,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-3-normal_artian",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+          "snapshotFingerprint": "fnv1a32:faf46b26",
+          "routeFilter": "normal_artian",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 18249.1744,
+          "cancelResponseMs": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 548,
+          "advances": {
+            "normal": 63,
+            "gogma": 171,
+            "skill": 314
+          },
+          "candidateFingerprint": "fnv1a32:f56de10c",
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "existing_gogma_current",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 547
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 20.976400000004446,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 104294,
+                "elapsedMs": 12183.401700000355,
+                "uniqueInputs": 104294,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 547,
+                "elapsedMs": 71.29710000000762,
+                "uniqueInputs": 547,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 695.7443000004964,
+            "settledWorkItems": 6372,
+            "settledCountExact": true,
+            "progressEvents": 65,
+            "cancellationChecks": 115060,
+            "checkpointCount": 112804,
+            "yieldCount": 2256,
+            "yieldElapsedMs": 210.43409999993798,
+            "candidateIdentityCalls": 1
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 774792,
+          "rss": 793452544,
+          "heapTotal": 697376768,
+          "heapUsed": 617264528,
+          "external": 24706695,
+          "arrayBuffers": 869214,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-4-all",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "snapshotFingerprint": "fnv1a32:cbd941ca",
+          "routeFilter": "all",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "not_found_within_extent",
+          "error": null,
+          "elapsedMs": 30298.997199999998,
+          "cancelResponseMs": null,
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "candidateFingerprint": null,
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 1501
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 21.092799999984095,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 99688,
+                "elapsedMs": 23900.10580000006,
+                "uniqueInputs": 99688,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 1501,
+                "elapsedMs": 491.6816999999435,
+                "uniqueInputs": 1501,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 723.1192000001212,
+            "settledWorkItems": 2350,
+            "settledCountExact": true,
+            "progressEvents": 25,
+            "cancellationChecks": 105609,
+            "checkpointCount": 103539,
+            "yieldCount": 2070,
+            "yieldElapsedMs": 219.92370000005246,
+            "candidateIdentityCalls": 0
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1566892,
+          "rss": 1604521984,
+          "heapTotal": 1489481728,
+          "heapUsed": 466495264,
+          "external": 24108788,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-4-existing_gogma",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "snapshotFingerprint": "fnv1a32:cbd941ca",
+          "routeFilter": "existing_gogma",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "unavailable",
+          "error": null,
+          "elapsedMs": 1.4542999999999893,
+          "cancelResponseMs": null,
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "candidateFingerprint": null,
+          "searchedRoutes": [],
+          "skippedRoutes": [
+            {
+              "route": "normal_artian_to_gogma",
+              "reason": "disabled_by_filter",
+              "detail": "Normal Artian routes are disabled by routeFilter."
+            },
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "disabled_by_filter",
+              "detail": "Normal Artian routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 0,
+            "gogma": 0,
+            "skill": 0
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 0,
+                "elapsedMs": 0,
+                "uniqueInputs": 0,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 0,
+                "elapsedMs": 0,
+                "uniqueInputs": 0,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 0,
+                "elapsedMs": 0,
+                "uniqueInputs": 0,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 0,
+            "settledWorkItems": 0,
+            "settledCountExact": true,
+            "progressEvents": 2,
+            "cancellationChecks": 1,
+            "checkpointCount": 1,
+            "yieldCount": 0,
+            "yieldElapsedMs": 0,
+            "candidateIdentityCalls": 0
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 382804,
+          "rss": 387612672,
+          "heapTotal": 301780992,
+          "heapUsed": 216922816,
+          "external": 25310123,
+          "arrayBuffers": 1472642,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "family-4-normal_artian",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "snapshotFingerprint": "fnv1a32:cbd941ca",
+          "routeFilter": "normal_artian",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "not_found_within_extent",
+          "error": null,
+          "elapsedMs": 30776.9373,
+          "cancelResponseMs": null,
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "candidateFingerprint": null,
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "existing_gogma_current",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "disabled_by_filter",
+              "detail": "Existing Gogma routes are disabled by routeFilter."
+            },
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 1501
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 20.95980000000702,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 99688,
+                "elapsedMs": 24413.913100000394,
+                "uniqueInputs": 99688,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 1501,
+                "elapsedMs": 470.326899999998,
+                "uniqueInputs": 1501,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 715.988799999559,
+            "settledWorkItems": 2350,
+            "settledCountExact": true,
+            "progressEvents": 25,
+            "cancellationChecks": 105609,
+            "checkpointCount": 103539,
+            "yieldCount": 2070,
+            "yieldElapsedMs": 241.89240000003736,
+            "candidateIdentityCalls": 0
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1539948,
+          "rss": 1576914944,
+          "heapTotal": 1463005184,
+          "heapUsed": 411196112,
+          "external": 24108788,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "bound-0-normal",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "snapshotFingerprint": "fnv1a32:cbd941ca",
+          "routeFilter": "all",
+          "extent": {
+            "maxNormalAdvance": 700,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "found",
+          "error": null,
+          "elapsedMs": 30906.257599999997,
+          "cancelResponseMs": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 896,
+          "advances": {
+            "normal": 643,
+            "gogma": 1,
+            "skill": 252
+          },
+          "candidateFingerprint": "fnv1a32:37b97ddc",
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 700,
+            "gogma": 500,
+            "skill": 895
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 700,
+                "elapsedMs": 50.649800000031064,
+                "uniqueInputs": 700,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 100155,
+                "elapsedMs": 24745.286200000122,
+                "uniqueInputs": 100155,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 895,
+                "elapsedMs": 234.7594999999909,
+                "uniqueInputs": 895,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 720.2943999996291,
+            "settledWorkItems": 2562,
+            "settledCountExact": true,
+            "progressEvents": 27,
+            "cancellationChecks": 105685,
+            "checkpointCount": 103613,
+            "yieldCount": 2072,
+            "yieldElapsedMs": 263.497799999992,
+            "candidateIdentityCalls": 1
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1392324,
+          "rss": 1425743872,
+          "heapTotal": 1314467840,
+          "heapUsed": 1188763320,
+          "external": 24115680,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "bound-0-gogma",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "snapshotFingerprint": "fnv1a32:cbd941ca",
+          "routeFilter": "all",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 1000,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "not_found_within_extent",
+          "error": null,
+          "elapsedMs": 121051.7141,
+          "cancelResponseMs": null,
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "candidateFingerprint": null,
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 1000,
+            "skill": 1501
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 22.175299999972935,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 336141,
+                "elapsedMs": 91078.03770000048,
+                "uniqueInputs": 336141,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 1501,
+                "elapsedMs": 464.5997000002211,
+                "uniqueInputs": 1501,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 2535.6944000007643,
+            "settledWorkItems": 2850,
+            "settledCountExact": true,
+            "progressEvents": 30,
+            "cancellationChecks": 347301,
+            "checkpointCount": 340492,
+            "yieldCount": 6809,
+            "yieldElapsedMs": 916.1749000000988,
+            "candidateIdentityCalls": 0
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 3001848,
+          "rss": 3073896448,
+          "heapTotal": 2754392064,
+          "heapUsed": 1344309440,
+          "external": 24108788,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "bound-0-skill",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "snapshotFingerprint": "fnv1a32:cbd941ca",
+          "routeFilter": "all",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 3000
+          },
+          "timeBudgetMs": 180000,
+          "status": "not_found_within_extent",
+          "error": null,
+          "elapsedMs": 30108.767,
+          "cancelResponseMs": null,
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "candidateFingerprint": null,
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 3001
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 20.730099999998515,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 99688,
+                "elapsedMs": 23176.77830000026,
+                "uniqueInputs": 99688,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 3001,
+                "elapsedMs": 995.2059000001188,
+                "uniqueInputs": 3001,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 721.8991999994118,
+            "settledWorkItems": 3850,
+            "settledCountExact": true,
+            "progressEvents": 40,
+            "cancellationChecks": 108669,
+            "checkpointCount": 106539,
+            "yieldCount": 2130,
+            "yieldElapsedMs": 190.44899999999927,
+            "candidateIdentityCalls": 0
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1498344,
+          "rss": 1534308352,
+          "heapTotal": 1418440704,
+          "heapUsed": 739028232,
+          "external": 24108788,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "deadline-0",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "snapshotFingerprint": "fnv1a32:cbd941ca",
+          "routeFilter": "all",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "not_found_within_extent",
+          "error": null,
+          "elapsedMs": 29411.2907,
+          "cancelResponseMs": null,
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "candidateFingerprint": null,
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 1501
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 20.811999999995464,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 99688,
+                "elapsedMs": 23197.26140000011,
+                "uniqueInputs": 99688,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 1501,
+                "elapsedMs": 463.83939999998154,
+                "uniqueInputs": 1501,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 713.3801000005087,
+            "settledWorkItems": 2350,
+            "settledCountExact": true,
+            "progressEvents": 25,
+            "cancellationChecks": 105609,
+            "checkpointCount": 103539,
+            "yieldCount": 2070,
+            "yieldElapsedMs": 185.8322000000394,
+            "candidateIdentityCalls": 0
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 1514036,
+          "rss": 1550376960,
+          "heapTotal": 1436528640,
+          "heapUsed": 469850680,
+          "external": 24108788,
+          "arrayBuffers": 278199,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": false,
+          "responseMs": null
+        }
+      }
+    },
+    {
+      "label": "cancel-0",
+      "record": {
+        "environment": {
+          "runtime": "Node (not Browser Worker)",
+          "node": "v24.19.0",
+          "platform": "win32",
+          "arch": "x64",
+          "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+          "logicalCpuCount": 16,
+          "totalMemoryBytes": 33377591296,
+          "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+          "maxPlanSteps": 20000,
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "focus": {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "snapshotFingerprint": "fnv1a32:cbd941ca",
+          "routeFilter": "all",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "timeBudgetMs": 180000,
+          "status": "cancelled",
+          "error": "Candidate search was cancelled.",
+          "elapsedMs": 94.7387,
+          "cancelResponseMs": 0.11300000000005639,
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "candidateFingerprint": null,
+          "searchedRoutes": [],
+          "skippedRoutes": [],
+          "observedPredictionReach": {
+            "normal": 22,
+            "gogma": 22,
+            "skill": 23
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 22,
+                "elapsedMs": 1.5048999999997932,
+                "uniqueInputs": 22,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 260,
+                "elapsedMs": 66.44759999999906,
+                "uniqueInputs": 260,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 23,
+                "elapsedMs": 9.403199999999742,
+                "uniqueInputs": 23,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 2.8547000000014577,
+            "settledWorkItems": 0,
+            "settledCountExact": false,
+            "progressEvents": 1,
+            "cancellationChecks": 357,
+            "checkpointCount": 350,
+            "yieldCount": 7,
+            "yieldElapsedMs": 1.0177000000001044,
+            "candidateIdentityCalls": 0
+          }
+        },
+        "phase1": {
+          "strategy": "phase0",
+          "yieldMode": "immediate",
+          "failedFirstTargetIds": [],
+          "predictionReuse": null,
+          "resultSha256": null
+        },
+        "memory": {
+          "maxRssKiB": 390304,
+          "rss": 397328384,
+          "heapTotal": 309997568,
+          "heapUsed": 220680032,
+          "external": 24706695,
+          "arrayBuffers": 869214,
+          "scope": "whole Node process, includes Vite loader and Export parsing"
+        },
+        "cancel": {
+          "requested": true,
+          "responseMs": 2.54219999999998
+        }
+      }
+    }
+  ]
+}
