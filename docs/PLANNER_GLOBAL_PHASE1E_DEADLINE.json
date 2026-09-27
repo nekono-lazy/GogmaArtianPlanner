@@ -1,0 +1,288 @@
+{
+  "axis": "normal",
+  "note": "axis = first initial strategy of this Phase 1-E run that reached a fallback (read from its own INITIAL_VARIANTS)",
+  "fallbackDeadline": {
+    "name": "deadline-fallback",
+    "args": [
+      "--extent-fallback",
+      "normal",
+      "--fallback-budget-ms",
+      "1000",
+      "--fallback-max-episodes",
+      "3"
+    ],
+    "exitCode": 0,
+    "wallMs": 120241.9951,
+    "stop": "extent_fallback_blocked",
+    "reportStatus": "blocked",
+    "stage": "discovery",
+    "error": "Extent fallback reached its Research time budget; not a bounded no-match.",
+    "final": null,
+    "searches": [
+      {
+        "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "status": "found"
+      },
+      {
+        "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "status": "found"
+      },
+      {
+        "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+        "status": "found"
+      },
+      {
+        "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "status": "found"
+      },
+      {
+        "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+        "status": "found"
+      },
+      {
+        "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+        "status": "found"
+      },
+      {
+        "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+        "status": "found"
+      },
+      {
+        "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+        "status": "found"
+      },
+      {
+        "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "status": "found"
+      },
+      {
+        "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "status": "found"
+      },
+      {
+        "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+        "status": "found"
+      },
+      {
+        "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+        "status": "found"
+      },
+      {
+        "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+        "status": "found"
+      },
+      {
+        "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+        "status": "found"
+      },
+      {
+        "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+        "status": "found"
+      },
+      {
+        "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+        "status": "found"
+      },
+      {
+        "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+        "status": "found"
+      },
+      {
+        "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+        "status": "found"
+      },
+      {
+        "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+        "status": "found"
+      },
+      {
+        "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+        "status": "found"
+      },
+      {
+        "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+        "status": "not_found_within_extent",
+        "fallback": {
+          "status": "time_budget_reached",
+          "stoppedBy": "fallback_budget",
+          "elapsedMs": 1002.9962999999989,
+          "timeBudgetMs": 1000
+        }
+      }
+    ],
+    "totalElapsedMs": 119102.3047,
+    "cancel": {
+      "requested": false,
+      "responseMs": null
+    },
+    "memory": {
+      "maxRssKiB": 2554272,
+      "heapSizeLimitBytes": 8791261184,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "heapSizeLimitBytes": 8791261184,
+      "execArgv": [
+        "--max-old-space-size=8192"
+      ],
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "6ddf5603510f1f6bb5c04321d8113460aa8719fc",
+      "benchmarkCodeSha256": "fc1c28d2d48799d9ab8ff5e7379cd92a23ddfd0a10dc91dd31b56ac1b6439cb9",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "phase1d-normal-fallback-max-episodes-3",
+      "cacheMode": "per-search",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine"
+    }
+  },
+  "attemptDeadline": {
+    "name": "deadline-attempt",
+    "args": [
+      "--extent-fallback",
+      "normal",
+      "--fallback-budget-ms",
+      "180000",
+      "--fallback-max-episodes",
+      "3"
+    ],
+    "exitCode": 0,
+    "wallMs": 31063.96299999999,
+    "stop": "time_budget",
+    "reportStatus": "time_budget_reached",
+    "stage": "discovery",
+    "error": "Candidate search was cancelled.",
+    "final": null,
+    "searches": [
+      {
+        "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "status": "found"
+      },
+      {
+        "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "status": "found"
+      },
+      {
+        "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+        "status": "found"
+      },
+      {
+        "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "status": "found"
+      },
+      {
+        "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+        "status": "found"
+      },
+      {
+        "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+        "status": "time_budget_reached"
+      }
+    ],
+    "totalElapsedMs": 30001.0916,
+    "cancel": {
+      "requested": false,
+      "responseMs": null
+    },
+    "memory": {
+      "maxRssKiB": 1779800,
+      "heapSizeLimitBytes": 8791261184,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "heapSizeLimitBytes": 8791261184,
+      "execArgv": [
+        "--max-old-space-size=8192"
+      ],
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "6ddf5603510f1f6bb5c04321d8113460aa8719fc",
+      "benchmarkCodeSha256": "fc1c28d2d48799d9ab8ff5e7379cd92a23ddfd0a10dc91dd31b56ac1b6439cb9",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "phase1d-normal-fallback-max-episodes-3",
+      "cacheMode": "per-search",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine"
+    }
+  },
+  "controllerDeadline": {
+    "name": "deadline-controller",
+    "args": [
+      "--controller-budget-ms",
+      "5000"
+    ],
+    "exitCode": 0,
+    "wallMs": 8333.779099999985,
+    "outcome": "time_budget",
+    "stop": "time_budget",
+    "cancel": {
+      "requested": false,
+      "completedBeforeStop": false
+    },
+    "firstCompleted": null,
+    "variants": [],
+    "control": {
+      "stop": "time_budget",
+      "reportStatus": "time_budget_reached"
+    },
+    "totals": {
+      "control": {
+        "candidateSearches": 0,
+        "fallbackEpisodes": 0,
+        "searchElapsedMs": 0,
+        "fallbackSearchElapsedMs": 0,
+        "plannerElapsedMs": 6645.0054,
+        "totalElapsedMs": 6713.486999999999,
+        "wallMs": 7696.521
+      },
+      "initialVariants": {},
+      "retryAttempts": 0,
+      "attempts": 1,
+      "candidateSearches": 0,
+      "fallbackEpisodes": 0,
+      "searchElapsedMs": 0,
+      "fallbackSearchElapsedMs": 0,
+      "plannerElapsedMs": 6645.0054,
+      "attemptElapsedMs": 6713.486999999999,
+      "childWallMs": 7696.521,
+      "timeToFirstCompletedMs": null,
+      "timeToFirstCompletedExcludingControlMs": null,
+      "allInitialAxesComparedAtMs": null,
+      "controllerWallMs": 8088.1933,
+      "winningAttempt": null,
+      "peakChildMaxRssKiB": 858296,
+      "controllerMaxRssKiB": 179180,
+      "heapSizeLimitBytes": 8791261184,
+      "reproductionExcluded": true,
+      "childTimingAndPeakAreLowerBounds": false
+    }
+  }
+}

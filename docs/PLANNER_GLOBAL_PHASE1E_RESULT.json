@@ -1,0 +1,584 @@
+{
+  "environment": {
+    "runtime": "Node (not Browser Worker)",
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "heapSizeLimitBytes": 8791261184,
+    "execArgv": [
+      "--max-old-space-size=8192"
+    ],
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "maxPlanSteps": 20000,
+    "extent": {
+      "maxNormalAdvance": 350,
+      "maxGogmaAdvance": 500,
+      "maxSkillAdvance": 1500
+    },
+    "repositoryHead": "6ddf5603510f1f6bb5c04321d8113460aa8719fc",
+    "benchmarkCodeSha256": "fc1c28d2d48799d9ab8ff5e7379cd92a23ddfd0a10dc91dd31b56ac1b6439cb9",
+    "rngEngineVersion": "production-rng:c5-e7",
+    "osRelease": "10.0.26200",
+    "benchmarkMode": "phase0",
+    "cacheMode": "per-search",
+    "yieldMode": "immediate",
+    "routeFilter": "all",
+    "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+    "controller": "scripts/run-planner-global-phase1e.mjs",
+    "runtimeInput": "original Export only (every child reloads it)",
+    "productionDefaultMaxPlanSteps": 1000,
+    "baseExtent": {
+      "maxNormalAdvance": 350,
+      "maxGogmaAdvance": 500,
+      "maxSkillAdvance": 1500
+    },
+    "fallbackFactor": 2,
+    "fallbackEpisodeLimit": 3,
+    "axisStrategies": [
+      "normal-2x-fallback",
+      "gogma-2x-fallback",
+      "skill-2x-fallback"
+    ],
+    "retryBounds": {
+      "orderingAttempts": 6,
+      "maxStates": 12,
+      "releaseDepth": 2
+    },
+    "rawCacheMode": "per-search",
+    "childHeapFlag": "--max-old-space-size=8192",
+    "attemptBudgetMs": 900000,
+    "fallbackBudgetMs": 180000,
+    "controllerBudgetMs": 10800000,
+    "cancelAfterFirstCompletedMs": null,
+    "readsEarlierPhaseReports": false
+  },
+  "outcome": "completed",
+  "stop": null,
+  "cancel": {
+    "requested": false,
+    "completedBeforeStop": false
+  },
+  "initialSuccess": true,
+  "retryStarted": false,
+  "orderingRetryNeededForCompletion": false,
+  "retries": [],
+  "firstCompleted": {
+    "axis": "normal",
+    "stage": "initial",
+    "attemptId": 0,
+    "elapsedMs": 332991.95800000004,
+    "variantIndex": 0
+  },
+  "winner": {
+    "axis": "normal",
+    "stage": "initial",
+    "attemptId": 0,
+    "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"normal-2x-fallback\"}",
+    "final": {
+      "status": "completed",
+      "reachedLimits": [],
+      "limits": {
+        "maxPlanSteps": 20000
+      },
+      "expandedStates": 8577,
+      "completedTargetCount": 43,
+      "totalTargetCount": 43,
+      "selected": 43,
+      "conflicts": 0,
+      "conflictsByKind": {},
+      "rejected": 0,
+      "resourceConflictRejected": 0,
+      "steps": 8534,
+      "traceReplay": "passed",
+      "elapsedMs": 34180.738700000016,
+      "fullRuns": 1,
+      "warnings": []
+    },
+    "timing": {
+      "candidateSearches": 23,
+      "fallbackEpisodes": 1,
+      "searchElapsedMs": 99224.9813,
+      "fallbackSearchElapsedMs": 7168.466100000005,
+      "plannerElapsedMs": 65969.07410000001,
+      "totalElapsedMs": 176608.37110000002,
+      "wallMs": 178252.14150000003
+    },
+    "memory": {
+      "maxRssKiB": 4073128,
+      "heapSizeLimitBytes": 8791261184,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "evidence": {
+      "planSha256": "6c380cb3584d925e82c908ae34fe41f1d4f4f907a91515778542154df641ef66",
+      "finalResultSha256": "c133660bf096d110ff3697bf68b948db44b051cd6b379d926dc0cd046a2c651f",
+      "resultSha256": "7046b2ab95e428870a536e8cc3b9267bcc1d575602d17c201e3fd5f891bd2579"
+    }
+  },
+  "ranking": [
+    {
+      "axis": "normal",
+      "stage": "initial",
+      "attemptId": 0,
+      "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"normal-2x-fallback\"}",
+      "final": {
+        "completedTargetCount": 43,
+        "conflicts": 0,
+        "rejected": 0,
+        "resourceConflictRejected": 0,
+        "steps": 8534,
+        "traceReplay": "passed",
+        "status": "completed"
+      },
+      "stop": "completed"
+    },
+    {
+      "axis": "gogma",
+      "stage": "initial",
+      "attemptId": 0,
+      "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"gogma-2x-fallback\"}",
+      "final": {
+        "completedTargetCount": 42,
+        "conflicts": 2,
+        "rejected": 1,
+        "resourceConflictRejected": 1,
+        "steps": 7330,
+        "traceReplay": "passed",
+        "status": "exhausted"
+      },
+      "stop": null
+    },
+    {
+      "axis": "skill",
+      "stage": "initial",
+      "attemptId": 0,
+      "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"skill-2x-fallback\"}",
+      "final": {
+        "completedTargetCount": 42,
+        "conflicts": 2,
+        "rejected": 1,
+        "resourceConflictRejected": 1,
+        "steps": 7330,
+        "traceReplay": "passed",
+        "status": "exhausted"
+      },
+      "stop": null
+    }
+  ],
+  "control": {
+    "stop": null,
+    "reportStatus": "partial",
+    "final": {
+      "status": "exhausted",
+      "reachedLimits": [],
+      "limits": {
+        "maxPlanSteps": 20000
+      },
+      "expandedStates": 7372,
+      "completedTargetCount": 42,
+      "totalTargetCount": 43,
+      "selected": 42,
+      "conflicts": 2,
+      "conflictsByKind": {
+        "same_normal_counter": 1,
+        "same_skill_counter": 1
+      },
+      "rejected": 1,
+      "resourceConflictRejected": 1,
+      "steps": 7330,
+      "traceReplay": "passed",
+      "elapsedMs": 29033.872900000002,
+      "fullRuns": 1,
+      "warnings": []
+    },
+    "evidence": {
+      "resultSha256": "d799923f94d3803325af20686618aff371cfc31eb7d33bcffd6a01b9e70ccc0e",
+      "planSha256": "5db231229d65d8e312b8b6f8dea1cfba8ec99a8a02a9501701bb2f5f77133bf6"
+    }
+  },
+  "variants": [
+    {
+      "axis": "normal",
+      "stage": "initial",
+      "attemptId": 0,
+      "retryStrategy": null,
+      "stop": "completed",
+      "reportStatus": "completed",
+      "final": {
+        "status": "completed",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 20000
+        },
+        "expandedStates": 8577,
+        "completedTargetCount": 43,
+        "totalTargetCount": 43,
+        "selected": 43,
+        "conflicts": 0,
+        "conflictsByKind": {},
+        "rejected": 0,
+        "resourceConflictRejected": 0,
+        "steps": 8534,
+        "traceReplay": "passed",
+        "elapsedMs": 34180.738700000016,
+        "fullRuns": 1,
+        "warnings": []
+      },
+      "signals": {
+        "notFound": [],
+        "resourceRejected": [],
+        "conflictTargets": [],
+        "conflicts": [],
+        "blockers": []
+      },
+      "fallbacks": [
+        {
+          "searchIndex": 20,
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "baseStatus": "not_found_within_extent",
+          "targetOutcome": "resolved_by_extent_fallback",
+          "axis": "normal",
+          "extent": {
+            "maxNormalAdvance": 700,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "status": "found",
+          "stoppedBy": null,
+          "elapsedMs": 7168.466100000005,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 896,
+          "advances": {
+            "normal": 643,
+            "gogma": 1,
+            "skill": 252
+          }
+        }
+      ],
+      "timing": {
+        "candidateSearches": 23,
+        "fallbackEpisodes": 1,
+        "searchElapsedMs": 99224.9813,
+        "fallbackSearchElapsedMs": 7168.466100000005,
+        "plannerElapsedMs": 65969.07410000001,
+        "totalElapsedMs": 176608.37110000002,
+        "wallMs": 178252.14150000003
+      },
+      "memory": {
+        "maxRssKiB": 4073128,
+        "heapSizeLimitBytes": 8791261184,
+        "scope": "whole Node process, includes Vite loader and Export parsing"
+      },
+      "finishedAtMs": 332991.95800000004,
+      "evidence": {
+        "resultSha256": "7046b2ab95e428870a536e8cc3b9267bcc1d575602d17c201e3fd5f891bd2579",
+        "planSha256": "6c380cb3584d925e82c908ae34fe41f1d4f4f907a91515778542154df641ef66"
+      }
+    },
+    {
+      "axis": "gogma",
+      "stage": "initial",
+      "attemptId": 0,
+      "retryStrategy": null,
+      "stop": null,
+      "reportStatus": "partial",
+      "final": {
+        "status": "exhausted",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 20000
+        },
+        "expandedStates": 7372,
+        "completedTargetCount": 42,
+        "totalTargetCount": 43,
+        "selected": 42,
+        "conflicts": 2,
+        "conflictsByKind": {
+          "same_normal_counter": 1,
+          "same_skill_counter": 1
+        },
+        "rejected": 1,
+        "resourceConflictRejected": 1,
+        "steps": 7330,
+        "traceReplay": "passed",
+        "elapsedMs": 29875.7586,
+        "fullRuns": 1,
+        "warnings": []
+      },
+      "signals": {
+        "notFound": [
+          "813fb479-accd-454d-8fcd-fed51d4e891d"
+        ],
+        "resourceRejected": [
+          "813fb479-accd-454d-8fcd-fed51d4e891d"
+        ],
+        "conflictTargets": [
+          "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "820831d0-edd9-4005-a4a2-c8025cdad2c2"
+        ],
+        "conflicts": [
+          {
+            "id": "plan-conflict:fnv1a32:61cfd288",
+            "kind": "same_normal_counter",
+            "participants": [
+              {
+                "entryId": "build-list.constrained.fnv1a32-a32ec8c8",
+                "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+                "role": "generated"
+              },
+              {
+                "entryId": "build-list.fnv1a32-bbf8125e",
+                "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+                "role": "pending_original"
+              }
+            ]
+          },
+          {
+            "id": "plan-conflict:fnv1a32:96d4a203",
+            "kind": "same_skill_counter",
+            "participants": [
+              {
+                "entryId": "build-list.fnv1a32-bbf8125e",
+                "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+                "role": "pending_original"
+              },
+              {
+                "entryId": "build-list.fnv1a32-e396d352",
+                "targetId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+                "role": "retained"
+              }
+            ]
+          }
+        ],
+        "blockers": []
+      },
+      "fallbacks": [
+        {
+          "searchIndex": 20,
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "baseStatus": "not_found_within_extent",
+          "targetOutcome": "unresolved_after_extent_fallback",
+          "axis": "gogma",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 1000,
+            "maxSkillAdvance": 1500
+          },
+          "status": "not_found_within_extent",
+          "stoppedBy": null,
+          "elapsedMs": 37805.091799999995,
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null
+        }
+      ],
+      "timing": {
+        "candidateSearches": 23,
+        "fallbackEpisodes": 1,
+        "searchElapsedMs": 130641.21039999995,
+        "fallbackSearchElapsedMs": 37805.091799999995,
+        "plannerElapsedMs": 59637.9167,
+        "totalElapsedMs": 200971.80550000002,
+        "wallMs": 202707.8189
+      },
+      "memory": {
+        "maxRssKiB": 4910896,
+        "heapSizeLimitBytes": 8791261184,
+        "scope": "whole Node process, includes Vite loader and Export parsing"
+      },
+      "finishedAtMs": 535701.4637999999,
+      "evidence": {
+        "resultSha256": "d799923f94d3803325af20686618aff371cfc31eb7d33bcffd6a01b9e70ccc0e",
+        "planSha256": "5db231229d65d8e312b8b6f8dea1cfba8ec99a8a02a9501701bb2f5f77133bf6"
+      }
+    },
+    {
+      "axis": "skill",
+      "stage": "initial",
+      "attemptId": 0,
+      "retryStrategy": null,
+      "stop": null,
+      "reportStatus": "partial",
+      "final": {
+        "status": "exhausted",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 20000
+        },
+        "expandedStates": 7372,
+        "completedTargetCount": 42,
+        "totalTargetCount": 43,
+        "selected": 42,
+        "conflicts": 2,
+        "conflictsByKind": {
+          "same_normal_counter": 1,
+          "same_skill_counter": 1
+        },
+        "rejected": 1,
+        "resourceConflictRejected": 1,
+        "steps": 7330,
+        "traceReplay": "passed",
+        "elapsedMs": 32079.7727,
+        "fullRuns": 1,
+        "warnings": []
+      },
+      "signals": {
+        "notFound": [
+          "813fb479-accd-454d-8fcd-fed51d4e891d"
+        ],
+        "resourceRejected": [
+          "813fb479-accd-454d-8fcd-fed51d4e891d"
+        ],
+        "conflictTargets": [
+          "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "820831d0-edd9-4005-a4a2-c8025cdad2c2"
+        ],
+        "conflicts": [
+          {
+            "id": "plan-conflict:fnv1a32:61cfd288",
+            "kind": "same_normal_counter",
+            "participants": [
+              {
+                "entryId": "build-list.constrained.fnv1a32-a32ec8c8",
+                "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+                "role": "generated"
+              },
+              {
+                "entryId": "build-list.fnv1a32-bbf8125e",
+                "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+                "role": "pending_original"
+              }
+            ]
+          },
+          {
+            "id": "plan-conflict:fnv1a32:96d4a203",
+            "kind": "same_skill_counter",
+            "participants": [
+              {
+                "entryId": "build-list.fnv1a32-bbf8125e",
+                "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+                "role": "pending_original"
+              },
+              {
+                "entryId": "build-list.fnv1a32-e396d352",
+                "targetId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+                "role": "retained"
+              }
+            ]
+          }
+        ],
+        "blockers": []
+      },
+      "fallbacks": [
+        {
+          "searchIndex": 20,
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "baseStatus": "not_found_within_extent",
+          "targetOutcome": "unresolved_after_extent_fallback",
+          "axis": "skill",
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 3000
+          },
+          "status": "not_found_within_extent",
+          "stoppedBy": null,
+          "elapsedMs": 8996.215200000006,
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null
+        }
+      ],
+      "timing": {
+        "candidateSearches": 23,
+        "fallbackEpisodes": 1,
+        "searchElapsedMs": 105173.31590000003,
+        "fallbackSearchElapsedMs": 8996.215200000006,
+        "plannerElapsedMs": 62260.19930000002,
+        "totalElapsedMs": 178121.956,
+        "wallMs": 179871.4303
+      },
+      "memory": {
+        "maxRssKiB": 4333948,
+        "heapSizeLimitBytes": 8791261184,
+        "scope": "whole Node process, includes Vite loader and Export parsing"
+      },
+      "finishedAtMs": 715574.6873,
+      "evidence": {
+        "resultSha256": "d799923f94d3803325af20686618aff371cfc31eb7d33bcffd6a01b9e70ccc0e",
+        "planSha256": "5db231229d65d8e312b8b6f8dea1cfba8ec99a8a02a9501701bb2f5f77133bf6"
+      }
+    }
+  ],
+  "totals": {
+    "control": {
+      "candidateSearches": 23,
+      "fallbackEpisodes": 0,
+      "searchElapsedMs": 87281.41829999999,
+      "fallbackSearchElapsedMs": 0,
+      "plannerElapsedMs": 56358.6369,
+      "totalElapsedMs": 153145.7573,
+      "wallMs": 154735.6079
+    },
+    "initialVariants": {
+      "normal": {
+        "candidateSearches": 23,
+        "fallbackEpisodes": 1,
+        "searchElapsedMs": 99224.9813,
+        "fallbackSearchElapsedMs": 7168.466100000005,
+        "plannerElapsedMs": 65969.07410000001,
+        "totalElapsedMs": 176608.37110000002,
+        "wallMs": 178252.14150000003
+      },
+      "gogma": {
+        "candidateSearches": 23,
+        "fallbackEpisodes": 1,
+        "searchElapsedMs": 130641.21039999995,
+        "fallbackSearchElapsedMs": 37805.091799999995,
+        "plannerElapsedMs": 59637.9167,
+        "totalElapsedMs": 200971.80550000002,
+        "wallMs": 202707.8189
+      },
+      "skill": {
+        "candidateSearches": 23,
+        "fallbackEpisodes": 1,
+        "searchElapsedMs": 105173.31590000003,
+        "fallbackSearchElapsedMs": 8996.215200000006,
+        "plannerElapsedMs": 62260.19930000002,
+        "totalElapsedMs": 178121.956,
+        "wallMs": 179871.4303
+      }
+    },
+    "retryAttempts": 0,
+    "attempts": 4,
+    "candidateSearches": 92,
+    "fallbackEpisodes": 3,
+    "searchElapsedMs": 422320.92590000003,
+    "fallbackSearchElapsedMs": 53969.773100000006,
+    "plannerElapsedMs": 244225.82700000005,
+    "attemptElapsedMs": 708847.8899000001,
+    "childWallMs": 715566.9986,
+    "timeToFirstCompletedMs": 332991.95800000004,
+    "timeToFirstCompletedExcludingControlMs": 178253.79760000005,
+    "allInitialAxesComparedAtMs": 715574.6873,
+    "controllerWallMs": 715968.5767,
+    "winningAttempt": {
+      "candidateSearches": 23,
+      "fallbackEpisodes": 1,
+      "searchElapsedMs": 99224.9813,
+      "fallbackSearchElapsedMs": 7168.466100000005,
+      "plannerElapsedMs": 65969.07410000001,
+      "totalElapsedMs": 176608.37110000002,
+      "wallMs": 178252.14150000003
+    },
+    "peakChildMaxRssKiB": 4910896,
+    "controllerMaxRssKiB": 181268,
+    "heapSizeLimitBytes": 8791261184,
+    "reproductionExcluded": true,
+    "childTimingAndPeakAreLowerBounds": false
+  }
+}

@@ -1,0 +1,428 @@
+{
+  "axis": "normal",
+  "controlCancel": {
+    "name": "cancel-control",
+    "args": [
+      "--cancel-after-ms",
+      "2000"
+    ],
+    "exitCode": 0,
+    "wallMs": 2973.9553000000014,
+    "stop": "cancelled",
+    "reportStatus": "cancelled",
+    "stage": "baseline",
+    "error": "Research cancelled or budget reached.",
+    "final": null,
+    "searches": [],
+    "totalElapsedMs": 2035.1391999999996,
+    "cancel": {
+      "requested": true,
+      "responseMs": 3.113800000000083
+    },
+    "memory": {
+      "maxRssKiB": 593960,
+      "heapSizeLimitBytes": 8791261184,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "heapSizeLimitBytes": 8791261184,
+      "execArgv": [
+        "--max-old-space-size=8192"
+      ],
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "6ddf5603510f1f6bb5c04321d8113460aa8719fc",
+      "benchmarkCodeSha256": "fc1c28d2d48799d9ab8ff5e7379cd92a23ddfd0a10dc91dd31b56ac1b6439cb9",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "phase0",
+      "cacheMode": "per-search",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine"
+    }
+  },
+  "initialVariantCancel": {
+    "name": "cancel-initial",
+    "args": [
+      "--extent-fallback",
+      "normal",
+      "--fallback-budget-ms",
+      "180000",
+      "--fallback-max-episodes",
+      "3",
+      "--cancel-after-ms",
+      "60000"
+    ],
+    "exitCode": 0,
+    "wallMs": 62864.28210000001,
+    "stop": "cancelled",
+    "reportStatus": "cancelled",
+    "stage": "discovery",
+    "error": "Candidate search was cancelled.",
+    "final": null,
+    "searches": [
+      {
+        "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "status": "found"
+      },
+      {
+        "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "status": "found"
+      },
+      {
+        "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+        "status": "found"
+      },
+      {
+        "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "status": "found"
+      },
+      {
+        "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+        "status": "found"
+      },
+      {
+        "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+        "status": "found"
+      },
+      {
+        "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+        "status": "found"
+      },
+      {
+        "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+        "status": "found"
+      },
+      {
+        "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "status": "found"
+      },
+      {
+        "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "status": "cancelled"
+      }
+    ],
+    "totalElapsedMs": 61817.7665,
+    "cancel": {
+      "requested": true,
+      "responseMs": 22.912399999993795
+    },
+    "memory": {
+      "maxRssKiB": 1807344,
+      "heapSizeLimitBytes": 8791261184,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "heapSizeLimitBytes": 8791261184,
+      "execArgv": [
+        "--max-old-space-size=8192"
+      ],
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "6ddf5603510f1f6bb5c04321d8113460aa8719fc",
+      "benchmarkCodeSha256": "fc1c28d2d48799d9ab8ff5e7379cd92a23ddfd0a10dc91dd31b56ac1b6439cb9",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "phase1d-normal-fallback-max-episodes-3",
+      "cacheMode": "per-search",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine"
+    }
+  },
+  "fallbackCancel": {
+    "name": "cancel-fallback",
+    "args": [
+      "--extent-fallback",
+      "normal",
+      "--fallback-budget-ms",
+      "180000",
+      "--fallback-max-episodes",
+      "3",
+      "--cancel-after-fallback-start-ms",
+      "1000"
+    ],
+    "exitCode": 0,
+    "wallMs": 122440.5999,
+    "stop": "cancelled",
+    "reportStatus": "cancelled",
+    "stage": "discovery",
+    "error": "Research cancelled or budget reached during extent fallback.",
+    "final": null,
+    "searches": [
+      {
+        "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "status": "found"
+      },
+      {
+        "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "status": "found"
+      },
+      {
+        "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+        "status": "found"
+      },
+      {
+        "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "status": "found"
+      },
+      {
+        "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+        "status": "found"
+      },
+      {
+        "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+        "status": "found"
+      },
+      {
+        "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+        "status": "found"
+      },
+      {
+        "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+        "status": "found"
+      },
+      {
+        "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "status": "found"
+      },
+      {
+        "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "status": "found"
+      },
+      {
+        "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+        "status": "found"
+      },
+      {
+        "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+        "status": "found"
+      },
+      {
+        "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+        "status": "found"
+      },
+      {
+        "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+        "status": "found"
+      },
+      {
+        "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+        "status": "found"
+      },
+      {
+        "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+        "status": "found"
+      },
+      {
+        "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+        "status": "found"
+      },
+      {
+        "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+        "status": "found"
+      },
+      {
+        "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+        "status": "found"
+      },
+      {
+        "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+        "status": "found"
+      },
+      {
+        "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+        "status": "not_found_within_extent",
+        "fallback": {
+          "status": "cancelled",
+          "stoppedBy": "external_cancel",
+          "elapsedMs": 999.74010000001,
+          "timeBudgetMs": 180000
+        }
+      }
+    ],
+    "totalElapsedMs": 121329.7399,
+    "cancel": {
+      "requested": true,
+      "responseMs": 38.96829999999318
+    },
+    "memory": {
+      "maxRssKiB": 2516852,
+      "heapSizeLimitBytes": 8791261184,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    },
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "heapSizeLimitBytes": 8791261184,
+      "execArgv": [
+        "--max-old-space-size=8192"
+      ],
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "6ddf5603510f1f6bb5c04321d8113460aa8719fc",
+      "benchmarkCodeSha256": "fc1c28d2d48799d9ab8ff5e7379cd92a23ddfd0a10dc91dd31b56ac1b6439cb9",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "phase1d-normal-fallback-max-episodes-3",
+      "cacheMode": "per-search",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine"
+    }
+  },
+  "controllerCancelAfterCompleted": {
+    "name": "cancel-controller",
+    "args": [
+      "--cancel-after-first-completed-ms",
+      "5000"
+    ],
+    "exitCode": 0,
+    "wallMs": 371705.30850000004,
+    "outcome": "completed",
+    "stop": "cancelled",
+    "cancel": {
+      "requested": true,
+      "completedBeforeStop": true
+    },
+    "firstCompleted": {
+      "axis": "normal",
+      "stage": "initial",
+      "attemptId": 0,
+      "elapsedMs": 359299.9163,
+      "variantIndex": 0
+    },
+    "variants": [
+      {
+        "axis": "normal",
+        "stage": "initial",
+        "stop": "completed",
+        "final": {
+          "status": "completed",
+          "reachedLimits": [],
+          "limits": {
+            "maxPlanSteps": 20000
+          },
+          "expandedStates": 8577,
+          "completedTargetCount": 43,
+          "totalTargetCount": 43,
+          "selected": 43,
+          "conflicts": 0,
+          "conflictsByKind": {},
+          "rejected": 0,
+          "resourceConflictRejected": 0,
+          "steps": 8534,
+          "traceReplay": "passed",
+          "elapsedMs": 37545.67179999998,
+          "fullRuns": 1,
+          "warnings": []
+        },
+        "reportStatus": "completed"
+      },
+      {
+        "axis": "gogma",
+        "stage": "initial",
+        "stop": "cancelled",
+        "final": null,
+        "reportStatus": "cancelled"
+      }
+    ],
+    "control": {
+      "stop": null,
+      "reportStatus": "partial"
+    },
+    "totals": {
+      "control": {
+        "candidateSearches": 23,
+        "fallbackEpisodes": 0,
+        "searchElapsedMs": 95060.31480000001,
+        "fallbackSearchElapsedMs": 0,
+        "plannerElapsedMs": 61386.78070000003,
+        "totalElapsedMs": 167301.11,
+        "wallMs": 168961.5403
+      },
+      "initialVariants": {
+        "normal": {
+          "candidateSearches": 23,
+          "fallbackEpisodes": 1,
+          "searchElapsedMs": 104541.92089999998,
+          "fallbackSearchElapsedMs": 7661.049800000008,
+          "plannerElapsedMs": 71689.53429999997,
+          "totalElapsedMs": 188578.9124,
+          "wallMs": 190334.1578
+        },
+        "gogma": {
+          "candidateSearches": 0,
+          "fallbackEpisodes": 0,
+          "searchElapsedMs": 0,
+          "fallbackSearchElapsedMs": 0,
+          "plannerElapsedMs": 8030.019599999999,
+          "totalElapsedMs": 10704.8214,
+          "wallMs": 11720.69260000001
+        }
+      },
+      "retryAttempts": 0,
+      "attempts": 3,
+      "candidateSearches": 46,
+      "fallbackEpisodes": 1,
+      "searchElapsedMs": 199602.2357,
+      "fallbackSearchElapsedMs": 7661.049800000008,
+      "plannerElapsedMs": 141106.3346,
+      "attemptElapsedMs": 366584.84380000003,
+      "childWallMs": 371016.3907,
+      "timeToFirstCompletedMs": 359299.9163,
+      "timeToFirstCompletedExcludingControlMs": 190336.0318,
+      "allInitialAxesComparedAtMs": 371021.9721,
+      "controllerWallMs": 371419.4957,
+      "winningAttempt": {
+        "candidateSearches": 23,
+        "fallbackEpisodes": 1,
+        "searchElapsedMs": 104541.92089999998,
+        "fallbackSearchElapsedMs": 7661.049800000008,
+        "plannerElapsedMs": 71689.53429999997,
+        "totalElapsedMs": 188578.9124,
+        "wallMs": 190334.1578
+      },
+      "peakChildMaxRssKiB": 4071732,
+      "controllerMaxRssKiB": 179444,
+      "heapSizeLimitBytes": 8791261184,
+      "reproductionExcluded": true,
+      "childTimingAndPeakAreLowerBounds": false
+    }
+  }
+}
