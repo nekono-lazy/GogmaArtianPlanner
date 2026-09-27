@@ -28,18 +28,35 @@ try {
   const records = []
   async function execute(state, strategy, reason, attemptId, suffix = String(attemptId)) {
     const output = `${outputPath}.attempt-${suffix}.local`, statePath = `${outputPath}.state-${suffix}.local`
-    const args = ['scripts/run-planner-global-research.mjs', '--export', exportPath, '--output', output,
+    const args = ['--max-old-space-size=8192', 'scripts/run-planner-global-research.mjs', '--export', exportPath, '--output', output,
       '--raw-block-cache', 'per-search', '--yield-mode', 'immediate', '--max-plan-steps', '20000',
       '--attempt-budget-ms', String(suffix === 'reproduction' ? attemptBudgetMs : Math.max(0, Math.min(attemptBudgetMs, controllerBudgetMs - (performance.now() - start))))]
     if (state) { await write(statePath, state); args.push('--attempt-state', statePath) }
     console.log(`START ${suffix} ${strategy}`)
-    await new Promise((done, reject) => {
-      child = spawn(process.execPath, args, { stdio: ['ignore', 'ignore', 'inherit'], windowsHide: true })
+    let stderrTail = ''
+    const exitCode = await new Promise((done, reject) => {
+      child = spawn(process.execPath, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true })
+      child.stderr.on('data', chunk => { stderrTail = (stderrTail + chunk.toString()).slice(-16000); process.stderr.write(chunk) })
       child.once('error', reject)
-      child.once('exit', code => { child = null; (code === 0 || code === 1 && existsSync(output)) ? done() : reject(new Error(`Attempt process failed: ${code}; evidence at ${output}`)) })
+      child.once('exit', code => { child = null; done(code) })
     })
-    const record = JSON.parse(await readFile(output, 'utf8'))
-    for (const key of ['repositoryHead', 'benchmarkCodeSha256', 'rngEngineVersion', 'exportSha256']) {
+    let record
+    if (existsSync(output)) record = JSON.parse(await readFile(output, 'utf8'))
+    else {
+      const progress = (await readFile(`${output}.progress.local`, 'utf8')).trim().split(/\r?\n/)
+      const last = JSON.parse(progress.at(-1))
+      const stop = cancelled ? 'cancelled' : exitCode === 134 && /heap out of memory/.test(stderrTail) ? 'memory_limit' : 'process_error'
+      record = { environment: last.environment, report: { ...last.report, status: 'error', error: `Child exited ${exitCode}; final result unavailable` },
+        phase1c: { stop, priorityEntries: last.priorityEntries, signals: {
+          notFound: last.report.searches.filter(s => s.status === 'not_found_within_extent').map(s => s.targetId),
+          resourceRejected: [], conflictTargets: [], conflicts: [], blockers: [{ targetId: '', classification: stop }],
+        } }, memory: last.memory, processFailure: { exitCode, stderrTail, memoryScope: 'last progress sample: lower bound, NOT final process peak',
+          timingScope: 'attempt elapsed/Search/Planner are last-progress lower bounds' },
+        phase1b: { searchEvidence: [], generatedEntries: [], finalSelectedEntryIds: [], planSha256: null, finalResultSha256: null, resultSha256: null,
+          unavailable: 'Process exited before semantic evidence aggregation' } }
+      await write(output, record)
+    }
+    for (const key of ['repositoryHead', 'benchmarkCodeSha256', 'rngEngineVersion', 'exportSha256', 'heapSizeLimitBytes']) {
       if (records.length && records[0].environment[key] !== record.environment[key]) throw new Error(`Benchmark changed mid-controller: ${key}`)
     }
     const actualState = state ?? { retainedEntryIds: record.report.retainedOriginalEntryIds,
@@ -48,7 +65,7 @@ try {
       signals: record.phase1c.signals, report: record.report, stop: record.phase1c.stop }
     const stored = { ...summary, releasedEntryIds: records[0]?.state.retainedEntryIds.filter(id => !actualState.retainedEntryIds.includes(id)) ?? [],
       environment: { ...record.environment, extent: actualState.extent, strategy, attemptBudgetMs, controllerBudgetMs, bounds: retry.PHASE1C_BOUNDS },
-      evidence: record.phase1b, memory: record.memory }
+      evidence: record.phase1b, memory: record.memory, ...(record.processFailure ? { processFailure: record.processFailure } : {}) }
     records.push(stored)
     console.log(`DONE ${suffix}: ${record.report.final?.completedTargetCount ?? 0}/43, conflicts ${record.report.final?.conflicts}, ${record.report.totalElapsedMs} ms`)
     return { summary, priorityEntries: record.phase1c.priorityEntries }
@@ -85,6 +102,7 @@ try {
       searchElapsedMs: sum('searchElapsedMs'), plannerElapsedMs: sum('plannerElapsedMs'), attemptElapsedMs: sum('totalElapsedMs'), controllerWallMs,
       winningAttemptElapsedMs: winner?.report.totalElapsedMs ?? null,
       peakChildMaxRssKiB: Math.max(...discoveryRecords.map(r => r.memory.maxRssKiB)),
+      childTimingAndPeakAreLowerBounds: discoveryRecords.some(r => r.processFailure),
       controllerMaxRssKiB: process.resourceUsage().maxRSS },
     extentFallback: 'not implemented; conditional follow-up only if ordering and release remain unsuccessful' }
   await write(outputPath, final)

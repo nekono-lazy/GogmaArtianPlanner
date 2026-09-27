@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { cpus, totalmem, release } from 'node:os'
+import { getHeapStatistics } from 'node:v8'
 import { createServer } from 'vite'
 
 const args = process.argv.slice(2)
@@ -61,6 +62,7 @@ try {
   const retryModule = await server.ssrLoadModule('/src/benchmarks/plannerGlobalOptimizationRetry.ts')
   const attemptState = attemptPath ? retryModule.parseDiscoveryState(JSON.parse(await readFile(attemptPath, 'utf8'))) : undefined
   const environment = { runtime: 'Node (not Browser Worker)', node: process.version, platform: process.platform, arch: process.arch,
+    heapSizeLimitBytes: getHeapStatistics().heap_size_limit, execArgv: process.execArgv,
     cpu: cpus()[0]?.model ?? null, logicalCpuCount: cpus().length, totalMemoryBytes: totalmem(),
     exportSha256: createHash('sha256').update(raw).digest('hex'), maxPlanSteps, extent: module.GLOBAL_RESEARCH_EXTENT }
   const sha = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -121,7 +123,9 @@ try {
       const stage = `${report.stage}: ${report.baseline?.selected ?? '-'} / ${report.retained?.selected ?? '-'} / ${report.searches.length} searches / ${report.generatedReplacementCount} replacements / ${report.status}`
       if (stage !== lastStage) {
         console.error(stage)
-        writeSync(progressFd, JSON.stringify({ at: new Date().toISOString(), report }) + '\n')
+        writeSync(progressFd, JSON.stringify({ at: new Date().toISOString(), environment, report,
+          priorityEntries: retryModule.stableResearchEntries(input).map(e => ({ id: e.id, targetWeaponId: e.targetWeaponId })),
+          memory: { maxRssKiB: process.resourceUsage().maxRSS, ...process.memoryUsage() } }) + '\n')
         lastStage = stage
       }
     },

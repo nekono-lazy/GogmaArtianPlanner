@@ -30,7 +30,7 @@ export interface RetrySignals {
   blockers: { targetId: string; classification: string }[]
 }
 export type StopReason = 'completed' | 'attempt_limit' | 'state_limit' | 'cycle_detected' | 'no_progress' | 'time_budget' | 'cancelled' |
-  'search_error' | 'materialization_blocked' | 'projection_failed' | 'checkpoint_blocked' | 'retained_prefix_invalid' | 'unavailable' | 'planner_incomplete' | 'attempt_error'
+  'search_error' | 'materialization_blocked' | 'projection_failed' | 'checkpoint_blocked' | 'retained_prefix_invalid' | 'unavailable' | 'planner_incomplete' | 'attempt_error' | 'memory_limit' | 'process_error'
 export interface AttemptSummary {
   attemptId: number
   strategy: string
@@ -155,7 +155,10 @@ export async function runDiscoveryRetries(first: AttemptSummary, priorityEntries
   if (!seen.has(discoverySignature(controlState))) {
     const control = await run(controlState, 'retain_none', 'control: ordinary stable Planner priority')
     // A successful control still leaves the bounded release experiment useful.
-    if (control.stop && control.stop !== 'completed') return finish(control.stop)
+    // This independent control supplies no release evidence. A process resource
+    // failure must be recorded, but cannot erase earlier typed conflict evidence.
+    if (control.stop === 'memory_limit') stageStops.push({ strategy: 'retain_none', reason: control.stop })
+    else if (control.stop && control.stop !== 'completed') return finish(control.stop)
   }
   while (attempts.length < bounds.maxStates) {
     const stop = shouldStop(); if (stop) return finish(stop)

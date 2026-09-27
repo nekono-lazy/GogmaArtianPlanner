@@ -105,4 +105,14 @@ describe('Research deterministic retry controller', () => {
     expect(signals.blockers).toEqual([{ targetId: 'C', classification: 'search_error' }])
     expect(retainedReleaseCandidates(signals, ['r'], priority)).toEqual(['r'])
   })
+  it('records an OOM control separately and still tests the earlier conflict-derived release', async () => {
+    const signals: RetrySignals = { ...empty(), notFound: ['B'], conflicts: [{ id: 'c', kind: 'same_skill_counter', participants: [
+      { entryId: 'r', targetId: 'R', role: 'retained' }, { entryId: 'b', targetId: 'B', role: 'pending_original' }] }] }
+    const result = await runDiscoveryRetries(summary(state, signals), priority, async (s, strategy, reason, id) => ({
+      ...summary(s, empty(), id), strategy, reason, stop: strategy === 'retain_none' ? 'memory_limit' : 'completed',
+    }), { orderingAttempts: 1, maxStates: 4, releaseDepth: 1 })
+    expect(result.stopReason).toBe('completed')
+    expect(result.stageStops).toContainEqual({ strategy: 'retain_none', reason: 'memory_limit' })
+    expect(result.attempts.map(a => a.strategy)).toEqual(['fixed_retained', 'retain_none', 'conflict_release'])
+  })
 })
