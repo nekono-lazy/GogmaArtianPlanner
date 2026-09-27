@@ -21,6 +21,7 @@ const maxPlanSteps = Number(option('--max-plan-steps') ?? 20000)
 const cancelAfterMs = option('--cancel-after-ms') === undefined ? null : Number(option('--cancel-after-ms'))
 const profileEnabled = args.includes('--profile')
 const strategy = option('--strategy') ?? 'phase0'
+const attemptPath = option('--attempt-state')
 const capturePath = option('--capture-inputs')
 const focusPath = option('--focus-inputs'), focusTarget = option('--focus-target')
 const observedReportPath = option('--observed-report')
@@ -40,7 +41,7 @@ if (!Number.isSafeInteger(maxPlanSteps) || maxPlanSteps < 1 || (cancelAfterMs !=
 // Refuse an existing output before opening progress evidence or starting Research.
 // Keep the final exclusive write too: another process may create it during the run.
 if (lstatSync(outputPath, { throwIfNoEntry: false }) !== undefined) throw new Error(`Output already exists: ${resolve(outputPath)}`)
-const reads = [inputPath, focusPath, observedReportPath].filter(Boolean).map(p => resolve(p).toLowerCase())
+const reads = [inputPath, focusPath, observedReportPath, attemptPath].filter(Boolean).map(p => resolve(p).toLowerCase())
 const writes = [outputPath, `${outputPath}.progress.local`, capturePath].filter(Boolean).map(p => resolve(p).toLowerCase())
 if (new Set(writes).size !== writes.length || writes.some(p => reads.includes(p))) throw new Error('Research output paths must be distinct from every input and output.')
 if (capturePath && lstatSync(capturePath, { throwIfNoEntry: false }) !== undefined) throw new Error('Capture already exists.')
@@ -57,6 +58,8 @@ try {
   const { ProductionRngEngine } = await server.ssrLoadModule('/src/domain/rng/production/productionRngEngine.ts')
   const raw = await readFile(inputPath, 'utf8')
   const input = module.globalResearchInputFromExport(JSON.parse(raw), maxPlanSteps)
+  const retryModule = await server.ssrLoadModule('/src/benchmarks/plannerGlobalOptimizationRetry.ts')
+  const attemptState = attemptPath ? retryModule.parseDiscoveryState(JSON.parse(await readFile(attemptPath, 'utf8'))) : undefined
   const environment = { runtime: 'Node (not Browser Worker)', node: process.version, platform: process.platform, arch: process.arch,
     cpu: cpus()[0]?.model ?? null, logicalCpuCount: cpus().length, totalMemoryBytes: totalmem(),
     exportSha256: createHash('sha256').update(raw).digest('hex'), maxPlanSteps, extent: module.GLOBAL_RESEARCH_EXTENT }
@@ -108,6 +111,8 @@ try {
       shouldCancel: () => cancelledAt !== null, yieldControl, rawBlocks, onResult: rawBlocks ? observeSearchResult : undefined })
   } else result = await module.runGlobalPlannerResearch(input, module.globalResearchDependencies(new ProductionRngEngine()), {
     profiler, failedFirstTargetIds, rawBlocks, onSearchResult: rawBlocks ? observeSearchResult : undefined,
+    attempt: attemptState, extent: attemptState?.extent,
+    timeBudgetMs: option('--attempt-budget-ms') === undefined ? undefined : Number(option('--attempt-budget-ms')),
     onSearchInput: captureFd === null ? undefined : searchInput => writeSync(captureFd, JSON.stringify({ exportSha256: environment.exportSha256, input: searchInput }) + '\n'),
     shouldCancel: () => cancelledAt !== null,
     yieldControl,
@@ -121,7 +126,11 @@ try {
       }
     },
   })
+  const signals = result ? retryModule.collectRetrySignals(input, result.report, result.finalResult, result.generatedEntries) : null
   const record = { environment, ...(focus ? { focus } : { report: result.report }),
+    ...(result ? { phase1c: { signals, stop: retryModule.classifyAttempt(result.report, signals),
+      priorityEntries: retryModule.stableResearchEntries(input).map(e => ({ id: e.id, targetWeaponId: e.targetWeaponId })),
+      attemptState: attemptState ?? null } } : {}),
     ...(rawBlocks ? { phase1b: { rawBlocks: rawBlocks.profiles, rawBlockSummary: rawBlocks.summary(), searchEvidence,
       generatedEntries: result?.generatedEntries.map(entry => ({ id: entry.id, candidateSha256: sha(entry.candidateSnapshot), entrySha256: sha(entry) })) ?? [],
       finalSelectedEntryIds: result?.finalResult?.plan?.selectedBuildListEntryIds ?? [],

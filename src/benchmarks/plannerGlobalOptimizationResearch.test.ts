@@ -82,6 +82,33 @@ describe('Global Planner Phase 0 Research', () => {
       expect(a.report.searches[0].advances?.normal).toBe(1)
     }
     expect(a.report.plannerFullRunCount).toBe(4)
+    const attempt = { retainedEntryIds: a.report.retainedOriginalEntryIds, pendingTargetIds: a.report.searches.map(s => s.targetId) }
+    const explicit = await runGlobalPlannerResearch(input, globalResearchDependencies(engine), { extent: search.settings, nowMs: () => 0, attempt })
+    expect(explicit).toEqual(a)
+    const none = await runGlobalPlannerResearch(input, globalResearchDependencies(engine), { extent: search.settings, nowMs: () => 0,
+      attempt: { retainedEntryIds: [], pendingTargetIds: input.buildListEntries.map(e => e.targetWeaponId) } })
+    expect(none.report.retained).toMatchObject({ completedTargetCount: 0, conflicts: 0, rejected: 0, traceReplay: 'passed' })
+    expect(none.report.status, JSON.stringify(none.report)).toBe('completed')
+    const again = await runGlobalPlannerResearch(input, globalResearchDependencies(engine), { extent: search.settings, nowMs: () => 0, attempt })
+    expect(again).toEqual(a)
+    expect(input).toEqual(before)
+  })
+
+  it('revalidates a retained set instead of projecting a conflicting prefix', async () => {
+    const { input, search, engine } = await fixture()
+    const result = await runGlobalPlannerResearch(input, globalResearchDependencies(engine), { extent: search.settings,
+      attempt: { retainedEntryIds: input.buildListEntries.map(e => e.id), pendingTargetIds: [] } })
+    expect(result.report.status).toBe('blocked')
+    expect(result.report.searches).toEqual([])
+    expect(result.report.retained?.conflicts).toBeGreaterThan(0)
+  })
+
+  it('distinguishes attempt deadline from cancel and bounded no-match', async () => {
+    const { input, engine } = await fixture()
+    const result = await runGlobalPlannerResearch(input, globalResearchDependencies(engine), { timeBudgetMs: 0, nowMs: () => 0 })
+    expect(result.report.status).toBe('time_budget_reached')
+    expect(result.report.searches).toEqual([])
+    expect(result.finalResult).toBeNull()
   })
 
   it('reports bounded no-match separately from a prediction exception, keeping failed original Entries', async () => {
