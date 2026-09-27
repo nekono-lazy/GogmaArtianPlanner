@@ -21,6 +21,21 @@ Issue #157の事前整理は行わない。Exportの保存済みPlanやoracle Ro
 Issueの2,982 steps（18件維持・25件置換、約33秒）は比較用の既知oracleであり、今回の保持集合、
 Target順序、Counter位置、RouteKind、Candidate IDの決定には使わない。2,982以下は成功条件ではない。
 
+### Planner boundとBaselineの意味
+
+Phase 0は探索成立性とSearch / Plannerの性能切り分けのため、Research専用に
+**`maxPlanSteps = 20000` を明示指定**している。本書のBaselineはProduction Domain / ordinary Plannerと
+同じ計算経路を使うが、**Production default boundそのものではなく、Research用20000で実行したbaseline**である。
+
+現在のProduction defaultは `defaultPlannerOptions.maxPlanSteps = 1000`
+（`src/domain/planner/plannerTypes.ts`、PLANNER_SPEC 7.2.1）。20000はこの既定値を表さず、変更もしない。
+Applicationにはruntime上限の導出・ユーザー設定があるため、1000は全画面に共通する固定上限でもない。
+今回のbaseline **1,465 steps**、prototype **7,330 steps**、比較用の既知oracle **2,982 steps**は
+いずれも1000を超え、この測定はProduction default bound内での成立を示していない。
+
+Production化にはGlobal Planner用のstep bound policy、Application側の上限設定、
+またはPlan生成方式を別途設計する必要がある。このPRではそのProduction policyを決定しない。
+
 ## 現行authorityの調査
 
 | 用途 | 再利用するauthority |
@@ -105,6 +120,8 @@ Node runnerはVite SSR loaderで既存TypeScriptを読み、同じDomainのasync
 `yieldControl` は既存seamに `setTimeout(0)` を渡し、SIGINT / `--cancel-after-ms` は
 `shouldCancel` で扱う。synchronousなReplay / projection中は即時cancelを保証しない。
 outputは新規作成専用で、入力Exportや既存reportを上書きしない。
+既存outputはResearch開始前に明示エラーで拒否する。既存 `.progress.local` もexclusive creationで拒否し、
+input / output同一pathの拒否を維持する。実行中に他processがoutputを作る場合に備え、最終writeも `wx` を維持する。
 
 - `totalElapsedMs`: 検証済みPlannerInputを受け取ってから結果まで。baseline、保持集合確認、Search、
   materialization、単体Planner、投影、最終Plannerを含む。Vite起動・Export読込とschema / Master validationは含まない。
@@ -135,7 +152,7 @@ Windows x64、Node v24.19.0、Ryzen 7 9700X（16 logical CPU）、物理memory�
 数値・完全なTarget ID・保持ID・generated ID・各探索の証跡は
 [NODE_RESULTS](PLANNER_GLOBAL_OPTIMIZATION_NODE_RESULTS.json) に保存した。Export自体は含めない。
 
-| 項目 | Baseline | Global prototype |
+| 項目 | Research baseline（bound 20000） | Global prototype（bound 20000） |
 | --- | --- | --- |
 | 入力Target / Entry | 43 / 43 | 43 / 43 |
 | 完成Target / 全planning Target | 20 / 43 | **42 / 43** |
@@ -213,13 +230,16 @@ N / G / SはNormal / Gogma / Skill。未発見のSはconversion窓の1501予測�
 synchronousなTrace Replay / projection中やBrowser Workerの応答性は保証しない。
 
 - `npm run lint`: pass。
-- `npm test`: **290 files / 4,734 tests pass**。
+- `npm test`: レビュー修正後 **291 files / 4,737 tests pass**。
 - `npm run build`: pass。既存の500 kB超chunk warningあり。
 - `npx tsc -b --force`: pass。
 - 追加したResearch test 8件: deterministicな完全結果、元入力とBaseline維持、Conflictの自動置換、
   Candidate / Entry / Planner validation、origin reach再構築、未発見とSearch例外の区別、cancel、
   変更済み・新規生成武器参照と偽hashの拒否、破損予測のReplay拒否、Production import分離を検証。
 - 通常buildのJSにResearchの識別子がないことを確認した。
+- レビュー修正でrunnerのCLI test 3件を追加。既存outputをResearch開始前に拒否し、既存progressの
+  exclusive creationとinput / output同一path拒否を維持し、既存ファイルを変更しないことを確認した。
+  lint / test / buildを再実行した。実Export benchmarkは再実行せず、実測JSONは変更していない。
 
 最初の全testは開発中の実Export試行と同時実行し、既存IdentificationWizardDialogの1件が
 15秒timeoutになった。試行終了後の単独再実行は全件pass。最終性能測定はtest / buildを並行させず実施した。
@@ -227,6 +247,9 @@ synchronousなTrace Replay / projection中やBrowser Workerの応答性は保証
 ## Production化に向けた課題
 
 - 性能・成立性の結果が良くても、無選択の自動再検索は別docs-only PRでの契約変更が先。
+- 今回のbaseline / prototype / 既知oracleはすべてProduction defaultの1000 stepsを超える。
+  Global Plannerのstep bound policy、Application側の上限設定、またはPlan生成方式の設計は別途必要で、
+  このPRでは決定しない。
 - 投影後検索は前段内の空きCounterを使えず、保持集合と順序の局所最適化も行わない。
   保持集合の再実行が成立しない、有限extentで未発見、変化したOwnedWeaponを起点に選ぶ、blind観測、
   checkpoint pinがある場合は今回の最小構成では救済しない。

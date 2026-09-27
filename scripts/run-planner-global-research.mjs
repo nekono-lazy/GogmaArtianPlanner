@@ -1,6 +1,6 @@
 // Explicit external JSON input; does not import into the app or open IndexedDB.
 import { readFile, writeFile } from 'node:fs/promises'
-import { openSync, writeSync, closeSync } from 'node:fs'
+import { lstatSync, openSync, writeSync, closeSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { cpus, totalmem } from 'node:os'
@@ -17,6 +17,9 @@ if (resolve(inputPath) === resolve(outputPath)) throw new Error('Output must not
 const maxPlanSteps = Number(option('--max-plan-steps') ?? 20000)
 const cancelAfterMs = option('--cancel-after-ms') === undefined ? null : Number(option('--cancel-after-ms'))
 if (!Number.isSafeInteger(maxPlanSteps) || maxPlanSteps < 1 || (cancelAfterMs !== null && (!Number.isFinite(cancelAfterMs) || cancelAfterMs < 0))) throw new Error('Invalid research bounds.')
+// Refuse an existing output before opening progress evidence or starting Research.
+// Keep the final exclusive write too: another process may create it during the run.
+if (lstatSync(outputPath, { throwIfNoEntry: false }) !== undefined) throw new Error(`Output already exists: ${resolve(outputPath)}`)
 // Append-only progress evidence survives a killed process / out-of-memory failure.
 // Exclusive creation prevents overwriting another run's evidence.
 const progressFd = openSync(`${outputPath}.progress.local`, 'wx')
