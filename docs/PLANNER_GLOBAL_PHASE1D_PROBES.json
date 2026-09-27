@@ -1,0 +1,1901 @@
+{
+  "environment": {
+    "runtime": "Node (not Browser Worker)",
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "heapSizeLimitBytes": 8791261184,
+    "execArgv": [
+      "--max-old-space-size=8192"
+    ],
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "maxPlanSteps": 20000,
+    "extent": {
+      "maxNormalAdvance": 350,
+      "maxGogmaAdvance": 500,
+      "maxSkillAdvance": 1500
+    },
+    "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+    "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+    "rngEngineVersion": "production-rng:c5-e7",
+    "osRelease": "10.0.26200",
+    "benchmarkMode": "phase0",
+    "cacheMode": "per-search",
+    "yieldMode": "immediate",
+    "routeFilter": "all",
+    "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+    "phase1cReport": "docs/PLANNER_GLOBAL_PHASE1C_RESULTS_8G.json",
+    "phase1cReportSha256": "f0254b517b4224255b174f457173ef2986fa5e370946ff20aa938eb8acb3dd70",
+    "anchorDerivation": "selectExtentProbeAnchors: blocker-free, Trace-Replay-passed, evidenced Phase 1-C attempts with the maximum completed count, ranked by compareResearchAttempts; secondary = best such attempt whose bounded no-match set names a Target absent from the primary",
+    "probeRule": "single axis x2 when the base bounded no-match reached that axis boundary (observed prediction reach)",
+    "attemptBudgetMs": 900000,
+    "fallbackBudgetMs": 180000,
+    "probeBudgetMs": 180000,
+    "bounds": {
+      "maxAnchors": 2,
+      "maxProbes": 6,
+      "maxVariants": 6
+    },
+    "childHeapFlag": "--max-old-space-size=8192"
+  },
+  "selection": {
+    "anchors": [
+      4,
+      3
+    ],
+    "rejectedAttemptIds": [],
+    "reportedBestAttemptId": 4,
+    "primaryMatchesReportedBest": true
+  },
+  "anchors": [
+    {
+      "anchor": {
+        "role": "primary",
+        "attemptId": 4,
+        "state": {
+          "retainedEntryIds": [
+            "build-list.fnv1a32-2fdb4406",
+            "build-list.fnv1a32-32e817d9",
+            "build-list.fnv1a32-35613e34",
+            "build-list.fnv1a32-462a2dfa",
+            "build-list.fnv1a32-50009b78",
+            "build-list.fnv1a32-54dd2b4e",
+            "build-list.fnv1a32-58a4e590",
+            "build-list.fnv1a32-61066e62",
+            "build-list.fnv1a32-66c25e3d",
+            "build-list.fnv1a32-7df2bbec",
+            "build-list.fnv1a32-8561c387",
+            "build-list.fnv1a32-85dc00cc",
+            "build-list.fnv1a32-92d87b90",
+            "build-list.fnv1a32-a1d13672",
+            "build-list.fnv1a32-a3d6817e",
+            "build-list.fnv1a32-b82c6259",
+            "build-list.fnv1a32-c1fe111c",
+            "build-list.fnv1a32-ccd01768",
+            "build-list.fnv1a32-d8c8e4a6",
+            "build-list.fnv1a32-e396d352"
+          ],
+          "pendingTargetIds": [
+            "813fb479-accd-454d-8fcd-fed51d4e891d",
+            "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+            "be881717-f092-4be7-870c-c6bd19f2141f",
+            "e96249b4-cb24-4fff-a852-4055904161ad",
+            "9733b090-9901-49fa-aaab-983379f1edae",
+            "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+            "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+            "c140578c-9aad-48d0-81db-95496636c459",
+            "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+            "27ac3237-543b-4887-85e6-28ccc7564294",
+            "a830a376-e596-495e-b458-fc1705204e2c",
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "8d233d8b-f366-42cb-a559-62666f079b58",
+            "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+            "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+            "b6780f04-da21-42b0-af8c-88f09a192e17",
+            "fea60316-a05c-4252-bf1d-41c31b99b75a",
+            "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+            "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "188571a7-b480-4085-a8f5-59666c0e4cc5",
+            "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "signature": "{\"retainedEntryIds\":[\"build-list.fnv1a32-2fdb4406\",\"build-list.fnv1a32-32e817d9\",\"build-list.fnv1a32-35613e34\",\"build-list.fnv1a32-462a2dfa\",\"build-list.fnv1a32-50009b78\",\"build-list.fnv1a32-54dd2b4e\",\"build-list.fnv1a32-58a4e590\",\"build-list.fnv1a32-61066e62\",\"build-list.fnv1a32-66c25e3d\",\"build-list.fnv1a32-7df2bbec\",\"build-list.fnv1a32-8561c387\",\"build-list.fnv1a32-85dc00cc\",\"build-list.fnv1a32-92d87b90\",\"build-list.fnv1a32-a1d13672\",\"build-list.fnv1a32-a3d6817e\",\"build-list.fnv1a32-b82c6259\",\"build-list.fnv1a32-c1fe111c\",\"build-list.fnv1a32-ccd01768\",\"build-list.fnv1a32-d8c8e4a6\",\"build-list.fnv1a32-e396d352\"],\"pendingTargetIds\":[\"813fb479-accd-454d-8fcd-fed51d4e891d\",\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\",\"be881717-f092-4be7-870c-c6bd19f2141f\",\"e96249b4-cb24-4fff-a852-4055904161ad\",\"9733b090-9901-49fa-aaab-983379f1edae\",\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\",\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\",\"c140578c-9aad-48d0-81db-95496636c459\",\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\",\"27ac3237-543b-4887-85e6-28ccc7564294\",\"a830a376-e596-495e-b458-fc1705204e2c\",\"02876df4-cd56-4c95-add9-9e3e9cc90801\",\"8d233d8b-f366-42cb-a559-62666f079b58\",\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\",\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\",\"b6780f04-da21-42b0-af8c-88f09a192e17\",\"fea60316-a05c-4252-bf1d-41c31b99b75a\",\"2378d3e0-c376-470d-86c4-32f2ace71ab7\",\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\",\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\",\"188571a7-b480-4085-a8f5-59666c0e4cc5\",\"1efa01c6-1f1e-433f-b34e-9442e4df00df\",\"86439c85-0efc-40ba-b490-e39ab38aa1e0\"],\"extent\":{\"maxNormalAdvance\":350,\"maxGogmaAdvance\":500,\"maxSkillAdvance\":1500}}",
+        "reason": "best of 5 blocker-free replayed states with 42 completed (compareResearchAttempts)",
+        "expected": {
+          "completed": 42,
+          "conflicts": 2,
+          "rejected": 1,
+          "resourceConflictRejected": 1,
+          "steps": 6214,
+          "traceReplay": "passed",
+          "resultSha256": "2242740c0eb6f161c62669c3a84748e41febbd8d509029686df76fca5c38cc1e",
+          "planSha256": "70b7cb8900b5ce6a380e5a37866a2ab450ca85a93adad9ba94981784d6d079dd",
+          "notFound": [
+            "711f7d15-bb2b-4113-af0c-bd1832dcfd49"
+          ],
+          "searchStatuses": [
+            {
+              "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+              "status": "found"
+            },
+            {
+              "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+              "status": "not_found_within_extent"
+            },
+            {
+              "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+              "status": "found"
+            },
+            {
+              "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+              "status": "found"
+            },
+            {
+              "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+              "status": "found"
+            },
+            {
+              "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+              "status": "found"
+            },
+            {
+              "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+              "status": "found"
+            },
+            {
+              "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+              "status": "found"
+            },
+            {
+              "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+              "status": "found"
+            },
+            {
+              "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+              "status": "found"
+            },
+            {
+              "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+              "status": "found"
+            },
+            {
+              "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+              "status": "found"
+            },
+            {
+              "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+              "status": "found"
+            },
+            {
+              "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+              "status": "found"
+            },
+            {
+              "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+              "status": "found"
+            },
+            {
+              "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+              "status": "found"
+            },
+            {
+              "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+              "status": "found"
+            },
+            {
+              "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+              "status": "found"
+            },
+            {
+              "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+              "status": "found"
+            },
+            {
+              "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+              "status": "found"
+            },
+            {
+              "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+              "status": "found"
+            },
+            {
+              "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+              "status": "found"
+            },
+            {
+              "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+              "status": "found"
+            }
+          ]
+        }
+      },
+      "reproduction": {
+        "passed": true,
+        "searchEvidenceMatches": true,
+        "actual": {
+          "completed": 42,
+          "conflicts": 2,
+          "rejected": 1,
+          "resourceConflictRejected": 1,
+          "steps": 6214,
+          "traceReplay": "passed",
+          "resultSha256": "2242740c0eb6f161c62669c3a84748e41febbd8d509029686df76fca5c38cc1e",
+          "planSha256": "70b7cb8900b5ce6a380e5a37866a2ab450ca85a93adad9ba94981784d6d079dd",
+          "notFound": [
+            "711f7d15-bb2b-4113-af0c-bd1832dcfd49"
+          ],
+          "searchStatuses": [
+            {
+              "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+              "status": "found"
+            },
+            {
+              "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+              "status": "not_found_within_extent"
+            },
+            {
+              "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+              "status": "found"
+            },
+            {
+              "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+              "status": "found"
+            },
+            {
+              "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+              "status": "found"
+            },
+            {
+              "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+              "status": "found"
+            },
+            {
+              "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+              "status": "found"
+            },
+            {
+              "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+              "status": "found"
+            },
+            {
+              "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+              "status": "found"
+            },
+            {
+              "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+              "status": "found"
+            },
+            {
+              "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+              "status": "found"
+            },
+            {
+              "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+              "status": "found"
+            },
+            {
+              "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+              "status": "found"
+            },
+            {
+              "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+              "status": "found"
+            },
+            {
+              "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+              "status": "found"
+            },
+            {
+              "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+              "status": "found"
+            },
+            {
+              "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+              "status": "found"
+            },
+            {
+              "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+              "status": "found"
+            },
+            {
+              "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+              "status": "found"
+            },
+            {
+              "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+              "status": "found"
+            },
+            {
+              "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+              "status": "found"
+            },
+            {
+              "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+              "status": "found"
+            },
+            {
+              "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+              "status": "found"
+            }
+          ]
+        },
+        "wallMs": 105396.69009999999,
+        "exitCode": 0,
+        "maxRssKiB": 3093280,
+        "report": {
+          "searchElapsedMs": 54330.51390000002,
+          "plannerElapsedMs": 41204.43720000003,
+          "totalElapsedMs": 104015.9278,
+          "searches": 23
+        },
+        "noMatchCaptures": [
+          {
+            "searchIndex": 1,
+            "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+            "snapshotSha256": "a10e7d332be86811a0c226c25479246adc9dbde190529f2601a12eedacb8d9db",
+            "baseSearchRunId": "research.global.search.fnv1a32:3c2b0b5c",
+            "baseBoundary": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": true,
+              "skillConversion": true
+            },
+            "baseReach": {
+              "normal": 350,
+              "gogma": 500,
+              "skill": 1501
+            },
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "baseSearch": {
+              "status": "not_found_within_extent",
+              "elapsedMs": 7067.0576,
+              "settledWorkItems": 2350,
+              "predictionCalls": {
+                "normal": 350,
+                "gogma": 104325,
+                "skill": 1501
+              },
+              "predictionElapsedMs": 826.9818000002851,
+              "searchedRoutes": [
+                "normal_artian_to_gogma"
+              ],
+              "skippedRoutes": [
+                {
+                  "route": "owned_normal_artian_to_gogma",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Normal Artian weapon is available."
+                },
+                {
+                  "route": "existing_gogma_current",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Gogma weapon is available."
+                },
+                {
+                  "route": "existing_gogma_reset_bonuses",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Gogma weapon is available."
+                },
+                {
+                  "route": "existing_gogma_keep_bonuses",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Gogma weapon is available."
+                },
+                {
+                  "route": "existing_gogma_reset_skills",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Gogma weapon is available."
+                },
+                {
+                  "route": "existing_gogma_mixed",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Gogma weapon is available."
+                }
+              ],
+              "resultSha256": "8a7fd191265e2313c6a450a9925a482df266f71e3e3992e4a9fbfc5549dacf6e"
+            }
+          }
+        ]
+      },
+      "probes": [
+        {
+          "searchIndex": 1,
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "axis": "normal",
+          "snapshotSha256": "fnv1a32:072de162",
+          "wallMs": 9870.141499999998,
+          "exitCode": 0,
+          "maxRssKiB": 1069152,
+          "baseSearchRunId": "research.global.search.fnv1a32:3c2b0b5c",
+          "baseExtent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "probeExtent": {
+            "maxNormalAdvance": 700,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "probeSearchRunId": "research.global.search.fnv1a32:ae5547e7",
+          "baseBoundary": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "status": "found",
+          "error": null,
+          "timeBudgetMs": 180000,
+          "elapsedMs": 5662.8492,
+          "observedPredictionReach": {
+            "normal": 700,
+            "gogma": 500,
+            "skill": 1479
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 1480,
+          "advances": {
+            "normal": 643,
+            "gogma": 1,
+            "skill": 836
+          },
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "candidateFingerprint": "fnv1a32:cb35cec4",
+          "validation": {
+            "status": "passed",
+            "error": null,
+            "generatedEntryId": "build-list.constrained.fnv1a32-289b5104",
+            "applicationSteps": 1480
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 700,
+                "elapsedMs": 42.4967999999991,
+                "uniqueInputs": 700,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 105325,
+                "elapsedMs": 289.7784999999318,
+                "uniqueInputs": 105325,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 1479,
+                "elapsedMs": 354.3323000000097,
+                "uniqueInputs": 1479,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 584.8867999999695,
+            "settledWorkItems": 3679,
+            "settledCountExact": true,
+            "progressEvents": 38,
+            "cancellationChecks": 112693,
+            "checkpointCount": 110484,
+            "yieldCount": 2209,
+            "yieldElapsedMs": 104.35189999998954,
+            "candidateIdentityCalls": 1
+          },
+          "candidateSha256": "4acfe3aaeb86df85b6bb8a112ce9c48483345f8621699ebc9e46361976728608",
+          "rawBlocks": {
+            "requests": 105325,
+            "uniqueBlocks": 500,
+            "duplicateRequests": 104825,
+            "theoreticalHitRatio": 0.9952527889864704,
+            "hits": 104825,
+            "hitRatio": 0.9952527889864704,
+            "misses": 500,
+            "failures": 0,
+            "evictions": 0,
+            "readerElapsedMs": 32.56809999994289,
+            "missReadElapsedMs": 25.333900000003723,
+            "peakEntries": 500,
+            "rawUint32Count": 5000,
+            "approximatePayloadBytes": 20000,
+            "maxBlockIndex": 931,
+            "blockIndexDistribution": {
+              "256..511": 3397,
+              "512..1023": 101928
+            }
+          },
+          "environment": {
+            "runtime": "Node (not Browser Worker)",
+            "node": "v24.19.0",
+            "platform": "win32",
+            "arch": "x64",
+            "heapSizeLimitBytes": 8791261184,
+            "execArgv": [
+              "--max-old-space-size=8192"
+            ],
+            "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+            "logicalCpuCount": 16,
+            "totalMemoryBytes": 33377591296,
+            "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+            "maxPlanSteps": 20000,
+            "extent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+            "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+            "rngEngineVersion": "production-rng:c5-e7",
+            "osRelease": "10.0.26200",
+            "benchmarkMode": "phase1d-probe",
+            "cacheMode": "per-search",
+            "yieldMode": "immediate",
+            "routeFilter": "all",
+            "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+            "probeAxis": "normal",
+            "timeBudgetMs": 180000,
+            "snapshotSha256": "a10e7d332be86811a0c226c25479246adc9dbde190529f2601a12eedacb8d9db",
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "probeExtent": {
+              "maxNormalAdvance": 700,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            }
+          }
+        },
+        {
+          "searchIndex": 1,
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "axis": "gogma",
+          "snapshotSha256": "fnv1a32:072de162",
+          "wallMs": 33610.24859999999,
+          "exitCode": 0,
+          "maxRssKiB": 2678968,
+          "baseSearchRunId": "research.global.search.fnv1a32:3c2b0b5c",
+          "baseExtent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "probeExtent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 1000,
+            "maxSkillAdvance": 1500
+          },
+          "probeSearchRunId": "research.global.search.fnv1a32:be35e38a",
+          "baseBoundary": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "status": "not_found_within_extent",
+          "error": null,
+          "timeBudgetMs": 180000,
+          "elapsedMs": 32529.6186,
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 1000,
+            "skill": 1501
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "candidateFingerprint": null,
+          "validation": {
+            "status": "not_applicable",
+            "error": null,
+            "generatedEntryId": null,
+            "applicationSteps": null
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 17.50390000000243,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 341541,
+                "elapsedMs": 1131.3291999992994,
+                "uniqueInputs": 341541,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 1501,
+                "elapsedMs": 388.2266000000087,
+                "uniqueInputs": 1501,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 2294.3917000012807,
+            "settledWorkItems": 2850,
+            "settledCountExact": true,
+            "progressEvents": 30,
+            "cancellationChecks": 352809,
+            "checkpointCount": 345892,
+            "yieldCount": 6917,
+            "yieldElapsedMs": 457.27549999992914,
+            "candidateIdentityCalls": 0
+          },
+          "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "rawBlocks": {
+            "requests": 341541,
+            "uniqueBlocks": 1000,
+            "duplicateRequests": 340541,
+            "theoreticalHitRatio": 0.9970720938335368,
+            "hits": 340541,
+            "hitRatio": 0.9970720938335368,
+            "misses": 1000,
+            "failures": 0,
+            "evictions": 0,
+            "readerElapsedMs": 126.63000000049408,
+            "missReadElapsedMs": 103.28710000004764,
+            "peakEntries": 1000,
+            "rawUint32Count": 10000,
+            "approximatePayloadBytes": 40000,
+            "maxBlockIndex": 1431,
+            "blockIndexDistribution": {
+              "256..511": 3237,
+              "512..1023": 137833,
+              "1024..2047": 200471
+            }
+          },
+          "environment": {
+            "runtime": "Node (not Browser Worker)",
+            "node": "v24.19.0",
+            "platform": "win32",
+            "arch": "x64",
+            "heapSizeLimitBytes": 8791261184,
+            "execArgv": [
+              "--max-old-space-size=8192"
+            ],
+            "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+            "logicalCpuCount": 16,
+            "totalMemoryBytes": 33377591296,
+            "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+            "maxPlanSteps": 20000,
+            "extent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+            "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+            "rngEngineVersion": "production-rng:c5-e7",
+            "osRelease": "10.0.26200",
+            "benchmarkMode": "phase1d-probe",
+            "cacheMode": "per-search",
+            "yieldMode": "immediate",
+            "routeFilter": "all",
+            "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+            "probeAxis": "gogma",
+            "timeBudgetMs": 180000,
+            "snapshotSha256": "a10e7d332be86811a0c226c25479246adc9dbde190529f2601a12eedacb8d9db",
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "probeExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 1000,
+              "maxSkillAdvance": 1500
+            }
+          }
+        },
+        {
+          "searchIndex": 1,
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "axis": "skill",
+          "snapshotSha256": "fnv1a32:072de162",
+          "wallMs": 8318.153399999981,
+          "exitCode": 0,
+          "maxRssKiB": 943672,
+          "baseSearchRunId": "research.global.search.fnv1a32:3c2b0b5c",
+          "baseExtent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "probeExtent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 3000
+          },
+          "probeSearchRunId": "research.global.search.fnv1a32:b4600ae9",
+          "baseBoundary": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "status": "not_found_within_extent",
+          "error": null,
+          "timeBudgetMs": 180000,
+          "elapsedMs": 7321.4832,
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 3001
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "candidateFingerprint": null,
+          "validation": {
+            "status": "not_applicable",
+            "error": null,
+            "generatedEntryId": null,
+            "applicationSteps": null
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 17.225900000002866,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 104325,
+                "elapsedMs": 348.70110000010436,
+                "uniqueInputs": 104325,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 3001,
+                "elapsedMs": 1037.5253000000175,
+                "uniqueInputs": 3001,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 709.6745999999911,
+            "settledWorkItems": 3850,
+            "settledCountExact": true,
+            "progressEvents": 40,
+            "cancellationChecks": 113399,
+            "checkpointCount": 111176,
+            "yieldCount": 2223,
+            "yieldElapsedMs": 110.81870000000163,
+            "candidateIdentityCalls": 0
+          },
+          "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "rawBlocks": {
+            "requests": 104325,
+            "uniqueBlocks": 500,
+            "duplicateRequests": 103825,
+            "theoreticalHitRatio": 0.9952072849269111,
+            "hits": 103825,
+            "hitRatio": 0.9952072849269111,
+            "misses": 500,
+            "failures": 0,
+            "evictions": 0,
+            "readerElapsedMs": 35.52670000010937,
+            "missReadElapsedMs": 27.53470000000118,
+            "peakEntries": 500,
+            "rawUint32Count": 5000,
+            "approximatePayloadBytes": 20000,
+            "maxBlockIndex": 931,
+            "blockIndexDistribution": {
+              "256..511": 3237,
+              "512..1023": 101088
+            }
+          },
+          "environment": {
+            "runtime": "Node (not Browser Worker)",
+            "node": "v24.19.0",
+            "platform": "win32",
+            "arch": "x64",
+            "heapSizeLimitBytes": 8791261184,
+            "execArgv": [
+              "--max-old-space-size=8192"
+            ],
+            "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+            "logicalCpuCount": 16,
+            "totalMemoryBytes": 33377591296,
+            "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+            "maxPlanSteps": 20000,
+            "extent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+            "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+            "rngEngineVersion": "production-rng:c5-e7",
+            "osRelease": "10.0.26200",
+            "benchmarkMode": "phase1d-probe",
+            "cacheMode": "per-search",
+            "yieldMode": "immediate",
+            "routeFilter": "all",
+            "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+            "probeAxis": "skill",
+            "timeBudgetMs": 180000,
+            "snapshotSha256": "a10e7d332be86811a0c226c25479246adc9dbde190529f2601a12eedacb8d9db",
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "probeExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 3000
+            }
+          }
+        }
+      ],
+      "boundStops": []
+    },
+    {
+      "anchor": {
+        "role": "secondary",
+        "attemptId": 3,
+        "state": {
+          "retainedEntryIds": [
+            "build-list.fnv1a32-2fdb4406",
+            "build-list.fnv1a32-32e817d9",
+            "build-list.fnv1a32-35613e34",
+            "build-list.fnv1a32-462a2dfa",
+            "build-list.fnv1a32-50009b78",
+            "build-list.fnv1a32-54dd2b4e",
+            "build-list.fnv1a32-58a4e590",
+            "build-list.fnv1a32-61066e62",
+            "build-list.fnv1a32-66c25e3d",
+            "build-list.fnv1a32-7df2bbec",
+            "build-list.fnv1a32-8561c387",
+            "build-list.fnv1a32-85dc00cc",
+            "build-list.fnv1a32-92d87b90",
+            "build-list.fnv1a32-a1d13672",
+            "build-list.fnv1a32-a3d6817e",
+            "build-list.fnv1a32-b82c6259",
+            "build-list.fnv1a32-c1fe111c",
+            "build-list.fnv1a32-ccd01768",
+            "build-list.fnv1a32-d8c8e4a6",
+            "build-list.fnv1a32-e396d352"
+          ],
+          "pendingTargetIds": [
+            "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+            "813fb479-accd-454d-8fcd-fed51d4e891d",
+            "be881717-f092-4be7-870c-c6bd19f2141f",
+            "e96249b4-cb24-4fff-a852-4055904161ad",
+            "9733b090-9901-49fa-aaab-983379f1edae",
+            "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+            "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+            "c140578c-9aad-48d0-81db-95496636c459",
+            "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+            "27ac3237-543b-4887-85e6-28ccc7564294",
+            "a830a376-e596-495e-b458-fc1705204e2c",
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "8d233d8b-f366-42cb-a559-62666f079b58",
+            "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+            "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+            "b6780f04-da21-42b0-af8c-88f09a192e17",
+            "fea60316-a05c-4252-bf1d-41c31b99b75a",
+            "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+            "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "188571a7-b480-4085-a8f5-59666c0e4cc5",
+            "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "extent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          }
+        },
+        "signature": "{\"retainedEntryIds\":[\"build-list.fnv1a32-2fdb4406\",\"build-list.fnv1a32-32e817d9\",\"build-list.fnv1a32-35613e34\",\"build-list.fnv1a32-462a2dfa\",\"build-list.fnv1a32-50009b78\",\"build-list.fnv1a32-54dd2b4e\",\"build-list.fnv1a32-58a4e590\",\"build-list.fnv1a32-61066e62\",\"build-list.fnv1a32-66c25e3d\",\"build-list.fnv1a32-7df2bbec\",\"build-list.fnv1a32-8561c387\",\"build-list.fnv1a32-85dc00cc\",\"build-list.fnv1a32-92d87b90\",\"build-list.fnv1a32-a1d13672\",\"build-list.fnv1a32-a3d6817e\",\"build-list.fnv1a32-b82c6259\",\"build-list.fnv1a32-c1fe111c\",\"build-list.fnv1a32-ccd01768\",\"build-list.fnv1a32-d8c8e4a6\",\"build-list.fnv1a32-e396d352\"],\"pendingTargetIds\":[\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\",\"813fb479-accd-454d-8fcd-fed51d4e891d\",\"be881717-f092-4be7-870c-c6bd19f2141f\",\"e96249b4-cb24-4fff-a852-4055904161ad\",\"9733b090-9901-49fa-aaab-983379f1edae\",\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\",\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\",\"c140578c-9aad-48d0-81db-95496636c459\",\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\",\"27ac3237-543b-4887-85e6-28ccc7564294\",\"a830a376-e596-495e-b458-fc1705204e2c\",\"02876df4-cd56-4c95-add9-9e3e9cc90801\",\"8d233d8b-f366-42cb-a559-62666f079b58\",\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\",\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\",\"b6780f04-da21-42b0-af8c-88f09a192e17\",\"fea60316-a05c-4252-bf1d-41c31b99b75a\",\"2378d3e0-c376-470d-86c4-32f2ace71ab7\",\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\",\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\",\"188571a7-b480-4085-a8f5-59666c0e4cc5\",\"1efa01c6-1f1e-433f-b34e-9442e4df00df\",\"86439c85-0efc-40ba-b490-e39ab38aa1e0\"],\"extent\":{\"maxNormalAdvance\":350,\"maxGogmaAdvance\":500,\"maxSkillAdvance\":1500}}",
+        "reason": "best such state whose bounded no-match set names a Target absent from the primary",
+        "expected": {
+          "completed": 42,
+          "conflicts": 2,
+          "rejected": 1,
+          "resourceConflictRejected": 1,
+          "steps": 6448,
+          "traceReplay": "passed",
+          "resultSha256": "7d17ea7bfeb8bacddb7e60ffd6ed58fe3a3cf0dffb5bcdf427507f1a7cecd195",
+          "planSha256": "e5bd5c3be28985b7a5852b83a6342de76acd27ed5591b0a65defcd7e4459cc62",
+          "notFound": [
+            "813fb479-accd-454d-8fcd-fed51d4e891d"
+          ],
+          "searchStatuses": [
+            {
+              "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+              "status": "found"
+            },
+            {
+              "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+              "status": "not_found_within_extent"
+            },
+            {
+              "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+              "status": "found"
+            },
+            {
+              "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+              "status": "found"
+            },
+            {
+              "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+              "status": "found"
+            },
+            {
+              "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+              "status": "found"
+            },
+            {
+              "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+              "status": "found"
+            },
+            {
+              "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+              "status": "found"
+            },
+            {
+              "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+              "status": "found"
+            },
+            {
+              "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+              "status": "found"
+            },
+            {
+              "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+              "status": "found"
+            },
+            {
+              "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+              "status": "found"
+            },
+            {
+              "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+              "status": "found"
+            },
+            {
+              "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+              "status": "found"
+            },
+            {
+              "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+              "status": "found"
+            },
+            {
+              "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+              "status": "found"
+            },
+            {
+              "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+              "status": "found"
+            },
+            {
+              "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+              "status": "found"
+            },
+            {
+              "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+              "status": "found"
+            },
+            {
+              "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+              "status": "found"
+            },
+            {
+              "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+              "status": "found"
+            },
+            {
+              "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+              "status": "found"
+            },
+            {
+              "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+              "status": "found"
+            }
+          ]
+        }
+      },
+      "reproduction": {
+        "passed": true,
+        "searchEvidenceMatches": true,
+        "actual": {
+          "completed": 42,
+          "conflicts": 2,
+          "rejected": 1,
+          "resourceConflictRejected": 1,
+          "steps": 6448,
+          "traceReplay": "passed",
+          "resultSha256": "7d17ea7bfeb8bacddb7e60ffd6ed58fe3a3cf0dffb5bcdf427507f1a7cecd195",
+          "planSha256": "e5bd5c3be28985b7a5852b83a6342de76acd27ed5591b0a65defcd7e4459cc62",
+          "notFound": [
+            "813fb479-accd-454d-8fcd-fed51d4e891d"
+          ],
+          "searchStatuses": [
+            {
+              "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+              "status": "found"
+            },
+            {
+              "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+              "status": "not_found_within_extent"
+            },
+            {
+              "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+              "status": "found"
+            },
+            {
+              "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+              "status": "found"
+            },
+            {
+              "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+              "status": "found"
+            },
+            {
+              "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+              "status": "found"
+            },
+            {
+              "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+              "status": "found"
+            },
+            {
+              "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+              "status": "found"
+            },
+            {
+              "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+              "status": "found"
+            },
+            {
+              "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+              "status": "found"
+            },
+            {
+              "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+              "status": "found"
+            },
+            {
+              "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+              "status": "found"
+            },
+            {
+              "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+              "status": "found"
+            },
+            {
+              "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+              "status": "found"
+            },
+            {
+              "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+              "status": "found"
+            },
+            {
+              "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+              "status": "found"
+            },
+            {
+              "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+              "status": "found"
+            },
+            {
+              "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+              "status": "found"
+            },
+            {
+              "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+              "status": "found"
+            },
+            {
+              "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+              "status": "found"
+            },
+            {
+              "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+              "status": "found"
+            },
+            {
+              "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+              "status": "found"
+            },
+            {
+              "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+              "status": "found"
+            }
+          ]
+        },
+        "wallMs": 135579.4165,
+        "exitCode": 0,
+        "maxRssKiB": 3117856,
+        "report": {
+          "searchElapsedMs": 79781.4816,
+          "plannerElapsedMs": 44949.73419999999,
+          "totalElapsedMs": 134202.8789,
+          "searches": 23
+        },
+        "noMatchCaptures": [
+          {
+            "searchIndex": 1,
+            "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+            "snapshotSha256": "50e45db5a41b3c4c05bc409374a30e69a6db8c0b972d3942a64cc0d836c8b1de",
+            "baseSearchRunId": "research.global.search.fnv1a32:8f17b2d1",
+            "baseBoundary": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": true,
+              "skillConversion": true
+            },
+            "baseReach": {
+              "normal": 350,
+              "gogma": 500,
+              "skill": 1501
+            },
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "baseSearch": {
+              "status": "not_found_within_extent",
+              "elapsedMs": 7079.040099999998,
+              "settledWorkItems": 2350,
+              "predictionCalls": {
+                "normal": 350,
+                "gogma": 102621,
+                "skill": 1501
+              },
+              "predictionElapsedMs": 786.7651999998125,
+              "searchedRoutes": [
+                "normal_artian_to_gogma"
+              ],
+              "skippedRoutes": [
+                {
+                  "route": "owned_normal_artian_to_gogma",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Normal Artian weapon is available."
+                },
+                {
+                  "route": "existing_gogma_current",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Gogma weapon is available."
+                },
+                {
+                  "route": "existing_gogma_reset_bonuses",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Gogma weapon is available."
+                },
+                {
+                  "route": "existing_gogma_keep_bonuses",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Gogma weapon is available."
+                },
+                {
+                  "route": "existing_gogma_reset_skills",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Gogma weapon is available."
+                },
+                {
+                  "route": "existing_gogma_mixed",
+                  "reason": "no_owned_weapon_available",
+                  "detail": "No compatible owned Gogma weapon is available."
+                }
+              ],
+              "resultSha256": "39561a584a4d7916bf33859b7a02fb10962727b6cb85af05b6e25956a61502b6"
+            }
+          }
+        ]
+      },
+      "probes": [
+        {
+          "searchIndex": 1,
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "axis": "normal",
+          "snapshotSha256": "fnv1a32:c5e7fa65",
+          "wallMs": 9849.672300000035,
+          "exitCode": 0,
+          "maxRssKiB": 862556,
+          "baseSearchRunId": "research.global.search.fnv1a32:8f17b2d1",
+          "baseExtent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "probeExtent": {
+            "maxNormalAdvance": 700,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "probeSearchRunId": "research.global.search.fnv1a32:b0458a66",
+          "baseBoundary": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "status": "found",
+          "error": null,
+          "timeBudgetMs": 180000,
+          "elapsedMs": 5434.8381,
+          "observedPredictionReach": {
+            "normal": 700,
+            "gogma": 500,
+            "skill": 1097
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 1098,
+          "advances": {
+            "normal": 643,
+            "gogma": 1,
+            "skill": 454
+          },
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "candidateFingerprint": "fnv1a32:6b4e89c1",
+          "validation": {
+            "status": "passed",
+            "error": null,
+            "generatedEntryId": "build-list.constrained.fnv1a32-82c499ba",
+            "applicationSteps": 1098
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 700,
+                "elapsedMs": 51.46489999999426,
+                "uniqueInputs": 700,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 103492,
+                "elapsedMs": 293.43429999999967,
+                "uniqueInputs": 103492,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 1097,
+                "elapsedMs": 176.78150000000187,
+                "uniqueInputs": 1097,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 586.0385999999605,
+            "settledWorkItems": 3168,
+            "settledCountExact": true,
+            "progressEvents": 33,
+            "cancellationChecks": 109913,
+            "checkpointCount": 107758,
+            "yieldCount": 2155,
+            "yieldElapsedMs": 105.56349999999043,
+            "candidateIdentityCalls": 1
+          },
+          "candidateSha256": "922a86f0bd5300955a1f3b3ab875492f8a87dcc0ae32328f0984a5f9791b3533",
+          "rawBlocks": {
+            "requests": 103492,
+            "uniqueBlocks": 500,
+            "duplicateRequests": 102992,
+            "theoreticalHitRatio": 0.9951687086924593,
+            "hits": 102992,
+            "hitRatio": 0.9951687086924593,
+            "misses": 500,
+            "failures": 0,
+            "evictions": 0,
+            "readerElapsedMs": 32.405700000005936,
+            "missReadElapsedMs": 25.268699999999512,
+            "peakEntries": 500,
+            "rawUint32Count": 5000,
+            "approximatePayloadBytes": 20000,
+            "maxBlockIndex": 932,
+            "blockIndexDistribution": {
+              "256..511": 3326,
+              "512..1023": 100166
+            }
+          },
+          "environment": {
+            "runtime": "Node (not Browser Worker)",
+            "node": "v24.19.0",
+            "platform": "win32",
+            "arch": "x64",
+            "heapSizeLimitBytes": 8791261184,
+            "execArgv": [
+              "--max-old-space-size=8192"
+            ],
+            "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+            "logicalCpuCount": 16,
+            "totalMemoryBytes": 33377591296,
+            "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+            "maxPlanSteps": 20000,
+            "extent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+            "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+            "rngEngineVersion": "production-rng:c5-e7",
+            "osRelease": "10.0.26200",
+            "benchmarkMode": "phase1d-probe",
+            "cacheMode": "per-search",
+            "yieldMode": "immediate",
+            "routeFilter": "all",
+            "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+            "probeAxis": "normal",
+            "timeBudgetMs": 180000,
+            "snapshotSha256": "50e45db5a41b3c4c05bc409374a30e69a6db8c0b972d3942a64cc0d836c8b1de",
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "probeExtent": {
+              "maxNormalAdvance": 700,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            }
+          }
+        },
+        {
+          "searchIndex": 1,
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "axis": "gogma",
+          "snapshotSha256": "fnv1a32:c5e7fa65",
+          "wallMs": 40220.92070000002,
+          "exitCode": 0,
+          "maxRssKiB": 2676040,
+          "baseSearchRunId": "research.global.search.fnv1a32:8f17b2d1",
+          "baseExtent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "probeExtent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 1000,
+            "maxSkillAdvance": 1500
+          },
+          "probeSearchRunId": "research.global.search.fnv1a32:7f1ec6bf",
+          "baseBoundary": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "status": "not_found_within_extent",
+          "error": null,
+          "timeBudgetMs": 180000,
+          "elapsedMs": 39040.1598,
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 1000,
+            "skill": 1501
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "candidateFingerprint": null,
+          "validation": {
+            "status": "not_applicable",
+            "error": null,
+            "generatedEntryId": null,
+            "applicationSteps": null
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 22.77740000000108,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 341372,
+                "elapsedMs": 1447.900599999035,
+                "uniqueInputs": 341372,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 1501,
+                "elapsedMs": 405.9729999998766,
+                "uniqueInputs": 1501,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 2912.6704000002537,
+            "settledWorkItems": 2850,
+            "settledCountExact": true,
+            "progressEvents": 30,
+            "cancellationChecks": 352637,
+            "checkpointCount": 345723,
+            "yieldCount": 6914,
+            "yieldElapsedMs": 529.0925000000149,
+            "candidateIdentityCalls": 0
+          },
+          "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "rawBlocks": {
+            "requests": 341372,
+            "uniqueBlocks": 1000,
+            "duplicateRequests": 340372,
+            "theoreticalHitRatio": 0.9970706443410707,
+            "hits": 340372,
+            "hitRatio": 0.9970706443410707,
+            "misses": 1000,
+            "failures": 0,
+            "evictions": 0,
+            "readerElapsedMs": 128.16760000008105,
+            "missReadElapsedMs": 99.30999999998653,
+            "peakEntries": 1000,
+            "rawUint32Count": 10000,
+            "approximatePayloadBytes": 40000,
+            "maxBlockIndex": 1432,
+            "blockIndexDistribution": {
+              "256..511": 3168,
+              "512..1023": 134588,
+              "1024..2047": 203616
+            }
+          },
+          "environment": {
+            "runtime": "Node (not Browser Worker)",
+            "node": "v24.19.0",
+            "platform": "win32",
+            "arch": "x64",
+            "heapSizeLimitBytes": 8791261184,
+            "execArgv": [
+              "--max-old-space-size=8192"
+            ],
+            "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+            "logicalCpuCount": 16,
+            "totalMemoryBytes": 33377591296,
+            "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+            "maxPlanSteps": 20000,
+            "extent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+            "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+            "rngEngineVersion": "production-rng:c5-e7",
+            "osRelease": "10.0.26200",
+            "benchmarkMode": "phase1d-probe",
+            "cacheMode": "per-search",
+            "yieldMode": "immediate",
+            "routeFilter": "all",
+            "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+            "probeAxis": "gogma",
+            "timeBudgetMs": 180000,
+            "snapshotSha256": "50e45db5a41b3c4c05bc409374a30e69a6db8c0b972d3942a64cc0d836c8b1de",
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "probeExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 1000,
+              "maxSkillAdvance": 1500
+            }
+          }
+        },
+        {
+          "searchIndex": 1,
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "axis": "skill",
+          "snapshotSha256": "fnv1a32:c5e7fa65",
+          "wallMs": 8867.491199999931,
+          "exitCode": 0,
+          "maxRssKiB": 879492,
+          "baseSearchRunId": "research.global.search.fnv1a32:8f17b2d1",
+          "baseExtent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "probeExtent": {
+            "maxNormalAdvance": 350,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 3000
+          },
+          "probeSearchRunId": "research.global.search.fnv1a32:7254f0f8",
+          "baseBoundary": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "status": "not_found_within_extent",
+          "error": null,
+          "timeBudgetMs": 180000,
+          "elapsedMs": 7770.461199999999,
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 3001
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "searchedRoutes": [
+            "normal_artian_to_gogma"
+          ],
+          "skippedRoutes": [
+            {
+              "route": "owned_normal_artian_to_gogma",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Normal Artian weapon is available."
+            },
+            {
+              "route": "existing_gogma_current",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_keep_bonuses",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_reset_skills",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            },
+            {
+              "route": "existing_gogma_mixed",
+              "reason": "no_owned_weapon_available",
+              "detail": "No compatible owned Gogma weapon is available."
+            }
+          ],
+          "candidateFingerprint": null,
+          "validation": {
+            "status": "not_applicable",
+            "error": null,
+            "generatedEntryId": null,
+            "applicationSteps": null
+          },
+          "profile": {
+            "predictions": {
+              "normal": {
+                "calls": 350,
+                "elapsedMs": 23.2574999999988,
+                "uniqueInputs": 350,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "gogma": {
+                "calls": 102621,
+                "elapsedMs": 379.811600000006,
+                "uniqueInputs": 102621,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              },
+              "skill": {
+                "calls": 3001,
+                "elapsedMs": 972.5655999999451,
+                "uniqueInputs": 3001,
+                "withinSearchDuplicateCalls": 0,
+                "previousSearchDuplicateCalls": 0
+              }
+            },
+            "keyObservationMs": 756.7371999998677,
+            "settledWorkItems": 3850,
+            "settledCountExact": true,
+            "progressEvents": 40,
+            "cancellationChecks": 111661,
+            "checkpointCount": 109472,
+            "yieldCount": 2189,
+            "yieldElapsedMs": 137.4097000000006,
+            "candidateIdentityCalls": 0
+          },
+          "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "rawBlocks": {
+            "requests": 102621,
+            "uniqueBlocks": 500,
+            "duplicateRequests": 102121,
+            "theoreticalHitRatio": 0.9951277029068124,
+            "hits": 102121,
+            "hitRatio": 0.9951277029068124,
+            "misses": 500,
+            "failures": 0,
+            "evictions": 0,
+            "readerElapsedMs": 39.579700000104594,
+            "missReadElapsedMs": 30.681799999996656,
+            "peakEntries": 500,
+            "rawUint32Count": 5000,
+            "approximatePayloadBytes": 20000,
+            "maxBlockIndex": 932,
+            "blockIndexDistribution": {
+              "256..511": 3168,
+              "512..1023": 99453
+            }
+          },
+          "environment": {
+            "runtime": "Node (not Browser Worker)",
+            "node": "v24.19.0",
+            "platform": "win32",
+            "arch": "x64",
+            "heapSizeLimitBytes": 8791261184,
+            "execArgv": [
+              "--max-old-space-size=8192"
+            ],
+            "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+            "logicalCpuCount": 16,
+            "totalMemoryBytes": 33377591296,
+            "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+            "maxPlanSteps": 20000,
+            "extent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+            "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+            "rngEngineVersion": "production-rng:c5-e7",
+            "osRelease": "10.0.26200",
+            "benchmarkMode": "phase1d-probe",
+            "cacheMode": "per-search",
+            "yieldMode": "immediate",
+            "routeFilter": "all",
+            "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+            "probeAxis": "skill",
+            "timeBudgetMs": 180000,
+            "snapshotSha256": "50e45db5a41b3c4c05bc409374a30e69a6db8c0b972d3942a64cc0d836c8b1de",
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "probeExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 3000
+            }
+          }
+        }
+      ],
+      "boundStops": []
+    }
+  ]
+}

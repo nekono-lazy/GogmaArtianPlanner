@@ -1,0 +1,2641 @@
+{
+  "environment": {
+    "runtime": "Node (not Browser Worker)",
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "heapSizeLimitBytes": 8791261184,
+    "execArgv": [
+      "--max-old-space-size=8192"
+    ],
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "maxPlanSteps": 20000,
+    "extent": {
+      "maxNormalAdvance": 350,
+      "maxGogmaAdvance": 500,
+      "maxSkillAdvance": 1500
+    },
+    "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+    "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+    "rngEngineVersion": "production-rng:c5-e7",
+    "osRelease": "10.0.26200",
+    "benchmarkMode": "phase0",
+    "cacheMode": "per-search",
+    "yieldMode": "immediate",
+    "routeFilter": "all",
+    "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+    "phase1cReport": "docs/PLANNER_GLOBAL_PHASE1C_RESULTS_8G.json",
+    "phase1cReportSha256": "f0254b517b4224255b174f457173ef2986fa5e370946ff20aa938eb8acb3dd70",
+    "anchorDerivation": "selectExtentProbeAnchors: blocker-free, Trace-Replay-passed, evidenced Phase 1-C attempts with the maximum completed count, ranked by compareResearchAttempts; secondary = best such attempt whose bounded no-match set names a Target absent from the primary",
+    "probeRule": "single axis x2 when the base bounded no-match reached that axis boundary (observed prediction reach)",
+    "attemptBudgetMs": 900000,
+    "fallbackBudgetMs": 180000,
+    "probeBudgetMs": 180000,
+    "bounds": {
+      "maxAnchors": 2,
+      "maxProbes": 6,
+      "maxVariants": 6
+    },
+    "childHeapFlag": "--max-old-space-size=8192"
+  },
+  "outcome": "completed",
+  "winner": {
+    "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"normal-2x-fallback\"}",
+    "anchorAttemptId": 3,
+    "axis": "normal",
+    "success": true,
+    "final": {
+      "completedTargetCount": 43,
+      "conflicts": 0,
+      "rejected": 0,
+      "resourceConflictRejected": 0,
+      "steps": 6857,
+      "traceReplay": "passed",
+      "status": "completed"
+    },
+    "stop": "completed"
+  },
+  "ranking": [
+    {
+      "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"normal-2x-fallback\"}",
+      "anchorAttemptId": 3,
+      "axis": "normal",
+      "success": true,
+      "final": {
+        "completedTargetCount": 43,
+        "conflicts": 0,
+        "rejected": 0,
+        "resourceConflictRejected": 0,
+        "steps": 6857,
+        "traceReplay": "passed",
+        "status": "completed"
+      },
+      "stop": "completed"
+    },
+    {
+      "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"normal-2x-fallback\"}",
+      "anchorAttemptId": 4,
+      "axis": "normal",
+      "success": true,
+      "final": {
+        "completedTargetCount": 43,
+        "conflicts": 0,
+        "rejected": 0,
+        "resourceConflictRejected": 0,
+        "steps": 8589,
+        "traceReplay": "passed",
+        "status": "completed"
+      },
+      "stop": "completed"
+    }
+  ],
+  "variants": [
+    {
+      "anchorAttemptId": 4,
+      "axis": "normal",
+      "strategy": "normal-2x-fallback",
+      "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"normal-2x-fallback\"}",
+      "stop": "completed",
+      "planningTargetCount": 43,
+      "final": {
+        "status": "completed",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 20000
+        },
+        "expandedStates": 8632,
+        "completedTargetCount": 43,
+        "totalTargetCount": 43,
+        "selected": 43,
+        "conflicts": 0,
+        "conflictsByKind": {},
+        "rejected": 0,
+        "resourceConflictRejected": 0,
+        "steps": 8589,
+        "traceReplay": "passed",
+        "elapsedMs": 35586.47279999999,
+        "fullRuns": 1,
+        "warnings": []
+      },
+      "reportStatus": "completed",
+      "error": null,
+      "signals": {
+        "notFound": [],
+        "resourceRejected": [],
+        "conflictTargets": [],
+        "conflicts": [],
+        "blockers": []
+      },
+      "fallbacks": [
+        {
+          "searchIndex": 1,
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "baseStatus": "not_found_within_extent",
+          "targetOutcome": "resolved_by_extent_fallback",
+          "fallback": {
+            "strategy": "normal-2x-fallback",
+            "axis": "normal",
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "extent": {
+              "maxNormalAdvance": 700,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "searchRunId": "research.global.search.fnv1a32:ae5547e7",
+            "status": "found",
+            "stoppedBy": null,
+            "timeBudgetMs": 180000,
+            "elapsedMs": 7636.753100000002,
+            "applicationPlannerMs": 3506.7353000000003,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 1480,
+            "advances": {
+              "normal": 643,
+              "gogma": 1,
+              "skill": 836
+            },
+            "observedPredictionReach": {
+              "normal": 700,
+              "gogma": 500,
+              "skill": 1479
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "searchedRoutes": [
+              "normal_artian_to_gogma"
+            ],
+            "skippedRoutes": [
+              {
+                "route": "owned_normal_artian_to_gogma",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Normal Artian weapon is available."
+              },
+              {
+                "route": "existing_gogma_current",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_reset_bonuses",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_keep_bonuses",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_reset_skills",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_mixed",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              }
+            ],
+            "generatedEntryId": "build-list.constrained.fnv1a32-289b5104",
+            "generatedCandidateId": "candidate.research.global.fnv1a32-c94d72d5",
+            "error": null
+          }
+        }
+      ],
+      "fallbackSearchEvidence": [
+        {
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "axis": "normal",
+          "extent": {
+            "maxNormalAdvance": 700,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "searchRunId": "research.global.search.fnv1a32:ae5547e7",
+          "resultSha256": "1a4a0cc5f56aed4f856a4e8860bad8148883d0cd5b498365e113676ae124da26",
+          "candidateSha256": "4acfe3aaeb86df85b6bb8a112ce9c48483345f8621699ebc9e46361976728608"
+        }
+      ],
+      "probeConsistency": [
+        {
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "probeCandidateSha256": "4acfe3aaeb86df85b6bb8a112ce9c48483345f8621699ebc9e46361976728608",
+          "fallbackCandidateSha256": "4acfe3aaeb86df85b6bb8a112ce9c48483345f8621699ebc9e46361976728608",
+          "same": true
+        }
+      ],
+      "searches": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-8f6c1b9c",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 1030,
+          "advances": {
+            "normal": 207,
+            "gogma": 1,
+            "skill": 822
+          },
+          "elapsedMs": 7213.489700000002,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "status": "not_found_within_extent",
+          "targetOutcome": "resolved_by_extent_fallback",
+          "generatedEntryId": "build-list.constrained.fnv1a32-289b5104",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 1480,
+          "advances": {
+            "normal": 643,
+            "gogma": 1,
+            "skill": 836
+          },
+          "elapsedMs": 7277.012800000004,
+          "fallbackElapsedMs": 7636.753100000002
+        },
+        {
+          "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-13419488",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 150,
+          "advances": {
+            "normal": 28,
+            "gogma": 31,
+            "skill": 91
+          },
+          "elapsedMs": 857.1007000000027,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-6beb971e",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 109,
+          "advances": {
+            "normal": null,
+            "gogma": 109,
+            "skill": 0
+          },
+          "elapsedMs": 425.47149999999965,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-12273b41",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 91,
+          "advances": {
+            "normal": null,
+            "gogma": 91,
+            "skill": 0
+          },
+          "elapsedMs": 259.68850000000384,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-b93208a5",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 39,
+          "advances": {
+            "normal": null,
+            "gogma": 39,
+            "skill": 0
+          },
+          "elapsedMs": 94.10469999999623,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-feae3001",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 132,
+          "advances": {
+            "normal": null,
+            "gogma": 102,
+            "skill": 30
+          },
+          "elapsedMs": 913.7332000000024,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-16b77264",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 269,
+          "advances": {
+            "normal": null,
+            "gogma": 269,
+            "skill": 0
+          },
+          "elapsedMs": 5786.783500000005,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-fe897825",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 96,
+          "advances": {
+            "normal": null,
+            "gogma": 96,
+            "skill": 0
+          },
+          "elapsedMs": 457.3492000000042,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-5e5a1ab8",
+          "routeKind": "existing_gogma_keep_bonuses",
+          "estimatedOperationCount": 257,
+          "advances": {
+            "normal": null,
+            "gogma": 257,
+            "skill": 0
+          },
+          "elapsedMs": 3823.225599999998,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-d05f6eb3",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 134,
+          "advances": {
+            "normal": null,
+            "gogma": 53,
+            "skill": 81
+          },
+          "elapsedMs": 900.790399999998,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-6b263264",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 272,
+          "advances": {
+            "normal": null,
+            "gogma": 271,
+            "skill": 1
+          },
+          "elapsedMs": 3166.4401999999973,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-db29d193",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 117,
+          "advances": {
+            "normal": 77,
+            "gogma": 16,
+            "skill": 24
+          },
+          "elapsedMs": 490.5407000000123,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-bf94e325",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 120,
+          "advances": {
+            "normal": null,
+            "gogma": 120,
+            "skill": 0
+          },
+          "elapsedMs": 588.4247999999934,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-43e3c8a3",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 238,
+          "advances": {
+            "normal": null,
+            "gogma": 215,
+            "skill": 23
+          },
+          "elapsedMs": 2300.62950000001,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-d8a7e796",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 556,
+          "advances": {
+            "normal": null,
+            "gogma": 33,
+            "skill": 523
+          },
+          "elapsedMs": 12735.020999999993,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-79b0d981",
+          "routeKind": "existing_gogma_keep_bonuses",
+          "estimatedOperationCount": 2,
+          "advances": {
+            "normal": null,
+            "gogma": 2,
+            "skill": 0
+          },
+          "elapsedMs": 2.221399999994901,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-d7c1c941",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 695,
+          "advances": {
+            "normal": 66,
+            "gogma": 73,
+            "skill": 556
+          },
+          "elapsedMs": 12901.424700000003,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-819d3051",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 124,
+          "advances": {
+            "normal": null,
+            "gogma": 124,
+            "skill": 0
+          },
+          "elapsedMs": 1053.2546000000002,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-2e9bd85c",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 190,
+          "advances": {
+            "normal": 130,
+            "gogma": 37,
+            "skill": 23
+          },
+          "elapsedMs": 896.2280000000028,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-e2649f78",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 403,
+          "advances": {
+            "normal": 13,
+            "gogma": 252,
+            "skill": 138
+          },
+          "elapsedMs": 11326.160100000008,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-af17eba0",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 98,
+          "advances": {
+            "normal": null,
+            "gogma": 13,
+            "skill": 85
+          },
+          "elapsedMs": 379.73659999998927,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-62210c74",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 522,
+          "advances": {
+            "normal": null,
+            "gogma": 263,
+            "skill": 259
+          },
+          "elapsedMs": 18123.385100000014,
+          "fallbackElapsedMs": null
+        }
+      ],
+      "evidence": {
+        "rawBlockSummary": {
+          "requests": 913574,
+          "uniqueBlocks": 5201,
+          "duplicateRequests": 908373,
+          "theoreticalHitRatio": 0.994306974585529,
+          "hits": 907735,
+          "hitRatio": 0.9936086184589317,
+          "misses": 5839,
+          "failures": 0,
+          "evictions": 0,
+          "readerElapsedMs": 834.6403999944268,
+          "missReadElapsedMs": 742.8870999999708,
+          "peakEntries": 500,
+          "rawUint32Count": 5000,
+          "approximatePayloadBytes": 20000,
+          "maxBlockIndex": 3135,
+          "blockIndexDistribution": {
+            "256..511": 14695,
+            "512..1023": 354779,
+            "1024..2047": 116946,
+            "2048..4095": 427154
+          }
+        },
+        "searchEvidence": [
+          {
+            "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+            "resultSha256": "088148d86b4337e16014bba3d955a82a2eb82a00d1b19b49be167db94feb0f26",
+            "candidateSha256": "b77fd8918272d666420d3a0d3e18c7bc658edecf09d96e69a7d8bdf0abc1d78e"
+          },
+          {
+            "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+            "resultSha256": "8a7fd191265e2313c6a450a9925a482df266f71e3e3992e4a9fbfc5549dacf6e",
+            "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+          },
+          {
+            "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+            "resultSha256": "79c671779a42b4d19214c3b61e4c02deb9c5830c615b09172027ad603a323283",
+            "candidateSha256": "f972bd6a65c0831f6acfae1cf84451c08b8295d131515bc835f373efcad4acab"
+          },
+          {
+            "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+            "resultSha256": "c2f60c093554170b6d95f31a7b2607e1ac740b005699877073960e2a17fa7cf8",
+            "candidateSha256": "e4901058f1067469983b69bceaf6fc005769a28b86b689b7e1549ee31683541a"
+          },
+          {
+            "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+            "resultSha256": "3f82599264dddca99801b803990bc3f86f46dbf20294b9e084fe5661814f88f0",
+            "candidateSha256": "bd4806ea89385d5630bb3009934cad41275cdd1e6fb11dcc0440b2269c854ade"
+          },
+          {
+            "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+            "resultSha256": "0eb8228bd91193b722fce42b04811171be7fc671391381bf8e54309d303b5fa8",
+            "candidateSha256": "29319c839f49b8da4a1d2c1bd97df2dbedd6fbf8a9fd61eda6842640d048a377"
+          },
+          {
+            "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+            "resultSha256": "c03a7b5889bd5ab2a470ff918ada2479dae7d4a2ae56a2545630b27be89c45b8",
+            "candidateSha256": "a6a9d7fbc3945fb6bbf4f93b1e62151fe87c46d2aa4af545e1b0f9a6cc056004"
+          },
+          {
+            "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+            "resultSha256": "5ec394c5e7c067a991f6d2573bdd8a0482fee062282b26e9cbbf371bf0e4a027",
+            "candidateSha256": "09385bf60a4161caa97c29b2414ac43fa0decdce2d2227b77e558b9efe28b37d"
+          },
+          {
+            "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+            "resultSha256": "2e59ea8f1af55df2d4ab11aa1732581bc5e160fcb5be3dfd04ab1669d9c7b6ac",
+            "candidateSha256": "213288898dbd97d3b4c0d0290c2ae27a9e0e641203a6f674bf9be3f553cff409"
+          },
+          {
+            "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+            "resultSha256": "31013d18035ecde98da2d39be487cd199c65d9c78bb46a284773f28feba34709",
+            "candidateSha256": "e3e4ff88fc35863ccb48fde319a184262a81a7fd5694c0d11a5f0efef97d4c2d"
+          },
+          {
+            "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+            "resultSha256": "ebf95d2483635993588438e503d283028079ccb072c2a965548a0c8621dc633b",
+            "candidateSha256": "58cebc3b11c32412dbbee77693b6625a950548fee3e44b24fceee4d4d2a24e42"
+          },
+          {
+            "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "resultSha256": "8a0adc590d65c81a995b7391a85cc064f5bfac60259cc5b204d210f5698c4779",
+            "candidateSha256": "56043b288b28326e6ebde156871c2ebb80f8828209dbe04a416b1ecd80fd97d0"
+          },
+          {
+            "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+            "resultSha256": "e457e794bd5be3cb0621525b69ffd70ae7f30a5178dc9a2fdfe05455d924d8ad",
+            "candidateSha256": "3e8a4986793923912e1ccb1038284109f797f23a0a113e35a3c54a1e3bfb4b76"
+          },
+          {
+            "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+            "resultSha256": "c744c7581fa704002ab0743ff76ded3f7738950e2c8beb7341415c9140e72f44",
+            "candidateSha256": "6ad5f21889d0df2c2f3aaffdd665e2c1ff1a9083bf15252198e0f7dbd29bb7c7"
+          },
+          {
+            "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+            "resultSha256": "0c2191e48a01ad3a50879d1a2b59caa4ac83f08ed86a06e2ae45a926b00783c3",
+            "candidateSha256": "4882f20618d7c7df5d071e8ac5c1747a40aa00d84282d0061f3ea6e2c62fa87f"
+          },
+          {
+            "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+            "resultSha256": "7718b03109bbcc0343daf79b4c964989c44a822cd18c73f3fa2597ffa0fe2e08",
+            "candidateSha256": "e7200dd7ec22a5da28c1b7aaf2d118c432c008129cd12bbf577cf973e23214bf"
+          },
+          {
+            "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+            "resultSha256": "84b60a9c3c8cdfd05474d5d3b741a4387e47f247698d604313d28b8710fee75d",
+            "candidateSha256": "531f840645926abb44425e041369fca7cfbebf40687dacc221cca68a4bebb49c"
+          },
+          {
+            "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+            "resultSha256": "9bd286f8fcc54de4c6ca4d57e81a89a10a1a3d95472d97a375161ae8efc380ef",
+            "candidateSha256": "badde4a5a6d0034cd1317662bcb23a7eef144a56ce1ed1d16e4aa392d0fee278"
+          },
+          {
+            "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "resultSha256": "abee4735aa282c542a1e01d493abfb07256f91f54541c6cac71d4651ae1d4713",
+            "candidateSha256": "b2490f0c75ec8f9bfd9f3acd9a2b47a284dcb1afba96b6de9008bbfee792c7c8"
+          },
+          {
+            "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "resultSha256": "a042d7f448bff24e6a1be7d1dd90b0a1cdd8ffa34c0fe94e75ddd9f5d1573cc3",
+            "candidateSha256": "a9929471ea4d6389a6f69e517e8830d5c59878c3b547b49e86fc0d2c55013945"
+          },
+          {
+            "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+            "resultSha256": "36f2e768a55e42540e8f1012cbcb4e255acb188ec60b0d3ac6c2022bc712e4a3",
+            "candidateSha256": "97dbee43c2c63d1546d888f9b5e7617f8af3a0714aeb00130573dcfc763cd71e"
+          },
+          {
+            "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+            "resultSha256": "ea09f4834b4e585356d7fe27bc9233d51dfd5b9b1b88adeaf66da0b3d59be5c1",
+            "candidateSha256": "480461821f3b0ee714a7f2a15a52fe32b02be917722f238404cac86f9c892361"
+          },
+          {
+            "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+            "resultSha256": "29567b861be915a27ea132d35b407a1b3378e5f1bf4b6ac3ca658f789f2777b8",
+            "candidateSha256": "f3ec9ed59bbe99edf49f0a3495fe073446543303191b64dfc17ddce1906d8e7a"
+          }
+        ],
+        "generatedEntries": [
+          {
+            "id": "build-list.constrained.fnv1a32-8f6c1b9c",
+            "candidateSha256": "b1ee94d5ea36dbe1e4995ec06e54872775fab3979c4a6ab6675f1b837198f53f",
+            "entrySha256": "b4335b082e05c3927390e480b3870bc81ab190cc6efcca44e1ae345f6a8bf62b"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-289b5104",
+            "candidateSha256": "122ea42faf33a1fe11167bd366414ea7e25db4e432296bd91559da29e801f33f",
+            "entrySha256": "84b9c974f88b7c33b6373bbd4c9fd33e8c076a71c30899f74160052f4aad5040"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-13419488",
+            "candidateSha256": "e1b48919c0fe45133a7fe09be9d74fc12c72324bbe7c54dbcaffa4c2448553bb",
+            "entrySha256": "efa43658126aa86e5a9887e306ff58ba8d781a9ec825dd6e576acb2eb343f7ab"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-6beb971e",
+            "candidateSha256": "7701ad3aa128db5d4cd5923046ed4bdb9b58232c57f26f69dd29c74b4e63803c",
+            "entrySha256": "e3776271d41b2dad7d071e3f46a748f1387507688382b70b4a003891dfd6da04"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-12273b41",
+            "candidateSha256": "d97c9ba950b1b1a90bcb35e2654651b531de2b866af6bb4050920b141fca477d",
+            "entrySha256": "7b676dd4b68b47eb1fb190d0e51815b996c40323893bbd23f0ba9849ea623978"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-b93208a5",
+            "candidateSha256": "ad3bbc849f17c2271e828004e4cd8b9c0054d20b2ee1a850df0b7035c2441026",
+            "entrySha256": "1eaf226cc1d6be0b5707c18e3daead28091487399bc16038288e51112c6612f3"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-feae3001",
+            "candidateSha256": "f78f918548496c631a5fa9132abab6c1179b0f30c84c6d91038257b05a1fbd2a",
+            "entrySha256": "6f16713eff35ce1da485a26916019fdd42eb12e90f368f98b729fc563950257f"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-16b77264",
+            "candidateSha256": "b8fcb8c395e494d09aeb96902e8663b9b8a0ffba6255a668eff707e127c3bffa",
+            "entrySha256": "d0773bb796bfd753979a8e142a63539b85d8b415d9ab05a147ba85cc99930d25"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-fe897825",
+            "candidateSha256": "70eb7a065d355a3d1ed5e70d38e7eb3519e82c5284931c7c90fb0454e7b02552",
+            "entrySha256": "10c4e2467af1ccaa7ea9bed6f5c368251cc8692346978a222936c6d3c2262ea6"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-5e5a1ab8",
+            "candidateSha256": "743232595f3a71fd15381e4418edffcfdf2880ede32fcf270a3387270bd84d6d",
+            "entrySha256": "d6a13db713f005210850cdbd80caed3dddb19daf28471921f3965ddcd6f763c4"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-d05f6eb3",
+            "candidateSha256": "e7a5d505ff756e43268bb89d569ecdc57fc6fe609546375c4995fc31263c6b37",
+            "entrySha256": "4bf3f007c57bdf6c37e727d4cbd1f89ee8cefe460dd05eb3762313880993228e"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-6b263264",
+            "candidateSha256": "256b8f855a3686aaf7a1c70f7dbaaf0992b55fcce5a29a2dc525e6295b019f9f",
+            "entrySha256": "a87d5d754f7859e5c77beaf4fcda3c64c2fd239e6dbf4806d7569b9c5ba08049"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-db29d193",
+            "candidateSha256": "aa3ac1fda13f2f28efd64a164936d832d99ea70833da5b521d083e2b61b7b7ee",
+            "entrySha256": "b3ca50ce4a9ddf038c9e05218e84d13dd94c349d16eb0c3d0c8f7cc449207d07"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-bf94e325",
+            "candidateSha256": "054ffa1f44cb04c93bcb6302dd2e518aafcd8327e0043b99c045a093c98e7608",
+            "entrySha256": "37c6f5a0f1ea4e7cd79895c3a0aeeb287088edf80263aa59663b67bb3e86802d"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-43e3c8a3",
+            "candidateSha256": "c3db3f804fb89ad2dceed6d310b8dc6cdc37f09cac069c02e6bb255d0b64e49a",
+            "entrySha256": "ab16a31f55ed98f3b2a9bdfd14173b8f4d0917f40e21de6c0af1a13d21deb5a0"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-d8a7e796",
+            "candidateSha256": "c66f48794906e4314b1168629f093644676b2a697670ca5dd5c9b2b4abcca5aa",
+            "entrySha256": "0875dcb2de4d8839b8faa82b9ce3765952b75f803a30cc54f6b26b7f9cd97a7d"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-79b0d981",
+            "candidateSha256": "e180e91fbf9331f24a3f591e06d98af38ef1592ea5294bd787fcb65f3e971da4",
+            "entrySha256": "b59d0bbb18fe64e1993bd907b05ba4aa49cec62e364734f6a33176abcaa0eda5"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-d7c1c941",
+            "candidateSha256": "63058f071fdc08f163074a60bedce067cce6707c48457d6425bc741aafd563f1",
+            "entrySha256": "c6de7d32607770bc0d807153161614282f0d6a3db2eef2e61b58b1d07d00f82c"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-819d3051",
+            "candidateSha256": "1907760436f1a844e97501a40da062890f7e09a0b7d0bef7e0199e1cc310d556",
+            "entrySha256": "dad99e111e55ee2e58d0a86357277275322494208a7b26de5b1f5bbe25e965f2"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-2e9bd85c",
+            "candidateSha256": "5f7bba62b9d4ec7396544c932ed35cef4efc77fa1e7052277f83493d9f4e639b",
+            "entrySha256": "b2a2f6765608c69f4651fbd5ae513b8f7b89c6f2ccd77bd09237d15041d0b1db"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-e2649f78",
+            "candidateSha256": "4d99f69befff450608d72f8330c6525290101efe116dcf13017c6d86df5d15f4",
+            "entrySha256": "9dcd080e607fd5f0c1ee6c4f0005641e39eb07595bb90a3e9e9a4787f07fdce3"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-af17eba0",
+            "candidateSha256": "5e455bf62ea5d6b22353b15c10abe3709fd5463ad83828c922a8a7cea686fa03",
+            "entrySha256": "0ddce3ed515098a96e5cacc2a157d6b1fc010ef7d17fb7affad9e51b4c9ae8c5"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-62210c74",
+            "candidateSha256": "131de35091ece74ea84b4dabe4775df43c504003158eb475767e259087a56151",
+            "entrySha256": "e7800c9101ab213d41aeef1df2ecc1471fd4a99e9f91e49a4fbe30b5b5b6c587"
+          }
+        ],
+        "finalSelectedEntryIds": [
+          "build-list.constrained.fnv1a32-12273b41",
+          "build-list.constrained.fnv1a32-13419488",
+          "build-list.constrained.fnv1a32-16b77264",
+          "build-list.constrained.fnv1a32-289b5104",
+          "build-list.constrained.fnv1a32-2e9bd85c",
+          "build-list.constrained.fnv1a32-43e3c8a3",
+          "build-list.constrained.fnv1a32-5e5a1ab8",
+          "build-list.constrained.fnv1a32-62210c74",
+          "build-list.constrained.fnv1a32-6b263264",
+          "build-list.constrained.fnv1a32-6beb971e",
+          "build-list.constrained.fnv1a32-79b0d981",
+          "build-list.constrained.fnv1a32-819d3051",
+          "build-list.constrained.fnv1a32-8f6c1b9c",
+          "build-list.constrained.fnv1a32-af17eba0",
+          "build-list.constrained.fnv1a32-b93208a5",
+          "build-list.constrained.fnv1a32-bf94e325",
+          "build-list.constrained.fnv1a32-d05f6eb3",
+          "build-list.constrained.fnv1a32-d7c1c941",
+          "build-list.constrained.fnv1a32-d8a7e796",
+          "build-list.constrained.fnv1a32-db29d193",
+          "build-list.constrained.fnv1a32-e2649f78",
+          "build-list.constrained.fnv1a32-fe897825",
+          "build-list.constrained.fnv1a32-feae3001",
+          "build-list.fnv1a32-2fdb4406",
+          "build-list.fnv1a32-32e817d9",
+          "build-list.fnv1a32-35613e34",
+          "build-list.fnv1a32-462a2dfa",
+          "build-list.fnv1a32-50009b78",
+          "build-list.fnv1a32-54dd2b4e",
+          "build-list.fnv1a32-58a4e590",
+          "build-list.fnv1a32-61066e62",
+          "build-list.fnv1a32-66c25e3d",
+          "build-list.fnv1a32-7df2bbec",
+          "build-list.fnv1a32-8561c387",
+          "build-list.fnv1a32-85dc00cc",
+          "build-list.fnv1a32-92d87b90",
+          "build-list.fnv1a32-a1d13672",
+          "build-list.fnv1a32-a3d6817e",
+          "build-list.fnv1a32-b82c6259",
+          "build-list.fnv1a32-c1fe111c",
+          "build-list.fnv1a32-ccd01768",
+          "build-list.fnv1a32-d8c8e4a6",
+          "build-list.fnv1a32-e396d352"
+        ],
+        "planSha256": "2c03423b66af64c39188c0ae7c4049da344c624c8725f12a1f5e2af2e5f7b900",
+        "finalResultSha256": "c5e0ebbfa6c06b7f96ea87086a30bb055a21f2ad11d23e4cf34fd5daa60998e2",
+        "resultSha256": "9d22cdd6b2d94ec0705cac7031e167379c4970255d0392349a704cf2e9e309ca",
+        "cacheLimit": 20000
+      },
+      "timing": {
+        "candidateSearches": 23,
+        "fallbackSearches": 1,
+        "searchElapsedMs": 99608.96960000004,
+        "fallbackSearchElapsedMs": 7636.753100000002,
+        "plannerElapsedMs": 68821.51400000001,
+        "totalElapsedMs": 180632.8909
+      },
+      "wallMs": 182295.57340000002,
+      "exitCode": 0,
+      "maxRssKiB": 3977196,
+      "environment": {
+        "runtime": "Node (not Browser Worker)",
+        "node": "v24.19.0",
+        "platform": "win32",
+        "arch": "x64",
+        "heapSizeLimitBytes": 8791261184,
+        "execArgv": [
+          "--max-old-space-size=8192"
+        ],
+        "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "logicalCpuCount": 16,
+        "totalMemoryBytes": 33377591296,
+        "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "maxPlanSteps": 20000,
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+        "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+        "rngEngineVersion": "production-rng:c5-e7",
+        "osRelease": "10.0.26200",
+        "benchmarkMode": "phase1d-normal-fallback",
+        "cacheMode": "per-search",
+        "yieldMode": "immediate",
+        "routeFilter": "all",
+        "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine"
+      }
+    },
+    {
+      "anchorAttemptId": 3,
+      "axis": "normal",
+      "strategy": "normal-2x-fallback",
+      "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"normal-2x-fallback\"}",
+      "stop": "completed",
+      "planningTargetCount": 43,
+      "final": {
+        "status": "completed",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 20000
+        },
+        "expandedStates": 6900,
+        "completedTargetCount": 43,
+        "totalTargetCount": 43,
+        "selected": 43,
+        "conflicts": 0,
+        "conflictsByKind": {},
+        "rejected": 0,
+        "resourceConflictRejected": 0,
+        "steps": 6857,
+        "traceReplay": "passed",
+        "elapsedMs": 26924.356700000004,
+        "fullRuns": 1,
+        "warnings": []
+      },
+      "reportStatus": "completed",
+      "error": null,
+      "signals": {
+        "notFound": [],
+        "resourceRejected": [],
+        "conflictTargets": [],
+        "conflicts": [],
+        "blockers": []
+      },
+      "fallbacks": [
+        {
+          "searchIndex": 1,
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "baseStatus": "not_found_within_extent",
+          "targetOutcome": "resolved_by_extent_fallback",
+          "fallback": {
+            "strategy": "normal-2x-fallback",
+            "axis": "normal",
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "extent": {
+              "maxNormalAdvance": 700,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "searchRunId": "research.global.search.fnv1a32:b0458a66",
+            "status": "found",
+            "stoppedBy": null,
+            "timeBudgetMs": 180000,
+            "elapsedMs": 7406.0861,
+            "applicationPlannerMs": 2568.971399999995,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 1098,
+            "advances": {
+              "normal": 643,
+              "gogma": 1,
+              "skill": 454
+            },
+            "observedPredictionReach": {
+              "normal": 700,
+              "gogma": 500,
+              "skill": 1097
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "searchedRoutes": [
+              "normal_artian_to_gogma"
+            ],
+            "skippedRoutes": [
+              {
+                "route": "owned_normal_artian_to_gogma",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Normal Artian weapon is available."
+              },
+              {
+                "route": "existing_gogma_current",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_reset_bonuses",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_keep_bonuses",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_reset_skills",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_mixed",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              }
+            ],
+            "generatedEntryId": "build-list.constrained.fnv1a32-82c499ba",
+            "generatedCandidateId": "candidate.research.global.fnv1a32-84f8d999",
+            "error": null
+          }
+        }
+      ],
+      "fallbackSearchEvidence": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "axis": "normal",
+          "extent": {
+            "maxNormalAdvance": 700,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "searchRunId": "research.global.search.fnv1a32:b0458a66",
+          "resultSha256": "842bcc14645aa905363e62b8e291b88e1f583b6f80b4302e2a3b5f25e255f025",
+          "candidateSha256": "922a86f0bd5300955a1f3b3ab875492f8a87dcc0ae32328f0984a5f9791b3533"
+        }
+      ],
+      "probeConsistency": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "probeCandidateSha256": "922a86f0bd5300955a1f3b3ab875492f8a87dcc0ae32328f0984a5f9791b3533",
+          "fallbackCandidateSha256": "922a86f0bd5300955a1f3b3ab875492f8a87dcc0ae32328f0984a5f9791b3533",
+          "same": true
+        }
+      ],
+      "searches": [
+        {
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-cf8d910b",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 577,
+          "advances": {
+            "normal": 207,
+            "gogma": 2,
+            "skill": 368
+          },
+          "elapsedMs": 7691.239399999999,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "status": "not_found_within_extent",
+          "targetOutcome": "resolved_by_extent_fallback",
+          "generatedEntryId": "build-list.constrained.fnv1a32-82c499ba",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 1098,
+          "advances": {
+            "normal": 643,
+            "gogma": 1,
+            "skill": 454
+          },
+          "elapsedMs": 7299.7402,
+          "fallbackElapsedMs": 7406.0861
+        },
+        {
+          "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-328c54ba",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 121,
+          "advances": {
+            "normal": 28,
+            "gogma": 30,
+            "skill": 63
+          },
+          "elapsedMs": 544.3177999999971,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-6beb971e",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 109,
+          "advances": {
+            "normal": null,
+            "gogma": 109,
+            "skill": 0
+          },
+          "elapsedMs": 434.6380999999965,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-12273b41",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 91,
+          "advances": {
+            "normal": null,
+            "gogma": 91,
+            "skill": 0
+          },
+          "elapsedMs": 288.21970000000147,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-b93208a5",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 39,
+          "advances": {
+            "normal": null,
+            "gogma": 39,
+            "skill": 0
+          },
+          "elapsedMs": 100.6620000000039,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-c9db2537",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 189,
+          "advances": {
+            "normal": null,
+            "gogma": 102,
+            "skill": 87
+          },
+          "elapsedMs": 2007.2520000000004,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-16b77264",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 269,
+          "advances": {
+            "normal": null,
+            "gogma": 269,
+            "skill": 0
+          },
+          "elapsedMs": 5729.7981,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-fe897825",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 96,
+          "advances": {
+            "normal": null,
+            "gogma": 96,
+            "skill": 0
+          },
+          "elapsedMs": 447.5372999999963,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-5e5a1ab8",
+          "routeKind": "existing_gogma_keep_bonuses",
+          "estimatedOperationCount": 257,
+          "advances": {
+            "normal": null,
+            "gogma": 257,
+            "skill": 0
+          },
+          "elapsedMs": 3776.044399999999,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-f52abba6",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 62,
+          "advances": {
+            "normal": null,
+            "gogma": 53,
+            "skill": 9
+          },
+          "elapsedMs": 146.47619999999733,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-041df00d",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 274,
+          "advances": {
+            "normal": null,
+            "gogma": 271,
+            "skill": 3
+          },
+          "elapsedMs": 2491.136500000008,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-167fb8a3",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 94,
+          "advances": {
+            "normal": 77,
+            "gogma": 16,
+            "skill": 1
+          },
+          "elapsedMs": 235.058400000009,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-bf94e325",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 120,
+          "advances": {
+            "normal": null,
+            "gogma": 120,
+            "skill": 0
+          },
+          "elapsedMs": 392.93889999999374,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-b618553c",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 273,
+          "advances": {
+            "normal": null,
+            "gogma": 215,
+            "skill": 58
+          },
+          "elapsedMs": 2499.0117000000027,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-7cb78639",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 70,
+          "advances": {
+            "normal": null,
+            "gogma": 33,
+            "skill": 37
+          },
+          "elapsedMs": 146.51480000000447,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-79b0d981",
+          "routeKind": "existing_gogma_keep_bonuses",
+          "estimatedOperationCount": 2,
+          "advances": {
+            "normal": null,
+            "gogma": 2,
+            "skill": 0
+          },
+          "elapsedMs": 2.014199999990524,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-6ba948f2",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 590,
+          "advances": {
+            "normal": 66,
+            "gogma": 73,
+            "skill": 451
+          },
+          "elapsedMs": 10067.844700000001,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-819d3051",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 124,
+          "advances": {
+            "normal": null,
+            "gogma": 124,
+            "skill": 0
+          },
+          "elapsedMs": 766.1713000000018,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-15a0a7e6",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 190,
+          "advances": {
+            "normal": 130,
+            "gogma": 37,
+            "skill": 23
+          },
+          "elapsedMs": 661.3246000000072,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-ec2d3f52",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 284,
+          "advances": {
+            "normal": 13,
+            "gogma": 252,
+            "skill": 19
+          },
+          "elapsedMs": 3892.4098999999987,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-23475d87",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 118,
+          "advances": {
+            "normal": null,
+            "gogma": 13,
+            "skill": 105
+          },
+          "elapsedMs": 386.2758000000031,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-f735b8ac",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 345,
+          "advances": {
+            "normal": null,
+            "gogma": 263,
+            "skill": 82
+          },
+          "elapsedMs": 6567.545599999998,
+          "fallbackElapsedMs": null
+        }
+      ],
+      "evidence": {
+        "rawBlockSummary": {
+          "requests": 732333,
+          "uniqueBlocks": 4606,
+          "duplicateRequests": 727727,
+          "theoreticalHitRatio": 0.9937105114749711,
+          "hits": 727208,
+          "hitRatio": 0.9930018174792069,
+          "misses": 5125,
+          "failures": 0,
+          "evictions": 0,
+          "readerElapsedMs": 635.6386000006241,
+          "missReadElapsedMs": 567.0561999992133,
+          "peakEntries": 500,
+          "rawUint32Count": 5000,
+          "approximatePayloadBytes": 20000,
+          "maxBlockIndex": 2980,
+          "blockIndexDistribution": {
+            "256..511": 14433,
+            "512..1023": 358035,
+            "1024..2047": 108300,
+            "2048..4095": 251565
+          }
+        },
+        "searchEvidence": [
+          {
+            "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+            "resultSha256": "8aef419ccb9889feebfa767681b13b8e564bf99e55777bd3f433b01a54c82848",
+            "candidateSha256": "c96405d04053e8f5128336664fe07dcc75521caf9958b8a5590d21f62a7a369c"
+          },
+          {
+            "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+            "resultSha256": "39561a584a4d7916bf33859b7a02fb10962727b6cb85af05b6e25956a61502b6",
+            "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+          },
+          {
+            "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+            "resultSha256": "acc78552dbb4d2fe7022396e7b524af37bb051cd18496df72a9888ef217f93cc",
+            "candidateSha256": "7191f060bef26802e95ed1b1df7adb32796887e6dfdccd98f915a3cf4f8d3b1b"
+          },
+          {
+            "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+            "resultSha256": "c698fc3e9c3f753af75177c1fa6cef54a1e9ea9dc0081ecae40b69dfb57c9536",
+            "candidateSha256": "5a01277b9073da71ee857ce266fbd018a51cd67e36baeb7b4ed8970854efc070"
+          },
+          {
+            "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+            "resultSha256": "7648ada61e5e72c6467ef9ee6e8a5662ac98473dec0d81487f750b0cf2baed08",
+            "candidateSha256": "facf5a5b072b8fc898623bd24a8edcc07820402b7d3bc3e9501c2b7bdc550b77"
+          },
+          {
+            "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+            "resultSha256": "ba3258ed0d5f2d1f6cb764018096c8da042900524befae5a4755147f3174f87e",
+            "candidateSha256": "e0201115bef8036c7c4991e197d019a6d1b8c020722ca6f21ada3fe2c606f6c7"
+          },
+          {
+            "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+            "resultSha256": "e4779156d5aa333cc8c2b16884545d6617d7a487969b5aad196ed03345a9801b",
+            "candidateSha256": "2fb416bfae09216feeecb0561abd9286fb9b53057038ca04a0b7d2fc5378208f"
+          },
+          {
+            "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+            "resultSha256": "80270a953f25416306e0ebbe6bb214d621597d27003f435fc50e700d321631a2",
+            "candidateSha256": "681fd86a4e8a68082cfc01c7ff0160e341fb032ed0e2478208276b88fd7071da"
+          },
+          {
+            "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+            "resultSha256": "8c9d1d6abfbdf495472e5fbfbf015a833ac37ba533133b9fdcf99eea265c3f8b",
+            "candidateSha256": "2453d7d057a15f093f72dcacedbe8624ea3172efd1c2ef97afb4c49402d35319"
+          },
+          {
+            "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+            "resultSha256": "dfb23123ee06a758ed9ea0d7413372bbd83d8b77c8c021ab3114a1371c599905",
+            "candidateSha256": "ed5510fa7d22520396309932688d44b007433398a65ca703ff004dc77cd12bde"
+          },
+          {
+            "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+            "resultSha256": "f6f370fd35e0cb2922dff4fb5f86597e994ee3df6ed1715e91e4fa5bcf760c86",
+            "candidateSha256": "a752d1fbaf78cae05a4d3a4f226bc781b7ac68e5703ce4406796d025d12323cf"
+          },
+          {
+            "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "resultSha256": "455c1c05ee98479d2be99ac851d3175f4088418e9b27d4c663eb90e5654c0ce9",
+            "candidateSha256": "92181261bbea104be1db4de792f19d884e788d49ca9e5dd36747e7a5402facd4"
+          },
+          {
+            "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+            "resultSha256": "0d79ab4d20b84204c4e2056dbf0fc13c6afc065b2f0a2b80363e0da6b4bf7382",
+            "candidateSha256": "73c243d7a75f92625cba97569acdda236edd899cdf91cf47330aebafb2f0f1e4"
+          },
+          {
+            "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+            "resultSha256": "932ae0820493c1bdecf5f24f4f84bc10b1d9fd4e9c16b09d4d334c543703b748",
+            "candidateSha256": "7999196505dad67fb122b4093e318bd702884ff2dd5a465a9f743d398f48b583"
+          },
+          {
+            "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+            "resultSha256": "10f219dc3c05da30716ca9e28e6278945bfa983a0372cffbcd81e83f32b61023",
+            "candidateSha256": "d1c3e122a218657295939d6c4a33b71257bd025c30b134e0b0bdcc92ea146034"
+          },
+          {
+            "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+            "resultSha256": "a49394a128ad5d0041182901f8ab970c23488b452a1a72fbdc6d544354255dcc",
+            "candidateSha256": "78fca386e7bb35f0237d7ab2f337287c0fbfe50d52eca9c62b597c46bd21f0d2"
+          },
+          {
+            "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+            "resultSha256": "d7ae1135b7c278f21642d564f21639694526bc609a516cbd53a6a37a3cb0be18",
+            "candidateSha256": "024e40944eb5fa38fb3fb6c075993fc5fab21b4f6530f571013422e736b5803d"
+          },
+          {
+            "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+            "resultSha256": "afbd34bcb2d77265d0814672b06b5383f24641e852a345dee1f56a0cc476efa5",
+            "candidateSha256": "745ab8a9f75f7263f4cf2a1a1503359f2e86226b465d3704ff2635eaa8f41f7d"
+          },
+          {
+            "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "resultSha256": "b4a9fbd4190f8b7d71f5c9f8ccae7bddb8db9a37fc0b0972ec67f0dfaa75e395",
+            "candidateSha256": "1cd5703f5ef36979c0b029c943c6ef5f9ac9f3ef19e2af558dbd2e11cd44883c"
+          },
+          {
+            "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "resultSha256": "ee783b4b4b2757dda5b670e53ca08700157b17f283c0e19dde358f13f456e989",
+            "candidateSha256": "704d8354760b058329ad7518e8a9148d82479874f8aaf3b235cd2ca7ae466655"
+          },
+          {
+            "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+            "resultSha256": "49c297eaec430f1c74b6c07c3cd98b455a6df5104490a02b00f2d35d143bd3f5",
+            "candidateSha256": "5de40318ef268d0326cd7c4a3c1957c7e9887ff92a6bbb3176cf62067c161496"
+          },
+          {
+            "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+            "resultSha256": "949a6857bb72343e566e391ed1c315a2ad6fe6a65692410485624e3381e6f768",
+            "candidateSha256": "e9f7978ccefdcf11527a1e27458e9c1ac9247b6a33ac7da6de873f9a55e2113b"
+          },
+          {
+            "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+            "resultSha256": "c16360e907ff1639b1e011b347282b4557ee88897d0c62ce8f27ed33aeb5d070",
+            "candidateSha256": "5c939c1be0b23e643946d560d040480fb58edf849a4a6fa6dad68888321de778"
+          }
+        ],
+        "generatedEntries": [
+          {
+            "id": "build-list.constrained.fnv1a32-cf8d910b",
+            "candidateSha256": "8594506ad3e782499173096f07455861ff3b2a34030fe553bff83efbe6722755",
+            "entrySha256": "d0885162b913d9f8f9c3f5394b4bfb1da341149c2669f26cf7d655863dafbd5a"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-82c499ba",
+            "candidateSha256": "b2f4441c6a455b71a94600e3a47a34d3368466946f0731f3185ba24404430590",
+            "entrySha256": "452df1faa6636127c3e38a3284f70b1759e22902cda14af04adada49249cc3b5"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-328c54ba",
+            "candidateSha256": "7f22c0e86c1f694fa659414ae3f0a097f9780b5e48c5de49c785c9afeedd93c6",
+            "entrySha256": "fb57c97798f6e2c8d8d873dd94071e4b8b9a1781eb2062a5d06b97182cd259af"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-6beb971e",
+            "candidateSha256": "6ea192b7f12976074d1c717ba65111426465c2423ccaa7fb9789b4e0038b6c03",
+            "entrySha256": "fbd8cbb05a27c76efa95d33e536eabb47c6b5dc238c666d5955739813f28f37e"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-12273b41",
+            "candidateSha256": "f19d67a364a69242b24f944f5fd4b45b5c4323fbada6106e0a5e5e112f289ee8",
+            "entrySha256": "2a3257d7acf27a9e3572758e6e1628440ff427b771e3f38002461bf98908e8ac"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-b93208a5",
+            "candidateSha256": "ca05d8960b94d56e04d5cf43be621e1e18a571d6356e434e0ef08d762060e724",
+            "entrySha256": "6b93ace74a6bede1327b3a697e6b644041ec93f74eb320029b88df8370c3dc88"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-c9db2537",
+            "candidateSha256": "cc1e99fc7e72c1007f4af7190d78a2408f87ecaaf916529b54dd23f23a838a41",
+            "entrySha256": "535f18241ab72a3765d557bce766326c050d12075772f3663f4c9e0daa0172c8"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-16b77264",
+            "candidateSha256": "58b5cff4dbe7eaa358b3ee608bd5458fbb4be7b332651042eacf80113c53f744",
+            "entrySha256": "ed930e709f523be0749f5d16e9ce036b4bbf43111faf70b1f6ab4d135183fdae"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-fe897825",
+            "candidateSha256": "25985c54e090e665c30629271ae55d974e6420473ddf2723d502e41614abb7c3",
+            "entrySha256": "9eaa91ea8b8db721860c962c35d6645b161cf22104dd634e7e2b63a542ffb8ee"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-5e5a1ab8",
+            "candidateSha256": "b8d3a0a667b0cd6aff8abd97a20f03331b2cc1a21a6be6fb66da1cba8013a1bd",
+            "entrySha256": "b6117764d827480c96c503c0529949ae690f77ef7f553ad49a2360d0216b5c7d"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-f52abba6",
+            "candidateSha256": "cf47b280b41f7fc29044cc561ec47484e15a895ca68f48d84b0252fad623928e",
+            "entrySha256": "b7c3de29334806d7b4c18fc29b274bd150038bdb230b80f4ebc792f14fb2562e"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-041df00d",
+            "candidateSha256": "8177eaf32c6728a1032b228f248561696aa64c2df47f56a97268c6ce6a4363d9",
+            "entrySha256": "d4f836648a3cff8a68e2a588bb5c448e9e9e48825b30dfbfc9e33ccae66875d4"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-167fb8a3",
+            "candidateSha256": "c9e6853eaeaffa7458eb770e4e9a3ef42ad2092c30a4863d0ecc02cbf71e23c7",
+            "entrySha256": "c2330b02820420060a32d94bd74d2f4208eff5396ffd780bb2751ae41c817d29"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-bf94e325",
+            "candidateSha256": "4f755b5572df7e4ad5d842a41596b26f3a0f73f533ac51aaeeb5e47e7b8d7d55",
+            "entrySha256": "38ce932c9046e9c795db2d8a50accd93316da7626fa92da945a6dce8c991c831"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-b618553c",
+            "candidateSha256": "9432c83526de41bc2c92cef3a54c988cc322a36e0e137311d6f48a725146c906",
+            "entrySha256": "289feb4c06aee3c43f401e519fd584fbc732d32a59f214f59c0322efd476aaf6"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-7cb78639",
+            "candidateSha256": "049c1b90e99ba2f9ac58e5c0a30f0150246ddc84caef46e258dc00d5bf29bf3e",
+            "entrySha256": "6984a093288e4372ccb584f2ef5429c34406787ea4eefcd27c317bf5a49e7188"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-79b0d981",
+            "candidateSha256": "9c1cbad53eddefd236ad7ed704b4b7aec60dc54d64be64efdb31d1ee39e82036",
+            "entrySha256": "2ca3a149765c260249da7a410838d536ebd179987bd386ea75b4c5f812c6ca46"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-6ba948f2",
+            "candidateSha256": "ff6809b336e48c2fb5cf808366f6a775fa16d2dd1f3afd6e8f2b92191810e8a7",
+            "entrySha256": "59218adf438865de75a5e0ef3ef2d5ee7e436b135d2b5d895db79971b0040eae"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-819d3051",
+            "candidateSha256": "12cde7177d3fcca1fa318a65fa81e4df85aa01fdbc09e15edde7e9ade7fcb248",
+            "entrySha256": "bd67753ecd4aec6c8920e7c8948515b01334abb199240e976303e123b9ccb34b"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-15a0a7e6",
+            "candidateSha256": "1f710f2de6574a683c67990c0f4460bcd46a909140966c14708bff2fab8e3266",
+            "entrySha256": "75f4787c63d52ccaae4a81ae6917f272d62bfb2f53c6569c3e455c792fa9db8a"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-ec2d3f52",
+            "candidateSha256": "a5bc771637c91c5d654e8529b58564308540e04072f0a53d404a2cedcbae5f37",
+            "entrySha256": "4c4ec6cd9d3880105b8b8028c846eb661317b1875056bb1cfe3da2d9fc0c15de"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-23475d87",
+            "candidateSha256": "9dd0b5e59585a05527b4d899a6a66ab64455863fed26c0eddf6d7500efd4b07d",
+            "entrySha256": "053bd48cdc8b1a3d4b0c506465efae6124943ecb84b35de1231c18f2bb3a4d5e"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-f735b8ac",
+            "candidateSha256": "e884ca5ad3dd0b875b8a1dc9f566db582a0fcc313d0053fc48c6f1037d3fc077",
+            "entrySha256": "4f3a7028de9761a5ce4891201d38e185a5c9b88d900ebe1cd75bccbe468f4b6a"
+          }
+        ],
+        "finalSelectedEntryIds": [
+          "build-list.constrained.fnv1a32-041df00d",
+          "build-list.constrained.fnv1a32-12273b41",
+          "build-list.constrained.fnv1a32-15a0a7e6",
+          "build-list.constrained.fnv1a32-167fb8a3",
+          "build-list.constrained.fnv1a32-16b77264",
+          "build-list.constrained.fnv1a32-23475d87",
+          "build-list.constrained.fnv1a32-328c54ba",
+          "build-list.constrained.fnv1a32-5e5a1ab8",
+          "build-list.constrained.fnv1a32-6ba948f2",
+          "build-list.constrained.fnv1a32-6beb971e",
+          "build-list.constrained.fnv1a32-79b0d981",
+          "build-list.constrained.fnv1a32-7cb78639",
+          "build-list.constrained.fnv1a32-819d3051",
+          "build-list.constrained.fnv1a32-82c499ba",
+          "build-list.constrained.fnv1a32-b618553c",
+          "build-list.constrained.fnv1a32-b93208a5",
+          "build-list.constrained.fnv1a32-bf94e325",
+          "build-list.constrained.fnv1a32-c9db2537",
+          "build-list.constrained.fnv1a32-cf8d910b",
+          "build-list.constrained.fnv1a32-ec2d3f52",
+          "build-list.constrained.fnv1a32-f52abba6",
+          "build-list.constrained.fnv1a32-f735b8ac",
+          "build-list.constrained.fnv1a32-fe897825",
+          "build-list.fnv1a32-2fdb4406",
+          "build-list.fnv1a32-32e817d9",
+          "build-list.fnv1a32-35613e34",
+          "build-list.fnv1a32-462a2dfa",
+          "build-list.fnv1a32-50009b78",
+          "build-list.fnv1a32-54dd2b4e",
+          "build-list.fnv1a32-58a4e590",
+          "build-list.fnv1a32-61066e62",
+          "build-list.fnv1a32-66c25e3d",
+          "build-list.fnv1a32-7df2bbec",
+          "build-list.fnv1a32-8561c387",
+          "build-list.fnv1a32-85dc00cc",
+          "build-list.fnv1a32-92d87b90",
+          "build-list.fnv1a32-a1d13672",
+          "build-list.fnv1a32-a3d6817e",
+          "build-list.fnv1a32-b82c6259",
+          "build-list.fnv1a32-c1fe111c",
+          "build-list.fnv1a32-ccd01768",
+          "build-list.fnv1a32-d8c8e4a6",
+          "build-list.fnv1a32-e396d352"
+        ],
+        "planSha256": "c124f9a3d144b9f225f0ecf978512a9d1f916d6b228e38f8285a1a0b210f3e1c",
+        "finalResultSha256": "4635e3999d7b1097eb20f405a6b5b2a7d5bd3d5936838f2d491159864a732edd",
+        "resultSha256": "86b38b033d30238f0a37022ccf93efe733663d402b2173cfeadce35820f0cecc",
+        "cacheLimit": 20000
+      },
+      "timing": {
+        "candidateSearches": 23,
+        "fallbackSearches": 1,
+        "searchElapsedMs": 63980.25770000001,
+        "fallbackSearchElapsedMs": 7406.0861,
+        "plannerElapsedMs": 53451.92949999997,
+        "totalElapsedMs": 126894.014
+      },
+      "wallMs": 128524.46340000001,
+      "exitCode": 0,
+      "maxRssKiB": 3281804,
+      "environment": {
+        "runtime": "Node (not Browser Worker)",
+        "node": "v24.19.0",
+        "platform": "win32",
+        "arch": "x64",
+        "heapSizeLimitBytes": 8791261184,
+        "execArgv": [
+          "--max-old-space-size=8192"
+        ],
+        "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "logicalCpuCount": 16,
+        "totalMemoryBytes": 33377591296,
+        "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "maxPlanSteps": 20000,
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+        "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+        "rngEngineVersion": "production-rng:c5-e7",
+        "osRelease": "10.0.26200",
+        "benchmarkMode": "phase1d-normal-fallback",
+        "cacheMode": "per-search",
+        "yieldMode": "immediate",
+        "routeFilter": "all",
+        "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine"
+      }
+    }
+  ],
+  "reproduction": {
+    "passed": true,
+    "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"normal-2x-fallback\"}",
+    "originalSemanticSha256": "3e908264f9a796758a32841fa24daede17dd4135314c83e5d64f122fbb0fa727",
+    "repeatedSemanticSha256": "3e908264f9a796758a32841fa24daede17dd4135314c83e5d64f122fbb0fa727",
+    "record": {
+      "anchorAttemptId": 3,
+      "axis": "normal",
+      "strategy": "normal-2x-fallback",
+      "signature": "{\"anchor\":\"{\\\"retainedEntryIds\\\":[\\\"build-list.fnv1a32-2fdb4406\\\",\\\"build-list.fnv1a32-32e817d9\\\",\\\"build-list.fnv1a32-35613e34\\\",\\\"build-list.fnv1a32-462a2dfa\\\",\\\"build-list.fnv1a32-50009b78\\\",\\\"build-list.fnv1a32-54dd2b4e\\\",\\\"build-list.fnv1a32-58a4e590\\\",\\\"build-list.fnv1a32-61066e62\\\",\\\"build-list.fnv1a32-66c25e3d\\\",\\\"build-list.fnv1a32-7df2bbec\\\",\\\"build-list.fnv1a32-8561c387\\\",\\\"build-list.fnv1a32-85dc00cc\\\",\\\"build-list.fnv1a32-92d87b90\\\",\\\"build-list.fnv1a32-a1d13672\\\",\\\"build-list.fnv1a32-a3d6817e\\\",\\\"build-list.fnv1a32-b82c6259\\\",\\\"build-list.fnv1a32-c1fe111c\\\",\\\"build-list.fnv1a32-ccd01768\\\",\\\"build-list.fnv1a32-d8c8e4a6\\\",\\\"build-list.fnv1a32-e396d352\\\"],\\\"pendingTargetIds\\\":[\\\"711f7d15-bb2b-4113-af0c-bd1832dcfd49\\\",\\\"813fb479-accd-454d-8fcd-fed51d4e891d\\\",\\\"be881717-f092-4be7-870c-c6bd19f2141f\\\",\\\"e96249b4-cb24-4fff-a852-4055904161ad\\\",\\\"9733b090-9901-49fa-aaab-983379f1edae\\\",\\\"2e26c0b1-f554-4c5e-ab71-be9f521c96f0\\\",\\\"a6c17e25-bd3a-42e1-b86a-c813b78acde0\\\",\\\"c140578c-9aad-48d0-81db-95496636c459\\\",\\\"57126a5e-90b2-46c6-9f9f-298bd15f6d92\\\",\\\"27ac3237-543b-4887-85e6-28ccc7564294\\\",\\\"a830a376-e596-495e-b458-fc1705204e2c\\\",\\\"02876df4-cd56-4c95-add9-9e3e9cc90801\\\",\\\"8d233d8b-f366-42cb-a559-62666f079b58\\\",\\\"46bf2c78-6e39-4982-8abc-b9cdaa4d96f0\\\",\\\"b27e57a7-4a80-41a8-8d8d-17bc44f868a7\\\",\\\"b6780f04-da21-42b0-af8c-88f09a192e17\\\",\\\"fea60316-a05c-4252-bf1d-41c31b99b75a\\\",\\\"2378d3e0-c376-470d-86c4-32f2ace71ab7\\\",\\\"45b13c06-f750-4d1e-83c2-8ea41f4fefea\\\",\\\"6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7\\\",\\\"188571a7-b480-4085-a8f5-59666c0e4cc5\\\",\\\"1efa01c6-1f1e-433f-b34e-9442e4df00df\\\",\\\"86439c85-0efc-40ba-b490-e39ab38aa1e0\\\"],\\\"extent\\\":{\\\"maxNormalAdvance\\\":350,\\\"maxGogmaAdvance\\\":500,\\\"maxSkillAdvance\\\":1500}}\",\"strategy\":\"normal-2x-fallback\"}",
+      "stop": "completed",
+      "planningTargetCount": 43,
+      "final": {
+        "status": "completed",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 20000
+        },
+        "expandedStates": 6900,
+        "completedTargetCount": 43,
+        "totalTargetCount": 43,
+        "selected": 43,
+        "conflicts": 0,
+        "conflictsByKind": {},
+        "rejected": 0,
+        "resourceConflictRejected": 0,
+        "steps": 6857,
+        "traceReplay": "passed",
+        "elapsedMs": 26104.473399999988,
+        "fullRuns": 1,
+        "warnings": []
+      },
+      "reportStatus": "completed",
+      "error": null,
+      "signals": {
+        "notFound": [],
+        "resourceRejected": [],
+        "conflictTargets": [],
+        "conflicts": [],
+        "blockers": []
+      },
+      "fallbacks": [
+        {
+          "searchIndex": 1,
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "baseStatus": "not_found_within_extent",
+          "targetOutcome": "resolved_by_extent_fallback",
+          "fallback": {
+            "strategy": "normal-2x-fallback",
+            "axis": "normal",
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "extent": {
+              "maxNormalAdvance": 700,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "searchRunId": "research.global.search.fnv1a32:b0458a66",
+            "status": "found",
+            "stoppedBy": null,
+            "timeBudgetMs": 180000,
+            "elapsedMs": 5770.349600000001,
+            "applicationPlannerMs": 2406.5167999999976,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 1098,
+            "advances": {
+              "normal": 643,
+              "gogma": 1,
+              "skill": 454
+            },
+            "observedPredictionReach": {
+              "normal": 700,
+              "gogma": 500,
+              "skill": 1097
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "searchedRoutes": [
+              "normal_artian_to_gogma"
+            ],
+            "skippedRoutes": [
+              {
+                "route": "owned_normal_artian_to_gogma",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Normal Artian weapon is available."
+              },
+              {
+                "route": "existing_gogma_current",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_reset_bonuses",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_keep_bonuses",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_reset_skills",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              },
+              {
+                "route": "existing_gogma_mixed",
+                "reason": "no_owned_weapon_available",
+                "detail": "No compatible owned Gogma weapon is available."
+              }
+            ],
+            "generatedEntryId": "build-list.constrained.fnv1a32-82c499ba",
+            "generatedCandidateId": "candidate.research.global.fnv1a32-84f8d999",
+            "error": null
+          }
+        }
+      ],
+      "fallbackSearchEvidence": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "axis": "normal",
+          "extent": {
+            "maxNormalAdvance": 700,
+            "maxGogmaAdvance": 500,
+            "maxSkillAdvance": 1500
+          },
+          "searchRunId": "research.global.search.fnv1a32:b0458a66",
+          "resultSha256": "842bcc14645aa905363e62b8e291b88e1f583b6f80b4302e2a3b5f25e255f025",
+          "candidateSha256": "922a86f0bd5300955a1f3b3ab875492f8a87dcc0ae32328f0984a5f9791b3533"
+        }
+      ],
+      "probeConsistency": [],
+      "searches": [
+        {
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-cf8d910b",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 577,
+          "advances": {
+            "normal": 207,
+            "gogma": 2,
+            "skill": 368
+          },
+          "elapsedMs": 6810.053599999999,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "status": "not_found_within_extent",
+          "targetOutcome": "resolved_by_extent_fallback",
+          "generatedEntryId": "build-list.constrained.fnv1a32-82c499ba",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 1098,
+          "advances": {
+            "normal": 643,
+            "gogma": 1,
+            "skill": 454
+          },
+          "elapsedMs": 6037.092100000002,
+          "fallbackElapsedMs": 5770.349600000001
+        },
+        {
+          "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-328c54ba",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 121,
+          "advances": {
+            "normal": 28,
+            "gogma": 30,
+            "skill": 63
+          },
+          "elapsedMs": 506.1744999999937,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-6beb971e",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 109,
+          "advances": {
+            "normal": null,
+            "gogma": 109,
+            "skill": 0
+          },
+          "elapsedMs": 408.2679999999964,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-12273b41",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 91,
+          "advances": {
+            "normal": null,
+            "gogma": 91,
+            "skill": 0
+          },
+          "elapsedMs": 247.07559999999648,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-b93208a5",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 39,
+          "advances": {
+            "normal": null,
+            "gogma": 39,
+            "skill": 0
+          },
+          "elapsedMs": 75.99620000000141,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-c9db2537",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 189,
+          "advances": {
+            "normal": null,
+            "gogma": 102,
+            "skill": 87
+          },
+          "elapsedMs": 1839.900099999999,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-16b77264",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 269,
+          "advances": {
+            "normal": null,
+            "gogma": 269,
+            "skill": 0
+          },
+          "elapsedMs": 5253.742100000003,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-fe897825",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 96,
+          "advances": {
+            "normal": null,
+            "gogma": 96,
+            "skill": 0
+          },
+          "elapsedMs": 398.322699999997,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-5e5a1ab8",
+          "routeKind": "existing_gogma_keep_bonuses",
+          "estimatedOperationCount": 257,
+          "advances": {
+            "normal": null,
+            "gogma": 257,
+            "skill": 0
+          },
+          "elapsedMs": 3570.4960999999967,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-f52abba6",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 62,
+          "advances": {
+            "normal": null,
+            "gogma": 53,
+            "skill": 9
+          },
+          "elapsedMs": 165.91760000000068,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-041df00d",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 274,
+          "advances": {
+            "normal": null,
+            "gogma": 271,
+            "skill": 3
+          },
+          "elapsedMs": 2959.5134000000035,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-167fb8a3",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 94,
+          "advances": {
+            "normal": 77,
+            "gogma": 16,
+            "skill": 1
+          },
+          "elapsedMs": 313.7473000000027,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-bf94e325",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 120,
+          "advances": {
+            "normal": null,
+            "gogma": 120,
+            "skill": 0
+          },
+          "elapsedMs": 475.56610000000364,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-b618553c",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 273,
+          "advances": {
+            "normal": null,
+            "gogma": 215,
+            "skill": 58
+          },
+          "elapsedMs": 2931.2787999999928,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-7cb78639",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 70,
+          "advances": {
+            "normal": null,
+            "gogma": 33,
+            "skill": 37
+          },
+          "elapsedMs": 179.21029999999155,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-79b0d981",
+          "routeKind": "existing_gogma_keep_bonuses",
+          "estimatedOperationCount": 2,
+          "advances": {
+            "normal": null,
+            "gogma": 2,
+            "skill": 0
+          },
+          "elapsedMs": 2.2190000000118744,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-6ba948f2",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 590,
+          "advances": {
+            "normal": 66,
+            "gogma": 73,
+            "skill": 451
+          },
+          "elapsedMs": 12300.670600000012,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-819d3051",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 124,
+          "advances": {
+            "normal": null,
+            "gogma": 124,
+            "skill": 0
+          },
+          "elapsedMs": 971.2652999999991,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-15a0a7e6",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 190,
+          "advances": {
+            "normal": 130,
+            "gogma": 37,
+            "skill": 23
+          },
+          "elapsedMs": 765.4287999999942,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-ec2d3f52",
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 284,
+          "advances": {
+            "normal": 13,
+            "gogma": 252,
+            "skill": 19
+          },
+          "elapsedMs": 4556.600200000001,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-23475d87",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 118,
+          "advances": {
+            "normal": null,
+            "gogma": 13,
+            "skill": 105
+          },
+          "elapsedMs": 495.74610000000393,
+          "fallbackElapsedMs": null
+        },
+        {
+          "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "status": "found",
+          "targetOutcome": null,
+          "generatedEntryId": "build-list.constrained.fnv1a32-f735b8ac",
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 345,
+          "advances": {
+            "normal": null,
+            "gogma": 263,
+            "skill": 82
+          },
+          "elapsedMs": 7040.8318,
+          "fallbackElapsedMs": null
+        }
+      ],
+      "evidence": {
+        "rawBlockSummary": {
+          "requests": 732333,
+          "uniqueBlocks": 4606,
+          "duplicateRequests": 727727,
+          "theoreticalHitRatio": 0.9937105114749711,
+          "hits": 727208,
+          "hitRatio": 0.9930018174792069,
+          "misses": 5125,
+          "failures": 0,
+          "evictions": 0,
+          "readerElapsedMs": 650.4141999953026,
+          "missReadElapsedMs": 583.0655999995906,
+          "peakEntries": 500,
+          "rawUint32Count": 5000,
+          "approximatePayloadBytes": 20000,
+          "maxBlockIndex": 2980,
+          "blockIndexDistribution": {
+            "256..511": 14433,
+            "512..1023": 358035,
+            "1024..2047": 108300,
+            "2048..4095": 251565
+          }
+        },
+        "searchEvidence": [
+          {
+            "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+            "resultSha256": "8aef419ccb9889feebfa767681b13b8e564bf99e55777bd3f433b01a54c82848",
+            "candidateSha256": "c96405d04053e8f5128336664fe07dcc75521caf9958b8a5590d21f62a7a369c"
+          },
+          {
+            "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+            "resultSha256": "39561a584a4d7916bf33859b7a02fb10962727b6cb85af05b6e25956a61502b6",
+            "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+          },
+          {
+            "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+            "resultSha256": "acc78552dbb4d2fe7022396e7b524af37bb051cd18496df72a9888ef217f93cc",
+            "candidateSha256": "7191f060bef26802e95ed1b1df7adb32796887e6dfdccd98f915a3cf4f8d3b1b"
+          },
+          {
+            "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+            "resultSha256": "c698fc3e9c3f753af75177c1fa6cef54a1e9ea9dc0081ecae40b69dfb57c9536",
+            "candidateSha256": "5a01277b9073da71ee857ce266fbd018a51cd67e36baeb7b4ed8970854efc070"
+          },
+          {
+            "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+            "resultSha256": "7648ada61e5e72c6467ef9ee6e8a5662ac98473dec0d81487f750b0cf2baed08",
+            "candidateSha256": "facf5a5b072b8fc898623bd24a8edcc07820402b7d3bc3e9501c2b7bdc550b77"
+          },
+          {
+            "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+            "resultSha256": "ba3258ed0d5f2d1f6cb764018096c8da042900524befae5a4755147f3174f87e",
+            "candidateSha256": "e0201115bef8036c7c4991e197d019a6d1b8c020722ca6f21ada3fe2c606f6c7"
+          },
+          {
+            "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+            "resultSha256": "e4779156d5aa333cc8c2b16884545d6617d7a487969b5aad196ed03345a9801b",
+            "candidateSha256": "2fb416bfae09216feeecb0561abd9286fb9b53057038ca04a0b7d2fc5378208f"
+          },
+          {
+            "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+            "resultSha256": "80270a953f25416306e0ebbe6bb214d621597d27003f435fc50e700d321631a2",
+            "candidateSha256": "681fd86a4e8a68082cfc01c7ff0160e341fb032ed0e2478208276b88fd7071da"
+          },
+          {
+            "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+            "resultSha256": "8c9d1d6abfbdf495472e5fbfbf015a833ac37ba533133b9fdcf99eea265c3f8b",
+            "candidateSha256": "2453d7d057a15f093f72dcacedbe8624ea3172efd1c2ef97afb4c49402d35319"
+          },
+          {
+            "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+            "resultSha256": "dfb23123ee06a758ed9ea0d7413372bbd83d8b77c8c021ab3114a1371c599905",
+            "candidateSha256": "ed5510fa7d22520396309932688d44b007433398a65ca703ff004dc77cd12bde"
+          },
+          {
+            "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+            "resultSha256": "f6f370fd35e0cb2922dff4fb5f86597e994ee3df6ed1715e91e4fa5bcf760c86",
+            "candidateSha256": "a752d1fbaf78cae05a4d3a4f226bc781b7ac68e5703ce4406796d025d12323cf"
+          },
+          {
+            "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "resultSha256": "455c1c05ee98479d2be99ac851d3175f4088418e9b27d4c663eb90e5654c0ce9",
+            "candidateSha256": "92181261bbea104be1db4de792f19d884e788d49ca9e5dd36747e7a5402facd4"
+          },
+          {
+            "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+            "resultSha256": "0d79ab4d20b84204c4e2056dbf0fc13c6afc065b2f0a2b80363e0da6b4bf7382",
+            "candidateSha256": "73c243d7a75f92625cba97569acdda236edd899cdf91cf47330aebafb2f0f1e4"
+          },
+          {
+            "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+            "resultSha256": "932ae0820493c1bdecf5f24f4f84bc10b1d9fd4e9c16b09d4d334c543703b748",
+            "candidateSha256": "7999196505dad67fb122b4093e318bd702884ff2dd5a465a9f743d398f48b583"
+          },
+          {
+            "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+            "resultSha256": "10f219dc3c05da30716ca9e28e6278945bfa983a0372cffbcd81e83f32b61023",
+            "candidateSha256": "d1c3e122a218657295939d6c4a33b71257bd025c30b134e0b0bdcc92ea146034"
+          },
+          {
+            "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+            "resultSha256": "a49394a128ad5d0041182901f8ab970c23488b452a1a72fbdc6d544354255dcc",
+            "candidateSha256": "78fca386e7bb35f0237d7ab2f337287c0fbfe50d52eca9c62b597c46bd21f0d2"
+          },
+          {
+            "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+            "resultSha256": "d7ae1135b7c278f21642d564f21639694526bc609a516cbd53a6a37a3cb0be18",
+            "candidateSha256": "024e40944eb5fa38fb3fb6c075993fc5fab21b4f6530f571013422e736b5803d"
+          },
+          {
+            "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+            "resultSha256": "afbd34bcb2d77265d0814672b06b5383f24641e852a345dee1f56a0cc476efa5",
+            "candidateSha256": "745ab8a9f75f7263f4cf2a1a1503359f2e86226b465d3704ff2635eaa8f41f7d"
+          },
+          {
+            "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "resultSha256": "b4a9fbd4190f8b7d71f5c9f8ccae7bddb8db9a37fc0b0972ec67f0dfaa75e395",
+            "candidateSha256": "1cd5703f5ef36979c0b029c943c6ef5f9ac9f3ef19e2af558dbd2e11cd44883c"
+          },
+          {
+            "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "resultSha256": "ee783b4b4b2757dda5b670e53ca08700157b17f283c0e19dde358f13f456e989",
+            "candidateSha256": "704d8354760b058329ad7518e8a9148d82479874f8aaf3b235cd2ca7ae466655"
+          },
+          {
+            "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+            "resultSha256": "49c297eaec430f1c74b6c07c3cd98b455a6df5104490a02b00f2d35d143bd3f5",
+            "candidateSha256": "5de40318ef268d0326cd7c4a3c1957c7e9887ff92a6bbb3176cf62067c161496"
+          },
+          {
+            "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+            "resultSha256": "949a6857bb72343e566e391ed1c315a2ad6fe6a65692410485624e3381e6f768",
+            "candidateSha256": "e9f7978ccefdcf11527a1e27458e9c1ac9247b6a33ac7da6de873f9a55e2113b"
+          },
+          {
+            "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+            "resultSha256": "c16360e907ff1639b1e011b347282b4557ee88897d0c62ce8f27ed33aeb5d070",
+            "candidateSha256": "5c939c1be0b23e643946d560d040480fb58edf849a4a6fa6dad68888321de778"
+          }
+        ],
+        "generatedEntries": [
+          {
+            "id": "build-list.constrained.fnv1a32-cf8d910b",
+            "candidateSha256": "8594506ad3e782499173096f07455861ff3b2a34030fe553bff83efbe6722755",
+            "entrySha256": "d0885162b913d9f8f9c3f5394b4bfb1da341149c2669f26cf7d655863dafbd5a"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-82c499ba",
+            "candidateSha256": "b2f4441c6a455b71a94600e3a47a34d3368466946f0731f3185ba24404430590",
+            "entrySha256": "452df1faa6636127c3e38a3284f70b1759e22902cda14af04adada49249cc3b5"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-328c54ba",
+            "candidateSha256": "7f22c0e86c1f694fa659414ae3f0a097f9780b5e48c5de49c785c9afeedd93c6",
+            "entrySha256": "fb57c97798f6e2c8d8d873dd94071e4b8b9a1781eb2062a5d06b97182cd259af"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-6beb971e",
+            "candidateSha256": "6ea192b7f12976074d1c717ba65111426465c2423ccaa7fb9789b4e0038b6c03",
+            "entrySha256": "fbd8cbb05a27c76efa95d33e536eabb47c6b5dc238c666d5955739813f28f37e"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-12273b41",
+            "candidateSha256": "f19d67a364a69242b24f944f5fd4b45b5c4323fbada6106e0a5e5e112f289ee8",
+            "entrySha256": "2a3257d7acf27a9e3572758e6e1628440ff427b771e3f38002461bf98908e8ac"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-b93208a5",
+            "candidateSha256": "ca05d8960b94d56e04d5cf43be621e1e18a571d6356e434e0ef08d762060e724",
+            "entrySha256": "6b93ace74a6bede1327b3a697e6b644041ec93f74eb320029b88df8370c3dc88"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-c9db2537",
+            "candidateSha256": "cc1e99fc7e72c1007f4af7190d78a2408f87ecaaf916529b54dd23f23a838a41",
+            "entrySha256": "535f18241ab72a3765d557bce766326c050d12075772f3663f4c9e0daa0172c8"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-16b77264",
+            "candidateSha256": "58b5cff4dbe7eaa358b3ee608bd5458fbb4be7b332651042eacf80113c53f744",
+            "entrySha256": "ed930e709f523be0749f5d16e9ce036b4bbf43111faf70b1f6ab4d135183fdae"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-fe897825",
+            "candidateSha256": "25985c54e090e665c30629271ae55d974e6420473ddf2723d502e41614abb7c3",
+            "entrySha256": "9eaa91ea8b8db721860c962c35d6645b161cf22104dd634e7e2b63a542ffb8ee"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-5e5a1ab8",
+            "candidateSha256": "b8d3a0a667b0cd6aff8abd97a20f03331b2cc1a21a6be6fb66da1cba8013a1bd",
+            "entrySha256": "b6117764d827480c96c503c0529949ae690f77ef7f553ad49a2360d0216b5c7d"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-f52abba6",
+            "candidateSha256": "cf47b280b41f7fc29044cc561ec47484e15a895ca68f48d84b0252fad623928e",
+            "entrySha256": "b7c3de29334806d7b4c18fc29b274bd150038bdb230b80f4ebc792f14fb2562e"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-041df00d",
+            "candidateSha256": "8177eaf32c6728a1032b228f248561696aa64c2df47f56a97268c6ce6a4363d9",
+            "entrySha256": "d4f836648a3cff8a68e2a588bb5c448e9e9e48825b30dfbfc9e33ccae66875d4"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-167fb8a3",
+            "candidateSha256": "c9e6853eaeaffa7458eb770e4e9a3ef42ad2092c30a4863d0ecc02cbf71e23c7",
+            "entrySha256": "c2330b02820420060a32d94bd74d2f4208eff5396ffd780bb2751ae41c817d29"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-bf94e325",
+            "candidateSha256": "4f755b5572df7e4ad5d842a41596b26f3a0f73f533ac51aaeeb5e47e7b8d7d55",
+            "entrySha256": "38ce932c9046e9c795db2d8a50accd93316da7626fa92da945a6dce8c991c831"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-b618553c",
+            "candidateSha256": "9432c83526de41bc2c92cef3a54c988cc322a36e0e137311d6f48a725146c906",
+            "entrySha256": "289feb4c06aee3c43f401e519fd584fbc732d32a59f214f59c0322efd476aaf6"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-7cb78639",
+            "candidateSha256": "049c1b90e99ba2f9ac58e5c0a30f0150246ddc84caef46e258dc00d5bf29bf3e",
+            "entrySha256": "6984a093288e4372ccb584f2ef5429c34406787ea4eefcd27c317bf5a49e7188"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-79b0d981",
+            "candidateSha256": "9c1cbad53eddefd236ad7ed704b4b7aec60dc54d64be64efdb31d1ee39e82036",
+            "entrySha256": "2ca3a149765c260249da7a410838d536ebd179987bd386ea75b4c5f812c6ca46"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-6ba948f2",
+            "candidateSha256": "ff6809b336e48c2fb5cf808366f6a775fa16d2dd1f3afd6e8f2b92191810e8a7",
+            "entrySha256": "59218adf438865de75a5e0ef3ef2d5ee7e436b135d2b5d895db79971b0040eae"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-819d3051",
+            "candidateSha256": "12cde7177d3fcca1fa318a65fa81e4df85aa01fdbc09e15edde7e9ade7fcb248",
+            "entrySha256": "bd67753ecd4aec6c8920e7c8948515b01334abb199240e976303e123b9ccb34b"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-15a0a7e6",
+            "candidateSha256": "1f710f2de6574a683c67990c0f4460bcd46a909140966c14708bff2fab8e3266",
+            "entrySha256": "75f4787c63d52ccaae4a81ae6917f272d62bfb2f53c6569c3e455c792fa9db8a"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-ec2d3f52",
+            "candidateSha256": "a5bc771637c91c5d654e8529b58564308540e04072f0a53d404a2cedcbae5f37",
+            "entrySha256": "4c4ec6cd9d3880105b8b8028c846eb661317b1875056bb1cfe3da2d9fc0c15de"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-23475d87",
+            "candidateSha256": "9dd0b5e59585a05527b4d899a6a66ab64455863fed26c0eddf6d7500efd4b07d",
+            "entrySha256": "053bd48cdc8b1a3d4b0c506465efae6124943ecb84b35de1231c18f2bb3a4d5e"
+          },
+          {
+            "id": "build-list.constrained.fnv1a32-f735b8ac",
+            "candidateSha256": "e884ca5ad3dd0b875b8a1dc9f566db582a0fcc313d0053fc48c6f1037d3fc077",
+            "entrySha256": "4f3a7028de9761a5ce4891201d38e185a5c9b88d900ebe1cd75bccbe468f4b6a"
+          }
+        ],
+        "finalSelectedEntryIds": [
+          "build-list.constrained.fnv1a32-041df00d",
+          "build-list.constrained.fnv1a32-12273b41",
+          "build-list.constrained.fnv1a32-15a0a7e6",
+          "build-list.constrained.fnv1a32-167fb8a3",
+          "build-list.constrained.fnv1a32-16b77264",
+          "build-list.constrained.fnv1a32-23475d87",
+          "build-list.constrained.fnv1a32-328c54ba",
+          "build-list.constrained.fnv1a32-5e5a1ab8",
+          "build-list.constrained.fnv1a32-6ba948f2",
+          "build-list.constrained.fnv1a32-6beb971e",
+          "build-list.constrained.fnv1a32-79b0d981",
+          "build-list.constrained.fnv1a32-7cb78639",
+          "build-list.constrained.fnv1a32-819d3051",
+          "build-list.constrained.fnv1a32-82c499ba",
+          "build-list.constrained.fnv1a32-b618553c",
+          "build-list.constrained.fnv1a32-b93208a5",
+          "build-list.constrained.fnv1a32-bf94e325",
+          "build-list.constrained.fnv1a32-c9db2537",
+          "build-list.constrained.fnv1a32-cf8d910b",
+          "build-list.constrained.fnv1a32-ec2d3f52",
+          "build-list.constrained.fnv1a32-f52abba6",
+          "build-list.constrained.fnv1a32-f735b8ac",
+          "build-list.constrained.fnv1a32-fe897825",
+          "build-list.fnv1a32-2fdb4406",
+          "build-list.fnv1a32-32e817d9",
+          "build-list.fnv1a32-35613e34",
+          "build-list.fnv1a32-462a2dfa",
+          "build-list.fnv1a32-50009b78",
+          "build-list.fnv1a32-54dd2b4e",
+          "build-list.fnv1a32-58a4e590",
+          "build-list.fnv1a32-61066e62",
+          "build-list.fnv1a32-66c25e3d",
+          "build-list.fnv1a32-7df2bbec",
+          "build-list.fnv1a32-8561c387",
+          "build-list.fnv1a32-85dc00cc",
+          "build-list.fnv1a32-92d87b90",
+          "build-list.fnv1a32-a1d13672",
+          "build-list.fnv1a32-a3d6817e",
+          "build-list.fnv1a32-b82c6259",
+          "build-list.fnv1a32-c1fe111c",
+          "build-list.fnv1a32-ccd01768",
+          "build-list.fnv1a32-d8c8e4a6",
+          "build-list.fnv1a32-e396d352"
+        ],
+        "planSha256": "c124f9a3d144b9f225f0ecf978512a9d1f916d6b228e38f8285a1a0b210f3e1c",
+        "finalResultSha256": "4635e3999d7b1097eb20f405a6b5b2a7d5bd3d5936838f2d491159864a732edd",
+        "resultSha256": "86b38b033d30238f0a37022ccf93efe733663d402b2173cfeadce35820f0cecc",
+        "cacheLimit": 20000
+      },
+      "timing": {
+        "candidateSearches": 23,
+        "fallbackSearches": 1,
+        "searchElapsedMs": 64075.4659,
+        "fallbackSearchElapsedMs": 5770.349600000001,
+        "plannerElapsedMs": 52391.11619999997,
+        "totalElapsedMs": 125590.2748
+      },
+      "wallMs": 127172.92680000002,
+      "exitCode": 0,
+      "maxRssKiB": 3026628,
+      "environment": {
+        "runtime": "Node (not Browser Worker)",
+        "node": "v24.19.0",
+        "platform": "win32",
+        "arch": "x64",
+        "heapSizeLimitBytes": 8791261184,
+        "execArgv": [
+          "--max-old-space-size=8192"
+        ],
+        "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "logicalCpuCount": 16,
+        "totalMemoryBytes": 33377591296,
+        "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "maxPlanSteps": 20000,
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+        "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+        "rngEngineVersion": "production-rng:c5-e7",
+        "osRelease": "10.0.26200",
+        "benchmarkMode": "phase1d-normal-fallback",
+        "cacheMode": "per-search",
+        "yieldMode": "immediate",
+        "routeFilter": "all",
+        "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine"
+      }
+    }
+  },
+  "totals": {
+    "anchorReproductions": {
+      "count": 2,
+      "candidateSearches": 46,
+      "searchElapsedMs": 134111.99550000002,
+      "plannerElapsedMs": 86154.17140000002,
+      "totalElapsedMs": 238218.80670000002,
+      "wallMs": 240976.1066
+    },
+    "probes": {
+      "count": 6,
+      "searchElapsedMs": 97759.41010000001,
+      "wallMs": 110736.62769999995,
+      "predictionElapsedMs": 7401.085999998233
+    },
+    "variants": {
+      "count": 2,
+      "candidateSearches": 46,
+      "fallbackSearches": 2,
+      "searchElapsedMs": 163589.22730000006,
+      "fallbackSearchElapsedMs": 15042.839200000002,
+      "plannerElapsedMs": 122273.44349999998,
+      "totalElapsedMs": 307526.90489999996,
+      "wallMs": 310820.0368
+    },
+    "discoveryControllerWallMs": 662950.976,
+    "controllerWallMsIncludingReproduction": 790125.8179,
+    "peakChildMaxRssKiB": 3977196,
+    "controllerMaxRssKiB": 180520,
+    "reproductionExcludedFromDiscoveryTotals": true
+  }
+}

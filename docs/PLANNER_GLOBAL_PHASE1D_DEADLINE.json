@@ -1,0 +1,237 @@
+{
+  "anchorAttemptId": 4,
+  "axis": "normal",
+  "probe": {
+    "wallMs": 2948.0316000000003,
+    "exitCode": 0,
+    "maxRssKiB": 750068,
+    "args": [
+      "--probe-snapshot",
+      "docs/PLANNER_GLOBAL_PHASE1D.anchor-4.nomatch.local",
+      "--probe-target",
+      "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "--probe-axis",
+      "normal",
+      "--time-budget-ms",
+      "2000"
+    ],
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "heapSizeLimitBytes": 8791261184,
+      "execArgv": [
+        "--max-old-space-size=8192"
+      ],
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+      "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "phase1d-probe",
+      "cacheMode": "per-search",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine",
+      "probeAxis": "normal",
+      "timeBudgetMs": 2000,
+      "snapshotSha256": "a10e7d332be86811a0c226c25479246adc9dbde190529f2601a12eedacb8d9db",
+      "baseExtent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "probeExtent": {
+        "maxNormalAdvance": 700,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      }
+    },
+    "probe": {
+      "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "axis": "normal",
+      "snapshotSha256": "fnv1a32:072de162",
+      "baseSearchRunId": "research.global.search.fnv1a32:3c2b0b5c",
+      "baseExtent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "probeExtent": {
+        "maxNormalAdvance": 700,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "probeSearchRunId": "research.global.search.fnv1a32:ae5547e7",
+      "baseBoundary": {
+        "normal": true,
+        "gogma": true,
+        "skillExisting": true,
+        "skillConversion": true
+      },
+      "status": "time_budget_reached",
+      "error": "Candidate search was cancelled.",
+      "timeBudgetMs": 2000,
+      "elapsedMs": 2000.6291999999999,
+      "observedPredictionReach": {
+        "normal": 313,
+        "gogma": 313,
+        "skill": 314
+      },
+      "predictionBoundaryReached": {
+        "normal": false,
+        "gogma": false,
+        "skillExisting": false,
+        "skillConversion": false
+      },
+      "routeKind": null,
+      "estimatedOperationCount": null,
+      "advances": null,
+      "searchedRoutes": [],
+      "skippedRoutes": [],
+      "candidateFingerprint": null,
+      "validation": {
+        "status": "not_applicable",
+        "error": null,
+        "generatedEntryId": null,
+        "applicationSteps": null
+      },
+      "candidateSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    "stop": null,
+    "signals": null,
+    "cancel": {
+      "requested": false,
+      "responseMs": null
+    }
+  },
+  "fallback": {
+    "wallMs": 29962.4607,
+    "exitCode": 0,
+    "maxRssKiB": 1740436,
+    "args": [
+      "--attempt-state",
+      "docs/PLANNER_GLOBAL_PHASE1D.anchor-4.state.local",
+      "--attempt-budget-ms",
+      "900000",
+      "--extent-fallback",
+      "normal",
+      "--fallback-budget-ms",
+      "1000"
+    ],
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "heapSizeLimitBytes": 8791261184,
+      "execArgv": [
+        "--max-old-space-size=8192"
+      ],
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "repositoryHead": "2c595ad53a31b71497aab5f823f76569986ca6cb",
+      "benchmarkCodeSha256": "ffdf91544b0454721c2a62a57f240cbeb7412f713c75c9ac482e074cbd6ee131",
+      "rngEngineVersion": "production-rng:c5-e7",
+      "osRelease": "10.0.26200",
+      "benchmarkMode": "phase1d-normal-fallback",
+      "cacheMode": "per-search",
+      "yieldMode": "immediate",
+      "routeFilter": "all",
+      "cacheScope": "Candidate Search only; Planner and Replay always use default ProductionRngEngine"
+    },
+    "report": {
+      "status": "blocked",
+      "stage": "discovery",
+      "error": "Extent fallback reached its Research time budget; not a bounded no-match.",
+      "final": null,
+      "searches": [
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "status": "found"
+        },
+        {
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "status": "not_found_within_extent",
+          "fallback": {
+            "strategy": "normal-2x-fallback",
+            "axis": "normal",
+            "baseExtent": {
+              "maxNormalAdvance": 350,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "extent": {
+              "maxNormalAdvance": 700,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "searchRunId": "research.global.search.fnv1a32:ae5547e7",
+            "status": "time_budget_reached",
+            "stoppedBy": "fallback_budget",
+            "timeBudgetMs": 1000,
+            "elapsedMs": 1001.0341000000008,
+            "applicationPlannerMs": 0,
+            "routeKind": null,
+            "estimatedOperationCount": null,
+            "advances": null,
+            "observedPredictionReach": {
+              "normal": 237,
+              "gogma": 237,
+              "skill": 238
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "searchedRoutes": [],
+            "skippedRoutes": [],
+            "generatedEntryId": null,
+            "generatedCandidateId": null,
+            "error": "Candidate search was cancelled."
+          }
+        }
+      ],
+      "totalElapsedMs": 28952.0125
+    },
+    "stop": "extent_fallback_blocked",
+    "signals": {
+      "notFound": [
+        "711f7d15-bb2b-4113-af0c-bd1832dcfd49"
+      ],
+      "resourceRejected": [],
+      "conflictTargets": [],
+      "conflicts": [],
+      "blockers": [
+        {
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "classification": "extent_fallback_time_budget_reached"
+        }
+      ]
+    },
+    "cancel": {
+      "requested": false,
+      "responseMs": null
+    }
+  }
+}
