@@ -66,6 +66,8 @@ export interface Phase1EVariant<T extends AttemptSummary> {
   finishedAtMs: number
 }
 
+export interface Phase1EFirstCompleted { axis: ExtentAxis; stage: 'initial' | 'retry'; attemptId: number; elapsedMs: number; variantIndex: number }
+
 export function phase1eVariantOutcome(axis: ExtentAxis, attempt: AttemptSummary): ExtentVariantOutcome {
   const f = attempt.report.final
   return { signature: extentVariantSignature(attempt.signature, phase1eStrategyName(axis)), planningTargetCount: attempt.report.planningTargetCount, stop: attempt.stop,
@@ -76,6 +78,15 @@ export function phase1eVariantOutcome(axis: ExtentAxis, attempt: AttemptSummary)
 /** A completed variant, once observed, is never replaced by a later failure, cancel or deadline. */
 export function phase1eControllerOutcome(variants: readonly ExtentVariantOutcome[], stop: string | null): 'completed' | string {
   return variants.some(isGlobalPlanSuccess) ? 'completed' : stop ?? 'not_completed'
+}
+
+/**
+ * Phase 2-A (PR #164 review): the only initial attempt a retry may start from is a finished partial Plan -
+ * no stop, a `partial` report, no error and a final Plan. An error, a memory limit, a Worker / process
+ * failure, a cancel, a deadline or a blocker is never treated as a partial result to retry.
+ */
+export function isRetryablePartialAttempt(attempt: AttemptSummary): boolean {
+  return attempt.stop === null && attempt.report.status === 'partial' && attempt.report.error === null && attempt.report.final !== null
 }
 
 function samePriority(a: PriorityEntries, b: PriorityEntries) {
@@ -94,7 +105,7 @@ export async function runPhase1EController<T extends AttemptSummary>(deps: Phase
   const variants: Phase1EVariant<T>[] = []
   const executed = new Set<string>()
   let priorityEntries: PriorityEntries | null = null
-  let firstCompleted: { axis: ExtentAxis; stage: 'initial' | 'retry'; attemptId: number; elapsedMs: number; variantIndex: number } | null = null
+  let firstCompleted = null as Phase1EFirstCompleted | null
   let stop: 'cancelled' | 'time_budget' | null
   const acceptPriority = (entries: PriorityEntries) => {
     // Each child derives it from the same original Export; a difference means the input changed.
@@ -130,8 +141,10 @@ export async function runPhase1EController<T extends AttemptSummary>(deps: Phase
   const initialSuccess = initial.some(v => isGlobalPlanSuccess(v.outcome))
   const allInitialRan = initial.length === bounds.axisStrategies
   const retries: { axis: ExtentAxis; stopReason: StopReason; stageStops: { strategy: string; reason: StopReason }[]; cycleCount: number; attemptIds: number[] }[] = []
-  // Retry only when every initial axis strategy ran to a partial result: a completed one makes it unnecessary.
-  const retryStarted = !initialSuccess && allInitialRan && !stop && priorityEntries !== null
+  const nonRetryableInitial = initial.filter(v => !isGlobalPlanSuccess(v.outcome) && !isRetryablePartialAttempt(v.attempt)).map(v => ({ axis: v.axis, stop: v.attempt.stop, status: v.attempt.report.status }))
+  // Retry only when every initial axis strategy ran to a retryable partial result: a completed one makes it
+  // unnecessary, and an error / memory limit / cancel / deadline is not a partial result (Phase 2-A).
+  const retryStarted = !initialSuccess && allInitialRan && !stop && priorityEntries !== null && nonRetryableInitial.length === 0
   if (retryStarted) {
     const ranked = [...initial].sort((a, b) => compareExtentVariants(a.outcome, b.outcome))
     for (const first of ranked) {
@@ -147,7 +160,7 @@ export async function runPhase1EController<T extends AttemptSummary>(deps: Phase
   const ranking = [...variants].sort((a, b) => compareExtentVariants(a.outcome, b.outcome))
   const winner = ranking.find(v => isGlobalPlanSuccess(v.outcome)) ?? null
   const outcome = phase1eControllerOutcome(variants.map(v => v.outcome), stop)
-  return { control, initial, initialSuccess, retryStarted, retries, variants, ranking, winner, firstCompleted: firstCompleted as typeof firstCompleted,
+  return { control, initial, initialSuccess, retryStarted, nonRetryableInitial, retries, variants, ranking, winner, firstCompleted: firstCompleted as Phase1EFirstCompleted | null,
     outcome, stop, cancel: { requested: stop === 'cancelled', completedBeforeStop: stop !== null && variants.some(v => isGlobalPlanSuccess(v.outcome)) },
     priorityEntries, elapsedMs: elapsed() }
 }

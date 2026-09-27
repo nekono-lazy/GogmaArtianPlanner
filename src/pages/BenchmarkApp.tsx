@@ -3,6 +3,7 @@ import { Button, Stack } from '@mui/material'
 import { CandidateSearchBenchmarkPage } from './CandidateSearchBenchmarkPage'
 import { ConstrainedEnumerationBenchmarkPage } from './ConstrainedEnumerationBenchmarkPage'
 import { PlannerAlternativeBenchmarkPage } from './PlannerAlternativeBenchmarkPage'
+import { PlannerGlobalBrowserBenchmarkPage } from './PlannerGlobalBrowserBenchmarkPage'
 import { SkillIdentificationBenchmarkPage } from './SkillIdentificationBenchmarkPage'
 
 type BenchmarkId =
@@ -10,6 +11,7 @@ type BenchmarkId =
   | 'b5-candidate-search'
   | 'b8-constrained-enumeration'
   | 'planner-alternative-phase3'
+  | 'planner-global-phase2a'
 
 /**
  * Isolated benchmark shell. The C5-E2C8 Skill Identification harness stays the
@@ -23,6 +25,8 @@ type BenchmarkId =
  * `docs/ISSUE_103_SCHEDULER_PARITY_BENCHMARK.md`.
  * Issue #101 adds its constrained re-search harness beside the others; none of
  * the existing harnesses changes.
+ * Issue #154 Global Planner Research Phase 2-A adds its Browser Worker harness
+ * (`docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2A.md`); C5 stays the default.
  * Planner Alternative Search Phase 3-A adds its Browser Worker harness
  * (`docs/PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMARK.md`); C5 stays the default.
  * Planner Alternative Phase 6-B1 removed the B8 Planner orchestration and B9
@@ -65,6 +69,12 @@ export function BenchmarkApp() {
         >
           Planner Alternative Phase 3
         </Button>
+        <Button
+          variant={benchmark === 'planner-global-phase2a' ? 'contained' : 'outlined'}
+          onClick={() => setBenchmark('planner-global-phase2a')}
+        >
+          Global Planner Phase 2-A
+        </Button>
       </Stack>
       {benchmark === 'c8-skill-identification' && <SkillIdentificationBenchmarkPage />}
       {benchmark === 'b5-candidate-search' && <CandidateSearchBenchmarkPage />}
@@ -72,6 +82,7 @@ export function BenchmarkApp() {
         <ConstrainedEnumerationBenchmarkPage />
       )}
       {benchmark === 'planner-alternative-phase3' && <PlannerAlternativeBenchmarkPage />}
+      {benchmark === 'planner-global-phase2a' && <PlannerGlobalBrowserBenchmarkPage />}
     </Stack>
   )
 }

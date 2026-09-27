@@ -149,7 +149,8 @@ describe('Global Planner Phase 0 Research', () => {
 
 const sources = import.meta.glob('../**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 it('has no incoming Production import and adds no persistence or legacy orchestration dependency', () => {
-  const production = Object.entries(sources).filter(([path]) => path.startsWith('../') && !/benchmarks|\.test\.|\/test\//.test(path))
+  // Benchmark-only Workers / pages (Phase 2-A Browser harness) are benchmark code, not Production.
+  const production = Object.entries(sources).filter(([path]) => path.startsWith('../') && !/benchmarks|\.worker\.benchmark|BenchmarkPage|BenchmarkApp|\/benchmark\.tsx$|\.test\.|\/test\//.test(path))
   expect(production.length).toBeGreaterThan(100)
   expect(production.filter(([, source]) => /plannerGlobal(?:Optimization|RawBlocks)/.test(source))).toEqual([])
   for (const [path, source] of Object.entries(sources).filter(([path]) => /plannerGlobal(?:Optimization|RawBlocks)/.test(path) && !path.includes('.test.'))) {

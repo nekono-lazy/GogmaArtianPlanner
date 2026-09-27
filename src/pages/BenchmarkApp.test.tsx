@@ -27,7 +27,9 @@ describe('BenchmarkApp', () => {
   it('no longer offers the removed Issue 103 Planner Search harness', () => {
     render(<BenchmarkApp />)
     expect(screen.queryByRole('button', { name: 'Issue 103 Planner Search' })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button')).toHaveLength(4)
+    // Issue #154 Phase 2-A added the Global Planner Browser Worker harness as the fifth tab.
+    expect(screen.getAllByRole('button')).toHaveLength(5)
+    expect(screen.getByRole('button', { name: 'Global Planner Phase 2-A' })).toBeInTheDocument()
   })
 
   it('no longer offers the B8 Planner orchestration or B9 what-if harness (Phase 6-B1)', () => {

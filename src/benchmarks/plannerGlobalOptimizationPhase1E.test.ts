@@ -9,7 +9,7 @@ import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/producti
 import { createRestorationBonusSet } from '../test/fixtures/domainData'
 import type { FakeRngEngine } from '../domain/rng/fakeRngEngine'
 import { EXTENT_AXES, runGlobalExtentProbe, singleAxisProbeExtent, type ExtentAxis } from './plannerGlobalOptimizationExtentProbe'
-import { createPhase1EFallback, derivedAttemptState, PHASE1E_BOUNDS, phase1eControllerOutcome, phase1eStrategyName, phase1eVariantOutcome,
+import { createPhase1EFallback, derivedAttemptState, isRetryablePartialAttempt, PHASE1E_BOUNDS, phase1eControllerOutcome, phase1eStrategyName, phase1eVariantOutcome,
   reproducePhase1EWinner, runPhase1EController, validatePhase1EBounds, type Phase1EDependencies, type PriorityEntries } from './plannerGlobalOptimizationPhase1E'
 import { globalResearchDependencies, GLOBAL_RESEARCH_EXTENT, runGlobalPlannerResearch, type GlobalResearchNoMatchCapture, type GlobalResearchReport } from './plannerGlobalOptimizationResearch'
 import { classifyAttempt, collectRetrySignals, discoverySignature, PHASE1C_BOUNDS, stableResearchEntries, type AttemptSummary, type DiscoveryState, type RetrySignals } from './plannerGlobalOptimizationRetry'
@@ -221,6 +221,26 @@ describe('Phase 1-E controller', () => {
     expect(result.retries.map(r => r.axis)).toHaveLength(3)
     for (const axis of EXTENT_AXES) expect(calls.filter(c => c.kind === 'retry' && c.args[0] === axis).length).toBeLessThanOrEqual(PHASE1C_BOUNDS.maxStates - 1)
     expect(new Set(result.variants.map(v => v.outcome.signature)).size).toBe(result.variants.length)
+  })
+
+  it('never starts the retry from an error, memory limit, Worker / process failure, cancel or deadline initial (Phase 2-A, PR #164 review)', async () => {
+    for (const stop of ['memory_limit', 'process_error', 'attempt_error', 'cancelled', 'time_budget', 'search_error'] as const) {
+      const { deps, calls } = fakeDeps({ gogma: { final: null, stop } })
+      const result = await runPhase1EController(deps)
+      expect(result.initialSuccess).toBe(false)
+      expect(result.retryStarted).toBe(false)
+      expect(calls.filter(c => c.kind === 'retry')).toEqual([])
+      expect(result.nonRetryableInitial).toEqual([{ axis: 'gogma', stop, status: 'partial' }])
+      expect(result.outcome).toBe('not_completed')
+    }
+    const partial = attemptOf(initialState, 0, PARTIAL, null)
+    expect(isRetryablePartialAttempt(partial)).toBe(true)
+    expect(isRetryablePartialAttempt({ ...partial, report: { ...partial.report, error: 'x' } })).toBe(false)
+    expect(isRetryablePartialAttempt({ ...partial, report: { ...partial.report, status: 'error' } })).toBe(false)
+    expect(isRetryablePartialAttempt({ ...partial, report: { ...partial.report, final: null } })).toBe(false)
+    // A completed initial is not listed as non-retryable; it simply makes the retry unnecessary.
+    const done = await runPhase1EController(fakeDeps({ normal: { final: DONE, stop: 'completed' } }).deps)
+    expect(done.nonRetryableInitial).toEqual([])
   })
 
   it('never lets a later failure, cancel or deadline overwrite a completed variant, and records the cancel apart', async () => {
