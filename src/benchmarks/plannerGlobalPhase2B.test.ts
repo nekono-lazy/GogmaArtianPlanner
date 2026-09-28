@@ -62,6 +62,50 @@ describe('Phase 2-B timeline recorder', () => {
     expect(summarizePlannerCallsByKind(timeline.calls).find(k => k.kind === 'final')).toMatchObject({ calls: 1, elapsedMs: 70, maxSchedulerSyncSegmentMs: 21, schedulerLoopIterations: 2 })
   })
 
+  it('returns the original yieldControl Promise itself, observes its resolution, and passes its rejection through unchanged', async () => {
+    let clock = 0
+    const timeline = new Phase2BPlannerTimeline({ nowMs: () => clock })
+    const call = timeline.begin('final')
+    let resolveOriginal!: () => void
+    const originalPromise = new Promise<void>(resolve => { resolveOriginal = resolve })
+    const failure = new Error('yield failed')
+    let rejectedPromise: Promise<void> | null = null
+    // The rejected Promise is created only when the hook is called, so nothing rejects before a handler exists.
+    const originals = [() => originalPromise, () => (rejectedPromise = Promise.reject(failure))]
+    const cancelValues = [false, true, false]
+    const wrapped = call.wrapExecution({ shouldCancel: () => cancelValues.shift()!, yieldControl: () => originals.shift()!() })
+    call.beforePlannerRun()
+    clock = 5
+    expect(wrapped.shouldCancel!()).toBe(false)
+    expect(wrapped.shouldCancel!()).toBe(true)
+    clock = 8
+    const wrappedPromise = wrapped.yieldControl!()
+    // The very same Promise object: the wrapper creates no Promise of its own.
+    expect(wrappedPromise).toBe(originalPromise)
+    clock = 12
+    resolveOriginal()
+    await wrappedPromise
+    // The observation reaction was registered before the caller awaited, so it has already run.
+    clock = 20
+    const rejectedWrapped = wrapped.yieldControl!()
+    expect(rejectedWrapped).toBe(rejectedPromise)
+    await expect(rejectedWrapped).rejects.toBe(failure)
+    expect(wrapped.shouldCancel!()).toBe(false)
+    clock = 30
+    call.afterPlannerRun()
+    call.end()
+    const [run] = timeline.calls[0].schedulerRuns
+    expect(run.yields).toBe(2)
+    // Segment 0..8 before the first yield, then 12..20 after its resolution; the rejected yield never restarts a segment.
+    expect(run.lastSegmentStartAtMs).toBe(12)
+    expect(run.maxSyncSegmentMs).toBe(18)
+    expect(run.maxSyncSegmentStartAtMs).toBe(12)
+    // No async wrapper anywhere: the wrapped hook is a plain function.
+    expect(wrapped.yieldControl!.constructor.name).toBe('Function')
+    expect('yieldControl' in call.wrapExecution({ shouldCancel: () => false })).toBe(false)
+    expect('shouldCancel' in call.wrapExecution({})).toBe(false)
+  })
+
   it('attributes slow pings and heap samples to the intervals they overlap, without inventing coverage', () => {
     const intervals = [{ name: 'a', startMs: 0, endMs: 10 }, { name: 'b', startMs: 10, endMs: 30 }]
     const attributed = attributePingDelays([{ sentAtMs: 5, receivedAtMs: 40 }, { sentAtMs: 1, receivedAtMs: 2 }, { sentAtMs: 3, receivedAtMs: null }], intervals, 5)
@@ -161,7 +205,8 @@ function syntheticEvidence(): { autonomous: Phase2BAutonomousPlanEvidence; optim
   const optimum = parseOptimumEvidence({ verdict: 'proven_minimum', environment: { exportSha256: 'x' },
     summary: { physicalOperations: 3, routeOperationSum: 3, stageC: { stepOperationCounts: { reset_bonuses: 2, keep_bonuses: 1 } },
       skill: { start: 10, end: 10 }, gogma: { start: 50, end: 53 }, normal: {} },
-    lowerBound: { origins: { normal: {} }, targets: [{ targetWeaponId: 'target.a', minSkillThreshold: null, minGogmaThreshold: 51, minNormalThreshold: null, firstIdealSkillPosition: null }] },
+    lowerBound: { origins: { normal: {} }, targets: [{ targetWeaponId: 'target.a', minSkillThreshold: null, minGogmaThreshold: 51, minNormalThreshold: null, firstIdealSkillPosition: null },
+      { targetWeaponId: 'target.b', minSkillThreshold: 11, minGogmaThreshold: 51, minNormalThreshold: null, firstIdealSkillPosition: 10 }] },
     routes: [
       { targetWeaponId: 'target.a', weaponTypeId: 'weapon.x', elementId: 'element.y', sourceKind: 'owned', sourceOwnedWeaponId: 'w.target.a', normalPosition: null, conversionPosition: null,
         normal: null, gogma: { first: 50, last: 50, operations: 1, required: [50] }, skill: { first: null, last: null, operations: 0, required: [] }, routeOperationCount: 1,
@@ -193,13 +238,18 @@ describe('Phase 2-B gap reconciliation (post-hoc)', () => {
     // Targets come from the evidence, not from embedded IDs.
     expect(result.targets.map(t => [t.targetWeaponId, t.sourceRelation, t.routeKindChanged, t.optimum.crossesHeldPositions])).toEqual([
       ['target.a', 'same_owned_weapon', true, false], ['target.b', 'same_owned_weapon', false, false]])
-    expect(result.targets[0].singleTargetMinimum?.minGogmaThreshold).toBe(51)
+    expect(result.targets[0].perStreamEarliestThreshold).toEqual({ gogma: 51, skill: null, normal: null, firstIdealSkillPosition: null })
     // An unused stream recorded as { first: null, last: null, operations: 0 } is no use at all.
     expect(result.targets.map(t => t.optimum.startsAfterStreamOrigin)).toEqual([[], ['gogma']])
     expect(result.categories['optimum_relies_on_shared_coverage:gogma']).toEqual({ targets: 1, targetWeaponIds: ['target.b'] })
     expect(result.categories['autonomous_starts_after_stream_origin:gogma']).toEqual({ targets: 1, targetWeaponIds: ['target.b'] })
-    // target.a finishes at G50 = its single-option minimum (threshold 51): not later than it could alone.
-    expect(result.categories['optimum_finishes_after_single_target_minimum:gogma']).toBeUndefined()
+    // target.a finishes at G50 = its per-stream earliest Gogma threshold (51): not after it.
+    // target.b ends Gogma at 52 (threshold 53 > its per-stream earliest 51): judged on the Gogma stream only.
+    expect(result.categories['optimum_finishes_after_per_stream_earliest_threshold:gogma']).toEqual({ targets: 1, targetWeaponIds: ['target.b'] })
+    expect(result.categories['optimum_finishes_after_per_stream_earliest_threshold:skill']).toBeUndefined()
+    // Per-stream earliest thresholds are never presented as a single-Target Route minimum.
+    expect(Object.keys(result.categories).filter(name => /single_target|route_minimum|locally_shortest/.test(name))).toEqual([])
+    expect(result.targets[1].perStreamEarliestThreshold).toEqual({ gogma: 51, skill: 11, normal: null, firstIdealSkillPosition: 10 })
     expect(result.stacking.rows).toEqual([{ discoveryIndex: 0, targetWeaponId: 'target.b', stream: 'gogma', frontierBefore: 55, first: 54, last: 57, operations: 4, startsAtOrAfterFrontier: false }])
     expect(result.physicalByEntryOrigin.all).toEqual({ retained_original: 5, generated_base_search: 3 })
   })

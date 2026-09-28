@@ -39,11 +39,23 @@ export interface Phase2BOptimumEvidence {
   readonly routes: readonly Phase2BOptimumRoute[]
   readonly exportSha256: string
   /**
-   * Per Target, from the Phase 2-A.5 lower-bound audit: the smallest Counter thresholds at which the Target has ANY
-   * valid option from the Planner-start origin (each alone; not a joint assignment).
+   * Per Target, mapped from the Phase 2-A.5 lower-bound audit fields `minGogmaThreshold` / `minSkillThreshold` /
+   * `minNormalThreshold` (the audit's evidence schema is read unchanged): for EACH stream independently, the earliest
+   * Counter threshold at which the Target has some valid option from the Planner-start origin.
+   *
+   * They are per-stream earliest thresholds, NOT a single-Target Route minimum: the option reaching the earliest Gogma
+   * threshold and the one reaching the earliest Skill threshold need not be the same source or Route, and no evidence
+   * here says that one Route of the Target attains them together.
    */
-  readonly targetMinimums: Readonly<Record<string, { readonly minSkillThreshold: number | null; readonly minGogmaThreshold: number | null;
-    readonly minNormalThreshold: number | null; readonly firstIdealSkillPosition: number | null }>>
+  readonly perStreamEarliestThresholds: Readonly<Record<string, Phase2BPerStreamEarliestThreshold>>
+}
+
+export interface Phase2BPerStreamEarliestThreshold {
+  readonly gogma: number | null
+  readonly skill: number | null
+  readonly normal: number | null
+  /** The earliest Skill position with the Target's Ideal Skill (the audit's `firstIdealSkillPosition`). */
+  readonly firstIdealSkillPosition: number | null
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -74,8 +86,8 @@ export function parseOptimumEvidence(json: unknown): Phase2BOptimumEvidence {
       normal: route.normal, gogma: route.gogma, skill: route.skill, routeOperationCount: route.routeOperationCount,
       materialization: { method: route.materialization.method, routeKind: route.materialization.routeKind, estimated: route.materialization.estimated } })),
     exportSha256: String(json.environment.exportSha256),
-    targetMinimums: Object.fromEntries(need(lowerBound.targets, 'lowerBound.targets').map(target => [target.targetWeaponId, {
-      minSkillThreshold: target.minSkillThreshold, minGogmaThreshold: target.minGogmaThreshold, minNormalThreshold: target.minNormalThreshold,
+    perStreamEarliestThresholds: Object.fromEntries(need(lowerBound.targets, 'lowerBound.targets').map(target => [target.targetWeaponId, {
+      gogma: target.minGogmaThreshold, skill: target.minSkillThreshold, normal: target.minNormalThreshold,
       firstIdealSkillPosition: target.firstIdealSkillPosition }])),
   }
 }
@@ -161,8 +173,11 @@ export interface Phase2BTargetComparison {
   readonly extendsBeyondOptimumEnd: readonly string[]
   /** Position in the Research discovery order (null for a retained original Entry). */
   readonly discoveryIndex: number | null
-  /** The Phase 2-A.5 per-Target single-option minimums (thresholds = one past the last position), when recorded. */
-  readonly singleTargetMinimum: Phase2BOptimumEvidence['targetMinimums'][string] | null
+  /**
+   * The Phase 2-A.5 per-stream earliest thresholds of this Target (threshold = one past the last position), when
+   * recorded. Each stream independently; never read as the minimum of one Route of the Target.
+   */
+  readonly perStreamEarliestThreshold: Phase2BPerStreamEarliestThreshold | null
 }
 
 /** One generated Route against the stream frontier its discovery Search started from (Research sequential projection). */
@@ -368,7 +383,7 @@ export function analyzePhase2BGap(autonomous: Phase2BAutonomousPlanEvidence, opt
       routeOperationDelta: auto.routeOperationCount - opt.routeOperationCount, optimumRouteLocallyLonger: opt.routeOperationCount > auto.routeOperationCount,
       extendsBeyondOptimumEnd,
       discoveryIndex: auto.entryOrigin === 'retained_original' ? null : discoveryIndexOf.get(auto.targetWeaponId) ?? null,
-      singleTargetMinimum: optimum.targetMinimums[auto.targetWeaponId] ?? null,
+      perStreamEarliestThreshold: optimum.perStreamEarliestThresholds[auto.targetWeaponId] ?? null,
     }
   })
 
@@ -390,14 +405,15 @@ export function analyzePhase2BGap(autonomous: Phase2BAutonomousPlanEvidence, opt
     else add('autonomous_entry:retained_original', row.targetWeaponId)
     for (const stream of row.extendsBeyondOptimumEnd) add(`extends_beyond_optimum_end:${stream}`, row.targetWeaponId)
     if (row.extendsBeyondOptimumEnd.length === 0) add('within_every_optimum_stream_end', row.targetWeaponId)
-    // The optimum finishes this Target later than the Target could finish alone (its single-option minimum threshold):
-    // a globally better, locally worse position.
-    const minimum = row.singleTargetMinimum
-    if (minimum) {
+    // On this stream, the optimum Route of the Target ends after the Target's per-stream earliest threshold: the global
+    // optimum does not take the earliest position this stream alone would allow. Streams are judged independently;
+    // this says nothing about a shorter single-Target Route existing.
+    const earliest = row.perStreamEarliestThreshold
+    if (earliest) {
       const optLastGogma = optimumStreamUse(optimumById.get(row.targetWeaponId)!, 'gogma')?.last ?? null
       const optLastSkill = optimumStreamUse(optimumById.get(row.targetWeaponId)!, 'skill')?.last ?? null
-      if (optLastGogma !== null && minimum.minGogmaThreshold !== null && optLastGogma + 1 > minimum.minGogmaThreshold) add('optimum_finishes_after_single_target_minimum:gogma', row.targetWeaponId)
-      if (optLastSkill !== null && minimum.minSkillThreshold !== null && optLastSkill + 1 > minimum.minSkillThreshold) add('optimum_finishes_after_single_target_minimum:skill', row.targetWeaponId)
+      if (optLastGogma !== null && earliest.gogma !== null && optLastGogma + 1 > earliest.gogma) add('optimum_finishes_after_per_stream_earliest_threshold:gogma', row.targetWeaponId)
+      if (optLastSkill !== null && earliest.skill !== null && optLastSkill + 1 > earliest.skill) add('optimum_finishes_after_per_stream_earliest_threshold:skill', row.targetWeaponId)
     }
   }
 

@@ -112,10 +112,36 @@ try {
     byKind: perf.summarizePlannerCallsByKind(run.json.result.phase2b.timeline),
     finalMarks: run.json.result.phase2b.timeline.find(call => call.kind === 'final').marks }
 
+  // Measurement provenance. Every measured run must come from the same committed benchmark code.
+  const measuredCommit = env.benchmarkBuild.commit
+  for (const run of [node, nodeGc].filter(Boolean)) {
+    if (run.json.environment.repositoryHead !== measuredCommit || run.json.environment.uncommittedBenchmarkCode !== false) {
+      throw new Error(`Node run ${run.source.file} was not measured at the Browser measured commit with committed code.`)
+    }
+  }
+  const nodeEnv = node?.json.environment ?? nodeGc?.json.environment ?? null
+  const countOf = kind => completed.filter(record => record.kind === kind).length
+  const provenance = {
+    measuredCommit, benchmarkCodeSha256: env.benchmarkBuild.benchmarkCodeSha256, uncommittedBenchmarkCode: env.benchmarkBuild.uncommittedBenchmarkCode,
+    nodeRuns: [node, nodeGc].filter(Boolean).map(run => ({ file: run.source.file, repositoryHead: run.json.environment.repositoryHead,
+      benchmarkCodeSha256: run.json.environment.benchmarkCodeSha256, uncommittedBenchmarkCode: run.json.environment.uncommittedBenchmarkCode, heapProbe: run.json.environment.heapProbe })),
+    exportSha256: env.export.sha256,
+    browser: { fullVersionList: env.userAgentData?.fullVersionList ?? null, userAgent: env.userAgent, crossOriginIsolated: env.crossOriginIsolated,
+      hardwareConcurrency: env.hardwareConcurrency, deviceMemoryGiB: env.deviceMemory },
+    machine: nodeEnv && { source: 'Node run on the same machine', platform: nodeEnv.platform, osRelease: nodeEnv.osRelease, arch: nodeEnv.arch, cpu: nodeEnv.cpu,
+      logicalCpuCount: nodeEnv.logicalCpuCount, totalMemoryBytes: nodeEnv.totalMemoryBytes, node: nodeEnv.node },
+    rngEngineVersion: env.rngEngineVersion, calculationAppSchemaVersion: env.calculationAppSchemaVersion,
+    workload: { ...records[0].config, kind: undefined, label: undefined, ping: undefined, memory: undefined },
+    researchMaxPlanSteps: env.researchMaxPlanSteps, productionDefaultMaxPlanSteps: env.productionDefaultMaxPlanSteps,
+    runs: { timingWarmup: countOf('warmup'), timingMeasurement: countOf('measurement'), responsiveness: countOf('responsiveness'), memory: countOf('memory'),
+      phase2aEquivalentControl: browser.json.records.filter(record => !record.config.phase2b && record.status === 'completed').length },
+  }
+
   const output = {
     phase: 'Issue #154 Global Planner Research Phase 2-B: decomposition of the Plan quality gap and of the final Planner performance',
     analyzedAt: new Date().toISOString(),
     sources: { browser: browser.source, optimum: optimumFile.source, externalMemory: external?.source ?? null, node: node?.source ?? null, nodeGc: nodeGc?.source ?? null },
+    provenance,
     browserEnvironment: env,
     expected: { exportSha256: EXPECTED_EXPORT_SHA256, phase2aSemanticSha256: EXPECTED_SEMANTIC_SHA256, historicalValidatedOracle: HISTORICAL_VALIDATED_ORACLE },
     semantics: { browser: semantics, node: nodeSemantics, autonomousPlanEvidenceSha256: [...evidenceHashes][0] },

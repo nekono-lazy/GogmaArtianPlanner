@@ -127,15 +127,20 @@ export class Phase2BPlannerTimeline {
             if (open) { const at = nowMs(); open.checks += 1; open.firstCheckAtMs ??= at; open.lastCheckAtMs = at }
             return shouldCancel()
           } } : {}),
-          ...(yieldControl ? { yieldControl: async () => {
+          // Returns the very Promise the original `yieldControl()` returned: no async wrapper, so the caller's
+          // `await` adds no extra Promise boundary. The observation is a separate reaction registered on that
+          // Promise before the caller awaits it; its rejection handler only swallows the observer's own derived
+          // Promise, while the caller still receives the original rejection unchanged.
+          ...(yieldControl ? { yieldControl: () => {
             const run = open
             if (run) {
               const at = nowMs(), segment = at - run.segmentStartAtMs
               run.yields += 1
               if (segment > run.maxSyncSegmentMs) { run.maxSyncSegmentMs = segment; run.maxSyncSegmentStartAtMs = run.segmentStartAtMs }
             }
-            await yieldControl()
-            if (run) run.segmentStartAtMs = nowMs()
+            const promise = yieldControl()
+            if (run) void promise.then(() => { run.segmentStartAtMs = nowMs() }, () => undefined)
+            return promise
           } } : {}),
         }
       },
