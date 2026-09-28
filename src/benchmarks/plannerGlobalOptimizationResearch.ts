@@ -72,7 +72,8 @@ export function globalResearchInputFromExport(value: unknown, maxPlanSteps: numb
 }
 
 /** Reconstruct all origin-dependent semantics, not a Search-hash overwrite. */
-export function materializeGlobalResearchCandidate(originInput: PlannerInput, projectedInput: CandidateSearchInput, candidate: BuildCandidate): BuildListEntry {
+export function materializeGlobalResearchCandidate(originInput: PlannerInput, projectedInput: CandidateSearchInput, candidate: BuildCandidate,
+  algorithm: string = 'phase0-sequential-v1'): BuildListEntry {
   const origin = createPlannerStartSearchOrigin(originInput)
   const target = origin.targetWeapons.find(t => t.id === candidate.targetWeaponId)
   if (!target) throw new Error('Candidate Target is absent from Planner origin.')
@@ -95,7 +96,7 @@ export function materializeGlobalResearchCandidate(originInput: PlannerInput, pr
   const semantic = createConstrainedCandidate(target, origin, candidate, 'origin_reach')
   if (!semantic) throw new Error('Candidate no longer satisfies the original Ideal.')
   const searchIdentity = `research.global.${hashStableValue({
-    algorithm: 'phase0-sequential-v1', origin: normalizePlannerSearchOrigin(origin, target),
+    algorithm, origin: normalizePlannerSearchOrigin(origin, target),
     projectedOrigin: normalizePlannerSearchOrigin(projectedInput, projectedTarget),
     extent: projectedInput.settings, routeFilter: projectedInput.routeFilter, calculationContext: origin.calculationContext,
   })}`
@@ -264,7 +265,20 @@ export interface GlobalResearchReport {
   error: string | null
   /** Phase 1-D only. Fallback Search time is inside `searchElapsedMs` too. */
   extentFallback?: { strategy: string; searches: number; searchElapsedMs: number; maxEpisodes?: number }
+  /** Phase 2-C1 only (absent = the sequential projection of Phase 0..2-B). */
+  searchOrigin?: GlobalResearchSearchOrigin
 }
+
+/**
+ * Where the pending Target Searches start (Issue #154 Phase 2-C1).
+ * - `sequential_projection` (default, Phase 0..2-B): the state after the retained prefix and every earlier
+ *   generated Candidate was applied by the single-Candidate Planner.
+ * - `planner_start`: every pending Search starts from the same Planner-start origin (the original Export
+ *   state); no retained Route, earlier Candidate, Counter advance or weapon change reaches a Search, and no
+ *   single-Candidate application Planner runs. Collisions between Candidates are left to the final Planner.
+ */
+export type GlobalResearchSearchOrigin = 'sequential_projection' | 'planner_start'
+export const PHASE2C1_PLANNER_START_ALGORITHM = 'phase2c1-planner-start-origin-v1'
 
 export interface GlobalResearchOptions extends PlannerExecutionOptions {
   extent?: CandidateSearchSettings
@@ -286,6 +300,8 @@ export interface GlobalResearchOptions extends PlannerExecutionOptions {
   onFallbackSearchResult?: (result: CandidateSearchResult, fallback: ExtentFallbackMeasurement) => void
   /** Phase 2-B: semantics-neutral timeline of every full Planner call (clocks only). Absent = unchanged. */
   plannerTimeline?: Phase2BPlannerTimeline
+  /** Phase 2-C1: the pending Search origin. Absent = `sequential_projection` (unchanged). */
+  searchOrigin?: GlobalResearchSearchOrigin
 }
 
 export function orderGlobalResearchPending<T extends { targetWeaponId: string }>(pending: readonly T[], failedIds: readonly string[] = []): T[] {
@@ -317,6 +333,14 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
     report.algorithm = `phase1d-extent-fallback-v1:${options.extentFallback.strategy}`
     report.extentFallback = { strategy: options.extentFallback.strategy, searches: 0, searchElapsedMs: 0, ...(max !== undefined ? { maxEpisodes: max } : {}) }
   }
+  const searchOrigin = options.searchOrigin ?? 'sequential_projection'
+  if (searchOrigin !== 'sequential_projection' && searchOrigin !== 'planner_start') throw new Error('Invalid search origin')
+  const plannerStartOrigin = searchOrigin === 'planner_start'
+  if (plannerStartOrigin) {
+    report.algorithm = options.extentFallback ? `${PHASE2C1_PLANNER_START_ALGORITHM}:${options.extentFallback.strategy}` : PHASE2C1_PLANNER_START_ALGORITHM
+    report.searchOrigin = searchOrigin
+  }
+  const materializationAlgorithm = plannerStartOrigin ? PHASE2C1_PLANNER_START_ALGORITHM : undefined
   const fallbackRequests = new Set<string>()
   const publish = () => { report.totalElapsedMs = nowMs() - start; options.onProgress?.(structuredClone(report)) }
   const cancelled = () => { if (shouldCancel()) throw new CandidateSearchError('cancelled', 'Research cancelled or budget reached.') }
@@ -373,7 +397,10 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
       throw new Error('The selected/progressed retention hypothesis did not yield a complete conflict-free prefix.')
     }
     if (emptyPrefix) report.retained.traceReplay = 'passed'
-    let projected = retained.result.plan ? projectGlobalResearchPlan(retainedInput, retained.result.plan, dependencies) : { ...structuredClone(original), buildListEntries: [], conflictResolutions: [] }
+    // Phase 2-C1: the Planner-start origin is the original input itself. The retained prefix is verified above,
+    // exactly as in the control, but never projected into a Search.
+    let projected = plannerStartOrigin ? { ...structuredClone(original), buildListEntries: [], conflictResolutions: [] }
+      : retained.result.plan ? projectGlobalResearchPlan(retainedInput, retained.result.plan, dependencies) : { ...structuredClone(original), buildListEntries: [], conflictResolutions: [] }
     report.stage = 'discovery'
     const targets = new Map(original.targetWeapons.map(t => [t.id, t]))
     const pending = validation.validBuildListEntries.map(v => v.entry).filter(entry => !kept.has(entry.id))
@@ -497,7 +524,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
       const chosen = candidate
       let entry: BuildListEntry
       try {
-        entry = materializeGlobalResearchCandidate(original, candidateInput, chosen)
+        entry = materializeGlobalResearchCandidate(original, candidateInput, chosen, materializationAlgorithm)
         const check = validatePlannerInput({ ...original, buildListEntries: [entry] }, dependencies)
         if (!check.isValid || check.excludedBuildListEntries.length) throw new Error(JSON.stringify({ issues: check.issues, exclusions: check.excludedBuildListEntries.map(e => e.reason) }))
       } catch (error) {
@@ -507,7 +534,8 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
         }
         measurement.status = 'materialization_blocked'; measurement.error = String(error); publish(); continue
       }
-      try {
+      // Phase 2-C1: no single-Candidate application Planner and no projection; the next Search keeps the origin.
+      if (!plannerStartOrigin) try {
         // Existing Planner + Replay applies each Route; no custom Route transition or RNG advance.
         const target = projected.targetWeapons.find(t => t.id === chosen.targetWeaponId)!
         const applicationInput = { ...projected, buildListEntries: [createBuildListEntry(chosen, target, { createdAt: GLOBAL_RESEARCH_TIME })] }
