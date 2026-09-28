@@ -1,0 +1,6719 @@
+{
+  "phase": "Issue #154 Phase 2-A.5: 1,657 physical operation oracle, Production verification and lower-bound audit",
+  "measuredAt": "2026-09-28T07:19:27.434Z",
+  "environment": {
+    "runtime": "Node (Vite SSR loader, not Browser Worker)",
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "heapSizeLimitBytes": 8791261184,
+    "repositoryHead": "90edfeb4a288e545379b68eb2b473e5359fd8a59",
+    "uncommittedResearchCode": false,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportBytes": 19424064,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "rngEngineVersion": "production-rng:c5-e7",
+    "productionRngEngineVersion": "production-rng:c5-e7",
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 5000
+  },
+  "verdict": "proven_minimum",
+  "summary": {
+    "targets": 43,
+    "ownedSourceTargets": 35,
+    "newNormalSourceTargets": 8,
+    "materializedBy": {
+      "candidateSearch": 25,
+      "plannerAlternativeSearch": 18
+    },
+    "skill": {
+      "start": 341,
+      "end": 1424,
+      "advance": 1083,
+      "gaps": [],
+      "duplicateRequired": []
+    },
+    "gogma": {
+      "start": 55,
+      "end": 290,
+      "advance": 235,
+      "gaps": [],
+      "duplicateRequired": []
+    },
+    "normal": {
+      "weapon.charge_blade:8": {
+        "start": 0,
+        "end": 207,
+        "advance": 207,
+        "gaps": [],
+        "duplicateRequired": []
+      },
+      "weapon.dual_blades:8": {
+        "start": 349,
+        "end": 475,
+        "advance": 126,
+        "gaps": [],
+        "duplicateRequired": []
+      },
+      "weapon.switch_axe:8": {
+        "start": 0,
+        "end": 1,
+        "advance": 1,
+        "gaps": [],
+        "duplicateRequired": []
+      },
+      "weapon.sword_and_shield:8": {
+        "start": 7,
+        "end": 12,
+        "advance": 5,
+        "gaps": [],
+        "duplicateRequired": []
+      }
+    },
+    "streamAdvances": {
+      "skill": 1083,
+      "gogma": 235,
+      "normal": 339,
+      "normalByCounter": {
+        "weapon.charge_blade:8": 207,
+        "weapon.dual_blades:8": 126,
+        "weapon.switch_axe:8": 1,
+        "weapon.sword_and_shield:8": 5
+      }
+    },
+    "physicalOperations": 1657,
+    "routeOperationSum": 1745,
+    "stageA": {
+      "passed": true,
+      "errors": [],
+      "targetsWithErrors": []
+    },
+    "stageB": {
+      "passed": true,
+      "failures": []
+    },
+    "stageC": {
+      "excludedBuildListEntries": 0,
+      "termination": {
+        "status": "completed",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 5000
+        },
+        "expandedStates": 1700,
+        "completedTargetCount": 43,
+        "totalTargetCount": 43
+      },
+      "steps": 1657,
+      "stepOperationCounts": {
+        "reset_skills": 1075,
+        "create_normal_artian": 339,
+        "convert_normal_to_gogma": 8,
+        "reset_bonuses": 193,
+        "keep_bonuses": 42
+      },
+      "physicalSteps": 1657,
+      "selectedBuildListEntries": 43,
+      "conflicts": 0,
+      "rejectedBuildListEntries": 0,
+      "resourceConflictRejections": 0,
+      "warnings": [],
+      "fullPlannerRuns": 1,
+      "traceReplay": {
+        "isValid": true,
+        "issues": 0,
+        "drafts": 1700
+      },
+      "elapsedMs": 8136.379799999995,
+      "error": null
+    },
+    "elapsedMs": {
+      "stageA": 184.84799999999996,
+      "stageB": 49486.220199999996,
+      "stageC": 8969.496400000004,
+      "lowerBound": 240170.3235
+    }
+  },
+  "comparison": {
+    "phase2aAutonomousResearch": 8534,
+    "historicalValidatedOracle": 2982,
+    "thisOracle": 1657,
+    "minusFromPhase2a": 6877,
+    "minusFromHistorical": 1325
+  },
+  "lowerBound": {
+    "budget": 1658,
+    "assumptions": [
+      "Every physical operation advances exactly one Counter by exactly one: create_normal_artian (count c) advances its weapon type Normal Counter by c = c physical forges, convert_normal_to_gogma and reset_skills advance the Skill Counter, reset_bonuses and keep_bonuses advance the Gogma Counter (RngEngine advance functions). confirm_owned_ideal advances nothing and is not a physical operation.",
+      "Counters never decrease and advance only through physical operations, so the physical operation count equals the sum of the Counter advances.",
+      "Precondition checked per PlannerInput, not a general Production rule: auditCrossSatisfaction() finds no pair of planning Targets that one weapon state can satisfy together (Production has cross satisfaction; with such a pair the bound is not applicable). Then every planning Target needs its own completed weapon, because an Ideal completion protects its weapon so it never changes again, and each weapon comes from exactly one source: an existing compatible OwnedWeapon (same weapon type and element; unprotected, or protected and already Ideal with no operation) or a new rarity-8 Normal Artian forged at its own Normal Counter position of its weapon type and converted. Hence the sources are pairwise distinct.",
+      "A completed weapon holds the Ideal restoration bonuses (gogma_artian scope, exact multiset) and the Ideal Skill condition.",
+      "Final Skills: an existing Gogma may keep its current Skills; otherwise the last Skill operation (conversion or Reset Skills, which draw the same Skills at the same Skill position) is at a position p whose prediction satisfies the Ideal Skill condition.",
+      "Final bonuses: an existing Gogma may keep its current bonuses; otherwise the last bonus operation at Gogma position g is a Reset whose result is Ideal, or a Keep whose result is Ideal for the family layout it reads: the source layout (no earlier Reset) or the layout of a Reset at an earlier position g1 (Keep preserves the slot family layout).",
+      "A Keep result depends only on the Seed, weapon type, element, Gogma position and the ordered family layout of the current slots (Production Keep reads families only).",
+      "Unsupported predictions (Engine support query) are not Production operations and give no option."
+    ],
+    "crossSatisfaction": {
+      "planningTargetCount": 43,
+      "sameWeaponTypeAndElementPairCount": 54,
+      "skillStateCandidates": {
+        "series": 26,
+        "group": 18
+      },
+      "possiblePairCount": 0,
+      "possiblePairs": [],
+      "masterSkillIds": {
+        "series": 25,
+        "group": 17
+      },
+      "distinctSourcePreconditionHolds": true
+    },
+    "relaxation": {
+      "status": "found",
+      "provenAtLeast": 1657,
+      "minimum": {
+        "total": 1657,
+        "thresholds": {
+          "skill": 1424,
+          "gogma": 290,
+          "normal": {
+            "weapon.sword_and_shield": 12,
+            "weapon.dual_blades": 475,
+            "weapon.heavy_bowgun": 4,
+            "weapon.great_sword": 156,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 24
+          }
+        },
+        "advances": {
+          "skill": 1083,
+          "gogma": 235,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 126,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        }
+      },
+      "targetsWithoutOption": [],
+      "nearMinimum": [
+        {
+          "total": 1657,
+          "skill": 1424,
+          "gogma": 290,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 126,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1669,
+          "skill": 1424,
+          "gogma": 302,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 126,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1672,
+          "skill": 1424,
+          "gogma": 431,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1674,
+          "skill": 1424,
+          "gogma": 433,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1676,
+          "skill": 1424,
+          "gogma": 435,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1682,
+          "skill": 1424,
+          "gogma": 441,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        }
+      ]
+    },
+    "singleStream": {
+      "skill": {
+        "advance": 1083,
+        "witnessTargetId": "a367c177-a0c2-4986-995e-4efcf4131b5c"
+      },
+      "gogma": {
+        "advance": 170,
+        "witnessTargetId": "b4f252cd-9530-46f2-b387-b99e3904a66e"
+      },
+      "normal": {
+        "weapon.sword_and_shield": 0,
+        "weapon.dual_blades": 0,
+        "weapon.heavy_bowgun": 0,
+        "weapon.great_sword": 0,
+        "weapon.switch_axe": 1,
+        "weapon.charge_blade": 207,
+        "weapon.hammer": 0
+      }
+    },
+    "origins": {
+      "skill": 341,
+      "gogma": 55,
+      "normal": {
+        "weapon.sword_and_shield": 7,
+        "weapon.dual_blades": 349,
+        "weapon.heavy_bowgun": 4,
+        "weapon.great_sword": 156,
+        "weapon.switch_axe": 0,
+        "weapon.charge_blade": 0,
+        "weapon.hammer": 24
+      }
+    },
+    "targets": [
+      {
+        "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "weaponTypeId": "weapon.sword_and_shield",
+        "elementId": "element.fire",
+        "firstIdealSkillPosition": 363,
+        "firstIdealResetPosition": null,
+        "optionCount": 1659,
+        "ownedOptionCount": 1,
+        "minSkillThreshold": 364,
+        "minGogmaThreshold": 174,
+        "minNormalThreshold": 8
+      },
+      {
+        "targetWeaponId": "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+        "weaponTypeId": "weapon.sword_and_shield",
+        "elementId": "element.water",
+        "firstIdealSkillPosition": 386,
+        "firstIdealResetPosition": null,
+        "optionCount": 1659,
+        "ownedOptionCount": 1,
+        "minSkillThreshold": 387,
+        "minGogmaThreshold": 77,
+        "minNormalThreshold": 8
+      },
+      {
+        "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.water",
+        "firstIdealSkillPosition": 791,
+        "firstIdealResetPosition": null,
+        "optionCount": 1662,
+        "ownedOptionCount": 4,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 78,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "0d98b225-e5d4-4cd4-b8e9-4c62ba695893",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.dragon",
+        "firstIdealSkillPosition": 512,
+        "firstIdealResetPosition": null,
+        "optionCount": 1664,
+        "ownedOptionCount": 6,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 106,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "155a6831-7ff7-42d7-abf5-6e5a186edca6",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.dragon",
+        "firstIdealSkillPosition": 887,
+        "firstIdealResetPosition": null,
+        "optionCount": 1664,
+        "ownedOptionCount": 6,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 118,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.water",
+        "firstIdealSkillPosition": 791,
+        "firstIdealResetPosition": null,
+        "optionCount": 1662,
+        "ownedOptionCount": 4,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 78,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.ice",
+        "firstIdealSkillPosition": 648,
+        "firstIdealResetPosition": 1060,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 649,
+        "minGogmaThreshold": 72,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+        "weaponTypeId": "weapon.heavy_bowgun",
+        "elementId": "element.thunder",
+        "firstIdealSkillPosition": 341,
+        "firstIdealResetPosition": null,
+        "optionCount": 1659,
+        "ownedOptionCount": 1,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 85,
+        "minNormalThreshold": 5
+      },
+      {
+        "targetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+        "weaponTypeId": "weapon.great_sword",
+        "elementId": "element.paralysis",
+        "firstIdealSkillPosition": 757,
+        "firstIdealResetPosition": 698,
+        "optionCount": 1660,
+        "ownedOptionCount": 2,
+        "minSkillThreshold": 758,
+        "minGogmaThreshold": 78,
+        "minNormalThreshold": 157
+      },
+      {
+        "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.fire",
+        "firstIdealSkillPosition": 485,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 70,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85",
+        "weaponTypeId": "weapon.great_sword",
+        "elementId": "element.fire",
+        "firstIdealSkillPosition": 730,
+        "firstIdealResetPosition": null,
+        "optionCount": 1660,
+        "ownedOptionCount": 2,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 75,
+        "minNormalThreshold": 157
+      },
+      {
+        "targetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.water",
+        "firstIdealSkillPosition": 396,
+        "firstIdealResetPosition": null,
+        "optionCount": 1662,
+        "ownedOptionCount": 4,
+        "minSkillThreshold": 397,
+        "minGogmaThreshold": 100,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.thunder",
+        "firstIdealSkillPosition": 675,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 153,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.fire",
+        "firstIdealSkillPosition": 422,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 99,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.ice",
+        "firstIdealSkillPosition": 378,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 72,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+        "weaponTypeId": "weapon.great_sword",
+        "elementId": "element.fire",
+        "firstIdealSkillPosition": 1165,
+        "firstIdealResetPosition": null,
+        "optionCount": 1660,
+        "ownedOptionCount": 2,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 75,
+        "minNormalThreshold": 157
+      },
+      {
+        "targetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+        "weaponTypeId": "weapon.great_sword",
+        "elementId": "element.paralysis",
+        "firstIdealSkillPosition": 392,
+        "firstIdealResetPosition": null,
+        "optionCount": 1660,
+        "ownedOptionCount": 2,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 73,
+        "minNormalThreshold": 157
+      },
+      {
+        "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+        "weaponTypeId": "weapon.switch_axe",
+        "elementId": "element.paralysis",
+        "firstIdealSkillPosition": 410,
+        "firstIdealResetPosition": null,
+        "optionCount": 1658,
+        "ownedOptionCount": 0,
+        "minSkillThreshold": 411,
+        "minGogmaThreshold": 76,
+        "minNormalThreshold": 1
+      },
+      {
+        "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+        "weaponTypeId": "weapon.charge_blade",
+        "elementId": "element.fire",
+        "firstIdealSkillPosition": 399,
+        "firstIdealResetPosition": 289,
+        "optionCount": 1658,
+        "ownedOptionCount": 0,
+        "minSkillThreshold": 400,
+        "minGogmaThreshold": 56,
+        "minNormalThreshold": 1
+      },
+      {
+        "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+        "weaponTypeId": "weapon.charge_blade",
+        "elementId": "element.dragon",
+        "firstIdealSkillPosition": 478,
+        "firstIdealResetPosition": null,
+        "optionCount": 4,
+        "ownedOptionCount": 0,
+        "minSkillThreshold": 479,
+        "minGogmaThreshold": 56,
+        "minNormalThreshold": 207
+      },
+      {
+        "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+        "weaponTypeId": "weapon.sword_and_shield",
+        "elementId": "element.ice",
+        "firstIdealSkillPosition": 343,
+        "firstIdealResetPosition": null,
+        "optionCount": 1659,
+        "ownedOptionCount": 1,
+        "minSkillThreshold": 344,
+        "minGogmaThreshold": 73,
+        "minNormalThreshold": 8
+      },
+      {
+        "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.ice",
+        "firstIdealSkillPosition": 648,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 649,
+        "minGogmaThreshold": 156,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+        "weaponTypeId": "weapon.sword_and_shield",
+        "elementId": "element.thunder",
+        "firstIdealSkillPosition": 341,
+        "firstIdealResetPosition": null,
+        "optionCount": 1659,
+        "ownedOptionCount": 1,
+        "minSkillThreshold": 342,
+        "minGogmaThreshold": 181,
+        "minNormalThreshold": 8
+      },
+      {
+        "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
+        "weaponTypeId": "weapon.heavy_bowgun",
+        "elementId": "element.water",
+        "firstIdealSkillPosition": 341,
+        "firstIdealResetPosition": null,
+        "optionCount": 1659,
+        "ownedOptionCount": 1,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 121,
+        "minNormalThreshold": 5
+      },
+      {
+        "targetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.ice",
+        "firstIdealSkillPosition": 648,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 649,
+        "minGogmaThreshold": 72,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.thunder",
+        "firstIdealSkillPosition": 566,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 153,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "weaponTypeId": "weapon.great_sword",
+        "elementId": "element.dragon",
+        "firstIdealSkillPosition": 1423,
+        "firstIdealResetPosition": null,
+        "optionCount": 1660,
+        "ownedOptionCount": 2,
+        "minSkillThreshold": 1424,
+        "minGogmaThreshold": 114,
+        "minNormalThreshold": 157
+      },
+      {
+        "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.fire",
+        "firstIdealSkillPosition": 485,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 61,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.water",
+        "firstIdealSkillPosition": 396,
+        "firstIdealResetPosition": null,
+        "optionCount": 1662,
+        "ownedOptionCount": 4,
+        "minSkillThreshold": 397,
+        "minGogmaThreshold": 59,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "aa4e67d8-cc57-487c-b0f0-6a8b36f13dbb",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.thunder",
+        "firstIdealSkillPosition": 566,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 113,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.thunder",
+        "firstIdealSkillPosition": 566,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 153,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.dragon",
+        "firstIdealSkillPosition": 512,
+        "firstIdealResetPosition": null,
+        "optionCount": 1664,
+        "ownedOptionCount": 6,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 225,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.fire",
+        "firstIdealSkillPosition": 485,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 74,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "weaponTypeId": "weapon.great_sword",
+        "elementId": "element.dragon",
+        "firstIdealSkillPosition": 408,
+        "firstIdealResetPosition": null,
+        "optionCount": 1660,
+        "ownedOptionCount": 2,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 114,
+        "minNormalThreshold": 157
+      },
+      {
+        "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.thunder",
+        "firstIdealSkillPosition": 675,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 153,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.ice",
+        "firstIdealSkillPosition": 378,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 72,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "d453ca34-a142-4241-9dce-8551c96cb887",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.dragon",
+        "firstIdealSkillPosition": 887,
+        "firstIdealResetPosition": 1599,
+        "optionCount": 1664,
+        "ownedOptionCount": 6,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 56,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.fire",
+        "firstIdealSkillPosition": 422,
+        "firstIdealResetPosition": null,
+        "optionCount": 1663,
+        "ownedOptionCount": 5,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 99,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "e4147de7-587c-4106-a47d-b09f8796464d",
+        "weaponTypeId": "weapon.great_sword",
+        "elementId": "element.blast",
+        "firstIdealSkillPosition": 508,
+        "firstIdealResetPosition": null,
+        "optionCount": 1659,
+        "ownedOptionCount": 1,
+        "minSkillThreshold": 509,
+        "minGogmaThreshold": 82,
+        "minNormalThreshold": 157
+      },
+      {
+        "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
+        "weaponTypeId": "weapon.sword_and_shield",
+        "elementId": "element.dragon",
+        "firstIdealSkillPosition": 348,
+        "firstIdealResetPosition": null,
+        "optionCount": 1659,
+        "ownedOptionCount": 1,
+        "minSkillThreshold": 349,
+        "minGogmaThreshold": 70,
+        "minNormalThreshold": 8
+      },
+      {
+        "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "weaponTypeId": "weapon.hammer",
+        "elementId": "element.paralysis",
+        "firstIdealSkillPosition": 379,
+        "firstIdealResetPosition": null,
+        "optionCount": 1659,
+        "ownedOptionCount": 1,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 90,
+        "minNormalThreshold": 25
+      },
+      {
+        "targetWeaponId": "f5d20af4-86b4-4e3f-b9ad-80862917007d",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.dragon",
+        "firstIdealSkillPosition": 512,
+        "firstIdealResetPosition": null,
+        "optionCount": 1664,
+        "ownedOptionCount": 6,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 68,
+        "minNormalThreshold": 350
+      },
+      {
+        "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+        "weaponTypeId": "weapon.dual_blades",
+        "elementId": "element.dragon",
+        "firstIdealSkillPosition": 887,
+        "firstIdealResetPosition": null,
+        "optionCount": 1664,
+        "ownedOptionCount": 6,
+        "minSkillThreshold": 341,
+        "minGogmaThreshold": 118,
+        "minNormalThreshold": 350
+      }
+    ]
+  },
+  "routes": [
+    {
+      "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+      "weaponTypeId": "weapon.sword_and_shield",
+      "elementId": "element.fire",
+      "sourceKind": "new_normal",
+      "sourceOwnedWeaponId": null,
+      "normalPosition": 11,
+      "conversionPosition": 363,
+      "normal": {
+        "first": 7,
+        "last": 11,
+        "operations": 5
+      },
+      "gogma": {
+        "first": 173,
+        "last": 173,
+        "operations": 1,
+        "required": [
+          173
+        ]
+      },
+      "skill": {
+        "first": 363,
+        "last": 363,
+        "operations": 1,
+        "required": [
+          363
+        ]
+      },
+      "routeOperationCount": 7,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_07",
+      "finalGroupSkillId": "group_skill.verified_07",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-9a2cd0c1",
+        "buildListEntryId": "build-list.constrained.fnv1a32-05fe4ccb",
+        "routeKind": "normal_artian_to_gogma",
+        "estimated": {
+          "operations": 7,
+          "normal": 5,
+          "gogma": 119,
+          "skill": 23
+        },
+        "plannerRequired": {
+          "normal": 11,
+          "skill": [
+            363
+          ],
+          "gogma": [
+            173
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 14.95270000000005
+      }
+    },
+    {
+      "targetWeaponId": "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+      "weaponTypeId": "weapon.sword_and_shield",
+      "elementId": "element.water",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "f78a71f2-42fa-4b34-94c7-8d9ad1ca1d43",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 63,
+        "last": 100,
+        "operations": 2,
+        "required": [
+          63,
+          100
+        ]
+      },
+      "skill": {
+        "first": 386,
+        "last": 386,
+        "operations": 1,
+        "required": [
+          386
+        ]
+      },
+      "routeOperationCount": 3,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.iii"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_07",
+      "finalGroupSkillId": "group_skill.verified_08",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-2673f05a",
+        "buildListEntryId": "build-list.constrained.fnv1a32-ee9de590",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 3,
+          "normal": null,
+          "gogma": 46,
+          "skill": 46
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            386
+          ],
+          "gogma": [
+            63,
+            100
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 189.28290000000015
+      }
+    },
+    {
+      "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.water",
+      "sourceKind": "new_normal",
+      "sourceOwnedWeaponId": null,
+      "normalPosition": 474,
+      "conversionPosition": 791,
+      "normal": {
+        "first": 349,
+        "last": 474,
+        "operations": 126
+      },
+      "gogma": {
+        "first": 77,
+        "last": 77,
+        "operations": 1,
+        "required": [
+          77
+        ]
+      },
+      "skill": {
+        "first": 791,
+        "last": 791,
+        "operations": 1,
+        "required": [
+          791
+        ]
+      },
+      "routeOperationCount": 128,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-2724de18",
+        "buildListEntryId": "build-list.constrained.fnv1a32-e5af9612",
+        "routeKind": "normal_artian_to_gogma",
+        "estimated": {
+          "operations": 128,
+          "normal": 126,
+          "gogma": 23,
+          "skill": 451
+        },
+        "plannerRequired": {
+          "normal": 474,
+          "skill": [
+            791
+          ],
+          "gogma": [
+            77
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 21.72460000000001
+      }
+    },
+    {
+      "targetWeaponId": "0d98b225-e5d4-4cd4-b8e9-4c62ba695893",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.dragon",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "8bac3ee0-b030-48c7-9868-b3a9ffc02e03",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 201,
+        "last": 201,
+        "operations": 1,
+        "required": [
+          201
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 1,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-3014af9c",
+        "buildListEntryId": "build-list.constrained.fnv1a32-6fbafb47",
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimated": {
+          "operations": 1,
+          "normal": null,
+          "gogma": 147,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            201
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 3.8115999999999985
+      }
+    },
+    {
+      "targetWeaponId": "155a6831-7ff7-42d7-abf5-6e5a186edca6",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.dragon",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "533b92bb-fc40-43e5-a7c5-4dba76cd634a",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 117,
+        "last": 117,
+        "operations": 1,
+        "required": [
+          117
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 1,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-b1953b50",
+        "buildListEntryId": "build-list.constrained.fnv1a32-148409ad",
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimated": {
+          "operations": 1,
+          "normal": null,
+          "gogma": 63,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            117
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 2.9253000000001066
+      }
+    },
+    {
+      "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.water",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "4e80c02d-0ec0-4116-807f-49aaeac95b7d",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 106,
+        "last": 212,
+        "operations": 2,
+        "required": [
+          106,
+          212
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-b40403cf",
+        "buildListEntryId": "build-list.constrained.fnv1a32-ac5ea200",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 158,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            106,
+            212
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 528.4019000000001
+      }
+    },
+    {
+      "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.ice",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "e3a29191-9684-4cc0-9851-5255e9757219",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 71,
+        "last": 71,
+        "operations": 1,
+        "required": [
+          71
+        ]
+      },
+      "skill": {
+        "first": 786,
+        "last": 786,
+        "operations": 1,
+        "required": [
+          786
+        ]
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-59c7bd80",
+        "buildListEntryId": "build-list.constrained.fnv1a32-75814817",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 17,
+          "skill": 446
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            786
+          ],
+          "gogma": [
+            71
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 4.314800000000105
+      }
+    },
+    {
+      "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+      "weaponTypeId": "weapon.heavy_bowgun",
+      "elementId": "element.thunder",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "c09a85a3-0837-4f71-8f98-49c6b194d390",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 73,
+        "last": 84,
+        "operations": 2,
+        "required": [
+          73,
+          84
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_15",
+      "finalGroupSkillId": "group_skill.verified_12",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-5481c27a",
+        "buildListEntryId": "build-list.constrained.fnv1a32-18def823",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 30,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            73,
+            84
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 22.058600000000297
+      }
+    },
+    {
+      "targetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+      "weaponTypeId": "weapon.great_sword",
+      "elementId": "element.paralysis",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "95a1b045-0353-4278-8f71-0f1e4d1bbf88",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 137,
+        "last": 137,
+        "operations": 1,
+        "required": [
+          137
+        ]
+      },
+      "skill": {
+        "first": 757,
+        "last": 757,
+        "operations": 1,
+        "required": [
+          757
+        ]
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ii"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-8005b014",
+        "buildListEntryId": "build-list.constrained.fnv1a32-cb75624e",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 83,
+          "skill": 417
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            757
+          ],
+          "gogma": [
+            137
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 4.438599999999951
+      }
+    },
+    {
+      "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.fire",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "d508b91b-f454-46da-9c77-661bc4589e8d",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 107,
+        "last": 144,
+        "operations": 2,
+        "required": [
+          107,
+          144
+        ]
+      },
+      "skill": {
+        "first": 854,
+        "last": 854,
+        "operations": 1,
+        "required": [
+          854
+        ]
+      },
+      "routeOperationCount": 3,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-c95d6958",
+        "buildListEntryId": "build-list.constrained.fnv1a32-19245322",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 3,
+          "normal": null,
+          "gogma": 90,
+          "skill": 514
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            854
+          ],
+          "gogma": [
+            107,
+            144
+          ]
+        },
+        "deliveredCandidates": 2,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 3427.5579
+      }
+    },
+    {
+      "targetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85",
+      "weaponTypeId": "weapon.great_sword",
+      "elementId": "element.fire",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "f86e1dac-e1fb-4182-abcb-ec56aa26047a",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 74,
+        "last": 74,
+        "operations": 1,
+        "required": [
+          74
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 1,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-1b41e071",
+        "buildListEntryId": "build-list.constrained.fnv1a32-d5df2985",
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimated": {
+          "operations": 1,
+          "normal": null,
+          "gogma": 20,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            74
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 3.0671000000002095
+      }
+    },
+    {
+      "targetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.water",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "541efaa0-2973-48ec-b817-fa7e663a9a22",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 287,
+        "last": 287,
+        "operations": 1,
+        "required": [
+          287
+        ]
+      },
+      "skill": {
+        "first": 892,
+        "last": 892,
+        "operations": 1,
+        "required": [
+          892
+        ]
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-92ce4123",
+        "buildListEntryId": "build-list.constrained.fnv1a32-73805822",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 233,
+          "skill": 552
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            892
+          ],
+          "gogma": [
+            287
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 2.5445999999992637
+      }
+    },
+    {
+      "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.thunder",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "870c1051-4967-455a-ae6f-4b059d9a8cad",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 149,
+        "last": 247,
+        "operations": 2,
+        "required": [
+          149,
+          247
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-2674cbf3",
+        "buildListEntryId": "build-list.constrained.fnv1a32-c4be63ef",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 193,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            149,
+            247
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 870.5756000000001
+      }
+    },
+    {
+      "targetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.fire",
+      "sourceKind": "new_normal",
+      "sourceOwnedWeaponId": null,
+      "normalPosition": 470,
+      "conversionPosition": 422,
+      "normal": {
+        "first": 470,
+        "last": 470,
+        "operations": 1
+      },
+      "gogma": {
+        "first": 98,
+        "last": 98,
+        "operations": 1,
+        "required": [
+          98
+        ]
+      },
+      "skill": {
+        "first": 422,
+        "last": 422,
+        "operations": 1,
+        "required": [
+          422
+        ]
+      },
+      "routeOperationCount": 3,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-10c7c195",
+        "buildListEntryId": "build-list.constrained.fnv1a32-810a32f9",
+        "routeKind": "normal_artian_to_gogma",
+        "estimated": {
+          "operations": 3,
+          "normal": 122,
+          "gogma": 44,
+          "skill": 82
+        },
+        "plannerRequired": {
+          "normal": 470,
+          "skill": [
+            422
+          ],
+          "gogma": [
+            98
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 4.45010000000002
+      }
+    },
+    {
+      "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.ice",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "192573eb-307e-4515-a8e5-bf8cbc65eaa8",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 235,
+        "last": 277,
+        "operations": 2,
+        "required": [
+          235,
+          277
+        ]
+      },
+      "skill": {
+        "first": 708,
+        "last": 708,
+        "operations": 1,
+        "required": [
+          708
+        ]
+      },
+      "routeOperationCount": 3,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-766ff286",
+        "buildListEntryId": "build-list.constrained.fnv1a32-f20f7ac8",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 3,
+          "normal": null,
+          "gogma": 223,
+          "skill": 368
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            708
+          ],
+          "gogma": [
+            235,
+            277
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 17032.9887
+      }
+    },
+    {
+      "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+      "weaponTypeId": "weapon.great_sword",
+      "elementId": "element.fire",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "8e57b313-a379-4b70-9973-ad239e6159e1",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 101,
+        "last": 288,
+        "operations": 2,
+        "required": [
+          101,
+          288
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_21",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-1d661b1b",
+        "buildListEntryId": "build-list.constrained.fnv1a32-3d040e8e",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 234,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            101,
+            288
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 1366.5517
+      }
+    },
+    {
+      "targetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+      "weaponTypeId": "weapon.great_sword",
+      "elementId": "element.paralysis",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "4340b7e3-9d1e-43ae-a6cb-eecca0275d7d",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 219,
+        "last": 219,
+        "operations": 1,
+        "required": [
+          219
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 1,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_21",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-d4091ce8",
+        "buildListEntryId": "build-list.constrained.fnv1a32-af24d49d",
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimated": {
+          "operations": 1,
+          "normal": null,
+          "gogma": 165,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            219
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 2.954599999997299
+      }
+    },
+    {
+      "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+      "weaponTypeId": "weapon.switch_axe",
+      "elementId": "element.paralysis",
+      "sourceKind": "new_normal",
+      "sourceOwnedWeaponId": null,
+      "normalPosition": 0,
+      "conversionPosition": 410,
+      "normal": {
+        "first": 0,
+        "last": 0,
+        "operations": 1
+      },
+      "gogma": {
+        "first": 72,
+        "last": 267,
+        "operations": 2,
+        "required": [
+          72,
+          267
+        ]
+      },
+      "skill": {
+        "first": 410,
+        "last": 410,
+        "operations": 1,
+        "required": [
+          410
+        ]
+      },
+      "routeOperationCount": 4,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_07",
+      "finalGroupSkillId": "group_skill.verified_03",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-47b5a23f",
+        "buildListEntryId": "build-list.constrained.fnv1a32-5aebb662",
+        "routeKind": "normal_artian_to_gogma",
+        "estimated": {
+          "operations": 4,
+          "normal": 1,
+          "gogma": 213,
+          "skill": 70
+        },
+        "plannerRequired": {
+          "normal": 0,
+          "skill": [
+            410
+          ],
+          "gogma": [
+            72,
+            267
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 1074.7978999999978
+      }
+    },
+    {
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "weaponTypeId": "weapon.charge_blade",
+      "elementId": "element.fire",
+      "sourceKind": "new_normal",
+      "sourceOwnedWeaponId": null,
+      "normalPosition": 0,
+      "conversionPosition": 399,
+      "normal": {
+        "first": 0,
+        "last": 0,
+        "operations": 1
+      },
+      "gogma": {
+        "first": 55,
+        "last": 289,
+        "operations": 235,
+        "required": [
+          289
+        ]
+      },
+      "skill": {
+        "first": 399,
+        "last": 399,
+        "operations": 1,
+        "required": [
+          399
+        ]
+      },
+      "routeOperationCount": 237,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ii"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ii"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-ea0f17a9",
+        "buildListEntryId": "build-list.constrained.fnv1a32-77340b83",
+        "routeKind": "normal_artian_to_gogma",
+        "estimated": {
+          "operations": 237,
+          "normal": 1,
+          "gogma": 235,
+          "skill": 59
+        },
+        "plannerRequired": {
+          "normal": 0,
+          "skill": [
+            399
+          ],
+          "gogma": [
+            289
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 2376.644799999998
+      }
+    },
+    {
+      "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "weaponTypeId": "weapon.charge_blade",
+      "elementId": "element.dragon",
+      "sourceKind": "new_normal",
+      "sourceOwnedWeaponId": null,
+      "normalPosition": 206,
+      "conversionPosition": 478,
+      "normal": {
+        "first": 0,
+        "last": 206,
+        "operations": 207
+      },
+      "gogma": {
+        "first": 230,
+        "last": 230,
+        "operations": 1,
+        "required": [
+          230
+        ]
+      },
+      "skill": {
+        "first": 478,
+        "last": 478,
+        "operations": 1,
+        "required": [
+          478
+        ]
+      },
+      "routeOperationCount": 209,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ii"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ii"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-336dbb1f",
+        "buildListEntryId": "build-list.constrained.fnv1a32-29d3790f",
+        "routeKind": "normal_artian_to_gogma",
+        "estimated": {
+          "operations": 209,
+          "normal": 207,
+          "gogma": 176,
+          "skill": 138
+        },
+        "plannerRequired": {
+          "normal": 206,
+          "skill": [
+            478
+          ],
+          "gogma": [
+            230
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 12.176500000001397
+      }
+    },
+    {
+      "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+      "weaponTypeId": "weapon.sword_and_shield",
+      "elementId": "element.ice",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "246cc02e-097e-4384-b487-82fddfefd618",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 198,
+        "last": 253,
+        "operations": 2,
+        "required": [
+          198,
+          253
+        ]
+      },
+      "skill": {
+        "first": 343,
+        "last": 343,
+        "operations": 1,
+        "required": [
+          343
+        ]
+      },
+      "routeOperationCount": 3,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_07",
+      "finalGroupSkillId": "group_skill.verified_13",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-2d30d388",
+        "buildListEntryId": "build-list.constrained.fnv1a32-edda6625",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 3,
+          "normal": null,
+          "gogma": 199,
+          "skill": 3
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            343
+          ],
+          "gogma": [
+            198,
+            253
+          ]
+        },
+        "deliveredCandidates": 4,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 11600.500100000001
+      }
+    },
+    {
+      "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.ice",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "c03a0d0e-b59f-4464-809b-30032d6c2056",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 133,
+        "last": 193,
+        "operations": 2,
+        "required": [
+          133,
+          193
+        ]
+      },
+      "skill": {
+        "first": 740,
+        "last": 740,
+        "operations": 1,
+        "required": [
+          740
+        ]
+      },
+      "routeOperationCount": 3,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-c1cb2f9d",
+        "buildListEntryId": "build-list.constrained.fnv1a32-43ca9fb1",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 3,
+          "normal": null,
+          "gogma": 139,
+          "skill": 400
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            740
+          ],
+          "gogma": [
+            133,
+            193
+          ]
+        },
+        "deliveredCandidates": 2,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 5221.409800000001
+      }
+    },
+    {
+      "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+      "weaponTypeId": "weapon.sword_and_shield",
+      "elementId": "element.thunder",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "2230977f-6f45-4c8c-b1c5-761b92d276e5",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 210,
+        "last": 210,
+        "operations": 1,
+        "required": [
+          210
+        ]
+      },
+      "skill": {
+        "first": 341,
+        "last": 341,
+        "operations": 1,
+        "required": [
+          341
+        ]
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_07",
+      "finalGroupSkillId": "group_skill.verified_07",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-2c77c226",
+        "buildListEntryId": "build-list.constrained.fnv1a32-df3fc8d2",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 156,
+          "skill": 1
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            341
+          ],
+          "gogma": [
+            210
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 3.63289999999688
+      }
+    },
+    {
+      "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
+      "weaponTypeId": "weapon.heavy_bowgun",
+      "elementId": "element.water",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "7b347758-0cdb-4e94-9ca4-ece065caf8ef",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 146,
+        "last": 165,
+        "operations": 2,
+        "required": [
+          146,
+          165
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_21",
+      "finalGroupSkillId": "group_skill.verified_08",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-961c7a96",
+        "buildListEntryId": "build-list.constrained.fnv1a32-5b87fddb",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 111,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            146,
+            165
+          ]
+        },
+        "deliveredCandidates": 3,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 231.09719999999652
+      }
+    },
+    {
+      "targetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.ice",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "da8d7cf3-2abc-410a-8e51-bfe49977367b",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 125,
+        "last": 125,
+        "operations": 1,
+        "required": [
+          125
+        ]
+      },
+      "skill": {
+        "first": 648,
+        "last": 648,
+        "operations": 1,
+        "required": [
+          648
+        ]
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-88acb363",
+        "buildListEntryId": "build-list.constrained.fnv1a32-04991c31",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 71,
+          "skill": 308
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            648
+          ],
+          "gogma": [
+            125
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 5.018199999998615
+      }
+    },
+    {
+      "targetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.thunder",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "0d13daed-97f8-44e8-a87a-8c00cf3045c4",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 216,
+        "last": 216,
+        "operations": 1,
+        "required": [
+          216
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 1,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-b375ef35",
+        "buildListEntryId": "build-list.constrained.fnv1a32-903f1628",
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimated": {
+          "operations": 1,
+          "normal": null,
+          "gogma": 162,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            216
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 2.8954999999987194
+      }
+    },
+    {
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "weaponTypeId": "weapon.great_sword",
+      "elementId": "element.dragon",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "a801b133-99bd-483e-8519-d98bf748f406",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 113,
+        "last": 113,
+        "operations": 1,
+        "required": [
+          113
+        ]
+      },
+      "skill": {
+        "first": 341,
+        "last": 1423,
+        "operations": 1083,
+        "required": [
+          1423
+        ]
+      },
+      "routeOperationCount": 1084,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-c09abbef",
+        "buildListEntryId": "build-list.constrained.fnv1a32-c6b3e779",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 1084,
+          "normal": null,
+          "gogma": 59,
+          "skill": 1083
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            1423
+          ],
+          "gogma": [
+            113
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 229.29559999999765
+      }
+    },
+    {
+      "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.fire",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "5749b7fb-bded-4b89-b383-9cfe904d2f5c",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 116,
+        "last": 161,
+        "operations": 2,
+        "required": [
+          116,
+          161
+        ]
+      },
+      "skill": {
+        "first": 588,
+        "last": 588,
+        "operations": 1,
+        "required": [
+          588
+        ]
+      },
+      "routeOperationCount": 3,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-528e26b6",
+        "buildListEntryId": "build-list.constrained.fnv1a32-bb0ced0d",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 3,
+          "normal": null,
+          "gogma": 107,
+          "skill": 248
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            588
+          ],
+          "gogma": [
+            116,
+            161
+          ]
+        },
+        "deliveredCandidates": 2,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 2058.0734999999986
+      }
+    },
+    {
+      "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.water",
+      "sourceKind": "new_normal",
+      "sourceOwnedWeaponId": null,
+      "normalPosition": 367,
+      "conversionPosition": 396,
+      "normal": {
+        "first": 367,
+        "last": 367,
+        "operations": 1
+      },
+      "gogma": {
+        "first": 130,
+        "last": 130,
+        "operations": 1,
+        "required": [
+          130
+        ]
+      },
+      "skill": {
+        "first": 396,
+        "last": 396,
+        "operations": 1,
+        "required": [
+          396
+        ]
+      },
+      "routeOperationCount": 3,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-935db1be",
+        "buildListEntryId": "build-list.constrained.fnv1a32-ab33ea8b",
+        "routeKind": "normal_artian_to_gogma",
+        "estimated": {
+          "operations": 3,
+          "normal": 19,
+          "gogma": 76,
+          "skill": 56
+        },
+        "plannerRequired": {
+          "normal": 367,
+          "skill": [
+            396
+          ],
+          "gogma": [
+            130
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 4.4003000000011525
+      }
+    },
+    {
+      "targetWeaponId": "aa4e67d8-cc57-487c-b0f0-6a8b36f13dbb",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.thunder",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "346dfc0f-603a-430f-8698-d4b093315179",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 170,
+        "last": 170,
+        "operations": 1,
+        "required": [
+          170
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 1,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-9c0d824a",
+        "buildListEntryId": "build-list.constrained.fnv1a32-5b490e2a",
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimated": {
+          "operations": 1,
+          "normal": null,
+          "gogma": 116,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            170
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 6.239699999998265
+      }
+    },
+    {
+      "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.thunder",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "701736da-6c4b-42f4-8949-dbad41cab5d4",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 153,
+        "last": 153,
+        "operations": 1,
+        "required": [
+          153
+        ]
+      },
+      "skill": {
+        "first": 566,
+        "last": 566,
+        "operations": 1,
+        "required": [
+          566
+        ]
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-6b6eb49f",
+        "buildListEntryId": "build-list.constrained.fnv1a32-792a8e1b",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 99,
+          "skill": 226
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            566
+          ],
+          "gogma": [
+            153
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 2.2361999999993714
+      }
+    },
+    {
+      "targetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.dragon",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "31f07927-5911-46f5-8a20-2c07717a5a9c",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 242,
+        "last": 242,
+        "operations": 1,
+        "required": [
+          242
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 1,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-1d6484c5",
+        "buildListEntryId": "build-list.constrained.fnv1a32-416ebb8f",
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimated": {
+          "operations": 1,
+          "normal": null,
+          "gogma": 188,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            242
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 4.679700000000594
+      }
+    },
+    {
+      "targetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.fire",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "dc4f742c-13ad-433b-bc29-2426fcb4aff0",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 164,
+        "last": 164,
+        "operations": 1,
+        "required": [
+          164
+        ]
+      },
+      "skill": {
+        "first": 485,
+        "last": 485,
+        "operations": 1,
+        "required": [
+          485
+        ]
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-68cd4d5f",
+        "buildListEntryId": "build-list.constrained.fnv1a32-c7f342e5",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 110,
+          "skill": 145
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            485
+          ],
+          "gogma": [
+            164
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 3.5960999999952037
+      }
+    },
+    {
+      "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+      "weaponTypeId": "weapon.great_sword",
+      "elementId": "element.dragon",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "1fef53b8-fad1-44fa-acc6-73b029c0f9c0",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 67,
+        "last": 269,
+        "operations": 2,
+        "required": [
+          67,
+          269
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_21",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-0f22476c",
+        "buildListEntryId": "build-list.constrained.fnv1a32-9545de77",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 215,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            67,
+            269
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 1153.655899999998
+      }
+    },
+    {
+      "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.thunder",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "40bea7a9-7b32-41b6-b421-e9ced0d6e09f",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 70,
+        "last": 168,
+        "operations": 2,
+        "required": [
+          70,
+          168
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-6a06e3d9",
+        "buildListEntryId": "build-list.constrained.fnv1a32-cd0e043f",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 114,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            70,
+            168
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 237.454899999997
+      }
+    },
+    {
+      "targetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.ice",
+      "sourceKind": "new_normal",
+      "sourceOwnedWeaponId": null,
+      "normalPosition": 413,
+      "conversionPosition": 378,
+      "normal": {
+        "first": 413,
+        "last": 413,
+        "operations": 1
+      },
+      "gogma": {
+        "first": 88,
+        "last": 88,
+        "operations": 1,
+        "required": [
+          88
+        ]
+      },
+      "skill": {
+        "first": 378,
+        "last": 378,
+        "operations": 1,
+        "required": [
+          378
+        ]
+      },
+      "routeOperationCount": 3,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-22c231c7",
+        "buildListEntryId": "build-list.constrained.fnv1a32-f8f3b03d",
+        "routeKind": "normal_artian_to_gogma",
+        "estimated": {
+          "operations": 3,
+          "normal": 65,
+          "gogma": 34,
+          "skill": 38
+        },
+        "plannerRequired": {
+          "normal": 413,
+          "skill": [
+            378
+          ],
+          "gogma": [
+            88
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 4.021600000000035
+      }
+    },
+    {
+      "targetWeaponId": "d453ca34-a142-4241-9dce-8551c96cb887",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.dragon",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "eb7e92b9-3bfb-4ffe-b740-8d40c076487c",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 76,
+        "last": 76,
+        "operations": 1,
+        "required": [
+          76
+        ]
+      },
+      "skill": {
+        "first": 887,
+        "last": 887,
+        "operations": 1,
+        "required": [
+          887
+        ]
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ii"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ii"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-22c30e15",
+        "buildListEntryId": "build-list.constrained.fnv1a32-e1744e22",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 22,
+          "skill": 547
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            887
+          ],
+          "gogma": [
+            76
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 4.546300000001793
+      }
+    },
+    {
+      "targetWeaponId": "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.fire",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "a754e5bd-6a52-484c-9f92-bebdc2281ca6",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 194,
+        "last": 202,
+        "operations": 2,
+        "required": [
+          194,
+          202
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-a65edc00",
+        "buildListEntryId": "build-list.constrained.fnv1a32-25a737cd",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 148,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            194,
+            202
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 461.72559999999794
+      }
+    },
+    {
+      "targetWeaponId": "e4147de7-587c-4106-a47d-b09f8796464d",
+      "weaponTypeId": "weapon.great_sword",
+      "elementId": "element.blast",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "b17b1c2a-87da-4eed-8909-feb98253b06f",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 179,
+        "last": 179,
+        "operations": 1,
+        "required": [
+          179
+        ]
+      },
+      "skill": {
+        "first": 508,
+        "last": 508,
+        "operations": 1,
+        "required": [
+          508
+        ]
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-011d31d3",
+        "buildListEntryId": "build-list.constrained.fnv1a32-cb6206e8",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 125,
+          "skill": 168
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            508
+          ],
+          "gogma": [
+            179
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 6.546399999999267
+      }
+    },
+    {
+      "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
+      "weaponTypeId": "weapon.sword_and_shield",
+      "elementId": "element.dragon",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "99a69d14-5c79-4f86-b5ae-4f34c15da938",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 69,
+        "last": 96,
+        "operations": 2,
+        "required": [
+          69,
+          96
+        ]
+      },
+      "skill": {
+        "first": 348,
+        "last": 348,
+        "operations": 1,
+        "required": [
+          348
+        ]
+      },
+      "routeOperationCount": 3,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.affinity",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_07",
+      "finalGroupSkillId": "group_skill.verified_09",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-b3efaf00",
+        "buildListEntryId": "build-list.constrained.fnv1a32-defb9112",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 3,
+          "normal": null,
+          "gogma": 42,
+          "skill": 8
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [
+            348
+          ],
+          "gogma": [
+            69,
+            96
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 121.81880000000092
+      }
+    },
+    {
+      "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
+      "weaponTypeId": "weapon.hammer",
+      "elementId": "element.paralysis",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "f3189ef9-8661-4069-89a6-cdedc8336c6e",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 94,
+        "last": 211,
+        "operations": 2,
+        "required": [
+          94,
+          211
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_07",
+      "finalGroupSkillId": "group_skill.verified_04",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-effeb7e7",
+        "buildListEntryId": "build-list.constrained.fnv1a32-9e0f8650",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 157,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            94,
+            211
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 544.1030000000028
+      }
+    },
+    {
+      "targetWeaponId": "f5d20af4-86b4-4e3f-b9ad-80862917007d",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.dragon",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "ac3a59f5-f348-4e84-8ba4-888435ee668d",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 85,
+        "last": 85,
+        "operations": 1,
+        "required": [
+          85
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 1,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.iii"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.gore_magala",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "candidate_search",
+        "candidateId": "candidate.research.global.fnv1a32-d5f3163c",
+        "buildListEntryId": "build-list.constrained.fnv1a32-cfa9960d",
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimated": {
+          "operations": 1,
+          "normal": null,
+          "gogma": 31,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            85
+          ]
+        },
+        "deliveredCandidates": null,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 3.087599999998929
+      }
+    },
+    {
+      "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+      "weaponTypeId": "weapon.dual_blades",
+      "elementId": "element.dragon",
+      "sourceKind": "owned",
+      "sourceOwnedWeaponId": "d787f5b6-dab3-438f-924e-65fb6711b5bb",
+      "normalPosition": null,
+      "conversionPosition": null,
+      "normal": {
+        "first": null,
+        "last": null,
+        "operations": 0
+      },
+      "gogma": {
+        "first": 159,
+        "last": 224,
+        "operations": 2,
+        "required": [
+          159,
+          224
+        ]
+      },
+      "skill": {
+        "first": null,
+        "last": null,
+        "operations": 0,
+        "required": []
+      },
+      "routeOperationCount": 2,
+      "finalBonuses": [
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.attack",
+          "bonusRankId": "bonus_rank.ex"
+        },
+        {
+          "bonusTypeId": "bonus_type.element",
+          "bonusRankId": "bonus_rank.ex"
+        }
+      ],
+      "finalScope": "gogma_artian",
+      "finalSeriesSkillId": "series_skill.verified_24",
+      "finalGroupSkillId": "group_skill.apex",
+      "idealFull": true,
+      "idealRequiredOnly": true,
+      "rngErrors": [],
+      "materialization": {
+        "method": "planner_alternative_search",
+        "candidateId": "candidate.research.oracle1657.fnv1a32-dc542982",
+        "buildListEntryId": "build-list.constrained.fnv1a32-26c7ab2d",
+        "routeKind": "existing_gogma_mixed",
+        "estimated": {
+          "operations": 2,
+          "normal": null,
+          "gogma": 170,
+          "skill": 0
+        },
+        "plannerRequired": {
+          "normal": null,
+          "skill": [],
+          "gogma": [
+            159,
+            224
+          ]
+        },
+        "deliveredCandidates": 1,
+        "matches": {
+          "operations": true,
+          "estimated": true,
+          "finalWeapon": true,
+          "requiredUnits": true,
+          "routeKind": true,
+          "source": true
+        },
+        "error": null,
+        "elapsedMs": 608.3425999999963
+      }
+    }
+  ],
+  "gogmaUsage": [
+    {
+      "position": 55,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 56,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 57,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 58,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 59,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 60,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 61,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 62,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 63,
+      "targetWeaponId": "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 63,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 64,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 65,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 66,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 67,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 67,
+      "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 68,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 69,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 69,
+      "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 70,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 70,
+      "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 71,
+      "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 71,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 72,
+      "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 72,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 73,
+      "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 73,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 74,
+      "targetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 74,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 75,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 76,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 76,
+      "targetWeaponId": "d453ca34-a142-4241-9dce-8551c96cb887",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 77,
+      "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 77,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 78,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 79,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 80,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 81,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 82,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 83,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 84,
+      "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 84,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 85,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 85,
+      "targetWeaponId": "f5d20af4-86b4-4e3f-b9ad-80862917007d",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 86,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 87,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 88,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 88,
+      "targetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 89,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 90,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 91,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 92,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 93,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 94,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 94,
+      "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 95,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 96,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 96,
+      "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 97,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 98,
+      "targetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 98,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 99,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 100,
+      "targetWeaponId": "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 100,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 101,
+      "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 101,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 102,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 103,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 104,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 105,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 106,
+      "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 106,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 107,
+      "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 107,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 108,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 109,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 110,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 111,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 112,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 113,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 113,
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 114,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 115,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 116,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 116,
+      "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 117,
+      "targetWeaponId": "155a6831-7ff7-42d7-abf5-6e5a186edca6",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 117,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 118,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 119,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 120,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 121,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 122,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 123,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 124,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 125,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 125,
+      "targetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 126,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 127,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 128,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 129,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 130,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 130,
+      "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 131,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 132,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 133,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 133,
+      "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 134,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 135,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 136,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 137,
+      "targetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 137,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 138,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 139,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 140,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 141,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 142,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 143,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 144,
+      "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 144,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 145,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 146,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 146,
+      "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 147,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 148,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 149,
+      "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 149,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 150,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 151,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 152,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 153,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 153,
+      "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 154,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 155,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 156,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 157,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 158,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 159,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 159,
+      "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 160,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 161,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 161,
+      "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 162,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 163,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 164,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 164,
+      "targetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 165,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 165,
+      "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 166,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 167,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 168,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 168,
+      "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 169,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 170,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 170,
+      "targetWeaponId": "aa4e67d8-cc57-487c-b0f0-6a8b36f13dbb",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 171,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 172,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 173,
+      "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 173,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 174,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 175,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 176,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 177,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 178,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 179,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 179,
+      "targetWeaponId": "e4147de7-587c-4106-a47d-b09f8796464d",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 180,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 181,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 182,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 183,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 184,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 185,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 186,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 187,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 188,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 189,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 190,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 191,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 192,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 193,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 193,
+      "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 194,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 194,
+      "targetWeaponId": "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 195,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 196,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 197,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 198,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 198,
+      "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 199,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 200,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 201,
+      "targetWeaponId": "0d98b225-e5d4-4cd4-b8e9-4c62ba695893",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 201,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 202,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 202,
+      "targetWeaponId": "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 203,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 204,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 205,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 206,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 207,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 208,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 209,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 210,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 210,
+      "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 211,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 211,
+      "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 212,
+      "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 212,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 213,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 214,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 215,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 216,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 216,
+      "targetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 217,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 218,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 219,
+      "targetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 219,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 220,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 221,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 222,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 223,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 224,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 224,
+      "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 225,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 226,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 227,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 228,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 229,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 230,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 230,
+      "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 231,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 232,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 233,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 234,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 235,
+      "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+      "type": "reset_bonuses",
+      "required": true
+    },
+    {
+      "position": 235,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 236,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 237,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 238,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 239,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 240,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 241,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 242,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 242,
+      "targetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 243,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 244,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 245,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 246,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 247,
+      "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 247,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 248,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 249,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 250,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 251,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 252,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 253,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 253,
+      "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 254,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 255,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 256,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 257,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 258,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 259,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 260,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 261,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 262,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 263,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 264,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 265,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 266,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 267,
+      "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 267,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 268,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 269,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 269,
+      "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 270,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 271,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 272,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 273,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 274,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 275,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 276,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 277,
+      "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 277,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 278,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 279,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 280,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 281,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 282,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 283,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 284,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 285,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 286,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 287,
+      "targetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 287,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 288,
+      "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+      "type": "keep_bonuses",
+      "required": true
+    },
+    {
+      "position": 288,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": false
+    },
+    {
+      "position": 289,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "reset_bonuses",
+      "required": true
+    }
+  ],
+  "requiredSkillUsage": [
+    {
+      "position": 341,
+      "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 343,
+      "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 348,
+      "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 363,
+      "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+      "type": "convert_normal_to_gogma",
+      "required": true
+    },
+    {
+      "position": 378,
+      "targetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
+      "type": "convert_normal_to_gogma",
+      "required": true
+    },
+    {
+      "position": 386,
+      "targetWeaponId": "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 396,
+      "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+      "type": "convert_normal_to_gogma",
+      "required": true
+    },
+    {
+      "position": 399,
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "type": "convert_normal_to_gogma",
+      "required": true
+    },
+    {
+      "position": 410,
+      "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+      "type": "convert_normal_to_gogma",
+      "required": true
+    },
+    {
+      "position": 422,
+      "targetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+      "type": "convert_normal_to_gogma",
+      "required": true
+    },
+    {
+      "position": 478,
+      "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "type": "convert_normal_to_gogma",
+      "required": true
+    },
+    {
+      "position": 485,
+      "targetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 508,
+      "targetWeaponId": "e4147de7-587c-4106-a47d-b09f8796464d",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 566,
+      "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 588,
+      "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 648,
+      "targetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 708,
+      "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 740,
+      "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 757,
+      "targetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 786,
+      "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 791,
+      "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "type": "convert_normal_to_gogma",
+      "required": true
+    },
+    {
+      "position": 854,
+      "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 887,
+      "targetWeaponId": "d453ca34-a142-4241-9dce-8551c96cb887",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 892,
+      "targetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+      "type": "reset_skills",
+      "required": true
+    },
+    {
+      "position": 1423,
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "type": "reset_skills",
+      "required": true
+    }
+  ],
+  "requiredNormalUsage": {
+    "weapon.charge_blade:8": [
+      {
+        "position": 0,
+        "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+        "type": "create_normal_artian",
+        "required": true
+      },
+      {
+        "position": 206,
+        "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+        "type": "create_normal_artian",
+        "required": true
+      }
+    ],
+    "weapon.dual_blades:8": [
+      {
+        "position": 367,
+        "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "type": "create_normal_artian",
+        "required": true
+      },
+      {
+        "position": 413,
+        "targetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
+        "type": "create_normal_artian",
+        "required": true
+      },
+      {
+        "position": 470,
+        "targetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "type": "create_normal_artian",
+        "required": true
+      },
+      {
+        "position": 474,
+        "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+        "type": "create_normal_artian",
+        "required": true
+      }
+    ],
+    "weapon.switch_axe:8": [
+      {
+        "position": 0,
+        "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+        "type": "create_normal_artian",
+        "required": true
+      }
+    ],
+    "weapon.sword_and_shield:8": [
+      {
+        "position": 11,
+        "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "type": "create_normal_artian",
+        "required": true
+      }
+    ]
+  },
+  "hashes": {
+    "manifestSha256": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+    "entriesSha256": "d3fcbb2e14224ee063bc94dc799121ff9226654d6c2d43e1f120284c02dda43e",
+    "planSha256": "90fbba66bac6c4d19b81a3353ee4d496b1195e37a58b40e426826f775a32eabf",
+    "resultSha256": "765d4e826fbef4b44777349e91295528db4b03f9bb42e69fa050bb7029f104d1",
+    "semanticSha256": "aa6be94917f15d1c9a4f81d510557b1bcc25c1ea1f0c9e3a9132ede745323a1e"
+  }
+}
