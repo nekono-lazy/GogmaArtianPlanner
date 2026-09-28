@@ -176,13 +176,56 @@ export function phase2c2OracleCoverage(portfolio: readonly PortfolioLike[], orac
 }
 
 /**
- * The C3 readiness classification, a fixed rule over the measured values (never tuned to a result):
+ * The C3 readiness judgement. The A / B / C rule classifies portfolio diversity and presupposes that every Conflict
+ * participant was actually searched. A participant no completed Search context reached (a kernel child process that
+ * ran out of memory, timed out or failed) is unmeasured, not a portfolio of size 1, so while any participant is
+ * unexplored the premise of the rule is not met and the judgement fails closed as `inconclusive` instead of classifying.
+ *
+ * Only with every participant explored:
  * - C: fewer than half of the Conflict participant Targets have more than one portfolio Candidate;
  * - A: at least half do, and every oracle Route is covered (exact or partial comparable);
  * - B: at least half do, but some oracle Route is not covered.
+ *
+ * `multipleShareOverallLowerBound` counts every unexplored participant as having no alternative: it is an observed
+ * lower bound, never the portfolio diversity rate. `multipleShareAmongExplored` is observed over explored participants only.
  */
-export function phase2c2CaseJudgement(input: { participants: number; participantsWithMultiple: number; oracleRoutes: number; oracleCovered: number }) {
-  const multipleShare = input.participants === 0 ? 0 : input.participantsWithMultiple / input.participants
-  const caseId = multipleShare < 0.5 ? 'C' : input.oracleCovered === input.oracleRoutes ? 'A' : 'B'
-  return { case: caseId, multipleShare, rule: 'C if < 1/2 of Conflict participants have portfolio > 1; else A if every oracle Route is covered (exact or partial comparable); else B' }
+export interface Phase2C2ReadinessInput {
+  participantsTotal: number
+  /** Participants at least one completed Search context searched. */
+  participantsExplored: number
+  /** Explored participants whose portfolio holds more than one Candidate. */
+  participantsWithMultipleAmongExplored: number
+  /** Participants whose portfolio holds more than one Candidate (an unexplored participant only ever has its original). */
+  participantsWithMultipleOverall: number
+  oracleRoutes: number
+  oracleCovered: number
+}
+
+export const PHASE2C2_READINESS_RULE = 'inconclusive while any Conflict participant is unexplored (the A / B / C premise is not met: an OOM / timeout / failed process is unmeasured, never a portfolio of size 1); '
+  + 'only when every participant is explored: C if < 1/2 of Conflict participants have portfolio > 1; else A if every oracle Route is covered (exact or partial comparable); else B'
+
+export function phase2c2ReadinessJudgement(input: Phase2C2ReadinessInput) {
+  const { participantsTotal: total, participantsExplored: explored, participantsWithMultipleAmongExplored: multipleExplored, participantsWithMultipleOverall: multipleOverall } = input
+  const integers = [total, explored, multipleExplored, multipleOverall, input.oracleRoutes, input.oracleCovered]
+  if (integers.some(value => !Number.isInteger(value) || value < 0) || explored > total || multipleExplored > explored || multipleOverall !== multipleExplored
+    || input.oracleCovered > input.oracleRoutes) {
+    throw new Error(`Inconsistent Phase 2-C2 readiness input: ${JSON.stringify(input)}`)
+  }
+  const participantsUnexplored = total - explored
+  const shares = {
+    participantsTotal: total, participantsExplored: explored, participantsUnexplored,
+    participantsWithMultipleOverall: multipleOverall, participantsWithMultipleAmongExplored: multipleExplored,
+    multipleShareOverallLowerBound: total === 0 ? null : multipleOverall / total,
+    multipleShareOverallLowerBoundFraction: `${multipleOverall}/${total}`,
+    multipleShareAmongExplored: explored === 0 ? null : multipleExplored / explored,
+    multipleShareAmongExploredFraction: `${multipleExplored}/${explored}`,
+    oracleRoutes: input.oracleRoutes, oracleCovered: input.oracleCovered,
+    rule: PHASE2C2_READINESS_RULE,
+  }
+  if (participantsUnexplored > 0) {
+    return { status: 'inconclusive' as const, case: null,
+      reason: 'incomplete_measurement: Candidate portfolio sufficiency cannot be judged while Conflict participants are unexplored; make them measurable first.', ...shares }
+  }
+  const caseId = total === 0 || multipleExplored / total < 0.5 ? 'C' as const : input.oracleCovered === input.oracleRoutes ? 'A' as const : 'B' as const
+  return { status: 'classified' as const, case: caseId, reason: 'every Conflict participant explored', ...shares }
 }

@@ -7,6 +7,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { lstatSync } from 'node:fs'
 import { resolve, basename } from 'node:path'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { createServer } from 'vite'
 
 const args = process.argv.slice(2)
@@ -23,6 +24,20 @@ const load = async path => {
 const [run, c1, optimum] = await Promise.all([load(paths.run), load(paths.c1), load(paths.optimum)])
 const r = run.json
 if (r.environment.uncommittedBenchmarkCode) throw new Error('The run measured uncommitted benchmark code.')
+
+// Analysis provenance: the analysis code is committed, and every code change since the measured HEAD is post-hoc
+// analysis only (the calculation module, the runner and everything they load stay as measured).
+const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim()
+const allowUncommittedAnalysis = args.includes('--allow-uncommitted-analysis')
+const analysisPaths = ['src/benchmarks/plannerGlobalPhase2C2Analysis.ts', 'scripts/analyze-planner-global-phase2c2.mjs']
+const analysisUncommitted = Boolean(git('diff', 'HEAD', '--', ...analysisPaths) || git('ls-files', '--others', '--exclude-standard', '--', ...analysisPaths))
+if (analysisUncommitted && !allowUncommittedAnalysis) throw new Error('Commit the post-hoc analysis code before regenerating evidence (or pass --allow-uncommitted-analysis for a non-formal check).')
+const measuredHead = r.environment.repositoryHead
+const codePaths = ['src', 'scripts', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json']
+const changedSinceMeasured = git('diff', '--name-only', measuredHead, 'HEAD', '--', ...codePaths).split(/\r?\n/).filter(Boolean)
+// The C2 test file changes no calculation; every other path must be unchanged since the measurement.
+const nonAnalysisChanges = changedSinceMeasured.filter(path => !analysisPaths.includes(path) && path !== 'src/benchmarks/plannerGlobalPhase2C2.test.ts')
+if (nonAnalysisChanges.length > 0) throw new Error(`Code other than the post-hoc analysis changed since the measured HEAD: ${nonAnalysisChanges.join(', ')}`)
 if (r.smokeOrientationLimit !== null) throw new Error('The run is a non-formal smoke run.')
 const exportSha256 = r.environment.exportSha256
 if (optimum.json.environment?.exportSha256 !== exportSha256 || optimum.json.verdict !== 'proven_minimum') throw new Error('Optimum evidence is not the proven minimum of this Export.')
@@ -165,15 +180,21 @@ try {
   const coverageRows = coverage.targets.map(row => ({ ...row, matchedStableKeySha256: row.matchedStableKey ? sha(row.matchedStableKey) : null, matchedStableKey: undefined,
     conflictParticipant: participantTargets.includes(row.targetWeaponId), searched: searchedTargets.has(row.targetWeaponId) }))
   const oracleCovered = coverage.totals.exact + coverage.totals.partialComparable
-  const judgement = analysis.phase2c2CaseJudgement({ participants: participants.length, participantsWithMultiple: diversitySummary.participantsWithMultiple,
-    oracleRoutes: coverage.totals.routes, oracleCovered })
+  // Explored = searched by at least one completed Search context. An unexplored participant (its every kernel child
+  // process failed) is unmeasured: it is never counted as a portfolio of size 1 in the readiness judgement.
+  const exploredParticipants = participants.filter(p => searchedTargets.has(p.targetWeaponId))
+  const judgement = analysis.phase2c2ReadinessJudgement({ participantsTotal: participants.length, participantsExplored: exploredParticipants.length,
+    participantsWithMultipleAmongExplored: exploredParticipants.filter(p => p.has.multipleCandidates).length,
+    participantsWithMultipleOverall: diversitySummary.participantsWithMultiple, oracleRoutes: coverage.totals.routes, oracleCovered })
 
   const failures = r.processes.filter(p => p.outcome !== 'completed').map(p => ({ id: p.id, role: p.role, outcome: p.outcome, exitCode: p.exitCode, wallMs: p.wallMs, stderrTail: p.stderrTail }))
   const record = {
     phase: 'Issue #154 Phase 2-C2: Candidate portfolio from the original Export Conflicts (post-hoc analysis)',
     analyzedAt: new Date().toISOString(),
     sources: { run: run.source, c1: c1.source, optimum: optimum.source },
-    provenance: { measuredHead: r.environment.repositoryHead, benchmarkCodeSha256: r.environment.benchmarkCodeSha256, uncommittedBenchmarkCode: false, exportSha256,
+    provenance: { measuredHead, analysisHead: git('rev-parse', 'HEAD'), analysisCodeUncommitted: analysisUncommitted,
+      codeChangedSinceMeasuredHead: changedSinceMeasured, calculationCodeChangedSinceMeasuredHead: nonAnalysisChanges,
+      note: 'The calculation code (module, runner and everything they load) is the measured HEAD; only the post-hoc analysis code changed after the measurement, and the raw run was not re-measured.', benchmarkCodeSha256: r.environment.benchmarkCodeSha256, uncommittedBenchmarkCode: false, exportSha256,
       exportFileName: r.environment.exportFileName, exportBytes: r.environment.exportBytes, measuredAt: r.measuredAt, runWallMs: r.wallMs, environment: r.environment, budgets: r.budgets },
     conditions: r.conditions, probeGrid: r.probeGrid,
     baseline: { summary: baseline.summary, elapsedMs: baseline.elapsedMs, memory: baseline.memory },
@@ -187,8 +208,9 @@ try {
     portfolio: { summary: diversitySummary, unsearchedParticipants, targets: portfolio },
     processFailures: { count: failures.length, byOutcome: countBy(failures, f => `${f.role}:${f.outcome}`), failures },
     oracleCoverage: { totals: coverage.totals, targets: coverageRows },
-    c3Readiness: { ...judgement, participants: participants.length, participantsWithMultiple: diversitySummary.participantsWithMultiple, oracleRoutes: coverage.totals.routes, oracleCovered,
-      kernelOrientationsCompleted: kernelOutcomes.orientationStatus.completed ?? 0, kernelOrientations: kernelOutcomes.orientations, unsearchedParticipants: unsearchedParticipants.length },
+    c3Readiness: { ...judgement, unexploredParticipantIds: unsearchedParticipants,
+      kernelOrientationsCompleted: kernelOutcomes.orientationStatus.completed ?? 0, kernelOrientations: kernelOutcomes.orientations,
+      kernelOrientationsFailedByProcess: kernelRows.filter(row => row.kernel.status.startsWith('process_')).length },
   }
   await writeFile(paths.output, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' })
   console.log(JSON.stringify({ output: resolve(paths.output), baseline: baseline.summary.conflictsByKind, c1Parity: c1Parity.checks, kernel: kernelOutcomes.orientationStatus,

@@ -43,7 +43,7 @@ import {
   type Phase2C2Conditions,
   type Phase2C2SearchContextRecord,
 } from './plannerGlobalPhase2C2'
-import { comparePhase2C2BaselineWithC1, phase2c2OracleCoverage } from './plannerGlobalPhase2C2Analysis'
+import { comparePhase2C2BaselineWithC1, phase2c2OracleCoverage, phase2c2ReadinessJudgement } from './plannerGlobalPhase2C2Analysis'
 
 /** Every input the Planner Alternative Search received, in call order (kernel and post-hoc portfolio Search alike). */
 const searchCalls = vi.hoisted(() => ({ inputs: [] as unknown[] }))
@@ -341,6 +341,43 @@ describe('Phase 2-C2 post-hoc analysis', () => {
   })
 })
 
+describe('Phase 2-C2 C3 readiness judgement', () => {
+  const measured = { participantsTotal: 34, participantsExplored: 15, participantsWithMultipleAmongExplored: 12, participantsWithMultipleOverall: 12, oracleRoutes: 43, oracleCovered: 0 }
+
+  it('stays inconclusive while any participant is unexplored, and never counts an unexplored (OOM) participant as a portfolio of size 1', () => {
+    const judgement = phase2c2ReadinessJudgement(measured)
+    expect(judgement.status).toBe('inconclusive')
+    expect(judgement.case).toBeNull()
+    expect(judgement.reason).toMatch(/incomplete_measurement/)
+    expect(judgement).toMatchObject({ participantsTotal: 34, participantsExplored: 15, participantsUnexplored: 19, participantsWithMultipleOverall: 12,
+      participantsWithMultipleAmongExplored: 12, multipleShareOverallLowerBoundFraction: '12/34', multipleShareAmongExploredFraction: '12/15' })
+    expect(judgement.multipleShareOverallLowerBound).toBeCloseTo(12 / 34)
+    expect(judgement.multipleShareAmongExplored).toBeCloseTo(12 / 15)
+    // Oracle coverage 0 and an overall share below one half would read as Case C if the unexplored 19 were size-1 portfolios.
+    expect(phase2c2ReadinessJudgement({ ...measured, participantsWithMultipleAmongExplored: 1, participantsWithMultipleOverall: 1 }).status).toBe('inconclusive')
+    expect(phase2c2ReadinessJudgement({ ...measured, participantsExplored: 33 }).case).toBeNull()
+  })
+
+  it('classifies only a fully measured result: C below one half, A with every oracle Route covered, B otherwise', () => {
+    const full = { participantsTotal: 34, participantsExplored: 34, oracleRoutes: 43 }
+    expect(phase2c2ReadinessJudgement({ ...full, participantsWithMultipleAmongExplored: 12, participantsWithMultipleOverall: 12, oracleCovered: 43 }))
+      .toMatchObject({ status: 'classified', case: 'C', participantsUnexplored: 0 })
+    expect(phase2c2ReadinessJudgement({ ...full, participantsWithMultipleAmongExplored: 17, participantsWithMultipleOverall: 17, oracleCovered: 42 }))
+      .toMatchObject({ status: 'classified', case: 'B' })
+    expect(phase2c2ReadinessJudgement({ ...full, participantsWithMultipleAmongExplored: 30, participantsWithMultipleOverall: 30, oracleCovered: 0 }))
+      .toMatchObject({ status: 'classified', case: 'B' })
+    expect(phase2c2ReadinessJudgement({ ...full, participantsWithMultipleAmongExplored: 30, participantsWithMultipleOverall: 30, oracleCovered: 43 }))
+      .toMatchObject({ status: 'classified', case: 'A' })
+  })
+
+  it('refuses inconsistent counts instead of classifying them', () => {
+    expect(() => phase2c2ReadinessJudgement({ ...measured, participantsExplored: 35 })).toThrow(/Inconsistent/)
+    expect(() => phase2c2ReadinessJudgement({ ...measured, participantsWithMultipleAmongExplored: 16 })).toThrow(/Inconsistent/)
+    expect(() => phase2c2ReadinessJudgement({ ...measured, participantsWithMultipleOverall: 13 })).toThrow(/Inconsistent/)
+    expect(() => phase2c2ReadinessJudgement({ ...measured, oracleCovered: 44 })).toThrow(/Inconsistent/)
+  })
+})
+
 // Built from parts so that this test itself never names the oracle modules (their own isolation test scans every Research file).
 const ORACLE_NAMES = new RegExp(['plannerGlobal' + 'Oracle1657', 'plannerGlobal' + 'LowerBound', 'PLANNER_GLOBAL_' + '1657', 'ORACLE_' + 'RESULT', 'PHASE2C1_' + 'RESULT'].join('|'))
 const benchmarkSources = import.meta.glob('./*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
@@ -368,6 +405,10 @@ describe('Phase 2-C2 isolation', () => {
     expect(analysis).not.toMatch(new RegExp('plannerGlobal' + 'Oracle1657|plannerGlobal' + 'LowerBound'))
     const analysisModule = benchmarkSources['./plannerGlobalPhase2C2Analysis.ts']
     expect(analysisModule).not.toMatch(/runPhase2C2|createProductionPlan|visitPlannerAlternativeCandidates|runPlannerAlternativeKernel|readFile/)
+    // The readiness judgement gets the explored participants separately and the analyzer refuses changed calculation code.
+    expect(analysisModule).not.toMatch(/phase2c2CaseJudgement/)
+    expect(analysis).toMatch(/phase2c2ReadinessJudgement\(\{ participantsTotal: participants\.length, participantsExplored: exploredParticipants\.length/)
+    expect(analysis).toMatch(/calculationCodeChangedSinceMeasuredHead/)
   })
 
   it('is reached by no Production module, and Production keeps its defaults, schema and versions', () => {
