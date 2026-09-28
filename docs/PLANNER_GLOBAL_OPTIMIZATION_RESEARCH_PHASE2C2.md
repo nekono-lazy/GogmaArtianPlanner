@@ -2,37 +2,39 @@
 
 Refs #154。Researchであり、global assignment・Global Planner本実装・Production仕様変更はしていない。
 
-## 結論（Case C）
+## 結論（C3 readiness: inconclusive / 測定不完全）
 
-**元ExportのConflict 21件から作った54 orientationのうち、現行Production Planner Alternative kernel（default extent N4 / G235 / S4、
-trial 2 / rerun 8）が完走したのは11件だけで、43件はPlanner Alternative Searchが8 GB heapを使い切ってOOMで停止した。
-完走したcontextではTargetあたり最大8件のIdeal Candidateが得られ、source / Counter位置 / held Routeの多様性も観測できたが、
-portfolioが2件以上になったConflict participantは34 Target中12 Target（35%）に留まり、1,657 oracleのRouteは43件中0件しか
-portfolioに含まれなかった。**
+**元ExportのConflict 21件から作った54 orientationについて、formal Node run（child heap上限8 GB）では43 orientationのkernel child processがOOMで
+停止した。その結果、Conflict participant 34 Target中19 Targetは一度もSearch contextまで到達できず、未探索（未測定）である。
+探索できた15 participantでは12 Target（80%）で複数Candidateが得られたため、portfolio diversity自体が不足しているとはまだ言えない。
+C3 readinessは、未探索participantが残る間はA / B / Cへ分類しない規則により **inconclusive（incomplete measurement）** とした。**
 
 - baseline（元ExportのBuild ListにそのままProduction Planner）: planning Target 43、completed 20/43、Conflict 21
   （same_gogma_counter 15 / same_skill_counter 3 / same_owned_weapon_consumed 2 / same_normal_counter 1）、Plan 1,465 steps。
   Phase 2-C1のoriginal baselineとplan steps・completed・termination・kind別件数・Target単位Conflict signature 21件・selected Targetが全て一致。
-- orientation 54（2 participant 16件 ×2 + 3 participant 4件 ×3 + 10 participant 1件 ×10、§5）。kernel完走 **11 / 54**、**OOM 43 / 54**
-  （Gogma 27/33、Skill 13/15、owned weapon 3/4、Normal 0/2）。timeout・その他のprocess failureは0件。
+- orientation 54（2 participant 16件 ×2 + 3 participant 4件 ×3 + 10 participant 1件 ×10、§5）。kernel child process完走 **11 / 54**、
+  **8 GB heap上限でのOOM 43 / 54**（Gogma 27/33、Skill 13/15、owned weapon 3/4、Normal 0/2）。timeout・その他のprocess failureは0件。
+  OOMの発生箇所・原因はformal runでは局所化していない（非formal診断は§6で分離して記載）。
 - 完走kernelのTarget outcome（27件）: **found 5**、stopped_by_candidate_trial_bound 2、**stopped_by_search_extent_bound 20**、
   not_found_within_search_extent 0、stopped_by_planner_rerun_bound 0、blocked_by_selected_checkpoint 0。trial rejectedは10件で全件
   `explicit_decision_not_selected`。
 - default extentのportfolio Search context 27件: consumer stop（8件到達）7、stoppedByExtent 20、exhausted 0。delivered 62件。
   Research probe 70 context: consumer stop 9、stoppedByExtent 61、exhausted 0、delivered 92件。Normal 40のprobe 2件がOOM。
 - portfolio: 43 Target、unique Candidate 132（original 43 + alternative 89）。size分布 {1: 31, 2: 1, 9: 11}。
-  **portfolio > 1: 12 Target（全員Conflict participant）**、source alternative 9、Counter位置alternative 11、held Routeを持つTarget 10
+  portfolio > 1は12 Target（全員Conflict participant）、source alternative 9、Counter位置alternative 11、held Routeを持つTarget 10
   （held alternative 52件、default extent内29件 / 5 Target、probeでのみ得たもの23件）。probeで新たに得たalternativeは38件。
-- **Conflict participant 34のうち19 Targetは、自分が非fixed側となる全orientationのkernelがOOMしたため一度も探索されていない。**
-  探索された15 participantでは12 Target（80%）でportfolio > 1。
-- **1,657 oracle coverage: exact 0 / partial comparable 0 / not comparable 0 / uncovered 43**。originalだけでcoverage 0、
-  C2 alternativeで追加coverage 0。1,657のRouteは43件中42件でGogma stream originより後から始まる1〜3操作のRoute
-  （他Routeの被覆に乗る共有coverage Route）で、1 Entryだけをfixedとするreservationでは生成条件を満たさない（§12）。
+- **Conflict participant: total 34 / explored 15 / unexplored 19**。portfolio > 1の割合は
+  **explored-only 12 / 15（80%）**（実際に探索できたparticipantに限った観測値）と、**overall lower bound 12 / 34（35%）**
+  （未探索19件を0件とみなした実測下限であり、真のportfolio diversity率ではない）を区別して記録した。
+- **1,657 oracle coverage: exact 0 / partial comparable 0 / not comparable 0 / uncovered 43**（originalでもC2 alternativeでも0）。
+  有力な説明の1つとして、1,657 Routeの多く（43件中42件）が他Routeによるstream coverageを利用してGogma originより後から開始する一方、
+  C2では1つのfixed winner由来のreservationしか使用していないことがある。ただしOOMによる未探索19 participant、extent bound・capture bound・
+  probe grid上限による未確認範囲も残るため、C2だけでは未coverageの原因を一意には特定できない（§12）。
 
-判定規則（§14、結果を見る前に固定）により **Case C**: 現行Planner Alternative Searchのままではportfolio自体がほとんど増えない。
-主因は (1) default extentでのSearchのメモリ増加（OOM 43/54）と、(2) 1つのConflict decisionだけをreservationに反映する
-context生成では、1,657が使う「他Route全体の被覆に乗るRoute」を表現できないこと、の2点である。global assignment（C3）より前に、
-Search frontierのメモリ特性とportfolio用context（reservation）生成を再設計する必要がある。
+次Phaseの優先順位（§14）: 第一に、未探索19 participantを測定可能にする（kernel OOMの正式な局所化・改善、またはResearch-onlyでSearch contextを
+完走できる方法の検証）。第二に、それができた後、single fixed winner reservationだけでportfolio生成能力が十分かを再評価し、oracle Route coverageや
+held / late-start Routeが依然不足するなら、複数Route coverageをreservationへ含めるcontext生成を検証する。十分なportfolioが得られた時点でC3
+global assignmentへ進む。2つの要因を現時点で同程度に「原因確定」とは扱わない。
 
 ## 1. 目的
 
@@ -106,11 +108,14 @@ probeは別processである。
 | same_normal_counter | 2 | 2 | 0 |
 | **計** | **54** | **11** | **43** |
 
-- OOMは開始後50〜141秒（中央値約110秒）、V8 `Ineffective mark-compacts near heap limit`。smoke診断（非formal）では、OOMの発生箇所は
-  kernel内のPlanner Alternative Search（最初のCandidateが届く前）で、Gogma held-aware streamの深さとともにheapが増え続けた。
-  同じcontextをheap 24 GBで実行してもGogma深さ約169（extent 235）でOOMし、Candidateは1件も届かなかった（非formal診断、
-  commitしていないscratch scriptによる。formal evidenceはheap 8 GBのrunのみ）。すなわちOOMはheap上限の問題ではなく、
-  default extentでのSearch frontierのメモリ増加である。Browser Workerのheap上限は通常これより小さいが、Browser Workerでの挙動は未測定。
+- **formal結果**: formal Node runでは54 orientation中43 orientationのkernel child processが8 GB heap上限でOOMした（開始後50〜141秒、
+  中央値約110秒、V8 `Ineffective mark-compacts near heap limit`）。formal runはkernel child process単位で失敗を記録しており、
+  kernel内のどの処理（Planner Alternative Search / full Planner trial など）でheapが尽きたかは局所化していない。
+- **非formal診断（formal evidenceではない）**: 開発中のsmoke runとcommitしていないscratch scriptによる診断では、OOMはPlanner Alternative Search中かつ
+  最初のCandidate delivery前に発生し、held-aware Gogma探索の進行とともにheapが増加する挙動が観測された。heap 24 GBでも、1 context
+  （c0-p0の非fixed側）はGogma深さ約169（extent 235）でOOMし完走しなかった。これはformal evidenceではなく、次Phaseで正式instrumentation
+  （既存の `PlannerAlternativeSearchExecutionOptions.instrumentation` 等）とBrowser Worker測定によって局所化する必要がある。
+  Browser Workerでの挙動は未測定。
 - 完走kernel 11件のTarget outcome（計27件）:
 
 | outcome | 件数 | 内容 |
@@ -167,7 +172,8 @@ default extentの先頭k件だけで作ったportfolio（同一runのprefix）:
 | 8 | 8 | 85 | 29 |
 
 default extentだけでもCandidateが得られるcontextでは、kを増やすとheld Routeや別Counter位置の選択肢が増える。一方、
-portfolio > 1のTarget数はk = 1で頭打ちで、増えない理由は「探索できたcontextの数」（kernel OOM）と「default extentで0件」の2つである。
+portfolio > 1のTarget数はk = 1から増えない。これは、探索できたcontextの数（kernel child process OOMで19 participantが未探索）と、
+default extentで0件だったcontextに制約された観測であり、portfolio diversityの上限を示すものではない。
 
 観測された多様性の例（Target IDは観測結果）:
 
@@ -195,7 +201,7 @@ Planner Route unit（`createPlannerRouteUnitPlans()`）のabsolute位置とown o
 Production default（N4 / G235 / S4、trial 2 / rerun 8）で得られたのは、kernel完走11 orientationのsearched Target 27 contextだけである。
 default extentのみのportfolioで > 1 となったparticipantは8 Target。default extentでは:
 
-- 54 orientation中43件がSearchのメモリで停止し、そのparticipantは「代替がない」のではなく **未確認**。
+- 54 orientation中43件でkernel child processが8 GB heap上限でOOMし、非fixed側のparticipantのうち19 Targetは「代替がない」のではなく **未確認**。
 - 完走context 27件のうち20件がstoppedByExtent（exhausted 0）。Normal Conflict（N4）、チャアク2件のGogma Conflict（G235）、
   10 participant Skill Conflict（S4）ではdefault extentで0件だった。これも「代替がない」ではなく、current Production extentの範囲外が
   未確認のまま残ったという記録である。
@@ -244,40 +250,74 @@ first / last / operations / requiredから一意に決まる場合のみ完全�
 不一致の内訳（各Targetで最も近いCandidateとの差分field、延べ）: gogma first 42、gogma operations 42、own operation数 42、estimated operations 42、
 estimated advances 23、gogma last 17、gogma required 17、final Bonus 16、skill first 13、skill operations 12 など。
 
-1,657のRouteは43件中42件でGogma stream origin（55）より後から始まり、多くは1〜3操作（例: 0d98b225はG201のKeep 1回、02876df4は
-N7〜11 + S363 + G173の7操作）。これは「originから自Route開始位置まで、他のRoute群がstreamを被覆する」ことを前提にしたRouteで、
-Planner Alternative Searchでは開始位置より前の全位置がheldでなければ生成できない。C2のcontextはreservationが1つのfixed winner
-（1 Entry）だけなので、held位置はそのRouteの被覆範囲に限られ、1,657のRouteを生成する条件（複数Routeの被覆の合成）を満たさない。
-C2で観測した「fixed Routeの被覆直後から始まる短いRoute」（a26f6bcf 2操作、a6c17e25 2操作）はその小さな一例である。
+観測事実: 1,657のRouteは43件中42件でGogma stream origin（55）より後から始まり、多くは1〜3操作（例: 0d98b225はG201のKeep 1回、02876df4は
+N7〜11 + S363 + G173の7操作）で、held Routeは18件ある。C2のcontextは1つのfixed winner（1 Entry）由来のreservationだけを使用した。
+
+C2 portfolioでは1,657 oracle Routeを0 / 43しかcoverageできなかった。有力な説明の1つとして、1,657 Routeの多くが他Routeによる
+stream coverageを利用して遅い位置から開始する一方、C2では1つのfixed winner由来のreservationしか使用していないことがある
+（Planner Alternative Searchは、Route開始位置より前の位置がheldでなければ遅い位置から始まるRouteを返さない）。C2で観測した
+「fixed Routeの被覆直後から始まる短いRoute」（a26f6bcf 2操作、a6c17e25 2操作）はこの方向と整合する。
+
+ただし、この説明で全43 Routeの未coverageを断定することはできない:
+
+- 19 participantはkernel child process OOMで未探索
+- 多数のcontextがstoppedByExtentで終わり、capture bound 8、probe grid上限、Normal probeのOOMがある
+- oracle Route × 各C2 reservationについて、そのRouteが生成条件を満たすかを網羅的には監査していない
+
+したがってOOM・extent bound・capture boundによる未探索も残り、C2だけでは未coverageの原因を一意には特定できない。
 
 ## 13. 未確認事項
 
 - kernel OOM 43 orientationの非fixed側19 participantの代替: 未探索（「代替なし」ではない）。
 - default extentでstoppedByExtentだったcontextの範囲外、Normal 40 / 80、Gogma 350超、Skill 64超。
 - Browser Worker / スマートフォンでの時間・memory（本Phaseの全測定はNode、heap上限8 GB）。24 GB heapの診断は非formal。
+- kernel OOMの発生箇所（非formal診断ではPlanner Alternative Search中と観測したが、formalには未局所化）。
+- 1,657 oracle Route未coverageの原因（single fixed winner reservationの制約か、未探索・extent・capture boundによるものか）。
 - 複数Conflict decisionを同時に反映したreservation、Plan全体の被覆をheldとするcontextでのportfolio。
 - portfolioの組合せでの共存可能性（C3の範囲）。別Export・別武器種。
 - 既存のreference-verified / game-verified / unverifiedの境界は拡張しない。
 
-## 14. C3へ進む条件
+## 14. C3 readinessと次Phase
 
-判定規則（analyzerに固定、結果に合わせて調整しない）:
+判定規則（analyzer `phase2c2ReadinessJudgement()` に固定）:
 
-- **C**: Conflict participantのうちportfolio > 1が半数未満
-- **A**: 半数以上、かつ1,657の全Routeがcoverage（exact またはpartial comparable）
-- **B**: 半数以上だが、1,657のRouteに未coverageがある
+- **inconclusive**: Conflict participantに未探索（一度も完了したSearch contextに到達していない）Targetが1件でもある場合。A / B / Cへ分類しない
+- 全participant探索済みの場合のみ:
+  - **C**: portfolio > 1が半数未満
+  - **A**: 半数以上、かつ1,657の全Routeがcoverage（exact またはpartial comparable）
+  - **B**: 半数以上だが、1,657のRouteに未coverageがある
 
-結果: participant 34中12（35%）、oracle coverage 0 / 43 → **Case C**。
+A / B / C規則は、各participantのportfolioが実際に測定されていることを前提にした分類である。OOM / timeout / process failureで測定できなかった
+participantはno-matchではなく未測定であり（C2自身の「timeout / OOMをno-match扱いしない」原則）、portfolio size 1として数えるとA / B / Cの前提を
+満たさない。そのためincomplete measurementはfail-closedでinconclusiveとする。初版のanalyzerは未探索participantもportfolio size 1として
+share（12 / 34）を計算しCase Cと分類していたが、これはこの前提に反するため修正した。A / B / Cの閾値そのものは変更していない。
 
-C3（global assignment）へ進む前に必要と考えられるもの（次に検証する仮説であり、本Phaseで効果は示していない）:
+結果（raw runからanalyzerが再導出）:
 
-1. **Planner Alternative Search frontierのメモリ特性**: default extent（G235）で43 / 54 orientationがOOMし、24 GB heapでも完走しない
-   context がある。Gogma held-aware streamのfrontier / 公開状態の保持量を測定・再設計し、Production default extentで完走できることを先に確認する
-   （これはProductionの「比較する」「この候補を優先」にも関わる観測で、Browser Workerでの再現確認が必要）。
-2. **portfolio用context（reservation）生成**: 1 Conflict decision = 1 fixed winnerのreservationでは、1,657が使う「複数Routeの被覆に乗るRoute」を
-   生成できない。Plan全体（または部分集合）の被覆をheldとするcontextを、Planner authority（`derivePlannerAlternativeReservation()`）で
-   導出してSearchに渡すportfolio生成が候補になる。
-3. 上記2点で、Conflict participantの大半にportfolio > 1が得られ、1,657のRouteがportfolioに入るかを再測定してからC3へ進む。
+| 項目 | 値 |
+| --- | --- |
+| participantsTotal | 34 |
+| participantsExplored | 15 |
+| participantsUnexplored | 19（全員、非fixed側となるorientationのkernel child processがすべてOOM） |
+| participantsWithMultipleOverall | 12 |
+| participantsWithMultipleAmongExplored | 12 |
+| multipleShareOverallLowerBound | 12 / 34 = 35%（未探索を0件とみなした実測下限。真のdiversity率ではない） |
+| multipleShareAmongExplored | 12 / 15 = 80%（探索できたparticipantに限った観測値） |
+| oracle coverage | 0 / 43（原因は一意に特定できない、§12） |
+| **C3 readiness** | **inconclusive（incomplete measurement）** |
+
+次Phaseの優先順位（本Phaseのevidenceが直接支持する順）:
+
+1. **第一優先: 未探索19 participantを測定可能にする。** formal runでは43 / 54 orientationのkernel child processがOOMしたため、現状では
+   portfolio能力そのものを評価し切れていない。kernel OOMの正式な局所化（正式instrumentation、Browser Worker測定）・改善、または
+   Research-onlyでSearch contextを完走できる方法を検証する。これはProductionの「比較する」「この候補を優先」も同じkernelを使うため、
+   Production側の観測としても再現確認が必要である。
+2. **第二優先: OOMを解消・回避できた後、single fixed winner reservationだけでportfolio生成能力が十分かを再評価する。** その結果、
+   oracle Route coverageが依然低い、またはheld / late-start Routeが不足するなら、複数Route coverageをreservationへ含めるcontext生成
+   （Planner authority `derivePlannerAlternativeReservation()` で導出したcontext）を検証する。
+3. 十分なportfolioが得られた時点でC3 global assignmentへ進む。
+
+1と2は現時点で同程度に「原因確定」とは扱わない。本Phaseで直接示したのは、測定不完全であることと、探索できた範囲では複数Candidateが得られたことまでである。
 
 ## 15. 測定環境・provenance
 
@@ -287,7 +327,9 @@ C3（global assignment）へ進む前に必要と考えられるもの（次に�
 | 作業branch | `research/global-planner-phase2c2-portfolio` |
 | **measured HEAD** | `3db8197fa5b256de080b810985f333c44a524ccb`（Research codeをcommit後、clean HEADで測定。runnerは未commit codeを拒否） |
 | benchmark code SHA-256 | `0002540835f59b4d1c170ff643d18a011e7b46b4a91a8318dbe3f1935dc034b8` |
-| 測定後のcommit | analyzer（post-hoc、次項）・文書・証跡のみ。計算側（module / runner）は変更していない |
+| 測定後のcommit | post-hoc analyzer（`plannerGlobalPhase2C2Analysis.ts` / `analyze-planner-global-phase2c2.mjs`）・テスト・文書・証跡のみ。計算側（`plannerGlobalPhase2C2.ts` / runner）は変更していない |
+| **latest analysis commit** | `924cf27c5c331a5af66985b43b8f777e00115767`（readiness判定のfail-closed化。evidence JSONの `provenance.analysisHead`） |
+| analysis provenance | analyzerはmeasured HEAD以降に変更されたcodeを列挙し、post-hoc analysis以外の変更があれば停止する。今回の `calculationCodeChangedSinceMeasuredHead` は空。raw runは再測定していない |
 | 実施 | 2026-09-28 21:25〜22:00 JST（wall 2,097秒） |
 | runtime | Node v24.19.0（Vite SSR loader、1 task = 1 child process、Browser Workerではない）、child heap上限 8,192 MB、concurrency 3、yield `setImmediate` |
 | budget | kernel / baseline 30分、portfolio / probe 10分、probe合計90分（timeoutは0件） |
@@ -297,22 +339,26 @@ C3（global assignment）へ進む前に必要と考えられるもの（次に�
 
 - 測定済みrunnerはraw recordの `defaultContexts[].process` を未設定のまま書いた（変数参照の誤り）。計算結果には影響せず、同じchild情報は
   `processes` にidで記録されているため、analyzerがidから復元する（analyzerの変更は測定後、post-hocのみ）。
+- PR headとmeasured HEADが異なるのは、測定後にpost-hoc analyzer・テスト・文書・証跡だけをcommitしたためである。evidence JSONは既存のraw run
+  （`PLANNER_GLOBAL_PHASE2C2_RAW.json.local`）からlatest analysis commitのanalyzerで再生成した。
 
 ## 16. テスト・検証
 
-`src/benchmarks/plannerGlobalPhase2C2.test.ts`（15件）: orientationをConflictからID hard-codeなしで全生成（N participant → N）、kernel requestが
+`src/benchmarks/plannerGlobalPhase2C2.test.ts`（18件）: orientationをConflictからID hard-codeなしで全生成（N participant → N）、kernel requestが
 Conflict key / participantから構築されprior fixed / exclusionなし・Production defaultのspread copy、kernelとpost-hoc Searchが同一の
 origin / reservation / excluded keys / extentで呼ばれる（Search入力を捕捉して比較）、reservationを再導出しkernel記録との不一致を拒否、
 first 8のconsumer stop、exhausted / stoppedByExtent / consumer stopの区別、`candidateStableKey` dedupとprovenance保持、original保持、
 held Routeがunit位置から導出、Search-deliveredとkernel-foundの区別、probeがConflict kindの軸だけを段階拡張、timeout / OOMをno-matchにしない、
-C1 parity比較、oracle coverageの4区分、isolation（計算側はoracle / C1 evidenceを読まない、analyzerだけが引数で読む）、
+C1 parity比較、oracle coverageの4区分、C3 readiness（未探索participantがあればinconclusiveで、未探索をportfolio size 1として数えない、
+explored-only shareとoverall lower boundを別fieldで記録、全participant探索済みのときだけA / B / Cへ分類、oracle coverage 0でも未探索があればB / Cへ
+早期分類しない、不整合なcountを拒否）、isolation（計算側はoracle / C1 evidenceを読まない、analyzerだけが引数で読む）、
 ProductionからC2へ到達しない、Production default / schema / version不変。
 
 | 確認 | 結果 |
 | --- | --- |
 | `npm run lint` | passed |
 | `npx tsc -b --force` | passed |
-| `npm test` | 307 files / 4,889 tests passed |
+| `npm test` | 307 files / 4,892 tests passed（readiness修正後） |
 | `npm run build` | passed（既存の500 kB超chunk warningのみ）。`dist` にPhase 2-C2識別子なし |
 | `git diff --check` | passed |
 

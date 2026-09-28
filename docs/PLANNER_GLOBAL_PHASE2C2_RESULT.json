@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 Phase 2-C2: Candidate portfolio from the original Export Conflicts (post-hoc analysis)",
-  "analyzedAt": "2026-09-28T13:00:40.109Z",
+  "analyzedAt": "2026-09-28T13:46:07.052Z",
   "sources": {
     "run": {
       "file": "PLANNER_GLOBAL_PHASE2C2_RAW.json.local",
@@ -20,6 +20,15 @@
   },
   "provenance": {
     "measuredHead": "3db8197fa5b256de080b810985f333c44a524ccb",
+    "analysisHead": "924cf27c5c331a5af66985b43b8f777e00115767",
+    "analysisCodeUncommitted": false,
+    "codeChangedSinceMeasuredHead": [
+      "scripts/analyze-planner-global-phase2c2.mjs",
+      "src/benchmarks/plannerGlobalPhase2C2.test.ts",
+      "src/benchmarks/plannerGlobalPhase2C2Analysis.ts"
+    ],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "note": "The calculation code (module, runner and everything they load) is the measured HEAD; only the post-hoc analysis code changed after the measurement, and the raw run was not re-measured.",
     "benchmarkCodeSha256": "0002540835f59b4d1c170ff643d18a011e7b46b4a91a8318dbe3f1935dc034b8",
     "uncommittedBenchmarkCode": false,
     "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
@@ -32023,15 +32032,44 @@
     ]
   },
   "c3Readiness": {
-    "case": "C",
-    "multipleShare": 0.35294117647058826,
-    "rule": "C if < 1/2 of Conflict participants have portfolio > 1; else A if every oracle Route is covered (exact or partial comparable); else B",
-    "participants": 34,
-    "participantsWithMultiple": 12,
+    "status": "inconclusive",
+    "case": null,
+    "reason": "incomplete_measurement: Candidate portfolio sufficiency cannot be judged while Conflict participants are unexplored; make them measurable first.",
+    "participantsTotal": 34,
+    "participantsExplored": 15,
+    "participantsUnexplored": 19,
+    "participantsWithMultipleOverall": 12,
+    "participantsWithMultipleAmongExplored": 12,
+    "multipleShareOverallLowerBound": 0.35294117647058826,
+    "multipleShareOverallLowerBoundFraction": "12/34",
+    "multipleShareAmongExplored": 0.8,
+    "multipleShareAmongExploredFraction": "12/15",
     "oracleRoutes": 43,
     "oracleCovered": 0,
+    "rule": "inconclusive while any Conflict participant is unexplored (the A / B / C premise is not met: an OOM / timeout / failed process is unmeasured, never a portfolio of size 1); only when every participant is explored: C if < 1/2 of Conflict participants have portfolio > 1; else A if every oracle Route is covered (exact or partial comparable); else B",
+    "unexploredParticipantIds": [
+      "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+      "188571a7-b480-4085-a8f5-59666c0e4cc5",
+      "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+      "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+      "2123eaa6-2df4-4003-8d20-8904e375aa85",
+      "27ac3237-543b-4887-85e6-28ccc7564294",
+      "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+      "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+      "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+      "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+      "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+      "b4f252cd-9530-46f2-b387-b99e3904a66e",
+      "b6780f04-da21-42b0-af8c-88f09a192e17",
+      "be881717-f092-4be7-870c-c6bd19f2141f",
+      "c140578c-9aad-48d0-81db-95496636c459",
+      "e523209e-57e8-4316-a7f0-329f64fd0b00",
+      "e96249b4-cb24-4fff-a852-4055904161ad",
+      "fea60316-a05c-4252-bf1d-41c31b99b75a"
+    ],
     "kernelOrientationsCompleted": 11,
     "kernelOrientations": 54,
-    "unsearchedParticipants": 19
+    "kernelOrientationsFailedByProcess": 43
   }
 }
