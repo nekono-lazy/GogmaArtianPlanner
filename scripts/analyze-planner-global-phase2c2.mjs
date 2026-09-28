@@ -90,8 +90,14 @@ try {
     extentLabel: c.extentLabel, extent: c.extent, status: c.status, summary: c.summary, kernelTrialPrefixMatches: c.kernelTrialPrefixMatches, elapsedMs: c.elapsedMs,
     candidates: c.candidates.map(x => ({ deliveredIndex: x.deliveredIndex, stableKeySha256: sha(x.stableKey), kernel: x.kernel, respectsReservation: x.reservationCheck.respects,
       heldRoute: x.summary.heldRoute, sourceKind: x.summary.sourceKind, estimatedOperationCount: x.summary.estimatedOperationCount })) })
-  const defaultRows = r.defaultContexts.map(d => ({ orientationId: d.orientationId, targetWeaponId: d.targetWeaponId, process: { outcome: d.process.outcome, wallMs: d.process.wallMs,
-    stderrTail: d.process.stderrTail }, memory: d.memory, context: d.context ? contextRow(d.context) : null }))
+  // The measured runner (3db8197) left `defaultContexts[].process` unset; the same child entry is in `processes` under its id.
+  const processById = new Map(r.processes.map(p => [p.id, p]))
+  const defaultRows = r.defaultContexts.map(d => {
+    const process = d.process ?? processById.get(`portfolio-${d.orientationId}-${d.targetWeaponId}-default`)
+    if (!process) throw new Error(`No process entry for the default context ${d.orientationId}/${d.targetWeaponId}.`)
+    return { orientationId: d.orientationId, targetWeaponId: d.targetWeaponId, process: { outcome: process.outcome, wallMs: process.wallMs, stderrTail: process.stderrTail },
+      memory: d.memory, context: d.context ? contextRow(d.context) : null }
+  })
   const probeRows = r.probes.contexts.map(contextRow)
   const statusCounts = rows => countBy(rows, c => c.status)
   const searchExecution = {
