@@ -124,8 +124,11 @@ export interface Phase2BRouteSummary {
   readonly weaponTypeId: string
   readonly elementId: string
   readonly buildListEntryId: string
-  /** Which Research step supplied the final Entry. */
-  readonly entryOrigin: 'retained_original' | 'generated_base_search' | 'generated_extent_fallback'
+  /**
+   * Which Research step supplied the final Entry. `pending_original_kept`: a pending Target whose Search found no
+   * Candidate keeps its original Entry in the final input (Phase 2-C1 records it; a completed Phase 2-B run has none).
+   */
+  readonly entryOrigin: 'retained_original' | 'generated_base_search' | 'generated_extent_fallback' | 'pending_original_kept'
   readonly routeKind: string
   readonly sourceKind: 'owned' | 'new_normal'
   readonly sourceOwnedWeaponId: string | null
@@ -157,6 +160,7 @@ export function summarizeFinalRoutes(finalInput: PlannerInput, report: GlobalRes
   const retained = new Set(report.retainedOriginalEntryIds)
   const base = new Set(report.searches.map(search => search.generatedEntryId).filter((id): id is string => id !== null))
   const fallback = new Set(report.searches.map(search => search.fallback?.generatedEntryId).filter((id): id is string => typeof id === 'string'))
+  const keptPending = new Set(report.searches.filter(search => (search.fallback?.generatedEntryId ?? search.generatedEntryId) === null).map(search => search.originalEntryId))
   const targets = new Map(finalInput.targetWeapons.map(target => [target.id, target]))
   return [...finalInput.buildListEntries].sort((a, b) => a.targetWeaponId < b.targetWeaponId ? -1 : a.targetWeaponId > b.targetWeaponId ? 1 : 0).map((entry: BuildListEntry) => {
     const target = targets.get(entry.targetWeaponId)
@@ -173,7 +177,7 @@ export function summarizeFinalRoutes(finalInput: PlannerInput, report: GlobalRes
     return {
       targetWeaponId: entry.targetWeaponId, weaponTypeId: target.weaponTypeId, elementId: target.elementId, buildListEntryId: entry.id,
       entryOrigin: retained.has(entry.id) ? 'retained_original' : fallback.has(entry.id) ? 'generated_extent_fallback' : base.has(entry.id) ? 'generated_base_search'
-        : (() => { throw new Error(`Final Entry ${entry.id} is neither retained nor generated.`) })(),
+        : keptPending.has(entry.id) ? 'pending_original_kept' : (() => { throw new Error(`Final Entry ${entry.id} is neither retained, generated nor a kept pending original.`) })(),
       routeKind: route.kind, sourceKind: create ? 'new_normal' : 'owned', sourceOwnedWeaponId: route.sourceOwnedWeaponId,
       normalPosition: create && create.normalCounterAfter !== null ? create.normalCounterAfter - 1 : null,
       normalCounterId: normalUnits[0]?.counterId ?? null,
