@@ -62,6 +62,7 @@ if (role === 'snapshot-analyzer') {
     const result = snapshot.analyzeHeapSnapshot(graph, {
       baselineMaxNodeId, top: 30, holderGroupsPerEdge: 5, edgeCutHolderGroupsPerEdge: 2,
       edgeGroups: [...analysis.PHASE2C25C_HYPOTHESES.map(h => h.snapshotEdgeGroup), ...analysis.PHASE2C25C_DESCRIPTIVE_EDGE_GROUPS],
+      pathSignaturePrefixes: analysis.PHASE2C25C_PATH_SIGNATURE_PREFIXES, persistentRootSignaturePrefixes: analysis.PHASE2C25C_PERSISTENT_ROOT_PREFIXES,
     })
     timings.analysisMs = performance.now() - t
     await writeFile(outPath, JSON.stringify({ completeness: { json: 'complete', sections: parsed.sections, metaResolved: true, nodes: graph.schema.nodeCount, edges: graph.schema.edgeCount,
@@ -235,6 +236,20 @@ await withModules(MODULES, async ({ c25c, profile, analysis }) => {
   const hypotheses = analysis.evaluatePhase2C25CHypotheses(oomKeys.map(key => ({ contextKey: key, snapshot: snapshotRuns.find(s => s.contextKey === key)?.analysis ?? null,
     sampling: { no_inlining: lastOf('no_inlining', key), jit_default: lastOf('jit_default', key) } })))
 
+  const samplingSummary = run => run?.lastAnalysis == null ? null : { thresholdMiB: run.lastAnalysis.thresholdMiB, totalSampledBytes: run.lastAnalysis.analysis.totalSampledBytes,
+    repositorySelfBytes: run.lastAnalysis.analysis.repositorySelfBytes, categories: run.lastAnalysis.analysis.categories,
+    attributedRepositoryCallsites: run.lastAnalysis.analysis.attributedCallsites.filter(s => s.repository).slice(0, 30) }
+  const findings = analysis.buildPhase2C25CFindings(r.workload.oomRepresentatives.map(item => {
+    const key = `${item.orientationId}#${item.workIndex}`
+    const jit = samplingRuns.find(s => s.variant === 'jit_default' && s.contextKey === key)
+    const snap = snapshotRuns.find(s => s.contextKey === key)?.analysis ?? null
+    const resultNode = snap === null ? null : [...snap.topNewSignaturesByShallowSize, ...snap.topNewSignaturesByCount].find(g => g.key === analysis.PHASE2C25C_HOLDER_SIGNATURES.reservedBonusResultNode)
+    return { contextKey: key, kind: item.kind, gogmaMaxDepthAtLastProgress: jit?.lastProgress?.progress?.maxDepth?.gogma ?? null,
+      sampling: { jit_default: samplingSummary(jit), no_inlining: samplingSummary(samplingRuns.find(s => s.variant === 'no_inlining' && s.contextKey === key)) },
+      snapshot: snap === null ? null : { newReachableBytes: snap.reachableFromRoot.newSize, persistentNewBytes: snap.persistentSplit?.reachableFromRoots.newSize ?? null,
+        groupCutNewBytes: Object.fromEntries(snap.groupEdgeCuts.map(g => [g.group, g.edgeCut.newSize])), reservedBonusResultNodeShallowBytes: resultNode?.shallowSize ?? 0 } }
+  }), hypotheses)
+
   const evidence = {
     phase: 'Issue #154 Phase 2-C2.5-C: heap profiling of the Search-only OOM (post-hoc analysis)',
     analyzedAt: new Date().toISOString(),
@@ -269,9 +284,10 @@ await withModules(MODULES, async ({ c25c, profile, analysis }) => {
       baselineMaxNodeId: a.baselineMaxNodeId, newNodeCount: a.newNodeCount, newShallowSize: a.newShallowSize,
       topByShallowSize: a.topByShallowSize.slice(0, 20), topByCount: a.topByCount.slice(0, 20),
       topNewSignaturesByShallowSize: a.topNewSignaturesByShallowSize, topNewSignaturesByCount: a.topNewSignaturesByCount.slice(0, 20),
-      targetedEdges: a.targetedEdges, groupEdgeCuts: a.groupEdgeCuts, retainingPathExamples: a.retainingPathExamples } })),
+      targetedEdges: a.targetedEdges, groupEdgeCuts: a.groupEdgeCuts, retainingPathExamples: a.retainingPathExamples, persistentSplit: a.persistentSplit } })),
     hypothesisRule: analysis.PHASE2C25C_VERDICT_RULE,
     hypotheses,
+    findings,
   }
   await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', { flag: 'wx' })
   console.log(JSON.stringify({ output: outputPath, sampling: samplingRuns.map(s => `${s.runId}: ${s.outcome}/${s.profilingOutcome} t=${s.thresholdsReached.join(',')}`),

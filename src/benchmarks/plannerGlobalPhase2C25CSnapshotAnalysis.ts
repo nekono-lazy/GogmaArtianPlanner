@@ -545,6 +545,17 @@ export interface HeapSnapshotAnalysis {
   /** Collective edge cuts of edge sets (hypothesis groups). */
   groupEdgeCuts: { group: string; edgeNames: string[]; edgeTypes: string[] | null; matchedEdges: number; holderSignatures: string[]; edgeCut: HeapSnapshotEdgeCut }[]
   retainingPathExamples: { reason: string; path: ReturnType<typeof heapSnapshotRetainingPath> }[]
+  /**
+   * New nodes reachable from the long-lived structure roots (every node whose signature starts with one of the given
+   * prefixes, e.g. the TargetSearchScheduler instance) versus new nodes those roots do not reach (locals of running or
+   * suspended frames, among others). Null when no prefix was given.
+   */
+  persistentSplit: null | {
+    rootSignaturePrefixes: string[]
+    roots: number
+    reachableFromRoots: { nodes: number; size: number; newNodes: number; newSize: number }
+    newNotReachableFromRoots: { newNodes: number; newSize: number }
+  }
 }
 
 export interface HeapSnapshotEdgeGroup {
@@ -573,6 +584,10 @@ export function analyzeHeapSnapshot(graph: HeapSnapshotGraph, options: {
   top?: number
   holderGroupsPerEdge?: number
   edgeCutHolderGroupsPerEdge?: number
+  /** Signature prefixes whose first new node also gets a retaining path example. */
+  pathSignaturePrefixes?: readonly string[]
+  /** Signature prefixes of the long-lived structure roots of `persistentSplit`. */
+  persistentRootSignaturePrefixes?: readonly string[]
 }): HeapSnapshotAnalysis {
   const top = options.top ?? 30
   const count = graph.schema.nodeCount
@@ -696,12 +711,33 @@ export function analyzeHeapSnapshot(graph: HeapSnapshotGraph, options: {
     reason: `first new node (lowest node index) of the new signature ${group.key}`,
     path: heapSnapshotRetainingPath(graph, full, firstNewOfSignature.get(group.key)!, isNew),
   }))
+  for (const prefix of options.pathSignaturePrefixes ?? []) {
+    const signature = [...firstNewOfSignature.keys()].filter(key => key.startsWith(prefix)).sort((a, b) => firstNewOfSignature.get(a)! - firstNewOfSignature.get(b)!)[0]
+    retainingPathExamples.push(signature === undefined
+      ? { reason: `no new node has a signature starting with ${prefix}`, path: null }
+      : { reason: `first new node (lowest node index) whose signature starts with ${prefix}`, path: heapSnapshotRetainingPath(graph, full, firstNewOfSignature.get(signature)!, isNew) })
+  }
+  let persistentSplit: HeapSnapshotAnalysis['persistentSplit'] = null
+  if (options.persistentRootSignaturePrefixes && options.persistentRootSignaturePrefixes.length > 0) {
+    const prefixes = [...options.persistentRootSignaturePrefixes]
+    const roots: number[] = []
+    for (let node = 0; node < count; node++) {
+      if (!full.reached[node]) continue
+      const type = heapSnapshotNodeType(graph, node)
+      if (type !== 'object') continue
+      if (prefixes.some(prefix => signatureOf(node).startsWith(prefix))) roots.push(node)
+    }
+    const fromRoots = heapSnapshotBfs(graph, roots, undefined, false)
+    const reachableFromRoots = heapSnapshotSizeOf(graph, fromRoots.reached, isNew)
+    persistentSplit = { rootSignaturePrefixes: prefixes, roots: roots.length, reachableFromRoots,
+      newNotReachableFromRoots: { newNodes: reachableFromRoot.newNodes - reachableFromRoots.newNodes, newSize: reachableFromRoot.newSize - reachableFromRoots.newSize } }
+  }
   return {
     terminology: { dominatorTreeComputed: false, sizes: ['shallowSize', 'reachableFromRoot', 'edgeCut'] },
     nodeCount: count, edgeCount: graph.schema.edgeCount, totalShallowSize, reachableFromRoot, baselineMaxNodeId: baseline, newNodeCount, newShallowSize,
     topByShallowSize: topGroups(byTypeName, top, 'size'), topByCount: topGroups(byTypeName, top, 'count'),
     topNewSignaturesByShallowSize: topNewBySize, topNewSignaturesByCount: topGroups(newBySignature, top, 'count'),
-    targetedEdges, groupEdgeCuts, retainingPathExamples,
+    targetedEdges, groupEdgeCuts, retainingPathExamples, persistentSplit,
   }
 }
 

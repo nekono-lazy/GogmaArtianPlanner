@@ -74,6 +74,18 @@ export const PHASE2C25C_DESCRIPTIVE_EDGE_GROUPS: readonly HeapSnapshotEdgeGroup[
   { group: 'reserved_sets_closure', edgeNames: ['reservedSets'], holderSignaturePrefixes: null, edgeTypes: ['context'] },
 ]
 
+/** Shapes that get a retaining path example beside the top new signatures (post-hoc, descriptive). */
+export const PHASE2C25C_PATH_SIGNATURE_PREFIXES: readonly string[] = [
+  'object:Object{bonusKey,idealMatch,index,',
+  'object:Object{bonusKey,idealMatch,matchedIdealBonusCount,',
+  PHASE2C25C_HOLDER_SIGNATURES.reservedBonusSolution,
+  PHASE2C25C_HOLDER_SIGNATURES.reservedBonusState,
+  PHASE2C25C_HOLDER_SIGNATURES.reservedBonusResultNode,
+]
+
+/** The long-lived Search structure root of the persistent / in-flight split (post-hoc, descriptive). */
+export const PHASE2C25C_PERSISTENT_ROOT_PREFIXES: readonly string[] = [PHASE2C25C_HOLDER_SIGNATURES.targetSearchScheduler]
+
 export const PHASE2C25C_VERDICT_RULE = {
   strongShare: 0.25,
   noneShare: 0.05,
@@ -146,4 +158,98 @@ export function evaluatePhase2C25CHypotheses(contexts: readonly Phase2C25CContex
     return { id: hypothesis.id, title: hypothesis.title, samplingCategories: hypothesis.samplingCategories, snapshotEdgeGroup: hypothesis.snapshotEdgeGroup,
       measures, verdict: phase2c25cVerdict(measures.map(m => m.strength)) }
   })
+}
+
+// ---------------------------------------------------------------- findings (post-hoc, descriptive)
+
+/** Growth type of an OOM context: `deep` when its held-aware Gogma depth reached at least this before dying. */
+export const PHASE2C25C_DEEP_GROWTH_MIN_GOGMA_DEPTH = 20
+
+export interface Phase2C25CSamplingSummary {
+  thresholdMiB: number
+  totalSampledBytes: number
+  repositorySelfBytes: number
+  categories: { category: Phase2C25CSourceCategory; sampledSelfBytes: number; share: number }[]
+  attributedRepositoryCallsites: { key: string; functionName: string; url: string; category: Phase2C25CSourceCategory; sampledSelfBytes: number }[]
+}
+
+export interface Phase2C25CFindingsContext {
+  contextKey: string
+  kind: string
+  gogmaMaxDepthAtLastProgress: number | null
+  sampling: { jit_default: Phase2C25CSamplingSummary | null; no_inlining: Phase2C25CSamplingSummary | null }
+  snapshot: null | {
+    newReachableBytes: number
+    persistentNewBytes: number | null
+    groupCutNewBytes: Record<string, number>
+    reservedBonusResultNodeShallowBytes: number
+  }
+}
+
+const shareOf = (part: number, whole: number) => whole === 0 ? null : part / whole
+const pct = (value: number | null) => value === null ? 'n/a' : `${(value * 100).toFixed(1)}%`
+
+/**
+ * The per-question numbers of this Phase and a one-line reading of each, computed from the analyzed evidence only.
+ * Interpretation beyond these numbers is left to the document.
+ */
+export function buildPhase2C25CFindings(contexts: readonly Phase2C25CFindingsContext[], hypotheses: ReturnType<typeof evaluatePhase2C25CHypotheses>) {
+  const growthType = (c: Phase2C25CFindingsContext) => c.gogmaMaxDepthAtLastProgress === null ? 'unknown'
+    : c.gogmaMaxDepthAtLastProgress >= PHASE2C25C_DEEP_GROWTH_MIN_GOGMA_DEPTH ? 'deep' : 'shallow'
+  const categoryShare = (s: Phase2C25CSamplingSummary | null, category: Phase2C25CSourceCategory) =>
+    s === null ? null : shareOf(s.categories.find(c => c.category === category)?.sampledSelfBytes ?? 0, s.totalSampledBytes)
+  const functionShare = (s: Phase2C25CSamplingSummary | null, name: string) =>
+    s === null ? null : shareOf(s.attributedRepositoryCallsites.filter(c => c.functionName === name).reduce((sum, c) => sum + c.sampledSelfBytes, 0), s.totalSampledBytes)
+  const cutShare = (c: Phase2C25CFindingsContext, group: string) => c.snapshot === null ? null : shareOf(c.snapshot.groupCutNewBytes[group] ?? 0, c.snapshot.newReachableBytes)
+  const perContext = contexts.map(c => {
+    const noInline = c.sampling.no_inlining
+    const jit = c.sampling.jit_default
+    const top = noInline?.attributedRepositoryCallsites[0] ?? null
+    const jitTop = jit?.attributedRepositoryCallsites[0] ?? null
+    const persistent = c.snapshot?.persistentNewBytes ?? null
+    return {
+      contextKey: c.contextKey, kind: c.kind, growthType: growthType(c), gogmaMaxDepthAtLastProgress: c.gogmaMaxDepthAtLastProgress,
+      samplingThresholdMiB: noInline?.thresholdMiB ?? null,
+      repositoryShareNoInlining: noInline === null ? null : shareOf(noInline.repositorySelfBytes, noInline.totalSampledBytes),
+      topCallsiteNoInlining: top === null || noInline === null ? null : { key: top.key, category: top.category, share: shareOf(top.sampledSelfBytes, noInline.totalSampledBytes) },
+      topCallsiteJitDefault: jitTop === null || jit === null ? null : { key: jitTop.key, category: jitTop.category, share: shareOf(jitTop.sampledSelfBytes, jit.totalSampledBytes) },
+      topCategoriesNoInlining: noInline?.categories.slice(0, 5).map(x => ({ category: x.category, share: x.share })) ?? null,
+      reservedBonusStepsShare: categoryShare(noInline, 'reserved_bonus_steps'),
+      bonusAmendmentOperationsShare: functionShare(noInline, 'bonusAmendmentOperations'),
+      semanticKeysShare: categoryShare(noInline, 'semantic_keys'),
+      snapshotPersistentShare: c.snapshot === null || persistent === null ? null : shareOf(persistent, c.snapshot.newReachableBytes),
+      snapshotRetainedCutShare: cutShare(c, 'H4'),
+      snapshotRetainedCutShareOfPersistent: c.snapshot === null || persistent === null ? null : shareOf(c.snapshot.groupCutNewBytes.H4 ?? 0, persistent),
+      snapshotDepthsCutShare: cutShare(c, 'H1'),
+      snapshotStepsCutShare: cutShare(c, 'H2'),
+      snapshotHistoryCutShare: cutShare(c, 'H3'),
+      snapshotResultNodeShallowShare: c.snapshot === null ? null : shareOf(c.snapshot.reservedBonusResultNodeShallowBytes, c.snapshot.newReachableBytes),
+      snapshotOperationsCutShare: cutShare(c, 'route_bonus_solution_operations'),
+      snapshotKeysCutShare: cutShare(c, 'evaluated_solution_keys'),
+      snapshotCrossCutShare: cutShare(c, 'H5'),
+      snapshotQueueCutShare: cutShare(c, 'H6'),
+    }
+  })
+  type Row = typeof perContext[number]
+  const line = (label: (c: Row) => string) => perContext.map(c => `${c.contextKey} (${c.growthType}): ${label(c)}`).join('; ')
+  const verdict = (id: Phase2C25CHypothesisId) => hypotheses.find(h => h.id === id)?.verdict ?? 'inconclusive'
+  const answers = {
+    Q1: { question: 'heap増加の最大寄与allocation site',
+      perContext: perContext.map(c => ({ contextKey: c.contextKey, growthType: c.growthType, topCallsiteNoInlining: c.topCallsiteNoInlining, topCallsiteJitDefault: c.topCallsiteJitDefault })),
+      reading: line(c => `no_inlining top ${c.topCallsiteNoInlining?.key ?? 'n/a'} ${pct(c.topCallsiteNoInlining?.share ?? null)}`) },
+    Q2: { question: 'deep型とshallow型で同じallocation siteが支配的か',
+      sameTopCallsite: new Set(perContext.map(c => c.topCallsiteNoInlining?.key ?? null)).size === 1,
+      reading: line(c => `top categories ${(c.topCategoriesNoInlining ?? []).slice(0, 3).map(x => `${x.category} ${pct(x.share)}`).join(', ')}`) },
+    Q3: { question: 'reservedBonusSteps()のfull steps[] materializationの割合',
+      reading: line(c => `sampling ${pct(c.reservedBonusStepsShare)}, snapshot steps edge-cut ${pct(c.snapshotStepsCutShare)}`) },
+    Q4: { question: 'ReservedBonusResultNode.previous history chainは主要因か', verdict: verdict('H3'),
+      reading: line(c => `results+previous edge-cut ${pct(c.snapshotHistoryCutShare)}, result node shallow ${pct(c.snapshotResultNodeShallowShare)}`) },
+    Q5: { question: 'set.depths由来のpublished solution群が主要retaining pathか', verdict: verdict('H1'),
+      reading: line(c => `depths edge-cut ${pct(c.snapshotDepthsCutShare)} vs channel.retained edge-cut ${pct(c.snapshotRetainedCutShare)}`) },
+    Q6: { question: 'Scheduler channel.retainedの保持量', verdict: verdict('H4'),
+      reading: line(c => `retained edge-cut ${pct(c.snapshotRetainedCutShare)} of new bytes (${pct(c.snapshotRetainedCutShareOfPersistent)} of the Search-reachable new bytes)`) },
+    Q7: { question: 'Lazy Ideal Cross / SearchWorkQueueは主要因か', verdicts: { H5: verdict('H5'), H6: verdict('H6') },
+      reading: line(c => `cross edge-cut ${pct(c.snapshotCrossCutShare)}, queue edge-cut ${pct(c.snapshotQueueCutShare)}`) },
+  }
+  return { growthRule: `deep when the held-aware Gogma depth reached at the last progress is >= ${PHASE2C25C_DEEP_GROWTH_MIN_GOGMA_DEPTH}`, perContext, answers }
 }

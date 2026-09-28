@@ -68,6 +68,7 @@ import {
   parseHeapSnapshotText,
 } from './plannerGlobalPhase2C25CSnapshotAnalysis'
 import {
+  buildPhase2C25CFindings,
   evaluatePhase2C25CHypotheses,
   phase2c25cContextStrength,
   phase2c25cVerdict,
@@ -527,6 +528,41 @@ describe('Phase 2-C2.5-C heap snapshot parser', () => {
     expect(keys.filter(k => /retained|dominator(?!TreeComputed)/i.test(k))).toEqual([])
     // Without a baseline nothing is new.
     expect(analyzeHeapSnapshot(graph, { baselineMaxNodeId: null, targetedEdgeNames: ['retained'] }).newNodeCount).toBe(0)
+  })
+
+  it('splits new nodes into those a long-lived root reaches and in-flight ones, and adds requested path examples', () => {
+    const nodes = schedulerGraph()
+    // A new array held only by the synthetic root (a local of a running frame), not by the scheduler.
+    nodes[0].edges.push({ type: 'element', name: 2, to: 9 })
+    nodes.push({ type: 'object', name: 'Array', id: 109, self: 64, edges: [] })
+    const graph = buildHeapSnapshotGraph(parseHeapSnapshotText(synthSnapshot(nodes)))
+    const result = analyzeHeapSnapshot(graph, { baselineMaxNodeId: 100, targetedEdgeNames: ['retained'], persistentRootSignaturePrefixes: ['object:TargetSearchScheduler{'],
+      pathSignaturePrefixes: ['object:Object{previous,', 'object:Nothing'] })
+    expect(result.persistentSplit).toEqual({ rootSignaturePrefixes: ['object:TargetSearchScheduler{'], roots: 1,
+      reachableFromRoots: { nodes: 8, size: 230, newNodes: 4, newSize: 118 }, newNotReachableFromRoots: { newNodes: 1, newSize: 64 } })
+    const extra = result.retainingPathExamples.slice(-2)
+    expect(extra[0].path!.target.signature).toBe('object:Object{previous,result}')
+    expect(extra[1]).toEqual({ reason: 'no new node has a signature starting with object:Nothing', path: null })
+  })
+})
+
+describe('Phase 2-C2.5-C findings', () => {
+  it('labels growth types by the reached Gogma depth and reads each question from the measures only', () => {
+    const sampling = (top: string, bytes: number) => ({ thresholdMiB: 7168, totalSampledBytes: 1000, repositorySelfBytes: 990,
+      categories: [{ category: 'bonus_solution_materialization' as const, sampledSelfBytes: bytes, share: bytes / 1000 }, { category: 'reserved_bonus_steps' as const, sampledSelfBytes: 100, share: 0.1 }],
+      attributedRepositoryCallsites: [{ key: `${top} src/x.ts:1`, functionName: top, url: 'src/x.ts', category: 'bonus_solution_materialization' as const, sampledSelfBytes: bytes }] })
+    const context = (key: string, depth: number, top: string) => ({ contextKey: key, kind: 'k', gogmaMaxDepthAtLastProgress: depth,
+      sampling: { jit_default: null, no_inlining: sampling(top, 600) },
+      snapshot: { newReachableBytes: 400, persistentNewBytes: 200, groupCutNewBytes: { H4: 100, H1: 40, H2: 20, H3: 4 }, reservedBonusResultNodeShallowBytes: 8 } })
+    const findings = buildPhase2C25CFindings([context('a#0', 134, 'bonusAmendmentOperations'), context('b#0', 5, 'serializeStable')], [])
+    expect(findings.perContext.map(c => c.growthType)).toEqual(['deep', 'shallow'])
+    expect(findings.perContext[0]).toMatchObject({ reservedBonusStepsShare: 0.1, bonusAmendmentOperationsShare: 0.6, snapshotRetainedCutShare: 0.25,
+      snapshotRetainedCutShareOfPersistent: 0.5, snapshotPersistentShare: 0.5, snapshotStepsCutShare: 0.05, snapshotResultNodeShallowShare: 0.02 })
+    expect(findings.perContext[1].bonusAmendmentOperationsShare).toBe(0)
+    expect(findings.answers.Q2.sameTopCallsite).toBe(false)
+    expect(findings.answers.Q4.verdict).toBe('inconclusive')
+    const missing = buildPhase2C25CFindings([{ ...context('c#0', 3, 'x'), snapshot: null, sampling: { jit_default: null, no_inlining: null } }], [])
+    expect(missing.perContext[0]).toMatchObject({ snapshotRetainedCutShare: null, reservedBonusStepsShare: null, topCallsiteNoInlining: null })
   })
 })
 
