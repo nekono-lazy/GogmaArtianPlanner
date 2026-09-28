@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import type { PlannerInput } from '../domain/planner/plannerTypes'
+import type { TargetWeapon } from '../domain/models/publicTypes'
 import type { RngEngine } from '../domain/rng/rngEngine'
 import { globalResearchFixture } from './plannerGlobalOptimizationTestFixture'
+import { classifyOracleVerdict } from './plannerGlobalOracle1657'
 import {
-  collectLowerBoundProblem, LowerBoundUnsupportedInputError, singleStreamLowerBounds, solveLowerBoundRelaxation,
-  type LowerBoundProblem, type LowerBoundTargetOptions,
+  auditCrossSatisfaction, collectLowerBoundProblem, LowerBoundUnsupportedInputError, provenLowerBoundTotal, singleStreamLowerBounds, solveLowerBoundRelaxation,
+  type CrossSatisfactionAudit, type LowerBoundProblem, type LowerBoundTargetOptions,
 } from './plannerGlobalLowerBound'
 
 const target = (id: string, weaponTypeId: string, options: LowerBoundTargetOptions['options']): LowerBoundTargetOptions =>
   ({ targetWeaponId: id, weaponTypeId, elementId: 'element.x', firstIdealSkillPosition: null, firstIdealResetPosition: null, options })
+const noCrossSatisfaction: CrossSatisfactionAudit = { planningTargetCount: 2, sameWeaponTypeAndElementPairCount: 0, skillStateCandidates: { series: 0, group: 0 },
+  possiblePairCount: 0, possiblePairs: [] }
 const problem = (targets: LowerBoundTargetOptions[], budget = 100): LowerBoundProblem =>
-  ({ budget, skillOrigin: 10, gogmaOrigin: 20, normalOrigins: { w: 0, v: 0 }, targets })
+  ({ budget, crossSatisfaction: noCrossSatisfaction, skillOrigin: 10, gogmaOrigin: 20, normalOrigins: { w: 0, v: 0 }, targets })
+/** Skill states for the audit: the fixture's own Skill IDs stand in for the Master lists. */
+const fixtureSkills = { seriesSkillIds: ['series_skill.fixture.a', 'series_skill.fixture.b'], groupSkillIds: ['group_skill.fixture.a', 'group_skill.fixture.b'] }
 
 /** Wraps the fixed-table Fake Engine: every input outside its table is a non-Ideal result, never an Ideal guess. */
 function scanningEngine(engine: RngEngine): RngEngine {
@@ -76,7 +82,7 @@ describe('Phase 2-A.5 lower-bound relaxation', () => {
 describe('Phase 2-A.5 lower-bound option collection', () => {
   it('collects per-Target options from the given Engine only and gives a bound below the synthetic oracle', async () => {
     const { input, engine } = await globalResearchFixture()
-    const p = collectLowerBoundProblem(input as PlannerInput, scanningEngine(engine), 7)
+    const p = collectLowerBoundProblem(input as PlannerInput, scanningEngine(engine), 7, fixtureSkills)
     expect(p.skillOrigin).toBe(7)
     expect(p.gogmaOrigin).toBe(10)
     expect(p.targets.map(t => [t.firstIdealSkillPosition, t.firstIdealResetPosition])).toEqual([[7, 10], [7, 10]])
@@ -87,6 +93,7 @@ describe('Phase 2-A.5 lower-bound option collection', () => {
     // The relaxation drops Counter position exclusivity: both Targets may convert at 7 and Reset at 10,
     // so it proves 4, strictly below the 6 physical operations of the synthetic oracle. That is not
     // a proof of optimality for the oracle.
+    expect(p.crossSatisfaction).toMatchObject({ planningTargetCount: 2, sameWeaponTypeAndElementPairCount: 0, possiblePairCount: 0 })
     const result = solveLowerBoundRelaxation(p)
     expect(result.minimum).toMatchObject({ total: 4, advances: { skill: 1, gogma: 1, normal: { 'weapon.fixture.a': 2 } } })
   })
@@ -94,6 +101,77 @@ describe('Phase 2-A.5 lower-bound option collection', () => {
   it('fails closed without a confirmed Normal Counter instead of guessing a blind forge bound', async () => {
     const { input, engine } = await globalResearchFixture()
     const unconfirmed = { ...input, normalCounters: input.normalCounters.map(counter => ({ ...counter, isConfirmed: false })) } as PlannerInput
-    expect(() => collectLowerBoundProblem(unconfirmed, scanningEngine(engine), 7)).toThrow(LowerBoundUnsupportedInputError)
+    expect(() => collectLowerBoundProblem(unconfirmed, scanningEngine(engine), 7, fixtureSkills)).toThrow(LowerBoundUnsupportedInputError)
+  })
+})
+
+/** A second Target on the first fixture Target's weapon type and element, differing only as given. */
+async function crossFixture(change: (target: TargetWeapon) => void, first: (target: TargetWeapon) => void = () => {}) {
+  const { input, engine } = await globalResearchFixture()
+  const a = structuredClone(input.targetWeapons[0]!) as TargetWeapon
+  first(a)
+  const b = { ...structuredClone(a), id: 'target.fixture.cross' } as TargetWeapon
+  change(b)
+  return { input: { ...input, targetWeapons: [a, b] } as PlannerInput, engine, a, b }
+}
+const skill = (seriesSkillId: string | null, groupSkillId: string | null) => ({ seriesSkillId, groupSkillId, matchMode: 'all' }) as TargetWeapon['idealSkillCondition']
+
+describe('Phase 2-A.5 cross satisfaction precondition', () => {
+  it('finds a pair when the same Ideal bonuses and a common Skill state satisfy both Targets (Series S1 + Group G1 vs Group G1)', async () => {
+    const { input, a, b } = await crossFixture(target => { target.idealSkillCondition = skill(null, 'group_skill.fixture.a') },
+      target => { target.idealSkillCondition = skill('series_skill.fixture.a', 'group_skill.fixture.a') })
+    const audit = auditCrossSatisfaction(input, fixtureSkills)
+    expect(audit.possiblePairCount).toBeGreaterThan(0)
+    expect(audit.possiblePairs).toEqual([{ targetWeaponIds: [a.id, b.id].sort(),
+      witness: { bonusesOfTargetWeaponId: [a.id, b.id].sort()[0], seriesSkillId: 'series_skill.fixture.a', groupSkillId: 'group_skill.fixture.a' } }])
+  })
+
+  it('finds a pair when neither Target constrains Skills', async () => {
+    const { input } = await crossFixture(target => { target.idealSkillCondition = skill(null, null) }, target => { target.idealSkillCondition = skill(null, null) })
+    expect(auditCrossSatisfaction(input, fixtureSkills).possiblePairCount).toBe(1)
+  })
+
+  it('never pairs Targets whose Ideal bonuses differ in rank, type or count, and adds no higher-rank compatibility', async () => {
+    const rank = await crossFixture(target => { target.idealBonuses[0] = { ...target.idealBonuses[0]!, bonusRankId: 'bonus_rank.fixture.middle' } as never })
+    expect(rank.b.idealBonuses[0]!.bonusTypeId).toBe(rank.a.idealBonuses[0]!.bonusTypeId)
+    expect(auditCrossSatisfaction(rank.input, fixtureSkills)).toMatchObject({ sameWeaponTypeAndElementPairCount: 1, possiblePairCount: 0 })
+    // Same type, the second Target asking for the lower rank: a higher-rank weapon is not its Ideal.
+    const lower = await crossFixture(target => { target.idealBonuses[3] = { ...target.idealBonuses[3]!, bonusRankId: 'bonus_rank.fixture.high' } as never })
+    expect(auditCrossSatisfaction(lower.input, fixtureSkills).possiblePairCount).toBe(0)
+    const type = await crossFixture(target => { target.idealBonuses[3] = { ...target.idealBonuses[3]!, bonusTypeId: 'bonus_type.fixture.attack' } as never })
+    expect(auditCrossSatisfaction(type.input, fixtureSkills).possiblePairCount).toBe(0)
+    const count = await crossFixture(target => { target.idealBonuses[2] = { ...target.idealBonuses[0]! } as never })
+    expect(auditCrossSatisfaction(count.input, fixtureSkills).possiblePairCount).toBe(0)
+  })
+
+  it('never pairs Targets whose Skill conditions share no satisfying state', async () => {
+    const { input } = await crossFixture(target => { target.idealSkillCondition = skill('series_skill.fixture.b', null) },
+      target => { target.idealSkillCondition = skill('series_skill.fixture.a', null) })
+    expect(auditCrossSatisfaction(input, fixtureSkills)).toMatchObject({ sameWeaponTypeAndElementPairCount: 1, possiblePairCount: 0 })
+  })
+
+  it('never pairs Targets on another element even with identical conditions', async () => {
+    const { input } = await crossFixture(target => { target.elementId = 'element.fixture.b' as never })
+    expect(auditCrossSatisfaction(input, fixtureSkills)).toMatchObject({ sameWeaponTypeAndElementPairCount: 0, possiblePairCount: 0 })
+  })
+
+  it('fails closed: with a possible pair no distinct-source bound and no single-stream bound are claimed', async () => {
+    const { input, engine } = await crossFixture(target => { target.idealSkillCondition = skill(null, null) }, target => { target.idealSkillCondition = skill(null, null) })
+    const p = collectLowerBoundProblem(input, scanningEngine(engine), 7, fixtureSkills)
+    expect(p.crossSatisfaction.possiblePairCount).toBe(1)
+    expect(solveLowerBoundRelaxation(p)).toMatchObject({ status: 'not_applicable', provenAtLeast: null, minimum: null })
+    expect(solveLowerBoundRelaxation(p, { recordAbove: 30 }).nearMinimum).toEqual([])
+    expect(singleStreamLowerBounds(p)).toBeNull()
+    // Even an otherwise fully validated oracle is then never called a proven minimum.
+    const validatedPlanner = { error: null, selectedBuildListEntries: 2, conflicts: 0, rejectedBuildListEntries: 0, warnings: [],
+      traceReplay: { isValid: true, issues: 0, drafts: 6 }, physicalSteps: 6,
+      termination: { status: 'completed' as const, reachedLimits: [], limits: { maxPlanSteps: 100 }, expandedStates: 6, completedTargetCount: 2, totalTargetCount: 2 } }
+    const verdict = (lowerBoundTotal: number | null) => classifyOracleVerdict({ rngPassed: true, materializationPassed: true, planner: validatedPlanner,
+      routeCount: 2, oraclePhysicalOperations: 6, lowerBoundTotal })
+    expect(provenLowerBoundTotal(solveLowerBoundRelaxation(p))).toBeNull()
+    expect(verdict(provenLowerBoundTotal(solveLowerBoundRelaxation(p)))).toBe('validated_oracle')
+    // The same thresholds without the pair would have been a proof: the precondition alone decides.
+    const withoutPair = { ...p, crossSatisfaction: { ...p.crossSatisfaction, possiblePairCount: 0, possiblePairs: [] } }
+    expect(provenLowerBoundTotal(solveLowerBoundRelaxation(withoutPair))).toBe(4)
   })
 })

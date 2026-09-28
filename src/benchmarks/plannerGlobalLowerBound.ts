@@ -11,21 +11,29 @@
  * module collects which final Counter thresholds would let that Target, on its own, reach its Ideal
  * from one source (an existing OwnedWeapon or a new Normal at one position), and then minimises the
  * sum over threshold vectors under which every Target has such an option with pairwise distinct
- * sources (bipartite matching per weapon type). Counter position exclusivity, cross-stream order and
- * Route shape are dropped, so the minimum can only be lower than or equal to the true optimum.
+ * sources (bipartite matching per weapon type).
+ *
+ * Pairwise distinct sources are NOT a general Production constraint: the Production Planner has cross
+ * satisfaction (one completed weapon that also meets another Target's Ideal releases that Target's
+ * Entry, `released` / `candidate_already_satisfied`). The distinct-source requirement holds for one
+ * PlannerInput only when no weapon state can meet the Ideal of two of its planning Targets, which
+ * `auditCrossSatisfaction()` checks with the Production evaluators before any bound is claimed. With
+ * that precondition met, the relaxation drops only Counter position exclusivity, cross-stream order and
+ * Route shape, so its minimum is lower than or equal to the true optimum; without it
+ * `solveLowerBoundRelaxation()` fails closed (`not_applicable`) and claims no bound.
  */
 import { keepFamilyLayout } from '../domain/rng/gogmaBonusFamily'
 import { isTargetWeaponPlanningEligible } from '../domain/models/domainRules'
 import type { OwnedWeapon, RestorationBonusSet, TargetWeapon } from '../domain/models/publicTypes'
 import type { PlannerInput } from '../domain/planner/plannerTypes'
 import type { NormalizedSeed, RngEngine, RngMasterSubset } from '../domain/rng/rngEngine'
-import { satisfiesIdealBonuses } from '../domain/target/targetEvaluator'
+import { satisfiesIdealBonuses, satisfiesIdealTarget } from '../domain/target/targetEvaluator'
 import { evaluateSkillCondition } from '../domain/target/skillConditionEvaluator'
 
 export const LOWER_BOUND_ASSUMPTIONS = [
   'Every physical operation advances exactly one Counter by exactly one: create_normal_artian (count c) advances its weapon type Normal Counter by c = c physical forges, convert_normal_to_gogma and reset_skills advance the Skill Counter, reset_bonuses and keep_bonuses advance the Gogma Counter (RngEngine advance functions). confirm_owned_ideal advances nothing and is not a physical operation.',
   'Counters never decrease and advance only through physical operations, so the physical operation count equals the sum of the Counter advances.',
-  'Each planning Target is completed by its own weapon: an existing compatible OwnedWeapon (same weapon type and element; unprotected, or protected and already Ideal with no operation) or a new rarity-8 Normal Artian forged at a distinct Normal Counter position of its weapon type and converted.',
+  'Precondition checked per PlannerInput, not a general Production rule: auditCrossSatisfaction() finds no pair of planning Targets that one weapon state can satisfy together (Production has cross satisfaction; with such a pair the bound is not applicable). Then every planning Target needs its own completed weapon, because an Ideal completion protects its weapon so it never changes again, and each weapon comes from exactly one source: an existing compatible OwnedWeapon (same weapon type and element; unprotected, or protected and already Ideal with no operation) or a new rarity-8 Normal Artian forged at its own Normal Counter position of its weapon type and converted. Hence the sources are pairwise distinct.',
   'A completed weapon holds the Ideal restoration bonuses (gogma_artian scope, exact multiset) and the Ideal Skill condition.',
   'Final Skills: an existing Gogma may keep its current Skills; otherwise the last Skill operation (conversion or Reset Skills, which draw the same Skills at the same Skill position) is at a position p whose prediction satisfies the Ideal Skill condition.',
   'Final bonuses: an existing Gogma may keep its current bonuses; otherwise the last bonus operation at Gogma position g is a Reset whose result is Ideal, or a Keep whose result is Ideal for the family layout it reads: the source layout (no earlier Reset) or the layout of a Reset at an earlier position g1 (Keep preserves the slot family layout).',
@@ -53,9 +61,81 @@ export interface LowerBoundTargetOptions {
   options: LowerBoundOption[]
 }
 
+/** One weapon state that meets the Ideal of both Targets of a pair (Production evaluators). */
+export interface CrossSatisfactionPair {
+  targetWeaponIds: [string, string]
+  witness: { bonusesOfTargetWeaponId: string; seriesSkillId: string | null; groupSkillId: string | null }
+}
+
+export interface CrossSatisfactionAudit {
+  planningTargetCount: number
+  /** Pairs of planning Targets with the same weapon type and element (the only ones one weapon can serve). */
+  sameWeaponTypeAndElementPairCount: number
+  /** Largest number of Skill states tried per pair: the given Series / Group IDs, both conditions' own IDs, and null. */
+  skillStateCandidates: { series: number; group: number }
+  possiblePairCount: number
+  possiblePairs: CrossSatisfactionPair[]
+}
+
+export interface SkillStateCandidates {
+  seriesSkillIds: readonly string[]
+  groupSkillIds: readonly string[]
+}
+
+type SeriesSkillIdValue = TargetWeapon['idealSkillCondition']['seriesSkillId']
+type GroupSkillIdValue = TargetWeapon['idealSkillCondition']['groupSkillId']
+
+/**
+ * Pairs of planning Targets that one completed weapon state could satisfy together, judged only with the
+ * Production authorities: a weapon serves a Target only with the same weapon type and element
+ * (`deriveTargetSatisfaction()`), and `satisfiesIdealTarget()` decides Ideal (it delegates to
+ * `satisfiesIdealBonuses()` and `evaluateSkillCondition()`). No Bonus or Skill inclusion rule is
+ * re-implemented. Candidate bonus states are both Targets' own Ideal sets in `gogma_artian` scope (a
+ * state meeting a Target's Ideal is, under that authority, that Target's Ideal set); candidate Skill
+ * states are every combination of the given Master Series / Group IDs, the IDs both conditions name,
+ * and null.
+ */
+export function auditCrossSatisfaction(input: PlannerInput, skills: SkillStateCandidates): CrossSatisfactionAudit {
+  const planning = input.targetWeapons.filter(isTargetWeaponPlanningEligible).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  const possiblePairs: CrossSatisfactionPair[] = []
+  let sameWeaponTypeAndElementPairCount = 0
+  const counts = { series: 0, group: 0 }
+  for (let i = 0; i < planning.length; i++) {
+    for (let j = i + 1; j < planning.length; j++) {
+      const a = planning[i]!, b = planning[j]!
+      if (a.weaponTypeId !== b.weaponTypeId || a.elementId !== b.elementId) continue
+      sameWeaponTypeAndElementPairCount += 1
+      const series = [...new Set<string | null>([null, ...skills.seriesSkillIds, a.idealSkillCondition.seriesSkillId, b.idealSkillCondition.seriesSkillId])]
+      const group = [...new Set<string | null>([null, ...skills.groupSkillIds, a.idealSkillCondition.groupSkillId, b.idealSkillCondition.groupSkillId])]
+      counts.series = Math.max(counts.series, series.length)
+      counts.group = Math.max(counts.group, group.length)
+      const witness = findCrossSatisfactionWitness(input, a, b, series, group)
+      if (witness) possiblePairs.push({ targetWeaponIds: [a.id, b.id], witness })
+    }
+  }
+  return { planningTargetCount: planning.length, sameWeaponTypeAndElementPairCount, skillStateCandidates: counts,
+    possiblePairCount: possiblePairs.length, possiblePairs }
+}
+
+function findCrossSatisfactionWitness(input: PlannerInput, a: TargetWeapon, b: TargetWeapon,
+  series: readonly (string | null)[], group: readonly (string | null)[]): CrossSatisfactionPair['witness'] | null {
+  for (const bonusesOf of [a, b]) {
+    for (const seriesSkillId of series) {
+      for (const groupSkillId of group) {
+        const satisfies = (target: TargetWeapon) => satisfiesIdealTarget(target, bonusesOf.idealBonuses, 'gogma_artian',
+          seriesSkillId as SeriesSkillIdValue, groupSkillId as GroupSkillIdValue, input.master)
+        if (satisfies(a) && satisfies(b)) return { bonusesOfTargetWeaponId: bonusesOf.id, seriesSkillId, groupSkillId }
+      }
+    }
+  }
+  return null
+}
+
 export interface LowerBoundProblem {
   /** Only thresholds whose total stays below `budget` were scanned; see `solveLowerBoundRelaxation()`. */
   budget: number
+  /** The distinct-source precondition; the bound is claimed only when it has no possible pair. */
+  crossSatisfaction: CrossSatisfactionAudit
   skillOrigin: number
   gogmaOrigin: number
   normalOrigins: Record<string, number>
@@ -94,8 +174,9 @@ function idealLayouts(target: TargetWeapon, master: PlannerInput['master']): Map
  * total `< budget` has every stream advance `< budget`, so no option outside this box can take part in
  * such a solution; that is what makes the bounded scan exhaustive for the `< budget` question.
  */
-export function collectLowerBoundProblem(input: PlannerInput, engine: RngEngine, budget: number): LowerBoundProblem {
+export function collectLowerBoundProblem(input: PlannerInput, engine: RngEngine, budget: number, skills: SkillStateCandidates): LowerBoundProblem {
   if (!Number.isSafeInteger(budget) || budget < 1) throw new RangeError('Lower bound budget must be a positive integer.')
+  const crossSatisfaction = auditCrossSatisfaction(input, skills)
   const master = input.master as unknown as RngMasterSubset & PlannerInput['master']
   const { baseSeed, skillCounter, gogmaCounter } = input.rngState
   if (!baseSeed.isConfirmed || baseSeed.value === null || !skillCounter.isConfirmed || skillCounter.value === null
@@ -169,7 +250,7 @@ export function collectLowerBoundProblem(input: PlannerInput, engine: RngEngine,
     }
     targets.push({ targetWeaponId: target.id, weaponTypeId, elementId, firstIdealSkillPosition, firstIdealResetPosition, options })
   }
-  return { budget, skillOrigin, gogmaOrigin, normalOrigins, targets }
+  return { budget, crossSatisfaction, skillOrigin, gogmaOrigin, normalOrigins, targets }
 }
 
 function ownedWeaponOption(target: TargetWeapon, weapon: OwnedWeapon, master: PlannerInput['master'], skillOrigin: number, gogmaOrigin: number,
@@ -202,10 +283,12 @@ export interface LowerBoundRelaxationResult {
    * `found`: `minimum` is the relaxation minimum, and it is `< budget`, or equals the smallest total the
    * scanned box can prove (see `provenAtLeast`). `none_below_budget`: no threshold vector of total
    * `< budget` is feasible, so every Plan needs at least `budget` physical operations.
+   * `not_applicable`: the input has a cross-satisfaction pair, so pairwise distinct sources are not
+   * proven and no bound is claimed.
    */
-  status: 'found' | 'none_below_budget'
-  /** A valid lower bound on every Plan's physical operation count (under the assumptions). */
-  provenAtLeast: number
+  status: 'found' | 'none_below_budget' | 'not_applicable'
+  /** A valid lower bound on every Plan's physical operation count (under the assumptions), or null. */
+  provenAtLeast: number | null
   /** The minimising thresholds when one was found inside the box. */
   minimum: { total: number; thresholds: LowerBoundThresholds; advances: { skill: number; gogma: number; normal: Record<string, number> } } | null
   /** Targets without any option inside the box (each alone forces a total `>= budget`). */
@@ -247,6 +330,8 @@ export function solveLowerBoundRelaxation(problem: LowerBoundProblem, options: {
   const recordAbove = options.recordAbove ?? 0
   const limit = budget + recordAbove
   const nearMinimum: LowerBoundRelaxationResult['nearMinimum'] = []
+  // Fail closed: without the distinct-source precondition the matching below proves nothing.
+  if (problem.crossSatisfaction.possiblePairCount > 0) return { status: 'not_applicable', provenAtLeast: null, minimum: null, targetsWithoutOption: [], nearMinimum }
   const targetsWithoutOption = targets.filter(target => target.options.length === 0).map(target => target.targetWeaponId)
   if (targetsWithoutOption.length > 0) return { status: 'none_below_budget', provenAtLeast: budget, minimum: null, targetsWithoutOption, nearMinimum }
   const byType = new Map<string, LowerBoundTargetOptions[]>()
@@ -290,12 +375,22 @@ export function solveLowerBoundRelaxation(problem: LowerBoundProblem, options: {
 }
 
 /**
+ * The total a relaxation result proves as an exact minimum, or null. Only `found` names one; a
+ * `not_applicable` result (cross satisfaction possible) and `none_below_budget` never do.
+ */
+export function provenLowerBoundTotal(result: LowerBoundRelaxationResult): number | null {
+  return result.status === 'found' && result.minimum !== null ? result.minimum.total : null
+}
+
+/**
  * Single-stream bounds for the audit narrative. Each is the smallest advance of that stream alone over
  * all options inside the box, so it holds for every Plan of total `< budget` (and trivially otherwise
  * only when it is `< budget`). They are NOT added together: the joint bound is
  * `solveLowerBoundRelaxation()`.
  */
 export function singleStreamLowerBounds(problem: LowerBoundProblem) {
+  // Its Normal part uses the same distinct-source matching, so it fails closed the same way.
+  if (problem.crossSatisfaction.possiblePairCount > 0) return null
   const { skillOrigin, gogmaOrigin, normalOrigins, targets } = problem
   const skillWitness = [...targets].sort((a, b) => Math.min(...b.options.map(o => o.skillThreshold)) - Math.min(...a.options.map(o => o.skillThreshold)))[0]
   const gogmaWitness = [...targets].sort((a, b) => Math.min(...b.options.map(o => o.gogmaThreshold)) - Math.min(...a.options.map(o => o.gogmaThreshold)))[0]

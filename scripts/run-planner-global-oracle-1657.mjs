@@ -29,6 +29,7 @@ try {
   const manifest = await load('/src/benchmarks/plannerGlobalOracle1657Manifest.ts')
   const lowerBound = await load('/src/benchmarks/plannerGlobalLowerBound.ts')
   const { ProductionRngEngine, PRODUCTION_RNG_ENGINE_VERSION } = await load('/src/domain/rng/production/productionRngEngine.ts')
+  const { loadMasterData } = await load('/src/domain/master/loadMasterData.ts')
   const raw = await readFile(inputPath)
   const exportSha256 = createHash('sha256').update(raw).digest('hex')
   if (exportSha256 !== manifest.ORACLE_1657_EXPORT_SHA256) throw new Error(`Export SHA-256 ${exportSha256} is not the oracle Export; refusing to treat it as the same acceptance case.`)
@@ -49,7 +50,11 @@ try {
   const planner = await oracle.runOraclePlanner(input, research.globalResearchDependencies(new ProductionRngEngine()), materialization.entries, maxPlanSteps)
   const t3 = performance.now()
   const budget = manifest.ORACLE_1657_PHYSICAL_OPERATIONS + 1
-  const problem = lowerBound.collectLowerBoundProblem(input, new ProductionRngEngine(), budget)
+  // Skill states for the cross-satisfaction audit: every Master Series / Group Skill ID (disabled ones included).
+  const master = loadMasterData()
+  if (!master.ok) throw new Error('Master Data failed validation.')
+  const skillStates = { seriesSkillIds: master.data.seriesSkills.map(skill => skill.id), groupSkillIds: master.data.groupSkills.map(skill => skill.id) }
+  const problem = lowerBound.collectLowerBoundProblem(input, new ProductionRngEngine(), budget, skillStates)
   const relaxation = lowerBound.solveLowerBoundRelaxation(problem, { recordAbove: 30 })
   const singleStream = lowerBound.singleStreamLowerBounds(problem)
   const t4 = performance.now()
@@ -57,7 +62,7 @@ try {
   const { plan, ...plannerSummary } = planner
   const streams = oracle.oracleStreamTotals(rng)
   const verdict = oracle.classifyOracleVerdict({ rngPassed: rng.passed, materializationPassed: materialization.passed, planner, routeCount: routes.length,
-    oraclePhysicalOperations: rng.physicalOperations, lowerBoundTotal: relaxation.status === 'found' ? relaxation.minimum.total : null })
+    oraclePhysicalOperations: rng.physicalOperations, lowerBoundTotal: lowerBound.provenLowerBoundTotal(relaxation) })
   const targetsById = new Map(input.targetWeapons.map(target => [target.id, target]))
   const routeSummary = rng.targets.map(target => {
     const m = materialization.targets.find(value => value.targetWeaponId === target.targetWeaponId)
@@ -94,7 +99,10 @@ try {
     },
     comparison: { phase2aAutonomousResearch: 8534, historicalValidatedOracle: 2982, thisOracle: planner.steps,
       minusFromPhase2a: 8534 - planner.steps, minusFromHistorical: 2982 - planner.steps },
-    lowerBound: { budget, assumptions: lowerBound.LOWER_BOUND_ASSUMPTIONS, relaxation, singleStream, origins: { skill: problem.skillOrigin, gogma: problem.gogmaOrigin, normal: problem.normalOrigins }, targets: lowerBoundTargets },
+    lowerBound: { budget, assumptions: lowerBound.LOWER_BOUND_ASSUMPTIONS,
+      crossSatisfaction: { ...problem.crossSatisfaction, masterSkillIds: { series: skillStates.seriesSkillIds.length, group: skillStates.groupSkillIds.length },
+        distinctSourcePreconditionHolds: problem.crossSatisfaction.possiblePairCount === 0 },
+      relaxation, singleStream, origins: { skill: problem.skillOrigin, gogma: problem.gogmaOrigin, normal: problem.normalOrigins }, targets: lowerBoundTargets },
     routes: routeSummary,
     gogmaUsage: rng.gogmaUsage,
     requiredSkillUsage: rng.requiredSkillUsage,
@@ -106,14 +114,14 @@ try {
       resultSha256: sha({ planner: plannerSummary, entries: materialization.entries, plan }),
       semanticSha256: sha({ routes, rng: { targets: rng.targets, streams: rng.streams, physicalOperations: rng.physicalOperations },
         materialization: materialization.targets.map(({ elapsedMs: _e, ...rest }) => rest), planner: { ...plannerSummary, elapsedMs: undefined },
-        lowerBound: relaxation }),
+        lowerBound: { relaxation, crossSatisfaction: problem.crossSatisfaction } }),
     },
   }
   await writeFile(outputPath, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' })
   console.log(JSON.stringify({ verdict, physicalOperations: rng.physicalOperations, stageA: rng.passed, stageB: materialization.passed,
     planner: { termination: planner.termination, steps: planner.steps, selected: planner.selectedBuildListEntries, conflicts: planner.conflicts,
       rejected: planner.rejectedBuildListEntries, warnings: planner.warnings, traceReplay: planner.traceReplay, elapsedMs: planner.elapsedMs, error: planner.error },
-    lowerBound: relaxation.minimum, singleStream }, null, 1))
+    crossSatisfactionPossiblePairCount: problem.crossSatisfaction.possiblePairCount, lowerBound: relaxation.minimum, lowerBoundStatus: relaxation.status, singleStream }, null, 1))
 } finally {
   await server.close()
 }
