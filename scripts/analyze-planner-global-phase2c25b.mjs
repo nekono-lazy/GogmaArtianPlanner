@@ -3,7 +3,9 @@
 // Reads the run directory the external CDP driver wrote (the page's verbatim exportJson() of every page session and the
 // driver's external evidence) and the Phase 2-C2.5-A evidence (explicit --evidence; post-hoc Node comparison only), and
 // writes the three committed files. Runs no Planner and no Search. The page exports are committed as they are (wrapped
-// in one list); the external evidence is committed as the driver wrote it.
+// in one list); the external evidence is committed as the driver wrote it. A re-analysis of an already committed run
+// never rewrites those two raw files: when they exist, the analyzer only checks that the same run reproduces them byte
+// for byte (and fails otherwise), and records that check in the provenance.
 import { readFile, writeFile, readdir } from 'node:fs/promises'
 import { lstatSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -19,7 +21,7 @@ if (!runDir || !evidencePath || !outputPath || !browserOutput || !externalOutput
   throw new Error('Usage: node scripts/analyze-planner-global-phase2c25b.mjs --run-dir <driver out dir> --evidence docs/PLANNER_GLOBAL_PHASE2C25A_RESULT.json '
     + '--output <results.json> --browser-output <browser results.json> --external-output <external memory.json> [--allow-nonformal]')
 }
-for (const path of [outputPath, browserOutput, externalOutput]) if (lstatSync(path, { throwIfNoEntry: false }) !== undefined) throw new Error(`Output already exists: ${path}`)
+if (lstatSync(outputPath, { throwIfNoEntry: false }) !== undefined) throw new Error(`Output already exists: ${outputPath}`)
 const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim()
 const sha = value => createHash('sha256').update(value).digest('hex')
 const load = async path => { const raw = await readFile(path); return { raw, json: JSON.parse(raw.toString('utf8')), source: { file: basename(path), bytes: raw.length, sha256: sha(raw) } } }
@@ -59,6 +61,7 @@ try {
   const result = analysis.analyzePhase2C25B(pages.map(page => page.json), external.json, view)
   const env = pages[0].json.environment
   const t = result.totals, v = result.verdict
+  const workerRealmJsHeapSizeLimit = pages.flatMap(page => page.json.records).find(record => record.workerEnvironment?.performanceMemory)?.workerEnvironment.performanceMemory.jsHeapSizeLimit ?? null
   const statements = {
     formal: [
       `Context parity: every page session re-derived the ${t.contexts} selected contexts from the original Export and matched the Phase 2-C2.5-A evidence field by field (digests included) before any Search.`,
@@ -71,9 +74,29 @@ try {
       ...(t.nativeWorkerFailures === 0 && v.auxiliary.representativeRuns > 0 && v.auxiliary.lostDuringSearchBeforeFirstCandidate === v.auxiliary.representativeRuns
         ? ['That this Chrome delivers a native Worker error for the representatives: none of the recorded runs saw one; each representative run ended with the renderer process lost.']
         : []),
-      'That the Node 8 GB OOM and the Browser loss happen at the same Search state: the Browser Worker heap limit (about 4 GiB) differs, and only sampled heap and the last received progress are compared.',
+      'That the Node 8 GB OOM and the Browser renderer loss happen at the same Search state: only the sampled heap and the last received progress are compared, and the heap limits are not compared directly.',
+      `The Dedicated Worker's own heap limit. ${analysis.phase2c25bWorkerHeapLimitStatement({
+        representativeSampledMaxBytes: result.runs.filter(run => v.representatives.some(r => r.orientationId === run.orientationId && r.workIndex === run.workIndex))
+          .map(run => run.cdp.maxUsedBytes).filter(bytes => bytes !== null),
+        pageRealmJsHeapSizeLimit: env.mainRealmPerformanceMemory?.jsHeapSizeLimit ?? null,
+        workerRealmJsHeapSizeLimit,
+      })}`,
       'The heap-holding objects (no heap snapshot or allocation profile), the other 40 Phase 2-C2 OOM orientations, other browsers or mobile devices.',
     ],
+  }
+  // The raw evidence: written for a new run, only verified byte for byte when it already exists (never rewritten).
+  const rawEvidence = {}
+  const browserContent = Buffer.from(JSON.stringify({ phase: 'Issue #154 Phase 2-C2.5-B: the page exportJson() of every page session, verbatim',
+    sessions: pages.map((page, index) => ({ session: index + 1, source: page.source, export: page.json })) }, null, 1) + '\n')
+  for (const [key, path, content] of [['browserResults', browserOutput, browserContent], ['externalMemory', externalOutput, external.raw]]) {
+    if (lstatSync(path, { throwIfNoEntry: false }) !== undefined) {
+      const existing = await readFile(path)
+      if (!existing.equals(content)) throw new Error(`${path} exists and differs from what this run reproduces; raw evidence is never rewritten.`)
+      rawEvidence[key] = { file: basename(path), sha256: sha(existing), bytes: existing.length, action: 'verified_unchanged' }
+    } else {
+      await writeFile(path, content, { flag: 'wx' })
+      rawEvidence[key] = { file: basename(path), sha256: sha(content), bytes: content.length, action: 'written' }
+    }
   }
   const results = {
     phase: 'Issue #154 Phase 2-C2.5-B: Browser Worker reproduction of the Search-only failure (post-hoc analysis)',
@@ -85,12 +108,19 @@ try {
       exportFileName: pages[0].json.exportInfo.fileName, exportSha256, exportBytes: pages[0].json.exportInfo.byteSize,
       evidenceFileName: pages[0].json.evidenceInfo.fileName, evidenceSha256: evidence.source.sha256, c25aMeasuredHead: view.measuredHead,
       driverSha256: external.json.driver.sha256, measuredAt: external.json.driver.startedAt, pageSessions: pages.length,
+      rawEvidence,
     },
     environment: {
       chrome: external.json.driver.chromeVersion, chromeFlags: external.json.driver.chromeFlags, userAgent: env.userAgent, userAgentData: env.userAgentData,
       hardwareConcurrency: env.hardwareConcurrency, deviceMemory: env.deviceMemory, crossOriginIsolated: env.crossOriginIsolated, isSecureContext: env.isSecureContext,
       visibilityAtSessionStart: pages.map(page => page.json.environment.visibilityState), mainRealmPerformanceMemory: env.mainRealmPerformanceMemory,
       workerPerformanceMemory: pages[0].json.records[0]?.workerEnvironment?.performanceMemory ?? null, machine: external.json.machine,
+      heapLimits: {
+        pageRealmJsHeapSizeLimit: env.mainRealmPerformanceMemory?.jsHeapSizeLimit ?? null,
+        workerRealmJsHeapSizeLimit,
+        workerHeapLimitMeasured: workerRealmJsHeapSizeLimit !== null,
+        note: 'The page realm limit is another realm\'s value, given for reference only. The Dedicated Worker used heap is the external CDP sample (runs[].cdp). Neither is compared with the Node 8 GB limit.',
+      },
       rngEngineVersion: env.rngEngineVersion, calculationAppSchemaVersion: env.calculationAppSchemaVersion,
     },
     conditions: {
@@ -108,9 +138,6 @@ try {
     statements,
   }
   await writeFile(outputPath, JSON.stringify(results, null, 2) + '\n', { flag: 'wx' })
-  await writeFile(browserOutput, JSON.stringify({ phase: 'Issue #154 Phase 2-C2.5-B: the page exportJson() of every page session, verbatim',
-    sessions: pages.map((page, index) => ({ session: index + 1, source: page.source, export: page.json })) }, null, 1) + '\n', { flag: 'wx' })
-  await writeFile(externalOutput, external.raw, { flag: 'wx' })
   console.log(JSON.stringify({ output: outputPath, totals: result.totals, verdict: result.verdict }, null, 2))
 } finally {
   await server.close()

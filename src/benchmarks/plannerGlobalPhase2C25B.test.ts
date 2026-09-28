@@ -30,6 +30,7 @@ import {
   mergePhase2C25BRun,
   phase2c25bLostDuringSearchBeforeFirstCandidate,
   phase2c25bPairClassification,
+  phase2c25bWorkerHeapLimitStatement,
   type Phase2C25BExternalEvidence,
   type Phase2C25BExternalRun,
   type Phase2C25BPageExport,
@@ -399,6 +400,43 @@ describe('Phase 2-C2.5-B classification', () => {
     expect(good.contexts[0]).toMatchObject({ classification: 'browser_no_failure', controlSemanticParity: true })
     const bad = analyse(node.minimal.firstCandidateKeySha256 === null ? 'other' : 'f'.repeat(64))
     expect(bad.contexts[0].controlSemanticParity).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------- heap limit wording
+
+describe('Phase 2-C2.5-B heap limit wording', () => {
+  const GiB = 2 ** 30
+  const statement = (worker: number | null) => phase2c25bWorkerHeapLimitStatement({
+    representativeSampledMaxBytes: [3.714 * GiB, 3.85 * GiB, 3.8 * GiB], pageRealmJsHeapSizeLimit: 4_395_630_592, workerRealmJsHeapSizeLimit: worker })
+
+  it('keeps the Worker used heap, the page realm limit and the unknown Worker limit apart', () => {
+    const text = statement(null)
+    // The measured Worker used heap (CDP sampled maxima), with its range.
+    expect(text).toMatch(/Dedicated Worker used heap sampled by CDP reached 3\.71-3\.85 GiB/)
+    // The page realm limit, as another realm's reference value.
+    expect(text).toMatch(/page realm reported performance\.memory\.jsHeapSizeLimit 4395630592 bytes \(about 4\.09 GiB\), a value of another realm given for reference only/)
+    // The Worker's own limit is unknown and never taken to equal the page realm value.
+    expect(text).toMatch(/Dedicated Worker realm did not expose its own jsHeapSizeLimit, so the Worker's actual heap limit was not measured \(unknown\) and is not taken to equal the page realm value/)
+    expect(text).toMatch(/Neither value is compared directly with the Node 8 GB heap limit/)
+    // Never a Worker / Browser heap limit of about 4 GiB.
+    expect(text).not.toMatch(/(?:Worker|Browser)[^;]*heap limit[^;]*(?:about|≈|~)\s*4(?:\.\d+)?\s*GiB/i)
+    expect(text).not.toMatch(/Worker heap limit \(about 4 GiB\)/)
+  })
+
+  it('names a Worker realm limit only when the Worker realm itself reports one', () => {
+    expect(statement(1234)).toMatch(/Dedicated Worker realm reported its own jsHeapSizeLimit 1234 bytes/)
+    expect(statement(1234)).not.toMatch(/not measured/)
+    expect(phase2c25bWorkerHeapLimitStatement({ representativeSampledMaxBytes: [], pageRealmJsHeapSizeLimit: null, workerRealmJsHeapSizeLimit: null }))
+      .toMatch(/no Dedicated Worker used heap was sampled.*page realm exposed no jsHeapSizeLimit/)
+  })
+
+  it('makes the analyzer use that statement and never rewrite the raw evidence of a committed run', () => {
+    const analyzer = Object.values(scriptSources)[0]
+    expect(analyzer).toMatch(/phase2c25bWorkerHeapLimitStatement\(/)
+    expect(analyzer).not.toMatch(/heap limit \(about 4 GiB\)|about 4 GiB/)
+    expect(analyzer).toMatch(/verified_unchanged/)
+    expect(analyzer).toMatch(/raw evidence is never rewritten/)
   })
 })
 

@@ -280,6 +280,29 @@ function oomComparison(run: Phase2C25BMergedRun, node: Phase2C25BNodeContext) {
   }
 }
 
+// ---------------------------------------------------------------- heap limit wording
+
+const gib = (bytes: number) => (bytes / 2 ** 30).toFixed(2)
+
+/**
+ * The one statement about the Browser heap limit. It keeps three things apart: the Dedicated Worker used heap the
+ * external CDP driver sampled (a measurement), the page realm `jsHeapSizeLimit` (reference only, another realm), and
+ * the Dedicated Worker's own heap limit, which is unknown unless the Worker realm exposed `performance.memory`. It
+ * never equates the page realm limit with the Worker limit, and never compares either with the Node 8 GB limit.
+ */
+export function phase2c25bWorkerHeapLimitStatement(input: { readonly representativeSampledMaxBytes: readonly number[]; readonly pageRealmJsHeapSizeLimit: number | null;
+  readonly workerRealmJsHeapSizeLimit: number | null }): string {
+  const sampled = input.representativeSampledMaxBytes
+  const used = sampled.length === 0 ? 'no Dedicated Worker used heap was sampled by CDP in the representative runs'
+    : `the Dedicated Worker used heap sampled by CDP reached ${gib(Math.min(...sampled))}-${gib(Math.max(...sampled))} GiB (per-run sampled maxima) before the renderer loss`
+  const page = input.pageRealmJsHeapSizeLimit === null ? 'the page realm exposed no jsHeapSizeLimit'
+    : `the page realm reported performance.memory.jsHeapSizeLimit ${input.pageRealmJsHeapSizeLimit} bytes (about ${gib(input.pageRealmJsHeapSizeLimit)} GiB), a value of another realm given for reference only`
+  const worker = input.workerRealmJsHeapSizeLimit === null
+    ? 'the Dedicated Worker realm did not expose its own jsHeapSizeLimit, so the Worker\'s actual heap limit was not measured (unknown) and is not taken to equal the page realm value'
+    : `the Dedicated Worker realm reported its own jsHeapSizeLimit ${input.workerRealmJsHeapSizeLimit} bytes`
+  return `Heap measurement boundary: ${used}; ${page}; ${worker}. Neither value is compared directly with the Node 8 GB heap limit.`
+}
+
 // ---------------------------------------------------------------- whole analysis
 
 export function analyzePhase2C25B(pages: readonly Phase2C25BPageExport[], external: Phase2C25BExternalEvidence, view: Phase2C25BEvidenceView) {
