@@ -1,11 +1,11 @@
 {
  "phase": "Issue #154 Global Planner Research Phase 2-B: decomposition of the Plan quality gap and of the final Planner performance",
- "analyzedAt": "2026-09-28T09:03:02.731Z",
+ "analyzedAt": "2026-09-28T09:53:00.548Z",
  "sources": {
   "browser": {
    "file": "PLANNER_GLOBAL_PHASE2B_BROWSER_RAW.json.local",
-   "bytes": 10173393,
-   "sha256": "d11c650fcd07820da679d6a30b73e43077d61029f31e6029813c03aece916862"
+   "bytes": 10176294,
+   "sha256": "8bbb696637613c25f2513a2609f9e5f5e5b3708e866240bef74876447ec39796"
   },
   "optimum": {
    "file": "PLANNER_GLOBAL_1657_ORACLE_RESULT.json",
@@ -14,18 +14,96 @@
   },
   "externalMemory": {
    "file": "PLANNER_GLOBAL_PHASE2B_EXTERNAL_MEMORY.json",
-   "bytes": 159124,
-   "sha256": "3fd98cb6dc16bc2037840dde01eb14889d59acf8313489a0716dbed8e1dc6ed0"
+   "bytes": 150916,
+   "sha256": "02546c7b909db4ed77e5a240cd94782f0df45cc9ba8468c21fea3c036001e489"
   },
   "node": {
    "file": "PLANNER_GLOBAL_PHASE2B_NODE_USED_HEAP.json.local",
-   "bytes": 1211889,
-   "sha256": "bf8d1fe598ffd7646cebcea7b3cbe8a284a68c6fa9066749b68e28cade15c11c"
+   "bytes": 1211898,
+   "sha256": "9ab6029052eda1a73e1fe74607e2ef937fbdae38888209205b71641d32849ca1"
   },
   "nodeGc": {
    "file": "PLANNER_GLOBAL_PHASE2B_NODE_GC_HEAP.json.local",
-   "bytes": 1211571,
-   "sha256": "68ebc980dcc3a50af9e3c4d0e7b244e5cb9a32763a233767e72f252f53ef6ad8"
+   "bytes": 1211590,
+   "sha256": "6e7caacef96fa67ef644be3b5209ae11d3e41bf3820e6892531c2aee20a49471"
+  }
+ },
+ "provenance": {
+  "measuredCommit": "38b8d7ff245efa0556ebbf34054d383e88e7d897",
+  "benchmarkCodeSha256": "2e50390ef96fd438e343636cac2e97c085e8c75f4595c239b5ee96492f64693f",
+  "uncommittedBenchmarkCode": false,
+  "nodeRuns": [
+   {
+    "file": "PLANNER_GLOBAL_PHASE2B_NODE_USED_HEAP.json.local",
+    "repositoryHead": "38b8d7ff245efa0556ebbf34054d383e88e7d897",
+    "benchmarkCodeSha256": "a273700e74916d274cd2a6404ac2f27e94101171500af0936390a9565527c5ed",
+    "uncommittedBenchmarkCode": false,
+    "heapProbe": "used"
+   },
+   {
+    "file": "PLANNER_GLOBAL_PHASE2B_NODE_GC_HEAP.json.local",
+    "repositoryHead": "38b8d7ff245efa0556ebbf34054d383e88e7d897",
+    "benchmarkCodeSha256": "a273700e74916d274cd2a6404ac2f27e94101171500af0936390a9565527c5ed",
+    "uncommittedBenchmarkCode": false,
+    "heapProbe": "gc"
+   }
+  ],
+  "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+  "browser": {
+   "fullVersionList": [
+    {
+     "brand": "Google Chrome",
+     "version": "153.0.8010.49"
+    },
+    {
+     "brand": "Not_A Brand",
+     "version": "8.0.0.0"
+    },
+    {
+     "brand": "Chromium",
+     "version": "153.0.8010.49"
+    }
+   ],
+   "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+   "crossOriginIsolated": true,
+   "hardwareConcurrency": 16,
+   "deviceMemoryGiB": 32
+  },
+  "machine": {
+   "source": "Node run on the same machine",
+   "platform": "win32",
+   "osRelease": "10.0.26200",
+   "arch": "x64",
+   "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+   "logicalCpuCount": 16,
+   "totalMemoryBytes": 33377591296,
+   "node": "v24.19.0"
+  },
+  "rngEngineVersion": "production-rng:c5-e7",
+  "calculationAppSchemaVersion": 17,
+  "workload": {
+   "mode": "fallback",
+   "fallbackAxis": "normal",
+   "rawCache": "per-search",
+   "yieldMode": "message-channel",
+   "fallbackBudgetMs": 180000,
+   "fallbackMaxEpisodes": 3,
+   "attemptBudgetMs": 900000,
+   "profiler": false,
+   "phase2b": {
+    "timeline": true,
+    "planEvidence": true
+   },
+   "attemptStateSignature": null
+  },
+  "researchMaxPlanSteps": 20000,
+  "productionDefaultMaxPlanSteps": 1000,
+  "runs": {
+   "timingWarmup": 1,
+   "timingMeasurement": 3,
+   "responsiveness": 1,
+   "memory": 1,
+   "phase2aEquivalentControl": 1
   }
  },
  "browserEnvironment": {
@@ -77,9 +155,9 @@
   },
   "location": "http://127.0.0.1:4173/GogmaArtianPlanner/benchmark.html",
   "benchmarkBuild": {
-   "commit": "44194e28147c9550796e69979804e0e1c072b84d",
+   "commit": "38b8d7ff245efa0556ebbf34054d383e88e7d897",
    "uncommittedBenchmarkCode": false,
-   "benchmarkCodeSha256": "4dcd3b02f31d567001ad9a9c927b33f72231d9bc3c74fac570775cc2e3a1bd0c",
+   "benchmarkCodeSha256": "2e50390ef96fd438e343636cac2e97c085e8c75f4595c239b5ee96492f64693f",
    "benchmarkCodePaths": [
     "src",
     "scripts",
@@ -103,7 +181,7 @@
    "schemaVersion": 13,
    "targetCount": 43,
    "buildListEntryCount": 43,
-   "inputBuildMs": 133.47500002384186,
+   "inputBuildMs": 140.76499998569489,
    "maxPlanSteps": 20000
   },
   "researchMaxPlanSteps": 20000,
@@ -1610,10 +1688,10 @@
      "gogma"
     ],
     "discoveryIndex": 9,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 364,
-     "minGogmaThreshold": 174,
-     "minNormalThreshold": 8,
+    "perStreamEarliestThreshold": {
+     "gogma": 174,
+     "skill": 364,
+     "normal": 8,
      "firstIdealSkillPosition": 363
     }
    },
@@ -1699,10 +1777,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 387,
-     "minGogmaThreshold": 77,
-     "minNormalThreshold": 8,
+    "perStreamEarliestThreshold": {
+     "gogma": 77,
+     "skill": 387,
+     "normal": 8,
      "firstIdealSkillPosition": 386
     }
    },
@@ -1781,10 +1859,10 @@
      "gogma"
     ],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 78,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 78,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 791
     }
    },
@@ -1857,10 +1935,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 106,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 106,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 512
     }
    },
@@ -1933,10 +2011,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 118,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 118,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 887
     }
    },
@@ -2011,10 +2089,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 78,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 78,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 791
     }
    },
@@ -2101,10 +2179,10 @@
      "gogma"
     ],
     "discoveryIndex": 19,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 649,
-     "minGogmaThreshold": 72,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 72,
+     "skill": 649,
+     "normal": 350,
      "firstIdealSkillPosition": 648
     }
    },
@@ -2179,10 +2257,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 85,
-     "minNormalThreshold": 5,
+    "perStreamEarliestThreshold": {
+     "gogma": 85,
+     "skill": 341,
+     "normal": 5,
      "firstIdealSkillPosition": 341
     }
    },
@@ -2269,10 +2347,10 @@
      "gogma"
     ],
     "discoveryIndex": 21,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 758,
-     "minGogmaThreshold": 78,
-     "minNormalThreshold": 157,
+    "perStreamEarliestThreshold": {
+     "gogma": 78,
+     "skill": 758,
+     "normal": 157,
      "firstIdealSkillPosition": 757
     }
    },
@@ -2350,10 +2428,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 70,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 70,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 485
     }
    },
@@ -2426,10 +2504,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 75,
-     "minNormalThreshold": 157,
+    "perStreamEarliestThreshold": {
+     "gogma": 75,
+     "skill": 341,
+     "normal": 157,
      "firstIdealSkillPosition": 730
     }
    },
@@ -2525,10 +2603,10 @@
      "gogma"
     ],
     "discoveryIndex": 15,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 397,
-     "minGogmaThreshold": 100,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 100,
+     "skill": 397,
+     "normal": 350,
      "firstIdealSkillPosition": 396
     }
    },
@@ -2605,10 +2683,10 @@
      "gogma"
     ],
     "discoveryIndex": 7,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 153,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 153,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 675
     }
    },
@@ -2687,10 +2765,10 @@
      "gogma"
     ],
     "discoveryIndex": 3,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 99,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 99,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 422
     }
    },
@@ -2770,10 +2848,10 @@
      "gogma"
     ],
     "discoveryIndex": 16,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 72,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 72,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 378
     }
    },
@@ -2868,10 +2946,10 @@
      "normal:weapon.great_sword:8"
     ],
     "discoveryIndex": 11,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 75,
-     "minNormalThreshold": 157,
+    "perStreamEarliestThreshold": {
+     "gogma": 75,
+     "skill": 341,
+     "normal": 157,
      "firstIdealSkillPosition": 1165
     }
    },
@@ -2946,10 +3024,10 @@
      "gogma"
     ],
     "discoveryIndex": 6,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 73,
-     "minNormalThreshold": 157,
+    "perStreamEarliestThreshold": {
+     "gogma": 73,
+     "skill": 341,
+     "normal": 157,
      "firstIdealSkillPosition": 392
     }
    },
@@ -3047,10 +3125,10 @@
      "normal:weapon.switch_axe:8"
     ],
     "discoveryIndex": 18,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 411,
-     "minGogmaThreshold": 76,
-     "minNormalThreshold": 1,
+    "perStreamEarliestThreshold": {
+     "gogma": 76,
+     "skill": 411,
+     "normal": 1,
      "firstIdealSkillPosition": 410
     }
    },
@@ -3145,10 +3223,10 @@
      "gogma"
     ],
     "discoveryIndex": 17,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 400,
-     "minGogmaThreshold": 56,
-     "minNormalThreshold": 1,
+    "perStreamEarliestThreshold": {
+     "gogma": 56,
+     "skill": 400,
+     "normal": 1,
      "firstIdealSkillPosition": 399
     }
    },
@@ -3245,10 +3323,10 @@
      "normal:weapon.charge_blade:8"
     ],
     "discoveryIndex": 20,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 479,
-     "minGogmaThreshold": 56,
-     "minNormalThreshold": 207,
+    "perStreamEarliestThreshold": {
+     "gogma": 56,
+     "skill": 479,
+     "normal": 207,
      "firstIdealSkillPosition": 478
     }
    },
@@ -3344,10 +3422,10 @@
      "normal:weapon.sword_and_shield:8"
     ],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 344,
-     "minGogmaThreshold": 73,
-     "minNormalThreshold": 8,
+    "perStreamEarliestThreshold": {
+     "gogma": 73,
+     "skill": 344,
+     "normal": 8,
      "firstIdealSkillPosition": 343
     }
    },
@@ -3445,10 +3523,10 @@
      "normal:weapon.dual_blades:8"
     ],
     "discoveryIndex": 22,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 649,
-     "minGogmaThreshold": 156,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 156,
+     "skill": 649,
+     "normal": 350,
      "firstIdealSkillPosition": 648
     }
    },
@@ -3544,10 +3622,10 @@
      "normal:weapon.sword_and_shield:8"
     ],
     "discoveryIndex": 10,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 342,
-     "minGogmaThreshold": 181,
-     "minNormalThreshold": 8,
+    "perStreamEarliestThreshold": {
+     "gogma": 181,
+     "skill": 342,
+     "normal": 8,
      "firstIdealSkillPosition": 341
     }
    },
@@ -3624,10 +3702,10 @@
      "gogma"
     ],
     "discoveryIndex": 2,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 121,
-     "minNormalThreshold": 5,
+    "perStreamEarliestThreshold": {
+     "gogma": 121,
+     "skill": 341,
+     "normal": 5,
      "firstIdealSkillPosition": 341
     }
    },
@@ -3711,10 +3789,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 649,
-     "minGogmaThreshold": 72,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 72,
+     "skill": 649,
+     "normal": 350,
      "firstIdealSkillPosition": 648
     }
    },
@@ -3788,10 +3866,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 153,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 153,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 566
     }
    },
@@ -3874,10 +3952,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 1424,
-     "minGogmaThreshold": 114,
-     "minNormalThreshold": 157,
+    "perStreamEarliestThreshold": {
+     "gogma": 114,
+     "skill": 1424,
+     "normal": 157,
      "firstIdealSkillPosition": 1423
     }
    },
@@ -3966,10 +4044,10 @@
      "gogma"
     ],
     "discoveryIndex": 4,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 61,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 61,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 485
     }
    },
@@ -4057,10 +4135,10 @@
      "gogma"
     ],
     "discoveryIndex": 8,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 397,
-     "minGogmaThreshold": 59,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 59,
+     "skill": 397,
+     "normal": 350,
      "firstIdealSkillPosition": 396
     }
    },
@@ -4133,10 +4211,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 113,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 113,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 566
     }
    },
@@ -4224,10 +4302,10 @@
      "gogma"
     ],
     "discoveryIndex": 12,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 153,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 153,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 566
     }
    },
@@ -4301,10 +4379,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 225,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 225,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 512
     }
    },
@@ -4400,10 +4478,10 @@
      "gogma"
     ],
     "discoveryIndex": 13,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 74,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 74,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 485
     }
    },
@@ -4480,10 +4558,10 @@
      "gogma"
     ],
     "discoveryIndex": 0,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 114,
-     "minNormalThreshold": 157,
+    "perStreamEarliestThreshold": {
+     "gogma": 114,
+     "skill": 341,
+     "normal": 157,
      "firstIdealSkillPosition": 408
     }
    },
@@ -4560,10 +4638,10 @@
      "gogma"
     ],
     "discoveryIndex": 5,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 153,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 153,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 675
     }
    },
@@ -4640,10 +4718,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 72,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 72,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 378
     }
    },
@@ -4727,10 +4805,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 56,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 56,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 887
     }
    },
@@ -4805,10 +4883,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 99,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 99,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 422
     }
    },
@@ -4892,10 +4970,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 509,
-     "minGogmaThreshold": 82,
-     "minNormalThreshold": 157,
+    "perStreamEarliestThreshold": {
+     "gogma": 82,
+     "skill": 509,
+     "normal": 157,
      "firstIdealSkillPosition": 508
     }
    },
@@ -4981,10 +5059,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 349,
-     "minGogmaThreshold": 70,
-     "minNormalThreshold": 8,
+    "perStreamEarliestThreshold": {
+     "gogma": 70,
+     "skill": 349,
+     "normal": 8,
      "firstIdealSkillPosition": 348
     }
    },
@@ -5061,10 +5139,10 @@
      "gogma"
     ],
     "discoveryIndex": 1,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 90,
-     "minNormalThreshold": 25,
+    "perStreamEarliestThreshold": {
+     "gogma": 90,
+     "skill": 341,
+     "normal": 25,
      "firstIdealSkillPosition": 379
     }
    },
@@ -5137,10 +5215,10 @@
     "optimumRouteLocallyLonger": false,
     "extendsBeyondOptimumEnd": [],
     "discoveryIndex": null,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 68,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 68,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 512
     }
    },
@@ -5217,10 +5295,10 @@
      "gogma"
     ],
     "discoveryIndex": 14,
-    "singleTargetMinimum": {
-     "minSkillThreshold": 341,
-     "minGogmaThreshold": 118,
-     "minNormalThreshold": 350,
+    "perStreamEarliestThreshold": {
+     "gogma": 118,
+     "skill": 341,
+     "normal": 350,
      "firstIdealSkillPosition": 887
     }
    }
@@ -5433,7 +5511,7 @@
      "fea60316-a05c-4252-bf1d-41c31b99b75a"
     ]
    },
-   "optimum_finishes_after_single_target_minimum:gogma": {
+   "optimum_finishes_after_per_stream_earliest_threshold:gogma": {
     "targets": 35,
     "targetWeaponIds": [
      "05e6b206-21d4-447d-86dd-f5a62ff8479e",
@@ -5473,7 +5551,7 @@
      "fea60316-a05c-4252-bf1d-41c31b99b75a"
     ]
    },
-   "optimum_finishes_after_single_target_minimum:skill": {
+   "optimum_finishes_after_per_stream_earliest_threshold:skill": {
     "targets": 12,
     "targetWeaponIds": [
      "070a1222-5e31-4c9f-a035-c557bfa7be73",
@@ -5704,35 +5782,35 @@
    "records": [
     {
      "id": "pg2a-record-2",
-     "roundTripMs": 89687.719999969,
-     "calculationElapsedMs": 89314.47500002384,
-     "searchElapsedMs": 46293.0799998641,
-     "plannerElapsedMs": 37324.19000005722,
-     "evidenceElapsedMs": 320.41000002622604,
-     "planEvidenceElapsedMs": 32.344999969005585,
+     "roundTripMs": 86826.39499998093,
+     "calculationElapsedMs": 86455.97000002861,
+     "searchElapsedMs": 45065.43000012636,
+     "plannerElapsedMs": 35959.06500005722,
+     "evidenceElapsedMs": 317.30500000715256,
+     "planEvidenceElapsedMs": 31.2399999499321,
      "byKind": [
       {
        "kind": "baseline",
        "calls": 1,
        "schedulerRuns": 1,
-       "elapsedMs": 3838.875,
+       "elapsedMs": 3678.530029296875,
        "phasesMs": {
-        "call_setup": 0.204833984375,
-        "scheduler_prepare": 1226.7001953125,
-        "scheduler_loop": 658.619873046875,
-        "scheduler_finish": 0.820068359375,
-        "scheduler_handoff": 0.034912109375,
-        "trace_replay": 244.150146484375,
-        "post_processing": 0.039794921875,
-        "execution_projection": 1697.41015625,
-        "planning_input_snapshot": 10.054931640625,
+        "call_setup": 0.195068359375,
+        "scheduler_prepare": 1165.125,
+        "scheduler_loop": 636.445068359375,
+        "scheduler_finish": 0.64501953125,
+        "scheduler_handoff": 0.014892578125,
+        "trace_replay": 239.580078125,
+        "post_processing": 0.0400390625,
+        "execution_projection": 1626.010009765625,
+        "planning_input_snapshot": 9.639892578125,
         "checkpoint_defence": 0.195068359375,
         "rejected_build_list_entries": 0.554931640625,
-        "required_materials": 0.034912109375,
-        "plan_assembly": 0.045166015625,
-        "call_return": 0.010009765625
+        "required_materials": 0.030029296875,
+        "plan_assembly": 0.0400390625,
+        "call_return": 0.014892578125
        },
-       "maxSchedulerSyncSegmentMs": 1284.440185546875,
+       "maxSchedulerSyncSegmentMs": 1219.6201171875,
        "schedulerLoopIterations": 1466,
        "schedulerYields": 22
       },
@@ -5740,24 +5818,24 @@
        "kind": "retained_prefix",
        "calls": 1,
        "schedulerRuns": 1,
-       "elapsedMs": 2877.679931640625,
+       "elapsedMs": 2782.820068359375,
        "phasesMs": {
-        "call_setup": 0.010009765625,
-        "scheduler_prepare": 511.150146484375,
-        "scheduler_loop": 447.52490234375,
-        "scheduler_finish": 0.090087890625,
-        "scheduler_handoff": 0.010009765625,
-        "trace_replay": 251.579833984375,
-        "post_processing": 0.02001953125,
-        "execution_projection": 1660.280029296875,
-        "planning_input_snapshot": 6.705078125,
+        "call_setup": 0.02001953125,
+        "scheduler_prepare": 509.10498046875,
+        "scheduler_loop": 431.554931640625,
+        "scheduler_finish": 0.080078125,
+        "scheduler_handoff": 0.005126953125,
+        "trace_replay": 239.219970703125,
+        "post_processing": 0.014892578125,
+        "execution_projection": 1595.52001953125,
+        "planning_input_snapshot": 6.985107421875,
         "checkpoint_defence": 0.094970703125,
-        "rejected_build_list_entries": 0.18994140625,
+        "rejected_build_list_entries": 0.19482421875,
         "required_materials": 0.005126953125,
         "plan_assembly": 0.014892578125,
-        "call_return": 0.0048828125
+        "call_return": 0.005126953125
        },
-       "maxSchedulerSyncSegmentMs": 549.72998046875,
+       "maxSchedulerSyncSegmentMs": 548.175048828125,
        "schedulerLoopIterations": 1466,
        "schedulerYields": 22
       },
@@ -5765,24 +5843,24 @@
        "kind": "application",
        "calls": 23,
        "schedulerRuns": 23,
-       "elapsedMs": 11421.04052734375,
+       "elapsedMs": 10959.96044921875,
        "phasesMs": {
-        "call_setup": 0.2607421875,
-        "scheduler_prepare": 982.505126953125,
-        "scheduler_loop": 203.355224609375,
-        "scheduler_finish": 0.724365234375,
-        "scheduler_handoff": 0.094482421875,
-        "trace_replay": 1983.7802734375,
-        "post_processing": 0.156005859375,
-        "execution_projection": 8227.04931640625,
-        "planning_input_snapshot": 20.894775390625,
-        "checkpoint_defence": 0.615234375,
-        "rejected_build_list_entries": 1.085205078125,
-        "required_materials": 0.099853515625,
-        "plan_assembly": 0.28955078125,
-        "call_return": 0.13037109375
+        "call_setup": 0.280029296875,
+        "scheduler_prepare": 940.0751953125,
+        "scheduler_loop": 191.50537109375,
+        "scheduler_finish": 0.64013671875,
+        "scheduler_handoff": 0.08984375,
+        "trace_replay": 1870.839599609375,
+        "post_processing": 0.22509765625,
+        "execution_projection": 7933.43505859375,
+        "planning_input_snapshot": 20.344970703125,
+        "checkpoint_defence": 0.635009765625,
+        "rejected_build_list_entries": 1.450439453125,
+        "required_materials": 0.064697265625,
+        "plan_assembly": 0.285400390625,
+        "call_return": 0.089599609375
        },
-       "maxSchedulerSyncSegmentMs": 117.044921875,
+       "maxSchedulerSyncSegmentMs": 113.094970703125,
        "schedulerLoopIterations": 7092,
        "schedulerYields": 102
       },
@@ -5790,213 +5868,213 @@
        "kind": "final",
        "calls": 1,
        "schedulerRuns": 1,
-       "elapsedMs": 19186.445068359375,
+       "elapsedMs": 18537.574951171875,
+       "phasesMs": {
+        "call_setup": 0.0048828125,
+        "scheduler_prepare": 1434.14013671875,
+        "scheduler_loop": 4229.159912109375,
+        "scheduler_finish": 0.054931640625,
+        "scheduler_handoff": 0,
+        "trace_replay": 2151.630126953125,
+        "post_processing": 0.010009765625,
+        "execution_projection": 10705.655029296875,
+        "planning_input_snapshot": 15.44482421875,
+        "checkpoint_defence": 0.275146484375,
+        "rejected_build_list_entries": 1.169921875,
+        "required_materials": 0.010009765625,
+        "plan_assembly": 0.01513671875,
+        "call_return": 0.0048828125
+       },
+       "maxSchedulerSyncSegmentMs": 1485.76513671875,
+       "schedulerLoopIterations": 8535,
+       "schedulerYields": 133
+      }
+     ],
+     "finalPhasesMs": {
+      "call_setup": 0.0048828125,
+      "scheduler_prepare": 1434.14013671875,
+      "scheduler_loop": 4229.159912109375,
+      "scheduler_finish": 0.054931640625,
+      "scheduler_handoff": 0,
+      "trace_replay": 2151.630126953125,
+      "post_processing": 0.010009765625,
+      "execution_projection": 10705.655029296875,
+      "planning_input_snapshot": 15.44482421875,
+      "checkpoint_defence": 0.275146484375,
+      "rejected_build_list_entries": 1.169921875,
+      "required_materials": 0.010009765625,
+      "plan_assembly": 0.01513671875,
+      "call_return": 0.0048828125
+     },
+     "finalTailSync": {
+      "fromMs": 1790588564575.185,
+      "toMs": 1790588577451.97,
+      "durationMs": 12876.784912109375
+     }
+    },
+    {
+     "id": "pg2a-record-3",
+     "roundTripMs": 85745.19999998808,
+     "calculationElapsedMs": 85370.6400000453,
+     "searchElapsedMs": 43984.77000004053,
+     "plannerElapsedMs": 35895.189999997616,
+     "evidenceElapsedMs": 322.5199999809265,
+     "planEvidenceElapsedMs": 31.600000023841858,
+     "byKind": [
+      {
+       "kind": "baseline",
+       "calls": 1,
+       "schedulerRuns": 1,
+       "elapsedMs": 3711.929931640625,
+       "phasesMs": {
+        "call_setup": 0.199951171875,
+        "scheduler_prepare": 1158.3349609375,
+        "scheduler_loop": 663.75,
+        "scheduler_finish": 0.635009765625,
+        "scheduler_handoff": 0.014892578125,
+        "trace_replay": 241.75,
+        "post_processing": 0.0751953125,
+        "execution_projection": 1636.39990234375,
+        "planning_input_snapshot": 9.949951171875,
+        "checkpoint_defence": 0.18505859375,
+        "rejected_build_list_entries": 0.550048828125,
+        "required_materials": 0.034912109375,
+        "plan_assembly": 0.0400390625,
+        "call_return": 0.010009765625
+       },
+       "maxSchedulerSyncSegmentMs": 1212.489990234375,
+       "schedulerLoopIterations": 1466,
+       "schedulerYields": 22
+      },
+      {
+       "kind": "retained_prefix",
+       "calls": 1,
+       "schedulerRuns": 1,
+       "elapsedMs": 2789.8251953125,
        "phasesMs": {
         "call_setup": 0.010009765625,
-        "scheduler_prepare": 1508.130126953125,
-        "scheduler_loop": 4308.239990234375,
-        "scheduler_finish": 0.044921875,
-        "scheduler_handoff": 0,
-        "trace_replay": 2201.56494140625,
-        "post_processing": 0.010009765625,
-        "execution_projection": 11150.155029296875,
-        "planning_input_snapshot": 16.969970703125,
-        "checkpoint_defence": 0.30517578125,
-        "rejected_build_list_entries": 0.974853515625,
-        "required_materials": 0.01513671875,
-        "plan_assembly": 0.019775390625,
-        "call_return": 0.005126953125
+        "scheduler_prepare": 497.52001953125,
+        "scheduler_loop": 431.25,
+        "scheduler_finish": 0.074951171875,
+        "scheduler_handoff": 0.010009765625,
+        "trace_replay": 243.4501953125,
+        "post_processing": 0.02001953125,
+        "execution_projection": 1610.494873046875,
+        "planning_input_snapshot": 6.6650390625,
+        "checkpoint_defence": 0.099853515625,
+        "rejected_build_list_entries": 0.2001953125,
+        "required_materials": 0.0048828125,
+        "plan_assembly": 0.01513671875,
+        "call_return": 0.010009765625
        },
-       "maxSchedulerSyncSegmentMs": 1563.6650390625,
+       "maxSchedulerSyncSegmentMs": 534.55517578125,
+       "schedulerLoopIterations": 1466,
+       "schedulerYields": 22
+      },
+      {
+       "kind": "application",
+       "calls": 23,
+       "schedulerRuns": 23,
+       "elapsedMs": 10930.854736328125,
+       "phasesMs": {
+        "call_setup": 0.265625,
+        "scheduler_prepare": 938.4091796875,
+        "scheduler_loop": 189.145263671875,
+        "scheduler_finish": 0.615234375,
+        "scheduler_handoff": 0.105224609375,
+        "trace_replay": 1878.3046875,
+        "post_processing": 0.164794921875,
+        "execution_projection": 7901.5048828125,
+        "planning_input_snapshot": 20.180419921875,
+        "checkpoint_defence": 0.64013671875,
+        "rejected_build_list_entries": 1.124755859375,
+        "required_materials": 0.024658203125,
+        "plan_assembly": 0.260009765625,
+        "call_return": 0.10986328125
+       },
+       "maxSchedulerSyncSegmentMs": 110.925048828125,
+       "schedulerLoopIterations": 7092,
+       "schedulerYields": 102
+      },
+      {
+       "kind": "final",
+       "calls": 1,
+       "schedulerRuns": 1,
+       "elapsedMs": 18462.364990234375,
+       "phasesMs": {
+        "call_setup": 0.010009765625,
+        "scheduler_prepare": 1440.885009765625,
+        "scheduler_loop": 4094.155029296875,
+        "scheduler_finish": 0.050048828125,
+        "scheduler_handoff": 0,
+        "trace_replay": 2141.485107421875,
+        "post_processing": 0.014892578125,
+        "execution_projection": 10768.864990234375,
+        "planning_input_snapshot": 15.610107421875,
+        "checkpoint_defence": 0.294921875,
+        "rejected_build_list_entries": 0.965087890625,
+        "required_materials": 0.010009765625,
+        "plan_assembly": 0.014892578125,
+        "call_return": 0.0048828125
+       },
+       "maxSchedulerSyncSegmentMs": 1491.0400390625,
        "schedulerLoopIterations": 8535,
        "schedulerYields": 133
       }
      ],
      "finalPhasesMs": {
       "call_setup": 0.010009765625,
-      "scheduler_prepare": 1508.130126953125,
-      "scheduler_loop": 4308.239990234375,
-      "scheduler_finish": 0.044921875,
-      "scheduler_handoff": 0,
-      "trace_replay": 2201.56494140625,
-      "post_processing": 0.010009765625,
-      "execution_projection": 11150.155029296875,
-      "planning_input_snapshot": 16.969970703125,
-      "checkpoint_defence": 0.30517578125,
-      "rejected_build_list_entries": 0.974853515625,
-      "required_materials": 0.01513671875,
-      "plan_assembly": 0.019775390625,
-      "call_return": 0.005126953125
-     },
-     "finalTailSync": {
-      "fromMs": 1790585307750.055,
-      "toMs": 1790585321123.145,
-      "durationMs": 13373.090087890625
-     }
-    },
-    {
-     "id": "pg2a-record-3",
-     "roundTripMs": 91332.43000000715,
-     "calculationElapsedMs": 90953.58499997854,
-     "searchElapsedMs": 48303.80999994278,
-     "plannerElapsedMs": 37068.95999991894,
-     "evidenceElapsedMs": 322.9699999690056,
-     "planEvidenceElapsedMs": 33.855000019073486,
-     "byKind": [
-      {
-       "kind": "baseline",
-       "calls": 1,
-       "schedulerRuns": 1,
-       "elapsedMs": 3827.349853515625,
-       "phasesMs": {
-        "call_setup": 0.21484375,
-        "scheduler_prepare": 1219.93994140625,
-        "scheduler_loop": 679.840087890625,
-        "scheduler_finish": 0.625,
-        "scheduler_handoff": 0.02001953125,
-        "trace_replay": 246.27001953125,
-        "post_processing": 0.034912109375,
-        "execution_projection": 1668.66015625,
-        "planning_input_snapshot": 10.809814453125,
-        "checkpoint_defence": 0.22509765625,
-        "rejected_build_list_entries": 0.60498046875,
-        "required_materials": 0.030029296875,
-        "plan_assembly": 0.06005859375,
-        "call_return": 0.014892578125
-       },
-       "maxSchedulerSyncSegmentMs": 1279.420166015625,
-       "schedulerLoopIterations": 1466,
-       "schedulerYields": 22
-      },
-      {
-       "kind": "retained_prefix",
-       "calls": 1,
-       "schedulerRuns": 1,
-       "elapsedMs": 2865.110107421875,
-       "phasesMs": {
-        "call_setup": 0.02001953125,
-        "scheduler_prepare": 519.43505859375,
-        "scheduler_loop": 444.1650390625,
-        "scheduler_finish": 0.08984375,
-        "scheduler_handoff": 0.010009765625,
-        "trace_replay": 250.340087890625,
-        "post_processing": 0.014892578125,
-        "execution_projection": 1643.775146484375,
-        "planning_input_snapshot": 6.949951171875,
-        "checkpoint_defence": 0.08984375,
-        "rejected_build_list_entries": 0.2001953125,
-        "required_materials": 0.0048828125,
-        "plan_assembly": 0.01513671875,
-        "call_return": 0
-       },
-       "maxSchedulerSyncSegmentMs": 559.739990234375,
-       "schedulerLoopIterations": 1466,
-       "schedulerYields": 22
-      },
-      {
-       "kind": "application",
-       "calls": 23,
-       "schedulerRuns": 23,
-       "elapsedMs": 11412.95458984375,
-       "phasesMs": {
-        "call_setup": 0.27978515625,
-        "scheduler_prepare": 990.630126953125,
-        "scheduler_loop": 233.949462890625,
-        "scheduler_finish": 0.6552734375,
-        "scheduler_handoff": 0.10498046875,
-        "trace_replay": 1982.39501953125,
-        "post_processing": 0.185546875,
-        "execution_projection": 8182.039306640625,
-        "planning_input_snapshot": 20.25,
-        "checkpoint_defence": 0.680419921875,
-        "rejected_build_list_entries": 1.359619140625,
-        "required_materials": 0.05029296875,
-        "plan_assembly": 0.244873046875,
-        "call_return": 0.1298828125
-       },
-       "maxSchedulerSyncSegmentMs": 121.074951171875,
-       "schedulerLoopIterations": 7092,
-       "schedulerYields": 102
-      },
-      {
-       "kind": "final",
-       "calls": 1,
-       "schedulerRuns": 1,
-       "elapsedMs": 18963.349853515625,
-       "phasesMs": {
-        "call_setup": 0.0048828125,
-        "scheduler_prepare": 1465.130126953125,
-        "scheduler_loop": 4313.81494140625,
-        "scheduler_finish": 0.050048828125,
-        "scheduler_handoff": 0.0048828125,
-        "trace_replay": 2243.044921875,
-        "post_processing": 0.010009765625,
-        "execution_projection": 10923.864990234375,
-        "planning_input_snapshot": 16.070068359375,
-        "checkpoint_defence": 0.31494140625,
-        "rejected_build_list_entries": 1.005126953125,
-        "required_materials": 0.014892578125,
-        "plan_assembly": 0.01513671875,
-        "call_return": 0.0048828125
-       },
-       "maxSchedulerSyncSegmentMs": 1518.010009765625,
-       "schedulerLoopIterations": 8535,
-       "schedulerYields": 133
-      }
-     ],
-     "finalPhasesMs": {
-      "call_setup": 0.0048828125,
-      "scheduler_prepare": 1465.130126953125,
-      "scheduler_loop": 4313.81494140625,
+      "scheduler_prepare": 1440.885009765625,
+      "scheduler_loop": 4094.155029296875,
       "scheduler_finish": 0.050048828125,
-      "scheduler_handoff": 0.0048828125,
-      "trace_replay": 2243.044921875,
-      "post_processing": 0.010009765625,
-      "execution_projection": 10923.864990234375,
-      "planning_input_snapshot": 16.070068359375,
-      "checkpoint_defence": 0.31494140625,
-      "rejected_build_list_entries": 1.005126953125,
-      "required_materials": 0.014892578125,
-      "plan_assembly": 0.01513671875,
+      "scheduler_handoff": 0,
+      "trace_replay": 2141.485107421875,
+      "post_processing": 0.014892578125,
+      "execution_projection": 10768.864990234375,
+      "planning_input_snapshot": 15.610107421875,
+      "checkpoint_defence": 0.294921875,
+      "rejected_build_list_entries": 0.965087890625,
+      "required_materials": 0.010009765625,
+      "plan_assembly": 0.014892578125,
       "call_return": 0.0048828125
      },
      "finalTailSync": {
-      "fromMs": 1790585399290.435,
-      "toMs": 1790585412477.355,
-      "durationMs": 13186.919921875
+      "fromMs": 1790588650279.485,
+      "toMs": 1790588663209.23,
+      "durationMs": 12929.744873046875
      }
     },
     {
      "id": "pg2a-record-4",
-     "roundTripMs": 90812.82499998808,
-     "calculationElapsedMs": 90439.875,
-     "searchElapsedMs": 47469.9849999547,
-     "plannerElapsedMs": 37282.33500009775,
-     "evidenceElapsedMs": 318.9350000023842,
-     "planEvidenceElapsedMs": 32.685000002384186,
+     "roundTripMs": 85532.02500003576,
+     "calculationElapsedMs": 85165.89999997616,
+     "searchElapsedMs": 43547.479999780655,
+     "plannerElapsedMs": 36189.90000003576,
+     "evidenceElapsedMs": 314.42500001192093,
+     "planEvidenceElapsedMs": 31.804999947547913,
      "byKind": [
       {
        "kind": "baseline",
        "calls": 1,
        "schedulerRuns": 1,
-       "elapsedMs": 3853.18505859375,
+       "elapsedMs": 3729.385009765625,
        "phasesMs": {
-        "call_setup": 0.18994140625,
-        "scheduler_prepare": 1223.885009765625,
-        "scheduler_loop": 678.544921875,
-        "scheduler_finish": 0.64013671875,
-        "scheduler_handoff": 0.02001953125,
-        "trace_replay": 248.72998046875,
-        "post_processing": 0.030029296875,
-        "execution_projection": 1690.35986328125,
-        "planning_input_snapshot": 10.01513671875,
-        "checkpoint_defence": 0.159912109375,
-        "rejected_build_list_entries": 0.530029296875,
-        "required_materials": 0.030029296875,
-        "plan_assembly": 0.0400390625,
+        "call_setup": 0.195068359375,
+        "scheduler_prepare": 1155.304931640625,
+        "scheduler_loop": 642.574951171875,
+        "scheduler_finish": 0.630126953125,
+        "scheduler_handoff": 0.02490234375,
+        "trace_replay": 241.530029296875,
+        "post_processing": 0.0400390625,
+        "execution_projection": 1675.6298828125,
+        "planning_input_snapshot": 12.5400390625,
+        "checkpoint_defence": 0.22998046875,
+        "rejected_build_list_entries": 0.590087890625,
+        "required_materials": 0.0400390625,
+        "plan_assembly": 0.044921875,
         "call_return": 0.010009765625
        },
-       "maxSchedulerSyncSegmentMs": 1284.130126953125,
+       "maxSchedulerSyncSegmentMs": 1211.329833984375,
        "schedulerLoopIterations": 1466,
        "schedulerYields": 22
       },
@@ -6004,24 +6082,24 @@
        "kind": "retained_prefix",
        "calls": 1,
        "schedulerRuns": 1,
-       "elapsedMs": 2870.5,
+       "elapsedMs": 2770.8798828125,
        "phasesMs": {
-        "call_setup": 0.014892578125,
-        "scheduler_prepare": 517.47998046875,
-        "scheduler_loop": 445.72021484375,
+        "call_setup": 0.02978515625,
+        "scheduler_prepare": 490.405029296875,
+        "scheduler_loop": 423.315185546875,
         "scheduler_finish": 0.079833984375,
         "scheduler_handoff": 0.005126953125,
-        "trace_replay": 247.31494140625,
-        "post_processing": 0.02001953125,
-        "execution_projection": 1653.304931640625,
-        "planning_input_snapshot": 6.179931640625,
-        "checkpoint_defence": 0.090087890625,
-        "rejected_build_list_entries": 0.235107421875,
-        "required_materials": 0.010009765625,
-        "plan_assembly": 0.02490234375,
-        "call_return": 0.02001953125
+        "trace_replay": 243.7548828125,
+        "post_processing": 0.01513671875,
+        "execution_projection": 1606.304931640625,
+        "planning_input_snapshot": 6.659912109375,
+        "checkpoint_defence": 0.094970703125,
+        "rejected_build_list_entries": 0.18505859375,
+        "required_materials": 0.005126953125,
+        "plan_assembly": 0.02001953125,
+        "call_return": 0.0048828125
        },
-       "maxSchedulerSyncSegmentMs": 555.050048828125,
+       "maxSchedulerSyncSegmentMs": 527.275146484375,
        "schedulerLoopIterations": 1466,
        "schedulerYields": 22
       },
@@ -6029,24 +6107,24 @@
        "kind": "application",
        "calls": 23,
        "schedulerRuns": 23,
-       "elapsedMs": 11452.059326171875,
+       "elapsedMs": 11132.0947265625,
        "phasesMs": {
-        "call_setup": 0.329345703125,
-        "scheduler_prepare": 997.48095703125,
-        "scheduler_loop": 197.899169921875,
-        "scheduler_finish": 0.675048828125,
-        "scheduler_handoff": 0.109619140625,
-        "trace_replay": 1979.80078125,
-        "post_processing": 0.19970703125,
-        "execution_projection": 8252.70947265625,
-        "planning_input_snapshot": 20.24560546875,
-        "checkpoint_defence": 0.77490234375,
-        "rejected_build_list_entries": 1.404541015625,
-        "required_materials": 0.05029296875,
-        "plan_assembly": 0.280029296875,
-        "call_return": 0.099853515625
+        "call_setup": 0.264892578125,
+        "scheduler_prepare": 937.43505859375,
+        "scheduler_loop": 191.5048828125,
+        "scheduler_finish": 0.64453125,
+        "scheduler_handoff": 0.06494140625,
+        "trace_replay": 1905.350341796875,
+        "post_processing": 0.17041015625,
+        "execution_projection": 8073.98486328125,
+        "planning_input_snapshot": 20.5947265625,
+        "checkpoint_defence": 0.58984375,
+        "rejected_build_list_entries": 1.05517578125,
+        "required_materials": 0.0703125,
+        "plan_assembly": 0.269287109375,
+        "call_return": 0.095458984375
        },
-       "maxSchedulerSyncSegmentMs": 120.5,
+       "maxSchedulerSyncSegmentMs": 111.91015625,
        "schedulerLoopIterations": 7092,
        "schedulerYields": 102
       },
@@ -6054,726 +6132,728 @@
        "kind": "final",
        "calls": 1,
        "schedulerRuns": 1,
-       "elapsedMs": 19106.385009765625,
+       "elapsedMs": 18557.375,
        "phasesMs": {
         "call_setup": 0.0048828125,
-        "scheduler_prepare": 1496.955078125,
-        "scheduler_loop": 4346.380126953125,
-        "scheduler_finish": 0.06494140625,
+        "scheduler_prepare": 1471.425048828125,
+        "scheduler_loop": 4204.85498046875,
+        "scheduler_finish": 0.054931640625,
         "scheduler_handoff": 0,
-        "trace_replay": 2225.300048828125,
-        "post_processing": 0.014892578125,
-        "execution_projection": 11019.320068359375,
-        "planning_input_snapshot": 17.125,
-        "checkpoint_defence": 0.31494140625,
-        "rejected_build_list_entries": 0.869873046875,
-        "required_materials": 0.01513671875,
-        "plan_assembly": 0.014892578125,
+        "trace_replay": 2151.72998046875,
+        "post_processing": 0.010009765625,
+        "execution_projection": 10711.97998046875,
+        "planning_input_snapshot": 15.0400390625,
+        "checkpoint_defence": 0.27001953125,
+        "rejected_build_list_entries": 1.965087890625,
+        "required_materials": 0.014892578125,
+        "plan_assembly": 0.02001953125,
         "call_return": 0.005126953125
        },
-       "maxSchedulerSyncSegmentMs": 1550.335205078125,
+       "maxSchedulerSyncSegmentMs": 1523.26513671875,
        "schedulerLoopIterations": 8535,
        "schedulerYields": 133
       }
      ],
      "finalPhasesMs": {
       "call_setup": 0.0048828125,
-      "scheduler_prepare": 1496.955078125,
-      "scheduler_loop": 4346.380126953125,
-      "scheduler_finish": 0.06494140625,
+      "scheduler_prepare": 1471.425048828125,
+      "scheduler_loop": 4204.85498046875,
+      "scheduler_finish": 0.054931640625,
       "scheduler_handoff": 0,
-      "trace_replay": 2225.300048828125,
-      "post_processing": 0.014892578125,
-      "execution_projection": 11019.320068359375,
-      "planning_input_snapshot": 17.125,
-      "checkpoint_defence": 0.31494140625,
-      "rejected_build_list_entries": 0.869873046875,
-      "required_materials": 0.01513671875,
-      "plan_assembly": 0.014892578125,
+      "trace_replay": 2151.72998046875,
+      "post_processing": 0.010009765625,
+      "execution_projection": 10711.97998046875,
+      "planning_input_snapshot": 15.0400390625,
+      "checkpoint_defence": 0.27001953125,
+      "rejected_build_list_entries": 1.965087890625,
+      "required_materials": 0.014892578125,
+      "plan_assembly": 0.02001953125,
       "call_return": 0.005126953125
      },
      "finalTailSync": {
-      "fromMs": 1790585490049.64,
-      "toMs": 1790585503315.345,
-      "durationMs": 13265.705078125
+      "fromMs": 1790588735891.925,
+      "toMs": 1790588748775.715,
+      "durationMs": 12883.7900390625
      }
     }
    ],
    "median": {
-    "roundTripMs": 90812.82499998808,
-    "calculationElapsedMs": 90439.875,
-    "searchElapsedMs": 47469.9849999547,
-    "plannerElapsedMs": 37282.33500009775,
+    "roundTripMs": 85745.19999998808,
+    "calculationElapsedMs": 85370.6400000453,
+    "searchElapsedMs": 43984.77000004053,
+    "plannerElapsedMs": 35959.06500005722,
     "finalPhasesMs": {
      "call_setup": 0.0048828125,
-     "scheduler_prepare": 1496.955078125,
-     "scheduler_loop": 4313.81494140625,
-     "scheduler_finish": 0.050048828125,
+     "scheduler_prepare": 1440.885009765625,
+     "scheduler_loop": 4204.85498046875,
+     "scheduler_finish": 0.054931640625,
      "scheduler_handoff": 0,
-     "trace_replay": 2225.300048828125,
+     "trace_replay": 2151.630126953125,
      "post_processing": 0.010009765625,
-     "execution_projection": 11019.320068359375,
-     "planning_input_snapshot": 16.969970703125,
-     "checkpoint_defence": 0.31494140625,
-     "rejected_build_list_entries": 0.974853515625,
-     "required_materials": 0.01513671875,
+     "execution_projection": 10711.97998046875,
+     "planning_input_snapshot": 15.44482421875,
+     "checkpoint_defence": 0.275146484375,
+     "rejected_build_list_entries": 1.169921875,
+     "required_materials": 0.010009765625,
      "plan_assembly": 0.01513671875,
-     "call_return": 0.005126953125
+     "call_return": 0.0048828125
     },
     "byKind": [
      {
       "kind": "baseline",
       "calls": 1,
-      "elapsedMs": 3838.875,
-      "maxSchedulerSyncSegmentMs": 1284.130126953125,
+      "elapsedMs": 3711.929931640625,
+      "maxSchedulerSyncSegmentMs": 1212.489990234375,
       "phasesMs": {
-       "call_setup": 0.204833984375,
-       "scheduler_prepare": 1223.885009765625,
-       "scheduler_loop": 678.544921875,
-       "scheduler_finish": 0.64013671875,
-       "scheduler_handoff": 0.02001953125,
-       "trace_replay": 246.27001953125,
-       "post_processing": 0.034912109375,
-       "execution_projection": 1690.35986328125,
-       "planning_input_snapshot": 10.054931640625,
+       "call_setup": 0.195068359375,
+       "scheduler_prepare": 1158.3349609375,
+       "scheduler_loop": 642.574951171875,
+       "scheduler_finish": 0.635009765625,
+       "scheduler_handoff": 0.014892578125,
+       "trace_replay": 241.530029296875,
+       "post_processing": 0.0400390625,
+       "execution_projection": 1636.39990234375,
+       "planning_input_snapshot": 9.949951171875,
        "checkpoint_defence": 0.195068359375,
        "rejected_build_list_entries": 0.554931640625,
-       "required_materials": 0.030029296875,
-       "plan_assembly": 0.045166015625,
+       "required_materials": 0.034912109375,
+       "plan_assembly": 0.0400390625,
        "call_return": 0.010009765625
       }
      },
      {
       "kind": "retained_prefix",
       "calls": 1,
-      "elapsedMs": 2870.5,
-      "maxSchedulerSyncSegmentMs": 555.050048828125,
+      "elapsedMs": 2782.820068359375,
+      "maxSchedulerSyncSegmentMs": 534.55517578125,
       "phasesMs": {
-       "call_setup": 0.014892578125,
-       "scheduler_prepare": 517.47998046875,
-       "scheduler_loop": 445.72021484375,
-       "scheduler_finish": 0.08984375,
-       "scheduler_handoff": 0.010009765625,
-       "trace_replay": 250.340087890625,
-       "post_processing": 0.02001953125,
-       "execution_projection": 1653.304931640625,
-       "planning_input_snapshot": 6.705078125,
-       "checkpoint_defence": 0.090087890625,
-       "rejected_build_list_entries": 0.2001953125,
+       "call_setup": 0.02001953125,
+       "scheduler_prepare": 497.52001953125,
+       "scheduler_loop": 431.25,
+       "scheduler_finish": 0.079833984375,
+       "scheduler_handoff": 0.005126953125,
+       "trace_replay": 243.4501953125,
+       "post_processing": 0.01513671875,
+       "execution_projection": 1606.304931640625,
+       "planning_input_snapshot": 6.6650390625,
+       "checkpoint_defence": 0.094970703125,
+       "rejected_build_list_entries": 0.19482421875,
        "required_materials": 0.005126953125,
        "plan_assembly": 0.01513671875,
-       "call_return": 0.0048828125
+       "call_return": 0.005126953125
       }
      },
      {
       "kind": "application",
       "calls": 23,
-      "elapsedMs": 11421.04052734375,
-      "maxSchedulerSyncSegmentMs": 120.5,
+      "elapsedMs": 10959.96044921875,
+      "maxSchedulerSyncSegmentMs": 111.91015625,
       "phasesMs": {
-       "call_setup": 0.27978515625,
-       "scheduler_prepare": 990.630126953125,
-       "scheduler_loop": 203.355224609375,
-       "scheduler_finish": 0.675048828125,
-       "scheduler_handoff": 0.10498046875,
-       "trace_replay": 1982.39501953125,
-       "post_processing": 0.185546875,
-       "execution_projection": 8227.04931640625,
-       "planning_input_snapshot": 20.25,
-       "checkpoint_defence": 0.680419921875,
-       "rejected_build_list_entries": 1.359619140625,
-       "required_materials": 0.05029296875,
-       "plan_assembly": 0.280029296875,
-       "call_return": 0.1298828125
+       "call_setup": 0.265625,
+       "scheduler_prepare": 938.4091796875,
+       "scheduler_loop": 191.5048828125,
+       "scheduler_finish": 0.64013671875,
+       "scheduler_handoff": 0.08984375,
+       "trace_replay": 1878.3046875,
+       "post_processing": 0.17041015625,
+       "execution_projection": 7933.43505859375,
+       "planning_input_snapshot": 20.344970703125,
+       "checkpoint_defence": 0.635009765625,
+       "rejected_build_list_entries": 1.124755859375,
+       "required_materials": 0.064697265625,
+       "plan_assembly": 0.269287109375,
+       "call_return": 0.095458984375
       }
      },
      {
       "kind": "final",
       "calls": 1,
-      "elapsedMs": 19106.385009765625,
-      "maxSchedulerSyncSegmentMs": 1550.335205078125,
+      "elapsedMs": 18537.574951171875,
+      "maxSchedulerSyncSegmentMs": 1491.0400390625,
       "phasesMs": {
        "call_setup": 0.0048828125,
-       "scheduler_prepare": 1496.955078125,
-       "scheduler_loop": 4313.81494140625,
-       "scheduler_finish": 0.050048828125,
+       "scheduler_prepare": 1440.885009765625,
+       "scheduler_loop": 4204.85498046875,
+       "scheduler_finish": 0.054931640625,
        "scheduler_handoff": 0,
-       "trace_replay": 2225.300048828125,
+       "trace_replay": 2151.630126953125,
        "post_processing": 0.010009765625,
-       "execution_projection": 11019.320068359375,
-       "planning_input_snapshot": 16.969970703125,
-       "checkpoint_defence": 0.31494140625,
-       "rejected_build_list_entries": 0.974853515625,
-       "required_materials": 0.01513671875,
+       "execution_projection": 10711.97998046875,
+       "planning_input_snapshot": 15.44482421875,
+       "checkpoint_defence": 0.275146484375,
+       "rejected_build_list_entries": 1.169921875,
+       "required_materials": 0.010009765625,
        "plan_assembly": 0.01513671875,
-       "call_return": 0.005126953125
+       "call_return": 0.0048828125
       }
      }
     ],
-    "finalTailSyncMs": 13265.705078125
+    "finalTailSyncMs": 12883.7900390625
    }
   },
   "responsiveness": {
    "id": "pg2a-record-5",
    "ping": {
-    "count": 39113,
+    "count": 39129,
     "lost": 0,
-    "medianMs": 0.2549999952316284,
-    "p95Ms": 6.399999976158142,
-    "maxMs": 13665.064999997616
+    "medianMs": 0.24500000476837158,
+    "p95Ms": 6.629999995231628,
+    "maxMs": 13336.590000033379
    },
-   "acceptedClockCheckMs": 0.090087890625,
+   "acceptedClockCheckMs": 0.070068359375,
    "thresholdMs": 100,
-   "slowPingCount": 37,
+   "slowPingCount": 36,
    "slowest": {
-    "sentAtMs": 1790585581915.905,
-    "rttMs": 13665.06494140625,
+    "sentAtMs": 1790588826254.115,
+    "rttMs": 13336.590087890625,
     "overlapMs": {
-     "final#25:scheduler_loop_start": 2.804931640625,
-     "final#25:scheduler_finish_start": 0.06005859375,
-     "final#25:trace_replay": 2253.669921875,
-     "final#25:post_processing": 0.010009765625,
-     "final#25:execution_projection": 11025.760009765625,
-     "final#25:planning_input_snapshot": 17.47509765625,
-     "final#25:checkpoint_defence": 0.324951171875,
-     "final#25:rejected_build_list_entries": 0.91015625,
-     "final#25:required_materials": 0.014892578125,
-     "final#25:plan_assembly": 0.014892578125,
+     "final#25:scheduler_loop_start": 3.22998046875,
+     "final#25:scheduler_finish_start": 0.0400390625,
+     "final#25:trace_replay": 2126.6201171875,
+     "final#25:post_processing": 0.014892578125,
+     "final#25:execution_projection": 10814.4150390625,
+     "final#25:planning_input_snapshot": 15.23486328125,
+     "final#25:checkpoint_defence": 0.420166015625,
+     "final#25:rejected_build_list_entries": 1.294921875,
+     "final#25:required_materials": 0.010009765625,
+     "final#25:plan_assembly": 0.02490234375,
      "final#25:completed": 0.005126953125,
-     "worker:evidence": 327.264892578125,
-     "worker:plan_evidence": 34.55517578125,
-     "worker:result_post": 0.06005859375,
-     "unattributed": 2.134765625
+     "worker:evidence": 343.14990234375,
+     "worker:plan_evidence": 30.239990234375,
+     "worker:result_post": 0.054931640625,
+     "unattributed": 1.835205078125
     }
    },
    "slowPings": [
     {
-     "sentAtMs": 1790585581915.905,
-     "rttMs": 13665.06494140625,
+     "sentAtMs": 1790588826254.115,
+     "rttMs": 13336.590087890625,
      "overlapMs": {
-      "final#25:scheduler_loop_start": 2.804931640625,
-      "final#25:scheduler_finish_start": 0.06005859375,
-      "final#25:trace_replay": 2253.669921875,
-      "final#25:post_processing": 0.010009765625,
-      "final#25:execution_projection": 11025.760009765625,
-      "final#25:planning_input_snapshot": 17.47509765625,
-      "final#25:checkpoint_defence": 0.324951171875,
-      "final#25:rejected_build_list_entries": 0.91015625,
-      "final#25:required_materials": 0.014892578125,
-      "final#25:plan_assembly": 0.014892578125,
+      "final#25:scheduler_loop_start": 3.22998046875,
+      "final#25:scheduler_finish_start": 0.0400390625,
+      "final#25:trace_replay": 2126.6201171875,
+      "final#25:post_processing": 0.014892578125,
+      "final#25:execution_projection": 10814.4150390625,
+      "final#25:planning_input_snapshot": 15.23486328125,
+      "final#25:checkpoint_defence": 0.420166015625,
+      "final#25:rejected_build_list_entries": 1.294921875,
+      "final#25:required_materials": 0.010009765625,
+      "final#25:plan_assembly": 0.02490234375,
       "final#25:completed": 0.005126953125,
-      "worker:evidence": 327.264892578125,
-      "worker:plan_evidence": 34.55517578125,
-      "worker:result_post": 0.06005859375,
-      "unattributed": 2.134765625
+      "worker:evidence": 343.14990234375,
+      "worker:plan_evidence": 30.239990234375,
+      "worker:result_post": 0.054931640625,
+      "unattributed": 1.835205078125
      }
     },
     {
-     "sentAtMs": 1790585508443.4001,
-     "rttMs": 3652.010009765625,
+     "sentAtMs": 1790588753638.77,
+     "rttMs": 3469.06005859375,
      "overlapMs": {
-      "baseline#0:scheduler_loop_start": 21.905029296875,
-      "baseline#0:scheduler_finish_start": 0.669921875,
-      "baseline#0:scheduler_end": 0.02001953125,
-      "baseline#0:trace_replay": 249.864990234375,
-      "baseline#0:post_processing": 0.030029296875,
-      "baseline#0:execution_projection": 1697.554931640625,
-      "baseline#0:planning_input_snapshot": 10.81005859375,
-      "baseline#0:checkpoint_defence": 0.18994140625,
-      "baseline#0:rejected_build_list_entries": 0.580078125,
+      "baseline#0:scheduler_loop_start": 20.4150390625,
+      "baseline#0:scheduler_finish_start": 0.619873046875,
+      "baseline#0:scheduler_end": 0.01513671875,
+      "baseline#0:trace_replay": 240.1298828125,
+      "baseline#0:post_processing": 0.03515625,
+      "baseline#0:execution_projection": 1623.164794921875,
+      "baseline#0:planning_input_snapshot": 9.650146484375,
+      "baseline#0:checkpoint_defence": 0.1650390625,
+      "baseline#0:rejected_build_list_entries": 0.534912109375,
       "baseline#0:required_materials": 0.02490234375,
-      "baseline#0:plan_assembly": 0.050048828125,
+      "baseline#0:plan_assembly": 0.045166015625,
       "baseline#0:completed": 0.010009765625,
-      "retained_prefix#1:call_start": 0.02001953125,
-      "retained_prefix#1:scheduler_start": 512.919921875,
-      "retained_prefix#1:scheduler_loop_start": 39.630126953125,
-      "unattributed": 1117.72998046875
+      "retained_prefix#1:call_start": 0.010009765625,
+      "retained_prefix#1:scheduler_start": 490.900146484375,
+      "retained_prefix#1:scheduler_loop_start": 38.22998046875,
+      "unattributed": 1045.10986328125
      }
     },
     {
-     "sentAtMs": 1790585512494.5652,
-     "rttMs": 2748.965087890625,
+     "sentAtMs": 1790588757490.395,
+     "rttMs": 2587.280029296875,
      "overlapMs": {
-      "retained_prefix#1:scheduler_loop_start": 11.40478515625,
-      "retained_prefix#1:scheduler_finish_start": 0.080078125,
-      "retained_prefix#1:scheduler_end": 0.010009765625,
-      "retained_prefix#1:trace_replay": 243.5400390625,
-      "retained_prefix#1:post_processing": 0.010009765625,
-      "retained_prefix#1:execution_projection": 1686.2099609375,
-      "retained_prefix#1:planning_input_snapshot": 6.27001953125,
-      "retained_prefix#1:checkpoint_defence": 0.090087890625,
-      "retained_prefix#1:rejected_build_list_entries": 0.18994140625,
-      "retained_prefix#1:required_materials": 0.0048828125,
-      "retained_prefix#1:plan_assembly": 0.02001953125,
-      "retained_prefix#1:completed": 0.005126953125,
-      "unattributed": 801.130126953125
+      "retained_prefix#1:scheduler_loop_start": 10.264892578125,
+      "retained_prefix#1:scheduler_finish_start": 0.0751953125,
+      "retained_prefix#1:scheduler_end": 0.0048828125,
+      "retained_prefix#1:trace_replay": 235.64990234375,
+      "retained_prefix#1:post_processing": 0.01513671875,
+      "retained_prefix#1:execution_projection": 1604.139892578125,
+      "retained_prefix#1:planning_input_snapshot": 8.080078125,
+      "retained_prefix#1:checkpoint_defence": 0.1201171875,
+      "retained_prefix#1:rejected_build_list_entries": 0.304931640625,
+      "retained_prefix#1:required_materials": 0.014892578125,
+      "retained_prefix#1:plan_assembly": 0.045166015625,
+      "retained_prefix#1:completed": 0.010009765625,
+      "unattributed": 728.554931640625
      }
     },
     {
-     "sentAtMs": 1790585573768.185,
-     "rttMs": 1774.4951171875,
+     "sentAtMs": 1790588818490.375,
+     "rttMs": 1720.679931640625,
      "overlapMs": {
-      "application#23:scheduler_loop_start": 0.625,
+      "application#23:scheduler_loop_start": 0.610107421875,
       "application#23:scheduler_finish_start": 0.02490234375,
-      "application#23:trace_replay": 264.425048828125,
+      "application#23:scheduler_end": 0.0048828125,
+      "application#23:trace_replay": 253.985107421875,
       "application#23:post_processing": 0.005126953125,
-      "application#23:execution_projection": 1099.5048828125,
-      "application#23:planning_input_snapshot": 1.989990234375,
-      "application#23:checkpoint_defence": 0.070068359375,
-      "application#23:rejected_build_list_entries": 0.139892578125,
-      "application#23:required_materials": 0.010009765625,
-      "application#23:plan_assembly": 0.025146484375,
-      "application#23:completed": 0.010009765625,
-      "unattributed": 407.6650390625
+      "application#23:execution_projection": 1074.625,
+      "application#23:planning_input_snapshot": 1.73486328125,
+      "application#23:checkpoint_defence": 0.06005859375,
+      "application#23:rejected_build_list_entries": 0.195068359375,
+      "application#23:required_materials": 0.0048828125,
+      "application#23:plan_assembly": 0.010009765625,
+      "application#23:completed": 0.0048828125,
+      "unattributed": 389.4150390625
      }
     },
     {
-     "sentAtMs": 1790585575831.03,
-     "rttMs": 1750.64501953125,
+     "sentAtMs": 1790588820497.205,
+     "rttMs": 1652.580078125,
      "overlapMs": {
       "application#24:scheduler_loop_start": 0.929931640625,
-      "application#24:scheduler_finish_start": 0.030029296875,
-      "application#24:scheduler_end": 0.005126953125,
-      "application#24:trace_replay": 16.324951171875,
-      "application#24:execution_projection": 141.800048828125,
-      "application#24:planning_input_snapshot": 0.56982421875,
+      "application#24:scheduler_finish_start": 0.02001953125,
+      "application#24:scheduler_end": 0.0048828125,
+      "application#24:trace_replay": 16.2451171875,
+      "application#24:post_processing": 0.010009765625,
+      "application#24:execution_projection": 132.909912109375,
+      "application#24:planning_input_snapshot": 0.5400390625,
       "application#24:checkpoint_defence": 0.010009765625,
-      "application#24:rejected_build_list_entries": 0.025146484375,
-      "application#24:required_materials": 0.0048828125,
+      "application#24:rejected_build_list_entries": 0.030029296875,
       "application#24:plan_assembly": 0.010009765625,
-      "final#25:call_start": 0.0048828125,
-      "final#25:scheduler_start": 1487.449951171875,
-      "final#25:scheduler_loop_start": 55.090087890625,
-      "unattributed": 48.39013671875
+      "application#24:completed": 0.0048828125,
+      "final#25:call_start": 0.010009765625,
+      "final#25:scheduler_start": 1408.1298828125,
+      "final#25:scheduler_loop_start": 50.5751953125,
+      "unattributed": 43.150146484375
      }
     },
     {
-     "sentAtMs": 1790585566685.62,
-     "rttMs": 1579.764892578125,
+     "sentAtMs": 1790588810471.19,
+     "rttMs": 1516.195068359375,
      "overlapMs": {
-      "application#22:scheduler_finish_start": 0.0048828125,
       "application#22:scheduler_end": 0.005126953125,
-      "application#22:trace_replay": 113.52490234375,
-      "application#22:post_processing": 0.010009765625,
-      "application#22:execution_projection": 1069.445068359375,
-      "application#22:planning_input_snapshot": 1.0849609375,
-      "application#22:checkpoint_defence": 0.080078125,
-      "application#22:rejected_build_list_entries": 0.289794921875,
-      "application#22:required_materials": 0.005126953125,
-      "application#22:plan_assembly": 0.044921875,
-      "application#22:completed": 0.010009765625,
-      "unattributed": 395.260009765625
+      "application#22:trace_replay": 109.579833984375,
+      "application#22:post_processing": 0.005126953125,
+      "application#22:execution_projection": 1024.9150390625,
+      "application#22:planning_input_snapshot": 0.824951171875,
+      "application#22:checkpoint_defence": 0.06005859375,
+      "application#22:rejected_build_list_entries": 0.159912109375,
+      "application#22:plan_assembly": 0.010009765625,
+      "unattributed": 380.635009765625
      }
     },
     {
-     "sentAtMs": 1790585539116.4602,
-     "rttMs": 1388.294921875,
+     "sentAtMs": 1790588782446.555,
+     "rttMs": 1297.7548828125,
      "overlapMs": {
-      "application#10:scheduler_loop_start": 0.6748046875,
-      "application#10:scheduler_finish_start": 0.045166015625,
-      "application#10:scheduler_end": 0.0048828125,
-      "application#10:trace_replay": 148.81494140625,
+      "application#10:scheduler_loop_start": 0.920166015625,
+      "application#10:scheduler_finish_start": 0.0498046875,
+      "application#10:scheduler_end": 0.005126953125,
+      "application#10:trace_replay": 142.39501953125,
       "application#10:post_processing": 0.010009765625,
-      "application#10:execution_projection": 928.675048828125,
-      "application#10:planning_input_snapshot": 1.8349609375,
-      "application#10:checkpoint_defence": 0.080078125,
+      "application#10:execution_projection": 857.81494140625,
+      "application#10:planning_input_snapshot": 1.985107421875,
+      "application#10:checkpoint_defence": 0.06982421875,
       "application#10:rejected_build_list_entries": 0.094970703125,
-      "application#10:plan_assembly": 0.014892578125,
-      "application#10:completed": 0.010009765625,
-      "unattributed": 308.03515625
+      "application#10:required_materials": 0.005126953125,
+      "application#10:plan_assembly": 0.0048828125,
+      "application#10:completed": 0.005126953125,
+      "unattributed": 294.394775390625
      }
     },
     {
-     "sentAtMs": 1790585506495.34,
-     "rttMs": 1344.155029296875,
+     "sentAtMs": 1790588751889.365,
+     "rttMs": 1176.320068359375,
      "overlapMs": {
-      "baseline#0:call_start": 0.27001953125,
-      "baseline#0:scheduler_start": 1224.044921875,
-      "baseline#0:scheduler_loop_start": 61.985107421875,
-      "unattributed": 57.85498046875
+      "baseline#0:call_start": 0.22509765625,
+      "baseline#0:scheduler_start": 1075.184814453125,
+      "baseline#0:scheduler_loop_start": 58.545166015625,
+      "unattributed": 42.364990234375
      }
     },
     {
-     "sentAtMs": 1790585554636.925,
-     "rttMs": 1067.659912109375,
+     "sentAtMs": 1790588798108.885,
+     "rttMs": 1015.014892578125,
      "overlapMs": {
-      "application#17:scheduler_loop_start": 1.005126953125,
-      "application#17:scheduler_finish_start": 0.02490234375,
-      "application#17:scheduler_end": 0.0048828125,
-      "application#17:trace_replay": 143.4501953125,
-      "application#17:execution_projection": 688.204833984375,
-      "application#17:planning_input_snapshot": 1.070068359375,
-      "application#17:checkpoint_defence": 0.030029296875,
-      "application#17:rejected_build_list_entries": 0.0849609375,
+      "application#17:scheduler_loop_start": 0.594970703125,
+      "application#17:scheduler_finish_start": 0.02001953125,
+      "application#17:scheduler_end": 0.005126953125,
+      "application#17:trace_replay": 131.56982421875,
+      "application#17:post_processing": 0.010009765625,
+      "application#17:execution_projection": 655.364990234375,
+      "application#17:planning_input_snapshot": 1.14501953125,
+      "application#17:checkpoint_defence": 0.0400390625,
+      "application#17:rejected_build_list_entries": 0.114990234375,
       "application#17:required_materials": 0.005126953125,
-      "application#17:plan_assembly": 0.0048828125,
-      "application#17:completed": 0.0048828125,
-      "unattributed": 233.77001953125
+      "application#17:plan_assembly": 0.009765625,
+      "application#17:completed": 0.005126953125,
+      "unattributed": 226.1298828125
      }
     },
     {
-     "sentAtMs": 1790585518925.345,
-     "rttMs": 668.93505859375,
+     "sentAtMs": 1790588790228.69,
+     "rttMs": 644.919921875,
      "overlapMs": {
-      "application#3:scheduler_loop_start": 0.72998046875,
-      "application#3:scheduler_finish_start": 0.025146484375,
-      "application#3:scheduler_end": 0.010009765625,
-      "application#3:trace_replay": 135.824951171875,
-      "application#3:post_processing": 0.014892578125,
-      "application#3:execution_projection": 406.31005859375,
-      "application#3:planning_input_snapshot": 0.97509765625,
-      "application#3:checkpoint_defence": 0.054931640625,
-      "application#3:rejected_build_list_entries": 0.155029296875,
-      "application#3:required_materials": 0.010009765625,
-      "application#3:plan_assembly": 0.034912109375,
-      "application#3:completed": 0.005126953125,
-      "unattributed": 124.784912109375
-     }
-    },
-    {
-     "sentAtMs": 1790585547504.375,
-     "rttMs": 660.844970703125,
-     "overlapMs": {
-      "application#14:scheduler_loop_start": 1.630126953125,
+      "application#14:scheduler_loop_start": 1.594970703125,
       "application#14:scheduler_finish_start": 0.010009765625,
-      "application#14:scheduler_end": 0.0048828125,
-      "application#14:trace_replay": 98.25,
-      "application#14:post_processing": 0.005126953125,
-      "application#14:execution_projection": 426.780029296875,
-      "application#14:planning_input_snapshot": 0.994873046875,
-      "application#14:checkpoint_defence": 0.030029296875,
-      "application#14:rejected_build_list_entries": 0.044921875,
-      "application#14:plan_assembly": 0.030029296875,
+      "application#14:trace_replay": 94.344970703125,
+      "application#14:post_processing": 0.010009765625,
+      "application#14:execution_projection": 412.18017578125,
+      "application#14:planning_input_snapshot": 1.375,
+      "application#14:checkpoint_defence": 0.034912109375,
+      "application#14:rejected_build_list_entries": 0.050048828125,
+      "application#14:plan_assembly": 0.014892578125,
       "application#14:completed": 0.005126953125,
-      "unattributed": 133.059814453125
+      "unattributed": 135.2998046875
      }
     },
     {
-     "sentAtMs": 1790585526434.2751,
-     "rttMs": 624.25,
+     "sentAtMs": 1790588763456.12,
+     "rttMs": 641.77490234375,
      "overlapMs": {
-      "application#7:scheduler_loop_start": 0.52490234375,
-      "application#7:scheduler_finish_start": 0.044921875,
-      "application#7:scheduler_end": 0.005126953125,
-      "application#7:trace_replay": 136.929931640625,
+      "application#3:scheduler_loop_start": 0.769775390625,
+      "application#3:scheduler_finish_start": 0.030029296875,
+      "application#3:scheduler_end": 0.005126953125,
+      "application#3:trace_replay": 127.389892578125,
+      "application#3:post_processing": 0.010009765625,
+      "application#3:execution_projection": 393.864990234375,
+      "application#3:planning_input_snapshot": 0.949951171875,
+      "application#3:checkpoint_defence": 0.050048828125,
+      "application#3:rejected_build_list_entries": 0.090087890625,
+      "application#3:plan_assembly": 0.014892578125,
+      "unattributed": 118.60009765625
+     }
+    },
+    {
+     "sentAtMs": 1790588770454.705,
+     "rttMs": 598.97998046875,
+     "overlapMs": {
+      "application#7:scheduler_loop_start": 0.514892578125,
+      "application#7:scheduler_finish_start": 0.03515625,
+      "application#7:scheduler_end": 0.009765625,
+      "application#7:trace_replay": 133.22021484375,
       "application#7:post_processing": 0.010009765625,
-      "application#7:execution_projection": 366.75,
-      "application#7:planning_input_snapshot": 0.93994140625,
-      "application#7:checkpoint_defence": 0.03515625,
-      "application#7:rejected_build_list_entries": 0.054931640625,
-      "application#7:plan_assembly": 0.010009765625,
+      "application#7:execution_projection": 350.3349609375,
+      "application#7:planning_input_snapshot": 0.94482421875,
+      "application#7:checkpoint_defence": 0.025146484375,
+      "application#7:rejected_build_list_entries": 0.06005859375,
+      "application#7:required_materials": 0.0048828125,
+      "application#7:plan_assembly": 0.005126953125,
       "application#7:completed": 0.010009765625,
-      "unattributed": 118.93505859375
+      "unattributed": 113.804931640625
      }
     },
     {
-     "sentAtMs": 1790585557800.75,
-     "rttMs": 568.68994140625,
+     "sentAtMs": 1790588801218.0151,
+     "rttMs": 542.514892578125,
      "overlapMs": {
-      "application#19:scheduler_loop_start": 0.699951171875,
-      "application#19:scheduler_finish_start": 0.025146484375,
-      "application#19:scheduler_end": 0.0048828125,
-      "application#19:trace_replay": 43.43505859375,
-      "application#19:post_processing": 0.005126953125,
-      "application#19:execution_projection": 397.15478515625,
-      "application#19:planning_input_snapshot": 0.900146484375,
-      "application#19:checkpoint_defence": 0.050048828125,
-      "application#19:rejected_build_list_entries": 0.0849609375,
+      "application#19:scheduler_loop_start": 0.56982421875,
+      "application#19:scheduler_finish_start": 0.02001953125,
+      "application#19:scheduler_end": 0.005126953125,
+      "application#19:trace_replay": 40.764892578125,
+      "application#19:post_processing": 0.010009765625,
+      "application#19:execution_projection": 378.455078125,
+      "application#19:planning_input_snapshot": 0.97998046875,
+      "application#19:checkpoint_defence": 0.030029296875,
+      "application#19:rejected_build_list_entries": 0.099853515625,
+      "application#19:required_materials": 0.005126953125,
       "application#19:plan_assembly": 0.014892578125,
-      "application#19:completed": 0.010009765625,
-      "unattributed": 126.304931640625
+      "application#19:completed": 0.005126953125,
+      "unattributed": 121.554931640625
      }
     },
     {
-     "sentAtMs": 1790585542214.01,
-     "rttMs": 542.699951171875,
+     "sentAtMs": 1790588785331.815,
+     "rttMs": 513.5,
      "overlapMs": {
-      "application#11:scheduler_loop_start": 0.72509765625,
+      "application#11:scheduler_loop_start": 0.66015625,
       "application#11:scheduler_finish_start": 0.02001953125,
-      "application#11:trace_replay": 131.155029296875,
-      "application#11:post_processing": 0.010009765625,
-      "application#11:execution_projection": 313.65478515625,
-      "application#11:planning_input_snapshot": 0.965087890625,
+      "application#11:trace_replay": 125.684814453125,
+      "application#11:post_processing": 0.005126953125,
+      "application#11:execution_projection": 294.010009765625,
+      "application#11:planning_input_snapshot": 0.9150390625,
       "application#11:checkpoint_defence": 0.02001953125,
-      "application#11:rejected_build_list_entries": 0.02490234375,
-      "application#11:plan_assembly": 0.01513671875,
-      "application#11:completed": 0.0048828125,
-      "unattributed": 96.10498046875
+      "application#11:rejected_build_list_entries": 0.019775390625,
+      "application#11:required_materials": 0.010009765625,
+      "application#11:completed": 0.005126953125,
+      "unattributed": 92.14990234375
      }
     },
     {
-     "sentAtMs": 1790585528515.34,
-     "rttMs": 450.2451171875,
+     "sentAtMs": 1790588772358.465,
+     "rttMs": 440.14501953125,
      "overlapMs": {
-      "application#8:scheduler_loop_start": 1.280029296875,
-      "application#8:scheduler_finish_start": 0.06005859375,
-      "application#8:scheduler_end": 0.0048828125,
-      "application#8:trace_replay": 96.824951171875,
+      "application#8:scheduler_loop_start": 0.96484375,
+      "application#8:scheduler_finish_start": 0.0400390625,
+      "application#8:scheduler_end": 0.005126953125,
+      "application#8:trace_replay": 92.514892578125,
       "application#8:post_processing": 0.010009765625,
-      "application#8:execution_projection": 273.455078125,
-      "application#8:planning_input_snapshot": 1,
-      "application#8:checkpoint_defence": 0.034912109375,
-      "application#8:rejected_build_list_entries": 0.050048828125,
-      "application#8:required_materials": 0.0048828125,
+      "application#8:execution_projection": 265.784912109375,
+      "application#8:planning_input_snapshot": 0.830078125,
+      "application#8:checkpoint_defence": 0.030029296875,
+      "application#8:rejected_build_list_entries": 0.044921875,
       "application#8:plan_assembly": 0.010009765625,
-      "application#8:completed": 0.010009765625,
-      "unattributed": 77.500244140625
+      "unattributed": 79.91015625
      }
     },
     {
-     "sentAtMs": 1790585559098.0852,
-     "rttMs": 446.68505859375,
+     "sentAtMs": 1790588802459.315,
+     "rttMs": 423.389892578125,
      "overlapMs": {
-      "application#20:scheduler_loop_start": 0.56494140625,
-      "application#20:scheduler_finish_start": 0.02490234375,
-      "application#20:scheduler_end": 0.005126953125,
-      "application#20:trace_replay": 22.784912109375,
-      "application#20:post_processing": 0.010009765625,
-      "application#20:execution_projection": 311.699951171875,
-      "application#20:planning_input_snapshot": 0.6201171875,
-      "application#20:checkpoint_defence": 0.02978515625,
-      "application#20:rejected_build_list_entries": 0.05517578125,
+      "application#20:scheduler_loop_start": 0.565185546875,
+      "application#20:scheduler_finish_start": 0.009765625,
+      "application#20:scheduler_end": 0.010009765625,
+      "application#20:trace_replay": 21.27001953125,
+      "application#20:post_processing": 0.005126953125,
+      "application#20:execution_projection": 304.175048828125,
+      "application#20:planning_input_snapshot": 0.52001953125,
+      "application#20:checkpoint_defence": 0.019775390625,
+      "application#20:rejected_build_list_entries": 0.030029296875,
       "application#20:plan_assembly": 0.010009765625,
-      "application#20:completed": 0.0048828125,
-      "unattributed": 110.875244140625
+      "unattributed": 96.77490234375
      }
     },
     {
-     "sentAtMs": 1790585520450.195,
-     "rttMs": 398.47998046875,
+     "sentAtMs": 1790588764865.54,
+     "rttMs": 396.344970703125,
      "overlapMs": {
       "application#4:scheduler_loop_start": 0.7099609375,
       "application#4:scheduler_finish_start": 0.034912109375,
-      "application#4:scheduler_end": 0.010009765625,
-      "application#4:trace_replay": 85.06005859375,
+      "application#4:scheduler_end": 0.005126953125,
+      "application#4:trace_replay": 82.974853515625,
       "application#4:post_processing": 0.010009765625,
-      "application#4:execution_projection": 237.864990234375,
-      "application#4:planning_input_snapshot": 0.81005859375,
-      "application#4:checkpoint_defence": 0.034912109375,
-      "application#4:rejected_build_list_entries": 0.0400390625,
-      "application#4:plan_assembly": 0.03515625,
-      "application#4:completed": 0.0048828125,
-      "unattributed": 73.864990234375
+      "application#4:execution_projection": 238.26513671875,
+      "application#4:planning_input_snapshot": 1.06494140625,
+      "application#4:checkpoint_defence": 0.02001953125,
+      "application#4:rejected_build_list_entries": 0.034912109375,
+      "application#4:plan_assembly": 0.02001953125,
+      "unattributed": 73.205078125
      }
     },
     {
-     "sentAtMs": 1790585544185.885,
-     "rttMs": 392.2451171875,
+     "sentAtMs": 1790588787138.84,
+     "rttMs": 383.669921875,
      "overlapMs": {
-      "application#13:scheduler_loop_start": 1.030029296875,
-      "application#13:scheduler_finish_start": 0.02001953125,
-      "application#13:scheduler_end": 0.0048828125,
-      "application#13:trace_replay": 51.990234375,
-      "application#13:execution_projection": 259.134765625,
-      "application#13:planning_input_snapshot": 0.615234375,
-      "application#13:checkpoint_defence": 0.019775390625,
-      "application#13:rejected_build_list_entries": 0.025146484375,
+      "application#13:scheduler_loop_start": 0.71484375,
+      "application#13:scheduler_finish_start": 0.01513671875,
+      "application#13:trace_replay": 47.530029296875,
+      "application#13:post_processing": 0.010009765625,
+      "application#13:execution_projection": 256.3798828125,
+      "application#13:planning_input_snapshot": 0.64990234375,
+      "application#13:checkpoint_defence": 0.010009765625,
+      "application#13:rejected_build_list_entries": 0.030029296875,
       "application#13:plan_assembly": 0.010009765625,
-      "unattributed": 79.39501953125
+      "application#13:completed": 0.010009765625,
+      "unattributed": 78.31005859375
      }
     },
     {
-     "sentAtMs": 1790585560502.57,
-     "rttMs": 386.5400390625,
+     "sentAtMs": 1790588803844.62,
+     "rttMs": 365.425048828125,
      "overlapMs": {
-      "application#21:scheduler_loop_start": 0.31005859375,
-      "application#21:scheduler_finish_start": 0.02490234375,
-      "application#21:trace_replay": 78.050048828125,
-      "application#21:post_processing": 0.010009765625,
-      "application#21:execution_projection": 232.9150390625,
-      "application#21:planning_input_snapshot": 0.829833984375,
-      "application#21:checkpoint_defence": 0.02001953125,
-      "application#21:rejected_build_list_entries": 0.0400390625,
-      "application#21:required_materials": 0.005126953125,
-      "application#21:plan_assembly": 0.02490234375,
-      "unattributed": 74.31005859375
+      "application#21:scheduler_loop_start": 0.33984375,
+      "application#21:scheduler_finish_start": 0.025146484375,
+      "application#21:trace_replay": 76.77001953125,
+      "application#21:post_processing": 0.009765625,
+      "application#21:execution_projection": 216.835205078125,
+      "application#21:planning_input_snapshot": 0.81982421875,
+      "application#21:checkpoint_defence": 0.01513671875,
+      "application#21:rejected_build_list_entries": 0.070068359375,
+      "application#21:required_materials": 0.0048828125,
+      "application#21:plan_assembly": 0.010009765625,
+      "application#21:completed": 0.010009765625,
+      "unattributed": 70.51513671875
      }
     },
     {
-     "sentAtMs": 1790585548853.6501,
-     "rttMs": 325.27001953125,
+     "sentAtMs": 1790588791581.705,
+     "rttMs": 306.31005859375,
      "overlapMs": {
-      "application#16:scheduler_loop_start": 1.204833984375,
-      "application#16:scheduler_finish_start": 0.02001953125,
-      "application#16:trace_replay": 77.705078125,
-      "application#16:post_processing": 0.0048828125,
-      "application#16:execution_projection": 188.455078125,
-      "application#16:planning_input_snapshot": 0.75,
+      "application#16:scheduler_loop_start": 1.175048828125,
+      "application#16:scheduler_finish_start": 0.014892578125,
+      "application#16:scheduler_end": 0.0048828125,
+      "application#16:trace_replay": 74.66015625,
+      "application#16:post_processing": 0.010009765625,
+      "application#16:execution_projection": 174.35498046875,
+      "application#16:planning_input_snapshot": 0.71484375,
       "application#16:checkpoint_defence": 0.01513671875,
-      "application#16:rejected_build_list_entries": 0.02978515625,
-      "application#16:plan_assembly": 0.010009765625,
-      "application#16:completed": 0.005126953125,
-      "unattributed": 57.070068359375
+      "application#16:rejected_build_list_entries": 0.02490234375,
+      "application#16:plan_assembly": 0.005126953125,
+      "application#16:completed": 0.0048828125,
+      "unattributed": 55.3251953125
      }
     },
     {
-     "sentAtMs": 1790585529641.175,
-     "rttMs": 308.679931640625,
+     "sentAtMs": 1790588773435.895,
+     "rttMs": 295.094970703125,
      "overlapMs": {
-      "application#9:scheduler_loop_start": 1.284912109375,
-      "application#9:scheduler_finish_start": 0.050048828125,
+      "application#9:scheduler_loop_start": 1.2099609375,
+      "application#9:scheduler_finish_start": 0.044921875,
       "application#9:scheduler_end": 0.005126953125,
-      "application#9:trace_replay": 71.10498046875,
+      "application#9:trace_replay": 69.9150390625,
       "application#9:post_processing": 0.0048828125,
-      "application#9:execution_projection": 175.590087890625,
-      "application#9:planning_input_snapshot": 0.760009765625,
+      "application#9:execution_projection": 169.505126953125,
+      "application#9:planning_input_snapshot": 0.739990234375,
       "application#9:checkpoint_defence": 0.014892578125,
-      "application#9:rejected_build_list_entries": 0.03515625,
+      "application#9:rejected_build_list_entries": 0.025146484375,
       "application#9:required_materials": 0.0048828125,
-      "application#9:plan_assembly": 0.005126953125,
-      "application#9:completed": 0.0048828125,
-      "unattributed": 59.81494140625
+      "application#9:plan_assembly": 0.010009765625,
+      "application#9:completed": 0.005126953125,
+      "unattributed": 53.60986328125
      }
     },
     {
-     "sentAtMs": 1790585515788.54,
-     "rttMs": 288.820068359375,
+     "sentAtMs": 1790588799731.025,
+     "rttMs": 288.050048828125,
      "overlapMs": {
-      "application#2:scheduler_loop_start": 0.9599609375,
-      "application#2:scheduler_finish_start": 0.030029296875,
-      "application#2:trace_replay": 57.43994140625,
-      "application#2:post_processing": 0.010009765625,
-      "application#2:execution_projection": 172.2451171875,
-      "application#2:planning_input_snapshot": 0.7099609375,
-      "application#2:checkpoint_defence": 0.02001953125,
-      "application#2:rejected_build_list_entries": 0.030029296875,
-      "application#2:required_materials": 0.0048828125,
-      "application#2:plan_assembly": 0.010009765625,
-      "application#2:completed": 0.010009765625,
-      "unattributed": 57.35009765625
-     }
-    },
-    {
-     "sentAtMs": 1790585556379.645,
-     "rttMs": 282.89501953125,
-     "overlapMs": {
-      "application#18:scheduler_loop_start": 0.53515625,
-      "application#18:scheduler_finish_start": 0.019775390625,
-      "application#18:scheduler_end": 0.005126953125,
-      "application#18:trace_replay": 71.554931640625,
+      "application#18:scheduler_loop_start": 0.5400390625,
+      "application#18:scheduler_finish_start": 0.01513671875,
+      "application#18:scheduler_end": 0.0048828125,
+      "application#18:trace_replay": 66.114990234375,
       "application#18:post_processing": 0.010009765625,
-      "application#18:execution_projection": 156.570068359375,
-      "application#18:planning_input_snapshot": 0.760009765625,
+      "application#18:execution_projection": 168.1650390625,
+      "application#18:planning_input_snapshot": 0.75,
       "application#18:checkpoint_defence": 0.014892578125,
-      "application#18:rejected_build_list_entries": 0.050048828125,
-      "application#18:required_materials": 0.005126953125,
-      "application#18:plan_assembly": 0.0048828125,
-      "application#18:completed": 0.005126953125,
-      "unattributed": 53.35986328125
+      "application#18:rejected_build_list_entries": 0.045166015625,
+      "application#18:plan_assembly": 0.010009765625,
+      "application#18:completed": 0.0048828125,
+      "unattributed": 52.375
      }
     },
     {
-     "sentAtMs": 1790585521495.685,
-     "rttMs": 259.909912109375,
+     "sentAtMs": 1790588760590.56,
+     "rttMs": 283.179931640625,
      "overlapMs": {
-      "application#5:scheduler_loop_start": 0.550048828125,
+      "application#2:scheduler_loop_start": 1.2099609375,
+      "application#2:scheduler_finish_start": 0.0400390625,
+      "application#2:trace_replay": 57.280029296875,
+      "application#2:post_processing": 0.0048828125,
+      "application#2:execution_projection": 169.775146484375,
+      "application#2:planning_input_snapshot": 0.71484375,
+      "application#2:checkpoint_defence": 0.010009765625,
+      "application#2:rejected_build_list_entries": 0.044921875,
+      "application#2:plan_assembly": 0.01513671875,
+      "application#2:completed": 0.0048828125,
+      "unattributed": 54.080078125
+     }
+    },
+    {
+     "sentAtMs": 1790588765857.7551,
+     "rttMs": 256.780029296875,
+     "overlapMs": {
+      "application#5:scheduler_loop_start": 0.554931640625,
       "application#5:scheduler_finish_start": 0.030029296875,
       "application#5:scheduler_end": 0.0048828125,
-      "application#5:trace_replay": 54.150146484375,
-      "application#5:post_processing": 0.010009765625,
-      "application#5:execution_projection": 156.52978515625,
-      "application#5:planning_input_snapshot": 0.710205078125,
+      "application#5:trace_replay": 53.35498046875,
+      "application#5:post_processing": 0.005126953125,
+      "application#5:execution_projection": 156.010009765625,
+      "application#5:planning_input_snapshot": 0.704833984375,
       "application#5:checkpoint_defence": 0.010009765625,
-      "application#5:rejected_build_list_entries": 0.02490234375,
+      "application#5:rejected_build_list_entries": 0.025146484375,
       "application#5:required_materials": 0.0048828125,
       "application#5:plan_assembly": 0.005126953125,
       "application#5:completed": 0.0048828125,
-      "unattributed": 47.875
+      "unattributed": 46.065185546875
      }
     },
     {
-     "sentAtMs": 1790585518664.5452,
-     "rttMs": 253.7451171875,
-     "overlapMs": {
-      "application#3:call_start": 0.01513671875,
-      "application#3:scheduler_start": 115.139892578125,
-      "application#3:scheduler_loop_start": 2.0302734375,
-      "unattributed": 136.559814453125
-     }
-    },
-    {
-     "sentAtMs": 1790585541962.8352,
-     "rttMs": 246.360107421875,
-     "overlapMs": {
-      "application#11:scheduler_start": 111.784912109375,
-      "application#11:scheduler_loop_start": 2.145263671875,
-      "unattributed": 132.429931640625
-     }
-    },
-    {
-     "sentAtMs": 1790585526179.9302,
-     "rttMs": 245.205078125,
+     "sentAtMs": 1790588770204.0151,
+     "rttMs": 241.77490234375,
      "overlapMs": {
       "application#7:call_start": 0.02490234375,
-      "application#7:scheduler_start": 112.125,
-      "application#7:scheduler_loop_start": 2.7001953125,
-      "unattributed": 130.35498046875
+      "application#7:scheduler_start": 111,
+      "application#7:scheduler_loop_start": 4.1201171875,
+      "unattributed": 126.6298828125
      }
     },
     {
-     "sentAtMs": 1790585542996.6301,
-     "rttMs": 193.679931640625,
+     "sentAtMs": 1790588763212.8801,
+     "rttMs": 236.340087890625,
      "overlapMs": {
-      "application#12:scheduler_loop_start": 1.0849609375,
-      "application#12:scheduler_finish_start": 0.02490234375,
-      "application#12:trace_replay": 44.0849609375,
+      "application#3:call_start": 0.010009765625,
+      "application#3:scheduler_start": 108.71484375,
+      "application#3:scheduler_loop_start": 2.435302734375,
+      "unattributed": 125.179931640625
+     }
+    },
+    {
+     "sentAtMs": 1790588785093.675,
+     "rttMs": 233.89990234375,
+     "overlapMs": {
+      "application#11:call_start": 0.005126953125,
+      "application#11:scheduler_start": 108.544921875,
+      "application#11:scheduler_loop_start": 2.409912109375,
+      "unattributed": 122.93994140625
+     }
+    },
+    {
+     "sentAtMs": 1790588786059.95,
+     "rttMs": 186.614990234375,
+     "overlapMs": {
+      "application#12:scheduler_loop_start": 0.925048828125,
+      "application#12:scheduler_finish_start": 0.014892578125,
+      "application#12:scheduler_end": 0.005126953125,
+      "application#12:trace_replay": 38.889892578125,
       "application#12:post_processing": 0.005126953125,
-      "application#12:execution_projection": 112.455078125,
-      "application#12:planning_input_snapshot": 1.014892578125,
-      "application#12:checkpoint_defence": 0.014892578125,
-      "application#12:rejected_build_list_entries": 0.01513671875,
-      "application#12:plan_assembly": 0.010009765625,
-      "application#12:completed": 0.0048828125,
-      "unattributed": 34.965087890625
+      "application#12:execution_projection": 111.695068359375,
+      "application#12:planning_input_snapshot": 0.60986328125,
+      "application#12:checkpoint_defence": 0.010009765625,
+      "application#12:rejected_build_list_entries": 0.025146484375,
+      "application#12:required_materials": 0.0048828125,
+      "application#12:plan_assembly": 0.014892578125,
+      "application#12:completed": 0.005126953125,
+      "unattributed": 34.409912109375
      }
     },
     {
-     "sentAtMs": 1790585528320.75,
-     "rttMs": 190.925048828125,
+     "sentAtMs": 1790588772180.175,
+     "rttMs": 174.034912109375,
      "overlapMs": {
-      "application#8:call_start": 0.02490234375,
-      "application#8:scheduler_start": 91.610107421875,
-      "application#8:scheduler_loop_start": 2.449951171875,
-      "unattributed": 96.840087890625
+      "application#8:call_start": 0.02001953125,
+      "application#8:scheduler_start": 81.090087890625,
+      "application#8:scheduler_loop_start": 1.81494140625,
+      "unattributed": 91.10986328125
      }
     },
     {
-     "sentAtMs": 1790585521911.83,
-     "rttMs": 145.514892578125,
+     "sentAtMs": 1790588766250.745,
+     "rttMs": 128.68994140625,
      "overlapMs": {
-      "application#6:scheduler_loop_start": 0.455078125,
-      "application#6:scheduler_finish_start": 0.0498046875,
+      "application#6:scheduler_loop_start": 0.4248046875,
+      "application#6:scheduler_finish_start": 0.030029296875,
       "application#6:scheduler_end": 0.005126953125,
-      "application#6:trace_replay": 26.510009765625,
-      "application#6:execution_projection": 90.784912109375,
-      "application#6:planning_input_snapshot": 0.655029296875,
-      "application#6:checkpoint_defence": 0.01513671875,
-      "application#6:rejected_build_list_entries": 0.014892578125,
-      "application#6:plan_assembly": 0.02001953125,
-      "unattributed": 27.0048828125
+      "application#6:trace_replay": 25.39501953125,
+      "application#6:post_processing": 0.0048828125,
+      "application#6:execution_projection": 78.510009765625,
+      "application#6:planning_input_snapshot": 0.705078125,
+      "application#6:checkpoint_defence": 0.014892578125,
+      "application#6:rejected_build_list_entries": 0.030029296875,
+      "application#6:plan_assembly": 0.005126953125,
+      "application#6:completed": 0.010009765625,
+      "unattributed": 23.554931640625
      }
     }
    ],
    "finalPhasesMs": {
-    "call_setup": 0.0048828125,
-    "scheduler_prepare": 1487.449951171875,
-    "scheduler_loop": 4392.125,
-    "scheduler_finish": 0.06005859375,
+    "call_setup": 0.010009765625,
+    "scheduler_prepare": 1408.1298828125,
+    "scheduler_loop": 4158.135009765625,
+    "scheduler_finish": 0.0400390625,
     "scheduler_handoff": 0,
-    "trace_replay": 2253.669921875,
-    "post_processing": 0.010009765625,
-    "execution_projection": 11025.760009765625,
-    "planning_input_snapshot": 17.47509765625,
-    "checkpoint_defence": 0.324951171875,
-    "rejected_build_list_entries": 0.91015625,
-    "required_materials": 0.014892578125,
-    "plan_assembly": 0.014892578125,
+    "trace_replay": 2126.6201171875,
+    "post_processing": 0.014892578125,
+    "execution_projection": 10814.4150390625,
+    "planning_input_snapshot": 15.23486328125,
+    "checkpoint_defence": 0.420166015625,
+    "rejected_build_list_entries": 1.294921875,
+    "required_materials": 0.010009765625,
+    "plan_assembly": 0.02490234375,
     "call_return": 0.005126953125
    },
    "finalTailSync": {
-    "fromMs": 1790585581916.2,
-    "toMs": 1790585595216.955,
-    "durationMs": 13300.755126953125
+    "fromMs": 1790588826254.66,
+    "toMs": 1790588839215.425,
+    "durationMs": 12960.76513671875
    }
   },
   "memory": {
@@ -6784,95 +6864,95 @@
      "atMs": 0.004999995231628418,
      "userAgentSpecific": {
       "status": "ok",
-      "bytes": 12628559,
+      "bytes": 12633067,
       "dedicatedWorkerBytes": 0,
-      "windowBytes": 12142561,
-      "otherBytes": 485998,
-      "resolveMs": 4749.775000035763
+      "windowBytes": 12098214,
+      "otherBytes": 534853,
+      "resolveMs": 14020.050000011921
      },
      "mainRealm": {
-      "usedJSHeapSize": 11670328,
-      "totalJSHeapSize": 15537900,
+      "usedJSHeapSize": 11674912,
+      "totalJSHeapSize": 16586476,
       "jsHeapSizeLimit": 4395630592
      }
     },
     {
      "label": "worker_ready",
-     "atMs": 4768.634999990463,
+     "atMs": 14042.909999966621,
      "userAgentSpecific": {
       "status": "ok",
-      "bytes": 14165481,
-      "dedicatedWorkerBytes": 1478587,
-      "windowBytes": 11595685,
-      "otherBytes": 1091209,
-      "resolveMs": 19013.400000035763
+      "bytes": 14169572,
+      "dedicatedWorkerBytes": 1478649,
+      "windowBytes": 12203634,
+      "otherBytes": 487289,
+      "resolveMs": 16010.535000026226
      },
      "mainRealm": {
-      "usedJSHeapSize": 11725726,
-      "totalJSHeapSize": 13703050,
+      "usedJSHeapSize": 11729150,
+      "totalJSHeapSize": 15275914,
       "jsHeapSizeLimit": 4395630592
      }
     },
     {
      "label": "result_received",
-     "atMs": 113900.08499997854,
+     "atMs": 117351.06000000238,
      "userAgentSpecific": {
       "status": "ok",
-      "bytes": 17776657,
-      "dedicatedWorkerBytes": 4572906,
-      "windowBytes": 12717702,
-      "otherBytes": 486049,
-      "resolveMs": 19024.365000009537
+      "bytes": 17861935,
+      "dedicatedWorkerBytes": 4654424,
+      "windowBytes": 12721181,
+      "otherBytes": 486330,
+      "resolveMs": 17019.40499997139
      },
      "mainRealm": {
-      "usedJSHeapSize": 12245394,
-      "totalJSHeapSize": 14227302,
+      "usedJSHeapSize": 12327334,
+      "totalJSHeapSize": 15275878,
       "jsHeapSizeLimit": 4395630592
      }
     },
     {
      "label": "after_dispose",
-     "atMs": 132924.530000031,
+     "atMs": 134370.5450000167,
      "userAgentSpecific": {
       "status": "ok",
-      "bytes": 13209699,
+      "bytes": 13213507,
       "dedicatedWorkerBytes": 0,
-      "windowBytes": 12721863,
-      "otherBytes": 487836,
-      "resolveMs": 60003.464999973774
+      "windowBytes": 12725539,
+      "otherBytes": 487968,
+      "resolveMs": 60016.15499997139
      },
      "mainRealm": {
-      "usedJSHeapSize": 12250444,
-      "totalJSHeapSize": 13440748,
+      "usedJSHeapSize": 12254388,
+      "totalJSHeapSize": 15013612,
       "jsHeapSizeLimit": 4395630592
      }
     },
     {
      "label": "after_gc_wait_reference",
-     "atMs": 202941.14499998093,
+     "atMs": 204400.4049999714,
      "userAgentSpecific": {
       "status": "ok",
-      "bytes": 13204911,
+      "bytes": 13206306,
       "dedicatedWorkerBytes": 0,
-      "windowBytes": 12670287,
-      "otherBytes": 534624,
-      "resolveMs": 13022.54500001669
+      "windowBytes": 12716854,
+      "otherBytes": 489452,
+      "resolveMs": 19018.540000021458
      },
      "mainRealm": {
-      "usedJSHeapSize": 12246040,
-      "totalJSHeapSize": 13440748,
+      "usedJSHeapSize": 12247671,
+      "totalJSHeapSize": 14751387,
       "jsHeapSizeLimit": 4395630592
      }
     }
    ],
-   "acceptedClockCheckMs": 0.08984375,
+   "acceptedClockCheckMs": 0.0849609375,
    "external": {
     "source": {
      "file": "PLANNER_GLOBAL_PHASE2B_EXTERNAL_MEMORY.json",
-     "bytes": 159124,
-     "sha256": "3fd98cb6dc16bc2037840dde01eb14889d59acf8313489a0716dbed8e1dc6ed0"
+     "bytes": 150916,
+     "sha256": "02546c7b909db4ed77e5a240cd94782f0df45cc9ba8468c21fea3c036001e489"
     },
-    "sampleCount": 1180,
+    "sampleCount": 1097,
     "intervalMs": 100,
     "scope": {
      "workerHeap": "CDP Runtime.getHeapUsage on the benchmark Worker target (usedSize = V8 isolate used heap incl. uncollected garbage); sampled about every 100 ms plus request latency; sampled max, not a continuous peak",
@@ -6882,1538 +6962,1586 @@
      "samples": [
       {
        "realm": "page",
-       "driverMid": 1790585597125,
-       "realmEpoch": 1790585597126.47,
-       "rtt": 0
-      },
-      {
-       "realm": "page",
-       "driverMid": 1790585597125.5,
-       "realmEpoch": 1790585597127.0151,
+       "driverMid": 1790588841077.5,
+       "realmEpoch": 1790588841078.27,
        "rtt": 1
       },
       {
        "realm": "page",
-       "driverMid": 1790585597126,
-       "realmEpoch": 1790585597127.56,
+       "driverMid": 1790588841078,
+       "realmEpoch": 1790588841078.7,
        "rtt": 0
       },
       {
        "realm": "page",
-       "driverMid": 1790585597126.5,
-       "realmEpoch": 1790585597127.945,
+       "driverMid": 1790588841078.5,
+       "realmEpoch": 1790588841079.285,
        "rtt": 1
       },
       {
        "realm": "page",
-       "driverMid": 1790585597127,
-       "realmEpoch": 1790585597128.3052,
+       "driverMid": 1790588841079,
+       "realmEpoch": 1790588841079.745,
        "rtt": 0
+      },
+      {
+       "realm": "page",
+       "driverMid": 1790588841080.5,
+       "realmEpoch": 1790588841080.12,
+       "rtt": 3
       },
       {
        "realm": "worker",
-       "driverMid": 1790585603779,
-       "realmEpoch": 1790585603782.48,
-       "rtt": 4
+       "driverMid": 1790588857036.5,
+       "realmEpoch": 1790588857037.185,
+       "rtt": 1
       }
      ],
-     "workerMinusDriverMs": 3.47998046875,
+     "workerMinusDriverMs": 0.68505859375,
      "source": "worker realm timeOrigin+now minus driver Date.now (midpoint)"
     },
-    "maxSampledBytes": 1859374440,
+    "maxSampledBytes": 1860402432,
     "finalCall": [
      {
       "name": "final#25:call_start",
-      "durationMs": 0.005126953125,
+      "durationMs": 0.0048828125,
       "samples": 0,
-      "beforeBytes": 259950064,
-      "afterBytes": 287706944,
+      "beforeBytes": 77624080,
+      "afterBytes": 85023820,
       "maxInsideBytes": null,
-      "deltaBytes": 27756880
+      "deltaBytes": 7399740
      },
      {
       "name": "final#25:scheduler_start",
-      "durationMs": 1486.60986328125,
+      "durationMs": 1435.385009765625,
       "samples": 13,
-      "beforeBytes": 259950064,
-      "afterBytes": 229562540,
-      "maxInsideBytes": 361568976,
-      "deltaBytes": -30387524
+      "beforeBytes": 77624080,
+      "afterBytes": 220319776,
+      "maxInsideBytes": 215337496,
+      "deltaBytes": 142695696
      },
      {
       "name": "final#25:scheduler_loop_start",
-      "durationMs": 4278.72998046875,
-      "samples": 40,
-      "beforeBytes": 223252128,
-      "afterBytes": 266423940,
-      "maxInsideBytes": 256431080,
-      "deltaBytes": 43171812
+      "durationMs": 4128.175048828125,
+      "samples": 38,
+      "beforeBytes": 208800564,
+      "afterBytes": 260200956,
+      "maxInsideBytes": 252267548,
+      "deltaBytes": 51400392
      },
      {
       "name": "final#25:scheduler_finish_start",
-      "durationMs": 0.050048828125,
+      "durationMs": 0.044921875,
       "samples": 0,
-      "beforeBytes": 235905024,
-      "afterBytes": 266423940,
+      "beforeBytes": 250253040,
+      "afterBytes": 260200956,
       "maxInsideBytes": null,
-      "deltaBytes": 30518916
+      "deltaBytes": 9947916
      },
      {
       "name": "final#25:scheduler_end",
-      "durationMs": 0,
+      "durationMs": 0.010009765625,
       "samples": 0,
-      "beforeBytes": 235905024,
-      "afterBytes": 266423940,
+      "beforeBytes": 250253040,
+      "afterBytes": 260200956,
       "maxInsideBytes": null,
-      "deltaBytes": 30518916
+      "deltaBytes": 9947916
      },
      {
       "name": "final#25:trace_replay",
-      "durationMs": 2226.18505859375,
-      "samples": 20,
-      "beforeBytes": 235905024,
-      "afterBytes": 284688264,
-      "maxInsideBytes": 272802996,
-      "deltaBytes": 48783240
+      "durationMs": 2124.705078125,
+      "samples": 19,
+      "beforeBytes": 250253040,
+      "afterBytes": 281726436,
+      "maxInsideBytes": 271464892,
+      "deltaBytes": 31473396
      },
      {
       "name": "final#25:post_processing",
       "durationMs": 0.014892578125,
       "samples": 0,
-      "beforeBytes": 272802996,
-      "afterBytes": 284688264,
+      "beforeBytes": 271464892,
+      "afterBytes": 281726436,
       "maxInsideBytes": null,
-      "deltaBytes": 11885268
+      "deltaBytes": 10261544
      },
      {
       "name": "final#25:execution_projection",
-      "durationMs": 11283.190185546875,
-      "samples": 103,
-      "beforeBytes": 272802996,
-      "afterBytes": 1826469444,
-      "maxInsideBytes": 1834749208,
-      "deltaBytes": 1553666448
+      "durationMs": 10673.43994140625,
+      "samples": 97,
+      "beforeBytes": 271464892,
+      "afterBytes": 1811423472,
+      "maxInsideBytes": 1834615664,
+      "deltaBytes": 1539958580
      },
      {
       "name": "final#25:planning_input_snapshot",
-      "durationMs": 15.719970703125,
-      "samples": 1,
-      "beforeBytes": 1816903536,
-      "afterBytes": 1854397596,
-      "maxInsideBytes": 1826469444,
-      "deltaBytes": 37494060
+      "durationMs": 14.505126953125,
+      "samples": 0,
+      "beforeBytes": 1819974284,
+      "afterBytes": 1811423472,
+      "maxInsideBytes": null,
+      "deltaBytes": -8550812
      },
      {
       "name": "final#25:checkpoint_defence",
-      "durationMs": 0.35498046875,
+      "durationMs": 0.27490234375,
       "samples": 0,
-      "beforeBytes": 1826469444,
-      "afterBytes": 1854397596,
+      "beforeBytes": 1819974284,
+      "afterBytes": 1811423472,
       "maxInsideBytes": null,
-      "deltaBytes": 27928152
+      "deltaBytes": -8550812
      },
      {
       "name": "final#25:rejected_build_list_entries",
-      "durationMs": 1.885009765625,
+      "durationMs": 1.1201171875,
       "samples": 0,
-      "beforeBytes": 1826469444,
-      "afterBytes": 1854397596,
+      "beforeBytes": 1819974284,
+      "afterBytes": 1811423472,
       "maxInsideBytes": null,
-      "deltaBytes": 27928152
+      "deltaBytes": -8550812
      },
      {
       "name": "final#25:required_materials",
-      "durationMs": 0.014892578125,
+      "durationMs": 0.010009765625,
       "samples": 0,
-      "beforeBytes": 1826469444,
-      "afterBytes": 1854397596,
+      "beforeBytes": 1819974284,
+      "afterBytes": 1811423472,
       "maxInsideBytes": null,
-      "deltaBytes": 27928152
+      "deltaBytes": -8550812
      },
      {
       "name": "final#25:plan_assembly",
-      "durationMs": 0.025146484375,
+      "durationMs": 0.014892578125,
       "samples": 0,
-      "beforeBytes": 1826469444,
-      "afterBytes": 1854397596,
+      "beforeBytes": 1819974284,
+      "afterBytes": 1811423472,
       "maxInsideBytes": null,
-      "deltaBytes": 27928152
+      "deltaBytes": -8550812
      },
      {
       "name": "final#25:completed",
-      "durationMs": 0.0048828125,
+      "durationMs": 0.005126953125,
       "samples": 0,
-      "beforeBytes": 1826469444,
-      "afterBytes": 1854397596,
+      "beforeBytes": 1819974284,
+      "afterBytes": 1811423472,
       "maxInsideBytes": null,
-      "deltaBytes": 27928152
+      "deltaBytes": -8550812
      },
      {
       "name": "worker:evidence",
-      "durationMs": 350.489990234375,
+      "durationMs": 316.22998046875,
       "samples": 3,
-      "beforeBytes": 1826469444,
-      "afterBytes": 1811282716,
-      "maxInsideBytes": 1859374440,
-      "deltaBytes": -15186728
+      "beforeBytes": 1819974284,
+      "afterBytes": 1812396632,
+      "maxInsideBytes": 1860402432,
+      "deltaBytes": -7577652
      },
      {
       "name": "worker:plan_evidence",
-      "durationMs": 38.304931640625,
+      "durationMs": 30.97998046875,
       "samples": 0,
-      "beforeBytes": 1859374440,
-      "afterBytes": 1811282716,
+      "beforeBytes": 1860402432,
+      "afterBytes": 1812396632,
       "maxInsideBytes": null,
-      "deltaBytes": -48091724
+      "deltaBytes": -48005800
      },
      {
       "name": "worker:result_post",
-      "durationMs": 0.06494140625,
+      "durationMs": 0.06005859375,
       "samples": 0,
-      "beforeBytes": 1859374440,
-      "afterBytes": 1811282716,
+      "beforeBytes": 1860402432,
+      "afterBytes": 1812396632,
       "maxInsideBytes": null,
-      "deltaBytes": -48091724
+      "deltaBytes": -48005800
      }
     ],
     "byStage": [
      {
       "name": "calculation",
-      "durationMs": 89708.830078125,
-      "samples": 826,
-      "beforeBytes": 1072400,
-      "afterBytes": 1854397596,
-      "maxInsideBytes": 1834749208,
-      "deltaBytes": 1853325196
+      "durationMs": 86932.90502929688,
+      "samples": 792,
+      "beforeBytes": 1068928,
+      "afterBytes": 1811423472,
+      "maxInsideBytes": 1834615664,
+      "deltaBytes": 1810354544
      },
      {
       "name": "final_call",
-      "durationMs": 19292.7900390625,
-      "samples": 177,
-      "beforeBytes": 259950064,
-      "afterBytes": 1854397596,
-      "maxInsideBytes": 1834749208,
-      "deltaBytes": 1594447532
+      "durationMs": 18377.7099609375,
+      "samples": 167,
+      "beforeBytes": 77624080,
+      "afterBytes": 1811423472,
+      "maxInsideBytes": 1834615664,
+      "deltaBytes": 1733799392
      },
      {
       "name": "after_calculation",
-      "durationMs": 388.85986328125,
+      "durationMs": 347.27001953125,
       "samples": 3,
-      "beforeBytes": 1826469444,
-      "afterBytes": 1811282716,
-      "maxInsideBytes": 1859374440,
-      "deltaBytes": -15186728
+      "beforeBytes": 1819974284,
+      "afterBytes": 1812396632,
+      "maxInsideBytes": 1860402432,
+      "deltaBytes": -7577652
      }
     ],
     "os": [
      {
-      "atEpochMs": 1790585597933,
-      "pid": 38872,
-      "privateBytes": 2093625344,
-      "workingSetBytes": 2141683712
+      "atEpochMs": 1790588841826,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142896128
      },
      {
-      "atEpochMs": 1790585599011,
-      "pid": 38872,
-      "privateBytes": 2093625344,
-      "workingSetBytes": 2141683712
+      "atEpochMs": 1790588842904,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142896128
      },
      {
-      "atEpochMs": 1790585600035,
-      "pid": 38872,
-      "privateBytes": 2093625344,
-      "workingSetBytes": 2141786112
+      "atEpochMs": 1790588843923,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585601051,
-      "pid": 38872,
-      "privateBytes": 2093625344,
-      "workingSetBytes": 2141786112
+      "atEpochMs": 1790588844940,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585602089,
-      "pid": 38872,
-      "privateBytes": 2093625344,
-      "workingSetBytes": 2141786112
+      "atEpochMs": 1790588845967,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585603108,
-      "pid": 38872,
-      "privateBytes": 2093625344,
-      "workingSetBytes": 2141786112
+      "atEpochMs": 1790588846986,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585604125,
-      "pid": 38872,
-      "privateBytes": 2056261632,
-      "workingSetBytes": 2105389056
+      "atEpochMs": 1790588848003,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585605149,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2100383744
+      "atEpochMs": 1790588849015,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585606171,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588850031,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585607194,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588851055,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585608215,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588852080,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585609239,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588853095,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585610263,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588854114,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585611283,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588855135,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585612308,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588856151,
+      "pid": 46956,
+      "privateBytes": 2095370240,
+      "workingSetBytes": 2142998528
      },
      {
-      "atEpochMs": 1790585613335,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588857176,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585614353,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588858190,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585615373,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588859200,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585616397,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588860217,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585617421,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588861229,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585618445,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588862258,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585619465,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588863268,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585620481,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588864285,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585621502,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588865306,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585622526,
-      "pid": 38872,
-      "privateBytes": 2050973696,
-      "workingSetBytes": 2099793920
+      "atEpochMs": 1790588866323,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585623560,
+      "atEpochMs": 1790588867349,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585624572,
+      "atEpochMs": 1790588868360,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585625588,
+      "atEpochMs": 1790588869378,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585626609,
+      "atEpochMs": 1790588870396,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585627622,
-      "pid": 38872,
-      "privateBytes": 1059459072,
-      "workingSetBytes": 1099894784
+      "atEpochMs": 1790588871415,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585628649,
+      "atEpochMs": 1790588872441,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585629682,
-      "pid": 38872,
-      "privateBytes": 1338527744,
-      "workingSetBytes": 1385586688
+      "atEpochMs": 1790588873455,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585630703,
-      "pid": 38872,
-      "privateBytes": 1674403840,
-      "workingSetBytes": 1720569856
+      "atEpochMs": 1790588874477,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585631716,
-      "pid": 38872,
-      "privateBytes": 1691893760,
-      "workingSetBytes": 1738141696
+      "atEpochMs": 1790588875492,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585632738,
-      "pid": 38872,
-      "privateBytes": 1129709568,
-      "workingSetBytes": 1179078656
+      "atEpochMs": 1790588876511,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585633762,
-      "pid": 38872,
-      "privateBytes": 1050439680,
-      "workingSetBytes": 1100881920
+      "atEpochMs": 1790588877526,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585634790,
-      "pid": 38872,
-      "privateBytes": 1062121472,
-      "workingSetBytes": 1110974464
+      "atEpochMs": 1790588878546,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585635810,
-      "pid": 38872,
-      "privateBytes": 1048412160,
-      "workingSetBytes": 1098797056
+      "atEpochMs": 1790588879559,
+      "pid": 46956,
+      "privateBytes": 1392902144,
+      "workingSetBytes": 1439838208
      },
      {
-      "atEpochMs": 1790585636835,
-      "pid": 38872,
-      "privateBytes": 1043591168,
-      "workingSetBytes": 1093758976
+      "atEpochMs": 1790588880581,
+      "pid": 46956,
+      "privateBytes": 1644564480,
+      "workingSetBytes": 1691475968
      },
      {
-      "atEpochMs": 1790585637855,
-      "pid": 38872,
-      "privateBytes": 1110196224,
-      "workingSetBytes": 1159098368
+      "atEpochMs": 1790588881599,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489824256
      },
      {
-      "atEpochMs": 1790585638869,
-      "pid": 38872,
-      "privateBytes": 1043812352,
-      "workingSetBytes": 1094443008
+      "atEpochMs": 1790588882616,
+      "pid": 46956,
+      "privateBytes": 1086328832,
+      "workingSetBytes": 1134493696
      },
      {
-      "atEpochMs": 1790585639890,
-      "pid": 38872,
-      "privateBytes": 1047044096,
-      "workingSetBytes": 1097363456
+      "atEpochMs": 1790588883637,
+      "pid": 46956,
+      "privateBytes": 1087647744,
+      "workingSetBytes": 1136017408
      },
      {
-      "atEpochMs": 1790585640922,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588884662,
+      "pid": 46956,
+      "privateBytes": 1100484608,
+      "workingSetBytes": 1148334080
      },
      {
-      "atEpochMs": 1790585641937,
-      "pid": 38872,
-      "privateBytes": 1045889024,
-      "workingSetBytes": 1096056832
+      "atEpochMs": 1790588885679,
+      "pid": 46956,
+      "privateBytes": 1218994176,
+      "workingSetBytes": 1266941952
      },
      {
-      "atEpochMs": 1790585642949,
-      "pid": 38872,
-      "privateBytes": 1112305664,
-      "workingSetBytes": 1162321920
+      "atEpochMs": 1790588886701,
+      "pid": 46956,
+      "privateBytes": 1300340736,
+      "workingSetBytes": 1347776512
      },
      {
-      "atEpochMs": 1790585643962,
-      "pid": 38872,
-      "privateBytes": 1113620480,
-      "workingSetBytes": 1163718656
+      "atEpochMs": 1790588887720,
+      "pid": 46956,
+      "privateBytes": 1379287040,
+      "workingSetBytes": 1426444288
      },
      {
-      "atEpochMs": 1790585644982,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588888739,
+      "pid": 46956,
+      "privateBytes": 1380904960,
+      "workingSetBytes": 1428062208
      },
      {
-      "atEpochMs": 1790585646012,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588889757,
+      "pid": 46956,
+      "privateBytes": 1372712960,
+      "workingSetBytes": 1418936320
      },
      {
-      "atEpochMs": 1790585647033,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588890775,
+      "pid": 46956,
+      "privateBytes": 1386274816,
+      "workingSetBytes": 1432895488
      },
      {
-      "atEpochMs": 1790585648056,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588891797,
+      "pid": 46956,
+      "privateBytes": 1566306304,
+      "workingSetBytes": 1611665408
      },
      {
-      "atEpochMs": 1790585649081,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588892812,
+      "pid": 46956,
+      "privateBytes": 1618538496,
+      "workingSetBytes": 1664884736
      },
      {
-      "atEpochMs": 1790585650101,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588893840,
+      "pid": 46956,
+      "privateBytes": 1772052480,
+      "workingSetBytes": 1816248320
      },
      {
-      "atEpochMs": 1790585651126,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588894871,
+      "pid": 46956,
+      "privateBytes": 1902370816,
+      "workingSetBytes": 1946406912
      },
      {
-      "atEpochMs": 1790585652143,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588895886,
+      "pid": 46956,
+      "privateBytes": 1928056832,
+      "workingSetBytes": 1971953664
      },
      {
-      "atEpochMs": 1790585653169,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588896905,
+      "pid": 46956,
+      "privateBytes": 1947082752,
+      "workingSetBytes": 1991077888
      },
      {
-      "atEpochMs": 1790585654192,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588897921,
+      "pid": 46956,
+      "privateBytes": 1961189376,
+      "workingSetBytes": 2004705280
      },
      {
-      "atEpochMs": 1790585655217,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588898939,
+      "pid": 46956,
+      "privateBytes": 1271554048,
+      "workingSetBytes": 1321238528
      },
      {
-      "atEpochMs": 1790585656239,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588899980,
+      "pid": 46956,
+      "privateBytes": 1273884672,
+      "workingSetBytes": 1323368448
      },
      {
-      "atEpochMs": 1790585657280,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588901005,
+      "pid": 46956,
+      "privateBytes": 1282564096,
+      "workingSetBytes": 1330630656
      },
      {
-      "atEpochMs": 1790585658301,
-      "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "atEpochMs": 1790588902020,
+      "pid": 46956,
+      "privateBytes": 1282564096,
+      "workingSetBytes": 1330798592
+     },
+     {
+      "atEpochMs": 1790588903040,
+      "pid": 46956,
+      "privateBytes": 1282592768,
+      "workingSetBytes": 1330827264
      },
      {
-      "atEpochMs": 1790585659319,
+      "atEpochMs": 1790588904056,
+      "pid": 46956,
+      "privateBytes": 1474768896,
+      "workingSetBytes": 1521659904
+     },
+     {
+      "atEpochMs": 1790588905074,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585660344,
+      "atEpochMs": 1790588906095,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585661366,
+      "atEpochMs": 1790588907118,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585662398,
+      "atEpochMs": 1790588908138,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585663421,
-      "pid": 38872,
-      "privateBytes": 1141706752,
-      "workingSetBytes": 1188823040
+      "atEpochMs": 1790588909156,
+      "pid": 46956,
+      "privateBytes": 1119809536,
+      "workingSetBytes": 1168375808
      },
      {
-      "atEpochMs": 1790585664446,
-      "pid": 38872,
-      "privateBytes": 1299197952,
-      "workingSetBytes": 1346060288
+      "atEpochMs": 1790588910177,
+      "pid": 46956,
+      "privateBytes": 1122869248,
+      "workingSetBytes": 1171283968
      },
      {
-      "atEpochMs": 1790585665470,
+      "atEpochMs": 1790588911208,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585666491,
+      "atEpochMs": 1790588912220,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585667514,
+      "atEpochMs": 1790588913235,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585668546,
+      "atEpochMs": 1790588914256,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585669561,
+      "atEpochMs": 1790588915274,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585670586,
-      "pid": 38872,
-      "privateBytes": 1063014400,
-      "workingSetBytes": 1113116672
+      "atEpochMs": 1790588916292,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585671606,
+      "atEpochMs": 1790588917317,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585672627,
+      "atEpochMs": 1790588918336,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585673653,
+      "atEpochMs": 1790588919350,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585674674,
+      "atEpochMs": 1790588920363,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585675687,
+      "atEpochMs": 1790588921382,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585676700,
+      "atEpochMs": 1790588922410,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585677718,
+      "atEpochMs": 1790588923432,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585678731,
+      "atEpochMs": 1790588924453,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585679758,
+      "atEpochMs": 1790588925471,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585680782,
+      "atEpochMs": 1790588926489,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585681796,
+      "atEpochMs": 1790588927508,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585682818,
+      "atEpochMs": 1790588928531,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585683843,
+      "atEpochMs": 1790588929556,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585684868,
+      "atEpochMs": 1790588930572,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585685887,
+      "atEpochMs": 1790588931589,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468361216
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585686911,
+      "atEpochMs": 1790588932606,
       "pid": 16296,
-      "privateBytes": 1041629184,
-      "workingSetBytes": 468377600
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585687933,
+      "atEpochMs": 1790588933630,
       "pid": 16296,
-      "privateBytes": 1043619840,
-      "workingSetBytes": 470052864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585688962,
+      "atEpochMs": 1790588934655,
       "pid": 16296,
-      "privateBytes": 1043619840,
-      "workingSetBytes": 468480000
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585689991,
+      "atEpochMs": 1790588935672,
       "pid": 16296,
-      "privateBytes": 1043619840,
-      "workingSetBytes": 468791296
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585691011,
+      "atEpochMs": 1790588936693,
       "pid": 16296,
-      "privateBytes": 1042071552,
-      "workingSetBytes": 465276928
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585692032,
-      "pid": 38872,
-      "privateBytes": 1045925888,
-      "workingSetBytes": 1094873088
+      "atEpochMs": 1790588937713,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585693056,
+      "atEpochMs": 1790588938731,
       "pid": 16296,
-      "privateBytes": 1042067456,
-      "workingSetBytes": 463364096
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585694079,
+      "atEpochMs": 1790588939762,
       "pid": 16296,
-      "privateBytes": 1042067456,
-      "workingSetBytes": 459304960
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
+     },
+     {
+      "atEpochMs": 1790588940782,
+      "pid": 46956,
+      "privateBytes": 1335898112,
+      "workingSetBytes": 1384325120
      },
      {
-      "atEpochMs": 1790585695104,
+      "atEpochMs": 1790588941800,
       "pid": 16296,
-      "privateBytes": 1042067456,
-      "workingSetBytes": 459304960
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585696137,
+      "atEpochMs": 1790588942816,
       "pid": 16296,
-      "privateBytes": 1041625088,
-      "workingSetBytes": 458862592
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585697148,
-      "pid": 38872,
-      "privateBytes": 1071734784,
-      "workingSetBytes": 1123520512
+      "atEpochMs": 1790588943835,
+      "pid": 46956,
+      "privateBytes": 1182806016,
+      "workingSetBytes": 1233272832
      },
      {
-      "atEpochMs": 1790585698173,
-      "pid": 38872,
-      "privateBytes": 1176956928,
-      "workingSetBytes": 1228296192
+      "atEpochMs": 1790588944857,
+      "pid": 46956,
+      "privateBytes": 1363136512,
+      "workingSetBytes": 1413304320
      },
      {
-      "atEpochMs": 1790585699186,
-      "pid": 38872,
-      "privateBytes": 1280122880,
-      "workingSetBytes": 1330044928
+      "atEpochMs": 1790588945870,
+      "pid": 46956,
+      "privateBytes": 1485090816,
+      "workingSetBytes": 1535188992
      },
      {
-      "atEpochMs": 1790585700211,
-      "pid": 38872,
-      "privateBytes": 1340497920,
-      "workingSetBytes": 1390116864
+      "atEpochMs": 1790588946889,
+      "pid": 46956,
+      "privateBytes": 1571323904,
+      "workingSetBytes": 1621217280
      },
      {
-      "atEpochMs": 1790585701236,
-      "pid": 38872,
-      "privateBytes": 1418031104,
-      "workingSetBytes": 1468071936
+      "atEpochMs": 1790588947905,
+      "pid": 46956,
+      "privateBytes": 1639403520,
+      "workingSetBytes": 1689423872
      },
      {
-      "atEpochMs": 1790585702248,
-      "pid": 16296,
-      "privateBytes": 1041625088,
-      "workingSetBytes": 458862592
+      "atEpochMs": 1790588948921,
+      "pid": 46956,
+      "privateBytes": 1722245120,
+      "workingSetBytes": 1772269568
      },
      {
-      "atEpochMs": 1790585703270,
-      "pid": 38872,
-      "privateBytes": 1364267008,
-      "workingSetBytes": 1416060928
+      "atEpochMs": 1790588949936,
+      "pid": 46956,
+      "privateBytes": 1190129664,
+      "workingSetBytes": 1242456064
      },
      {
-      "atEpochMs": 1790585704297,
-      "pid": 38872,
-      "privateBytes": 1917104128,
-      "workingSetBytes": 1968738304
+      "atEpochMs": 1790588950956,
+      "pid": 46956,
+      "privateBytes": 1509888000,
+      "workingSetBytes": 1561563136
      },
      {
-      "atEpochMs": 1790585705311,
-      "pid": 38872,
-      "privateBytes": 2032476160,
-      "workingSetBytes": 2084036608
+      "atEpochMs": 1790588951971,
+      "pid": 46956,
+      "privateBytes": 1742770176,
+      "workingSetBytes": 1793810432
      },
      {
-      "atEpochMs": 1790585706326,
-      "pid": 38872,
-      "privateBytes": 2570768384,
-      "workingSetBytes": 2621939712
+      "atEpochMs": 1790588952984,
+      "pid": 46956,
+      "privateBytes": 2067976192,
+      "workingSetBytes": 2119290880
      },
      {
-      "atEpochMs": 1790585707349,
-      "pid": 38872,
-      "privateBytes": 3244978176,
-      "workingSetBytes": 3296149504
+      "atEpochMs": 1790588953999,
+      "pid": 46956,
+      "privateBytes": 2774126592,
+      "workingSetBytes": 2824818688
      },
      {
-      "atEpochMs": 1790585708368,
-      "pid": 38872,
-      "privateBytes": 3939676160,
-      "workingSetBytes": 3989692416
+      "atEpochMs": 1790588955027,
+      "pid": 46956,
+      "privateBytes": 3423780864,
+      "workingSetBytes": 3472691200
      },
      {
-      "atEpochMs": 1790585709381,
-      "pid": 38872,
-      "privateBytes": 4232880128,
-      "workingSetBytes": 4282073088
+      "atEpochMs": 1790588956047,
+      "pid": 46956,
+      "privateBytes": 4093214720,
+      "workingSetBytes": 4142284800
      },
      {
-      "atEpochMs": 1790585710402,
-      "pid": 38872,
-      "privateBytes": 4233981952,
-      "workingSetBytes": 4283203584
+      "atEpochMs": 1790588957072,
+      "pid": 46956,
+      "privateBytes": 4411801600,
+      "workingSetBytes": 4461031424
      },
      {
-      "atEpochMs": 1790585711422,
-      "pid": 38872,
-      "privateBytes": 4235046912,
-      "workingSetBytes": 4284456960
+      "atEpochMs": 1790588958096,
+      "pid": 46956,
+      "privateBytes": 4412874752,
+      "workingSetBytes": 4462174208
      },
      {
-      "atEpochMs": 1790585712454,
-      "pid": 38872,
-      "privateBytes": 4236304384,
-      "workingSetBytes": 4285902848
+      "atEpochMs": 1790588959114,
+      "pid": 46956,
+      "privateBytes": 4414201856,
+      "workingSetBytes": 4463497216
      },
      {
-      "atEpochMs": 1790585713468,
-      "pid": 38872,
-      "privateBytes": 2387623936,
-      "workingSetBytes": 2436034560
+      "atEpochMs": 1790588960133,
+      "pid": 46956,
+      "privateBytes": 4570607616,
+      "workingSetBytes": 4614635520
      },
      {
-      "atEpochMs": 1790585714493,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588961148,
+      "pid": 46956,
+      "privateBytes": 2992648192,
+      "workingSetBytes": 3038064640
      },
      {
-      "atEpochMs": 1790585715518,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588962170,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585716542,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588963181,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585717563,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588964202,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585718586,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588965218,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585719609,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588966234,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585720622,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588967263,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585721646,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588968287,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585722666,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588969309,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585723694,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588970327,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585724708,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588971347,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585725730,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588972366,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585726742,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588973388,
+      "pid": 46956,
+      "privateBytes": 2990288896,
+      "workingSetBytes": 3035705344
      },
      {
-      "atEpochMs": 1790585727766,
-      "pid": 38872,
-      "privateBytes": 2368307200,
-      "workingSetBytes": 2416717824
+      "atEpochMs": 1790588974405,
+      "pid": 46956,
+      "privateBytes": 2246131712,
+      "workingSetBytes": 2278957056
      },
      {
-      "atEpochMs": 1790585728794,
-      "pid": 38872,
-      "privateBytes": 2219487232,
-      "workingSetBytes": 2268004352
+      "atEpochMs": 1790588975426,
+      "pid": 46956,
+      "privateBytes": 2194620416,
+      "workingSetBytes": 2244501504
      },
      {
-      "atEpochMs": 1790585729808,
-      "pid": 38872,
-      "privateBytes": 2219487232,
-      "workingSetBytes": 2268004352
+      "atEpochMs": 1790588976442,
+      "pid": 46956,
+      "privateBytes": 2194620416,
+      "workingSetBytes": 2244501504
      },
      {
-      "atEpochMs": 1790585730830,
-      "pid": 38872,
-      "privateBytes": 2219487232,
-      "workingSetBytes": 2268004352
+      "atEpochMs": 1790588977457,
+      "pid": 46956,
+      "privateBytes": 2073100288,
+      "workingSetBytes": 2123943936
      },
      {
-      "atEpochMs": 1790585731855,
-      "pid": 38872,
-      "privateBytes": 2219487232,
-      "workingSetBytes": 2268004352
+      "atEpochMs": 1790588978486,
+      "pid": 46956,
+      "privateBytes": 2073100288,
+      "workingSetBytes": 2123943936
      },
      {
-      "atEpochMs": 1790585732878,
-      "pid": 38872,
-      "privateBytes": 2072682496,
-      "workingSetBytes": 2122199040
+      "atEpochMs": 1790588979498,
+      "pid": 46956,
+      "privateBytes": 2073100288,
+      "workingSetBytes": 2123943936
      },
      {
-      "atEpochMs": 1790585733908,
-      "pid": 38872,
-      "privateBytes": 2072682496,
-      "workingSetBytes": 2122199040
+      "atEpochMs": 1790588980518,
+      "pid": 46956,
+      "privateBytes": 2073100288,
+      "workingSetBytes": 2123943936
      },
      {
-      "atEpochMs": 1790585734928,
-      "pid": 38872,
-      "privateBytes": 2072682496,
-      "workingSetBytes": 2122199040
+      "atEpochMs": 1790588981532,
+      "pid": 46956,
+      "privateBytes": 2073100288,
+      "workingSetBytes": 2123943936
      },
      {
-      "atEpochMs": 1790585735954,
-      "pid": 38872,
-      "privateBytes": 2072682496,
-      "workingSetBytes": 2122199040
+      "atEpochMs": 1790588982550,
+      "pid": 46956,
+      "privateBytes": 1810964480,
+      "workingSetBytes": 1861840896
      },
      {
-      "atEpochMs": 1790585736972,
-      "pid": 38872,
-      "privateBytes": 2037010432,
-      "workingSetBytes": 2086576128
+      "atEpochMs": 1790588983568,
+      "pid": 46956,
+      "privateBytes": 1810964480,
+      "workingSetBytes": 1861840896
      },
      {
-      "atEpochMs": 1790585737996,
-      "pid": 38872,
-      "privateBytes": 2037010432,
-      "workingSetBytes": 2086576128
+      "atEpochMs": 1790588984594,
+      "pid": 46956,
+      "privateBytes": 1810964480,
+      "workingSetBytes": 1861840896
      },
      {
-      "atEpochMs": 1790585739016,
-      "pid": 38872,
-      "privateBytes": 2037010432,
-      "workingSetBytes": 2086576128
+      "atEpochMs": 1790588985607,
+      "pid": 46956,
+      "privateBytes": 1810964480,
+      "workingSetBytes": 1861840896
      },
      {
-      "atEpochMs": 1790585740035,
-      "pid": 38872,
-      "privateBytes": 2037010432,
-      "workingSetBytes": 2086576128
+      "atEpochMs": 1790588986629,
+      "pid": 46956,
+      "privateBytes": 1810964480,
+      "workingSetBytes": 1861840896
      },
      {
-      "atEpochMs": 1790585741047,
-      "pid": 38872,
-      "privateBytes": 2037010432,
-      "workingSetBytes": 2086576128
+      "atEpochMs": 1790588987647,
+      "pid": 46956,
+      "privateBytes": 1810964480,
+      "workingSetBytes": 1861840896
      },
      {
-      "atEpochMs": 1790585742075,
-      "pid": 38872,
-      "privateBytes": 2037010432,
-      "workingSetBytes": 2086576128
+      "atEpochMs": 1790588988669,
+      "pid": 46956,
+      "privateBytes": 1810964480,
+      "workingSetBytes": 1861840896
      },
      {
-      "atEpochMs": 1790585743096,
-      "pid": 38872,
-      "privateBytes": 2037010432,
-      "workingSetBytes": 2086576128
+      "atEpochMs": 1790588989689,
+      "pid": 46956,
+      "privateBytes": 1810964480,
+      "workingSetBytes": 1861840896
+     },
+     {
+      "atEpochMs": 1790588990712,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
+     },
+     {
+      "atEpochMs": 1790588991731,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
+     },
+     {
+      "atEpochMs": 1790588992749,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
+     },
+     {
+      "atEpochMs": 1790588993762,
+      "pid": 16296,
+      "privateBytes": 1078620160,
+      "workingSetBytes": 489832448
+     },
+     {
+      "atEpochMs": 1790588994785,
+      "pid": 16296,
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585744122,
+      "atEpochMs": 1790588995808,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585745152,
+      "atEpochMs": 1790588996822,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585746166,
+      "atEpochMs": 1790588997842,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585747178,
+      "atEpochMs": 1790588998858,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585748202,
+      "atEpochMs": 1790588999873,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585749214,
+      "atEpochMs": 1790589000902,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585750236,
+      "atEpochMs": 1790589001915,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585751264,
+      "atEpochMs": 1790589002926,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585752282,
+      "atEpochMs": 1790589003943,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585753308,
+      "atEpochMs": 1790589004960,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585754329,
+      "atEpochMs": 1790589005975,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585755354,
+      "atEpochMs": 1790589007005,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585756382,
+      "atEpochMs": 1790589008020,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585757405,
+      "atEpochMs": 1790589009043,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585758416,
+      "atEpochMs": 1790589010066,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585759428,
+      "atEpochMs": 1790589011082,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585760453,
+      "atEpochMs": 1790589012103,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585761488,
+      "atEpochMs": 1790589013113,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585762511,
+      "atEpochMs": 1790589014130,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585763536,
+      "atEpochMs": 1790589015146,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585764546,
+      "atEpochMs": 1790589016160,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585765570,
+      "atEpochMs": 1790589017182,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585766592,
+      "atEpochMs": 1790589018201,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585767618,
+      "atEpochMs": 1790589019212,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585768636,
+      "atEpochMs": 1790589020233,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585769659,
+      "atEpochMs": 1790589021256,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078620160,
+      "workingSetBytes": 489848832
      },
      {
-      "atEpochMs": 1790585770682,
+      "atEpochMs": 1790589022276,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489832448
      },
      {
-      "atEpochMs": 1790585771703,
+      "atEpochMs": 1790589023301,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585772725,
+      "atEpochMs": 1790589024323,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585773737,
+      "atEpochMs": 1790589025339,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489816064
      },
      {
-      "atEpochMs": 1790585774749,
+      "atEpochMs": 1790589026351,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585775770,
+      "atEpochMs": 1790589027365,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585776791,
+      "atEpochMs": 1790589028388,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585777815,
+      "atEpochMs": 1790589029413,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585778847,
+      "atEpochMs": 1790589030434,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585779865,
+      "atEpochMs": 1790589031449,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585780883,
+      "atEpochMs": 1790589032472,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585781905,
+      "atEpochMs": 1790589033489,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585782931,
+      "atEpochMs": 1790589034513,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585783959,
+      "atEpochMs": 1790589035527,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585784977,
+      "atEpochMs": 1790589036549,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585786000,
+      "atEpochMs": 1790589037566,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585787028,
+      "atEpochMs": 1790589038585,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585788044,
+      "atEpochMs": 1790589039602,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585789077,
+      "atEpochMs": 1790589040627,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585790093,
+      "atEpochMs": 1790589041646,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458801152
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585791116,
+      "atEpochMs": 1790589042657,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585792136,
+      "atEpochMs": 1790589043673,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585793147,
+      "atEpochMs": 1790589044691,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585794168,
+      "atEpochMs": 1790589045703,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585795205,
+      "atEpochMs": 1790589046723,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585796229,
+      "atEpochMs": 1790589047739,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585797256,
+      "atEpochMs": 1790589048753,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585798278,
+      "atEpochMs": 1790589049773,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585799300,
+      "atEpochMs": 1790589050805,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489811968
      },
      {
-      "atEpochMs": 1790585800317,
+      "atEpochMs": 1790589051823,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585801332,
+      "atEpochMs": 1790589052846,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585802350,
+      "atEpochMs": 1790589053864,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585803372,
+      "atEpochMs": 1790589054879,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585804382,
+      "atEpochMs": 1790589055901,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585805407,
+      "atEpochMs": 1790589056921,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585806435,
+      "atEpochMs": 1790589057934,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585807456,
+      "atEpochMs": 1790589058949,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585808475,
+      "atEpochMs": 1790589059964,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585809488,
+      "atEpochMs": 1790589060987,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585810511,
+      "atEpochMs": 1790589062001,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585811543,
+      "atEpochMs": 1790589063011,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585812561,
+      "atEpochMs": 1790589064028,
       "pid": 16296,
-      "privateBytes": 1041604608,
-      "workingSetBytes": 458788864
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585813574,
+      "atEpochMs": 1790589065048,
       "pid": 16296,
-      "privateBytes": 1041625088,
-      "workingSetBytes": 458838016
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585814598,
+      "atEpochMs": 1790589066068,
       "pid": 16296,
-      "privateBytes": 1041625088,
-      "workingSetBytes": 458838016
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      },
      {
-      "atEpochMs": 1790585815617,
+      "atEpochMs": 1790589067090,
       "pid": 16296,
-      "privateBytes": 1041616896,
-      "workingSetBytes": 458846208
+      "privateBytes": 1078616064,
+      "workingSetBytes": 489795584
      }
     ]
    },
    "finalPhasesMs": {
-    "call_setup": 0.005126953125,
-    "scheduler_prepare": 1486.60986328125,
-    "scheduler_loop": 4278.72998046875,
-    "scheduler_finish": 0.050048828125,
-    "scheduler_handoff": 0,
-    "trace_replay": 2226.18505859375,
+    "call_setup": 0.0048828125,
+    "scheduler_prepare": 1435.385009765625,
+    "scheduler_loop": 4128.175048828125,
+    "scheduler_finish": 0.044921875,
+    "scheduler_handoff": 0.010009765625,
+    "trace_replay": 2124.705078125,
     "post_processing": 0.014892578125,
-    "execution_projection": 11283.190185546875,
-    "planning_input_snapshot": 15.719970703125,
-    "checkpoint_defence": 0.35498046875,
-    "rejected_build_list_entries": 1.885009765625,
-    "required_materials": 0.014892578125,
-    "plan_assembly": 0.025146484375,
-    "call_return": 0.0048828125
+    "execution_projection": 10673.43994140625,
+    "planning_input_snapshot": 14.505126953125,
+    "checkpoint_defence": 0.27490234375,
+    "rejected_build_list_entries": 1.1201171875,
+    "required_materials": 0.010009765625,
+    "plan_assembly": 0.014892578125,
+    "call_return": 0.005126953125
    }
   },
   "node": {
    "source": {
     "file": "PLANNER_GLOBAL_PHASE2B_NODE_USED_HEAP.json.local",
-    "bytes": 1211889,
-    "sha256": "bf8d1fe598ffd7646cebcea7b3cbe8a284a68c6fa9066749b68e28cade15c11c"
+    "bytes": 1211898,
+    "sha256": "9ab6029052eda1a73e1fe74607e2ef937fbdae38888209205b71641d32849ca1"
    },
    "environment": {
     "runtime": "Node (Vite SSR loader, NOT a Browser Worker)",
@@ -8428,9 +8556,9 @@
     "execArgv": [
      "--max-old-space-size=8192"
     ],
-    "repositoryHead": "44194e28147c9550796e69979804e0e1c072b84d",
+    "repositoryHead": "38b8d7ff245efa0556ebbf34054d383e88e7d897",
     "uncommittedBenchmarkCode": false,
-    "benchmarkCodeSha256": "544c8054b0ab494dc07c10498044c30c3f2adc38630ff610d75eb0f878966553",
+    "benchmarkCodeSha256": "a273700e74916d274cd2a6404ac2f27e94101171500af0936390a9565527c5ed",
     "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
     "exportBytes": 19424064,
     "rngEngineVersion": "production-rng:c5-e7",
@@ -8456,31 +8584,31 @@
     "nodeYield": "setImmediate",
     "heapProbe": "used"
    },
-   "wallMs": 121841.5616,
+   "wallMs": 129787.511,
    "heapProbe": "node v8 used_heap_size (includes uncollected garbage)",
    "byKind": [
     {
      "kind": "baseline",
      "calls": 1,
      "schedulerRuns": 1,
-     "elapsedMs": 5095.2060546875,
+     "elapsedMs": 5106.61181640625,
      "phasesMs": {
-      "call_setup": 0.334716796875,
-      "scheduler_prepare": 1703.794189453125,
-      "scheduler_loop": 992.0654296875,
-      "scheduler_finish": 0.8876953125,
-      "scheduler_handoff": 0.059326171875,
-      "trace_replay": 325.326416015625,
-      "post_processing": 0.095703125,
-      "execution_projection": 2059.171630859375,
-      "planning_input_snapshot": 12.38232421875,
-      "checkpoint_defence": 0.243896484375,
-      "rejected_build_list_entries": 0.726318359375,
-      "required_materials": 0.052490234375,
-      "plan_assembly": 0.054443359375,
-      "call_return": 0.011474609375
+      "call_setup": 0.29736328125,
+      "scheduler_prepare": 1713.27099609375,
+      "scheduler_loop": 989.148193359375,
+      "scheduler_finish": 0.908203125,
+      "scheduler_handoff": 0.057861328125,
+      "trace_replay": 325.459716796875,
+      "post_processing": 0.064697265625,
+      "execution_projection": 2062.923828125,
+      "planning_input_snapshot": 13.107666015625,
+      "checkpoint_defence": 0.391357421875,
+      "rejected_build_list_entries": 0.823486328125,
+      "required_materials": 0.07080078125,
+      "plan_assembly": 0.07177734375,
+      "call_return": 0.015869140625
      },
-     "maxSchedulerSyncSegmentMs": 1779.482421875,
+     "maxSchedulerSyncSegmentMs": 1789.20361328125,
      "schedulerLoopIterations": 1466,
      "schedulerYields": 22
     },
@@ -8488,24 +8616,24 @@
      "kind": "retained_prefix",
      "calls": 1,
      "schedulerRuns": 1,
-     "elapsedMs": 3724.92333984375,
+     "elapsedMs": 3757.771240234375,
      "phasesMs": {
       "call_setup": 0.034423828125,
-      "scheduler_prepare": 768.576416015625,
-      "scheduler_loop": 578.923583984375,
-      "scheduler_finish": 0.109619140625,
-      "scheduler_handoff": 0.017578125,
-      "trace_replay": 323.65966796875,
-      "post_processing": 0.029052734375,
-      "execution_projection": 2044.585693359375,
-      "planning_input_snapshot": 8.486083984375,
-      "checkpoint_defence": 0.185302734375,
-      "rejected_build_list_entries": 0.275634765625,
-      "required_materials": 0.009033203125,
-      "plan_assembly": 0.02392578125,
-      "call_return": 0.00732421875
+      "scheduler_prepare": 782.27734375,
+      "scheduler_loop": 580.657958984375,
+      "scheduler_finish": 0.130126953125,
+      "scheduler_handoff": 0.02197265625,
+      "trace_replay": 330.4365234375,
+      "post_processing": 0.025634765625,
+      "execution_projection": 2055.28076171875,
+      "planning_input_snapshot": 8.42041015625,
+      "checkpoint_defence": 0.13232421875,
+      "rejected_build_list_entries": 0.304931640625,
+      "required_materials": 0.00830078125,
+      "plan_assembly": 0.033447265625,
+      "call_return": 0.007080078125
      },
-     "maxSchedulerSyncSegmentMs": 819.765380859375,
+     "maxSchedulerSyncSegmentMs": 836.89892578125,
      "schedulerLoopIterations": 1466,
      "schedulerYields": 22
     },
@@ -8513,24 +8641,24 @@
      "kind": "application",
      "calls": 23,
      "schedulerRuns": 23,
-     "elapsedMs": 14280.4169921875,
+     "elapsedMs": 14333.997802734375,
      "phasesMs": {
-      "call_setup": 0.752197265625,
-      "scheduler_prepare": 1430.21630859375,
-      "scheduler_loop": 267.74609375,
-      "scheduler_finish": 0.9169921875,
-      "scheduler_handoff": 0.34326171875,
-      "trace_replay": 2568.791259765625,
-      "post_processing": 0.513671875,
-      "execution_projection": 9978.8369140625,
-      "planning_input_snapshot": 29.314697265625,
-      "checkpoint_defence": 1.001220703125,
-      "rejected_build_list_entries": 1.46533203125,
-      "required_materials": 0.072509765625,
-      "plan_assembly": 0.314697265625,
-      "call_return": 0.1318359375
+      "call_setup": 0.7392578125,
+      "scheduler_prepare": 1411.412109375,
+      "scheduler_loop": 258.8291015625,
+      "scheduler_finish": 0.960693359375,
+      "scheduler_handoff": 0.339111328125,
+      "trace_replay": 2588.509033203125,
+      "post_processing": 0.476318359375,
+      "execution_projection": 10041.183837890625,
+      "planning_input_snapshot": 28.720703125,
+      "checkpoint_defence": 0.797607421875,
+      "rejected_build_list_entries": 1.53759765625,
+      "required_materials": 0.067138671875,
+      "plan_assembly": 0.29443359375,
+      "call_return": 0.130859375
      },
-     "maxSchedulerSyncSegmentMs": 166.808837890625,
+     "maxSchedulerSyncSegmentMs": 169.34130859375,
      "schedulerLoopIterations": 7092,
      "schedulerYields": 102
     },
@@ -8538,24 +8666,24 @@
      "kind": "final",
      "calls": 1,
      "schedulerRuns": 1,
-     "elapsedMs": 24477.156494140625,
+     "elapsedMs": 24574.37158203125,
      "phasesMs": {
-      "call_setup": 0.019287109375,
-      "scheduler_prepare": 2154.796142578125,
-      "scheduler_loop": 5833.88623046875,
-      "scheduler_finish": 0.052734375,
-      "scheduler_handoff": 0.0107421875,
-      "trace_replay": 2886.486083984375,
-      "post_processing": 0.028564453125,
-      "execution_projection": 13579.742919921875,
-      "planning_input_snapshot": 20.485595703125,
-      "checkpoint_defence": 0.578125,
-      "rejected_build_list_entries": 1.029296875,
-      "required_materials": 0.019775390625,
-      "plan_assembly": 0.01611328125,
+      "call_setup": 0.02490234375,
+      "scheduler_prepare": 2211.87109375,
+      "scheduler_loop": 5863.74853515625,
+      "scheduler_finish": 0.049072265625,
+      "scheduler_handoff": 0.010498046875,
+      "trace_replay": 2895.422607421875,
+      "post_processing": 0.022705078125,
+      "execution_projection": 13580.4599609375,
+      "planning_input_snapshot": 20.177001953125,
+      "checkpoint_defence": 0.491455078125,
+      "rejected_build_list_entries": 2.03564453125,
+      "required_materials": 0.029296875,
+      "plan_assembly": 0.02392578125,
       "call_return": 0.0048828125
      },
-     "maxSchedulerSyncSegmentMs": 2223.11572265625,
+     "maxSchedulerSyncSegmentMs": 2283.92041015625,
      "schedulerLoopIterations": 8535,
      "schedulerYields": 133
     }
@@ -8563,86 +8691,86 @@
    "finalMarks": [
     {
      "name": "call_start",
-     "atMs": 1790584925292.044,
-     "heapUsedBytes": 652626608
+     "atMs": 1790588179030.796,
+     "heapUsedBytes": 467366680
     },
     {
      "name": "scheduler_start",
-     "atMs": 1790584925292.0632,
-     "heapUsedBytes": 652630176
+     "atMs": 1790588179030.8208,
+     "heapUsedBytes": 467370248
     },
     {
      "name": "scheduler_loop_start",
-     "atMs": 1790584927446.8594,
+     "atMs": 1790588181242.692,
      "heapUsedBytes": null
     },
     {
      "name": "scheduler_finish_start",
-     "atMs": 1790584933280.7456,
+     "atMs": 1790588187106.4404,
      "heapUsedBytes": null
     },
     {
      "name": "scheduler_end",
-     "atMs": 1790584933280.7983,
-     "heapUsedBytes": 852402072
+     "atMs": 1790588187106.4895,
+     "heapUsedBytes": 636400368
     },
     {
      "name": "trace_replay",
-     "atMs": 1790584933280.809,
-     "heapUsedBytes": 852402888
+     "atMs": 1790588187106.5,
+     "heapUsedBytes": 636401184
     },
     {
      "name": "post_processing",
-     "atMs": 1790584936167.2952,
-     "heapUsedBytes": 372911808
+     "atMs": 1790588190001.9226,
+     "heapUsedBytes": 923484976
     },
     {
      "name": "execution_projection",
-     "atMs": 1790584936167.3237,
-     "heapUsedBytes": 372917288
+     "atMs": 1790588190001.9453,
+     "heapUsedBytes": 923490976
     },
     {
      "name": "planning_input_snapshot",
-     "atMs": 1790584949747.0667,
-     "heapUsedBytes": 2664769296
+     "atMs": 1790588203582.4053,
+     "heapUsedBytes": 2701430848
     },
     {
      "name": "checkpoint_defence",
-     "atMs": 1790584949767.5522,
-     "heapUsedBytes": 2658178432
+     "atMs": 1790588203602.5823,
+     "heapUsedBytes": 2698283128
     },
     {
      "name": "rejected_build_list_entries",
-     "atMs": 1790584949768.1304,
-     "heapUsedBytes": 2658943864
+     "atMs": 1790588203603.0737,
+     "heapUsedBytes": 2699048536
     },
     {
      "name": "required_materials",
-     "atMs": 1790584949769.1597,
-     "heapUsedBytes": 2662687152
+     "atMs": 1790588203605.1094,
+     "heapUsedBytes": 2702747856
     },
     {
      "name": "plan_assembly",
-     "atMs": 1790584949769.1794,
-     "heapUsedBytes": 2662693744
+     "atMs": 1790588203605.1387,
+     "heapUsedBytes": 2702754448
     },
     {
      "name": "completed",
-     "atMs": 1790584949769.1956,
-     "heapUsedBytes": 2662697016
+     "atMs": 1790588203605.1626,
+     "heapUsedBytes": 2702757720
     },
     {
      "name": "call_end",
-     "atMs": 1790584949769.2004,
-     "heapUsedBytes": 2662697832
+     "atMs": 1790588203605.1675,
+     "heapUsedBytes": 2702758536
     }
    ]
   },
   "nodeGc": {
    "source": {
     "file": "PLANNER_GLOBAL_PHASE2B_NODE_GC_HEAP.json.local",
-    "bytes": 1211571,
-    "sha256": "68ebc980dcc3a50af9e3c4d0e7b244e5cb9a32763a233767e72f252f53ef6ad8"
+    "bytes": 1211590,
+    "sha256": "6e7caacef96fa67ef644be3b5209ae11d3e41bf3820e6892531c2aee20a49471"
    },
    "environment": {
     "runtime": "Node (Vite SSR loader, NOT a Browser Worker)",
@@ -8658,9 +8786,9 @@
      "--max-old-space-size=8192",
      "--expose-gc"
     ],
-    "repositoryHead": "44194e28147c9550796e69979804e0e1c072b84d",
+    "repositoryHead": "38b8d7ff245efa0556ebbf34054d383e88e7d897",
     "uncommittedBenchmarkCode": false,
-    "benchmarkCodeSha256": "544c8054b0ab494dc07c10498044c30c3f2adc38630ff610d75eb0f878966553",
+    "benchmarkCodeSha256": "a273700e74916d274cd2a6404ac2f27e94101171500af0936390a9565527c5ed",
     "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
     "exportBytes": 19424064,
     "rngEngineVersion": "production-rng:c5-e7",
@@ -8686,31 +8814,31 @@
     "nodeYield": "setImmediate",
     "heapProbe": "gc"
    },
-   "wallMs": 130398.09079999999,
+   "wallMs": 129696.0215,
    "heapProbe": "node v8 used_heap_size after global.gc() (live heap at the mark)",
    "byKind": [
     {
      "kind": "baseline",
      "calls": 1,
      "schedulerRuns": 1,
-     "elapsedMs": 5113.44287109375,
+     "elapsedMs": 5141.798095703125,
      "phasesMs": {
-      "call_setup": 6.996826171875,
-      "scheduler_prepare": 1663.04443359375,
-      "scheduler_loop": 973.933837890625,
-      "scheduler_finish": 0.8759765625,
-      "scheduler_handoff": 6.97021484375,
-      "trace_replay": 319.532470703125,
-      "post_processing": 7.634521484375,
-      "execution_projection": 2061.06298828125,
-      "planning_input_snapshot": 21.931396484375,
-      "checkpoint_defence": 12.1328125,
-      "rejected_build_list_entries": 10.504638671875,
-      "required_materials": 11.43212890625,
-      "plan_assembly": 8.338134765625,
-      "call_return": 9.052490234375
+      "call_setup": 7.927734375,
+      "scheduler_prepare": 1729.238525390625,
+      "scheduler_loop": 970.87109375,
+      "scheduler_finish": 1.02099609375,
+      "scheduler_handoff": 6.29248046875,
+      "trace_replay": 319.67578125,
+      "post_processing": 6.856689453125,
+      "execution_projection": 2025.236328125,
+      "planning_input_snapshot": 21.632568359375,
+      "checkpoint_defence": 13.279296875,
+      "rejected_build_list_entries": 10.732421875,
+      "required_materials": 9.630859375,
+      "plan_assembly": 9.60498046875,
+      "call_return": 9.79833984375
      },
-     "maxSchedulerSyncSegmentMs": 1739.973876953125,
+     "maxSchedulerSyncSegmentMs": 1808.70947265625,
      "schedulerLoopIterations": 1466,
      "schedulerYields": 22
     },
@@ -8718,24 +8846,24 @@
      "kind": "retained_prefix",
      "calls": 1,
      "schedulerRuns": 1,
-     "elapsedMs": 3822.1162109375,
+     "elapsedMs": 3845.507568359375,
      "phasesMs": {
-      "call_setup": 6.859130859375,
-      "scheduler_prepare": 763.72412109375,
-      "scheduler_loop": 587.226806640625,
-      "scheduler_finish": 0.097412109375,
-      "scheduler_handoff": 6.994873046875,
-      "trace_replay": 326.455810546875,
-      "post_processing": 8.637939453125,
-      "execution_projection": 2045.22998046875,
-      "planning_input_snapshot": 21.810546875,
-      "checkpoint_defence": 10.7822265625,
-      "rejected_build_list_entries": 11.25634765625,
-      "required_materials": 10.84423828125,
-      "plan_assembly": 10.81201171875,
-      "call_return": 11.384765625
+      "call_setup": 6.52734375,
+      "scheduler_prepare": 759.66455078125,
+      "scheduler_loop": 595.787353515625,
+      "scheduler_finish": 0.114013671875,
+      "scheduler_handoff": 7.33056640625,
+      "trace_replay": 325.526611328125,
+      "post_processing": 7.68603515625,
+      "execution_projection": 2068.161865234375,
+      "planning_input_snapshot": 21.22314453125,
+      "checkpoint_defence": 9.964111328125,
+      "rejected_build_list_entries": 9.677978515625,
+      "required_materials": 10.4892578125,
+      "plan_assembly": 11.32568359375,
+      "call_return": 12.029052734375
      },
-     "maxSchedulerSyncSegmentMs": 817.74755859375,
+     "maxSchedulerSyncSegmentMs": 811.66748046875,
      "schedulerLoopIterations": 1466,
      "schedulerYields": 22
     },
@@ -8743,24 +8871,24 @@
      "kind": "application",
      "calls": 23,
      "schedulerRuns": 23,
-     "elapsedMs": 17240.05322265625,
+     "elapsedMs": 17164.615478515625,
      "phasesMs": {
-      "call_setup": 203.574951171875,
-      "scheduler_prepare": 1657.93896484375,
-      "scheduler_loop": 308.734130859375,
-      "scheduler_finish": 1.143798828125,
-      "scheduler_handoff": 225.897705078125,
-      "trace_replay": 2777.74267578125,
-      "post_processing": 192.618408203125,
-      "execution_projection": 10484.802734375,
-      "planning_input_snapshot": 236.35546875,
-      "checkpoint_defence": 236.31787109375,
-      "rejected_build_list_entries": 226.85791015625,
-      "required_materials": 231.662109375,
-      "plan_assembly": 225.997314453125,
-      "call_return": 230.4091796875
+      "call_setup": 200.025390625,
+      "scheduler_prepare": 1630.606201171875,
+      "scheduler_loop": 313.899169921875,
+      "scheduler_finish": 1.188720703125,
+      "scheduler_handoff": 208.628173828125,
+      "trace_replay": 2762.117919921875,
+      "post_processing": 198.181396484375,
+      "execution_projection": 10468.269775390625,
+      "planning_input_snapshot": 245.574462890625,
+      "checkpoint_defence": 236.331298828125,
+      "rejected_build_list_entries": 223.0791015625,
+      "required_materials": 227.91796875,
+      "plan_assembly": 225.931884765625,
+      "call_return": 222.864013671875
      },
-     "maxSchedulerSyncSegmentMs": 185.58984375,
+     "maxSchedulerSyncSegmentMs": 183.267822265625,
      "schedulerLoopIterations": 7092,
      "schedulerYields": 102
     },
@@ -8768,24 +8896,24 @@
      "kind": "final",
      "calls": 1,
      "schedulerRuns": 1,
-     "elapsedMs": 24959.623046875,
+     "elapsedMs": 24612.61865234375,
      "phasesMs": {
-      "call_setup": 8.267578125,
-      "scheduler_prepare": 2166.457763671875,
-      "scheduler_loop": 5882.7607421875,
-      "scheduler_finish": 0.10400390625,
-      "scheduler_handoff": 12.79833984375,
-      "trace_replay": 2916.619140625,
-      "post_processing": 19.143798828125,
-      "execution_projection": 13697.5517578125,
-      "planning_input_snapshot": 53.633056640625,
-      "checkpoint_defence": 41.202392578125,
-      "rejected_build_list_entries": 49.385986328125,
-      "required_materials": 39.884521484375,
-      "plan_assembly": 37.968017578125,
-      "call_return": 33.845947265625
+      "call_setup": 8.4296875,
+      "scheduler_prepare": 2141.23486328125,
+      "scheduler_loop": 5742.532958984375,
+      "scheduler_finish": 0.103515625,
+      "scheduler_handoff": 11.3193359375,
+      "trace_replay": 2841.043701171875,
+      "post_processing": 20.23583984375,
+      "execution_projection": 13591.587890625,
+      "planning_input_snapshot": 51.3515625,
+      "checkpoint_defence": 43.150390625,
+      "rejected_build_list_entries": 47.7578125,
+      "required_materials": 39.680419921875,
+      "plan_assembly": 40.419677734375,
+      "call_return": 33.77099609375
      },
-     "maxSchedulerSyncSegmentMs": 2238.275634765625,
+     "maxSchedulerSyncSegmentMs": 2214.274169921875,
      "schedulerLoopIterations": 8535,
      "schedulerYields": 133
     }
@@ -8793,78 +8921,78 @@
    "finalMarks": [
     {
      "name": "call_start",
-     "atMs": 1790585063512.1172,
-     "heapUsedBytes": 71762528
+     "atMs": 1790588309774.618,
+     "heapUsedBytes": 71750296
     },
     {
      "name": "scheduler_start",
-     "atMs": 1790585063520.3848,
-     "heapUsedBytes": 71763536
+     "atMs": 1790588309783.0476,
+     "heapUsedBytes": 71751304
     },
     {
      "name": "scheduler_loop_start",
-     "atMs": 1790585065686.8425,
+     "atMs": 1790588311924.2825,
      "heapUsedBytes": null
     },
     {
      "name": "scheduler_finish_start",
-     "atMs": 1790585071569.6033,
+     "atMs": 1790588317666.8154,
      "heapUsedBytes": null
     },
     {
      "name": "scheduler_end",
-     "atMs": 1790585071569.7073,
-     "heapUsedBytes": 91804616
+     "atMs": 1790588317666.919,
+     "heapUsedBytes": 91776032
     },
     {
      "name": "trace_replay",
-     "atMs": 1790585071582.5056,
-     "heapUsedBytes": 91645640
+     "atMs": 1790588317678.2383,
+     "heapUsedBytes": 91617320
     },
     {
      "name": "post_processing",
-     "atMs": 1790585074499.1248,
-     "heapUsedBytes": 207571304
+     "atMs": 1790588320519.282,
+     "heapUsedBytes": 207543056
     },
     {
      "name": "execution_projection",
-     "atMs": 1790585074518.2686,
-     "heapUsedBytes": 207559736
+     "atMs": 1790588320539.5178,
+     "heapUsedBytes": 207531488
     },
     {
      "name": "planning_input_snapshot",
-     "atMs": 1790585088215.8203,
-     "heapUsedBytes": 238829344
+     "atMs": 1790588334131.1057,
+     "heapUsedBytes": 238801480
     },
     {
      "name": "checkpoint_defence",
-     "atMs": 1790585088269.4534,
-     "heapUsedBytes": 238727688
+     "atMs": 1790588334182.4573,
+     "heapUsedBytes": 238719544
     },
     {
      "name": "rejected_build_list_entries",
-     "atMs": 1790585088310.6558,
-     "heapUsedBytes": 238731496
+     "atMs": 1790588334225.6077,
+     "heapUsedBytes": 238723352
     },
     {
      "name": "required_materials",
-     "atMs": 1790585088360.0417,
-     "heapUsedBytes": 238727304
+     "atMs": 1790588334273.3655,
+     "heapUsedBytes": 238719160
     },
     {
      "name": "plan_assembly",
-     "atMs": 1790585088399.9263,
-     "heapUsedBytes": 238718952
+     "atMs": 1790588334313.046,
+     "heapUsedBytes": 238710808
     },
     {
      "name": "completed",
-     "atMs": 1790585088437.8943,
-     "heapUsedBytes": 238719560
+     "atMs": 1790588334353.4656,
+     "heapUsedBytes": 238711416
     },
     {
      "name": "call_end",
-     "atMs": 1790585088471.7402,
-     "heapUsedBytes": 123067376
+     "atMs": 1790588334387.2366,
+     "heapUsedBytes": 123059232
     }
    ]
   }
