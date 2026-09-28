@@ -4078,6 +4078,13 @@ conflicts / warningsと `plan: null` を返す。この観測のために
 `beforeBeamSearch()` も `beforePlannerRun()` へ改名し、数え方は変えていない）。観測専用であり、
 通常のProduction Plan生成semanticsを変更しない。
 
+Issue #154 Phase 2-B（Research）で、同じobserverへ任意の `onPlanGenerationPhase?(phase)` を追加した。
+full run後の共有tail（Trace Replay、post-processing、execution projection、`PlanningInputSnapshot`、
+checkpoint defence、rejected Build List、required materials、Plan assembly、`completed`）の各phase開始時に
+phase名だけを渡す性能観測用のseamであり、Plan・Trace・Stepなどのデータを渡さず、何もその有無で分岐しない。
+Production callerは渡さない。observerの有無で `PlannerResult` は完全に同一である（テストで固定）。
+Worker DTO、`PlannerInput`、永続化、schema / versionへは入らない。
+
 #### cancellation
 
 通常PlannerはBeam cancellationを `beamResult.cancelled = true` から

@@ -26,6 +26,8 @@ import { GlobalSearchProfiler } from '../benchmarks/plannerGlobalOptimizationPro
 import { GLOBAL_RESEARCH_EXTENT, globalResearchDependencies, runGlobalPlannerResearch, type GlobalResearchReport } from '../benchmarks/plannerGlobalOptimizationResearch'
 import { classifyAttempt, collectRetrySignals, discoverySignature, parseDiscoveryState, stableResearchEntries } from '../benchmarks/plannerGlobalOptimizationRetry'
 import type { GlobalRawBlockResearch } from '../benchmarks/plannerGlobalRawBlocks'
+import { phase2bAutonomousPlanEvidence } from '../benchmarks/plannerGlobalPhase2BPlan'
+import { Phase2BPlannerTimeline } from '../benchmarks/plannerGlobalPhase2BTimeline'
 import type { RngEngine } from '../domain/rng/rngEngine'
 
 /**
@@ -50,7 +52,13 @@ export interface PlannerGlobalBenchmarkControllerOptions {
   readonly sha256?: Sha256Text
   /** Worker-realm `performance.memory` when the Browser exposes it; null otherwise (never estimated). */
   readonly workerHeap?: () => PlannerGlobalWorkerHeapSample | null
+  /** Phase 2-B: epoch-aligned clock (`performance.timeOrigin + performance.now()` by default). */
+  readonly epochNow?: () => number
+  /** Phase 2-B: synchronous heap probe at timeline marks (Node only); absent in a Browser Worker. */
+  readonly timelineHeapProbe?: { readonly label: string; readonly heapUsedBytes: () => number }
 }
+
+export const defaultEpochNow = () => performance.timeOrigin + performance.now()
 
 /**
  * A MessagePort turn: a macrotask, so a pending `cancel` / `ping` message is dispatched between two
@@ -103,6 +111,8 @@ export function createPlannerGlobalBenchmarkController(postMessage: PlannerGloba
     const attemptState = request.attemptState === null ? null : parseDiscoveryState(request.attemptState)
     const input = request.input
     const priorityEntries = stableResearchEntries(input).map(e => ({ id: e.id as string, targetWeaponId: e.targetWeaponId as string }))
+    const epochNow = options.epochNow ?? defaultEpochNow
+    const acceptedAtEpoch = epochNow()
     const acceptedAt = now()
     postMessage({ type: 'pg2a_benchmark_accepted', requestId: request.requestId, priorityEntries })
     const engine = options.createEngine()
@@ -124,14 +134,21 @@ export function createPlannerGlobalBenchmarkController(postMessage: PlannerGloba
         generatedReplacements: report.generatedReplacementCount, elapsedMs: now() - acceptedAt, workerHeap: request.measurement === 'memory' ? workerHeap() : null }
       postMessage({ type: 'pg2a_benchmark_progress', requestId: request.requestId, observation })
     }
+    // Phase 2-B: clocks only; absent = the Phase 2-A run unchanged.
+    const plannerTimeline = request.phase2b?.timeline
+      ? new Phase2BPlannerTimeline({ nowMs: epochNow, ...(options.timelineHeapProbe ? { heapUsedBytes: options.timelineHeapProbe.heapUsedBytes } : {}) })
+      : undefined
+    const calculationStartEpoch = epochNow()
     const calculationStart = now()
     const result = await runGlobalPlannerResearch(input, dependencies, {
+      ...(plannerTimeline ? { plannerTimeline } : {}),
       profiler, rawBlocks, onSearchResult: evidence.onSearchResult, onFallbackSearchResult: evidence.onFallbackSearchResult,
       attempt: attemptState ?? undefined, extent: attemptState?.extent, extentFallback,
       timeBudgetMs: request.attemptBudgetMs ?? undefined,
       shouldCancel: () => cancelled.has(request.requestId), yieldControl: yieldFor(request.yieldMode), nowMs: now, onProgress: observe,
     })
     const calculationElapsedMs = now() - calculationStart
+    const calculationEndEpoch = epochNow()
     const rawBlockSummary = rawBlocks.summary()
     rawBlocks.endRun()
     const evidenceStart = now()
@@ -144,6 +161,14 @@ export function createPlannerGlobalBenchmarkController(postMessage: PlannerGloba
     const semantic = plannerGlobalSemantic({ report, state, fallbacks, evidence: collected, stop })
     const semanticSha256 = await jsonSha256(sha, semantic)
     const evidenceElapsedMs = now() - evidenceStart
+    const evidenceEndEpoch = epochNow()
+    // Phase 2-B: post-hoc read of the finished Plan (after the calculation; never fed back into it).
+    const planEvidenceStart = now()
+    const autonomousPlan = request.phase2b?.planEvidence && result.finalResult?.plan
+      ? phase2bAutonomousPlanEvidence(input, result.report, result.generatedEntries, result.finalResult.plan, engine)
+      : null
+    const planEvidenceElapsedMs = now() - planEvidenceStart
+    const planEvidenceEndEpoch = epochNow()
     const workerResult: PlannerGlobalWorkerResult = {
       rngEngineVersion: engine.version, inputFingerprint: result.report.inputFingerprint, priorityEntries, state, signature: discoverySignature(state), signals, stop,
       report, fallbacks, evidence: collected, semantic, semanticSha256,
@@ -151,6 +176,12 @@ export function createPlannerGlobalBenchmarkController(postMessage: PlannerGloba
         fallbackSearchElapsedMs: report.extentFallback?.searchElapsedMs ?? 0, plannerElapsedMs: report.plannerElapsedMs, totalElapsedMs: report.totalElapsedMs,
         candidateSearches: report.searches.length, fallbackEpisodes: report.extentFallback?.searches ?? 0 },
       rawBlockSummary, predictionProfile: profiler?.summary() ?? null, workerHeapAfter: workerHeap(),
+      ...(request.phase2b ? { phase2b: {
+        marks: { acceptedAtMs: acceptedAtEpoch, calculationStartAtMs: calculationStartEpoch, calculationEndAtMs: calculationEndEpoch,
+          evidenceEndAtMs: evidenceEndEpoch, planEvidenceEndAtMs: planEvidenceEndEpoch, resultPostAtMs: epochNow() },
+        timeline: plannerTimeline ? plannerTimeline.calls : null, autonomousPlan, planEvidenceElapsedMs,
+        heapProbe: plannerTimeline && options.timelineHeapProbe ? options.timelineHeapProbe.label : null,
+      } } : {}),
     }
     // A cancelled run is its own outcome: never a result, never a no-match, never a deadline.
     postMessage(report.status === 'cancelled'

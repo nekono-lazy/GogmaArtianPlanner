@@ -6,6 +6,7 @@ import {
   createPlannerGlobalBrowserRunner,
   PHASE2A_RESEARCH_MAX_PLAN_STEPS,
   PHASE2A_WORKLOADS,
+  PHASE2B_WORKLOADS,
   type PlannerGlobalAttemptConfig,
   type PlannerGlobalBrowserRecord,
   type PlannerGlobalBrowserRunner,
@@ -38,6 +39,8 @@ export interface PlannerGlobalExportInfo {
 export interface PlannerGlobalBrowserBenchmarkGlobal {
   readonly protocolVersion: string
   readonly workloads: typeof PHASE2A_WORKLOADS
+  /** Issue #154 Phase 2-B: the same normal-2x run with the Worker Planner call timeline and Plan evidence. */
+  readonly phase2bWorkloads: typeof PHASE2B_WORKLOADS
   exportInfo(): PlannerGlobalExportInfo | null
   runAttempt(config: PlannerGlobalAttemptConfig): Promise<PlannerGlobalBrowserRecord>
   runSeries(config: Omit<PlannerGlobalAttemptConfig, 'kind'>, warmups: number, measurements: number): Promise<PlannerGlobalBrowserRecord[]>
@@ -113,6 +116,7 @@ export function PlannerGlobalBrowserBenchmarkPage() {
     const api: PlannerGlobalBrowserBenchmarkGlobal = {
       protocolVersion: PLANNER_GLOBAL_BROWSER_BENCHMARK_PROTOCOL_VERSION,
       workloads: PHASE2A_WORKLOADS,
+      phase2bWorkloads: PHASE2B_WORKLOADS,
       exportInfo: () => infoRef.current,
       runAttempt: config => runner.runAttempt(requireInput(), config),
       runSeries: (config, warmups, measurements) => runner.runSeries(requireInput(), config, warmups, measurements),
@@ -202,6 +206,9 @@ export function PlannerGlobalBrowserBenchmarkPage() {
           <Button variant="outlined" disabled={disabled} onClick={() => start(() => runner.runAttempt(requireInput(), PHASE2A_WORKLOADS.cancelBaseSearch()))}>cancel（base Search中）</Button>
           <Button variant="outlined" disabled={disabled} onClick={() => start(() => runner.runAttempt(requireInput(), PHASE2A_WORKLOADS.cancelFallback()))}>cancel（fallback中）</Button>
           <Button variant="outlined" disabled={disabled} onClick={() => start(() => runner.runAttempt(requireInput(), PHASE2A_WORKLOADS.memory()))}>memory（normal）</Button>
+          <Button variant="outlined" disabled={disabled} onClick={() => start(() => runner.runSeries(requireInput(), PHASE2B_WORKLOADS.timing(), 1, 3))}>Phase 2-B timeline（warm-up 1 + 3）</Button>
+          <Button variant="outlined" disabled={disabled} onClick={() => start(() => runner.runAttempt(requireInput(), PHASE2B_WORKLOADS.responsiveness()))}>Phase 2-B responsiveness</Button>
+          <Button variant="outlined" disabled={disabled} onClick={() => start(() => runner.runAttempt(requireInput(), PHASE2B_WORKLOADS.memory()))}>Phase 2-B memory</Button>
           <Button variant="outlined" color="warning" disabled={!running} onClick={() => runner.cancel()}>Cancel</Button>
           <Button variant="outlined" color="inherit" disabled={running} onClick={() => runner.clear()}>Clear</Button>
           <Button variant="outlined" color="inherit" disabled={records.length === 0} onClick={download}>JSON保存</Button>

@@ -22,6 +22,7 @@ import type { CandidateSearchInput, CandidateSearchResult, CandidateSearchSettin
 import { projectGlobalResearchPlan } from './plannerGlobalOptimizationProjection'
 import type { GlobalSearchProfiler, SearchProfile } from './plannerGlobalOptimizationProfile'
 import type { GlobalRawBlockResearch } from './plannerGlobalRawBlocks'
+import type { GlobalResearchPlannerRunKind, Phase2BPlannerTimeline } from './plannerGlobalPhase2BTimeline'
 
 export const GLOBAL_RESEARCH_EXTENT: CandidateSearchSettings = { maxNormalAdvance: 350, maxGogmaAdvance: 500, maxSkillAdvance: 1500 }
 export const GLOBAL_RESEARCH_TIME = '2026-09-27T00:00:00.000Z'
@@ -283,6 +284,8 @@ export interface GlobalResearchOptions extends PlannerExecutionOptions {
   extentFallback?: GlobalResearchExtentFallback
   onBoundedNoMatch?: (capture: GlobalResearchNoMatchCapture) => void
   onFallbackSearchResult?: (result: CandidateSearchResult, fallback: ExtentFallbackMeasurement) => void
+  /** Phase 2-B: semantics-neutral timeline of every full Planner call (clocks only). Absent = unchanged. */
+  plannerTimeline?: Phase2BPlannerTimeline
 }
 
 export function orderGlobalResearchPending<T extends { targetWeaponId: string }>(pending: readonly T[], failedIds: readonly string[] = []): T[] {
@@ -317,17 +320,22 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
   const fallbackRequests = new Set<string>()
   const publish = () => { report.totalElapsedMs = nowMs() - start; options.onProgress?.(structuredClone(report)) }
   const cancelled = () => { if (shouldCancel()) throw new CandidateSearchError('cancelled', 'Research cancelled or budget reached.') }
-  const fullRun = async (runInput: PlannerInput) => {
+  const fullRun = async (runInput: PlannerInput, kind: GlobalResearchPlannerRunKind, searchIndex: number | null = null) => {
     cancelled()
     const started = nowMs(), countBefore = report.plannerFullRunCount
     let observed: PlannerRunResult | null = null
     let result: PlannerResult
     let elapsedMs: number
+    // Phase 2-B: the timeline only reads clocks; it forwards shouldCancel / yieldControl unchanged.
+    const timeline = options.plannerTimeline?.begin(kind, searchIndex)
     try {
-      result = await createProductionPlanWithObserver(runInput, dependencies, { ...options, shouldCancel }, {
-        beforePlannerRun: () => { report.plannerFullRunCount += 1 }, afterPlannerRun: value => { observed = value },
+      result = await createProductionPlanWithObserver(runInput, dependencies, timeline ? timeline.wrapExecution({ ...options, shouldCancel }) : { ...options, shouldCancel }, {
+        beforePlannerRun: () => { report.plannerFullRunCount += 1; timeline?.beforePlannerRun() },
+        afterPlannerRun: value => { observed = value; timeline?.afterPlannerRun() },
+        ...(timeline ? { onPlanGenerationPhase: timeline.onPlanGenerationPhase } : {}),
       })
     } finally {
+      timeline?.end()
       elapsedMs = nowMs() - started
       report.plannerElapsedMs += elapsedMs
     }
@@ -337,7 +345,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
   let finalResult: PlannerResult | null = null
   const replacements = new Map<string, BuildListEntry>()
   try {
-    const baseline = await fullRun(original)
+    const baseline = await fullRun(original, 'baseline')
     report.baseline = baseline.summary
     report.planningTargetCount = baseline.result.termination.totalTargetCount
     publish()
@@ -353,7 +361,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
     report.stage = 'retained_prefix'
     publish()
     // Removing non-progressed Routes can change scheduling. Verify the prefix anew, never assume equivalence.
-    const retained = await fullRun(retainedInput)
+    const retained = await fullRun(retainedInput, 'retained_prefix')
     report.retained = retained.summary
     publish()
     const emptyPrefix = retainedEntries.length === 0 && retained.observed?.bestState &&
@@ -503,7 +511,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
         // Existing Planner + Replay applies each Route; no custom Route transition or RNG advance.
         const target = projected.targetWeapons.find(t => t.id === chosen.targetWeaponId)!
         const applicationInput = { ...projected, buildListEntries: [createBuildListEntry(chosen, target, { createdAt: GLOBAL_RESEARCH_TIME })] }
-        const application = await fullRun(applicationInput)
+        const application = await fullRun(applicationInput, 'application', report.searches.length - 1)
         if (fallback) fallback.applicationPlannerMs = application.summary.elapsedMs
         else measurement.applicationPlannerMs = application.summary.elapsedMs
         if (!application.result.plan || application.result.termination.status !== 'completed' || application.result.conflicts.length || application.summary.rejected) throw new Error('Single Candidate full Planner did not complete.')
@@ -533,7 +541,7 @@ export async function runGlobalPlannerResearch(input: PlannerInput, dependencies
     const finalInput = { ...original, buildListEntries: original.buildListEntries.map(entry => replacements.get(entry.id) ?? entry) }
     report.stage = 'final_planner'
     publish()
-    const final = await fullRun(finalInput)
+    const final = await fullRun(finalInput, 'final')
     finalResult = final.result
     report.final = final.summary
     report.status = final.result.plan && final.result.termination.status === 'completed' && final.summary.completedTargetCount === report.planningTargetCount &&

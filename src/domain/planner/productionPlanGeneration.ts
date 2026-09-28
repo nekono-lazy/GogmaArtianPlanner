@@ -41,6 +41,7 @@ import type {
   PlannerTerminationOf,
   PlannerWarning,
   ProductionPlanGenerationObserver,
+  ProductionPlanGenerationPhase,
 } from './plannerTypes'
 import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
 
@@ -595,6 +596,8 @@ export interface PlannerPlanGenerationOf<T extends PlannerAnyRunTermination> {
 export interface PlannerFullRunObserverOf<TResult> {
   beforePlannerRun(): void
   afterPlannerRun?(result: TResult): void
+  /** Semantics-neutral tail phase boundary (`ProductionPlanGenerationPhase`). */
+  onPlanGenerationPhase?(phase: ProductionPlanGenerationPhase): void
 }
 
 /**
@@ -685,6 +688,7 @@ export async function generatePlanFromFullRun<T extends PlannerAnyRunTermination
       runResult.bestState.trace.length === 0
     ) break
 
+    observer?.onPlanGenerationPhase?.('trace_replay')
     replay = replayPlannerSearchTrace(
       runInput,
       runResult.bestState,
@@ -708,6 +712,7 @@ export async function generatePlanFromFullRun<T extends PlannerAnyRunTermination
   if (runResult === null) {
     throw new PlannerPlanGenerationError('Planner full run did not return a result.')
   }
+  observer?.onPlanGenerationPhase?.('post_processing')
   const runtimeWarnings: PlannerWarning[] = [...runtimeUnsupported]
     .sort(([left], [right]) => compareStableStrings(left, right))
     .map(([entryId, reason]) => ({
@@ -754,6 +759,7 @@ export async function generatePlanFromFullRun<T extends PlannerAnyRunTermination
   const productionPlanId = dependencies.idFactory.productionPlanId()
   const selectedBuildListEntryIds = [...new Set(runResult.bestState.selectedBuildListEntryIds)]
     .sort(compareStableStrings)
+  observer?.onPlanGenerationPhase?.('execution_projection')
   const projection = projectProductionPlanExecution({
     input,
     drafts: replay.drafts,
@@ -764,31 +770,43 @@ export async function generatePlanFromFullRun<T extends PlannerAnyRunTermination
     now,
   })
   const steps = projection.steps
+  observer?.onPlanGenerationPhase?.('planning_input_snapshot')
   const baseSnapshot = createPlanningInputSnapshot(
     input,
     { ...projection, selectedBuildListEntryIds },
     now,
   )
+  observer?.onPlanGenerationPhase?.('checkpoint_defence')
   assertCheckpointRequirementsSatisfied(
     runInputEntries(input, runResult),
     selectedBuildListEntryIds,
     steps,
     runResult.termination.status === 'completed',
   )
+  // The Plan fields below are evaluated in the same order as the object
+  // literal lists them; they are only named so the optional observer can see
+  // the phase boundaries (`ProductionPlanGenerationPhase`).
+  observer?.onPlanGenerationPhase?.('rejected_build_list_entries')
+  const calculationContext = structuredClone(input.calculationContext)
+  const planConflicts = structuredClone(runResult.conflicts)
+  const rejectedBuildListEntries = createRejectedBuildListEntries(
+    input,
+    runResult,
+    selectedBuildListEntryIds,
+  )
+  observer?.onPlanGenerationPhase?.('required_materials')
+  const requiredMaterials = collectRequiredMaterials(input, selectedBuildListEntryIds)
+  observer?.onPlanGenerationPhase?.('plan_assembly')
   const plan: ProductionPlan = {
     id: productionPlanId,
     status: 'draft',
     baseSnapshot,
     selectedBuildListEntryIds,
-    calculationContext: structuredClone(input.calculationContext),
+    calculationContext,
     steps,
-    conflicts: structuredClone(runResult.conflicts),
-    rejectedBuildListEntries: createRejectedBuildListEntries(
-      input,
-      runResult,
-      selectedBuildListEntryIds,
-    ),
-    requiredMaterials: collectRequiredMaterials(input, selectedBuildListEntryIds),
+    conflicts: planConflicts,
+    rejectedBuildListEntries,
+    requiredMaterials,
     currentStepId: steps[0]?.id ?? null,
     recalculationReasons: [],
     abandonmentReason: null,
@@ -802,7 +820,7 @@ export async function generatePlanFromFullRun<T extends PlannerAnyRunTermination
     createdAt: now,
     updatedAt: now,
   }
-  return {
+  const generated: PlannerPlanGenerationOf<T> = {
     plan,
     conflicts: structuredClone(runResult.conflicts),
     warnings: structuredClone(warnings),
@@ -811,6 +829,8 @@ export async function generatePlanFromFullRun<T extends PlannerAnyRunTermination
     // (PLANNER_SPEC 7.2.1).
     termination: structuredClone(runResult.termination),
   }
+  observer?.onPlanGenerationPhase?.('completed')
+  return generated
 }
 
 /**

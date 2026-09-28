@@ -3,6 +3,7 @@ import { createPlannerGlobalBrowserHarness, type PlannerGlobalBrowserHarness, ty
 import {
   PLANNER_GLOBAL_BROWSER_BENCHMARK_PROTOCOL_VERSION,
   type PlannerGlobalMeasurementMode,
+  type PlannerGlobalPhase2BRequest,
   type PlannerGlobalProgressObservation,
   type PlannerGlobalRawCacheMode,
   type PlannerGlobalRunMode,
@@ -14,6 +15,7 @@ import { EXTENT_AXES, isGlobalPlanSuccess, type ExtentAxis } from './plannerGlob
 import { PHASE1E_BOUNDS, phase1eStrategyName, runPhase1EController, type Phase1EBounds, type Phase1EExecution } from './plannerGlobalOptimizationPhase1E'
 import { GLOBAL_RESEARCH_EXTENT, type GlobalResearchReport } from './plannerGlobalOptimizationResearch'
 import { discoverySignature, type AttemptSummary, type DiscoveryState, type StopReason } from './plannerGlobalOptimizationRetry'
+import { attributePingDelays, phase2bIntervals, type Phase2BInterval, type Phase2BPingAttribution, type Phase2BPingSample } from './plannerGlobalPhase2BTimeline'
 
 /**
  * Issue #154 Phase 2-A main-thread runner: records, fresh Worker per attempt, Phase 1-E controller on
@@ -44,6 +46,25 @@ export interface PlannerGlobalAttemptConfig {
   readonly memory?: { readonly intervalMs: number; readonly gcWaitMs: number } | null
   /** How long to keep listening after the run settled, to detect a response sent after a cancel. */
   readonly lateResponseWaitMs?: number
+  /** Issue #154 Phase 2-B (optional): Worker full Planner call timeline and post-hoc Plan evidence. */
+  readonly phase2b?: PlannerGlobalPhase2BRequest | null
+}
+
+/** Phase 2-B: pings slower than this are attributed to the Worker timeline intervals they overlapped. */
+export const PHASE2B_PING_ATTRIBUTION_THRESHOLD_MS = 100
+
+export interface PlannerGlobalPhase2BRecord {
+  /**
+   * Main-thread epoch at `accepted` minus the Worker's epoch when it posted `accepted`: message latency plus the
+   * skew of the two realms' `timeOrigin + now()` clocks. Small and positive when the clocks agree.
+   */
+  readonly acceptedClockCheckMs: number | null
+  readonly ping: {
+    readonly thresholdMs: number
+    readonly slowPings: readonly Phase2BPingAttribution[]
+    /** The slowest ping, attributed to the Worker intervals it overlapped (null without pings). */
+    readonly slowest: Phase2BPingAttribution | null
+  } | null
 }
 
 /** A Research workload preset. Fallback bounds are the Phase 1-E ones; Research maxPlanSteps comes from the input. */
@@ -147,6 +168,8 @@ export interface PlannerGlobalBrowserRecord {
   readonly memory: readonly PlannerGlobalMemorySample[] | null
   /** Main-thread ms: Worker creation -> dispose (whole attempt wall, including the ready wait). */
   readonly attemptWallMs: number
+  /** Phase 2-B only (`config.phase2b`). */
+  readonly phase2b?: PlannerGlobalPhase2BRecord
 }
 
 export interface PlannerGlobalControllerRecord {
@@ -180,6 +203,8 @@ export interface PlannerGlobalRunnerDependencies {
   readonly memory?: PlannerGlobalMemorySampler
   readonly sleep?: (ms: number) => Promise<void>
   readonly clock?: () => string
+  /** Phase 2-B epoch-aligned clock (`performance.timeOrigin + performance.now()` by default). */
+  readonly epochNow?: () => number
   readonly onChange?: (state: { readonly records: readonly PlannerGlobalBrowserRecord[]; readonly controllers: readonly PlannerGlobalControllerRecord[]; readonly running: boolean }) => void
 }
 
@@ -231,6 +256,7 @@ export function createPlannerGlobalBrowserRunner(dependencies: PlannerGlobalRunn
   const memory = dependencies.memory ?? createBrowserMemorySampler(now)
   const sleep = dependencies.sleep ?? (ms => new Promise<void>(resolve => globalThis.setTimeout(resolve, ms)))
   const clock = dependencies.clock ?? (() => new Date().toISOString())
+  const epochNow = dependencies.epochNow ?? (() => performance.timeOrigin + performance.now())
   const records: PlannerGlobalBrowserRecord[] = []
   const controllers: PlannerGlobalControllerRecord[] = []
   let sequence = 0
@@ -262,6 +288,8 @@ export function createPlannerGlobalBrowserRunner(dependencies: PlannerGlobalRunn
     let run: PlannerGlobalRunResult | null = null, failure: string | null = null
     const milestones: { atMs: number; observation: PlannerGlobalProgressObservation }[] = []
     const pings: (number | null)[] = []
+    const pingTimeline: Phase2BPingSample[] = []
+    let acceptedEpochMs: number | null = null
     let pingChain: Promise<void> | null = null
     let settled = false
     let triggeredAtMs: number | null = null, triggerObservation: PlannerGlobalProgressObservation | null = null
@@ -284,12 +312,21 @@ export function createPlannerGlobalBrowserRunner(dependencies: PlannerGlobalRunn
       try {
         run = await harness.run({ requestId, input, mode: config.mode, fallbackAxis: config.fallbackAxis, rawCache: config.rawCache, yieldMode: config.yieldMode,
           maxPlanSteps: input.options.maxPlanSteps, fallbackBudgetMs: config.fallbackBudgetMs, fallbackMaxEpisodes: config.fallbackMaxEpisodes,
-          attemptBudgetMs: config.attemptBudgetMs, attemptState: config.attemptState, measurement: measurementOf(config.kind), profiler: config.profiler }, {
+          attemptBudgetMs: config.attemptBudgetMs, attemptState: config.attemptState, measurement: measurementOf(config.kind), profiler: config.profiler,
+          ...(config.phase2b ? { phase2b: config.phase2b } : {}) }, {
           onAccepted: atMs => {
+            acceptedEpochMs = epochNow()
             if (config.cancel?.trigger === 'after_ms') armCancel(null, atMs)
             if (config.ping) {
               const timeoutMs = config.ping.timeoutMs
-              pingChain = (async () => { while (!settled) pings.push(await harness.ping(timeoutMs)) })()
+              pingChain = (async () => {
+                while (!settled) {
+                  const sentAtMs = epochNow()
+                  const rtt = await harness.ping(timeoutMs)
+                  pings.push(rtt)
+                  if (config.phase2b) pingTimeline.push({ sentAtMs, receivedAtMs: rtt === null ? null : sentAtMs + rtt })
+                }
+              })()
             }
           },
           onProgress: (observation, atMs) => {
@@ -332,6 +369,8 @@ export function createPlannerGlobalBrowserRunner(dependencies: PlannerGlobalRunn
           trigger: config.cancel.trigger, triggeredAtMs, triggerObservation, lateResponses, lateResponseWaitMs: config.lateResponseWaitMs ?? 0 } : null,
         memory: config.memory ? samples : null,
         attemptWallMs: at(),
+        ...(config.phase2b ? { phase2b: phase2bRecordOf(outcome && (outcome.status === 'completed' || outcome.status === 'cancelled') ? outcome.result : null,
+          acceptedEpochMs, config.ping ? pingTimeline : null) } : {}),
       }
       records.push(record)
       notify()
@@ -450,6 +489,27 @@ export function createPlannerGlobalBrowserRunner(dependencies: PlannerGlobalRunn
 }
 export type PlannerGlobalBrowserRunner = ReturnType<typeof createPlannerGlobalBrowserRunner>
 
+/** Phase 2-B: the Worker's own intervals (full Planner call phases and the post-calculation evidence stages). */
+export function phase2bWorkerIntervals(result: PlannerGlobalWorkerResult): Phase2BInterval[] {
+  const phase2b = result.phase2b
+  if (!phase2b) return []
+  const { marks } = phase2b
+  return [...phase2bIntervals(phase2b.timeline ?? []),
+    { name: 'worker:evidence', startMs: marks.calculationEndAtMs, endMs: marks.evidenceEndAtMs },
+    { name: 'worker:plan_evidence', startMs: marks.evidenceEndAtMs, endMs: marks.planEvidenceEndAtMs },
+    { name: 'worker:result_post', startMs: marks.planEvidenceEndAtMs, endMs: marks.resultPostAtMs }]
+}
+
+export function phase2bRecordOf(result: PlannerGlobalWorkerResult | null, acceptedEpochMs: number | null, pings: readonly Phase2BPingSample[] | null): PlannerGlobalPhase2BRecord {
+  const workerAccepted = result?.phase2b?.marks.acceptedAtMs ?? null
+  let ping: PlannerGlobalPhase2BRecord['ping'] = null
+  if (pings !== null) {
+    const slowPings = result ? attributePingDelays(pings, phase2bWorkerIntervals(result), PHASE2B_PING_ATTRIBUTION_THRESHOLD_MS) : []
+    ping = { thresholdMs: PHASE2B_PING_ATTRIBUTION_THRESHOLD_MS, slowPings, slowest: slowPings.reduce<Phase2BPingAttribution | null>((max, p) => max === null || p.rttMs > max.rttMs ? p : max, null) }
+  }
+  return { acceptedClockCheckMs: acceptedEpochMs !== null && workerAccepted !== null ? acceptedEpochMs - workerAccepted : null, ping }
+}
+
 function measurementOf(kind: PlannerGlobalRecordKind): PlannerGlobalMeasurementMode {
   return kind === 'warmup' || kind === 'measurement' ? 'timing' : kind
 }
@@ -472,4 +532,19 @@ export const PHASE2A_WORKLOADS = {
   cancelBaseSearch: () => phase2aAttemptConfig('cancel-during-base-search', 'cancel', 'normal', { cancel: { trigger: 'base_search', delayMs: 1000 }, lateResponseWaitMs: 5000 }),
   cancelFallback: () => phase2aAttemptConfig('cancel-during-fallback', 'cancel', 'normal', { cancel: { trigger: 'fallback', delayMs: 1000 }, lateResponseWaitMs: 5000 }),
   memory: (axis: ExtentAxis | null = 'normal') => phase2aAttemptConfig(`${axis ?? 'control'}-memory`, 'memory', axis, { memory: { intervalMs: 15_000, gcWaitMs: 10_000 } }),
+} as const
+
+/**
+ * Issue #154 Phase 2-B workloads: the Phase 2-A normal-2x winner unchanged, plus the Worker full Planner call
+ * timeline (clocks only) and the post-hoc autonomous Plan evidence. The memory workload samples only at fixed
+ * points (no periodic `measureUserAgentSpecificMemory()` while running), so an external CDP Worker heap sampler
+ * can follow the Planner phases undisturbed.
+ */
+const PHASE2B_REQUEST: PlannerGlobalPhase2BRequest = { timeline: true, planEvidence: true }
+export const PHASE2B_FIXED_POINT_MEMORY_INTERVAL_MS = 1_000_000_000
+export const PHASE2B_WORKLOADS = {
+  timing: (kind: PlannerGlobalRecordKind = 'measurement') => phase2aAttemptConfig('phase2b-normal-2x-timeline', kind, 'normal', { phase2b: PHASE2B_REQUEST }),
+  responsiveness: () => phase2aAttemptConfig('phase2b-normal-2x-responsiveness', 'responsiveness', 'normal', { ping: { timeoutMs: 120_000 }, phase2b: PHASE2B_REQUEST }),
+  memory: () => phase2aAttemptConfig('phase2b-normal-2x-memory', 'memory', 'normal', {
+    memory: { intervalMs: PHASE2B_FIXED_POINT_MEMORY_INTERVAL_MS, gcWaitMs: 10_000 }, phase2b: PHASE2B_REQUEST }),
 } as const
