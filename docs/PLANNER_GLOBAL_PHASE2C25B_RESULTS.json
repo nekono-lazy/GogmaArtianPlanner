@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 Phase 2-C2.5-B: Browser Worker reproduction of the Search-only failure (post-hoc analysis)",
-  "analyzedAt": "2026-09-28T16:12:08.270Z",
+  "analyzedAt": "2026-09-28T22:10:33.376Z",
   "sources": {
     "pages": [
       {
@@ -82,8 +82,12 @@
   },
   "provenance": {
     "measuredHead": "901773191f2293953bfdf5dd40468453e707466f",
-    "analysisHead": "901773191f2293953bfdf5dd40468453e707466f",
-    "codeChangedSinceMeasuredHead": [],
+    "analysisHead": "cf3d7ce4040f3162e72ae38b2ebd00afb59b6cf3",
+    "codeChangedSinceMeasuredHead": [
+      "scripts/analyze-planner-global-phase2c25b.mjs",
+      "src/benchmarks/plannerGlobalPhase2C25B.test.ts",
+      "src/benchmarks/plannerGlobalPhase2C25BAnalysis.ts"
+    ],
     "calculationCodeChangedSinceMeasuredHead": [],
     "formal": true,
     "benchmarkCodeSha256": "65187aa7383bbc1290f17650a29515f27a5142e9dfee0ab968bad725b2aa6132",
@@ -96,7 +100,21 @@
     "c25aMeasuredHead": "a479bc27fe0e55cb6d5112b1be8e8eb4d4ac11d4",
     "driverSha256": "501b2e1eb85c585d32d5ea78902d3509dc50661de0e1402a4c00804946914ba1",
     "measuredAt": "2026-09-28T15:59:46.350Z",
-    "pageSessions": 13
+    "pageSessions": 13,
+    "rawEvidence": {
+      "browserResults": {
+        "file": "PLANNER_GLOBAL_PHASE2C25B_BROWSER_RESULTS.json",
+        "sha256": "a6c1cb768d210581b1d4d6d7049695eac6ee33392a7e2935bbf0ab44045bb941",
+        "bytes": 823820,
+        "action": "verified_unchanged"
+      },
+      "externalMemory": {
+        "file": "PLANNER_GLOBAL_PHASE2C25B_EXTERNAL_MEMORY.json",
+        "sha256": "b41a4671d3c383ebf61ac94113919124e311a20dce6123637d84c47cfec7d320",
+        "bytes": 965490,
+        "action": "verified_unchanged"
+      }
+    }
   },
   "environment": {
     "chrome": "Chrome/153.0.8010.49",
@@ -179,6 +197,12 @@
       "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
       "logicalCpuCount": 16,
       "totalMemoryBytes": 33377591296
+    },
+    "heapLimits": {
+      "pageRealmJsHeapSizeLimit": 4395630592,
+      "workerRealmJsHeapSizeLimit": null,
+      "workerHeapLimitMeasured": false,
+      "note": "The page realm limit is another realm's value, given for reference only. The Dedicated Worker used heap is the external CDP sample (runs[].cdp). Neither is compared with the Node 8 GB limit."
     },
     "rngEngineVersion": "production-rng:c5-e7",
     "calculationAppSchemaVersion": 17
@@ -8546,7 +8570,8 @@
     ],
     "notFormal": [
       "That this Chrome delivers a native Worker error for the representatives: none of the recorded runs saw one; each representative run ended with the renderer process lost.",
-      "That the Node 8 GB OOM and the Browser loss happen at the same Search state: the Browser Worker heap limit (about 4 GiB) differs, and only sampled heap and the last received progress are compared.",
+      "That the Node 8 GB OOM and the Browser renderer loss happen at the same Search state: only the sampled heap and the last received progress are compared, and the heap limits are not compared directly.",
+      "The Dedicated Worker's own heap limit. Heap measurement boundary: the Dedicated Worker used heap sampled by CDP reached 3.71-3.85 GiB (per-run sampled maxima) before the renderer loss; the page realm reported performance.memory.jsHeapSizeLimit 4395630592 bytes (about 4.09 GiB), a value of another realm given for reference only; the Dedicated Worker realm did not expose its own jsHeapSizeLimit, so the Worker's actual heap limit was not measured (unknown) and is not taken to equal the page realm value. Neither value is compared directly with the Node 8 GB heap limit.",
       "The heap-holding objects (no heap snapshot or allocation profile), the other 40 Phase 2-C2 OOM orientations, other browsers or mobile devices."
     ]
   }

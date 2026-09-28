@@ -18,9 +18,11 @@ native Worker `error` は1件も発生していない。**
   - relayされた `search_ready` の後で、`first_candidate` noticeもfinal resultもないまま、CDP `Inspector.detached`
     （`Render process gone.`）でpageが失われ、同時刻（±5 ms）にSearch Worker targetがdetach / destroy された。
   - そのrunのrenderer crash dumpに、V8のOOM crash key `v8-oom-location` = `MarkCompactCollector: young object promotion failed`
-    がある（§14）。これは§18で許された「Chrome / V8の明示的なOOM diagnostic」に当たるため、補助ラベル
+    がある（§14）。これは本Phaseの依頼で補助分類を許した「Chrome / V8の明示的なOOM diagnostic」に当たるため、補助ラベル
     `explicit_v8_oom_crash_key` を付けた。
-  - loss直前のCDP Worker heap（sampled）は3.71〜3.85 GiBで、Chromeの `jsHeapSizeLimit`（page realm 4,395,630,592 bytes）に近い。
+  - loss直前に外部CDPで観測したDedicated Worker used heap（sampled）は3.71〜3.85 GiBで、**page realm** の `jsHeapSizeLimit`
+    （4,395,630,592 bytes、約4.09 GiB）に近い水準だった。Dedicated Worker自身の `jsHeapSizeLimit` は取得できていない（Worker realmに
+    `performance.memory` が無い）ため、Worker自身のheap上限値は未測定であり、page realmの値と同一視しない。
 - completed control 12 contextは両modeとも正常終了し（first Candidate 5、extent stop 7）、Browser 2 modeのsemanticsと、Node Phase 2-C2.5-A
   のstatus・Search summary・first Candidate key SHA-256が **12 / 12一致** した。instrumentation contamination 0、timeout 0、structured error 0。
 - 同じ条件のformal seriesを2回実行し（§9.4）、2回とも同じ結果（loss 12、正常24、control parity 12 / 12、V8 OOM key 12 / 12）だった。
@@ -216,8 +218,10 @@ V8 OOM key 12 / 12）だった。ただし1回目の外部driverは、page loss�
 - 実測: median interval 約502〜504 ms、全runでsample 3〜58件。OOM代表では、loss直前に1件ずつ要求がtimeout（5 s）またはGC中に遅延
   （最大応答4.1 s、c2-p1）し、その要求はheap値として扱わず `sampleErrors` に記録した。loss前最後の成功sampleからloss検出までは0.4〜3.8 s。
 - 全run sampled max: **4,133,777,868 bytes（3.850 GiB）**（c2-p1 minimal a2）。OOM代表のsampled maxは3.71〜3.85 GiB、controlは0.35〜2.00 GiB。
-- page realmの `performance.memory.jsHeapSizeLimit` は4,395,630,592 bytes（4.09 GiB）。Dedicated Workerのrealmには `performance.memory` が無く
-  （`null`）、Worker自身のheap上限値は取得していない。Nodeの8 GB（`--max-old-space-size=8192`）とは同一視しない。
+- page realmの `performance.memory.jsHeapSizeLimit` は4,395,630,592 bytes（約4.09 GiB）。これは別realm（page）の値で、参考情報に留める。
+- Dedicated Workerのrealmには `performance.memory` が無く（`null`）、**Worker自身の `jsHeapSizeLimit` / heap上限値は取得していない（unknown）**。
+  CDPのused heap（実測のsample）・page realmの上限（参考値）・Worker自身の上限（未測定）を区別し、page realmの値をWorkerの上限とみなさない。
+  いずれもNodeの8 GB（`--max-old-space-size=8192`）とは直接比較しない。
 - target lifecycle（Worker target作成を0 msとして）: attach 3〜5 ms、first sample 約510 ms、detach / destroy = page loss検出の2〜4 ms前。
 
 ## 13. Node vs Browser比較
@@ -228,8 +232,11 @@ V8 OOM key 12 / 12）だった。ただし1回目の外部driverは、page loss�
 | c12-p0 | OOM 76.4 / 77.3 s、last GC 7,977 MB | 61.6 s、heapUsed 7.47 GiB、depth 5、累積生成 4,274,305 | 25.5〜27.7 sでpage loss、最後のprogressはdepth 5 / 累積生成 3,048,468 |
 | c2-p1 | OOM 67.3 / 78.1 s、last GC 8,010 MB | 71.5 s、heapUsed 7.75 GiB、depth 7、累積生成 4,306,320 | 29.9〜34.4 sでpage loss、最後のprogressはdepth 6 / 累積生成 3.05〜3.20M |
 
-- どちらの環境でも、同じcontextが **1件目Candidate前のSearch段階** で進めなくなった。Browserは約4 GiBでNodeより早いdepth / state数で止まった
-  （Nodeのheapはpointer compressionなし、Chromeはあり、で1 state当たりのbyte数も異なりうる。数値の直接比較はしない）。
+- どちらの環境でも、同じcontextが **1件目Candidate前のSearch段階** で進めなくなった。BrowserではNodeより早いdepth / state数でrenderer loss
+  が発生し、その直前にCDPで観測されたDedicated Worker used heapは約3.71〜3.85 GiBだった。page realmの `jsHeapSizeLimit` は約4.09 GiB
+  だったが、Dedicated Worker自身のheap limitは取得できていないため、両値を同一視しない。
+- 比較の前提: Node = heap上限8 GB（設定値）、Browser Worker used heap = CDPのsampled値、Browser Worker heap limit = unknown（未測定）。
+  Nodeのheapはpointer compressionなし、Chromeはありで、1 state当たりのbyte数も異なりうるため、heap数値やlimitの直接比較はしない。
 - control 12 contextは両環境で同じstatus / summary / first Candidate keyだった。したがってBrowser Worker上のSearchはNodeと同じ入力で同じSearch semanticsを
   実行しており、代表3 contextの差は「Browserでは異なる計算をした」ことによるものではない。
 
@@ -243,11 +250,15 @@ V8 OOM key 12 / 12）だった。ただし1回目の外部driverは、page loss�
 - 明示的diagnostic: 外部driverは、page loss後に本計測専用のChrome profileに新しく書かれたCrashpad report（`.dmp`）から、process type、loaded origin、
   V8 OOM crash key（`v8-oom-location` / `v8-oom-details`）の文字列だけを抽出した（dumpはcommitしない）。12 / 12 runで、そのrunのrenderer dump
   （`ptype` = `renderer`、origin = benchmark preview）に `v8-oom-location` = `MarkCompactCollector: young object promotion failed` があった。
-  これはV8がheap上限到達で致命的に終了する時に設定するcrash keyであり、§18の「Chrome / V8の明示的なOOM diagnostic」に当たる。よって補助ラベル
+  これはV8がheap上限到達で致命的に終了する時に設定するcrash keyであり、本Phaseの依頼が補助分類を許した「Chrome / V8の明示的なOOM
+  diagnostic」に当たる。よって補助ラベル
   `browserOomEvidence = explicit_v8_oom_crash_key` を付けた。formal分類（inconclusive）は置き換えていない。
 - 言えること: この12 runでは、renderer processはV8 heap OOMで終了し、その時点でrendererの中で動いていた計算はこのSearch Workerだけ
-  （page main threadはidle、contexts Workerは準備時に終了済み）で、Worker heapは上限近く（3.71〜3.85 GiB）まで増えていた。
+  （page main threadはidle、contexts Workerは準備時に終了済み）で、Dedicated Worker used heapはCDP sample上で3.71〜3.85 GiBまで増加して
+  いた。これはpage realmで観測した `jsHeapSizeLimit` 約4.09 GiBに近い水準だが、Dedicated Worker自身のheap limitは取得していないため、
+  「Worker自身のheap上限直前」とは断定しない。
 - 言えないこと: crash keyはprocess単位であり、どのisolateが上限に達したかを直接は示さない（page realmのheapはCDPで取っていない）。
+  Dedicated Worker自身のheap limitが何GiBかも示さない（未測定）。
 
 ## 15. 未確認事項
 
@@ -255,7 +266,9 @@ V8 OOM key 12 / 12）だった。ただし1回目の外部driverは、page loss�
 - heapを保持する具体object（heap snapshot / allocation profileは取っていない）。
 - 残る40のPhase 2-C2 OOM orientation（3 participant以上、2件目Targetなど）への一般化。
 - 他Browser（Firefox / Safari）、スマートフォン（heap上限がさらに小さい）での挙動と時間。
-- Browser heap上限（約4 GiB）の下で、代表3 contextが上限なしなら何depth / 何秒でfirst Candidateまたはextent stopに届くか。
+- Dedicated Worker自身のheap limit（Worker realmは `jsHeapSizeLimit` を公開しない。page realmの約4.09 GiBと同じかは未確認）。
+- 今回のChrome環境で観測されたrenderer loss条件の下で止まった代表3 contextが、heapの制約がなければ何depth / 何秒でfirst Candidateまたは
+  extent stopに届くか。
 - page realmのheapとrenderer process全体のmemory（OS private bytes）の同時系列（本Phaseは外部CDPのWorker heapだけ）。
 - 既存のreference-verified / game-verified / unverifiedのRNG境界は拡張していない（RNGは変更していない）。
 
@@ -263,7 +276,8 @@ V8 OOM key 12 / 12）だった。ただし1回目の外部driverは、page loss�
 
 1. **原因局所化（第一候補、最適化の前に）**: 代表3 context（深い型c0-p0と浅い型c12-p0 / c2-p1を分けて）について、Node側でheap snapshot /
    allocation samplingを取り、保持objectの内訳（held-aware Bonus streamの公開解・amendment history chain・frontier・memo）を特定する。
-   Browserは約4 GiBでrenderer processごと失われるため、プロファイル取得はNode（または上限を下げたNode）が扱いやすい。
+   Browserでは、Dedicated Worker used heapが約3.7〜3.85 GiBまで増えた時点でrenderer processごと失われたため、プロファイル取得は
+   Node（または上限を下げたNode）が扱いやすい。
 2. 残る40 OOM orientationを同じNode Search-only harnessで分類し、Search-localizedがどこまで一般化するかを測る。
 3. Production上の影響整理: 「比較する」「この候補を優先」は同じkernel / Searchを使うため、同じ入力ではPlanner Worker上で同様にrenderer processごと
    失われうる（page全体が落ちる）。UXとしてのfail-closed（Worker分離・上限付きSearch）の要否は、原因特定の後に仕様として判断する。
@@ -313,7 +327,7 @@ scratchpadの計測tooling（commitしない、SHA-256 `501b2e1eb85c585d32d5ea78
 | 作業branch | `research/global-planner-phase2c25b-browser` |
 | **measured HEAD** | `901773191f2293953bfdf5dd40468453e707466f`（benchmark codeをcommitしたclean HEADからbuild） |
 | benchmark code SHA-256 | `65187aa7383bbc1290f17650a29515f27a5142e9dfee0ab968bad725b2aa6132`（uncommitted benchmark code = false） |
-| analysis | measured HEAD以降のbenchmark code変更なし（analyzerが検査） |
+| analysis | measured HEAD以降のbenchmark calculation / Browser execution code変更なし（analyzerが検査、`calculationCodeChangedSinceMeasuredHead` 空）。Required fix（Dedicated Worker heap limitの表現）でpost-hoc analyzerだけを修正し、同じformal raw evidenceを再解析した（analysis HEAD `cf3d7ce4`）。Browser raw evidence / external memory evidenceは書き換えず、同じrunから同一bytesが再現されることを検証した（`provenance.rawEvidence` = `verified_unchanged`） |
 | Export | `gogma-artian-planner-backup_20260927015837.json`、19,424,064 bytes、SHA-256 `cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b`（commitしない） |
 | C2.5-A evidence | `PLANNER_GLOBAL_PHASE2C25A_RESULT.json`、SHA-256 `a6e38294a5c9137a7d62a3f57d552af637a67d115e1fd04541713b27823e87dd` |
 | 実施 | 2026-09-29 00:59〜01:11 JST（formal series 2回目、wall 688 s）。1回目は 00:47〜00:59 JST |
@@ -328,7 +342,7 @@ scratchpadの計測tooling（commitしない、SHA-256 `501b2e1eb85c585d32d5ea78
 
 ## 20. テスト・検証
 
-`src/benchmarks/plannerGlobalPhase2C25B.test.ts`（14件）:
+`src/benchmarks/plannerGlobalPhase2C25B.test.ts`（17件）:
 
 - evidence: C2.5-A evidenceのparseとworkload導出（選択を減らすとworkloadも減る＝codeに名前が無い）、malformed evidenceのfail closed（formalでない、
   context欠落、Node結果欠落、未知role、conditions欠落）
@@ -341,6 +355,9 @@ scratchpadの計測tooling（commitしない、SHA-256 `501b2e1eb85c585d32d5ea78
 - 分類: 両mode native failure → reproduced、minimal正常 + instrumented failure → contamination、逆 → inconsistent、両正常同semantics → no failure、
   page / browser loss → inconclusive、structured / mixed / after first、repeat判定、page lossのexternal-only mergeと明示的V8 OOM keyの補助ラベル
 - control parity: status・Search summary・first Candidate keyが両modeでNodeと一致する時だけ `controlSemanticParity`
+- heap limitの表現: 生成文がCDP実測のWorker used heap・page realmの `jsHeapSizeLimit`（参考値）・未測定のWorker自身のheap limitを区別し、
+  「Worker / Browserのheap limit ≈ 4 GiB」と断定しない。Worker realmが自分の上限を返した時だけその値を書く。analyzerがこの文を使い、
+  commit済みのraw evidenceを書き換えない
 - isolation: ProductionからC2.5-Bへの到達なし、Production Worker protocol不変、oracle・UUID・64桁hex・orientation id / Entry IDリテラルなし、file / DB
   読み書きなし、benchmark.html（`BenchmarkApp`）からのみ到達、Production default / schema / version不変
 
@@ -348,7 +365,7 @@ scratchpadの計測tooling（commitしない、SHA-256 `501b2e1eb85c585d32d5ea78
 | --- | --- |
 | `npm run lint` | passed |
 | `npx tsc -b --force` | passed |
-| `npm test` | 309 files / 4,923 tests passed |
+| `npm test` | 309 files / 4,926 tests passed（Required fix後の再実行） |
 | `npm run build` | passed。`dist` にPhase 2-C2.5-B識別子なし |
 | `npx vite build --config vite.benchmark.config.ts` | passed |
 | `git diff --check` | passed |
@@ -357,7 +374,9 @@ scratchpadの計測tooling（commitしない、SHA-256 `501b2e1eb85c585d32d5ea78
 
 - [PLANNER_GLOBAL_PHASE2C25B_RESULTS.json](PLANNER_GLOBAL_PHASE2C25B_RESULTS.json): provenance、環境、条件、sessionごとのparity、workload、repeat判定、
   totals、verdict（formal / auxiliary）、contextごとの分類・attempt・Node比較（controlはparity、代表はNode / Browserのfailure比較）、runごとの統合record
-  （status、first Candidate到達、CDP heap summaryと全sample trajectory、target lifecycle、crash dump key）、formalに言えること / 言えないこと。
+  （status、first Candidate到達、CDP heap summaryと全sample trajectory、target lifecycle、crash dump key）、formalに言えること / 言えないこと、
+  `environment.heapLimits`（page realmの `jsHeapSizeLimit`、Worker realmの値 = `null`、`workerHeapLimitMeasured` = false）、
+  `provenance.rawEvidence`（raw 2ファイルのSHA-256と `verified_unchanged`）。
 - [PLANNER_GLOBAL_PHASE2C25B_BROWSER_RESULTS.json](PLANNER_GLOBAL_PHASE2C25B_BROWSER_RESULTS.json): 13 page sessionそれぞれのpage `exportJson()`（verbatim、
   Candidate body・Export全文・raw stable keyなし、Route keyはSHA-256、progressは集計値）。
 - [PLANNER_GLOBAL_PHASE2C25B_EXTERNAL_MEMORY.json](PLANNER_GLOBAL_PHASE2C25B_EXTERNAL_MEMORY.json): driverのexternal evidence（CDP構成、runごとの
