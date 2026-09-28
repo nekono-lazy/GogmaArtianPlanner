@@ -32,7 +32,7 @@ try {
   const external = paths.externalMemory ? await load(paths.externalMemory) : null
   const node = paths.node ? await load(paths.node) : null, nodeGc = paths.nodeGc ? await load(paths.nodeGc) : null
   const env = browser.json.environment
-  if (env.exportInfo?.sha256 !== EXPECTED_EXPORT_SHA256) throw new Error('Browser export was not measured on the Phase 1-2 Export.')
+  if (env.export?.sha256 !== EXPECTED_EXPORT_SHA256 || env.benchmarkBuild?.uncommittedBenchmarkCode !== false) throw new Error('Browser export was not measured on the Phase 1-2 Export with committed benchmark code.')
   const records = browser.json.records.filter(record => record.config.phase2b)
   if (records.length === 0) throw new Error('No Phase 2-B record in the Browser export.')
   const completed = records.filter(record => record.status === 'completed')

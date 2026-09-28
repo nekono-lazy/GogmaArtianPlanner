@@ -20,9 +20,10 @@ export interface Phase2BOptimumRoute {
   readonly sourceOwnedWeaponId: string | null
   readonly normalPosition: number | null
   readonly conversionPosition: number | null
-  readonly normal: { readonly first: number; readonly last: number; readonly operations: number } | null
-  readonly gogma: { readonly first: number; readonly last: number; readonly operations: number; readonly required: readonly number[] } | null
-  readonly skill: { readonly first: number; readonly last: number; readonly operations: number; readonly required: readonly number[] } | null
+  /** An unused stream may be recorded as `{ first: null, last: null, operations: 0 }`; it counts as no use. */
+  readonly normal: { readonly first: number | null; readonly last: number | null; readonly operations: number } | null
+  readonly gogma: { readonly first: number | null; readonly last: number | null; readonly operations: number; readonly required: readonly number[] } | null
+  readonly skill: { readonly first: number | null; readonly last: number | null; readonly operations: number; readonly required: readonly number[] } | null
   readonly routeOperationCount: number
   readonly materialization: { readonly method: string; readonly routeKind: string | null; readonly estimated: { readonly operations: number } | null }
 }
@@ -144,6 +145,11 @@ export interface Phase2BTargetComparison {
     readonly skill: Phase2BOptimumRoute['skill']
     /** A Gogma / Skill Route whose unit positions are not consecutive (it holds the weapon across other Targets' positions). */
     readonly crossesHeldPositions: boolean
+    /**
+     * Streams on which this Route's first unit lies after the Planner-start origin: the Counter reaches it only through
+     * other Routes' operations (shared stream coverage), instead of a chain of this Route's own.
+     */
+    readonly startsAfterStreamOrigin: readonly ('gogma' | 'skill')[]
   }
   readonly sourceRelation: Phase2BSourceRelation
   readonly routeKindChanged: boolean
@@ -198,14 +204,14 @@ export interface Phase2BGapAnalysis {
 
 const PHYSICAL = PHYSICAL_OPERATION_TYPES as readonly string[]
 
-function optimumStreamUse(route: Phase2BOptimumRoute, stream: 'normal' | 'gogma' | 'skill'): { last: number } | null {
+function optimumStreamUse(route: Phase2BOptimumRoute, stream: 'normal' | 'gogma' | 'skill'): { first: number; last: number; operations: number } | null {
   const use = route[stream]
-  return use && use.operations > 0 ? { last: use.last } : null
+  return use && use.operations > 0 && use.first !== null && use.last !== null ? { first: use.first, last: use.last, operations: use.operations } : null
 }
 
 function crossesHeld(route: Phase2BOptimumRoute): boolean {
   const spread = (use: { first: number; last: number; operations: number } | null) => use !== null && use.last - use.first + 1 > use.operations
-  return spread(route.gogma) || spread(route.skill)
+  return spread(optimumStreamUse(route, 'gogma')) || spread(optimumStreamUse(route, 'skill'))
 }
 
 function sourceRelation(auto: Phase2BRouteSummary, optimum: Phase2BOptimumRoute): Phase2BSourceRelation {
@@ -353,7 +359,11 @@ export function analyzePhase2BGap(autonomous: Phase2BAutonomousPlanEvidence, opt
         physicalPrimarySteps: physical.perTarget[auto.targetWeaponId]?.physical ?? 0 },
       optimum: { materialization: opt.materialization.method, routeKind: opt.materialization.routeKind, sourceKind: opt.sourceKind, sourceOwnedWeaponId: opt.sourceOwnedWeaponId,
         normalPosition: opt.normalPosition, conversionPosition: opt.conversionPosition, routeOperationCount: opt.routeOperationCount,
-        normal: opt.normal, gogma: opt.gogma, skill: opt.skill, crossesHeldPositions: crossesHeld(opt) },
+        normal: opt.normal, gogma: opt.gogma, skill: opt.skill, crossesHeldPositions: crossesHeld(opt),
+        startsAfterStreamOrigin: (['gogma', 'skill'] as const).filter(stream => {
+          const use = optimumStreamUse(opt, stream)
+          return use !== null && use.first > (stream === 'gogma' ? optimum.gogma.start : optimum.skill.start)
+        }) },
       sourceRelation: sourceRelation(auto, opt), routeKindChanged: auto.routeKind !== opt.materialization.routeKind,
       routeOperationDelta: auto.routeOperationCount - opt.routeOperationCount, optimumRouteLocallyLonger: opt.routeOperationCount > auto.routeOperationCount,
       extendsBeyondOptimumEnd,
@@ -368,12 +378,27 @@ export function analyzePhase2BGap(autonomous: Phase2BAutonomousPlanEvidence, opt
     add(`source:${row.sourceRelation}`, row.targetWeaponId)
     if (row.routeKindChanged) add('route_kind_changed', row.targetWeaponId)
     if (row.optimum.crossesHeldPositions) add('optimum_crosses_held_positions', row.targetWeaponId)
+    for (const stream of row.optimum.startsAfterStreamOrigin) add(`optimum_relies_on_shared_coverage:${stream}`, row.targetWeaponId)
+    const autoStarts = (['gogma', 'skill'] as const).filter(stream => {
+      const use = row.autonomous[stream]
+      return use !== null && use.first > (stream === 'gogma' ? optimum.gogma.start : optimum.skill.start)
+    })
+    for (const stream of autoStarts) add(`autonomous_starts_after_stream_origin:${stream}`, row.targetWeaponId)
     if (row.optimum.materialization === 'planner_alternative_search') add('optimum_materialized_by_planner_alternative_search', row.targetWeaponId)
     if (row.optimumRouteLocallyLonger) add('optimum_route_locally_longer', row.targetWeaponId)
     if (row.autonomous.entryOrigin !== 'retained_original') add(`autonomous_entry:${row.autonomous.entryOrigin}`, row.targetWeaponId)
     else add('autonomous_entry:retained_original', row.targetWeaponId)
     for (const stream of row.extendsBeyondOptimumEnd) add(`extends_beyond_optimum_end:${stream}`, row.targetWeaponId)
     if (row.extendsBeyondOptimumEnd.length === 0) add('within_every_optimum_stream_end', row.targetWeaponId)
+    // The optimum finishes this Target later than the Target could finish alone (its single-option minimum threshold):
+    // a globally better, locally worse position.
+    const minimum = row.singleTargetMinimum
+    if (minimum) {
+      const optLastGogma = optimumStreamUse(optimumById.get(row.targetWeaponId)!, 'gogma')?.last ?? null
+      const optLastSkill = optimumStreamUse(optimumById.get(row.targetWeaponId)!, 'skill')?.last ?? null
+      if (optLastGogma !== null && minimum.minGogmaThreshold !== null && optLastGogma + 1 > minimum.minGogmaThreshold) add('optimum_finishes_after_single_target_minimum:gogma', row.targetWeaponId)
+      if (optLastSkill !== null && minimum.minSkillThreshold !== null && optLastSkill + 1 > minimum.minSkillThreshold) add('optimum_finishes_after_single_target_minimum:skill', row.targetWeaponId)
+    }
   }
 
   return {

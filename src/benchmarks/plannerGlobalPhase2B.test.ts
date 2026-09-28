@@ -164,7 +164,7 @@ function syntheticEvidence(): { autonomous: Phase2BAutonomousPlanEvidence; optim
     lowerBound: { origins: { normal: {} }, targets: [{ targetWeaponId: 'target.a', minSkillThreshold: null, minGogmaThreshold: 51, minNormalThreshold: null, firstIdealSkillPosition: null }] },
     routes: [
       { targetWeaponId: 'target.a', weaponTypeId: 'weapon.x', elementId: 'element.y', sourceKind: 'owned', sourceOwnedWeaponId: 'w.target.a', normalPosition: null, conversionPosition: null,
-        normal: null, gogma: { first: 50, last: 50, operations: 1, required: [50] }, skill: null, routeOperationCount: 1,
+        normal: null, gogma: { first: 50, last: 50, operations: 1, required: [50] }, skill: { first: null, last: null, operations: 0, required: [] }, routeOperationCount: 1,
         materialization: { method: 'candidate_search', routeKind: 'existing_gogma_reset_bonuses', estimated: { operations: 1 } } },
       { targetWeaponId: 'target.b', weaponTypeId: 'weapon.x', elementId: 'element.y', sourceKind: 'owned', sourceOwnedWeaponId: 'w.target.b', normalPosition: null, conversionPosition: null,
         normal: null, gogma: { first: 51, last: 52, operations: 2, required: [51, 52] }, skill: null, routeOperationCount: 2,
@@ -194,6 +194,12 @@ describe('Phase 2-B gap reconciliation (post-hoc)', () => {
     expect(result.targets.map(t => [t.targetWeaponId, t.sourceRelation, t.routeKindChanged, t.optimum.crossesHeldPositions])).toEqual([
       ['target.a', 'same_owned_weapon', true, false], ['target.b', 'same_owned_weapon', false, false]])
     expect(result.targets[0].singleTargetMinimum?.minGogmaThreshold).toBe(51)
+    // An unused stream recorded as { first: null, last: null, operations: 0 } is no use at all.
+    expect(result.targets.map(t => t.optimum.startsAfterStreamOrigin)).toEqual([[], ['gogma']])
+    expect(result.categories['optimum_relies_on_shared_coverage:gogma']).toEqual({ targets: 1, targetWeaponIds: ['target.b'] })
+    expect(result.categories['autonomous_starts_after_stream_origin:gogma']).toEqual({ targets: 1, targetWeaponIds: ['target.b'] })
+    // target.a finishes at G50 = its single-option minimum (threshold 51): not later than it could alone.
+    expect(result.categories['optimum_finishes_after_single_target_minimum:gogma']).toBeUndefined()
     expect(result.stacking.rows).toEqual([{ discoveryIndex: 0, targetWeaponId: 'target.b', stream: 'gogma', frontierBefore: 55, first: 54, last: 57, operations: 4, startsAtOrAfterFrontier: false }])
     expect(result.physicalByEntryOrigin.all).toEqual({ retained_original: 5, generated_base_search: 3 })
   })
