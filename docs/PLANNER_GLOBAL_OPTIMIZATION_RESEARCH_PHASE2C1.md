@@ -20,15 +20,18 @@ Candidate位置の積み上げは完全に消えるが、得られるBuild List�
 - frontier stacking: control **37/37** がfrontier以降から開始 → C1 **0/36**（全区間がfrontierより前、すべてstream originから開始）。
 - C1のRoute集合のstatic stream envelope（required位置の最大+1の和）は **1,758**。controlの8,534、1,657に対し、
   **Skill 1,424（1,657と同一）/ Gogma 431（1,657は290）/ チャアク207（同一）/ スラアク1（同一）/ 双剣406（1,657は475）/
-  大剣184（1,657は156）/ 片手剣13（1,657は12）**。ただしこれは実行可能Planのstep数ではない（21 Conflictで実行できない）。
+  大剣184（1,657は156）/ 片手剣13（1,657は12）**。ただしこれはConflictを無視したRoute集合のvirtual stream envelopeで、
+  実行可能Production Planのstep数ではない（21 Conflictで実行できない）。1,657に近いことは、近い位置に候補が存在する可能性の
+  示唆に留まり、1,758から1,657へ実際に到達できることを示すものではない。
 - 共存失敗はcanonical 1件/Targetの **位置・sourceの重複そのもの**: required位置の重複はGogma 15位置 / Skill 3位置 / Normal 1位置、
   source重複2武器（4 Target）で、Planner Conflictのkind別件数（15 / 3 / 1 / 2）と一致した。Skill 341（stream origin）には
   10 Targetのrequired unitが集中している（生成新規Normal 8件のconversionを含む）。
 
-したがって **sequential projectionは8,534の主要な積み上げ要因であると同時に、canonical 1件/Targetの衝突を「後ろへずらす」ことで
-43/43を成立させていた唯一の仕組み** だった。逐次射影を外すだけでは共存性を表現できず、Target ごとに複数Candidate
-（別Gogma / Skill位置・別source・別Normal位置・held Route）を持ってglobalに割り当てる能力（C2: Candidate portfolio +
-global assignment）が必要である。
+したがって **今回比較したcanonical 1件/Targetの2 variantでは、sequential projection側だけが43/43を成立させた**。
+その代償としてshared streamのRoute位置が後方へ積み上がり、Planは8,534 stepsになった。Planner-start originへ戻すだけでは
+21件のresource conflictが再出現した。C2では、逐次射影による衝突回避に依存せず、Targetごとに複数Candidate
+（別Gogma / Skill位置・別source・別Normal位置・held Route）を持ち、その中から共存可能な組合せを選ぶ能力
+（Candidate portfolio + global assignment）を、次に検証するgeneric能力として扱う。これで1,657へ到達することはまだ示していない。
 
 ## 1. 開始状態・authority・変更境界
 
@@ -187,8 +190,10 @@ C1のRoute集合からpost-hocで数えた重複（静的なcount。Planner判�
 | source（所持武器）重複 | **2武器 / 4 Target** | 0d13daed（a26f6bcf retained / b27e57a7 生成）、aec3d2e4（1f121742 retained / a6c17e25 生成） |
 
 Planner Conflictのkind別件数（Gogma 15 / Skill 3 / Normal 1 / owned weapon 2）とstatic重複の件数が一致した。
-生成の新規Normal 8件はすべてSkill 341（Skill streamのorigin）でconversionし、同じSkill位置を奪い合う。これは「canonical 1件/Targetはすべてstream originの
-最早位置を取りにいく」ことの直接の結果で、C2でportfolioが必要な理由の一次証拠である。
+生成の新規Normal 8件はすべてSkill 341（Skill streamのorigin）でconversionし、同じSkill位置を奪い合う。通常Candidate SearchのRouteは
+各streamでoriginから連続するため、Planner-start originから選ばれたcanonical Routeが共有streamの早い位置へ集中し、required Counter位置や
+OwnedWeapon sourceの重複が生じた、というのが本Phaseで直接観測した事実である（canonical Candidateは既存のCandidate ranking /
+canonical selectionで決まり、各stream位置を独立に最小化するものではない）。これはC2でportfolioを検証する理由の一次証拠である。
 
 ## 9. frontier stacking
 
@@ -221,7 +226,7 @@ C1では逐次積み上げは完全に消えた（全区間がstream originか�
 | shared coverage（1,657でstream originより後から始まるRoute） | — | — | Gogma 42 / Skill 23 |
 
 1,657の新規Normal位置: チャアク N0 / N206、双剣 N367 / 413 / 470 / 474、スラアク N0、片手剣 N11。C1（=元Build List）はチャアク2件がともにN206を取り衝突する
-（Phase 2-A.5で記録されたチャアク火 N0 → Reset連鎖 / 龍 N206 → Keep の非対称を、canonical 1件では表現できない）。
+（Phase 2-A.5で記録されたチャアク火 N0 → Reset連鎖 / 龍 N206 → Keep の非対称は、C1のcanonical 1件/Targetには現れない）。
 
 ## 11. runtime（Node、参考値）
 
@@ -242,22 +247,29 @@ post-hocの元Build List Planner比較（C1 6.9秒 / control 7.5秒）は計算�
 
 1. このExportでは、元Build Listのpending 23 Entryはすでに「Planner-start originのcanonical Ideal」だった。逐次射影を外すと
    Research発見は元Build Listへ戻るだけで、Planner側から見て新しい情報はない。
-2. 8,534は「逐次射影で衝突を後ろへずらした結果」であり、逐次射影はPlan長の主要因であると同時に、canonical 1件/Targetで
-   共存を成立させる唯一の手段になっていた。逐次射影の除去は必要条件ではあるが十分条件ではない。
-3. 共存を壊すのは、全Targetがstreamの最早位置（Gogma 55〜、Skill 341〜、Normal N206など）を取りにいくcanonical選択と、
-   所持武器の重複である。static envelopeは1,758で1,657に近く、「位置の予約を他Targetと調整しながら別Candidateを選ぶ」
-   ことができれば1,657付近へ届き得ることを示唆する（ただし実行可能性は未検証）。
+2. 今回比較したcanonical 1件/Targetの2 variantでは、sequential projection側だけが43/43を成立させた。その代償として
+   shared streamのRoute位置が後方へ積み上がり（frontier stacking 37/37）、Planは8,534 stepsとなった。Planner-start originへ戻すだけでは
+   21件のresource conflictが再出現した（frontier stacking 0/36）。本Phaseが比較したのはこの2 variantだけであり、逐次射影が
+   共存を成立させる唯一の手段であることや、逐次射影の除去がGlobal Plannerの必要条件であることまでは示していない。
+3. C1で直接観測した共存失敗は、Planner-start originから選ばれたcanonical Routeが共有streamの早い位置へ集中したことによる
+   required Counter位置の重複（新規Normal 8件のconversionがすべてS341、Gogma required位置はorigin近傍の15位置で重複、
+   チャアク2件がともにN206）と、OwnedWeapon sourceの重複（2武器）である。これがProduction Plannerの21 Conflictと一致した。
+   static envelope 1,758はConflictを無視したvirtual値で、1,657に近いことは近い位置に候補が存在する可能性を示唆するだけであり、
+   1,657へ実際に到達可能であることは示していない。
 
-C2で検証すべき能力（Phase 2-B 11章の1・3・4・5を、本Phaseの証拠で具体化）:
+C2の方向は、C1で「Planner-start origin canonical 1件/Targetだけでは共存できない」「同じCounter位置・OwnedWeaponへCandidateが集中する」こと、
+1,657ではC1と異なるsource / Normal位置が多数使われ、held Routeも18件使われていることに基づく。以下は **C2で検証すべき次のgeneric能力**
+（仮説）であり、これらで1,657へ到達できることはまだ示していない（Phase 2-B 11章の1・3・4・5を、本Phaseの証拠で具体化）:
 
 - **Candidate portfolio**: Targetごとに複数のIdeal Candidate（別Gogma / Skill位置、別の所持武器、所持 ↔ 新規Normal、別Normal位置、
   held位置を跨ぐRoute）を同じPlanner-start originから持つ。C1で衝突した19 Counter位置・2武器の各参加Targetについて、
   「衝突しない次のCandidate」がどれだけ近くにあるかが最初の測定対象になる。Planner Alternative Search（held-aware、
   排他OwnedWeapon、blocked位置）はこの生成器の候補。
 - **global assignment**: portfolioから、required位置とsourceが互いに排他になるよう全Targetへ同時に割り当て、目的関数を
-  stream終端の和（= physical operation数、Phase 2-Bで恒等式を確認済み）にする。逐次・貪欲に1件ずつ決めると、C1で
-  S341に10 Targetが集中したような衝突を後ろへずらす（= 8,534）ことになる。
-- 評価authorityは引き続き通常Production Planner（Conflict 0 / Trace Replay）で、static envelopeはあくまで探索のための下界・推定に使う。
+  stream終端の和（= physical operation数、Phase 2-Bで恒等式を確認済み）にする。controlの逐次決定は、C1でS341に10 Targetが
+  集中したような衝突を後ろへずらす形で共存させ、8,534になった。
+- 評価authorityは引き続き通常Production Planner（Conflict 0 / Trace Replay）で、static envelopeは実行可能性を示さない参考値
+  （探索の推定）としてだけ使う。
 
 ## 13. テスト
 
