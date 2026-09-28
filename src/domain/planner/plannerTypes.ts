@@ -679,7 +679,44 @@ export interface ProductionPlanGenerationObserver {
    * ProductionPlan from a run whose Trace Replay never succeeded.
    */
   afterPlannerRun?(result: PlannerRunResult): void
+  /**
+   * Optional phase boundary of the shared Plan-generation tail, for performance
+   * observation only (Issue #154 Phase 2-B). See `ProductionPlanGenerationPhase`.
+   * No Production caller passes it; nothing branches on its presence, and it
+   * receives no Plan data.
+   */
+  onPlanGenerationPhase?(phase: ProductionPlanGenerationPhase): void
 }
+
+/**
+ * The start of one phase of the shared Plan-generation tail after a full
+ * Planner run (`productionPlanGeneration.ts`), reported to the optional
+ * `onPlanGenerationPhase()` observer. Each phase lasts until the next one
+ * starts; `completed` means the tail is about to return a Plan. A tail that
+ * returns `plan: null` or throws reports no `completed`.
+ *
+ * - `trace_replay`: Trace Replay of one full run (once per full run whose
+ *   trace is replayed, so the runtime-unsupported retry check follows it)
+ * - `post_processing`: runtime warnings, excluded Entries and the selected
+ *   Entry set after the last full run
+ * - `execution_projection`: `projectProductionPlanExecution()`
+ * - `planning_input_snapshot`: `createPlanningInputSnapshot()`
+ * - `checkpoint_defence`: the checkpoint requirement defence
+ * - `rejected_build_list_entries`: `createRejectedBuildListEntries()` (and the
+ *   Plan field clones evaluated before it)
+ * - `required_materials`: `collectRequiredMaterials()`
+ * - `plan_assembly`: the Plan object and the result clones
+ */
+export type ProductionPlanGenerationPhase =
+  | 'trace_replay'
+  | 'post_processing'
+  | 'execution_projection'
+  | 'planning_input_snapshot'
+  | 'checkpoint_defence'
+  | 'rejected_build_list_entries'
+  | 'required_materials'
+  | 'plan_assembly'
+  | 'completed'
 
 export type PlannerWorkerRequest =
   | {

@@ -1,4 +1,6 @@
 import type { PlannerInput } from '../domain/planner/plannerTypes'
+import type { Phase2BAutonomousPlanEvidence } from './plannerGlobalPhase2BPlan'
+import type { Phase2BPlannerCallTimeline } from './plannerGlobalPhase2BTimeline'
 import type { ExtentAxis } from './plannerGlobalOptimizationExtentProbe'
 import type { ExtentFallbackMeasurement, GlobalResearchReport } from './plannerGlobalOptimizationResearch'
 import type { DiscoveryState, RetrySignals, StopReason } from './plannerGlobalOptimizationRetry'
@@ -52,6 +54,27 @@ export interface PlannerGlobalRunRequest {
   readonly measurement: PlannerGlobalMeasurementMode
   /** Research prediction profiler (a pure observer, as in the Node runner). Off for Phase 2-A timing runs. */
   readonly profiler: boolean
+  /**
+   * Issue #154 Phase 2-B (optional; absent = the Phase 2-A run unchanged): the full Planner call timeline
+   * (clocks only) and the post-hoc autonomous Plan evidence computed after the calculation.
+   */
+  readonly phase2b?: PlannerGlobalPhase2BRequest
+}
+
+export interface PlannerGlobalPhase2BRequest {
+  readonly timeline: boolean
+  readonly planEvidence: boolean
+}
+
+/** Phase 2-B additions to a Worker result. Every time is epoch-aligned ms (`timeOrigin + now()` of the Worker realm). */
+export interface PlannerGlobalPhase2BResult {
+  readonly marks: { readonly acceptedAtMs: number; readonly calculationStartAtMs: number; readonly calculationEndAtMs: number;
+    readonly evidenceEndAtMs: number; readonly planEvidenceEndAtMs: number; readonly resultPostAtMs: number }
+  readonly timeline: readonly Phase2BPlannerCallTimeline[] | null
+  readonly autonomousPlan: Phase2BAutonomousPlanEvidence | null
+  readonly planEvidenceElapsedMs: number
+  /** Where the timeline heap probe came from (`null` = none; a Browser Worker exposes no synchronous heap API). */
+  readonly heapProbe: string | null
 }
 
 export interface PlannerGlobalCancelRequest {
@@ -169,6 +192,8 @@ export interface PlannerGlobalWorkerResult {
   readonly rawBlockSummary: unknown
   readonly predictionProfile: unknown
   readonly workerHeapAfter: PlannerGlobalWorkerHeapSample | null
+  /** Phase 2-B only (`request.phase2b` present). */
+  readonly phase2b?: PlannerGlobalPhase2BResult
 }
 
 export type PlannerGlobalBenchmarkResponse =
@@ -226,6 +251,9 @@ export function validatePlannerGlobalRunRequest(request: PlannerGlobalRunRequest
   if (!Number.isSafeInteger(request.maxPlanSteps) || request.maxPlanSteps < 1) issues.push('maxPlanSteps must be a positive integer')
   else if (request.input.options?.maxPlanSteps !== request.maxPlanSteps) issues.push('maxPlanSteps must equal input.options.maxPlanSteps')
   if (!nullOr(request.attemptBudgetMs, finiteNonNegative)) issues.push('attemptBudgetMs must be null or a finite number >= 0')
+  if (request.phase2b !== undefined && (!isObject(request.phase2b) || typeof request.phase2b.timeline !== 'boolean' || typeof request.phase2b.planEvidence !== 'boolean')) {
+    issues.push('phase2b must be { timeline: boolean, planEvidence: boolean } when present')
+  }
   if (request.mode === 'control') {
     if (request.fallbackAxis !== null || request.fallbackBudgetMs !== null || request.fallbackMaxEpisodes !== null) issues.push('control takes no fallback axis, budget or episode bound')
   } else if (request.mode === 'fallback') {
