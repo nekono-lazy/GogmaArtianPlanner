@@ -1,0 +1,149 @@
+/**
+ * Issue #154 Phase 2-C2.5-C: hypothesis measures and verdict rules, Research only. Never import from Production.
+ *
+ * The rules below were fixed BEFORE the formal profiling run (they are committed with the profiling code). They read
+ * only numbers the two analyses produce:
+ *
+ * - snapshot measure  the collective edge-cut size of the hypothesis' edge set, restricted to nodes allocated after the
+ *                     pre-Search baseline, as a share of every such node reachable from the synthetic root;
+ * - sampling measure  the share of sampled live bytes whose attributed Repository frame falls into the hypothesis'
+ *                     source categories, in the `no_inlining` variant's profile of the highest threshold reached
+ *                     (function-precise attribution; the `jit_default` share is reported beside it).
+ *
+ * Per context: `strong` when both measures are >= 25 %, `none` when both are < 5 %, `mixed` otherwise, `missing` when
+ * either measure is unavailable (an analysis failure is never read as 0 %). Across contexts: `supported` when every
+ * context is strong, `not_supported` when every context is none, `inconclusive` when no context has both measures,
+ * `partially_supported` otherwise. The edge-cut measure is what the listed edges alone keep alive; it is not a
+ * dominator-tree retained size, and overlapping hypotheses are never summed.
+ */
+import type { HeapSnapshotAnalysis, HeapSnapshotEdgeGroup } from './plannerGlobalPhase2C25CSnapshotAnalysis'
+import type { Phase2C25CProfileAnalysis, Phase2C25CSourceCategory } from './plannerGlobalPhase2C25CProfileAnalysis'
+
+export type Phase2C25CHypothesisId = 'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'H7'
+
+export interface Phase2C25CHypothesis {
+  id: Phase2C25CHypothesisId
+  title: string
+  samplingCategories: Phase2C25CSourceCategory[]
+  snapshotEdgeGroup: HeapSnapshotEdgeGroup
+}
+
+/** Holder signatures (`heapSnapshotNodeSignature()` form) of the Search structures the hypotheses name. */
+export const PHASE2C25C_HOLDER_SIGNATURES = {
+  reservedBonusSet: 'object:Object{cutByExtent,depths,done,frontier,index,unsupported,windows}',
+  reservedSkillSet: 'object:Object{cutByExtent,depths,done,frontier,index,windows}',
+  reservedBonusSolution: 'object:Object{bonuses,depth,lastResetDepth,restorationBonusScope,results,steps}',
+  reservedBonusState: 'object:Object{bonuses,depth,familyLayoutKey,lastResetDepth,nextFrom,position,results,scope}',
+  reservedBonusResultNode: 'object:Object{depth,previous,result,step}',
+  searchWorkQueue: 'object:SearchWorkQueue{',
+  targetSearchScheduler: 'object:TargetSearchScheduler{',
+} as const
+
+export const PHASE2C25C_HYPOTHESES: readonly Phase2C25CHypothesis[] = [
+  { id: 'H1', title: 'held-aware Bonus ReservedSet.depths keeps every generated state as a published solution',
+    samplingCategories: ['reserved_bonus_generation', 'reserved_bonus_steps'],
+    snapshotEdgeGroup: { group: 'H1', edgeNames: ['depths'], holderSignaturePrefixes: [PHASE2C25C_HOLDER_SIGNATURES.reservedBonusSet], edgeTypes: ['property'] } },
+  { id: 'H2', title: 'reservedBonusSteps() materializes a full steps[] per published solution',
+    samplingCategories: ['reserved_bonus_steps'],
+    snapshotEdgeGroup: { group: 'H2', edgeNames: ['steps'], holderSignaturePrefixes: [PHASE2C25C_HOLDER_SIGNATURES.reservedBonusSolution], edgeTypes: ['property'] } },
+  { id: 'H3', title: 'the ReservedBonusResultNode.previous history chain',
+    samplingCategories: ['reserved_bonus_generation'],
+    snapshotEdgeGroup: { group: 'H3', edgeNames: ['results', 'previous'],
+      holderSignaturePrefixes: [PHASE2C25C_HOLDER_SIGNATURES.reservedBonusSolution, PHASE2C25C_HOLDER_SIGNATURES.reservedBonusState, PHASE2C25C_HOLDER_SIGNATURES.reservedBonusResultNode],
+      edgeTypes: ['property'] } },
+  { id: 'H4', title: 'scheduler channel.retained keeps every evaluated Bonus / Skill solution',
+    samplingCategories: ['scheduler_channel', 'bonus_solution_materialization', 'stream_solution_evaluation', 'semantic_keys'],
+    snapshotEdgeGroup: { group: 'H4', edgeNames: ['retained'], holderSignaturePrefixes: null, edgeTypes: ['property'] } },
+  { id: 'H5', title: 'createLazyIdealCross() bonuses / skills / nextColumn / waiting',
+    samplingCategories: ['lazy_ideal_cross'],
+    snapshotEdgeGroup: { group: 'H5', edgeNames: ['bonuses', 'skills', 'nextColumn', 'waiting'], holderSignaturePrefixes: null, edgeTypes: ['context'] } },
+  { id: 'H6', title: 'SearchWorkQueue / pending closures',
+    samplingCategories: ['search_work_queue'],
+    snapshotEdgeGroup: { group: 'H6', edgeNames: ['heap', 'queue'],
+      holderSignaturePrefixes: [PHASE2C25C_HOLDER_SIGNATURES.searchWorkQueue, PHASE2C25C_HOLDER_SIGNATURES.targetSearchScheduler], edgeTypes: ['property'] } },
+  { id: 'H7', title: 'prediction memo / reservation windows',
+    samplingCategories: ['rng_prediction', 'reservation_window'],
+    snapshotEdgeGroup: { group: 'H7', edgeNames: ['windows', 'resetPredictions', 'keepPredictions', 'predictions'], holderSignaturePrefixes: null, edgeTypes: ['property', 'context'] } },
+]
+
+/** Descriptive edge sets reported beside the hypotheses (not verdicts). */
+export const PHASE2C25C_DESCRIPTIVE_EDGE_GROUPS: readonly HeapSnapshotEdgeGroup[] = [
+  { group: 'route_bonus_solution_operations', edgeNames: ['operations', 'amendmentResults'], holderSignaturePrefixes: ['object:Object{amendmentResults,finalBonuses,gogmaAdvance,lastResetDepth,operations,restorationBonusScope}'], edgeTypes: ['property'] },
+  { group: 'evaluated_solution_keys', edgeNames: ['operationTypeKey', 'retentionKey', 'bonusKey'], holderSignaturePrefixes: null, edgeTypes: ['property'] },
+  { group: 'evaluated_solution_body', edgeNames: ['solution'], holderSignaturePrefixes: null, edgeTypes: ['property'] },
+  { group: 'reserved_sets_closure', edgeNames: ['reservedSets'], holderSignaturePrefixes: null, edgeTypes: ['context'] },
+]
+
+export const PHASE2C25C_VERDICT_RULE = {
+  strongShare: 0.25,
+  noneShare: 0.05,
+  samplingVariant: 'no_inlining',
+  text: 'Per context: strong when the snapshot edge-cut share (new nodes) and the no_inlining sampling share at the highest reached threshold are both >= 25 %, ' +
+    'none when both are < 5 %, mixed otherwise, missing when either is unavailable. supported: every context strong; not_supported: every context none; ' +
+    'inconclusive: no context has both measures; partially_supported: otherwise.',
+} as const
+
+export type Phase2C25CContextStrength = 'strong' | 'none' | 'mixed' | 'missing'
+export type Phase2C25CVerdict = 'supported' | 'partially_supported' | 'not_supported' | 'inconclusive'
+
+export interface Phase2C25CHypothesisMeasure {
+  contextKey: string
+  snapshotShare: number | null
+  snapshotNewEdgeCutBytes: number | null
+  snapshotMatchedEdges: number | null
+  samplingShare: number | null
+  samplingShareJitDefault: number | null
+  samplingThresholdMiB: number | null
+  strength: Phase2C25CContextStrength
+}
+
+export function phase2c25cSnapshotShare(analysis: HeapSnapshotAnalysis | null, group: string): { share: number | null; bytes: number | null; matchedEdges: number | null } {
+  if (analysis === null) return { share: null, bytes: null, matchedEdges: null }
+  const cut = analysis.groupEdgeCuts.find(g => g.group === group)
+  if (!cut) throw new Error(`The snapshot analysis has no edge group ${group}.`)
+  const denominator = analysis.reachableFromRoot.newSize
+  return { share: denominator === 0 ? null : cut.edgeCut.newSize / denominator, bytes: cut.edgeCut.newSize, matchedEdges: cut.matchedEdges }
+}
+
+export function phase2c25cSamplingShare(analysis: Phase2C25CProfileAnalysis | null, categories: readonly Phase2C25CSourceCategory[]): number | null {
+  if (analysis === null || analysis.totalSampledBytes === 0) return null
+  const bytes = analysis.categories.filter(c => categories.includes(c.category)).reduce((sum, c) => sum + c.sampledSelfBytes, 0)
+  return bytes / analysis.totalSampledBytes
+}
+
+export function phase2c25cContextStrength(snapshotShare: number | null, samplingShare: number | null): Phase2C25CContextStrength {
+  if (snapshotShare === null || samplingShare === null) return 'missing'
+  if (snapshotShare >= PHASE2C25C_VERDICT_RULE.strongShare && samplingShare >= PHASE2C25C_VERDICT_RULE.strongShare) return 'strong'
+  if (snapshotShare < PHASE2C25C_VERDICT_RULE.noneShare && samplingShare < PHASE2C25C_VERDICT_RULE.noneShare) return 'none'
+  return 'mixed'
+}
+
+export function phase2c25cVerdict(strengths: readonly Phase2C25CContextStrength[]): Phase2C25CVerdict {
+  const available = strengths.filter(s => s !== 'missing')
+  if (available.length === 0) return 'inconclusive'
+  if (available.length === strengths.length && strengths.every(s => s === 'strong')) return 'supported'
+  if (available.length === strengths.length && strengths.every(s => s === 'none')) return 'not_supported'
+  return 'partially_supported'
+}
+
+export interface Phase2C25CContextAnalyses {
+  contextKey: string
+  snapshot: HeapSnapshotAnalysis | null
+  /** Highest-threshold profile of each sampling variant (null when that run captured none / failed). */
+  sampling: { no_inlining: { thresholdMiB: number; analysis: Phase2C25CProfileAnalysis } | null; jit_default: { thresholdMiB: number; analysis: Phase2C25CProfileAnalysis } | null }
+}
+
+/** Measures and verdict of every hypothesis over the OOM representative contexts. */
+export function evaluatePhase2C25CHypotheses(contexts: readonly Phase2C25CContextAnalyses[]) {
+  return PHASE2C25C_HYPOTHESES.map(hypothesis => {
+    const measures: Phase2C25CHypothesisMeasure[] = contexts.map(context => {
+      const snapshot = phase2c25cSnapshotShare(context.snapshot, hypothesis.snapshotEdgeGroup.group)
+      const samplingShare = phase2c25cSamplingShare(context.sampling.no_inlining?.analysis ?? null, hypothesis.samplingCategories)
+      return { contextKey: context.contextKey, snapshotShare: snapshot.share, snapshotNewEdgeCutBytes: snapshot.bytes, snapshotMatchedEdges: snapshot.matchedEdges,
+        samplingShare, samplingShareJitDefault: phase2c25cSamplingShare(context.sampling.jit_default?.analysis ?? null, hypothesis.samplingCategories),
+        samplingThresholdMiB: context.sampling.no_inlining?.thresholdMiB ?? null, strength: phase2c25cContextStrength(snapshot.share, samplingShare) }
+    })
+    return { id: hypothesis.id, title: hypothesis.title, samplingCategories: hypothesis.samplingCategories, snapshotEdgeGroup: hypothesis.snapshotEdgeGroup,
+      measures, verdict: phase2c25cVerdict(measures.map(m => m.strength)) }
+  })
+}
