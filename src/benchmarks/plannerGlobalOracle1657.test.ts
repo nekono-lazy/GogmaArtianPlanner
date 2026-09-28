@@ -201,6 +201,34 @@ describe('Phase 2-A.5 oracle verification stages (synthetic fixture)', () => {
   })
 })
 
+/** The committed formal evidence of the real Export run (`scripts/run-planner-global-oracle-1657.mjs`). */
+const evidence = Object.values(import.meta.glob('../../docs/PLANNER_GLOBAL_1657_ORACLE_RESULT.json', { eager: true, import: 'default' }))[0] as {
+  verdict: string
+  environment: { repositoryHead: string; uncommittedResearchCode: boolean; exportSha256: string }
+  summary: { physicalOperations: number; stageA: { passed: boolean }; stageB: { passed: boolean }; materializedBy: Record<string, number>
+    stageC: { termination: { status: string; completedTargetCount: number }; steps: number; physicalSteps: number; selectedBuildListEntries: number
+      conflicts: number; rejectedBuildListEntries: number; resourceConflictRejections: number; warnings: string[]; traceReplay: { isValid: boolean } } }
+  lowerBound: { crossSatisfaction: { planningTargetCount: number; possiblePairCount: number; possiblePairs: unknown[]; distinctSourcePreconditionHolds: boolean }
+    relaxation: { status: string; provenAtLeast: number | null; minimum: { total: number } | null } }
+}
+
+describe('Phase 2-A.5 formal evidence (real Export)', () => {
+  it('records a clean-HEAD run whose distinct-source precondition held and whose bound equals the Production Plan', () => {
+    expect(evidence.environment.exportSha256).toBe(ORACLE_1657_EXPORT_SHA256)
+    expect(evidence.environment.repositoryHead).toMatch(/^[0-9a-f]{40}$/)
+    expect(evidence.environment.uncommittedResearchCode).toBe(false)
+    expect(evidence.lowerBound.crossSatisfaction).toMatchObject({ planningTargetCount: 43, possiblePairCount: 0, possiblePairs: [], distinctSourcePreconditionHolds: true })
+    expect(evidence.lowerBound.relaxation).toMatchObject({ status: 'found', provenAtLeast: ORACLE_1657_PHYSICAL_OPERATIONS, minimum: { total: ORACLE_1657_PHYSICAL_OPERATIONS } })
+    expect(evidence.summary.stageA.passed).toBe(true)
+    expect(evidence.summary.stageB.passed).toBe(true)
+    expect(evidence.summary.materializedBy).toEqual({ candidateSearch: 25, plannerAlternativeSearch: 18 })
+    expect(evidence.summary.physicalOperations).toBe(ORACLE_1657_PHYSICAL_OPERATIONS)
+    expect(evidence.summary.stageC).toMatchObject({ termination: { status: 'completed', completedTargetCount: 43 }, steps: 1657, physicalSteps: 1657,
+      selectedBuildListEntries: 43, conflicts: 0, rejectedBuildListEntries: 0, resourceConflictRejections: 0, warnings: [], traceReplay: { isValid: true } })
+    expect(evidence.verdict).toBe('proven_minimum')
+  })
+})
+
 describe('Phase 2-A.5 verdict', () => {
   const planner: OracleVerdictInput['planner'] = { error: null, selectedBuildListEntries: 2, conflicts: 0, rejectedBuildListEntries: 0, warnings: [],
     traceReplay: { isValid: true, issues: 0, drafts: 6 }, physicalSteps: 6,

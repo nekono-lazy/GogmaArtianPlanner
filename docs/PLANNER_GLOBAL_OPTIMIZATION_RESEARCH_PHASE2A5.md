@@ -12,12 +12,16 @@ Refs #154。Researchであり、Production仕様・Production codeは変更し�
   ProductionPlan.steps 1,657、expandedStates 1,700、Trace Replay passed** を返した（Node、約8.1秒、`maxPlanSteps = 5000`）。
 - 物理操作数の下限を、Counter閾値に対する緩和問題としてProduction RNGから網羅計算し、**下限 = 1,657** を得た。
   実行可能な1,657解が存在するので、1,657はこのExportに対する最小値である。
+- 下限は「各Targetに別々のsourceが要る」（distinct source）ことを使う。これは **Production一般の制約ではない**
+  （Production Plannerにはcross satisfactionがある）。今回のExportでは、1つの武器状態で2つのplanning TargetのIdealを
+  同時に満たせるTargetペアが **0件** であることをProductionの評価関数で機械検証したので（7.0.1）、このExportに限って適用できる。
 - ただし内訳（Skill 1,083 / Gogma 235 / Normal 339）の **単純加算は証明ではない**。Skill 1,083は単独で強制されるが、
   Gogma 235とNormal 339は単独では強制されない（単一stream下限はGogma 170、Normal 208）。1,657は3 streamを
   **同時に最小化した緩和問題の最小値** として証明される（7.4）。
 
 「最小」はこのExport（SHA-256 `cc35fb5b…e1e6b`）の43 planning Target・OwnedWeapon集合・RNG state、
-現在のProduction RNG / Route / Planner semantics、目的関数 = physical operation数に限る。ゲーム全体の最短、
+現在のProduction RNG / Route / Planner semantics、目的関数 = physical operation数に限る。distinct sourceの前提も
+このExportで検証したものであり、任意のPlannerInputへ無条件には適用できない。ゲーム全体の最短、
 別Export、Production RNGのgame-verified範囲外の実機挙動の保証へ一般化しない。
 
 | 比較 | ProductionPlan steps | 1,657との差 |
@@ -226,15 +230,20 @@ CS = Candidate Search、PA (n) = Planner Alternative Search（n件目で一致�
 
 ## 7. lower-bound監査
 
-`plannerGlobalLowerBound.ts`。oracleを読まず、PlannerInputとRNG Engineだけから計算する。
+`plannerGlobalLowerBound.ts`。oracleを読まず、PlannerInput・RNG Engine・MasterのSkill ID一覧だけから計算する。
 
 ### 7.0 前提（`LOWER_BOUND_ASSUMPTIONS`）
+
+前提3（distinct source）はProduction一般のsemanticsではなく、7.0.1の監査で対象PlannerInputごとに確認する前提である。
+それ以外（1・2・4〜8）は現在のProduction semantics（RngEngine advance、RouteOperation集合、Ideal判定、source規則）から来る。
 
 1. 物理操作はちょうど1つのCounterをちょうど1進める（create count c = c回のforge、巨戟化とReset Skills = Skill、Reset / Keep = Gogma）。
    `confirm_owned_ideal` は物理操作でない。
 2. Counterは減らず物理操作でしか進まない。よって **physical operation数 = Σ stream advance**（RouteOperation / PlanStepの定義による）。
-3. 各planning Targetは自分の武器で完成する: 種別・属性が一致する所持武器（未保護、または保護済みで既にIdealなら操作なし）か、
-   その種別の別々のNormal位置でforgeした新規Normalを巨戟化したもの。
+3. （対象PlannerInputで検証する前提）1つの武器状態で2つのplanning TargetのIdealを同時に満たせるペアが無い（7.0.1）。
+   このとき各Targetは自分の完成武器を要する（Ideal完成は武器を保護するので、完成後に別Target向けへ変わることもない）。
+   武器はそれぞれ1つのsource（種別・属性が一致する所持武器（未保護、または保護済みで既にIdealなら操作なし）か、
+   その種別のNormal位置1つでforgeした新規Normalを巨戟化したもの）から来るので、sourceは互いに異なる。
 4. 完成武器はIdeal Bonus（`gogma_artian` scopeの完全一致）とIdeal Skill条件を満たす。
 5. 最終Skillは、所持Gogmaの現在Skillのままか、最後のSkill操作（巨戟化とReset Skillsは同じ位置で同じSkillを引く）の位置pの予測。
 6. 最終Bonusは、所持Gogmaの現在値のままか、最後のBonus操作の位置gで、Idealを出すReset、または読むfamily layout
@@ -242,7 +251,40 @@ CS = Candidate Search、PA (n) = Planner Alternative Search（n件目で一致�
 7. Keepの結果はSeed・種別・属性・位置・順序付きfamily layoutだけで決まる（Production Keepはfamilyだけを読む）。
 8. Engineがunsupportedを返す予測はProduction操作ではない。
 
-緩和で捨てるもの: 同一Counter位置の排他、stream間の時間順序、Routeの連続性、shareability。よって緩和の最小値は真の最小値以下である。
+緩和で捨てるもの: 同一Counter位置の排他、stream間の時間順序、Routeの連続性、shareability。前提3が成り立つPlannerInputでは、
+任意のPlanの終端Counterが緩和の条件を満たすので、緩和の最小値は真の最小値以下である。前提3が成り立たない
+（cross satisfaction可能ペアがある）PlannerInputでは、1本の武器で2 Targetを完成させるPlanが緩和の外にあり得るので、
+`solveLowerBoundRelaxation()` は `not_applicable` を返して下限を主張しない（fail closed。単一stream下限もnullにする）。
+
+### 7.0.1 cross satisfaction監査（distinct sourceの前提確認）
+
+Production Plannerには **cross satisfaction** がある。あるEntryで完成した武器が別TargetのIdealも満たすと、その別Targetは
+充足済み（`hasIdeal`）になり、そのEntryは実行されない（schedulerの `released`、rejectionの `candidate_already_satisfied`。
+`deriveTargetSatisfaction()`、`plannerDeterministicScheduler.ts`、ISSUE_103設計 6.8 / 8.4）。したがって「各Targetに別々の
+sourceが要る」はProduction一般の制約ではなく、Productionのcross satisfaction挙動も本Phaseでは一切変更していない。
+
+`auditCrossSatisfaction()` は、対象PlannerInputのplanning Targetの全ペアについて、1つの完成武器状態で両方のIdealを満たせるかを
+Productionのauthorityだけで判定する（Bonus / Skillの包含規則を再実装しない）:
+
+- 武器がTargetを満たすのは種別・属性が一致するときだけ（`deriveTargetSatisfaction()` と同じ条件）。
+- Idealの判定は `satisfiesIdealTarget()`（`satisfiesIdealBonuses()` = `gogma_artian` scopeの5枠完全一致、
+  `evaluateSkillCondition()` = 指定したSeries / Group条件）。上位ランク互換のような独自規則は入れない。
+- 候補のBonus状態は両Target自身のIdeal集合（`gogma_artian` scope）。現行authorityではIdealを満たす状態はそのTargetのIdeal集合
+  そのものなので、これで網羅になる。候補のSkill状態は、MasterのSeries全25件・Group全17件（無効化されたものを含む）、
+  両条件が名指しするID、`null` の全組合せ（今回はSeries 26 × Group 18）。
+
+実Exportの結果（`lowerBound.crossSatisfaction`、PlannerInput / Target / Master / Production evaluatorから導出）:
+
+| 項目 | 値 |
+| --- | ---: |
+| planning Target | 43 |
+| 種別・属性が一致するTargetペア | 54 |
+| **1つの武器状態で両方のIdealを満たせるペア（possiblePairCount）** | **0** |
+| distinct sourceの前提（`distinctSourcePreconditionHolds`） | true |
+
+54ペアはいずれも、Ideal Bonusの完全一致が成り立たないか、Skill条件を同時に満たす状態が無い。よって今回のPlannerInputでは
+各Targetに別々の完成武器 = 別々のsourceが要り、distinct-source matchingによる下限をこのExportへ適用できる。
+これはExport固有に検証された前提であり、可能ペアが1件でもあるPlannerInputでは同じ下限を最小性の根拠に使わない。
 
 ### 7.1 Skill下限（単独で強制）
 
@@ -279,7 +321,8 @@ G ≤ 289 の閾値では、合計1,687以下の実行可能な閾値は存在�
 
 そこで閾値ベクトル (S, G, N_w) を変数とし、「全Targetが、閾値の内側に収まるoptionを、互いに異なるsource
 （所持武器 / Normal位置。種別ごとの二部マッチング）で持てる」ことを条件に、上式を最小化した（`solveLowerBoundRelaxation()`）。
-任意のPlanの終端Counterはこの条件を満たすので、最小値はPlanの物理操作数の下限である。
+今回のPlannerInputではcross satisfaction可能ペアが0件なので（7.0.1）、任意のPlanの終端Counterはこの条件を満たし、
+最小値はPlanの物理操作数の下限である。
 
 - 網羅性: 合計 < 1,658 のPlanでは各streamのadvanceも < 1,658 なので、各streamを originから1,657位置だけ走査すれば
   必要なoptionをすべて含む（Skill 341〜1997、Gogma 55〜1711、各Normal origin〜+1,657）。optionの閾値値だけを試せば十分で、
@@ -287,12 +330,16 @@ G ≤ 289 の閾値では、合計1,687以下の実行可能な閾値は存在�
 - 結果: **最小 = 1,657**（S 1424、G 290、チャアク207、双剣126、片手剣5、スラアク1、他0）。次点は1,669（G 302）、
   1,672（G 431、双剣0）。
 
-実行可能な1,657のProductionPlan（6章）が存在するので、**1,657は下限を達成する最小値** である。
+実行可能な1,657のProductionPlan（6章）が存在するので、**1,657は下限を達成する最小値** である。この結論は
+「cross satisfaction可能ペア0件（7.0.1）→ distinct source → 緩和の最小1,657 ≤ 任意のPlan → 1,657のPlanが実在」
+という順で、このExportについて自己完結している。
 
 ### 7.5 証明の限定
 
-- 前提1〜8は現在のProduction semantics（RngEngine advance、RouteOperation集合、Target Satisfaction、source規則）そのものである。
-  将来Route操作や資源の意味が変われば再監査が必要。
+- 前提1・2・4〜8は現在のProduction semantics（RngEngine advance、RouteOperation集合、Ideal判定、source規則）による。
+  前提3（distinct source）はProduction一般の制約ではなく、このExportでcross satisfaction可能ペア0件を検証したことによる。
+  別のPlannerInputでは7.0.1の監査を再実行し、可能ペアがあれば本下限を最小性の根拠にしない。
+  将来Route操作・資源・Ideal判定の意味が変われば再監査が必要。
 - 物理操作数だけを目的とする。Plan steps中のweapon switch、所要時間、アイテム素材 / 費用は最適化していない。
 - 走査はProduction Engineそのものを使い、RNGの検証状態（reference-verified / game-verified / category-level adoption）は変えない。
   Production予測が実機と異なる条件があれば、実機での最短性は保証しない。
@@ -305,15 +352,20 @@ node --max-old-space-size=8192 scripts/run-planner-global-oracle-1657.mjs --expo
 
 - runnerはExport SHA-256がoracleのExportと一致しなければ拒否し、outputを新規作成でのみ書く。Vite SSR loaderで既存TypeScriptを
   直接実行する（**Browser Workerではない**）。
-- 正式測定: 2026-09-28、measured HEAD `745e761bedeb322818130e7d72a774664ff15818`（Research codeのcommit、未commit codeなし）、
-  Windows 11 x64、Node v24.19.0、Ryzen 7 9700X（16 logical）。elapsed: Stage A 0.18秒、Stage B 47.9秒（Planner Alternative Searchを含む）、
-  Stage C 8.9秒、下限監査 207.9秒。測定は1回で分布は未測定。
+- 正式測定: 2026-09-28、measured HEAD `90edfeb4a288e545379b68eb2b473e5359fd8a59`（cross satisfaction監査を加えたResearch codeの
+  commit、未commit codeなし）、Windows 11 x64、Node v24.19.0、Ryzen 7 9700X（16 logical）。elapsed: Stage A 0.18秒、
+  Stage B 49.5秒（Planner Alternative Searchを含む）、Stage C 9.0秒（Planner 8.1秒）、下限監査（cross satisfaction監査を含む）240.2秒。
+  測定は1回で分布は未測定。
+- 前回の測定（HEAD `745e761`、cross satisfaction監査なし）はこの測定で置き換えた。Stage A / B / Cの結果、manifest・Entries・Plan hash、
+  下限1,657は前回と同一である。
 - raw evidence: [PLANNER_GLOBAL_1657_ORACLE_RESULT.json](PLANNER_GLOBAL_1657_ORACLE_RESULT.json)。Export SHA、HEAD、RNG Engine、
   CalculationContext、Target別Route（source、Normal / Gogma / Skill位置とrequired、最終Bonus・Skill、Candidate / Entry ID、
   estimate）、Gogma全usage、Skill / Normalのrequired usage、Planner summary、Trace Replay、下限監査（前提、Target別最小閾値、
-  緩和の最小と近傍、単一stream下限）。Plan全文・Export全文は含まない。
+  緩和の最小と近傍、単一stream下限、`crossSatisfaction`（ペア数・可能ペア一覧（今回は空）・Skill候補数・前提成立））。
+  Plan全文・Export全文は含まない。
 - hash（`sha256(JSON.stringify(value))`）: manifest `ffb6db5a…73cc`、Entries `d3fcbb2e…a43e`、Plan `90fbba66…eabf`、
-  result `5aaad704…86a8`、semantic `9e3d7a24…0026`。
+  result `765d4e82…04d1`（Planner summaryのelapsedを含むので測定ごとに変わる）、semantic `aa6be949…3a1e`
+  （cross satisfaction監査を含む）。
 
 ## 9. テスト
 
@@ -325,6 +377,12 @@ node --max-old-space-size=8192 scripts/run-planner-global-oracle-1657.mjs --expo
   Stage B（Candidate Search / Planner Alternative Search）、Stage C（Trace Replay）、verdictが下限一致のときだけ最小と呼ぶこと。
 - `plannerGlobalLowerBound.test.ts`: 閾値合計、source排他（マッチング）、単一stream下限を加算しないこと、option無しの扱い、
   budget以上を最小と呼ばないこと、合成fixtureでは緩和が4 < 実際6になり **最小と判定しない** こと、未確定Normal Counterでfail closed。
+  cross satisfaction: 同種別・同属性・Ideal Bonus完全一致でSkill条件に共通充足状態がある2 Target（Series S1 + Group G1 と Group G1のみ、
+  Skill無条件同士）は可能ペアになる。Bonusが同じTypeでRankだけ違う（下位Targetへ上位Rankを当てない）・Typeが違う・個数が違う、
+  Skill条件が交差しない、属性が違う場合は可能ペアにならない。可能ペアがあると下限は `not_applicable`・単一stream下限null・
+  他が完全に検証済みでもverdictは `validated_oracle`（ペアを除けば同じ閾値で下限が出ることも確認し、前提だけが判定を分けることを固定）。
+- `plannerGlobalOracle1657.test.ts` は、commitした正式evidenceが `proven_minimum`、cross satisfaction可能ペア0件（空配列）、
+  前提成立、下限1,657、Stage C 1,657 steps / Conflict 0 / Trace Replay validであることも確認する。
 
 ## 10. Phase 2-Bへ引き継ぐこと
 

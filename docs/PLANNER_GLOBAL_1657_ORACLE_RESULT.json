@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 Phase 2-A.5: 1,657 physical operation oracle, Production verification and lower-bound audit",
-  "measuredAt": "2026-09-28T06:15:46.461Z",
+  "measuredAt": "2026-09-28T07:19:27.434Z",
   "environment": {
     "runtime": "Node (Vite SSR loader, not Browser Worker)",
     "node": "v24.19.0",
@@ -11,7 +11,7 @@
     "logicalCpuCount": 16,
     "totalMemoryBytes": 33377591296,
     "heapSizeLimitBytes": 8791261184,
-    "repositoryHead": "745e761bedeb322818130e7d72a774664ff15818",
+    "repositoryHead": "90edfeb4a288e545379b68eb2b473e5359fd8a59",
     "uncommittedResearchCode": false,
     "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
     "exportBytes": 19424064,
@@ -133,14 +133,14 @@
         "issues": 0,
         "drafts": 1700
       },
-      "elapsedMs": 8074.659,
+      "elapsedMs": 8136.379799999995,
       "error": null
     },
     "elapsedMs": {
-      "stageA": 175.52300000000014,
-      "stageB": 47911.0792,
-      "stageC": 8859.873599999999,
-      "lowerBound": 207883.78379999998
+      "stageA": 184.84799999999996,
+      "stageB": 49486.220199999996,
+      "stageC": 8969.496400000004,
+      "lowerBound": 240170.3235
     }
   },
   "comparison": {
@@ -155,13 +155,28 @@
     "assumptions": [
       "Every physical operation advances exactly one Counter by exactly one: create_normal_artian (count c) advances its weapon type Normal Counter by c = c physical forges, convert_normal_to_gogma and reset_skills advance the Skill Counter, reset_bonuses and keep_bonuses advance the Gogma Counter (RngEngine advance functions). confirm_owned_ideal advances nothing and is not a physical operation.",
       "Counters never decrease and advance only through physical operations, so the physical operation count equals the sum of the Counter advances.",
-      "Each planning Target is completed by its own weapon: an existing compatible OwnedWeapon (same weapon type and element; unprotected, or protected and already Ideal with no operation) or a new rarity-8 Normal Artian forged at a distinct Normal Counter position of its weapon type and converted.",
+      "Precondition checked per PlannerInput, not a general Production rule: auditCrossSatisfaction() finds no pair of planning Targets that one weapon state can satisfy together (Production has cross satisfaction; with such a pair the bound is not applicable). Then every planning Target needs its own completed weapon, because an Ideal completion protects its weapon so it never changes again, and each weapon comes from exactly one source: an existing compatible OwnedWeapon (same weapon type and element; unprotected, or protected and already Ideal with no operation) or a new rarity-8 Normal Artian forged at its own Normal Counter position of its weapon type and converted. Hence the sources are pairwise distinct.",
       "A completed weapon holds the Ideal restoration bonuses (gogma_artian scope, exact multiset) and the Ideal Skill condition.",
       "Final Skills: an existing Gogma may keep its current Skills; otherwise the last Skill operation (conversion or Reset Skills, which draw the same Skills at the same Skill position) is at a position p whose prediction satisfies the Ideal Skill condition.",
       "Final bonuses: an existing Gogma may keep its current bonuses; otherwise the last bonus operation at Gogma position g is a Reset whose result is Ideal, or a Keep whose result is Ideal for the family layout it reads: the source layout (no earlier Reset) or the layout of a Reset at an earlier position g1 (Keep preserves the slot family layout).",
       "A Keep result depends only on the Seed, weapon type, element, Gogma position and the ordered family layout of the current slots (Production Keep reads families only).",
       "Unsupported predictions (Engine support query) are not Production operations and give no option."
     ],
+    "crossSatisfaction": {
+      "planningTargetCount": 43,
+      "sameWeaponTypeAndElementPairCount": 54,
+      "skillStateCandidates": {
+        "series": 26,
+        "group": 18
+      },
+      "possiblePairCount": 0,
+      "possiblePairs": [],
+      "masterSkillIds": {
+        "series": 25,
+        "group": 17
+      },
+      "distinctSourcePreconditionHolds": true
+    },
     "relaxation": {
       "status": "found",
       "provenAtLeast": 1657,
@@ -922,7 +937,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 14.619400000000041
+        "elapsedMs": 14.95270000000005
       }
     },
     {
@@ -1015,7 +1030,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 193.78870000000006
+        "elapsedMs": 189.28290000000015
       }
     },
     {
@@ -1106,7 +1121,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 20.245799999999917
+        "elapsedMs": 21.72460000000001
       }
     },
     {
@@ -1193,7 +1208,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 6.011500000000069
+        "elapsedMs": 3.8115999999999985
       }
     },
     {
@@ -1280,7 +1295,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.75669999999991
+        "elapsedMs": 2.9253000000001066
       }
     },
     {
@@ -1369,7 +1384,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 552.5735000000002
+        "elapsedMs": 528.4019000000001
       }
     },
     {
@@ -1460,7 +1475,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 4.359599999999773
+        "elapsedMs": 4.314800000000105
       }
     },
     {
@@ -1549,7 +1564,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 22.513800000000174
+        "elapsedMs": 22.058600000000297
       }
     },
     {
@@ -1640,7 +1655,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 4.475699999999961
+        "elapsedMs": 4.438599999999951
       }
     },
     {
@@ -1733,7 +1748,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3380.0348
+        "elapsedMs": 3427.5579
       }
     },
     {
@@ -1820,7 +1835,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.267899999999827
+        "elapsedMs": 3.0671000000002095
       }
     },
     {
@@ -1911,7 +1926,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.6026999999994587
+        "elapsedMs": 2.5445999999992637
       }
     },
     {
@@ -2000,7 +2015,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 810.7065999999995
+        "elapsedMs": 870.5756000000001
       }
     },
     {
@@ -2091,7 +2106,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.5820000000003347
+        "elapsedMs": 4.45010000000002
       }
     },
     {
@@ -2184,7 +2199,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 16610.246
+        "elapsedMs": 17032.9887
       }
     },
     {
@@ -2273,7 +2288,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 1278.608500000002
+        "elapsedMs": 1366.5517
       }
     },
     {
@@ -2360,7 +2375,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.7163999999975204
+        "elapsedMs": 2.954599999997299
       }
     },
     {
@@ -2453,7 +2468,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 1107.5528000000013
+        "elapsedMs": 1074.7978999999978
       }
     },
     {
@@ -2544,7 +2559,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 2198.4500000000007
+        "elapsedMs": 2376.644799999998
       }
     },
     {
@@ -2635,7 +2650,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 8.841099999997823
+        "elapsedMs": 12.176500000001397
       }
     },
     {
@@ -2728,7 +2743,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 11242.294999999998
+        "elapsedMs": 11600.500100000001
       }
     },
     {
@@ -2821,7 +2836,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 4947.520700000001
+        "elapsedMs": 5221.409800000001
       }
     },
     {
@@ -2912,7 +2927,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 5.183700000001409
+        "elapsedMs": 3.63289999999688
       }
     },
     {
@@ -3001,7 +3016,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 241.95620000000054
+        "elapsedMs": 231.09719999999652
       }
     },
     {
@@ -3092,7 +3107,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.9294000000008964
+        "elapsedMs": 5.018199999998615
       }
     },
     {
@@ -3179,7 +3194,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 4.973099999995611
+        "elapsedMs": 2.8954999999987194
       }
     },
     {
@@ -3270,7 +3285,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 214.54390000000421
+        "elapsedMs": 229.29559999999765
       }
     },
     {
@@ -3363,7 +3378,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 2008.9524999999994
+        "elapsedMs": 2058.0734999999986
       }
     },
     {
@@ -3454,7 +3469,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.685700000001816
+        "elapsedMs": 4.4003000000011525
       }
     },
     {
@@ -3541,7 +3556,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 2.4971999999979744
+        "elapsedMs": 6.239699999998265
       }
     },
     {
@@ -3632,7 +3647,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.202500000006694
+        "elapsedMs": 2.2361999999993714
       }
     },
     {
@@ -3719,7 +3734,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 2.8280999999988126
+        "elapsedMs": 4.679700000000594
       }
     },
     {
@@ -3810,7 +3825,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.2928000000028987
+        "elapsedMs": 3.5960999999952037
       }
     },
     {
@@ -3899,7 +3914,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 1035.0724000000046
+        "elapsedMs": 1153.655899999998
       }
     },
     {
@@ -3988,7 +4003,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 253.5590000000011
+        "elapsedMs": 237.454899999997
       }
     },
     {
@@ -4079,7 +4094,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 4.43590000000404
+        "elapsedMs": 4.021600000000035
       }
     },
     {
@@ -4170,7 +4185,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.316500000000815
+        "elapsedMs": 4.546300000001793
       }
     },
     {
@@ -4259,7 +4274,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 442.287900000003
+        "elapsedMs": 461.72559999999794
       }
     },
     {
@@ -4350,7 +4365,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.368300000001909
+        "elapsedMs": 6.546399999999267
       }
     },
     {
@@ -4443,7 +4458,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 136.45760000000155
+        "elapsedMs": 121.81880000000092
       }
     },
     {
@@ -4532,7 +4547,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 494.50900000000547
+        "elapsedMs": 544.1030000000028
       }
     },
     {
@@ -4619,7 +4634,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 3.2725999999966007
+        "elapsedMs": 3.087599999998929
       }
     },
     {
@@ -4708,7 +4723,7 @@
           "source": true
         },
         "error": null,
-        "elapsedMs": 617.2649999999994
+        "elapsedMs": 608.3425999999963
       }
     }
   ],
@@ -6698,7 +6713,7 @@
     "manifestSha256": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
     "entriesSha256": "d3fcbb2e14224ee063bc94dc799121ff9226654d6c2d43e1f120284c02dda43e",
     "planSha256": "90fbba66bac6c4d19b81a3353ee4d496b1195e37a58b40e426826f775a32eabf",
-    "resultSha256": "5aaad704331c901b00860a1a72f49878ac08e8eee717356872680c80a09986a8",
-    "semanticSha256": "9e3d7a244b8e25169b522bad6b30dd3e3d87a63ccdc000029544fbd705cb0026"
+    "resultSha256": "765d4e826fbef4b44777349e91295528db4b03f9bb42e69fa050bb7029f104d1",
+    "semanticSha256": "aa6be94917f15d1c9a4f81d510557b1bcc25c1ea1f0c9e3a9132ede745323a1e"
   }
 }
