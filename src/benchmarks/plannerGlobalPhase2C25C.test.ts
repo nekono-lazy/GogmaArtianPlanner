@@ -537,7 +537,11 @@ describe('Phase 2-C2.5-C heap snapshot parser', () => {
     nodes.push({ type: 'object', name: 'Array', id: 109, self: 64, edges: [] })
     const graph = buildHeapSnapshotGraph(parseHeapSnapshotText(synthSnapshot(nodes)))
     const result = analyzeHeapSnapshot(graph, { baselineMaxNodeId: 100, targetedEdgeNames: ['retained'], persistentRootSignaturePrefixes: ['object:TargetSearchScheduler{'],
-      pathSignaturePrefixes: ['object:Object{previous,', 'object:Nothing'] })
+      pathSignaturePrefixes: ['object:Object{previous,', 'object:Nothing'], elementPropertyCensus: [{ edgeName: 'retained', property: 'result' }] })
+    // The retained array holds node 5 (whose `result` is the string) and node 7 (no such property).
+    expect(result.elementPropertyCensus).toEqual([{ edgeName: 'retained', property: 'result', rows: [
+      { holderSignature: 'object:Object{retained,subscribers}', value: '(absent)', count: 1 },
+      { holderSignature: 'object:Object{retained,subscribers}', value: 'string:he"llo\\né', count: 1 }] }])
     expect(result.persistentSplit).toEqual({ rootSignaturePrefixes: ['object:TargetSearchScheduler{'], roots: 1,
       reachableFromRoots: { nodes: 8, size: 230, newNodes: 4, newSize: 118 }, newNotReachableFromRoots: { newNodes: 1, newSize: 64 } })
     const extra = result.retainingPathExamples.slice(-2)

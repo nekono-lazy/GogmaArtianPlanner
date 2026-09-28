@@ -550,6 +550,11 @@ export interface HeapSnapshotAnalysis {
    * prefixes, e.g. the TargetSearchScheduler instance) versus new nodes those roots do not reach (locals of running or
    * suspended frames, among others). Null when no prefix was given.
    */
+  /**
+   * For each requested (edge name, element property): the elements of every array held through an edge of that name,
+   * counted by the node their property points to (for a boolean, `hidden:true` / `hidden:false`), per holder signature.
+   */
+  elementPropertyCensus: { edgeName: string; property: string; rows: { holderSignature: string; value: string; count: number }[] }[]
   persistentSplit: null | {
     rootSignaturePrefixes: string[]
     roots: number
@@ -588,6 +593,8 @@ export function analyzeHeapSnapshot(graph: HeapSnapshotGraph, options: {
   pathSignaturePrefixes?: readonly string[]
   /** Signature prefixes of the long-lived structure roots of `persistentSplit`. */
   persistentRootSignaturePrefixes?: readonly string[]
+  /** Arrays held through an edge of `edgeName`: census of their elements' `property` value. */
+  elementPropertyCensus?: readonly { edgeName: string; property: string }[]
 }): HeapSnapshotAnalysis {
   const top = options.top ?? 30
   const count = graph.schema.nodeCount
@@ -717,6 +724,35 @@ export function analyzeHeapSnapshot(graph: HeapSnapshotGraph, options: {
       ? { reason: `no new node has a signature starting with ${prefix}`, path: null }
       : { reason: `first new node (lowest node index) whose signature starts with ${prefix}`, path: heapSnapshotRetainingPath(graph, full, firstNewOfSignature.get(signature)!, isNew) })
   }
+  const elementPropertyCensus = (options.elementPropertyCensus ?? []).map(({ edgeName, property }) => {
+    const rows = new Map<string, { holderSignature: string; value: string; count: number }>()
+    const elementsOf = (array: number, into: number[], depth: number) => {
+      for (let edge = graph.firstEdge[array], end = graph.firstEdge[array + 1]; edge < end; edge++) {
+        const type = heapSnapshotEdgeType(graph, edge)
+        if (type === 'element') into.push(heapSnapshotEdgeTarget(graph, edge))
+        else if (depth === 0 && type === 'internal' && heapSnapshotEdgeName(graph, edge) === 'elements') elementsOf(heapSnapshotEdgeTarget(graph, edge), into, 1)
+      }
+      return into
+    }
+    for (const edge of occurrences.get(edgeName)?.edges ?? []) {
+      if (heapSnapshotEdgeType(graph, edge) !== 'property') continue
+      const holderSignature = signatureOf(edgeOwner[edge])
+      for (const element of elementsOf(heapSnapshotEdgeTarget(graph, edge), [], 0)) {
+        let value = '(absent)'
+        for (let e = graph.firstEdge[element], end = graph.firstEdge[element + 1]; e < end; e++) {
+          if (heapSnapshotEdgeType(graph, e) === 'property' && heapSnapshotEdgeName(graph, e) === property) {
+            const to = heapSnapshotEdgeTarget(graph, e)
+            value = `${heapSnapshotNodeType(graph, to)}:${heapSnapshotNodeName(graph, to).slice(0, 40)}`
+          }
+        }
+        const key = `${holderSignature}\u0000${value}`
+        const row = rows.get(key) ?? { holderSignature, value, count: 0 }
+        row.count++
+        rows.set(key, row)
+      }
+    }
+    return { edgeName, property, rows: [...rows.values()].sort((a, b) => b.count - a.count || (a.holderSignature + a.value < b.holderSignature + b.value ? -1 : 1)) }
+  })
   let persistentSplit: HeapSnapshotAnalysis['persistentSplit'] = null
   if (options.persistentRootSignaturePrefixes && options.persistentRootSignaturePrefixes.length > 0) {
     const prefixes = [...options.persistentRootSignaturePrefixes]
@@ -737,7 +773,7 @@ export function analyzeHeapSnapshot(graph: HeapSnapshotGraph, options: {
     nodeCount: count, edgeCount: graph.schema.edgeCount, totalShallowSize, reachableFromRoot, baselineMaxNodeId: baseline, newNodeCount, newShallowSize,
     topByShallowSize: topGroups(byTypeName, top, 'size'), topByCount: topGroups(byTypeName, top, 'count'),
     topNewSignaturesByShallowSize: topNewBySize, topNewSignaturesByCount: topGroups(newBySignature, top, 'count'),
-    targetedEdges, groupEdgeCuts, retainingPathExamples, persistentSplit,
+    targetedEdges, groupEdgeCuts, retainingPathExamples, elementPropertyCensus, persistentSplit,
   }
 }
 

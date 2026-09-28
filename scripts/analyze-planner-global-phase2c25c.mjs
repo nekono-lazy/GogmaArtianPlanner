@@ -63,6 +63,7 @@ if (role === 'snapshot-analyzer') {
       baselineMaxNodeId, top: 30, holderGroupsPerEdge: 5, edgeCutHolderGroupsPerEdge: 2,
       edgeGroups: [...analysis.PHASE2C25C_HYPOTHESES.map(h => h.snapshotEdgeGroup), ...analysis.PHASE2C25C_DESCRIPTIVE_EDGE_GROUPS],
       pathSignaturePrefixes: analysis.PHASE2C25C_PATH_SIGNATURE_PREFIXES, persistentRootSignaturePrefixes: analysis.PHASE2C25C_PERSISTENT_ROOT_PREFIXES,
+      elementPropertyCensus: analysis.PHASE2C25C_ELEMENT_PROPERTY_CENSUS,
     })
     timings.analysisMs = performance.now() - t
     await writeFile(outPath, JSON.stringify({ completeness: { json: 'complete', sections: parsed.sections, metaResolved: true, nodes: graph.schema.nodeCount, edges: graph.schema.edgeCount,
@@ -284,7 +285,7 @@ await withModules(MODULES, async ({ c25c, profile, analysis }) => {
       baselineMaxNodeId: a.baselineMaxNodeId, newNodeCount: a.newNodeCount, newShallowSize: a.newShallowSize,
       topByShallowSize: a.topByShallowSize.slice(0, 20), topByCount: a.topByCount.slice(0, 20),
       topNewSignaturesByShallowSize: a.topNewSignaturesByShallowSize, topNewSignaturesByCount: a.topNewSignaturesByCount.slice(0, 20),
-      targetedEdges: a.targetedEdges, groupEdgeCuts: a.groupEdgeCuts, retainingPathExamples: a.retainingPathExamples, persistentSplit: a.persistentSplit } })),
+      targetedEdges: a.targetedEdges, groupEdgeCuts: a.groupEdgeCuts, retainingPathExamples: a.retainingPathExamples, elementPropertyCensus: a.elementPropertyCensus, persistentSplit: a.persistentSplit } })),
     hypothesisRule: analysis.PHASE2C25C_VERDICT_RULE,
     hypotheses,
     findings,

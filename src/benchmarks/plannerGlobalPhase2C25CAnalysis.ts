@@ -86,6 +86,9 @@ export const PHASE2C25C_PATH_SIGNATURE_PREFIXES: readonly string[] = [
 /** The long-lived Search structure root of the persistent / in-flight split (post-hoc, descriptive). */
 export const PHASE2C25C_PERSISTENT_ROOT_PREFIXES: readonly string[] = [PHASE2C25C_HOLDER_SIGNATURES.targetSearchScheduler]
 
+/** Post-hoc census (descriptive, not a verdict input): the Ideal flag of every evaluated solution a channel retains. */
+export const PHASE2C25C_ELEMENT_PROPERTY_CENSUS: readonly { edgeName: string; property: string }[] = [{ edgeName: 'retained', property: 'idealMatch' }]
+
 export const PHASE2C25C_VERDICT_RULE = {
   strongShare: 0.25,
   noneShare: 0.05,
