@@ -256,3 +256,61 @@ export function buildPhase2C25CFindings(contexts: readonly Phase2C25CFindingsCon
   }
   return { growthRule: `deep when the held-aware Gogma depth reached at the last progress is >= ${PHASE2C25C_DEEP_GROWTH_MIN_GOGMA_DEPTH}`, perContext, answers }
 }
+
+// ---------------------------------------------------------------- interpretation (written after reading the evidence)
+
+/**
+ * The document-level reading of this Phase's formal evidence: Q8, the formal conclusions, what is not yet formal, the
+ * limitations and the next-Phase candidates. It was written after the formal run and the post-hoc analysis; every number
+ * in it is one the evidence itself records (sampling: `no_inlining` at 7168 MiB unless noted; snapshot: share of the new
+ * bytes reachable from the root at the near-limit snapshot). No optimization is implemented by this Phase.
+ */
+export const PHASE2C25C_INTERPRETATION = {
+  writtenAfterFormalEvidence: true,
+  q8: {
+    question: 'memory改善を最初に試すべき箇所の候補（実装ではなく候補、1〜3件）',
+    candidates: [
+      { id: 'C1', site: 'TargetSearchScheduler bonusChannel (planner_alternative) の publication: 評価済みBonus解ごとの operations（bonusAmendmentOperations、depth長のRouteOperation[]）と amendmentResults（bonusAmendmentResults）の即時materialization',
+        evidence: 'deep型c0-p0: bonusAmendmentOperations 56.6%（threshold 512→7168 MiBで39%→57%へ増加）+ bonusAmendmentResults 9.6%、snapshot operations+amendmentResults edge-cut 50.7%。shallow型: 15.4% / 17.7%、edge-cut 25.6% / 27.7%' },
+      { id: 'C2', site: '評価済みBonus解（EvaluatedBonusSolution）が保持する文字列key（retentionKey / bonusKey = stableStringify、operationTypeKey = join）と、sort比較時の文字列flatten',
+        evidence: 'shallow型c12-p0 / c2-p1: semantic_keys 37.3% / 36.4%（serializeStable 22.8% / 22.0%、compareStableKeys 14.4% / 14.5%）、snapshot key edge-cut 37.2% / 30.5%。deep型c0-p0: semantic_keys 7.7%、key edge-cut 27.9%（operationTypeKeyはdepth長の文字列）' },
+      { id: 'C3', site: 'channel.retained が保持する評価済みBonus解の範囲（非Ideal解まで全件保持）と、held-aware ReservedSet.depths + steps[] との二重表現',
+        evidence: 'snapshot censusでBonus channelのretained要素のidealMatchは c0-p0 135,580件中true 2件、c12-p0 53,048件中1件、c2-p1 196,474件中0件（Skill channelの8 / 12 / 4件は全件false）。LazyIdealCross.addBonus はidealMatchのみ採用する（code読解。非Ideal保持が不要かは次Phaseで意味論的に検証が必要）。depths edge-cut 11.7% / 3.4% / 14.3%、steps edge-cut 8.8% / 11.4% / 13.6%' },
+    ],
+  },
+  formalConclusions: [
+    'OOM代表3 context（c0-p0 deep型、c12-p0 / c2-p1 shallow型）の7168 MiB時点のlive sampled bytesは、2 variantとも99.99%以上がRepositoryのSearch code由来で、Vite / harness / runtimeの寄与は無視できる。',
+    'scheduler bonusChannelのsettle（Planner Alternativeのheld-aware Bonus publication）は、live sampled bytesの77.8〜88.1%（2 variantとも）でinclusive stack上にある。',
+    'snapshotでは、TargetSearchSchedulerのchannel.retained（評価済みBonus / Skill解）を切るとc0-p0で新規bytesの83.8%、c2-p1で55.5%、c12-p0で14.3%（Search構造から到達する新規bytesに対しては84.2% / 63.8% / 34.3%）が到達不能になる。deep / shallow共通の最大の保持構造はchannel.retainedである。',
+    '保持されている評価済みBonus解のほぼ全件が非Ideal（idealMatch=false）である。',
+    '最大寄与allocation siteはdeep型とshallow型で異なる: deep型はbonusAmendmentOperations（depth長のRouteOperation配列、56.6%）、shallow型はserializeStable（key文字列、22〜23%）とcompareStableKeys（14%）。',
+    'reservedBonusSteps()のsteps[] materializationはsampling 9.5〜10.1%、snapshot edge-cut 8.8〜13.6%で、二次的要因である。',
+    'ReservedBonusResultNode.previous history chainはedge-cut 1.6〜4.4%で主要因ではない（prefix共有は効いている）。',
+    'set.depthsが排他的に保持するのは新規bytesの3.4〜14.3%で、主要retaining pathはchannel.retained側である。',
+    'Lazy Ideal Cross（bonuses / skills / nextColumn / waiting）、SearchWorkQueue、prediction memo / reservation windowsはsampling・snapshotとも1%未満で主要因ではない（H5 / H6 / H7はnot_supported）。',
+    '事前登録した判定規則ではH4はpartially_supported（c0-p0 / c2-p1 strong、c12-p0 mixed）、H1 / H2 / H3はpartially_supported（全context mixed、ただしH3のc0-p0はnone）、H5 / H6 / H7はnot_supported。',
+    'profiler contaminationはない: completed control 2 contextは2 variantともstatus・Search summary・first Candidate keyがC2.5-Aと一致した。',
+  ],
+  notYetFormal: [
+    '8 GB到達時点の保持構造そのもの（snapshotは512 MB heapで取得し、c0-p0はdepth 42時点、shallow型はdepth 2〜3の同期publication中）。8 GBまでの外挿はsampling thresholdの比例性に依拠している。',
+    'channel.retainedから非Ideal解を除いてもPlanner Alternative Searchの意味論（delivered Candidate順序、summary、prediction回数、extent stop判定）が不変かどうか。',
+    'shallow型のpeakに対する同期publication中の一時配列（c12-p0 snapshotで新規bytesの58.2%がTargetSearchSchedulerから到達しない）の寄与が、8 GB到達時にどの程度か。',
+    'Browser Dedicated Worker内での同じ内訳（本Phaseの計測はNodeのみ）。',
+    'compareStableKeysのlive bytesがcons stringのflattenによるという読み（sampling上の関数帰属とsnapshotのconcatenated string残存からの推定）。',
+  ],
+  limitations: [
+    'sampling bytesはV8の統計的推定値（256 KiB間隔）で、関数単位の帰属である。jit_defaultではinline展開されたcalleeの割り当てが呼び出し元（settle等）に計上されるため、関数別の結論はno_inlining（--no-turbo-inlining --no-maglev-inlining、Search・data・live objectは不変）で出した。',
+    'callsiteのlineはsource mapで解決した関数開始行で、割り当て文の行ではない。',
+    'edge-cut sizeはdominator treeのretained sizeではない。複数構造で共有されるobject（bonuses配列、step object等）はどの単独edge-cutにも入らず、仮説間の値は合算しない。',
+    'snapshotは512 MB heap・baseline snapshot（Search直前）でのid差分で新規objectを定義した。baseline時のGC後heapは約44 MiB。',
+    '判定規則（25% / 5%）はformal run前にcommitしたが、holder signatureとedge群の選定はnon-formal smoke（c0-p0）の観察後に行った。',
+    '各条件1 runずつで、反復・分散は取っていない。profiling runのwall timeは性能指標ではない。',
+    'post-hoc analyzerのsource map解決は間接依存のsource-map-jsを使う（Research scriptのみ、新規dependencyなし）。',
+  ],
+  nextPhaseCandidates: [
+    'C1〜C3それぞれについて、Search意味論を保つmemory削減案を設計する（まだ実装しない）。',
+    'formal equivalence条件: 同じinputでdelivered Candidateのsequence（candidateStableKey順）、Search summary、prediction call回数、first Candidate key、extent stop / exhausted判定がC2.5-A / C2.5-Cと一致すること。',
+    'benchmark条件: 同じOOM代表3 context + completed control 2件、Node 8 GB fresh child、同一threshold、到達depth / 累積生成state数 / OOM有無、およびBrowser Dedicated Workerでの再確認。',
+    'C3の前提確認として、planner_alternative policyでchannel.retainedの非Ideal解が後から登録されるRoute baseに対して意味を持つ経路があるかをcode / testで確定する。',
+  ],
+} as const

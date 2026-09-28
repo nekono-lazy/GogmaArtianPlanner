@@ -289,6 +289,7 @@ await withModules(MODULES, async ({ c25c, profile, analysis }) => {
     hypothesisRule: analysis.PHASE2C25C_VERDICT_RULE,
     hypotheses,
     findings,
+    interpretation: analysis.PHASE2C25C_INTERPRETATION,
   }
   await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', { flag: 'wx' })
   console.log(JSON.stringify({ output: outputPath, sampling: samplingRuns.map(s => `${s.runId}: ${s.outcome}/${s.profilingOutcome} t=${s.thresholdsReached.join(',')}`),
