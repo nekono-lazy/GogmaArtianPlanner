@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 Phase 2-C2.5-C: heap profiling of the Search-only OOM (post-hoc analysis)",
-  "analyzedAt": "2026-09-28T23:50:03.289Z",
+  "analyzedAt": "2026-09-29T00:29:55.026Z",
   "sources": {
     "run": {
       "file": "PLANNER_GLOBAL_PHASE2C25C_RUN.json.local",
@@ -14,7 +14,7 @@
   },
   "provenance": {
     "measuredHead": "6f08a2db53487c58651233319e7247b4339f7b6d",
-    "analysisHead": "f6f6b1411ede77ab7370bb4ace086e4699a27fbf",
+    "analysisHead": "8ec71d11913f19787008ec26662e29f34516d3dc",
     "codeChangedSinceMeasuredHead": [
       "scripts/analyze-planner-global-phase2c25c.mjs",
       "src/benchmarks/plannerGlobalPhase2C25C.test.ts",
@@ -35,6 +35,18 @@
     "c25bEvidenceSha256": "789a1525394210084b71c04e666608fe11fcf9970afe0b48e0b00783b05a6bdd",
     "measuredAt": "2026-09-28T23:05:23.115Z",
     "runWallMs": 942200.531,
+    "rawArtifactVerification": {
+      "rule": "every raw profile / snapshot is re-hashed and compared with the SHA-256 the formal run recorded; the formal raw run itself is only read",
+      "rawRunSha256": "d04f622240c492d83129b9334f87dde507a8b237014a1c0e0594ad3f09eb0ceb",
+      "profiles": {
+        "count": 48,
+        "verified": 48
+      },
+      "snapshots": {
+        "count": 6,
+        "verified": 6
+      }
+    },
     "environment": {
       "runtime": "Node (Vite SSR loader, one fresh child process per run, NOT a Browser Worker)",
       "node": "v24.19.0",
@@ -25841,7 +25853,7 @@
       "snapshotState": "complete",
       "analyzer": {
         "outcome": "analyzed",
-        "wallMs": 43571.132,
+        "wallMs": 81397.6298,
         "heapLimitMb": 16384
       },
       "ready": {
@@ -25971,12 +25983,12 @@
         }
       },
       "timings": {
-        "baselineParseMs": 138.3859,
-        "nearParseMs": 2089.6579,
-        "graphMs": 126.84339999999975,
-        "analysisMs": 40899.5887
+        "baselineParseMs": 237.13160000000005,
+        "nearParseMs": 4532.3811000000005,
+        "graphMs": 214.7407000000003,
+        "analysisMs": 75839.5778
       },
-      "analyzerMaxRssKiB": 2776996,
+      "analyzerMaxRssKiB": 2777352,
       "summary": {
         "terminology": {
           "dominatorTreeComputed": false,
@@ -33713,7 +33725,7 @@
       "snapshotState": "complete",
       "analyzer": {
         "outcome": "analyzed",
-        "wallMs": 38670.3744,
+        "wallMs": 68854.2018,
         "heapLimitMb": 16384
       },
       "ready": {
@@ -33843,12 +33855,12 @@
         }
       },
       "timings": {
-        "baselineParseMs": 134.28400000000002,
-        "nearParseMs": 1478.0842,
-        "graphMs": 87.85519999999997,
-        "analysisMs": 36700.3634
+        "baselineParseMs": 236.5326,
+        "nearParseMs": 3330.8078,
+        "graphMs": 148.65729999999985,
+        "analysisMs": 64674.47409999999
       },
-      "analyzerMaxRssKiB": 2111452,
+      "analyzerMaxRssKiB": 2111468,
       "summary": {
         "terminology": {
           "dominatorTreeComputed": false,
@@ -42259,7 +42271,7 @@
       "snapshotState": "complete",
       "analyzer": {
         "outcome": "analyzed",
-        "wallMs": 81933.5838,
+        "wallMs": 97142.53089999998,
         "heapLimitMb": 16384
       },
       "ready": {
@@ -42389,12 +42401,12 @@
         }
       },
       "timings": {
-        "baselineParseMs": 162.20770000000002,
-        "nearParseMs": 2157.8638,
-        "graphMs": 100.66870000000017,
-        "analysisMs": 79154.37939999999
+        "baselineParseMs": 225.14370000000002,
+        "nearParseMs": 2883.8464999999997,
+        "graphMs": 166.46799999999985,
+        "analysisMs": 93349.9302
       },
-      "analyzerMaxRssKiB": 2286420,
+      "analyzerMaxRssKiB": 2272064,
       "summary": {
         "terminology": {
           "dominatorTreeComputed": false,
@@ -50538,6 +50550,7 @@
     "samplingVariant": "no_inlining",
     "text": "Per context: strong when the snapshot edge-cut share (new nodes) and the no_inlining sampling share at the highest reached threshold are both >= 25 %, none when both are < 5 %, mixed otherwise, missing when either is unavailable. supported: every context strong; not_supported: every context none; inconclusive: no context has both measures; partially_supported: otherwise."
   },
+  "hypothesisScope": "Research verdicts of the pre-registered rule: snapshot edge-cut + no_inlining DIAGNOSTIC sampling. They do not state that the Production-like JIT (jit_default) heap has the same shares.",
   "hypotheses": [
     {
       "id": "H1",
@@ -50925,6 +50938,9 @@
         "gogmaMaxDepthAtLastProgress": 134,
         "samplingThresholdMiB": 7168,
         "repositoryShareNoInlining": 1,
+        "repositoryShareJitDefault": 1,
+        "publicationPathInclusiveShareJitDefault": 0.8759515117239097,
+        "publicationPathInclusiveShareNoInlining": 0.8806769272892606,
         "topCallsiteNoInlining": {
           "key": "bonusAmendmentOperations src/domain/search/bonusStream.ts:234",
           "category": "bonus_solution_materialization",
@@ -50961,6 +50977,7 @@
         "bonusAmendmentOperationsShare": 0.5659694245287769,
         "semanticKeysShare": 0.07674992791014498,
         "snapshotPersistentShare": 0.9947020619786977,
+        "snapshotInFlightShare": 0.005297938021302258,
         "snapshotRetainedCutShare": 0.8378882755966894,
         "snapshotRetainedCutShareOfPersistent": 0.8423509989814754,
         "snapshotDepthsCutShare": 0.11677859801101673,
@@ -50979,6 +50996,9 @@
         "gogmaMaxDepthAtLastProgress": 5,
         "samplingThresholdMiB": 7168,
         "repositoryShareNoInlining": 0.9999645046308124,
+        "repositoryShareJitDefault": 1,
+        "publicationPathInclusiveShareJitDefault": 0.7778397873804419,
+        "publicationPathInclusiveShareNoInlining": 0.777855009923021,
         "topCallsiteNoInlining": {
           "key": "serializeStable src/domain/models/hashing.ts:22",
           "category": "semantic_keys",
@@ -51015,6 +51035,7 @@
         "bonusAmendmentOperationsShare": 0.15414345586778677,
         "semanticKeysShare": 0.3725727238966531,
         "snapshotPersistentShare": 0.41753405528548343,
+        "snapshotInFlightShare": 0.5824659447145165,
         "snapshotRetainedCutShare": 0.14320818763459375,
         "snapshotRetainedCutShareOfPersistent": 0.34298564589342784,
         "snapshotDepthsCutShare": 0.034410160819520794,
@@ -51033,6 +51054,9 @@
         "gogmaMaxDepthAtLastProgress": 7,
         "samplingThresholdMiB": 7168,
         "repositoryShareNoInlining": 1,
+        "repositoryShareJitDefault": 1,
+        "publicationPathInclusiveShareJitDefault": 0.7863414307659677,
+        "publicationPathInclusiveShareNoInlining": 0.7867898598679607,
         "topCallsiteNoInlining": {
           "key": "serializeStable src/domain/models/hashing.ts:22",
           "category": "semantic_keys",
@@ -51069,6 +51093,7 @@
         "bonusAmendmentOperationsShare": 0.17657397323567836,
         "semanticKeysShare": 0.3641301697098586,
         "snapshotPersistentShare": 0.8701093452185806,
+        "snapshotInFlightShare": 0.12989065478141934,
         "snapshotRetainedCutShare": 0.5552812875752824,
         "snapshotRetainedCutShareOfPersistent": 0.6381741451538943,
         "snapshotDepthsCutShare": 0.14349608084320645,
@@ -51083,7 +51108,7 @@
     ],
     "answers": {
       "Q1": {
-        "question": "heap増加の最大寄与allocation site",
+        "question": "heap増加の最大寄与allocation site（関数別はno_inlining diagnostic variantでのattribution）",
         "perContext": [
           {
             "contextKey": "c0-p0#0",
@@ -51128,12 +51153,12 @@
             }
           }
         ],
-        "reading": "c0-p0#0 (deep): no_inlining top bonusAmendmentOperations src/domain/search/bonusStream.ts:234 56.6%; c12-p0#0 (shallow): no_inlining top serializeStable src/domain/models/hashing.ts:22 22.8%; c2-p1#0 (shallow): no_inlining top serializeStable src/domain/models/hashing.ts:22 22.0%"
+        "reading": "c0-p0#0 (deep): no_inlining diagnostic top attributed bonusAmendmentOperations src/domain/search/bonusStream.ts:234 56.6%; jit_default publication path inclusive 87.6%; c12-p0#0 (shallow): no_inlining diagnostic top attributed serializeStable src/domain/models/hashing.ts:22 22.8%; jit_default publication path inclusive 77.8%; c2-p1#0 (shallow): no_inlining diagnostic top attributed serializeStable src/domain/models/hashing.ts:22 22.0%; jit_default publication path inclusive 78.6%"
       },
       "Q2": {
         "question": "deep型とshallow型で同じallocation siteが支配的か",
         "sameTopCallsite": false,
-        "reading": "c0-p0#0 (deep): top categories bonus_solution_materialization 66.2%, stream_solution_evaluation 13.3%, reserved_bonus_steps 9.5%; c12-p0#0 (shallow): top categories semantic_keys 37.3%, bonus_solution_materialization 25.7%, reserved_bonus_generation 11.9%; c2-p1#0 (shallow): top categories semantic_keys 36.4%, bonus_solution_materialization 27.3%, reserved_bonus_generation 11.4%"
+        "reading": "c0-p0#0 (deep): no_inlining diagnostic top categories bonus_solution_materialization 66.2%, stream_solution_evaluation 13.3%, reserved_bonus_steps 9.5%; c12-p0#0 (shallow): no_inlining diagnostic top categories semantic_keys 37.3%, bonus_solution_materialization 25.7%, reserved_bonus_generation 11.9%; c2-p1#0 (shallow): no_inlining diagnostic top categories semantic_keys 36.4%, bonus_solution_materialization 27.3%, reserved_bonus_generation 11.4%"
       },
       "Q3": {
         "question": "reservedBonusSteps()のfull steps[] materializationの割合",
@@ -51152,7 +51177,7 @@
       "Q6": {
         "question": "Scheduler channel.retainedの保持量",
         "verdict": "partially_supported",
-        "reading": "c0-p0#0 (deep): retained edge-cut 83.8% of new bytes (84.2% of the Search-reachable new bytes); c12-p0#0 (shallow): retained edge-cut 14.3% of new bytes (34.3% of the Search-reachable new bytes); c2-p1#0 (shallow): retained edge-cut 55.5% of new bytes (63.8% of the Search-reachable new bytes)"
+        "reading": "c0-p0#0 (deep): retained edge-cut 83.8% of new bytes (84.2% of the Search-reachable new bytes), in-flight 0.5%; c12-p0#0 (shallow): retained edge-cut 14.3% of new bytes (34.3% of the Search-reachable new bytes), in-flight 58.2%; c2-p1#0 (shallow): retained edge-cut 55.5% of new bytes (63.8% of the Search-reachable new bytes), in-flight 13.0%"
       },
       "Q7": {
         "question": "Lazy Ideal Cross / SearchWorkQueueは主要因か",
@@ -51164,61 +51189,201 @@
       }
     }
   },
+  "conclusionScopes": {
+    "rule": {
+      "commonPathMinJitDefaultInclusiveShare": 0.5,
+      "majorRetentionMinShare": 0.5,
+      "minorRetentionMaxShare": 0.05,
+      "inFlightMajorityShare": 0.5
+    },
+    "commonAllocationPath": {
+      "path": "held_aware_bonus_publication",
+      "frame": {
+        "functionName": "settle",
+        "url": "src/domain/search/targetSearchScheduler.ts"
+      },
+      "basis": "jit_default inclusive share (Production-like JIT)",
+      "perContext": [
+        {
+          "contextKey": "c0-p0#0",
+          "growthType": "deep",
+          "jitDefaultInclusiveShare": 0.8759515117239097,
+          "noInliningInclusiveShare": 0.8806769272892606,
+          "repositoryShareJitDefault": 1,
+          "isCommonPath": true
+        },
+        {
+          "contextKey": "c12-p0#0",
+          "growthType": "shallow",
+          "jitDefaultInclusiveShare": 0.7778397873804419,
+          "noInliningInclusiveShare": 0.777855009923021,
+          "repositoryShareJitDefault": 1,
+          "isCommonPath": true
+        },
+        {
+          "contextKey": "c2-p1#0",
+          "growthType": "shallow",
+          "jitDefaultInclusiveShare": 0.7863414307659677,
+          "noInliningInclusiveShare": 0.7867898598679607,
+          "repositoryShareJitDefault": 1,
+          "isCommonPath": true
+        }
+      ],
+      "holdsInEveryContext": true
+    },
+    "persistentRetention": {
+      "structure": "channel.retained",
+      "perContext": [
+        {
+          "contextKey": "c0-p0#0",
+          "growthType": "deep",
+          "retainedEdgeCutShareOfNewBytes": 0.8378882755966894,
+          "retainedEdgeCutShareOfPersistentNewBytes": 0.8423509989814754,
+          "role": "major_persistent_retaining_structure"
+        },
+        {
+          "contextKey": "c12-p0#0",
+          "growthType": "shallow",
+          "retainedEdgeCutShareOfNewBytes": 0.14320818763459375,
+          "retainedEdgeCutShareOfPersistentNewBytes": 0.34298564589342784,
+          "role": "contributing_not_dominant"
+        },
+        {
+          "contextKey": "c2-p1#0",
+          "growthType": "shallow",
+          "retainedEdgeCutShareOfNewBytes": 0.5552812875752824,
+          "retainedEdgeCutShareOfPersistentNewBytes": 0.6381741451538943,
+          "role": "major_persistent_retaining_structure"
+        }
+      ],
+      "majorIn": [
+        "c0-p0#0",
+        "c2-p1#0"
+      ],
+      "notDominantIn": [
+        "c12-p0#0"
+      ],
+      "dominantInEveryContext": false,
+      "h4ResearchVerdict": "partially_supported",
+      "h4Scope": "pre-registered Research rule: snapshot edge-cut + no_inlining diagnostic sampling"
+    },
+    "inFlightWorkingSet": {
+      "perContext": [
+        {
+          "contextKey": "c0-p0#0",
+          "growthType": "deep",
+          "inFlightShareOfNewBytes": 0.005297938021302258,
+          "majorityOfNewBytes": false
+        },
+        {
+          "contextKey": "c12-p0#0",
+          "growthType": "shallow",
+          "inFlightShareOfNewBytes": 0.5824659447145165,
+          "majorityOfNewBytes": true
+        },
+        {
+          "contextKey": "c2-p1#0",
+          "growthType": "shallow",
+          "inFlightShareOfNewBytes": 0.12989065478141934,
+          "majorityOfNewBytes": false
+        }
+      ],
+      "majorityIn": [
+        "c12-p0#0"
+      ]
+    },
+    "noInliningScope": {
+      "role": "diagnostic_allocation_attribution",
+      "semanticOutputParity": "confirmed_for_controls",
+      "heapAllocationParityWithJitDefault": "not_proven",
+      "controls": {
+        "contexts": 2,
+        "runs": 4,
+        "contaminated": 0
+      }
+    },
+    "statements": [
+      "共通allocation path: jit_defaultで scheduler bonusChannel の held-aware Bonus publication（settle）が全OOM context（c0-p0#0 87.6% / c12-p0#0 77.8% / c2-p1#0 78.6%）のlive sampled bytesのinclusive stack上にある。",
+      "persistent retention: channel.retained は c0-p0#0, c2-p1#0 でmajor persistent retaining structure。c12-p0#0 では edge-cut 14.3%（Search構造到達分の 34.3%）で 保持要因の1つだが、このsnapshotでは支配的とは言えない。",
+      "in-flight working set: c12-p0#0 では新規bytesの 58.2% がTargetSearchSchedulerからまだ到達しない同期publication途中のデータだった（persistent retentionとは別の、1 depth内のpeak working setの問題）。",
+      "no_inlining: 関数別allocation attributionを読みやすくするためのdiagnostic condition。completed control 2 context（4 run、contaminated 0）でSearchのsemantic output parity（status / summary / first Candidate key）を確認したが、jit_defaultと同一のallocation量・live-object構成（heap-allocation parity）は確認していない。"
+    ]
+  },
   "interpretation": {
     "writtenAfterFormalEvidence": true,
+    "revision": "PR #172 review: no_inlining scoped as a diagnostic condition; persistent retention separated from the common allocation path and the in-flight working set",
+    "noInliningScope": "no_inlining（--no-turbo-inlining --no-maglev-inlining）はSearch semanticsの比較用ではなく、inlineされたcalleeのallocationを関数単位で観測しやすくするためのdiagnostic conditionである。completed controlではSearchのsemantic output parity（status / Search summary / first Candidate key）を確認したが、通常JIT（jit_default）と同一のallocation量・escape analysis・object lifetime・live-object構成・allocation site別shareを保証するものではない。no_inlining由来の関数別割合はすべて「no_inlining diagnostic variantでのallocation attribution」であり、Production-like heapの割合として読まない。",
+    "supersededStatements": [
+      {
+        "where": "src/benchmarks/plannerGlobalPhase2C25C.ts の PHASE2C25C_SAMPLING_VARIANTS doc comment（measured HEAD 6f08a2d の計算code）",
+        "statement": "no_inlining について「the Search, its data and its live objects are unchanged」とする記述",
+        "correction": "semantic output parityのみcontrolで確認済み、heap-allocation parityは未証明。measured provenanceを保つため計算codeのcommentは変更せず、この記述で置き換える。"
+      },
+      {
+        "where": "PR #172 初版の文書・evidence interpretation",
+        "statement": "「Search・data・live objectは不変」「deep / shallow共通の最大の保持構造はchannel.retained」",
+        "correction": "本revisionで削除。保持構造はcontextごとに評価する。"
+      }
+    ],
     "q8": {
       "question": "memory改善を最初に試すべき箇所の候補（実装ではなく候補、1〜3件）",
       "candidates": [
         {
           "id": "C1",
           "site": "TargetSearchScheduler bonusChannel (planner_alternative) の publication: 評価済みBonus解ごとの operations（bonusAmendmentOperations、depth長のRouteOperation[]）と amendmentResults（bonusAmendmentResults）の即時materialization",
-          "evidence": "deep型c0-p0: bonusAmendmentOperations 56.6%（threshold 512→7168 MiBで39%→57%へ増加）+ bonusAmendmentResults 9.6%、snapshot operations+amendmentResults edge-cut 50.7%。shallow型: 15.4% / 17.7%、edge-cut 25.6% / 27.7%"
+          "evidence": "no_inlining diagnostic variantでのattribution: deep型c0-p0で最大attributed allocation site（bonusAmendmentOperations 56.6%、threshold 512→7168 MiBで39%→57%）+ bonusAmendmentResults 9.6%、shallow型で15.4% / 17.7%。snapshot（JIT条件に依らない保持構造）: RouteOperation 305万件163 MiB（c0-p0）、operations + amendmentResults edge-cut 50.7% / 25.6% / 27.7%"
         },
         {
           "id": "C2",
-          "site": "評価済みBonus解（EvaluatedBonusSolution）が保持する文字列key（retentionKey / bonusKey = stableStringify、operationTypeKey = join）と、sort比較時の文字列flatten",
-          "evidence": "shallow型c12-p0 / c2-p1: semantic_keys 37.3% / 36.4%（serializeStable 22.8% / 22.0%、compareStableKeys 14.4% / 14.5%）、snapshot key edge-cut 37.2% / 30.5%。deep型c0-p0: semantic_keys 7.7%、key edge-cut 27.9%（operationTypeKeyはdepth長の文字列）"
+          "site": "評価済みBonus解（EvaluatedBonusSolution）が保持する文字列key（retentionKey / bonusKey = stableStringify、operationTypeKey = join）と、sort比較時の文字列比較",
+          "evidence": "no_inlining diagnostic variantでのattribution: shallow型c12-p0 / c2-p1でsemantic_keys 37.3% / 36.4%（serializeStable 22.8% / 22.0%、compareStableKeys 14.4% / 14.5%）、deep型c0-p0で7.7%。jit_defaultでもstableStringifyがc12-p0 / c2-p1で22.8% / 22.0%。snapshot key edge-cut 27.9% / 37.2% / 30.5%"
         },
         {
           "id": "C3",
           "site": "channel.retained が保持する評価済みBonus解の範囲（非Ideal解まで全件保持）と、held-aware ReservedSet.depths + steps[] との二重表現",
-          "evidence": "snapshot censusでBonus channelのretained要素のidealMatchは c0-p0 135,580件中true 2件、c12-p0 53,048件中1件、c2-p1 196,474件中0件（Skill channelの8 / 12 / 4件は全件false）。LazyIdealCross.addBonus はidealMatchのみ採用する（code読解。非Ideal保持が不要かは次Phaseで意味論的に検証が必要）。depths edge-cut 11.7% / 3.4% / 14.3%、steps edge-cut 8.8% / 11.4% / 13.6%"
+          "evidence": "c0-p0 / c2-p1では強い削減候補（channel.retained edge-cut 83.8% / 55.5%、Search構造到達分の84.2% / 63.8%）。c12-p0ではedge-cut 14.3%（同34.3%）で、新規bytesの58.2%が同期publication途中のin-flight dataだったため、同期publication中のpeak working setも同時に扱わないとpeak削減が限定的な可能性がある。全OOM patternの最大原因とは言わない。census: Bonus channelのretained要素のidealMatch=trueは c0-p0 135,580件中2件、c12-p0 53,048件中1件、c2-p1 196,474件中0件（Skill channelの8 / 12 / 4件は全件false）。LazyIdealCross.addBonus はidealMatchのみ採用する（code読解。非Ideal保持が不要かは次Phaseで意味論的に検証が必要）。depths edge-cut 11.7% / 3.4% / 14.3%、steps edge-cut 8.8% / 11.4% / 13.6%"
         }
       ]
     },
     "formalConclusions": [
-      "OOM代表3 context（c0-p0 deep型、c12-p0 / c2-p1 shallow型）の7168 MiB時点のlive sampled bytesは、2 variantとも99.99%以上がRepositoryのSearch code由来で、Vite / harness / runtimeの寄与は無視できる。",
-      "scheduler bonusChannelのsettle（Planner Alternativeのheld-aware Bonus publication）は、live sampled bytesの77.8〜88.1%（2 variantとも）でinclusive stack上にある。",
-      "snapshotでは、TargetSearchSchedulerのchannel.retained（評価済みBonus / Skill解）を切るとc0-p0で新規bytesの83.8%、c2-p1で55.5%、c12-p0で14.3%（Search構造から到達する新規bytesに対しては84.2% / 63.8% / 34.3%）が到達不能になる。deep / shallow共通の最大の保持構造はchannel.retainedである。",
-      "保持されている評価済みBonus解のほぼ全件が非Ideal（idealMatch=false）である。",
-      "最大寄与allocation siteはdeep型とshallow型で異なる: deep型はbonusAmendmentOperations（depth長のRouteOperation配列、56.6%）、shallow型はserializeStable（key文字列、22〜23%）とcompareStableKeys（14%）。",
-      "reservedBonusSteps()のsteps[] materializationはsampling 9.5〜10.1%、snapshot edge-cut 8.8〜13.6%で、二次的要因である。",
-      "ReservedBonusResultNode.previous history chainはedge-cut 1.6〜4.4%で主要因ではない（prefix共有は効いている）。",
-      "set.depthsが排他的に保持するのは新規bytesの3.4〜14.3%で、主要retaining pathはchannel.retained側である。",
-      "Lazy Ideal Cross（bonuses / skills / nextColumn / waiting）、SearchWorkQueue、prediction memo / reservation windowsはsampling・snapshotとも1%未満で主要因ではない（H5 / H6 / H7はnot_supported）。",
-      "事前登録した判定規則ではH4はpartially_supported（c0-p0 / c2-p1 strong、c12-p0 mixed）、H1 / H2 / H3はpartially_supported（全context mixed、ただしH3のc0-p0はnone）、H5 / H6 / H7はnot_supported。",
-      "profiler contaminationはない: completed control 2 contextは2 variantともstatus・Search summary・first Candidate keyがC2.5-Aと一致した。"
+      "共通allocation path: OOM代表3 context（c0-p0 deep型、c12-p0 / c2-p1 shallow型）のmemory growthは、いずれもscheduler bonusChannelのheld-aware Bonus publication path（settle）に集中している。Production-like JIT（jit_default）の7168 MiB時点で、settleのinclusive shareはc0-p0 87.6%、c12-p0 77.8%、c2-p1 78.6%。",
+      "jit_default（および no_inlining diagnostic variant）とも、7168 MiB時点のlive sampled bytesの99.99%以上がRepositoryのSearch code由来で、Vite / harness / runtimeの寄与は無視できる。3 contextとも1件目Candidate前にOOMした（C2.5-Aと同じ成長）。",
+      "snapshot（512 MB heap）上では、RouteOperation・key文字列・評価済みBonus解・held-aware published solutionが大量に存在する（c0-p0: RouteOperation 305万件163 MiB、評価済みBonus解135,580件、published solution 136,330件）。",
+      "persistent retention: c0-p0とc2-p1では、channel.retainedがmajor persistent retaining structureだった（edge-cut 83.8% / 55.5%、Search構造から到達する新規bytesに対して84.2% / 63.8%）。",
+      "persistent retention: c12-p0ではchannel.retainedは保持要因の1つだが、この512 MB snapshotでは支配的とは言えない（edge-cut 14.3%、Search構造到達分の34.3%）。channel.retainedが3 context共通の支配的保持構造だとは結論しない。",
+      "in-flight working set: c12-p0のnear-limit snapshotは巨大depthの同期publication途中で取得され、新規bytesの58.2%がTargetSearchSchedulerからまだ到達しないin-flight dataだった。c12-p0では長期保持に加えて同期publication中の一時的memory pressureも重要である（c0-p0 0.5%、c2-p1 13.0%）。",
+      "channel.retainedが保持する評価済みBonus解はほぼ全件が非Ideal（idealMatch=false）である（3 context）。",
+      "no_inlining diagnostic variantでのallocation attribution: deep型c0-p0の最大attributed allocation siteはbonusAmendmentOperations（56.6%）、shallow型c12-p0 / c2-p1はserializeStable（22.8% / 22.0%）で、compareStableKeys（14.4% / 14.5%）が続く。これはProduction-like heapの関数別割合ではない。",
+      "reservedBonusSteps()のsteps[]はno_inlining diagnostic sampling 9.5〜10.1%、snapshot edge-cut 8.8〜13.6%、set.depthsの排他保持は3.4〜14.3%、previous history chainはedge-cut 1.6〜4.4%で、いずれも二次的。",
+      "Lazy Ideal Cross（bonuses / skills / nextColumn / waiting）、SearchWorkQueue、prediction memo / reservation windowsはsampling（両variant）・snapshotとも1%未満で主要因ではない。",
+      "事前登録したResearch判定規則（snapshot edge-cut + no_inlining diagnostic sampling）では、H4はpartially_supported（c0-p0 / c2-p1 strong、c12-p0 mixed）、H1 / H2 / H3はpartially_supported、H5 / H6 / H7はnot_supported。この判定はProduction-like JITで同じ割合が成り立つことを意味しない。",
+      "profilerはSearchのsemantic outputを変えていない: completed control 2 context × 2 variantでstatus・Search summary・first Candidate keyがC2.5-Aと一致した（semantic output parity。heap-allocation parityではない）。"
     ],
     "notYetFormal": [
+      "no_inliningとjit_defaultのheap-allocation parity（allocation量・escape analysis・object lifetime・live-object構成・allocation site別share）。no_inlining由来の関数別割合をProduction-like heapへそのまま当てはめること。",
       "8 GB到達時点の保持構造そのもの（snapshotは512 MB heapで取得し、c0-p0はdepth 42時点、shallow型はdepth 2〜3の同期publication中）。8 GBまでの外挿はsampling thresholdの比例性に依拠している。",
+      "c12-p0でchannel.retainedが（8 GB到達時点を含め）支配的保持構造かどうか。512 MB snapshotでは支配的とは言えなかった。",
+      "shallow型のpeakに対する同期publication中のin-flight data（c12-p0 snapshotで新規bytesの58.2%）の寄与が、8 GB到達時にどの程度か。",
       "channel.retainedから非Ideal解を除いてもPlanner Alternative Searchの意味論（delivered Candidate順序、summary、prediction回数、extent stop判定）が不変かどうか。",
-      "shallow型のpeakに対する同期publication中の一時配列（c12-p0 snapshotで新規bytesの58.2%がTargetSearchSchedulerから到達しない）の寄与が、8 GB到達時にどの程度か。",
       "Browser Dedicated Worker内での同じ内訳（本Phaseの計測はNodeのみ）。",
-      "compareStableKeysのlive bytesがcons stringのflattenによるという読み（sampling上の関数帰属とsnapshotのconcatenated string残存からの推定）。"
+      "compareStableKeysのlive bytesがcons stringのflattenによるという読み（no_inlining diagnostic samplingの関数帰属とsnapshotのconcatenated string残存からの推定）。"
     ],
     "limitations": [
-      "sampling bytesはV8の統計的推定値（256 KiB間隔）で、関数単位の帰属である。jit_defaultではinline展開されたcalleeの割り当てが呼び出し元（settle等）に計上されるため、関数別の結論はno_inlining（--no-turbo-inlining --no-maglev-inlining、Search・data・live objectは不変）で出した。",
+      "sampling bytesはV8の統計的推定値（256 KiB間隔）で、関数単位の帰属である。jit_defaultではinline展開されたcalleeの割り当てが呼び出し元（settle等）に計上される。no_inliningはattributionを読みやすくするdiagnostic conditionで、jit_defaultとのheap-allocation parityは証明していない（controlで確認したのはSearchのsemantic output parityのみ）。",
+      "事前登録の仮説判定はsampling側にno_inlining diagnostic variantを使うResearch判定であり、Production-like JITでの割合を判定したものではない。",
+      "snapshotは512 MB heapで取得しており、8 GB到達時点のheapではない。c12-p0のsnapshotは同期publication途中（新規bytesの58.2%がin-flight）で、長期保持構造の比率はその時点の値である。",
       "callsiteのlineはsource mapで解決した関数開始行で、割り当て文の行ではない。",
       "edge-cut sizeはdominator treeのretained sizeではない。複数構造で共有されるobject（bonuses配列、step object等）はどの単独edge-cutにも入らず、仮説間の値は合算しない。",
-      "snapshotは512 MB heap・baseline snapshot（Search直前）でのid差分で新規objectを定義した。baseline時のGC後heapは約44 MiB。",
-      "判定規則（25% / 5%）はformal run前にcommitしたが、holder signatureとedge群の選定はnon-formal smoke（c0-p0）の観察後に行った。",
+      "snapshotはbaseline snapshot（Search直前）とのid差分で新規objectを定義した。baseline時のGC後heapは約44 MiB。",
+      "判定規則（25% / 5%）はformal run前にcommitしたが、holder signatureとedge群の選定はnon-formal smoke（c0-p0）の観察後に行った。結論scope（major / contributing / in-flight majority）の50% / 5%基準はreview後のpost-hoc分類で、仮説判定を変えない。",
       "各条件1 runずつで、反復・分散は取っていない。profiling runのwall timeは性能指標ではない。",
       "post-hoc analyzerのsource map解決は間接依存のsource-map-jsを使う（Research scriptのみ、新規dependencyなし）。"
     ],
     "nextPhaseCandidates": [
-      "C1〜C3それぞれについて、Search意味論を保つmemory削減案を設計する（まだ実装しない）。",
+      "C1〜C3それぞれについて、Search意味論を保つmemory削減案を設計する（まだ実装しない）。C3はc0-p0 / c2-p1では強い候補だが、c12-p0では同期publication peakと組で扱う。",
+      "独立検討事項: shallow型で1 depthに数十万〜200万stateを同期的に生成・評価・publicationする際のpeak working set（c12-p0 snapshotで新規bytesの58.2%がin-flight）を減らせるか。channel.retained削減とは別問題として扱う（まだ実装しない）。",
       "formal equivalence条件: 同じinputでdelivered Candidateのsequence（candidateStableKey順）、Search summary、prediction call回数、first Candidate key、extent stop / exhausted判定がC2.5-A / C2.5-Cと一致すること。",
-      "benchmark条件: 同じOOM代表3 context + completed control 2件、Node 8 GB fresh child、同一threshold、到達depth / 累積生成state数 / OOM有無、およびBrowser Dedicated Workerでの再確認。",
+      "benchmark条件: 同じOOM代表3 context + completed control 2件、Node 8 GB fresh child、jit_default（Production-like JIT）を主条件とする同一threshold、到達depth / 累積生成state数 / OOM有無、およびBrowser Dedicated Workerでの再確認。no_inliningは関数別attributionの補助に限る。",
       "C3の前提確認として、planner_alternative policyでchannel.retainedの非Ideal解が後から登録されるRoute baseに対して意味を持つ経路があるかをcode / testで確定する。"
     ]
   }
