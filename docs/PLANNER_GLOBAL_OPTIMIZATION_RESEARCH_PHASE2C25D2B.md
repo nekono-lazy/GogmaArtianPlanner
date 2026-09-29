@@ -112,6 +112,30 @@ C2.5-Bのscratch driver（SHA-256 `501b2e1eb85c585d32d5ea78902d3509dc50661de0e14
 - page loss後は8 s待って新規Crashpad dumpを確認した。各lossのdumpはrun開始後のmtimeを持つ別々の1ファイル（8件、再利用なし）で、
   すべて `ptype = renderer`、loaded origin `http://127.0.0.1:4179`、`mentionsAllocationFailure = true`。`.dmp` 本体はcommitしない。
 
+### 7.1 formal run completenessの検証
+
+formal resultは、5 contextすべてについてattempt 1 minimal / instrumented pairが存在し、Phase 2-C2.5-B repeat ruleでrepeatが必要な2 contextだけ
+attempt 2 pairが存在し、duplicate / missing / extra runおよびrepeat decision不一致がないことを、post-hoc analyzerでfail-closed確認した
+（Required fix。Browser / Dedicated Workerの再測定はしていない）。
+
+- 検証器: `validatePhase2C25D2BFormalSeries()`（`src/benchmarks/plannerGlobalPhase2C25D2BAnalysis.ts`、pure、Research only）。run集合のauthorityは
+  external driver evidence（renderer lossしたrunにはpage recordが無いため）。入力はD2-a workload、external runs、external `repeatDecisions`、driver metadata。
+- 要求: 各workload contextにattempt 1のminimal / instrumentedがexactly 1件ずつ。attempt 1 pairから既存 `phase2c25bRepeatDecision()` で
+  （driverが観測したstatus・semantic digest・CDP attach failureから）decisionを再計算し、記録decisionの存在と一致を確認。repeat = falseならattempt 2は0件、
+  trueならattempt 2 pairがexactly 1件ずつで、attempt 2 decisionは再計算でrepeat = false（記録と一致）。attempt ≥ 3、workload外context、duplicate runKey、
+  同一context / mode / attemptのduplicate、minimal / instrumented以外のmode、実行pairごとのdecisionの欠落・重複、実行していないattemptのdecisionを拒否。
+  driverは `modes` がexactly minimal + instrumented、`allowRepeat === true`、`only === null`、`completedAt` あり。page session数（今回9）とtimestamp順は条件にしない。
+- expected run数はworkloadとrepeat ruleからderiveする（固定値なし）。
+- 正式analyzer（`scripts/analyze-planner-global-phase2c25d2b.mjs`）は、analysisより前にこの検証を実行し、不完全ならRESULTを書かずに
+  `Formal series incomplete: …` でerror終了する。したがってformal RESULTに `not_run` は出ない（`analyzePhase2C25D2B()` 自体はtest utilityとして
+  `not_run` 表現を残す）。
+- 今回のformal raw evidenceの結果（RESULT `formalSeriesValidation`）: valid、workload 5 context、expected 14 run（= 5 × 2 + repeat 2 context × 2）=
+  actual 14 run、repeat context c12-p0#0 / c2-p1#0、duplicate runKey 0、duplicate logical run 0、missing / unexpected / foreign / attempt > 2 なし、
+  repeat decision 7 / 7（欠落・重複・余計・不一致なし）、driver issueなし。
+- 再解析では既存のraw Browser evidence（SHA-256 `146222dd…07fd`）とexternal evidence（SHA-256 `fe55d971…3e43`）を書き換えず、同じrun directoryから
+  byte-for-byte再現されることだけを確認した（`rawEvidence.*.action = verified_unchanged`）。formal resultのtotals・verdict・context別分類・run・statementsは
+  再解析前と同一。
+
 ## 8. 結果
 
 ### 8.1 run一覧（14 run、9 page session）
@@ -247,7 +271,7 @@ shallow型のpage lossが続くため、**post-D2 heap localization** へ進む�
 | 開始時 | branch `main`、`main` = `origin/main` = `994d8b97021dee618dc282230cc6d6889fb956b2`（PR #174 merge済み）、Working Tree clean、Issue #154 Open |
 | 作業branch | `research/global-planner-phase2c25d2b-browser` |
 | **measured HEAD** | `cb36d0ce157b681465527205be7ed11b1337ffd8`（benchmark codeをcommitしたclean HEADからbuild） |
-| analysis HEAD | `cb36d0ce157b681465527205be7ed11b1337ffd8`（`calculationCodeChangedSinceMeasuredHead` 空）。以後のcommitは本書とevidenceだけ |
+| analysis HEAD | `14c6ff580d460c92e991b80a02f4febfaaa9098b`（Required fix: formal series completeness検証の追加。measured HEAD以降の変更はpost-hoc analyzer・analysis helper・testだけで、`calculationCodeChangedSinceMeasuredHead` 空。初回解析は `cb36d0ce`） |
 | benchmark code SHA-256 | `97099b6fd6e043e8c82baf2f209a5dff2a5c1b51c85aa6d010ddbd97e9c99039`（uncommitted benchmark code = false） |
 | Export | `gogma-artian-planner-backup_20260927015837.json`、19,424,064 bytes、SHA-256 `cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b`（commitしない） |
 | C2.5-A evidence | SHA-256 `a6e38294a5c9137a7d62a3f57d552af637a67d115e1fd04541713b27823e87dd` |
@@ -266,7 +290,7 @@ C2.5-Bと同じoriginにして2回目のsmoke（c8-p1#0のみ、`--only`）でpa
 
 ## 13. テスト・検証
 
-`src/benchmarks/plannerGlobalPhase2C25D2B.test.ts`（19件）:
+`src/benchmarks/plannerGlobalPhase2C25D2B.test.ts`（35件）:
 
 - workload: committed C2.5-A evidenceから `selectPhase2C25CWorkload()` と同じ5 context、D2-a `workloadSelection` と一致。記録と食い違う選択はfail closed
 - protocol: prefixだけのrename、C2.5-B messageの無視、ready environmentのD2-b protocol version
@@ -279,6 +303,10 @@ C2.5-Bと同じoriginにして2回目のsmoke（c8-p1#0のみ、`--only`）でpa
 - statements / heap wording: Worker自身のlimit = unknown、page realm limitは参考値でWorker limitと同一視しない、Nodeとheap比較しない、
   「≈ 4 GiB」と書かない、残る代表がある時に「解消」と書かない
 - 比較source: committed D2-a result / C2.5-B resultsのparse
+- formal series completeness（Required fix、16件）: committed formal external evidenceと合成seriesがpass（expected runをruleからderive）。
+  context丸ごと欠落、片mode欠落、必要repeat欠落、attempt 2片mode欠落、不要repeat追加、attempt > 2、duplicate runKey、duplicate logical run、
+  repeat decision欠落・重複・不一致・未実行attemptのdecision、foreign run、driver modes不足 / 余計、`allowRepeat = false`、`only` あり、`completedAt` なしを
+  すべてfail。analyzerがanalysis前に検証し `Formal series incomplete` でerror終了すること
 - isolation: runtime moduleにoracle・UUID・64桁hex・orientation / Entry ID・context digestリテラルなし、file / DB読み書きなし、D2-b Search実装なし、
   ProductionからD2-bへの到達なし、Production Worker protocol / defaults / schema / version不変
 
@@ -286,7 +314,7 @@ C2.5-Bと同じoriginにして2回目のsmoke（c8-p1#0のみ、`--only`）でpa
 | --- | --- |
 | `npm run lint` | passed |
 | `npx tsc -b --force` | passed |
-| `npm test` | 314 files / 5,044 tests passed |
+| `npm test` | 314 files / 5,060 tests passed（Required fix後） |
 | `npm run build` | passed。`dist` にD2-b識別子なし |
 | `npx vite build --config vite.benchmark.config.ts` | passed（formal build） |
 | `git diff --check` | passed |
@@ -299,13 +327,15 @@ C2.5-Bと同じoriginにして2回目のsmoke（c8-p1#0のみ、`--only`）でpa
 - Research: `src/benchmarks/plannerGlobalPhase2C25D2B{,Protocol,Harness,Analysis}.ts`、`src/benchmarks/plannerGlobalPhase2C25D2B.test.ts`、
   `src/workers/plannerGlobalPhase2C25D2B.worker.benchmark(.entry).ts`、`src/pages/PlannerGlobalPhase2C25D2BBenchmarkPage.tsx`、
   `src/pages/BenchmarkApp(.test).tsx`（ボタン1つ）、`scripts/analyze-planner-global-phase2c25d2b.mjs`
+- Required fix（post-hocのみ）: `validatePhase2C25D2BFormalSeries()` の追加、analyzerのfail-closed gate、test、RESULTの再生成、本書。Browser execution code・
+  Worker・protocol・harness・workload selection・classification ruleは変更していない
 - C2.5-B Research codeへの最小注入点（既定挙動不変）: `plannerGlobalPhase2C25BHarness.ts`（`phase`、`phase2c25bEvidenceForOrientations()`）、
   `plannerGlobalPhase2C25BAnalysis.ts`（`sampledWhen`）
 - 変更なし: PR #173の固定baseline、D2-a unit tests、C2.5-B / D2-aのevidence
 
 ## 15. 証跡
 
-- [PLANNER_GLOBAL_PHASE2C25D2B_RESULT.json](PLANNER_GLOBAL_PHASE2C25D2B_RESULT.json): provenance、環境（`heapLimits`）、条件、sessionごとのparity
+- [PLANNER_GLOBAL_PHASE2C25D2B_RESULT.json](PLANNER_GLOBAL_PHASE2C25D2B_RESULT.json): provenance、環境（`heapLimits`）、条件、`formalSeriesValidation`、sessionごとのparity
   （13行と `workloadRows`）、workload、repeat判定、totals、verdict（formal / per context / auxiliary / semanticFailures）、contextごとの分類・attempt・
   Node D2-a parity・Browser before / afterのrun指標・進行比、runごとの統合record（CDP heap summaryと全sample trajectory、target lifecycle、crash dump key）、
   statements（formal / notYet）。

@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 Phase 2-C2.5-D2-b: Chrome Dedicated Worker re-measurement after the D2-a Ideal-only publication (post-hoc analysis)",
-  "analyzedAt": "2026-09-29T03:29:49.271Z",
+  "analyzedAt": "2026-09-29T03:50:32.467Z",
   "sources": {
     "pages": [
       {
@@ -72,8 +72,12 @@
   },
   "provenance": {
     "measuredHead": "cb36d0ce157b681465527205be7ed11b1337ffd8",
-    "analysisHead": "cb36d0ce157b681465527205be7ed11b1337ffd8",
-    "codeChangedSinceMeasuredHead": [],
+    "analysisHead": "14c6ff580d460c92e991b80a02f4febfaaa9098b",
+    "codeChangedSinceMeasuredHead": [
+      "scripts/analyze-planner-global-phase2c25d2b.mjs",
+      "src/benchmarks/plannerGlobalPhase2C25D2B.test.ts",
+      "src/benchmarks/plannerGlobalPhase2C25D2BAnalysis.ts"
+    ],
     "calculationCodeChangedSinceMeasuredHead": [],
     "formal": true,
     "benchmarkCodeSha256": "97099b6fd6e043e8c82baf2f209a5dff2a5c1b51c85aa6d010ddbd97e9c99039",
@@ -101,13 +105,13 @@
         "file": "PLANNER_GLOBAL_PHASE2C25D2B_BROWSER_RESULTS.json",
         "sha256": "146222dd9c811cfacdcd612523e3d5526a9d49a545ac27aaa0644f861cf007fd",
         "bytes": 274239,
-        "action": "written"
+        "action": "verified_unchanged"
       },
       "externalMemory": {
         "file": "PLANNER_GLOBAL_PHASE2C25D2B_EXTERNAL_MEMORY.json",
         "sha256": "fe55d971838d65401595ce52fbf029b79efd4fc9e0d18dfd1196f66ead753e43",
         "bytes": 481895,
-        "action": "written"
+        "action": "verified_unchanged"
       }
     }
   },
@@ -222,7 +226,8 @@
     ],
     "concurrency": 1,
     "repeatPolicy": "Phase 2-C2.5-B rule, unchanged: a context whose attempt 1 pair had a page / browser crash, a native Worker failure, a mode disagreement or a CDP attach failure is run once more (at most 2 attempts); both attempts are kept",
-    "classificationPolicy": "Phase 2-C2.5-B pre-registered rule, unchanged (phase2c25bPairClassification); an explicit V8 OOM crash key is auxiliary only"
+    "classificationPolicy": "Phase 2-C2.5-B pre-registered rule, unchanged (phase2c25bPairClassification); an explicit V8 OOM crash key is auxiliary only",
+    "formalSeriesPolicy": "validatePhase2C25D2BFormalSeries(): every workload context has exactly one attempt 1 minimal / instrumented run; the repeat decision recomputed by phase2c25bRepeatDecision() equals the recorded one; exactly one attempt 2 pair where it repeats and none otherwise; no attempt above 2, foreign context, duplicate run or extra / missing decision; driver modes exactly minimal + instrumented, allowRepeat true, only null, completedAt present. Checked before the analysis; a failure ends the analyzer without a result."
   },
   "parity": [
     {
@@ -1335,6 +1340,32 @@
       "selectionRole": "control_stopped_by_extent"
     }
   ],
+  "formalSeriesValidation": {
+    "valid": true,
+    "workloadContexts": 5,
+    "expectedRuns": 14,
+    "actualRuns": 14,
+    "repeatedContexts": [
+      "c12-p0#0",
+      "c2-p1#0"
+    ],
+    "duplicateRunKeys": [],
+    "duplicateLogicalRuns": [],
+    "missingRuns": [],
+    "unexpectedRuns": [],
+    "foreignRuns": [],
+    "attemptsAboveTwo": [],
+    "repeatDecisions": {
+      "expected": 7,
+      "recorded": 7,
+      "missing": [],
+      "duplicate": [],
+      "unexpected": [],
+      "mismatches": []
+    },
+    "driverIssues": [],
+    "issues": []
+  },
   "repeatDecisions": [
     {
       "context": "c0-p0#0",
