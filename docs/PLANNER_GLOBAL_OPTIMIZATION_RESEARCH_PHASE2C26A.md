@@ -22,6 +22,9 @@ publication + D2-d H1後）のPlanner Alternative kernelを全件formalに再実
 - baseline（43 Target、completed 20 / 43、exhausted、Plan 1,465 steps、Conflict 21 = Gogma 15 / Skill 3 / owned weapon 2 / Normal 1）と、
   orientation set（54件、id・Conflict順・kind・fixed Target・participant Target set、加えてConflict key・Entry IDまで）は旧C2と完全一致。
 - formal series validation: valid（baseline 1 + kernel 54 child、missing / duplicate / foreign / metadata mismatch / unknown status 0）。
+- **旧C2 comparability: valid（issues 0）**。旧C2とのbefore / after比較は、同一Export SHA、baseline、54 orientationとそのEntry / Conflict
+  metadata（順序込み）、Production extent / trial bounds、8 GB heap、concurrency 3、30分orientation budgetなどの一致をpost-hoc validatorが
+  fail-closedで確認した後にのみ生成している（§5.1）。現在のformal raw runは全条件一致した。
 
 **formalに言えること**: 今回の元Export・54 orientation・Node 8 GB条件では、旧Phase 2-C2で43件発生したkernel child OOMはcurrent Production
 では1件も再現しなかった。そのうち34件は30分budget内に完走し、残り9件はOOMではなく30分budgetのtimeoutで停止した。memory bottleneckは
@@ -50,7 +53,7 @@ extent `{ N 4, G 235, S 4 }`、bounds `{ trials 2, reruns 8 }`、`maxPlanSteps` 
 | 役割 | ファイル |
 | --- | --- |
 | kernel task生成・child条件定数・memory tracker（計算は旧C2 helperへ委譲） | `src/benchmarks/plannerGlobalPhase2C26A.ts` |
-| 旧C2 RESULT parser・baseline / orientation parity・formal validator・集計・遷移・結論規則（post-hoc） | `src/benchmarks/plannerGlobalPhase2C26AAnalysis.ts` |
+| 旧C2 RESULT parser・baseline / orientation parity・formal validator・旧C2 comparability validator・集計・遷移・結論規則（post-hoc） | `src/benchmarks/plannerGlobalPhase2C26AAnalysis.ts` |
 | テスト | `src/benchmarks/plannerGlobalPhase2C26A.test.ts` |
 | kernel-only Node runner / post-hoc analyzer | `scripts/run-planner-global-phase2c26a.mjs` / `scripts/analyze-planner-global-phase2c26a.mjs` |
 | committed evidence | `docs/PLANNER_GLOBAL_PHASE2C26A_RESULT.json` |
@@ -66,7 +69,7 @@ evidenceは変更していない。runnerは旧C2 RESULT・oracle・earlier Phas
 | --- | --- |
 | Export | `gogma-artian-planner-backup_20260927015837.json`、SHA-256 `cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b`、19,424,064 bytes（commitしない） |
 | 旧C2 RESULT | `PLANNER_GLOBAL_PHASE2C2_RESULT.json`、SHA-256 `afb70e9745bc56c264c8892075e6adbb8886b82cec1491177aa75d265f1833a4`（measured HEAD `3db8197f`） |
-| measured HEAD / analysis HEAD | `525ed892acb09609fcce1f7589c6751038ae255d` / 同一（測定後に計算・analysisコードの変更なし） |
+| measured HEAD / analysis HEAD | `525ed892acb09609fcce1f7589c6751038ae255d` / `40a57caa332eeb03350c737bc8d882debd5ded3f`（測定後の変更はpost-hoc allowlistのanalyzer・analysis helper・testのみ、`calculationCodeChangedSinceMeasuredHead = []`） |
 | benchmarkCodeSha256 | `ed29815e9560f0df8f874025126a44636749229e2a2ea2d1672ac5627f260db5`、uncommitted false |
 | 環境 | Node v24.19.0（V8 13.6）、Windows 11（10.0.26200）x64、AMD Ryzen 7 9700X（16 logical）、RAM 32 GB |
 | child | 1 task = fresh Node child（Vite SSR loader）、`--max-old-space-size=8192`、concurrency 3、budget 30分（baselineも同じ） |
@@ -96,8 +99,41 @@ current `createProductionPlan()` を元Exportへ実行し、そのrun自身のCo
 | selected Target | 20 | 20 | ✓（完全一致） |
 | orientation数 | 54 | 54 | ✓ |
 
-orientation setはid・Conflict index・kind・fixed Target・participant Target setが54件全件一致し、補助比較（Conflict key、fixed Entry ID、
-participant Entry ID列）も差分0だった。semantic differenceは無い。
+orientation setはid（順序込み）・Conflict index・kind・fixed Target・participant Target set、Conflict key・fixed Entry ID・participant
+Entry ID列・participant Target ID列が54件全件一致した。semantic differenceは無い。
+
+### 5.1 旧C2 comparabilityのfail-closed検証（Required fix）
+
+旧C2とのbefore / after比較（旧OOM 43件 / 旧completed 11件の遷移、旧completed kernelのsemantic parity、trial rejection / Target outcomeの
+before / after、旧C2のexplored participant数、旧OOM件数に触れる結論文、per-orientationの旧値）は、post-hoc validator
+`validatePhase2C26AOldC2Comparability()`（`src/benchmarks/plannerGlobalPhase2C26AAnalysis.ts`、runnerはimportしない）が
+**同じ測定であることを証明した後にのみ** 生成する。analyzerの順序は
+formal completeness → 旧C2 RESULT parse → comparability（baseline / orientation parityを内部で計算）→ invalidならRESULTを書かずerror終了 →
+`comparePhase2C26AWithOldC2()`（invalidなcomparabilityでは例外）→ RESULT。`--allow-nonformal` でのみnon-formal diagnosticとして続行でき、
+その場合も旧C2比較は一切生成せず `formal = false` とする。
+
+| 条件（すべて必須一致） | C2.6-A | 旧C2 | 一致 |
+| --- | --- | --- | --- |
+| Export SHA-256 | `cc35fb5b…c89e1e6b` | 同 | ✓ |
+| baseline parity（planning / completed Target、termination、Plan steps、Conflict数・kind別・signature、selected Target、orientation数） | 全9項目 | 同 | ✓ |
+| orientation数 / 順序付きID列 | 54 / 同一順 | 54 | ✓ |
+| orientation identity（Conflict index、kind、fixed Target、participant Target set）不一致 | 0 | — | ✓ |
+| orientation metadata（Conflict key、fixed Entry、participant Entry列、participant Target列）不一致 | 0 / 0 / 0 / 0 | — | ✓ |
+| extent | `{ N 4, G 235, S 4 }` | 同 | ✓ |
+| trial bounds | `{ trials 2, reruns 8 }` | 同 | ✓ |
+| 全kernel taskのextent / boundsがrun条件と同一 | true | — | ✓ |
+| child heap / concurrency / orientation budget | 8192 MB / 3 / 1,800,000 ms | 同 | ✓ |
+| Research `maxPlanSteps` / Node yield / CalculationContext | 20,000 / setImmediate / 17・master 4・c5-e7 | 同（旧RESULTに記録あり） | ✓ |
+
+RESULTの `oldC2Comparability` は `valid = true`、`issues = []`、`searchConditionsMatch = true`、`executionConditionsMatch = true`。
+旧 `conditionParityWithOldC2`（`matches` がextent / boundsだけを意味していた）と、表示用だった `baselineParityWithOldC2` /
+`orientationSetParityWithOldC2` はこれへ統合した。kernel requestのlineage（`priorFixedBuildListEntryIds = []`、`priorExcludedRoutes = []`）は
+旧C2 RESULTに記録が無いため **not machine-verifiable from old RESULT** として列挙し、推測した旧値とは比較しない（両runとも同じ
+`phase2c2KernelRequest()` で組み立て、空lineageはテスト済みのinvariant）。
+
+この修正はpost-hoc analyzer・analysis helper・testだけで、既存formal raw run（SHA-256 `cddafccc…43ac2533d`、不変）を再解析した。
+Node baseline / kernel childは再実行しておらず、測定値（completed 45 / OOM 0 / timeout 9 / failure 0、遷移、semantic parity 11 / 11、
+participant 32 / 34、結論case）は変わっていない。結論文は旧OOM件数に明示的に言及する形になった（比較可能なときだけ旧C2に触れる）。
 
 ## 6. kernel child outcome
 
