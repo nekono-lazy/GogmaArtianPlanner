@@ -1475,6 +1475,14 @@ held 位置で自分のoperationが無い場合、武器状態（Bonus 5枠、sc
 - lane開始状態（操作0の解）がすでにIdealなら、同じIdealを後方位置で再取得するためだけの後続operationは要求しない
   （そのlaneのstreamは開かない。5.6.1と同じ）。下記の「後方の同一結果を永久省略しない」規則は、その軸でoperationが
   必要な探索に対するものである
+- held-aware Skill / Bonus stream（`readReservedDepth()`）は、extent内の各absolute positionを同一結果retentionで
+  畳まずに独立して生成・予測・Ideal判定する（Ideal判定のauthorityはBonusが `satisfiesIdealBonuses()`、Skillが
+  `evaluateSkillCondition()` であり、不明なMaster参照のassertを含めて全positionに適用する）。Ideal条件を満たす各positionは
+  独立したsolutionとしてcompositionの対象であり、後から登録されるRoute baseにも提示される。Ideal条件を満たさない
+  positionはCandidateを構成しないので、Route operationやordering用のmaterializeを要求しない。ただし、そのpositionの
+  notice（searched RouteKind / unsupported prediction）、extent / exhausted判定、prediction、stream frontierへの寄与は
+  変わらない。これは既存semanticsの明文化であり、Candidate列・順序・summary・prediction呼び出しを変えない
+  （Issue #154 Phase 2-C2.5-D1 / D2-a）
 - 決定的な順序で1件ずつ返し、consumer（Planner）が次を要求する限り継続する。canonical Ideal（5.6.3）で
   探索を終了しない。「canonical Ideal → Plannerで使用不可 → 次のIdeal → さらに使用不可なら次」と進める
 - 除外key（`excludedRouteKeys`）と一致するCandidateは返さずに次へ進み、除外件数をsummaryへ数える。この件数
