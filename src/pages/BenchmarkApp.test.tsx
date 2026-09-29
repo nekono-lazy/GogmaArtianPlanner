@@ -8,6 +8,7 @@ vi.mock('./ConstrainedEnumerationBenchmarkPage', () => ({ ConstrainedEnumeration
 vi.mock('./PlannerAlternativeBenchmarkPage', () => ({ PlannerAlternativeBenchmarkPage: () => <div>Planner Alternative harness</div> }))
 vi.mock('./PlannerGlobalPhase2C25BBenchmarkPage', () => ({ PlannerGlobalPhase2C25BBenchmarkPage: () => <div>Phase 2-C2.5-B harness</div> }))
 vi.mock('./PlannerGlobalPhase2C25D2BBenchmarkPage', () => ({ PlannerGlobalPhase2C25D2BBenchmarkPage: () => <div>Phase 2-C2.5-D2-b harness</div> }))
+vi.mock('./PlannerGlobalPhase2C25D2EBenchmarkPage', () => ({ PlannerGlobalPhase2C25D2EBenchmarkPage: () => <div>Phase 2-C2.5-D2-e harness</div> }))
 
 describe('BenchmarkApp', () => {
   it('keeps C5 as default and switches between the remaining harnesses', () => {
@@ -21,6 +22,7 @@ describe('BenchmarkApp', () => {
       ['Planner Alternative Phase 3', 'Planner Alternative harness'],
       ['Global Planner Phase 2-C2.5-B', 'Phase 2-C2.5-B harness'],
       ['Global Planner Phase 2-C2.5-D2-b', 'Phase 2-C2.5-D2-b harness'],
+      ['Global Planner Phase 2-C2.5-D2-e', 'Phase 2-C2.5-D2-e harness'],
       ['C5-E2C8 Skill Identification', 'C5 harness'],
     ]) {
       fireEvent.click(screen.getByRole('button', { name: button }))
@@ -32,12 +34,14 @@ describe('BenchmarkApp', () => {
     render(<BenchmarkApp />)
     expect(screen.queryByRole('button', { name: 'Issue 103 Planner Search' })).not.toBeInTheDocument()
     // Issue #154 Phase 2-A added the Global Planner Browser Worker harness as the fifth tab,
-    // Phase 2-C2.5-B its Search-only reproduction harness as the sixth, and Phase 2-C2.5-D2-b its
-    // post-D2-a Browser re-measurement harness as the seventh.
-    expect(screen.getAllByRole('button')).toHaveLength(7)
+    // Phase 2-C2.5-B its Search-only reproduction harness as the sixth, Phase 2-C2.5-D2-b its
+    // post-D2-a Browser re-measurement harness as the seventh, and Phase 2-C2.5-D2-e its post-H1 Browser
+    // re-measurement harness as the eighth.
+    expect(screen.getAllByRole('button')).toHaveLength(8)
     expect(screen.getByRole('button', { name: 'Global Planner Phase 2-A' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Global Planner Phase 2-C2.5-B' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Global Planner Phase 2-C2.5-D2-b' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Global Planner Phase 2-C2.5-D2-e' })).toBeInTheDocument()
   })
 
   it('no longer offers the B8 Planner orchestration or B9 what-if harness (Phase 6-B1)', () => {

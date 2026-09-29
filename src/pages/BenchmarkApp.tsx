@@ -6,6 +6,7 @@ import { PlannerAlternativeBenchmarkPage } from './PlannerAlternativeBenchmarkPa
 import { PlannerGlobalBrowserBenchmarkPage } from './PlannerGlobalBrowserBenchmarkPage'
 import { PlannerGlobalPhase2C25BBenchmarkPage } from './PlannerGlobalPhase2C25BBenchmarkPage'
 import { PlannerGlobalPhase2C25D2BBenchmarkPage } from './PlannerGlobalPhase2C25D2BBenchmarkPage'
+import { PlannerGlobalPhase2C25D2EBenchmarkPage } from './PlannerGlobalPhase2C25D2EBenchmarkPage'
 import { SkillIdentificationBenchmarkPage } from './SkillIdentificationBenchmarkPage'
 
 type BenchmarkId =
@@ -16,6 +17,7 @@ type BenchmarkId =
   | 'planner-global-phase2a'
   | 'planner-global-phase2c25b'
   | 'planner-global-phase2c25d2b'
+  | 'planner-global-phase2c25d2e'
 
 /**
  * Isolated benchmark shell. The C5-E2C8 Skill Identification harness stays the
@@ -49,6 +51,9 @@ type BenchmarkId =
  * Issue #154 Phase 2-C2.5-D2-b adds its Browser Worker re-measurement harness after
  * the D2-a Ideal-only publication (`docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C25D2B.md`);
  * C5 stays the default and the existing harnesses (Phase 2-C2.5-B included) are unchanged.
+ * Issue #154 Phase 2-C2.5-D2-e adds its Browser Worker re-measurement harness after the D2-d
+ * single-pass held-aware Bonus stream (`docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C25D2E.md`);
+ * C5 stays the default and the existing harnesses (D2-b included) are unchanged.
  */
 export function BenchmarkApp() {
   const [benchmark, setBenchmark] = useState<BenchmarkId>('c8-skill-identification')
@@ -97,6 +102,12 @@ export function BenchmarkApp() {
         >
           Global Planner Phase 2-C2.5-D2-b
         </Button>
+        <Button
+          variant={benchmark === 'planner-global-phase2c25d2e' ? 'contained' : 'outlined'}
+          onClick={() => setBenchmark('planner-global-phase2c25d2e')}
+        >
+          Global Planner Phase 2-C2.5-D2-e
+        </Button>
       </Stack>
       {benchmark === 'c8-skill-identification' && <SkillIdentificationBenchmarkPage />}
       {benchmark === 'b5-candidate-search' && <CandidateSearchBenchmarkPage />}
@@ -107,6 +118,7 @@ export function BenchmarkApp() {
       {benchmark === 'planner-global-phase2a' && <PlannerGlobalBrowserBenchmarkPage />}
       {benchmark === 'planner-global-phase2c25b' && <PlannerGlobalPhase2C25BBenchmarkPage />}
       {benchmark === 'planner-global-phase2c25d2b' && <PlannerGlobalPhase2C25D2BBenchmarkPage />}
+      {benchmark === 'planner-global-phase2c25d2e' && <PlannerGlobalPhase2C25D2EBenchmarkPage />}
     </Stack>
   )
 }
