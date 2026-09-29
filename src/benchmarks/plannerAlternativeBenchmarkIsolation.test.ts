@@ -58,7 +58,15 @@ describe('Planner Alternative Phase 3-A benchmark isolation', () => {
   it('passes the Search instrumentation from no Production caller', () => {
     const users = productionPaths.filter((path) => /\bonSkillReservedDepth\b|\bonGogmaReservedDepth\b|\binstrumentation\?\.onWorkSettled\b/.test(production[path]))
     expect(users).toEqual(['../domain/search/alternative/plannerAlternativeSearch.ts'])
-    expect(production['../domain/planner/alternative/plannerAlternativeKernel.ts']).not.toContain('instrumentation')
+    // Issue #154 Phase 2-C2.6-A2: the kernel's only Search instrumentation is the one its optional, observational
+    // `PlannerAlternativeKernelOptions.instrumentation` hands it (undefined by default), and no Production module other
+    // than the kernel names that seam.
+    const kernel = production['../domain/planner/alternative/plannerAlternativeKernel.ts']
+    expect(kernel.match(/^\s*instrumentation: [A-Za-z]+,$/gm)).toEqual(['          instrumentation: targetSearchObserver,'])
+    expect(kernel).toMatch(/const targetSearchObserver = instrumentation\?\.searchInstrumentationForTarget\?\.\(/)
+    expect(kernel).toMatch(/const instrumentation = options\.instrumentation\n/)
+    const seamUsers = productionPaths.filter((path) => /PlannerAlternativeKernelInstrumentation|searchInstrumentationForTarget/.test(production[path]))
+    expect(seamUsers).toEqual(['../domain/planner/alternative/plannerAlternativeKernel.ts'])
   })
 
   it('defines the Production defaults only in the Search / Planner Domain authorities', () => {

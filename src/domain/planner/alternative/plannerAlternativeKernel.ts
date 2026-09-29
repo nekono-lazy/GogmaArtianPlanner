@@ -19,6 +19,7 @@ import type {
   PlannerAlternativeCandidate,
   PlannerAlternativeReservation,
   PlannerAlternativeSearchExtent,
+  PlannerAlternativeSearchInstrumentation,
   PlannerAlternativeSearchSummary,
 } from '../../search'
 import type {
@@ -122,6 +123,88 @@ export interface PlannerAlternativeKernelOptions {
    * own budget from `request.bounds`, exactly as a kernel-only request.
    */
   fullRunBudget?: PlannerAlternativeFullRunBudget
+  /**
+   * Optional observational instrumentation (benchmark / Research only). Every
+   * Production caller leaves it undefined; see
+   * `PlannerAlternativeKernelInstrumentation`.
+   */
+  instrumentation?: PlannerAlternativeKernelInstrumentation
+}
+
+/** The shared rerun budget as one lifecycle event saw it. */
+export interface PlannerAlternativeKernelBudgetSnapshot {
+  /** Full Planner runs started on the (possibly shared) budget so far. */
+  used: number
+  limit: number
+}
+
+export interface PlannerAlternativeKernelTargetEventBase {
+  targetWeaponId: TargetWeaponId
+  /** 0-based position of the Target in the stable `createPlannerConflictWorks()` order. */
+  targetOrdinal: number
+  targetCount: number
+  budget: PlannerAlternativeKernelBudgetSnapshot
+}
+
+export interface PlannerAlternativeKernelTrialEventBase extends PlannerAlternativeKernelTargetEventBase {
+  /** 0-based trial ordinal of this Target (the index its trial record gets). */
+  trialIndex: number
+  /** `candidateStableKey()` of the trialled Candidate. */
+  candidateKey: string
+}
+
+export type PlannerAlternativeKernelTrialEventResult =
+  | { status: 'found'; generatedSelected: boolean }
+  | { status: 'rejected'; reason: PlannerAlternativeTrialRejectionReason | 'reused_existing_entry' | 'preflight_refused' }
+  | { status: 'rerun_bound' }
+
+/**
+ * One kernel lifecycle boundary. Events carry identifiers, ordinals and counts
+ * only - never a Candidate, a Route, an Entry or a PlannerResult - and no
+ * timestamp: the kernel reads no clock for them.
+ */
+export type PlannerAlternativeKernelInstrumentationEvent =
+  | ({ type: 'target_started' } & PlannerAlternativeKernelTargetEventBase)
+  | ({ type: 'target_skipped_checkpoint' } & PlannerAlternativeKernelTargetEventBase)
+  | ({ type: 'target_stopped_rerun_bound' } & PlannerAlternativeKernelTargetEventBase)
+  | ({ type: 'search_started' } & PlannerAlternativeKernelTargetEventBase)
+  | ({
+      type: 'candidate_delivered'
+      /** 0-based delivery ordinal of this Target's Search. */
+      deliveryIndex: number
+      candidateKey: string
+    } & PlannerAlternativeKernelTargetEventBase)
+  | ({ type: 'trial_started' } & PlannerAlternativeKernelTrialEventBase)
+  | ({ type: 'preflight_started' } & PlannerAlternativeKernelTrialEventBase)
+  | ({ type: 'preflight_completed'; status: 'ready' | 'refused' } & PlannerAlternativeKernelTrialEventBase)
+  | ({ type: 'full_planner_run_started' } & PlannerAlternativeKernelTrialEventBase)
+  | ({ type: 'full_planner_run_completed'; status: 'completed' | 'rerun_budget_reached' } & PlannerAlternativeKernelTrialEventBase)
+  | ({ type: 'trial_completed'; result: PlannerAlternativeKernelTrialEventResult } & PlannerAlternativeKernelTrialEventBase)
+  | ({
+      type: 'search_completed'
+      deliveredCandidates: number
+      exhausted: boolean
+      stoppedByExtent: boolean
+      stoppedByConsumer: boolean
+    } & PlannerAlternativeKernelTargetEventBase)
+  | ({ type: 'target_completed'; outcome: PlannerAlternativeKernelOutcome['status'] } & PlannerAlternativeKernelTargetEventBase)
+  | { type: 'kernel_completed'; targetCount: number; plannerRerunsUsed: number; budget: PlannerAlternativeKernelBudgetSnapshot }
+
+/**
+ * Observational kernel instrumentation (benchmark / Research only). It changes
+ * no input, ordering, bound, budget or result: `onEvent` is called
+ * synchronously at each lifecycle boundary, is never awaited, and its return
+ * value is never read; `searchInstrumentationForTarget` only hands the existing
+ * `PlannerAlternativeSearchInstrumentation` to that Target's Search, which
+ * already guarantees identical Candidates, summary and prediction calls with
+ * and without it. Every Production caller leaves the whole object undefined.
+ */
+export interface PlannerAlternativeKernelInstrumentation {
+  onEvent?: (event: PlannerAlternativeKernelInstrumentationEvent) => void
+  searchInstrumentationForTarget?: (
+    targetWeaponId: TargetWeaponId,
+    targetOrdinal: number,
+  ) => PlannerAlternativeSearchInstrumentation | undefined
 }
 
 export interface PlannerAlternativeFound {
@@ -440,6 +523,10 @@ export async function runPreparedPlannerAlternativeKernel(
   const usedAtStart = budget.used
   const executionOptions = options.executionOptions
   const runner = createPlannerAlternativeFullRunner(budget, dependencies, executionOptions)
+  const instrumentation = options.instrumentation
+  const onEvent = instrumentation?.onEvent
+  const budgetSnapshot = (): PlannerAlternativeKernelBudgetSnapshot => ({ used: budget.used, limit: budget.limit })
+  const targetCount = scenario.works.length
   // 9.2.19.11: a prior fixed Entry this very decision invalidates is no longer
   // fixed - the latest decision wins - so no Target's search reserves its Route.
   // (Its restored resolutions were already superseded at preparation.)
@@ -448,7 +535,12 @@ export async function runPreparedPlannerAlternativeKernel(
     .filter((id) => !invalidatedByDecision.has(id))
 
   const targets: PlannerAlternativeKernelTargetResult[] = []
-  for (const work of scenario.works) targets.push(await runTarget(work))
+  for (const [targetOrdinal, work] of scenario.works.entries()) {
+    const result = await runTarget(work, targetOrdinal)
+    onEvent?.({ type: 'target_completed', outcome: result.outcome.status, ...targetEventBase(work, targetOrdinal) })
+    targets.push(result)
+  }
+  onEvent?.({ type: 'kernel_completed', targetCount, plannerRerunsUsed: budget.used - usedAtStart, budget: budgetSnapshot() })
   return {
     status: 'completed',
     conflictKey: scenario.scenarioConstraint.originalConflictId,
@@ -459,7 +551,12 @@ export async function runPreparedPlannerAlternativeKernel(
     plannerRerunsUsed: budget.used - usedAtStart,
   }
 
-  async function runTarget(work: PlannerConflictWork): Promise<PlannerAlternativeKernelTargetResult> {
+  function targetEventBase(work: PlannerConflictWork, targetOrdinal: number): PlannerAlternativeKernelTargetEventBase {
+    return { targetWeaponId: work.targetWeaponId, targetOrdinal, targetCount, budget: budgetSnapshot() }
+  }
+
+  async function runTarget(work: PlannerConflictWork, targetOrdinal: number): Promise<PlannerAlternativeKernelTargetResult> {
+    onEvent?.({ type: 'target_started', ...targetEventBase(work, targetOrdinal) })
     const invalidated = invalidatedEntryOf(scenario, work.targetWeaponId)
     const fixedRouteBuildListEntryIds = sortedUnique([
       ...explicitDecisionBuildListEntryIds,
@@ -482,10 +579,12 @@ export async function runPreparedPlannerAlternativeKernel(
     if (work.blockedBySelectedCheckpoint) {
       // A selected checkpoint is a hard constraint on this Target's Route: no
       // alternative is searched, materialized or trialled (9.5.2).
+      onEvent?.({ type: 'target_skipped_checkpoint', ...targetEventBase(work, targetOrdinal) })
       return { ...base, reservation: null, outcome: { status: 'blocked_by_selected_checkpoint' }, search: null, trials: [], skippedExcludedRouteKeys: [] }
     }
     if (budget.exhausted) {
       // No full Planner run is left to judge anything for this Target.
+      onEvent?.({ type: 'target_stopped_rerun_bound', ...targetEventBase(work, targetOrdinal) })
       return { ...base, reservation: null, outcome: { status: 'stopped_by_planner_rerun_bound' }, search: null, trials: [], skippedExcludedRouteKeys: [] }
     }
     const reservation = derivePlannerAlternativeReservation(
@@ -503,6 +602,9 @@ export async function runPreparedPlannerAlternativeKernel(
     const trials: PlannerAlternativeKernelTrialRecord[] = []
     let outcome: PlannerAlternativeKernelOutcome | null = null
     let execution
+    let deliveryIndex = 0
+    const targetSearchObserver = instrumentation?.searchInstrumentationForTarget?.(work.targetWeaponId, targetOrdinal)
+    onEvent?.({ type: 'search_started', ...targetEventBase(work, targetOrdinal) })
     try {
       execution = await visitPlannerAlternativeCandidates(
         {
@@ -514,6 +616,10 @@ export async function runPreparedPlannerAlternativeKernel(
         },
         dependencies.rngEngine,
         async (candidate) => {
+          if (onEvent) {
+            onEvent({ type: 'candidate_delivered', deliveryIndex, candidateKey: candidateStableKey(candidate), ...targetEventBase(work, targetOrdinal) })
+          }
+          deliveryIndex += 1
           // Only a further Candidate proves the trial cap truncated something.
           if (trials.length >= request.bounds.maxCandidateTrialsPerTarget) {
             outcome = { status: 'stopped_by_candidate_trial_bound' }
@@ -524,7 +630,12 @@ export async function runPreparedPlannerAlternativeKernel(
             outcome = { status: 'stopped_by_planner_rerun_bound' }
             return 'stop'
           }
-          const trial = await tryCandidate(candidate, invalidated, materializer, fixedRouteBuildListEntryIds)
+          const trialEvent = onEvent
+            ? { ...targetEventBase(work, targetOrdinal), trialIndex: trials.length, candidateKey: candidateStableKey(candidate) }
+            : null
+          if (trialEvent) onEvent?.({ type: 'trial_started', ...trialEvent })
+          const trial = await tryCandidate(candidate, invalidated, materializer, fixedRouteBuildListEntryIds, trialEvent)
+          if (trialEvent) onEvent?.({ type: 'trial_completed', ...trialEvent, budget: budgetSnapshot(), result: trialEventResult(trial) })
           if (trial.status === 'rerun_bound') {
             outcome = { status: 'stopped_by_planner_rerun_bound' }
             return 'stop'
@@ -550,6 +661,7 @@ export async function runPreparedPlannerAlternativeKernel(
         {
           shouldCancel: executionOptions?.shouldCancel,
           yieldControl: executionOptions?.yieldControl,
+          instrumentation: targetSearchObserver,
         },
       )
     } catch (error) {
@@ -558,6 +670,14 @@ export async function runPreparedPlannerAlternativeKernel(
       }
       throw error
     }
+    onEvent?.({
+      type: 'search_completed',
+      deliveredCandidates: execution.summary.deliveredCandidates,
+      exhausted: execution.summary.exhausted,
+      stoppedByExtent: execution.summary.stoppedByExtent,
+      stoppedByConsumer: execution.stoppedByConsumer,
+      ...targetEventBase(work, targetOrdinal),
+    })
     const settled: PlannerAlternativeKernelOutcome = outcome ?? (
       execution.summary.stoppedByExtent
         ? { status: 'stopped_by_search_extent_bound' }
@@ -585,7 +705,11 @@ export async function runPreparedPlannerAlternativeKernel(
     invalidated: BuildListEntry,
     materializer: PlannerAlternativeMaterializer,
     fixedRouteBuildListEntryIds: readonly BuildListEntryId[],
+    trialEvent: PlannerAlternativeKernelTrialEventBase | null,
   ): Promise<TrialOutcome> {
+    // Observation only: the same trial identity with the budget as it is now.
+    const observed = (): PlannerAlternativeKernelTrialEventBase | null =>
+      (trialEvent ? { ...trialEvent, budget: budgetSnapshot() } : null)
     const generated = materializer.materializeBuildListEntry(candidate, scenario.mergedInput.buildListEntries)
     // A current Entry with this exact semantic content is already in the
     // input: for this Target that is its own Entry `O`, which the decision
@@ -600,6 +724,8 @@ export async function runPreparedPlannerAlternativeKernel(
       )
     }
     const replacements = [resolved.replacement]
+    const preflightStarted = observed()
+    if (preflightStarted) onEvent?.({ type: 'preflight_started', ...preflightStarted })
     const preflight = preparePlannerReplacementConflictPreflight(
       {
         ...scenario.mergedInput,
@@ -610,6 +736,10 @@ export async function runPreparedPlannerAlternativeKernel(
       scenario.conflictContexts,
       dependencies,
     )
+    const preflightCompleted = observed()
+    if (preflightCompleted) {
+      onEvent?.({ type: 'preflight_completed', status: preflight.status === 'ready' ? 'ready' : 'refused', ...preflightCompleted })
+    }
     if (preflight.status !== 'ready') {
       return { status: 'rejected', generatedBuildListEntryId: generated.entry.id, record: { status: 'rejected', reason: 'preflight_refused' } }
     }
@@ -617,7 +747,13 @@ export async function runPreparedPlannerAlternativeKernel(
     // A blocked full run is a typed stop. Every other failure - Plan generation
     // (a Trace Replay failure included), prediction, Planner or Search
     // invariant - propagates unchanged, never becoming a rejection.
+    const runStarted = observed()
+    if (runStarted) onEvent?.({ type: 'full_planner_run_started', ...runStarted })
     const run = await runner.run(preflight.resolvedInput, runContext)
+    const runCompleted = observed()
+    if (runCompleted) {
+      onEvent?.({ type: 'full_planner_run_completed', status: run === 'rerun_budget_reached' ? 'rerun_budget_reached' : 'completed', ...runCompleted })
+    }
     if (run === 'rerun_budget_reached') return { status: 'rerun_bound' }
     const verdict = judgePlannerAlternativeTrial(run.result, {
       generatedBuildListEntryId: generated.entry.id,
@@ -641,4 +777,13 @@ export async function runPreparedPlannerAlternativeKernel(
       },
     }
   }
+}
+
+/** The observational form of one trial outcome (no Candidate, Entry or PlannerResult). */
+function trialEventResult(trial: TrialOutcome): PlannerAlternativeKernelTrialEventResult {
+  if (trial.status === 'found') return { status: 'found', generatedSelected: trial.found.generatedSelected }
+  if (trial.status === 'rerun_bound') return { status: 'rerun_bound' }
+  return trial.record.status === 'rejected'
+    ? { status: 'rejected', reason: trial.record.reason }
+    : { status: 'found', generatedSelected: trial.record.generatedSelected }
 }
