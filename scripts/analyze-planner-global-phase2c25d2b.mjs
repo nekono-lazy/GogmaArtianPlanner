@@ -73,7 +73,15 @@ try {
       throw new Error('A page session ran another workload than the D2-a rule selects.')
     }
   }
+  // The pre-registered run set (5 contexts x minimal / instrumented x the Phase 2-C2.5-B repeat rule), fail-closed on the
+  // external run set before any result: an incomplete series is never analyzed as formal.
+  const formalSeriesValidation = analysis.validatePhase2C25D2BFormalSeries({ workload, external: external.json })
+  // Only an explicitly non-formal smoke analysis (--allow-nonformal on a run that is not formal anyway) may continue past it.
+  if (!formalSeriesValidation.valid && (formal || !args.includes('--allow-nonformal'))) {
+    throw new Error(`Formal series incomplete: ${formalSeriesValidation.issues.join(' / ')}`)
+  }
   const result = analysis.analyzePhase2C25D2B({ pages: pages.map(page => page.json), external: external.json, workload, node, before })
+  if (formal && result.contexts.some(context => context.classification === 'not_run')) throw new Error('Formal series incomplete: a workload context was not run.')
   const env = pages[0].json.environment
   const workerRealmJsHeapSizeLimit = pages.flatMap(page => page.json.records).find(record => record.workerEnvironment?.performanceMemory)?.workerEnvironment.performanceMemory.jsHeapSizeLimit ?? null
   const heapLimits = { pageRealmJsHeapSizeLimit: env.mainRealmPerformanceMemory?.jsHeapSizeLimit ?? null, workerRealmJsHeapSizeLimit }
@@ -123,6 +131,7 @@ try {
       workerPolicy: env.workerPolicy, modes: ['minimal', 'instrumented'], concurrency: 1,
       repeatPolicy: 'Phase 2-C2.5-B rule, unchanged: a context whose attempt 1 pair had a page / browser crash, a native Worker failure, a mode disagreement or a CDP attach failure is run once more (at most 2 attempts); both attempts are kept',
       classificationPolicy: 'Phase 2-C2.5-B pre-registered rule, unchanged (phase2c25bPairClassification); an explicit V8 OOM crash key is auxiliary only',
+    formalSeriesPolicy: 'validatePhase2C25D2BFormalSeries(): every workload context has exactly one attempt 1 minimal / instrumented run; the repeat decision recomputed by phase2c25bRepeatDecision() equals the recorded one; exactly one attempt 2 pair where it repeats and none otherwise; no attempt above 2, foreign context, duplicate run or extra / missing decision; driver modes exactly minimal + instrumented, allowRepeat true, only null, completedAt present. Checked before the analysis; a failure ends the analyzer without a result.',
     },
     parity: pages.map((page, index) => ({ session: index + 1, status: page.json.preparation.status, matches: page.json.preparation.parity.matches,
       rows: page.json.preparation.parity.rows.length, matchingRows: page.json.preparation.parity.rows.filter(row => row.matches).length,
@@ -130,6 +139,7 @@ try {
         .map(row => ({ orientationId: row.orientationId, workIndex: row.workIndex, matches: row.matches, checks: row.checks })),
       baselineSummary: page.json.preparation.parity.baselineSummary, contextsWorker: page.json.preparation.contextsWorker })),
     workload,
+    formalSeriesValidation,
     repeatDecisions: external.json.repeatDecisions ?? [],
     ...result,
     statements,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import c25aEvidence from '../../docs/PLANNER_GLOBAL_PHASE2C25A_RESULT.json'
 import c25bResults from '../../docs/PLANNER_GLOBAL_PHASE2C25B_RESULTS.json'
 import d2aResult from '../../docs/PLANNER_GLOBAL_PHASE2C25D2A_RESULT.json'
+import d2bExternal from '../../docs/PLANNER_GLOBAL_PHASE2C25D2B_EXTERNAL_MEMORY.json'
 import { DATABASE_SCHEMA_VERSION } from '../db/AppDatabase'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/common'
 import { EXPORT_SCHEMA_VERSION } from '../domain/models/exportModel'
@@ -40,7 +41,9 @@ import {
   parsePhase2C25D2ANodeResult,
   phase2c25d2bNodeParity,
   phase2c25d2bStatements,
+  validatePhase2C25D2BFormalSeries,
   type Phase2C25D2BBeforeView,
+  type Phase2C25D2BFormalSeriesInput,
   type Phase2C25D2BNodeMode,
   type Phase2C25D2BNodeView,
 } from './plannerGlobalPhase2C25D2BAnalysis'
@@ -434,6 +437,156 @@ describe('Phase 2-C2.5-D2-b analysis', () => {
     expect(pair('page_crashed', 'page_crashed').repeat).toBe(true)
     expect(pair('page_crashed', 'page_crashed', 2).repeat).toBe(false)
     expect(pair('worker_error_before_first_candidate', 'worker_error_before_first_candidate').repeat).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------- formal series completeness
+
+type SeriesExternal = Phase2C25D2BFormalSeriesInput['external']
+type SeriesRun = SeriesExternal['runs'][number]
+type SeriesDecision = NonNullable<SeriesExternal['repeatDecisions']>[number]
+type CompleteSeries = SeriesExternal & { runs: SeriesRun[]; repeatDecisions: SeriesDecision[] }
+
+describe('Phase 2-C2.5-D2-b formal series completeness', () => {
+  const workload = phase2c25d2bWorkload(parsePhase2C25BEvidence(c25aEvidence), c25aEvidence)
+  /** The committed formal external evidence: the complete series (5 contexts, 14 runs, 2 repeated contexts). */
+  const complete = (): CompleteSeries => structuredClone(d2bExternal) as unknown as CompleteSeries
+  const validate = (external: SeriesExternal) => validatePhase2C25D2BFormalSeries({ workload, external })
+  const is = (context: string, mode?: string, attempt?: number) => (run: SeriesRun) => `${run.orientationId}#${run.workIndex}` === context
+    && (mode === undefined || run.mode === mode) && (attempt === undefined || run.attempt === attempt)
+  const without = (external: CompleteSeries, predicate: (run: SeriesRun) => boolean): CompleteSeries => ({ ...external, runs: external.runs.filter(run => !predicate(run)) })
+  const copyOf = (external: CompleteSeries, predicate: (run: SeriesRun) => boolean, patch: Partial<SeriesRun>): SeriesRun =>
+    ({ ...structuredClone(external.runs.find(predicate)!), ...patch })
+
+  it('A: accepts the committed formal series, deriving 14 expected runs from the workload and the repeat rule', () => {
+    const result = validate(complete())
+    expect(result).toMatchObject({ valid: true, workloadContexts: 5, expectedRuns: 14, actualRuns: 14, repeatedContexts: ['c12-p0#0', 'c2-p1#0'], duplicateRunKeys: [],
+      duplicateLogicalRuns: [], missingRuns: [], unexpectedRuns: [], foreignRuns: [], attemptsAboveTwo: [], driverIssues: [], issues: [] })
+    expect(result.repeatDecisions).toEqual({ expected: 7, recorded: 7, missing: [], duplicate: [], unexpected: [], mismatches: [] })
+  })
+
+  it('A: accepts a synthetic complete series and derives its expected run count from the rule', () => {
+    const run = (context: string, mode: 'minimal' | 'instrumented', attempt: number, lost: boolean): SeriesRun => {
+      const [orientationId, workIndex] = context.split('#')
+      return { runKey: `${context}:${mode}:a${attempt}`, orientationId, workIndex: Number(workIndex), mode, attempt,
+        driverStatus: lost ? 'page_crashed' : 'page_settled', pageStatus: lost ? null : 'stopped_by_extent_before_candidate',
+        workerTargets: [{ samples: 3 }] as never, ...(lost ? {} : { semanticDigest: 'same' }) } as SeriesRun
+    }
+    const external: SeriesExternal = { driver: { modes: ['minimal', 'instrumented'], allowRepeat: true, only: null }, completedAt: 1,
+      runs: [run('a#0', 'minimal', 1, false), run('a#0', 'instrumented', 1, false), run('b#0', 'minimal', 1, true), run('b#0', 'instrumented', 1, true),
+        run('b#0', 'minimal', 2, true), run('b#0', 'instrumented', 2, true)],
+      repeatDecisions: [{ context: 'a#0', attempt: 1, decision: { repeat: false, reasons: [] } }, { context: 'b#0', attempt: 1, decision: { repeat: true, reasons: ['page_or_browser_crash'] } },
+        { context: 'b#0', attempt: 2, decision: { repeat: false, reasons: ['page_or_browser_crash'] } }] }
+    const result = validatePhase2C25D2BFormalSeries({ workload: [{ orientationId: 'a', workIndex: 0 }, { orientationId: 'b', workIndex: 0 }], external })
+    expect(result).toMatchObject({ valid: true, expectedRuns: 6, actualRuns: 6, repeatedContexts: ['b#0'] })
+  })
+
+  it('B: fails when a whole context is missing', () => {
+    const base = complete()
+    const result = validate({ ...without(base, is('c8-p1#0')), repeatDecisions: base.repeatDecisions.filter(d => d.context !== 'c8-p1#0') })
+    expect(result.valid).toBe(false)
+    expect(result.missingRuns).toEqual(['c8-p1#0:minimal:a1', 'c8-p1#0:instrumented:a1'])
+  })
+
+  it('C: fails when one mode of a context is missing', () => {
+    const result = validate(without(complete(), is('c8-p1#0', 'instrumented', 1)))
+    expect(result.valid).toBe(false)
+    expect(result.missingRuns).toEqual(['c8-p1#0:instrumented:a1'])
+  })
+
+  it('D: fails when a required repeat was not run', () => {
+    const base = complete()
+    const result = validate({ ...without(base, is('c12-p0#0', undefined, 2)), repeatDecisions: base.repeatDecisions.filter(d => !(d.context === 'c12-p0#0' && d.attempt === 2)) })
+    expect(result.valid).toBe(false)
+    expect(result.missingRuns).toEqual(['c12-p0#0:minimal:a2', 'c12-p0#0:instrumented:a2'])
+  })
+
+  it('E: fails when the repeated attempt 2 has one mode only', () => {
+    const result = validate(without(complete(), is('c12-p0#0', 'instrumented', 2)))
+    expect(result.valid).toBe(false)
+    expect(result.missingRuns).toEqual(['c12-p0#0:instrumented:a2'])
+  })
+
+  it('F: fails on an attempt 2 after a pair that did not need a repeat', () => {
+    const base = complete()
+    const extra = (['minimal', 'instrumented'] as const).map(mode => copyOf(base, is('c8-p1#0', mode, 1), { attempt: 2, runKey: `c8-p1#0:${mode}:a2` }))
+    const result = validate({ ...base, runs: [...base.runs, ...extra] })
+    expect(result.valid).toBe(false)
+    expect(result.unexpectedRuns).toEqual(['c8-p1#0:minimal:a2', 'c8-p1#0:instrumented:a2'])
+  })
+
+  it('G: fails on an attempt above 2', () => {
+    const base = complete()
+    const result = validate({ ...base, runs: [...base.runs, copyOf(base, is('c12-p0#0', 'minimal', 2), { attempt: 3, runKey: 'c12-p0#0:minimal:a3' })] })
+    expect(result.valid).toBe(false)
+    expect(result.attemptsAboveTwo).toEqual(['c12-p0#0:minimal:a3'])
+  })
+
+  it('H: fails on a duplicate runKey', () => {
+    const base = complete()
+    const result = validate({ ...base, runs: [...base.runs, copyOf(base, is('c0-p0#0', 'minimal', 1), {})] })
+    expect(result.valid).toBe(false)
+    expect(result.duplicateRunKeys).toEqual(['c0-p0#0:minimal:a1'])
+  })
+
+  it('I: fails on a duplicate logical run under another runKey', () => {
+    const base = complete()
+    const result = validate({ ...base, runs: [...base.runs, copyOf(base, is('c0-p0#0', 'minimal', 1), { runKey: 'renamed' })] })
+    expect(result.valid).toBe(false)
+    expect(result.duplicateRunKeys).toEqual([])
+    expect(result.duplicateLogicalRuns).toEqual(['c0-p0#0:minimal:a1'])
+  })
+
+  it('J: fails when a pair has no recorded repeat decision', () => {
+    const base = complete()
+    const result = validate({ ...base, repeatDecisions: base.repeatDecisions.filter(d => d.context !== 'c0-p0#0') })
+    expect(result.valid).toBe(false)
+    expect(result.repeatDecisions.missing).toEqual(['c0-p0#0:a1'])
+  })
+
+  it('K: fails on a duplicate repeat decision', () => {
+    const base = complete()
+    const result = validate({ ...base, repeatDecisions: [...base.repeatDecisions, structuredClone(base.repeatDecisions[0])] })
+    expect(result.valid).toBe(false)
+    expect(result.repeatDecisions.duplicate).toEqual([`${base.repeatDecisions[0].context}:a${base.repeatDecisions[0].attempt}`])
+  })
+
+  it('L: fails when a recorded decision differs from the recomputed one, or names an attempt not run', () => {
+    const base = complete()
+    const decisions = base.repeatDecisions.map(d => d.context === 'c12-p0#0' && d.attempt === 1 ? { ...d, decision: { repeat: false, reasons: [] } } : d)
+    const result = validate({ ...base, repeatDecisions: decisions })
+    expect(result.valid).toBe(false)
+    expect(result.repeatDecisions.mismatches).toHaveLength(1)
+    expect(result.repeatDecisions.mismatches[0]).toMatch(/^c12-p0#0:a1 recorded/)
+    const orphan = validate({ ...base, repeatDecisions: [...base.repeatDecisions, { context: 'c0-p0#0', attempt: 2, decision: { repeat: false, reasons: [] } }] })
+    expect(orphan.valid).toBe(false)
+    expect(orphan.repeatDecisions.unexpected).toEqual(['c0-p0#0:a2'])
+  })
+
+  it('M: fails on a run outside the workload', () => {
+    const base = complete()
+    const result = validate({ ...base, runs: [...base.runs, copyOf(base, is('c0-p0#0', 'minimal', 1), { orientationId: 'foreign', runKey: 'foreign#0:minimal:a1' })] })
+    expect(result.valid).toBe(false)
+    expect(result.foreignRuns).toEqual(['foreign#0:minimal:a1'])
+  })
+
+  it('N / O: fails unless the driver ran both modes with repeat enabled, on the whole workload, to completion', () => {
+    const base = complete()
+    expect(validate({ ...base, driver: { ...base.driver, modes: ['minimal'] } })).toMatchObject({ valid: false, driverIssues: [expect.stringMatching(/driver\.modes/)] })
+    expect(validate({ ...base, driver: { ...base.driver, modes: ['minimal', 'instrumented', 'other'] } }).valid).toBe(false)
+    expect(validate({ ...base, driver: { ...base.driver, allowRepeat: false } })).toMatchObject({ valid: false, driverIssues: ['driver.allowRepeat is not true'] })
+    expect(validate({ ...base, driver: { ...base.driver, only: ['c0-p0#0'] } }).valid).toBe(false)
+    expect(validate({ ...base, completedAt: undefined }).valid).toBe(false)
+  })
+
+  it('makes the formal analyzer run the validator before the analysis and stop with an error on an incomplete series', () => {
+    const analyzer = Object.values(scriptSources)[0]
+    const gate = analyzer.indexOf('validatePhase2C25D2BFormalSeries(')
+    expect(gate).toBeGreaterThan(0)
+    expect(gate).toBeLessThan(analyzer.indexOf('analyzePhase2C25D2B('))
+    expect(analyzer).toMatch(/Formal series incomplete: /)
+    expect(analyzer).toMatch(/formalSeriesValidation,/)
+    expect(analyzer).not.toMatch(/pageSessions\s*===/)
   })
 })
 

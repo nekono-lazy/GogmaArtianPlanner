@@ -24,11 +24,12 @@ import {
   phase2c25bPairClassification,
   phase2c25bWorkerHeapLimitStatement,
   type Phase2C25BExternalEvidence,
+  type Phase2C25BExternalRun,
   type Phase2C25BMergedRun,
   type Phase2C25BPageExport,
   type Phase2C25BPairClassification,
 } from './plannerGlobalPhase2C25BAnalysis'
-import type { Phase2C25BRunRecord } from './plannerGlobalPhase2C25BHarness'
+import { phase2c25bRepeatDecision, type Phase2C25BRunRecord } from './plannerGlobalPhase2C25BHarness'
 import { isPhase2C25BNormalStatus, type Phase2C25BProgressSnapshot } from './plannerGlobalPhase2C25BProtocol'
 import type { Phase2C25D2BWorkloadContext } from './plannerGlobalPhase2C25D2B'
 
@@ -261,6 +262,148 @@ export function phase2c25d2bProgressDelta(before: readonly Phase2C25D2BRunMetric
       gogmaMaxDepth: ratio(ap.gogmaMaxDepth, bp.gogmaMaxDepth), cumulativeGogmaGenerated: ratio(ap.cumulativeGogmaGenerated, bp.cumulativeGogmaGenerated),
       cumulativeGogmaFrontier: ratio(ap.cumulativeGogmaFrontier, bp.cumulativeGogmaFrontier), settledWorkItems: ratio(ap.settledWorkItems, bp.settledWorkItems),
     },
+  }
+}
+
+// ---------------------------------------------------------------- formal series completeness
+
+export interface Phase2C25D2BFormalSeriesInput {
+  workload: readonly Pick<Phase2C25D2BWorkloadContext, 'orientationId' | 'workIndex'>[]
+  /** The external driver evidence: the run set authority (a renderer-loss run has no page record). */
+  external: {
+    driver: { modes?: unknown; allowRepeat?: unknown; only?: unknown }
+    completedAt?: unknown
+    runs: readonly Pick<Phase2C25BExternalRun, 'runKey' | 'orientationId' | 'workIndex' | 'mode' | 'attempt' | 'driverStatus' | 'pageStatus' | 'workerTargets'>[]
+    repeatDecisions?: readonly { context: string; attempt: number; decision: { repeat: boolean; reasons: readonly string[] } }[]
+  }
+}
+
+export interface Phase2C25D2BFormalSeriesValidation {
+  valid: boolean
+  workloadContexts: number
+  /** Derived from the workload and the Phase 2-C2.5-B repeat rule over each attempt 1 pair (never a fixed number). */
+  expectedRuns: number
+  actualRuns: number
+  repeatedContexts: string[]
+  duplicateRunKeys: string[]
+  duplicateLogicalRuns: string[]
+  missingRuns: string[]
+  unexpectedRuns: string[]
+  foreignRuns: string[]
+  attemptsAboveTwo: string[]
+  repeatDecisions: { expected: number; recorded: number; missing: string[]; duplicate: string[]; unexpected: string[]; mismatches: string[] }
+  driverIssues: string[]
+  issues: string[]
+}
+
+type ExternalRunLike = Phase2C25D2BFormalSeriesInput['external']['runs'][number]
+const logicalKey = (orientationId: string, workIndex: number, mode: string, attempt: number) => `${orientationId}#${workIndex}:${mode}:a${attempt}`
+
+/** What the driver passed to `repeatDecision()` for a run: the page status when the page settled, the driver's terminal status otherwise. */
+function driverObservedStatus(run: ExternalRunLike): string | null {
+  return run.driverStatus === 'page_settled' ? run.pageStatus : run.driverStatus
+}
+
+/**
+ * The pre-registered formal series, checked fail-closed on the external run set before any formal result: for every
+ * workload context exactly one attempt 1 minimal and instrumented run; the Phase 2-C2.5-B repeat decision recomputed
+ * from that pair (`phase2c25bRepeatDecision()`, the driver-observed status, semantic digest and CDP attach failure) and
+ * equal to the one recorded; exactly one attempt 2 pair where it says repeat and none otherwise; the attempt 2 decision
+ * recomputed as no repeat; no attempt above 2, no foreign context, no duplicate run key or logical run, no mode but
+ * minimal / instrumented; exactly one recorded decision per executed pair and none for an attempt not run; the driver
+ * with both modes, repeat enabled, no subset and a completion time. Page session counts and timestamps are not checked.
+ */
+export function validatePhase2C25D2BFormalSeries({ workload, external }: Phase2C25D2BFormalSeriesInput): Phase2C25D2BFormalSeriesValidation {
+  const driverIssues: string[] = []
+  const modes = Array.isArray(external.driver.modes) ? external.driver.modes : null
+  if (modes === null || modes.length !== MODES.length || !MODES.every(mode => modes.includes(mode)) || modes.some(mode => !MODES.includes(mode as Mode))) {
+    driverIssues.push(`driver.modes is ${JSON.stringify(external.driver.modes)}, not exactly minimal and instrumented`)
+  }
+  if (external.driver.allowRepeat !== true) driverIssues.push('driver.allowRepeat is not true')
+  if (external.driver.only !== null) driverIssues.push('driver.only is not null (a subset run)')
+  if (external.completedAt === undefined || external.completedAt === null) driverIssues.push('the driver recorded no completedAt')
+
+  const runs = external.runs
+  const inWorkload = (run: ExternalRunLike) => workload.some(c => c.orientationId === run.orientationId && c.workIndex === run.workIndex)
+  const count = <T>(values: readonly T[]) => values.reduce((map, value) => map.set(value, (map.get(value) ?? 0) + 1), new Map<T, number>())
+  const duplicates = <T>(values: readonly T[]) => [...count(values)].filter(([, n]) => n > 1).map(([value]) => String(value))
+  const duplicateRunKeys = duplicates(runs.map(run => run.runKey))
+  const duplicateLogicalRuns = duplicates(runs.map(run => logicalKey(run.orientationId, run.workIndex, run.mode, run.attempt)))
+  const foreignRuns = runs.filter(run => !inWorkload(run)).map(run => run.runKey)
+  const attemptsAboveTwo = runs.filter(run => !Number.isSafeInteger(run.attempt) || run.attempt < 1 || run.attempt > 2).map(run => run.runKey)
+  const unexpectedRuns = runs.filter(run => inWorkload(run) && !MODES.includes(run.mode)).map(run => run.runKey)
+
+  const recorded = external.repeatDecisions ?? []
+  const decisionKeys = recorded.map(d => `${d.context}:a${d.attempt}`)
+  const duplicateDecisions = duplicates(decisionKeys)
+  const missingRuns: string[] = []
+  const missingDecisions: string[] = []
+  const mismatches: string[] = []
+  const repeatedContexts: string[] = []
+  const executedAttempts = new Set<string>()
+  let expectedRuns = 0
+  let expectedDecisions = 0
+
+  const pairOf = (context: string, orientationId: string, workIndex: number, attempt: number) => {
+    const find = (mode: Mode) => runs.filter(run => run.orientationId === orientationId && run.workIndex === workIndex && run.mode === mode && run.attempt === attempt)
+    const minimal = find('minimal'), instrumented = find('instrumented')
+    if (minimal.length > 0 || instrumented.length > 0) executedAttempts.add(`${context}:a${attempt}`)
+    return { minimal: minimal.length === 1 ? minimal[0] : null, instrumented: instrumented.length === 1 ? instrumented[0] : null, minimalCount: minimal.length, instrumentedCount: instrumented.length }
+  }
+  const recompute = (context: string, attempt: number, pair: { minimal: ExternalRunLike; instrumented: ExternalRunLike }) => {
+    const observed = (run: ExternalRunLike) => ({ status: driverObservedStatus(run) as never, semanticDigest: (run as { semanticDigest?: string | null }).semanticDigest ?? null })
+    const cdpAttachFailure = [pair.minimal, pair.instrumented].some(run => !run.workerTargets.some(target => target.samples > 0))
+    const expected = phase2c25bRepeatDecision({ attempt, minimal: observed(pair.minimal), instrumented: observed(pair.instrumented), cdpAttachFailure })
+    expectedDecisions += 1
+    const records = recorded.filter(d => d.context === context && d.attempt === attempt)
+    if (records.length === 0) missingDecisions.push(`${context}:a${attempt}`)
+    else if (records.length === 1 && stableStringify(records[0].decision) !== stableStringify(expected)) {
+      mismatches.push(`${context}:a${attempt} recorded ${stableStringify(records[0].decision)} != recomputed ${stableStringify(expected)}`)
+    }
+    return expected
+  }
+
+  for (const context of workload) {
+    const key = `${context.orientationId}#${context.workIndex}`
+    expectedRuns += MODES.length
+    const first = pairOf(key, context.orientationId, context.workIndex, 1)
+    for (const mode of MODES) if ((mode === 'minimal' ? first.minimalCount : first.instrumentedCount) === 0) missingRuns.push(logicalKey(context.orientationId, context.workIndex, mode, 1))
+    const second = pairOf(key, context.orientationId, context.workIndex, 2)
+    if (first.minimal === null || first.instrumented === null) continue
+    const decision = recompute(key, 1, { minimal: first.minimal, instrumented: first.instrumented })
+    if (!decision.repeat) {
+      for (const run of runs.filter(r => r.orientationId === context.orientationId && r.workIndex === context.workIndex && r.attempt === 2)) unexpectedRuns.push(run.runKey)
+      continue
+    }
+    repeatedContexts.push(key)
+    expectedRuns += MODES.length
+    for (const mode of MODES) if ((mode === 'minimal' ? second.minimalCount : second.instrumentedCount) === 0) missingRuns.push(logicalKey(context.orientationId, context.workIndex, mode, 2))
+    if (second.minimal === null || second.instrumented === null) continue
+    const again = recompute(key, 2, { minimal: second.minimal, instrumented: second.instrumented })
+    if (again.repeat) mismatches.push(`${key}:a2 recomputed a repeat beyond the maximum attempt`)
+  }
+  const unexpectedDecisions = recorded.map(d => `${d.context}:a${d.attempt}`).filter(k => !executedAttempts.has(k)
+    || !workload.some(c => k.startsWith(`${c.orientationId}#${c.workIndex}:`)))
+
+  const issues = [
+    ...driverIssues,
+    ...duplicateRunKeys.map(k => `duplicate runKey ${k}`),
+    ...duplicateLogicalRuns.map(k => `duplicate logical run ${k}`),
+    ...foreignRuns.map(k => `foreign run ${k}`),
+    ...attemptsAboveTwo.map(k => `attempt outside 1..2: ${k}`),
+    ...missingRuns.map(k => `missing run ${k}`),
+    ...[...new Set(unexpectedRuns)].map(k => `unexpected run ${k}`),
+    ...missingDecisions.map(k => `missing repeat decision ${k}`),
+    ...duplicateDecisions.map(k => `duplicate repeat decision ${k}`),
+    ...[...new Set(unexpectedDecisions)].map(k => `repeat decision for an attempt not run ${k}`),
+    ...mismatches.map(k => `repeat decision mismatch ${k}`),
+  ]
+  if (issues.length === 0 && runs.length !== expectedRuns) issues.push(`run count ${runs.length} != expected ${expectedRuns}`)
+  return {
+    valid: issues.length === 0, workloadContexts: workload.length, expectedRuns, actualRuns: runs.length, repeatedContexts, duplicateRunKeys, duplicateLogicalRuns,
+    missingRuns, unexpectedRuns: [...new Set(unexpectedRuns)], foreignRuns, attemptsAboveTwo,
+    repeatDecisions: { expected: expectedDecisions, recorded: recorded.length, missing: missingDecisions, duplicate: duplicateDecisions, unexpected: [...new Set(unexpectedDecisions)], mismatches },
+    driverIssues, issues,
   }
 }
 
