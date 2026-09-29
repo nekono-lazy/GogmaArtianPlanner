@@ -68,11 +68,13 @@ import {
   parseHeapSnapshotText,
 } from './plannerGlobalPhase2C25CSnapshotAnalysis'
 import {
+  buildPhase2C25CConclusionScopes,
   buildPhase2C25CFindings,
   evaluatePhase2C25CHypotheses,
   phase2c25cContextStrength,
   phase2c25cVerdict,
   PHASE2C25C_HYPOTHESES,
+  PHASE2C25C_INTERPRETATION,
 } from './plannerGlobalPhase2C25CAnalysis'
 
 /** Every input the Planner Alternative Search received, in call order. */
@@ -547,6 +549,67 @@ describe('Phase 2-C2.5-C heap snapshot parser', () => {
     const extra = result.retainingPathExamples.slice(-2)
     expect(extra[0].path!.target.signature).toBe('object:Object{previous,result}')
     expect(extra[1]).toEqual({ reason: 'no new node has a signature starting with object:Nothing', path: null })
+  })
+})
+
+describe('Phase 2-C2.5-C conclusion scopes', () => {
+  /** A synthetic OOM context: jit_default publication-path inclusive share, retained edge-cut and persistent share. */
+  function oomContext(key: string, depth: number, publicationInclusive: number, retainedCut: number, persistent: number) {
+    const summary = { thresholdMiB: 7168, totalSampledBytes: 1000, repositorySelfBytes: 1000,
+      categories: [{ category: 'scheduler_channel' as const, sampledSelfBytes: 600, share: 0.6 }],
+      attributedRepositoryCallsites: [{ key: 'settle src/domain/search/targetSearchScheduler.ts:328', functionName: 'settle', url: 'src/domain/search/targetSearchScheduler.ts',
+        category: 'scheduler_channel' as const, sampledSelfBytes: 600, sampledInclusiveBytes: publicationInclusive * 1000 }] }
+    return { contextKey: key, kind: 'k', gogmaMaxDepthAtLastProgress: depth, sampling: { jit_default: summary, no_inlining: summary },
+      snapshot: { newReachableBytes: 1000, persistentNewBytes: persistent * 1000, groupCutNewBytes: { H4: retainedCut * 1000 }, reservedBonusResultNodeShallowBytes: 0 } }
+  }
+  const h4 = (verdict: string) => [{ id: 'H4', verdict }] as unknown as Parameters<typeof buildPhase2C25CConclusionScopes>[1]
+  const controls = { contexts: 2, runs: 4, contaminated: 0 }
+
+  it('keeps the common allocation path, the persistent retaining structure and the in-flight working set apart', () => {
+    // c0-p0-like (major), c12-p0-like (retained low, in-flight high, H4 mixed), c2-p1-like (major).
+    const findings = buildPhase2C25CFindings([oomContext('deep#0', 134, 0.876, 0.838, 0.995), oomContext('mixed#0', 5, 0.778, 0.143, 0.418), oomContext('shallow#0', 7, 0.786, 0.555, 0.870)], [])
+    const scopes = buildPhase2C25CConclusionScopes(findings.perContext, h4('partially_supported'), controls)
+    expect(scopes.commonAllocationPath).toMatchObject({ path: 'held_aware_bonus_publication', holdsInEveryContext: true, basis: 'jit_default inclusive share (Production-like JIT)' })
+    expect(scopes.persistentRetention.perContext.map(r => r.role)).toEqual(['major_persistent_retaining_structure', 'contributing_not_dominant', 'major_persistent_retaining_structure'])
+    expect(scopes.persistentRetention).toMatchObject({ dominantInEveryContext: false, majorIn: ['deep#0', 'shallow#0'], notDominantIn: ['mixed#0'], h4ResearchVerdict: 'partially_supported' })
+    expect(scopes.inFlightWorkingSet.majorityIn).toEqual(['mixed#0'])
+    expect(scopes.inFlightWorkingSet.perContext[1].inFlightShareOfNewBytes).toBeCloseTo(0.582)
+    const text = scopes.statements.join('\n')
+    expect(text).not.toMatch(/全OOM contextでmajor|every context|3 context共通|3 contextとも最大/)
+    expect(text).toMatch(/mixed#0 では edge-cut 14\.3%.*支配的とは言えない/)
+    expect(scopes.statements).toHaveLength(4)
+    expect(Object.keys(scopes)).toEqual(expect.arrayContaining(['commonAllocationPath', 'persistentRetention', 'inFlightWorkingSet', 'noInliningScope']))
+  })
+
+  it('claims retention in every context only when every context is major, and never claims heap parity for no_inlining', () => {
+    const findings = buildPhase2C25CFindings([oomContext('a#0', 134, 0.9, 0.8, 0.95), oomContext('b#0', 7, 0.8, 0.7, 0.9)], [])
+    const scopes = buildPhase2C25CConclusionScopes(findings.perContext, h4('supported'), controls)
+    expect(scopes.persistentRetention.dominantInEveryContext).toBe(true)
+    expect(scopes.statements[1]).toMatch(/全OOM contextでmajor/)
+    expect(scopes.noInliningScope).toEqual({ role: 'diagnostic_allocation_attribution', semanticOutputParity: 'confirmed_for_controls', heapAllocationParityWithJitDefault: 'not_proven', controls })
+    expect(scopes.statements[3]).toMatch(/diagnostic condition/)
+    expect(scopes.statements[3]).toMatch(/heap-allocation parity）は確認していない/)
+    const unknown = buildPhase2C25CConclusionScopes(buildPhase2C25CFindings([{ ...oomContext('c#0', 3, 0.9, 0.8, 0.9), snapshot: null }], []).perContext, h4('inconclusive'), { ...controls, contaminated: 1 })
+    expect(unknown.persistentRetention.perContext[0].role).toBe('unknown')
+    expect(unknown.persistentRetention.dominantInEveryContext).toBe(false)
+    expect(unknown.noInliningScope.semanticOutputParity).toBe('not_confirmed')
+  })
+
+  it('writes the interpretation within the reviewed boundaries', () => {
+    const all = JSON.stringify(PHASE2C25C_INTERPRETATION)
+    const conclusions = PHASE2C25C_INTERPRETATION.formalConclusions.join('\n')
+    // no_inlining is a diagnostic condition: no unchanged-live-object claim, no Production share claim.
+    expect(conclusions).not.toMatch(/live objectは不変|live objects? (are|is) unchanged|Search・data・live object/)
+    for (const line of PHASE2C25C_INTERPRETATION.formalConclusions.filter(l => l.includes('no_inlining'))) expect(line).toMatch(/diagnostic/)
+    expect(PHASE2C25C_INTERPRETATION.noInliningScope).toMatch(/diagnostic condition/)
+    expect(PHASE2C25C_INTERPRETATION.noInliningScope).toMatch(/保証するものではない/)
+    // channel.retained is never the common dominant retaining structure; c12-p0 and the in-flight share stay explicit.
+    expect(conclusions).not.toMatch(/共通の最大の保持構造|3 contextとも最大の保持構造|3 context共通の支配的保持構造(?!だとは結論しない)/)
+    expect(conclusions).toMatch(/c12-p0ではchannel\.retainedは保持要因の1つだが、この512 MB snapshotでは支配的とは言えない/)
+    expect(conclusions).toMatch(/58\.2%/)
+    expect(PHASE2C25C_INTERPRETATION.q8.candidates.find(c => c.id === 'C3')!.evidence).toMatch(/全OOM patternの最大原因とは言わない/)
+    expect(PHASE2C25C_INTERPRETATION.nextPhaseCandidates.join('\n')).toMatch(/peak working set/)
+    expect(all).toMatch(/事前登録したResearch判定規則（snapshot edge-cut \+ no_inlining diagnostic sampling）/)
   })
 })
 

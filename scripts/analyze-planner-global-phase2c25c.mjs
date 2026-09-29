@@ -250,6 +250,16 @@ await withModules(MODULES, async ({ c25c, profile, analysis }) => {
       snapshot: snap === null ? null : { newReachableBytes: snap.reachableFromRoot.newSize, persistentNewBytes: snap.persistentSplit?.reachableFromRoots.newSize ?? null,
         groupCutNewBytes: Object.fromEntries(snap.groupEdgeCuts.map(g => [g.group, g.edgeCut.newSize])), reservedBonusResultNodeShallowBytes: resultNode?.shallowSize ?? 0 } }
   }), hypotheses)
+  const controlRuns = samplingRuns.filter(s => s.control !== null)
+  const conclusionScopes = analysis.buildPhase2C25CConclusionScopes(findings.perContext, hypotheses,
+    { contexts: r.workload.controls.length, runs: controlRuns.length, contaminated: controlRuns.filter(s => s.control.contaminated).length })
+  const rawArtifactVerification = {
+    rule: 'every raw profile / snapshot is re-hashed and compared with the SHA-256 the formal run recorded; the formal raw run itself is only read',
+    rawRunSha256: sha(rawRun),
+    profiles: { count: profileManifest.length, verified: profileManifest.filter(p => p.verified).length },
+    snapshots: { count: snapshotRuns.reduce((n, s) => n + s.nearLimitSnapshots.length + (s.baseline === null ? 0 : 1), 0),
+      verified: snapshotRuns.reduce((n, s) => n + s.nearLimitSnapshots.filter(x => x.verified).length + (s.baseline?.verified ? 1 : 0), 0) },
+  }
 
   const evidence = {
     phase: 'Issue #154 Phase 2-C2.5-C: heap profiling of the Search-only OOM (post-hoc analysis)',
@@ -261,7 +271,7 @@ await withModules(MODULES, async ({ c25c, profile, analysis }) => {
       exportFileName: r.environment.exportFileName, exportSha256: r.environment.exportSha256, exportBytes: r.environment.exportBytes,
       c25aEvidenceFileName: r.environment.c25aEvidenceFileName, c25aEvidenceSha256: r.environment.c25aEvidenceSha256, c25aMeasuredHead: r.environment.c25aMeasuredHead,
       c25bEvidenceFileName: r.environment.c25bEvidenceFileName, c25bEvidenceSha256: r.environment.c25bEvidenceSha256,
-      measuredAt: r.measuredAt, runWallMs: r.wallMs,
+      measuredAt: r.measuredAt, runWallMs: r.wallMs, rawArtifactVerification,
       environment: { runtime: r.environment.runtime, node: r.environment.node, v8: r.environment.v8, platform: r.environment.platform, arch: r.environment.arch,
         osRelease: r.environment.osRelease, cpu: r.environment.cpu, logicalCpuCount: r.environment.logicalCpuCount, totalMemoryBytes: r.environment.totalMemoryBytes },
     },
@@ -287,8 +297,10 @@ await withModules(MODULES, async ({ c25c, profile, analysis }) => {
       topNewSignaturesByShallowSize: a.topNewSignaturesByShallowSize, topNewSignaturesByCount: a.topNewSignaturesByCount.slice(0, 20),
       targetedEdges: a.targetedEdges, groupEdgeCuts: a.groupEdgeCuts, retainingPathExamples: a.retainingPathExamples, elementPropertyCensus: a.elementPropertyCensus, persistentSplit: a.persistentSplit } })),
     hypothesisRule: analysis.PHASE2C25C_VERDICT_RULE,
+    hypothesisScope: 'Research verdicts of the pre-registered rule: snapshot edge-cut + no_inlining DIAGNOSTIC sampling. They do not state that the Production-like JIT (jit_default) heap has the same shares.',
     hypotheses,
     findings,
+    conclusionScopes,
     interpretation: analysis.PHASE2C25C_INTERPRETATION,
   }
   await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', { flag: 'wx' })
