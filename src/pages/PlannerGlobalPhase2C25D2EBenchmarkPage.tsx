@@ -35,6 +35,8 @@ const seconds = (ms: number | null | undefined) => ms === null || ms === undefin
 export interface PlannerGlobalPhase2C25D2EBenchmarkGlobal {
   readonly protocolVersion: string
   environment(): Record<string, unknown>
+  /** The page's own execution environment and why it is not the required D2-b formal one (`issue = null` when it is). */
+  browserEnvironment(): { crossOriginIsolated: boolean | null; isSecureContext: boolean | null; issue: string | null }
   d2dReferenceInfo(): Phase2C25D2EReferenceInfo | null
   exportInfo(): Phase2C25BFileInfo | null
   evidenceInfo(): Phase2C25BFileInfo | null
@@ -126,6 +128,7 @@ export function PlannerGlobalPhase2C25D2EBenchmarkPage() {
     const api: PlannerGlobalPhase2C25D2EBenchmarkGlobal = {
       protocolVersion: PHASE2C25D2E_PROTOCOL_VERSION,
       environment,
+      browserEnvironment: () => runner.browserEnvironment(),
       d2dReferenceInfo: () => runner.d2dReferenceInfo(),
       exportInfo: () => runner.exportInfo(),
       evidenceInfo: () => runner.evidenceInfo(),
@@ -177,7 +180,8 @@ export function PlannerGlobalPhase2C25D2EBenchmarkPage() {
     URL.revokeObjectURL(url)
   }
 
-  const ready = busy === null && preparation?.status === 'ok'
+  const environmentState = runner.browserEnvironment()
+  const ready = busy === null && preparation?.status === 'ok' && environmentState.issue === null
   const single = workload.find(c => `${c.orientationId}#${c.workIndex}` === selected) ?? null
   return (
     <PageShell title="Global Planner Research Phase 2-C2.5-D2-e" description="Issue #154 Research-only Browser Worker re-measurement after the D2-d single-pass held-aware Bonus stream (H1). Production behavior is unchanged; nothing is persisted.">
@@ -186,6 +190,10 @@ export function PlannerGlobalPhase2C25D2EBenchmarkPage() {
           先にPhase 2-C2.5-D2-d RESULTを選び（formal reference確認）、次にoriginal ExportとPhase 2-C2.5-A evidenceを選ぶと、D2-bと同じ規則で5 contextを選んで
           D2-d RESULTのworkloadと照合し、このpageで元ExportからSearch contextを再導出してevidenceとのparityを確認します。D2-d RESULTとevidenceはworkload選択・照合と
           parityだけに使い、Workerへは渡しません。各runは新しいDedicated Workerで実行され、1 SearchのbudgetはD2-bと同じ20分です。
+        </Alert>
+        <Alert severity={environmentState.issue === null ? 'success' : 'error'}>
+          crossOriginIsolated {String(environmentState.crossOriginIsolated)} / isSecureContext {String(environmentState.isSecureContext)}
+          {environmentState.issue === null ? '（D2-bのformal Browser環境と同じ）' : `（${environmentState.issue}）`}
         </Alert>
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={1}>

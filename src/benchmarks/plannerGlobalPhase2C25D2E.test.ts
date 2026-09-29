@@ -47,6 +47,7 @@ import {
   analyzePhase2C25D2E,
   parsePhase2C25D2BBrowserBeforeResult,
   parsePhase2C25D2DNodeResult,
+  phase2c25d2eBrowserEnvironmentParity,
   phase2c25d2eCdpDetail,
   phase2c25d2eProgressParity,
   phase2c25d2eStatements,
@@ -54,7 +55,7 @@ import {
   type Phase2C25D2ENodeMode,
   type Phase2C25D2ENodeView,
 } from './plannerGlobalPhase2C25D2EAnalysis'
-import { adaptPhase2C25D2EWorker, createPhase2C25D2ERunner } from './plannerGlobalPhase2C25D2EHarness'
+import { adaptPhase2C25D2EWorker, createPhase2C25D2ERunner, phase2c25d2eBrowserEnvironmentIssue, type Phase2C25D2EBrowserEnvironmentState } from './plannerGlobalPhase2C25D2EHarness'
 import {
   fromPhase2C25D2ERequest,
   fromPhase2C25D2EResponse,
@@ -264,7 +265,9 @@ const syntheticWorkload = (view: Phase2C25BEvidenceView, _json: unknown, referen
       selectionRole: item.role === 'control_first_candidate' ? 'control_first_candidate' : 'control_stopped_by_extent', d2dRole: item.role }
   })
 
-async function preparedRunner(options: { mutate?: (evidence: Record<string, unknown>) => void; skipReference?: boolean } = {}) {
+const ISOLATED: Phase2C25D2EBrowserEnvironmentState = { crossOriginIsolated: true, isSecureContext: true }
+
+async function preparedRunner(options: { mutate?: (evidence: Record<string, unknown>) => void; skipReference?: boolean; environment?: Phase2C25D2EBrowserEnvironmentState } = {}) {
   const built = scenario()
   const evidence = await syntheticEvidence(built)
   options.mutate?.(evidence as unknown as Record<string, unknown>)
@@ -276,6 +279,7 @@ async function preparedRunner(options: { mutate?: (evidence: Record<string, unkn
     relay: event => relayed.push(event), visibilityState: () => 'visible', onVisibilityChange: () => () => undefined,
     createWorker: () => { const worker = new InProcessD2EWorker(built.engine); workers.push(worker); return worker },
     selectWorkload: syntheticWorkload,
+    browserEnvironment: () => options.environment ?? ISOLATED,
   })
   if (!options.skipReference) await runner.loadD2DReference(bytesOf(reference), 'PLANNER_GLOBAL_PHASE2C25D2D_RESULT.json')
   return { built, evidence, reference, runner, relayed, workers }
@@ -355,6 +359,26 @@ describe('Phase 2-C2.5-D2-e runner', () => {
     const [first] = runner.selectedContexts()
     await expect(runner.runContext({ orientationId: first.orientationId, workIndex: first.workIndex, mode: 'minimal' })).rejects.toThrow(/preparation/)
     expect(workers).toHaveLength(1)
+  })
+
+  it.each([
+    ['not cross-origin isolated', { crossOriginIsolated: false, isSecureContext: true }, /crossOriginIsolated is false/],
+    ['not a secure context', { crossOriginIsolated: true, isSecureContext: false }, /isSecureContext is false/],
+    ['an unknown environment', { crossOriginIsolated: null, isSecureContext: null }, /crossOriginIsolated is null, isSecureContext is null/],
+  ])('prepares nothing and starts no Search outside the D2-b formal Browser environment: %s', async (_name, environment, pattern) => {
+    const { runner, evidence, workers } = await preparedRunner({ environment })
+    await runner.loadExport(EXPORT_BYTES, 'export.json')
+    await runner.loadEvidence(bytesOf(evidence), 'evidence.json')
+    expect(runner.browserEnvironment()).toMatchObject({ ...environment, issue: expect.stringMatching(pattern) })
+    await expect(runner.prepare()).rejects.toThrow(pattern)
+    const [first] = runner.selectedContexts()
+    const request = { orientationId: first.orientationId, workIndex: first.workIndex, mode: 'minimal' as const }
+    await expect(runner.runContext(request)).rejects.toThrow(pattern)
+    expect(() => runner.startRun(request)).toThrow(pattern)
+    await expect(runner.runFormalSeries()).rejects.toThrow(pattern)
+    expect(runner.preparation()).toBeNull()
+    expect(workers).toHaveLength(0)
+    expect(phase2c25d2eBrowserEnvironmentIssue(ISOLATED)).toBeNull()
   })
 
   it('ignores Phase 2-C2.5-B and D2-b messages arriving at the adapter', () => {
@@ -446,7 +470,7 @@ function beforeView(): Phase2C25D2EBeforeView {
     searchSummary: null, firstCandidateKeySha256: null, predictionCounts: null, browserOomEvidence: 'explicit_v8_oom_crash_key', v8OomLocation: 'x' }) as never
   const lostContext = (orientationId: string) => ({ orientationId, workIndex: 0, classification: 'inconclusive_page_or_browser_crash', attempts: 2, browserOomEvidenceRuns: 4,
     runs: [metrics(`${orientationId}#0:minimal:a1`, 'page_crashed'), metrics(`${orientationId}#0:instrumented:a1`, 'page_crashed')] })
-  return { measuredHead: 'b', exportSha256: 'e', c25aEvidenceSha256: 'a', contexts: [
+  return { measuredHead: 'b', exportSha256: 'e', c25aEvidenceSha256: 'a', environment: { crossOriginIsolated: true, isSecureContext: true, chrome: 'Chrome/153' }, contexts: [
     { orientationId: 'clr', workIndex: 0, classification: 'browser_no_failure', attempts: 1, browserOomEvidenceRuns: 0, runs: [] },
     lostContext('pa'), lostContext('pb'),
     { orientationId: 'ctl', workIndex: 0, classification: 'browser_no_failure', attempts: 1, browserOomEvidenceRuns: 0, runs: [] },
@@ -560,6 +584,50 @@ describe('Phase 2-C2.5-D2-e analysis', () => {
     expect(pair('page_crashed', 'page_crashed').repeat).toBe(true)
     expect(pair('page_crashed', 'page_crashed', 2).repeat).toBe(false)
     expect(pair('worker_error_before_first_candidate', 'worker_error_before_first_candidate').repeat).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------- Browser execution environment parity
+
+describe('Phase 2-C2.5-D2-e Browser environment parity', () => {
+  const before = { crossOriginIsolated: true, isSecureContext: true, chrome: 'Chrome/153.0.8010.49' }
+  const after = (patch: Partial<typeof before> = {}, session = 1) => ({ session, ...before, ...patch })
+
+  it('A: passes when every D2-e session equals D2-b in crossOriginIsolated and isSecureContext, recording the Chrome versions', () => {
+    const parity = phase2c25d2eBrowserEnvironmentParity(before, [after(), after({}, 2)])
+    expect(parity).toMatchObject({ valid: true, checks: { crossOriginIsolated: true, isSecureContext: true, chromeVersion: true }, issues: [],
+      required: ['crossOriginIsolated', 'isSecureContext'], before })
+    // A Chrome version difference is recorded, not required.
+    expect(phase2c25d2eBrowserEnvironmentParity(before, [after({ chrome: 'Chrome/154.0.0.0' })])).toMatchObject({ valid: true, checks: { chromeVersion: false } })
+  })
+
+  it('B: rejects a D2-e session that is not cross-origin isolated while D2-b was', () => {
+    const parity = phase2c25d2eBrowserEnvironmentParity(before, [after(), after({ crossOriginIsolated: false }, 2)])
+    expect(parity).toMatchObject({ valid: false, checks: { crossOriginIsolated: false } })
+    expect(parity.issues).toEqual(['crossOriginIsolated: D2-e true / false != D2-b true'])
+  })
+
+  it('C: rejects an isSecureContext mismatch, and no session at all', () => {
+    expect(phase2c25d2eBrowserEnvironmentParity(before, [after({ isSecureContext: false })])).toMatchObject({ valid: false, checks: { isSecureContext: false } })
+    expect(phase2c25d2eBrowserEnvironmentParity(before, [])).toMatchObject({ valid: false, issues: ['no D2-e page session environment',
+      expect.stringMatching(/^crossOriginIsolated/), expect.stringMatching(/^isSecureContext/)] })
+  })
+
+  it('D / E: accepts the committed D2-b RESULT as the before authority only when formal, series-complete and isolated', () => {
+    expect(parsePhase2C25D2BBrowserBeforeResult(d2bResult).environment).toEqual({ crossOriginIsolated: true, isSecureContext: true, chrome: 'Chrome/153.0.8010.49' })
+    expect(() => parsePhase2C25D2BBrowserBeforeResult({ ...d2bResult, provenance: { ...d2bResult.provenance, formal: false } })).toThrow(/provenance.formal/)
+    expect(() => parsePhase2C25D2BBrowserBeforeResult({ ...d2bResult, formalSeriesValidation: { ...d2bResult.formalSeriesValidation, valid: false } })).toThrow(/formalSeriesValidation/)
+    expect(() => parsePhase2C25D2BBrowserBeforeResult({ ...d2bResult, environment: { ...d2bResult.environment, crossOriginIsolated: false } })).toThrow(/environment.crossOriginIsolated is false/)
+    expect(() => parsePhase2C25D2BBrowserBeforeResult({ ...d2bResult, environment: { ...d2bResult.environment, isSecureContext: false } })).toThrow(/environment.isSecureContext is false/)
+  })
+
+  it('makes the formal analyzer check the environment parity before the analysis and stop without a RESULT on a mismatch', () => {
+    const analyzer = Object.values(scriptSources)[0]
+    const gate = analyzer.indexOf('phase2c25d2eBrowserEnvironmentParity(')
+    expect(gate).toBeGreaterThan(analyzer.indexOf('parsePhase2C25D2BBrowserBeforeResult('))
+    expect(gate).toBeLessThan(analyzer.indexOf('analyzePhase2C25D2E('))
+    expect(analyzer).toMatch(/Browser environment parity failed: /)
+    expect(analyzer).toMatch(/browserEnvironmentParity,/)
   })
 })
 
@@ -720,6 +788,12 @@ describe('Phase 2-C2.5-D2-e statements', () => {
     expect(all).not.toMatch(/\d+(?:\.\d+)?\s*(?:x|×|倍)\s*(?:less|smaller|improve)/i)
     expect(phase2c25d2eStatements(analyse(), { pageRealmJsHeapSizeLimit: null, workerRealmJsHeapSizeLimit: 1234 }).notYet.join('\n'))
       .toMatch(/Dedicated Worker realm reported its own jsHeapSizeLimit 1234 bytes/)
+    // The same-environment conclusion needs the Browser environment parity.
+    expect(all).not.toMatch(/same cross-origin isolated Browser environment/)
+    const heapNone = { pageRealmJsHeapSizeLimit: null, workerRealmJsHeapSizeLimit: null }
+    expect(phase2c25d2eStatements(analyse(), heapNone, { valid: true }).formal.some(s => /After H1, in the same cross-origin isolated Browser environment as D2-b .* all 4 selected contexts ended normally/.test(s))).toBe(true)
+    expect(phase2c25d2eStatements(analyse(), heapNone, { valid: false }).formal.some(s => /same cross-origin isolated/.test(s))).toBe(false)
+    expect(phase2c25d2eStatements(analyse({ pa: 'lost' }), heapNone, { valid: true }).formal.some(s => /same cross-origin isolated/.test(s))).toBe(false)
     const lost = phase2c25d2eStatements(analyse({ pa: 'lost' }), { pageRealmJsHeapSizeLimit: null, workerRealmJsHeapSizeLimit: null })
     expect(lost.formal.some(s => /every H1-after/.test(s))).toBe(false)
     expect(lost.notYet.some(s => /pa#0 \(inconclusive_page_or_browser_crash\)/.test(s))).toBe(true)

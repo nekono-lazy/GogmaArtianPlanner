@@ -77,7 +77,17 @@ try {
   // normally, D2-a parity, no mode parity failure); a failure ends the analyzer without a result.
   const node = analysis.parsePhase2C25D2DNodeResult(d2d.json)
   const workload = workloadModule.phase2c25d2eWorkload(view, c25a.json, node.reference)
+  // The D2-b RESULT is the Browser before authority only when formal, with a complete formal series, measured on a cross-origin
+  // isolated secure page (parsePhase2C25D2BBrowserBeforeResult() fails closed otherwise).
   const before = analysis.parsePhase2C25D2BBrowserBeforeResult(d2b.json)
+  // Browser execution environment parity: every D2-e page session must equal D2-b in crossOriginIsolated and isSecureContext, so
+  // no environment difference but H1 enters the formal before / after comparison. The Chrome version is recorded, not required.
+  const browserEnvironmentParity = analysis.phase2c25d2eBrowserEnvironmentParity(before.environment, pages.map((page, index) => ({ session: index + 1,
+    crossOriginIsolated: page.json.environment.crossOriginIsolated ?? null, isSecureContext: page.json.environment.isSecureContext ?? null,
+    chrome: external.json.driver.chromeVersion ?? null })))
+  if (!browserEnvironmentParity.valid && (formal || !args.includes('--allow-nonformal'))) {
+    throw new Error(`Browser environment parity failed: ${browserEnvironmentParity.issues.join(' / ')}`)
+  }
   const exportSha256 = pages[0].json.exportInfo.sha256
   if (pages.some(page => page.json.exportInfo.sha256 !== exportSha256) || exportSha256 !== view.exportSha256) throw new Error('The Export differs between sessions or from the evidence.')
   if (node.exportSha256 !== exportSha256 || before.exportSha256 !== exportSha256) throw new Error('The Node D2-d or Browser before result measured another Export.')
@@ -100,7 +110,7 @@ try {
   const env = pages[0].json.environment
   const workerRealmJsHeapSizeLimit = pages.flatMap(page => page.json.records).find(record => record.workerEnvironment?.performanceMemory)?.workerEnvironment.performanceMemory.jsHeapSizeLimit ?? null
   const heapLimits = { pageRealmJsHeapSizeLimit: env.mainRealmPerformanceMemory?.jsHeapSizeLimit ?? null, workerRealmJsHeapSizeLimit }
-  const statements = analysis.phase2c25d2eStatements(result, heapLimits)
+  const statements = analysis.phase2c25d2eStatements(result, heapLimits, browserEnvironmentParity)
   // The raw evidence: written for a new run, only verified byte for byte when it already exists (never rewritten).
   const rawEvidence = {}
   const browserContent = Buffer.from(JSON.stringify({ phase: 'Issue #154 Phase 2-C2.5-D2-e: the page exportJson() of every page session, verbatim',
@@ -126,6 +136,7 @@ try {
       c25aEvidenceFileName: pages[0].json.evidenceInfo.fileName, c25aEvidenceSha256: c25a.source.sha256, c25aMeasuredHead: view.measuredHead,
       d2bResultSha256: d2b.source.sha256, d2bMeasuredHead: before.measuredHead, d2dResultSha256: d2d.source.sha256, d2dMeasuredHead: node.measuredHead,
       d2dReferenceValidation: node.reference.validation,
+      browserEnvironmentParity,
       driverSha256: external.json.driver.sha256, driverBase: external.json.driver.base ?? null, measuredAt: external.json.driver.startedAt, pageSessions: pages.length,
       rawEvidence,
     },
@@ -156,6 +167,7 @@ try {
         .map(row => ({ orientationId: row.orientationId, workIndex: row.workIndex, matches: row.matches, checks: row.checks })),
       baselineSummary: page.json.preparation.parity.baselineSummary, contextsWorker: page.json.preparation.contextsWorker })),
     workload,
+    browserEnvironmentParity,
     formalSeriesValidation,
     repeatDecisions: external.json.repeatDecisions ?? [],
     ...result,

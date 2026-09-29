@@ -13,6 +13,10 @@
  *
  * The only Search input is the PlannerInput the page built from the original Export. The D2-d RESULT and the evidence
  * never reach a Worker.
+ *
+ * The page must run in the D2-b formal Browser execution environment - cross-origin isolated (COOP same-origin / COEP
+ * require-corp) and a secure context - so no environment difference but H1 enters the before / after comparison: otherwise
+ * the runner prepares nothing and starts no Search (fail closed).
  */
 import type { BenchmarkWorkerLike } from './constrainedEnumerationBrowserBenchmark'
 import type { Phase2C25BEvidenceView } from './plannerGlobalPhase2C25BEvidence'
@@ -64,13 +68,40 @@ export interface Phase2C25D2EReferenceInfo extends Phase2C25BFileInfo {
   readonly selection: Phase2C25D2EReference['selection']
 }
 
+/** The Browser execution environment every D2-e page session requires (the D2-b formal environment). */
+export const PHASE2C25D2E_REQUIRED_BROWSER_ENVIRONMENT = { crossOriginIsolated: true, isSecureContext: true } as const
+
+export interface Phase2C25D2EBrowserEnvironmentState {
+  readonly crossOriginIsolated: boolean | null
+  readonly isSecureContext: boolean | null
+}
+
+/** `null` when the page runs in the required environment; otherwise why it does not. */
+export function phase2c25d2eBrowserEnvironmentIssue(state: Phase2C25D2EBrowserEnvironmentState): string | null {
+  const issues = (Object.keys(PHASE2C25D2E_REQUIRED_BROWSER_ENVIRONMENT) as (keyof typeof PHASE2C25D2E_REQUIRED_BROWSER_ENVIRONMENT)[])
+    .filter(key => state[key] !== PHASE2C25D2E_REQUIRED_BROWSER_ENVIRONMENT[key]).map(key => `${key} is ${String(state[key])}`)
+  return issues.length === 0 ? null
+    : `The page is not in the D2-b formal Browser environment (${issues.join(', ')}; serve benchmark.html cross-origin isolated): no Search starts.`
+}
+
 export interface Phase2C25D2ERunnerDependencies extends Omit<Phase2C25BRunnerDependencies, 'phase'> {
+  /** The page's own execution environment; defaults to this realm's `crossOriginIsolated` / `isSecureContext`. */
+  readonly browserEnvironment?: () => Phase2C25D2EBrowserEnvironmentState
+
   /** Tests only: a synthetic scenario too small for the D2-b rule. The page always uses `phase2c25d2eWorkload()`. */
   readonly selectWorkload?: (view: Phase2C25BEvidenceView, json: unknown, reference: Phase2C25D2EReference) => Phase2C25D2EWorkloadContext[]
 }
 
 export function createPhase2C25D2ERunner(dependencies: Phase2C25D2ERunnerDependencies) {
-  const { selectWorkload = phase2c25d2eWorkload, createWorker = createPhase2C25D2EWorker, ...rest } = dependencies
+  const { selectWorkload = phase2c25d2eWorkload, createWorker = createPhase2C25D2EWorker, browserEnvironment = () => ({
+    crossOriginIsolated: typeof globalThis.crossOriginIsolated === 'boolean' ? globalThis.crossOriginIsolated : null,
+    isSecureContext: typeof globalThis.isSecureContext === 'boolean' ? globalThis.isSecureContext : null,
+  }), ...rest } = dependencies
+  const requireEnvironment = () => {
+    const issue = phase2c25d2eBrowserEnvironmentIssue(browserEnvironment())
+    if (issue !== null) throw new Error(issue)
+  }
+  const gated = <T>(task: () => Promise<T>): Promise<T> => { try { requireEnvironment() } catch (error) { return Promise.reject(error) } return task() }
   let reference: Phase2C25D2EReference | null = null
   let referenceInfo: Phase2C25D2EReferenceInfo | null = null
   const requireReference = () => {
@@ -117,6 +148,12 @@ export function createPhase2C25D2ERunner(dependencies: Phase2C25D2ERunnerDepende
 
   return {
     ...base,
+    /** Every Search path is gated on the required Browser environment: nothing is prepared or run outside it. */
+    prepare: () => gated(() => base.prepare()),
+    runContext: (request: Parameters<typeof base.runContext>[0]) => gated(() => base.runContext(request)),
+    startRun: (request: Parameters<typeof base.startRun>[0]) => { requireEnvironment(); return base.startRun(request) },
+    runFormalSeries: () => gated(() => base.runFormalSeries()),
+    browserEnvironment: () => ({ ...browserEnvironment(), issue: phase2c25d2eBrowserEnvironmentIssue(browserEnvironment()) }),
     loadD2DReference,
     loadExport,
     loadEvidence,

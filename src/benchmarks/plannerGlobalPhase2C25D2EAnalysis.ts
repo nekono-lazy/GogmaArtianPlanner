@@ -182,8 +182,23 @@ export interface Phase2C25D2EBeforeView {
   measuredHead: string
   exportSha256: string
   c25aEvidenceSha256: string
+  /** The D2-b formal Browser execution environment (the before side of `phase2c25d2eBrowserEnvironmentParity()`). */
+  environment: Phase2C25D2EBrowserEnvironment
   contexts: Phase2C25D2EBeforeContext[]
 }
+
+/** The Browser execution conditions a formal before / after comparison must share. */
+export interface Phase2C25D2EBrowserEnvironment {
+  crossOriginIsolated: boolean | null
+  isSecureContext: boolean | null
+  chrome: string | null
+}
+
+/**
+ * The D2-b formal environment, required of the Browser before authority: D2-b ran its formal series on a cross-origin
+ * isolated (COOP same-origin / COEP require-corp) secure page. A D2-b RESULT recording anything else is not a before authority.
+ */
+export const PHASE2C25D2E_REQUIRED_BEFORE_ENVIRONMENT = { crossOriginIsolated: true, isSecureContext: true } as const
 
 const D2B = 'D2-b RESULT'
 
@@ -193,6 +208,12 @@ export function parsePhase2C25D2BBrowserBeforeResult(value: unknown): Phase2C25D
   const provenance = record(root.provenance, D2B, 'provenance')
   if (provenance.formal !== true) fail(D2B, 'provenance.formal is not true.')
   if (record(root.formalSeriesValidation, D2B, 'formalSeriesValidation').valid !== true) fail(D2B, 'formalSeriesValidation.valid is not true.')
+  const env = record(root.environment, D2B, 'environment')
+  for (const [key, expected] of Object.entries(PHASE2C25D2E_REQUIRED_BEFORE_ENVIRONMENT)) {
+    if (env[key] !== expected) fail(D2B, `environment.${key} is ${String(env[key])}, not ${String(expected)}; it is not the formal Browser before authority.`)
+  }
+  const environment: Phase2C25D2EBrowserEnvironment = { crossOriginIsolated: env.crossOriginIsolated as boolean, isSecureContext: env.isSecureContext as boolean,
+    chrome: textOrNull(env.chrome, D2B, 'environment.chrome') }
   const contexts = list(root.contexts, D2B, 'contexts').map((raw, i) => {
     const path = `contexts[${i}]`
     const c = record(raw, D2B, path)
@@ -208,7 +229,43 @@ export function parsePhase2C25D2BBrowserBeforeResult(value: unknown): Phase2C25D
       browserOomEvidenceRuns: integer(c.browserOomEvidenceRuns, D2B, `${path}.browserOomEvidenceRuns`), runs }
   })
   return { measuredHead: text(provenance.measuredHead, D2B, 'provenance.measuredHead'), exportSha256: text(provenance.exportSha256, D2B, 'provenance.exportSha256'),
-    c25aEvidenceSha256: text(provenance.c25aEvidenceSha256, D2B, 'provenance.c25aEvidenceSha256'), contexts }
+    c25aEvidenceSha256: text(provenance.c25aEvidenceSha256, D2B, 'provenance.c25aEvidenceSha256'), environment, contexts }
+}
+
+// ---------------------------------------------------------------- Browser execution environment parity
+
+export interface Phase2C25D2EBrowserEnvironmentParity {
+  valid: boolean
+  before: Phase2C25D2EBrowserEnvironment
+  /** Every D2-e page session's own environment (the Chrome version from the external driver). */
+  after: (Phase2C25D2EBrowserEnvironment & { session: number })[]
+  checks: {
+    /** Required: every D2-e page session equals D2-b. */
+    crossOriginIsolated: boolean
+    /** Required: every D2-e page session equals D2-b. */
+    isSecureContext: boolean
+    /** Recorded, not required (the same major build is not a Browser execution condition of the formal classification). */
+    chromeVersion: boolean
+  }
+  required: readonly ('crossOriginIsolated' | 'isSecureContext')[]
+  issues: string[]
+}
+
+/**
+ * The formal Browser before / after comparison is H1 before -> after only when the Browser execution conditions are the
+ * same: every D2-e page session must equal the D2-b environment in `crossOriginIsolated` and `isSecureContext`
+ * (required, fail closed). The Chrome version is compared and recorded, not required.
+ */
+export function phase2c25d2eBrowserEnvironmentParity(before: Phase2C25D2EBrowserEnvironment,
+  after: readonly (Phase2C25D2EBrowserEnvironment & { session: number })[]): Phase2C25D2EBrowserEnvironmentParity {
+  const same = (key: keyof Phase2C25D2EBrowserEnvironment) => after.length > 0 && after.every(a => a[key] === before[key])
+  const checks = { crossOriginIsolated: same('crossOriginIsolated'), isSecureContext: same('isSecureContext'), chromeVersion: same('chrome') }
+  const required = ['crossOriginIsolated', 'isSecureContext'] as const
+  const issues = [
+    ...(after.length === 0 ? ['no D2-e page session environment'] : []),
+    ...required.filter(key => !checks[key]).map(key => `${key}: D2-e ${after.map(a => String(a[key])).join(' / ')} != D2-b ${String(before[key])}`),
+  ]
+  return { valid: issues.length === 0, before, after: after.map(a => ({ ...a })), checks, required, issues }
 }
 
 // ---------------------------------------------------------------- instrumented final progress parity
@@ -454,7 +511,8 @@ const minutes = (ms: number | null | undefined) => ms === null || ms === undefin
  * limit is another realm's reference value, and the Dedicated Worker's own limit is unknown unless the Worker realm reported
  * one; neither is compared with Node. Never "the Global Planner memory problem is solved": the kernel was not measured.
  */
-export function phase2c25d2eStatements(analysis: Phase2C25D2EAnalysis, heap: { pageRealmJsHeapSizeLimit: number | null; workerRealmJsHeapSizeLimit: number | null }) {
+export function phase2c25d2eStatements(analysis: Phase2C25D2EAnalysis, heap: { pageRealmJsHeapSizeLimit: number | null; workerRealmJsHeapSizeLimit: number | null },
+  environment: Pick<Phase2C25D2EBrowserEnvironmentParity, 'valid'> | null = null) {
   const { totals: t, verdict: v } = analysis
   const accepted = analysis.contexts.filter(c => c.nodeD2DAcceptance.accepted)
   const clearedPrimaries = accepted.filter(c => c.d2dRole === 'primary_oom' && c.browserBefore.classification === 'inconclusive_page_or_browser_crash')
@@ -467,6 +525,9 @@ export function phase2c25d2eStatements(analysis: Phase2C25D2EAnalysis, heap: { p
     ...clearedPrimaries.map(c => `After H1, ${key(c)} no longer reproduced the D2-b renderer loss in the Chrome Dedicated Worker: both modes ended ${c.node.minimal.status}, equal to Node D2-d in status, Search summary, first Candidate key, extent / exhaustion, instrumented prediction counts and instrumented final progress.`),
     ...(v.overallSummary === 'browser_no_failure_all_selected_contexts'
       ? [`In the ${t.contexts} measured contexts, every H1-after Chrome Dedicated Worker Search-only run ended normally, and its Candidate-visible semantics equalled Node D2-d.`] : []),
+    // Only with the Browser execution environment equal to D2-b (crossOriginIsolated and isSecureContext) is it the same-environment claim.
+    ...(v.overallSummary === 'browser_no_failure_all_selected_contexts' && environment?.valid === true
+      ? [`After H1, in the same cross-origin isolated Browser environment as D2-b (crossOriginIsolated and isSecureContext equal), all ${t.contexts} selected contexts ended normally.`] : []),
     `Run outcomes: ${t.runs} runs over ${t.pageSessions} page sessions; first Candidate reached ${t.firstCandidateReachedRuns}; renderer (page) loss ${t.pageCrashes}; browser loss ${t.browserCrashes}; native Worker failure ${t.nativeWorkerFailures}; structured error ${t.structuredErrors}; timeout ${t.timeouts}; explicit V8 OOM crash key ${t.explicitV8OomRuns}.`,
     `Auxiliary: ${v.auxiliary.explicitV8OomCrashKey} / ${v.auxiliary.representativeRuns} representative runs carry an explicit V8 OOM crash key (explicit_v8_oom_crash_key, beside the formal classification); ${v.auxiliary.lostDuringSearchBeforeFirstCandidate} lost the renderer while the Search Worker ran, before any first Candidate notice.`,
     ...analysis.contexts.map(c => `Runtime (reference, one run each): ${key(c)} Browser ${MODES.map(mode => `${mode} ${(c.runtime.browserSearchElapsedMs[mode] ?? []).map(minutes).join(' / ')}`).join(', ')}; Node D2-d minimal ${minutes(c.runtime.nodeSearchElapsedMs.minimal)}, instrumented ${minutes(c.runtime.nodeSearchElapsedMs.instrumented)}.`),
