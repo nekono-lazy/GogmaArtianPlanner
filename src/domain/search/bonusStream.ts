@@ -370,6 +370,65 @@ export interface ReservedGogmaDepthObservation {
 
 export type ReservedGogmaDepthObserver = (observation: ReservedGogmaDepthObservation) => void
 
+/**
+ * The mutually exclusive processing sections of one held-aware Bonus stream
+ * depth (`readReservedDepth()`), in the order they run. Issue #154 Phase
+ * 2-C2.6-A3 runtime localization only.
+ */
+export const RESERVED_GOGMA_RUNTIME_PHASES = [
+  'window_collection',
+  'support_evaluation',
+  'state_generation',
+  'solution_materialization',
+  'frontier_reduction_sort',
+  'exhaustion_scan',
+] as const
+export type ReservedGogmaRuntimePhase = typeof RESERVED_GOGMA_RUNTIME_PHASES[number]
+
+/**
+ * Counts the depth already holds at a boundary; `null` until the section that
+ * produces the value has completed. Nothing is scanned to produce them.
+ */
+export interface ReservedGogmaRuntimeCounts {
+  /** Frontier states the depth extends. */
+  frontierStatesBefore: number
+  /** Distinct legal next positions over that frontier. */
+  legalPositionCount: number | null
+  /** States generated (and published) at this depth. */
+  generatedStates: number | null
+  /** Frontier states after the reduction. */
+  frontierStatesAfter: number | null
+  /** Window memo entries of this stream at the boundary. */
+  windowMemoEntries: number
+}
+
+interface ReservedGogmaRuntimeEventBase {
+  /** 0-based creation order of this held-aware stream inside the Bonus stream. */
+  streamIndex: number
+  startGogmaCounter: number
+  depth: number
+  counts: ReservedGogmaRuntimeCounts
+}
+
+/**
+ * One boundary of a held-aware Bonus stream depth. It carries no timestamp:
+ * the stream reads no clock, and the observer stamps the boundary itself.
+ */
+export type ReservedGogmaRuntimeEvent =
+  | ({ type: 'depth_started' } & ReservedGogmaRuntimeEventBase)
+  | ({ type: 'phase_started'; phase: ReservedGogmaRuntimePhase } & ReservedGogmaRuntimeEventBase)
+  | ({ type: 'phase_completed'; phase: ReservedGogmaRuntimePhase } & ReservedGogmaRuntimeEventBase)
+  | ({ type: 'depth_completed'; exhausted: boolean } & ReservedGogmaRuntimeEventBase)
+
+/**
+ * Execution-only observer of the held-aware depth sections (Issue #154 Phase
+ * 2-C2.6-A3). Called synchronously at each boundary, never awaited, its return
+ * value never read; it changes no prediction, state, order or termination and
+ * is absent in every Production call. A depth that throws reports no further
+ * boundary.
+ */
+export type ReservedGogmaRuntimeObserver = (event: ReservedGogmaRuntimeEvent) => void
+
 export function createTargetBonusStream(
   target: TargetWeapon,
   input: BonusStreamInput,
@@ -382,6 +441,12 @@ export function createTargetBonusStream(
    * or a termination; absent in every Production call.
    */
   observeReservedDepth?: ReservedGogmaDepthObserver,
+  /**
+   * Execution-only observer of the held-aware depth sections (Issue #154
+   * Phase 2-C2.6-A3 runtime localization). Boundaries only, no clock, no
+   * extra scan; absent in every Production call.
+   */
+  observeReservedRuntime?: ReservedGogmaRuntimeObserver,
 ): TargetBonusStream {
   const resetPredictions = new Map<number, RestorationBonusSet>()
   const keepPredictions = new Map<string, RestorationBonusSet>()
@@ -721,14 +786,25 @@ export function createTargetBonusStream(
    * the ordinary stream: one Reset and one Keep per surviving layout per depth,
    * in the same order, over the window `start .. start + maxGogmaAdvance - 1`.
    */
-  async function generateReservedDepth(set: ReservedSet, base: BonusStreamBase, depth: number): Promise<ReservedBonusStreamSolution[]> {
+  async function generateReservedDepth(
+    set: ReservedSet,
+    base: BonusStreamBase,
+    depth: number,
+    runtime: ReservedRuntimeBoundaries | undefined,
+  ): Promise<ReservedBonusStreamSolution[]> {
     if (set.done) return []
+    runtime?.phase('phase_started', 'window_collection')
     const windows: Array<ReadonlySet<number>> = []
     const positions = new Set<number>()
     for (const state of set.frontier) {
       const window = await reservedWindow(set, base, state)
       windows.push(new Set(window.positions))
       window.positions.forEach((position) => positions.add(position))
+    }
+    if (runtime !== undefined) {
+      runtime.counts.legalPositionCount = positions.size
+      runtime.phase('phase_completed', 'window_collection')
+      runtime.phase('phase_started', 'support_evaluation')
     }
     const resetSupport = predictionSupport.gogmaReset()
     const resetAllowed = resetSupport.supported && base.amendmentPolicy !== 'keep_only'
@@ -740,6 +816,10 @@ export function createTargetBonusStream(
       if (!support.supported) recordReservedUnsupported(set, 'keep_bonuses', support.reason)
       return support.supported
     })
+    if (runtime !== undefined) {
+      runtime.phase('phase_completed', 'support_evaluation')
+      runtime.phase('phase_started', 'state_generation')
+    }
 
     const generated: ReservedBonusState[] = []
     for (const position of [...positions].sort((left, right) => left - right)) {
@@ -764,10 +844,15 @@ export function createTargetBonusStream(
         generated.push(reservedGeneratedState(depth, state.lastResetDepth, bonuses, state.results, position, gogmaCounterAfter))
       }
     }
+    if (runtime !== undefined) {
+      runtime.counts.generatedStates = generated.length
+      runtime.phase('phase_completed', 'state_generation')
+    }
     if (generated.length === 0) {
       set.done = true
       return []
     }
+    runtime?.phase('phase_started', 'solution_materialization')
     // Handed to the caller only; the stream keeps no reference to them.
     const solutions: ReservedBonusStreamSolution[] = generated.map((state) => ({
       depth: state.depth,
@@ -777,6 +862,10 @@ export function createTargetBonusStream(
       results: state.results as ReservedBonusResultNode,
       steps: reservedBonusSteps(state.results),
     }))
+    if (runtime !== undefined) {
+      runtime.phase('phase_completed', 'solution_materialization')
+      runtime.phase('phase_started', 'frontier_reduction_sort')
+    }
     const byKey = new Map<string, ReservedBonusState>()
     for (const state of generated) {
       const key = `${state.position}\u0000${state.familyLayoutKey}`
@@ -784,6 +873,10 @@ export function createTargetBonusStream(
       if (!current || compareReservedRepresentative(state, current) < 0) byKey.set(key, state)
     }
     set.frontier = [...byKey.values()].sort(compareReservedFrontier)
+    if (runtime !== undefined) {
+      runtime.counts.frontierStatesAfter = set.frontier.length
+      runtime.phase('phase_completed', 'frontier_reduction_sort')
+    }
     if (observeReservedDepth !== undefined) {
       observeReservedDepth({
         streamIndex: set.index,
@@ -796,6 +889,40 @@ export function createTargetBonusStream(
       })
     }
     return solutions
+  }
+
+  /** The boundary reporter of one observed depth read (Issue #154 Phase 2-C2.6-A3). */
+  interface ReservedRuntimeBoundaries {
+    readonly counts: ReservedGogmaRuntimeCounts
+    phase(type: 'phase_started' | 'phase_completed', phase: ReservedGogmaRuntimePhase): void
+    depth(type: 'depth_started'): void
+    depth(type: 'depth_completed', exhausted: boolean): void
+  }
+
+  function reservedRuntimeBoundaries(
+    observer: ReservedGogmaRuntimeObserver,
+    set: ReservedSet,
+    base: BonusStreamBase,
+    depth: number,
+  ): ReservedRuntimeBoundaries {
+    const counts: ReservedGogmaRuntimeCounts = {
+      frontierStatesBefore: set.frontier.length,
+      legalPositionCount: null,
+      generatedStates: null,
+      frontierStatesAfter: null,
+      windowMemoEntries: set.windows.size,
+    }
+    const snapshot = () => {
+      counts.windowMemoEntries = set.windows.size
+      return { streamIndex: set.index, startGogmaCounter: base.startGogmaCounter, depth, counts: { ...counts } }
+    }
+    return {
+      counts,
+      phase: (type, phase) => observer({ type, phase, ...snapshot() }),
+      depth: (type: 'depth_started' | 'depth_completed', exhausted?: boolean) => observer(type === 'depth_started'
+        ? { type, ...snapshot() }
+        : { type, exhausted: exhausted as boolean, ...snapshot() }),
+    }
   }
 
   /**
@@ -874,18 +1001,25 @@ export function createTargetBonusStream(
       const set = reservedSet(base)
       claimReservedDepth(set, base, depth)
       try {
-        const solutions = await generateReservedDepth(set, base, depth)
+        const runtime = observeReservedRuntime === undefined
+          ? undefined
+          : reservedRuntimeBoundaries(observeReservedRuntime, set, base, depth)
+        runtime?.depth('depth_started')
+        const solutions = await generateReservedDepth(set, base, depth, runtime)
         // An empty depth is terminal. Otherwise the stream goes on while one
         // reduced frontier state still has a legal next position; every state's
         // window is visited, so the extent-cut record and the memo are as before.
         let exhausted = true
         if (solutions.length > 0) {
+          runtime?.phase('phase_started', 'exhaustion_scan')
           for (const state of set.frontier) {
             if ((await reservedWindow(set, base, state)).positions.length > 0) exhausted = false
           }
+          runtime?.phase('phase_completed', 'exhaustion_scan')
         }
         if (exhausted) set.closedBy = 'exhausted'
         set.reading = false
+        runtime?.depth('depth_completed', exhausted)
         return { solutions, unsupportedPredictions: [...set.unsupported.values()], exhausted }
       } catch (error) {
         set.closedBy = 'failed'

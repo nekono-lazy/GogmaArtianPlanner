@@ -1,6 +1,6 @@
 import type { RestorationBonusSet } from '../../models/publicTypes'
 import type { RngEngine } from '../../rng/rngEngine'
-import { createTargetBonusStream, type ReservedGogmaDepthObserver } from '../bonusStream'
+import { createTargetBonusStream, type ReservedGogmaDepthObserver, type ReservedGogmaRuntimeObserver } from '../bonusStream'
 import { createCounterReservation, EMPTY_COUNTER_RESERVATION } from '../counterReservation'
 import { candidateStableKey } from '../candidateProcessing'
 import { compareConstrainedCandidates } from '../constrained/constrainedCandidateFactory'
@@ -40,6 +40,12 @@ export interface PlannerAlternativeSearchInstrumentation {
   onSkillReservedDepth?: ReservedSkillDepthObserver
   /** One held-aware Bonus stream depth was generated, published and reduced. */
   onGogmaReservedDepth?: ReservedGogmaDepthObserver
+  /**
+   * The section boundaries of each held-aware Bonus stream depth (Issue #154
+   * Phase 2-C2.6-A3 runtime localization): boundaries only, no clock and no
+   * extra scan in the stream; the observer stamps them itself.
+   */
+  onGogmaReservedRuntime?: ReservedGogmaRuntimeObserver
 }
 
 /**
@@ -175,6 +181,7 @@ export async function visitPlannerAlternativeCandidates(
       execution,
       predictionSupport,
       instrumentation?.onGogmaReservedDepth,
+      instrumentation?.onGogmaReservedRuntime,
     ),
   }
 
