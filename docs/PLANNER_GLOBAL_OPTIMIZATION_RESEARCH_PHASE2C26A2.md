@@ -23,13 +23,17 @@ kind別: `same_gogma_counter` 2件（c6-p1、c14-p0）、`same_skill_counter` 7�
   Planner run 28秒、kernel preparation 17秒。
 - 完了したfull Planner runは5回のみ（c13-p0 / p2で各1、c13-p6で3）、各 **5.4〜5.8秒**。preflightは各約3.7秒。
   30分をfull Planner rerunが消費したorientationは1件も無い。rerun budget使用は最大3 / 8。
-- Search内部は **held-aware Gogma（Bonus）streamが支配的**: Gogma generated statesは1 Target Searchで最大3.2億、Skillは全Targetで
-  states 30以下・maxDepth 4以下。完走したSearch 17件はすべて `stopped_by_search_extent_bound`（Gogma depth 234 / extent 235まで
-  到達、Candidate 0件）か、Candidate 1件のfoundだった。
+- Search内部の観測では、**生成state数・frontier量がheld-aware Gogma（Bonus）stream側へ圧倒的に偏っている**。Skill streamは最大
+  30 states / 39 transitions / depth 4に対し、Gogmaは1 Target Searchで最大約3.21億 generated states / 約2,349万 frontier states /
+  depth 234だった。このため次Phaseの最優先局所化対象をGogma / H6とする。ただしSkill / Gogma / composition / scheduler単位の
+  wall timeは今回直接計測していないため、Gogma streamがruntimeそのものを支配しているとはまだ確定しない。
+- 完走したSearch 17件はすべて `stopped_by_search_extent_bound`（Gogma depth 234 / extent 235まで到達、Candidate 0件）か、
+  Candidate 1件のfoundだった。
 - **participant未到達2件**（15829bfe、fea60316）は、それぞれc6-p1 / c14-p0の唯一の非fixed Targetで、そのSearch自体が30分では終わらない
   （Gogma depth 69 / 51まで、Candidate 0件、trial 0件）。
 
-**次Phase推奨（事前登録ruleの判定: A）**: Search runtime optimization（H6: held-aware Gogma stream generation量の局所化）を優先する。
+**次Phase推奨（事前登録ruleの判定: A）**: Search runtime方向（H6）を優先する。順序は、まずH6 / Gogma generation・frontier処理の
+runtimeを区間計時で追加局所化し、その結果に基づいてoptimizationを設計する（いきなりGogma stream optimizationを実装しない）。
 c13は1 Target当たり100〜1,800秒のSearchが9 Target分直列に積まれる構造（C要素）も併せ持つが、単一TargetのSearch自体が30分に届く
 orientationが大半なので、portfolio / kernel schedulingより先にSearch 1回のruntimeを下げる必要がある。C2.6-Bへは進めない（§11）。
 
@@ -141,11 +145,12 @@ maxPlanSteps・yield・CalculationContext・lineageも一致。selectionはC2.6-
 **Q3（主時間）**: c13 6件の観測時間10,770 sのうちSearch 10,715 s（99.5%）、full Planner run 28 s（5回）、preflight 18 s。
 主時間はSearchである。
 
-**Q4（Searchのどこか）**: Gogma streamが支配的。完了Searchの多くはGogma depth 234（extent上限）まで到達してCandidate 0件で終わり、
+**Q4（Searchのどこか）**: state生成量・frontier量の観測から、Gogma generation / frontier処理が次の最有力調査対象である。
+ただしSearch内部の各処理区間（Skill / Gogma stream、composition、scheduler / queue、frontier処理）は直接計時していないため、wall timeの
+主因そのものは次Phaseで追加局所化する必要がある。観測値: 完了Searchの多くはGogma depth 234（extent上限）まで到達してCandidate 0件で終わり、
 Gogma generated statesは完了Searchで1,441万〜2.46億、未完Search（c13-p1 Target 0）で3.21億、frontierは最大2,188万（いずれもc13）。Skill streamはTarget当たりstates 6〜30、
 transitions 39以下、maxDepth 3〜4。scheduler settled work itemは1 Search 31〜1,886。prediction countはkeepBonuses最大23万 / resetBonuses
-2,773 / predictSkills 3,285（full runを含む）で、generated states（億単位）に比べて小さく、時間の主因はRNG prediction呼び出し数ではなく
-Gogma state生成・frontier処理量と読める（Skill / Gogmaの時間配分自体は直接計時していない）。
+2,773 / predictSkills 3,285（full runを含む）で、generated states（億単位）に比べて小さい。
 
 **c6-p1 / c14-p0**: どちらも唯一の非fixed TargetのSearchだけで30分を使い切った（full run 0、trial 0、Candidate 0）。Gogma maxDepthは
 69 / 51（extent 235の3割弱）、generated states 2.89億 / 3.13億、frontier 887万 / 758万。
@@ -167,18 +172,33 @@ Gogma state生成・frontier処理量と読める（Skill / Gogmaの時間配分
 
 ## 8. formalに言えること
 
+### 8.1 直接測定で確定
+
 - 今回の元Export・同じProduction extent / bounds・Node 8 GB条件で、C2.6-A timeout 9件は再測定でも9件ともtimeoutで、その全件が
-  Planner Alternative Search実行中に30分へ達した。preflight・full Production Planner runで30分に達したものは無い。
-- full Planner runは1回約5.6秒、preflightは約3.7秒で、9件合計でも46秒程度。30分の99.6%はSearchである。
-- Searchの支配streamはheld-aware Gogma（Bonus）streamで、Skill streamは無視できる規模である（state数の観測）。
+  Planner Alternative Search実行中に30分へ達した（kernel timeoutの直接stageはSearch、9 / 9 timeout_in_search）。preflight・
+  full Production Planner runで30分に達したものは無い。
+- full Planner runは1回約5.6秒、preflightは約3.7秒で、9件合計でも46秒程度。観測kernel時間の約99.6%はSearchであり、full Planner run
+  は支配要因ではない。
 - participant未到達2件（15829bfe、fea60316）が測定不能なのは、それを探索する唯一のorientationで、そのTarget 1件のSearchが30分では
   完了しないためである。
 - c13では止まるTargetがfixed側ごとに異なり、同じTargetのSearch時間もreservationで数倍変わる。
 
+### 8.2 aggregateから強く示唆
+
+- Search内部の生成state数・frontier量はheld-aware Gogma（Bonus）stream側へ圧倒的に偏っている（Gogma generated最大約3.21億 /
+  frontier最大約2,349万 / maxDepth 234、Skill states最大30 / transitions最大39 / maxDepth 4）。
+- したがってGogma / H6が次の最有力局所化対象である。
+
+### 8.3 未確定
+
+- Search内部wall timeのうちGogma streamが何%を占めるか。Skill側のstate数は小さいが、stream別wall timeは直接計測していないため、
+  Gogma streamがruntimeそのものを支配しているとはまだ確定しない。
+- generation / frontier処理 / composition / scheduler・queueのどれがwall timeを支配しているか。
+
 ## 9. まだ言えないこと
 
 - 30分を超えればこれらのSearchがいつ終わるか、Candidateが見つかるか（timeoutはCandidateなしを意味しない）。
-- Search内部でSkill / Gogmaそれぞれに何秒使ったか（時間は直接計時しておらず、state数からの推定のみ）。
+- Search内部でSkill / Gogma / composition / schedulerそれぞれに何秒使ったか（区間ごとのwall timeは直接計時していない。§8.3）。
 - 他device・Browser Worker・他concurrencyでの挙動、run間ばらつき（各1回のみ）。
 - 特定のoptimization（例: Gogma frontier縮約）がどれだけ効くか。
 - C3 readiness、global assignmentの成否。
@@ -187,8 +207,11 @@ Gogma state生成・frontier処理量と読める（Skill / Gogmaの時間配分
 
 事前登録rule（`phase2c26a2NextCase()`）: completedが過半 → D、timeoutの過半がfull run支配 → B、Search支配が過半 → そのうち過半で
 Search時間が1 Targetに集中していればA、分散していればC、それ以外はmixed。結果は **A（Search支配 9 / 9、うち6件は1 Targetに集中）**。
+ここでの「支配」はkernel stage単位（Search / preflight / full run等）の時間attributionで、Search内部のstream別の支配ではない。
 
-1. **primary（A）: Search runtime optimization / H6 generation量の局所化**。対象はheld-aware Gogma（Bonus）stream。特に
+1. **primary（A）: H6 / Gogma generation・frontier runtimeの追加局所化 → その結果に基づくoptimization設計**。まずSearch内部
+   （Skill / Gogma stream、composition、scheduler / queue、frontier処理）を区間計時し、wall timeの主因を確定する。state量の偏りから
+   最有力の対象はheld-aware Gogma（Bonus）streamで、特に
    (a) extent 235までCandidate 0件で到達するSearch（c13の多数、c20-p1 Target 0）で何がstateを生成しているか、
    (b) c6-p1 / c14-p0でdepth 51〜69の時点で既に3億state近いのはなぜか（reservationのheld / blocked位置との関係）、
    (c) 同じTargetでもfixed側によってSearch時間が数倍変わる要因、をdepth別aggregate（RESULTの `searchDepths`）から局所化する。
@@ -199,9 +222,10 @@ Search時間が1 Targetに集中していればA、分散していればC、そ�
 
 ## 11. C2.6-Bへ進む条件の判定
 
-- timeout原因は局所化できた（9 / 9 Search、支配streamはGogma）。
+- timeoutの直接stageは局所化できた（9 / 9 Search）。Search内部はGogma側へstate量が偏っており、次の局所化対象は定まった
+  （stream別wall timeは未計測）。
 - participant未到達2件への影響は理解できた（その唯一のorientationのSearch自体が30分で終わらない）。
-- しかし、portfolio再構築を先に行うと、同じGogma Searchを別の形で繰り返すことになり、2 participantは引き続き測定できない。
+- しかし、portfolio再構築を先に行うと、30分で完了しない同じSearchを別の形で繰り返すことになり、2 participantは引き続き測定できない。
 
 したがって **C2.6-Bはまだ次候補にしない**。Search runtime optimization（A）で上記2件と9 orientationが測定可能になるかを先に確認する。
 
