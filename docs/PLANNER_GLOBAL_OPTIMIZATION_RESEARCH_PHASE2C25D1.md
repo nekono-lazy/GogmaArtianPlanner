@@ -328,7 +328,7 @@ subscribe条件（`!zero.idealMatch && stream available`）も変えない。
 
 ## 13. characterization test結果
 
-追加: `src/domain/search/alternative/plannerAlternativeIdealPublication.test.ts`（17 tests、すべて現行コードでpass）。
+追加: `src/domain/search/alternative/plannerAlternativeIdealPublication.test.ts`（18 tests、すべて現行コードでpass）。
 fixtureはPhase 1-Cのfrontier fixtureを `src/test/fixtures/plannerAlternativeFrontier.ts` へ切り出して共有した
 （`plannerAlternativeFrontier.test.ts` はimport先の変更だけで、26 testsの内容は不変）。
 
@@ -342,7 +342,7 @@ fixtureはPhase 1-Cのfrontier fixtureを `src/test/fixtures/plannerAlternativeF
 | source audit | scheduler / Lazy Ideal Cross / `alternative/*.ts` に `.index` 参照が無い。channel subscriberは `cross.addSkill` / `cross.addBonus` / `base.onBonusNotice` だけ。Lazy Ideal Crossが非Idealを即returnする |
 | notices | Idealが無い入力でも既存巨戟のReset / Keep / mixedのsearched報告、Keep unsupported warningが出る |
 | extent | Idealが無い入力でGogma 10..14・Skill 7..12を全位置予測し `stoppedByExtent`。Bonus streamの自然終了で `exhausted` |
-| D2 baseline | predicted Normal 5 offset + 既存巨戟 + 同一結果後続位置（R10..R12とR10,R11,K12,K13の同結果）+ 軸外pair + 両軸の非Ideal位置を持つfixtureの **全48 Candidate** の配送順（projection）、stable key重複なし、summary、`skippedExcludedRouteKeys`、全prediction呼び出し列。先頭Candidateを除外した場合の残り47件の順序と除外記録 |
+| D2 baseline | predicted Normal 5 offset + 既存巨戟 + 同一結果後続位置（R10..R12とR10,R11,K12,K13の同結果）+ 軸外pair + 両軸の非Ideal位置を持つfixtureの **全48 Candidate** について、Route projectionの配送順に加え、現行pre-D2実装から一度だけ採取した `candidateStableKey` の値と順序そのもの（`BASELINE_STABLE_KEYS`、48件・重複なし。test実行時に期待値を生成しない）、summary、`skippedExcludedRouteKeys`、全prediction呼び出し列。先頭Candidate除外時も、固定済みpre-D2 stable key（`BASELINE_STABLE_KEYS[0]`）を除外入力に使い、残り47件のprojection列とstable-key列がbaselineのsuffixと一致し、除外記録がそのkey 1件であること |
 
 ## 14. semantic feasibility verdict
 
@@ -379,6 +379,9 @@ defaults、schema / version、Persistence、UIは変えない。calculation sema
   （prediction呼び出し列を含む）が不変でpass
 - 本PRのcharacterization test（`plannerAlternativeIdealPublication.test.ts`）が **期待値を変えずに** pass（late subscriber、
   順序、notice、extent、D2 baselineの全48件配送順・summary・prediction列）
+- 特に、PR #173で固定したpre-D2 baseline stable-key sequence（`BASELINE_STABLE_KEYS`、除外ケースのsuffixを含む）と
+  `BASELINE_SEQUENCE` / prediction列を期待値変更なしでpassさせる。D2実装時にこれらの期待値を再採取・書き換えてsemantic changeを
+  隠すことは禁止する。一致しない場合はD2の実装を直すか、semantic changeとして報告して判断を仰ぐ
 - 追加: Planner Alternative channelが非Idealをmaterializeしないことのwhite-box test（例: 非Idealだらけのfixtureで
   `bonusAmendmentOperations` / `resetSkillsOperations` の呼び出し回数がIdeal position数に等しいこと）
 - 追加: 小さなexhaustive synthetic fixture（Ideal位置パターンを網羅的に変える）で、現行実装（比較用にtest内へ残すreference
