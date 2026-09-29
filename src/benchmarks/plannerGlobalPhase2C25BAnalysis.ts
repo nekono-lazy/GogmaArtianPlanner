@@ -291,10 +291,11 @@ const gib = (bytes: number) => (bytes / 2 ** 30).toFixed(2)
  * never equates the page realm limit with the Worker limit, and never compares either with the Node 8 GB limit.
  */
 export function phase2c25bWorkerHeapLimitStatement(input: { readonly representativeSampledMaxBytes: readonly number[]; readonly pageRealmJsHeapSizeLimit: number | null;
-  readonly workerRealmJsHeapSizeLimit: number | null }): string {
+  readonly workerRealmJsHeapSizeLimit: number | null; /** When the samples were taken; Phase 2-C2.5-B: every representative run ended with the renderer loss. */
+  readonly sampledWhen?: string }): string {
   const sampled = input.representativeSampledMaxBytes
   const used = sampled.length === 0 ? 'no Dedicated Worker used heap was sampled by CDP in the representative runs'
-    : `the Dedicated Worker used heap sampled by CDP reached ${gib(Math.min(...sampled))}-${gib(Math.max(...sampled))} GiB (per-run sampled maxima) before the renderer loss`
+    : `the Dedicated Worker used heap sampled by CDP reached ${gib(Math.min(...sampled))}-${gib(Math.max(...sampled))} GiB (per-run sampled maxima) ${input.sampledWhen ?? 'before the renderer loss'}`
   const page = input.pageRealmJsHeapSizeLimit === null ? 'the page realm exposed no jsHeapSizeLimit'
     : `the page realm reported performance.memory.jsHeapSizeLimit ${input.pageRealmJsHeapSizeLimit} bytes (about ${gib(input.pageRealmJsHeapSizeLimit)} GiB), a value of another realm given for reference only`
   const worker = input.workerRealmJsHeapSizeLimit === null
