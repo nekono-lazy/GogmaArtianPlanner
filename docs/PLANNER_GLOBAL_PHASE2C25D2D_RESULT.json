@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 Phase 2-C2.5-D2-d: Node memory / runtime effect of the single-pass held-aware Bonus stream (post-hoc analysis)",
-  "analyzedAt": "2026-09-29T06:45:06.464Z",
+  "analyzedAt": "2026-09-29T07:16:32.696Z",
   "sources": {
     "run": {
       "file": "PLANNER_GLOBAL_PHASE2C25D2D_RUN.json.local",
@@ -30,14 +30,18 @@
   },
   "provenance": {
     "measuredHead": "aebe6bbb2e52ca59641fb70b25754de0a76b78c5",
-    "analysisHead": "2047a69cf39840f122b89555156e20841dbf04a0",
+    "analysisHead": "a1ee8ca3f2b2a7a9229760c0660bc2a7cac762b5",
     "codeChangedSinceMeasuredHead": [
+      "scripts/analyze-planner-global-phase2c25d2d.mjs",
+      "src/benchmarks/plannerGlobalPhase2C25D2D.test.ts",
+      "src/benchmarks/plannerGlobalPhase2C25D2DFormalValidation.ts",
       "src/benchmarks/plannerGlobalPhase2C25D2DInterpretation.ts"
     ],
     "calculationCodeChangedSinceMeasuredHead": [],
     "postHocAllowedFiles": [
       "scripts/analyze-planner-global-phase2c25d2d.mjs",
       "src/benchmarks/plannerGlobalPhase2C25D2DInterpretation.ts",
+      "src/benchmarks/plannerGlobalPhase2C25D2DFormalValidation.ts",
       "*.test.ts"
     ],
     "formal": true,
@@ -487,6 +491,39 @@
         "digestMatches": true
       }
     ]
+  },
+  "formalRunValidation": {
+    "validator": "validatePhase2C25D2DFormalRun (post-hoc, src/benchmarks/plannerGlobalPhase2C25D2DFormalValidation.ts)",
+    "valid": true,
+    "failures": [],
+    "rawStatus": "completed",
+    "smokeIsNull": true,
+    "uncommittedBenchmarkCode": false,
+    "expectedModes": [
+      "minimal",
+      "instrumented"
+    ],
+    "environmentModes": [
+      "minimal",
+      "instrumented"
+    ],
+    "environmentModeMismatch": false,
+    "expectedContexts": 5,
+    "actualContexts": 5,
+    "expectedSearchRuns": 10,
+    "actualSearchRuns": 10,
+    "missingContexts": [],
+    "duplicateContexts": [],
+    "unexpectedContexts": [],
+    "itemMismatches": [],
+    "missingModes": [],
+    "unexpectedModes": [],
+    "processCounts": {
+      "contexts": 1,
+      "search": 10,
+      "other": 0
+    },
+    "processCountMismatch": false
   },
   "semanticTests": {
     "reportHead": "aebe6bbb2e52ca59641fb70b25754de0a76b78c5",

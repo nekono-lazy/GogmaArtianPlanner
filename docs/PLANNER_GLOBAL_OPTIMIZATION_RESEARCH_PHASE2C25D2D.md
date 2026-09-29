@@ -127,6 +127,16 @@ Planner Alternative reservation / frontier / search tests、same-cost closure、
 
 context parity: 5 / 5（C2.5-A evidenceとfield-by-field、workload digestとも一致）。一致しなければSearchを開始しない。
 
+**formal completeness**: formal post-hoc analysisでは、D2-a RESULT / C2.5-A evidenceからanalyzer自身が再導出した
+（`selectPhase2C25D2CWorkload()` → `phase2c25d2dWorkloadItems()`、D2-c RESULT workloadとも一致）5 contextがraw runに exactly 1件ずつ存在し、
+全contextにminimal / instrumentedの2 modeが揃い、duplicate / foreign / missingのcontext・mode、workload metadata
+（orientationId / workIndex / targetWeaponId / role / contextDigest）の不一致、未知のmodeが無く、`environment.modes` がexactly 2 mode、
+`environment.smoke` がnull、`uncommittedBenchmarkCode` がfalse、raw statusがcompleted、child processがcontexts 1 + Search 10であることを
+fail-closedで検証した（`validatePhase2C25D2DFormalRun()`、post-hocの `src/benchmarks/plannerGlobalPhase2C25D2DFormalValidation.ts`。runnerは
+importしない）。不完全なraw runではanalyzerがRESULTを書かずにerror終了する。現在のformal raw runは5 context / 10 Search runで完全だった
+（RESULT `formalRunValidation.valid = true`、expected / actual contexts 5 / 5、Search runs 10 / 10）。この検証はNode benchmarkを再実行せず、
+同じraw run（SHA-256 `4b93ac9b…c996`、変更なし）のpost-hoc再解析で追加した。測定値・分類・parityは再解析前と同一である。
+
 non-formal smoke（未commit code、primary 2件・minimalのみ・4分budget）はcontract error / 即OOMが無いことだけを確認し
 （両方timeout、sampled max 1.3 / 1.0 GiB）、formal結果・selection・budgetには使っていない。
 
@@ -255,15 +265,16 @@ analyzerがmeasured HEADとD2-c measured HEADの `bonusStream.ts` を読んで�
 | 項目 | 値 |
 | --- | --- |
 | measured HEAD | `aebe6bbb2e52ca59641fb70b25754de0a76b78c5`（formal、uncommittedBenchmarkCode false） |
-| analysis HEAD | `2047a69cf39840f122b89555156e20841dbf04a0`（measured HEAD以後の変更は解釈module `plannerGlobalPhase2C25D2DInterpretation.ts` だけ。calculationCodeChangedSinceMeasuredHead 空、allowlist: analyzer・解釈module・`*.test.ts`） |
+| analysis HEAD | `a1ee8ca3f2b2a7a9229760c0660bc2a7cac762b5`（measured HEAD以後の変更はpost-hocのanalyzer・解釈module・formal completeness validator・testだけ。calculationCodeChangedSinceMeasuredHead 空、allowlist: analyzer・`plannerGlobalPhase2C25D2DInterpretation.ts`・`plannerGlobalPhase2C25D2DFormalValidation.ts`・`*.test.ts`） |
 | benchmarkCodeSha256 | `849f2ad4d7aaa66c1f6642abbd12dd3b536d6bd98d08be9ca6cca7a10f644dea` |
 | Export | `gogma-artian-planner-backup_20260927015837.json`、19,424,064 bytes、SHA-256 `cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b`（commitしない） |
 | C2.5-A evidence | SHA-256 `a6e38294a5c9137a7d62a3f57d552af637a67d115e1fd04541713b27823e87dd` |
 | D2-a RESULT | SHA-256 `51918edeb7b8b4b08953847125295f6bddab5f4f89c2a759daa37d7d1bc7e914`（measured `0c054a8`） |
 | D2-c RESULT | SHA-256 `fc9c5102affda2bf102a68cd782e0f3548d256024416b68c38e264841e50c4c6`（measured `dddbfaa`） |
 | semantic tests | measured HEADのVitest JSON report、317 files / 5,119 tests passed、failure 0 |
+| raw run | `docs/PLANNER_GLOBAL_PHASE2C25D2D_RUN.json.local`、SHA-256 `4b93ac9b12cc34f3675b4fa77c19146e0e4d0ac0ae2688fe6a220aff3972c996`（commitしない、再解析でも不変） |
 | run wall time | 2,505.7 s（contexts 1 + Search 10 child） |
 
 追加ファイル: `src/benchmarks/plannerGlobalPhase2C25D2D.ts`（pure helper。D2-a / D2-cのhelperを再利用）、`plannerGlobalPhase2C25D2D.test.ts`、
-`plannerGlobalPhase2C25D2DInterpretation.ts`、`scripts/run-planner-global-phase2c25d2d.mjs`（parentのみ。childはD2-a runnerの既存role）、
+`plannerGlobalPhase2C25D2DInterpretation.ts`、`plannerGlobalPhase2C25D2DFormalValidation.ts`（post-hoc）、`scripts/run-planner-global-phase2c25d2d.mjs`（parentのみ。childはD2-a runnerの既存role）、
 `scripts/analyze-planner-global-phase2c25d2d.mjs`、`docs/PLANNER_GLOBAL_PHASE2C25D2D_RESULT.json`、本書。Browser benchmark codeは追加していない。
