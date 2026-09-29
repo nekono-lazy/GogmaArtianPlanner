@@ -751,6 +751,15 @@ describe('Phase 2-C2.5-D2-e committed formal RESULT', () => {
     expect(d2eResult.environment.heapLimits).toMatchObject({ workerRealmJsHeapSizeLimit: null, workerHeapLimitMeasured: false })
   })
 
+  it('F: was measured cross-origin isolated in a secure context, with the Browser environment parity to D2-b valid', () => {
+    expect(d2eResult.environment).toMatchObject({ crossOriginIsolated: true, isSecureContext: true })
+    expect(d2eResult.browserEnvironmentParity).toMatchObject({ valid: true, checks: { crossOriginIsolated: true, isSecureContext: true }, issues: [],
+      before: { crossOriginIsolated: d2bResult.environment.crossOriginIsolated, isSecureContext: d2bResult.environment.isSecureContext, chrome: d2bResult.environment.chrome } })
+    expect(d2eResult.browserEnvironmentParity.after.every(a => a.crossOriginIsolated === true && a.isSecureContext === true)).toBe(true)
+    expect(d2eResult.provenance.browserEnvironmentParity).toEqual(d2eResult.browserEnvironmentParity)
+    expect(d2eResult.statements.formal.some(s => /same cross-origin isolated Browser environment as D2-b/.test(s))).toBe(true)
+  })
+
   it('equals Node D2-d in every run of every context, the comparison values read from the D2-d RESULT', () => {
     expect(d2eResult.contexts).toHaveLength(workload.length)
     for (const c of d2eResult.contexts) {
