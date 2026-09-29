@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import c25aEvidence from '../../docs/PLANNER_GLOBAL_PHASE2C25A_RESULT.json'
 import d2bResult from '../../docs/PLANNER_GLOBAL_PHASE2C25D2B_RESULT.json'
 import d2dResult from '../../docs/PLANNER_GLOBAL_PHASE2C25D2D_RESULT.json'
+import d2eResult from '../../docs/PLANNER_GLOBAL_PHASE2C25D2E_RESULT.json'
 import { DATABASE_SCHEMA_VERSION } from '../db/AppDatabase'
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/common'
 import { EXPORT_SCHEMA_VERSION } from '../domain/models/exportModel'
@@ -662,6 +663,42 @@ describe('Phase 2-C2.5-D2-e comparison sources', () => {
     expect(() => parsePhase2C25D2BBrowserBeforeResult({ ...d2bResult, formalSeriesValidation: { valid: false } })).toThrow(/formalSeriesValidation/)
     expect(() => parsePhase2C25D2BBrowserBeforeResult({ ...d2bResult, provenance: { ...d2bResult.provenance, formal: false } })).toThrow(/formal/)
     expect(() => parsePhase2C25D2DNodeResult({ ...d2dResult, provenance: { ...d2dResult.provenance, formal: false } })).toThrow(/formal/)
+  })
+})
+
+// ---------------------------------------------------------------- committed formal D2-e RESULT (post hoc)
+
+describe('Phase 2-C2.5-D2-e committed formal RESULT', () => {
+  const node = parsePhase2C25D2DNodeResult(d2dResult)
+  const workload = phase2c25d2eWorkload(parsePhase2C25BEvidence(c25aEvidence), c25aEvidence, node.reference)
+
+  it('is a formal, complete series over the D2-d workload, measured on a clean committed build with the unchanged budgets', () => {
+    expect(d2eResult.provenance).toMatchObject({ formal: true, uncommittedBenchmarkCode: false, calculationCodeChangedSinceMeasuredHead: [] })
+    expect(d2eResult.formalSeriesValidation).toMatchObject({ valid: true, workloadContexts: 5, issues: [] })
+    expect(d2eResult.workload.map(c => [c.orientationId, c.workIndex, c.contextDigest, c.d2dRole])).toEqual(workload.map(c => [c.orientationId, c.workIndex, c.contextDigest, c.d2dRole]))
+    expect(d2eResult.conditions).toMatchObject({ runBudgetMs: PHASE2C25D2E_RUN_BUDGET_MS, driverRunBudgetMs: PHASE2C25D2E_DRIVER_RUN_BUDGET_MS, candidateStopBound: 1 })
+    expect(d2eResult.provenance.d2dResultSha256).toBe(d2eResult.sources.d2dResult.sha256)
+    expect(d2eResult.parity.every(p => p.status === 'ok' && p.matches)).toBe(true)
+    // The Dedicated Worker's own limit stays unknown; the page realm value is a reference only.
+    expect(d2eResult.environment.heapLimits).toMatchObject({ workerRealmJsHeapSizeLimit: null, workerHeapLimitMeasured: false })
+  })
+
+  it('equals Node D2-d in every run of every context, the comparison values read from the D2-d RESULT', () => {
+    expect(d2eResult.contexts).toHaveLength(workload.length)
+    for (const c of d2eResult.contexts) {
+      const n = node.contexts.find(x => x.orientationId === c.orientationId && x.workIndex === c.workIndex)!
+      expect(c.nodeD2DAcceptance.accepted).toBe(true)
+      expect(c.nodeParity.every(p => p.applicable && p.matches === true)).toBe(true)
+      expect(c.progressParity.every(p => p.applicable && p.matches === true)).toBe(true)
+      for (const run of c.browserAfter.runs) {
+        expect(run.status).toBe(n[run.mode as 'minimal' | 'instrumented'].status)
+        expect(run.firstCandidateKeySha256).toBe(n[run.mode as 'minimal' | 'instrumented'].firstCandidateKeySha256)
+        if (run.mode === 'instrumented') expect(run.predictionCounts).toEqual(n.instrumented.predictionCounts)
+      }
+      const final = c.progressParity[0].fields.map(f => [f.field, f.browser])
+      expect(Object.fromEntries(final)).toEqual(n.instrumented.progress)
+    }
+    expect(d2eResult.verdict).toMatchObject({ overallSummary: 'browser_no_failure_all_selected_contexts', semanticFailures: [] })
   })
 })
 
