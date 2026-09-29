@@ -67,7 +67,8 @@ export interface PlannerAlternativeSearchExecutionOptions {
  *
  * Frontier. The context carries the `planner_alternative` frontier policy, so
  * none of the initial Search's other policies bounds what is reachable either:
- * every stream position is published (no same-result retention), every Ideal
+ * every absolute stream position is considered independently and every Ideal
+ * position is published for composition (no same-result retention), every Ideal
  * Bonus x Ideal Skill pair of a Route base is composed lazily, one row at a
  * time (no Cross-only), and every predicted Normal offset of the extent is a
  * full Route base (no #104 reduction). The streams, their prediction memos and

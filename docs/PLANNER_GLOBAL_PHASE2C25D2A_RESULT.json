@@ -1,0 +1,2322 @@
+{
+  "phase": "Issue #154 Phase 2-C2.5-D2-a: Node memory effect of the Ideal-only Planner Alternative publication (post-hoc analysis)",
+  "analyzedAt": "2026-09-29T02:38:31.835Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C25D2A_RUN.json.local",
+      "bytes": 1542996,
+      "sha256": "f71d3bf1c2ebfc2175c6a6e559734ea6462dd32ce0e65c0a353a3656f5635521"
+    },
+    "c25a": {
+      "file": "PLANNER_GLOBAL_PHASE2C25A_RESULT.json",
+      "bytes": 635030,
+      "sha256": "a6e38294a5c9137a7d62a3f57d552af637a67d115e1fd04541713b27823e87dd"
+    },
+    "semanticTests": {
+      "file": "PLANNER_GLOBAL_PHASE2C25D2A_TESTS.json.local",
+      "bytes": 1829351,
+      "sha256": "79ea0e98df5f1c62ce317a97e1bf0e90fd3ec85464213c094666544f5d768759"
+    },
+    "interpretation": {
+      "file": "PLANNER_GLOBAL_PHASE2C25D2A_INTERPRETATION.json.local",
+      "bytes": 6116,
+      "sha256": "ec180f51b862f0ac3cae974732634de0822bef23df94819b5a527472d3489f9e"
+    }
+  },
+  "provenance": {
+    "measuredHead": "0c054a8415244e99743cc2c615bf38c94917729f",
+    "analysisHead": "0c054a8415244e99743cc2c615bf38c94917729f",
+    "codeChangedSinceMeasuredHead": [],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "formal": true,
+    "benchmarkCodeSha256": "a3d028e6df713c970e57a0b37a7f32c0273f6812a3141d8421f0f63d0f14fba7",
+    "uncommittedBenchmarkCode": false,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "c25aEvidenceFileName": "PLANNER_GLOBAL_PHASE2C25A_RESULT.json",
+    "c25aEvidenceSha256": "a6e38294a5c9137a7d62a3f57d552af637a67d115e1fd04541713b27823e87dd",
+    "c25aMeasuredHead": "a479bc27fe0e55cb6d5112b1be8e8eb4d4ac11d4",
+    "measuredAt": "2026-09-29T02:26:56.325Z",
+    "runWallMs": 504748.627
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per Search run, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296
+  },
+  "conditions": {
+    "childHeapLimitMb": 8192,
+    "jit": "jit_default (no V8 flag other than --max-old-space-size)",
+    "concurrency": 1,
+    "freshChildPerSearchRun": true,
+    "modes": [
+      "minimal",
+      "instrumented"
+    ],
+    "nodeYield": "setImmediate",
+    "searchExtent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "candidateStopBound": 1,
+    "snapshotPolicy": {
+      "heartbeatMs": 2000,
+      "heapGrowthBytes": 268435456,
+      "depthStep": 5
+    },
+    "minimalMemoryHeartbeatMs": 2000,
+    "runBudgetMs": 1200000,
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 20000,
+    "memoryValues": "process.memoryUsage() periodic samples are sampled maxima, never a true peak; v8FatalGc is V8's own trace line at an OOM death"
+  },
+  "workloadSelection": {
+    "rule": "OOM representatives: every C2.5-A evidence context with role oom_representative, classification search_only_oom_reproduced and out_of_memory in both C2.5-A modes. Controls: in the C2.5-A evidence contexts order (its selection order, then work index), the first completed_control context ending first_candidate in both modes and the first ending stopped_by_extent_before_candidate in both modes. No Target, Entry or orientation ID is fixed in source.",
+    "oomRepresentatives": [
+      {
+        "role": "oom_representative",
+        "evidenceIndex": 0,
+        "orientationId": "c0-p0",
+        "kind": "same_gogma_counter",
+        "workIndex": 0,
+        "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "contextDigest": "fnv1a32:9c34f78f"
+      },
+      {
+        "role": "oom_representative",
+        "evidenceIndex": 1,
+        "orientationId": "c12-p0",
+        "kind": "same_skill_counter",
+        "workIndex": 0,
+        "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "contextDigest": "fnv1a32:4495d2ca"
+      },
+      {
+        "role": "oom_representative",
+        "evidenceIndex": 2,
+        "orientationId": "c2-p1",
+        "kind": "same_owned_weapon_consumed",
+        "workIndex": 0,
+        "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+        "contextDigest": "fnv1a32:c15b7420"
+      }
+    ],
+    "controls": [
+      {
+        "role": "control_first_candidate",
+        "evidenceIndex": 3,
+        "orientationId": "c8-p1",
+        "kind": "same_gogma_counter",
+        "workIndex": 0,
+        "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+        "contextDigest": "fnv1a32:26200e54"
+      },
+      {
+        "role": "control_stopped_by_extent",
+        "evidenceIndex": 4,
+        "orientationId": "c13-p4",
+        "kind": "same_skill_counter",
+        "workIndex": 0,
+        "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "contextDigest": "fnv1a32:bd84b1d6"
+      }
+    ]
+  },
+  "contextParity": {
+    "contexts": 5,
+    "matching": 5,
+    "rows": [
+      {
+        "orientationId": "c0-p0",
+        "workIndex": 0,
+        "matches": true,
+        "fields": [
+          {
+            "field": "orientationId",
+            "matches": true
+          },
+          {
+            "field": "workIndex",
+            "matches": true
+          },
+          {
+            "field": "targetWeaponId",
+            "matches": true
+          },
+          {
+            "field": "status",
+            "matches": true
+          },
+          {
+            "field": "invalidatedBuildListEntryId",
+            "matches": true
+          },
+          {
+            "field": "invalidatedRouteKey",
+            "matches": true
+          },
+          {
+            "field": "fixedRouteBuildListEntryIds",
+            "matches": true
+          },
+          {
+            "field": "reservation",
+            "matches": true
+          },
+          {
+            "field": "excludedRouteKeys",
+            "matches": true
+          },
+          {
+            "field": "extent",
+            "matches": true
+          },
+          {
+            "field": "originDigest",
+            "matches": true
+          },
+          {
+            "field": "contextDigest",
+            "matches": true
+          }
+        ]
+      },
+      {
+        "orientationId": "c12-p0",
+        "workIndex": 0,
+        "matches": true,
+        "fields": [
+          {
+            "field": "orientationId",
+            "matches": true
+          },
+          {
+            "field": "workIndex",
+            "matches": true
+          },
+          {
+            "field": "targetWeaponId",
+            "matches": true
+          },
+          {
+            "field": "status",
+            "matches": true
+          },
+          {
+            "field": "invalidatedBuildListEntryId",
+            "matches": true
+          },
+          {
+            "field": "invalidatedRouteKey",
+            "matches": true
+          },
+          {
+            "field": "fixedRouteBuildListEntryIds",
+            "matches": true
+          },
+          {
+            "field": "reservation",
+            "matches": true
+          },
+          {
+            "field": "excludedRouteKeys",
+            "matches": true
+          },
+          {
+            "field": "extent",
+            "matches": true
+          },
+          {
+            "field": "originDigest",
+            "matches": true
+          },
+          {
+            "field": "contextDigest",
+            "matches": true
+          }
+        ]
+      },
+      {
+        "orientationId": "c2-p1",
+        "workIndex": 0,
+        "matches": true,
+        "fields": [
+          {
+            "field": "orientationId",
+            "matches": true
+          },
+          {
+            "field": "workIndex",
+            "matches": true
+          },
+          {
+            "field": "targetWeaponId",
+            "matches": true
+          },
+          {
+            "field": "status",
+            "matches": true
+          },
+          {
+            "field": "invalidatedBuildListEntryId",
+            "matches": true
+          },
+          {
+            "field": "invalidatedRouteKey",
+            "matches": true
+          },
+          {
+            "field": "fixedRouteBuildListEntryIds",
+            "matches": true
+          },
+          {
+            "field": "reservation",
+            "matches": true
+          },
+          {
+            "field": "excludedRouteKeys",
+            "matches": true
+          },
+          {
+            "field": "extent",
+            "matches": true
+          },
+          {
+            "field": "originDigest",
+            "matches": true
+          },
+          {
+            "field": "contextDigest",
+            "matches": true
+          }
+        ]
+      },
+      {
+        "orientationId": "c8-p1",
+        "workIndex": 0,
+        "matches": true,
+        "fields": [
+          {
+            "field": "orientationId",
+            "matches": true
+          },
+          {
+            "field": "workIndex",
+            "matches": true
+          },
+          {
+            "field": "targetWeaponId",
+            "matches": true
+          },
+          {
+            "field": "status",
+            "matches": true
+          },
+          {
+            "field": "invalidatedBuildListEntryId",
+            "matches": true
+          },
+          {
+            "field": "invalidatedRouteKey",
+            "matches": true
+          },
+          {
+            "field": "fixedRouteBuildListEntryIds",
+            "matches": true
+          },
+          {
+            "field": "reservation",
+            "matches": true
+          },
+          {
+            "field": "excludedRouteKeys",
+            "matches": true
+          },
+          {
+            "field": "extent",
+            "matches": true
+          },
+          {
+            "field": "originDigest",
+            "matches": true
+          },
+          {
+            "field": "contextDigest",
+            "matches": true
+          }
+        ]
+      },
+      {
+        "orientationId": "c13-p4",
+        "workIndex": 0,
+        "matches": true,
+        "fields": [
+          {
+            "field": "orientationId",
+            "matches": true
+          },
+          {
+            "field": "workIndex",
+            "matches": true
+          },
+          {
+            "field": "targetWeaponId",
+            "matches": true
+          },
+          {
+            "field": "status",
+            "matches": true
+          },
+          {
+            "field": "invalidatedBuildListEntryId",
+            "matches": true
+          },
+          {
+            "field": "invalidatedRouteKey",
+            "matches": true
+          },
+          {
+            "field": "fixedRouteBuildListEntryIds",
+            "matches": true
+          },
+          {
+            "field": "reservation",
+            "matches": true
+          },
+          {
+            "field": "excludedRouteKeys",
+            "matches": true
+          },
+          {
+            "field": "extent",
+            "matches": true
+          },
+          {
+            "field": "originDigest",
+            "matches": true
+          },
+          {
+            "field": "contextDigest",
+            "matches": true
+          }
+        ]
+      }
+    ]
+  },
+  "semanticTests": {
+    "reportHead": "0c054a8415244e99743cc2c615bf38c94917729f",
+    "numTotalTests": 5025,
+    "numPassedTests": 5025,
+    "numFailedTests": 0,
+    "numTotalTestSuites": 1146,
+    "success": true,
+    "keyFiles": [
+      {
+        "file": "src/domain/search/alternative/plannerAlternativeIdealOnlyPublication.test.ts",
+        "status": "passed",
+        "passed": 42,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/alternative/plannerAlternativeIdealPublication.test.ts",
+        "status": "passed",
+        "passed": 18,
+        "failed": 0
+      }
+    ]
+  },
+  "totals": {
+    "contexts": 5,
+    "oomRepresentatives": 3,
+    "controls": 2,
+    "oomRepresentativesLeftOom": 1,
+    "oomRepresentativeOutcomes": {
+      "stopped_by_extent_before_candidate": 1,
+      "out_of_memory": 2
+    },
+    "controlsSemanticParity": true,
+    "modeSemanticParityFailures": 0
+  },
+  "contexts": [
+    {
+      "orientationId": "c0-p0",
+      "workIndex": 0,
+      "role": "oom_representative",
+      "kind": "same_gogma_counter",
+      "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+      "before": {
+        "classification": "search_only_oom_reproduced",
+        "minimalStatus": "out_of_memory",
+        "instrumentedStatus": "out_of_memory"
+      },
+      "after": {
+        "minimal": {
+          "mode": "minimal",
+          "view": {
+            "status": "stopped_by_extent_before_candidate",
+            "searchElapsedMs": 35360.8734,
+            "timeToFirstMs": null,
+            "searchSummary": {
+              "deliveredCandidates": 0,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": true,
+              "stoppedByConsumer": false,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 282678648,
+              "heapTotal": 423931904,
+              "rss": 576466944,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 4497148016,
+              "heapTotal": 4618354688,
+              "rss": 4811898880,
+              "external": 24055838,
+              "arrayBuffers": 212663
+            },
+            "maxRssKiB": 4699132,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 19,
+            "sampledMax": {
+              "heapUsed": 4497148016,
+              "heapTotal": 4618354688,
+              "rss": 4811898880
+            },
+            "last": {
+              "heapUsed": 4497148016,
+              "heapTotal": 4618354688,
+              "rss": 4811898880
+            },
+            "lastAtElapsedMs": 35360.8734
+          },
+          "metrics": null,
+          "gogmaDepthMaxima": null,
+          "lastSnapshotPredictionCounts": null
+        },
+        "instrumented": {
+          "mode": "instrumented",
+          "view": {
+            "status": "stopped_by_extent_before_candidate",
+            "searchElapsedMs": 35290.6133,
+            "timeToFirstMs": null,
+            "searchSummary": {
+              "deliveredCandidates": 0,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": true,
+              "stoppedByConsumer": false,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 233,
+              "keepBonuses": 25474
+            },
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 281684600,
+              "heapTotal": 422883328,
+              "rss": 574464000,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 4472156880,
+              "heapTotal": 4593188864,
+              "rss": 4786561024,
+              "external": 24055838,
+              "arrayBuffers": 342992
+            },
+            "maxRssKiB": 4674380,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 61,
+            "sampledMax": {
+              "heapUsed": 4472156880,
+              "heapTotal": 4593188864,
+              "rss": 4786561024
+            },
+            "last": {
+              "heapUsed": 4472156880,
+              "heapTotal": 4593188864,
+              "rss": 4786561024
+            },
+            "lastAtElapsedMs": 35290.6133
+          },
+          "metrics": {
+            "gogmaMaxDepth": 233,
+            "cumulativeGogmaGenerated": 2360100,
+            "cumulativeGogmaFrontier": 2331740,
+            "maxGogmaGeneratedPerDepth": 18558,
+            "maxGogmaFrontierPerDepth": 18551,
+            "maxGogmaFamilyLayoutsPerDepth": 1205,
+            "gogmaDepthWeightedGeneratedStates": 341877960,
+            "skillMaxDepth": 4,
+            "cumulativeSkillStates": 8,
+            "settledWorkItems": 1410,
+            "predictionCalls": 25716,
+            "resetBonuses": 233,
+            "keepBonuses": 25474,
+            "predictSkills": 5,
+            "sampledMaxHeapUsed": 4497959208,
+            "sampledMaxRss": 4786507776
+          },
+          "gogmaDepthMaxima": {
+            "maxGeneratedStatesPerDepth": 18558,
+            "depthOfMaxGeneratedStates": 218,
+            "reachedDepths": 233
+          },
+          "lastSnapshotPredictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 5,
+            "resetBonuses": 233,
+            "keepBonuses": 25474
+          }
+        }
+      },
+      "rows": [
+        {
+          "orientationId": "c0-p0",
+          "workIndex": 0,
+          "role": "oom_representative",
+          "mode": "minimal",
+          "status": {
+            "before": "out_of_memory",
+            "after": "stopped_by_extent_before_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "before": null,
+            "after": 4497148016
+          },
+          "sampledMaxHeapTotal": {
+            "before": null,
+            "after": 4618354688
+          },
+          "sampledMaxRss": {
+            "before": null,
+            "after": 4811898880
+          },
+          "v8FatalGcBeforeMb": {
+            "before": 8182.4,
+            "after": null
+          },
+          "maxRssKiB": {
+            "before": null,
+            "after": 4699132
+          },
+          "gogmaMaxDepth": {
+            "before": null,
+            "after": null
+          },
+          "skillMaxDepth": {
+            "before": null,
+            "after": null
+          },
+          "cumulativeGogmaGenerated": {
+            "before": null,
+            "after": null
+          },
+          "cumulativeGogmaFrontier": {
+            "before": null,
+            "after": null
+          },
+          "settledWorkItems": {
+            "before": null,
+            "after": null
+          },
+          "predictionCounts": {
+            "before": null,
+            "after": null
+          },
+          "timeToFirstMs": {
+            "before": null,
+            "after": null
+          },
+          "searchElapsedMs": {
+            "before": null,
+            "after": 35360.8734
+          }
+        },
+        {
+          "orientationId": "c0-p0",
+          "workIndex": 0,
+          "role": "oom_representative",
+          "mode": "instrumented",
+          "status": {
+            "before": "out_of_memory",
+            "after": "stopped_by_extent_before_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "before": 8496179736,
+            "after": 4472156880
+          },
+          "sampledMaxHeapTotal": {
+            "before": 8518152192,
+            "after": 4593188864
+          },
+          "sampledMaxRss": {
+            "before": 8814067712,
+            "after": 4786561024
+          },
+          "v8FatalGcBeforeMb": {
+            "before": 8175.4,
+            "after": null
+          },
+          "maxRssKiB": {
+            "before": null,
+            "after": 4674380
+          },
+          "gogmaMaxDepth": {
+            "before": 134,
+            "after": 233
+          },
+          "skillMaxDepth": {
+            "before": 4,
+            "after": 4
+          },
+          "cumulativeGogmaGenerated": {
+            "before": 898590,
+            "after": 2360100
+          },
+          "cumulativeGogmaFrontier": {
+            "before": 872067,
+            "after": 2331740
+          },
+          "settledWorkItems": {
+            "before": 804,
+            "after": 1410
+          },
+          "predictionCounts": {
+            "before": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 149,
+              "keepBonuses": 11072
+            },
+            "after": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 233,
+              "keepBonuses": 25474
+            }
+          },
+          "timeToFirstMs": {
+            "before": null,
+            "after": null
+          },
+          "searchElapsedMs": {
+            "before": null,
+            "after": 35290.6133
+          }
+        }
+      ],
+      "controlParity": null,
+      "modeSemanticParity": true,
+      "oomOutcome": {
+        "leftOom": true,
+        "consistent": true,
+        "reached": "stopped_by_extent_before_candidate"
+      }
+    },
+    {
+      "orientationId": "c12-p0",
+      "workIndex": 0,
+      "role": "oom_representative",
+      "kind": "same_skill_counter",
+      "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+      "before": {
+        "classification": "search_only_oom_reproduced",
+        "minimalStatus": "out_of_memory",
+        "instrumentedStatus": "out_of_memory"
+      },
+      "after": {
+        "minimal": {
+          "mode": "minimal",
+          "view": {
+            "status": "out_of_memory",
+            "searchElapsedMs": null,
+            "timeToFirstMs": null,
+            "searchSummary": null,
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 339843608,
+              "heapTotal": 422981632,
+              "rss": 575328256,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": null,
+            "maxRssKiB": null,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": {
+              "lastGc": {
+                "atMs": 90867,
+                "kind": "Mark-Compact",
+                "beforeMb": 6804.4,
+                "beforeCommittedMb": 8257.8,
+                "afterMb": 6760.7,
+                "afterCommittedMb": 8256.1
+              },
+              "fatal": true
+            }
+          },
+          "memory": {
+            "samples": 38,
+            "sampledMax": {
+              "heapUsed": 7110114184,
+              "heapTotal": 8662794240,
+              "rss": 9029976064
+            },
+            "last": {
+              "heapUsed": 7110114184,
+              "heapTotal": 8662794240,
+              "rss": 9029976064
+            },
+            "lastAtElapsedMs": 85354.033
+          },
+          "metrics": null,
+          "gogmaDepthMaxima": null,
+          "lastSnapshotPredictionCounts": null
+        },
+        "instrumented": {
+          "mode": "instrumented",
+          "view": {
+            "status": "out_of_memory",
+            "searchElapsedMs": null,
+            "timeToFirstMs": null,
+            "searchSummary": null,
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 339513624,
+              "heapTotal": 424271872,
+              "rss": 577863680,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": null,
+            "maxRssKiB": null,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": {
+              "lastGc": {
+                "atMs": 94355,
+                "kind": "Mark-Compact",
+                "beforeMb": 6811.2,
+                "beforeCommittedMb": 8258.3,
+                "afterMb": 6768,
+                "afterCommittedMb": 8256.6
+              },
+              "fatal": true
+            }
+          },
+          "memory": {
+            "samples": 63,
+            "sampledMax": {
+              "heapUsed": 7127028072,
+              "heapTotal": 8650735616,
+              "rss": 9019260928
+            },
+            "last": {
+              "heapUsed": 7127028072,
+              "heapTotal": 8650735616,
+              "rss": 9019260928
+            },
+            "lastAtElapsedMs": 89117.7664
+          },
+          "metrics": {
+            "gogmaMaxDepth": 12,
+            "cumulativeGogmaGenerated": 17403169,
+            "cumulativeGogmaFrontier": 546316,
+            "maxGogmaGeneratedPerDepth": 1964741,
+            "maxGogmaFrontierPerDepth": 57252,
+            "maxGogmaFamilyLayoutsPerDepth": 911,
+            "gogmaDepthWeightedGeneratedStates": 121208927,
+            "skillMaxDepth": 3,
+            "cumulativeSkillStates": 16,
+            "settledWorkItems": 101,
+            "predictionCalls": 8349,
+            "resetBonuses": 125,
+            "keepBonuses": 8216,
+            "predictSkills": 4,
+            "sampledMaxHeapUsed": 7127028072,
+            "sampledMaxRss": 9023123456
+          },
+          "gogmaDepthMaxima": {
+            "maxGeneratedStatesPerDepth": 1964741,
+            "depthOfMaxGeneratedStates": 3,
+            "reachedDepths": 12
+          },
+          "lastSnapshotPredictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 4,
+            "resetBonuses": 125,
+            "keepBonuses": 8216
+          }
+        }
+      },
+      "rows": [
+        {
+          "orientationId": "c12-p0",
+          "workIndex": 0,
+          "role": "oom_representative",
+          "mode": "minimal",
+          "status": {
+            "before": "out_of_memory",
+            "after": "out_of_memory"
+          },
+          "sampledMaxHeapUsed": {
+            "before": null,
+            "after": 7110114184
+          },
+          "sampledMaxHeapTotal": {
+            "before": null,
+            "after": 8662794240
+          },
+          "sampledMaxRss": {
+            "before": null,
+            "after": 9029976064
+          },
+          "v8FatalGcBeforeMb": {
+            "before": 7976.9,
+            "after": 6804.4
+          },
+          "maxRssKiB": {
+            "before": null,
+            "after": null
+          },
+          "gogmaMaxDepth": {
+            "before": null,
+            "after": null
+          },
+          "skillMaxDepth": {
+            "before": null,
+            "after": null
+          },
+          "cumulativeGogmaGenerated": {
+            "before": null,
+            "after": null
+          },
+          "cumulativeGogmaFrontier": {
+            "before": null,
+            "after": null
+          },
+          "settledWorkItems": {
+            "before": null,
+            "after": null
+          },
+          "predictionCounts": {
+            "before": null,
+            "after": null
+          },
+          "timeToFirstMs": {
+            "before": null,
+            "after": null
+          },
+          "searchElapsedMs": {
+            "before": null,
+            "after": null
+          }
+        },
+        {
+          "orientationId": "c12-p0",
+          "workIndex": 0,
+          "role": "oom_representative",
+          "mode": "instrumented",
+          "status": {
+            "before": "out_of_memory",
+            "after": "out_of_memory"
+          },
+          "sampledMaxHeapUsed": {
+            "before": 8020675648,
+            "after": 7127028072
+          },
+          "sampledMaxHeapTotal": {
+            "before": 8377282560,
+            "after": 8650735616
+          },
+          "sampledMaxRss": {
+            "before": 8675450880,
+            "after": 9019260928
+          },
+          "v8FatalGcBeforeMb": {
+            "before": 7978.3,
+            "after": 6811.2
+          },
+          "maxRssKiB": {
+            "before": null,
+            "after": null
+          },
+          "gogmaMaxDepth": {
+            "before": 5,
+            "after": 12
+          },
+          "skillMaxDepth": {
+            "before": 3,
+            "after": 3
+          },
+          "cumulativeGogmaGenerated": {
+            "before": 4274305,
+            "after": 17403169
+          },
+          "cumulativeGogmaFrontier": {
+            "before": 165358,
+            "after": 546316
+          },
+          "settledWorkItems": {
+            "before": 47,
+            "after": 101
+          },
+          "predictionCounts": {
+            "before": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 118,
+              "keepBonuses": 7383
+            },
+            "after": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 125,
+              "keepBonuses": 8216
+            }
+          },
+          "timeToFirstMs": {
+            "before": null,
+            "after": null
+          },
+          "searchElapsedMs": {
+            "before": null,
+            "after": null
+          }
+        }
+      ],
+      "controlParity": null,
+      "modeSemanticParity": null,
+      "oomOutcome": {
+        "leftOom": false,
+        "consistent": true,
+        "reached": "out_of_memory"
+      }
+    },
+    {
+      "orientationId": "c2-p1",
+      "workIndex": 0,
+      "role": "oom_representative",
+      "kind": "same_owned_weapon_consumed",
+      "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+      "before": {
+        "classification": "search_only_oom_reproduced",
+        "minimalStatus": "out_of_memory",
+        "instrumentedStatus": "out_of_memory"
+      },
+      "after": {
+        "minimal": {
+          "mode": "minimal",
+          "view": {
+            "status": "out_of_memory",
+            "searchElapsedMs": null,
+            "timeToFirstMs": null,
+            "searchSummary": null,
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 340463896,
+              "heapTotal": 424009728,
+              "rss": 576761856,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": null,
+            "maxRssKiB": null,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": {
+              "lastGc": {
+                "atMs": 100704,
+                "kind": "Mark-Compact",
+                "beforeMb": 6891,
+                "beforeCommittedMb": 8317,
+                "afterMb": 6827.1,
+                "afterCommittedMb": 8307.5
+              },
+              "fatal": true
+            }
+          },
+          "memory": {
+            "samples": 41,
+            "sampledMax": {
+              "heapUsed": 7079988472,
+              "heapTotal": 8658477056,
+              "rss": 9020502016
+            },
+            "last": {
+              "heapUsed": 7079988472,
+              "heapTotal": 8657457152,
+              "rss": 9020502016
+            },
+            "lastAtElapsedMs": 91330.30600000001
+          },
+          "metrics": null,
+          "gogmaDepthMaxima": null,
+          "lastSnapshotPredictionCounts": null
+        },
+        "instrumented": {
+          "mode": "instrumented",
+          "view": {
+            "status": "out_of_memory",
+            "searchElapsedMs": null,
+            "timeToFirstMs": null,
+            "searchSummary": null,
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 282890800,
+              "heapTotal": 424136704,
+              "rss": 576815104,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": null,
+            "maxRssKiB": null,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": {
+              "lastGc": {
+                "atMs": 101679,
+                "kind": "Mark-Compact",
+                "beforeMb": 6824.3,
+                "beforeCommittedMb": 8257.3,
+                "afterMb": 6743.6,
+                "afterCommittedMb": 8249
+              },
+              "fatal": true
+            }
+          },
+          "memory": {
+            "samples": 67,
+            "sampledMax": {
+              "heapUsed": 7108533328,
+              "heapTotal": 8652185600,
+              "rss": 9050374144
+            },
+            "last": {
+              "heapUsed": 7108533328,
+              "heapTotal": 8652185600,
+              "rss": 9050374144
+            },
+            "lastAtElapsedMs": 97886.2528
+          },
+          "metrics": {
+            "gogmaMaxDepth": 18,
+            "cumulativeGogmaGenerated": 17267064,
+            "cumulativeGogmaFrontier": 652568,
+            "maxGogmaGeneratedPerDepth": 1256560,
+            "maxGogmaFrontierPerDepth": 46304,
+            "maxGogmaFamilyLayoutsPerDepth": 848,
+            "gogmaDepthWeightedGeneratedStates": 163850914,
+            "skillMaxDepth": 4,
+            "cumulativeSkillStates": 8,
+            "settledWorkItems": 140,
+            "predictionCalls": 7223,
+            "resetBonuses": 115,
+            "keepBonuses": 7099,
+            "predictSkills": 5,
+            "sampledMaxHeapUsed": 7108533328,
+            "sampledMaxRss": 9052643328
+          },
+          "gogmaDepthMaxima": {
+            "maxGeneratedStatesPerDepth": 1256560,
+            "depthOfMaxGeneratedStates": 3,
+            "reachedDepths": 18
+          },
+          "lastSnapshotPredictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 5,
+            "resetBonuses": 115,
+            "keepBonuses": 7099
+          }
+        }
+      },
+      "rows": [
+        {
+          "orientationId": "c2-p1",
+          "workIndex": 0,
+          "role": "oom_representative",
+          "mode": "minimal",
+          "status": {
+            "before": "out_of_memory",
+            "after": "out_of_memory"
+          },
+          "sampledMaxHeapUsed": {
+            "before": null,
+            "after": 7079988472
+          },
+          "sampledMaxHeapTotal": {
+            "before": null,
+            "after": 8658477056
+          },
+          "sampledMaxRss": {
+            "before": null,
+            "after": 9020502016
+          },
+          "v8FatalGcBeforeMb": {
+            "before": 8009.7,
+            "after": 6891
+          },
+          "maxRssKiB": {
+            "before": null,
+            "after": null
+          },
+          "gogmaMaxDepth": {
+            "before": null,
+            "after": null
+          },
+          "skillMaxDepth": {
+            "before": null,
+            "after": null
+          },
+          "cumulativeGogmaGenerated": {
+            "before": null,
+            "after": null
+          },
+          "cumulativeGogmaFrontier": {
+            "before": null,
+            "after": null
+          },
+          "settledWorkItems": {
+            "before": null,
+            "after": null
+          },
+          "predictionCounts": {
+            "before": null,
+            "after": null
+          },
+          "timeToFirstMs": {
+            "before": null,
+            "after": null
+          },
+          "searchElapsedMs": {
+            "before": null,
+            "after": null
+          }
+        },
+        {
+          "orientationId": "c2-p1",
+          "workIndex": 0,
+          "role": "oom_representative",
+          "mode": "instrumented",
+          "status": {
+            "before": "out_of_memory",
+            "after": "out_of_memory"
+          },
+          "sampledMaxHeapUsed": {
+            "before": 8322896480,
+            "after": 7108533328
+          },
+          "sampledMaxHeapTotal": {
+            "before": 8628289536,
+            "after": 8652185600
+          },
+          "sampledMaxRss": {
+            "before": 8922984448,
+            "after": 9050374144
+          },
+          "v8FatalGcBeforeMb": {
+            "before": 8009.8,
+            "after": 6824.3
+          },
+          "maxRssKiB": {
+            "before": null,
+            "after": null
+          },
+          "gogmaMaxDepth": {
+            "before": 7,
+            "after": 18
+          },
+          "skillMaxDepth": {
+            "before": 4,
+            "after": 4
+          },
+          "cumulativeGogmaGenerated": {
+            "before": 4306320,
+            "after": 17267064
+          },
+          "cumulativeGogmaFrontier": {
+            "before": 175225,
+            "after": 652568
+          },
+          "settledWorkItems": {
+            "before": 55,
+            "after": 140
+          },
+          "predictionCounts": {
+            "before": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 104,
+              "keepBonuses": 5873
+            },
+            "after": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 115,
+              "keepBonuses": 7099
+            }
+          },
+          "timeToFirstMs": {
+            "before": null,
+            "after": null
+          },
+          "searchElapsedMs": {
+            "before": null,
+            "after": null
+          }
+        }
+      ],
+      "controlParity": null,
+      "modeSemanticParity": null,
+      "oomOutcome": {
+        "leftOom": false,
+        "consistent": true,
+        "reached": "out_of_memory"
+      }
+    },
+    {
+      "orientationId": "c8-p1",
+      "workIndex": 0,
+      "role": "control_first_candidate",
+      "kind": "same_gogma_counter",
+      "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+      "before": {
+        "classification": "no_oom",
+        "minimalStatus": "first_candidate",
+        "instrumentedStatus": "first_candidate"
+      },
+      "after": {
+        "minimal": {
+          "mode": "minimal",
+          "view": {
+            "status": "first_candidate",
+            "searchElapsedMs": 4576.9409,
+            "timeToFirstMs": 4576.920900000001,
+            "searchSummary": {
+              "deliveredCandidates": 1,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": false,
+              "stoppedByConsumer": true,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": "39d2d78787b6a91f61e6bd858e34ca4ede8aebe104e36f4de6f5be56f8e2fd5e",
+            "firstCandidate": {
+              "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+              "routeKind": "normal_artian_to_gogma",
+              "sourceKind": "new_normal",
+              "sourceOwnedWeaponId": null,
+              "estimatedOperationCount": 101,
+              "estimatedAdvances": {
+                "normal": 3,
+                "gogma": 116,
+                "skill": 1
+              },
+              "ownOperationCount": 101,
+              "operationTypes": {
+                "create_normal_artian": 3,
+                "convert_normal_to_gogma": 1,
+                "keep_bonuses": 97
+              },
+              "normalCounterId": "weapon.heavy_bowgun:8",
+              "normalProductionTargetPosition": 6,
+              "blindNormalCreation": false,
+              "conversionSkillPosition": 341,
+              "normal": {
+                "first": 4,
+                "last": 6,
+                "operations": 3,
+                "positions": [
+                  [
+                    4,
+                    6
+                  ]
+                ],
+                "required": [
+                  6
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": false
+              },
+              "gogma": {
+                "first": 74,
+                "last": 170,
+                "operations": 97,
+                "positions": [
+                  [
+                    74,
+                    170
+                  ]
+                ],
+                "required": [
+                  170
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": true
+              },
+              "skill": {
+                "first": 341,
+                "last": 341,
+                "operations": 1,
+                "positions": [
+                  [
+                    341,
+                    341
+                  ]
+                ],
+                "required": [
+                  341
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": false
+              },
+              "gogmaTypeRuns": [
+                [
+                  74,
+                  170,
+                  "keep_bonuses"
+                ]
+              ],
+              "heldRoute": false,
+              "finalBonuses": [
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.attack",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.affinity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.attack",
+                  "bonusRankId": "bonus_rank.ex"
+                }
+              ],
+              "restorationBonusScope": "gogma_artian",
+              "seriesSkillId": "series_skill.verified_02",
+              "groupSkillId": "group_skill.verified_11"
+            },
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 340374392,
+              "heapTotal": 424271872,
+              "rss": 576577536,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 551538656,
+              "heapTotal": 678813696,
+              "rss": 793710592,
+              "external": 24055838,
+              "arrayBuffers": 212663
+            },
+            "maxRssKiB": 775440,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 4,
+            "sampledMax": {
+              "heapUsed": 551538656,
+              "heapTotal": 678813696,
+              "rss": 793710592
+            },
+            "last": {
+              "heapUsed": 551538656,
+              "heapTotal": 678813696,
+              "rss": 793710592
+            },
+            "lastAtElapsedMs": 4576.9409
+          },
+          "metrics": null,
+          "gogmaDepthMaxima": null,
+          "lastSnapshotPredictionCounts": null
+        },
+        "instrumented": {
+          "mode": "instrumented",
+          "view": {
+            "status": "first_candidate",
+            "searchElapsedMs": 4758.824,
+            "timeToFirstMs": 4758.6121,
+            "searchSummary": {
+              "deliveredCandidates": 1,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": false,
+              "stoppedByConsumer": true,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": "39d2d78787b6a91f61e6bd858e34ca4ede8aebe104e36f4de6f5be56f8e2fd5e",
+            "firstCandidate": {
+              "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+              "routeKind": "normal_artian_to_gogma",
+              "sourceKind": "new_normal",
+              "sourceOwnedWeaponId": null,
+              "estimatedOperationCount": 101,
+              "estimatedAdvances": {
+                "normal": 3,
+                "gogma": 116,
+                "skill": 1
+              },
+              "ownOperationCount": 101,
+              "operationTypes": {
+                "create_normal_artian": 3,
+                "convert_normal_to_gogma": 1,
+                "keep_bonuses": 97
+              },
+              "normalCounterId": "weapon.heavy_bowgun:8",
+              "normalProductionTargetPosition": 6,
+              "blindNormalCreation": false,
+              "conversionSkillPosition": 341,
+              "normal": {
+                "first": 4,
+                "last": 6,
+                "operations": 3,
+                "positions": [
+                  [
+                    4,
+                    6
+                  ]
+                ],
+                "required": [
+                  6
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": false
+              },
+              "gogma": {
+                "first": 74,
+                "last": 170,
+                "operations": 97,
+                "positions": [
+                  [
+                    74,
+                    170
+                  ]
+                ],
+                "required": [
+                  170
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": true
+              },
+              "skill": {
+                "first": 341,
+                "last": 341,
+                "operations": 1,
+                "positions": [
+                  [
+                    341,
+                    341
+                  ]
+                ],
+                "required": [
+                  341
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": false
+              },
+              "gogmaTypeRuns": [
+                [
+                  74,
+                  170,
+                  "keep_bonuses"
+                ]
+              ],
+              "heldRoute": false,
+              "finalBonuses": [
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.attack",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.affinity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.attack",
+                  "bonusRankId": "bonus_rank.ex"
+                }
+              ],
+              "restorationBonusScope": "gogma_artian",
+              "seriesSkillId": "series_skill.verified_02",
+              "groupSkillId": "group_skill.verified_11"
+            },
+            "predictionCounts": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 119,
+              "keepBonuses": 6079
+            },
+            "predictionCountsAtFirstCandidate": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 119,
+              "keepBonuses": 6079
+            },
+            "preSearchMemory": {
+              "heapUsed": 338882528,
+              "heapTotal": 422981632,
+              "rss": 576012288,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 597223592,
+              "heapTotal": 687464448,
+              "rss": 795877376,
+              "external": 24055838,
+              "arrayBuffers": 325913
+            },
+            "maxRssKiB": 778696,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 26,
+            "sampledMax": {
+              "heapUsed": 597223592,
+              "heapTotal": 687464448,
+              "rss": 795877376
+            },
+            "last": {
+              "heapUsed": 597223592,
+              "heapTotal": 687464448,
+              "rss": 795877376
+            },
+            "lastAtElapsedMs": 4758.824
+          },
+          "metrics": {
+            "gogmaMaxDepth": 101,
+            "cumulativeGogmaGenerated": 493595,
+            "cumulativeGogmaFrontier": 450388,
+            "maxGogmaGeneratedPerDepth": 7410,
+            "maxGogmaFrontierPerDepth": 7374,
+            "maxGogmaFamilyLayoutsPerDepth": 417,
+            "gogmaDepthWeightedGeneratedStates": 28066721,
+            "skillMaxDepth": 0,
+            "cumulativeSkillStates": 0,
+            "settledWorkItems": 500,
+            "predictionCalls": 6207,
+            "resetBonuses": 119,
+            "keepBonuses": 6079,
+            "predictSkills": 5,
+            "sampledMaxHeapUsed": 603694472,
+            "sampledMaxRss": 795860992
+          },
+          "gogmaDepthMaxima": {
+            "maxGeneratedStatesPerDepth": 7410,
+            "depthOfMaxGeneratedStates": 96,
+            "reachedDepths": 101
+          },
+          "lastSnapshotPredictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 5,
+            "resetBonuses": 119,
+            "keepBonuses": 6079
+          }
+        }
+      },
+      "rows": [
+        {
+          "orientationId": "c8-p1",
+          "workIndex": 0,
+          "role": "control_first_candidate",
+          "mode": "minimal",
+          "status": {
+            "before": "first_candidate",
+            "after": "first_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "before": null,
+            "after": 551538656
+          },
+          "sampledMaxHeapTotal": {
+            "before": null,
+            "after": 678813696
+          },
+          "sampledMaxRss": {
+            "before": null,
+            "after": 793710592
+          },
+          "v8FatalGcBeforeMb": {
+            "before": null,
+            "after": null
+          },
+          "maxRssKiB": {
+            "before": 3814940,
+            "after": 775440
+          },
+          "gogmaMaxDepth": {
+            "before": null,
+            "after": null
+          },
+          "skillMaxDepth": {
+            "before": null,
+            "after": null
+          },
+          "cumulativeGogmaGenerated": {
+            "before": null,
+            "after": null
+          },
+          "cumulativeGogmaFrontier": {
+            "before": null,
+            "after": null
+          },
+          "settledWorkItems": {
+            "before": null,
+            "after": null
+          },
+          "predictionCounts": {
+            "before": null,
+            "after": null
+          },
+          "timeToFirstMs": {
+            "before": 10505.8868,
+            "after": 4576.920900000001
+          },
+          "searchElapsedMs": {
+            "before": 10505.903999999999,
+            "after": 4576.9409
+          }
+        },
+        {
+          "orientationId": "c8-p1",
+          "workIndex": 0,
+          "role": "control_first_candidate",
+          "mode": "instrumented",
+          "status": {
+            "before": "first_candidate",
+            "after": "first_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "before": 3668613616,
+            "after": 597223592
+          },
+          "sampledMaxHeapTotal": {
+            "before": 3745767424,
+            "after": 687464448
+          },
+          "sampledMaxRss": {
+            "before": 3920191488,
+            "after": 795877376
+          },
+          "v8FatalGcBeforeMb": {
+            "before": null,
+            "after": null
+          },
+          "maxRssKiB": {
+            "before": 3828380,
+            "after": 778696
+          },
+          "gogmaMaxDepth": {
+            "before": 101,
+            "after": 101
+          },
+          "skillMaxDepth": {
+            "before": 0,
+            "after": 0
+          },
+          "cumulativeGogmaGenerated": {
+            "before": 493595,
+            "after": 493595
+          },
+          "cumulativeGogmaFrontier": {
+            "before": 450388,
+            "after": 450388
+          },
+          "settledWorkItems": {
+            "before": 500,
+            "after": 500
+          },
+          "predictionCounts": {
+            "before": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 119,
+              "keepBonuses": 6079
+            },
+            "after": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 119,
+              "keepBonuses": 6079
+            }
+          },
+          "timeToFirstMs": {
+            "before": 10457.8344,
+            "after": 4758.6121
+          },
+          "searchElapsedMs": {
+            "before": 10460.934799999999,
+            "after": 4758.824
+          }
+        }
+      ],
+      "controlParity": [
+        {
+          "orientationId": "c8-p1",
+          "workIndex": 0,
+          "mode": "minimal",
+          "statusMatches": true,
+          "searchSummaryMatches": true,
+          "firstCandidateKeyMatches": true,
+          "predictionCountsMatch": null,
+          "extentAndExhaustionMatch": true,
+          "matches": true
+        },
+        {
+          "orientationId": "c8-p1",
+          "workIndex": 0,
+          "mode": "instrumented",
+          "statusMatches": true,
+          "searchSummaryMatches": true,
+          "firstCandidateKeyMatches": true,
+          "predictionCountsMatch": true,
+          "extentAndExhaustionMatch": true,
+          "matches": true
+        }
+      ],
+      "modeSemanticParity": true,
+      "oomOutcome": null
+    },
+    {
+      "orientationId": "c13-p4",
+      "workIndex": 0,
+      "role": "control_stopped_by_extent",
+      "kind": "same_skill_counter",
+      "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+      "before": {
+        "classification": "no_oom",
+        "minimalStatus": "stopped_by_extent_before_candidate",
+        "instrumentedStatus": "stopped_by_extent_before_candidate"
+      },
+      "after": {
+        "minimal": {
+          "mode": "minimal",
+          "view": {
+            "status": "stopped_by_extent_before_candidate",
+            "searchElapsedMs": 2241.2576000000004,
+            "timeToFirstMs": null,
+            "searchSummary": {
+              "deliveredCandidates": 0,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": true,
+              "stoppedByConsumer": false,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 300901592,
+              "heapTotal": 424136704,
+              "rss": 576913408,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 376324040,
+              "heapTotal": 478314496,
+              "rss": 579125248,
+              "external": 24055838,
+              "arrayBuffers": 212663
+            },
+            "maxRssKiB": 622868,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 3,
+            "sampledMax": {
+              "heapUsed": 376324040,
+              "heapTotal": 478314496,
+              "rss": 579125248
+            },
+            "last": {
+              "heapUsed": 376324040,
+              "heapTotal": 478314496,
+              "rss": 579125248
+            },
+            "lastAtElapsedMs": 2241.2576000000004
+          },
+          "metrics": null,
+          "gogmaDepthMaxima": null,
+          "lastSnapshotPredictionCounts": null
+        },
+        "instrumented": {
+          "mode": "instrumented",
+          "view": {
+            "status": "stopped_by_extent_before_candidate",
+            "searchElapsedMs": 2243.9284999999995,
+            "timeToFirstMs": null,
+            "searchSummary": {
+              "deliveredCandidates": 0,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": true,
+              "stoppedByConsumer": false,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 234,
+              "keepBonuses": 25874
+            },
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 303990664,
+              "heapTotal": 426999808,
+              "rss": 579358720,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 347031872,
+              "heapTotal": 486440960,
+              "rss": 594071552,
+              "external": 24055838,
+              "arrayBuffers": 339266
+            },
+            "maxRssKiB": 638252,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 51,
+            "sampledMax": {
+              "heapUsed": 404368512,
+              "heapTotal": 499494912,
+              "rss": 653271040
+            },
+            "last": {
+              "heapUsed": 347031872,
+              "heapTotal": 486440960,
+              "rss": 594071552
+            },
+            "lastAtElapsedMs": 2243.9284999999995
+          },
+          "metrics": {
+            "gogmaMaxDepth": 234,
+            "cumulativeGogmaGenerated": 125860,
+            "cumulativeGogmaFrontier": 125690,
+            "maxGogmaGeneratedPerDepth": 1005,
+            "maxGogmaFrontierPerDepth": 1005,
+            "maxGogmaFamilyLayoutsPerDepth": 1005,
+            "gogmaDepthWeightedGeneratedStates": 19321470,
+            "skillMaxDepth": 3,
+            "cumulativeSkillStates": 16,
+            "settledWorkItems": 1184,
+            "predictionCalls": 26116,
+            "resetBonuses": 234,
+            "keepBonuses": 25874,
+            "predictSkills": 4,
+            "sampledMaxHeapUsed": 413249616,
+            "sampledMaxRss": 653570048
+          },
+          "gogmaDepthMaxima": {
+            "maxGeneratedStatesPerDepth": 1005,
+            "depthOfMaxGeneratedStates": 233,
+            "reachedDepths": 234
+          },
+          "lastSnapshotPredictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 4,
+            "resetBonuses": 234,
+            "keepBonuses": 25874
+          }
+        }
+      },
+      "rows": [
+        {
+          "orientationId": "c13-p4",
+          "workIndex": 0,
+          "role": "control_stopped_by_extent",
+          "mode": "minimal",
+          "status": {
+            "before": "stopped_by_extent_before_candidate",
+            "after": "stopped_by_extent_before_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "before": null,
+            "after": 376324040
+          },
+          "sampledMaxHeapTotal": {
+            "before": null,
+            "after": 478314496
+          },
+          "sampledMaxRss": {
+            "before": null,
+            "after": 579125248
+          },
+          "v8FatalGcBeforeMb": {
+            "before": null,
+            "after": null
+          },
+          "maxRssKiB": {
+            "before": 2439412,
+            "after": 622868
+          },
+          "gogmaMaxDepth": {
+            "before": null,
+            "after": null
+          },
+          "skillMaxDepth": {
+            "before": null,
+            "after": null
+          },
+          "cumulativeGogmaGenerated": {
+            "before": null,
+            "after": null
+          },
+          "cumulativeGogmaFrontier": {
+            "before": null,
+            "after": null
+          },
+          "settledWorkItems": {
+            "before": null,
+            "after": null
+          },
+          "predictionCounts": {
+            "before": null,
+            "after": null
+          },
+          "timeToFirstMs": {
+            "before": null,
+            "after": null
+          },
+          "searchElapsedMs": {
+            "before": 4553.3877,
+            "after": 2241.2576000000004
+          }
+        },
+        {
+          "orientationId": "c13-p4",
+          "workIndex": 0,
+          "role": "control_stopped_by_extent",
+          "mode": "instrumented",
+          "status": {
+            "before": "stopped_by_extent_before_candidate",
+            "after": "stopped_by_extent_before_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "before": 2264410864,
+            "after": 404368512
+          },
+          "sampledMaxHeapTotal": {
+            "before": 2353889280,
+            "after": 499494912
+          },
+          "sampledMaxRss": {
+            "before": 2494197760,
+            "after": 653271040
+          },
+          "v8FatalGcBeforeMb": {
+            "before": null,
+            "after": null
+          },
+          "maxRssKiB": {
+            "before": 2435740,
+            "after": 638252
+          },
+          "gogmaMaxDepth": {
+            "before": 234,
+            "after": 234
+          },
+          "skillMaxDepth": {
+            "before": 3,
+            "after": 3
+          },
+          "cumulativeGogmaGenerated": {
+            "before": 125860,
+            "after": 125860
+          },
+          "cumulativeGogmaFrontier": {
+            "before": 125690,
+            "after": 125690
+          },
+          "settledWorkItems": {
+            "before": 1184,
+            "after": 1184
+          },
+          "predictionCounts": {
+            "before": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 234,
+              "keepBonuses": 25874
+            },
+            "after": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 234,
+              "keepBonuses": 25874
+            }
+          },
+          "timeToFirstMs": {
+            "before": null,
+            "after": null
+          },
+          "searchElapsedMs": {
+            "before": 4617.2425,
+            "after": 2243.9284999999995
+          }
+        }
+      ],
+      "controlParity": [
+        {
+          "orientationId": "c13-p4",
+          "workIndex": 0,
+          "mode": "minimal",
+          "statusMatches": true,
+          "searchSummaryMatches": true,
+          "firstCandidateKeyMatches": true,
+          "predictionCountsMatch": null,
+          "extentAndExhaustionMatch": true,
+          "matches": true
+        },
+        {
+          "orientationId": "c13-p4",
+          "workIndex": 0,
+          "mode": "instrumented",
+          "statusMatches": true,
+          "searchSummaryMatches": true,
+          "firstCandidateKeyMatches": true,
+          "predictionCountsMatch": true,
+          "extentAndExhaustionMatch": true,
+          "matches": true
+        }
+      ],
+      "modeSemanticParity": true,
+      "oomOutcome": null
+    }
+  ],
+  "processes": [
+    {
+      "id": "contexts",
+      "role": "contexts",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 15127.681,
+      "startedAt": "2026-09-29T02:26:41.173Z"
+    },
+    {
+      "id": "search-c0-p0-w0-minimal",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 38003.3447,
+      "startedAt": "2026-09-29T02:26:56.326Z"
+    },
+    {
+      "id": "search-c0-p0-w0-instrumented",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 37912.935000000005,
+      "startedAt": "2026-09-29T02:27:34.339Z"
+    },
+    {
+      "id": "search-c12-p0-w0-minimal",
+      "role": "search",
+      "outcome": "out_of_memory",
+      "exitCode": 134,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 91382.56999999999,
+      "startedAt": "2026-09-29T02:28:12.253Z"
+    },
+    {
+      "id": "search-c12-p0-w0-instrumented",
+      "role": "search",
+      "outcome": "out_of_memory",
+      "exitCode": 134,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 94843.33759999997,
+      "startedAt": "2026-09-29T02:29:43.636Z"
+    },
+    {
+      "id": "search-c2-p1-w0-minimal",
+      "role": "search",
+      "outcome": "out_of_memory",
+      "exitCode": 134,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 101195.44870000001,
+      "startedAt": "2026-09-29T02:31:18.481Z"
+    },
+    {
+      "id": "search-c2-p1-w0-instrumented",
+      "role": "search",
+      "outcome": "out_of_memory",
+      "exitCode": 134,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 102167.17560000002,
+      "startedAt": "2026-09-29T02:32:59.677Z"
+    },
+    {
+      "id": "search-c8-p1-w0-minimal",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 7012.868800000055,
+      "startedAt": "2026-09-29T02:34:41.845Z"
+    },
+    {
+      "id": "search-c8-p1-w0-instrumented",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 7226.779600000009,
+      "startedAt": "2026-09-29T02:34:48.858Z"
+    },
+    {
+      "id": "search-c13-p4-w0-minimal",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 4685.811799999967,
+      "startedAt": "2026-09-29T02:34:56.086Z"
+    },
+    {
+      "id": "search-c13-p4-w0-instrumented",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "wallMs": 4689.962899999984,
+      "startedAt": "2026-09-29T02:35:00.772Z"
+    }
+  ],
+  "formalConclusions": [
+    "Search semantics: both completed controls (c8-p1#0 first_candidate, c13-p4#0 stopped_by_extent_before_candidate) reproduce the C2.5-A status, Search summary, first Candidate key SHA-256, extent / exhausted flags and, in the instrumented mode, the exact prediction counts. Minimal and instrumented agree on every context that ended normally.",
+    "Outcome B (partial): of the three C2.5-A Search-only OOM representatives, one left the out-of-memory ending in both modes. c0-p0#0 (deep type) now ends stopped_by_extent_before_candidate (Gogma max depth 233 of the 235 extent, no Candidate), sampled max heapUsed 4.47 GB instrumented / 4.50 GB minimal. c12-p0#0 and c2-p1#0 (shallow type) are still out_of_memory in both modes.",
+    "c0-p0#0 reaching the extent is not 'memory issue solved': it delivers no Candidate within the Production default extent, and its Search still used ~4.5 GB of sampled heap.",
+    "The retained memory per generated Gogma state dropped: descriptive heapUsed delta per cumulative generated state (last snapshot minus pre-Search) ~9.1 kB -> ~1.8 kB (c0-p0), ~1.8 kB -> ~0.39 kB (c12-p0), ~1.9 kB -> ~0.40 kB (c2-p1). This is a correlation-level descriptive ratio, not an allocation attribution.",
+    "The shallow OOM contexts progress about four times further before dying: cumulative generated Gogma states 4.27 M -> 17.40 M (c12-p0) and 4.31 M -> 17.27 M (c2-p1), Gogma max depth 5 -> 12 and 7 -> 18, wall time to the OOM 76 s -> 91 s and 67 s -> 101 s (minimal).",
+    "Completed controls use far less memory and time: sampled max heapUsed 3.67 GB -> 0.60 GB (c8-p1 instrumented), 2.26 GB -> 0.40 GB (c13-p4 instrumented); maxRSS 3.81 GB -> 0.78 GB and 2.44 GB -> 0.62 GB (minimal); time to the first Candidate 10.5 s -> 4.6 s (c8-p1 minimal)."
+  ],
+  "notYetClaimable": [
+    "That the Planner Alternative kernel no longer OOMs for this Export: only the Search-only first-Candidate run of 5 contexts was measured, and two representatives still OOM.",
+    "Any Browser (Chrome Dedicated Worker) effect: D2-b.",
+    "A true peak heap: all process.memoryUsage() values are sampled maxima; OOM before values are the C2.5-A last snapshot.",
+    "Which remaining structure holds the heap of the shallow OOMs after D2-a: no heap snapshot or profile was taken in D2-a; the remaining-structure list is carried over from C2.5-C / D1 and not re-measured.",
+    "That c0-p0#0 would deliver a Candidate with a wider extent, or that a Candidate exists at all for it."
+  ],
+  "optimizationAttribution": {
+    "directlyRemovedForNonIdealPositions": [
+      "RouteBonusSolution / RouteSkillSolution objects",
+      "Route operation arrays (bonusAmendmentOperations(): steps.slice + one RouteOperation per own amendment; resetSkillsOperations())",
+      "amendmentResults arrays (bonusAmendmentResults() / skillAmendmentResults())",
+      "evaluated objects and their semantic key strings (bonusKey, retentionKey, operationTypeKey, semanticKey), materialQuantity",
+      "sort inputs and the {...evaluated, index} copies",
+      "channel.retained entries (Planner Alternative channel.retained now holds Ideal positions only)"
+    ],
+    "remaining": [
+      "held-aware stream raw states in bonusStream set.depths (every generated state of every depth, kept for the stream's lifetime)",
+      "raw steps[] arrays per raw solution (length = depth, pointers to shared step objects)",
+      "the result node chain (BonusAmendmentResultNode) per state",
+      "the per-depth generated array during generation (the single-depth burst: 1.96 M states at depth 3 in c12-p0, 1.26 M in c2-p1)",
+      "the frontier reduction working set",
+      "prediction memos (Reset per position, Keep per family layout and position)",
+      "temporary allocations of satisfiesIdealBonuses() for every raw solution"
+    ]
+  },
+  "limitations": [
+    "Node (Vite SSR loader) fresh child processes, 8192 MB heap, jit_default, one machine; not a Browser Worker.",
+    "Workload: 3 OOM representatives and 2 completed controls selected from the C2.5-A evidence by the C2.5-C rule; not every orientation or Target of the Export.",
+    "C2.5-A minimal mode sampled no memory, so minimal before values exist only as V8's fatal GC line (OOM) or maxRSS / post-Search memory (completed).",
+    "The minimal mode of this Phase samples memory every 2 s outside the Search plus the pre / post-Search samples; short runs have few samples.",
+    "OOM after values are the last sample received before the death and V8's fatal GC line; the committed heap reached the limit (~8.26 GB committed) while V8 reported ~6.8 GB used at the fatal Mark-Compact.",
+    "One run per (context, mode); no repetition statistics."
+  ],
+  "nextPhaseRecommendation": {
+    "proceedToD2b": "Yes: Search semantics are unchanged and the Node effect is substantial (one representative left OOM, the others progress ~4x further, controls use ~1/6 of the heap). D2-b should re-measure the same contexts in a Chrome Dedicated Worker, expecting the shallow representatives to remain out of memory there.",
+    "nextMemoryCandidates": [
+      "Shallow type (c12-p0, c2-p1 still OOM): the held-aware stream's own raw state storage. set.depths keeps every generated raw state (bonuses, steps[], result node) for the stream's lifetime although each depth is read once per channel; and a single depth generates up to ~2 M states before the frontier reduction. Candidates: release a depth from set.depths once every subscribing channel has read it, derive steps from the result node chain on demand, and bound the per-depth generation working set. These are stream-side changes and need their own semantic audit (late subscribers / replay) like D1.",
+      "Deep type (c0-p0 left OOM but still ~4.5 GB): the same set.depths / steps[] retention grows with cumulative states x depth; the same stream-side candidate applies.",
+      "Before choosing, a C2.5-C style heap snapshot of the post-D2-a shallow OOM would confirm which of these holds the remaining heap."
+    ]
+  }
+}

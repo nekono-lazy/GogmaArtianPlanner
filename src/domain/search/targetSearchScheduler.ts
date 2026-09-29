@@ -4,6 +4,7 @@ import type {
   RouteOperation,
   SkillAmendmentResult,
 } from '../models/publicTypes'
+import { evaluateSkillCondition, satisfiesIdealBonuses } from '../target'
 import {
   bonusAmendmentOperations, bonusAmendmentResults, bonusStreamBaseKey,
   type BonusStreamBase, type UnsupportedAmendmentPrediction,
@@ -113,7 +114,8 @@ interface Channel<T> {
   /**
    * Every solution already delivered, replayed once to a later subscriber:
    * the initial-Search retained delta, or, under the Planner Alternative
-   * policy, every evaluated solution of each depth.
+   * policy, every Ideal absolute position published so far (one entry per
+   * position, never collapsed per Ideal result).
    */
   retained: T[]
   subscribers: Array<(value: T) => void>
@@ -137,7 +139,9 @@ interface BonusChannel extends Channel<EvaluatedBonusSolution> {
  * `RouteSearchContext.frontierPolicy` selects the consumer policy. The ordinary
  * `initial_candidate_search` retains the first position of each stream result
  * and composes the Cross axes only. `planner_alternative` (SEARCH_SPEC 5.6.8)
- * publishes every stream position and composes every Ideal pair through
+ * considers every absolute stream position independently (no same-result
+ * retention), publishes every Ideal position for composition, and composes
+ * every Ideal pair through
  * `createLazyIdealCross()`, one pending cell per row and one queued wake-up
  * step per waiting row resumed, so the Cartesian product is still never
  * materialized ahead of the lower bound and no long synchronous expansion runs
@@ -267,9 +271,16 @@ export class TargetSearchScheduler {
         if (alternative) {
           // Held-aware reading over the Skill reservation (SEARCH_SPEC 5.6.8):
           // each solution carries its own absolute operation positions, and
-          // `depth` stays the own operation count, i.e. the cost.
+          // `depth` stays the own operation count, i.e. the cost. Every
+          // absolute position is judged with the Ideal Skill authority; only an
+          // Ideal one is materialized, ordered and published, because the Lazy
+          // Ideal Cross composes nothing else. Extent and exhaustion still
+          // follow the raw depth.
           const reserved = await this.context.skillStream.readReservedDepth(start, depth)
-          const solutions = reserved.solutions.map((solution) => {
+          const ideal = reserved.solutions.filter((solution) => evaluateSkillCondition(
+            this.context.target.idealSkillCondition, solution.seriesSkillId, solution.groupSkillId,
+          ))
+          const solutions = ideal.map((solution) => {
             const own = { startSkillCounter: start, steps: solution.steps, solutions: [] }
             return {
               resetCount: solution.resetCount,
@@ -295,7 +306,8 @@ export class TargetSearchScheduler {
           amendmentResults: skillAmendmentResults(delta, solution.resetCount),
         }))
         // Initial-Search retention keeps the first position of each Skill
-        // result; the Planner Alternative policy (above) publishes every one.
+        // result; the Planner Alternative policy (above) judges every absolute
+        // position and publishes every Ideal one.
         for (const value of retention.appendDepth(solutions)) {
           channel.retained.push(value)
           for (const receive of channel.subscribers) receive(value)
@@ -337,7 +349,15 @@ export class TargetSearchScheduler {
               : solution.lastResetDepth === 0 ? 'existing_gogma_keep_bonuses' : 'existing_gogma_mixed' })
           }
           for (const prediction of reserved.unsupportedPredictions) publishNotice({ type: 'unsupported', prediction })
-          const solutions = reserved.solutions.map((solution) => ({
+          // The notices above come from every raw state. Every absolute
+          // position is then judged with the Ideal Bonus authority itself (its
+          // Master rank assertion included); only an Ideal one is materialized,
+          // ordered and published, because the Lazy Ideal Cross composes
+          // nothing else. Extent and exhaustion still follow the raw depth.
+          const ideal = reserved.solutions.filter((solution) => satisfiesIdealBonuses(
+            this.context.target, solution.bonuses, solution.restorationBonusScope, this.context.input.master,
+          ))
+          const solutions = ideal.map((solution) => ({
             gogmaAdvance: solution.depth, lastResetDepth: solution.lastResetDepth,
             finalBonuses: solution.bonuses, restorationBonusScope: solution.restorationBonusScope,
             operations: bonusAmendmentOperations(
@@ -369,9 +389,10 @@ export class TargetSearchScheduler {
           amendmentResults: bonusAmendmentResults(solution),
         }))
         // Initial-Search retention keeps the first position of each (scope,
-        // multiset); the Planner Alternative policy (above) publishes every
-        // generated state. The B2 family-layout frontier reduction applies to
-        // both, per absolute position in the held-aware reading.
+        // multiset); the Planner Alternative policy (above) judges every
+        // generated state and publishes every Ideal absolute position. The B2
+        // family-layout frontier reduction applies to both, per absolute
+        // position in the held-aware reading.
         for (const value of retention.appendDepth(solutions)) {
           channel.retained.push(value)
           for (const receive of channel.subscribers) receive(value)

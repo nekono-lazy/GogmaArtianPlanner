@@ -200,6 +200,11 @@ export function compareBonusSolutions(
  * Route base WITHOUT applying the initial-Search retention of SEARCH_SPEC
  * 5.5.2.
  *
+ * Every comparator key is derived from its own solution alone and the sort is
+ * stable, so ordering any subset (the Ideal solutions only, as the Planner
+ * Alternative publication does) gives the same relative order as ordering the
+ * whole set and then filtering. Keep that property when changing a key.
+ *
  * The Planner-driven constrained enumerator (5.6.7) must be able to offer the
  * same Skill outcome reached at a later `resetCount`, because the Planner
  * matches `RouteOperation.counterBefore` against the runtime Counter. Ordering
@@ -221,6 +226,7 @@ export function evaluateSkillSolutions(
  * without the initial-Search `(scope, completed multiset)` retention of
  * SEARCH_SPEC 5.5.3. The B2 family-layout frontier reduction is a Bonus stream
  * concern and is unaffected: this function only sees what the stream published.
+ * The subset-ordering property of `evaluateSkillSolutions()` holds here too.
  */
 export function evaluateBonusSolutions(
   target: TargetWeapon,
