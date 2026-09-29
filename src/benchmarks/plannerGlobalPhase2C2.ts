@@ -25,6 +25,7 @@ import {
   preparePlannerAlternativeKernel,
   runPreparedPlannerAlternativeKernel,
   defaultPlannerAlternativeTrialBounds,
+  type PlannerAlternativeKernelInstrumentation,
   type PlannerAlternativeKernelRequest,
   type PlannerAlternativeTrialBounds,
 } from '../domain/planner/alternative'
@@ -437,6 +438,11 @@ export interface Phase2C2RunDependencies {
   createEngine: () => RngEngine
   yieldControl?: () => Promise<void>
   now?: () => number
+  /**
+   * Phase 2-C2.6-A2 only: the optional, observational kernel lifecycle instrumentation, passed to the kernel as it is.
+   * Absent (every earlier phase), the kernel runs exactly as before.
+   */
+  kernelInstrumentation?: PlannerAlternativeKernelInstrumentation
 }
 
 /** One orientation's current Planner Alternative kernel over the original input, recorded without any change. */
@@ -451,7 +457,7 @@ export async function runPhase2C2Kernel(input: PlannerInput, orientation: Phase2
     return { orientation, conditions, kernel: { status: 'preparation_failed', failure: preparation.status, detail: stableStringify(preparation) }, timing: { kernelMs: now() - kernelStarted } }
   }
   const kernel = await runPreparedPlannerAlternativeKernel(preparation.prepared, request, plannerDependencies,
-    { executionOptions: { yieldControl: dependencies.yieldControl } })
+    { executionOptions: { yieldControl: dependencies.yieldControl }, instrumentation: dependencies.kernelInstrumentation })
   const kernelMs = now() - kernelStarted
   const targets: Phase2C2KernelTargetRecord[] = kernel.targets.map(target => {
     const outcome = target.outcome
