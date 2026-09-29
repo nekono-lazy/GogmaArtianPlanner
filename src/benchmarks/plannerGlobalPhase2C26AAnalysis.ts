@@ -67,6 +67,10 @@ export interface Phase2C26AOldC2View {
   concurrency: number
   orientationBudgetMs: number
   conditions: Pick<Phase2C2Conditions, 'extent' | 'bounds'>
+  /** Optional provenance fields: `null` when the old RESULT does not carry them (never filled in by guess). */
+  researchMaxPlanSteps: number | null
+  nodeYield: string | null
+  calculationContext: unknown
   baseline: Phase2C2BaselineSummary
   orientations: Phase2C2Orientation[]
   rows: Map<string, Phase2C26AOldOrientationRow>
@@ -127,6 +131,9 @@ export function parsePhase2C26AOldC2Result(json: unknown): Phase2C26AOldC2View {
     concurrency: Number(need(environment.concurrency, 'concurrency missing')),
     orientationBudgetMs: Number(need(budgets.orientationBudgetMs, 'orientationBudgetMs missing')),
     conditions: { extent: need(conditions.extent, 'conditions.extent missing') as Phase2C2Conditions['extent'], bounds: need(conditions.bounds, 'conditions.bounds missing') as Phase2C2Conditions['bounds'] },
+    researchMaxPlanSteps: typeof environment.researchMaxPlanSteps === 'number' ? environment.researchMaxPlanSteps : null,
+    nodeYield: typeof environment.nodeYield === 'string' ? environment.nodeYield : null,
+    calculationContext: isObject(environment.calculationContext) ? environment.calculationContext : null,
     baseline: baselineSummary as unknown as Phase2C2BaselineSummary,
     orientations,
     rows,
@@ -301,6 +308,163 @@ export function validatePhase2C26AFormalRun(raw: unknown, expected: Phase2C26AFo
     valid: failures.length === 0, failures, rawStatus, smokeIsNull, uncommittedBenchmarkCode, baselineCompleted,
     expectedOrientations: expectedById.size, actualKernelRecords: kernels?.length ?? 0,
     missingOrientations, duplicateOrientations, foreignOrientations, metadataMismatches, unknownStatuses, processCounts,
+  }
+}
+
+// ---------------------------------------------------------------- comparability with Phase 2-C2 (post-hoc, fail closed)
+
+export interface Phase2C26AConditionComparison<T> { current: T | null; old: T | null; matches: boolean }
+
+/** A condition the old RESULT does not record: kept as a current invariant only, never compared against a guessed old value. */
+export interface Phase2C26ANotMachineVerifiable { condition: string; current: unknown; reason: string }
+
+/** The orientation metadata that must also be equal, because this phase re-measures the SAME orientations of the SAME Export. */
+export const PHASE2C26A_ORIENTATION_METADATA_FIELDS = ['conflictKey', 'fixedBuildListEntryId', 'participantBuildListEntryIds', 'participantTargetWeaponIds'] as const
+
+export interface Phase2C26AOldC2Comparability {
+  valid: boolean
+  issues: string[]
+  exportSha256: Phase2C26AConditionComparison<string>
+  baseline: { matches: boolean; failedFields: string[]; checks: Phase2C26AParityCheck[] }
+  orientations: {
+    matches: boolean
+    currentCount: number
+    oldCount: number
+    countMatches: boolean
+    orderedIdsMatch: boolean
+    missingInCurrent: string[]
+    extraInCurrent: string[]
+    identityMismatches: { orientationId: string; field: string; current: unknown; old: unknown }[]
+    metadataMismatches: { orientationId: string; field: string; current: unknown; old: unknown }[]
+    metadataMismatchCounts: Record<(typeof PHASE2C26A_ORIENTATION_METADATA_FIELDS)[number], number>
+  }
+  extent: Phase2C26AConditionComparison<Phase2C2Conditions['extent']>
+  bounds: Phase2C26AConditionComparison<Phase2C2Conditions['bounds']>
+  /** Every kernel task of the current run carries the run's own extent / bounds. */
+  currentTaskConditionsUniform: boolean
+  childHeapLimitMb: Phase2C26AConditionComparison<number>
+  concurrency: Phase2C26AConditionComparison<number>
+  orientationBudgetMs: Phase2C26AConditionComparison<number>
+  /** Recorded by both RESULTs; compared when the old RESULT has the value, `notMachineVerifiable` otherwise. */
+  researchMaxPlanSteps: Phase2C26AConditionComparison<number>
+  nodeYield: Phase2C26AConditionComparison<string>
+  calculationContext: Phase2C26AConditionComparison<unknown>
+  searchConditionsMatch: boolean
+  executionConditionsMatch: boolean
+  notMachineVerifiable: Phase2C26ANotMachineVerifiable[]
+}
+
+function compareCondition<T>(current: T | null | undefined, old: T | null | undefined): Phase2C26AConditionComparison<T> {
+  const a = current ?? null, b = old ?? null
+  return { current: a, old: b, matches: a !== null && b !== null && stableStringify(a) === stableStringify(b) }
+}
+
+/**
+ * Whether the before / after comparison with the committed Phase 2-C2 RESULT is a comparison of the same measurement:
+ * the same Export SHA-256, the same baseline (every parity check), the same orientations in the same order with the same
+ * Conflict key / Entry metadata, the same Production extent / trial bounds, and the same Node execution conditions (heap,
+ * concurrency, orientation budget), plus the Research `maxPlanSteps`, Node yield and CalculationContext both RESULTs record.
+ * Any difference or any missing value makes it invalid. `raw` is the current raw run (untrusted JSON), `old` the parsed
+ * Phase 2-C2 RESULT. The baseline and orientation parities are computed here from exactly these two inputs.
+ */
+export function validatePhase2C26AOldC2Comparability(raw: unknown, old: Phase2C26AOldC2View): Phase2C26AOldC2Comparability {
+  const issues: string[] = []
+  const root = isObject(raw) ? raw : {}
+  const environment = isObject(root.environment) ? root.environment : {}
+  const baseline = isObject(root.baseline) ? root.baseline : {}
+  const record = isObject(baseline.record) ? baseline.record : null
+  const conditions = isObject(root.conditions) ? root.conditions : {}
+
+  const exportSha256 = compareCondition(typeof environment.exportSha256 === 'string' ? environment.exportSha256 : null, old.exportSha256)
+  if (!exportSha256.matches) issues.push(`Export SHA-256 differs (current ${String(exportSha256.current)}, Phase 2-C2 ${old.exportSha256})`)
+
+  const summary = record && isObject(record.summary) ? (record.summary as unknown as Phase2C2BaselineSummary) : null
+  const currentOrientations = (record && Array.isArray(record.orientations) ? record.orientations : []) as Phase2C2Orientation[]
+  if (summary === null) issues.push('the current baseline summary is missing')
+  const baselineParity = summary === null ? { checks: [], matches: false } : comparePhase2C26ABaselineWithOldC2(summary, currentOrientations.length, old)
+  const failedFields = baselineParity.checks.filter(check => !check.matches).map(check => check.field)
+  if (!baselineParity.matches) issues.push(`baseline differs: ${summary === null ? 'missing' : failedFields.join(', ')}`)
+
+  const orientationParity = comparePhase2C26AOrientationSets(currentOrientations, old.orientations)
+  const countMatches = currentOrientations.length === old.orientations.length
+  const orderedIdsMatch = stableStringify(currentOrientations.map(o => o.orientationId)) === stableStringify(old.orientations.map(o => o.orientationId))
+  const metadataMismatchCounts = Object.fromEntries(PHASE2C26A_ORIENTATION_METADATA_FIELDS.map(field =>
+    [field, orientationParity.auxiliaryMismatches.filter(m => m.field === field).length])) as Phase2C26AOldC2Comparability['orientations']['metadataMismatchCounts']
+  const orientationsMatch = orientationParity.matches && countMatches && orderedIdsMatch && orientationParity.auxiliaryMismatches.length === 0
+  if (!countMatches) issues.push(`orientation count differs (current ${currentOrientations.length}, Phase 2-C2 ${old.orientations.length})`)
+  if (!orderedIdsMatch) issues.push('the ordered orientation IDs differ')
+  if (orientationParity.missingInCurrent.length > 0) issues.push(`orientations missing in the current run: ${orientationParity.missingInCurrent.join(', ')}`)
+  if (orientationParity.extraInCurrent.length > 0) issues.push(`orientations not in Phase 2-C2: ${orientationParity.extraInCurrent.join(', ')}`)
+  if (orientationParity.mismatches.length > 0) issues.push(`orientation identity mismatches: ${orientationParity.mismatches.map(m => `${m.orientationId}.${m.field}`).join(', ')}`)
+  if (orientationParity.auxiliaryMismatches.length > 0) issues.push(`orientation metadata mismatches: ${orientationParity.auxiliaryMismatches.map(m => `${m.orientationId}.${m.field}`).join(', ')}`)
+
+  const extent = compareCondition(isObject(conditions.extent) ? (conditions.extent as unknown as Phase2C2Conditions['extent']) : null, old.conditions.extent)
+  const bounds = compareCondition(isObject(conditions.bounds) ? (conditions.bounds as unknown as Phase2C2Conditions['bounds']) : null, old.conditions.bounds)
+  if (!extent.matches) issues.push(`Planner Alternative extent differs (current ${stableStringify(extent.current)}, Phase 2-C2 ${stableStringify(extent.old)})`)
+  if (!bounds.matches) issues.push(`Planner Alternative trial bounds differ (current ${stableStringify(bounds.current)}, Phase 2-C2 ${stableStringify(bounds.old)})`)
+  const currentTaskConditionsUniform = asArray(root.kernels).every(kernel => {
+    const task = isObject(kernel) && isObject(kernel.task) && isObject(kernel.task.conditions) ? kernel.task.conditions : null
+    return task !== null && stableStringify(task.extent) === stableStringify(conditions.extent) && stableStringify(task.bounds) === stableStringify(conditions.bounds)
+  })
+  if (!currentTaskConditionsUniform) issues.push('a current kernel task carries an extent / bounds other than the run conditions')
+
+  const numberOf = (value: unknown) => (typeof value === 'number' ? value : null)
+  const childHeapLimitMb = compareCondition(numberOf(environment.childHeapLimitMb), old.childHeapLimitMb)
+  const concurrency = compareCondition(numberOf(environment.concurrency), old.concurrency)
+  const orientationBudgetMs = compareCondition(numberOf(environment.orientationBudgetMs), old.orientationBudgetMs)
+  if (!childHeapLimitMb.matches) issues.push(`child heap limit differs (current ${String(childHeapLimitMb.current)} MB, Phase 2-C2 ${old.childHeapLimitMb} MB)`)
+  if (!concurrency.matches) issues.push(`concurrency differs (current ${String(concurrency.current)}, Phase 2-C2 ${old.concurrency})`)
+  if (!orientationBudgetMs.matches) issues.push(`orientation budget differs (current ${String(orientationBudgetMs.current)} ms, Phase 2-C2 ${old.orientationBudgetMs} ms)`)
+
+  const notMachineVerifiable: Phase2C26ANotMachineVerifiable[] = [{
+    condition: 'kernel request lineage (priorFixedBuildListEntryIds = [], priorExcludedRoutes = [])',
+    current: { priorFixedBuildListEntryIds: [], priorExcludedRoutes: [] },
+    reason: 'not machine-verifiable from the Phase 2-C2 RESULT, which records no request lineage; both runs build the request with the unchanged phase2c2KernelRequest(), whose empty lineage is a tested invariant',
+  }]
+  const optional = <T>(name: string, current: T | null, before: T | null) => {
+    const comparison = compareCondition(current, before)
+    if (before === null) notMachineVerifiable.push({ condition: name, current, reason: 'not machine-verifiable from the Phase 2-C2 RESULT' })
+    else if (!comparison.matches) issues.push(`${name} differs (current ${stableStringify(current)}, Phase 2-C2 ${stableStringify(before)})`)
+    return comparison
+  }
+  const researchMaxPlanSteps = optional('researchMaxPlanSteps', numberOf(baseline.researchMaxPlanSteps), old.researchMaxPlanSteps)
+  const nodeYield = optional('nodeYield', typeof environment.nodeYield === 'string' ? environment.nodeYield : null, old.nodeYield)
+  const calculationContext = optional('calculationContext', isObject(baseline.calculationContext) ? baseline.calculationContext : null, old.calculationContext)
+
+  const searchConditionsMatch = extent.matches && bounds.matches && currentTaskConditionsUniform
+  const executionConditionsMatch = childHeapLimitMb.matches && concurrency.matches && orientationBudgetMs.matches &&
+    (old.researchMaxPlanSteps === null || researchMaxPlanSteps.matches) && (old.nodeYield === null || nodeYield.matches) &&
+    (old.calculationContext === null || calculationContext.matches)
+  return {
+    valid: issues.length === 0, issues, exportSha256,
+    baseline: { matches: baselineParity.matches, failedFields, checks: baselineParity.checks },
+    orientations: {
+      matches: orientationsMatch, currentCount: currentOrientations.length, oldCount: old.orientations.length, countMatches, orderedIdsMatch,
+      missingInCurrent: orientationParity.missingInCurrent, extraInCurrent: orientationParity.extraInCurrent,
+      identityMismatches: orientationParity.mismatches, metadataMismatches: orientationParity.auxiliaryMismatches, metadataMismatchCounts,
+    },
+    extent, bounds, currentTaskConditionsUniform, childHeapLimitMb, concurrency, orientationBudgetMs,
+    researchMaxPlanSteps, nodeYield, calculationContext, searchConditionsMatch, executionConditionsMatch, notMachineVerifiable,
+  }
+}
+
+/**
+ * The before / after comparison with Phase 2-C2, produced ONLY for a valid comparability: the old -> current child
+ * outcome transitions, the semantic parity of the old completed kernels, the trial rejection / Target outcome before /
+ * after and the participant coverage with the old explored count. An invalid comparability throws; nothing here is ever
+ * computed against a Phase 2-C2 RESULT that is not the same measurement.
+ */
+export function comparePhase2C26AWithOldC2(comparability: Phase2C26AOldC2Comparability, old: Phase2C26AOldC2View, kernels: readonly Phase2C26ARawKernel[],
+  orientations: readonly Phase2C2Orientation[], sha256: (value: string) => string) {
+  if (!comparability.valid) throw new Error(`The Phase 2-C2 RESULT is not comparable with this run: ${comparability.issues.join('; ')}`)
+  const summary = summarizePhase2C26AKernels(kernels)
+  return {
+    transitions: phase2c26aTransitions(old, kernels),
+    oldCompletedSemantics: comparePhase2C26AOldCompletedSemantics(old, kernels, sha256),
+    trialRejectionBeforeAfter: { oldC2: old.trialRejectionReasons, current: summary.trials.rejectionReasons,
+      explicitDecisionNotSelected: { oldC2: old.trialRejectionReasons.explicit_decision_not_selected ?? 0, current: summary.trials.rejectionReasons.explicit_decision_not_selected ?? 0 } },
+    targetOutcomeBeforeAfter: { oldC2: old.targetOutcomes, current: summary.targetOutcomes, currentOther: summary.otherTargetOutcomes },
+    participants: phase2c26aParticipantCoverage(orientations, kernels, old),
   }
 }
 
@@ -502,7 +666,12 @@ export type Phase2C26AConclusionCase = 'all_completed' | 'residual_out_of_memory
  * The pre-registered conclusion rule. OOM takes precedence (a residual OOM is localized before anything else), then a
  * timeout (runtime, never "no Candidate"), then another process failure; only a series with none of them is `all_completed`.
  */
-export function phase2c26aConclusion(childStatus: Record<Phase2C2ChildOutcome, number>, orientations: number, oldOutOfMemory: number) {
+/**
+ * `oldOutOfMemory` is the Phase 2-C2 OOM count, passed only when the comparability with Phase 2-C2 is valid; `null`
+ * (a non-formal diagnostic without a comparable Phase 2-C2) keeps every statement free of any old-run claim.
+ */
+export function phase2c26aConclusion(childStatus: Record<Phase2C2ChildOutcome, number>, orientations: number, oldOutOfMemory: number | null) {
+  const oldOom = oldOutOfMemory === null ? '' : `旧Phase 2-C2で${oldOutOfMemory}件発生したkernel child OOMは`
   const { completed, out_of_memory: oom, timeout, process_failure: failure } = childStatus
   const kase: Phase2C26AConclusionCase = oom > 0 ? 'residual_out_of_memory' : timeout > 0 ? 'timeout_without_out_of_memory'
     : failure > 0 ? 'process_failure_only' : 'all_completed'
@@ -515,13 +684,13 @@ export function phase2c26aConclusion(childStatus: Record<Phase2C2ChildOutcome, n
   ]
   switch (kase) {
     case 'all_completed':
-      return { case: kase, statement: `今回の元Export・${orientations} orientation・Node 8GB条件では、旧Phase 2-C2で${oldOutOfMemory}件発生したkernel child OOMはH1後のcurrent Productionでは再現せず、全orientationを測定可能になった。`,
+      return { case: kase, statement: `今回の元Export・${orientations} orientation・Node 8GB条件では、${oldOom || 'kernel child OOMは'}H1後のcurrent Productionでは再現せず、全orientationを測定可能になった。`,
         cannotSay, nextPhase: 'Phase 2-C2.6-B：current ProductionでCandidate portfolioを再構築する（default extent portfolio、capture bound、explored participant、portfolio diversity、held / late-start alternatives、必要ならextent probe、1,657 oracle coverage、C3 readinessの再評価）。' }
     case 'residual_out_of_memory':
       return { case: kase, statement: `今回の元Export・${orientations} orientation・Node 8GB条件で、current Productionのkernel childにOOMが${oom}件残った（completed ${completed}、timeout ${timeout}、process failure ${failure}）。`,
         cannotSay, nextPhase: '残ったOOM orientationに対するpost-H1 residual localization。portfolio再測定（C2.6-B）へは進まない。' }
     case 'timeout_without_out_of_memory':
-      return { case: kase, statement: `今回の元Export・${orientations} orientation・Node 8GB条件でOOMは0件になったが、30分budgetのtimeoutが${timeout}件残った（completed ${completed}、process failure ${failure}）。memory bottleneckがruntime bottleneckへ移った可能性がある。timeoutはCandidateなしを意味しない。`,
+      return { case: kase, statement: `今回の元Export・${orientations} orientation・Node 8GB条件で、${oldOom ? `${oldOom}current Productionでは再現しなかった（OOM 0件）` : 'OOMは0件になった'}が、30分budgetのtimeoutが${timeout}件残った（completed ${completed}、process failure ${failure}）。memory bottleneckがruntime bottleneckへ移った可能性がある。timeoutはCandidateなしを意味しない。`,
         cannotSay, nextPhase: 'timeout orientationのtargeted runtime analysisを優先する。測定可能範囲（completed orientation）だけでportfolio再測定へ進むかは、その結果で判断する。' }
     case 'process_failure_only':
       return { case: kase, statement: `OOM・timeoutは0件だが、その他のprocess failureが${failure}件ある（completed ${completed}）。`,

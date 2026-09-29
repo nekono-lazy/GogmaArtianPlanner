@@ -3,6 +3,9 @@
 // JSON. Runs no Planner and no Search. Before any analysis, validatePhase2C26AFormalRun()
 // (src/benchmarks/plannerGlobalPhase2C26AAnalysis.ts, post-hoc, imported by no runner) must prove the run is a complete
 // series: exactly one kernel record per orientation the run's own baseline derived. An incomplete run writes no RESULT.
+// Then validatePhase2C26AOldC2Comparability() must prove the Phase 2-C2 RESULT is the same measurement (Export, baseline,
+// ordered orientations with their Conflict / Entry metadata, extent / bounds, heap, concurrency, budget, ...): only then are
+// the old -> current transitions and every other old comparison produced. An incomparable RESULT writes no RESULT.
 import { readFile, writeFile } from 'node:fs/promises'
 import { lstatSync } from 'node:fs'
 import { basename } from 'node:path'
@@ -43,40 +46,41 @@ try {
   const c25a = await server.ssrLoadModule('/src/benchmarks/plannerGlobalPhase2C25AAnalysis.ts')
   const expectations = { childHeapLimitMb: c26a.PHASE2C26A_CHILD_HEAP_MB, concurrency: c26a.PHASE2C26A_CONCURRENCY,
     orientationBudgetMs: c26a.PHASE2C26A_ORIENTATION_BUDGET_MS, conditions: c2.phase2c2ProductionDefaultConditions() }
+  // 1. The current raw run must be a complete formal series.
   const formalRunValidation = analysis.validatePhase2C26AFormalRun(r, expectations)
   if (!formalRunValidation.valid && !allowNonformal) throw new Error(`Formal C2.6-A run is incomplete: ${formalRunValidation.failures.join('; ')}`)
 
+  // 2. - 5. The Phase 2-C2 RESULT, and the proof that it is the same measurement: Export SHA-256, baseline parity, the
+  // same orientations in the same order with the same Conflict key / Entry metadata, Production extent / trial bounds, and
+  // the Node execution conditions (heap, concurrency, orientation budget, Research maxPlanSteps, yield, CalculationContext).
   const old = analysis.parsePhase2C26AOldC2Result(oldC2.json)
-  if (old.exportSha256 !== r.environment.exportSha256) throw new Error('The Phase 2-C2 RESULT was measured on another Export.')
+  const oldC2Comparability = analysis.validatePhase2C26AOldC2Comparability(r, old)
+  // 6. Fail closed: an incomparable Phase 2-C2 RESULT writes no RESULT (a non-formal diagnostic only drops every old comparison).
+  if (!oldC2Comparability.valid && !allowNonformal) throw new Error(`The Phase 2-C2 RESULT is not comparable with this run: ${oldC2Comparability.issues.join('; ')}`)
+  const comparable = oldC2Comparability.valid
+
+  // 7. Aggregation, and the before / after comparison only for a comparable Phase 2-C2 RESULT.
   const baseline = r.baseline.record
   const orientations = baseline.orientations
-  const baselineParity = analysis.comparePhase2C26ABaselineWithOldC2(baseline.summary, orientations.length, old)
-  const orientationSetParity = analysis.comparePhase2C26AOrientationSets(orientations, old.orientations)
-  const conditionParity = { current: { extent: expectations.conditions.extent, bounds: expectations.conditions.bounds }, oldC2: old.conditions,
-    matches: JSON.stringify({ extent: expectations.conditions.extent, bounds: expectations.conditions.bounds }) === JSON.stringify(old.conditions),
-    heap: { current: r.environment.childHeapLimitMb, oldC2: old.childHeapLimitMb }, concurrency: { current: r.environment.concurrency, oldC2: old.concurrency },
-    orientationBudgetMs: { current: r.environment.orientationBudgetMs, oldC2: old.orientationBudgetMs } }
-
   const kernels = r.kernels
   const summary = analysis.summarizePhase2C26AKernels(kernels)
-  const transitions = analysis.phase2c26aTransitions(old, kernels)
-  const oldCompletedSemantics = analysis.comparePhase2C26AOldCompletedSemantics(old, kernels, sha)
-  const participants = analysis.phase2c26aParticipantCoverage(orientations, kernels, old)
-  const conclusion = analysis.phase2c26aConclusion(summary.childStatus, kernels.length, transitions.oldOutOfMemory.total)
-  const perOrientation = kernels.map(kernel => analysis.compactPhase2C26AKernel(kernel, old.rows.get(kernel.orientationId) ?? null, sha,
+  const oldComparison = comparable ? analysis.comparePhase2C26AWithOldC2(oldC2Comparability, old, kernels, orientations, sha) : null
+  const participants = oldComparison?.participants ?? analysis.phase2c26aParticipantCoverage(orientations, kernels, null)
+  const conclusion = analysis.phase2c26aConclusion(summary.childStatus, kernels.length, oldComparison?.transitions.oldOutOfMemory.total ?? null)
+  const perOrientation = kernels.map(kernel => analysis.compactPhase2C26AKernel(kernel, comparable ? old.rows.get(kernel.orientationId) ?? null : null, sha,
     kernel.process.outcome === 'out_of_memory' ? c25a.parsePhase2C25AV8FatalGcTrace(kernel.process.stderrTail) : null))
   const failures = perOrientation.filter(row => row.child.outcome !== 'completed')
     .map(row => ({ orientationId: row.orientationId, kind: row.kind, fixedTargetWeaponId: row.fixedTargetWeaponId, outcome: row.child.outcome, wallMs: row.child.wallMs,
       lastIpcYields: row.child.lastIpcYields, memory: row.memory, v8FatalGc: row.v8FatalGc, stderrTail: row.child.stderrTail,
       targetOutcomeProgress: 'not observable: the kernel API exposes no per-Target progress and the child wrote no record' }))
-  const oldTrialRejectionReasons = old.trialRejectionReasons
+  // 8. The RESULT.
   const evidence = {
     phase: 'Issue #154 Phase 2-C2.6-A: post-H1 Global Planner kernel re-evaluation (post-hoc analysis)',
     analyzedAt: new Date().toISOString(),
     sources: { run: run.source, oldC2Result: oldC2.source },
     provenance: {
       measuredHead, analysisHead: git('rev-parse', 'HEAD'), analysisCodeUncommitted, codeChangedSinceMeasuredHead: changed, calculationCodeChangedSinceMeasuredHead,
-      postHocAllowedFiles: POST_HOC_ALLOWED, formal: formalRunValidation.valid && calculationCodeChangedSinceMeasuredHead.length === 0,
+      postHocAllowedFiles: POST_HOC_ALLOWED, formal: formalRunValidation.valid && comparable && calculationCodeChangedSinceMeasuredHead.length === 0,
       benchmarkCodeSha256: r.environment.benchmarkCodeSha256, uncommittedBenchmarkCode: r.environment.uncommittedBenchmarkCode,
       exportFileName: r.environment.exportFileName, exportSha256: r.environment.exportSha256, exportBytes: r.environment.exportBytes,
       oldC2ResultSha256: oldC2.source.sha256, oldC2MeasuredHead: old.measuredHead, measuredAt: r.measuredAt, runWallMs: r.wallMs,
@@ -93,18 +97,15 @@ try {
       notRun: ['post-hoc portfolio Search', 'capture bound 8', 'extent probe', 'oracle coverage', 'C3 A/B/C readiness', 'global assignment'],
       memoryValues: 'process.memoryUsage() sampled maxima (250 ms), never a true peak; Node heap bytes are not comparable with Browser CDP bytes',
     },
-    conditionParityWithOldC2: conditionParity,
     baseline: { summary: baseline.summary, orientations: orientations.length, process: { outcome: r.baseline.process.outcome, wallMs: r.baseline.process.wallMs }, memory: r.baseline.memory },
-    baselineParityWithOldC2: baselineParity,
-    orientationSetParityWithOldC2: orientationSetParity,
     orientations,
     formalRunValidation: { validator: 'validatePhase2C26AFormalRun (post-hoc, src/benchmarks/plannerGlobalPhase2C26AAnalysis.ts)', ...formalRunValidation },
+    oldC2Comparability: { validator: 'validatePhase2C26AOldC2Comparability (post-hoc, src/benchmarks/plannerGlobalPhase2C26AAnalysis.ts); every old comparison below exists only when valid', ...oldC2Comparability },
     kernel: summary,
-    trialRejectionBeforeAfter: { oldC2: oldTrialRejectionReasons, current: summary.trials.rejectionReasons,
-      explicitDecisionNotSelected: { oldC2: oldTrialRejectionReasons.explicit_decision_not_selected ?? 0, current: summary.trials.rejectionReasons.explicit_decision_not_selected ?? 0 } },
-    targetOutcomeBeforeAfter: { oldC2: old.targetOutcomes, current: summary.targetOutcomes, currentOther: summary.otherTargetOutcomes },
-    transitions,
-    oldCompletedSemantics,
+    trialRejectionBeforeAfter: oldComparison?.trialRejectionBeforeAfter ?? null,
+    targetOutcomeBeforeAfter: oldComparison?.targetOutcomeBeforeAfter ?? null,
+    transitions: oldComparison?.transitions ?? null,
+    oldCompletedSemantics: oldComparison?.oldCompletedSemantics ?? null,
     participants,
     failures,
     perOrientation,
@@ -120,8 +121,10 @@ try {
     ],
   }
   await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', { flag: 'wx' })
-  console.log(JSON.stringify({ output: outputPath, formal: evidence.provenance.formal, childStatus: summary.childStatus, transitions: transitions.matrix,
-    baselineParity: baselineParity.matches, orientationSetParity: orientationSetParity.matches, participants, conclusion: conclusion.case }, null, 2))
+  console.log(JSON.stringify({ output: outputPath, formal: evidence.provenance.formal, formalRunValidation: formalRunValidation.valid,
+    oldC2Comparability: { valid: oldC2Comparability.valid, issues: oldC2Comparability.issues }, childStatus: summary.childStatus,
+    transitions: oldComparison?.transitions.matrix ?? null, oldCompletedSemantics: oldComparison?.oldCompletedSemantics ?? null,
+    participants: { total: participants.participantsTotal, searched: participants.participantsSearched, notSearched: participants.participantsNotSearched.length }, conclusion: conclusion.case }, null, 2))
 } finally {
   await server.close()
 }

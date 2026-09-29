@@ -53,7 +53,9 @@ import {
   phase2c26aParticipantCoverage,
   phase2c26aTransitions,
   summarizePhase2C26AKernels,
+  comparePhase2C26AWithOldC2,
   validatePhase2C26AFormalRun,
+  validatePhase2C26AOldC2Comparability,
   type Phase2C26AKernelTarget,
   type Phase2C26ARawKernel,
 } from './plannerGlobalPhase2C26AAnalysis'
@@ -195,7 +197,7 @@ function completeRun(outcomeOf: (o: Phase2C2Orientation) => 'completed' | 'out_o
   return {
     status: 'completed',
     environment: { smoke: null, uncommittedBenchmarkCode: false, childHeapLimitMb: 8192, concurrency: 3, orientationBudgetMs: 1_800_000 },
-    conditions,
+    conditions: structuredClone(conditions),
     baseline: { process: { outcome: 'completed' }, record: { summary: old.baseline, orientations: structuredClone(old.orientations) } },
     kernels,
     processes: [{ role: 'baseline' }, ...kernels.map(k => ({ role: 'kernel', id: `kernel-${k.orientationId}` }))],
@@ -383,6 +385,123 @@ describe('aggregation, transitions and conclusion', () => {
       expect(conclusion.statement).toMatch(/旧Phase 2-C2で43件発生したkernel child OOM/)
       expect(conclusion.cannotSay.join('')).toMatch(/完全に解決/)
     }
+    const timeout = phase2c26aConclusion({ completed: 45, out_of_memory: 0, timeout: 9, process_failure: 0 }, 54, 43)
+    expect(timeout.statement).toMatch(/旧Phase 2-C2で43件発生したkernel child OOMはcurrent Productionでは再現しなかった.*timeoutが9件残った.*runtime bottleneck/)
+    // Without a comparable Phase 2-C2 RESULT the statement makes no old-run claim.
+    expect(phase2c26aConclusion({ completed: 45, out_of_memory: 0, timeout: 9, process_failure: 0 }, 54, null).statement).not.toMatch(/旧Phase 2-C2/)
+  })
+})
+
+describe('comparability with Phase 2-C2 (post-hoc, fail closed)', () => {
+  const oldEnvironment = (oldC2Result as unknown as { provenance: { environment: Record<string, unknown> } }).provenance.environment
+  /** The complete synthetic series, carrying exactly the Phase 2-C2 Export, conditions and execution environment. */
+  function comparableRun() {
+    const raw = completeRun()
+    Object.assign(raw.environment, { exportSha256: old.exportSha256, nodeYield: oldEnvironment.nodeYield })
+    Object.assign(raw.baseline, { researchMaxPlanSteps: oldEnvironment.researchMaxPlanSteps, calculationContext: structuredClone(oldEnvironment.calculationContext) })
+    return raw
+  }
+  type Run = ReturnType<typeof comparableRun>
+  const check = (raw: unknown) => validatePhase2C26AOldC2Comparability(raw, old)
+  const environmentOf = (raw: Run) => raw.environment as Record<string, unknown>
+
+  it('A. accepts the same measurement: every condition matches', () => {
+    const result = check(comparableRun())
+    expect(result).toMatchObject({ valid: true, issues: [], searchConditionsMatch: true, executionConditionsMatch: true, currentTaskConditionsUniform: true })
+    expect(result.exportSha256.matches).toBe(true)
+    expect(result.baseline).toMatchObject({ matches: true, failedFields: [] })
+    expect(result.orientations).toMatchObject({ matches: true, countMatches: true, orderedIdsMatch: true, identityMismatches: [], metadataMismatches: [],
+      metadataMismatchCounts: { conflictKey: 0, fixedBuildListEntryId: 0, participantBuildListEntryIds: 0, participantTargetWeaponIds: 0 } })
+    for (const field of ['extent', 'bounds', 'childHeapLimitMb', 'concurrency', 'orientationBudgetMs', 'researchMaxPlanSteps', 'nodeYield', 'calculationContext'] as const) {
+      expect(result[field].matches).toBe(true)
+    }
+    // The lineage is not recorded by Phase 2-C2: it is listed, never compared against a guessed value.
+    expect(result.notMachineVerifiable.map(n => n.condition)).toEqual([expect.stringMatching(/lineage/)])
+  })
+
+  it('B. rejects another Export', () => {
+    const raw = comparableRun(); environmentOf(raw).exportSha256 = '0'.repeat(64)
+    expect(check(raw)).toMatchObject({ valid: false, exportSha256: { matches: false } })
+    const missing = comparableRun(); delete environmentOf(missing).exportSha256
+    expect(check(missing).valid).toBe(false)
+  })
+
+  it('C. rejects a different baseline', () => {
+    const raw = comparableRun(); raw.baseline.record.summary = { ...raw.baseline.record.summary, planSteps: 1464 }
+    expect(check(raw)).toMatchObject({ valid: false, baseline: { matches: false, failedFields: ['planSteps'] } })
+  })
+
+  it('D. rejects a missing orientation and a different order', () => {
+    const missing = comparableRun(); missing.baseline.record.orientations.splice(3, 1)
+    const result = check(missing)
+    expect(result.valid).toBe(false)
+    expect(result.orientations).toMatchObject({ countMatches: false, missingInCurrent: [old.orientations[3].orientationId] })
+    const reordered = comparableRun(); const list = reordered.baseline.record.orientations; [list[0], list[1]] = [list[1], list[0]]
+    expect(check(reordered)).toMatchObject({ valid: false, orientations: { orderedIdsMatch: false } })
+  })
+
+  it('E. rejects another fixed Entry', () => {
+    const raw = comparableRun(); raw.baseline.record.orientations[0].fixedBuildListEntryId = 'build-list.other'
+    expect(check(raw)).toMatchObject({ valid: false, orientations: { metadataMismatchCounts: { fixedBuildListEntryId: 1 } } })
+  })
+
+  it('F. rejects other participant Entries', () => {
+    const raw = comparableRun(); const o = raw.baseline.record.orientations[1]
+    o.participantBuildListEntryIds = [...o.participantBuildListEntryIds].reverse()
+    expect(check(raw)).toMatchObject({ valid: false, orientations: { metadataMismatchCounts: { participantBuildListEntryIds: 1 } } })
+  })
+
+  it('G. rejects another Conflict key', () => {
+    const raw = comparableRun(); raw.baseline.record.orientations[2].conflictKey = 'plan-conflict:other'
+    expect(check(raw)).toMatchObject({ valid: false, orientations: { metadataMismatchCounts: { conflictKey: 1 } } })
+  })
+
+  it('H / I / J. rejects another extent, candidate trial bound or planner rerun bound', () => {
+    const changes: ['extent' | 'bounds', (c: Phase2C2Conditions) => void][] = [
+      ['extent', c => { c.extent.maxGogmaAdvance = 300 }],
+      ['bounds', c => { c.bounds.maxCandidateTrialsPerTarget = 3 }],
+      ['bounds', c => { c.bounds.maxPlannerReruns = 9 }],
+    ]
+    for (const [field, change] of changes) {
+      // The whole run changed: the run conditions and every task carry the changed value.
+      const raw = comparableRun(); change(raw.conditions); for (const kernel of raw.kernels) change(kernel.task.conditions)
+      const result = check(raw)
+      expect(result).toMatchObject({ valid: false, searchConditionsMatch: false, currentTaskConditionsUniform: true })
+      expect(result[field].matches).toBe(false)
+      // A single task differing from the run conditions is rejected too.
+      const one = comparableRun(); change(one.kernels[0].task.conditions)
+      expect(check(one)).toMatchObject({ valid: false, currentTaskConditionsUniform: false })
+    }
+  })
+
+  it('K / L / M. rejects another heap, concurrency or orientation budget (and Research maxPlanSteps / yield)', () => {
+    for (const [field, value] of [['childHeapLimitMb', 16384], ['concurrency', 1], ['orientationBudgetMs', 3_600_000]] as const) {
+      const raw = comparableRun(); environmentOf(raw)[field] = value
+      const result = check(raw)
+      expect(result).toMatchObject({ valid: false, executionConditionsMatch: false })
+      expect(result[field].matches).toBe(false)
+    }
+    const steps = comparableRun(); (steps.baseline as Record<string, unknown>).researchMaxPlanSteps = 1000
+    expect(check(steps)).toMatchObject({ valid: false, executionConditionsMatch: false })
+    const yieldChange = comparableRun(); environmentOf(yieldChange).nodeYield = 'setTimeout'
+    expect(check(yieldChange)).toMatchObject({ valid: false, executionConditionsMatch: false })
+  })
+
+  it('N. produces no old comparison from an incomparable RESULT, and the analyzer gates on it before any transition', () => {
+    const raw = comparableRun(); environmentOf(raw).concurrency = 1
+    const invalid = check(raw)
+    expect(() => comparePhase2C26AWithOldC2(invalid, old, raw.kernels, raw.baseline.record.orientations, value => value)).toThrow(/not comparable/)
+    const valid = check(comparableRun())
+    expect(comparePhase2C26AWithOldC2(valid, old, completeRun().kernels, old.orientations, value => value).transitions.oldOutOfMemory.total).toBe(43)
+    const gate = analyzerSource.indexOf('if (!oldC2Comparability.valid && !allowNonformal) throw')
+    expect(gate).toBeGreaterThan(0)
+    expect(analyzerSource.indexOf('validatePhase2C26AFormalRun(')).toBeLessThan(analyzerSource.indexOf('validatePhase2C26AOldC2Comparability('))
+    expect(analyzerSource.indexOf('validatePhase2C26AOldC2Comparability(')).toBeLessThan(gate)
+    expect(gate).toBeLessThan(analyzerSource.indexOf('comparePhase2C26AWithOldC2('))
+    expect(gate).toBeLessThan(analyzerSource.indexOf('writeFile('))
+    // Old comparisons are reached only through the gated comparison, never directly.
+    expect(analyzerSource).not.toMatch(/phase2c26aTransitions\(|comparePhase2C26AOldCompletedSemantics\(/)
+    expect(analyzerSource).toMatch(/formal: formalRunValidation\.valid && comparable &&/)
   })
 })
 
