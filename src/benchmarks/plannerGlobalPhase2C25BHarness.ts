@@ -284,6 +284,27 @@ export interface Phase2C25BRunnerDependencies extends Phase2C25BHarnessDependenc
   readonly clock?: () => string
   readonly createRequestId?: () => string
   readonly onChange?: () => void
+  /**
+   * A later Research phase that reuses this runner (Phase 2-C2.5-D2-b): its protocol version, record ID prefix and
+   * workload. Omitted, the runner is exactly Phase 2-C2.5-B (every searchable context of every selected orientation).
+   * With a phase, the contexts Worker derives, and the parity compares, only the orientations of that workload.
+   */
+  readonly phase?: Phase2C25BRunnerPhase
+}
+
+export interface Phase2C25BRunnerPhase {
+  readonly protocolVersion: string
+  readonly recordIdPrefix: string
+  /** The phase's workload, derived from the Phase 2-C2.5-A evidence alone (its typed view and the same parsed JSON). */
+  readonly workload: (view: Phase2C25BEvidenceView, json: unknown) => Phase2C25BWorkloadContext[]
+}
+
+/** The evidence view narrowed to the given orientations (selection and recorded contexts), for the phase's parity. */
+export function phase2c25bEvidenceForOrientations(view: Phase2C25BEvidenceView, orientationIds: readonly string[]): Phase2C25BEvidenceView {
+  const missing = orientationIds.filter(id => !view.selection.some(s => s.orientationId === id))
+  if (missing.length > 0) throw new Error(`The workload names orientations the Phase 2-C2.5-A evidence did not select: ${missing.join(', ')}.`)
+  return { ...view, selection: view.selection.filter(s => orientationIds.includes(s.orientationId)),
+    expectedContexts: view.expectedContexts.filter(c => orientationIds.includes(c.orientationId)) }
 }
 
 export interface Phase2C25BRunRequest {
@@ -315,6 +336,9 @@ export function createPhase2C25BRunner(dependencies: Phase2C25BRunnerDependencie
   let input: PlannerInput | null = null
   let researchMaxPlanSteps: number | null = null
   let evidence: Phase2C25BEvidenceView | null = null
+  let evidenceJson: unknown = null
+  const phase = dependencies.phase ?? null
+  const protocolVersion = phase?.protocolVersion ?? PHASE2C25B_PROTOCOL_VERSION
   let preparation: Phase2C25BPreparation | null = null
   let orientations: Phase2C2Orientation[] = []
   const records: Phase2C25BRunRecord[] = []
@@ -347,9 +371,14 @@ export function createPhase2C25BRunner(dependencies: Phase2C25BRunnerDependencie
   async function loadEvidence(bytes: ArrayBuffer, fileName: string): Promise<Phase2C25BFileInfo> {
     const sha256 = await dependencies.sha256Bytes(bytes)
     evidence = null
+    evidenceJson = null
     evidenceInfo = null
     preparation = null
-    evidence = parsePhase2C25BEvidence(JSON.parse(new TextDecoder().decode(bytes)))
+    const json: unknown = JSON.parse(new TextDecoder().decode(bytes))
+    const view = parsePhase2C25BEvidence(json)
+    if (phase !== null) phase.workload(view, json)
+    evidence = view
+    evidenceJson = json
     evidenceInfo = { fileName, byteSize: bytes.byteLength, sha256 }
     changed()
     return evidenceInfo
@@ -371,13 +400,15 @@ export function createPhase2C25BRunner(dependencies: Phase2C25BRunnerDependencie
         preparation = { ...base, status: 'failed', message: 'The Export or a recorded condition differs from the Phase 2-C2.5-A evidence.', contextsWorker: null, parity: null }
         return preparation
       }
+      const parityView = phase === null ? evidence
+        : phase2c25bEvidenceForOrientations(evidence, [...new Set(phase.workload(evidence, evidenceJson).map(c => c.orientationId))])
       const session = openWorkerSession(sessionDependencies, event => relay({ event: `contexts:${event.type}`, atMs: event.atMs }))
       relay({ event: 'contexts_worker_created', epochMs: session.createdAtEpochMs })
       const started = now()
       let outcome: WorkerOutcome
       try {
         outcome = await session.run({ type: 'pg2c25b_benchmark_contexts', requestId: createRequestId(), input,
-          orientationIds: evidence.selection.map(s => s.orientationId) }, PHASE2C25B_CONTEXTS_BUDGET_MS)
+          orientationIds: parityView.selection.map(s => s.orientationId) }, PHASE2C25B_CONTEXTS_BUDGET_MS)
       } finally {
         session.dispose()
       }
@@ -389,7 +420,7 @@ export function createPhase2C25BRunner(dependencies: Phase2C25BRunnerDependencie
             workerCreatedAtEpochMs: session.createdAtEpochMs }, parity: null }
         return preparation
       }
-      const parity = await comparePhase2C25BContextParity(evidence, outcome.result, dependencies.sha256)
+      const parity = await comparePhase2C25BContextParity(parityView, outcome.result, dependencies.sha256)
       orientations = outcome.result.baseline.orientations
       preparation = { ...base, status: parity.matches ? 'ok' : 'failed', message: parity.matches ? null : `Context parity failed: ${parity.mismatches.join(' / ')}`,
         contextsWorker: { status: 'completed', message: null, wallMs, baselineElapsedMs: outcome.result.baseline.elapsedMs, derivationElapsedMs: outcome.result.elapsedMs,
@@ -401,7 +432,7 @@ export function createPhase2C25BRunner(dependencies: Phase2C25BRunnerDependencie
 
   function selectedContexts(): Phase2C25BWorkloadContext[] {
     if (!evidence) throw new Error('Load the Phase 2-C2.5-A evidence first.')
-    return phase2c25bWorkload(evidence)
+    return phase === null ? phase2c25bWorkload(evidence) : phase.workload(evidence, evidenceJson)
   }
 
   async function runOne(request: Phase2C25BRunRequest): Promise<Phase2C25BRunRecord> {
@@ -414,7 +445,7 @@ export function createPhase2C25BRunner(dependencies: Phase2C25BRunnerDependencie
     if (!Number.isSafeInteger(attempt) || attempt < 1) throw new RangeError('attempt must be a positive integer.')
     if (request.mode !== 'minimal' && request.mode !== 'instrumented') throw new RangeError('mode must be minimal or instrumented.')
     const runKey = phase2c25bRunKey(context.orientationId, context.workIndex, request.mode, attempt)
-    const id = `pg2c25b-record-${++sequence}`
+    const id = `${phase?.recordIdPrefix ?? 'pg2c25b-record-'}${++sequence}`
     const startedAt = clock()
     const visibilityAtStart = visibilityState()
     let visibilityChanges = 0
@@ -534,8 +565,8 @@ export function createPhase2C25BRunner(dependencies: Phase2C25BRunnerDependencie
     preparation: () => preparation,
     evidenceView: () => evidence,
     clear: () => { if (busy !== null) throw new Error('Cannot clear while running.'); records.length = 0; sequence = 0; changed() },
-    exportJson: (environment: Record<string, unknown>) => JSON.stringify({ protocolVersion: PHASE2C25B_PROTOCOL_VERSION, exportedAt: clock(), environment,
-      exportInfo, evidenceInfo, preparation, workload: evidence ? phase2c25bWorkload(evidence) : null, records }, null, 2),
+    exportJson: (environment: Record<string, unknown>) => JSON.stringify({ protocolVersion, exportedAt: clock(), environment,
+      exportInfo, evidenceInfo, preparation, workload: evidence ? selectedContexts() : null, records }, null, 2),
   }
 }
 export type Phase2C25BRunner = ReturnType<typeof createPhase2C25BRunner>
