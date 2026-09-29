@@ -177,6 +177,19 @@ export interface TargetBonusStream {
    * reservation (see `createTargetBonusStream()` for the state rule).
    * `exhausted` means no state of this depth can place a further amendment
    * inside the Gogma window.
+   *
+   * Single-pass (SEARCH_SPEC 5.6.8): the stream identity is
+   * `bonusStreamBaseKey(base, master)`, so two base objects with one key share
+   * one cursor. The first legal read of a stream is depth 1, and each later
+   * legal read is the depth right after the previous read. The returned raw
+   * solutions are handed to the caller and never kept by the stream, so a
+   * duplicate read, a backward read, a skip ahead, a read after a read that
+   * returned `exhausted`, a read while another read of the same stream is in
+   * flight, and any read after a failed read all throw instead of returning
+   * `[]` or regenerating a past depth. Re-presenting a past Ideal position to a
+   * later Route base is the scheduler's `BonusChannel.retained`, never a replay
+   * of this stream. `reservedReachesBeyondExtent()` is not a depth read and may
+   * be called after the terminal read.
    */
   readReservedDepth(base: BonusStreamBase, depth: number): Promise<{
     solutions: ReservedBonusStreamSolution[]
@@ -186,7 +199,8 @@ export interface TargetBonusStream {
   /**
    * Whether the Gogma window cut a position where this held-aware stream would
    * still have generated a state (SEARCH_SPEC 5.6.8 stopped by extent), as
-   * opposed to a natural end. It predicts nothing.
+   * opposed to a natural end. It predicts nothing, reads no depth and does not
+   * move the single-pass cursor, so it may be called after the terminal read.
    */
   reservedReachesBeyondExtent(base: BonusStreamBase): boolean
 }
@@ -583,9 +597,20 @@ export function createTargetBonusStream(
     /** The Gogma Counter right after the last own amendment (the start for the base). */
     nextFrom: number
   }
+  /**
+   * One held-aware stream. It keeps no raw solution of a depth it already
+   * returned (single-pass, SEARCH_SPEC 5.6.8): only the cursor, the reduced
+   * frontier (whose result history chains the next depth extends), the
+   * termination and extent flags, the unsupported notices and the window memo.
+   */
   interface ReservedSet {
     index: number
-    depths: ReservedBonusStreamSolution[][]
+    /** The one depth the next `readReservedDepth()` of this stream may read. */
+    nextDepth: number
+    /** Set once a read returned `exhausted` or failed: no further depth may be read. */
+    closedBy: 'exhausted' | 'failed' | null
+    /** A read of this stream is in flight. */
+    reading: boolean
     frontier: ReservedBonusState[]
     done: boolean
     cutByExtent: boolean
@@ -613,7 +638,9 @@ export function createTargetBonusStream(
     if (!set) {
       set = {
         index: reservedSets.size,
-        depths: [],
+        nextDepth: 1,
+        closedBy: null,
+        reading: false,
         frontier: [{
           depth: 0,
           lastResetDepth: 0,
@@ -669,8 +696,10 @@ export function createTargetBonusStream(
   }
 
   /**
-   * Held-aware Bonus states (`docs/SEARCH_SPEC.md` 5.6.8), depth by depth,
-   * where the depth is the own amendment count.
+   * The held-aware Bonus states of one depth (`docs/SEARCH_SPEC.md` 5.6.8),
+   * where the depth is the own amendment count. `readReservedDepth()` calls it
+   * once per depth, in order; it extends only the reduced frontier and returns
+   * the depth's raw solutions without keeping them.
    *
    * From each state the next amendment may stand at any legal position of its
    * window (`nextOperationPositions()`): a held position is skipped or used, a
@@ -692,83 +721,107 @@ export function createTargetBonusStream(
    * the ordinary stream: one Reset and one Keep per surviving layout per depth,
    * in the same order, over the window `start .. start + maxGogmaAdvance - 1`.
    */
-  async function ensureReserved(base: BonusStreamBase, through: number): Promise<ReservedSet> {
-    const set = reservedSet(base)
-    while (!set.done && set.depths.length < through) {
-      const depth = set.depths.length + 1
-      const windows: Array<ReadonlySet<number>> = []
-      const positions = new Set<number>()
-      for (const state of set.frontier) {
-        const window = await reservedWindow(set, base, state)
-        windows.push(new Set(window.positions))
-        window.positions.forEach((position) => positions.add(position))
-      }
-      const resetSupport = predictionSupport.gogmaReset()
-      const resetAllowed = resetSupport.supported && base.amendmentPolicy !== 'keep_only'
-      if (!resetSupport.supported) recordReservedUnsupported(set, 'reset_bonuses', resetSupport.reason)
-      const keepCapable = engine.capabilities.supportsKeepBonusesPrediction
-      const keepSupported = set.frontier.map((state, index) => {
-        if (!keepCapable || state.bonuses === null || windows[index].size === 0) return false
-        const support = predictionSupport.gogmaKeep(state.bonuses)
-        if (!support.supported) recordReservedUnsupported(set, 'keep_bonuses', support.reason)
-        return support.supported
-      })
+  async function generateReservedDepth(set: ReservedSet, base: BonusStreamBase, depth: number): Promise<ReservedBonusStreamSolution[]> {
+    if (set.done) return []
+    const windows: Array<ReadonlySet<number>> = []
+    const positions = new Set<number>()
+    for (const state of set.frontier) {
+      const window = await reservedWindow(set, base, state)
+      windows.push(new Set(window.positions))
+      window.positions.forEach((position) => positions.add(position))
+    }
+    const resetSupport = predictionSupport.gogmaReset()
+    const resetAllowed = resetSupport.supported && base.amendmentPolicy !== 'keep_only'
+    if (!resetSupport.supported) recordReservedUnsupported(set, 'reset_bonuses', resetSupport.reason)
+    const keepCapable = engine.capabilities.supportsKeepBonusesPrediction
+    const keepSupported = set.frontier.map((state, index) => {
+      if (!keepCapable || state.bonuses === null || windows[index].size === 0) return false
+      const support = predictionSupport.gogmaKeep(state.bonuses)
+      if (!support.supported) recordReservedUnsupported(set, 'keep_bonuses', support.reason)
+      return support.supported
+    })
 
-      const generated: ReservedBonusState[] = []
-      for (const position of [...positions].sort((left, right) => left - right)) {
-        if (resetAllowed) {
-          const parent = depth === 1
-            ? null
-            : set.frontier.find((state, index) =>
-              state.lastResetDepth === depth - 1 && state.depth === depth - 1 && windows[index].has(position))
-          if (parent === undefined) {
-            throw new Error(`Held-aware Bonus stream has no Reset chain reaching Gogma ${position} at depth ${depth}.`)
-          }
-          await execution.checkpoint()
-          const bonuses = predictReset(position)
-          const gogmaCounterAfter = engine.advanceGogmaCounter(position, { type: 'reset_bonuses' })
-          generated.push(reservedGeneratedState(depth, depth, bonuses, parent?.results ?? null, position, gogmaCounterAfter))
+    const generated: ReservedBonusState[] = []
+    for (const position of [...positions].sort((left, right) => left - right)) {
+      if (resetAllowed) {
+        const parent = depth === 1
+          ? null
+          : set.frontier.find((state, index) =>
+            state.lastResetDepth === depth - 1 && state.depth === depth - 1 && windows[index].has(position))
+        if (parent === undefined) {
+          throw new Error(`Held-aware Bonus stream has no Reset chain reaching Gogma ${position} at depth ${depth}.`)
         }
-        for (const [index, state] of set.frontier.entries()) {
-          if (!keepSupported[index] || !windows[index].has(position) || state.bonuses === null || state.familyLayoutKey === null) continue
-          await execution.checkpoint()
-          const bonuses = predictKeep(position, state.familyLayoutKey, state.bonuses)
-          const gogmaCounterAfter = engine.advanceGogmaCounter(position, { type: 'keep_bonuses' })
-          generated.push(reservedGeneratedState(depth, state.lastResetDepth, bonuses, state.results, position, gogmaCounterAfter))
-        }
+        await execution.checkpoint()
+        const bonuses = predictReset(position)
+        const gogmaCounterAfter = engine.advanceGogmaCounter(position, { type: 'reset_bonuses' })
+        generated.push(reservedGeneratedState(depth, depth, bonuses, parent?.results ?? null, position, gogmaCounterAfter))
       }
-      if (generated.length === 0) {
-        set.done = true
-        break
-      }
-      set.depths.push(generated.map((state) => ({
-        depth: state.depth,
-        lastResetDepth: state.lastResetDepth,
-        bonuses: state.bonuses as RestorationBonusSet,
-        restorationBonusScope: 'gogma_artian',
-        results: state.results as ReservedBonusResultNode,
-        steps: reservedBonusSteps(state.results),
-      })))
-      const byKey = new Map<string, ReservedBonusState>()
-      for (const state of generated) {
-        const key = `${state.position}\u0000${state.familyLayoutKey}`
-        const current = byKey.get(key)
-        if (!current || compareReservedRepresentative(state, current) < 0) byKey.set(key, state)
-      }
-      set.frontier = [...byKey.values()].sort(compareReservedFrontier)
-      if (observeReservedDepth !== undefined) {
-        observeReservedDepth({
-          streamIndex: set.index,
-          startGogmaCounter: base.startGogmaCounter,
-          depth,
-          generatedStates: generated.length,
-          frontierStates: set.frontier.length,
-          absolutePositions: new Set(generated.map((state) => state.position)).size,
-          familyLayouts: new Set(generated.map((state) => state.familyLayoutKey)).size,
-        })
+      for (const [index, state] of set.frontier.entries()) {
+        if (!keepSupported[index] || !windows[index].has(position) || state.bonuses === null || state.familyLayoutKey === null) continue
+        await execution.checkpoint()
+        const bonuses = predictKeep(position, state.familyLayoutKey, state.bonuses)
+        const gogmaCounterAfter = engine.advanceGogmaCounter(position, { type: 'keep_bonuses' })
+        generated.push(reservedGeneratedState(depth, state.lastResetDepth, bonuses, state.results, position, gogmaCounterAfter))
       }
     }
-    return set
+    if (generated.length === 0) {
+      set.done = true
+      return []
+    }
+    // Handed to the caller only; the stream keeps no reference to them.
+    const solutions: ReservedBonusStreamSolution[] = generated.map((state) => ({
+      depth: state.depth,
+      lastResetDepth: state.lastResetDepth,
+      bonuses: state.bonuses as RestorationBonusSet,
+      restorationBonusScope: 'gogma_artian',
+      results: state.results as ReservedBonusResultNode,
+      steps: reservedBonusSteps(state.results),
+    }))
+    const byKey = new Map<string, ReservedBonusState>()
+    for (const state of generated) {
+      const key = `${state.position}\u0000${state.familyLayoutKey}`
+      const current = byKey.get(key)
+      if (!current || compareReservedRepresentative(state, current) < 0) byKey.set(key, state)
+    }
+    set.frontier = [...byKey.values()].sort(compareReservedFrontier)
+    if (observeReservedDepth !== undefined) {
+      observeReservedDepth({
+        streamIndex: set.index,
+        startGogmaCounter: base.startGogmaCounter,
+        depth,
+        generatedStates: generated.length,
+        frontierStates: set.frontier.length,
+        absolutePositions: new Set(generated.map((state) => state.position)).size,
+        familyLayouts: new Set(generated.map((state) => state.familyLayoutKey)).size,
+      })
+    }
+    return solutions
+  }
+
+  /**
+   * The single-pass cursor check of `readReservedDepth()` (SEARCH_SPEC 5.6.8).
+   * A read the Production consumer never makes is an internal invariant
+   * violation and fails closed; it never returns `[]` and never regenerates a
+   * past depth, because the stream no longer holds one.
+   */
+  function claimReservedDepth(set: ReservedSet, base: BonusStreamBase, depth: number): void {
+    const stream = `held-aware Bonus stream ${bonusStreamBaseKey(base, input.master)}`
+    if (set.closedBy === 'failed') {
+      throw new Error(`Single-pass violation: ${stream} failed an earlier read; depth ${depth} cannot be read.`)
+    }
+    if (set.reading) {
+      throw new Error(`Single-pass violation: ${stream} is already reading depth ${set.nextDepth - 1}; depth ${depth} cannot be read concurrently.`)
+    }
+    if (set.closedBy === 'exhausted') {
+      throw new Error(`Single-pass violation: ${stream} returned exhausted at depth ${set.nextDepth - 1}; depth ${depth} cannot be read.`)
+    }
+    if (!Number.isInteger(depth) || depth !== set.nextDepth) {
+      const kind = !Number.isInteger(depth) ? 'a non-integer depth'
+        : depth < set.nextDepth ? (depth === set.nextDepth - 1 ? 'a duplicate read' : 'a backward read') : 'a skip ahead'
+      throw new Error(`Single-pass violation: ${stream} expects depth ${set.nextDepth}, got ${depth} (${kind}).`)
+    }
+    set.reading = true
+    set.nextDepth = depth + 1
   }
 
   function reservedGeneratedState(
@@ -818,15 +871,27 @@ export function createTargetBonusStream(
 
   return {
     readReservedDepth: async (base, depth) => {
-      const set = await ensureReserved(base, depth)
-      const solutions = set.depths[depth - 1] ?? []
-      let exhausted = set.depths.length <= depth
-      if (exhausted && !set.done && solutions.length > 0) {
-        for (const state of set.frontier) {
-          if ((await reservedWindow(set, base, state)).positions.length > 0) exhausted = false
+      const set = reservedSet(base)
+      claimReservedDepth(set, base, depth)
+      try {
+        const solutions = await generateReservedDepth(set, base, depth)
+        // An empty depth is terminal. Otherwise the stream goes on while one
+        // reduced frontier state still has a legal next position; every state's
+        // window is visited, so the extent-cut record and the memo are as before.
+        let exhausted = true
+        if (solutions.length > 0) {
+          for (const state of set.frontier) {
+            if ((await reservedWindow(set, base, state)).positions.length > 0) exhausted = false
+          }
         }
+        if (exhausted) set.closedBy = 'exhausted'
+        set.reading = false
+        return { solutions, unsupportedPredictions: [...set.unsupported.values()], exhausted }
+      } catch (error) {
+        set.closedBy = 'failed'
+        set.reading = false
+        throw error
       }
-      return { solutions, unsupportedPredictions: [...set.unsupported.values()], exhausted }
     },
     reservedReachesBeyondExtent: (base) =>
       reservedSets.get(bonusStreamBaseKey(base, input.master))?.cutByExtent ?? false,

@@ -97,7 +97,49 @@ describe('exhaustive synthetic parity with the pre-D2 publication', () => {
 })
 
 describe('Ideal-only channel retention on the real streams', () => {
-  /** The real held-aware frontier of one fixture, keeping the scheduler and the stream bases it registered. */
+  /**
+   * The raw held-aware depths the scheduler itself read, recorded by a test-only
+   * decorator around the real streams. The decorator passes every read and every
+   * result through unchanged; it never reads a stream on its own, because the
+   * held-aware streams are single-pass (SEARCH_SPEC 5.6.8) and a re-read after
+   * the scheduler would be a consumer contract violation, not an observation.
+   */
+  interface RecordedReads {
+    bonus: Map<string, { depths: number[]; solutions: ReservedBonusStreamSolution[]; exhausted: boolean }>
+    skill: Map<number, { depths: number[]; solutions: ReservedSkillStreamSolution[]; exhausted: boolean }>
+  }
+
+  function recordingStreams(bonusStream: TargetBonusStream, skillStream: TargetSkillStream, master: Parameters<typeof bonusStreamBaseKey>[1]) {
+    const reads: RecordedReads = { bonus: new Map(), skill: new Map() }
+    const bonus: TargetBonusStream = {
+      ...bonusStream,
+      readReservedDepth: async (base, depth) => {
+        const result = await bonusStream.readReservedDepth(base, depth)
+        const key = bonusStreamBaseKey(base, master)
+        const record = reads.bonus.get(key) ?? { depths: [], solutions: [], exhausted: false }
+        record.depths.push(depth)
+        record.solutions.push(...result.solutions)
+        record.exhausted = result.exhausted
+        reads.bonus.set(key, record)
+        return result
+      },
+    }
+    const skill: TargetSkillStream = {
+      ...skillStream,
+      readReservedDepth: async (start, depth) => {
+        const result = await skillStream.readReservedDepth(start, depth)
+        const record = reads.skill.get(start) ?? { depths: [], solutions: [], exhausted: false }
+        record.depths.push(depth)
+        record.solutions.push(...result.solutions)
+        record.exhausted = result.exhausted
+        reads.skill.set(start, record)
+        return result
+      },
+    }
+    return { reads, bonus, skill }
+  }
+
+  /** The real held-aware frontier of one fixture, keeping the scheduler, the stream bases it registered and the reads it made. */
   async function drain(options: FrontierFixtureOptions) {
     const fixture = frontierFixture(options)
     const extent = options.extent ?? 5
@@ -123,6 +165,9 @@ describe('Ideal-only channel retention on the real streams', () => {
         fixture.engine, execution, support,
       ),
     }
+    const recording = recordingStreams(context.bonusStream, context.skillStream, fixture.input.master)
+    context.bonusStream = recording.bonus
+    context.skillStream = recording.skill
     const compositions: ScheduledComposition[] = []
     const scheduler = new TargetSearchScheduler(context, (composition) => compositions.push(composition))
     const bonusBases = new Map<string, BonusStreamBase>()
@@ -137,7 +182,7 @@ describe('Ideal-only channel retention on the real streams', () => {
       await search(context, scheduler)
     }
     while (await scheduler.step()) { /* drain the whole extent */ }
-    return { fixture, context, target, scheduler, compositions, bonusBases, skillStarts }
+    return { fixture, context, target, scheduler, compositions, bonusBases, skillStarts, reads: recording.reads }
   }
 
   const options: FrontierFixtureOptions = {
@@ -151,41 +196,45 @@ describe('Ideal-only channel retention on the real streams', () => {
   }
 
   it('retains and publishes exactly the Ideal absolute positions of every channel, and nothing else', async () => {
-    const { fixture, context, target, scheduler, bonusBases, skillStarts } = await drain(options)
+    const { fixture, target, scheduler, bonusBases, skillStarts, reads } = await drain(options)
     const { skills, bonuses } = channelsOf(scheduler)
     expect(bonuses.size).toBeGreaterThan(0)
     expect(skills.size).toBeGreaterThan(0)
+    // One channel per stream key, and every channel stream was read exactly
+    // once per depth, 1, 2, 3, ..., up to its terminal read.
+    expect([...reads.bonus.keys()].sort()).toEqual([...bonuses.keys()].sort())
+    expect([...reads.skill.keys()].sort()).toEqual([...skills.keys()].sort())
+    for (const record of [...reads.bonus.values(), ...reads.skill.values()]) {
+      expect(record.depths).toEqual(record.depths.map((_, index) => index + 1))
+      expect(record.exhausted).toBe(true)
+    }
     let rawBonus = 0
     let idealBonus = 0
-    for (const [key, base] of bonusBases) {
+    for (const key of bonusBases.keys()) {
       const channel = bonuses.get(key)
       if (!channel) continue
-      // Re-read the memoized held-aware depths the scheduler already read.
-      const ideal: ReservedBonusStreamSolution[] = []
-      for (let depth = 1; ; depth += 1) {
-        const reserved = await context.bonusStream.readReservedDepth(base, depth)
-        rawBonus += reserved.solutions.length
-        ideal.push(...reserved.solutions.filter((solution) =>
-          satisfiesIdealBonuses(target, solution.bonuses, solution.restorationBonusScope, fixture.input.master)))
-        if (reserved.exhausted) break
-      }
+      // The raw depths the scheduler's own single-pass reads returned.
+      const read = reads.bonus.get(key)!
+      rawBonus += read.solutions.length
+      const ideal = read.solutions.filter((solution) =>
+        satisfiesIdealBonuses(target, solution.bonuses, solution.restorationBonusScope, fixture.input.master))
       idealBonus += ideal.length
       expect(channel.retained.every((value) => value.idealMatch)).toBe(true)
       expect(channel.retained.map((value) => value.solution.finalBonuses)).toEqual(ideal.map((solution) => solution.bonuses))
+      expect(channel.retained.map((value) => value.solution.operations.map((operation) =>
+        'gogmaCounterBefore' in operation ? `${operation.type}@${operation.gogmaCounterBefore}` : null)))
+        .toEqual(ideal.map((solution) => solution.steps.map((step, index) =>
+          `${index < solution.lastResetDepth ? 'reset_bonuses' : 'keep_bonuses'}@${step.gogmaCounterBefore}`)))
     }
     let rawSkill = 0
     let idealSkill = 0
     for (const start of skillStarts) {
       const channel = skills.get(start)
       if (!channel) continue
-      const ideal: ReservedSkillStreamSolution[] = []
-      for (let depth = 1; ; depth += 1) {
-        const reserved = await context.skillStream.readReservedDepth(start, depth)
-        rawSkill += reserved.solutions.length
-        ideal.push(...reserved.solutions.filter((solution) =>
-          evaluateSkillCondition(target.idealSkillCondition, solution.seriesSkillId, solution.groupSkillId)))
-        if (reserved.exhausted) break
-      }
+      const read = reads.skill.get(start)!
+      rawSkill += read.solutions.length
+      const ideal = read.solutions.filter((solution) =>
+        evaluateSkillCondition(target.idealSkillCondition, solution.seriesSkillId, solution.groupSkillId))
       idealSkill += ideal.length
       expect(channel.retained.every((value) => value.idealMatch)).toBe(true)
       expect(channel.retained.map((value) => value.solution.operations.map((operation) =>
