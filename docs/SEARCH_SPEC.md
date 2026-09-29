@@ -1483,6 +1483,18 @@ held 位置で自分のoperationが無い場合、武器状態（Bonus 5枠、sc
   notice（searched RouteKind / unsupported prediction）、extent / exhausted判定、prediction、stream frontierへの寄与は
   変わらない。これは既存semanticsの明文化であり、Candidate列・順序・summary・prediction呼び出しを変えない
   （Issue #154 Phase 2-C2.5-D1 / D2-a）
+- held-aware **Bonus** stream（`TargetBonusStream.readReservedDepth()`）は、`bonusStreamBaseKey(base, master)` で識別される
+  streamごとに **single-pass** で消費する。Production consumer（`TargetSearchScheduler` のBonus channel。stream keyごとに1つ）は
+  depthを1, 2, 3, …の順に各1回だけ読み、`exhausted` を返したdepthの後には次のdepthを読まない。後から登録されるRoute baseへ
+  過去のIdeal positionを再提示するのはschedulerのchannel（`BonusChannel.retained`、Ideal positionだけを保持する）であり、Bonus
+  stream自身が過去のraw depthをreplayすることはCandidate semanticsではない。したがってBonus streamは、既に返したdepthの
+  raw solutionを保持しない（保持するのは次に読むdepth、reduced frontierとそのresult history、termination / extentの記録、
+  unsupported notice、window memoだけである）。同一depthの再読、過去depthへの逆行、次depthの飛び越し、depth 1以外からの
+  開始、`exhausted` 後の追加read、同じstreamのread実行中の別read、失敗したread後のreadはconsumer contract違反であり、
+  黙って空配列を返したり過去depthを再生成したりせずfail closedする（internal invariant error）。`reservedReachesBeyondExtent()`
+  はdepth readではなく、terminal read後にも呼べ、predictionを行わない。これは各readが返すraw solutionの集合・順序・内容、
+  notice、extent / exhausted、predictionを変えない既存consumer contractの明文化であり、Candidate semanticsを変更しない
+  （Issue #154 Phase 2-C2.5-D2-d）。held-aware Skill stream（`TargetSkillStream.readReservedDepth()`）の保持方式は対象外で変えない
 - 決定的な順序で1件ずつ返し、consumer（Planner）が次を要求する限り継続する。canonical Ideal（5.6.3）で
   探索を終了しない。「canonical Ideal → Plannerで使用不可 → 次のIdeal → さらに使用不可なら次」と進める
 - 除外key（`excludedRouteKeys`）と一致するCandidateは返さずに次へ進み、除外件数をsummaryへ数える。この件数
