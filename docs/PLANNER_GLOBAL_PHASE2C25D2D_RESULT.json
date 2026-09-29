@@ -1,0 +1,3407 @@
+{
+  "phase": "Issue #154 Phase 2-C2.5-D2-d: Node memory / runtime effect of the single-pass held-aware Bonus stream (post-hoc analysis)",
+  "analyzedAt": "2026-09-29T06:45:06.464Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C25D2D_RUN.json.local",
+      "bytes": 3336284,
+      "sha256": "4b93ac9b12cc34f3675b4fa77c19146e0e4d0ac0ae2688fe6a220aff3972c996"
+    },
+    "c25a": {
+      "file": "PLANNER_GLOBAL_PHASE2C25A_RESULT.json",
+      "bytes": 635030,
+      "sha256": "a6e38294a5c9137a7d62a3f57d552af637a67d115e1fd04541713b27823e87dd"
+    },
+    "d2a": {
+      "file": "PLANNER_GLOBAL_PHASE2C25D2A_RESULT.json",
+      "bytes": 72406,
+      "sha256": "51918edeb7b8b4b08953847125295f6bddab5f4f89c2a759daa37d7d1bc7e914"
+    },
+    "d2c": {
+      "file": "PLANNER_GLOBAL_PHASE2C25D2C_RESULT.json",
+      "bytes": 1184595,
+      "sha256": "fc9c5102affda2bf102a68cd782e0f3548d256024416b68c38e264841e50c4c6"
+    },
+    "semanticTests": {
+      "file": "PLANNER_GLOBAL_PHASE2C25D2D_TESTS.json.local",
+      "bytes": 1865343,
+      "sha256": "ea619fe00e3422af553ab083778f60925f99ace7a03449919929054d8f8d8711"
+    }
+  },
+  "provenance": {
+    "measuredHead": "aebe6bbb2e52ca59641fb70b25754de0a76b78c5",
+    "analysisHead": "2047a69cf39840f122b89555156e20841dbf04a0",
+    "codeChangedSinceMeasuredHead": [
+      "src/benchmarks/plannerGlobalPhase2C25D2DInterpretation.ts"
+    ],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "scripts/analyze-planner-global-phase2c25d2d.mjs",
+      "src/benchmarks/plannerGlobalPhase2C25D2DInterpretation.ts",
+      "*.test.ts"
+    ],
+    "formal": true,
+    "benchmarkCodeSha256": "849f2ad4d7aaa66c1f6642abbd12dd3b536d6bd98d08be9ca6cca7a10f644dea",
+    "uncommittedBenchmarkCode": false,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "c25aEvidenceFileName": "PLANNER_GLOBAL_PHASE2C25A_RESULT.json",
+    "c25aEvidenceSha256": "a6e38294a5c9137a7d62a3f57d552af637a67d115e1fd04541713b27823e87dd",
+    "d2aResultFileName": "PLANNER_GLOBAL_PHASE2C25D2A_RESULT.json",
+    "d2aResultSha256": "51918edeb7b8b4b08953847125295f6bddab5f4f89c2a759daa37d7d1bc7e914",
+    "d2aMeasuredHead": "0c054a8415244e99743cc2c615bf38c94917729f",
+    "d2cResultFileName": "PLANNER_GLOBAL_PHASE2C25D2C_RESULT.json",
+    "d2cResultSha256": "fc9c5102affda2bf102a68cd782e0f3548d256024416b68c38e264841e50c4c6",
+    "d2cMeasuredHead": "dddbfaa5afe235e323ae1cf730fcd143a41ccbe8",
+    "measuredAt": "2026-09-29T05:59:16.261Z",
+    "runWallMs": 2505710.6982
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per Search run, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296
+  },
+  "conditions": {
+    "childHeapLimitMb": 8192,
+    "jit": "jit_default (no V8 flag other than --max-old-space-size)",
+    "concurrency": 1,
+    "freshChildPerSearchRun": true,
+    "childScript": "scripts/run-planner-global-phase2c25d2a.mjs",
+    "modes": [
+      "minimal",
+      "instrumented"
+    ],
+    "nodeYield": "setImmediate",
+    "searchExtent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "candidateStopBound": 1,
+    "snapshotPolicy": {
+      "heartbeatMs": 2000,
+      "heapGrowthBytes": 268435456,
+      "depthStep": 5
+    },
+    "minimalMemoryHeartbeatMs": 2000,
+    "runBudgetMs": 1200000,
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 20000,
+    "memoryValues": "process.memoryUsage() periodic samples are sampled maxima, never a true peak; v8FatalGc is V8's own trace line at an OOM death; D2-c values come from a profiled child and are a reference only"
+  },
+  "workloadSelection": {
+    "rule": "Primary OOM: every D2-a RESULT context with role oom_representative that is out_of_memory in both D2-a modes (minimal, instrumented). Cleared reference: every D2-a RESULT context with role oom_representative that ended normally (first_candidate / stopped_by_extent_before_candidate / exhausted_before_candidate) with the same status in both D2-a modes. Controls: the D2-a workloadSelection controls, which must equal the C2.5-C rule (selectPhase2C25CWorkload) re-applied by the runner to the C2.5-A evidence and must have D2-a control semantic parity in every mode. An OOM representative that is neither (modes differ, timeout, process failure) is reported unselected. No Target, Entry or orientation ID is fixed in source.",
+    "primary": [
+      {
+        "role": "primary_oom",
+        "evidenceIndex": 1,
+        "d2aIndex": 1,
+        "orientationId": "c12-p0",
+        "kind": "same_skill_counter",
+        "workIndex": 0,
+        "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "contextDigest": "fnv1a32:4495d2ca",
+        "d2aDepth": {
+          "gogmaMaxDepth": 12,
+          "maxGeneratedStatesPerDepth": 1964741,
+          "depthOfMaxGeneratedStates": 3,
+          "cumulativeGogmaGenerated": 17403169
+        }
+      },
+      {
+        "role": "primary_oom",
+        "evidenceIndex": 2,
+        "d2aIndex": 2,
+        "orientationId": "c2-p1",
+        "kind": "same_owned_weapon_consumed",
+        "workIndex": 0,
+        "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+        "contextDigest": "fnv1a32:c15b7420",
+        "d2aDepth": {
+          "gogmaMaxDepth": 18,
+          "maxGeneratedStatesPerDepth": 1256560,
+          "depthOfMaxGeneratedStates": 3,
+          "cumulativeGogmaGenerated": 17267064
+        }
+      }
+    ],
+    "clearedReferences": [
+      {
+        "role": "cleared_reference",
+        "evidenceIndex": 0,
+        "d2aIndex": 0,
+        "orientationId": "c0-p0",
+        "kind": "same_gogma_counter",
+        "workIndex": 0,
+        "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "contextDigest": "fnv1a32:9c34f78f",
+        "d2aDepth": {
+          "gogmaMaxDepth": 233,
+          "maxGeneratedStatesPerDepth": 18558,
+          "depthOfMaxGeneratedStates": 218,
+          "cumulativeGogmaGenerated": 2360100
+        }
+      }
+    ],
+    "controls": [
+      {
+        "role": "control_first_candidate",
+        "evidenceIndex": 3,
+        "d2aIndex": 3,
+        "orientationId": "c8-p1",
+        "kind": "same_gogma_counter",
+        "workIndex": 0,
+        "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+        "contextDigest": "fnv1a32:26200e54",
+        "d2aDepth": {
+          "gogmaMaxDepth": 101,
+          "maxGeneratedStatesPerDepth": 7410,
+          "depthOfMaxGeneratedStates": 96,
+          "cumulativeGogmaGenerated": 493595
+        }
+      },
+      {
+        "role": "control_stopped_by_extent",
+        "evidenceIndex": 4,
+        "d2aIndex": 4,
+        "orientationId": "c13-p4",
+        "kind": "same_skill_counter",
+        "workIndex": 0,
+        "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "contextDigest": "fnv1a32:bd84b1d6",
+        "d2aDepth": {
+          "gogmaMaxDepth": 234,
+          "maxGeneratedStatesPerDepth": 1005,
+          "depthOfMaxGeneratedStates": 233,
+          "cumulativeGogmaGenerated": 125860
+        }
+      }
+    ],
+    "unselected": [],
+    "equalsD2CWorkload": true
+  },
+  "contextParity": {
+    "contexts": 5,
+    "matching": 5,
+    "rows": [
+      {
+        "orientationId": "c12-p0",
+        "workIndex": 0,
+        "matches": true,
+        "fields": [
+          {
+            "field": "orientationId",
+            "matches": true
+          },
+          {
+            "field": "workIndex",
+            "matches": true
+          },
+          {
+            "field": "targetWeaponId",
+            "matches": true
+          },
+          {
+            "field": "status",
+            "matches": true
+          },
+          {
+            "field": "invalidatedBuildListEntryId",
+            "matches": true
+          },
+          {
+            "field": "invalidatedRouteKey",
+            "matches": true
+          },
+          {
+            "field": "fixedRouteBuildListEntryIds",
+            "matches": true
+          },
+          {
+            "field": "reservation",
+            "matches": true
+          },
+          {
+            "field": "excludedRouteKeys",
+            "matches": true
+          },
+          {
+            "field": "extent",
+            "matches": true
+          },
+          {
+            "field": "originDigest",
+            "matches": true
+          },
+          {
+            "field": "contextDigest",
+            "matches": true
+          }
+        ],
+        "workloadDigest": "fnv1a32:4495d2ca",
+        "derivedDigest": "fnv1a32:4495d2ca",
+        "digestMatches": true
+      },
+      {
+        "orientationId": "c2-p1",
+        "workIndex": 0,
+        "matches": true,
+        "fields": [
+          {
+            "field": "orientationId",
+            "matches": true
+          },
+          {
+            "field": "workIndex",
+            "matches": true
+          },
+          {
+            "field": "targetWeaponId",
+            "matches": true
+          },
+          {
+            "field": "status",
+            "matches": true
+          },
+          {
+            "field": "invalidatedBuildListEntryId",
+            "matches": true
+          },
+          {
+            "field": "invalidatedRouteKey",
+            "matches": true
+          },
+          {
+            "field": "fixedRouteBuildListEntryIds",
+            "matches": true
+          },
+          {
+            "field": "reservation",
+            "matches": true
+          },
+          {
+            "field": "excludedRouteKeys",
+            "matches": true
+          },
+          {
+            "field": "extent",
+            "matches": true
+          },
+          {
+            "field": "originDigest",
+            "matches": true
+          },
+          {
+            "field": "contextDigest",
+            "matches": true
+          }
+        ],
+        "workloadDigest": "fnv1a32:c15b7420",
+        "derivedDigest": "fnv1a32:c15b7420",
+        "digestMatches": true
+      },
+      {
+        "orientationId": "c0-p0",
+        "workIndex": 0,
+        "matches": true,
+        "fields": [
+          {
+            "field": "orientationId",
+            "matches": true
+          },
+          {
+            "field": "workIndex",
+            "matches": true
+          },
+          {
+            "field": "targetWeaponId",
+            "matches": true
+          },
+          {
+            "field": "status",
+            "matches": true
+          },
+          {
+            "field": "invalidatedBuildListEntryId",
+            "matches": true
+          },
+          {
+            "field": "invalidatedRouteKey",
+            "matches": true
+          },
+          {
+            "field": "fixedRouteBuildListEntryIds",
+            "matches": true
+          },
+          {
+            "field": "reservation",
+            "matches": true
+          },
+          {
+            "field": "excludedRouteKeys",
+            "matches": true
+          },
+          {
+            "field": "extent",
+            "matches": true
+          },
+          {
+            "field": "originDigest",
+            "matches": true
+          },
+          {
+            "field": "contextDigest",
+            "matches": true
+          }
+        ],
+        "workloadDigest": "fnv1a32:9c34f78f",
+        "derivedDigest": "fnv1a32:9c34f78f",
+        "digestMatches": true
+      },
+      {
+        "orientationId": "c8-p1",
+        "workIndex": 0,
+        "matches": true,
+        "fields": [
+          {
+            "field": "orientationId",
+            "matches": true
+          },
+          {
+            "field": "workIndex",
+            "matches": true
+          },
+          {
+            "field": "targetWeaponId",
+            "matches": true
+          },
+          {
+            "field": "status",
+            "matches": true
+          },
+          {
+            "field": "invalidatedBuildListEntryId",
+            "matches": true
+          },
+          {
+            "field": "invalidatedRouteKey",
+            "matches": true
+          },
+          {
+            "field": "fixedRouteBuildListEntryIds",
+            "matches": true
+          },
+          {
+            "field": "reservation",
+            "matches": true
+          },
+          {
+            "field": "excludedRouteKeys",
+            "matches": true
+          },
+          {
+            "field": "extent",
+            "matches": true
+          },
+          {
+            "field": "originDigest",
+            "matches": true
+          },
+          {
+            "field": "contextDigest",
+            "matches": true
+          }
+        ],
+        "workloadDigest": "fnv1a32:26200e54",
+        "derivedDigest": "fnv1a32:26200e54",
+        "digestMatches": true
+      },
+      {
+        "orientationId": "c13-p4",
+        "workIndex": 0,
+        "matches": true,
+        "fields": [
+          {
+            "field": "orientationId",
+            "matches": true
+          },
+          {
+            "field": "workIndex",
+            "matches": true
+          },
+          {
+            "field": "targetWeaponId",
+            "matches": true
+          },
+          {
+            "field": "status",
+            "matches": true
+          },
+          {
+            "field": "invalidatedBuildListEntryId",
+            "matches": true
+          },
+          {
+            "field": "invalidatedRouteKey",
+            "matches": true
+          },
+          {
+            "field": "fixedRouteBuildListEntryIds",
+            "matches": true
+          },
+          {
+            "field": "reservation",
+            "matches": true
+          },
+          {
+            "field": "excludedRouteKeys",
+            "matches": true
+          },
+          {
+            "field": "extent",
+            "matches": true
+          },
+          {
+            "field": "originDigest",
+            "matches": true
+          },
+          {
+            "field": "contextDigest",
+            "matches": true
+          }
+        ],
+        "workloadDigest": "fnv1a32:bd84b1d6",
+        "derivedDigest": "fnv1a32:bd84b1d6",
+        "digestMatches": true
+      }
+    ]
+  },
+  "semanticTests": {
+    "reportHead": "aebe6bbb2e52ca59641fb70b25754de0a76b78c5",
+    "numTotalTests": 5119,
+    "numPassedTests": 5119,
+    "numFailedTests": 0,
+    "numTotalTestSuites": 1175,
+    "success": true,
+    "keyFiles": [
+      {
+        "file": "src/benchmarks/plannerGlobalPhase2C25D2D.test.ts",
+        "status": "passed",
+        "passed": 14,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/candidateSearch.integration.test.ts",
+        "status": "passed",
+        "passed": 42,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/incrementalSearch.test.ts",
+        "status": "passed",
+        "passed": 11,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/lazyIdealCross.test.ts",
+        "status": "passed",
+        "passed": 7,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/normalRouteReduction.test.ts",
+        "status": "passed",
+        "passed": 19,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/reservedBonusStreamSinglePass.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/planner/alternative/plannerAlternativeReservation.test.ts",
+        "status": "passed",
+        "passed": 7,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/alternative/plannerAlternativeFrontier.test.ts",
+        "status": "passed",
+        "passed": 26,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/alternative/plannerAlternativeIdealOnlyPublication.test.ts",
+        "status": "passed",
+        "passed": 42,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/alternative/plannerAlternativeIdealPublication.test.ts",
+        "status": "passed",
+        "passed": 18,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/alternative/plannerAlternativeReservation.test.ts",
+        "status": "passed",
+        "passed": 21,
+        "failed": 0
+      },
+      {
+        "file": "src/domain/search/alternative/plannerAlternativeSearch.test.ts",
+        "status": "passed",
+        "passed": 32,
+        "failed": 0
+      }
+    ]
+  },
+  "sourceAudit": {
+    "measured": {
+      "head": "aebe6bbb2e52ca59641fb70b25754de0a76b78c5",
+      "reservedSetHoldsRawSolutions": false,
+      "readReservedDepthReadsDepths": false,
+      "singlePassCursor": true,
+      "ordinaryDepthCacheKept": true,
+      "stepsStillBuiltPerRawSolution": true
+    },
+    "d2cMeasured": {
+      "head": "dddbfaa5afe235e323ae1cf730fcd143a41ccbe8",
+      "reservedSetHoldsRawSolutions": true,
+      "readReservedDepthReadsDepths": true,
+      "singlePassCursor": false,
+      "ordinaryDepthCacheKept": true,
+      "stepsStillBuiltPerRawSolution": true
+    },
+    "productionFilesChangedSinceD2CMeasured": [
+      "src/domain/search/bonusStream.ts"
+    ]
+  },
+  "totals": {
+    "contexts": 5,
+    "primary": 2,
+    "primaryLeftOom": 2,
+    "primaryEndedNormally": 2,
+    "primaryOutcomes": {
+      "stopped_by_extent_before_candidate": 1,
+      "first_candidate": 1
+    },
+    "semanticParityContexts": 3,
+    "semanticParityWithD2A": true,
+    "modeSemanticParityFailures": 0
+  },
+  "contexts": [
+    {
+      "orientationId": "c12-p0",
+      "workIndex": 0,
+      "role": "primary_oom",
+      "kind": "same_skill_counter",
+      "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+      "d2a": {
+        "minimalStatus": "out_of_memory",
+        "instrumentedStatus": "out_of_memory"
+      },
+      "d2c": {
+        "runId": "sampling-jit_default-c12-p0-w0",
+        "outcome": "out_of_memory",
+        "wallMs": 90489.1954,
+        "heapSizeLimitBytes": 8791261184,
+        "lastProgress": {
+          "elapsedMs": 84913.7138,
+          "heapUsed": 7126499504,
+          "rss": 9027497984,
+          "maxDepth": {
+            "skill": 3,
+            "gogma": 12
+          },
+          "cumulative": {
+            "gogmaGeneratedStates": 17403169,
+            "gogmaFrontierStates": 546316,
+            "skillStates": 16
+          },
+          "maxGeneratedStatesInOneDepth": 246039,
+          "depthOfMaxGenerated": 3
+        }
+      },
+      "after": {
+        "minimal": {
+          "mode": "minimal",
+          "view": {
+            "status": "stopped_by_extent_before_candidate",
+            "searchElapsedMs": 867596.8086,
+            "timeToFirstMs": null,
+            "searchSummary": {
+              "deliveredCandidates": 0,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": true,
+              "stoppedByConsumer": false,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 341256904,
+              "heapTotal": 424271872,
+              "rss": 576745472,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 1086835160,
+              "heapTotal": 2830708736,
+              "rss": 5675581440,
+              "external": 24048946,
+              "arrayBuffers": 212663
+            },
+            "maxRssKiB": 5603168,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 397,
+            "sampledMax": {
+              "heapUsed": 4671634240,
+              "heapTotal": 5309005824,
+              "rss": 5689905152
+            },
+            "last": {
+              "heapUsed": 1086835160,
+              "heapTotal": 2830708736,
+              "rss": 5675581440
+            },
+            "lastAtElapsedMs": 867596.8086
+          },
+          "metrics": null,
+          "gogmaDepthMaxima": null,
+          "lastSnapshotPredictionCounts": null
+        },
+        "instrumented": {
+          "mode": "instrumented",
+          "view": {
+            "status": "stopped_by_extent_before_candidate",
+            "searchElapsedMs": 902976.2905,
+            "timeToFirstMs": null,
+            "searchSummary": {
+              "deliveredCandidates": 0,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": true,
+              "stoppedByConsumer": false,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 234,
+              "keepBonuses": 26719
+            },
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 338884136,
+              "heapTotal": 422457344,
+              "rss": 574345216,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 1263908328,
+              "heapTotal": 2921410560,
+              "rss": 5685207040,
+              "external": 24048946,
+              "arrayBuffers": 347219
+            },
+            "maxRssKiB": 5619944,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 649,
+            "sampledMax": {
+              "heapUsed": 4748942800,
+              "heapTotal": 5450805248,
+              "rss": 5701681152
+            },
+            "last": {
+              "heapUsed": 1263908328,
+              "heapTotal": 2921410560,
+              "rss": 5685207040
+            },
+            "lastAtElapsedMs": 902976.2905
+          },
+          "metrics": {
+            "gogmaMaxDepth": 234,
+            "cumulativeGogmaGenerated": 125904312,
+            "cumulativeGogmaFrontier": 21126394,
+            "maxGogmaGeneratedPerDepth": 1964741,
+            "maxGogmaFrontierPerDepth": 146470,
+            "maxGogmaFamilyLayoutsPerDepth": 1646,
+            "gogmaDepthWeightedGeneratedStates": 6076870697,
+            "skillMaxDepth": 3,
+            "cumulativeSkillStates": 16,
+            "settledWorkItems": 1886,
+            "predictionCalls": 26961,
+            "resetBonuses": 234,
+            "keepBonuses": 26719,
+            "predictSkills": 4,
+            "sampledMaxHeapUsed": 4841002056,
+            "sampledMaxRss": 5722415104
+          },
+          "gogmaDepthMaxima": {
+            "maxGeneratedStatesPerDepth": 1964741,
+            "depthOfMaxGeneratedStates": 3,
+            "reachedDepths": 234
+          },
+          "lastSnapshotPredictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 4,
+            "resetBonuses": 234,
+            "keepBonuses": 26719
+          }
+        }
+      },
+      "rows": [
+        {
+          "orientationId": "c12-p0",
+          "workIndex": 0,
+          "role": "primary_oom",
+          "mode": "minimal",
+          "status": {
+            "d2a": "out_of_memory",
+            "d2c": null,
+            "d2d": "stopped_by_extent_before_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "d2a": 7110114184,
+            "d2c": null,
+            "d2d": 4671634240
+          },
+          "sampledMaxHeapTotal": {
+            "d2a": 8662794240,
+            "d2c": null,
+            "d2d": 5309005824
+          },
+          "sampledMaxRss": {
+            "d2a": 9029976064,
+            "d2c": null,
+            "d2d": 5689905152
+          },
+          "lastSampleHeapUsed": {
+            "d2a": 7110114184,
+            "d2c": null,
+            "d2d": 1086835160
+          },
+          "lastSampleAtElapsedMs": {
+            "d2a": 85354.033,
+            "d2c": null,
+            "d2d": 867596.8086
+          },
+          "v8FatalGcBeforeMb": {
+            "d2a": 6804.4,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxRssKiB": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": 5603168
+          },
+          "gogmaMaxDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "skillMaxDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeGogmaGenerated": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeGogmaFrontier": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeSkillStates": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxGogmaGeneratedPerDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "depthOfMaxGogmaGenerated": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "settledWorkItems": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "predictionCounts": {
+            "d2a": null,
+            "d2d": null
+          },
+          "timeToFirstMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "searchElapsedMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": 867596.8086
+          }
+        },
+        {
+          "orientationId": "c12-p0",
+          "workIndex": 0,
+          "role": "primary_oom",
+          "mode": "instrumented",
+          "status": {
+            "d2a": "out_of_memory",
+            "d2c": "out_of_memory",
+            "d2d": "stopped_by_extent_before_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "d2a": 7127028072,
+            "d2c": null,
+            "d2d": 4748942800
+          },
+          "sampledMaxHeapTotal": {
+            "d2a": 8650735616,
+            "d2c": null,
+            "d2d": 5450805248
+          },
+          "sampledMaxRss": {
+            "d2a": 9019260928,
+            "d2c": null,
+            "d2d": 5701681152
+          },
+          "lastSampleHeapUsed": {
+            "d2a": 7127028072,
+            "d2c": 7126499504,
+            "d2d": 1263908328
+          },
+          "lastSampleAtElapsedMs": {
+            "d2a": 89117.7664,
+            "d2c": 84913.7138,
+            "d2d": 902976.2905
+          },
+          "v8FatalGcBeforeMb": {
+            "d2a": 6811.2,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxRssKiB": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": 5619944
+          },
+          "gogmaMaxDepth": {
+            "d2a": 12,
+            "d2c": 12,
+            "d2d": 234
+          },
+          "skillMaxDepth": {
+            "d2a": 3,
+            "d2c": 3,
+            "d2d": 3
+          },
+          "cumulativeGogmaGenerated": {
+            "d2a": 17403169,
+            "d2c": 17403169,
+            "d2d": 125904312
+          },
+          "cumulativeGogmaFrontier": {
+            "d2a": 546316,
+            "d2c": 546316,
+            "d2d": 21126394
+          },
+          "cumulativeSkillStates": {
+            "d2a": 16,
+            "d2c": 16,
+            "d2d": 16
+          },
+          "maxGogmaGeneratedPerDepth": {
+            "d2a": 1964741,
+            "d2c": null,
+            "d2d": 1964741
+          },
+          "depthOfMaxGogmaGenerated": {
+            "d2a": 3,
+            "d2c": null,
+            "d2d": 3
+          },
+          "settledWorkItems": {
+            "d2a": 101,
+            "d2c": null,
+            "d2d": 1886
+          },
+          "predictionCounts": {
+            "d2a": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 125,
+              "keepBonuses": 8216
+            },
+            "d2d": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 234,
+              "keepBonuses": 26719
+            }
+          },
+          "timeToFirstMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "searchElapsedMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": 902976.2905
+          }
+        }
+      ],
+      "processes": {
+        "minimal": {
+          "id": "search-c12-p0-w0-minimal",
+          "role": "search",
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "budgetMs": 1200000,
+          "startedAt": "2026-09-29T05:59:16.270Z",
+          "wallMs": 870313.4677,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "stderrTail": null
+        },
+        "instrumented": {
+          "id": "search-c12-p0-w0-instrumented",
+          "role": "search",
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "budgetMs": 1200000,
+          "startedAt": "2026-09-29T06:13:46.592Z",
+          "wallMs": 905676.7395000001,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "stderrTail": null
+        }
+      },
+      "semanticParityWithD2A": null,
+      "modeSemanticParity": true,
+      "primaryOutcome": {
+        "leftOom": true,
+        "endedNormally": true,
+        "consistent": true,
+        "reached": "stopped_by_extent_before_candidate"
+      },
+      "newObservation": {
+        "minimal": {
+          "status": "stopped_by_extent_before_candidate",
+          "searchSummary": {
+            "deliveredCandidates": 0,
+            "excludedCandidates": 0,
+            "exhausted": false,
+            "stoppedByExtent": true,
+            "stoppedByConsumer": false,
+            "skippedExcludedRouteKeys": 0
+          },
+          "firstCandidateKeySha256": null,
+          "predictionCounts": null,
+          "searchElapsedMs": 867596.8086,
+          "timeToFirstMs": null,
+          "finalOrLastGogmaDepth": null
+        },
+        "instrumented": {
+          "status": "stopped_by_extent_before_candidate",
+          "searchSummary": {
+            "deliveredCandidates": 0,
+            "excludedCandidates": 0,
+            "exhausted": false,
+            "stoppedByExtent": true,
+            "stoppedByConsumer": false,
+            "skippedExcludedRouteKeys": 0
+          },
+          "firstCandidateKeySha256": null,
+          "predictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 4,
+            "resetBonuses": 234,
+            "keepBonuses": 26719
+          },
+          "searchElapsedMs": 902976.2905,
+          "timeToFirstMs": null,
+          "finalOrLastGogmaDepth": 234
+        }
+      }
+    },
+    {
+      "orientationId": "c2-p1",
+      "workIndex": 0,
+      "role": "primary_oom",
+      "kind": "same_owned_weapon_consumed",
+      "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+      "d2a": {
+        "minimalStatus": "out_of_memory",
+        "instrumentedStatus": "out_of_memory"
+      },
+      "d2c": {
+        "runId": "sampling-jit_default-c2-p1-w0",
+        "outcome": "out_of_memory",
+        "wallMs": 96127.08599999998,
+        "heapSizeLimitBytes": 8791261184,
+        "lastProgress": {
+          "elapsedMs": 91979.8175,
+          "heapUsed": 7092853848,
+          "rss": 9060503552,
+          "maxDepth": {
+            "skill": 4,
+            "gogma": 18
+          },
+          "cumulative": {
+            "gogmaGeneratedStates": 17267064,
+            "gogmaFrontierStates": 652568,
+            "skillStates": 8
+          },
+          "maxGeneratedStatesInOneDepth": 157070,
+          "depthOfMaxGenerated": 3
+        }
+      },
+      "after": {
+        "minimal": {
+          "mode": "minimal",
+          "view": {
+            "status": "first_candidate",
+            "searchElapsedMs": 305717.4769,
+            "timeToFirstMs": 305717.4623,
+            "searchSummary": {
+              "deliveredCandidates": 1,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": false,
+              "stoppedByConsumer": true,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": "fffec72ab6b58d8ff06a7ee0e549e5d4647bedc2694a03bbb78e6323ae15115c",
+            "firstCandidate": {
+              "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+              "routeKind": "existing_gogma_mixed",
+              "sourceKind": "owned_gogma",
+              "sourceOwnedWeaponId": "346dfc0f-603a-430f-8698-d4b093315179",
+              "estimatedOperationCount": 63,
+              "estimatedAdvances": {
+                "normal": null,
+                "gogma": 162,
+                "skill": 0
+              },
+              "ownOperationCount": 63,
+              "operationTypes": {
+                "reset_bonuses": 22,
+                "keep_bonuses": 41
+              },
+              "normalCounterId": null,
+              "normalProductionTargetPosition": null,
+              "blindNormalCreation": false,
+              "conversionSkillPosition": null,
+              "normal": null,
+              "gogma": {
+                "first": 154,
+                "last": 216,
+                "operations": 63,
+                "positions": [
+                  [
+                    154,
+                    216
+                  ]
+                ],
+                "required": [
+                  175,
+                  216
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": true
+              },
+              "skill": null,
+              "gogmaTypeRuns": [
+                [
+                  154,
+                  175,
+                  "reset_bonuses"
+                ],
+                [
+                  176,
+                  216,
+                  "keep_bonuses"
+                ]
+              ],
+              "heldRoute": false,
+              "finalBonuses": [
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.affinity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.attack",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.affinity",
+                  "bonusRankId": "bonus_rank.ex"
+                }
+              ],
+              "restorationBonusScope": "gogma_artian",
+              "seriesSkillId": "series_skill.gore_magala",
+              "groupSkillId": "group_skill.apex"
+            },
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 340468528,
+              "heapTotal": 424271872,
+              "rss": 576700416,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 1061273664,
+              "heapTotal": 1480839168,
+              "rss": 1879138304,
+              "external": 24048946,
+              "arrayBuffers": 212663
+            },
+            "maxRssKiB": 1847076,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 142,
+            "sampledMax": {
+              "heapUsed": 1441607024,
+              "heapTotal": 1626591232,
+              "rss": 1879138304
+            },
+            "last": {
+              "heapUsed": 1061273664,
+              "heapTotal": 1480839168,
+              "rss": 1879138304
+            },
+            "lastAtElapsedMs": 305717.4769
+          },
+          "metrics": null,
+          "gogmaDepthMaxima": null,
+          "lastSnapshotPredictionCounts": null
+        },
+        "instrumented": {
+          "mode": "instrumented",
+          "view": {
+            "status": "first_candidate",
+            "searchElapsedMs": 314922.0329,
+            "timeToFirstMs": 314921.81799999997,
+            "searchSummary": {
+              "deliveredCandidates": 1,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": false,
+              "stoppedByConsumer": true,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": "fffec72ab6b58d8ff06a7ee0e549e5d4647bedc2694a03bbb78e6323ae15115c",
+            "firstCandidate": {
+              "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+              "routeKind": "existing_gogma_mixed",
+              "sourceKind": "owned_gogma",
+              "sourceOwnedWeaponId": "346dfc0f-603a-430f-8698-d4b093315179",
+              "estimatedOperationCount": 63,
+              "estimatedAdvances": {
+                "normal": null,
+                "gogma": 162,
+                "skill": 0
+              },
+              "ownOperationCount": 63,
+              "operationTypes": {
+                "reset_bonuses": 22,
+                "keep_bonuses": 41
+              },
+              "normalCounterId": null,
+              "normalProductionTargetPosition": null,
+              "blindNormalCreation": false,
+              "conversionSkillPosition": null,
+              "normal": null,
+              "gogma": {
+                "first": 154,
+                "last": 216,
+                "operations": 63,
+                "positions": [
+                  [
+                    154,
+                    216
+                  ]
+                ],
+                "required": [
+                  175,
+                  216
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": true
+              },
+              "skill": null,
+              "gogmaTypeRuns": [
+                [
+                  154,
+                  175,
+                  "reset_bonuses"
+                ],
+                [
+                  176,
+                  216,
+                  "keep_bonuses"
+                ]
+              ],
+              "heldRoute": false,
+              "finalBonuses": [
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.affinity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.attack",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.affinity",
+                  "bonusRankId": "bonus_rank.ex"
+                }
+              ],
+              "restorationBonusScope": "gogma_artian",
+              "seriesSkillId": "series_skill.gore_magala",
+              "groupSkillId": "group_skill.apex"
+            },
+            "predictionCounts": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 160,
+              "keepBonuses": 13173
+            },
+            "predictionCountsAtFirstCandidate": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 160,
+              "keepBonuses": 13173
+            },
+            "preSearchMemory": {
+              "heapUsed": 337948224,
+              "heapTotal": 423243776,
+              "rss": 575258624,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 473315488,
+              "heapTotal": 1381228544,
+              "rss": 1594728448,
+              "external": 24048946,
+              "arrayBuffers": 290567
+            },
+            "maxRssKiB": 1584024,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 194,
+            "sampledMax": {
+              "heapUsed": 1387746776,
+              "heapTotal": 1477492736,
+              "rss": 1606586368
+            },
+            "last": {
+              "heapUsed": 473315488,
+              "heapTotal": 1381228544,
+              "rss": 1594728448
+            },
+            "lastAtElapsedMs": 314922.0329
+          },
+          "metrics": {
+            "gogmaMaxDepth": 63,
+            "cumulativeGogmaGenerated": 55433083,
+            "cumulativeGogmaFrontier": 3602677,
+            "maxGogmaGeneratedPerDepth": 1256560,
+            "maxGogmaFrontierPerDepth": 78639,
+            "maxGogmaFamilyLayoutsPerDepth": 1143,
+            "gogmaDepthWeightedGeneratedStates": 1528171065,
+            "skillMaxDepth": 4,
+            "cumulativeSkillStates": 8,
+            "settledWorkItems": 503,
+            "predictionCalls": 13342,
+            "resetBonuses": 160,
+            "keepBonuses": 13173,
+            "predictSkills": 5,
+            "sampledMaxHeapUsed": 1387746776,
+            "sampledMaxRss": 1610301440
+          },
+          "gogmaDepthMaxima": {
+            "maxGeneratedStatesPerDepth": 1256560,
+            "depthOfMaxGeneratedStates": 3,
+            "reachedDepths": 63
+          },
+          "lastSnapshotPredictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 5,
+            "resetBonuses": 160,
+            "keepBonuses": 13173
+          }
+        }
+      },
+      "rows": [
+        {
+          "orientationId": "c2-p1",
+          "workIndex": 0,
+          "role": "primary_oom",
+          "mode": "minimal",
+          "status": {
+            "d2a": "out_of_memory",
+            "d2c": null,
+            "d2d": "first_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "d2a": 7079988472,
+            "d2c": null,
+            "d2d": 1441607024
+          },
+          "sampledMaxHeapTotal": {
+            "d2a": 8658477056,
+            "d2c": null,
+            "d2d": 1626591232
+          },
+          "sampledMaxRss": {
+            "d2a": 9020502016,
+            "d2c": null,
+            "d2d": 1879138304
+          },
+          "lastSampleHeapUsed": {
+            "d2a": 7079988472,
+            "d2c": null,
+            "d2d": 1061273664
+          },
+          "lastSampleAtElapsedMs": {
+            "d2a": 91330.30600000001,
+            "d2c": null,
+            "d2d": 305717.4769
+          },
+          "v8FatalGcBeforeMb": {
+            "d2a": 6891,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxRssKiB": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": 1847076
+          },
+          "gogmaMaxDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "skillMaxDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeGogmaGenerated": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeGogmaFrontier": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeSkillStates": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxGogmaGeneratedPerDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "depthOfMaxGogmaGenerated": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "settledWorkItems": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "predictionCounts": {
+            "d2a": null,
+            "d2d": null
+          },
+          "timeToFirstMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": 305717.4623
+          },
+          "searchElapsedMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": 305717.4769
+          }
+        },
+        {
+          "orientationId": "c2-p1",
+          "workIndex": 0,
+          "role": "primary_oom",
+          "mode": "instrumented",
+          "status": {
+            "d2a": "out_of_memory",
+            "d2c": "out_of_memory",
+            "d2d": "first_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "d2a": 7108533328,
+            "d2c": null,
+            "d2d": 1387746776
+          },
+          "sampledMaxHeapTotal": {
+            "d2a": 8652185600,
+            "d2c": null,
+            "d2d": 1477492736
+          },
+          "sampledMaxRss": {
+            "d2a": 9050374144,
+            "d2c": null,
+            "d2d": 1606586368
+          },
+          "lastSampleHeapUsed": {
+            "d2a": 7108533328,
+            "d2c": 7092853848,
+            "d2d": 473315488
+          },
+          "lastSampleAtElapsedMs": {
+            "d2a": 97886.2528,
+            "d2c": 91979.8175,
+            "d2d": 314922.0329
+          },
+          "v8FatalGcBeforeMb": {
+            "d2a": 6824.3,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxRssKiB": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": 1584024
+          },
+          "gogmaMaxDepth": {
+            "d2a": 18,
+            "d2c": 18,
+            "d2d": 63
+          },
+          "skillMaxDepth": {
+            "d2a": 4,
+            "d2c": 4,
+            "d2d": 4
+          },
+          "cumulativeGogmaGenerated": {
+            "d2a": 17267064,
+            "d2c": 17267064,
+            "d2d": 55433083
+          },
+          "cumulativeGogmaFrontier": {
+            "d2a": 652568,
+            "d2c": 652568,
+            "d2d": 3602677
+          },
+          "cumulativeSkillStates": {
+            "d2a": 8,
+            "d2c": 8,
+            "d2d": 8
+          },
+          "maxGogmaGeneratedPerDepth": {
+            "d2a": 1256560,
+            "d2c": null,
+            "d2d": 1256560
+          },
+          "depthOfMaxGogmaGenerated": {
+            "d2a": 3,
+            "d2c": null,
+            "d2d": 3
+          },
+          "settledWorkItems": {
+            "d2a": 140,
+            "d2c": null,
+            "d2d": 503
+          },
+          "predictionCounts": {
+            "d2a": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 115,
+              "keepBonuses": 7099
+            },
+            "d2d": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 160,
+              "keepBonuses": 13173
+            }
+          },
+          "timeToFirstMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": 314921.81799999997
+          },
+          "searchElapsedMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": 314922.0329
+          }
+        }
+      ],
+      "processes": {
+        "minimal": {
+          "id": "search-c2-p1-w0-minimal",
+          "role": "search",
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "budgetMs": 1200000,
+          "startedAt": "2026-09-29T06:28:52.278Z",
+          "wallMs": 308266.2488999998,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "stderrTail": null
+        },
+        "instrumented": {
+          "id": "search-c2-p1-w0-instrumented",
+          "role": "search",
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "budgetMs": 1200000,
+          "startedAt": "2026-09-29T06:34:00.546Z",
+          "wallMs": 317449.3539,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "stderrTail": null
+        }
+      },
+      "semanticParityWithD2A": null,
+      "modeSemanticParity": true,
+      "primaryOutcome": {
+        "leftOom": true,
+        "endedNormally": true,
+        "consistent": true,
+        "reached": "first_candidate"
+      },
+      "newObservation": {
+        "minimal": {
+          "status": "first_candidate",
+          "searchSummary": {
+            "deliveredCandidates": 1,
+            "excludedCandidates": 0,
+            "exhausted": false,
+            "stoppedByExtent": false,
+            "stoppedByConsumer": true,
+            "skippedExcludedRouteKeys": 0
+          },
+          "firstCandidateKeySha256": "fffec72ab6b58d8ff06a7ee0e549e5d4647bedc2694a03bbb78e6323ae15115c",
+          "predictionCounts": null,
+          "searchElapsedMs": 305717.4769,
+          "timeToFirstMs": 305717.4623,
+          "finalOrLastGogmaDepth": null
+        },
+        "instrumented": {
+          "status": "first_candidate",
+          "searchSummary": {
+            "deliveredCandidates": 1,
+            "excludedCandidates": 0,
+            "exhausted": false,
+            "stoppedByExtent": false,
+            "stoppedByConsumer": true,
+            "skippedExcludedRouteKeys": 0
+          },
+          "firstCandidateKeySha256": "fffec72ab6b58d8ff06a7ee0e549e5d4647bedc2694a03bbb78e6323ae15115c",
+          "predictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 5,
+            "resetBonuses": 160,
+            "keepBonuses": 13173
+          },
+          "searchElapsedMs": 314922.0329,
+          "timeToFirstMs": 314921.81799999997,
+          "finalOrLastGogmaDepth": 63
+        }
+      }
+    },
+    {
+      "orientationId": "c0-p0",
+      "workIndex": 0,
+      "role": "cleared_reference",
+      "kind": "same_gogma_counter",
+      "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+      "d2a": {
+        "minimalStatus": "stopped_by_extent_before_candidate",
+        "instrumentedStatus": "stopped_by_extent_before_candidate"
+      },
+      "d2c": {
+        "runId": "sampling-jit_default-c0-p0-w0",
+        "outcome": "stopped_by_extent_before_candidate",
+        "wallMs": 38122.89730000001,
+        "heapSizeLimitBytes": 8791261184,
+        "lastProgress": {
+          "elapsedMs": 34790.3997,
+          "heapUsed": 4000134856,
+          "rss": 4580696064,
+          "maxDepth": {
+            "skill": 4,
+            "gogma": 229
+          },
+          "cumulative": {
+            "gogmaGeneratedStates": 2331461,
+            "gogmaFrontierStates": 2303107,
+            "skillStates": 8
+          },
+          "maxGeneratedStatesInOneDepth": 3095,
+          "depthOfMaxGenerated": 218
+        }
+      },
+      "after": {
+        "minimal": {
+          "mode": "minimal",
+          "view": {
+            "status": "stopped_by_extent_before_candidate",
+            "searchElapsedMs": 30910.5026,
+            "timeToFirstMs": null,
+            "searchSummary": {
+              "deliveredCandidates": 0,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": true,
+              "stoppedByConsumer": false,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 338975376,
+              "heapTotal": 423747584,
+              "rss": 576212992,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 703791504,
+              "heapTotal": 920117248,
+              "rss": 1059520512,
+              "external": 24055838,
+              "arrayBuffers": 212663
+            },
+            "maxRssKiB": 1034692,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 17,
+            "sampledMax": {
+              "heapUsed": 853183640,
+              "heapTotal": 937328640,
+              "rss": 1059520512
+            },
+            "last": {
+              "heapUsed": 703791504,
+              "heapTotal": 920117248,
+              "rss": 1059520512
+            },
+            "lastAtElapsedMs": 30910.5026
+          },
+          "metrics": null,
+          "gogmaDepthMaxima": null,
+          "lastSnapshotPredictionCounts": null
+        },
+        "instrumented": {
+          "mode": "instrumented",
+          "view": {
+            "status": "stopped_by_extent_before_candidate",
+            "searchElapsedMs": 31401.0086,
+            "timeToFirstMs": null,
+            "searchSummary": {
+              "deliveredCandidates": 0,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": true,
+              "stoppedByConsumer": false,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 233,
+              "keepBonuses": 25474
+            },
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 338814392,
+              "heapTotal": 424534016,
+              "rss": 576323584,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 698551816,
+              "heapTotal": 920117248,
+              "rss": 1058430976,
+              "external": 24055838,
+              "arrayBuffers": 342983
+            },
+            "maxRssKiB": 1034648,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 58,
+            "sampledMax": {
+              "heapUsed": 779918080,
+              "heapTotal": 920117248,
+              "rss": 1059479552
+            },
+            "last": {
+              "heapUsed": 698551816,
+              "heapTotal": 920117248,
+              "rss": 1058430976
+            },
+            "lastAtElapsedMs": 31401.0086
+          },
+          "metrics": {
+            "gogmaMaxDepth": 233,
+            "cumulativeGogmaGenerated": 2360100,
+            "cumulativeGogmaFrontier": 2331740,
+            "maxGogmaGeneratedPerDepth": 18558,
+            "maxGogmaFrontierPerDepth": 18551,
+            "maxGogmaFamilyLayoutsPerDepth": 1205,
+            "gogmaDepthWeightedGeneratedStates": 341877960,
+            "skillMaxDepth": 4,
+            "cumulativeSkillStates": 8,
+            "settledWorkItems": 1410,
+            "predictionCalls": 25716,
+            "resetBonuses": 233,
+            "keepBonuses": 25474,
+            "predictSkills": 5,
+            "sampledMaxHeapUsed": 837804984,
+            "sampledMaxRss": 1059479552
+          },
+          "gogmaDepthMaxima": {
+            "maxGeneratedStatesPerDepth": 18558,
+            "depthOfMaxGeneratedStates": 218,
+            "reachedDepths": 233
+          },
+          "lastSnapshotPredictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 5,
+            "resetBonuses": 233,
+            "keepBonuses": 25474
+          }
+        }
+      },
+      "rows": [
+        {
+          "orientationId": "c0-p0",
+          "workIndex": 0,
+          "role": "cleared_reference",
+          "mode": "minimal",
+          "status": {
+            "d2a": "stopped_by_extent_before_candidate",
+            "d2c": null,
+            "d2d": "stopped_by_extent_before_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "d2a": 4497148016,
+            "d2c": null,
+            "d2d": 853183640
+          },
+          "sampledMaxHeapTotal": {
+            "d2a": 4618354688,
+            "d2c": null,
+            "d2d": 937328640
+          },
+          "sampledMaxRss": {
+            "d2a": 4811898880,
+            "d2c": null,
+            "d2d": 1059520512
+          },
+          "lastSampleHeapUsed": {
+            "d2a": 4497148016,
+            "d2c": null,
+            "d2d": 703791504
+          },
+          "lastSampleAtElapsedMs": {
+            "d2a": 35360.8734,
+            "d2c": null,
+            "d2d": 30910.5026
+          },
+          "v8FatalGcBeforeMb": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxRssKiB": {
+            "d2a": 4699132,
+            "d2c": null,
+            "d2d": 1034692
+          },
+          "gogmaMaxDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "skillMaxDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeGogmaGenerated": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeGogmaFrontier": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeSkillStates": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxGogmaGeneratedPerDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "depthOfMaxGogmaGenerated": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "settledWorkItems": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "predictionCounts": {
+            "d2a": null,
+            "d2d": null
+          },
+          "timeToFirstMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "searchElapsedMs": {
+            "d2a": 35360.8734,
+            "d2c": null,
+            "d2d": 30910.5026
+          }
+        },
+        {
+          "orientationId": "c0-p0",
+          "workIndex": 0,
+          "role": "cleared_reference",
+          "mode": "instrumented",
+          "status": {
+            "d2a": "stopped_by_extent_before_candidate",
+            "d2c": "stopped_by_extent_before_candidate",
+            "d2d": "stopped_by_extent_before_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "d2a": 4472156880,
+            "d2c": null,
+            "d2d": 779918080
+          },
+          "sampledMaxHeapTotal": {
+            "d2a": 4593188864,
+            "d2c": null,
+            "d2d": 920117248
+          },
+          "sampledMaxRss": {
+            "d2a": 4786561024,
+            "d2c": null,
+            "d2d": 1059479552
+          },
+          "lastSampleHeapUsed": {
+            "d2a": 4472156880,
+            "d2c": 4000134856,
+            "d2d": 698551816
+          },
+          "lastSampleAtElapsedMs": {
+            "d2a": 35290.6133,
+            "d2c": 34790.3997,
+            "d2d": 31401.0086
+          },
+          "v8FatalGcBeforeMb": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxRssKiB": {
+            "d2a": 4674380,
+            "d2c": null,
+            "d2d": 1034648
+          },
+          "gogmaMaxDepth": {
+            "d2a": 233,
+            "d2c": 229,
+            "d2d": 233
+          },
+          "skillMaxDepth": {
+            "d2a": 4,
+            "d2c": 4,
+            "d2d": 4
+          },
+          "cumulativeGogmaGenerated": {
+            "d2a": 2360100,
+            "d2c": 2331461,
+            "d2d": 2360100
+          },
+          "cumulativeGogmaFrontier": {
+            "d2a": 2331740,
+            "d2c": 2303107,
+            "d2d": 2331740
+          },
+          "cumulativeSkillStates": {
+            "d2a": 8,
+            "d2c": 8,
+            "d2d": 8
+          },
+          "maxGogmaGeneratedPerDepth": {
+            "d2a": 18558,
+            "d2c": null,
+            "d2d": 18558
+          },
+          "depthOfMaxGogmaGenerated": {
+            "d2a": 218,
+            "d2c": null,
+            "d2d": 218
+          },
+          "settledWorkItems": {
+            "d2a": 1410,
+            "d2c": null,
+            "d2d": 1410
+          },
+          "predictionCounts": {
+            "d2a": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 233,
+              "keepBonuses": 25474
+            },
+            "d2d": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 233,
+              "keepBonuses": 25474
+            }
+          },
+          "timeToFirstMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "searchElapsedMs": {
+            "d2a": 35290.6133,
+            "d2c": null,
+            "d2d": 31401.0086
+          }
+        }
+      ],
+      "processes": {
+        "minimal": {
+          "id": "search-c0-p0-w0-minimal",
+          "role": "search",
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "budgetMs": 1200000,
+          "startedAt": "2026-09-29T06:39:18.004Z",
+          "wallMs": 33374.38739999989,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "stderrTail": null
+        },
+        "instrumented": {
+          "id": "search-c0-p0-w0-instrumented",
+          "role": "search",
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "budgetMs": 1200000,
+          "startedAt": "2026-09-29T06:39:51.379Z",
+          "wallMs": 33889.01289999997,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "stderrTail": null
+        }
+      },
+      "semanticParityWithD2A": [
+        {
+          "orientationId": "c0-p0",
+          "workIndex": 0,
+          "mode": "minimal",
+          "statusMatches": true,
+          "searchSummaryMatches": true,
+          "firstCandidateKeyMatches": true,
+          "predictionCountsMatch": null,
+          "extentAndExhaustionMatch": true,
+          "matches": true,
+          "role": "cleared_reference"
+        },
+        {
+          "orientationId": "c0-p0",
+          "workIndex": 0,
+          "mode": "instrumented",
+          "statusMatches": true,
+          "searchSummaryMatches": true,
+          "firstCandidateKeyMatches": true,
+          "predictionCountsMatch": true,
+          "extentAndExhaustionMatch": true,
+          "matches": true,
+          "role": "cleared_reference"
+        }
+      ],
+      "modeSemanticParity": true,
+      "primaryOutcome": null,
+      "newObservation": null
+    },
+    {
+      "orientationId": "c8-p1",
+      "workIndex": 0,
+      "role": "control_first_candidate",
+      "kind": "same_gogma_counter",
+      "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+      "d2a": {
+        "minimalStatus": "first_candidate",
+        "instrumentedStatus": "first_candidate"
+      },
+      "d2c": {
+        "runId": "sampling-jit_default-c8-p1-w0",
+        "outcome": "first_candidate",
+        "wallMs": 7062.114600000001,
+        "heapSizeLimitBytes": 8791261184,
+        "lastProgress": {
+          "elapsedMs": 4024.5649,
+          "heapUsed": 479247864,
+          "rss": 730939392,
+          "maxDepth": {
+            "skill": 0,
+            "gogma": 95
+          },
+          "cumulative": {
+            "gogmaGeneratedStates": 450697,
+            "gogmaFrontierStates": 407698,
+            "skillStates": 0
+          },
+          "maxGeneratedStatesInOneDepth": 1469,
+          "depthOfMaxGenerated": 94
+        }
+      },
+      "after": {
+        "minimal": {
+          "mode": "minimal",
+          "view": {
+            "status": "first_candidate",
+            "searchElapsedMs": 4159.2935,
+            "timeToFirstMs": 4159.2773,
+            "searchSummary": {
+              "deliveredCandidates": 1,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": false,
+              "stoppedByConsumer": true,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": "39d2d78787b6a91f61e6bd858e34ca4ede8aebe104e36f4de6f5be56f8e2fd5e",
+            "firstCandidate": {
+              "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+              "routeKind": "normal_artian_to_gogma",
+              "sourceKind": "new_normal",
+              "sourceOwnedWeaponId": null,
+              "estimatedOperationCount": 101,
+              "estimatedAdvances": {
+                "normal": 3,
+                "gogma": 116,
+                "skill": 1
+              },
+              "ownOperationCount": 101,
+              "operationTypes": {
+                "create_normal_artian": 3,
+                "convert_normal_to_gogma": 1,
+                "keep_bonuses": 97
+              },
+              "normalCounterId": "weapon.heavy_bowgun:8",
+              "normalProductionTargetPosition": 6,
+              "blindNormalCreation": false,
+              "conversionSkillPosition": 341,
+              "normal": {
+                "first": 4,
+                "last": 6,
+                "operations": 3,
+                "positions": [
+                  [
+                    4,
+                    6
+                  ]
+                ],
+                "required": [
+                  6
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": false
+              },
+              "gogma": {
+                "first": 74,
+                "last": 170,
+                "operations": 97,
+                "positions": [
+                  [
+                    74,
+                    170
+                  ]
+                ],
+                "required": [
+                  170
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": true
+              },
+              "skill": {
+                "first": 341,
+                "last": 341,
+                "operations": 1,
+                "positions": [
+                  [
+                    341,
+                    341
+                  ]
+                ],
+                "required": [
+                  341
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": false
+              },
+              "gogmaTypeRuns": [
+                [
+                  74,
+                  170,
+                  "keep_bonuses"
+                ]
+              ],
+              "heldRoute": false,
+              "finalBonuses": [
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.attack",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.affinity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.attack",
+                  "bonusRankId": "bonus_rank.ex"
+                }
+              ],
+              "restorationBonusScope": "gogma_artian",
+              "seriesSkillId": "series_skill.verified_02",
+              "groupSkillId": "group_skill.verified_11"
+            },
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 339968976,
+              "heapTotal": 423505920,
+              "rss": 576114688,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 225323144,
+              "heapTotal": 474079232,
+              "rss": 588574720,
+              "external": 24055838,
+              "arrayBuffers": 212663
+            },
+            "maxRssKiB": 634956,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 4,
+            "sampledMax": {
+              "heapUsed": 382899416,
+              "heapTotal": 492032000,
+              "rss": 645779456
+            },
+            "last": {
+              "heapUsed": 225323144,
+              "heapTotal": 474079232,
+              "rss": 588574720
+            },
+            "lastAtElapsedMs": 4159.2935
+          },
+          "metrics": null,
+          "gogmaDepthMaxima": null,
+          "lastSnapshotPredictionCounts": null
+        },
+        "instrumented": {
+          "mode": "instrumented",
+          "view": {
+            "status": "first_candidate",
+            "searchElapsedMs": 4215.2528,
+            "timeToFirstMs": 4214.995000000001,
+            "searchSummary": {
+              "deliveredCandidates": 1,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": false,
+              "stoppedByConsumer": true,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": "39d2d78787b6a91f61e6bd858e34ca4ede8aebe104e36f4de6f5be56f8e2fd5e",
+            "firstCandidate": {
+              "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+              "routeKind": "normal_artian_to_gogma",
+              "sourceKind": "new_normal",
+              "sourceOwnedWeaponId": null,
+              "estimatedOperationCount": 101,
+              "estimatedAdvances": {
+                "normal": 3,
+                "gogma": 116,
+                "skill": 1
+              },
+              "ownOperationCount": 101,
+              "operationTypes": {
+                "create_normal_artian": 3,
+                "convert_normal_to_gogma": 1,
+                "keep_bonuses": 97
+              },
+              "normalCounterId": "weapon.heavy_bowgun:8",
+              "normalProductionTargetPosition": 6,
+              "blindNormalCreation": false,
+              "conversionSkillPosition": 341,
+              "normal": {
+                "first": 4,
+                "last": 6,
+                "operations": 3,
+                "positions": [
+                  [
+                    4,
+                    6
+                  ]
+                ],
+                "required": [
+                  6
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": false
+              },
+              "gogma": {
+                "first": 74,
+                "last": 170,
+                "operations": 97,
+                "positions": [
+                  [
+                    74,
+                    170
+                  ]
+                ],
+                "required": [
+                  170
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": true
+              },
+              "skill": {
+                "first": 341,
+                "last": 341,
+                "operations": 1,
+                "positions": [
+                  [
+                    341,
+                    341
+                  ]
+                ],
+                "required": [
+                  341
+                ],
+                "crossesHeldPositions": false,
+                "startsAfterOrigin": false
+              },
+              "gogmaTypeRuns": [
+                [
+                  74,
+                  170,
+                  "keep_bonuses"
+                ]
+              ],
+              "heldRoute": false,
+              "finalBonuses": [
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.attack",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.affinity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.gogma_sharpness_capacity",
+                  "bonusRankId": "bonus_rank.ex"
+                },
+                {
+                  "bonusTypeId": "bonus_type.attack",
+                  "bonusRankId": "bonus_rank.ex"
+                }
+              ],
+              "restorationBonusScope": "gogma_artian",
+              "seriesSkillId": "series_skill.verified_02",
+              "groupSkillId": "group_skill.verified_11"
+            },
+            "predictionCounts": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 119,
+              "keepBonuses": 6079
+            },
+            "predictionCountsAtFirstCandidate": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 119,
+              "keepBonuses": 6079
+            },
+            "preSearchMemory": {
+              "heapUsed": 339158208,
+              "heapTotal": 422719488,
+              "rss": 575275008,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 214099912,
+              "heapTotal": 456515584,
+              "rss": 587034624,
+              "external": 24055838,
+              "arrayBuffers": 325913
+            },
+            "maxRssKiB": 630256,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 26,
+            "sampledMax": {
+              "heapUsed": 403143408,
+              "heapTotal": 488886272,
+              "rss": 642691072
+            },
+            "last": {
+              "heapUsed": 214099912,
+              "heapTotal": 456515584,
+              "rss": 587034624
+            },
+            "lastAtElapsedMs": 4215.2528
+          },
+          "metrics": {
+            "gogmaMaxDepth": 101,
+            "cumulativeGogmaGenerated": 493595,
+            "cumulativeGogmaFrontier": 450388,
+            "maxGogmaGeneratedPerDepth": 7410,
+            "maxGogmaFrontierPerDepth": 7374,
+            "maxGogmaFamilyLayoutsPerDepth": 417,
+            "gogmaDepthWeightedGeneratedStates": 28066721,
+            "skillMaxDepth": 0,
+            "cumulativeSkillStates": 0,
+            "settledWorkItems": 500,
+            "predictionCalls": 6207,
+            "resetBonuses": 119,
+            "keepBonuses": 6079,
+            "predictSkills": 5,
+            "sampledMaxHeapUsed": 408957720,
+            "sampledMaxRss": 645349376
+          },
+          "gogmaDepthMaxima": {
+            "maxGeneratedStatesPerDepth": 7410,
+            "depthOfMaxGeneratedStates": 96,
+            "reachedDepths": 101
+          },
+          "lastSnapshotPredictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 5,
+            "resetBonuses": 119,
+            "keepBonuses": 6079
+          }
+        }
+      },
+      "rows": [
+        {
+          "orientationId": "c8-p1",
+          "workIndex": 0,
+          "role": "control_first_candidate",
+          "mode": "minimal",
+          "status": {
+            "d2a": "first_candidate",
+            "d2c": null,
+            "d2d": "first_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "d2a": 551538656,
+            "d2c": null,
+            "d2d": 382899416
+          },
+          "sampledMaxHeapTotal": {
+            "d2a": 678813696,
+            "d2c": null,
+            "d2d": 492032000
+          },
+          "sampledMaxRss": {
+            "d2a": 793710592,
+            "d2c": null,
+            "d2d": 645779456
+          },
+          "lastSampleHeapUsed": {
+            "d2a": 551538656,
+            "d2c": null,
+            "d2d": 225323144
+          },
+          "lastSampleAtElapsedMs": {
+            "d2a": 4576.9409,
+            "d2c": null,
+            "d2d": 4159.2935
+          },
+          "v8FatalGcBeforeMb": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxRssKiB": {
+            "d2a": 775440,
+            "d2c": null,
+            "d2d": 634956
+          },
+          "gogmaMaxDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "skillMaxDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeGogmaGenerated": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeGogmaFrontier": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeSkillStates": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxGogmaGeneratedPerDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "depthOfMaxGogmaGenerated": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "settledWorkItems": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "predictionCounts": {
+            "d2a": null,
+            "d2d": null
+          },
+          "timeToFirstMs": {
+            "d2a": 4576.920900000001,
+            "d2c": null,
+            "d2d": 4159.2773
+          },
+          "searchElapsedMs": {
+            "d2a": 4576.9409,
+            "d2c": null,
+            "d2d": 4159.2935
+          }
+        },
+        {
+          "orientationId": "c8-p1",
+          "workIndex": 0,
+          "role": "control_first_candidate",
+          "mode": "instrumented",
+          "status": {
+            "d2a": "first_candidate",
+            "d2c": "first_candidate",
+            "d2d": "first_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "d2a": 597223592,
+            "d2c": null,
+            "d2d": 403143408
+          },
+          "sampledMaxHeapTotal": {
+            "d2a": 687464448,
+            "d2c": null,
+            "d2d": 488886272
+          },
+          "sampledMaxRss": {
+            "d2a": 795877376,
+            "d2c": null,
+            "d2d": 642691072
+          },
+          "lastSampleHeapUsed": {
+            "d2a": 597223592,
+            "d2c": 479247864,
+            "d2d": 214099912
+          },
+          "lastSampleAtElapsedMs": {
+            "d2a": 4758.824,
+            "d2c": 4024.5649,
+            "d2d": 4215.2528
+          },
+          "v8FatalGcBeforeMb": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxRssKiB": {
+            "d2a": 778696,
+            "d2c": null,
+            "d2d": 630256
+          },
+          "gogmaMaxDepth": {
+            "d2a": 101,
+            "d2c": 95,
+            "d2d": 101
+          },
+          "skillMaxDepth": {
+            "d2a": 0,
+            "d2c": 0,
+            "d2d": 0
+          },
+          "cumulativeGogmaGenerated": {
+            "d2a": 493595,
+            "d2c": 450697,
+            "d2d": 493595
+          },
+          "cumulativeGogmaFrontier": {
+            "d2a": 450388,
+            "d2c": 407698,
+            "d2d": 450388
+          },
+          "cumulativeSkillStates": {
+            "d2a": 0,
+            "d2c": 0,
+            "d2d": 0
+          },
+          "maxGogmaGeneratedPerDepth": {
+            "d2a": 7410,
+            "d2c": null,
+            "d2d": 7410
+          },
+          "depthOfMaxGogmaGenerated": {
+            "d2a": 96,
+            "d2c": null,
+            "d2d": 96
+          },
+          "settledWorkItems": {
+            "d2a": 500,
+            "d2c": null,
+            "d2d": 500
+          },
+          "predictionCounts": {
+            "d2a": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 119,
+              "keepBonuses": 6079
+            },
+            "d2d": {
+              "predictNormalArtian": 4,
+              "predictSkills": 5,
+              "resetBonuses": 119,
+              "keepBonuses": 6079
+            }
+          },
+          "timeToFirstMs": {
+            "d2a": 4758.6121,
+            "d2c": null,
+            "d2d": 4214.995000000001
+          },
+          "searchElapsedMs": {
+            "d2a": 4758.824,
+            "d2c": null,
+            "d2d": 4215.2528
+          }
+        }
+      ],
+      "processes": {
+        "minimal": {
+          "id": "search-c8-p1-w0-minimal",
+          "role": "search",
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "budgetMs": 1200000,
+          "startedAt": "2026-09-29T06:40:25.278Z",
+          "wallMs": 6602.674799999688,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "stderrTail": null
+        },
+        "instrumented": {
+          "id": "search-c8-p1-w0-instrumented",
+          "role": "search",
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "budgetMs": 1200000,
+          "startedAt": "2026-09-29T06:40:31.881Z",
+          "wallMs": 6656.706400000025,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "stderrTail": null
+        }
+      },
+      "semanticParityWithD2A": [
+        {
+          "orientationId": "c8-p1",
+          "workIndex": 0,
+          "mode": "minimal",
+          "statusMatches": true,
+          "searchSummaryMatches": true,
+          "firstCandidateKeyMatches": true,
+          "predictionCountsMatch": null,
+          "extentAndExhaustionMatch": true,
+          "matches": true,
+          "role": "control_first_candidate"
+        },
+        {
+          "orientationId": "c8-p1",
+          "workIndex": 0,
+          "mode": "instrumented",
+          "statusMatches": true,
+          "searchSummaryMatches": true,
+          "firstCandidateKeyMatches": true,
+          "predictionCountsMatch": true,
+          "extentAndExhaustionMatch": true,
+          "matches": true,
+          "role": "control_first_candidate"
+        }
+      ],
+      "modeSemanticParity": true,
+      "primaryOutcome": null,
+      "newObservation": null
+    },
+    {
+      "orientationId": "c13-p4",
+      "workIndex": 0,
+      "role": "control_stopped_by_extent",
+      "kind": "same_skill_counter",
+      "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+      "d2a": {
+        "minimalStatus": "stopped_by_extent_before_candidate",
+        "instrumentedStatus": "stopped_by_extent_before_candidate"
+      },
+      "d2c": {
+        "runId": "sampling-jit_default-c13-p4-w0",
+        "outcome": "stopped_by_extent_before_candidate",
+        "wallMs": 4853.247600000002,
+        "heapSizeLimitBytes": 8791261184,
+        "lastProgress": {
+          "elapsedMs": 2000.9893000000002,
+          "heapUsed": 330819864,
+          "rss": 651960320,
+          "maxDepth": {
+            "skill": 3,
+            "gogma": 225
+          },
+          "cumulative": {
+            "gogmaGeneratedStates": 114189,
+            "gogmaFrontierStates": 114035,
+            "skillStates": 16
+          },
+          "maxGeneratedStatesInOneDepth": 195,
+          "depthOfMaxGenerated": 225
+        }
+      },
+      "after": {
+        "minimal": {
+          "mode": "minimal",
+          "view": {
+            "status": "stopped_by_extent_before_candidate",
+            "searchElapsedMs": 1974.2758,
+            "timeToFirstMs": null,
+            "searchSummary": {
+              "deliveredCandidates": 0,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": true,
+              "stoppedByConsumer": false,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": null,
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 303663400,
+              "heapTotal": 426999808,
+              "rss": 578711552,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 342747136,
+              "heapTotal": 471257088,
+              "rss": 624029696,
+              "external": 81968754,
+              "arrayBuffers": 19636727
+            },
+            "maxRssKiB": 609404,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 2,
+            "sampledMax": {
+              "heapUsed": 342747136,
+              "heapTotal": 471257088,
+              "rss": 624029696
+            },
+            "last": {
+              "heapUsed": 342747136,
+              "heapTotal": 471257088,
+              "rss": 624029696
+            },
+            "lastAtElapsedMs": 1974.2758
+          },
+          "metrics": null,
+          "gogmaDepthMaxima": null,
+          "lastSnapshotPredictionCounts": null
+        },
+        "instrumented": {
+          "mode": "instrumented",
+          "view": {
+            "status": "stopped_by_extent_before_candidate",
+            "searchElapsedMs": 2040.6236,
+            "timeToFirstMs": null,
+            "searchSummary": {
+              "deliveredCandidates": 0,
+              "excludedCandidates": 0,
+              "exhausted": false,
+              "stoppedByExtent": true,
+              "stoppedByConsumer": false,
+              "skippedExcludedRouteKeys": 0
+            },
+            "firstCandidateKeySha256": null,
+            "firstCandidate": null,
+            "predictionCounts": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 234,
+              "keepBonuses": 25874
+            },
+            "predictionCountsAtFirstCandidate": null,
+            "preSearchMemory": {
+              "heapUsed": 304417152,
+              "heapTotal": 426213376,
+              "rss": 579137536,
+              "external": 81968714,
+              "arrayBuffers": 19636727
+            },
+            "postSearchMemory": {
+              "heapUsed": 343863512,
+              "heapTotal": 471257088,
+              "rss": 625639424,
+              "external": 81968754,
+              "arrayBuffers": 19763336
+            },
+            "maxRssKiB": 610976,
+            "heapSizeLimitBytes": 8791261184,
+            "v8FatalGc": null
+          },
+          "memory": {
+            "samples": 51,
+            "sampledMax": {
+              "heapUsed": 389431648,
+              "heapTotal": 471257088,
+              "rss": 625639424
+            },
+            "last": {
+              "heapUsed": 343863512,
+              "heapTotal": 471257088,
+              "rss": 625639424
+            },
+            "lastAtElapsedMs": 2040.6236
+          },
+          "metrics": {
+            "gogmaMaxDepth": 234,
+            "cumulativeGogmaGenerated": 125860,
+            "cumulativeGogmaFrontier": 125690,
+            "maxGogmaGeneratedPerDepth": 1005,
+            "maxGogmaFrontierPerDepth": 1005,
+            "maxGogmaFamilyLayoutsPerDepth": 1005,
+            "gogmaDepthWeightedGeneratedStates": 19321470,
+            "skillMaxDepth": 3,
+            "cumulativeSkillStates": 16,
+            "settledWorkItems": 1184,
+            "predictionCalls": 26116,
+            "resetBonuses": 234,
+            "keepBonuses": 25874,
+            "predictSkills": 4,
+            "sampledMaxHeapUsed": 389431648,
+            "sampledMaxRss": 625639424
+          },
+          "gogmaDepthMaxima": {
+            "maxGeneratedStatesPerDepth": 1005,
+            "depthOfMaxGeneratedStates": 233,
+            "reachedDepths": 234
+          },
+          "lastSnapshotPredictionCounts": {
+            "predictNormalArtian": 4,
+            "predictSkills": 4,
+            "resetBonuses": 234,
+            "keepBonuses": 25874
+          }
+        }
+      },
+      "rows": [
+        {
+          "orientationId": "c13-p4",
+          "workIndex": 0,
+          "role": "control_stopped_by_extent",
+          "mode": "minimal",
+          "status": {
+            "d2a": "stopped_by_extent_before_candidate",
+            "d2c": null,
+            "d2d": "stopped_by_extent_before_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "d2a": 376324040,
+            "d2c": null,
+            "d2d": 342747136
+          },
+          "sampledMaxHeapTotal": {
+            "d2a": 478314496,
+            "d2c": null,
+            "d2d": 471257088
+          },
+          "sampledMaxRss": {
+            "d2a": 579125248,
+            "d2c": null,
+            "d2d": 624029696
+          },
+          "lastSampleHeapUsed": {
+            "d2a": 376324040,
+            "d2c": null,
+            "d2d": 342747136
+          },
+          "lastSampleAtElapsedMs": {
+            "d2a": 2241.2576000000004,
+            "d2c": null,
+            "d2d": 1974.2758
+          },
+          "v8FatalGcBeforeMb": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxRssKiB": {
+            "d2a": 622868,
+            "d2c": null,
+            "d2d": 609404
+          },
+          "gogmaMaxDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "skillMaxDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeGogmaGenerated": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeGogmaFrontier": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "cumulativeSkillStates": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxGogmaGeneratedPerDepth": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "depthOfMaxGogmaGenerated": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "settledWorkItems": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "predictionCounts": {
+            "d2a": null,
+            "d2d": null
+          },
+          "timeToFirstMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "searchElapsedMs": {
+            "d2a": 2241.2576000000004,
+            "d2c": null,
+            "d2d": 1974.2758
+          }
+        },
+        {
+          "orientationId": "c13-p4",
+          "workIndex": 0,
+          "role": "control_stopped_by_extent",
+          "mode": "instrumented",
+          "status": {
+            "d2a": "stopped_by_extent_before_candidate",
+            "d2c": "stopped_by_extent_before_candidate",
+            "d2d": "stopped_by_extent_before_candidate"
+          },
+          "sampledMaxHeapUsed": {
+            "d2a": 404368512,
+            "d2c": null,
+            "d2d": 389431648
+          },
+          "sampledMaxHeapTotal": {
+            "d2a": 499494912,
+            "d2c": null,
+            "d2d": 471257088
+          },
+          "sampledMaxRss": {
+            "d2a": 653271040,
+            "d2c": null,
+            "d2d": 625639424
+          },
+          "lastSampleHeapUsed": {
+            "d2a": 347031872,
+            "d2c": 330819864,
+            "d2d": 343863512
+          },
+          "lastSampleAtElapsedMs": {
+            "d2a": 2243.9284999999995,
+            "d2c": 2000.9893000000002,
+            "d2d": 2040.6236
+          },
+          "v8FatalGcBeforeMb": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "maxRssKiB": {
+            "d2a": 638252,
+            "d2c": null,
+            "d2d": 610976
+          },
+          "gogmaMaxDepth": {
+            "d2a": 234,
+            "d2c": 225,
+            "d2d": 234
+          },
+          "skillMaxDepth": {
+            "d2a": 3,
+            "d2c": 3,
+            "d2d": 3
+          },
+          "cumulativeGogmaGenerated": {
+            "d2a": 125860,
+            "d2c": 114189,
+            "d2d": 125860
+          },
+          "cumulativeGogmaFrontier": {
+            "d2a": 125690,
+            "d2c": 114035,
+            "d2d": 125690
+          },
+          "cumulativeSkillStates": {
+            "d2a": 16,
+            "d2c": 16,
+            "d2d": 16
+          },
+          "maxGogmaGeneratedPerDepth": {
+            "d2a": 1005,
+            "d2c": null,
+            "d2d": 1005
+          },
+          "depthOfMaxGogmaGenerated": {
+            "d2a": 233,
+            "d2c": null,
+            "d2d": 233
+          },
+          "settledWorkItems": {
+            "d2a": 1184,
+            "d2c": null,
+            "d2d": 1184
+          },
+          "predictionCounts": {
+            "d2a": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 234,
+              "keepBonuses": 25874
+            },
+            "d2d": {
+              "predictNormalArtian": 4,
+              "predictSkills": 4,
+              "resetBonuses": 234,
+              "keepBonuses": 25874
+            }
+          },
+          "timeToFirstMs": {
+            "d2a": null,
+            "d2c": null,
+            "d2d": null
+          },
+          "searchElapsedMs": {
+            "d2a": 2243.9284999999995,
+            "d2c": null,
+            "d2d": 2040.6236
+          }
+        }
+      ],
+      "processes": {
+        "minimal": {
+          "id": "search-c13-p4-w0-minimal",
+          "role": "search",
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "budgetMs": 1200000,
+          "startedAt": "2026-09-29T06:40:38.547Z",
+          "wallMs": 4499.474300000351,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "stderrTail": null
+        },
+        "instrumented": {
+          "id": "search-c13-p4-w0-instrumented",
+          "role": "search",
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "budgetMs": 1200000,
+          "startedAt": "2026-09-29T06:40:43.047Z",
+          "wallMs": 4508.415100000333,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "stderrTail": null
+        }
+      },
+      "semanticParityWithD2A": [
+        {
+          "orientationId": "c13-p4",
+          "workIndex": 0,
+          "mode": "minimal",
+          "statusMatches": true,
+          "searchSummaryMatches": true,
+          "firstCandidateKeyMatches": true,
+          "predictionCountsMatch": null,
+          "extentAndExhaustionMatch": true,
+          "matches": true,
+          "role": "control_stopped_by_extent"
+        },
+        {
+          "orientationId": "c13-p4",
+          "workIndex": 0,
+          "mode": "instrumented",
+          "statusMatches": true,
+          "searchSummaryMatches": true,
+          "firstCandidateKeyMatches": true,
+          "predictionCountsMatch": true,
+          "extentAndExhaustionMatch": true,
+          "matches": true,
+          "role": "control_stopped_by_extent"
+        }
+      ],
+      "modeSemanticParity": true,
+      "primaryOutcome": null,
+      "newObservation": null
+    }
+  ],
+  "processes": [
+    {
+      "id": "contexts",
+      "role": "contexts",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 13904.716,
+      "startedAt": "2026-09-29T05:59:02.324Z"
+    },
+    {
+      "id": "search-c12-p0-w0-minimal",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 870313.4677,
+      "startedAt": "2026-09-29T05:59:16.270Z"
+    },
+    {
+      "id": "search-c12-p0-w0-instrumented",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 905676.7395000001,
+      "startedAt": "2026-09-29T06:13:46.592Z"
+    },
+    {
+      "id": "search-c2-p1-w0-minimal",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 308266.2488999998,
+      "startedAt": "2026-09-29T06:28:52.278Z"
+    },
+    {
+      "id": "search-c2-p1-w0-instrumented",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 317449.3539,
+      "startedAt": "2026-09-29T06:34:00.546Z"
+    },
+    {
+      "id": "search-c0-p0-w0-minimal",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 33374.38739999989,
+      "startedAt": "2026-09-29T06:39:18.004Z"
+    },
+    {
+      "id": "search-c0-p0-w0-instrumented",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 33889.01289999997,
+      "startedAt": "2026-09-29T06:39:51.379Z"
+    },
+    {
+      "id": "search-c8-p1-w0-minimal",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 6602.674799999688,
+      "startedAt": "2026-09-29T06:40:25.278Z"
+    },
+    {
+      "id": "search-c8-p1-w0-instrumented",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 6656.706400000025,
+      "startedAt": "2026-09-29T06:40:31.881Z"
+    },
+    {
+      "id": "search-c13-p4-w0-minimal",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 4499.474300000351,
+      "startedAt": "2026-09-29T06:40:38.547Z"
+    },
+    {
+      "id": "search-c13-p4-w0-instrumented",
+      "role": "search",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "budgetMs": 1200000,
+      "wallMs": 4508.415100000333,
+      "startedAt": "2026-09-29T06:40:43.047Z"
+    }
+  ],
+  "interpretation": {
+    "outcomeCategory": "A: 両primary（c12-p0#0 / c2-p1#0）とも両modeでOOMを脱し、20分budget内に正常終了した",
+    "formalConclusions": [
+      "H1（held-aware Bonus streamのpast depth raw solution保持の廃止）後、D2-aで両modeともout_of_memoryだったprimary 2件は、Node 8 GB・20分budgetで両modeとも正常終了した（OOM脱出 2 / 2）。",
+      "c12-p0#0は両modeでstopped_by_extent_before_candidate（minimal 867.6 s、instrumented 903.0 s、Gogma depth 234、累積Gogma generated 125,904,312）。Candidateはextent内に無かった。これは新規観測であり、D2-aとのCandidate parityではない。",
+      "c2-p1#0は両modeでfirst_candidate（minimal 305.7 s、instrumented 314.9 s、Gogma depth 63、累積Gogma generated 55,433,083、first Candidate key SHA-256 fffec72a…115c が両modeで一致）。これも新規観測である。",
+      "sampled max heapUsedはc12が6.62 / 6.64 GiB（D2-a、OOM前）→ 4.35 / 4.42 GiB（D2-d、完走）、c2が6.59 / 6.62 GiB → 1.34 / 1.29 GiB（minimal / instrumented）。D2-dの値は完走までの全期間のsampled maximumで、D2-aの値はOOM前の最後までのsampled maximumである。",
+      "cleared reference c0-p0#0と完了control 2件（c8-p1#0 / c13-p4#0）は、両modeでD2-aとstatus・Search summary・first Candidate key SHA-256・extent / exhausted・instrumented prediction counts・累積Gogma generated / frontierが完全一致した（semantic parity 3 / 3 context、mode間parity失敗 0）。c0-p0#0のsampled max heapUsedは4.19 / 4.17 GiB → 0.79 / 0.73 GiBになった。",
+      "Candidate semanticsは不変: PR #173の48 Candidate baseline、D2-aの33 pattern pre-D2 parity、pre-D2-d実装で一度だけ記録したheld-aware Bonus stream 11 caseのgolden（raw solution・順序・steps・history・notice・exhausted・extent・prediction）を期待値変更なしでpassした（measured HEADのVitest 5,119 tests passed、failure 0）。",
+      "measured HEADのbonusStream.tsはReservedSetにraw solution collectionを持たず、readReservedDepth()はdepths collectionを読まない（D2-c measured HEADではどちらもtrue）。ordinaryの readDepth() / solve() cacheと全raw solutionの steps[] 構築（H2未実装）はそのまま残っている。"
+    ],
+    "h1Effect": [
+      "H1で消えたのは「読み終えたdepthのraw solutionを全件保持し続ける」構造である。D2-aでは累積generated state数に比例してheapが増え約17.3〜17.4 M stateでOOMしたが、D2-dではc12が約1.26億state、c2が約5,543万stateを生成してもsampled max heapUsedは4.42 GiB以下だった。",
+      "D2-dのheapは単調増加せず、1 depthのgenerated burst（最大1,964,741 state / depth、8 stream合算の同depth値はD2-aと同一）とfrontier / result historyの成長に応じて上下した（c12 instrumentedのsnapshot列の10%刻み抜粋で0.50〜3.15 GiB、全sampleのsampled maximumは4.42 GiB）。",
+      "到達depthと生成量が大きく異なるため、「set.depthsを消してX GiB削減した」という単純差分は主張しない。"
+    ],
+    "notYetClaimable": [
+      "Browser（Chrome Dedicated Worker）でOOM / renderer lossが解消したとは言えない（今回Browserは測定していない）。c12-p0#0のNode sampled max heapUsed 4.35〜4.42 GiBは、D2-bが記録したpage realmの jsHeapSizeLimit 約4.09 GiB（Worker上限と同一視しない参考値）を上回っており、Browserで完走する保証はない。",
+      "「memory issue solved」とは言えない。H1後のpeakを構成する保持構造（frontier・result history・windows memo・generated burstの比率）はheap profileで局在化していない。",
+      "Production UXとして十分に速いとは言えない。c12-p0#0はCandidateなしのextent stopまで約14.5〜15分、c2-p1#0はfirst Candidateまで約5分かかった。",
+      "実Planner Alternative trial全体（複数Target・複数trial・full Planner rerun）のmemory / runtimeは測定していない（本PhaseはSearch-only）。",
+      "c12-p0#0でextent内にIdeal Candidateが無いことが、Issue #154のPlan全体の可否に対して何を意味するかは本Phaseの対象外である。"
+    ],
+    "limitations": [
+      "process.memoryUsage()は1 s heartbeat / snapshot時点のsampled maximumであり、true peakではない。",
+      "各(context, mode)は1 run。wall timeは同一マシン上の参考値で、別プロセス（既存のvite preview server 2組）が起動していた。",
+      "D2-cの値はsampling heap profilerを付けたchildのもので、reference列としてのみ示した。",
+      "minimal modeはSearch instrumentationを持たないのでprogress（depth・generated）を記録しない。",
+      "non-formal smoke（primary 2件・minimalのみ・4分budget、未commit code）はcontract error / 即OOMの検出だけに使い、formal結果・selection・budgetに使っていない。"
+    ],
+    "nextPhaseRecommendation": {
+      "primary": "Phase 2-C2.5-D2-e: H1後のChrome Dedicated Worker正式再測定（D2-bと同じ5 context・同じdriver条件）。Node 8 GBで両primaryが完走したので、次はBrowserで同じ入力がrenderer lossせず完走するかを確認する。特にc12-p0#0はNode sampled max 4.35〜4.42 GiBでBrowserの参考上限付近にある。",
+      "secondary": "Browserでc12-p0#0が失われる、またはruntimeを短縮する必要がある場合は、H1後のheap localization（c12-p0#0のpeak時点の保持構造: frontier / result history / windows memo / generated burst）と、1 depthあたり最大約196万state（8 stream合算）を生成するgeneration量・時間（H6、stream間で一致するgenerated列）の分析を行う。H2（steps[] lazy化）はH1のedge-cutにほぼ含まれていたため、単独の優先度は低い。",
+      "notRecommended": "Search extent（Gogma 235）やProduction defaultの変更は、本Phaseの結果だけでは推奨しない。"
+    }
+  }
+}
