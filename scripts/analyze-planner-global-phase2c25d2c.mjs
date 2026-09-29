@@ -341,6 +341,32 @@ await withModules(MODULES, async ({ d2c, analysis, interpretation, profile, hash
     topNewSignaturesByShallowSize: a.base.topNewSignaturesByShallowSize.slice(0, 15), retainingPathExamples: a.base.retainingPathExamples,
     retainedIdealCensus: a.base.elementPropertyCensus,
   }
+  /**
+   * The held-aware Gogma stream structure of one run, from its last progress per-depth counts only: how many streams,
+   * the largest one-stream depth (one ensureReserved() depth), the largest same-depth sum over streams, and which streams
+   * generated exactly the same per-depth count sequence over their common depths.
+   */
+  const streamStructure = run => {
+    const depths = run?.lastProgress?.gogmaDepths
+    if (!depths || depths.length === 0) return null
+    const byStream = new Map()
+    for (const d of depths) byStream.set(d.streamIndex, [...(byStream.get(d.streamIndex) ?? []), d])
+    const sequences = [...byStream.entries()].map(([streamIndex, list]) => ({ streamIndex, generated: list.sort((a, b) => a.depth - b.depth).map(d => d.generatedStates) }))
+    const byDepth = new Map()
+    for (const d of depths) { const row = byDepth.get(d.depth) ?? { depth: d.depth, streams: 0, generatedStates: 0, frontierStates: 0 }; row.streams++; row.generatedStates += d.generatedStates; row.frontierStates += d.frontierStates; byDepth.set(d.depth, row) }
+    const perDepth = [...byDepth.values()].sort((a, b) => a.depth - b.depth)
+    const maxSum = perDepth.reduce((best, row) => row.generatedStates > best.generatedStates ? row : best, perDepth[0])
+    const groups = new Map()
+    for (const s of sequences) {
+      const common = Math.min(...sequences.map(t => t.generated.length))
+      const key = s.generated.slice(0, common).join(',')
+      groups.set(key, [...(groups.get(key) ?? []), s.streamIndex])
+    }
+    const largestIdentical = [...groups.values()].sort((a, b) => b.length - a.length)[0]
+    return { streams: byStream.size, depthEvents: depths.length, cumulativeGenerated: depths.reduce((n, d) => n + d.generatedStates, 0),
+      maxGeneratedInOneStreamDepth: run.lastProgress.gogmaDepthMaxima, maxSumOverStreamsAtOneDepth: maxSum,
+      streamsWithIdenticalCountsOverCommonDepths: largestIdentical, perDepthSumOverStreams: perDepth, perStreamGenerated: sequences }
+  }
   const topOf = run => run?.top == null ? null : { thresholdMiB: run.top.thresholdMiB, topAttributed: run.top.topAttributedRepositoryCallsites.slice(0, 5),
     topCategories: run.top.categories.slice(0, 6).map(c => ({ category: c.category, share: c.share })), topInclusive: run.top.topInclusive.slice(0, 8) }
   const perContext = contextKeys.primary.map(key => {
@@ -357,8 +383,9 @@ await withModules(MODULES, async ({ d2c, analysis, interpretation, profile, hash
       postD2: {
         jitDefault: { outcome: jit?.outcome ?? null, thresholdsReached: jit?.thresholds.map(t => t.thresholdMiB) ?? [], thresholdStatus: jit?.thresholdStatus ?? null,
           lastProgress: jit?.lastProgress === null || jit === undefined ? null : { maxDepth: jit.lastProgress.maxDepth, cumulative: jit.lastProgress.cumulative, gogmaDepthMaxima: jit.lastProgress.gogmaDepthMaxima, memory: jit.lastProgress.memory },
-          top: topOf(jit) },
-        noInliningDiagnostic: { outcome: noInl?.outcome ?? null, thresholdsReached: noInl?.thresholds.map(t => t.thresholdMiB) ?? [], thresholdStatus: noInl?.thresholdStatus ?? null, top: topOf(noInl) },
+          streamStructure: streamStructure(jit), top: topOf(jit) },
+        noInliningDiagnostic: { outcome: noInl?.outcome ?? null, thresholdsReached: noInl?.thresholds.map(t => t.thresholdMiB) ?? [], thresholdStatus: noInl?.thresholdStatus ?? null,
+          streamStructure: streamStructure(noInl), top: topOf(noInl) },
         snapshot: snap === undefined ? null : { outcome: snap.outcome, snapshotState: snap.snapshotState, lastProgressBeforeWrite: snap.nearLimitSnapshots[0]?.lastProgressBeforeWrite ?? null,
           ...snapshotSummary(snap.analysis) },
       },
@@ -450,7 +477,9 @@ await withModules(MODULES, async ({ d2c, analysis, interpretation, profile, hash
       controls: r.workload.controls.map(({ expected, ...rest }) => ({ ...rest, d2aStatus: expected.status, d2aSearchSummary: expected.searchSummary, d2aFirstCandidateKeySha256: expected.firstCandidateKeySha256 })),
       unselected: r.workload.unselected, c25cControlRuleCrossCheck: r.c25cWorkload },
     contextParity: { contexts: r.parity.length, matching: r.parity.filter(p => p.matches).length, rows: r.parity },
-    samplingRuns: samplingRuns.map(({ lastAnalysis: _last, ...rest }) => rest),
+    // Per-depth progress lists are kept for the primary runs only (the stream structure above is derived from them).
+    samplingRuns: samplingRuns.map(({ lastAnalysis: _last, ...rest }) => rest.role === 'primary_oom' || rest.lastProgress === null ? rest
+      : { ...rest, lastProgress: { ...rest.lastProgress, gogmaDepths: undefined, gogmaDepthsOmitted: rest.lastProgress.gogmaDepths.length } }),
     profileManifest,
     snapshotRuns: snapshotRuns.map(({ analysis: a, ...rest }) => ({ ...rest, summary: snapshotSummary(a) })),
     rules: { sha256: rulesSha256, verdictRule: analysis.PHASE2C25D2C_VERDICT_RULE, effectRule: analysis.PHASE2C25D2C_EFFECT_RULE, recommendationRule: analysis.PHASE2C25D2C_RECOMMENDATION_RULE,
