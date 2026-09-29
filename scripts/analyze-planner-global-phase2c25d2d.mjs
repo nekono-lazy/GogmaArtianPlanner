@@ -3,6 +3,9 @@
 // (provenance only), the semantic test report of the measured HEAD (a Vitest JSON report) and writes the committed
 // evidence JSON. Runs no Planner and no Search. The written interpretation is the committed
 // src/benchmarks/plannerGlobalPhase2C25D2DInterpretation.ts (post-hoc, allowlisted).
+// Before any analysis, validatePhase2C25D2DFormalRun() (src/benchmarks/plannerGlobalPhase2C25D2DFormalValidation.ts,
+// post-hoc, allowlisted, imported by no runner) must prove the run is a complete series: every context of the workload
+// re-derived here exactly once, both modes each, nothing foreign. An incomplete run writes no RESULT.
 import { readFile, writeFile } from 'node:fs/promises'
 import { lstatSync, existsSync } from 'node:fs'
 import { basename } from 'node:path'
@@ -33,7 +36,10 @@ if (!formal && !args.includes('--allow-nonformal')) throw new Error('The raw run
 // The calculation code (modules, runners and everything they load) must be the measured HEAD; only the post-hoc files
 // below may change after the measurement.
 const measuredHead = r.environment.repositoryHead
-const POST_HOC_ALLOWED = ['scripts/analyze-planner-global-phase2c25d2d.mjs', 'src/benchmarks/plannerGlobalPhase2C25D2DInterpretation.ts', '*.test.ts']
+// Post-hoc only: the analyzer, the written interpretation and the formal completeness validator (which decides whether a
+// raw run may become formal evidence; no runner, Search or benchmark calculation imports it), plus tests.
+const POST_HOC_ALLOWED = ['scripts/analyze-planner-global-phase2c25d2d.mjs', 'src/benchmarks/plannerGlobalPhase2C25D2DInterpretation.ts',
+  'src/benchmarks/plannerGlobalPhase2C25D2DFormalValidation.ts', '*.test.ts']
 const changed = git('diff', '--name-only', measuredHead, 'HEAD', '--', 'src', 'scripts', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json')
   .split(/\r?\n/).filter(Boolean)
 const postHocOnly = path => POST_HOC_ALLOWED.includes(path) || /\.test\.tsx?$/.test(path)
@@ -56,6 +62,17 @@ if (!semanticTests.keyFiles.some(file => file.file.endsWith('reservedBonusStream
 const server = await createServer({ configFile: false, server: { middlewareMode: true, watch: null, hmr: false }, appType: 'custom' })
 try {
   const d2d = await server.ssrLoadModule('/src/benchmarks/plannerGlobalPhase2C25D2D.ts')
+  const d2cModule = await server.ssrLoadModule('/src/benchmarks/plannerGlobalPhase2C25D2C.ts')
+  const c25c = await server.ssrLoadModule('/src/benchmarks/plannerGlobalPhase2C25C.ts')
+  const formalValidation = await server.ssrLoadModule('/src/benchmarks/plannerGlobalPhase2C25D2DFormalValidation.ts')
+  // The expected workload, re-derived here from the committed evidence (the runner's own rule), never read from the raw run.
+  const expectedWorkload = d2cModule.selectPhase2C25D2CWorkload(d2cModule.parsePhase2C25D2CD2AResult(d2a.json),
+    c25c.selectPhase2C25CWorkload(c25c.parsePhase2C25CEvidence(c25a.json)))
+  d2d.assertPhase2C25D2DWorkloadMatchesD2C(expectedWorkload, d2d.parsePhase2C25D2DD2CResult(d2c.json).items)
+  const formalRunValidation = formalValidation.validatePhase2C25D2DFormalRun(d2d.phase2c25d2dWorkloadItems(expectedWorkload), r)
+  if (!formalRunValidation.valid && !args.includes('--allow-nonformal')) {
+    throw new Error(`Formal D2-d run is incomplete: ${formalRunValidation.failures.join('; ')}`)
+  }
   const interpretationPath = '/src/benchmarks/plannerGlobalPhase2C25D2DInterpretation.ts'
   const interpretation = existsSync(`.${interpretationPath}`) ? (await server.ssrLoadModule(interpretationPath)).PHASE2C25D2D_INTERPRETATION : null
   if (interpretation === null && !args.includes('--allow-nonformal')) throw new Error('The interpretation module is missing.')
@@ -73,7 +90,8 @@ try {
     analyzedAt: new Date().toISOString(),
     sources: { run: run.source, c25a: c25a.source, d2a: d2a.source, d2c: d2c.source, semanticTests: tests.source },
     provenance: {
-      measuredHead, analysisHead: git('rev-parse', 'HEAD'), codeChangedSinceMeasuredHead: changed, calculationCodeChangedSinceMeasuredHead, postHocAllowedFiles: POST_HOC_ALLOWED, formal,
+      measuredHead, analysisHead: git('rev-parse', 'HEAD'), codeChangedSinceMeasuredHead: changed, calculationCodeChangedSinceMeasuredHead, postHocAllowedFiles: POST_HOC_ALLOWED,
+      formal: formal && formalRunValidation.valid,
       benchmarkCodeSha256: r.environment.benchmarkCodeSha256, uncommittedBenchmarkCode: r.environment.uncommittedBenchmarkCode,
       exportFileName: r.environment.exportFileName, exportSha256: r.environment.exportSha256, exportBytes: r.environment.exportBytes,
       c25aEvidenceFileName: r.environment.c25aEvidenceFileName, c25aEvidenceSha256: r.environment.c25aEvidenceSha256,
@@ -99,6 +117,7 @@ try {
       equalsD2CWorkload: true,
     },
     contextParity: { contexts: r.parity.length, matching: r.parity.filter(row => row.matches && row.digestMatches).length, rows: r.parity },
+    formalRunValidation: { validator: 'validatePhase2C25D2DFormalRun (post-hoc, src/benchmarks/plannerGlobalPhase2C25D2DFormalValidation.ts)', ...formalRunValidation },
     semanticTests,
     sourceAudit,
     ...result,
@@ -106,7 +125,7 @@ try {
     interpretation,
   }
   await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', { flag: 'wx' })
-  console.log(JSON.stringify({ output: outputPath, totals: result.totals, sourceAudit }, null, 2))
+  console.log(JSON.stringify({ output: outputPath, formalRunValidation, totals: result.totals, sourceAudit }, null, 2))
 } finally {
   await server.close()
 }

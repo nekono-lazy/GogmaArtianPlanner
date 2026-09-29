@@ -26,6 +26,10 @@ import {
   PHASE2C25D2D_RUN_BUDGET_MS,
 } from './plannerGlobalPhase2C25D2D'
 import d2dSource from './plannerGlobalPhase2C25D2D.ts?raw'
+import { validatePhase2C25D2DFormalRun } from './plannerGlobalPhase2C25D2DFormalValidation'
+import formalValidationSource from './plannerGlobalPhase2C25D2DFormalValidation.ts?raw'
+import runnerSource from '../../scripts/run-planner-global-phase2c25d2d.mjs?raw'
+import analyzerSource from '../../scripts/analyze-planner-global-phase2c25d2d.mjs?raw'
 
 const workload = selectPhase2C25D2CWorkload(parsePhase2C25D2CD2AResult(d2aResult), selectPhase2C25CWorkload(parsePhase2C25CEvidence(c25aEvidence)))
 const items = phase2c25d2dWorkloadItems(workload)
@@ -180,5 +184,128 @@ describe('isolation', () => {
       { query: '?raw', import: 'default', eager: true }) as Record<string, string>
     expect(Object.keys(production).length).toBeGreaterThan(50)
     expect(Object.entries(production).filter(([, source]) => /plannerGlobalPhase2C25D2D/.test(source)).map(([path]) => path)).toEqual([])
+  })
+})
+
+describe('formal run completeness (post-hoc validator)', () => {
+  /** A complete synthetic series over the derived workload: every context once, both modes, 1 contexts + N Search children. */
+  const complete = () => ({
+    status: 'completed',
+    environment: { modes: ['minimal', 'instrumented'], smoke: null, uncommittedBenchmarkCode: false },
+    runs: items.map(item => ({ item: structuredClone(item), modes: { minimal: { status: 'first_candidate' }, instrumented: { status: 'first_candidate' } } })),
+    processes: [{ role: 'contexts' }, ...items.flatMap(() => [{ role: 'search' }, { role: 'search' }])],
+  })
+  const validate = (raw: unknown) => validatePhase2C25D2DFormalRun(items, raw)
+
+  it('A. accepts the complete 5 context x 2 mode series, with every count derived from the workload', () => {
+    const result = validate(complete())
+    expect(result).toMatchObject({
+      valid: true, failures: [], expectedContexts: items.length, actualContexts: items.length,
+      expectedSearchRuns: items.length * PHASE2C25D2D_MODES.length, actualSearchRuns: items.length * PHASE2C25D2D_MODES.length,
+      missingContexts: [], duplicateContexts: [], unexpectedContexts: [], itemMismatches: [], missingModes: [], unexpectedModes: [],
+      environmentModeMismatch: false, smokeIsNull: true, uncommittedBenchmarkCode: false, processCountMismatch: false,
+    })
+    expect(result.expectedContexts).toBe(5)
+    expect(result.expectedSearchRuns).toBe(10)
+  })
+
+  it('B. rejects a missing context', () => {
+    const raw = complete()
+    raw.runs.splice(2, 1)
+    const result = validate(raw)
+    expect(result.valid).toBe(false)
+    expect(result.missingContexts).toEqual([phase2c25d2dItemKey(items[2])])
+    expect(result.actualSearchRuns).toBe(8)
+  })
+
+  it('C. rejects a duplicate context, even an identical record', () => {
+    const raw = complete()
+    raw.runs.push(structuredClone(raw.runs[0]))
+    const result = validate(raw)
+    expect(result.valid).toBe(false)
+    expect(result.duplicateContexts).toEqual([phase2c25d2dItemKey(items[0])])
+  })
+
+  it('D / E. rejects a record missing its minimal or its instrumented mode', () => {
+    for (const mode of ['minimal', 'instrumented'] as const) {
+      const raw = complete()
+      delete (raw.runs[1].modes as Partial<Record<string, unknown>>)[mode]
+      const result = validate(raw)
+      expect(result.valid).toBe(false)
+      expect(result.missingModes).toEqual([{ context: phase2c25d2dItemKey(items[1]), mode }])
+      expect(result.actualSearchRuns).toBe(9)
+    }
+  })
+
+  it('F. rejects a foreign context', () => {
+    const raw = complete()
+    raw.runs.push({ ...structuredClone(raw.runs[0]), item: { ...structuredClone(items[0]), orientationId: 'foreign-orientation', workIndex: 7 } })
+    const result = validate(raw)
+    expect(result.valid).toBe(false)
+    expect(result.unexpectedContexts).toEqual(['foreign-orientation#7'])
+  })
+
+  it('G. rejects an item whose target, role or context digest differs from the workload', () => {
+    for (const [field, value] of [['targetWeaponId', 'another-target'], ['role', 'control_first_candidate'], ['contextDigest', 'fnv1a32:ffffffff']] as const) {
+      const raw = complete()
+      raw.runs[0].item = { ...raw.runs[0].item, [field]: value }
+      const result = validate(raw)
+      expect(result.valid).toBe(false)
+      expect(result.itemMismatches).toEqual([{ context: phase2c25d2dItemKey(items[0]), field, expected: items[0][field], actual: value }])
+    }
+  })
+
+  it('H / I. rejects environment.modes that is not exactly the two D2-d modes', () => {
+    for (const modes of [['minimal'], ['instrumented'], ['minimal', 'instrumented', 'other'], ['minimal', 'minimal']]) {
+      const raw = complete()
+      raw.environment.modes = modes
+      const result = validate(raw)
+      expect(result.valid).toBe(false)
+      expect(result.environmentModeMismatch).toBe(true)
+    }
+    const reordered = complete()
+    reordered.environment.modes = ['instrumented', 'minimal']
+    expect(validate(reordered).valid).toBe(true)
+  })
+
+  it('rejects an unknown mode property in a record', () => {
+    const raw = complete()
+    ;(raw.runs[3].modes as Record<string, unknown>).other = { status: 'first_candidate' }
+    const result = validate(raw)
+    expect(result.valid).toBe(false)
+    expect(result.unexpectedModes).toEqual([{ context: phase2c25d2dItemKey(items[3]), mode: 'other' }])
+  })
+
+  it('J. rejects a smoke run, uncommitted benchmark code and a status other than completed', () => {
+    const smoke = complete()
+    ;(smoke.environment as Record<string, unknown>).smoke = { only: null, modes: ['minimal'], runBudgetMs: 240000 }
+    expect(validate(smoke)).toMatchObject({ valid: false, smokeIsNull: false })
+    const uncommitted = complete()
+    uncommitted.environment.uncommittedBenchmarkCode = true
+    expect(validate(uncommitted)).toMatchObject({ valid: false, uncommittedBenchmarkCode: true })
+    const parity = complete()
+    parity.status = 'parity_failed_no_search_run'
+    expect(validate(parity)).toMatchObject({ valid: false, rawStatus: 'parity_failed_no_search_run' })
+  })
+
+  it('checks the child process counts as an auxiliary condition', () => {
+    const raw = complete()
+    raw.processes.pop()
+    expect(validate(raw)).toMatchObject({ valid: false, processCountMismatch: true, processCounts: { contexts: 1, search: 9, other: 0 } })
+  })
+
+  it('stays post-hoc: no runner imports it, the analyzer runs it before the analysis and writes nothing when it fails', () => {
+    expect(runnerSource).not.toMatch(/FormalValidation/)
+    expect(d2dSource).not.toMatch(/FormalValidation/)
+    expect(formalValidationSource).not.toMatch(/node:fs|readFile|c12-p0|c2-p1|c0-p0|c8-p1|c13-p4/)
+    const validation = analyzerSource.indexOf('validatePhase2C25D2DFormalRun(')
+    const incomplete = analyzerSource.indexOf('Formal D2-d run is incomplete')
+    const analysis = analyzerSource.indexOf('analyzePhase2C25D2DRun(')
+    const writing = analyzerSource.indexOf('await writeFile(outputPath')
+    expect(validation).toBeGreaterThan(0)
+    expect(validation).toBeLessThan(incomplete)
+    expect(incomplete).toBeLessThan(analysis)
+    expect(analysis).toBeLessThan(writing)
+    expect(analyzerSource).toMatch(/'src\/benchmarks\/plannerGlobalPhase2C25D2DFormalValidation\.ts'/)
   })
 })
