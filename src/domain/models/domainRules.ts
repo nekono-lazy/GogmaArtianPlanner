@@ -4,19 +4,6 @@ import type {
 } from './common'
 import type { OwnedWeapon, SkillCondition, TargetWeapon } from './entities'
 
-function bonusKey(bonus: RestorationBonusSet[number]): string {
-  return JSON.stringify([bonus.bonusTypeId, bonus.bonusRankId])
-}
-
-function countBonuses(bonuses: RestorationBonusSet): Map<string, number> {
-  const counts = new Map<string, number>()
-  bonuses.forEach((bonus) => {
-    const key = bonusKey(bonus)
-    counts.set(key, (counts.get(key) ?? 0) + 1)
-  })
-  return counts
-}
-
 /**
  * Unordered multiset equality with duplicate counts preserved.
  *
@@ -26,17 +13,33 @@ function countBonuses(bonuses: RestorationBonusSet): Map<string, number> {
  *
  * It is deliberately NOT the comparison for anything that feeds Keep
  * prediction: use `areRestorationBonusSlotsEqual()` there.
+ *
+ * Each left slot consumes the first still unmatched right slot with the same
+ * `bonusTypeId` and `bonusRankId`; a bit mask records the consumed right slots,
+ * so a duplicate on one side must be matched by as many on the other. A set
+ * holds five slots, so this is at most 5 x 5 comparisons and allocates nothing.
  */
 export function areRestorationBonusSetsEqual(
   left: RestorationBonusSet,
   right: RestorationBonusSet,
 ): boolean {
-  const leftCounts = countBonuses(left)
-  const rightCounts = countBonuses(right)
-  if (leftCounts.size !== rightCounts.size) return false
-  return [...leftCounts].every(
-    ([key, count]) => rightCounts.get(key) === count,
-  )
+  if (left.length !== right.length) return false
+  let matchedRight = 0
+  for (let leftSlot = 0; leftSlot < left.length; leftSlot += 1) {
+    const bonus = left[leftSlot]
+    let rightSlot = 0
+    while (
+      rightSlot < right.length &&
+      ((matchedRight & (1 << rightSlot)) !== 0 ||
+        right[rightSlot].bonusTypeId !== bonus.bonusTypeId ||
+        right[rightSlot].bonusRankId !== bonus.bonusRankId)
+    ) {
+      rightSlot += 1
+    }
+    if (rightSlot === right.length) return false
+    matchedRight |= 1 << rightSlot
+  }
+  return true
 }
 
 /**
