@@ -1,0 +1,2904 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-A5: Bonus Ideal filter internal runtime localization (post-hoc analysis)",
+  "analyzedAt": "2026-09-30T07:11:22.821Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A5_RAW.json.local",
+      "bytes": 20819523,
+      "sha256": "5c86accf9b5515bdb5d3482e49890263a5696ade35d81ecfea7e56e3cbc1557b"
+    },
+    "c26aResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A_RESULT.json",
+      "bytes": 318778,
+      "sha256": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171"
+    },
+    "c26a2Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A2_RESULT.json",
+      "bytes": 642128,
+      "sha256": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2"
+    },
+    "c26a3Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A3_RESULT.json",
+      "bytes": 147318,
+      "sha256": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2"
+    },
+    "c26a4Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A4_RESULT.json",
+      "bytes": 95474,
+      "sha256": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529"
+    }
+  },
+  "provenance": {
+    "measuredHead": "a2e3c3ed489c0ff9bceabb2b66ff813ae8068906",
+    "analysisHead": "a2e3c3ed489c0ff9bceabb2b66ff813ae8068906",
+    "analysisCodeUncommitted": false,
+    "codeChangedSinceMeasuredHead": [],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "analysisCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "scripts/analyze-planner-global-phase2c26a5.mjs",
+      "src/benchmarks/plannerGlobalPhase2C26A5Analysis.ts",
+      "*.test.ts"
+    ],
+    "formal": true,
+    "benchmarkCodeSha256": "f6a5a22e7e0979739268a1a4e88c5098dc7f5eb91e3dc6ea0802d2a59225ae7d",
+    "uncommittedBenchmarkCode": false,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "c26aResultSha256": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "c26aResultRecordedByRunner": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "c26aMeasuredHead": "525ed892acb09609fcce1f7589c6751038ae255d",
+    "c26a2ResultSha256": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+    "c26a2ResultRecordedByRunner": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+    "c26a2MeasuredHead": "9bb89e988c619965473cf5ef7a8413d49f97bf4f",
+    "c26a3ResultSha256": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+    "c26a3ResultRecordedByRunner": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+    "c26a3MeasuredHead": "0e2a5fea93882f4c7d121c305d7fa1ad7e3b8bf0",
+    "c26a4ResultSha256": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+    "c26a4ResultRecordedByRunner": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+    "c26a4MeasuredHead": "9fadd93d8e68c074f5784368976d593aeb50021f",
+    "authorityShaChain": {
+      "c26aShaRecordedByA4": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+      "a2ShaRecordedByA4": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+      "a3ShaRecordedByA4": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+      "a4ChainRecordedByA4": {
+        "c26aShaRecordedByA2": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+        "c26aShaRecordedByA3": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+        "c26aShaRecordedByA3ForA2": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+        "a2ShaRecordedByA3": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+        "allMatchFilesRead": true
+      },
+      "allMatchFilesRead": true
+    },
+    "profileFileIssues": [],
+    "measuredAt": "2026-09-30T05:28:50.124Z",
+    "runWallMs": 6132677.8069
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296
+  },
+  "selectionRule": {
+    "source": "Phase 2-C2.6-A4 RESULT selectionValidation.expected (= its selectionRule.primaryOrientationIds = the A3 selection; no ID fixed in source)",
+    "registeredCount": 3,
+    "primaryOrientationIds": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "selectedCount": 3
+  },
+  "diagnosticSelection": {
+    "rule": "A4 primaries sorted by bonus_ideal_filter share ascending (ties: A4 selection order); the middle one (index floor(n / 2))",
+    "ordered": [
+      {
+        "orientationId": "c6-p1",
+        "bonusIdealFilterShare": 0.2611399650086039,
+        "a4SelectionIndex": 0
+      },
+      {
+        "orientationId": "c14-p0",
+        "bonusIdealFilterShare": 0.28004334361897104,
+        "a4SelectionIndex": 2
+      },
+      {
+        "orientationId": "c13-p1",
+        "bonusIdealFilterShare": 0.2937440164011473,
+        "a4SelectionIndex": 1
+      }
+    ],
+    "representativeOrientationId": "c14-p0"
+  },
+  "conditions": {
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "childHeapLimitMb": 8192,
+    "concurrency": 1,
+    "orientationBudgetMs": 1800000,
+    "nodeYield": "setImmediate",
+    "extent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "bounds": {
+      "maxCandidateTrialsPerTarget": 2,
+      "maxPlannerReruns": 8
+    },
+    "researchMaxPlanSteps": 20000,
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "lineage": {
+      "priorFixedBuildListEntryIds": [],
+      "priorExcludedRoutes": []
+    },
+    "nodeFlags": [
+      "--max-old-space-size=8192"
+    ],
+    "freshChildPerOrientation": true,
+    "memorySampleIntervalMs": 250,
+    "heartbeatIntervalMs": 5000,
+    "retry": "none (each orientation once)",
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": false,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "conditionNote": "Every A4 condition is unchanged (concurrency 1 and the primary Node flags included); only the CPU profiler (and the filter interval stamps on A4's own observer) is added, so absolute wall time is never compared with A4.",
+    "diagnosticNodeFlags": [
+      "--no-turbo-inlining",
+      "--no-maglev-inlining",
+      "--max-old-space-size=8192"
+    ],
+    "diagnosticBudgetMs": 900000
+  },
+  "profilerProbe": {
+    "valid": true,
+    "issues": [],
+    "steps": {
+      "Profiler.enable": {
+        "accepted": true
+      },
+      "Profiler.setSamplingInterval": {
+        "accepted": true
+      },
+      "Profiler.start": {
+        "accepted": true
+      },
+      "Profiler.stop": {
+        "accepted": true
+      }
+    },
+    "requestedSamplingIntervalUs": 10000,
+    "observedMedianIntervalUs": 10495,
+    "keysPresent": {
+      "nodes": true,
+      "samples": true,
+      "timeDeltas": true,
+      "startTime": true,
+      "endTime": true
+    },
+    "samples": 147,
+    "nodes": 27,
+    "hits": 992000,
+    "alignment": {
+      "valid": true,
+      "issues": [],
+      "offsetSpreadMs": 0.0021499991416931152,
+      "maxPairPrecisionMs": 0.010099999999965803,
+      "profileDurationMs": 1577.5430000126362,
+      "negativeDeltas": 0
+    },
+    "scripts": {
+      "file": "probe.scripts.json",
+      "sha256": "93f37ad1f4cc9e4193ba7b3dfe9d0b9a73d4771068544870543a0ddcdd7a5dfe",
+      "bytes": 2980292,
+      "scriptCount": 944,
+      "sourceMappedCount": 175,
+      "requiredSourceMaps": {
+        "src/domain/target/targetEvaluator.ts": true,
+        "src/domain/target/bonusConditionEvaluator.ts": true,
+        "src/domain/master/masterSelectors.ts": true,
+        "src/domain/models/domainRules.ts": true,
+        "src/domain/search/targetSearchScheduler.ts": true
+      }
+    },
+    "predicateSpan": {
+      "file": "src/domain/target/targetEvaluator.ts",
+      "functionName": "satisfiesIdealBonuses",
+      "startLine": 25,
+      "endLine": 33
+    },
+    "predicateFrameLines": [
+      25
+    ],
+    "predicateLineMatches": true
+  },
+  "profilerConfig": {
+    "requestedSamplingIntervalUs": 10000,
+    "warmupMs": 120000,
+    "profileStopMs": 720000,
+    "requestedProfileDurationMs": 600000,
+    "method": "node:inspector Session (main thread): Debugger.enable while the modules load (scriptParsed: url + inline source map), Debugger.disable, then Profiler.enable / setSamplingInterval / start / stop",
+    "clockAlignment": "V8 CPU profile timestamps are on the process.hrtime clock; four (performance.now, hrtime) pairs around Profiler.start / stop give the constant offset; startTime / endTime must lie inside the hrtime brackets of the calls (tolerance 1 ms)",
+    "windowAnchor": "the kernel's first Search start (first search_runtime section start)"
+  },
+  "registeredRule": {
+    "categories": [
+      "gc",
+      "rank_reference_validation",
+      "multiset_equality",
+      "predicate_self_or_inlined",
+      "filter_or_inlined_predicate",
+      "other_unresolved"
+    ],
+    "categoryRules": [
+      {
+        "category": "gc",
+        "rule": "the stack contains the V8 \"(garbage collector)\" frame"
+      },
+      {
+        "category": "rank_reference_validation",
+        "rule": "the stack contains assertRestorationBonusRankReferences (bonusConditionEvaluator.ts) or getBonusRank / requireById (masterSelectors.ts), named or an anonymous frame whose source-mapped start lies in one of their source spans"
+      },
+      {
+        "category": "multiset_equality",
+        "rule": "the stack contains areRestorationBonusSetsEqual / countBonuses / bonusKey (domainRules.ts), named or an anonymous frame in their spans (a native JSON.stringify / Map frame under bonusKey / countBonuses is therefore multiset)"
+      },
+      {
+        "category": "predicate_self_or_inlined",
+        "rule": "the stack contains satisfiesIdealBonuses (targetEvaluator.ts) but none of the above: its own work (scope check, calls) and anything JIT-inlined into it without a frame; never \"the scope check alone\""
+      },
+      {
+        "category": "filter_or_inlined_predicate",
+        "rule": "none of the above, and the innermost (leaf) frame is in targetSearchScheduler.ts: the filter callback or the method holding the Array.prototype.filter call (builtin loop, callback, or a predicate inlined into it); never \"pure Array.prototype.filter overhead\""
+      },
+      {
+        "category": "other_unresolved",
+        "rule": "anything else inside a filter interval ((program), (idle), a Vite SSR module runner import accessor, a Research harness frame, native frames without a registered ancestor, other files)"
+      }
+    ],
+    "functionRegistry": [
+      {
+        "category": "rank_reference_validation",
+        "file": "src/domain/target/bonusConditionEvaluator.ts",
+        "functionName": "assertRestorationBonusRankReferences"
+      },
+      {
+        "category": "rank_reference_validation",
+        "file": "src/domain/master/masterSelectors.ts",
+        "functionName": "getBonusRank"
+      },
+      {
+        "category": "rank_reference_validation",
+        "file": "src/domain/master/masterSelectors.ts",
+        "functionName": "requireById"
+      },
+      {
+        "category": "multiset_equality",
+        "file": "src/domain/models/domainRules.ts",
+        "functionName": "areRestorationBonusSetsEqual"
+      },
+      {
+        "category": "multiset_equality",
+        "file": "src/domain/models/domainRules.ts",
+        "functionName": "countBonuses"
+      },
+      {
+        "category": "multiset_equality",
+        "file": "src/domain/models/domainRules.ts",
+        "functionName": "bonusKey"
+      },
+      {
+        "category": "predicate_self_or_inlined",
+        "file": "src/domain/target/targetEvaluator.ts",
+        "functionName": "satisfiesIdealBonuses"
+      }
+    ],
+    "filterCallSiteFile": "src/domain/search/targetSearchScheduler.ts",
+    "functionSpansAtMeasuredHead": [
+      {
+        "file": "src/domain/target/bonusConditionEvaluator.ts",
+        "functionName": "assertRestorationBonusRankReferences",
+        "startLine": 8,
+        "endLine": 12
+      },
+      {
+        "file": "src/domain/master/masterSelectors.ts",
+        "functionName": "getBonusRank",
+        "startLine": 66,
+        "endLine": 71
+      },
+      {
+        "file": "src/domain/master/masterSelectors.ts",
+        "functionName": "requireById",
+        "startLine": 52,
+        "endLine": 62
+      },
+      {
+        "file": "src/domain/models/domainRules.ts",
+        "functionName": "areRestorationBonusSetsEqual",
+        "startLine": 30,
+        "endLine": 40
+      },
+      {
+        "file": "src/domain/models/domainRules.ts",
+        "functionName": "countBonuses",
+        "startLine": 11,
+        "endLine": 18
+      },
+      {
+        "file": "src/domain/models/domainRules.ts",
+        "functionName": "bonusKey",
+        "startLine": 7,
+        "endLine": 9
+      },
+      {
+        "file": "src/domain/target/targetEvaluator.ts",
+        "functionName": "satisfiesIdealBonuses",
+        "startLine": 25,
+        "endLine": 33
+      }
+    ],
+    "unresolvedCategories": [
+      "predicate_self_or_inlined",
+      "filter_or_inlined_predicate",
+      "other_unresolved"
+    ],
+    "decision": {
+      "majority": 2,
+      "minimumFilterIntervalSamples": 5000,
+      "unresolvedThreshold": 0.35,
+      "gcThreshold": 0.2,
+      "rankThreshold": 0.35,
+      "multisetThreshold": 0.35,
+      "order": [
+        "U0 insufficient_samples: fewer than 2 primaries have a valid clock alignment / intervals and >= 5,000 filter interval samples",
+        "U1 jit_attribution_insufficient: >= 2 valid primaries have predicate_self_or_inlined + filter_or_inlined_predicate + other_unresolved >= 0.35",
+        "GC: >= 2 valid primaries have gc >= 0.20",
+        "RANK: >= 2 valid primaries have rank_reference_validation >= 0.35",
+        "MULTISET: >= 2 valid primaries have multiset_equality >= 0.35",
+        "MIXED: otherwise (the two largest pooled categories are the next candidates)"
+      ]
+    },
+    "clockToleranceMs": 1,
+    "population": "samples whose Research time (profile time - offset) lies in [startMs, endMs) of a bonus_ideal_filter interval; filter-external samples are never in a denominator"
+  },
+  "selectionValidation": {
+    "valid": true,
+    "expected": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "actual": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "missing": [],
+    "duplicate": [],
+    "foreign": [],
+    "notPrimary": [],
+    "metadataMismatches": []
+  },
+  "conditionParity": {
+    "valid": true,
+    "issues": [],
+    "checks": [
+      {
+        "condition": "exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "concurrency is 1",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "primary nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "A4 searchInstrumentation",
+        "current": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "authority": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a4.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a4.concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a4.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a4.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a4.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a4.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.concurrency is 1",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.concurrency",
+        "current": 1,
+        "authority": 3,
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.a2.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.a2.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.a2.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.a2.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.a2.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.a2.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.a2.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.a2.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a3.a2.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      }
+    ]
+  },
+  "baselineParity": {
+    "valid": true,
+    "issues": [],
+    "baselineChecks": [
+      {
+        "field": "planningTargetCount",
+        "matches": true
+      },
+      {
+        "field": "completedTargetCount",
+        "matches": true
+      },
+      {
+        "field": "termination",
+        "matches": true
+      },
+      {
+        "field": "planSteps",
+        "matches": true
+      },
+      {
+        "field": "conflicts",
+        "matches": true
+      },
+      {
+        "field": "conflictsByKind",
+        "matches": true
+      },
+      {
+        "field": "conflictSignatures",
+        "matches": true
+      },
+      {
+        "field": "selectedTargets",
+        "matches": true
+      },
+      {
+        "field": "orientationCount",
+        "matches": true
+      }
+    ],
+    "orderedIdsMatch": true,
+    "orientationIdentityMismatches": 0,
+    "orientationMetadataMismatches": 0,
+    "timeoutOrientationMismatches": []
+  },
+  "formalSeriesValidation": {
+    "valid": true,
+    "failures": [],
+    "rawStatus": "completed",
+    "smokeIsNull": true,
+    "uncommittedBenchmarkCode": false,
+    "shaMatches": {
+      "c26a": true,
+      "a2": true,
+      "a3": true,
+      "a4": true,
+      "export": true
+    },
+    "probeValid": true,
+    "profilerConfig": {
+      "requestedSamplingIntervalUs": 10000,
+      "warmupMs": 120000,
+      "profileStopMs": 720000,
+      "requestedProfileDurationMs": 600000
+    },
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": false,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "diagnosticRepresentative": {
+      "expected": "c14-p0",
+      "actual": "c14-p0",
+      "matches": true
+    },
+    "recordIssues": []
+  },
+  "summary": {
+    "orientations": 3,
+    "childStatus": {
+      "completed": 0,
+      "out_of_memory": 0,
+      "timeout": 3,
+      "process_failure": 0
+    },
+    "pooledShares": {
+      "gc": 0.022035206086597644,
+      "rank_reference_validation": 0.030702147894274077,
+      "multiset_equality": 0.7456440991225395,
+      "predicate_self_or_inlined": 0.013224712447738162,
+      "filter_or_inlined_predicate": 0.18182633817222632,
+      "other_unresolved": 0.006567496276624379
+    },
+    "decision": {
+      "rule": {
+        "majority": 2,
+        "minimumFilterIntervalSamples": 5000,
+        "unresolvedThreshold": 0.35,
+        "gcThreshold": 0.2,
+        "rankThreshold": 0.35,
+        "multisetThreshold": 0.35,
+        "order": [
+          "U0 insufficient_samples: fewer than 2 primaries have a valid clock alignment / intervals and >= 5,000 filter interval samples",
+          "U1 jit_attribution_insufficient: >= 2 valid primaries have predicate_self_or_inlined + filter_or_inlined_predicate + other_unresolved >= 0.35",
+          "GC: >= 2 valid primaries have gc >= 0.20",
+          "RANK: >= 2 valid primaries have rank_reference_validation >= 0.35",
+          "MULTISET: >= 2 valid primaries have multiset_equality >= 0.35",
+          "MIXED: otherwise (the two largest pooled categories are the next candidates)"
+        ]
+      },
+      "validPrimaries": [
+        "c6-p1",
+        "c13-p1",
+        "c14-p0"
+      ],
+      "invalidPrimaries": [],
+      "primariesAtThreshold": {
+        "unresolved": [],
+        "gc": [],
+        "rank_reference_validation": [],
+        "multiset_equality": [
+          "c6-p1",
+          "c13-p1",
+          "c14-p0"
+        ]
+      },
+      "topPooledCategories": [
+        "multiset_equality",
+        "filter_or_inlined_predicate"
+      ],
+      "case": "MULTISET_multiset_equality",
+      "reason": "multiset_equality >= 0.35 in c6-p1, c13-p1, c14-p0",
+      "recommendation": "次Phaseでmultiset equalityのoptimization設計（precomputed Ideal multiset表現、allocation-free 5-slot multiset比較等を候補として比較。unordered multiset・重複数の意味を維持し、slot-order semanticsと混同しない。rank validationのerror timingも維持）。"
+    }
+  },
+  "perPrimary": [
+    {
+      "orientationId": "c6-p1",
+      "variant": "jit_default",
+      "childOutcome": "timeout",
+      "childWallMs": 1800214.5663,
+      "killedAtMs": 1800015.3652000001,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "searchOutcome": {
+        "lastHeartbeatElapsedMs": 1798245.6718,
+        "stage": "search_running",
+        "counters": {
+          "startedTargets": 1,
+          "completedTargets": 0,
+          "deliveredCandidates": 0,
+          "trialsStarted": 0,
+          "trialsCompleted": 0,
+          "fullPlannerRunsStarted": 0,
+          "fullPlannerRunsCompleted": 0
+        },
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 254,
+          "keepBonuses": 29242
+        },
+        "activeStack": [
+          "search_runtime",
+          "scheduler_step",
+          "scheduler_settle",
+          "bonus_depth_work",
+          "bonus_depth_read"
+        ],
+        "contractViolations": 0
+      },
+      "window": {
+        "requestedSamplingIntervalUs": 10000,
+        "warmupMs": 120000,
+        "profileStopMs": 720000,
+        "requestedProfileDurationMs": 600000,
+        "actualStartElapsedMs": 120157.04950000001,
+        "actualStopElapsedMs": 722127.45115,
+        "actualProfileDurationMs": 601970.4016499999,
+        "startDelayMs": 157.04950000000827,
+        "stopDelayMs": 2127.451149999979,
+        "stoppedBy": "window",
+        "error": null
+      },
+      "intervalSnapshot": {
+        "recorded": 271,
+        "completedAfterFreeze": 0,
+        "openAtSnapshot": null,
+        "violations": 0
+      },
+      "scriptTable": {
+        "scriptCount": 944,
+        "sourceMappedCount": 175,
+        "requiredSourceMaps": {
+          "src/domain/target/targetEvaluator.ts": true,
+          "src/domain/target/bonusConditionEvaluator.ts": true,
+          "src/domain/master/masterSelectors.ts": true,
+          "src/domain/models/domainRules.ts": true,
+          "src/domain/search/targetSearchScheduler.ts": true
+        }
+      },
+      "captureIssues": [],
+      "profile": {
+        "alignment": {
+          "valid": true,
+          "issues": [],
+          "offsetSpreadMs": 0.015549987554550171,
+          "maxPairPrecisionMs": 0.030199999993783422,
+          "profileDurationMs": 602128.6070000231,
+          "sumDeltasMs": 602128.462,
+          "negativeDeltas": 0
+        },
+        "intervalValidation": {
+          "valid": true,
+          "issues": [],
+          "count": 271
+        },
+        "allProfileSamples": 57488,
+        "observedIntervalUs": {
+          "median": 10506,
+          "mean": 10473.985214305594
+        },
+        "intervalsInProfile": 203,
+        "intervalMsInProfile": 185472.0906,
+        "intervalShareOfProfile": 0.3080273689769948,
+        "filterIntervalSamples": 17656,
+        "filterSampleShare": 0.30712496521013083,
+        "categories": [
+          {
+            "category": "gc",
+            "samples": 345,
+            "share": 0.019540099682827366
+          },
+          {
+            "category": "rank_reference_validation",
+            "samples": 554,
+            "share": 0.03137743543271409
+          },
+          {
+            "category": "multiset_equality",
+            "samples": 13573,
+            "share": 0.7687471681014952
+          },
+          {
+            "category": "predicate_self_or_inlined",
+            "samples": 229,
+            "share": 0.01297009515178976
+          },
+          {
+            "category": "filter_or_inlined_predicate",
+            "samples": 2863,
+            "share": 0.16215450838241957
+          },
+          {
+            "category": "other_unresolved",
+            "samples": 92,
+            "share": 0.005210693248753965
+          }
+        ],
+        "unresolvedShare": 0.1803352967829633,
+        "leafKinds": [
+          {
+            "leafKind": "repository",
+            "samples": 17183,
+            "share": 0.9732102401449932
+          },
+          {
+            "leafKind": "gc",
+            "samples": 345,
+            "share": 0.019540099682827366
+          },
+          {
+            "leafKind": "vite_ssr_unmapped",
+            "samples": 59,
+            "share": 0.0033416402356139558
+          },
+          {
+            "leafKind": "vite_module_runner",
+            "samples": 54,
+            "share": 0.003058450385138197
+          },
+          {
+            "leafKind": "program",
+            "samples": 14,
+            "share": 0.0007929315813321251
+          },
+          {
+            "leafKind": "native_or_builtin",
+            "samples": 1,
+            "share": 0.00005663797009515179
+          }
+        ],
+        "registeredInclusive": [
+          {
+            "registered": "src/domain/target/targetEvaluator.ts#satisfiesIdealBonuses",
+            "samples": 14195,
+            "share": 0.8039759855006796
+          },
+          {
+            "registered": "src/domain/models/domainRules.ts#countBonuses",
+            "samples": 13530,
+            "share": 0.7663117353874037
+          },
+          {
+            "registered": "src/domain/models/domainRules.ts#areRestorationBonusSetsEqual",
+            "samples": 13421,
+            "share": 0.7601381966470322
+          },
+          {
+            "registered": "src/domain/models/domainRules.ts#bonusKey",
+            "samples": 6316,
+            "share": 0.3577254191209787
+          },
+          {
+            "registered": "src/domain/target/bonusConditionEvaluator.ts#assertRestorationBonusRankReferences",
+            "samples": 545,
+            "share": 0.030867693701857726
+          },
+          {
+            "registered": "src/domain/master/masterSelectors.ts#requireById",
+            "samples": 9,
+            "share": 0.0005097417308563661
+          }
+        ],
+        "topLeaves": [
+          {
+            "leaf": "(anonymous)@src/domain/models/domainRules.ts:13",
+            "category": "multiset_equality",
+            "samples": 7087,
+            "share": 0.4013932940643407
+          },
+          {
+            "leaf": "bonusKey@src/domain/models/domainRules.ts:7",
+            "category": "multiset_equality",
+            "samples": 6316,
+            "share": 0.3577254191209787
+          },
+          {
+            "leaf": "(anonymous)@src/domain/search/targetSearchScheduler.ts:433",
+            "category": "filter_or_inlined_predicate",
+            "samples": 2310,
+            "share": 0.13083371091980064
+          },
+          {
+            "leaf": "settle@src/domain/search/targetSearchScheduler.ts:410",
+            "category": "filter_or_inlined_predicate",
+            "samples": 553,
+            "share": 0.03132079746261894
+          },
+          {
+            "leaf": "(anonymous)@src/domain/target/bonusConditionEvaluator.ts:11",
+            "category": "rank_reference_validation",
+            "samples": 512,
+            "share": 0.028998640688717717
+          },
+          {
+            "leaf": "(garbage collector)@-",
+            "category": "gc",
+            "samples": 345,
+            "share": 0.019540099682827366
+          },
+          {
+            "leaf": "satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25",
+            "category": "predicate_self_or_inlined",
+            "samples": 223,
+            "share": 0.01263026733121885
+          },
+          {
+            "leaf": "countBonuses@src/domain/models/domainRules.ts:11",
+            "category": "multiset_equality",
+            "samples": 127,
+            "share": 0.007193022202084278
+          },
+          {
+            "leaf": "get@node_modules/vite/dist/node/module-runner.js",
+            "category": "other_unresolved",
+            "samples": 54,
+            "share": 0.003058450385138197
+          },
+          {
+            "leaf": "(anonymous)@src/domain/master/masterSelectors.ts",
+            "category": "other_unresolved",
+            "samples": 45,
+            "share": 0.0025487086542818303
+          },
+          {
+            "leaf": "areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30",
+            "category": "multiset_equality",
+            "samples": 37,
+            "share": 0.002095604893520616
+          },
+          {
+            "leaf": "(program)@-",
+            "category": "other_unresolved",
+            "samples": 14,
+            "share": 0.0007929315813321251
+          },
+          {
+            "leaf": "requireById@src/domain/master/masterSelectors.ts:52",
+            "category": "rank_reference_validation",
+            "samples": 9,
+            "share": 0.0005097417308563661
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/domainRules.ts:37",
+            "category": "multiset_equality",
+            "samples": 6,
+            "share": 0.00033982782057091076
+          },
+          {
+            "leaf": "(anonymous)@src/domain/target/bonusConditionEvaluator.ts",
+            "category": "predicate_self_or_inlined",
+            "samples": 6,
+            "share": 0.00033982782057091076
+          },
+          {
+            "leaf": "(anonymous)@src/domain/target/targetEvaluator.ts",
+            "category": "other_unresolved",
+            "samples": 6,
+            "share": 0.00033982782057091076
+          },
+          {
+            "leaf": "assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8",
+            "category": "rank_reference_validation",
+            "samples": 3,
+            "share": 0.00016991391028545538
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/domainRules.ts",
+            "category": "predicate_self_or_inlined",
+            "samples": 2,
+            "share": 0.00011327594019030358
+          },
+          {
+            "leaf": "get@node:internal/util",
+            "category": "other_unresolved",
+            "samples": 1,
+            "share": 0.00005663797009515179
+          }
+        ],
+        "topStacks": [
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13",
+            "category": "multiset_equality",
+            "samples": 7003,
+            "share": 0.396635704576348
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13 > bonusKey@src/domain/models/domainRules.ts:7",
+            "category": "multiset_equality",
+            "samples": 6254,
+            "share": 0.3542138649750793
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433",
+            "category": "filter_or_inlined_predicate",
+            "samples": 2309,
+            "share": 0.13077707294970548
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410",
+            "category": "filter_or_inlined_predicate",
+            "samples": 553,
+            "share": 0.03132079746261894
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11",
+            "category": "rank_reference_validation",
+            "samples": 512,
+            "share": 0.028998640688717717
+          },
+          {
+            "stack": "(root)@- > (garbage collector)@-",
+            "category": "gc",
+            "samples": 345,
+            "share": 0.019540099682827366
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25",
+            "category": "predicate_self_or_inlined",
+            "samples": 223,
+            "share": 0.01263026733121885
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11",
+            "category": "multiset_equality",
+            "samples": 121,
+            "share": 0.006853194381513367
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13",
+            "category": "multiset_equality",
+            "samples": 84,
+            "share": 0.00475758948799275
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13 > bonusKey@src/domain/models/domainRules.ts:7",
+            "category": "multiset_equality",
+            "samples": 62,
+            "share": 0.003511554145899411
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > get@node_modules/vite/dist/node/module-runner.js",
+            "category": "other_unresolved",
+            "samples": 54,
+            "share": 0.003058450385138197
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30",
+            "category": "multiset_equality",
+            "samples": 37,
+            "share": 0.002095604893520616
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11 > (anonymous)@src/domain/master/masterSelectors.ts",
+            "category": "rank_reference_validation",
+            "samples": 30,
+            "share": 0.0016991391028545538
+          },
+          {
+            "stack": "(root)@- > (anonymous)@src/domain/master/masterSelectors.ts",
+            "category": "other_unresolved",
+            "samples": 15,
+            "share": 0.0008495695514272769
+          },
+          {
+            "stack": "(root)@- > (program)@-",
+            "category": "other_unresolved",
+            "samples": 14,
+            "share": 0.0007929315813321251
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > requireById@src/domain/master/masterSelectors.ts:52",
+            "category": "rank_reference_validation",
+            "samples": 9,
+            "share": 0.0005097417308563661
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > countBonuses@src/domain/models/domainRules.ts:11",
+            "category": "multiset_equality",
+            "samples": 6,
+            "share": 0.00033982782057091076
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > get@node_modules/vite/dist/node/module-runner.js > (anonymous)@src/domain/target/targetEvaluator.ts",
+            "category": "other_unresolved",
+            "samples": 6,
+            "share": 0.00033982782057091076
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > (anonymous)@src/domain/models/domainRules.ts:37",
+            "category": "multiset_equality",
+            "samples": 6,
+            "share": 0.00033982782057091076
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts",
+            "category": "predicate_self_or_inlined",
+            "samples": 5,
+            "share": 0.0002831898504757589
+          }
+        ],
+        "registeredOutsideFilterSamples": 0,
+        "boundarySamples": 72
+      },
+      "decisionRow": {
+        "orientationId": "c6-p1",
+        "valid": true,
+        "invalidReasons": [],
+        "filterIntervalSamples": 17656,
+        "shares": {
+          "gc": 0.019540099682827366,
+          "rank_reference_validation": 0.03137743543271409,
+          "multiset_equality": 0.7687471681014952,
+          "predicate_self_or_inlined": 0.01297009515178976,
+          "filter_or_inlined_predicate": 0.16215450838241957,
+          "other_unresolved": 0.005210693248753965
+        },
+        "unresolvedShare": 0.1803352967829633
+      },
+      "a4Reference": {
+        "orientationId": "c6-p1",
+        "childOutcome": "timeout",
+        "searchWallMs": 1794440.1719,
+        "coverage": 0.9999983145718382,
+        "bonusIdealFilterShare": 0.2611399650086039,
+        "bonusDepthReadShare": 0.716124702357373,
+        "bonusNoticeScanShare": 0.02263666247339578,
+        "bonusIdealFilterMs": 468600.04369999917,
+        "rawSolutions": 311563140,
+        "idealSolutions": 0,
+        "bonusIdealFilterMedianNsPerRawSolution": 1504.67,
+        "deliveredCandidates": 0,
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 254,
+          "keepBonuses": 29104
+        }
+      }
+    },
+    {
+      "orientationId": "c13-p1",
+      "variant": "jit_default",
+      "childOutcome": "timeout",
+      "childWallMs": 1800250.0720000002,
+      "killedAtMs": 1800009.6382,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "searchOutcome": {
+        "lastHeartbeatElapsedMs": 1791925.4486,
+        "stage": "search_running",
+        "counters": {
+          "startedTargets": 1,
+          "completedTargets": 0,
+          "deliveredCandidates": 0,
+          "trialsStarted": 0,
+          "trialsCompleted": 0,
+          "fullPlannerRunsStarted": 0,
+          "fullPlannerRunsCompleted": 0
+        },
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 4,
+          "resetBonuses": 253,
+          "keepBonuses": 28218
+        },
+        "activeStack": [
+          "search_runtime",
+          "scheduler_step",
+          "scheduler_settle",
+          "bonus_depth_work",
+          "bonus_depth_read"
+        ],
+        "contractViolations": 0
+      },
+      "window": {
+        "requestedSamplingIntervalUs": 10000,
+        "warmupMs": 120000,
+        "profileStopMs": 720000,
+        "requestedProfileDurationMs": 600000,
+        "actualStartElapsedMs": 122264.9656,
+        "actualStopElapsedMs": 721135.996,
+        "actualProfileDurationMs": 598871.0304,
+        "startDelayMs": 2264.965599999996,
+        "stopDelayMs": 1135.9960000000428,
+        "stoppedBy": "window",
+        "error": null
+      },
+      "intervalSnapshot": {
+        "recorded": 123,
+        "completedAfterFreeze": 0,
+        "openAtSnapshot": null,
+        "violations": 0
+      },
+      "scriptTable": {
+        "scriptCount": 944,
+        "sourceMappedCount": 175,
+        "requiredSourceMaps": {
+          "src/domain/target/targetEvaluator.ts": true,
+          "src/domain/target/bonusConditionEvaluator.ts": true,
+          "src/domain/master/masterSelectors.ts": true,
+          "src/domain/models/domainRules.ts": true,
+          "src/domain/search/targetSearchScheduler.ts": true
+        }
+      },
+      "captureIssues": [],
+      "profile": {
+        "alignment": {
+          "valid": true,
+          "issues": [],
+          "offsetSpreadMs": 0.016350001096725464,
+          "maxPairPrecisionMs": 0.030599999998230487,
+          "profileDurationMs": 600037.9449999928,
+          "sumDeltasMs": 600037.801,
+          "negativeDeltas": 0
+        },
+        "intervalValidation": {
+          "valid": true,
+          "issues": [],
+          "count": 123
+        },
+        "allProfileSamples": 57533,
+        "observedIntervalUs": {
+          "median": 10439,
+          "mean": 10429.45441746476
+        },
+        "intervalsInProfile": 91,
+        "intervalMsInProfile": 202989.6200000001,
+        "intervalShareOfProfile": 0.3382946390165417,
+        "filterIntervalSamples": 19461,
+        "filterSampleShare": 0.3382580432099838,
+        "categories": [
+          {
+            "category": "gc",
+            "samples": 552,
+            "share": 0.028364421149992294
+          },
+          {
+            "category": "rank_reference_validation",
+            "samples": 595,
+            "share": 0.030573968449719952
+          },
+          {
+            "category": "multiset_equality",
+            "samples": 14228,
+            "share": 0.7311032321052361
+          },
+          {
+            "category": "predicate_self_or_inlined",
+            "samples": 258,
+            "share": 0.013257283798365964
+          },
+          {
+            "category": "filter_or_inlined_predicate",
+            "samples": 3701,
+            "share": 0.1901752222393505
+          },
+          {
+            "category": "other_unresolved",
+            "samples": 127,
+            "share": 0.006525872257335183
+          }
+        ],
+        "unresolvedShare": 0.20995837829505165,
+        "leafKinds": [
+          {
+            "leafKind": "repository",
+            "samples": 18742,
+            "share": 0.9630543137557166
+          },
+          {
+            "leafKind": "gc",
+            "samples": 552,
+            "share": 0.028364421149992294
+          },
+          {
+            "leafKind": "vite_module_runner",
+            "samples": 98,
+            "share": 0.00503571245054211
+          },
+          {
+            "leafKind": "vite_ssr_unmapped",
+            "samples": 48,
+            "share": 0.002466471404347156
+          },
+          {
+            "leafKind": "program",
+            "samples": 21,
+            "share": 0.0010790812394018807
+          }
+        ],
+        "registeredInclusive": [
+          {
+            "registered": "src/domain/target/targetEvaluator.ts#satisfiesIdealBonuses",
+            "samples": 15006,
+            "share": 0.7710806227840296
+          },
+          {
+            "registered": "src/domain/models/domainRules.ts#countBonuses",
+            "samples": 14173,
+            "share": 0.7282770669544216
+          },
+          {
+            "registered": "src/domain/models/domainRules.ts#areRestorationBonusSetsEqual",
+            "samples": 14156,
+            "share": 0.7274035249987154
+          },
+          {
+            "registered": "src/domain/models/domainRules.ts#bonusKey",
+            "samples": 8260,
+            "share": 0.4244386208314064
+          },
+          {
+            "registered": "src/domain/target/bonusConditionEvaluator.ts#assertRestorationBonusRankReferences",
+            "samples": 592,
+            "share": 0.030419813986948256
+          },
+          {
+            "registered": "src/domain/master/masterSelectors.ts#requireById",
+            "samples": 3,
+            "share": 0.00015415446277169725
+          }
+        ],
+        "topLeaves": [
+          {
+            "leaf": "bonusKey@src/domain/models/domainRules.ts:7",
+            "category": "multiset_equality",
+            "samples": 8260,
+            "share": 0.4244386208314064
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/domainRules.ts:13",
+            "category": "multiset_equality",
+            "samples": 5710,
+            "share": 0.2934073274754638
+          },
+          {
+            "leaf": "(anonymous)@src/domain/search/targetSearchScheduler.ts:433",
+            "category": "filter_or_inlined_predicate",
+            "samples": 3093,
+            "share": 0.15893325111761986
+          },
+          {
+            "leaf": "settle@src/domain/search/targetSearchScheduler.ts:410",
+            "category": "filter_or_inlined_predicate",
+            "samples": 608,
+            "share": 0.03124197112173064
+          },
+          {
+            "leaf": "(anonymous)@src/domain/target/bonusConditionEvaluator.ts:11",
+            "category": "rank_reference_validation",
+            "samples": 562,
+            "share": 0.02887826935923128
+          },
+          {
+            "leaf": "(garbage collector)@-",
+            "category": "gc",
+            "samples": 552,
+            "share": 0.028364421149992294
+          },
+          {
+            "leaf": "satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25",
+            "category": "predicate_self_or_inlined",
+            "samples": 245,
+            "share": 0.012589281126355274
+          },
+          {
+            "leaf": "countBonuses@src/domain/models/domainRules.ts:11",
+            "category": "multiset_equality",
+            "samples": 203,
+            "share": 0.010431118647551514
+          },
+          {
+            "leaf": "get@node_modules/vite/dist/node/module-runner.js",
+            "category": "other_unresolved",
+            "samples": 98,
+            "share": 0.00503571245054211
+          },
+          {
+            "leaf": "areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30",
+            "category": "multiset_equality",
+            "samples": 49,
+            "share": 0.002517856225271055
+          },
+          {
+            "leaf": "(anonymous)@src/domain/master/masterSelectors.ts",
+            "category": "other_unresolved",
+            "samples": 32,
+            "share": 0.0016443142695647705
+          },
+          {
+            "leaf": "(program)@-",
+            "category": "other_unresolved",
+            "samples": 21,
+            "share": 0.0010790812394018807
+          },
+          {
+            "leaf": "(anonymous)@src/domain/target/bonusConditionEvaluator.ts",
+            "category": "predicate_self_or_inlined",
+            "samples": 10,
+            "share": 0.0005138482092389908
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/domainRules.ts:37",
+            "category": "multiset_equality",
+            "samples": 6,
+            "share": 0.0003083089255433945
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/domainRules.ts",
+            "category": "predicate_self_or_inlined",
+            "samples": 4,
+            "share": 0.0002055392836955963
+          },
+          {
+            "leaf": "assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8",
+            "category": "rank_reference_validation",
+            "samples": 3,
+            "share": 0.00015415446277169725
+          },
+          {
+            "leaf": "requireById@src/domain/master/masterSelectors.ts:52",
+            "category": "rank_reference_validation",
+            "samples": 3,
+            "share": 0.00015415446277169725
+          },
+          {
+            "leaf": "(anonymous)@src/domain/target/targetEvaluator.ts",
+            "category": "other_unresolved",
+            "samples": 2,
+            "share": 0.00010276964184779816
+          }
+        ],
+        "topStacks": [
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13 > bonusKey@src/domain/models/domainRules.ts:7",
+            "category": "multiset_equality",
+            "samples": 8221,
+            "share": 0.4224346128153743
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13",
+            "category": "multiset_equality",
+            "samples": 5682,
+            "share": 0.2919685524895946
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433",
+            "category": "filter_or_inlined_predicate",
+            "samples": 3087,
+            "share": 0.15862494219207646
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410",
+            "category": "filter_or_inlined_predicate",
+            "samples": 608,
+            "share": 0.03124197112173064
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11",
+            "category": "rank_reference_validation",
+            "samples": 562,
+            "share": 0.02887826935923128
+          },
+          {
+            "stack": "(root)@- > (garbage collector)@-",
+            "category": "gc",
+            "samples": 552,
+            "share": 0.028364421149992294
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25",
+            "category": "predicate_self_or_inlined",
+            "samples": 245,
+            "share": 0.012589281126355274
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11",
+            "category": "multiset_equality",
+            "samples": 198,
+            "share": 0.010174194542932018
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > get@node_modules/vite/dist/node/module-runner.js",
+            "category": "other_unresolved",
+            "samples": 98,
+            "share": 0.00503571245054211
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30",
+            "category": "multiset_equality",
+            "samples": 49,
+            "share": 0.002517856225271055
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13 > bonusKey@src/domain/models/domainRules.ts:7",
+            "category": "multiset_equality",
+            "samples": 39,
+            "share": 0.002004008016032064
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13",
+            "category": "multiset_equality",
+            "samples": 28,
+            "share": 0.0014387749858691741
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11 > (anonymous)@src/domain/master/masterSelectors.ts",
+            "category": "rank_reference_validation",
+            "samples": 27,
+            "share": 0.0013873901649452752
+          },
+          {
+            "stack": "(root)@- > (program)@-",
+            "category": "other_unresolved",
+            "samples": 21,
+            "share": 0.0010790812394018807
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts",
+            "category": "predicate_self_or_inlined",
+            "samples": 9,
+            "share": 0.0004624633883150917
+          },
+          {
+            "stack": "(root)@- > (anonymous)@src/domain/search/targetSearchScheduler.ts:433",
+            "category": "filter_or_inlined_predicate",
+            "samples": 6,
+            "share": 0.0003083089255433945
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > (anonymous)@src/domain/models/domainRules.ts:37",
+            "category": "multiset_equality",
+            "samples": 6,
+            "share": 0.0003083089255433945
+          },
+          {
+            "stack": "(root)@- > (anonymous)@src/domain/master/masterSelectors.ts",
+            "category": "other_unresolved",
+            "samples": 5,
+            "share": 0.0002569241046194954
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > countBonuses@src/domain/models/domainRules.ts:11",
+            "category": "multiset_equality",
+            "samples": 5,
+            "share": 0.0002569241046194954
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > (anonymous)@src/domain/models/domainRules.ts",
+            "category": "predicate_self_or_inlined",
+            "samples": 4,
+            "share": 0.0002055392836955963
+          }
+        ],
+        "registeredOutsideFilterSamples": 0,
+        "boundarySamples": 28
+      },
+      "decisionRow": {
+        "orientationId": "c13-p1",
+        "valid": true,
+        "invalidReasons": [],
+        "filterIntervalSamples": 19461,
+        "shares": {
+          "gc": 0.028364421149992294,
+          "rank_reference_validation": 0.030573968449719952,
+          "multiset_equality": 0.7311032321052361,
+          "predicate_self_or_inlined": 0.013257283798365964,
+          "filter_or_inlined_predicate": 0.1901752222393505,
+          "other_unresolved": 0.006525872257335183
+        },
+        "unresolvedShare": 0.20995837829505165
+      },
+      "a4Reference": {
+        "orientationId": "c13-p1",
+        "childOutcome": "timeout",
+        "searchWallMs": 1789713.1623000002,
+        "coverage": 0.9999992644072653,
+        "bonusIdealFilterShare": 0.2937440164011473,
+        "bonusDepthReadShare": 0.678886554278095,
+        "bonusNoticeScanShare": 0.027321466830561567,
+        "bonusIdealFilterMs": 525717.5325000004,
+        "rawSolutions": 355597735,
+        "idealSolutions": 0,
+        "bonusIdealFilterMedianNsPerRawSolution": 1478.68,
+        "deliveredCandidates": 0,
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 4,
+          "resetBonuses": 253,
+          "keepBonuses": 28218
+        }
+      }
+    },
+    {
+      "orientationId": "c14-p0",
+      "variant": "jit_default",
+      "childOutcome": "timeout",
+      "childWallMs": 1800244.8821999999,
+      "killedAtMs": 1800008.9516000003,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "searchOutcome": {
+        "lastHeartbeatElapsedMs": 1792720.0277,
+        "stage": "search_running",
+        "counters": {
+          "startedTargets": 1,
+          "completedTargets": 0,
+          "deliveredCandidates": 0,
+          "trialsStarted": 0,
+          "trialsCompleted": 0,
+          "fullPlannerRunsStarted": 0,
+          "fullPlannerRunsCompleted": 0
+        },
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 245,
+          "keepBonuses": 27411
+        },
+        "activeStack": [
+          "search_runtime",
+          "scheduler_step",
+          "scheduler_settle",
+          "bonus_depth_work",
+          "bonus_depth_read"
+        ],
+        "contractViolations": 0
+      },
+      "window": {
+        "requestedSamplingIntervalUs": 10000,
+        "warmupMs": 120000,
+        "profileStopMs": 720000,
+        "requestedProfileDurationMs": 600000,
+        "actualStartElapsedMs": 121320.1445,
+        "actualStopElapsedMs": 721600.1801000001,
+        "actualProfileDurationMs": 600280.0356000001,
+        "startDelayMs": 1320.1444999999949,
+        "stopDelayMs": 1600.1801000001142,
+        "stoppedBy": "window",
+        "error": null
+      },
+      "intervalSnapshot": {
+        "recorded": 237,
+        "completedAfterFreeze": 0,
+        "openAtSnapshot": null,
+        "violations": 0
+      },
+      "scriptTable": {
+        "scriptCount": 944,
+        "sourceMappedCount": 175,
+        "requiredSourceMaps": {
+          "src/domain/target/targetEvaluator.ts": true,
+          "src/domain/target/bonusConditionEvaluator.ts": true,
+          "src/domain/master/masterSelectors.ts": true,
+          "src/domain/models/domainRules.ts": true,
+          "src/domain/search/targetSearchScheduler.ts": true
+        }
+      },
+      "captureIssues": [],
+      "profile": {
+        "alignment": {
+          "valid": true,
+          "issues": [],
+          "offsetSpreadMs": 0.015099972486495972,
+          "maxPairPrecisionMs": 0.030800000007729977,
+          "profileDurationMs": 600833.0290000141,
+          "sumDeltasMs": 600832.814,
+          "negativeDeltas": 0
+        },
+        "intervalValidation": {
+          "valid": true,
+          "issues": [],
+          "count": 237
+        },
+        "allProfileSamples": 57338,
+        "observedIntervalUs": {
+          "median": 10505,
+          "mean": 10478.789179950469
+        },
+        "intervalsInProfile": 175,
+        "intervalMsInProfile": 195851.84650000086,
+        "intervalShareOfProfile": 0.325967177313743,
+        "filterIntervalSamples": 18612,
+        "filterSampleShare": 0.3246014859255642,
+        "categories": [
+          {
+            "category": "gc",
+            "samples": 331,
+            "share": 0.01778422523103374
+          },
+          {
+            "category": "rank_reference_validation",
+            "samples": 562,
+            "share": 0.03019557274876424
+          },
+          {
+            "category": "multiset_equality",
+            "samples": 13753,
+            "share": 0.7389318719105953
+          },
+          {
+            "category": "predicate_self_or_inlined",
+            "samples": 250,
+            "share": 0.013432194283258113
+          },
+          {
+            "category": "filter_or_inlined_predicate",
+            "samples": 3569,
+            "share": 0.19175800558779282
+          },
+          {
+            "category": "other_unresolved",
+            "samples": 147,
+            "share": 0.00789813023855577
+          }
+        ],
+        "unresolvedShare": 0.2130883301096067,
+        "leafKinds": [
+          {
+            "leafKind": "repository",
+            "samples": 18095,
+            "share": 0.9722222222222222
+          },
+          {
+            "leafKind": "gc",
+            "samples": 331,
+            "share": 0.01778422523103374
+          },
+          {
+            "leafKind": "vite_module_runner",
+            "samples": 101,
+            "share": 0.005426606490436278
+          },
+          {
+            "leafKind": "vite_ssr_unmapped",
+            "samples": 50,
+            "share": 0.0026864388566516227
+          },
+          {
+            "leafKind": "program",
+            "samples": 35,
+            "share": 0.0018805071996561358
+          }
+        ],
+        "registeredInclusive": [
+          {
+            "registered": "src/domain/target/targetEvaluator.ts#satisfiesIdealBonuses",
+            "samples": 14398,
+            "share": 0.7735869331614013
+          },
+          {
+            "registered": "src/domain/models/domainRules.ts#countBonuses",
+            "samples": 13694,
+            "share": 0.7357618740597464
+          },
+          {
+            "registered": "src/domain/models/domainRules.ts#areRestorationBonusSetsEqual",
+            "samples": 13600,
+            "share": 0.7307113690092414
+          },
+          {
+            "registered": "src/domain/models/domainRules.ts#bonusKey",
+            "samples": 7866,
+            "share": 0.42263056092843326
+          },
+          {
+            "registered": "src/domain/target/bonusConditionEvaluator.ts#assertRestorationBonusRankReferences",
+            "samples": 548,
+            "share": 0.029443369868901784
+          },
+          {
+            "registered": "src/domain/master/masterSelectors.ts#requireById",
+            "samples": 14,
+            "share": 0.0007522028798624544
+          }
+        ],
+        "topLeaves": [
+          {
+            "leaf": "bonusKey@src/domain/models/domainRules.ts:7",
+            "category": "multiset_equality",
+            "samples": 7866,
+            "share": 0.42263056092843326
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/domainRules.ts:13",
+            "category": "multiset_equality",
+            "samples": 5640,
+            "share": 0.30303030303030304
+          },
+          {
+            "leaf": "(anonymous)@src/domain/search/targetSearchScheduler.ts:433",
+            "category": "filter_or_inlined_predicate",
+            "samples": 2959,
+            "share": 0.15898345153664303
+          },
+          {
+            "leaf": "settle@src/domain/search/targetSearchScheduler.ts:410",
+            "category": "filter_or_inlined_predicate",
+            "samples": 610,
+            "share": 0.0327745540511498
+          },
+          {
+            "leaf": "(anonymous)@src/domain/target/bonusConditionEvaluator.ts:11",
+            "category": "rank_reference_validation",
+            "samples": 520,
+            "share": 0.027938964109176876
+          },
+          {
+            "leaf": "(garbage collector)@-",
+            "category": "gc",
+            "samples": 331,
+            "share": 0.01778422523103374
+          },
+          {
+            "leaf": "satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25",
+            "category": "predicate_self_or_inlined",
+            "samples": 238,
+            "share": 0.012787448957661724
+          },
+          {
+            "leaf": "countBonuses@src/domain/models/domainRules.ts:11",
+            "category": "multiset_equality",
+            "samples": 188,
+            "share": 0.010101010101010102
+          },
+          {
+            "leaf": "get@node_modules/vite/dist/node/module-runner.js",
+            "category": "other_unresolved",
+            "samples": 101,
+            "share": 0.005426606490436278
+          },
+          {
+            "leaf": "areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30",
+            "category": "multiset_equality",
+            "samples": 56,
+            "share": 0.0030088115194498175
+          },
+          {
+            "leaf": "(program)@-",
+            "category": "other_unresolved",
+            "samples": 35,
+            "share": 0.0018805071996561358
+          },
+          {
+            "leaf": "(anonymous)@src/domain/master/masterSelectors.ts",
+            "category": "rank_reference_validation",
+            "samples": 32,
+            "share": 0.0017193208682570384
+          },
+          {
+            "leaf": "requireById@src/domain/master/masterSelectors.ts:52",
+            "category": "rank_reference_validation",
+            "samples": 14,
+            "share": 0.0007522028798624544
+          },
+          {
+            "leaf": "(anonymous)@src/domain/target/bonusConditionEvaluator.ts",
+            "category": "predicate_self_or_inlined",
+            "samples": 11,
+            "share": 0.000591016548463357
+          },
+          {
+            "leaf": "(anonymous)@src/domain/target/targetEvaluator.ts",
+            "category": "other_unresolved",
+            "samples": 4,
+            "share": 0.0002149151085321298
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/domainRules.ts",
+            "category": "predicate_self_or_inlined",
+            "samples": 3,
+            "share": 0.00016118633139909736
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/domainRules.ts:37",
+            "category": "multiset_equality",
+            "samples": 3,
+            "share": 0.00016118633139909736
+          },
+          {
+            "leaf": "assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8",
+            "category": "rank_reference_validation",
+            "samples": 1,
+            "share": 0.00005372877713303245
+          }
+        ],
+        "topStacks": [
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13 > bonusKey@src/domain/models/domainRules.ts:7",
+            "category": "multiset_equality",
+            "samples": 7734,
+            "share": 0.41553836234687297
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13",
+            "category": "multiset_equality",
+            "samples": 5554,
+            "share": 0.29840962819686223
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433",
+            "category": "filter_or_inlined_predicate",
+            "samples": 2938,
+            "share": 0.15785514721684935
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410",
+            "category": "filter_or_inlined_predicate",
+            "samples": 610,
+            "share": 0.0327745540511498
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11",
+            "category": "rank_reference_validation",
+            "samples": 516,
+            "share": 0.027724049000644745
+          },
+          {
+            "stack": "(root)@- > (garbage collector)@-",
+            "category": "gc",
+            "samples": 331,
+            "share": 0.01778422523103374
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25",
+            "category": "predicate_self_or_inlined",
+            "samples": 234,
+            "share": 0.012572533849129593
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11",
+            "category": "multiset_equality",
+            "samples": 178,
+            "share": 0.009563722329679777
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > get@node_modules/vite/dist/node/module-runner.js",
+            "category": "other_unresolved",
+            "samples": 101,
+            "share": 0.005426606490436278
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13 > bonusKey@src/domain/models/domainRules.ts:7",
+            "category": "multiset_equality",
+            "samples": 90,
+            "share": 0.004835589941972921
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30",
+            "category": "multiset_equality",
+            "samples": 56,
+            "share": 0.0030088115194498175
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13",
+            "category": "multiset_equality",
+            "samples": 55,
+            "share": 0.002955082742316785
+          },
+          {
+            "stack": "(root)@- > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13 > bonusKey@src/domain/models/domainRules.ts:7",
+            "category": "multiset_equality",
+            "samples": 42,
+            "share": 0.002256608639587363
+          },
+          {
+            "stack": "(root)@- > (program)@-",
+            "category": "other_unresolved",
+            "samples": 35,
+            "share": 0.0018805071996561358
+          },
+          {
+            "stack": "(root)@- > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13",
+            "category": "multiset_equality",
+            "samples": 31,
+            "share": 0.001665592091124006
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11 > (anonymous)@src/domain/master/masterSelectors.ts",
+            "category": "rank_reference_validation",
+            "samples": 27,
+            "share": 0.0014506769825918763
+          },
+          {
+            "stack": "(root)@- > (anonymous)@src/domain/search/targetSearchScheduler.ts:433",
+            "category": "filter_or_inlined_predicate",
+            "samples": 21,
+            "share": 0.0011283043197936814
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > requireById@src/domain/master/masterSelectors.ts:52",
+            "category": "rank_reference_validation",
+            "samples": 14,
+            "share": 0.0007522028798624544
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts",
+            "category": "predicate_self_or_inlined",
+            "samples": 9,
+            "share": 0.00048355899419729207
+          },
+          {
+            "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > countBonuses@src/domain/models/domainRules.ts:11",
+            "category": "multiset_equality",
+            "samples": 8,
+            "share": 0.0004298302170642596
+          }
+        ],
+        "registeredOutsideFilterSamples": 0,
+        "boundarySamples": 68
+      },
+      "decisionRow": {
+        "orientationId": "c14-p0",
+        "valid": true,
+        "invalidReasons": [],
+        "filterIntervalSamples": 18612,
+        "shares": {
+          "gc": 0.01778422523103374,
+          "rank_reference_validation": 0.03019557274876424,
+          "multiset_equality": 0.7389318719105953,
+          "predicate_self_or_inlined": 0.013432194283258113,
+          "filter_or_inlined_predicate": 0.19175800558779282,
+          "other_unresolved": 0.00789813023855577
+        },
+        "unresolvedShare": 0.2130883301096067
+      },
+      "a4Reference": {
+        "orientationId": "c14-p0",
+        "childOutcome": "timeout",
+        "searchWallMs": 1796571.1643,
+        "coverage": 0.9999987125475197,
+        "bonusIdealFilterShare": 0.28004334361897104,
+        "bonusDepthReadShare": 0.6946272145508018,
+        "bonusNoticeScanShare": 0.025239054205608243,
+        "bonusIdealFilterMs": 503117.7958999998,
+        "rawSolutions": 337048805,
+        "idealSolutions": 0,
+        "bonusIdealFilterMedianNsPerRawSolution": 1492.78,
+        "deliveredCandidates": 0,
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 243,
+          "keepBonuses": 26996
+        }
+      }
+    }
+  ],
+  "diagnostic": {
+    "orientationId": "c14-p0",
+    "variant": "no_inlining",
+    "nodeFlags": [
+      "--no-turbo-inlining",
+      "--no-maglev-inlining",
+      "--max-old-space-size=8192"
+    ],
+    "productionLike": false,
+    "note": "no_inlining（--no-turbo-inlining --no-maglev-inlining）はhelperを関数単位で見やすくするdiagnosticであり、Production-like runtimeではない。以下の割合をPrimary（jit_default）の割合として読まず、平均・合算しない。",
+    "selection": {
+      "rule": "A4 primaries sorted by bonus_ideal_filter share ascending (ties: A4 selection order); the middle one (index floor(n / 2))",
+      "ordered": [
+        {
+          "orientationId": "c6-p1",
+          "bonusIdealFilterShare": 0.2611399650086039,
+          "a4SelectionIndex": 0
+        },
+        {
+          "orientationId": "c14-p0",
+          "bonusIdealFilterShare": 0.28004334361897104,
+          "a4SelectionIndex": 2
+        },
+        {
+          "orientationId": "c13-p1",
+          "bonusIdealFilterShare": 0.2937440164011473,
+          "a4SelectionIndex": 1
+        }
+      ],
+      "representativeOrientationId": "c14-p0"
+    },
+    "childOutcome": "completed",
+    "stoppedBy": "captured",
+    "childWallMs": 722881.1555000003,
+    "window": {
+      "requestedSamplingIntervalUs": 10000,
+      "warmupMs": 120000,
+      "profileStopMs": 720000,
+      "requestedProfileDurationMs": 600000,
+      "actualStartElapsedMs": 121002.38495,
+      "actualStopElapsedMs": 719999.0324499999,
+      "actualProfileDurationMs": 598996.6475,
+      "startDelayMs": 1002.3849500000069,
+      "stopDelayMs": -0.9675500000594184,
+      "stoppedBy": "window",
+      "error": null
+    },
+    "captureIssues": [],
+    "profile": {
+      "alignment": {
+        "valid": true,
+        "issues": [],
+        "offsetSpreadMs": 0.017999976873397827,
+        "maxPairPrecisionMs": 0.03910000000905711,
+        "profileDurationMs": 599289.3519999981,
+        "sumDeltasMs": 599289.179,
+        "negativeDeltas": 0
+      },
+      "intervalValidation": {
+        "valid": true,
+        "issues": [],
+        "count": 224
+      },
+      "allProfileSamples": 57205,
+      "observedIntervalUs": {
+        "median": 10507,
+        "mean": 10476.167800017482
+      },
+      "intervalsInProfile": 166,
+      "intervalMsInProfile": 221194.05340000035,
+      "intervalShareOfProfile": 0.3690939154213457,
+      "filterIntervalSamples": 21032,
+      "filterSampleShare": 0.36766016956559744,
+      "categories": [
+        {
+          "category": "gc",
+          "samples": 479,
+          "share": 0.022774819322936478
+        },
+        {
+          "category": "rank_reference_validation",
+          "samples": 4018,
+          "share": 0.1910422213769494
+        },
+        {
+          "category": "multiset_equality",
+          "samples": 15577,
+          "share": 0.7406333206542411
+        },
+        {
+          "category": "predicate_self_or_inlined",
+          "samples": 377,
+          "share": 0.01792506656523393
+        },
+        {
+          "category": "filter_or_inlined_predicate",
+          "samples": 458,
+          "share": 0.021776340813997718
+        },
+        {
+          "category": "other_unresolved",
+          "samples": 123,
+          "share": 0.005848231266641309
+        }
+      ],
+      "unresolvedShare": 0.045549638645872956,
+      "leafKinds": [
+        {
+          "leafKind": "repository",
+          "samples": 20393,
+          "share": 0.9696177253708634
+        },
+        {
+          "leafKind": "gc",
+          "samples": 479,
+          "share": 0.022774819322936478
+        },
+        {
+          "leafKind": "vite_module_runner",
+          "samples": 77,
+          "share": 0.0036610878661087866
+        },
+        {
+          "leafKind": "vite_ssr_unmapped",
+          "samples": 57,
+          "share": 0.0027101559528337773
+        },
+        {
+          "leafKind": "program",
+          "samples": 25,
+          "share": 0.0011886648915937618
+        },
+        {
+          "leafKind": "native_or_builtin",
+          "samples": 1,
+          "share": 0.00004754659566375048
+        }
+      ],
+      "registeredInclusive": [
+        {
+          "registered": "src/domain/target/targetEvaluator.ts#satisfiesIdealBonuses",
+          "samples": 19938,
+          "share": 0.947984024343857
+        },
+        {
+          "registered": "src/domain/models/domainRules.ts#areRestorationBonusSetsEqual",
+          "samples": 15574,
+          "share": 0.7404906808672499
+        },
+        {
+          "registered": "src/domain/models/domainRules.ts#countBonuses",
+          "samples": 15358,
+          "share": 0.7302206162038798
+        },
+        {
+          "registered": "src/domain/models/domainRules.ts#bonusKey",
+          "samples": 7009,
+          "share": 0.3332540890072271
+        },
+        {
+          "registered": "src/domain/target/bonusConditionEvaluator.ts#assertRestorationBonusRankReferences",
+          "samples": 3988,
+          "share": 0.1896158235070369
+        },
+        {
+          "registered": "src/domain/master/masterSelectors.ts#getBonusRank",
+          "samples": 2614,
+          "share": 0.12428680106504374
+        },
+        {
+          "registered": "src/domain/master/masterSelectors.ts#requireById",
+          "samples": 2057,
+          "share": 0.09780334728033473
+        }
+      ],
+      "topLeaves": [
+        {
+          "leaf": "(anonymous)@src/domain/models/domainRules.ts:13",
+          "category": "multiset_equality",
+          "samples": 7983,
+          "share": 0.37956447318372005
+        },
+        {
+          "leaf": "bonusKey@src/domain/models/domainRules.ts:7",
+          "category": "multiset_equality",
+          "samples": 7009,
+          "share": 0.3332540890072271
+        },
+        {
+          "leaf": "requireById@src/domain/master/masterSelectors.ts:52",
+          "category": "rank_reference_validation",
+          "samples": 1032,
+          "share": 0.04906808672499049
+        },
+        {
+          "leaf": "(anonymous)@src/domain/master/masterSelectors.ts:57",
+          "category": "rank_reference_validation",
+          "samples": 1025,
+          "share": 0.04873526055534424
+        },
+        {
+          "leaf": "(anonymous)@src/domain/target/bonusConditionEvaluator.ts:11",
+          "category": "rank_reference_validation",
+          "samples": 828,
+          "share": 0.03936858120958539
+        },
+        {
+          "leaf": "getBonusRank@src/domain/master/masterSelectors.ts:66",
+          "category": "rank_reference_validation",
+          "samples": 589,
+          "share": 0.02800494484594903
+        },
+        {
+          "leaf": "assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8",
+          "category": "rank_reference_validation",
+          "samples": 517,
+          "share": 0.024581589958158997
+        },
+        {
+          "leaf": "(garbage collector)@-",
+          "category": "gc",
+          "samples": 479,
+          "share": 0.022774819322936478
+        },
+        {
+          "leaf": "(anonymous)@src/domain/search/targetSearchScheduler.ts:433",
+          "category": "filter_or_inlined_predicate",
+          "samples": 372,
+          "share": 0.017687333586915176
+        },
+        {
+          "leaf": "countBonuses@src/domain/models/domainRules.ts:11",
+          "category": "multiset_equality",
+          "samples": 367,
+          "share": 0.017449600608596426
+        },
+        {
+          "leaf": "satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25",
+          "category": "predicate_self_or_inlined",
+          "samples": 367,
+          "share": 0.017449600608596426
+        },
+        {
+          "leaf": "areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30",
+          "category": "multiset_equality",
+          "samples": 215,
+          "share": 0.010222518067706353
+        },
+        {
+          "leaf": "settle@src/domain/search/targetSearchScheduler.ts:410",
+          "category": "filter_or_inlined_predicate",
+          "samples": 86,
+          "share": 0.004089007227082541
+        },
+        {
+          "leaf": "get@node_modules/vite/dist/node/module-runner.js",
+          "category": "other_unresolved",
+          "samples": 77,
+          "share": 0.0036610878661087866
+        },
+        {
+          "leaf": "(anonymous)@src/domain/master/masterSelectors.ts",
+          "category": "rank_reference_validation",
+          "samples": 44,
+          "share": 0.0020920502092050207
+        },
+        {
+          "leaf": "(program)@-",
+          "category": "other_unresolved",
+          "samples": 25,
+          "share": 0.0011886648915937618
+        },
+        {
+          "leaf": "(anonymous)@src/domain/target/bonusConditionEvaluator.ts",
+          "category": "predicate_self_or_inlined",
+          "samples": 7,
+          "share": 0.0003328261696462533
+        },
+        {
+          "leaf": "(anonymous)@src/domain/models/domainRules.ts",
+          "category": "predicate_self_or_inlined",
+          "samples": 5,
+          "share": 0.00023773297831875236
+        },
+        {
+          "leaf": "(anonymous)@src/domain/models/domainRules.ts:37",
+          "category": "multiset_equality",
+          "samples": 3,
+          "share": 0.00014263978699125142
+        },
+        {
+          "leaf": "(anonymous)@src/domain/target/targetEvaluator.ts",
+          "category": "other_unresolved",
+          "samples": 1,
+          "share": 0.00004754659566375048
+        },
+        {
+          "leaf": "now@-",
+          "category": "other_unresolved",
+          "samples": 1,
+          "share": 0.00004754659566375048
+        }
+      ],
+      "topStacks": [
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13",
+          "category": "multiset_equality",
+          "samples": 7954,
+          "share": 0.3781856219094713
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11 > (anonymous)@src/domain/models/domainRules.ts:13 > bonusKey@src/domain/models/domainRules.ts:7",
+          "category": "multiset_equality",
+          "samples": 7007,
+          "share": 0.3331589958158996
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11 > getBonusRank@src/domain/master/masterSelectors.ts:66 > requireById@src/domain/master/masterSelectors.ts:52",
+          "category": "rank_reference_validation",
+          "samples": 1009,
+          "share": 0.04797451502472423
+        },
+        {
+          "stack": "settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11 > getBonusRank@src/domain/master/masterSelectors.ts:66 > requireById@src/domain/master/masterSelectors.ts:52 > (anonymous)@src/domain/master/masterSelectors.ts:57",
+          "category": "rank_reference_validation",
+          "samples": 926,
+          "share": 0.04402814758463294
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11",
+          "category": "rank_reference_validation",
+          "samples": 798,
+          "share": 0.03794218333967288
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11 > getBonusRank@src/domain/master/masterSelectors.ts:66",
+          "category": "rank_reference_validation",
+          "samples": 587,
+          "share": 0.02790985165462153
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8",
+          "category": "rank_reference_validation",
+          "samples": 516,
+          "share": 0.024534043362495244
+        },
+        {
+          "stack": "(root)@- > (garbage collector)@-",
+          "category": "gc",
+          "samples": 479,
+          "share": 0.022774819322936478
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25",
+          "category": "predicate_self_or_inlined",
+          "samples": 367,
+          "share": 0.017449600608596426
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > countBonuses@src/domain/models/domainRules.ts:11",
+          "category": "multiset_equality",
+          "samples": 366,
+          "share": 0.017402054012932672
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433",
+          "category": "filter_or_inlined_predicate",
+          "samples": 365,
+          "share": 0.017354507417268922
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30",
+          "category": "multiset_equality",
+          "samples": 215,
+          "share": 0.010222518067706353
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11 > getBonusRank@src/domain/master/masterSelectors.ts:66 > (anonymous)@src/domain/master/masterSelectors.ts:57",
+          "category": "rank_reference_validation",
+          "samples": 90,
+          "share": 0.004279193609737543
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410",
+          "category": "filter_or_inlined_predicate",
+          "samples": 86,
+          "share": 0.004089007227082541
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > get@node_modules/vite/dist/node/module-runner.js",
+          "category": "other_unresolved",
+          "samples": 77,
+          "share": 0.0036610878661087866
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11",
+          "category": "rank_reference_validation",
+          "samples": 30,
+          "share": 0.0014263978699125142
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > areRestorationBonusSetsEqual@src/domain/models/domainRules.ts:30 > (anonymous)@src/domain/models/domainRules.ts:13",
+          "category": "multiset_equality",
+          "samples": 28,
+          "share": 0.0013313046785850132
+        },
+        {
+          "stack": "(root)@- > settle@src/domain/search/targetSearchScheduler.ts:410 > (anonymous)@src/domain/search/targetSearchScheduler.ts:433 > satisfiesIdealBonuses@src/domain/target/targetEvaluator.ts:25 > assertRestorationBonusRankReferences@src/domain/target/bonusConditionEvaluator.ts:8 > (anonymous)@src/domain/target/bonusConditionEvaluator.ts:11 > (anonymous)@src/domain/master/masterSelectors.ts",
+          "category": "rank_reference_validation",
+          "samples": 27,
+          "share": 0.0012837580829212628
+        },
+        {
+          "stack": "(root)@- > (program)@-",
+          "category": "other_unresolved",
+          "samples": 25,
+          "share": 0.0011886648915937618
+        },
+        {
+          "stack": "(root)@- > requireById@src/domain/master/masterSelectors.ts:52",
+          "category": "rank_reference_validation",
+          "samples": 19,
+          "share": 0.0009033853176112591
+        }
+      ],
+      "registeredOutsideFilterSamples": 0,
+      "boundarySamples": 57
+    }
+  },
+  "processes": [
+    {
+      "id": "probe",
+      "role": "probe",
+      "outcome": "completed",
+      "wallMs": 2594.8079000000002,
+      "killedAtMs": null,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 0,
+      "maxIpcHeartbeatGapMs": null,
+      "profileCapturedAtMs": null,
+      "lastHeartbeatAgeAtEndMs": null,
+      "stderrTail": null
+    },
+    {
+      "id": "baseline",
+      "role": "baseline",
+      "outcome": "completed",
+      "wallMs": 5820.780999999999,
+      "killedAtMs": null,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 0,
+      "maxIpcHeartbeatGapMs": null,
+      "profileCapturedAtMs": null,
+      "lastHeartbeatAgeAtEndMs": null,
+      "stderrTail": null
+    },
+    {
+      "id": "kernel-c6-p1",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800214.5663,
+      "killedAtMs": 1800015.3652000001,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 295,
+      "maxIpcHeartbeatGapMs": 7036.790800000075,
+      "profileCapturedAtMs": 724883.8859,
+      "lastHeartbeatAgeAtEndMs": 949.2332000001334,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    },
+    {
+      "id": "kernel-c13-p1",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800250.0720000002,
+      "killedAtMs": 1800009.6382,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 252,
+      "maxIpcHeartbeatGapMs": 8331.815900000278,
+      "profileCapturedAtMs": 723660.6560999998,
+      "lastHeartbeatAgeAtEndMs": 7417.375,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    },
+    {
+      "id": "kernel-c14-p0",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800244.8821999999,
+      "killedAtMs": 1800008.9516000003,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 254,
+      "maxIpcHeartbeatGapMs": 8500.240599999204,
+      "profileCapturedAtMs": 724113.6524,
+      "lastHeartbeatAgeAtEndMs": 6630.394299999811,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    },
+    {
+      "id": "diagnostic-c14-p0",
+      "role": "diagnostic",
+      "outcome": "completed",
+      "wallMs": 722881.1555000003,
+      "killedAtMs": null,
+      "nodeFlags": [
+        "--no-turbo-inlining",
+        "--no-maglev-inlining",
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 105,
+      "maxIpcHeartbeatGapMs": 8044.048499999568,
+      "profileCapturedAtMs": 722715.1540999999,
+      "lastHeartbeatAgeAtEndMs": 4904.7130000004545,
+      "stderrTail": null
+    }
+  ],
+  "conclusion": {
+    "statement": "Phase 2-C2.6-A4のprimary 3 orientationを、A4と同条件（jit_default）・A4のSearch section境界observerのみにV8 sampling CPU profiler（10 ms、Search開始120〜720秒）を加えて各1回profileした: completed 0、timeout 3、OOM 0、process failure 0。bonus_ideal_filter interval内sampleの構成: c6-p1 (n=17656) rank 3.1% / multiset 76.9% / predicate_self 1.3% / filter 16.2% / gc 2.0% / other 0.5%、c13-p1 (n=19461) rank 3.1% / multiset 73.1% / predicate_self 1.3% / filter 19.0% / gc 2.8% / other 0.7%、c14-p0 (n=18612) rank 3.0% / multiset 73.9% / predicate_self 1.3% / filter 19.2% / gc 1.8% / other 0.8%。decision case MULTISET_multiset_equality。",
+    "decision": {
+      "rule": {
+        "majority": 2,
+        "minimumFilterIntervalSamples": 5000,
+        "unresolvedThreshold": 0.35,
+        "gcThreshold": 0.2,
+        "rankThreshold": 0.35,
+        "multisetThreshold": 0.35,
+        "order": [
+          "U0 insufficient_samples: fewer than 2 primaries have a valid clock alignment / intervals and >= 5,000 filter interval samples",
+          "U1 jit_attribution_insufficient: >= 2 valid primaries have predicate_self_or_inlined + filter_or_inlined_predicate + other_unresolved >= 0.35",
+          "GC: >= 2 valid primaries have gc >= 0.20",
+          "RANK: >= 2 valid primaries have rank_reference_validation >= 0.35",
+          "MULTISET: >= 2 valid primaries have multiset_equality >= 0.35",
+          "MIXED: otherwise (the two largest pooled categories are the next candidates)"
+        ]
+      },
+      "validPrimaries": [
+        "c6-p1",
+        "c13-p1",
+        "c14-p0"
+      ],
+      "invalidPrimaries": [],
+      "primariesAtThreshold": {
+        "unresolved": [],
+        "gc": [],
+        "rank_reference_validation": [],
+        "multiset_equality": [
+          "c6-p1",
+          "c13-p1",
+          "c14-p0"
+        ]
+      },
+      "topPooledCategories": [
+        "multiset_equality",
+        "filter_or_inlined_predicate"
+      ],
+      "case": "MULTISET_multiset_equality",
+      "reason": "multiset_equality >= 0.35 in c6-p1, c13-p1, c14-p0",
+      "recommendation": "次Phaseでmultiset equalityのoptimization設計（precomputed Ideal multiset表現、allocation-free 5-slot multiset比較等を候補として比較。unordered multiset・重複数の意味を維持し、slot-order semanticsと混同しない。rank validationのerror timingも維持）。"
+    }
+  },
+  "limitations": [
+    "Node child（Vite SSR loader）のみ。Browser Worker・他device・他heap条件は測っていない。",
+    "CPU profiler（10 ms sampling）とfilter interval stampが加わるため、A4とのabsolute wall time・進行量は比較しない。比較はA5 profile内のsample shareだけ。",
+    "各orientation 1回のみ（retryなし）、profile windowはSearch開始後120〜720秒（600秒）の1区間。run間ばらつき・window外（warmup中や720秒以降）の構成は測っていない。",
+    "sampling profilerの統計的推定である。10 ms間隔のsampleは各filter intervalの時間に比例して入るが、個々のsolution評価の時間を直接測ったものではない。",
+    "V8 CPU profileはJIT inline frameを復元するが、復元されないinlineやstack walkの欠落（outer frameのない短いstack）はあり得る。ancestor frameが失われたsampleもregistered frameがstackにあればその分類になり、なければunresolved側に入る。",
+    "Ideal側（target.idealBonuses）とfinal側（solution.bonuses）のrank reference validationは同じ関数への2回の呼び出しで、CPU profile（leaf line mode）では呼び出し元の行で分離できない。rank_reference_validationは両者の合計であり、内訳は言えない。",
+    "filter_or_inlined_predicateは、filter call site（TargetSearchScheduler.settle内のArray.prototype.filter呼び出しとそのcallback）をleafとするsampleで、builtin loop・callback・callbackへinlineされたpredicateを区別しない。純粋なArray.prototype.filter overheadではない。",
+    "gcはV8の(garbage collector) sampleで、filter interval内に入ったもの。どのallocationがGCを起こしたかはCPU profileだけでは確定しない。",
+    "Vite SSR loaderのaccessor（module-runner.jsのimport getter = leafKind vite_module_runner、module preambleのexport getter = 元ソース行を持たないRepository frame = leafKind vite_ssr_unmapped）はProduction bundleには無い。分類は登録priorityどおり（registered ancestorがあればその分類、なければother_unresolved）で、leafKindとして別記する。",
+    "no-inlining diagnosticは関数単位attributionを見やすくする補助で、Production-like割合ではない（Primary表と平均・合算しない）。",
+    "filter interval境界はResearch側のperformance.now() stampで、区間はfilter呼び出しとSearch側のruntime observer呼び出しを含む（A4のdurable記録は区間外になるよう順序付けた）。境界±toleranceのsample数を記述的に併記する。"
+  ]
+}
