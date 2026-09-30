@@ -18,6 +18,7 @@ import {
   type CandidateSearchRouteContext, type RouteCompositionBase, type RouteSearchContext,
   type SearchFrontierPolicy,
 } from './routeSearchShared'
+import type { SearchRuntimeObserver } from './searchRuntime'
 import { SearchWorkQueue } from './searchWorkQueue'
 import { resetSkillsOperations, skillAmendmentResults } from './skillStream'
 import {
@@ -157,6 +158,13 @@ export class TargetSearchScheduler {
 
   private readonly context: RouteSearchContext
   private readonly onComposition: ScheduledCompositionHandler
+  /**
+   * Execution-only section boundary observer (Issue #154 Phase 2-C2.6-A4,
+   * `docs/SEARCH_SPEC.md` 5.6.8). Only the Planner Alternative Search passes
+   * one, and only when its caller does; every Production call leaves it
+   * undefined, in which case no boundary argument is even evaluated.
+   */
+  private readonly runtime: SearchRuntimeObserver | undefined
 
   /**
    * The ordinary Candidate Search materialization needs the ordinary request
@@ -165,9 +173,14 @@ export class TargetSearchScheduler {
    * supplies its own handler and never fabricates a `CandidateSearchInput`.
    */
   constructor(context: CandidateSearchRouteContext)
-  constructor(context: RouteSearchContext, onComposition: ScheduledCompositionHandler)
-  constructor(context: RouteSearchContext | CandidateSearchRouteContext, onComposition?: ScheduledCompositionHandler) {
+  constructor(context: RouteSearchContext, onComposition: ScheduledCompositionHandler, runtime?: SearchRuntimeObserver)
+  constructor(
+    context: RouteSearchContext | CandidateSearchRouteContext,
+    onComposition?: ScheduledCompositionHandler,
+    runtime?: SearchRuntimeObserver,
+  ) {
     this.context = context
+    this.runtime = runtime
     if (onComposition) {
       this.onComposition = onComposition
     } else if ('searchInput' in context) {
@@ -203,9 +216,32 @@ export class TargetSearchScheduler {
       kind: base.kindResolution.type === 'fixed' ? base.kindResolution.kind : 'existing_gogma_mixed',
       sourceOwnedWeaponId: base.sourceOwnedWeaponId, operations: [...base.baseOperations],
     })
-    const settleComposition = (bonus: EvaluatedBonusSolution, skill: EvaluatedSkillSolution, cost: number) => async () => {
+    const runtime = this.runtime
+    // `onSettled` (the lazy Cross's next cell of the row) runs after the
+    // composition, exactly as before; it is inside the work only so that the
+    // runtime boundaries nest.
+    const settleComposition = (
+      bonus: EvaluatedBonusSolution,
+      skill: EvaluatedSkillSolution,
+      cost: number,
+      onSettled?: () => void,
+    ) => async () => {
+      runtime?.({ type: 'section_started', section: 'composition_work' })
+      runtime?.({ type: 'section_started', section: 'composition_checkpoint' })
       await this.context.execution.checkpoint()
-      this.onComposition({ base, bonus, skill, route: composeScheduledRoute(base, bonus, skill), cost })
+      runtime?.({ type: 'section_completed', section: 'composition_checkpoint' })
+      runtime?.({ type: 'section_started', section: 'compose_route' })
+      const route = composeScheduledRoute(base, bonus, skill)
+      runtime?.({ type: 'section_completed', section: 'compose_route' })
+      runtime?.({ type: 'section_started', section: 'composition_consumer' })
+      this.onComposition({ base, bonus, skill, route, cost })
+      runtime?.({ type: 'section_completed', section: 'composition_consumer' })
+      if (onSettled) {
+        runtime?.({ type: 'section_started', section: 'cross_open_next' })
+        onSettled()
+        runtime?.({ type: 'section_completed', section: 'cross_open_next' })
+      }
+      runtime?.({ type: 'section_completed', section: 'composition_work' })
     }
     // The initial Search composes the Cross axes only (SEARCH_SPEC 5.5.4); the
     // Planner Alternative policy composes every Ideal pair, lazily (5.6.8).
@@ -213,17 +249,19 @@ export class TargetSearchScheduler {
       ? createLazyIdealCross({
         open: (bonus, skill, onSettled) => {
           const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
-          const settle = settleComposition(bonus, skill, cost)
-          this.queue.enqueue({ lowerBound: cost, settle: async () => {
-            await settle()
-            onSettled()
-          } })
+          this.queue.enqueue({ lowerBound: cost, settle: settleComposition(bonus, skill, cost, onSettled) })
         },
         // One waiting row per work item, so resuming many rows passes the
         // ordinary `step()` checkpoint between any two of them.
         wake: (bonus, skill, resume) => {
           const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
-          this.queue.enqueue({ lowerBound: cost, settle: resume })
+          this.queue.enqueue({ lowerBound: cost, settle: () => {
+            runtime?.({ type: 'section_started', section: 'cross_wake_work' })
+            runtime?.({ type: 'section_started', section: 'cross_wake' })
+            resume()
+            runtime?.({ type: 'section_completed', section: 'cross_wake' })
+            runtime?.({ type: 'section_completed', section: 'cross_wake_work' })
+          } })
         },
       })
       : createDeltaCross((bonus, skill) => {
@@ -262,12 +300,15 @@ export class TargetSearchScheduler {
     const existing = this.skills.get(start)
     if (existing) return existing
     const channel: Channel<EvaluatedSkillSolution> = { retained: [], subscribers: [] }
+    const channelIndex = this.skills.size
     this.skills.set(start, channel)
     const alternative = this.policy === 'planner_alternative'
     const retention = createIncrementalSkillRetention(this.context.target)
+    const runtime = this.runtime
     const next = (depth: number) => this.queue.enqueue({
       lowerBound: baseCost + depth,
       settle: async () => {
+        runtime?.({ type: 'section_started', section: 'skill_depth_work', work: { channel: channelIndex, depth } })
         if (alternative) {
           // Held-aware reading over the Skill reservation (SEARCH_SPEC 5.6.8):
           // each solution carries its own absolute operation positions, and
@@ -276,10 +317,15 @@ export class TargetSearchScheduler {
           // Ideal one is materialized, ordered and published, because the Lazy
           // Ideal Cross composes nothing else. Extent and exhaustion still
           // follow the raw depth.
+          runtime?.({ type: 'section_started', section: 'skill_depth_read' })
           const reserved = await this.context.skillStream.readReservedDepth(start, depth)
+          runtime?.({ type: 'section_completed', section: 'skill_depth_read' })
+          runtime?.({ type: 'section_started', section: 'skill_ideal_filter' })
           const ideal = reserved.solutions.filter((solution) => evaluateSkillCondition(
             this.context.target.idealSkillCondition, solution.seriesSkillId, solution.groupSkillId,
           ))
+          runtime?.({ type: 'section_completed', section: 'skill_ideal_filter' })
+          runtime?.({ type: 'section_started', section: 'skill_route_materialization' })
           const solutions = ideal.map((solution) => {
             const own = { startSkillCounter: start, steps: solution.steps, solutions: [] }
             return {
@@ -291,12 +337,33 @@ export class TargetSearchScheduler {
               amendmentResults: skillAmendmentResults(own, solution.resetCount),
             }
           })
-          for (const value of evaluateSkillSolutions(this.context.target, solutions)) {
+          runtime?.({ type: 'section_completed', section: 'skill_route_materialization' })
+          runtime?.({ type: 'section_started', section: 'skill_evaluate_sort' })
+          const evaluated = evaluateSkillSolutions(this.context.target, solutions)
+          runtime?.({ type: 'section_completed', section: 'skill_evaluate_sort' })
+          runtime?.({ type: 'section_started', section: 'skill_channel_publication' })
+          for (const value of evaluated) {
             channel.retained.push(value)
-            for (const receive of channel.subscribers) receive(value)
+            for (const receive of channel.subscribers) {
+              runtime?.({ type: 'section_started', section: 'cross_add_skill' })
+              receive(value)
+              runtime?.({ type: 'section_completed', section: 'cross_add_skill' })
+            }
           }
+          runtime?.({ type: 'section_completed', section: 'skill_channel_publication' })
+          runtime?.({ type: 'section_started', section: 'skill_depth_advance' })
           if (!reserved.exhausted) next(depth + 1)
           else if (this.context.skillStream.reservedReachesBeyondExtent(start)) this.noteExtentReached()
+          runtime?.({ type: 'section_completed', section: 'skill_depth_advance' })
+          runtime?.({ type: 'section_completed', section: 'skill_depth_work', counts: {
+            rawSolutions: reserved.solutions.length,
+            unsupportedPredictions: 0,
+            idealSolutions: ideal.length,
+            evaluatedSolutions: evaluated.length,
+            subscriberCount: channel.subscribers.length,
+            retainedCountAfter: channel.retained.length,
+            exhausted: reserved.exhausted,
+          } })
           return
         }
         const delta = await this.context.skillStream.readDepth(start, depth)
@@ -313,6 +380,7 @@ export class TargetSearchScheduler {
           for (const receive of channel.subscribers) receive(value)
         }
         if (!delta.exhausted) next(depth + 1)
+        runtime?.({ type: 'section_completed', section: 'skill_depth_work' })
       },
     })
     next(1)
@@ -324,9 +392,11 @@ export class TargetSearchScheduler {
     const existing = this.bonuses.get(key)
     if (existing) return existing
     const channel: BonusChannel = { retained: [], subscribers: [], notices: [], noticeSubscribers: [] }
+    const channelIndex = this.bonuses.size
     this.bonuses.set(key, channel)
     const alternative = this.policy === 'planner_alternative'
     const retention = createIncrementalBonusRetention(this.context.target, this.context.input)
+    const runtime = this.runtime
     const noticeKeys = new Set<string>()
     const publishNotice = (notice: BonusStreamNotice) => {
       const id = JSON.stringify(notice)
@@ -338,25 +408,33 @@ export class TargetSearchScheduler {
     const next = (depth: number) => this.queue.enqueue({
       lowerBound: baseCost + depth,
       settle: async () => {
+        runtime?.({ type: 'section_started', section: 'bonus_depth_work', work: { channel: channelIndex, depth } })
         if (alternative) {
           // Held-aware reading over the Gogma reservation (SEARCH_SPEC 5.6.8):
           // each state carries its own absolute amendment positions, and
           // `depth` stays the own amendment count, i.e. the cost.
+          runtime?.({ type: 'section_started', section: 'bonus_depth_read' })
           const reserved = await this.context.bonusStream.readReservedDepth(base, depth)
+          runtime?.({ type: 'section_completed', section: 'bonus_depth_read' })
+          runtime?.({ type: 'section_started', section: 'bonus_notice_scan' })
           for (const solution of reserved.solutions) {
             publishNotice({ type: 'route_kind', kind: solution.lastResetDepth === solution.depth
               ? 'existing_gogma_reset_bonuses'
               : solution.lastResetDepth === 0 ? 'existing_gogma_keep_bonuses' : 'existing_gogma_mixed' })
           }
           for (const prediction of reserved.unsupportedPredictions) publishNotice({ type: 'unsupported', prediction })
+          runtime?.({ type: 'section_completed', section: 'bonus_notice_scan' })
           // The notices above come from every raw state. Every absolute
           // position is then judged with the Ideal Bonus authority itself (its
           // Master rank assertion included); only an Ideal one is materialized,
           // ordered and published, because the Lazy Ideal Cross composes
           // nothing else. Extent and exhaustion still follow the raw depth.
+          runtime?.({ type: 'section_started', section: 'bonus_ideal_filter' })
           const ideal = reserved.solutions.filter((solution) => satisfiesIdealBonuses(
             this.context.target, solution.bonuses, solution.restorationBonusScope, this.context.input.master,
           ))
+          runtime?.({ type: 'section_completed', section: 'bonus_ideal_filter' })
+          runtime?.({ type: 'section_started', section: 'bonus_route_materialization' })
           const solutions = ideal.map((solution) => ({
             gogmaAdvance: solution.depth, lastResetDepth: solution.lastResetDepth,
             finalBonuses: solution.bonuses, restorationBonusScope: solution.restorationBonusScope,
@@ -367,12 +445,33 @@ export class TargetSearchScheduler {
             ),
             amendmentResults: bonusAmendmentResults(solution),
           }))
-          for (const value of evaluateBonusSolutions(this.context.target, this.context.input, solutions)) {
+          runtime?.({ type: 'section_completed', section: 'bonus_route_materialization' })
+          runtime?.({ type: 'section_started', section: 'bonus_evaluate_sort' })
+          const evaluated = evaluateBonusSolutions(this.context.target, this.context.input, solutions)
+          runtime?.({ type: 'section_completed', section: 'bonus_evaluate_sort' })
+          runtime?.({ type: 'section_started', section: 'bonus_channel_publication' })
+          for (const value of evaluated) {
             channel.retained.push(value)
-            for (const receive of channel.subscribers) receive(value)
+            for (const receive of channel.subscribers) {
+              runtime?.({ type: 'section_started', section: 'cross_add_bonus' })
+              receive(value)
+              runtime?.({ type: 'section_completed', section: 'cross_add_bonus' })
+            }
           }
+          runtime?.({ type: 'section_completed', section: 'bonus_channel_publication' })
+          runtime?.({ type: 'section_started', section: 'bonus_depth_advance' })
           if (!reserved.exhausted) next(depth + 1)
           else if (this.context.bonusStream.reservedReachesBeyondExtent(base)) this.noteExtentReached()
+          runtime?.({ type: 'section_completed', section: 'bonus_depth_advance' })
+          runtime?.({ type: 'section_completed', section: 'bonus_depth_work', counts: {
+            rawSolutions: reserved.solutions.length,
+            unsupportedPredictions: reserved.unsupportedPredictions.length,
+            idealSolutions: ideal.length,
+            evaluatedSolutions: evaluated.length,
+            subscriberCount: channel.subscribers.length,
+            retainedCountAfter: channel.retained.length,
+            exhausted: reserved.exhausted,
+          } })
           return
         }
         const delta = await this.context.bonusStream.readDepth(base, depth)
@@ -398,6 +497,7 @@ export class TargetSearchScheduler {
           for (const receive of channel.subscribers) receive(value)
         }
         if (!delta.exhausted) next(depth + 1)
+        runtime?.({ type: 'section_completed', section: 'bonus_depth_work' })
       },
     })
     next(1)
@@ -425,11 +525,23 @@ export class TargetSearchScheduler {
    */
   async step(): Promise<boolean> {
     if (this.queue.nextLowerBound === null) return false
+    const runtime = this.runtime
+    runtime?.({ type: 'section_started', section: 'scheduler_step' })
+    runtime?.({ type: 'section_started', section: 'scheduler_checkpoint' })
     await this.context.execution.checkpoint()
+    runtime?.({ type: 'section_completed', section: 'scheduler_checkpoint' })
+    // The heap pop and the dispatch stay in `scheduler_settle` itself; a work
+    // item the scheduler did not create (a Route base a Route search
+    // primitive queued) reports no work section of its own.
+    runtime?.({ type: 'section_started', section: 'scheduler_settle' })
     await this.queue.settleNext()
+    runtime?.({ type: 'section_completed', section: 'scheduler_settle' })
+    runtime?.({ type: 'section_started', section: 'scheduler_post_settle' })
     // Activity signal only. It counts settled work; it never gates, orders,
     // or terminates the queue.
     this.context.execution.onWorkSettled()
+    runtime?.({ type: 'section_completed', section: 'scheduler_post_settle' })
+    runtime?.({ type: 'section_completed', section: 'scheduler_step' })
     return true
   }
 
