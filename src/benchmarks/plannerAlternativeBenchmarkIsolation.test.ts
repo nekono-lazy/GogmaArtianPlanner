@@ -56,7 +56,7 @@ describe('Planner Alternative Phase 3-A benchmark isolation', () => {
   })
 
   it('passes the Search instrumentation from no Production caller', () => {
-    const users = productionPaths.filter((path) => /\bonSkillReservedDepth\b|\bonGogmaReservedDepth\b|\binstrumentation\?\.onWorkSettled\b/.test(production[path]))
+    const users = productionPaths.filter((path) => /\bonSkillReservedDepth\b|\bonGogmaReservedDepth\b|\bonGogmaReservedRuntime\b|\binstrumentation\?\.onWorkSettled\b/.test(production[path]))
     expect(users).toEqual(['../domain/search/alternative/plannerAlternativeSearch.ts'])
     // Issue #154 Phase 2-C2.6-A2: the kernel's only Search instrumentation is the one its optional, observational
     // `PlannerAlternativeKernelOptions.instrumentation` hands it (undefined by default), and no Production module other

@@ -1676,7 +1676,45 @@ Phase 3のBrowser Worker benchmark（[PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMA
 cancel / yieldと同じexecution-only境界であり、`PlannerAlternativeSearchInput`、search identity、Candidate
 identity、6キー順序、終了判定のいずれにも入らない。callbackは報告対象の処理の後に呼ばれ、戻り値をSearchが
 読まないため、有無でdeliverされる `candidateStableKey` 列、summary、prediction呼び出し回数は同一である。
-Production callerは渡さない（Planner Alternative kernelもWorker protocolも持たない）。
+Productionの通常callerはinstrumentationを指定しない。Planner Alternative kernelはbenchmark / Research向けの任意の
+observational instrumentation seam（`PlannerAlternativeKernelOptions.instrumentation`、default undefined）を持ち、その
+`searchInstrumentationForTarget()` を介してTargetごとの `PlannerAlternativeSearchInstrumentation` をSearchへ渡せる
+（下の `onGogmaReservedRuntime` もこの経路で使われる）。これらはcalculation semanticsに入らず、Worker protocolには露出しない。
+
+`onGogmaReservedRuntime`（Issue #154 Phase 2-C2.6-A3、execution-only）: held-aware Bonus（Gogma）streamの1 depth
+（`readReservedDepth()`）内部のexecution section境界を観測する任意のread-only observerである。上の3 callbackを置き換えるもの
+ではなく併存する。`onGogmaReservedDepth` は1 depthの生成・公開・frontier縮約が終わった後のdepth単位の集計を1回渡すのに対し、
+`onGogmaReservedRuntime` は同じdepthの内部を次のsectionに区切り、その境界を通知する。
+
+| section | 範囲 |
+| --- | --- |
+| `window_collection` | frontier stateごとのlegal Gogma position window（held / blocked位置を考慮した次のamendment位置）の収集と、その和集合 |
+| `support_evaluation` | Reset / Keep prediction support（capability、Keep対象frontier stateごとのsupport）の判定と、unsupported notice記録 |
+| `state_generation` | legal positionを昇順に確定し、各positionについてReset stateと、そのpositionへ到達するfrontier stateごとのKeep stateを生成（prediction memo参照を含む） |
+| `solution_materialization` | 生成stateから呼び出し側へ返す `ReservedBonusStreamSolution`（steps historyを含む）を構築 |
+| `frontier_reduction_sort` | position + family layout単位のrepresentative縮約と、次depthのfrontierの並べ替え |
+| `exhaustion_scan` | 縮約後frontierに次depthへ進めるlegal positionが残るかの確認 |
+
+eventは `depth_started`、`phase_started`、`phase_completed`、`depth_completed` の4種で、Search behaviorを制御するsignalでは
+なく観測用eventである。sectionは上の順に1つずつ、入れ子にならずに実行され、`phase_started` / `phase_completed` は同じ
+section・stream・depthで対になる。生成stateが0件のdepthは `state_generation` の後に `depth_completed` となり、solutionのある
+depthだけが `exhaustion_scan` を持つ。生成を行わない状態のstream（Gogma prediction不可など）のdepthはsectionを持たず、`depth_started` / `depth_completed` だけとなる。Search自体が例外（cancel等）で中断した
+depthは、それ以降の境界を通知しない。
+
+- Domain側はclock（`performance.now()`、`Date.now()` 等）を読まず、eventにtimestampを含めない。section境界だけを同期的に
+  通知し、wall timeが必要なResearch consumerはcallback受信側で自ら時刻を計測する
+- eventが渡すのは観測情報だけである: `streamIndex`（Bonus stream内のheld-aware streamの生成順）、`startGogmaCounter`、
+  `depth`、section名、そして既存処理中に既に得られている集計値（縮約前frontier数、legal position数、生成state数、縮約後
+  frontier数、window memo件数。そのsectionが終わるまで未確定の値は `null`）。Candidate、Bonus state、solution、frontier
+  などのstate内容そのものは渡さない。観測のためだけにstate集合を追加走査・再構築しない
+- callbackは同期的に呼ばれ、awaitされず、戻り値をSearchが読まない
+- optionalであり、Production callerは指定しない
+- Candidate生成結果、Candidate順序（6キー順序）、prediction内容・prediction呼び出し回数、stream state / frontier、
+  Searchの終了判定を変更しない
+- `PlannerAlternativeSearchInput`、search identity、Candidate identityに入らない
+- persistせず、Worker protocol、Export / Importへ追加しない
+
+instrumentation consumerはSearch semanticsを変更する用途に使わない（read-only observer）。
 
 #### 変更しないもの
 

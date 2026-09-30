@@ -1,0 +1,4193 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-A3: held-aware Gogma stream internal runtime localization (post-hoc analysis)",
+  "analyzedAt": "2026-09-30T00:41:28.763Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A3_RAW.json.local",
+      "bytes": 5863736,
+      "sha256": "e0f6a9e84d30f0d15222288bb1cd2dcf82a94d1e6acf327a4e3d88570d8a85f4"
+    },
+    "c26aResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A_RESULT.json",
+      "bytes": 318778,
+      "sha256": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171"
+    },
+    "c26a2Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A2_RESULT.json",
+      "bytes": 642128,
+      "sha256": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2"
+    }
+  },
+  "provenance": {
+    "measuredHead": "0e2a5fea93882f4c7d121c305d7fa1ad7e3b8bf0",
+    "analysisHead": "0e2a5fea93882f4c7d121c305d7fa1ad7e3b8bf0",
+    "analysisCodeUncommitted": false,
+    "codeChangedSinceMeasuredHead": [],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "scripts/analyze-planner-global-phase2c26a3.mjs",
+      "src/benchmarks/plannerGlobalPhase2C26A3Analysis.ts",
+      "*.test.ts"
+    ],
+    "formal": true,
+    "benchmarkCodeSha256": "638c66a5c817b07c629988dc8dc160c6b637e195f524391602856fd294918a2b",
+    "uncommittedBenchmarkCode": false,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "c26aResultSha256": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "c26aResultRecordedByRunner": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "c26aMeasuredHead": "525ed892acb09609fcce1f7589c6751038ae255d",
+    "c26a2ResultSha256": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+    "c26a2ResultRecordedByRunner": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+    "c26a2MeasuredHead": "9bb89e988c619965473cf5ef7a8413d49f97bf4f",
+    "c26aResultShaRecordedByA2": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "measuredAt": "2026-09-29T23:11:09.705Z",
+    "runWallMs": 5407092.927499999
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296
+  },
+  "selectionRule": {
+    "source": "Phase 2-C2.6-A2 RESULT perOrientation (derived, no ID fixed in source)",
+    "rule": "resultClass == timeout_in_search && counters.startedTargets == 1 && counters.completedTargets == 0 && counters.trialsStarted == 0 && counters.fullPlannerRunsStarted == 0 && activeTargetOrdinal == 0",
+    "registeredCount": 3,
+    "derivedPrimaryOrientationIds": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "selectedCount": 3
+  },
+  "conditions": {
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "childHeapLimitMb": 8192,
+    "concurrency": 1,
+    "orientationBudgetMs": 1800000,
+    "nodeYield": "setImmediate",
+    "extent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "bounds": {
+      "maxCandidateTrialsPerTarget": 2,
+      "maxPlannerReruns": 8
+    },
+    "researchMaxPlanSteps": 20000,
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "lineage": {
+      "priorFixedBuildListEntryIds": [],
+      "priorExcludedRoutes": []
+    },
+    "nodeFlags": [
+      "--max-old-space-size=8192"
+    ],
+    "freshChildPerOrientation": true,
+    "memorySampleIntervalMs": 250,
+    "heartbeatIntervalMs": 5000,
+    "retry": "none (each orientation once)",
+    "concurrencyNote": "A3 formal condition concurrency = 1 (C2.6-A / A2: 3). One Search at a time, so section wall time is not shared with sibling children; absolute wall time is never compared with A2.",
+    "searchInstrumentation": {
+      "onGogmaReservedRuntime": true,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "oldHeavyDepthObserversDisabled": "onGogmaReservedDepth / onSkillReservedDepth / onWorkSettled are not attached (A2 attached them); the only Search instrumentation is onGogmaReservedRuntime (section boundaries, no scan).",
+    "recording": "lifecycle records, one record per Gogma section start and one per completed Gogma depth, and a 5 s heartbeat: each one synchronous append to an open descriptor + IPC; nothing per state"
+  },
+  "selectionValidation": {
+    "valid": true,
+    "expected": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "actual": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "missing": [],
+    "duplicate": [],
+    "foreign": [],
+    "notPrimary": [],
+    "metadataMismatches": []
+  },
+  "conditionParity": {
+    "valid": true,
+    "issues": [],
+    "checks": [
+      {
+        "condition": "exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "concurrency",
+        "current": 1,
+        "authority": 3,
+        "matches": true,
+        "note": "A3 formal condition is 1; C2.6-A / A2 ran 3. Absolute wall time is not compared with A2."
+      },
+      {
+        "condition": "a2.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a2.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a2.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a2.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a2.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a2.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a2.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a2.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a2.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      }
+    ]
+  },
+  "baselineParity": {
+    "valid": true,
+    "issues": [],
+    "baselineChecks": [
+      {
+        "field": "planningTargetCount",
+        "matches": true
+      },
+      {
+        "field": "completedTargetCount",
+        "matches": true
+      },
+      {
+        "field": "termination",
+        "matches": true
+      },
+      {
+        "field": "planSteps",
+        "matches": true
+      },
+      {
+        "field": "conflicts",
+        "matches": true
+      },
+      {
+        "field": "conflictsByKind",
+        "matches": true
+      },
+      {
+        "field": "conflictSignatures",
+        "matches": true
+      },
+      {
+        "field": "selectedTargets",
+        "matches": true
+      },
+      {
+        "field": "orientationCount",
+        "matches": true
+      }
+    ],
+    "orderedIdsMatch": true,
+    "orientationIdentityMismatches": 0,
+    "orientationMetadataMismatches": 0,
+    "timeoutOrientationMismatches": []
+  },
+  "formalSeriesValidation": {
+    "valid": true,
+    "failures": [],
+    "rawStatus": "completed",
+    "smokeIsNull": true,
+    "uncommittedBenchmarkCode": false,
+    "c26aShaMatches": true,
+    "a2ShaMatches": true,
+    "exportShaMatches": true,
+    "searchInstrumentation": {
+      "onGogmaReservedRuntime": true,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "recordIssues": [],
+    "unknownStatuses": []
+  },
+  "summary": {
+    "orientations": 3,
+    "childStatus": {
+      "completed": 0,
+      "out_of_memory": 0,
+      "timeout": 3,
+      "process_failure": 0
+    },
+    "primarySearchCompleted": 0,
+    "phaseTotalsMs": {
+      "window_collection": 25055.53339999804,
+      "support_evaluation": 88638.70519999885,
+      "state_generation": 1286744.6275999988,
+      "solution_materialization": 296443.6478999972,
+      "frontier_reduction_sort": 2037223.998199996,
+      "exhaustion_scan": 2705.3273999998532
+    },
+    "phaseShareOfMeasured": {
+      "window_collection": 0.0067,
+      "support_evaluation": 0.0237,
+      "state_generation": 0.3443,
+      "solution_materialization": 0.0793,
+      "frontier_reduction_sort": 0.5452,
+      "exhaustion_scan": 0.0007
+    },
+    "searchWallMs": 5388430.1338,
+    "measuredGogmaMs": 3736811.8396999883,
+    "pooledCoverage": 0.6935,
+    "unattributedSearchMs": 1651618.2941000117,
+    "decision": {
+      "threshold": 0.8,
+      "majority": 2,
+      "coverage": {
+        "c6-p1": 0.7149,
+        "c13-p1": 0.6706,
+        "c14-p0": 0.6949
+      },
+      "dominantPhaseByPrimary": {
+        "c6-p1": "frontier_reduction_sort",
+        "c13-p1": "frontier_reduction_sort",
+        "c14-p0": "frontier_reduction_sort"
+      },
+      "dominantPhaseConsistentAcrossPrimaries": true,
+      "case": "R_gogma_does_not_explain",
+      "dominantPhase": null,
+      "reason": "coverage < 0.8 in 3 / 3 primaries (c6-p1, c13-p1, c14-p0)",
+      "recommendation": "Gogma stream内部だけではSearch runtimeを説明できない。次Phaseはscheduler / Bonus publication / Ideal filter / Lazy Cross等のruntime計時。optimizationへ進まない。"
+    }
+  },
+  "transitionsFromA2": [
+    {
+      "orientationId": "c6-p1",
+      "a2": "timeout",
+      "a3": "timeout",
+      "note": "absolute wall time not comparable (concurrency 3 -> 1, heavy observers removed)"
+    },
+    {
+      "orientationId": "c13-p1",
+      "a2": "timeout",
+      "a3": "timeout",
+      "note": "absolute wall time not comparable (concurrency 3 -> 1, heavy observers removed)"
+    },
+    {
+      "orientationId": "c14-p0",
+      "a2": "timeout",
+      "a3": "timeout",
+      "note": "absolute wall time not comparable (concurrency 3 -> 1, heavy observers removed)"
+    }
+  ],
+  "perOrientation": [
+    {
+      "orientationId": "c6-p1",
+      "kind": "same_gogma_counter",
+      "childOutcome": "timeout",
+      "resultClass": "timeout_in_search",
+      "primarySearch": {
+        "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+        "completed": false,
+        "observationPoint": "last_heartbeat",
+        "observedAtMs": 1798165.0567,
+        "searchStartedMs": 1629.2698999999998,
+        "searchWallMs": 1796535.7868000001,
+        "searchWallAtKillEstimateMs": 1797604.7541,
+        "unobservedTailMs": 1068.967299999902,
+        "phaseTotalsMs": {
+          "window_collection": 7988.091899998886,
+          "support_evaluation": 36074.96299999967,
+          "state_generation": 400222.6073000002,
+          "solution_materialization": 98073.71659999774,
+          "frontier_reduction_sort": 741054.8405999993,
+          "exhaustion_scan": 963.986399998546
+        },
+        "phaseShare": {
+          "window_collection": 0.006219423425223401,
+          "support_evaluation": 0.028087492326709044,
+          "state_generation": 0.31160806489293824,
+          "solution_materialization": 0.07635890749089054,
+          "frontier_reduction_sort": 0.5769755647157078,
+          "exhaustion_scan": 0.0007505471485309988
+        },
+        "measuredGogmaMs": 1284378.2057999943,
+        "coverage": 0.7149193549257018,
+        "unattributedSearchMs": 512157.5810000058,
+        "inclusiveDepthReadMs": 1284432.9920999983,
+        "inDepthOutsideSectionsMs": 54.786300003994256,
+        "dominantPhase": "frontier_reduction_sort",
+        "completedDepths": 580,
+        "maxDepthReached": 74,
+        "streams": 8,
+        "activeAtObservation": {
+          "streamIndex": 6,
+          "depth": 71,
+          "phase": "state_generation",
+          "elapsedMs": 0.2051000001374632
+        }
+      },
+      "activeAtEnd": {
+        "where": "section",
+        "streamIndex": 6,
+        "depth": 71,
+        "phase": "frontier_reduction_sort",
+        "startedMs": 1798970.2691,
+        "elapsedAtKillEstimateMs": 263.7549000000581
+      },
+      "counters": {
+        "startedTargets": 1,
+        "completedTargets": 0,
+        "deliveredCandidates": 0,
+        "trialsStarted": 0,
+        "trialsCompleted": 0,
+        "fullPlannerRunsStarted": 0,
+        "fullPlannerRunsCompleted": 0
+      },
+      "phaseDistributions": {
+        "window_collection": {
+          "count": 580,
+          "totalMs": 7977.746399998832,
+          "minMs": 0.06330000000025393,
+          "medianMs": 13.935049999854527,
+          "maxMs": 67.40999999991618,
+          "maxAt": {
+            "streamIndex": 0,
+            "depth": 31
+          }
+        },
+        "support_evaluation": {
+          "count": 580,
+          "totalMs": 35996.39579999974,
+          "minMs": 0.02320000000008804,
+          "medianMs": 62.210200000030454,
+          "maxMs": 211.83820000011474,
+          "maxAt": {
+            "streamIndex": 6,
+            "depth": 65
+          }
+        },
+        "state_generation": {
+          "count": 580,
+          "totalMs": 400222.4021999999,
+          "minMs": 2.135099999999966,
+          "medianMs": 711.4213999999774,
+          "maxMs": 923.9662999999709,
+          "maxAt": {
+            "streamIndex": 5,
+            "depth": 36
+          }
+        },
+        "solution_materialization": {
+          "count": 580,
+          "totalMs": 98073.71659999774,
+          "minMs": 0.021999999999934516,
+          "medianMs": 153.7244499999797,
+          "maxMs": 470.0123999998905,
+          "maxAt": {
+            "streamIndex": 6,
+            "depth": 68
+          }
+        },
+        "frontier_reduction_sort": {
+          "count": 580,
+          "totalMs": 741054.8405999993,
+          "minMs": 0.08770000000367872,
+          "medianMs": 1477.5130000000354,
+          "maxMs": 1912.174699999974,
+          "maxAt": {
+            "streamIndex": 0,
+            "depth": 45
+          }
+        },
+        "exhaustion_scan": {
+          "count": 580,
+          "totalMs": 963.986399998546,
+          "minMs": 0.8438000000005559,
+          "medianMs": 1.4677999999912572,
+          "maxMs": 5.371299999998882,
+          "maxAt": {
+            "streamIndex": 0,
+            "depth": 21
+          }
+        }
+      },
+      "byDepth": [
+        {
+          "depth": 1,
+          "streams": 8,
+          "generatedStates": 2528,
+          "frontierStatesBefore": 8,
+          "frontierStatesAfter": 2527,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 2.1445000000057917,
+            "support_evaluation": 0.47710000000233777,
+            "state_generation": 25.200000000003456,
+            "solution_materialization": 0.6332000000015796,
+            "frontier_reduction_sort": 1.0681999999987966,
+            "exhaustion_scan": 8.789099999998598
+          }
+        },
+        {
+          "depth": 2,
+          "streams": 8,
+          "generatedStates": 199600,
+          "frontierStatesBefore": 2527,
+          "frontierStatesAfter": 95919,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 5.773799999991297,
+            "support_evaluation": 8.78920000000062,
+            "state_generation": 386.70000000000573,
+            "solution_materialization": 9.208899999996902,
+            "frontier_reduction_sort": 585.7529000000022,
+            "exhaustion_scan": 10.978599999997641
+          }
+        },
+        {
+          "depth": 3,
+          "streams": 8,
+          "generatedStates": 5132327,
+          "frontierStatesBefore": 95919,
+          "frontierStatesAfter": 97078,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 130.08439999998336,
+            "support_evaluation": 393.1079999999979,
+            "state_generation": 5515.863499999985,
+            "solution_materialization": 453.39500000000317,
+            "frontier_reduction_sort": 2728.167599999988,
+            "exhaustion_scan": 12.012200000010125
+          }
+        },
+        {
+          "depth": 4,
+          "streams": 8,
+          "generatedStates": 5129766,
+          "frontierStatesBefore": 97078,
+          "frontierStatesAfter": 98237,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 129.8122000000094,
+            "support_evaluation": 378.7385000000013,
+            "state_generation": 5786.000500000015,
+            "solution_materialization": 531.0840000000135,
+            "frontier_reduction_sort": 3241.2187999999915,
+            "exhaustion_scan": 12.36640000000807
+          }
+        },
+        {
+          "depth": 5,
+          "streams": 8,
+          "generatedStates": 5125997,
+          "frontierStatesBefore": 98237,
+          "frontierStatesAfter": 99396,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 122.99799999999959,
+            "support_evaluation": 386.85770000001503,
+            "state_generation": 5907.664499999984,
+            "solution_materialization": 561.495900000009,
+            "frontier_reduction_sort": 3853.0474000000104,
+            "exhaustion_scan": 13.06890000000567
+          }
+        },
+        {
+          "depth": 6,
+          "streams": 8,
+          "generatedStates": 5121036,
+          "frontierStatesBefore": 99396,
+          "frontierStatesAfter": 100555,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 127.65469999997003,
+            "support_evaluation": 390.875300000007,
+            "state_generation": 5679.553599999977,
+            "solution_materialization": 536.0363000000216,
+            "frontier_reduction_sort": 3846.661100000005,
+            "exhaustion_scan": 12.819300000010116
+          }
+        },
+        {
+          "depth": 7,
+          "streams": 8,
+          "generatedStates": 5114899,
+          "frontierStatesBefore": 100555,
+          "frontierStatesAfter": 101706,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 126.43450000002485,
+            "support_evaluation": 400.76649999998335,
+            "state_generation": 5778.68499999999,
+            "solution_materialization": 564.6419000000242,
+            "frontier_reduction_sort": 4356.3077999999805,
+            "exhaustion_scan": 12.382899999967776
+          }
+        },
+        {
+          "depth": 8,
+          "streams": 8,
+          "generatedStates": 5107594,
+          "frontierStatesBefore": 101706,
+          "frontierStatesAfter": 102857,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 127.23610000000917,
+            "support_evaluation": 401.78819999995176,
+            "state_generation": 5995.00069999999,
+            "solution_materialization": 583.0801000000356,
+            "frontier_reduction_sort": 4713.379399999962,
+            "exhaustion_scan": 12.615099999966333
+          }
+        },
+        {
+          "depth": 9,
+          "streams": 8,
+          "generatedStates": 5099145,
+          "frontierStatesBefore": 102857,
+          "frontierStatesAfter": 104008,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 130.42320000003383,
+            "support_evaluation": 385.0108000000182,
+            "state_generation": 5775.044299999994,
+            "solution_materialization": 579.8847000000242,
+            "frontier_reduction_sort": 5035.638099999982,
+            "exhaustion_scan": 13.375800000008894
+          }
+        },
+        {
+          "depth": 10,
+          "streams": 8,
+          "generatedStates": 5089568,
+          "frontierStatesBefore": 104008,
+          "frontierStatesAfter": 105159,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 132.2441000000108,
+            "support_evaluation": 390.74460000000545,
+            "state_generation": 5819.5500000000175,
+            "solution_materialization": 583.9721999999456,
+            "frontier_reduction_sort": 5569.2343999999575,
+            "exhaustion_scan": 11.8573999999644
+          }
+        },
+        {
+          "depth": 11,
+          "streams": 8,
+          "generatedStates": 5078879,
+          "frontierStatesBefore": 105159,
+          "frontierStatesAfter": 106310,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 130.04630000001634,
+            "support_evaluation": 406.03570000000764,
+            "state_generation": 5780.348200000037,
+            "solution_materialization": 592.0964000000095,
+            "frontier_reduction_sort": 5944.773799999995,
+            "exhaustion_scan": 12.578699999954551
+          }
+        },
+        {
+          "depth": 12,
+          "streams": 8,
+          "generatedStates": 5067094,
+          "frontierStatesBefore": 106310,
+          "frontierStatesAfter": 107461,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 125.46210000000428,
+            "support_evaluation": 402.3248999999778,
+            "state_generation": 5749.1329999999725,
+            "solution_materialization": 613.6306999999506,
+            "frontier_reduction_sort": 6199.991300000052,
+            "exhaustion_scan": 12.226800000033109
+          }
+        },
+        {
+          "depth": 13,
+          "streams": 8,
+          "generatedStates": 5054229,
+          "frontierStatesBefore": 107461,
+          "frontierStatesAfter": 108612,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 126.32900000005611,
+            "support_evaluation": 408.1194999999716,
+            "state_generation": 5864.628199999948,
+            "solution_materialization": 613.1321999999927,
+            "frontier_reduction_sort": 6643.649200000073,
+            "exhaustion_scan": 14.564900000026682
+          }
+        },
+        {
+          "depth": 14,
+          "streams": 8,
+          "generatedStates": 5040300,
+          "frontierStatesBefore": 108612,
+          "frontierStatesAfter": 109755,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 133.03139999994892,
+            "support_evaluation": 402.4064000000071,
+            "state_generation": 5701.208699999959,
+            "solution_materialization": 598.7564999999886,
+            "frontier_reduction_sort": 6951.199400000041,
+            "exhaustion_scan": 13.618700000050012
+          }
+        },
+        {
+          "depth": 15,
+          "streams": 8,
+          "generatedStates": 5025315,
+          "frontierStatesBefore": 109755,
+          "frontierStatesAfter": 110898,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 141.94350000005215,
+            "support_evaluation": 411.3383000000031,
+            "state_generation": 5931.59639999998,
+            "solution_materialization": 625.1374999999825,
+            "frontier_reduction_sort": 7399.296199999953,
+            "exhaustion_scan": 12.869099999894388
+          }
+        },
+        {
+          "depth": 16,
+          "streams": 8,
+          "generatedStates": 5009298,
+          "frontierStatesBefore": 110898,
+          "frontierStatesAfter": 112041,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 127.10220000008121,
+            "support_evaluation": 452.9576999999699,
+            "state_generation": 5899.069599999959,
+            "solution_materialization": 703.9905000000726,
+            "frontier_reduction_sort": 7543.430399999925,
+            "exhaustion_scan": 11.667200000025332
+          }
+        },
+        {
+          "depth": 17,
+          "streams": 8,
+          "generatedStates": 4992265,
+          "frontierStatesBefore": 112041,
+          "frontierStatesAfter": 113184,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 128.4665999999852,
+            "support_evaluation": 409.9014999999781,
+            "state_generation": 5701.090699999884,
+            "solution_materialization": 698.8198000000557,
+            "frontier_reduction_sort": 7754.633700000064,
+            "exhaustion_scan": 13.843500000075437
+          }
+        },
+        {
+          "depth": 18,
+          "streams": 8,
+          "generatedStates": 4974232,
+          "frontierStatesBefore": 113184,
+          "frontierStatesAfter": 114327,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 127.5093999999226,
+            "support_evaluation": 418.97610000002896,
+            "state_generation": 5626.561799999967,
+            "solution_materialization": 1011.1460000000661,
+            "frontier_reduction_sort": 8096.303799999994,
+            "exhaustion_scan": 13.726299999922048
+          }
+        },
+        {
+          "depth": 19,
+          "streams": 8,
+          "generatedStates": 4955215,
+          "frontierStatesBefore": 114327,
+          "frontierStatesAfter": 115470,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 122.1028000000515,
+            "support_evaluation": 431.03819999995176,
+            "state_generation": 5791.750400000077,
+            "solution_materialization": 1206.3263999999617,
+            "frontier_reduction_sort": 8550.198100000038,
+            "exhaustion_scan": 10.448500000115018
+          }
+        },
+        {
+          "depth": 20,
+          "streams": 8,
+          "generatedStates": 4935230,
+          "frontierStatesBefore": 115470,
+          "frontierStatesAfter": 116605,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 121.46630000008736,
+            "support_evaluation": 430.77680000005057,
+            "state_generation": 6254.041999999899,
+            "solution_materialization": 1123.765999999945,
+            "frontier_reduction_sort": 8869.513699999952,
+            "exhaustion_scan": 13.402200000011362
+          }
+        },
+        {
+          "depth": 21,
+          "streams": 8,
+          "generatedStates": 4914285,
+          "frontierStatesBefore": 116605,
+          "frontierStatesAfter": 117740,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 121.21790000010515,
+            "support_evaluation": 433.0745000001043,
+            "state_generation": 6259.789500000072,
+            "solution_materialization": 1076.0517000001273,
+            "frontier_reduction_sort": 9202.135600000038,
+            "exhaustion_scan": 15.045099999930244
+          }
+        },
+        {
+          "depth": 22,
+          "streams": 8,
+          "generatedStates": 4892404,
+          "frontierStatesBefore": 117740,
+          "frontierStatesAfter": 118875,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 123.41119999985676,
+            "support_evaluation": 442.7275999999256,
+            "state_generation": 6147.233000000066,
+            "solution_materialization": 1191.8703999999561,
+            "frontier_reduction_sort": 9381.390700000105,
+            "exhaustion_scan": 12.474700000020675
+          }
+        },
+        {
+          "depth": 23,
+          "streams": 8,
+          "generatedStates": 4869603,
+          "frontierStatesBefore": 118875,
+          "frontierStatesAfter": 120010,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 115.21899999992456,
+            "support_evaluation": 438.97400000010384,
+            "state_generation": 6206.848799999978,
+            "solution_materialization": 1055.3334999998915,
+            "frontier_reduction_sort": 9546.082699999912,
+            "exhaustion_scan": 12.3705000000773
+          }
+        },
+        {
+          "depth": 24,
+          "streams": 8,
+          "generatedStates": 4845898,
+          "frontierStatesBefore": 120010,
+          "frontierStatesAfter": 121145,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 121.79779999988386,
+            "support_evaluation": 440.9625000000815,
+            "state_generation": 6304.464999999967,
+            "solution_materialization": 1150.397200000065,
+            "frontier_reduction_sort": 9867.739200000127,
+            "exhaustion_scan": 10.76659999997355
+          }
+        },
+        {
+          "depth": 25,
+          "streams": 8,
+          "generatedStates": 4821305,
+          "frontierStatesBefore": 121145,
+          "frontierStatesAfter": 122272,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 116.19739999988815,
+            "support_evaluation": 444.3747999999905,
+            "state_generation": 6252.843400000071,
+            "solution_materialization": 1337.9923999998719,
+            "frontier_reduction_sort": 10034.69299999997,
+            "exhaustion_scan": 10.480299999937415
+          }
+        },
+        {
+          "depth": 26,
+          "streams": 8,
+          "generatedStates": 4795832,
+          "frontierStatesBefore": 122272,
+          "frontierStatesAfter": 123399,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 120.02690000011353,
+            "support_evaluation": 443.28810000012163,
+            "state_generation": 6117.381599999964,
+            "solution_materialization": 1087.0125999999582,
+            "frontier_reduction_sort": 10198.54529999994,
+            "exhaustion_scan": 12.440799999923911
+          }
+        },
+        {
+          "depth": 27,
+          "streams": 8,
+          "generatedStates": 4769503,
+          "frontierStatesBefore": 123399,
+          "frontierStatesAfter": 124518,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 122.16889999981504,
+            "support_evaluation": 452.75989999982994,
+            "state_generation": 6116.245200000063,
+            "solution_materialization": 1093.9072000000742,
+            "frontier_reduction_sort": 10188.905899999838,
+            "exhaustion_scan": 11.637199999997392
+          }
+        },
+        {
+          "depth": 28,
+          "streams": 8,
+          "generatedStates": 4742326,
+          "frontierStatesBefore": 124518,
+          "frontierStatesAfter": 125637,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 121.44890000007581,
+            "support_evaluation": 450.7080999999307,
+            "state_generation": 6077.263500000001,
+            "solution_materialization": 1127.3329999998678,
+            "frontier_reduction_sort": 10488.731099999975,
+            "exhaustion_scan": 14.60910000000149
+          }
+        },
+        {
+          "depth": 29,
+          "streams": 8,
+          "generatedStates": 4714325,
+          "frontierStatesBefore": 125637,
+          "frontierStatesAfter": 126756,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 120.62340000004042,
+            "support_evaluation": 472.2772999998415,
+            "state_generation": 6140.543400000082,
+            "solution_materialization": 1081.6279999999097,
+            "frontier_reduction_sort": 10550.664500000072,
+            "exhaustion_scan": 10.955400000093505
+          }
+        },
+        {
+          "depth": 30,
+          "streams": 8,
+          "generatedStates": 4685516,
+          "frontierStatesBefore": 126756,
+          "frontierStatesAfter": 127875,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 118.47580000024755,
+            "support_evaluation": 523.7529000000795,
+            "state_generation": 6192.764500000165,
+            "solution_materialization": 1196.6029999998864,
+            "frontier_reduction_sort": 10880.967200000072,
+            "exhaustion_scan": 11.995099999941885
+          }
+        },
+        {
+          "depth": 31,
+          "streams": 8,
+          "generatedStates": 4655915,
+          "frontierStatesBefore": 127875,
+          "frontierStatesAfter": 128995,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 165.5797999999486,
+            "support_evaluation": 469.55850000015926,
+            "state_generation": 6195.7723000003025,
+            "solution_materialization": 1157.777999999933,
+            "frontier_reduction_sort": 11007.136799999862,
+            "exhaustion_scan": 11.48569999972824
+          }
+        },
+        {
+          "depth": 32,
+          "streams": 8,
+          "generatedStates": 4625666,
+          "frontierStatesBefore": 128995,
+          "frontierStatesAfter": 130115,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 115.02809999976307,
+            "support_evaluation": 473.07689999975264,
+            "state_generation": 5739.786100000027,
+            "solution_materialization": 1161.2722999998368,
+            "frontier_reduction_sort": 11335.045200000051,
+            "exhaustion_scan": 12.257499999832362
+          }
+        },
+        {
+          "depth": 33,
+          "streams": 8,
+          "generatedStates": 4594656,
+          "frontierStatesBefore": 130115,
+          "frontierStatesAfter": 131235,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 111.3650000001071,
+            "support_evaluation": 484.8841000002576,
+            "state_generation": 6011.032799999812,
+            "solution_materialization": 1170.2496000003302,
+            "frontier_reduction_sort": 11452.704299999983,
+            "exhaustion_scan": 13.976800000178628
+          }
+        },
+        {
+          "depth": 34,
+          "streams": 8,
+          "generatedStates": 4562901,
+          "frontierStatesBefore": 131235,
+          "frontierStatesAfter": 132355,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 115.77600000007078,
+            "support_evaluation": 478.3732000000309,
+            "state_generation": 5940.363799999934,
+            "solution_materialization": 1394.641399999964,
+            "frontier_reduction_sort": 11544.39480000001,
+            "exhaustion_scan": 14.465300000156276
+          }
+        },
+        {
+          "depth": 35,
+          "streams": 8,
+          "generatedStates": 4530417,
+          "frontierStatesBefore": 132355,
+          "frontierStatesAfter": 133467,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 112.08220000006258,
+            "support_evaluation": 484.4998999998206,
+            "state_generation": 6045.410599999945,
+            "solution_materialization": 1395.0891999999294,
+            "frontier_reduction_sort": 11764.475899999961,
+            "exhaustion_scan": 11.859700000146404
+          }
+        },
+        {
+          "depth": 36,
+          "streams": 8,
+          "generatedStates": 4497212,
+          "frontierStatesBefore": 133467,
+          "frontierStatesAfter": 134579,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 117.31609999982174,
+            "support_evaluation": 495.10800000000745,
+            "state_generation": 5995.336999999825,
+            "solution_materialization": 1297.310499999905,
+            "frontier_reduction_sort": 11901.87379999971,
+            "exhaustion_scan": 14.477900000056252
+          }
+        },
+        {
+          "depth": 37,
+          "streams": 8,
+          "generatedStates": 4464286,
+          "frontierStatesBefore": 134579,
+          "frontierStatesAfter": 135691,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 114.13460000022314,
+            "support_evaluation": 499.0606999999145,
+            "state_generation": 5932.12659999996,
+            "solution_materialization": 1407.9930999999633,
+            "frontier_reduction_sort": 12047.865100000054,
+            "exhaustion_scan": 12.262699999962933
+          }
+        },
+        {
+          "depth": 38,
+          "streams": 8,
+          "generatedStates": 4430671,
+          "frontierStatesBefore": 135691,
+          "frontierStatesAfter": 136803,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 109.81579999998212,
+            "support_evaluation": 494.6645000000717,
+            "state_generation": 5616.213100000052,
+            "solution_materialization": 1126.1264999998966,
+            "frontier_reduction_sort": 12250.085800000117,
+            "exhaustion_scan": 13.819700000109151
+          }
+        },
+        {
+          "depth": 39,
+          "streams": 8,
+          "generatedStates": 4396383,
+          "frontierStatesBefore": 136803,
+          "frontierStatesAfter": 137915,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 106.68980000005104,
+            "support_evaluation": 507.7225999998627,
+            "state_generation": 5839.760099999956,
+            "solution_materialization": 1186.438300000038,
+            "frontier_reduction_sort": 12281.390599999926,
+            "exhaustion_scan": 13.463300000061281
+          }
+        },
+        {
+          "depth": 40,
+          "streams": 8,
+          "generatedStates": 4361438,
+          "frontierStatesBefore": 137915,
+          "frontierStatesAfter": 139027,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 109.28330000001006,
+            "support_evaluation": 511.1565000003902,
+            "state_generation": 5907.938199999975,
+            "solution_materialization": 1255.917199999909,
+            "frontier_reduction_sort": 12399.371800000197,
+            "exhaustion_scan": 12.33269999967888
+          }
+        },
+        {
+          "depth": 41,
+          "streams": 8,
+          "generatedStates": 4325852,
+          "frontierStatesBefore": 139027,
+          "frontierStatesAfter": 140147,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 105.71059999987483,
+            "support_evaluation": 513.0749000001233,
+            "state_generation": 5768.208600000129,
+            "solution_materialization": 1164.8709000000963,
+            "frontier_reduction_sort": 12366.268699999899,
+            "exhaustion_scan": 10.671099999803118
+          }
+        },
+        {
+          "depth": 42,
+          "streams": 8,
+          "generatedStates": 4290585,
+          "frontierStatesBefore": 140147,
+          "frontierStatesAfter": 141267,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 110.52859999984503,
+            "support_evaluation": 508.468499999959,
+            "state_generation": 5383.763200000161,
+            "solution_materialization": 1206.4851000001654,
+            "frontier_reduction_sort": 12574.196399999782,
+            "exhaustion_scan": 10.416999999899417
+          }
+        },
+        {
+          "depth": 43,
+          "streams": 8,
+          "generatedStates": 4254701,
+          "frontierStatesBefore": 141267,
+          "frontierStatesAfter": 142387,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 104.89009999996051,
+            "support_evaluation": 523.9089999999851,
+            "state_generation": 5780.588499999954,
+            "solution_materialization": 1426.769500000053,
+            "frontier_reduction_sort": 12634.289499999955,
+            "exhaustion_scan": 12.84020000032615
+          }
+        },
+        {
+          "depth": 44,
+          "streams": 8,
+          "generatedStates": 4218216,
+          "frontierStatesBefore": 142387,
+          "frontierStatesAfter": 143507,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 111.03030000033323,
+            "support_evaluation": 530.3300000000745,
+            "state_generation": 5993.5625999999465,
+            "solution_materialization": 1790.722999999649,
+            "frontier_reduction_sort": 13011.026000000304,
+            "exhaustion_scan": 13.197000000043772
+          }
+        },
+        {
+          "depth": 45,
+          "streams": 8,
+          "generatedStates": 4181146,
+          "frontierStatesBefore": 143507,
+          "frontierStatesAfter": 144627,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 105.29360000009183,
+            "support_evaluation": 526.2818999998271,
+            "state_generation": 5674.481499999878,
+            "solution_materialization": 1884.4657999996562,
+            "frontier_reduction_sort": 13127.989599999855,
+            "exhaustion_scan": 16.26109999953769
+          }
+        },
+        {
+          "depth": 46,
+          "streams": 8,
+          "generatedStates": 4143507,
+          "frontierStatesBefore": 144627,
+          "frontierStatesAfter": 145747,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 109.52649999980349,
+            "support_evaluation": 534.3308000003453,
+            "state_generation": 5601.924399999785,
+            "solution_materialization": 2010.1659000002546,
+            "frontier_reduction_sort": 12826.609899999807,
+            "exhaustion_scan": 13.746800000080839
+          }
+        },
+        {
+          "depth": 47,
+          "streams": 8,
+          "generatedStates": 4105315,
+          "frontierStatesBefore": 145747,
+          "frontierStatesAfter": 146867,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 109.64079999993555,
+            "support_evaluation": 542.277499999851,
+            "state_generation": 5760.34430000023,
+            "solution_materialization": 1977.929199999664,
+            "frontier_reduction_sort": 12830.323200000217,
+            "exhaustion_scan": 11.61780000035651
+          }
+        },
+        {
+          "depth": 48,
+          "streams": 8,
+          "generatedStates": 4066586,
+          "frontierStatesBefore": 146867,
+          "frontierStatesAfter": 147979,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 100.61589999985881,
+            "support_evaluation": 548.5422000000253,
+            "state_generation": 5818.727799999528,
+            "solution_materialization": 2270.7587999997195,
+            "frontier_reduction_sort": 12907.450300000142,
+            "exhaustion_scan": 12.70919999992475
+          }
+        },
+        {
+          "depth": 49,
+          "streams": 8,
+          "generatedStates": 4027328,
+          "frontierStatesBefore": 147979,
+          "frontierStatesAfter": 149091,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 110.71159999957308,
+            "support_evaluation": 543.2833000000101,
+            "state_generation": 5923.99729999993,
+            "solution_materialization": 1841.3536999996286,
+            "frontier_reduction_sort": 13062.04700000002,
+            "exhaustion_scan": 11.847300000023097
+          }
+        },
+        {
+          "depth": 50,
+          "streams": 8,
+          "generatedStates": 3987565,
+          "frontierStatesBefore": 149091,
+          "frontierStatesAfter": 150203,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 99.10340000013821,
+            "support_evaluation": 549.7436999995261,
+            "state_generation": 5440.907600000035,
+            "solution_materialization": 1914.003100000089,
+            "frontier_reduction_sort": 12854.617499999935,
+            "exhaustion_scan": 15.483399999793619
+          }
+        },
+        {
+          "depth": 51,
+          "streams": 8,
+          "generatedStates": 3947313,
+          "frontierStatesBefore": 150203,
+          "frontierStatesAfter": 151315,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 104.4808000002522,
+            "support_evaluation": 553.0285000002477,
+            "state_generation": 5517.414900000207,
+            "solution_materialization": 1924.6982000002172,
+            "frontier_reduction_sort": 12963.423799999757,
+            "exhaustion_scan": 14.003199999919161
+          }
+        },
+        {
+          "depth": 52,
+          "streams": 8,
+          "generatedStates": 3906588,
+          "frontierStatesBefore": 151315,
+          "frontierStatesAfter": 152419,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 109.07790000038221,
+            "support_evaluation": 554.4831999996677,
+            "state_generation": 5416.443300000159,
+            "solution_materialization": 1933.7616999996826,
+            "frontier_reduction_sort": 12927.487700000405,
+            "exhaustion_scan": 13.333300000056624
+          }
+        },
+        {
+          "depth": 53,
+          "streams": 8,
+          "generatedStates": 3865398,
+          "frontierStatesBefore": 152419,
+          "frontierStatesAfter": 153523,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 101.86459999973886,
+            "support_evaluation": 589.0438999999315,
+            "state_generation": 5656.182899999898,
+            "solution_materialization": 1838.6479000002146,
+            "frontier_reduction_sort": 13037.438099999912,
+            "exhaustion_scan": 14.72469999967143
+          }
+        },
+        {
+          "depth": 54,
+          "streams": 8,
+          "generatedStates": 3823767,
+          "frontierStatesBefore": 153523,
+          "frontierStatesAfter": 154619,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 101.99790000030771,
+            "support_evaluation": 560.384600000456,
+            "state_generation": 5579.723700000439,
+            "solution_materialization": 1813.9528999999166,
+            "frontier_reduction_sort": 12819.106200000271,
+            "exhaustion_scan": 12.851699999766424
+          }
+        },
+        {
+          "depth": 55,
+          "streams": 8,
+          "generatedStates": 3781703,
+          "frontierStatesBefore": 154619,
+          "frontierStatesAfter": 155715,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 107.45959999971092,
+            "support_evaluation": 571.3928999998607,
+            "state_generation": 5554.223200000357,
+            "solution_materialization": 2021.1359999999404,
+            "frontier_reduction_sort": 12895.46219999995,
+            "exhaustion_scan": 14.972400000318885
+          }
+        },
+        {
+          "depth": 56,
+          "streams": 8,
+          "generatedStates": 3739230,
+          "frontierStatesBefore": 155715,
+          "frontierStatesAfter": 156811,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 109.212199999718,
+            "support_evaluation": 571.6217999996152,
+            "state_generation": 5765.946800000267,
+            "solution_materialization": 1921.185799999861,
+            "frontier_reduction_sort": 12966.799699999858,
+            "exhaustion_scan": 13.157799999928102
+          }
+        },
+        {
+          "depth": 57,
+          "streams": 8,
+          "generatedStates": 3696364,
+          "frontierStatesBefore": 156811,
+          "frontierStatesAfter": 157907,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 101.22080000001006,
+            "support_evaluation": 573.5386000000872,
+            "state_generation": 4937.581000000006,
+            "solution_materialization": 2128.5826999999117,
+            "frontier_reduction_sort": 12731.620099999709,
+            "exhaustion_scan": 10.551099999807775
+          }
+        },
+        {
+          "depth": 58,
+          "streams": 8,
+          "generatedStates": 3653121,
+          "frontierStatesBefore": 157907,
+          "frontierStatesAfter": 159003,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 99.53050000034273,
+            "support_evaluation": 581.2618000002112,
+            "state_generation": 5298.681399999885,
+            "solution_materialization": 1775.0391000001691,
+            "frontier_reduction_sort": 12795.781399999512,
+            "exhaustion_scan": 12.544199999654666
+          }
+        },
+        {
+          "depth": 59,
+          "streams": 8,
+          "generatedStates": 3609517,
+          "frontierStatesBefore": 159003,
+          "frontierStatesAfter": 160099,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 97.51419999985956,
+            "support_evaluation": 589.8674000003375,
+            "state_generation": 5129.175199999474,
+            "solution_materialization": 2144.143899999326,
+            "frontier_reduction_sort": 12924.70380000025,
+            "exhaustion_scan": 15.847700000042096
+          }
+        },
+        {
+          "depth": 60,
+          "streams": 8,
+          "generatedStates": 3565568,
+          "frontierStatesBefore": 160099,
+          "frontierStatesAfter": 161195,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 96.65050000022165,
+            "support_evaluation": 728.402499999851,
+            "state_generation": 5290.812399999704,
+            "solution_materialization": 1863.5086999996565,
+            "frontier_reduction_sort": 13158.9262999997,
+            "exhaustion_scan": 13.46350000007078
+          }
+        },
+        {
+          "depth": 61,
+          "streams": 8,
+          "generatedStates": 3521290,
+          "frontierStatesBefore": 161195,
+          "frontierStatesAfter": 162290,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 102.55050000036135,
+            "support_evaluation": 608.6221999996342,
+            "state_generation": 5358.111700000009,
+            "solution_materialization": 1900.3437999996822,
+            "frontier_reduction_sort": 13147.945400000084,
+            "exhaustion_scan": 15.47039999999106
+          }
+        },
+        {
+          "depth": 62,
+          "streams": 8,
+          "generatedStates": 3476698,
+          "frontierStatesBefore": 162290,
+          "frontierStatesAfter": 163385,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 95.9043999996502,
+            "support_evaluation": 608.9659999997821,
+            "state_generation": 4997.1101999999955,
+            "solution_materialization": 1803.9462999999523,
+            "frontier_reduction_sort": 13020.925500000129,
+            "exhaustion_scan": 15.545099999988452
+          }
+        },
+        {
+          "depth": 63,
+          "streams": 8,
+          "generatedStates": 3431809,
+          "frontierStatesBefore": 163385,
+          "frontierStatesAfter": 164480,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 94.83999999985099,
+            "support_evaluation": 624.6011999999173,
+            "state_generation": 5138.215699999826,
+            "solution_materialization": 2067.8984000002965,
+            "frontier_reduction_sort": 13405.628500000108,
+            "exhaustion_scan": 17.26480000000447
+          }
+        },
+        {
+          "depth": 64,
+          "streams": 8,
+          "generatedStates": 3386639,
+          "frontierStatesBefore": 164480,
+          "frontierStatesAfter": 165575,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 95.54450000007637,
+            "support_evaluation": 623.5898000001907,
+            "state_generation": 4957.685200000182,
+            "solution_materialization": 2027.0108000000473,
+            "frontier_reduction_sort": 13030.731499999994,
+            "exhaustion_scan": 14.98769999993965
+          }
+        },
+        {
+          "depth": 65,
+          "streams": 8,
+          "generatedStates": 3341204,
+          "frontierStatesBefore": 165575,
+          "frontierStatesAfter": 166670,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 89.99980000010692,
+            "support_evaluation": 767.8146000006236,
+            "state_generation": 5233.0163000000175,
+            "solution_materialization": 1975.6326999997254,
+            "frontier_reduction_sort": 13160.736100000096,
+            "exhaustion_scan": 14.375300000421703
+          }
+        },
+        {
+          "depth": 66,
+          "streams": 8,
+          "generatedStates": 3295520,
+          "frontierStatesBefore": 166670,
+          "frontierStatesAfter": 167757,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 93.43019999959506,
+            "support_evaluation": 636.3571000001393,
+            "state_generation": 5500.780099999858,
+            "solution_materialization": 1962.3887999998406,
+            "frontier_reduction_sort": 12757.126700000139,
+            "exhaustion_scan": 15.851400000276044
+          }
+        },
+        {
+          "depth": 67,
+          "streams": 8,
+          "generatedStates": 3249595,
+          "frontierStatesBefore": 167757,
+          "frontierStatesAfter": 168844,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 94.76129999943078,
+            "support_evaluation": 622.8375999999698,
+            "state_generation": 5249.438899999717,
+            "solution_materialization": 2182.614299999783,
+            "frontier_reduction_sort": 12310.174399999902,
+            "exhaustion_scan": 15.413599999854341
+          }
+        },
+        {
+          "depth": 68,
+          "streams": 8,
+          "generatedStates": 3203453,
+          "frontierStatesBefore": 168844,
+          "frontierStatesAfter": 169923,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 100.79779999959283,
+            "support_evaluation": 642.683099999791,
+            "state_generation": 5046.956100000069,
+            "solution_materialization": 2179.3497999997344,
+            "frontier_reduction_sort": 12487.067700000247,
+            "exhaustion_scan": 17.112200000090525
+          }
+        },
+        {
+          "depth": 69,
+          "streams": 8,
+          "generatedStates": 3157102,
+          "frontierStatesBefore": 169923,
+          "frontierStatesAfter": 171002,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 87.12350000021979,
+            "support_evaluation": 636.7400999998208,
+            "state_generation": 4863.618300000206,
+            "solution_materialization": 2077.9558000003453,
+            "frontier_reduction_sort": 12108.280099999858,
+            "exhaustion_scan": 17.793199999723583
+          }
+        },
+        {
+          "depth": 70,
+          "streams": 7,
+          "generatedStates": 2721235,
+          "frontierStatesBefore": 149606,
+          "frontierStatesAfter": 150550,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 80.00680000009015,
+            "support_evaluation": 561.3294999999925,
+            "state_generation": 4297.623200000264,
+            "solution_materialization": 1715.2085000004154,
+            "frontier_reduction_sort": 10551.38199999975,
+            "exhaustion_scan": 11.925999999744818
+          }
+        },
+        {
+          "depth": 71,
+          "streams": 6,
+          "generatedStates": 2296897,
+          "frontierStatesBefore": 129019,
+          "frontierStatesAfter": 129822,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 72.4108999997843,
+            "support_evaluation": 485.4719999998342,
+            "state_generation": 3493.208799999673,
+            "solution_materialization": 1603.8515000001062,
+            "frontier_reduction_sort": 8990.438400000101,
+            "exhaustion_scan": 10.75179999996908
+          }
+        },
+        {
+          "depth": 72,
+          "streams": 6,
+          "generatedStates": 2261769,
+          "frontierStatesBefore": 129822,
+          "frontierStatesAfter": 130619,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 72.22299999999814,
+            "support_evaluation": 502.0105999999214,
+            "state_generation": 3457.6591000005137,
+            "solution_materialization": 1469.4527999998536,
+            "frontier_reduction_sort": 9259.025400000159,
+            "exhaustion_scan": 12.283999999752268
+          }
+        },
+        {
+          "depth": 73,
+          "streams": 5,
+          "generatedStates": 1854818,
+          "frontierStatesBefore": 108833,
+          "frontierStatesAfter": 109498,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 58.464399999706075,
+            "support_evaluation": 405.91680000000633,
+            "state_generation": 2975.219699999783,
+            "solution_materialization": 1150.4581000003964,
+            "frontier_reduction_sort": 7397.28069999977,
+            "exhaustion_scan": 9.300300000002608
+          }
+        },
+        {
+          "depth": 74,
+          "streams": 4,
+          "generatedStates": 1459569,
+          "frontierStatesBefore": 87567,
+          "frontierStatesAfter": 88095,
+          "legalPositionsMax": 158,
+          "phaseMs": {
+            "window_collection": 47.70590000017546,
+            "support_evaluation": 324.15259999991395,
+            "state_generation": 2353.258700000122,
+            "solution_materialization": 964.2438000002876,
+            "frontier_reduction_sort": 5804.866199999815,
+            "exhaustion_scan": 9.282399999909103
+          }
+        }
+      ],
+      "maxGeneratedDepth": {
+        "depth": 3,
+        "generatedStates": 5132327
+      },
+      "maxFrontierDepth": {
+        "depth": 69,
+        "frontierStatesAfter": 171002
+      },
+      "maxGeneratedRecord": {
+        "streamIndex": 0,
+        "depth": 3,
+        "generatedStates": 642573
+      },
+      "maxFrontierRecord": {
+        "streamIndex": 0,
+        "depth": 74,
+        "frontierStatesAfter": 22063
+      },
+      "totals": {
+        "generatedStates": 304272027,
+        "frontierStatesAfter": 9713452
+      },
+      "correlations": {
+        "records": 580,
+        "generatedStates_vs_state_generation": 0.8297,
+        "generatedStates_vs_solution_materialization": -0.2689,
+        "depth_vs_solution_materialization": 0.8542,
+        "generatedTimesDepth_vs_solution_materialization": 0.8615,
+        "generatedStates_vs_frontier_reduction_sort": -0.0998,
+        "frontierStatesAfter_vs_frontier_reduction_sort": 0.8697,
+        "frontierStatesAfter_vs_exhaustion_scan": 0.2423,
+        "frontierStatesBefore_vs_window_collection": 0.1298,
+        "frontierStatesBefore_vs_support_evaluation": 0.8666
+      },
+      "ratios": {
+        "unit": "ns per unit, per completed depth record",
+        "state_generation_per_generatedState": {
+          "count": 580,
+          "min": 819.2,
+          "median": 1318.59,
+          "max": 19733.23
+        },
+        "solution_materialization_per_generatedState": {
+          "count": 580,
+          "min": 29.6,
+          "median": 273.93,
+          "max": 1172.21
+        },
+        "solution_materialization_per_generatedState_depth": {
+          "count": 580,
+          "min": 5.6,
+          "median": 9.18,
+          "max": 829.75
+        },
+        "frontier_reduction_sort_per_generatedState": {
+          "count": 580,
+          "min": 277.53,
+          "median": 2711.11,
+          "max": 4978.78
+        },
+        "exhaustion_scan_per_frontierStateAfter": {
+          "count": 580,
+          "min": 56.85,
+          "median": 88.7,
+          "max": 4574.05
+        },
+        "window_collection_per_frontierStateBefore": {
+          "count": 580,
+          "min": 435.31,
+          "median": 833.26,
+          "max": 1095600
+        },
+        "support_evaluation_per_frontierStateBefore": {
+          "count": 580,
+          "min": 3381.14,
+          "median": 3711.62,
+          "max": 123600
+        },
+        "state_generation_per_position_x_frontierBefore": {
+          "count": 580,
+          "min": 144.78,
+          "median": 279.34,
+          "max": 39466.46
+        }
+      },
+      "memory": {
+        "source": "last_heartbeat",
+        "sampledMaxHeapUsedBytes": 4214786296,
+        "sampledMaxRssBytes": 4544765952
+      },
+      "heartbeats": 281,
+      "maxHeartbeatGapMs": 7339.121099999989,
+      "predictionCounts": {
+        "predictNormalArtian": 12,
+        "predictSkills": 5,
+        "resetBonuses": 251,
+        "keepBonuses": 28477
+      },
+      "laterTargets": []
+    },
+    {
+      "orientationId": "c13-p1",
+      "kind": "same_skill_counter",
+      "childOutcome": "timeout",
+      "resultClass": "timeout_in_search",
+      "primarySearch": {
+        "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "completed": false,
+        "observationPoint": "last_heartbeat",
+        "observedAtMs": 1796503.2782,
+        "searchStartedMs": 1643.1738999999998,
+        "searchWallMs": 1794860.1043,
+        "searchWallAtKillEstimateMs": 1797172.4678999998,
+        "unobservedTailMs": 2312.363599999808,
+        "phaseTotalsMs": {
+          "window_collection": 9207.097699998432,
+          "support_evaluation": 22138.856600000152,
+          "state_generation": 444146.6913999994,
+          "solution_materialization": 100634.10549999976,
+          "frontier_reduction_sort": 626690.9544999991,
+          "exhaustion_scan": 827.0276000009021
+        },
+        "phaseShare": {
+          "window_collection": 0.00764934822151018,
+          "support_evaluation": 0.018393181964334853,
+          "state_generation": 0.3690014828397873,
+          "solution_materialization": 0.08360781442884245,
+          "frontier_reduction_sort": 0.5206610698007366,
+          "exhaustion_scan": 0.0006871027447887091
+        },
+        "measuredGogmaMs": 1203644.7332999976,
+        "coverage": 0.6706064335690508,
+        "unattributedSearchMs": 591215.3710000024,
+        "inclusiveDepthReadMs": 1203670.8796000013,
+        "inDepthOutsideSectionsMs": 26.14630000363104,
+        "dominantPhase": "frontier_reduction_sort",
+        "completedDepths": 255,
+        "maxDepthReached": 54,
+        "streams": 5,
+        "activeAtObservation": {
+          "streamIndex": 0,
+          "depth": 54,
+          "phase": "state_generation",
+          "elapsedMs": 0.2023999998345971
+        }
+      },
+      "activeAtEnd": {
+        "where": "section",
+        "streamIndex": 0,
+        "depth": 54,
+        "phase": "solution_materialization",
+        "startedMs": 1798203.6743,
+        "elapsedAtKillEstimateMs": 611.9674999997951
+      },
+      "counters": {
+        "startedTargets": 1,
+        "completedTargets": 0,
+        "deliveredCandidates": 0,
+        "trialsStarted": 0,
+        "trialsCompleted": 0,
+        "fullPlannerRunsStarted": 0,
+        "fullPlannerRunsCompleted": 0
+      },
+      "phaseDistributions": {
+        "window_collection": {
+          "count": 255,
+          "totalMs": 9177.962799998488,
+          "minMs": 0.18519999999989523,
+          "medianMs": 37.281999999890104,
+          "maxMs": 85.54830000014044,
+          "maxAt": {
+            "streamIndex": 3,
+            "depth": 42
+          }
+        },
+        "support_evaluation": {
+          "count": 255,
+          "totalMs": 22051.13430000013,
+          "minMs": 0.04299999999784632,
+          "medianMs": 89.7445000000298,
+          "maxMs": 135.17369999998482,
+          "maxAt": {
+            "streamIndex": 1,
+            "depth": 14
+          }
+        },
+        "state_generation": {
+          "count": 255,
+          "totalMs": 444146.4889999996,
+          "minMs": 3.718499999999949,
+          "medianMs": 1807.2831999999762,
+          "maxMs": 2089.030299999984,
+          "maxAt": {
+            "streamIndex": 0,
+            "depth": 35
+          }
+        },
+        "solution_materialization": {
+          "count": 255,
+          "totalMs": 100634.10549999976,
+          "minMs": 0.06420000000071013,
+          "medianMs": 374.4099999999162,
+          "maxMs": 934.4096999999601,
+          "maxAt": {
+            "streamIndex": 4,
+            "depth": 49
+          }
+        },
+        "frontier_reduction_sort": {
+          "count": 255,
+          "totalMs": 626690.9544999991,
+          "minMs": 0.14570000000094296,
+          "medianMs": 2646.3651000000536,
+          "maxMs": 3796.0108999998774,
+          "maxAt": {
+            "streamIndex": 0,
+            "depth": 53
+          }
+        },
+        "exhaustion_scan": {
+          "count": 255,
+          "totalMs": 827.0276000009021,
+          "minMs": 1.4671000000016647,
+          "medianMs": 2.9983000000938773,
+          "maxMs": 7.113399999914691,
+          "maxAt": {
+            "streamIndex": 3,
+            "depth": 40
+          }
+        }
+      },
+      "byDepth": [
+        {
+          "depth": 1,
+          "streams": 5,
+          "generatedStates": 2120,
+          "frontierStatesBefore": 5,
+          "frontierStatesAfter": 2120,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 2.7140000000008513,
+            "support_evaluation": 0.37480000000232394,
+            "state_generation": 26.664800000003652,
+            "solution_materialization": 0.5999000000015258,
+            "frontier_reduction_sort": 0.927900000003774,
+            "exhaustion_scan": 8.920400000004065
+          }
+        },
+        {
+          "depth": 2,
+          "streams": 5,
+          "generatedStates": 224730,
+          "frontierStatesBefore": 2120,
+          "frontierStatesAfter": 104565,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 6.070600000006834,
+            "support_evaluation": 7.858200000002853,
+            "state_generation": 592.0978999999938,
+            "solution_materialization": 12.509900000000016,
+            "frontier_reduction_sort": 754.8288999999968,
+            "exhaustion_scan": 14.764299999999821
+          }
+        },
+        {
+          "depth": 3,
+          "streams": 5,
+          "generatedStates": 7625820,
+          "frontierStatesBefore": 104565,
+          "frontierStatesAfter": 105480,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 190.32320000000163,
+            "support_evaluation": 396.28389999999627,
+            "state_generation": 8617.146699999987,
+            "solution_materialization": 683.8138000000054,
+            "frontier_reduction_sort": 3145.675099999986,
+            "exhaustion_scan": 15.017800000005082
+          }
+        },
+        {
+          "depth": 4,
+          "streams": 5,
+          "generatedStates": 7623600,
+          "frontierStatesBefore": 105480,
+          "frontierStatesAfter": 106395,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 192.26690000001508,
+            "support_evaluation": 395.5176999999894,
+            "state_generation": 8739.87629999999,
+            "solution_materialization": 702.1504999999943,
+            "frontier_reduction_sort": 3680.5289000000084,
+            "exhaustion_scan": 12.69099999998798
+          }
+        },
+        {
+          "depth": 5,
+          "streams": 5,
+          "generatedStates": 7620355,
+          "frontierStatesBefore": 106395,
+          "frontierStatesAfter": 107305,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 191.69559999999547,
+            "support_evaluation": 470.45569999998406,
+            "state_generation": 9238.181300000018,
+            "solution_materialization": 830.6163000000124,
+            "frontier_reduction_sort": 4646.791599999993,
+            "exhaustion_scan": 14.091299999978219
+          }
+        },
+        {
+          "depth": 6,
+          "streams": 5,
+          "generatedStates": 7616090,
+          "frontierStatesBefore": 107305,
+          "frontierStatesAfter": 108215,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 195.1432999999961,
+            "support_evaluation": 399.88979999998264,
+            "state_generation": 9102.265100000019,
+            "solution_materialization": 1090.03330000001,
+            "frontier_reduction_sort": 4828.132299999954,
+            "exhaustion_scan": 15.980700000021898
+          }
+        },
+        {
+          "depth": 7,
+          "streams": 5,
+          "generatedStates": 7610820,
+          "frontierStatesBefore": 108215,
+          "frontierStatesAfter": 109125,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 188.80319999998756,
+            "support_evaluation": 402.0436000000045,
+            "state_generation": 9174.693800000001,
+            "solution_materialization": 837.4868000000351,
+            "frontier_reduction_sort": 5428.282799999994,
+            "exhaustion_scan": 14.705599999993865
+          }
+        },
+        {
+          "depth": 8,
+          "streams": 5,
+          "generatedStates": 7604555,
+          "frontierStatesBefore": 109125,
+          "frontierStatesAfter": 110035,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 195.4889999999723,
+            "support_evaluation": 400.07150000002,
+            "state_generation": 9054.324300000007,
+            "solution_materialization": 978.1463999999978,
+            "frontier_reduction_sort": 6121.46199999997,
+            "exhaustion_scan": 14.8527000000322
+          }
+        },
+        {
+          "depth": 9,
+          "streams": 5,
+          "generatedStates": 7597305,
+          "frontierStatesBefore": 110035,
+          "frontierStatesAfter": 110945,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 205.97179999997024,
+            "support_evaluation": 433.8015000000014,
+            "state_generation": 9424.881899999993,
+            "solution_materialization": 948.624300000025,
+            "frontier_reduction_sort": 6355.1946000000025,
+            "exhaustion_scan": 16.956199999985984
+          }
+        },
+        {
+          "depth": 10,
+          "streams": 5,
+          "generatedStates": 7589080,
+          "frontierStatesBefore": 110945,
+          "frontierStatesAfter": 111850,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 189.94630000001052,
+            "support_evaluation": 417.48280000002705,
+            "state_generation": 9121.695999999996,
+            "solution_materialization": 1223.3549000000057,
+            "frontier_reduction_sort": 6923.412000000011,
+            "exhaustion_scan": 18.291699999943376
+          }
+        },
+        {
+          "depth": 11,
+          "streams": 5,
+          "generatedStates": 7579885,
+          "frontierStatesBefore": 111850,
+          "frontierStatesAfter": 112755,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 190.04329999999027,
+            "support_evaluation": 421.3673000000417,
+            "state_generation": 9052.921799999895,
+            "solution_materialization": 924.0439000000188,
+            "frontier_reduction_sort": 7239.556500000006,
+            "exhaustion_scan": 13.829900000040652
+          }
+        },
+        {
+          "depth": 12,
+          "streams": 5,
+          "generatedStates": 7569735,
+          "frontierStatesBefore": 112755,
+          "frontierStatesAfter": 113660,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 185.66830000001937,
+            "support_evaluation": 414.3479000000225,
+            "state_generation": 8943.28959999999,
+            "solution_materialization": 1000.3672999999835,
+            "frontier_reduction_sort": 7745.649899999989,
+            "exhaustion_scan": 16.40869999997085
+          }
+        },
+        {
+          "depth": 13,
+          "streams": 5,
+          "generatedStates": 7558640,
+          "frontierStatesBefore": 113660,
+          "frontierStatesAfter": 114565,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 188.02550000001793,
+            "support_evaluation": 423.0173000000068,
+            "state_generation": 9077.949499999959,
+            "solution_materialization": 1051.3632000000798,
+            "frontier_reduction_sort": 8084.783799999976,
+            "exhaustion_scan": 14.423000000067987
+          }
+        },
+        {
+          "depth": 14,
+          "streams": 5,
+          "generatedStates": 7546610,
+          "frontierStatesBefore": 114565,
+          "frontierStatesAfter": 115470,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 189.05770000000484,
+            "support_evaluation": 474.7130999999936,
+            "state_generation": 9207.231299999985,
+            "solution_materialization": 1140.0071999999345,
+            "frontier_reduction_sort": 8613.375100000005,
+            "exhaustion_scan": 16.96730000001844
+          }
+        },
+        {
+          "depth": 15,
+          "streams": 5,
+          "generatedStates": 7533655,
+          "frontierStatesBefore": 115470,
+          "frontierStatesAfter": 116375,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 187.5230000000447,
+            "support_evaluation": 426.929199999955,
+            "state_generation": 9112.867999999959,
+            "solution_materialization": 1023.3814999999595,
+            "frontier_reduction_sort": 9240.530000000028,
+            "exhaustion_scan": 17.42009999998845
+          }
+        },
+        {
+          "depth": 16,
+          "streams": 5,
+          "generatedStates": 7519785,
+          "frontierStatesBefore": 116375,
+          "frontierStatesAfter": 117280,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 191.29790000000503,
+            "support_evaluation": 424.53900000004796,
+            "state_generation": 9086.26159999991,
+            "solution_materialization": 941.5912000000244,
+            "frontier_reduction_sort": 9503.166100000031,
+            "exhaustion_scan": 13.379100000020117
+          }
+        },
+        {
+          "depth": 17,
+          "streams": 5,
+          "generatedStates": 7505010,
+          "frontierStatesBefore": 117280,
+          "frontierStatesAfter": 118185,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 195.38280000002123,
+            "support_evaluation": 435.11190000001807,
+            "state_generation": 9202.011599999969,
+            "solution_materialization": 985.7015999999712,
+            "frontier_reduction_sort": 9999.601200000092,
+            "exhaustion_scan": 16.01390000001993
+          }
+        },
+        {
+          "depth": 18,
+          "streams": 5,
+          "generatedStates": 7489340,
+          "frontierStatesBefore": 118185,
+          "frontierStatesAfter": 119090,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 193.97580000007292,
+            "support_evaluation": 462.31750000000466,
+            "state_generation": 9253.8848,
+            "solution_materialization": 2015.1701000001049,
+            "frontier_reduction_sort": 10485.898299999943,
+            "exhaustion_scan": 17.08759999985341
+          }
+        },
+        {
+          "depth": 19,
+          "streams": 5,
+          "generatedStates": 7472785,
+          "frontierStatesBefore": 119090,
+          "frontierStatesAfter": 119990,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 195.92880000011064,
+            "support_evaluation": 436.334899999958,
+            "state_generation": 9086.596800000116,
+            "solution_materialization": 2322.26310000004,
+            "frontier_reduction_sort": 10902.067900000024,
+            "exhaustion_scan": 19.55980000004638
+          }
+        },
+        {
+          "depth": 20,
+          "streams": 5,
+          "generatedStates": 7455350,
+          "frontierStatesBefore": 119990,
+          "frontierStatesAfter": 120885,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 191.02429999993183,
+            "support_evaluation": 449.86730000009993,
+            "state_generation": 9005.797100000025,
+            "solution_materialization": 2286.230399999884,
+            "frontier_reduction_sort": 11381.575200000138,
+            "exhaustion_scan": 16.084499999997206
+          }
+        },
+        {
+          "depth": 21,
+          "streams": 5,
+          "generatedStates": 7437045,
+          "frontierStatesBefore": 120885,
+          "frontierStatesAfter": 121780,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 193.76920000003884,
+            "support_evaluation": 461.8540999999386,
+            "state_generation": 9113.483800000045,
+            "solution_materialization": 2103.3410999999032,
+            "frontier_reduction_sort": 11725.363099999959,
+            "exhaustion_scan": 15.930499999958556
+          }
+        },
+        {
+          "depth": 22,
+          "streams": 5,
+          "generatedStates": 7417885,
+          "frontierStatesBefore": 121780,
+          "frontierStatesAfter": 122670,
+          "legalPositionsMax": 212,
+          "phaseMs": {
+            "window_collection": 197.6942000000272,
+            "support_evaluation": 473.39469999982975,
+            "state_generation": 9383.100199999986,
+            "solution_materialization": 2023.4334999999264,
+            "frontier_reduction_sort": 12161.342000000062,
+            "exhaustion_scan": 18.359400000073947
+          }
+        },
+        {
+          "depth": 23,
+          "streams": 5,
+          "generatedStates": 7397755,
+          "frontierStatesBefore": 122670,
+          "frontierStatesAfter": 123440,
+          "legalPositionsMax": 211,
+          "phaseMs": {
+            "window_collection": 193.1795999999158,
+            "support_evaluation": 459.41130000003614,
+            "state_generation": 9009.022299999953,
+            "solution_materialization": 2014.3025999998208,
+            "frontier_reduction_sort": 12652.158999999985,
+            "exhaustion_scan": 17.69930000009481
+          }
+        },
+        {
+          "depth": 24,
+          "streams": 5,
+          "generatedStates": 7375900,
+          "frontierStatesBefore": 123440,
+          "frontierStatesAfter": 123320,
+          "legalPositionsMax": 210,
+          "phaseMs": {
+            "window_collection": 191.87009999982547,
+            "support_evaluation": 466.5822000000626,
+            "state_generation": 9115.969300000113,
+            "solution_materialization": 2321.5331000000006,
+            "frontier_reduction_sort": 12786.644200000213,
+            "exhaustion_scan": 17.89289999997709
+          }
+        },
+        {
+          "depth": 25,
+          "streams": 5,
+          "generatedStates": 7353215,
+          "frontierStatesBefore": 123320,
+          "frontierStatesAfter": 123195,
+          "legalPositionsMax": 209,
+          "phaseMs": {
+            "window_collection": 197.31130000005942,
+            "support_evaluation": 468.71349999995437,
+            "state_generation": 9164.212899999926,
+            "solution_materialization": 2293.751199999824,
+            "frontier_reduction_sort": 12718.184199999901,
+            "exhaustion_scan": 19.386599999968894
+          }
+        },
+        {
+          "depth": 26,
+          "streams": 5,
+          "generatedStates": 7329710,
+          "frontierStatesBefore": 123195,
+          "frontierStatesAfter": 123070,
+          "legalPositionsMax": 208,
+          "phaseMs": {
+            "window_collection": 196.36349999997765,
+            "support_evaluation": 466.716999999946,
+            "state_generation": 9291.506900000153,
+            "solution_materialization": 1867.3386000001337,
+            "frontier_reduction_sort": 13225.9635999999,
+            "exhaustion_scan": 16.98449999978766
+          }
+        },
+        {
+          "depth": 27,
+          "streams": 5,
+          "generatedStates": 7306330,
+          "frontierStatesBefore": 123070,
+          "frontierStatesAfter": 122940,
+          "legalPositionsMax": 207,
+          "phaseMs": {
+            "window_collection": 199.253600000171,
+            "support_evaluation": 470.4412000000011,
+            "state_generation": 9054.68630000006,
+            "solution_materialization": 2231.177100000088,
+            "frontier_reduction_sort": 13392.138399999938,
+            "exhaustion_scan": 17.927800000063144
+          }
+        },
+        {
+          "depth": 28,
+          "streams": 5,
+          "generatedStates": 7282145,
+          "frontierStatesBefore": 122940,
+          "frontierStatesAfter": 122805,
+          "legalPositionsMax": 206,
+          "phaseMs": {
+            "window_collection": 196.2404000001261,
+            "support_evaluation": 457.10009999980684,
+            "state_generation": 8776.005000000005,
+            "solution_materialization": 2008.7330000001239,
+            "frontier_reduction_sort": 13708.671499999939,
+            "exhaustion_scan": 15.057999999960884
+          }
+        },
+        {
+          "depth": 29,
+          "streams": 5,
+          "generatedStates": 7257165,
+          "frontierStatesBefore": 122805,
+          "frontierStatesAfter": 122665,
+          "legalPositionsMax": 205,
+          "phaseMs": {
+            "window_collection": 185.93969999987166,
+            "support_evaluation": 466.81360000011045,
+            "state_generation": 8893.082299999776,
+            "solution_materialization": 1996.7572000002256,
+            "frontier_reduction_sort": 14552.211600000039,
+            "exhaustion_scan": 17.936400000122376
+          }
+        },
+        {
+          "depth": 30,
+          "streams": 5,
+          "generatedStates": 7231400,
+          "frontierStatesBefore": 122665,
+          "frontierStatesAfter": 122520,
+          "legalPositionsMax": 204,
+          "phaseMs": {
+            "window_collection": 191.78559999994468,
+            "support_evaluation": 483.2029000001494,
+            "state_generation": 9447.05670000019,
+            "solution_materialization": 2229.1151999998838,
+            "frontier_reduction_sort": 14822.63769999973,
+            "exhaustion_scan": 17.054000000003725
+          }
+        },
+        {
+          "depth": 31,
+          "streams": 5,
+          "generatedStates": 7204860,
+          "frontierStatesBefore": 122520,
+          "frontierStatesAfter": 122370,
+          "legalPositionsMax": 203,
+          "phaseMs": {
+            "window_collection": 186.42479999980424,
+            "support_evaluation": 489.2516999999061,
+            "state_generation": 9210.42740000016,
+            "solution_materialization": 2229.487399999867,
+            "frontier_reduction_sort": 15221.865600000136,
+            "exhaustion_scan": 15.273700000252575
+          }
+        },
+        {
+          "depth": 32,
+          "streams": 5,
+          "generatedStates": 7177555,
+          "frontierStatesBefore": 122370,
+          "frontierStatesAfter": 122215,
+          "legalPositionsMax": 202,
+          "phaseMs": {
+            "window_collection": 187.0564000000013,
+            "support_evaluation": 481.04240000003483,
+            "state_generation": 8983.561199999764,
+            "solution_materialization": 2735.5546999999788,
+            "frontier_reduction_sort": 15425.777500000084,
+            "exhaustion_scan": 18.722799999755807
+          }
+        },
+        {
+          "depth": 33,
+          "streams": 5,
+          "generatedStates": 7149495,
+          "frontierStatesBefore": 122215,
+          "frontierStatesAfter": 122055,
+          "legalPositionsMax": 201,
+          "phaseMs": {
+            "window_collection": 186.4299999998184,
+            "support_evaluation": 472.44410000008065,
+            "state_generation": 9082.962999999872,
+            "solution_materialization": 2083.7769000001717,
+            "frontier_reduction_sort": 15718.58189999999,
+            "exhaustion_scan": 16.956000000005588
+          }
+        },
+        {
+          "depth": 34,
+          "streams": 5,
+          "generatedStates": 7120690,
+          "frontierStatesBefore": 122055,
+          "frontierStatesAfter": 121890,
+          "legalPositionsMax": 200,
+          "phaseMs": {
+            "window_collection": 196.01120000018273,
+            "support_evaluation": 488.5222000000067,
+            "state_generation": 9378.850099999923,
+            "solution_materialization": 2462.2108999999473,
+            "frontier_reduction_sort": 15965.541099999915,
+            "exhaustion_scan": 16.892599999788217
+          }
+        },
+        {
+          "depth": 35,
+          "streams": 5,
+          "generatedStates": 7091150,
+          "frontierStatesBefore": 121890,
+          "frontierStatesAfter": 121720,
+          "legalPositionsMax": 199,
+          "phaseMs": {
+            "window_collection": 188.50809999986086,
+            "support_evaluation": 491.81039999995846,
+            "state_generation": 9463.675499999896,
+            "solution_materialization": 2562.0266999996966,
+            "frontier_reduction_sort": 16256.908799999976,
+            "exhaustion_scan": 19.125099999946542
+          }
+        },
+        {
+          "depth": 36,
+          "streams": 5,
+          "generatedStates": 7060885,
+          "frontierStatesBefore": 121720,
+          "frontierStatesAfter": 121545,
+          "legalPositionsMax": 198,
+          "phaseMs": {
+            "window_collection": 184.72269999980927,
+            "support_evaluation": 457.9812000002712,
+            "state_generation": 8712.827899999917,
+            "solution_materialization": 2023.8816999997944,
+            "frontier_reduction_sort": 16305.735399999656,
+            "exhaustion_scan": 16.382299999939278
+          }
+        },
+        {
+          "depth": 37,
+          "streams": 5,
+          "generatedStates": 7029905,
+          "frontierStatesBefore": 121545,
+          "frontierStatesAfter": 121365,
+          "legalPositionsMax": 197,
+          "phaseMs": {
+            "window_collection": 182.15419999998994,
+            "support_evaluation": 471.0735000001732,
+            "state_generation": 9206.634600000223,
+            "solution_materialization": 1901.2556999996305,
+            "frontier_reduction_sort": 16484.303500000155,
+            "exhaustion_scan": 17.14810000010766
+          }
+        },
+        {
+          "depth": 38,
+          "streams": 5,
+          "generatedStates": 6998220,
+          "frontierStatesBefore": 121365,
+          "frontierStatesAfter": 121180,
+          "legalPositionsMax": 196,
+          "phaseMs": {
+            "window_collection": 184.63489999994636,
+            "support_evaluation": 463.6146999998018,
+            "state_generation": 8835.770500000333,
+            "solution_materialization": 2855.7394999999087,
+            "frontier_reduction_sort": 16958.772399999667,
+            "exhaustion_scan": 15.314699999988079
+          }
+        },
+        {
+          "depth": 39,
+          "streams": 5,
+          "generatedStates": 6965840,
+          "frontierStatesBefore": 121180,
+          "frontierStatesAfter": 120990,
+          "legalPositionsMax": 195,
+          "phaseMs": {
+            "window_collection": 178.97980000032112,
+            "support_evaluation": 461.35370000009425,
+            "state_generation": 8727.106300000101,
+            "solution_materialization": 1881.4806999999564,
+            "frontier_reduction_sort": 17146.521299999906,
+            "exhaustion_scan": 15.82440000004135
+          }
+        },
+        {
+          "depth": 40,
+          "streams": 5,
+          "generatedStates": 6932775,
+          "frontierStatesBefore": 120990,
+          "frontierStatesAfter": 120795,
+          "legalPositionsMax": 194,
+          "phaseMs": {
+            "window_collection": 182.2612000000663,
+            "support_evaluation": 471.3205999999773,
+            "state_generation": 9173.955199999502,
+            "solution_materialization": 1977.0826999999117,
+            "frontier_reduction_sort": 17386.849299999885,
+            "exhaustion_scan": 23.410299999639392
+          }
+        },
+        {
+          "depth": 41,
+          "streams": 5,
+          "generatedStates": 6899035,
+          "frontierStatesBefore": 120795,
+          "frontierStatesAfter": 120595,
+          "legalPositionsMax": 193,
+          "phaseMs": {
+            "window_collection": 183.9364999998361,
+            "support_evaluation": 453.688700000057,
+            "state_generation": 8679.295300000114,
+            "solution_materialization": 2679.564300000202,
+            "frontier_reduction_sort": 17295.78899999964,
+            "exhaustion_scan": 17.153800000203773
+          }
+        },
+        {
+          "depth": 42,
+          "streams": 5,
+          "generatedStates": 6864630,
+          "frontierStatesBefore": 120595,
+          "frontierStatesAfter": 120390,
+          "legalPositionsMax": 192,
+          "phaseMs": {
+            "window_collection": 224.93740000016987,
+            "support_evaluation": 454.8754999998491,
+            "state_generation": 8702.350700000301,
+            "solution_materialization": 2039.7135000005364,
+            "frontier_reduction_sort": 17509.590499999933,
+            "exhaustion_scan": 17.527700000209734
+          }
+        },
+        {
+          "depth": 43,
+          "streams": 5,
+          "generatedStates": 6829570,
+          "frontierStatesBefore": 120390,
+          "frontierStatesAfter": 120180,
+          "legalPositionsMax": 191,
+          "phaseMs": {
+            "window_collection": 177.91310000000522,
+            "support_evaluation": 453.2646999997087,
+            "state_generation": 9199.898999999976,
+            "solution_materialization": 2188.750699999975,
+            "frontier_reduction_sort": 17699.541399999987,
+            "exhaustion_scan": 17.174600000027567
+          }
+        },
+        {
+          "depth": 44,
+          "streams": 5,
+          "generatedStates": 6793865,
+          "frontierStatesBefore": 120180,
+          "frontierStatesAfter": 119965,
+          "legalPositionsMax": 190,
+          "phaseMs": {
+            "window_collection": 169.85119999968447,
+            "support_evaluation": 455.3774999999441,
+            "state_generation": 9108.500999999698,
+            "solution_materialization": 3659.0750000001863,
+            "frontier_reduction_sort": 17637.580599999987,
+            "exhaustion_scan": 14.571800000034273
+          }
+        },
+        {
+          "depth": 45,
+          "streams": 5,
+          "generatedStates": 6757525,
+          "frontierStatesBefore": 119965,
+          "frontierStatesAfter": 119745,
+          "legalPositionsMax": 189,
+          "phaseMs": {
+            "window_collection": 175.28359999973327,
+            "support_evaluation": 444.11859999992885,
+            "state_generation": 9023.43669999973,
+            "solution_materialization": 3670.2586999998894,
+            "frontier_reduction_sort": 17819.650999999838,
+            "exhaustion_scan": 19.059500000206754
+          }
+        },
+        {
+          "depth": 46,
+          "streams": 5,
+          "generatedStates": 6720560,
+          "frontierStatesBefore": 119745,
+          "frontierStatesAfter": 119520,
+          "legalPositionsMax": 188,
+          "phaseMs": {
+            "window_collection": 177.11209999979474,
+            "support_evaluation": 440.6920000000391,
+            "state_generation": 9004.946999999927,
+            "solution_materialization": 3568.7631000000983,
+            "frontier_reduction_sort": 17973.769500000402,
+            "exhaustion_scan": 17.941200000001118
+          }
+        },
+        {
+          "depth": 47,
+          "streams": 5,
+          "generatedStates": 6682980,
+          "frontierStatesBefore": 119520,
+          "frontierStatesAfter": 119290,
+          "legalPositionsMax": 187,
+          "phaseMs": {
+            "window_collection": 160.4320000000298,
+            "support_evaluation": 458.6878000004217,
+            "state_generation": 8976.435100000119,
+            "solution_materialization": 3674.7269999997225,
+            "frontier_reduction_sort": 18027.063300000038,
+            "exhaustion_scan": 14.65639999997802
+          }
+        },
+        {
+          "depth": 48,
+          "streams": 5,
+          "generatedStates": 6644795,
+          "frontierStatesBefore": 119290,
+          "frontierStatesAfter": 119055,
+          "legalPositionsMax": 186,
+          "phaseMs": {
+            "window_collection": 156.67349999956787,
+            "support_evaluation": 447.3931999998167,
+            "state_generation": 8840.468600000022,
+            "solution_materialization": 3534.1777000003494,
+            "frontier_reduction_sort": 17862.38699999987,
+            "exhaustion_scan": 13.728100000182167
+          }
+        },
+        {
+          "depth": 49,
+          "streams": 5,
+          "generatedStates": 6606015,
+          "frontierStatesBefore": 119055,
+          "frontierStatesAfter": 118815,
+          "legalPositionsMax": 185,
+          "phaseMs": {
+            "window_collection": 157.02919999952428,
+            "support_evaluation": 450.08789999992587,
+            "state_generation": 8951.350299999816,
+            "solution_materialization": 3611.2633999998216,
+            "frontier_reduction_sort": 18004.664900000207,
+            "exhaustion_scan": 12.00910000037402
+          }
+        },
+        {
+          "depth": 50,
+          "streams": 4,
+          "generatedStates": 5253320,
+          "frontierStatesBefore": 95052,
+          "frontierStatesAfter": 94856,
+          "legalPositionsMax": 184,
+          "phaseMs": {
+            "window_collection": 132.92920000012964,
+            "support_evaluation": 346.20079999999143,
+            "state_generation": 6968.303200000199,
+            "solution_materialization": 2925.788000000175,
+            "frontier_reduction_sort": 14689.506900000153,
+            "exhaustion_scan": 9.887600000249222
+          }
+        },
+        {
+          "depth": 51,
+          "streams": 3,
+          "generatedStates": 3916026,
+          "frontierStatesBefore": 71142,
+          "frontierStatesAfter": 70992,
+          "legalPositionsMax": 183,
+          "phaseMs": {
+            "window_collection": 96.77919999998994,
+            "support_evaluation": 269.05480000027455,
+            "state_generation": 5316.391699999804,
+            "solution_materialization": 1951.1352999999654,
+            "frontier_reduction_sort": 11205.803500000155,
+            "exhaustion_scan": 9.776300000026822
+          }
+        },
+        {
+          "depth": 52,
+          "streams": 2,
+          "generatedStates": 2594482,
+          "frontierStatesBefore": 47328,
+          "frontierStatesAfter": 47226,
+          "legalPositionsMax": 182,
+          "phaseMs": {
+            "window_collection": 63.49179999995977,
+            "support_evaluation": 177.4547999999486,
+            "state_generation": 3417.8612000001594,
+            "solution_materialization": 1685.7556000000332,
+            "frontier_reduction_sort": 7471.983799999813,
+            "exhaustion_scan": 4.42449999996461
+          }
+        },
+        {
+          "depth": 53,
+          "streams": 1,
+          "generatedStates": 1289029,
+          "frontierStatesBefore": 23613,
+          "frontierStatesAfter": 23561,
+          "legalPositionsMax": 181,
+          "phaseMs": {
+            "window_collection": 34.65220000012778,
+            "support_evaluation": 85.26799999992363,
+            "state_generation": 1812.7116000000387,
+            "solution_materialization": 645.6980999999214,
+            "frontier_reduction_sort": 3796.0108999998774,
+            "exhaustion_scan": 2.3919999999925494
+          }
+        }
+      ],
+      "maxGeneratedDepth": {
+        "depth": 3,
+        "generatedStates": 7625820
+      },
+      "maxFrontierDepth": {
+        "depth": 23,
+        "frontierStatesAfter": 123440
+      },
+      "maxGeneratedRecord": {
+        "streamIndex": 0,
+        "depth": 3,
+        "generatedStates": 1525164
+      },
+      "maxFrontierRecord": {
+        "streamIndex": 0,
+        "depth": 23,
+        "frontierStatesAfter": 24688
+      },
+      "totals": {
+        "generatedStates": 354317027,
+        "frontierStatesAfter": 5903010
+      },
+      "correlations": {
+        "records": 255,
+        "generatedStates_vs_state_generation": 0.9527,
+        "generatedStates_vs_solution_materialization": 0.1935,
+        "depth_vs_solution_materialization": 0.8416,
+        "generatedTimesDepth_vs_solution_materialization": 0.8407,
+        "generatedStates_vs_frontier_reduction_sort": 0.2677,
+        "frontierStatesAfter_vs_frontier_reduction_sort": 0.5592,
+        "frontierStatesAfter_vs_exhaustion_scan": 0.2793,
+        "frontierStatesBefore_vs_window_collection": 0.8293,
+        "frontierStatesBefore_vs_support_evaluation": 0.946
+      },
+      "ratios": {
+        "unit": "ns per unit, per completed depth record",
+        "state_generation_per_generatedState": {
+          "count": 255,
+          "min": 930.61,
+          "median": 1247.02,
+          "max": 20718.87
+        },
+        "solution_materialization_per_generatedState": {
+          "count": 255,
+          "min": 41.12,
+          "median": 263.98,
+          "max": 707.24
+        },
+        "solution_materialization_per_generatedState_depth": {
+          "count": 255,
+          "min": 6.14,
+          "median": 10.85,
+          "max": 690.09
+        },
+        "frontier_reduction_sort_per_generatedState": {
+          "count": 255,
+          "min": 343.63,
+          "median": 1827.83,
+          "max": 3502.67
+        },
+        "exhaustion_scan_per_frontierStateAfter": {
+          "count": 255,
+          "min": 85.39,
+          "median": 126.12,
+          "max": 6055.66
+        },
+        "window_collection_per_frontierStateBefore": {
+          "count": 255,
+          "min": 1177.73,
+          "median": 1581.93,
+          "max": 1879700
+        },
+        "support_evaluation_per_frontierStateBefore": {
+          "count": 255,
+          "min": 3428.56,
+          "median": 3765.8,
+          "max": 164600
+        },
+        "state_generation_per_position_x_frontierBefore": {
+          "count": 255,
+          "min": 317.66,
+          "median": 381.88,
+          "max": 41437.74
+        }
+      },
+      "memory": {
+        "source": "last_heartbeat",
+        "sampledMaxHeapUsedBytes": 5086774224,
+        "sampledMaxRssBytes": 5471936512
+      },
+      "heartbeats": 245,
+      "maxHeartbeatGapMs": 8713.416600000113,
+      "predictionCounts": {
+        "predictNormalArtian": 12,
+        "predictSkills": 4,
+        "resetBonuses": 253,
+        "keepBonuses": 28218
+      },
+      "laterTargets": [
+        {
+          "targetOrdinal": 1,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 2,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 3,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 4,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 5,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 6,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 7,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 8,
+          "state": "not_started",
+          "searchOwnMs": null
+        }
+      ]
+    },
+    {
+      "orientationId": "c14-p0",
+      "kind": "same_gogma_counter",
+      "childOutcome": "timeout",
+      "resultClass": "timeout_in_search",
+      "primarySearch": {
+        "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+        "completed": false,
+        "observationPoint": "last_heartbeat",
+        "observedAtMs": 1798705.0086,
+        "searchStartedMs": 1670.7658999999999,
+        "searchWallMs": 1797034.2427,
+        "searchWallAtKillEstimateMs": 1797506.1568,
+        "unobservedTailMs": 471.9140999999363,
+        "phaseTotalsMs": {
+          "window_collection": 7860.343800000719,
+          "support_evaluation": 30424.885599999026,
+          "state_generation": 442375.32889999927,
+          "solution_materialization": 97735.82579999969,
+          "frontier_reduction_sort": 669478.2030999977,
+          "exhaustion_scan": 914.3134000004052
+        },
+        "phaseShare": {
+          "window_collection": 0.006294373529604657,
+          "support_evaluation": 0.024363513789545217,
+          "state_generation": 0.3542434823751672,
+          "solution_materialization": 0.07826448950102076,
+          "frontier_reduction_sort": 0.5361019807097408,
+          "exhaustion_scan": 0.000732160094921657
+        },
+        "measuredGogmaMs": 1248788.9005999966,
+        "coverage": 0.6949165858541024,
+        "unattributedSearchMs": 548245.3421000035,
+        "inclusiveDepthReadMs": 1248834.4646,
+        "inDepthOutsideSectionsMs": 45.5640000035055,
+        "dominantPhase": "frontier_reduction_sort",
+        "completedDepths": 483,
+        "maxDepthReached": 55,
+        "streams": 9,
+        "activeAtObservation": {
+          "streamIndex": 7,
+          "depth": 52,
+          "phase": "state_generation",
+          "elapsedMs": 0.19359999988228083
+        }
+      },
+      "activeAtEnd": {
+        "where": "section",
+        "streamIndex": 7,
+        "depth": 52,
+        "phase": "state_generation",
+        "startedMs": 1798704.8204,
+        "elapsedAtKillEstimateMs": 472.10229999991134
+      },
+      "counters": {
+        "startedTargets": 1,
+        "completedTargets": 0,
+        "deliveredCandidates": 0,
+        "trialsStarted": 0,
+        "trialsCompleted": 0,
+        "fullPlannerRunsStarted": 0,
+        "fullPlannerRunsCompleted": 0
+      },
+      "phaseDistributions": {
+        "window_collection": {
+          "count": 483,
+          "totalMs": 7845.021600000666,
+          "minMs": 0.03960000000006403,
+          "medianMs": 16.936999999918044,
+          "maxMs": 34.76300000003539,
+          "maxAt": {
+            "streamIndex": 0,
+            "depth": 14
+          }
+        },
+        "support_evaluation": {
+          "count": 483,
+          "totalMs": 30339.786499999034,
+          "minMs": 0.016999999999825377,
+          "medianMs": 64.48749999993015,
+          "maxMs": 178.08759999996983,
+          "maxAt": {
+            "streamIndex": 5,
+            "depth": 53
+          }
+        },
+        "state_generation": {
+          "count": 483,
+          "totalMs": 442375.13529999944,
+          "minMs": 1.4231999999974505,
+          "medianMs": 954.0360999999102,
+          "maxMs": 1121.3015999998897,
+          "maxAt": {
+            "streamIndex": 5,
+            "depth": 51
+          }
+        },
+        "solution_materialization": {
+          "count": 483,
+          "totalMs": 97735.82579999969,
+          "minMs": 0.04030000000011569,
+          "medianMs": 201.23869999998715,
+          "maxMs": 551.251900000032,
+          "maxAt": {
+            "streamIndex": 3,
+            "depth": 51
+          }
+        },
+        "frontier_reduction_sort": {
+          "count": 483,
+          "totalMs": 669478.2030999977,
+          "minMs": 0.10309999999981301,
+          "medianMs": 1535.5234000000637,
+          "maxMs": 2183.8223999999464,
+          "maxAt": {
+            "streamIndex": 3,
+            "depth": 51
+          }
+        },
+        "exhaustion_scan": {
+          "count": 483,
+          "totalMs": 914.3134000004052,
+          "minMs": 1.014500000004773,
+          "medianMs": 1.6076999999932013,
+          "maxMs": 10.31499999994412,
+          "maxAt": {
+            "streamIndex": 3,
+            "depth": 48
+          }
+        }
+      },
+      "byDepth": [
+        {
+          "depth": 1,
+          "streams": 9,
+          "generatedStates": 3042,
+          "frontierStatesBefore": 9,
+          "frontierStatesAfter": 3040,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 2.744600000000446,
+            "support_evaluation": 0.4297000000051412,
+            "state_generation": 27.807799999994586,
+            "solution_materialization": 0.6784000000011474,
+            "frontier_reduction_sort": 1.3139999999962129,
+            "exhaustion_scan": 12.05280000000721
+          }
+        },
+        {
+          "depth": 2,
+          "streams": 9,
+          "generatedStates": 256870,
+          "frontierStatesBefore": 3040,
+          "frontierStatesAfter": 123812,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 6.963000000008378,
+            "support_evaluation": 11.574099999990722,
+            "state_generation": 440.4211000000064,
+            "solution_materialization": 14.131200000007539,
+            "frontier_reduction_sort": 727.346199999994,
+            "exhaustion_scan": 14.836999999996806
+          }
+        },
+        {
+          "depth": 3,
+          "streams": 9,
+          "generatedStates": 7085929,
+          "frontierStatesBefore": 123812,
+          "frontierStatesAfter": 125187,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 154.7040000000129,
+            "support_evaluation": 457.67619999999897,
+            "state_generation": 7623.1535999999915,
+            "solution_materialization": 612.7640000000019,
+            "frontier_reduction_sort": 3449.6060999999954,
+            "exhaustion_scan": 16.287099999996826
+          }
+        },
+        {
+          "depth": 4,
+          "streams": 9,
+          "generatedStates": 7082822,
+          "frontierStatesBefore": 125187,
+          "frontierStatesAfter": 126562,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 163.04129999997895,
+            "support_evaluation": 485.4432000000088,
+            "state_generation": 7992.9748,
+            "solution_materialization": 718.3812999999827,
+            "frontier_reduction_sort": 4113.596000000001,
+            "exhaustion_scan": 15.720300000011775
+          }
+        },
+        {
+          "depth": 5,
+          "streams": 9,
+          "generatedStates": 7078257,
+          "frontierStatesBefore": 126562,
+          "frontierStatesAfter": 127937,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 162.72070000002714,
+            "support_evaluation": 455.7497000000076,
+            "state_generation": 8095.711300000032,
+            "solution_materialization": 722.7920000000013,
+            "frontier_reduction_sort": 4204.078900000008,
+            "exhaustion_scan": 16.234400000008463
+          }
+        },
+        {
+          "depth": 6,
+          "streams": 9,
+          "generatedStates": 7072252,
+          "frontierStatesBefore": 127937,
+          "frontierStatesAfter": 129312,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 160.33770000001823,
+            "support_evaluation": 466.82169999998587,
+            "state_generation": 8166.3655,
+            "solution_materialization": 959.9339999999575,
+            "frontier_reduction_sort": 4619.636699999988,
+            "exhaustion_scan": 14.103199999997742
+          }
+        },
+        {
+          "depth": 7,
+          "streams": 9,
+          "generatedStates": 7064825,
+          "frontierStatesBefore": 129312,
+          "frontierStatesAfter": 130687,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 160.52030000000377,
+            "support_evaluation": 489.8999999999796,
+            "state_generation": 8333.266899999988,
+            "solution_materialization": 819.4397000000172,
+            "frontier_reduction_sort": 5174.618500000011,
+            "exhaustion_scan": 15.14770000000135
+          }
+        },
+        {
+          "depth": 8,
+          "streams": 9,
+          "generatedStates": 7055994,
+          "frontierStatesBefore": 130687,
+          "frontierStatesAfter": 132062,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 162.8993000000046,
+            "support_evaluation": 472.1564000000217,
+            "state_generation": 8549.392000000022,
+            "solution_materialization": 930.7422999999981,
+            "frontier_reduction_sort": 5739.378900000025,
+            "exhaustion_scan": 23.790099999998347
+          }
+        },
+        {
+          "depth": 9,
+          "streams": 9,
+          "generatedStates": 7045777,
+          "frontierStatesBefore": 132062,
+          "frontierStatesAfter": 133437,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 156.46979999996256,
+            "support_evaluation": 501.69150000001537,
+            "state_generation": 8624.962399999975,
+            "solution_materialization": 958.9220999999961,
+            "frontier_reduction_sort": 6297.011600000042,
+            "exhaustion_scan": 14.20869999997376
+          }
+        },
+        {
+          "depth": 10,
+          "streams": 9,
+          "generatedStates": 7034192,
+          "frontierStatesBefore": 133437,
+          "frontierStatesAfter": 134803,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 155.5097999999998,
+            "support_evaluation": 483.4806999999855,
+            "state_generation": 8847.965099999972,
+            "solution_materialization": 997.7603999999701,
+            "frontier_reduction_sort": 6800.532599999977,
+            "exhaustion_scan": 12.896400000056019
+          }
+        },
+        {
+          "depth": 11,
+          "streams": 9,
+          "generatedStates": 7021248,
+          "frontierStatesBefore": 134803,
+          "frontierStatesAfter": 136160,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 158.37160000004224,
+            "support_evaluation": 511.77599999998347,
+            "state_generation": 8667.05959999992,
+            "solution_materialization": 953.4037999999709,
+            "frontier_reduction_sort": 7342.19419999994,
+            "exhaustion_scan": 14.383400000049733
+          }
+        },
+        {
+          "depth": 12,
+          "streams": 9,
+          "generatedStates": 7006963,
+          "frontierStatesBefore": 136160,
+          "frontierStatesAfter": 137517,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 158.78610000005574,
+            "support_evaluation": 515.8247999999439,
+            "state_generation": 8712.387200000026,
+            "solution_materialization": 1032.0996000000741,
+            "frontier_reduction_sort": 7897.528099999967,
+            "exhaustion_scan": 13.471900000033202
+          }
+        },
+        {
+          "depth": 13,
+          "streams": 9,
+          "generatedStates": 6991364,
+          "frontierStatesBefore": 137517,
+          "frontierStatesAfter": 138883,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 156.81099999995786,
+            "support_evaluation": 483.19169999999576,
+            "state_generation": 8773.71499999988,
+            "solution_materialization": 1085.8314000000246,
+            "frontier_reduction_sort": 8450.433100000024,
+            "exhaustion_scan": 14.988199999992503
+          }
+        },
+        {
+          "depth": 14,
+          "streams": 9,
+          "generatedStates": 6975882,
+          "frontierStatesBefore": 138883,
+          "frontierStatesAfter": 140240,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 182.2754000001005,
+            "support_evaluation": 545.3726999998908,
+            "state_generation": 8642.864699999976,
+            "solution_materialization": 1087.7779999999912,
+            "frontier_reduction_sort": 8780.031600000046,
+            "exhaustion_scan": 15.791199999977835
+          }
+        },
+        {
+          "depth": 15,
+          "streams": 9,
+          "generatedStates": 6959104,
+          "frontierStatesBefore": 140240,
+          "frontierStatesAfter": 141597,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 158.87020000000484,
+            "support_evaluation": 503.3712999999407,
+            "state_generation": 8630.080200000026,
+            "solution_materialization": 924.5116000000853,
+            "frontier_reduction_sort": 9288.896799999871,
+            "exhaustion_scan": 13.561099999817088
+          }
+        },
+        {
+          "depth": 16,
+          "streams": 9,
+          "generatedStates": 6941057,
+          "frontierStatesBefore": 141597,
+          "frontierStatesAfter": 142945,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 157.7288999998127,
+            "support_evaluation": 500.77370000001974,
+            "state_generation": 8718.125400000135,
+            "solution_materialization": 1019.4200000001001,
+            "frontier_reduction_sort": 9744.239300000074,
+            "exhaustion_scan": 14.957099999883212
+          }
+        },
+        {
+          "depth": 17,
+          "streams": 9,
+          "generatedStates": 6921750,
+          "frontierStatesBefore": 142945,
+          "frontierStatesAfter": 144293,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 161.54959999991115,
+            "support_evaluation": 512.3023000000394,
+            "state_generation": 8894.552500000049,
+            "solution_materialization": 1082.3499000000884,
+            "frontier_reduction_sort": 10241.968599999964,
+            "exhaustion_scan": 16.53120000002673
+          }
+        },
+        {
+          "depth": 18,
+          "streams": 9,
+          "generatedStates": 6901210,
+          "frontierStatesBefore": 144293,
+          "frontierStatesAfter": 145641,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 158.52329999994254,
+            "support_evaluation": 523.3024000001024,
+            "state_generation": 8619.26139999996,
+            "solution_materialization": 1796.515500000096,
+            "frontier_reduction_sort": 10604.275000000081,
+            "exhaustion_scan": 17.077699999907054
+          }
+        },
+        {
+          "depth": 19,
+          "streams": 9,
+          "generatedStates": 6879455,
+          "frontierStatesBefore": 145641,
+          "frontierStatesAfter": 146989,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 154.3607000001357,
+            "support_evaluation": 546.1490999999223,
+            "state_generation": 8916.409600000072,
+            "solution_materialization": 1821.8535999999149,
+            "frontier_reduction_sort": 10956.324799999944,
+            "exhaustion_scan": 20.567800000018906
+          }
+        },
+        {
+          "depth": 20,
+          "streams": 9,
+          "generatedStates": 6856503,
+          "frontierStatesBefore": 146989,
+          "frontierStatesAfter": 148337,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 160.97059999988414,
+            "support_evaluation": 534.1382000001031,
+            "state_generation": 8801.984299999895,
+            "solution_materialization": 1884.3724000000511,
+            "frontier_reduction_sort": 11300.805500000017,
+            "exhaustion_scan": 14.402699999976903
+          }
+        },
+        {
+          "depth": 21,
+          "streams": 9,
+          "generatedStates": 6832372,
+          "frontierStatesBefore": 148337,
+          "frontierStatesAfter": 149685,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 155.47600000002421,
+            "support_evaluation": 537.7103999999817,
+            "state_generation": 8863.684600000095,
+            "solution_materialization": 1919.1115000000573,
+            "frontier_reduction_sort": 11644.191799999855,
+            "exhaustion_scan": 14.053500000038184
+          }
+        },
+        {
+          "depth": 22,
+          "streams": 9,
+          "generatedStates": 6807080,
+          "frontierStatesBefore": 149685,
+          "frontierStatesAfter": 151033,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 159.38430000003427,
+            "support_evaluation": 541.9253999998327,
+            "state_generation": 8945.274500000058,
+            "solution_materialization": 1851.8843999998644,
+            "frontier_reduction_sort": 12016.289599999902,
+            "exhaustion_scan": 19.105199999874458
+          }
+        },
+        {
+          "depth": 23,
+          "streams": 9,
+          "generatedStates": 6780645,
+          "frontierStatesBefore": 151033,
+          "frontierStatesAfter": 152381,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 157.02679999987595,
+            "support_evaluation": 545.8835999999428,
+            "state_generation": 8883.182799999951,
+            "solution_materialization": 1816.625699999975,
+            "frontier_reduction_sort": 12374.916000000085,
+            "exhaustion_scan": 17.553799999994226
+          }
+        },
+        {
+          "depth": 24,
+          "streams": 9,
+          "generatedStates": 6753085,
+          "frontierStatesBefore": 152381,
+          "frontierStatesAfter": 153729,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 150.62529999995604,
+            "support_evaluation": 560.8922000002349,
+            "state_generation": 9081.746299999882,
+            "solution_materialization": 1856.3691000000108,
+            "frontier_reduction_sort": 12996.773000000045,
+            "exhaustion_scan": 15.725200000102632
+          }
+        },
+        {
+          "depth": 25,
+          "streams": 9,
+          "generatedStates": 6724418,
+          "frontierStatesBefore": 153729,
+          "frontierStatesAfter": 155077,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 152.4340000002412,
+            "support_evaluation": 563.3972999998368,
+            "state_generation": 9046.704700000002,
+            "solution_materialization": 1792.8485000004293,
+            "frontier_reduction_sort": 13159.840900000185,
+            "exhaustion_scan": 14.73769999970682
+          }
+        },
+        {
+          "depth": 26,
+          "streams": 9,
+          "generatedStates": 6694662,
+          "frontierStatesBefore": 155077,
+          "frontierStatesAfter": 156416,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 159.3680999999633,
+            "support_evaluation": 564.630099999602,
+            "state_generation": 8962.668900000048,
+            "solution_materialization": 1821.8949999999022,
+            "frontier_reduction_sort": 13533.247899999842,
+            "exhaustion_scan": 20.596200000261888
+          }
+        },
+        {
+          "depth": 27,
+          "streams": 9,
+          "generatedStates": 6663826,
+          "frontierStatesBefore": 156416,
+          "frontierStatesAfter": 157755,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 148.79380000010133,
+            "support_evaluation": 568.5796000001719,
+            "state_generation": 9026.65169999993,
+            "solution_materialization": 1869.4248000001535,
+            "frontier_reduction_sort": 13651.82900000026,
+            "exhaustion_scan": 16.17090000002645
+          }
+        },
+        {
+          "depth": 28,
+          "streams": 9,
+          "generatedStates": 6631937,
+          "frontierStatesBefore": 157755,
+          "frontierStatesAfter": 159094,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 152.21730000001844,
+            "support_evaluation": 580.2071999999462,
+            "state_generation": 8781.29700000002,
+            "solution_materialization": 1944.0668999999762,
+            "frontier_reduction_sort": 13990.113699999987,
+            "exhaustion_scan": 17.254599999869242
+          }
+        },
+        {
+          "depth": 29,
+          "streams": 9,
+          "generatedStates": 6599013,
+          "frontierStatesBefore": 159094,
+          "frontierStatesAfter": 160433,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 153.66389999981038,
+            "support_evaluation": 589.3799000000581,
+            "state_generation": 9046.8768999998,
+            "solution_materialization": 2111.0910999999614,
+            "frontier_reduction_sort": 14282.04700000002,
+            "exhaustion_scan": 17.04839999997057
+          }
+        },
+        {
+          "depth": 30,
+          "streams": 9,
+          "generatedStates": 6565072,
+          "frontierStatesBefore": 160433,
+          "frontierStatesAfter": 161772,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 161.1714000001084,
+            "support_evaluation": 578.6346999998204,
+            "state_generation": 8769.027599999914,
+            "solution_materialization": 1947.1480000000447,
+            "frontier_reduction_sort": 14881.662799999933,
+            "exhaustion_scan": 16.90830000001006
+          }
+        },
+        {
+          "depth": 31,
+          "streams": 9,
+          "generatedStates": 6530132,
+          "frontierStatesBefore": 161772,
+          "frontierStatesAfter": 163111,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 158.7267999999458,
+            "support_evaluation": 599.9414999999572,
+            "state_generation": 8703.815400000196,
+            "solution_materialization": 2064.800600000075,
+            "frontier_reduction_sort": 15093.240599999903,
+            "exhaustion_scan": 16.740400000009686
+          }
+        },
+        {
+          "depth": 32,
+          "streams": 9,
+          "generatedStates": 6494211,
+          "frontierStatesBefore": 163111,
+          "frontierStatesAfter": 164450,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 154.83870000008028,
+            "support_evaluation": 591.3170999999857,
+            "state_generation": 8524.145299999858,
+            "solution_materialization": 1786.3336999999592,
+            "frontier_reduction_sort": 14969.47809999995,
+            "exhaustion_scan": 18.159600000013597
+          }
+        },
+        {
+          "depth": 33,
+          "streams": 9,
+          "generatedStates": 6457327,
+          "frontierStatesBefore": 164450,
+          "frontierStatesAfter": 165789,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 150.52499999990687,
+            "support_evaluation": 607.0029000000795,
+            "state_generation": 8649.19619999989,
+            "solution_materialization": 1882.3453999997582,
+            "frontier_reduction_sort": 15360.766900000046,
+            "exhaustion_scan": 17.735400000121444
+          }
+        },
+        {
+          "depth": 34,
+          "streams": 9,
+          "generatedStates": 6419498,
+          "frontierStatesBefore": 165789,
+          "frontierStatesAfter": 167128,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 153.42339999985415,
+            "support_evaluation": 602.9565000000875,
+            "state_generation": 8552.062600000063,
+            "solution_materialization": 1948.9555999999866,
+            "frontier_reduction_sort": 15609.923599999747,
+            "exhaustion_scan": 21.592800000449643
+          }
+        },
+        {
+          "depth": 35,
+          "streams": 9,
+          "generatedStates": 6380742,
+          "frontierStatesBefore": 167128,
+          "frontierStatesAfter": 168467,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 149.17520000017248,
+            "support_evaluation": 611.9576000000816,
+            "state_generation": 8603.292999999714,
+            "solution_materialization": 2174.926500000176,
+            "frontier_reduction_sort": 15845.822500000359,
+            "exhaustion_scan": 14.382199999992736
+          }
+        },
+        {
+          "depth": 36,
+          "streams": 9,
+          "generatedStates": 6341077,
+          "frontierStatesBefore": 168467,
+          "frontierStatesAfter": 169806,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 155.1777999997139,
+            "support_evaluation": 609.2373999992851,
+            "state_generation": 8710.838100000285,
+            "solution_materialization": 1982.0893999998225,
+            "frontier_reduction_sort": 16091.85329999961,
+            "exhaustion_scan": 15.666000000201166
+          }
+        },
+        {
+          "depth": 37,
+          "streams": 9,
+          "generatedStates": 6300521,
+          "frontierStatesBefore": 169806,
+          "frontierStatesAfter": 171145,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 143.5712000001222,
+            "support_evaluation": 687.7465999999549,
+            "state_generation": 8518.244799999753,
+            "solution_materialization": 1866.7441000000108,
+            "frontier_reduction_sort": 16283.668000000063,
+            "exhaustion_scan": 16.52170000039041
+          }
+        },
+        {
+          "depth": 38,
+          "streams": 9,
+          "generatedStates": 6259092,
+          "frontierStatesBefore": 171145,
+          "frontierStatesAfter": 172484,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 141.01850000023842,
+            "support_evaluation": 625.8395000000019,
+            "state_generation": 8587.494299999671,
+            "solution_materialization": 1816.9250000002794,
+            "frontier_reduction_sort": 16308.348400000017,
+            "exhaustion_scan": 16.51370000024326
+          }
+        },
+        {
+          "depth": 39,
+          "streams": 9,
+          "generatedStates": 6216808,
+          "frontierStatesBefore": 172484,
+          "frontierStatesAfter": 173823,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 138.3605000001844,
+            "support_evaluation": 634.1875,
+            "state_generation": 8740.470600000117,
+            "solution_materialization": 1980.995699999854,
+            "frontier_reduction_sort": 16715.500499999616,
+            "exhaustion_scan": 15.09070000005886
+          }
+        },
+        {
+          "depth": 40,
+          "streams": 9,
+          "generatedStates": 6173687,
+          "frontierStatesBefore": 173823,
+          "frontierStatesAfter": 175162,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 148.94539999985136,
+            "support_evaluation": 629.935599999968,
+            "state_generation": 8585.452200000174,
+            "solution_materialization": 2183.422799999593,
+            "frontier_reduction_sort": 16664.366500000004,
+            "exhaustion_scan": 17.769599999999627
+          }
+        },
+        {
+          "depth": 41,
+          "streams": 9,
+          "generatedStates": 6129747,
+          "frontierStatesBefore": 175162,
+          "frontierStatesAfter": 176492,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 143.57449999987148,
+            "support_evaluation": 639.6492000001017,
+            "state_generation": 8155.436100000283,
+            "solution_materialization": 2082.4791999994777,
+            "frontier_reduction_sort": 16721.474099999527,
+            "exhaustion_scan": 15.5531000001356
+          }
+        },
+        {
+          "depth": 42,
+          "streams": 9,
+          "generatedStates": 6084997,
+          "frontierStatesBefore": 176492,
+          "frontierStatesAfter": 177822,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 143.2893999996595,
+            "support_evaluation": 725.1242999995593,
+            "state_generation": 8190.518300000345,
+            "solution_materialization": 2021.438599999994,
+            "frontier_reduction_sort": 17028.77680000011,
+            "exhaustion_scan": 15.665999999502674
+          }
+        },
+        {
+          "depth": 43,
+          "streams": 9,
+          "generatedStates": 6039464,
+          "frontierStatesBefore": 177822,
+          "frontierStatesAfter": 179152,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 139.78330000047572,
+            "support_evaluation": 663.7982999999076,
+            "state_generation": 8462.22819999978,
+            "solution_materialization": 1957.7831999992486,
+            "frontier_reduction_sort": 17155.279800000135,
+            "exhaustion_scan": 21.56110000004992
+          }
+        },
+        {
+          "depth": 44,
+          "streams": 9,
+          "generatedStates": 5993166,
+          "frontierStatesBefore": 179152,
+          "frontierStatesAfter": 180482,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 140.06350000039674,
+            "support_evaluation": 650.7646999999415,
+            "state_generation": 8384.992599999998,
+            "solution_materialization": 3080.6018999998923,
+            "frontier_reduction_sort": 17366.305799999973,
+            "exhaustion_scan": 18.421299999579787
+          }
+        },
+        {
+          "depth": 45,
+          "streams": 9,
+          "generatedStates": 5946121,
+          "frontierStatesBefore": 180482,
+          "frontierStatesAfter": 181812,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 141.21189999999478,
+            "support_evaluation": 678.1304999997374,
+            "state_generation": 8442.6399000003,
+            "solution_materialization": 3165.1959999999963,
+            "frontier_reduction_sort": 17800.797500000568,
+            "exhaustion_scan": 21.82050000014715
+          }
+        },
+        {
+          "depth": 46,
+          "streams": 9,
+          "generatedStates": 5898347,
+          "frontierStatesBefore": 181812,
+          "frontierStatesAfter": 183142,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 147.2340000004042,
+            "support_evaluation": 668.5061000003479,
+            "state_generation": 8572.903799999738,
+            "solution_materialization": 3112.6749999998137,
+            "frontier_reduction_sort": 17511.054199999664,
+            "exhaustion_scan": 21.07009999989532
+          }
+        },
+        {
+          "depth": 47,
+          "streams": 9,
+          "generatedStates": 5849862,
+          "frontierStatesBefore": 183142,
+          "frontierStatesAfter": 184472,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 147.30950000043958,
+            "support_evaluation": 668.6080999998376,
+            "state_generation": 8393.24049999984,
+            "solution_materialization": 3400.3111000005156,
+            "frontier_reduction_sort": 17905.987199999625,
+            "exhaustion_scan": 15.349300000118092
+          }
+        },
+        {
+          "depth": 48,
+          "streams": 9,
+          "generatedStates": 5800684,
+          "frontierStatesBefore": 184472,
+          "frontierStatesAfter": 185803,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 138.91389999981038,
+            "support_evaluation": 685.9812000000384,
+            "state_generation": 8683.365399999777,
+            "solution_materialization": 3331.437700000126,
+            "frontier_reduction_sort": 17786.762499999022,
+            "exhaustion_scan": 24.53539999993518
+          }
+        },
+        {
+          "depth": 49,
+          "streams": 9,
+          "generatedStates": 5750953,
+          "frontierStatesBefore": 185803,
+          "frontierStatesAfter": 187134,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 141.13069999963045,
+            "support_evaluation": 691.5156999998726,
+            "state_generation": 7949.900600000052,
+            "solution_materialization": 3070.1787000000477,
+            "frontier_reduction_sort": 17994.586900000228,
+            "exhaustion_scan": 18.86450000014156
+          }
+        },
+        {
+          "depth": 50,
+          "streams": 9,
+          "generatedStates": 5700564,
+          "frontierStatesBefore": 187134,
+          "frontierStatesAfter": 188456,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 139.5498999999836,
+            "support_evaluation": 695.2196000004187,
+            "state_generation": 8039.155100000091,
+            "solution_materialization": 3073.7085000001825,
+            "frontier_reduction_sort": 18085.944800000405,
+            "exhaustion_scan": 23.74130000034347
+          }
+        },
+        {
+          "depth": 51,
+          "streams": 8,
+          "generatedStates": 5020680,
+          "frontierStatesBefore": 167484,
+          "frontierStatesAfter": 168659,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 119.62680000020191,
+            "support_evaluation": 641.4810000001453,
+            "state_generation": 7475.135100000072,
+            "solution_materialization": 2796.099200000055,
+            "frontier_reduction_sort": 16170.88910000003,
+            "exhaustion_scan": 13.269799999892712
+          }
+        },
+        {
+          "depth": 52,
+          "streams": 7,
+          "generatedStates": 4351680,
+          "frontierStatesBefore": 147540,
+          "frontierStatesAfter": 148568,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 101.3175999999512,
+            "support_evaluation": 545.0612000001129,
+            "state_generation": 6237.505800000159,
+            "solution_materialization": 2468.806600000011,
+            "frontier_reduction_sort": 14307.67619999987,
+            "exhaustion_scan": 19.333199999760836
+          }
+        },
+        {
+          "depth": 53,
+          "streams": 7,
+          "generatedStates": 4311056,
+          "frontierStatesBefore": 148568,
+          "frontierStatesAfter": 149596,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 96.74150000000373,
+            "support_evaluation": 665.8612000003923,
+            "state_generation": 6277.681099999929,
+            "solution_materialization": 2257.6212000001688,
+            "frontier_reduction_sort": 14101.172999999719,
+            "exhaustion_scan": 13.184799999697134
+          }
+        },
+        {
+          "depth": 54,
+          "streams": 6,
+          "generatedStates": 3661490,
+          "frontierStatesBefore": 128310,
+          "frontierStatesAfter": 129192,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 96.52599999960512,
+            "support_evaluation": 481.17849999968894,
+            "state_generation": 5142.946799999801,
+            "solution_materialization": 2097.565700000152,
+            "frontier_reduction_sort": 12187.832799999742,
+            "exhaustion_scan": 10.709599999943748
+          }
+        },
+        {
+          "depth": 55,
+          "streams": 5,
+          "generatedStates": 3027200,
+          "frontierStatesBefore": 107800,
+          "frontierStatesAfter": 108535,
+          "legalPositionsMax": 169,
+          "phaseMs": {
+            "window_collection": 70.66780000017025,
+            "support_evaluation": 406.4189000001643,
+            "state_generation": 4306.898099999875,
+            "solution_materialization": 1778.2381999997888,
+            "frontier_reduction_sort": 10145.965799999656,
+            "exhaustion_scan": 10.897500000195578
+          }
+        }
+      ],
+      "maxGeneratedDepth": {
+        "depth": 3,
+        "generatedStates": 7085929
+      },
+      "maxFrontierDepth": {
+        "depth": 50,
+        "frontierStatesAfter": 188456
+      },
+      "maxGeneratedRecord": {
+        "streamIndex": 0,
+        "depth": 3,
+        "generatedStates": 788476
+      },
+      "maxFrontierRecord": {
+        "streamIndex": 0,
+        "depth": 55,
+        "frontierStatesAfter": 21707
+      },
+      "totals": {
+        "generatedStates": 336425712,
+        "frontierStatesAfter": 8367498
+      },
+      "correlations": {
+        "records": 483,
+        "generatedStates_vs_state_generation": 0.9122,
+        "generatedStates_vs_solution_materialization": 0.078,
+        "depth_vs_solution_materialization": 0.8575,
+        "generatedTimesDepth_vs_solution_materialization": 0.8529,
+        "generatedStates_vs_frontier_reduction_sort": 0.1476,
+        "frontierStatesAfter_vs_frontier_reduction_sort": 0.8756,
+        "frontierStatesAfter_vs_exhaustion_scan": 0.1895,
+        "frontierStatesBefore_vs_window_collection": 0.5871,
+        "frontierStatesBefore_vs_support_evaluation": 0.8921
+      },
+      "ratios": {
+        "unit": "ns per unit, per completed depth record",
+        "state_generation_per_generatedState": {
+          "count": 483,
+          "min": 804.65,
+          "median": 1322.22,
+          "max": 20465.38
+        },
+        "solution_materialization_per_generatedState": {
+          "count": 483,
+          "min": 41.18,
+          "median": 271.32,
+          "max": 876.61
+        },
+        "solution_materialization_per_generatedState_depth": {
+          "count": 483,
+          "min": 5.88,
+          "median": 10.97,
+          "max": 578.4
+        },
+        "frontier_reduction_sort_per_generatedState": {
+          "count": 483,
+          "min": 305.03,
+          "median": 2125.74,
+          "max": 3477.89
+        },
+        "exhaustion_scan_per_frontierStateAfter": {
+          "count": 483,
+          "min": 62.54,
+          "median": 95.41,
+          "max": 6887.28
+        },
+        "window_collection_per_frontierStateBefore": {
+          "count": 483,
+          "min": 596.28,
+          "median": 988.63,
+          "max": 1857400
+        },
+        "support_evaluation_per_frontierStateBefore": {
+          "count": 483,
+          "min": 3152.66,
+          "median": 3643.81,
+          "max": 200800
+        },
+        "state_generation_per_position_x_frontierBefore": {
+          "count": 483,
+          "min": 217.62,
+          "median": 338.43,
+          "max": 40930.77
+        }
+      },
+      "memory": {
+        "source": "last_heartbeat",
+        "sampledMaxHeapUsedBytes": 4593547384,
+        "sampledMaxRssBytes": 5211348992
+      },
+      "heartbeats": 274,
+      "maxHeartbeatGapMs": 8488.61360000004,
+      "predictionCounts": {
+        "predictNormalArtian": 12,
+        "predictSkills": 5,
+        "resetBonuses": 243,
+        "keepBonuses": 26995
+      },
+      "laterTargets": []
+    }
+  ],
+  "processes": [
+    {
+      "id": "baseline",
+      "role": "baseline",
+      "outcome": "completed",
+      "wallMs": 5835.8679,
+      "killedAtMs": null,
+      "lifecycleMessages": 0,
+      "heartbeatMessages": 0,
+      "phaseStartMessages": 0,
+      "depthMessages": 0,
+      "maxIpcHeartbeatGapMs": null,
+      "minClockOffsetMs": null,
+      "lastHeartbeatAgeAtEndMs": null,
+      "stderrTail": null
+    },
+    {
+      "id": "kernel-c6-p1",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800202.6209,
+      "killedAtMs": 1800007.9341,
+      "lifecycleMessages": 2,
+      "heartbeatMessages": 281,
+      "phaseStartMessages": 3485,
+      "depthMessages": 580,
+      "maxIpcHeartbeatGapMs": 7339.11269999994,
+      "minClockOffsetMs": 24.349400000000514,
+      "lastHeartbeatAgeAtEndMs": 1263.537200000137,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    },
+    {
+      "id": "kernel-c13-p1",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800262.6899999997,
+      "killedAtMs": 1800015.3560999997,
+      "lifecycleMessages": 2,
+      "heartbeatMessages": 245,
+      "phaseStartMessages": 1534,
+      "depthMessages": 255,
+      "maxIpcHeartbeatGapMs": 8713.430999999866,
+      "minClockOffsetMs": 27.666400000023714,
+      "lastHeartbeatAgeAtEndMs": 2559.6006999998353,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    },
+    {
+      "id": "kernel-c14-p0",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800247.4206999997,
+      "killedAtMs": 1800010.0340999998,
+      "lifecycleMessages": 2,
+      "heartbeatMessages": 274,
+      "phaseStartMessages": 2901,
+      "depthMessages": 483,
+      "maxIpcHeartbeatGapMs": 8488.501299999654,
+      "minClockOffsetMs": 27.226899999834586,
+      "lastHeartbeatAgeAtEndMs": 709.2187000000849,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    }
+  ],
+  "conclusion": {
+    "statement": "Phase 2-C2.6-A2でTarget 1件のSearchだけで30分を使い切った3 orientationを、concurrency 1・heavy observerなしで各1回profileした: completed 0、timeout 3、OOM 0、process failure 0。held-aware Gogma sectionのcoverage: c6-p1 0.7149、c13-p1 0.6706、c14-p0 0.6949。decision case R_gogma_does_not_explain。",
+    "decision": {
+      "threshold": 0.8,
+      "majority": 2,
+      "coverage": {
+        "c6-p1": 0.7149,
+        "c13-p1": 0.6706,
+        "c14-p0": 0.6949
+      },
+      "dominantPhaseByPrimary": {
+        "c6-p1": "frontier_reduction_sort",
+        "c13-p1": "frontier_reduction_sort",
+        "c14-p0": "frontier_reduction_sort"
+      },
+      "dominantPhaseConsistentAcrossPrimaries": true,
+      "case": "R_gogma_does_not_explain",
+      "dominantPhase": null,
+      "reason": "coverage < 0.8 in 3 / 3 primaries (c6-p1, c13-p1, c14-p0)",
+      "recommendation": "Gogma stream内部だけではSearch runtimeを説明できない。次Phaseはscheduler / Bonus publication / Ideal filter / Lazy Cross等のruntime計時。optimizationへ進まない。"
+    }
+  },
+  "limitations": [
+    "Node child（Vite SSR loader）のみ。Browser Worker・他device・他heap条件は測っていない。",
+    "concurrency 1はC2.6-A / A2（3）と異なり、heavy depth observerも外したため、A2とのabsolute wall time比較はしない。",
+    "各orientation 1回のみ（retryなし）。run間ばらつきは測っていない。",
+    "coverageの観測点はSearch完了時、またはtimeoutでは最後のheartbeat。最後のheartbeat以降（最大約5秒 + heartbeat遅延）は未観測で、unobservedTailMsとして別記する。kill時のactive sectionは最後の同期書き込み記録から読み、その経過時間はparentのkill時刻とIPC clock offset（最小値）からの推定。",
+    "section時間はResearch側performance.now()の差。section内のawait（checkpoint yield = setImmediate）とその間に走るtimer（250 ms memory sampler、5 s heartbeat）の時間は、その時activeなsection（主にstate_generation）に計上される。",
+    "section境界以外（scheduler、Bonus publication、Ideal filter、Lazy Cross、Skill stream、Route base登録等）は直接計時していない（unattributedとして残る）。",
+    "section境界記録（phase開始ごとの同期追記 + IPC、depthごとのsummary）は計算を変えないが、wall timeへのoverheadはゼロではない。",
+    "depth別分布・相関は完了したdepth記録のみ（timeout時のactive depthは含まない）。相関は記述統計で因果を示さない。"
+  ]
+}
