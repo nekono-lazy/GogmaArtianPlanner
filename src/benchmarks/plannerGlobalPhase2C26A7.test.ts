@@ -159,7 +159,9 @@ describe('Phase 2-C2.6-A7 has no Production change', () => {
 describe('Phase 2-C2.6-A7 conditions', () => {
   it('accepts every A6 condition with the A7 pair of observers and rejects another budget, heap flag or instrumentation', () => {
     const { c26a, a2, a3, a4, a5 } = authorities()
-    const current = { ...(a6Json.conditions as Phase2C26A2RunConditions), nodeFlags: [...PHASE2C26A7_NODE_FLAGS], searchInstrumentation: { ...PHASE2C26A7_SEARCH_INSTRUMENTATION } }
+    const current: Phase2C26A2RunConditions & { nodeFlags: string[]; searchInstrumentation: Record<string, boolean> } = {
+      ...(a6Json.conditions as Phase2C26A2RunConditions), nodeFlags: [...PHASE2C26A7_NODE_FLAGS], searchInstrumentation: { ...PHASE2C26A7_SEARCH_INSTRUMENTATION },
+    }
     const check = (value: typeof current, a6Conditions = a6Json.conditions) => validatePhase2C26A7ConditionParity(value, a6Conditions, a5.conditions, a4.conditions, a3.conditions, c26a, a2.conditions)
     expect(check(current).issues).toEqual([])
     expect(PHASE2C26A7_NODE_FLAGS).toEqual(PHASE2C26A6_NODE_FLAGS)
