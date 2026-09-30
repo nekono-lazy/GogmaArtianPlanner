@@ -1,0 +1,3827 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-A6: allocation-free Bonus multiset equality and formal re-measurement (post-hoc analysis)",
+  "analyzedAt": "2026-09-30T11:39:42.042Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A6_RAW.json.local",
+      "bytes": 21387246,
+      "sha256": "feb1238d58e24d68bc9ee00a8cd68dcd8b904027f5868449e70df10062480bda"
+    },
+    "c26aResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A_RESULT.json",
+      "bytes": 318778,
+      "sha256": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171"
+    },
+    "c26a2Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A2_RESULT.json",
+      "bytes": 642128,
+      "sha256": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2"
+    },
+    "c26a3Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A3_RESULT.json",
+      "bytes": 147318,
+      "sha256": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2"
+    },
+    "c26a4Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A4_RESULT.json",
+      "bytes": 95474,
+      "sha256": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529"
+    },
+    "c26a5Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A5_RESULT.json",
+      "bytes": 112320,
+      "sha256": "9d025a20cad23955adcb19fdee92d7c2e70eeb4b2429e875ddf5fb7bbdcd84c3"
+    },
+    "a4Run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A4_RAW.json.local",
+      "bytes": 18103009,
+      "sha256": "b6fd9b844f9d0add9b5e7b6d46e974c072c8fd43e8a680ee0f32ac3ced2d30a5"
+    }
+  },
+  "provenance": {
+    "measuredHead": "65a2a5cb2b811809b6afa1b6a5abdd988f721247",
+    "analysisHead": "65a2a5cb2b811809b6afa1b6a5abdd988f721247",
+    "analysisCodeUncommitted": false,
+    "codeChangedSinceMeasuredHead": [],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "scripts/analyze-planner-global-phase2c26a6.mjs",
+      "src/benchmarks/plannerGlobalPhase2C26A6Analysis.ts",
+      "*.test.ts"
+    ],
+    "formal": true,
+    "benchmarkCodeSha256": "af5e3db8ce3fbc6a1fe6d1c48e6cdd3e71e6d009cb6d81ebf76352489947515d",
+    "uncommittedBenchmarkCode": false,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "c26aResultSha256": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "c26aResultRecordedByRunner": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "c26aMeasuredHead": "525ed892acb09609fcce1f7589c6751038ae255d",
+    "c26a2ResultSha256": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+    "c26a2ResultRecordedByRunner": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+    "c26a2MeasuredHead": "9bb89e988c619965473cf5ef7a8413d49f97bf4f",
+    "c26a3ResultSha256": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+    "c26a3ResultRecordedByRunner": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+    "c26a3MeasuredHead": "0e2a5fea93882f4c7d121c305d7fa1ad7e3b8bf0",
+    "c26a4ResultSha256": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+    "c26a4ResultRecordedByRunner": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+    "c26a4MeasuredHead": "9fadd93d8e68c074f5784368976d593aeb50021f",
+    "c26a5ResultSha256": "9d025a20cad23955adcb19fdee92d7c2e70eeb4b2429e875ddf5fb7bbdcd84c3",
+    "c26a5ResultRecordedByRunner": "9d025a20cad23955adcb19fdee92d7c2e70eeb4b2429e875ddf5fb7bbdcd84c3",
+    "c26a5MeasuredHead": "a2e3c3ed489c0ff9bceabb2b66ff813ae8068906",
+    "a4RunSha256": "b6fd9b844f9d0add9b5e7b6d46e974c072c8fd43e8a680ee0f32ac3ced2d30a5",
+    "a4RunShaRecordedByA4": "b6fd9b844f9d0add9b5e7b6d46e974c072c8fd43e8a680ee0f32ac3ced2d30a5",
+    "a4RawShaMatches": true,
+    "authorityShaChain": {
+      "c26aShaRecordedByA5": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+      "a2ShaRecordedByA5": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+      "a3ShaRecordedByA5": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+      "a4ShaRecordedByA5": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+      "a5ChainRecordedByA5": {
+        "c26aShaRecordedByA4": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+        "a2ShaRecordedByA4": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+        "a3ShaRecordedByA4": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+        "a4ChainRecordedByA4": {
+          "c26aShaRecordedByA2": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+          "c26aShaRecordedByA3": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+          "c26aShaRecordedByA3ForA2": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+          "a2ShaRecordedByA3": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+          "allMatchFilesRead": true
+        },
+        "allMatchFilesRead": true
+      },
+      "allMatchFilesRead": true
+    },
+    "productionChange": {
+      "registered": [
+        "src/domain/models/domainRules.ts"
+      ],
+      "recordedByRunner": {
+        "registered": [
+          "src/domain/models/domainRules.ts"
+        ],
+        "a4MeasuredHead": "9fadd93d8e68c074f5784368976d593aeb50021f",
+        "a5MeasuredHead": "a2e3c3ed489c0ff9bceabb2b66ff813ae8068906",
+        "sinceA4MeasuredHead": [
+          "src/benchmarks/plannerGlobalPhase2C26A5.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A5.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A5Analysis.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6Analysis.ts",
+          "src/domain/models/domainRules.ts",
+          "src/domain/models/restorationBonusMultisetEquality.test.ts"
+        ],
+        "sinceA5MeasuredHead": [
+          "src/benchmarks/plannerGlobalPhase2C26A5.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6Analysis.ts",
+          "src/domain/models/domainRules.ts",
+          "src/domain/models/restorationBonusMultisetEquality.test.ts"
+        ]
+      },
+      "rederivedSinceA4MeasuredHead": {
+        "valid": true,
+        "issues": [],
+        "changed": [
+          "src/benchmarks/plannerGlobalPhase2C26A5.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A5.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A5Analysis.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6Analysis.ts",
+          "src/domain/models/domainRules.ts",
+          "src/domain/models/restorationBonusMultisetEquality.test.ts"
+        ],
+        "productionChanged": [
+          "src/domain/models/domainRules.ts"
+        ]
+      },
+      "rederivedSinceA5MeasuredHead": {
+        "valid": true,
+        "issues": [],
+        "changed": [
+          "src/benchmarks/plannerGlobalPhase2C26A5.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6Analysis.ts",
+          "src/domain/models/domainRules.ts",
+          "src/domain/models/restorationBonusMultisetEquality.test.ts"
+        ],
+        "productionChanged": [
+          "src/domain/models/domainRules.ts"
+        ]
+      }
+    },
+    "measuredAt": "2026-09-30T10:09:15.637Z",
+    "runWallMs": 5406791.0343
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296
+  },
+  "productionOptimization": {
+    "file": "src/domain/models/domainRules.ts",
+    "function": "areRestorationBonusSetsEqual",
+    "before": "JSON.stringify([bonusTypeId, bonusRankId]) key + Map count per side, compared by size and per-key count",
+    "after": "direct 5 x 5 match: each left slot consumes the first unmatched right slot with equal bonusTypeId and bonusRankId (consumed slots in a bit mask); no string key, Map, array, sort or clone",
+    "unchanged": [
+      "unordered multiset with duplicate counts",
+      "identity = bonusTypeId and bonusRankId",
+      "areRestorationBonusSlotsEqual (Keep / slot order) untouched",
+      "satisfiesIdealBonuses: both rank validations, then scope, then the multiset comparison (error timing unchanged)"
+    ],
+    "notDone": [
+      "Target Ideal multiset precompute / prepared representation",
+      "rank lookup / validation hoist",
+      "Array.filter replacement",
+      "notice scan",
+      "frontier reduction",
+      "state generation"
+    ]
+  },
+  "selectionRule": {
+    "source": "Phase 2-C2.6-A5 RESULT selectionValidation.expected (= its selectionRule.primaryOrientationIds = the A4 selection = the A3 selection; no ID fixed in source)",
+    "registeredCount": 3,
+    "primaryOrientationIds": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "selectedCount": 3
+  },
+  "conditions": {
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "childHeapLimitMb": 8192,
+    "concurrency": 1,
+    "orientationBudgetMs": 1800000,
+    "nodeYield": "setImmediate",
+    "extent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "bounds": {
+      "maxCandidateTrialsPerTarget": 2,
+      "maxPlannerReruns": 8
+    },
+    "researchMaxPlanSteps": 20000,
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "lineage": {
+      "priorFixedBuildListEntryIds": [],
+      "priorExcludedRoutes": []
+    },
+    "nodeFlags": [
+      "--max-old-space-size=8192"
+    ],
+    "freshChildPerOrientation": true,
+    "memorySampleIntervalMs": 250,
+    "heartbeatIntervalMs": 5000,
+    "retry": "none (each orientation once)",
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": false,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "conditionNote": "Every A4 condition and A4 instrumentation is unchanged (A5 primary conditions, concurrency 1, heap-only Node flags, onSearchRuntime alone); no CPU profiler. The only calculation difference from the A4 measured HEAD is the registered Production change."
+  },
+  "registeredRule": {
+    "primaryEffect": "bonus_ideal_filter phase time summed over the common completed-work prefix of A4 (before) and A6 (after): the same work records with identical raw solutions",
+    "semanticParity": "every completed-work record of the common prefix has equal work identity and counts (raw / Ideal / evaluated solutions, subscribers, retained, exhausted, unsupported)",
+    "decision": {
+      "majority": 2,
+      "filterReducedRatio": 0.5,
+      "order": [
+        "C primary_search_completed: >= 2 primaries completed their primary Search within the 30-minute budget",
+        "R filter_reduced_timeout_remains: >= 2 primaries have a common-prefix bonus_ideal_filter ratio (after / before) <= 0.5",
+        "F filter_improvement_small: >= 2 primaries have that ratio > 0.5",
+        "M mixed: otherwise"
+      ]
+    },
+    "recommendations": {
+      "C_primary_search_completed": "primary Searchが実用時間で完走する状態になった。54 orientation再評価、またはC2.6-B（Candidate portfolio / 1,657 oracle coverage）へ戻る準備へ進む。",
+      "R_filter_reduced_timeout_remains": "filter hotspotは縮小したがtimeoutが残る。A3で既に最大だったbonus_depth_read内部（frontier_reduction_sort / state_generation）を次の候補として再評価する。",
+      "F_filter_improvement_small": "filter改善が小さい。Target Ideal prepared representation（Ideal multisetの事前計算）等の追加を検討する。",
+      "M_mixed": "primary間で結果が分かれた。optimizationを追加せず、差の原因を局所化する。"
+    }
+  },
+  "selectionValidation": {
+    "valid": true,
+    "expected": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "actual": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "missing": [],
+    "duplicate": [],
+    "foreign": [],
+    "notPrimary": [],
+    "metadataMismatches": []
+  },
+  "conditionParity": {
+    "valid": true,
+    "issues": [],
+    "checks": [
+      {
+        "condition": "a5.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a5.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a5.concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a5.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a5.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a5.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a5.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a5.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a5.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a5.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a5.nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "nodeFlags are the A4 / A5 primary flags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "A5 searchInstrumentation",
+        "current": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "authority": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a4.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a4.concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a4.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a4.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a4.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a4.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a4.concurrency is 1",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a4.primary nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a4.A4 searchInstrumentation",
+        "current": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "authority": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.concurrency is 1",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.concurrency",
+        "current": 1,
+        "authority": 3,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.a2.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.a2.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.a2.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.a2.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.a2.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.a2.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.a2.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.a2.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a4.a4.a3.a2.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      }
+    ]
+  },
+  "baselineParity": {
+    "valid": true,
+    "source": "validatePhase2C26A4FormalRun (C2.6-A authority: summary, ordered IDs, identity, metadata)"
+  },
+  "formalSeriesValidation": {
+    "valid": true,
+    "failures": [],
+    "a4FormalRun": {
+      "valid": true,
+      "failures": []
+    },
+    "a4ShaMatches": true,
+    "a5ShaMatches": true,
+    "nodeFlags": [
+      "--max-old-space-size=8192"
+    ],
+    "productionChangeRecordedByRunner": {
+      "sinceA4MeasuredHead": {
+        "valid": true,
+        "issues": [],
+        "changed": [
+          "src/benchmarks/plannerGlobalPhase2C26A5.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A5.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A5Analysis.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6Analysis.ts",
+          "src/domain/models/domainRules.ts",
+          "src/domain/models/restorationBonusMultisetEquality.test.ts"
+        ],
+        "productionChanged": [
+          "src/domain/models/domainRules.ts"
+        ]
+      },
+      "sinceA5MeasuredHead": {
+        "valid": true,
+        "issues": [],
+        "changed": [
+          "src/benchmarks/plannerGlobalPhase2C26A5.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6Analysis.ts",
+          "src/domain/models/domainRules.ts",
+          "src/domain/models/restorationBonusMultisetEquality.test.ts"
+        ],
+        "productionChanged": [
+          "src/domain/models/domainRules.ts"
+        ]
+      }
+    },
+    "productionChangeRederived": {
+      "sinceA4MeasuredHead": {
+        "valid": true,
+        "issues": [],
+        "changed": [
+          "src/benchmarks/plannerGlobalPhase2C26A5.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A5.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A5Analysis.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6Analysis.ts",
+          "src/domain/models/domainRules.ts",
+          "src/domain/models/restorationBonusMultisetEquality.test.ts"
+        ],
+        "productionChanged": [
+          "src/domain/models/domainRules.ts"
+        ]
+      },
+      "sinceA5MeasuredHead": {
+        "valid": true,
+        "issues": [],
+        "changed": [
+          "src/benchmarks/plannerGlobalPhase2C26A5.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A6Analysis.ts",
+          "src/domain/models/domainRules.ts",
+          "src/domain/models/restorationBonusMultisetEquality.test.ts"
+        ],
+        "productionChanged": [
+          "src/domain/models/domainRules.ts"
+        ]
+      }
+    },
+    "a4RawShaMatches": true,
+    "workPrefix": [
+      {
+        "orientationId": "c6-p1",
+        "valid": true,
+        "issues": []
+      },
+      {
+        "orientationId": "c13-p1",
+        "valid": true,
+        "issues": []
+      },
+      {
+        "orientationId": "c14-p0",
+        "valid": true,
+        "issues": []
+      }
+    ]
+  },
+  "summary": {
+    "orientations": 3,
+    "childStatus": {
+      "completed": 0,
+      "out_of_memory": 0,
+      "timeout": 3,
+      "process_failure": 0
+    },
+    "primarySearchCompleted": 0,
+    "semanticFailures": 0,
+    "deliveredCandidates": 0,
+    "commonRawSolutions": 1004557808,
+    "pooledPrefixPhaseTotalsMs": {
+      "bonus_depth_read": {
+        "before": 3749963.1505000005,
+        "after": 3671648.1105000023,
+        "ratio": 0.9791
+      },
+      "bonus_notice_scan": {
+        "before": 134907.70630000185,
+        "after": 137877.1095999982,
+        "ratio": 1.022
+      },
+      "bonus_ideal_filter": {
+        "before": 1497966.2879999995,
+        "after": 236663.81519999937,
+        "ratio": 0.158
+      },
+      "bonus_route_materialization": {
+        "before": 134.1861999996886,
+        "after": 151.15179999996553,
+        "ratio": 1.1264
+      },
+      "bonus_evaluate_sort": {
+        "before": 22.279699997808166,
+        "after": 24.011399999478726,
+        "ratio": 1.0777
+      },
+      "bonus_channel_publication": {
+        "before": 11.49300000172343,
+        "after": 12.607099995662338,
+        "ratio": 1.0969
+      },
+      "bonus_depth_advance": {
+        "before": 13.801400002068931,
+        "after": 17.47579999661957,
+        "ratio": 1.2662
+      },
+      "self": {
+        "before": 116.95919999634407,
+        "after": 115.46840000733528,
+        "ratio": 0.9873
+      }
+    },
+    "rawSolutionsInBudget": {
+      "before": 1004209680,
+      "after": 1223520171
+    },
+    "decision": {
+      "rule": {
+        "majority": 2,
+        "filterReducedRatio": 0.5,
+        "order": [
+          "C primary_search_completed: >= 2 primaries completed their primary Search within the 30-minute budget",
+          "R filter_reduced_timeout_remains: >= 2 primaries have a common-prefix bonus_ideal_filter ratio (after / before) <= 0.5",
+          "F filter_improvement_small: >= 2 primaries have that ratio > 0.5",
+          "M mixed: otherwise"
+        ]
+      },
+      "completedPrimaries": [],
+      "filterReducedPrimaries": [
+        "c6-p1",
+        "c13-p1",
+        "c14-p0"
+      ],
+      "filterSmallPrimaries": [],
+      "filterRatioByPrimary": {
+        "c6-p1": 0.1574,
+        "c13-p1": 0.1564,
+        "c14-p0": 0.1602
+      },
+      "case": "R_filter_reduced_timeout_remains",
+      "reason": "common-prefix filter ratio <= 0.5 in c6-p1, c13-p1, c14-p0; primary Search completed in 0 / 3",
+      "recommendation": "filter hotspotは縮小したがtimeoutが残る。A3で既に最大だったbonus_depth_read内部（frontier_reduction_sort / state_generation）を次の候補として再評価する。"
+    }
+  },
+  "perOrientation": [
+    {
+      "orientationId": "c6-p1",
+      "outcome": {
+        "before": "timeout",
+        "after": "timeout"
+      },
+      "resultClass": {
+        "before": "timeout_in_search",
+        "after": "timeout_in_search"
+      },
+      "searchCompleted": {
+        "before": false,
+        "after": false
+      },
+      "searchWallMs": {
+        "before": 1794440.1719,
+        "after": 1792813.7158
+      },
+      "coverage": {
+        "before": 0.9999983145718382,
+        "after": 0.9999980104458326
+      },
+      "maxCategoryAfter": "bonus_depth_read",
+      "deliveredCandidates": 0,
+      "trialsStarted": 0,
+      "fullPlannerRunsStarted": 0,
+      "semanticFailures": 0,
+      "budget": {
+        "bonus_ideal_filter": {
+          "beforeMs": 468600.04369999917,
+          "afterMs": 88347.14839999954,
+          "beforeShare": 0.2611399650086039,
+          "afterShare": 0.04927848756477008,
+          "beforeNsPerRawSolution": 1504.03,
+          "afterNsPerRawSolution": 238.39,
+          "beforeMedianNsPerRawSolution": 1504.67,
+          "afterMedianNsPerRawSolution": 240.16
+        },
+        "bonus_depth_read": {
+          "beforeMs": 1285042.9340000008,
+          "afterMs": 1650938.5277000042,
+          "beforeShare": 0.716124702357373,
+          "afterShare": 0.9208645121076133,
+          "beforeNsPerRawSolution": 4124.5,
+          "afterNsPerRawSolution": 4454.72,
+          "beforeMedianNsPerRawSolution": 4415.58,
+          "afterMedianNsPerRawSolution": 5141.95
+        },
+        "bonus_notice_scan": {
+          "beforeMs": 40620.1365000026,
+          "afterMs": 53288.51649999901,
+          "beforeShare": 0.02263666247339578,
+          "afterShare": 0.029723398493869894,
+          "beforeNsPerRawSolution": 130.38,
+          "afterNsPerRawSolution": 143.79,
+          "beforeMedianNsPerRawSolution": null,
+          "afterMedianNsPerRawSolution": 144.44
+        }
+      },
+      "rawSolutions": {
+        "before": 311563140,
+        "after": 370604107,
+        "ratio": 1.1895
+      },
+      "idealSolutions": {
+        "before": 0,
+        "after": 0
+      },
+      "bonusDepthWorks": {
+        "before": 600,
+        "after": 813
+      },
+      "predictionCounts": {
+        "before": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 254,
+          "keepBonuses": 29104
+        },
+        "after": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 254,
+          "keepBonuses": 29247
+        }
+      },
+      "memoryAfter": {
+        "source": "last_heartbeat",
+        "sampledMaxHeapUsedBytes": 4702468544,
+        "sampledMaxRssBytes": 5293821952
+      },
+      "prefix": {
+        "commonWorks": 609,
+        "commonBonusWorks": 601,
+        "commonRawSolutions": 311911268,
+        "spanMs": {
+          "before": 1797176.7149999999,
+          "after": 1376397.1602,
+          "ratio": 0.7659
+        },
+        "phaseTotalsMs": {
+          "bonus_depth_read": {
+            "before": 1287213.8348000008,
+            "after": 1257655.328800003,
+            "ratio": 0.977,
+            "beforeNsPerRawSolution": 4126.86,
+            "afterNsPerRawSolution": 4032.09
+          },
+          "bonus_notice_scan": {
+            "before": 40666.36050000253,
+            "after": 44725.565599998954,
+            "ratio": 1.0998,
+            "beforeNsPerRawSolution": 130.38,
+            "afterNsPerRawSolution": 143.39
+          },
+          "bonus_ideal_filter": {
+            "before": 469130.9595999993,
+            "after": 73844.37209999928,
+            "ratio": 0.1574,
+            "beforeNsPerRawSolution": 1504.05,
+            "afterNsPerRawSolution": 236.75
+          },
+          "bonus_route_materialization": {
+            "before": 53.42029999860779,
+            "after": 61.17989999957581,
+            "ratio": 1.1453,
+            "beforeNsPerRawSolution": 0.17,
+            "afterNsPerRawSolution": 0.2
+          },
+          "bonus_evaluate_sort": {
+            "before": 9.682799999246981,
+            "after": 9.697300000499581,
+            "ratio": 1.0015,
+            "beforeNsPerRawSolution": 0.03,
+            "afterNsPerRawSolution": 0.03
+          },
+          "bonus_channel_publication": {
+            "before": 4.983099998098169,
+            "after": 5.131999996391187,
+            "ratio": 1.0299,
+            "beforeNsPerRawSolution": 0.02,
+            "afterNsPerRawSolution": 0.02
+          },
+          "bonus_depth_advance": {
+            "before": 5.736800001553547,
+            "after": 8.776799999327977,
+            "ratio": 1.5299,
+            "beforeNsPerRawSolution": 0.02,
+            "afterNsPerRawSolution": 0.03
+          },
+          "self": {
+            "before": 52.49690000022292,
+            "after": 51.69420000318769,
+            "ratio": 0.9847,
+            "beforeNsPerRawSolution": 0.17,
+            "afterNsPerRawSolution": 0.17
+          }
+        },
+        "filterRatio": 0.1574
+      },
+      "afterCategoryShare": {
+        "kernel_search_wrapper": 0.000004908094980824625,
+        "search_setup": 3.8308497639615637e-7,
+        "initial_route_registration": 0.0000010179529439766198,
+        "scheduler_checkpoint": 0.0000034366091376863545,
+        "queue_dispatch_or_unclassified": 0.0000186775679505358,
+        "scheduler_post_settle": 5.305626516840876e-7,
+        "route_base_work": 6.973396003069888e-7,
+        "bonus_depth_read": 0.9208645121076133,
+        "bonus_notice_scan": 0.029723398493869894,
+        "bonus_ideal_filter": 0.04927848756477008,
+        "bonus_route_materialization": 0.000047813054554246846,
+        "bonus_evaluate_sort": 0.000006999109774971646,
+        "bonus_channel_publication": 0.0000037742348443606505,
+        "bonus_depth_advance": 0.0000059754116692321585,
+        "bonus_depth_work_other": 0.000036173418037300076,
+        "skill_depth": 0.0000012258384575227977,
+        "lazy_cross": 0,
+        "composition": 0,
+        "delivery": 0
+      }
+    },
+    {
+      "orientationId": "c13-p1",
+      "outcome": {
+        "before": "timeout",
+        "after": "timeout"
+      },
+      "resultClass": {
+        "before": "timeout_in_search",
+        "after": "timeout_in_search"
+      },
+      "searchCompleted": {
+        "before": false,
+        "after": false
+      },
+      "searchWallMs": {
+        "before": 1789713.1623000002,
+        "after": 1793496.0528
+      },
+      "coverage": {
+        "before": 0.9999992644072653,
+        "after": 0.9999990420385941
+      },
+      "maxCategoryAfter": "bonus_depth_read",
+      "deliveredCandidates": 0,
+      "trialsStarted": 0,
+      "fullPlannerRunsStarted": 0,
+      "semanticFailures": 0,
+      "budget": {
+        "bonus_ideal_filter": {
+          "beforeMs": 525717.5325000004,
+          "afterMs": 103980.0580999999,
+          "beforeShare": 0.2937440164011473,
+          "afterShare": 0.05797618452388929,
+          "beforeNsPerRawSolution": 1478.41,
+          "afterNsPerRawSolution": 231.4,
+          "beforeMedianNsPerRawSolution": 1478.68,
+          "afterMedianNsPerRawSolution": 231.09
+        },
+        "bonus_depth_read": {
+          "beforeMs": 1215012.2019,
+          "afterMs": 1628813.117299999,
+          "beforeShare": 0.678886554278095,
+          "afterShare": 0.9081776983880737,
+          "beforeNsPerRawSolution": 3416.82,
+          "afterNsPerRawSolution": 3624.78,
+          "beforeMedianNsPerRawSolution": 3626.03,
+          "afterMedianNsPerRawSolution": 3812.36
+        },
+        "bonus_notice_scan": {
+          "beforeMs": 48897.588799998906,
+          "afterMs": 60572.77729999948,
+          "beforeShare": 0.027321466830561567,
+          "afterShare": 0.03377357714583953,
+          "beforeNsPerRawSolution": 137.51,
+          "afterNsPerRawSolution": 134.8,
+          "beforeMedianNsPerRawSolution": null,
+          "afterMedianNsPerRawSolution": 134.92
+        }
+      },
+      "rawSolutions": {
+        "before": 355597735,
+        "after": 449355409,
+        "ratio": 1.2637
+      },
+      "idealSolutions": {
+        "before": 0,
+        "after": 0
+      },
+      "bonusDepthWorks": {
+        "before": 256,
+        "after": 332
+      },
+      "predictionCounts": {
+        "before": {
+          "predictNormalArtian": 12,
+          "predictSkills": 4,
+          "resetBonuses": 253,
+          "keepBonuses": 28218
+        },
+        "after": {
+          "predictNormalArtian": 12,
+          "predictSkills": 4,
+          "resetBonuses": 253,
+          "keepBonuses": 28218
+        }
+      },
+      "memoryAfter": {
+        "source": "last_heartbeat",
+        "sampledMaxHeapUsedBytes": 5036700072,
+        "sampledMaxRssBytes": 5517971456
+      },
+      "prefix": {
+        "commonWorks": 266,
+        "commonBonusWorks": 256,
+        "commonRawSolutions": 355597735,
+        "spanMs": {
+          "before": 1789586.6177,
+          "after": 1302670.845,
+          "ratio": 0.7279
+        },
+        "phaseTotalsMs": {
+          "bonus_depth_read": {
+            "before": 1214896.9581,
+            "after": 1172430.8941999986,
+            "ratio": 0.965,
+            "beforeNsPerRawSolution": 3416.49,
+            "afterNsPerRawSolution": 3297.07
+          },
+          "bonus_notice_scan": {
+            "before": 48897.588799998906,
+            "after": 47936.362699999925,
+            "ratio": 0.9803,
+            "beforeNsPerRawSolution": 137.51,
+            "afterNsPerRawSolution": 134.81
+          },
+          "bonus_ideal_filter": {
+            "before": 525717.5325000004,
+            "after": 82206.40040000026,
+            "ratio": 0.1564,
+            "beforeNsPerRawSolution": 1478.41,
+            "afterNsPerRawSolution": 231.18
+          },
+          "bonus_route_materialization": {
+            "before": 23.54760000052329,
+            "after": 46.07490000007556,
+            "ratio": 1.9567,
+            "beforeNsPerRawSolution": 0.07,
+            "afterNsPerRawSolution": 0.13
+          },
+          "bonus_evaluate_sort": {
+            "before": 4.299199999121356,
+            "after": 4.263500000332897,
+            "ratio": 0.9917,
+            "beforeNsPerRawSolution": 0.01,
+            "afterNsPerRawSolution": 0.01
+          },
+          "bonus_channel_publication": {
+            "before": 2.259200000868532,
+            "after": 2.6053999996761377,
+            "ratio": 1.1532,
+            "beforeNsPerRawSolution": 0.01,
+            "afterNsPerRawSolution": 0.01
+          },
+          "bonus_depth_advance": {
+            "before": 3.725099999835493,
+            "after": 3.9513000002079934,
+            "ratio": 1.0607,
+            "beforeNsPerRawSolution": 0.01,
+            "afterNsPerRawSolution": 0.01
+          },
+          "self": {
+            "before": 22.968000000070333,
+            "after": 22.667400000765156,
+            "ratio": 0.9869,
+            "beforeNsPerRawSolution": 0.06,
+            "afterNsPerRawSolution": 0.06
+          }
+        },
+        "filterRatio": 0.1564
+      },
+      "afterCategoryShare": {
+        "kernel_search_wrapper": 0.000004911245824264998,
+        "search_setup": 3.7825564151151723e-7,
+        "initial_route_registration": 9.282429127183936e-7,
+        "scheduler_checkpoint": 0.000001997997148520646,
+        "queue_dispatch_or_unclassified": 0.000007835199847823933,
+        "scheduler_post_settle": 2.573744162349052e-7,
+        "route_base_work": 7.007542603943846e-7,
+        "bonus_depth_read": 0.9081776983880737,
+        "bonus_notice_scan": 0.03377357714583953,
+        "bonus_ideal_filter": 0.05797618452388929,
+        "bonus_route_materialization": 0.00002947344094593733,
+        "bonus_evaluate_sort": 0.000003035189283207592,
+        "bonus_channel_publication": 0.000001771121823774889,
+        "bonus_depth_advance": 0.000002875501171467711,
+        "bonus_depth_work_other": 0.000016434382421556996,
+        "skill_depth": 9.832750940526753e-7,
+        "lazy_cross": 0,
+        "composition": 0,
+        "delivery": 0
+      }
+    },
+    {
+      "orientationId": "c14-p0",
+      "outcome": {
+        "before": "timeout",
+        "after": "timeout"
+      },
+      "resultClass": {
+        "before": "timeout_in_search",
+        "after": "timeout_in_search"
+      },
+      "searchCompleted": {
+        "before": false,
+        "after": false
+      },
+      "searchWallMs": {
+        "before": 1796571.1643,
+        "after": 1792770.9608
+      },
+      "coverage": {
+        "before": 0.9999987125475197,
+        "after": 0.9999983456894012
+      },
+      "maxCategoryAfter": "bonus_depth_read",
+      "deliveredCandidates": 0,
+      "trialsStarted": 0,
+      "fullPlannerRunsStarted": 0,
+      "semanticFailures": 0,
+      "budget": {
+        "bonus_ideal_filter": {
+          "beforeMs": 503117.7958999998,
+          "afterMs": 97400.23909999912,
+          "beforeShare": 0.28004334361897104,
+          "afterShare": 0.05432943818798558,
+          "beforeNsPerRawSolution": 1492.71,
+          "afterNsPerRawSolution": 241.35,
+          "beforeMedianNsPerRawSolution": 1492.78,
+          "afterMedianNsPerRawSolution": 244.51
+        },
+        "bonus_depth_read": {
+          "beforeMs": 1247947.2236,
+          "afterMs": 1640702.5226000014,
+          "beforeShare": 0.6946272145508018,
+          "afterShare": 0.9151768733847964,
+          "beforeNsPerRawSolution": 3702.57,
+          "afterNsPerRawSolution": 4065.57,
+          "beforeMedianNsPerRawSolution": 3929.48,
+          "afterMedianNsPerRawSolution": 4328.98
+        },
+        "bonus_notice_scan": {
+          "beforeMs": 45343.75700000041,
+          "afterMs": 54484.23129999819,
+          "beforeShare": 0.025239054205608243,
+          "afterShare": 0.030391071972565492,
+          "beforeNsPerRawSolution": 134.53,
+          "afterNsPerRawSolution": 135.01,
+          "beforeMedianNsPerRawSolution": null,
+          "afterMedianNsPerRawSolution": 135.83
+        }
+      },
+      "rawSolutions": {
+        "before": 337048805,
+        "after": 403560655,
+        "ratio": 1.1973
+      },
+      "idealSolutions": {
+        "before": 0,
+        "after": 0
+      },
+      "bonusDepthWorks": {
+        "before": 484,
+        "after": 601
+      },
+      "predictionCounts": {
+        "before": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 243,
+          "keepBonuses": 26996
+        },
+        "after": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 253,
+          "keepBonuses": 29236
+        }
+      },
+      "memoryAfter": {
+        "source": "last_heartbeat",
+        "sampledMaxHeapUsedBytes": 4899839344,
+        "sampledMaxRssBytes": 5296041984
+      },
+      "prefix": {
+        "commonWorks": 492,
+        "commonBonusWorks": 484,
+        "commonRawSolutions": 337048805,
+        "spanMs": {
+          "before": 1796464.7326,
+          "after": 1367530.1179000002,
+          "ratio": 0.7612
+        },
+        "phaseTotalsMs": {
+          "bonus_depth_read": {
+            "before": 1247852.3575999998,
+            "after": 1241561.8875000004,
+            "ratio": 0.995,
+            "beforeNsPerRawSolution": 3702.29,
+            "afterNsPerRawSolution": 3683.63
+          },
+          "bonus_notice_scan": {
+            "before": 45343.75700000041,
+            "after": 45215.181299999305,
+            "ratio": 0.9972,
+            "beforeNsPerRawSolution": 134.53,
+            "afterNsPerRawSolution": 134.15
+          },
+          "bonus_ideal_filter": {
+            "before": 503117.7958999998,
+            "after": 80613.0426999998,
+            "ratio": 0.1602,
+            "beforeNsPerRawSolution": 1492.71,
+            "afterNsPerRawSolution": 239.17
+          },
+          "bonus_route_materialization": {
+            "before": 57.21830000055752,
+            "after": 43.897000000314165,
+            "ratio": 0.7672,
+            "beforeNsPerRawSolution": 0.17,
+            "afterNsPerRawSolution": 0.13
+          },
+          "bonus_evaluate_sort": {
+            "before": 8.297699999439828,
+            "after": 10.050599998646248,
+            "ratio": 1.2113,
+            "beforeNsPerRawSolution": 0.02,
+            "afterNsPerRawSolution": 0.03
+          },
+          "bonus_channel_publication": {
+            "before": 4.25070000275673,
+            "after": 4.869699999595014,
+            "ratio": 1.1456,
+            "beforeNsPerRawSolution": 0.01,
+            "afterNsPerRawSolution": 0.01
+          },
+          "bonus_depth_advance": {
+            "before": 4.339500000679891,
+            "after": 4.7476999970836005,
+            "ratio": 1.0941,
+            "beforeNsPerRawSolution": 0.01,
+            "afterNsPerRawSolution": 0.01
+          },
+          "self": {
+            "before": 41.49429999605081,
+            "after": 41.10680000338243,
+            "ratio": 0.9907,
+            "beforeNsPerRawSolution": 0.12,
+            "afterNsPerRawSolution": 0.12
+          }
+        },
+        "filterRatio": 0.1602
+      },
+      "afterCategoryShare": {
+        "kernel_search_wrapper": 2.7700136314865505e-7,
+        "search_setup": 3.5425607279836846e-7,
+        "initial_route_registration": 0.0000010166385109153346,
+        "scheduler_checkpoint": 0.0000057233747223912815,
+        "queue_dispatch_or_unclassified": 0.000015675622045988762,
+        "scheduler_post_settle": 4.747399524451066e-7,
+        "route_base_work": 5.810000400366709e-7,
+        "bonus_depth_read": 0.9151768733847964,
+        "bonus_notice_scan": 0.030391071972565492,
+        "bonus_ideal_filter": 0.05432943818798558,
+        "bonus_route_materialization": 0.000033511810105402524,
+        "bonus_evaluate_sort": 0.000007176655736117843,
+        "bonus_channel_publication": 0.000003372209910169501,
+        "bonus_depth_advance": 0.0000033647354454534996,
+        "bonus_depth_work_other": 0.00002822942869466698,
+        "skill_depth": 0.000001204671453975997,
+        "lazy_cross": 0,
+        "composition": 0,
+        "delivery": 0
+      }
+    }
+  ],
+  "a4StyleAfter": {
+    "summary": {
+      "orientations": 3,
+      "childStatus": {
+        "completed": 0,
+        "out_of_memory": 0,
+        "timeout": 3,
+        "process_failure": 0
+      },
+      "primarySearchCompleted": 0,
+      "categoryTotalsMs": {
+        "kernel_search_wrapper": 18.104200000176206,
+        "search_setup": 2.000300000000152,
+        "initial_route_registration": 5.3124000000002525,
+        "scheduler_checkpoint": 20.00529999734499,
+        "queue_dispatch_or_unclassified": 75.6405999960034,
+        "scheduler_post_settle": 2.263899999314617,
+        "route_base_work": 3.5486000000023523,
+        "bonus_depth_read": 4920454.167600005,
+        "bonus_notice_scan": 168345.52509999668,
+        "bonus_ideal_filter": 289727.4455999986,
+        "bonus_route_materialization": 198.65939999892953,
+        "bonus_evaluate_sort": 30.857800001263513,
+        "bonus_channel_publication": 15.98859999626211,
+        "bonus_depth_advance": 21.902199996383388,
+        "bonus_depth_work_other": 144.93610001168008,
+        "skill_depth": 6.12089999999489,
+        "lazy_cross": 0,
+        "composition": 0,
+        "delivery": 0
+      },
+      "categoryShareOfSearchWall": {
+        "kernel_search_wrapper": 0,
+        "search_setup": 0,
+        "initial_route_registration": 0,
+        "scheduler_checkpoint": 0,
+        "queue_dispatch_or_unclassified": 0,
+        "scheduler_post_settle": 0,
+        "route_base_work": 0,
+        "bonus_depth_read": 0.9147,
+        "bonus_notice_scan": 0.0313,
+        "bonus_ideal_filter": 0.0539,
+        "bonus_route_materialization": 0,
+        "bonus_evaluate_sort": 0,
+        "bonus_channel_publication": 0,
+        "bonus_depth_advance": 0,
+        "bonus_depth_work_other": 0,
+        "skill_depth": 0,
+        "lazy_cross": 0,
+        "composition": 0,
+        "delivery": 0
+      },
+      "searchWallMs": 5379080.7294,
+      "measuredMs": 5379072.478599998,
+      "pooledCoverage": 1,
+      "unattributedSearchMs": 8.250800001434982,
+      "decision": {
+        "coverageThreshold": 0.9,
+        "categoryThreshold": 0.1,
+        "majority": 2,
+        "coverage": {
+          "c6-p1": 1,
+          "c13-p1": 1,
+          "c14-p0": 1
+        },
+        "maxCategoryByPrimary": {
+          "c6-p1": "bonus_depth_read",
+          "c13-p1": "bonus_depth_read",
+          "c14-p0": "bonus_depth_read"
+        },
+        "maxCategoryConsistentAcrossPrimaries": true,
+        "outerCandidates": [],
+        "case": "I_inner_read_dominant",
+        "category": "bonus_depth_read",
+        "reason": "coverage >= 0.9, bonus_depth_read is the largest category and every other category < 0.1 in c6-p1, c13-p1, c14-p0",
+        "recommendation": "A3のinner evidenceを再利用し、frontier_reduction_sort / state_generationの詳細局所化へ戻る。"
+      }
+    },
+    "perOrientation": [
+      {
+        "orientationId": "c6-p1",
+        "kind": "same_gogma_counter",
+        "childOutcome": "timeout",
+        "resultClass": "timeout_in_search",
+        "primarySearch": {
+          "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+          "completed": false,
+          "observationPoint": "last_heartbeat",
+          "observedAtMs": 1794458.1049,
+          "searchStartedMs": 1644.3891,
+          "searchWallMs": 1792813.7158,
+          "searchWallAtKillEstimateMs": 1797537.3046999997,
+          "unobservedTailMs": 4723.588899999857,
+          "searchRuntimeInclusiveMs": 1792804.9164999998,
+          "trialMsExcluded": 0,
+          "categoryTotalsMs": {
+            "kernel_search_wrapper": 8.799300000071526,
+            "search_setup": 0.6867999999999483,
+            "initial_route_registration": 1.8250000000002728,
+            "scheduler_checkpoint": 6.161199997887707,
+            "queue_dispatch_or_unclassified": 33.48539999950708,
+            "scheduler_post_settle": 0.9511999990304503,
+            "route_base_work": 1.2502000000008593,
+            "bonus_depth_read": 1650938.5277000042,
+            "bonus_notice_scan": 53288.51649999901,
+            "bonus_ideal_filter": 88347.14839999954,
+            "bonus_route_materialization": 85.7198999991474,
+            "bonus_evaluate_sort": 12.548100002959018,
+            "bonus_channel_publication": 6.766499995620052,
+            "bonus_depth_advance": 10.712799998150786,
+            "bonus_depth_work_other": 64.85220000463869,
+            "skill_depth": 2.197700000001987,
+            "lazy_cross": 0,
+            "composition": 0,
+            "delivery": 0
+          },
+          "categoryShare": {
+            "kernel_search_wrapper": 0.000004908094980824625,
+            "search_setup": 3.8308497639615637e-7,
+            "initial_route_registration": 0.0000010179529439766198,
+            "scheduler_checkpoint": 0.0000034366091376863545,
+            "queue_dispatch_or_unclassified": 0.0000186775679505358,
+            "scheduler_post_settle": 5.305626516840876e-7,
+            "route_base_work": 6.973396003069888e-7,
+            "bonus_depth_read": 0.9208645121076133,
+            "bonus_notice_scan": 0.029723398493869894,
+            "bonus_ideal_filter": 0.04927848756477008,
+            "bonus_route_materialization": 0.000047813054554246846,
+            "bonus_evaluate_sort": 0.000006999109774971646,
+            "bonus_channel_publication": 0.0000037742348443606505,
+            "bonus_depth_advance": 0.0000059754116692321585,
+            "bonus_depth_work_other": 0.000036173418037300076,
+            "skill_depth": 0.0000012258384575227977,
+            "lazy_cross": 0,
+            "composition": 0,
+            "delivery": 0
+          },
+          "measuredMs": 1792810.1489000001,
+          "coverage": 0.9999980104458326,
+          "strictCoverage": 0.9999391326611136,
+          "unattributedSearchMs": 3.5668999997433275,
+          "unattributedSearchShare": 0.0000019895541674566476,
+          "maxCategory": "bonus_depth_read",
+          "maxCategoryShare": 0.9208645121076133,
+          "groups": {
+            "bonus_depth_work_inclusive": {
+              "ms": 1792754.7921000035,
+              "share": 0.9999671333951335
+            },
+            "bonus_post_read": {
+              "ms": 141816.2643999993,
+              "share": 0.07910262128752021
+            },
+            "skill_total": {
+              "ms": 2.197700000001987,
+              "share": 0.0000012258384575227977
+            },
+            "lazy_cross_total": {
+              "ms": 0,
+              "share": 0
+            },
+            "composition_total": {
+              "ms": 0,
+              "share": 0
+            },
+            "delivery_total": {
+              "ms": 0,
+              "share": 0
+            },
+            "scheduler_checkpoint": {
+              "ms": 6.161199997887707,
+              "share": 0.0000034366091376863545
+            },
+            "queue_dispatch_or_unclassified": {
+              "ms": 33.48539999950708,
+              "share": 0.0000186775679505358
+            },
+            "route_base_work": {
+              "ms": 1.2502000000008593,
+              "share": 6.973396003069888e-7
+            },
+            "initial_route_registration": {
+              "ms": 1.8250000000002728,
+              "share": 0.0000010179529439766198
+            }
+          },
+          "sections": [
+            {
+              "section": "search_runtime",
+              "parent": null,
+              "inclusiveMs": 1792804.9164999998,
+              "exclusiveMs": 3.566899999976158,
+              "count": 0,
+              "exclusiveShare": 0.0000019895541675865164
+            },
+            {
+              "section": "search_setup",
+              "parent": "search_runtime",
+              "inclusiveMs": 0.6867999999999483,
+              "exclusiveMs": 0.6867999999999483,
+              "count": 1,
+              "exclusiveShare": 3.8308497639615637e-7
+            },
+            {
+              "section": "route_registration",
+              "parent": "search_runtime",
+              "inclusiveMs": 1.8250000000002728,
+              "exclusiveMs": 0.10230000000046857,
+              "count": 1,
+              "exclusiveShare": 5.7061143106449105e-8
+            },
+            {
+              "section": "normal_route_registration",
+              "parent": "route_registration",
+              "inclusiveMs": 0.5742000000000189,
+              "exclusiveMs": 0.5742000000000189,
+              "count": 1,
+              "exclusiveShare": 3.202786742089353e-7
+            },
+            {
+              "section": "owned_normal_route_registration",
+              "parent": "route_registration",
+              "inclusiveMs": 0.11009999999987485,
+              "exclusiveMs": 0.11009999999987485,
+              "count": 1,
+              "exclusiveShare": 6.141184609955162e-8
+            },
+            {
+              "section": "existing_gogma_route_registration",
+              "parent": "route_registration",
+              "inclusiveMs": 1.0383999999999105,
+              "exclusiveMs": 1.0383999999999105,
+              "count": 1,
+              "exclusiveShare": 5.792012805616837e-7
+            },
+            {
+              "section": "scheduler_step",
+              "parent": "search_runtime",
+              "inclusiveMs": 1792798.8377999999,
+              "exclusiveMs": 2.322100003601463,
+              "count": 825,
+              "exclusiveShare": 0.0000012952265944514385
+            },
+            {
+              "section": "scheduler_checkpoint",
+              "parent": "scheduler_step",
+              "inclusiveMs": 6.161199997887707,
+              "exclusiveMs": 6.161199997887707,
+              "count": 826,
+              "exclusiveShare": 0.0000034366091376863545
+            },
+            {
+              "section": "scheduler_settle",
+              "parent": "scheduler_step",
+              "inclusiveMs": 1792789.4032999992,
+              "exclusiveMs": 32.41349999590648,
+              "count": 825,
+              "exclusiveShare": 0.000018079680956391353
+            },
+            {
+              "section": "scheduler_post_settle",
+              "parent": "scheduler_step",
+              "inclusiveMs": 0.9511999990304503,
+              "exclusiveMs": 0.9511999990304503,
+              "count": 825,
+              "exclusiveShare": 5.305626516840876e-7
+            },
+            {
+              "section": "bonus_depth_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 1792754.7921000035,
+              "exclusiveMs": 64.85220000463869,
+              "count": 813,
+              "exclusiveShare": 0.000036173418037300076
+            },
+            {
+              "section": "bonus_depth_read",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 1650938.5277000042,
+              "exclusiveMs": 1650938.5277000042,
+              "count": 813,
+              "exclusiveShare": 0.9208645121076133
+            },
+            {
+              "section": "bonus_notice_scan",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 53288.51649999901,
+              "exclusiveMs": 53288.51649999901,
+              "count": 813,
+              "exclusiveShare": 0.029723398493869894
+            },
+            {
+              "section": "bonus_ideal_filter",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 88347.14839999954,
+              "exclusiveMs": 88347.14839999954,
+              "count": 813,
+              "exclusiveShare": 0.04927848756477008
+            },
+            {
+              "section": "bonus_route_materialization",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 85.7198999991474,
+              "exclusiveMs": 85.7198999991474,
+              "count": 813,
+              "exclusiveShare": 0.000047813054554246846
+            },
+            {
+              "section": "bonus_evaluate_sort",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 12.548100002959018,
+              "exclusiveMs": 12.548100002959018,
+              "count": 813,
+              "exclusiveShare": 0.000006999109774971646
+            },
+            {
+              "section": "bonus_channel_publication",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 6.766499995620052,
+              "exclusiveMs": 6.766499995620052,
+              "count": 813,
+              "exclusiveShare": 0.0000037742348443606505
+            },
+            {
+              "section": "cross_add_bonus",
+              "parent": "bonus_channel_publication",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "bonus_depth_advance",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 10.712799998150786,
+              "exclusiveMs": 10.712799998150786,
+              "count": 813,
+              "exclusiveShare": 0.0000059754116692321585
+            },
+            {
+              "section": "skill_depth_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 2.197700000001987,
+              "exclusiveMs": 0.2920000000026448,
+              "count": 8,
+              "exclusiveShare": 1.6287247103771006e-7
+            },
+            {
+              "section": "skill_depth_read",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 1.2552000000014232,
+              "exclusiveMs": 1.2552000000014232,
+              "count": 8,
+              "exclusiveShare": 7.001285124825813e-7
+            },
+            {
+              "section": "skill_ideal_filter",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.21519999999827633,
+              "exclusiveMs": 0.21519999999827633,
+              "count": 8,
+              "exclusiveShare": 1.200347800230034e-7
+            },
+            {
+              "section": "skill_route_materialization",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.13930000000118525,
+              "exclusiveMs": 0.13930000000118525,
+              "count": 8,
+              "exclusiveShare": 7.769909320390601e-8
+            },
+            {
+              "section": "skill_evaluate_sort",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.0911999999989348,
+              "exclusiveMs": 0.0911999999989348,
+              "count": 8,
+              "exclusiveShare": 5.086975807647645e-8
+            },
+            {
+              "section": "skill_channel_publication",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.05849999999963984,
+              "exclusiveMs": 0.05849999999963984,
+              "count": 8,
+              "exclusiveShare": 3.263027245055163e-8
+            },
+            {
+              "section": "cross_add_skill",
+              "parent": "skill_channel_publication",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "skill_depth_advance",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.14629999999988286,
+              "exclusiveMs": 0.14629999999988286,
+              "count": 8,
+              "exclusiveShare": 8.160357024856875e-8
+            },
+            {
+              "section": "composition_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "composition_checkpoint",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "compose_route",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "composition_consumer",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "cross_open_next",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "cross_wake_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "cross_wake",
+              "parent": "cross_wake_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_flush",
+              "parent": "search_runtime",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_sort",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_checkpoint",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_key_dedup",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_consumer",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            }
+          ],
+          "routeRegistration": {
+            "normalMs": 0.5742000000000189,
+            "ownedNormalMs": 0.11009999999987485,
+            "existingGogmaMs": 1.0383999999999105,
+            "ownMs": 0.10230000000046857
+          },
+          "workCounts": {
+            "schedulerSteps": 825,
+            "bonusDepthWorks": 813,
+            "skillDepthWorks": 8,
+            "compositionWorks": 0,
+            "crossWakeWorks": 0,
+            "routeBaseWorks": 4,
+            "crossAddBonus": 0,
+            "crossAddSkill": 0,
+            "crossOpenNext": 0,
+            "deliveryFlushes": 0,
+            "deliveryConsumerCalls": 0
+          },
+          "bonusDepth": {
+            "works": 813,
+            "withCounts": 813,
+            "rawSolutions": 370604107,
+            "unsupportedPredictions": 0,
+            "idealSolutions": 0,
+            "evaluatedSolutions": 0,
+            "subscriberPublications": 0,
+            "maxRawSolutions": 642573,
+            "maxSubscriberCount": 1,
+            "maxRetainedCountAfter": 0,
+            "exhaustedWorks": 0
+          },
+          "skillDepth": {
+            "works": 8,
+            "withCounts": 8,
+            "rawSolutions": 8,
+            "unsupportedPredictions": 0,
+            "idealSolutions": 0,
+            "evaluatedSolutions": 0,
+            "subscriberPublications": 0,
+            "maxRawSolutions": 1,
+            "maxSubscriberCount": 4,
+            "maxRetainedCountAfter": 0,
+            "exhaustedWorks": 2
+          }
+        },
+        "activeAtEnd": {
+          "where": "section",
+          "lastDurable": {
+            "section": "bonus_depth_read",
+            "stack": [
+              "search_runtime",
+              "scheduler_step",
+              "scheduler_settle",
+              "bonus_depth_work",
+              "bonus_depth_read"
+            ],
+            "work": null,
+            "startedMs": 1798717.2251
+          },
+          "lastHeartbeatStack": [
+            {
+              "section": "search_runtime",
+              "elapsedMs": 1792804.9164999998,
+              "work": null
+            },
+            {
+              "section": "scheduler_step",
+              "elapsedMs": 78.65769999986514,
+              "work": null
+            },
+            {
+              "section": "scheduler_settle",
+              "elapsedMs": 78.65509999985807,
+              "work": null
+            },
+            {
+              "section": "bonus_depth_work",
+              "elapsedMs": 78.65240000002086,
+              "work": {
+                "channel": 7,
+                "depth": 99
+              }
+            },
+            {
+              "section": "bonus_depth_read",
+              "elapsedMs": 78.64650000003166,
+              "work": null
+            }
+          ],
+          "lastHeartbeatAtMs": 1794458.1049,
+          "killElapsedEstimateMs": 1799181.6937999998,
+          "lastDurableElapsedAtKillEstimateMs": 464.4686999998521
+        },
+        "counters": {
+          "startedTargets": 1,
+          "completedTargets": 0,
+          "deliveredCandidates": 0,
+          "trialsStarted": 0,
+          "trialsCompleted": 0,
+          "fullPlannerRunsStarted": 0,
+          "fullPlannerRunsCompleted": 0
+        },
+        "bonusWork": {
+          "works": 816,
+          "phaseDistributions": {
+            "bonus_depth_read": {
+              "count": 816,
+              "totalMs": 1654964.5731000043,
+              "minMs": 3.504400000001624,
+              "medianMs": 2141.5329500000225,
+              "maxMs": 2696.0984999999637
+            },
+            "bonus_notice_scan": {
+              "count": 816,
+              "totalMs": 53376.606999998716,
+              "minMs": 0.10009999999965657,
+              "medianMs": 69.84905000007711,
+              "maxMs": 144.93800000008196
+            },
+            "bonus_ideal_filter": {
+              "count": 816,
+              "totalMs": 88491.55289999951,
+              "minMs": 0.10390000000006694,
+              "medianMs": 116.06034999998519,
+              "maxMs": 164.33799999999974
+            },
+            "bonus_route_materialization": {
+              "count": 816,
+              "totalMs": 85.960499999283,
+              "minMs": 0.009000000001833541,
+              "medianMs": 0.08870000008028,
+              "maxMs": 6.953900000080466
+            },
+            "bonus_evaluate_sort": {
+              "count": 816,
+              "totalMs": 12.582200003007074,
+              "minMs": 0.007099999998899875,
+              "medianMs": 0.013399999996181577,
+              "maxMs": 0.09280000010039657
+            },
+            "bonus_channel_publication": {
+              "count": 816,
+              "totalMs": 6.786999995720635,
+              "minMs": 0.005000000121071935,
+              "medianMs": 0.006600000022444874,
+              "maxMs": 0.13379999995231628
+            },
+            "bonus_depth_advance": {
+              "count": 816,
+              "totalMs": 10.73719999814557,
+              "minMs": 0.006400000002031447,
+              "medianMs": 0.013299999991431832,
+              "maxMs": 0.11920000007376075
+            },
+            "self": {
+              "count": 816,
+              "totalMs": 64.99130000466812,
+              "minMs": 0.018099999993864913,
+              "medianMs": 0.05935000017052516,
+              "maxMs": 0.18589999980758876
+            }
+          },
+          "nsPerRawSolution": {
+            "bonus_depth_read": {
+              "count": 816,
+              "min": 1575.5,
+              "median": 5141.95,
+              "max": 54258.86
+            },
+            "bonus_notice_scan": {
+              "count": 816,
+              "min": 127.05,
+              "median": 144.44,
+              "max": 911.39
+            },
+            "bonus_ideal_filter": {
+              "count": 816,
+              "min": 222.32,
+              "median": 240.16,
+              "max": 1483.54
+            },
+            "bonus_route_materialization": {
+              "count": 816,
+              "min": 0.12,
+              "median": 0.19,
+              "max": 102.53
+            },
+            "bonus_evaluate_sort": {
+              "count": 816,
+              "min": 0.02,
+              "median": 0.03,
+              "max": 155.06
+            },
+            "bonus_channel_publication": {
+              "count": 816,
+              "min": 0.01,
+              "median": 0.01,
+              "max": 41.46
+            },
+            "bonus_depth_advance": {
+              "count": 816,
+              "min": 0.01,
+              "median": 0.03,
+              "max": 86.39
+            },
+            "self": {
+              "count": 816,
+              "min": 0.08,
+              "median": 0.18,
+              "max": 564.87
+            }
+          },
+          "correlations": {
+            "rawSolutions_vs_bonus_depth_read": 0.2785,
+            "rawSolutions_vs_bonus_notice_scan": 0.9739,
+            "rawSolutions_vs_bonus_ideal_filter": 0.9956,
+            "rawSolutions_vs_bonus_route_materialization": -0.0123,
+            "rawSolutions_vs_bonus_evaluate_sort": 0.1059,
+            "rawSolutions_vs_bonus_channel_publication": 0.0513,
+            "rawSolutions_vs_bonus_depth_advance": 0.2714,
+            "rawSolutions_vs_self": 0.4744
+          },
+          "maxRawSolutionsWork": {
+            "channel": 0,
+            "depth": 3,
+            "rawSolutions": 642573
+          }
+        },
+        "a3Reference": {
+          "orientationId": "c6-p1",
+          "childOutcome": "timeout",
+          "searchWallMs": 1796535.7868000001,
+          "measuredGogmaMs": 1284378.2057999943,
+          "coverage": 0.7149193549257018,
+          "dominantPhase": "frontier_reduction_sort",
+          "phaseShareOfMeasured": {
+            "window_collection": 0.006219423425223401,
+            "support_evaluation": 0.028087492326709044,
+            "state_generation": 0.31160806489293824,
+            "solution_materialization": 0.07635890749089054,
+            "frontier_reduction_sort": 0.5769755647157078,
+            "exhaustion_scan": 0.0007505471485309988
+          }
+        },
+        "memory": {
+          "source": "last_heartbeat",
+          "sampledMaxHeapUsedBytes": 4702468544,
+          "sampledMaxRssBytes": 5293821952
+        },
+        "heartbeats": 328,
+        "maxHeartbeatGapMs": 7058.533099999884,
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 254,
+          "keepBonuses": 29247
+        },
+        "laterTargets": []
+      },
+      {
+        "orientationId": "c13-p1",
+        "kind": "same_skill_counter",
+        "childOutcome": "timeout",
+        "resultClass": "timeout_in_search",
+        "primarySearch": {
+          "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+          "completed": false,
+          "observationPoint": "last_heartbeat",
+          "observedAtMs": 1795125.2408999999,
+          "searchStartedMs": 1629.1881000000003,
+          "searchWallMs": 1793496.0528,
+          "searchWallAtKillEstimateMs": 1797596.3675000002,
+          "unobservedTailMs": 4100.314700000221,
+          "searchRuntimeInclusiveMs": 1793487.2444999998,
+          "trialMsExcluded": 0,
+          "categoryTotalsMs": {
+            "kernel_search_wrapper": 8.808300000149757,
+            "search_setup": 0.6784000000002379,
+            "initial_route_registration": 1.6648000000000138,
+            "scheduler_checkpoint": 3.583399999377434,
+            "queue_dispatch_or_unclassified": 14.052399999971385,
+            "scheduler_post_settle": 0.4615999996090068,
+            "route_base_work": 1.256800000000112,
+            "bonus_depth_read": 1628813.117299999,
+            "bonus_notice_scan": 60572.77729999948,
+            "bonus_ideal_filter": 103980.0580999999,
+            "bonus_route_materialization": 52.8604999989725,
+            "bonus_evaluate_sort": 5.443599998933678,
+            "bonus_channel_publication": 3.1764999999682004,
+            "bonus_depth_advance": 5.157200000849116,
+            "bonus_depth_work_other": 29.47500000326818,
+            "skill_depth": 1.7635000000000218,
+            "lazy_cross": 0,
+            "composition": 0,
+            "delivery": 0
+          },
+          "categoryShare": {
+            "kernel_search_wrapper": 0.000004911245824264998,
+            "search_setup": 3.7825564151151723e-7,
+            "initial_route_registration": 9.282429127183936e-7,
+            "scheduler_checkpoint": 0.000001997997148520646,
+            "queue_dispatch_or_unclassified": 0.000007835199847823933,
+            "scheduler_post_settle": 2.573744162349052e-7,
+            "route_base_work": 7.007542603943846e-7,
+            "bonus_depth_read": 0.9081776983880737,
+            "bonus_notice_scan": 0.03377357714583953,
+            "bonus_ideal_filter": 0.05797618452388929,
+            "bonus_route_materialization": 0.00002947344094593733,
+            "bonus_evaluate_sort": 0.000003035189283207592,
+            "bonus_channel_publication": 0.000001771121823774889,
+            "bonus_depth_advance": 0.000002875501171467711,
+            "bonus_depth_work_other": 0.000016434382421556996,
+            "skill_depth": 9.832750940526753e-7,
+            "lazy_cross": 0,
+            "composition": 0,
+            "delivery": 0
+          },
+          "measuredMs": 1793494.3346999998,
+          "coverage": 0.9999990420385941,
+          "strictCoverage": 0.9999726595439521,
+          "unattributedSearchMs": 1.7181000001728535,
+          "unattributedSearchShare": 9.57961405875726e-7,
+          "maxCategory": "bonus_depth_read",
+          "maxCategoryShare": 0.9081776983880737,
+          "groups": {
+            "bonus_depth_work_inclusive": {
+              "ms": 1793462.0655000005,
+              "share": 0.9999810496934485
+            },
+            "bonus_post_read": {
+              "ms": 164648.94820000138,
+              "share": 0.09180335130537477
+            },
+            "skill_total": {
+              "ms": 1.7635000000000218,
+              "share": 9.832750940526753e-7
+            },
+            "lazy_cross_total": {
+              "ms": 0,
+              "share": 0
+            },
+            "composition_total": {
+              "ms": 0,
+              "share": 0
+            },
+            "delivery_total": {
+              "ms": 0,
+              "share": 0
+            },
+            "scheduler_checkpoint": {
+              "ms": 3.583399999377434,
+              "share": 0.000001997997148520646
+            },
+            "queue_dispatch_or_unclassified": {
+              "ms": 14.052399999971385,
+              "share": 0.000007835199847823933
+            },
+            "route_base_work": {
+              "ms": 1.256800000000112,
+              "share": 7.007542603943846e-7
+            },
+            "initial_route_registration": {
+              "ms": 1.6648000000000138,
+              "share": 9.282429127183936e-7
+            }
+          },
+          "sections": [
+            {
+              "section": "search_runtime",
+              "parent": null,
+              "inclusiveMs": 1793487.2444999998,
+              "exclusiveMs": 1.7181000004056841,
+              "count": 0,
+              "exclusiveShare": 9.579614060055455e-7
+            },
+            {
+              "section": "search_setup",
+              "parent": "search_runtime",
+              "inclusiveMs": 0.6784000000002379,
+              "exclusiveMs": 0.6784000000002379,
+              "count": 1,
+              "exclusiveShare": 3.7825564151151723e-7
+            },
+            {
+              "section": "route_registration",
+              "parent": "search_runtime",
+              "inclusiveMs": 1.6648000000000138,
+              "exclusiveMs": 0.12739999999939755,
+              "count": 1,
+              "exclusiveShare": 7.10344468283056e-8
+            },
+            {
+              "section": "normal_route_registration",
+              "parent": "route_registration",
+              "inclusiveMs": 0.49890000000004875,
+              "exclusiveMs": 0.49890000000004875,
+              "count": 1,
+              "exclusiveShare": 2.781717858933493e-7
+            },
+            {
+              "section": "owned_normal_route_registration",
+              "parent": "route_registration",
+              "inclusiveMs": 0.22770000000036816,
+              "exclusiveMs": 0.22770000000036816,
+              "count": 1,
+              "exclusiveShare": 1.2695874052517914e-7
+            },
+            {
+              "section": "existing_gogma_route_registration",
+              "parent": "route_registration",
+              "inclusiveMs": 0.8108000000001994,
+              "exclusiveMs": 0.8108000000001994,
+              "count": 1,
+              "exclusiveShare": 4.5207793947155954e-7
+            },
+            {
+              "section": "scheduler_step",
+              "parent": "search_runtime",
+              "inclusiveMs": 1793483.1831999994,
+              "exclusiveMs": 1.0581000006704926,
+              "count": 346,
+              "exclusiveShare": 5.899650568054445e-7
+            },
+            {
+              "section": "scheduler_checkpoint",
+              "parent": "scheduler_step",
+              "inclusiveMs": 3.583399999377434,
+              "exclusiveMs": 3.583399999377434,
+              "count": 347,
+              "exclusiveShare": 0.000001997997148520646
+            },
+            {
+              "section": "scheduler_settle",
+              "parent": "scheduler_step",
+              "inclusiveMs": 1793478.0801,
+              "exclusiveMs": 14.251099999301005,
+              "count": 346,
+              "exclusiveShare": 0.000007945989051412874
+            },
+            {
+              "section": "scheduler_post_settle",
+              "parent": "scheduler_step",
+              "inclusiveMs": 0.4615999996090068,
+              "exclusiveMs": 0.4615999996090068,
+              "count": 346,
+              "exclusiveShare": 2.573744162349052e-7
+            },
+            {
+              "section": "bonus_depth_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 1793462.0655000005,
+              "exclusiveMs": 29.47500000326818,
+              "count": 332,
+              "exclusiveShare": 0.000016434382421556996
+            },
+            {
+              "section": "bonus_depth_read",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 1628813.117299999,
+              "exclusiveMs": 1628813.117299999,
+              "count": 332,
+              "exclusiveShare": 0.9081776983880737
+            },
+            {
+              "section": "bonus_notice_scan",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 60572.77729999948,
+              "exclusiveMs": 60572.77729999948,
+              "count": 332,
+              "exclusiveShare": 0.03377357714583953
+            },
+            {
+              "section": "bonus_ideal_filter",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 103980.0580999999,
+              "exclusiveMs": 103980.0580999999,
+              "count": 332,
+              "exclusiveShare": 0.05797618452388929
+            },
+            {
+              "section": "bonus_route_materialization",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 52.8604999989725,
+              "exclusiveMs": 52.8604999989725,
+              "count": 332,
+              "exclusiveShare": 0.00002947344094593733
+            },
+            {
+              "section": "bonus_evaluate_sort",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 5.443599998933678,
+              "exclusiveMs": 5.443599998933678,
+              "count": 332,
+              "exclusiveShare": 0.000003035189283207592
+            },
+            {
+              "section": "bonus_channel_publication",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 3.1764999999682004,
+              "exclusiveMs": 3.1764999999682004,
+              "count": 332,
+              "exclusiveShare": 0.000001771121823774889
+            },
+            {
+              "section": "cross_add_bonus",
+              "parent": "bonus_channel_publication",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "bonus_depth_advance",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 5.157200000849116,
+              "exclusiveMs": 5.157200000849116,
+              "count": 332,
+              "exclusiveShare": 0.000002875501171467711
+            },
+            {
+              "section": "skill_depth_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 1.7635000000000218,
+              "exclusiveMs": 0.3694000000000415,
+              "count": 10,
+              "exclusiveShare": 2.059664415895064e-7
+            },
+            {
+              "section": "skill_depth_read",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.7297000000007756,
+              "exclusiveMs": 0.7297000000007756,
+              "count": 10,
+              "exclusiveShare": 4.068589941202103e-7
+            },
+            {
+              "section": "skill_ideal_filter",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.18599999999878492,
+              "exclusiveMs": 0.18599999999878492,
+              "count": 10,
+              "exclusiveShare": 1.0370806208823396e-7
+            },
+            {
+              "section": "skill_route_materialization",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.0911999999998443,
+              "exclusiveMs": 0.0911999999998443,
+              "count": 10,
+              "exclusiveShare": 5.085040463705686e-8
+            },
+            {
+              "section": "skill_evaluate_sort",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.10820000000012442,
+              "exclusiveMs": 0.10820000000012442,
+              "count": 10,
+              "exclusiveShare": 6.032909848404904e-8
+            },
+            {
+              "section": "skill_channel_publication",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.11620000000084474,
+              "exclusiveMs": 0.11620000000084474,
+              "count": 10,
+              "exclusiveShare": 6.478966029472643e-8
+            },
+            {
+              "section": "cross_add_skill",
+              "parent": "skill_channel_publication",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "skill_depth_advance",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.16279999999960637,
+              "exclusiveMs": 0.16279999999960637,
+              "count": 10,
+              "exclusiveShare": 9.077243283889227e-8
+            },
+            {
+              "section": "composition_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "composition_checkpoint",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "compose_route",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "composition_consumer",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "cross_open_next",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "cross_wake_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "cross_wake",
+              "parent": "cross_wake_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_flush",
+              "parent": "search_runtime",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_sort",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_checkpoint",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_key_dedup",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_consumer",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            }
+          ],
+          "routeRegistration": {
+            "normalMs": 0.49890000000004875,
+            "ownedNormalMs": 0.22770000000036816,
+            "existingGogmaMs": 0.8108000000001994,
+            "ownMs": 0.12739999999939755
+          },
+          "workCounts": {
+            "schedulerSteps": 346,
+            "bonusDepthWorks": 332,
+            "skillDepthWorks": 10,
+            "compositionWorks": 0,
+            "crossWakeWorks": 0,
+            "routeBaseWorks": 4,
+            "crossAddBonus": 0,
+            "crossAddSkill": 0,
+            "crossOpenNext": 0,
+            "deliveryFlushes": 0,
+            "deliveryConsumerCalls": 0
+          },
+          "bonusDepth": {
+            "works": 332,
+            "withCounts": 332,
+            "rawSolutions": 449355409,
+            "unsupportedPredictions": 0,
+            "idealSolutions": 0,
+            "evaluatedSolutions": 0,
+            "subscriberPublications": 0,
+            "maxRawSolutions": 1525164,
+            "maxSubscriberCount": 4,
+            "maxRetainedCountAfter": 0,
+            "exhaustedWorks": 0
+          },
+          "skillDepth": {
+            "works": 10,
+            "withCounts": 10,
+            "rawSolutions": 16,
+            "unsupportedPredictions": 0,
+            "idealSolutions": 0,
+            "evaluatedSolutions": 0,
+            "subscriberPublications": 0,
+            "maxRawSolutions": 3,
+            "maxSubscriberCount": 3,
+            "maxRetainedCountAfter": 0,
+            "exhaustedWorks": 5
+          }
+        },
+        "activeAtEnd": {
+          "where": "section",
+          "lastDurable": {
+            "section": "bonus_depth_read",
+            "stack": [
+              "search_runtime",
+              "scheduler_step",
+              "scheduler_settle",
+              "bonus_depth_work",
+              "bonus_depth_read"
+            ],
+            "work": null,
+            "startedMs": 1795012.0629
+          },
+          "lastHeartbeatStack": [
+            {
+              "section": "search_runtime",
+              "elapsedMs": 1793487.2444999998,
+              "work": null
+            },
+            {
+              "section": "scheduler_step",
+              "elapsedMs": 113.1917999999132,
+              "work": null
+            },
+            {
+              "section": "scheduler_settle",
+              "elapsedMs": 113.18919999990612,
+              "work": null
+            },
+            {
+              "section": "bonus_depth_work",
+              "elapsedMs": 113.18689999985509,
+              "work": {
+                "channel": 2,
+                "depth": 67
+              }
+            },
+            {
+              "section": "bonus_depth_read",
+              "elapsedMs": 113.17799999983981,
+              "work": null
+            }
+          ],
+          "lastHeartbeatAtMs": 1795125.2408999999,
+          "killElapsedEstimateMs": 1799225.5556,
+          "lastDurableElapsedAtKillEstimateMs": 4213.492700000061
+        },
+        "counters": {
+          "startedTargets": 1,
+          "completedTargets": 0,
+          "deliveredCandidates": 0,
+          "trialsStarted": 0,
+          "trialsCompleted": 0,
+          "fullPlannerRunsStarted": 0,
+          "fullPlannerRunsCompleted": 0
+        },
+        "bonusWork": {
+          "works": 332,
+          "phaseDistributions": {
+            "bonus_depth_read": {
+              "count": 332,
+              "totalMs": 1628699.9392999995,
+              "minMs": 5.714500000000044,
+              "medianMs": 5320.635300000024,
+              "maxMs": 6318.1767000001855
+            },
+            "bonus_notice_scan": {
+              "count": 332,
+              "totalMs": 60572.777299999485,
+              "minMs": 0.13149999999950523,
+              "medianMs": 189.96354999998584,
+              "maxMs": 255.81239999999525
+            },
+            "bonus_ideal_filter": {
+              "count": 332,
+              "totalMs": 103980.05809999988,
+              "minMs": 0.15869999999995343,
+              "medianMs": 325.2716500000097,
+              "maxMs": 394.272399999998
+            },
+            "bonus_route_materialization": {
+              "count": 332,
+              "totalMs": 52.8604999989725,
+              "minMs": 0.00989999999956126,
+              "medianMs": 0.0886000000173226,
+              "maxMs": 8.133500000054482
+            },
+            "bonus_evaluate_sort": {
+              "count": 332,
+              "totalMs": 5.443599998933678,
+              "minMs": 0.008200000000215368,
+              "medianMs": 0.014200000019627623,
+              "maxMs": 0.06959999981336296
+            },
+            "bonus_channel_publication": {
+              "count": 332,
+              "totalMs": 3.1764999999682004,
+              "minMs": 0.005600000033155084,
+              "medianMs": 0.007099999987985939,
+              "maxMs": 0.1443000000435859
+            },
+            "bonus_depth_advance": {
+              "count": 332,
+              "totalMs": 5.157200000849116,
+              "minMs": 0.007500000006984919,
+              "medianMs": 0.014200000019627623,
+              "maxMs": 0.10339999996358529
+            },
+            "self": {
+              "count": 332,
+              "totalMs": 29.466100003252905,
+              "minMs": 0.023700000001554145,
+              "medianMs": 0.06684999991557561,
+              "maxMs": 0.1887999998871237
+            }
+          },
+          "nsPerRawSolution": {
+            "bonus_depth_read": {
+              "count": 332,
+              "min": 1565.5,
+              "median": 3812.36,
+              "max": 30692.69
+            },
+            "bonus_notice_scan": {
+              "count": 332,
+              "min": 128.91,
+              "median": 134.92,
+              "max": 909.2
+            },
+            "bonus_ideal_filter": {
+              "count": 332,
+              "min": 224.88,
+              "median": 231.09,
+              "max": 1144.34
+            },
+            "bonus_route_materialization": {
+              "count": 332,
+              "min": 0.05,
+              "median": 0.06,
+              "max": 104.48
+            },
+            "bonus_evaluate_sort": {
+              "count": 332,
+              "min": 0.01,
+              "median": 0.01,
+              "max": 82.08
+            },
+            "bonus_channel_publication": {
+              "count": 332,
+              "min": 0,
+              "median": 0.01,
+              "max": 25.47
+            },
+            "bonus_depth_advance": {
+              "count": 332,
+              "min": 0,
+              "median": 0.01,
+              "max": 51.42
+            },
+            "self": {
+              "count": 332,
+              "min": 0.04,
+              "median": 0.05,
+              "max": 262.5
+            }
+          },
+          "correlations": {
+            "rawSolutions_vs_bonus_depth_read": 0.3098,
+            "rawSolutions_vs_bonus_notice_scan": 0.9889,
+            "rawSolutions_vs_bonus_ideal_filter": 0.9951,
+            "rawSolutions_vs_bonus_route_materialization": 0.0393,
+            "rawSolutions_vs_bonus_evaluate_sort": -0.0162,
+            "rawSolutions_vs_bonus_channel_publication": 0.0703,
+            "rawSolutions_vs_bonus_depth_advance": -0.0513,
+            "rawSolutions_vs_self": 0.2105
+          },
+          "maxRawSolutionsWork": {
+            "channel": 0,
+            "depth": 3,
+            "rawSolutions": 1525164
+          }
+        },
+        "a3Reference": {
+          "orientationId": "c13-p1",
+          "childOutcome": "timeout",
+          "searchWallMs": 1794860.1043,
+          "measuredGogmaMs": 1203644.7332999976,
+          "coverage": 0.6706064335690508,
+          "dominantPhase": "frontier_reduction_sort",
+          "phaseShareOfMeasured": {
+            "window_collection": 0.00764934822151018,
+            "support_evaluation": 0.018393181964334853,
+            "state_generation": 0.3690014828397873,
+            "solution_materialization": 0.08360781442884245,
+            "frontier_reduction_sort": 0.5206610698007366,
+            "exhaustion_scan": 0.0006871027447887091
+          }
+        },
+        "memory": {
+          "source": "last_heartbeat",
+          "sampledMaxHeapUsedBytes": 5036700072,
+          "sampledMaxRssBytes": 5517971456
+        },
+        "heartbeats": 302,
+        "maxHeartbeatGapMs": 7598.607300000003,
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 4,
+          "resetBonuses": 253,
+          "keepBonuses": 28218
+        },
+        "laterTargets": [
+          {
+            "targetOrdinal": 1,
+            "state": "not_started",
+            "searchOwnMs": null
+          },
+          {
+            "targetOrdinal": 2,
+            "state": "not_started",
+            "searchOwnMs": null
+          },
+          {
+            "targetOrdinal": 3,
+            "state": "not_started",
+            "searchOwnMs": null
+          },
+          {
+            "targetOrdinal": 4,
+            "state": "not_started",
+            "searchOwnMs": null
+          },
+          {
+            "targetOrdinal": 5,
+            "state": "not_started",
+            "searchOwnMs": null
+          },
+          {
+            "targetOrdinal": 6,
+            "state": "not_started",
+            "searchOwnMs": null
+          },
+          {
+            "targetOrdinal": 7,
+            "state": "not_started",
+            "searchOwnMs": null
+          },
+          {
+            "targetOrdinal": 8,
+            "state": "not_started",
+            "searchOwnMs": null
+          }
+        ]
+      },
+      {
+        "orientationId": "c14-p0",
+        "kind": "same_gogma_counter",
+        "childOutcome": "timeout",
+        "resultClass": "timeout_in_search",
+        "primarySearch": {
+          "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+          "completed": false,
+          "observationPoint": "last_heartbeat",
+          "observedAtMs": 1794392.8078,
+          "searchStartedMs": 1621.8469999999998,
+          "searchWallMs": 1792770.9608,
+          "searchWallAtKillEstimateMs": 1797590.3220999998,
+          "unobservedTailMs": 4819.361299999757,
+          "searchRuntimeInclusiveMs": 1792770.4642,
+          "trialMsExcluded": 0,
+          "categoryTotalsMs": {
+            "kernel_search_wrapper": 0.496599999954924,
+            "search_setup": 0.6350999999999658,
+            "initial_route_registration": 1.8225999999999658,
+            "scheduler_checkpoint": 10.26070000007985,
+            "queue_dispatch_or_unclassified": 28.102799996524936,
+            "scheduler_post_settle": 0.8511000006751601,
+            "route_base_work": 1.041600000001381,
+            "bonus_depth_read": 1640702.5226000014,
+            "bonus_notice_scan": 54484.23129999819,
+            "bonus_ideal_filter": 97400.23909999912,
+            "bonus_route_materialization": 60.07900000080963,
+            "bonus_evaluate_sort": 12.866099999370817,
+            "bonus_channel_publication": 6.045600000673858,
+            "bonus_depth_advance": 6.032199997383486,
+            "bonus_depth_work_other": 50.608900003773215,
+            "skill_depth": 2.159699999992881,
+            "lazy_cross": 0,
+            "composition": 0,
+            "delivery": 0
+          },
+          "categoryShare": {
+            "kernel_search_wrapper": 2.7700136314865505e-7,
+            "search_setup": 3.5425607279836846e-7,
+            "initial_route_registration": 0.0000010166385109153346,
+            "scheduler_checkpoint": 0.0000057233747223912815,
+            "queue_dispatch_or_unclassified": 0.000015675622045988762,
+            "scheduler_post_settle": 4.747399524451066e-7,
+            "route_base_work": 5.810000400366709e-7,
+            "bonus_depth_read": 0.9151768733847964,
+            "bonus_notice_scan": 0.030391071972565492,
+            "bonus_ideal_filter": 0.05432943818798558,
+            "bonus_route_materialization": 0.000033511810105402524,
+            "bonus_evaluate_sort": 0.000007176655736117843,
+            "bonus_channel_publication": 0.000003372209910169501,
+            "bonus_depth_advance": 0.0000033647354454534996,
+            "bonus_depth_work_other": 0.00002822942869466698,
+            "skill_depth": 0.000001204671453975997,
+            "lazy_cross": 0,
+            "composition": 0,
+            "delivery": 0
+          },
+          "measuredMs": 1792767.9949999982,
+          "coverage": 0.9999983456894012,
+          "strictCoverage": 0.9999508059300765,
+          "unattributedSearchMs": 2.9658000017516315,
+          "unattributedSearchShare": 0.0000016543105988442512,
+          "maxCategory": "bonus_depth_read",
+          "maxCategoryShare": 0.9151768733847964,
+          "groups": {
+            "bonus_depth_work_inclusive": {
+              "ms": 1792722.6248000008,
+              "share": 0.9999730383852393
+            },
+            "bonus_post_read": {
+              "ms": 152020.10219999938,
+              "share": 0.08479616500044292
+            },
+            "skill_total": {
+              "ms": 2.159699999992881,
+              "share": 0.000001204671453975997
+            },
+            "lazy_cross_total": {
+              "ms": 0,
+              "share": 0
+            },
+            "composition_total": {
+              "ms": 0,
+              "share": 0
+            },
+            "delivery_total": {
+              "ms": 0,
+              "share": 0
+            },
+            "scheduler_checkpoint": {
+              "ms": 10.26070000007985,
+              "share": 0.0000057233747223912815
+            },
+            "queue_dispatch_or_unclassified": {
+              "ms": 28.102799996524936,
+              "share": 0.000015675622045988762
+            },
+            "route_base_work": {
+              "ms": 1.041600000001381,
+              "share": 5.810000400366709e-7
+            },
+            "initial_route_registration": {
+              "ms": 1.8225999999999658,
+              "share": 0.0000010166385109153346
+            }
+          },
+          "sections": [
+            {
+              "section": "search_runtime",
+              "parent": null,
+              "inclusiveMs": 1792770.4642,
+              "exclusiveMs": 2.9658000017516315,
+              "count": 0,
+              "exclusiveShare": 0.0000016543105988442512
+            },
+            {
+              "section": "search_setup",
+              "parent": "search_runtime",
+              "inclusiveMs": 0.6350999999999658,
+              "exclusiveMs": 0.6350999999999658,
+              "count": 1,
+              "exclusiveShare": 3.5425607279836846e-7
+            },
+            {
+              "section": "route_registration",
+              "parent": "search_runtime",
+              "inclusiveMs": 1.8225999999999658,
+              "exclusiveMs": 0.09919999999965512,
+              "count": 1,
+              "exclusiveShare": 5.5333337146083876e-8
+            },
+            {
+              "section": "normal_route_registration",
+              "parent": "route_registration",
+              "inclusiveMs": 0.5731000000000677,
+              "exclusiveMs": 0.5731000000000677,
+              "count": 1,
+              "exclusiveShare": 3.1967273708200267e-7
+            },
+            {
+              "section": "owned_normal_route_registration",
+              "parent": "route_registration",
+              "inclusiveMs": 0.14620000000013533,
+              "exclusiveMs": 0.14620000000013533,
+              "count": 1,
+              "exclusiveShare": 8.154973680234956e-8
+            },
+            {
+              "section": "existing_gogma_route_registration",
+              "parent": "route_registration",
+              "inclusiveMs": 1.0041000000001077,
+              "exclusiveMs": 1.0041000000001077,
+              "count": 1,
+              "exclusiveShare": 5.600826998848986e-7
+            },
+            {
+              "section": "scheduler_step",
+              "parent": "search_runtime",
+              "inclusiveMs": 1792765.0406999981,
+              "exclusiveMs": 2.2735999963229006,
+              "count": 613,
+              "exclusiveShare": 0.0000012682043864143901
+            },
+            {
+              "section": "scheduler_checkpoint",
+              "parent": "scheduler_step",
+              "inclusiveMs": 10.26070000007985,
+              "exclusiveMs": 10.26070000007985,
+              "count": 614,
+              "exclusiveShare": 0.0000057233747223912815
+            },
+            {
+              "section": "scheduler_settle",
+              "parent": "scheduler_step",
+              "inclusiveMs": 1792751.6553000011,
+              "exclusiveMs": 26.870800000203417,
+              "count": 613,
+              "exclusiveShare": 0.000014988417699611044
+            },
+            {
+              "section": "scheduler_post_settle",
+              "parent": "scheduler_step",
+              "inclusiveMs": 0.8511000006751601,
+              "exclusiveMs": 0.8511000006751601,
+              "count": 613,
+              "exclusiveShare": 4.747399524451066e-7
+            },
+            {
+              "section": "bonus_depth_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 1792722.6248000008,
+              "exclusiveMs": 50.608900003773215,
+              "count": 601,
+              "exclusiveShare": 0.00002822942869466698
+            },
+            {
+              "section": "bonus_depth_read",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 1640702.5226000014,
+              "exclusiveMs": 1640702.5226000014,
+              "count": 601,
+              "exclusiveShare": 0.9151768733847964
+            },
+            {
+              "section": "bonus_notice_scan",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 54484.23129999819,
+              "exclusiveMs": 54484.23129999819,
+              "count": 601,
+              "exclusiveShare": 0.030391071972565492
+            },
+            {
+              "section": "bonus_ideal_filter",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 97400.23909999912,
+              "exclusiveMs": 97400.23909999912,
+              "count": 601,
+              "exclusiveShare": 0.05432943818798558
+            },
+            {
+              "section": "bonus_route_materialization",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 60.07900000080963,
+              "exclusiveMs": 60.07900000080963,
+              "count": 601,
+              "exclusiveShare": 0.000033511810105402524
+            },
+            {
+              "section": "bonus_evaluate_sort",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 12.866099999370817,
+              "exclusiveMs": 12.866099999370817,
+              "count": 601,
+              "exclusiveShare": 0.000007176655736117843
+            },
+            {
+              "section": "bonus_channel_publication",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 6.045600000673858,
+              "exclusiveMs": 6.045600000673858,
+              "count": 601,
+              "exclusiveShare": 0.000003372209910169501
+            },
+            {
+              "section": "cross_add_bonus",
+              "parent": "bonus_channel_publication",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "bonus_depth_advance",
+              "parent": "bonus_depth_work",
+              "inclusiveMs": 6.032199997383486,
+              "exclusiveMs": 6.032199997383486,
+              "count": 601,
+              "exclusiveShare": 0.0000033647354454534996
+            },
+            {
+              "section": "skill_depth_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 2.159699999992881,
+              "exclusiveMs": 0.2971000000006825,
+              "count": 8,
+              "exclusiveShare": 1.6572111357052862e-7
+            },
+            {
+              "section": "skill_depth_read",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 1.1741999999958352,
+              "exclusiveMs": 1.1741999999958352,
+              "count": 8,
+              "exclusiveShare": 6.54963754807733e-7
+            },
+            {
+              "section": "skill_ideal_filter",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.1643000000021857,
+              "exclusiveMs": 0.1643000000021857,
+              "count": 8,
+              "exclusiveShare": 9.164583964973921e-8
+            },
+            {
+              "section": "skill_route_materialization",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.087699999999586,
+              "exclusiveMs": 0.087699999999586,
+              "count": 8,
+              "exclusiveShare": 4.891868616638628e-8
+            },
+            {
+              "section": "skill_evaluate_sort",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.10490000000208966,
+              "exclusiveMs": 0.10490000000208966,
+              "count": 8,
+              "exclusiveShare": 5.851277285040329e-8
+            },
+            {
+              "section": "skill_channel_publication",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.07429999999612846,
+              "exclusiveMs": 0.07429999999612846,
+              "count": 8,
+              "exclusiveShare": 4.14442232838115e-8
+            },
+            {
+              "section": "cross_add_skill",
+              "parent": "skill_channel_publication",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "skill_depth_advance",
+              "parent": "skill_depth_work",
+              "inclusiveMs": 0.25719999999637366,
+              "exclusiveMs": 0.25719999999637366,
+              "count": 8,
+              "exclusiveShare": 1.434650636473951e-7
+            },
+            {
+              "section": "composition_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "composition_checkpoint",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "compose_route",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "composition_consumer",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "cross_open_next",
+              "parent": "composition_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "cross_wake_work",
+              "parent": "scheduler_settle",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "cross_wake",
+              "parent": "cross_wake_work",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_flush",
+              "parent": "search_runtime",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_sort",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_checkpoint",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_key_dedup",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            },
+            {
+              "section": "delivery_consumer",
+              "parent": "delivery_flush",
+              "inclusiveMs": 0,
+              "exclusiveMs": 0,
+              "count": 0,
+              "exclusiveShare": 0
+            }
+          ],
+          "routeRegistration": {
+            "normalMs": 0.5731000000000677,
+            "ownedNormalMs": 0.14620000000013533,
+            "existingGogmaMs": 1.0041000000001077,
+            "ownMs": 0.09919999999965512
+          },
+          "workCounts": {
+            "schedulerSteps": 613,
+            "bonusDepthWorks": 601,
+            "skillDepthWorks": 8,
+            "compositionWorks": 0,
+            "crossWakeWorks": 0,
+            "routeBaseWorks": 4,
+            "crossAddBonus": 0,
+            "crossAddSkill": 0,
+            "crossOpenNext": 0,
+            "deliveryFlushes": 0,
+            "deliveryConsumerCalls": 0
+          },
+          "bonusDepth": {
+            "works": 601,
+            "withCounts": 601,
+            "rawSolutions": 403560655,
+            "unsupportedPredictions": 0,
+            "idealSolutions": 0,
+            "evaluatedSolutions": 0,
+            "subscriberPublications": 0,
+            "maxRawSolutions": 788476,
+            "maxSubscriberCount": 1,
+            "maxRetainedCountAfter": 0,
+            "exhaustedWorks": 0
+          },
+          "skillDepth": {
+            "works": 8,
+            "withCounts": 8,
+            "rawSolutions": 8,
+            "unsupportedPredictions": 0,
+            "idealSolutions": 0,
+            "evaluatedSolutions": 0,
+            "subscriberPublications": 0,
+            "maxRawSolutions": 1,
+            "maxSubscriberCount": 4,
+            "maxRetainedCountAfter": 0,
+            "exhaustedWorks": 2
+          }
+        },
+        "activeAtEnd": {
+          "where": "section",
+          "lastDurable": {
+            "section": "bonus_depth_read",
+            "stack": [
+              "search_runtime",
+              "scheduler_step",
+              "scheduler_settle",
+              "bonus_depth_work",
+              "bonus_depth_read"
+            ],
+            "work": null,
+            "startedMs": 1797979.4925000002
+          },
+          "lastHeartbeatStack": [
+            {
+              "section": "search_runtime",
+              "elapsedMs": 1792770.4642,
+              "work": null
+            },
+            {
+              "section": "scheduler_step",
+              "elapsedMs": 114.58810000005178,
+              "work": null
+            },
+            {
+              "section": "scheduler_settle",
+              "elapsedMs": 114.58520000008866,
+              "work": null
+            },
+            {
+              "section": "bonus_depth_work",
+              "elapsedMs": 114.58319999999367,
+              "work": {
+                "channel": 8,
+                "depth": 64
+              }
+            },
+            {
+              "section": "bonus_depth_read",
+              "elapsedMs": 114.57440000004135,
+              "work": null
+            }
+          ],
+          "lastHeartbeatAtMs": 1794392.8078,
+          "killElapsedEstimateMs": 1799212.1690999998,
+          "lastDurableElapsedAtKillEstimateMs": 1232.676599999657
+        },
+        "counters": {
+          "startedTargets": 1,
+          "completedTargets": 0,
+          "deliveredCandidates": 0,
+          "trialsStarted": 0,
+          "trialsCompleted": 0,
+          "fullPlannerRunsStarted": 0,
+          "fullPlannerRunsCompleted": 0
+        },
+        "bonusWork": {
+          "works": 602,
+          "phaseDistributions": {
+            "bonus_depth_read": {
+              "count": 602,
+              "totalMs": 1644080.5033000014,
+              "minMs": 2.203899999999976,
+              "medianMs": 3030.150250000006,
+              "maxMs": 3952.9535999998916
+            },
+            "bonus_notice_scan": {
+              "count": 602,
+              "totalMs": 54557.69529999811,
+              "minMs": 0.08080000000018117,
+              "medianMs": 96.02195000002393,
+              "maxMs": 120.89200000010896
+            },
+            "bonus_ideal_filter": {
+              "count": 602,
+              "totalMs": 97535.24659999895,
+              "minMs": 0.10229999999864958,
+              "medianMs": 172.01165000002948,
+              "maxMs": 193.83400000003166
+            },
+            "bonus_route_materialization": {
+              "count": 602,
+              "totalMs": 60.164700000747416,
+              "minMs": 0.008400000000165164,
+              "medianMs": 0.08829999999943539,
+              "maxMs": 5.470500000054017
+            },
+            "bonus_evaluate_sort": {
+              "count": 602,
+              "totalMs": 12.89309999937268,
+              "minMs": 0.0061000000000603904,
+              "medianMs": 0.01660000000265427,
+              "maxMs": 0.08629999996628612
+            },
+            "bonus_channel_publication": {
+              "count": 602,
+              "totalMs": 6.05490000070813,
+              "minMs": 0.005400000000008731,
+              "medianMs": 0.008600000000569707,
+              "maxMs": 0.10180000000400469
+            },
+            "bonus_depth_advance": {
+              "count": 602,
+              "totalMs": 6.041699997543674,
+              "minMs": 0.006000000001222361,
+              "medianMs": 0.00929999997606501,
+              "maxMs": 0.0974000000860542
+            },
+            "self": {
+              "count": 602,
+              "totalMs": 50.6575000038697,
+              "minMs": 0.01849999999967622,
+              "medianMs": 0.06584999996994156,
+              "maxMs": 0.22389999986626208
+            }
+          },
+          "nsPerRawSolution": {
+            "bonus_depth_read": {
+              "count": 602,
+              "min": 1537.59,
+              "median": 4328.98,
+              "max": 30274.56
+            },
+            "bonus_notice_scan": {
+              "count": 602,
+              "min": 124.85,
+              "median": 135.83,
+              "max": 976.33
+            },
+            "bonus_ideal_filter": {
+              "count": 602,
+              "min": 221.88,
+              "median": 244.51,
+              "max": 1268.05
+            },
+            "bonus_route_materialization": {
+              "count": 602,
+              "min": 0.1,
+              "median": 0.13,
+              "max": 73.67
+            },
+            "bonus_evaluate_sort": {
+              "count": 602,
+              "min": 0.01,
+              "median": 0.03,
+              "max": 128.11
+            },
+            "bonus_channel_publication": {
+              "count": 602,
+              "min": 0.01,
+              "median": 0.01,
+              "max": 98.52
+            },
+            "bonus_depth_advance": {
+              "count": 602,
+              "min": 0.01,
+              "median": 0.01,
+              "max": 43.2
+            },
+            "self": {
+              "count": 602,
+              "min": 0.07,
+              "median": 0.1,
+              "max": 485.21
+            }
+          },
+          "correlations": {
+            "rawSolutions_vs_bonus_depth_read": 0.0934,
+            "rawSolutions_vs_bonus_notice_scan": 0.9808,
+            "rawSolutions_vs_bonus_ideal_filter": 0.973,
+            "rawSolutions_vs_bonus_route_materialization": 0.0018,
+            "rawSolutions_vs_bonus_evaluate_sort": -0.0407,
+            "rawSolutions_vs_bonus_channel_publication": -0.0041,
+            "rawSolutions_vs_bonus_depth_advance": -0.0882,
+            "rawSolutions_vs_self": 0.1963
+          },
+          "maxRawSolutionsWork": {
+            "channel": 0,
+            "depth": 3,
+            "rawSolutions": 788476
+          }
+        },
+        "a3Reference": {
+          "orientationId": "c14-p0",
+          "childOutcome": "timeout",
+          "searchWallMs": 1797034.2427,
+          "measuredGogmaMs": 1248788.9005999966,
+          "coverage": 0.6949165858541024,
+          "dominantPhase": "frontier_reduction_sort",
+          "phaseShareOfMeasured": {
+            "window_collection": 0.006294373529604657,
+            "support_evaluation": 0.024363513789545217,
+            "state_generation": 0.3542434823751672,
+            "solution_materialization": 0.07826448950102076,
+            "frontier_reduction_sort": 0.5361019807097408,
+            "exhaustion_scan": 0.000732160094921657
+          }
+        },
+        "memory": {
+          "source": "last_heartbeat",
+          "sampledMaxHeapUsedBytes": 4899839344,
+          "sampledMaxRssBytes": 5296041984
+        },
+        "heartbeats": 277,
+        "maxHeartbeatGapMs": 7745.536799999885,
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 253,
+          "keepBonuses": 29236
+        },
+        "laterTargets": []
+      }
+    ]
+  },
+  "processes": [
+    {
+      "id": "baseline",
+      "role": "baseline",
+      "outcome": "completed",
+      "wallMs": 5346.4069,
+      "killedAtMs": null,
+      "lifecycleMessages": 0,
+      "heartbeatMessages": 0,
+      "sectionStartMessages": 0,
+      "workSummaryMessages": 0,
+      "searchSummaryMessages": 0,
+      "maxIpcHeartbeatGapMs": null,
+      "minClockOffsetMs": null,
+      "lastHeartbeatAgeAtEndMs": null,
+      "stderrTail": null
+    },
+    {
+      "id": "kernel-c6-p1",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800239.7348000002,
+      "killedAtMs": 1800009.1568,
+      "lifecycleMessages": 2,
+      "heartbeatMessages": 328,
+      "sectionStartMessages": 6592,
+      "workSummaryMessages": 824,
+      "searchSummaryMessages": 0,
+      "maxIpcHeartbeatGapMs": 7058.498499999987,
+      "minClockOffsetMs": 25.09870000020601,
+      "lastHeartbeatAgeAtEndMs": 4953.8926000001375,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    },
+    {
+      "id": "kernel-c13-p1",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800254.9916,
+      "killedAtMs": 1800011.7471,
+      "lifecycleMessages": 2,
+      "heartbeatMessages": 302,
+      "sectionStartMessages": 2734,
+      "workSummaryMessages": 342,
+      "searchSummaryMessages": 0,
+      "maxIpcHeartbeatGapMs": 7598.447300000116,
+      "minClockOffsetMs": 27.250899999910416,
+      "lastHeartbeatAgeAtEndMs": 4343.282099999953,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    },
+    {
+      "id": "kernel-c14-p0",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800231.2207999998,
+      "killedAtMs": 1800008.8221999998,
+      "lifecycleMessages": 2,
+      "heartbeatMessages": 277,
+      "sectionStartMessages": 4880,
+      "workSummaryMessages": 610,
+      "searchSummaryMessages": 0,
+      "maxIpcHeartbeatGapMs": 7745.551299999468,
+      "minClockOffsetMs": 26.622499999975844,
+      "lastHeartbeatAgeAtEndMs": 5041.224899999797,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    }
+  ],
+  "conclusion": {
+    "statement": "Phase 2-C2.6-A5のprimary 3 orientationを、A4と同条件・同instrumentationで、allocation-free multiset equality後に各1回再測定した: completed 0、timeout 3、OOM 0、process failure 0、primary Search完了 0、semantic failure 0。共通work prefix（同一raw solution）でのbonus_ideal_filter after / before: c6-p1 0.1574、c13-p1 0.1564、c14-p0 0.1602。30分内のbonus_ideal_filter share: c6-p1 26.1% → 4.9%、c13-p1 29.4% → 5.8%、c14-p0 28.0% → 5.4%。decision case R_filter_reduced_timeout_remains。",
+    "decision": {
+      "rule": {
+        "majority": 2,
+        "filterReducedRatio": 0.5,
+        "order": [
+          "C primary_search_completed: >= 2 primaries completed their primary Search within the 30-minute budget",
+          "R filter_reduced_timeout_remains: >= 2 primaries have a common-prefix bonus_ideal_filter ratio (after / before) <= 0.5",
+          "F filter_improvement_small: >= 2 primaries have that ratio > 0.5",
+          "M mixed: otherwise"
+        ]
+      },
+      "completedPrimaries": [],
+      "filterReducedPrimaries": [
+        "c6-p1",
+        "c13-p1",
+        "c14-p0"
+      ],
+      "filterSmallPrimaries": [],
+      "filterRatioByPrimary": {
+        "c6-p1": 0.1574,
+        "c13-p1": 0.1564,
+        "c14-p0": 0.1602
+      },
+      "case": "R_filter_reduced_timeout_remains",
+      "reason": "common-prefix filter ratio <= 0.5 in c6-p1, c13-p1, c14-p0; primary Search completed in 0 / 3",
+      "recommendation": "filter hotspotは縮小したがtimeoutが残る。A3で既に最大だったbonus_depth_read内部（frontier_reduction_sort / state_generation）を次の候補として再評価する。"
+    }
+  },
+  "limitations": [
+    "Node child（Vite SSR loader）のみ。Browser Worker・他device・他heap条件は測っていない。",
+    "各orientation 1回のみ（retryなし）。run間ばらつきは測っていない。A4 beforeも各1回。",
+    "主効果は共通work prefix（A4とA6が同じwork recordを同じraw solution数で完了した範囲）でのphase時間比。30分全体の合計はafterの方が多く処理するため直接比較しない（Search wall share / raw solution 1件あたりの値として併記）。",
+    "観測点はSearch完了時、またはtimeoutでは最後のheartbeat。最後のheartbeat以降は未観測（A4と同じ）。",
+    "section時間はResearch側performance.now()の差。section内のawaitとtimer、GCはその時openなsectionへ計上される（A4と同じ）。",
+    "A4 beforeとA6 afterは別のprocess・別時刻の測定で、machine負荷等の差は制御していない。",
+    "1,657-step oracleに近いRouteを見つけられるか、54 orientation全体、Browser Worker、Target Ideal precomputeの追加効果、frontier_reduction_sort / state_generation optimizationの効果はこの測定から言えない。"
+  ]
+}
