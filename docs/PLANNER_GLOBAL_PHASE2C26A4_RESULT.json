@@ -1,0 +1,2866 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-A4: Planner Alternative Search outer runtime localization (post-hoc analysis)",
+  "analyzedAt": "2026-09-30T03:46:32.756Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A4_RAW.json.local",
+      "bytes": 18103009,
+      "sha256": "b6fd9b844f9d0add9b5e7b6d46e974c072c8fd43e8a680ee0f32ac3ced2d30a5"
+    },
+    "c26aResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A_RESULT.json",
+      "bytes": 318778,
+      "sha256": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171"
+    },
+    "c26a2Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A2_RESULT.json",
+      "bytes": 642128,
+      "sha256": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2"
+    },
+    "c26a3Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A3_RESULT.json",
+      "bytes": 147318,
+      "sha256": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2"
+    }
+  },
+  "provenance": {
+    "measuredHead": "9fadd93d8e68c074f5784368976d593aeb50021f",
+    "analysisHead": "9fadd93d8e68c074f5784368976d593aeb50021f",
+    "analysisCodeUncommitted": false,
+    "codeChangedSinceMeasuredHead": [],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "scripts/analyze-planner-global-phase2c26a4.mjs",
+      "src/benchmarks/plannerGlobalPhase2C26A4Analysis.ts",
+      "*.test.ts"
+    ],
+    "formal": true,
+    "benchmarkCodeSha256": "49a1f8f27f5d27004e16448c1dd78f037b80311c622eb7d6e45d08739d1fa060",
+    "uncommittedBenchmarkCode": false,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "c26aResultSha256": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "c26aResultRecordedByRunner": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "c26aMeasuredHead": "525ed892acb09609fcce1f7589c6751038ae255d",
+    "c26a2ResultSha256": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+    "c26a2ResultRecordedByRunner": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+    "c26a2MeasuredHead": "9bb89e988c619965473cf5ef7a8413d49f97bf4f",
+    "c26a3ResultSha256": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+    "c26a3ResultRecordedByRunner": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+    "c26a3MeasuredHead": "0e2a5fea93882f4c7d121c305d7fa1ad7e3b8bf0",
+    "authorityShaChain": {
+      "c26aShaRecordedByA2": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+      "c26aShaRecordedByA3": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+      "c26aShaRecordedByA3ForA2": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+      "a2ShaRecordedByA3": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+      "allMatchFilesRead": true
+    },
+    "measuredAt": "2026-09-30T02:16:07.477Z",
+    "runWallMs": 5407165.0003
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296
+  },
+  "selectionRule": {
+    "source": "Phase 2-C2.6-A3 RESULT selectionValidation.expected (= its selectionRule.derivedPrimaryOrientationIds = the A2 rule re-derived from the A2 RESULT; no ID fixed in source)",
+    "registeredCount": 3,
+    "primaryOrientationIds": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "selectedCount": 3
+  },
+  "conditions": {
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "childHeapLimitMb": 8192,
+    "concurrency": 1,
+    "orientationBudgetMs": 1800000,
+    "nodeYield": "setImmediate",
+    "extent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "bounds": {
+      "maxCandidateTrialsPerTarget": 2,
+      "maxPlannerReruns": 8
+    },
+    "researchMaxPlanSteps": 20000,
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "lineage": {
+      "priorFixedBuildListEntryIds": [],
+      "priorExcludedRoutes": []
+    },
+    "nodeFlags": [
+      "--max-old-space-size=8192"
+    ],
+    "freshChildPerOrientation": true,
+    "memorySampleIntervalMs": 250,
+    "heartbeatIntervalMs": 5000,
+    "retry": "none (each orientation once)",
+    "conditionNote": "Every A3 condition is unchanged (concurrency 1 included); only the Search instrumentation differs, so absolute wall time is never compared with A3.",
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": false,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "a3InnerObserverDisabled": "onGogmaReservedRuntime (A3 section observer) / onGogmaReservedDepth / onSkillReservedDepth / onWorkSettled are not attached; the only Search instrumentation is onSearchRuntime (section boundaries, no scan).",
+    "recording": "lifecycle records, one record per durable section start (Search, registration, Bonus / Skill depth work and outer phases, delivery flush), one summary per completed Bonus / Skill depth work and Search, and a 5 s heartbeat with the open section stack: each one synchronous append to an open descriptor + IPC; high-frequency sections aggregated in the child, nothing per solution / subscriber / Candidate / queue operation"
+  },
+  "registeredRule": {
+    "coverage": "sum of the outer categories (every exclusive section except the Search root, plus the kernel time around the Search) / Search wall (A3 denominator: kernel search_started -> observation, trials excluded)",
+    "coverageThreshold": 0.9,
+    "categoryThreshold": 0.1,
+    "majority": 2,
+    "order": [
+      "U: >= 2 primaries coverage < 0.90",
+      "O: >= 2 covered primaries share an outer category other than bonus_depth_read >= 0.10",
+      "I: >= 2 covered primaries have bonus_depth_read as the largest category and every other < 0.10",
+      "M: otherwise"
+    ],
+    "outerCategories": [
+      "kernel_search_wrapper",
+      "search_setup",
+      "initial_route_registration",
+      "scheduler_checkpoint",
+      "queue_dispatch_or_unclassified",
+      "scheduler_post_settle",
+      "route_base_work",
+      "bonus_depth_read",
+      "bonus_notice_scan",
+      "bonus_ideal_filter",
+      "bonus_route_materialization",
+      "bonus_evaluate_sort",
+      "bonus_channel_publication",
+      "bonus_depth_advance",
+      "bonus_depth_work_other",
+      "skill_depth",
+      "lazy_cross",
+      "composition",
+      "delivery"
+    ],
+    "sectionCategory": {
+      "search_runtime": null,
+      "search_setup": "search_setup",
+      "route_registration": "initial_route_registration",
+      "normal_route_registration": "initial_route_registration",
+      "owned_normal_route_registration": "initial_route_registration",
+      "existing_gogma_route_registration": "initial_route_registration",
+      "scheduler_step": "queue_dispatch_or_unclassified",
+      "scheduler_checkpoint": "scheduler_checkpoint",
+      "scheduler_settle": "queue_dispatch_or_unclassified",
+      "scheduler_post_settle": "scheduler_post_settle",
+      "bonus_depth_work": "bonus_depth_work_other",
+      "bonus_depth_read": "bonus_depth_read",
+      "bonus_notice_scan": "bonus_notice_scan",
+      "bonus_ideal_filter": "bonus_ideal_filter",
+      "bonus_route_materialization": "bonus_route_materialization",
+      "bonus_evaluate_sort": "bonus_evaluate_sort",
+      "bonus_channel_publication": "bonus_channel_publication",
+      "cross_add_bonus": "lazy_cross",
+      "bonus_depth_advance": "bonus_depth_advance",
+      "skill_depth_work": "skill_depth",
+      "skill_depth_read": "skill_depth",
+      "skill_ideal_filter": "skill_depth",
+      "skill_route_materialization": "skill_depth",
+      "skill_evaluate_sort": "skill_depth",
+      "skill_channel_publication": "skill_depth",
+      "cross_add_skill": "lazy_cross",
+      "skill_depth_advance": "skill_depth",
+      "composition_work": "composition",
+      "composition_checkpoint": "composition",
+      "compose_route": "composition",
+      "composition_consumer": "composition",
+      "cross_open_next": "lazy_cross",
+      "cross_wake_work": "lazy_cross",
+      "cross_wake": "lazy_cross",
+      "delivery_flush": "delivery",
+      "delivery_sort": "delivery",
+      "delivery_checkpoint": "delivery",
+      "delivery_key_dedup": "delivery",
+      "delivery_consumer": "delivery"
+    }
+  },
+  "selectionValidation": {
+    "valid": true,
+    "expected": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "actual": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "missing": [],
+    "duplicate": [],
+    "foreign": [],
+    "notPrimary": [],
+    "metadataMismatches": []
+  },
+  "conditionParity": {
+    "valid": true,
+    "issues": [],
+    "checks": [
+      {
+        "condition": "exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "concurrency is 1",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a3.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a3.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a3.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a3.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a3.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a3.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a3.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a3.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a3.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a3.concurrency",
+        "current": 1,
+        "authority": 3,
+        "matches": true
+      },
+      {
+        "condition": "a3.a2.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a3.a2.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a3.a2.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a3.a2.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a3.a2.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a3.a2.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a3.a2.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a3.a2.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a3.a2.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      }
+    ]
+  },
+  "baselineParity": {
+    "valid": true,
+    "issues": [],
+    "baselineChecks": [
+      {
+        "field": "planningTargetCount",
+        "matches": true
+      },
+      {
+        "field": "completedTargetCount",
+        "matches": true
+      },
+      {
+        "field": "termination",
+        "matches": true
+      },
+      {
+        "field": "planSteps",
+        "matches": true
+      },
+      {
+        "field": "conflicts",
+        "matches": true
+      },
+      {
+        "field": "conflictsByKind",
+        "matches": true
+      },
+      {
+        "field": "conflictSignatures",
+        "matches": true
+      },
+      {
+        "field": "selectedTargets",
+        "matches": true
+      },
+      {
+        "field": "orientationCount",
+        "matches": true
+      }
+    ],
+    "orderedIdsMatch": true,
+    "orientationIdentityMismatches": 0,
+    "orientationMetadataMismatches": 0,
+    "timeoutOrientationMismatches": []
+  },
+  "formalSeriesValidation": {
+    "valid": true,
+    "failures": [],
+    "rawStatus": "completed",
+    "smokeIsNull": true,
+    "uncommittedBenchmarkCode": false,
+    "c26aShaMatches": true,
+    "a2ShaMatches": true,
+    "a3ShaMatches": true,
+    "exportShaMatches": true,
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": false,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "recordIssues": [],
+    "unknownStatuses": []
+  },
+  "summary": {
+    "orientations": 3,
+    "childStatus": {
+      "completed": 0,
+      "out_of_memory": 0,
+      "timeout": 3,
+      "process_failure": 0
+    },
+    "primarySearchCompleted": 0,
+    "categoryTotalsMs": {
+      "kernel_search_wrapper": 25.709100000094622,
+      "search_setup": 1.93100000000004,
+      "initial_route_registration": 5.227399999999307,
+      "scheduler_checkpoint": 19.37109999963559,
+      "queue_dispatch_or_unclassified": 55.84779999827833,
+      "scheduler_post_settle": 1.806000001081884,
+      "route_base_work": 3.6421999999975014,
+      "bonus_depth_read": 3748002.359500001,
+      "bonus_notice_scan": 134861.48230000192,
+      "bonus_ideal_filter": 1497435.3720999993,
+      "bonus_route_materialization": 134.10709999971505,
+      "bonus_evaluate_sort": 22.264099997765697,
+      "bonus_channel_publication": 11.487100001734234,
+      "bonus_depth_advance": 13.79420000195978,
+      "bonus_depth_work_other": 116.95299999639883,
+      "skill_depth": 6.490600000001905,
+      "lazy_cross": 0,
+      "composition": 0,
+      "delivery": 0
+    },
+    "categoryShareOfSearchWall": {
+      "kernel_search_wrapper": 0,
+      "search_setup": 0,
+      "initial_route_registration": 0,
+      "scheduler_checkpoint": 0,
+      "queue_dispatch_or_unclassified": 0,
+      "scheduler_post_settle": 0,
+      "route_base_work": 0,
+      "bonus_depth_read": 0.6966,
+      "bonus_notice_scan": 0.0251,
+      "bonus_ideal_filter": 0.2783,
+      "bonus_route_materialization": 0,
+      "bonus_evaluate_sort": 0,
+      "bonus_channel_publication": 0,
+      "bonus_depth_advance": 0,
+      "bonus_depth_work_other": 0,
+      "skill_depth": 0,
+      "lazy_cross": 0,
+      "composition": 0,
+      "delivery": 0
+    },
+    "searchWallMs": 5380724.498500001,
+    "measuredMs": 5380717.844599999,
+    "pooledCoverage": 1,
+    "unattributedSearchMs": 6.653900002129376,
+    "decision": {
+      "coverageThreshold": 0.9,
+      "categoryThreshold": 0.1,
+      "majority": 2,
+      "coverage": {
+        "c6-p1": 1,
+        "c13-p1": 1,
+        "c14-p0": 1
+      },
+      "maxCategoryByPrimary": {
+        "c6-p1": "bonus_depth_read",
+        "c13-p1": "bonus_depth_read",
+        "c14-p0": "bonus_depth_read"
+      },
+      "maxCategoryConsistentAcrossPrimaries": true,
+      "outerCandidates": [
+        {
+          "category": "bonus_ideal_filter",
+          "primaries": [
+            "c6-p1",
+            "c13-p1",
+            "c14-p0"
+          ],
+          "pooledShare": 0.2783
+        }
+      ],
+      "case": "O_outer_bottleneck",
+      "category": "bonus_ideal_filter",
+      "reason": "coverage >= 0.9 and bonus_ideal_filter >= 0.1 in c6-p1, c13-p1, c14-p0",
+      "recommendation": "bonus_ideal_filter: raw solution全件のsatisfiesIdealBonuses() filterを最適化設計（次Phaseで詳細化またはoptimization設計。本Phaseではoptimizationしない）"
+    }
+  },
+  "transitionsFromA3": [
+    {
+      "orientationId": "c6-p1",
+      "a3": "timeout",
+      "a4": "timeout",
+      "note": "absolute wall time not comparable (different Search instrumentation)"
+    },
+    {
+      "orientationId": "c13-p1",
+      "a3": "timeout",
+      "a4": "timeout",
+      "note": "absolute wall time not comparable (different Search instrumentation)"
+    },
+    {
+      "orientationId": "c14-p0",
+      "a3": "timeout",
+      "a4": "timeout",
+      "note": "absolute wall time not comparable (different Search instrumentation)"
+    }
+  ],
+  "perOrientation": [
+    {
+      "orientationId": "c6-p1",
+      "kind": "same_gogma_counter",
+      "childOutcome": "timeout",
+      "resultClass": "timeout_in_search",
+      "primarySearch": {
+        "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+        "completed": false,
+        "observationPoint": "last_heartbeat",
+        "observedAtMs": 1796106.0472,
+        "searchStartedMs": 1665.8753,
+        "searchWallMs": 1794440.1719,
+        "searchWallAtKillEstimateMs": 1797554.4897,
+        "unobservedTailMs": 3114.317800000077,
+        "searchRuntimeInclusiveMs": 1794431.6405,
+        "trialMsExcluded": 0,
+        "categoryTotalsMs": {
+          "kernel_search_wrapper": 8.53139999997802,
+          "search_setup": 0.6260000000002037,
+          "initial_route_registration": 1.8773999999998523,
+          "scheduler_checkpoint": 8.613299999698484,
+          "queue_dispatch_or_unclassified": 24.161299998039794,
+          "scheduler_post_settle": 0.7363000013201599,
+          "route_base_work": 1.1445000000012442,
+          "bonus_depth_read": 1285042.9340000008,
+          "bonus_notice_scan": 40620.1365000026,
+          "bonus_ideal_filter": 468600.04369999917,
+          "bonus_route_materialization": 53.34119999863424,
+          "bonus_evaluate_sort": 9.667199999204513,
+          "bonus_channel_publication": 4.977199998108972,
+          "bonus_depth_advance": 5.729600001444396,
+          "bonus_depth_work_other": 52.450600000410304,
+          "skill_depth": 2.1773000000007414,
+          "lazy_cross": 0,
+          "composition": 0,
+          "delivery": 0
+        },
+        "categoryShare": {
+          "kernel_search_wrapper": 0.000004754351877301516,
+          "search_setup": 3.488553197833164e-7,
+          "initial_route_registration": 0.0000010462315932283283,
+          "scheduler_checkpoint": 0.000004799992852689258,
+          "queue_dispatch_or_unclassified": 0.000013464533605741328,
+          "scheduler_post_settle": 4.103229591324554e-7,
+          "route_base_work": 6.378033761857983e-7,
+          "bonus_depth_read": 0.716124702357373,
+          "bonus_notice_scan": 0.02263666247339578,
+          "bonus_ideal_filter": 0.2611399650086039,
+          "bonus_route_materialization": 0.000029725816905979755,
+          "bonus_evaluate_sort": 0.000005387306944298193,
+          "bonus_channel_publication": 0.0000027736784296569683,
+          "bonus_depth_advance": 0.0000031929735474979622,
+          "bonus_depth_work_other": 0.000029229506127738015,
+          "skill_depth": 0.0000012133589261409365,
+          "lazy_cross": 0,
+          "composition": 0,
+          "delivery": 0
+        },
+        "measuredMs": 1794437.1474999995,
+        "coverage": 0.9999983145718382,
+        "strictCoverage": 0.9999526053856077,
+        "unattributedSearchMs": 3.024400000460446,
+        "unattributedSearchShare": 0.0000016854281618417695,
+        "maxCategory": "bonus_depth_read",
+        "maxCategoryShare": 0.716124702357373,
+        "groups": {
+          "bonus_depth_work_inclusive": {
+            "ms": 1794389.2800000003,
+            "share": 0.9999716391213278
+          },
+          "bonus_post_read": {
+            "ms": 509346.34599999944,
+            "share": 0.2838469367639548
+          },
+          "skill_total": {
+            "ms": 2.1773000000007414,
+            "share": 0.0000012133589261409365
+          },
+          "lazy_cross_total": {
+            "ms": 0,
+            "share": 0
+          },
+          "composition_total": {
+            "ms": 0,
+            "share": 0
+          },
+          "delivery_total": {
+            "ms": 0,
+            "share": 0
+          },
+          "scheduler_checkpoint": {
+            "ms": 8.613299999698484,
+            "share": 0.000004799992852689258
+          },
+          "queue_dispatch_or_unclassified": {
+            "ms": 24.161299998039794,
+            "share": 0.000013464533605741328
+          },
+          "route_base_work": {
+            "ms": 1.1445000000012442,
+            "share": 6.378033761857983e-7
+          },
+          "initial_route_registration": {
+            "ms": 1.8773999999998523,
+            "share": 0.0000010462315932283283
+          }
+        },
+        "sections": [
+          {
+            "section": "search_runtime",
+            "parent": null,
+            "inclusiveMs": 1794431.6405,
+            "exclusiveMs": 3.024400000460446,
+            "count": 0,
+            "exclusiveShare": 0.0000016854281618417695
+          },
+          {
+            "section": "search_setup",
+            "parent": "search_runtime",
+            "inclusiveMs": 0.6260000000002037,
+            "exclusiveMs": 0.6260000000002037,
+            "count": 1,
+            "exclusiveShare": 3.488553197833164e-7
+          },
+          {
+            "section": "route_registration",
+            "parent": "search_runtime",
+            "inclusiveMs": 1.8773999999998523,
+            "exclusiveMs": 0.1021999999993568,
+            "count": 1,
+            "exclusiveShare": 5.695369597702708e-8
+          },
+          {
+            "section": "normal_route_registration",
+            "parent": "route_registration",
+            "inclusiveMs": 0.54950000000008,
+            "exclusiveMs": 0.54950000000008,
+            "count": 1,
+            "exclusiveShare": 3.062236393305078e-7
+          },
+          {
+            "section": "owned_normal_route_registration",
+            "parent": "route_registration",
+            "inclusiveMs": 0.11750000000029104,
+            "exclusiveMs": 0.11750000000029104,
+            "count": 1,
+            "exclusiveShare": 6.548003206809564e-8
+          },
+          {
+            "section": "existing_gogma_route_registration",
+            "parent": "route_registration",
+            "inclusiveMs": 1.1082000000001244,
+            "exclusiveMs": 1.1082000000001244,
+            "count": 1,
+            "exclusiveShare": 6.175742258526978e-7
+          },
+          {
+            "section": "scheduler_step",
+            "parent": "search_runtime",
+            "inclusiveMs": 1794426.1126999995,
+            "exclusiveMs": 1.7117999977872387,
+            "count": 612,
+            "exclusiveShare": 9.539465425446536e-7
+          },
+          {
+            "section": "scheduler_checkpoint",
+            "parent": "scheduler_step",
+            "inclusiveMs": 8.613299999698484,
+            "exclusiveMs": 8.613299999698484,
+            "count": 613,
+            "exclusiveShare": 0.000004799992852689258
+          },
+          {
+            "section": "scheduler_settle",
+            "parent": "scheduler_step",
+            "inclusiveMs": 1794415.0513000006,
+            "exclusiveMs": 23.5940000002538,
+            "count": 612,
+            "exclusiveShare": 0.000013148390439382472
+          },
+          {
+            "section": "scheduler_post_settle",
+            "parent": "scheduler_step",
+            "inclusiveMs": 0.7363000013201599,
+            "exclusiveMs": 0.7363000013201599,
+            "count": 612,
+            "exclusiveShare": 4.103229591324554e-7
+          },
+          {
+            "section": "bonus_depth_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 1794389.2800000003,
+            "exclusiveMs": 52.450600000410304,
+            "count": 600,
+            "exclusiveShare": 0.000029229506127738015
+          },
+          {
+            "section": "bonus_depth_read",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 1285042.9340000008,
+            "exclusiveMs": 1285042.9340000008,
+            "count": 600,
+            "exclusiveShare": 0.716124702357373
+          },
+          {
+            "section": "bonus_notice_scan",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 40620.1365000026,
+            "exclusiveMs": 40620.1365000026,
+            "count": 600,
+            "exclusiveShare": 0.02263666247339578
+          },
+          {
+            "section": "bonus_ideal_filter",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 468600.04369999917,
+            "exclusiveMs": 468600.04369999917,
+            "count": 600,
+            "exclusiveShare": 0.2611399650086039
+          },
+          {
+            "section": "bonus_route_materialization",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 53.34119999863424,
+            "exclusiveMs": 53.34119999863424,
+            "count": 600,
+            "exclusiveShare": 0.000029725816905979755
+          },
+          {
+            "section": "bonus_evaluate_sort",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 9.667199999204513,
+            "exclusiveMs": 9.667199999204513,
+            "count": 600,
+            "exclusiveShare": 0.000005387306944298193
+          },
+          {
+            "section": "bonus_channel_publication",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 4.977199998108972,
+            "exclusiveMs": 4.977199998108972,
+            "count": 600,
+            "exclusiveShare": 0.0000027736784296569683
+          },
+          {
+            "section": "cross_add_bonus",
+            "parent": "bonus_channel_publication",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "bonus_depth_advance",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 5.729600001444396,
+            "exclusiveMs": 5.729600001444396,
+            "count": 600,
+            "exclusiveShare": 0.0000031929735474979622
+          },
+          {
+            "section": "skill_depth_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 2.1773000000007414,
+            "exclusiveMs": 0.2557999999976346,
+            "count": 8,
+            "exclusiveShare": 1.425514230027446e-7
+          },
+          {
+            "section": "skill_depth_read",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 1.261100000002898,
+            "exclusiveMs": 1.261100000002898,
+            "count": 8,
+            "exclusiveShare": 7.027818590728564e-7
+          },
+          {
+            "section": "skill_ideal_filter",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.22880000000031941,
+            "exclusiveMs": 0.22880000000031941,
+            "count": 8,
+            "exclusiveShare": 1.2750494755033265e-7
+          },
+          {
+            "section": "skill_route_materialization",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.07340000000067448,
+            "exclusiveMs": 0.07340000000067448,
+            "count": 8,
+            "exclusiveShare": 4.09041221602594e-8
+          },
+          {
+            "section": "skill_evaluate_sort",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.13739999999688735,
+            "exclusiveMs": 0.13739999999688735,
+            "count": 8,
+            "exclusiveShare": 7.656984175259777e-8
+          },
+          {
+            "section": "skill_channel_publication",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.07530000000178916,
+            "exclusiveMs": 0.07530000000178916,
+            "count": 8,
+            "exclusiveShare": 4.196294821134079e-8
+          },
+          {
+            "section": "cross_add_skill",
+            "parent": "skill_channel_publication",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "skill_depth_advance",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.14550000000053842,
+            "exclusiveMs": 0.14550000000053842,
+            "count": 8,
+            "exclusiveShare": 8.108378439080487e-8
+          },
+          {
+            "section": "composition_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "composition_checkpoint",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "compose_route",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "composition_consumer",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "cross_open_next",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "cross_wake_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "cross_wake",
+            "parent": "cross_wake_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_flush",
+            "parent": "search_runtime",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_sort",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_checkpoint",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_key_dedup",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_consumer",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          }
+        ],
+        "routeRegistration": {
+          "normalMs": 0.54950000000008,
+          "ownedNormalMs": 0.11750000000029104,
+          "existingGogmaMs": 1.1082000000001244,
+          "ownMs": 0.1021999999993568
+        },
+        "workCounts": {
+          "schedulerSteps": 612,
+          "bonusDepthWorks": 600,
+          "skillDepthWorks": 8,
+          "compositionWorks": 0,
+          "crossWakeWorks": 0,
+          "routeBaseWorks": 4,
+          "crossAddBonus": 0,
+          "crossAddSkill": 0,
+          "crossOpenNext": 0,
+          "deliveryFlushes": 0,
+          "deliveryConsumerCalls": 0
+        },
+        "bonusDepth": {
+          "works": 600,
+          "withCounts": 600,
+          "rawSolutions": 311563140,
+          "unsupportedPredictions": 0,
+          "idealSolutions": 0,
+          "evaluatedSolutions": 0,
+          "subscriberPublications": 0,
+          "maxRawSolutions": 642573,
+          "maxSubscriberCount": 1,
+          "maxRetainedCountAfter": 0,
+          "exhaustedWorks": 0
+        },
+        "skillDepth": {
+          "works": 8,
+          "withCounts": 8,
+          "rawSolutions": 8,
+          "unsupportedPredictions": 0,
+          "idealSolutions": 0,
+          "evaluatedSolutions": 0,
+          "subscriberPublications": 0,
+          "maxRawSolutions": 1,
+          "maxSubscriberCount": 4,
+          "maxRetainedCountAfter": 0,
+          "exhaustedWorks": 2
+        }
+      },
+      "activeAtEnd": {
+        "where": "section",
+        "lastDurable": {
+          "section": "bonus_depth_read",
+          "stack": [
+            "search_runtime",
+            "scheduler_step",
+            "scheduler_settle",
+            "bonus_depth_work",
+            "bonus_depth_read"
+          ],
+          "work": null,
+          "startedMs": 1798854.281
+        },
+        "lastHeartbeatStack": [
+          {
+            "section": "search_runtime",
+            "elapsedMs": 1794431.6405,
+            "work": null
+          },
+          {
+            "section": "scheduler_step",
+            "elapsedMs": 86.59679999994114,
+            "work": null
+          },
+          {
+            "section": "scheduler_settle",
+            "elapsedMs": 86.59429999999702,
+            "work": null
+          },
+          {
+            "section": "bonus_depth_work",
+            "elapsedMs": 86.59229999990202,
+            "work": {
+              "channel": 2,
+              "depth": 77
+            }
+          },
+          {
+            "section": "bonus_depth_read",
+            "elapsedMs": 86.58609999995679,
+            "work": null
+          }
+        ],
+        "lastHeartbeatAtMs": 1796106.0472,
+        "killElapsedEstimateMs": 1799220.365,
+        "lastDurableElapsedAtKillEstimateMs": 366.08400000003166
+      },
+      "counters": {
+        "startedTargets": 1,
+        "completedTargets": 0,
+        "deliveredCandidates": 0,
+        "trialsStarted": 0,
+        "trialsCompleted": 0,
+        "fullPlannerRunsStarted": 0,
+        "fullPlannerRunsCompleted": 0
+      },
+      "bonusWork": {
+        "works": 601,
+        "phaseDistributions": {
+          "bonus_depth_read": {
+            "count": 601,
+            "totalMs": 1287213.8348000015,
+            "minMs": 3.1947000000000116,
+            "medianMs": 2334.352499999921,
+            "maxMs": 2764.221799999941
+          },
+          "bonus_notice_scan": {
+            "count": 601,
+            "totalMs": 40666.36050000253,
+            "minMs": 0.08469999999988431,
+            "medianMs": 71.06429999996908,
+            "maxMs": 92.06610000002547
+          },
+          "bonus_ideal_filter": {
+            "count": 601,
+            "totalMs": 469130.9595999993,
+            "minMs": 0.4859999999971478,
+            "medianMs": 815.7286000000313,
+            "maxMs": 1023.6226000000024
+          },
+          "bonus_route_materialization": {
+            "count": 601,
+            "totalMs": 53.42029999860779,
+            "minMs": 0.009300000001530861,
+            "medianMs": 0.08529999991878867,
+            "maxMs": 1.337000000057742
+          },
+          "bonus_evaluate_sort": {
+            "count": 601,
+            "totalMs": 9.682799999246981,
+            "minMs": 0.007799999999861029,
+            "medianMs": 0.013999999966472387,
+            "maxMs": 0.07030000002123415
+          },
+          "bonus_channel_publication": {
+            "count": 601,
+            "totalMs": 4.983099998098169,
+            "minMs": 0.005099999951198697,
+            "medianMs": 0.006599999964237213,
+            "maxMs": 0.09419999993406236
+          },
+          "bonus_depth_advance": {
+            "count": 601,
+            "totalMs": 5.736800001553547,
+            "minMs": 0.005700000001525041,
+            "medianMs": 0.007799999999406282,
+            "maxMs": 0.06670000008307397
+          },
+          "self": {
+            "count": 601,
+            "totalMs": 52.49690000022292,
+            "minMs": 0.01959999999962747,
+            "medianMs": 0.06269999989308417,
+            "maxMs": 1.7340000001713634
+          }
+        },
+        "nsPerRawSolution": {
+          "bonus_depth_read": {
+            "count": 601,
+            "min": 1702.32,
+            "median": 4415.58,
+            "max": 34002.22
+          },
+          "bonus_notice_scan": {
+            "count": 601,
+            "min": 122.37,
+            "median": 130.25,
+            "max": 1055.06
+          },
+          "bonus_ideal_filter": {
+            "count": 601,
+            "min": 1438.93,
+            "median": 1504.67,
+            "max": 2654.43
+          },
+          "bonus_route_materialization": {
+            "count": 601,
+            "min": 0.12,
+            "median": 0.16,
+            "max": 152.53
+          },
+          "bonus_evaluate_sort": {
+            "count": 601,
+            "min": 0.02,
+            "median": 0.03,
+            "max": 169.94
+          },
+          "bonus_channel_publication": {
+            "count": 601,
+            "min": 0.01,
+            "median": 0.01,
+            "max": 107.91
+          },
+          "bonus_depth_advance": {
+            "count": 601,
+            "min": 0.01,
+            "median": 0.02,
+            "max": 141.46
+          },
+          "self": {
+            "count": 601,
+            "min": 0.09,
+            "median": 0.15,
+            "max": 641.14
+          }
+        },
+        "correlations": {
+          "rawSolutions_vs_bonus_depth_read": 0.0549,
+          "rawSolutions_vs_bonus_notice_scan": 0.993,
+          "rawSolutions_vs_bonus_ideal_filter": 0.9953,
+          "rawSolutions_vs_bonus_route_materialization": 0.0234,
+          "rawSolutions_vs_bonus_evaluate_sort": 0.0119,
+          "rawSolutions_vs_bonus_channel_publication": 0.0167,
+          "rawSolutions_vs_bonus_depth_advance": -0.1046,
+          "rawSolutions_vs_self": 0.1529
+        },
+        "maxRawSolutionsWork": {
+          "channel": 0,
+          "depth": 3,
+          "rawSolutions": 642573
+        }
+      },
+      "a3Reference": {
+        "orientationId": "c6-p1",
+        "childOutcome": "timeout",
+        "searchWallMs": 1796535.7868000001,
+        "measuredGogmaMs": 1284378.2057999943,
+        "coverage": 0.7149193549257018,
+        "dominantPhase": "frontier_reduction_sort",
+        "phaseShareOfMeasured": {
+          "window_collection": 0.006219423425223401,
+          "support_evaluation": 0.028087492326709044,
+          "state_generation": 0.31160806489293824,
+          "solution_materialization": 0.07635890749089054,
+          "frontier_reduction_sort": 0.5769755647157078,
+          "exhaustion_scan": 0.0007505471485309988
+        }
+      },
+      "memory": {
+        "source": "last_heartbeat",
+        "sampledMaxHeapUsedBytes": 4079338096,
+        "sampledMaxRssBytes": 4698849280
+      },
+      "heartbeats": 289,
+      "maxHeartbeatGapMs": 7120.190500000026,
+      "predictionCounts": {
+        "predictNormalArtian": 12,
+        "predictSkills": 5,
+        "resetBonuses": 254,
+        "keepBonuses": 29104
+      },
+      "laterTargets": []
+    },
+    {
+      "orientationId": "c13-p1",
+      "kind": "same_skill_counter",
+      "childOutcome": "timeout",
+      "resultClass": "timeout_in_search",
+      "primarySearch": {
+        "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "completed": false,
+        "observationPoint": "last_heartbeat",
+        "observedAtMs": 1791377.9928000001,
+        "searchStartedMs": 1664.8305,
+        "searchWallMs": 1789713.1623000002,
+        "searchWallAtKillEstimateMs": 1797562.9518000006,
+        "unobservedTailMs": 7849.789500000421,
+        "searchRuntimeInclusiveMs": 1789704.5757000002,
+        "trialMsExcluded": 0,
+        "categoryTotalsMs": {
+          "kernel_search_wrapper": 8.586600000038743,
+          "search_setup": 0.6491000000000895,
+          "initial_route_registration": 1.5706999999997606,
+          "scheduler_checkpoint": 2.3207999999181084,
+          "queue_dispatch_or_unclassified": 11.126600002479336,
+          "scheduler_post_settle": 0.3353999985492919,
+          "route_base_work": 1.3273000000017419,
+          "bonus_depth_read": 1215012.2019,
+          "bonus_notice_scan": 48897.588799998906,
+          "bonus_ideal_filter": 525717.5325000004,
+          "bonus_route_materialization": 23.54760000052329,
+          "bonus_evaluate_sort": 4.299199999121356,
+          "bonus_channel_publication": 2.259200000868532,
+          "bonus_depth_advance": 3.725099999835493,
+          "bonus_depth_work_other": 23.001099999954477,
+          "skill_depth": 1.7738999999992302,
+          "lazy_cross": 0,
+          "composition": 0,
+          "delivery": 0
+        },
+        "categoryShare": {
+          "kernel_search_wrapper": 0.0000047977520537446975,
+          "search_setup": 3.626838164200104e-7,
+          "initial_route_registration": 8.776266683881451e-7,
+          "scheduler_checkpoint": 0.0000012967441089473783,
+          "queue_dispatch_or_unclassified": 0.000006216973891045364,
+          "scheduler_post_settle": 1.8740433138361787e-7,
+          "route_base_work": 7.416272215911957e-7,
+          "bonus_depth_read": 0.678886554278095,
+          "bonus_notice_scan": 0.027321466830561567,
+          "bonus_ideal_filter": 0.2937440164011473,
+          "bonus_route_materialization": 0.000013157192167186023,
+          "bonus_evaluate_sort": 0.0000024021726440209886,
+          "bonus_channel_publication": 0.0000012623251862131826,
+          "bonus_depth_advance": 0.0000020813949845729938,
+          "bonus_depth_work_other": 0.000012851835972640024,
+          "skill_depth": 9.911644152628078e-7,
+          "lazy_cross": 0,
+          "composition": 0,
+          "delivery": 0
+        },
+        "measuredMs": 1789711.8458000007,
+        "coverage": 0.9999992644072653,
+        "strictCoverage": 0.9999786021577036,
+        "unattributedSearchMs": 1.3164999994914979,
+        "unattributedSearchShare": 7.355927347595937e-7,
+        "maxCategory": "bonus_depth_read",
+        "maxCategoryShare": 0.678886554278095,
+        "groups": {
+          "bonus_depth_work_inclusive": {
+            "ms": 1789684.1553999998,
+            "share": 0.9999837924307585
+          },
+          "bonus_post_read": {
+            "ms": 574671.9534999998,
+            "share": 0.3210972381526636
+          },
+          "skill_total": {
+            "ms": 1.7738999999992302,
+            "share": 9.911644152628078e-7
+          },
+          "lazy_cross_total": {
+            "ms": 0,
+            "share": 0
+          },
+          "composition_total": {
+            "ms": 0,
+            "share": 0
+          },
+          "delivery_total": {
+            "ms": 0,
+            "share": 0
+          },
+          "scheduler_checkpoint": {
+            "ms": 2.3207999999181084,
+            "share": 0.0000012967441089473783
+          },
+          "queue_dispatch_or_unclassified": {
+            "ms": 11.126600002479336,
+            "share": 0.000006216973891045364
+          },
+          "route_base_work": {
+            "ms": 1.3273000000017419,
+            "share": 7.416272215911957e-7
+          },
+          "initial_route_registration": {
+            "ms": 1.5706999999997606,
+            "share": 8.776266683881451e-7
+          }
+        },
+        "sections": [
+          {
+            "section": "search_runtime",
+            "parent": null,
+            "inclusiveMs": 1789704.5757000002,
+            "exclusiveMs": 1.3164999997243285,
+            "count": 0,
+            "exclusiveShare": 7.355927348896876e-7
+          },
+          {
+            "section": "search_setup",
+            "parent": "search_runtime",
+            "inclusiveMs": 0.6491000000000895,
+            "exclusiveMs": 0.6491000000000895,
+            "count": 1,
+            "exclusiveShare": 3.626838164200104e-7
+          },
+          {
+            "section": "route_registration",
+            "parent": "search_runtime",
+            "inclusiveMs": 1.5706999999997606,
+            "exclusiveMs": 0.09869999999909851,
+            "count": 1,
+            "exclusiveShare": 5.514850204948873e-8
+          },
+          {
+            "section": "normal_route_registration",
+            "parent": "route_registration",
+            "inclusiveMs": 0.5500999999999294,
+            "exclusiveMs": 0.5500999999999294,
+            "count": 1,
+            "exclusiveShare": 3.073676897436367e-7
+          },
+          {
+            "section": "owned_normal_route_registration",
+            "parent": "route_registration",
+            "inclusiveMs": 0.10900000000037835,
+            "exclusiveMs": 0.10900000000037835,
+            "count": 1,
+            "exclusiveShare": 6.090361421955461e-8
+          },
+          {
+            "section": "existing_gogma_route_registration",
+            "parent": "route_registration",
+            "inclusiveMs": 0.8129000000003543,
+            "exclusiveMs": 0.8129000000003543,
+            "count": 1,
+            "exclusiveShare": 4.542068623754649e-7
+          },
+          {
+            "section": "scheduler_step",
+            "parent": "search_runtime",
+            "inclusiveMs": 1789701.0394000004,
+            "exclusiveMs": 0.873000002286517,
+            "count": 270,
+            "exclusiveShare": 4.877876637866401e-7
+          },
+          {
+            "section": "scheduler_checkpoint",
+            "parent": "scheduler_step",
+            "inclusiveMs": 2.3207999999181084,
+            "exclusiveMs": 2.3207999999181084,
+            "count": 271,
+            "exclusiveShare": 0.0000012967441089473783
+          },
+          {
+            "section": "scheduler_settle",
+            "parent": "scheduler_step",
+            "inclusiveMs": 1789697.5102,
+            "exclusiveMs": 11.58090000019456,
+            "count": 270,
+            "exclusiveShare": 0.00000647081344884992
+          },
+          {
+            "section": "scheduler_post_settle",
+            "parent": "scheduler_step",
+            "inclusiveMs": 0.3353999985492919,
+            "exclusiveMs": 0.3353999985492919,
+            "count": 270,
+            "exclusiveShare": 1.8740433138361787e-7
+          },
+          {
+            "section": "bonus_depth_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 1789684.1553999998,
+            "exclusiveMs": 23.001099999954477,
+            "count": 256,
+            "exclusiveShare": 0.000012851835972640024
+          },
+          {
+            "section": "bonus_depth_read",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 1215012.2019,
+            "exclusiveMs": 1215012.2019,
+            "count": 256,
+            "exclusiveShare": 0.678886554278095
+          },
+          {
+            "section": "bonus_notice_scan",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 48897.588799998906,
+            "exclusiveMs": 48897.588799998906,
+            "count": 256,
+            "exclusiveShare": 0.027321466830561567
+          },
+          {
+            "section": "bonus_ideal_filter",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 525717.5325000004,
+            "exclusiveMs": 525717.5325000004,
+            "count": 256,
+            "exclusiveShare": 0.2937440164011473
+          },
+          {
+            "section": "bonus_route_materialization",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 23.54760000052329,
+            "exclusiveMs": 23.54760000052329,
+            "count": 256,
+            "exclusiveShare": 0.000013157192167186023
+          },
+          {
+            "section": "bonus_evaluate_sort",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 4.299199999121356,
+            "exclusiveMs": 4.299199999121356,
+            "count": 256,
+            "exclusiveShare": 0.0000024021726440209886
+          },
+          {
+            "section": "bonus_channel_publication",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 2.259200000868532,
+            "exclusiveMs": 2.259200000868532,
+            "count": 256,
+            "exclusiveShare": 0.0000012623251862131826
+          },
+          {
+            "section": "cross_add_bonus",
+            "parent": "bonus_channel_publication",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "bonus_depth_advance",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 3.725099999835493,
+            "exclusiveMs": 3.725099999835493,
+            "count": 256,
+            "exclusiveShare": 0.0000020813949845729938
+          },
+          {
+            "section": "skill_depth_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 1.7738999999992302,
+            "exclusiveMs": 0.404499999998734,
+            "count": 10,
+            "exclusiveShare": 2.2601387111602957e-7
+          },
+          {
+            "section": "skill_depth_read",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.7226999999988948,
+            "exclusiveMs": 0.7226999999988948,
+            "count": 10,
+            "exclusiveShare": 4.0380772473625715e-7
+          },
+          {
+            "section": "skill_ideal_filter",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.19919999999910942,
+            "exclusiveMs": 0.19919999999910942,
+            "count": 10,
+            "exclusiveShare": 1.1130275185723788e-7
+          },
+          {
+            "section": "skill_route_materialization",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.08469999999988431,
+            "exclusiveMs": 0.08469999999988431,
+            "count": 10,
+            "exclusiveShare": 4.7326019489645175e-8
+          },
+          {
+            "section": "skill_evaluate_sort",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.11580000000185464,
+            "exclusiveMs": 0.11580000000185464,
+            "count": 10,
+            "exclusiveShare": 6.470310574965962e-8
+          },
+          {
+            "section": "skill_channel_publication",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.08939999999984138,
+            "exclusiveMs": 0.08939999999984138,
+            "count": 10,
+            "exclusiveShare": 4.9952138634858924e-8
+          },
+          {
+            "section": "cross_add_skill",
+            "parent": "skill_channel_publication",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "skill_depth_advance",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.15760000000091168,
+            "exclusiveMs": 0.15760000000091168,
+            "count": 10,
+            "exclusiveShare": 8.805880367911941e-8
+          },
+          {
+            "section": "composition_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "composition_checkpoint",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "compose_route",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "composition_consumer",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "cross_open_next",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "cross_wake_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "cross_wake",
+            "parent": "cross_wake_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_flush",
+            "parent": "search_runtime",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_sort",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_checkpoint",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_key_dedup",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_consumer",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          }
+        ],
+        "routeRegistration": {
+          "normalMs": 0.5500999999999294,
+          "ownedNormalMs": 0.10900000000037835,
+          "existingGogmaMs": 0.8129000000003543,
+          "ownMs": 0.09869999999909851
+        },
+        "workCounts": {
+          "schedulerSteps": 270,
+          "bonusDepthWorks": 256,
+          "skillDepthWorks": 10,
+          "compositionWorks": 0,
+          "crossWakeWorks": 0,
+          "routeBaseWorks": 4,
+          "crossAddBonus": 0,
+          "crossAddSkill": 0,
+          "crossOpenNext": 0,
+          "deliveryFlushes": 0,
+          "deliveryConsumerCalls": 0
+        },
+        "bonusDepth": {
+          "works": 256,
+          "withCounts": 256,
+          "rawSolutions": 355597735,
+          "unsupportedPredictions": 0,
+          "idealSolutions": 0,
+          "evaluatedSolutions": 0,
+          "subscriberPublications": 0,
+          "maxRawSolutions": 1525164,
+          "maxSubscriberCount": 4,
+          "maxRetainedCountAfter": 0,
+          "exhaustedWorks": 0
+        },
+        "skillDepth": {
+          "works": 10,
+          "withCounts": 10,
+          "rawSolutions": 16,
+          "unsupportedPredictions": 0,
+          "idealSolutions": 0,
+          "evaluatedSolutions": 0,
+          "subscriberPublications": 0,
+          "maxRawSolutions": 3,
+          "maxSubscriberCount": 3,
+          "maxRetainedCountAfter": 0,
+          "exhaustedWorks": 5
+        }
+      },
+      "activeAtEnd": {
+        "where": "section",
+        "lastDurable": {
+          "section": "bonus_ideal_filter",
+          "stack": [
+            "search_runtime",
+            "scheduler_step",
+            "scheduler_settle",
+            "bonus_depth_work",
+            "bonus_ideal_filter"
+          ],
+          "work": null,
+          "startedMs": 1797831.722
+        },
+        "lastHeartbeatStack": [
+          {
+            "section": "search_runtime",
+            "elapsedMs": 1789704.5757000002,
+            "work": null
+          },
+          {
+            "section": "scheduler_step",
+            "elapsedMs": 115.28930000006221,
+            "work": null
+          },
+          {
+            "section": "scheduler_settle",
+            "elapsedMs": 115.28300000005402,
+            "work": null
+          },
+          {
+            "section": "bonus_depth_work",
+            "elapsedMs": 115.2768999999389,
+            "work": {
+              "channel": 1,
+              "depth": 53
+            }
+          },
+          {
+            "section": "bonus_depth_read",
+            "elapsedMs": 115.24380000005476,
+            "work": null
+          }
+        ],
+        "lastHeartbeatAtMs": 1791377.9928000001,
+        "killElapsedEstimateMs": 1799227.7823000005,
+        "lastDurableElapsedAtKillEstimateMs": 1396.0603000004776
+      },
+      "counters": {
+        "startedTargets": 1,
+        "completedTargets": 0,
+        "deliveredCandidates": 0,
+        "trialsStarted": 0,
+        "trialsCompleted": 0,
+        "fullPlannerRunsStarted": 0,
+        "fullPlannerRunsCompleted": 0
+      },
+      "bonusWork": {
+        "works": 256,
+        "phaseDistributions": {
+          "bonus_depth_read": {
+            "count": 256,
+            "totalMs": 1214896.9581,
+            "minMs": 5.955799999999726,
+            "medianMs": 5203.504450000008,
+            "maxMs": 6324.130399999907
+          },
+          "bonus_notice_scan": {
+            "count": 256,
+            "totalMs": 48897.588799998906,
+            "minMs": 0.14059999999881256,
+            "medianMs": 199.33799999998882,
+            "maxMs": 216.5066999999981
+          },
+          "bonus_ideal_filter": {
+            "count": 256,
+            "totalMs": 525717.5325000006,
+            "minMs": 0.6520999999997912,
+            "medianMs": 2159.7656499999575,
+            "maxMs": 2284.4742000000006
+          },
+          "bonus_route_materialization": {
+            "count": 256,
+            "totalMs": 23.54760000052329,
+            "minMs": 0.010999999999967258,
+            "medianMs": 0.09135000000242144,
+            "maxMs": 0.1687000000383705
+          },
+          "bonus_evaluate_sort": {
+            "count": 256,
+            "totalMs": 4.299199999121356,
+            "minMs": 0.00860000000011496,
+            "medianMs": 0.014499999990221113,
+            "maxMs": 0.06630000000586733
+          },
+          "bonus_channel_publication": {
+            "count": 256,
+            "totalMs": 2.259200000868532,
+            "minMs": 0.005499999970197678,
+            "medianMs": 0.006700000027194619,
+            "maxMs": 0.05999999982304871
+          },
+          "bonus_depth_advance": {
+            "count": 256,
+            "totalMs": 3.725099999835493,
+            "minMs": 0.006999999983236194,
+            "medianMs": 0.013599999947473407,
+            "maxMs": 0.06069999997271225
+          },
+          "self": {
+            "count": 256,
+            "totalMs": 22.968000000070333,
+            "minMs": 0.02559999999948559,
+            "medianMs": 0.06984999997075647,
+            "maxMs": 0.1610000000018772
+          }
+        },
+        "nsPerRawSolution": {
+          "bonus_depth_read": {
+            "count": 256,
+            "min": 1602.2,
+            "median": 3626.03,
+            "max": 30759.67
+          },
+          "bonus_notice_scan": {
+            "count": 256,
+            "min": 128.26,
+            "median": 137.9,
+            "max": 909.67
+          },
+          "bonus_ideal_filter": {
+            "count": 256,
+            "min": 1437.16,
+            "median": 1478.68,
+            "max": 2533.49
+          },
+          "bonus_route_materialization": {
+            "count": 256,
+            "min": 0.05,
+            "median": 0.06,
+            "max": 173.82
+          },
+          "bonus_evaluate_sort": {
+            "count": 256,
+            "min": 0.01,
+            "median": 0.01,
+            "max": 89.15
+          },
+          "bonus_channel_publication": {
+            "count": 256,
+            "min": 0,
+            "median": 0,
+            "max": 33.73
+          },
+          "bonus_depth_advance": {
+            "count": 256,
+            "min": 0,
+            "median": 0.01,
+            "max": 46.7
+          },
+          "self": {
+            "count": 256,
+            "min": 0.04,
+            "median": 0.05,
+            "max": 258.49
+          }
+        },
+        "correlations": {
+          "rawSolutions_vs_bonus_depth_read": 0.4953,
+          "rawSolutions_vs_bonus_notice_scan": 0.9911,
+          "rawSolutions_vs_bonus_ideal_filter": 0.9987,
+          "rawSolutions_vs_bonus_route_materialization": 0.3508,
+          "rawSolutions_vs_bonus_evaluate_sort": -0.0762,
+          "rawSolutions_vs_bonus_channel_publication": -0.0809,
+          "rawSolutions_vs_bonus_depth_advance": -0.1224,
+          "rawSolutions_vs_self": 0.175
+        },
+        "maxRawSolutionsWork": {
+          "channel": 0,
+          "depth": 3,
+          "rawSolutions": 1525164
+        }
+      },
+      "a3Reference": {
+        "orientationId": "c13-p1",
+        "childOutcome": "timeout",
+        "searchWallMs": 1794860.1043,
+        "measuredGogmaMs": 1203644.7332999976,
+        "coverage": 0.6706064335690508,
+        "dominantPhase": "frontier_reduction_sort",
+        "phaseShareOfMeasured": {
+          "window_collection": 0.00764934822151018,
+          "support_evaluation": 0.018393181964334853,
+          "state_generation": 0.3690014828397873,
+          "solution_materialization": 0.08360781442884245,
+          "frontier_reduction_sort": 0.5206610698007366,
+          "exhaustion_scan": 0.0006871027447887091
+        }
+      },
+      "memory": {
+        "source": "last_heartbeat",
+        "sampledMaxHeapUsedBytes": 5080521584,
+        "sampledMaxRssBytes": 5464887296
+      },
+      "heartbeats": 246,
+      "maxHeartbeatGapMs": 8522.692499999888,
+      "predictionCounts": {
+        "predictNormalArtian": 12,
+        "predictSkills": 4,
+        "resetBonuses": 253,
+        "keepBonuses": 28218
+      },
+      "laterTargets": [
+        {
+          "targetOrdinal": 1,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 2,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 3,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 4,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 5,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 6,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 7,
+          "state": "not_started",
+          "searchOwnMs": null
+        },
+        {
+          "targetOrdinal": 8,
+          "state": "not_started",
+          "searchOwnMs": null
+        }
+      ]
+    },
+    {
+      "orientationId": "c14-p0",
+      "kind": "same_gogma_counter",
+      "childOutcome": "timeout",
+      "resultClass": "timeout_in_search",
+      "primarySearch": {
+        "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+        "completed": false,
+        "observationPoint": "last_heartbeat",
+        "observedAtMs": 1798194.9935,
+        "searchStartedMs": 1623.8291999999997,
+        "searchWallMs": 1796571.1643,
+        "searchWallAtKillEstimateMs": 1797589.6676,
+        "unobservedTailMs": 1018.5032999999821,
+        "searchRuntimeInclusiveMs": 1796562.5732,
+        "trialMsExcluded": 0,
+        "categoryTotalsMs": {
+          "kernel_search_wrapper": 8.591100000077859,
+          "search_setup": 0.6558999999997468,
+          "initial_route_registration": 1.7792999999996937,
+          "scheduler_checkpoint": 8.437000000018998,
+          "queue_dispatch_or_unclassified": 20.559899997759203,
+          "scheduler_post_settle": 0.7343000012124321,
+          "route_base_work": 1.1703999999945154,
+          "bonus_depth_read": 1247947.2236,
+          "bonus_notice_scan": 45343.75700000041,
+          "bonus_ideal_filter": 503117.7958999998,
+          "bonus_route_materialization": 57.21830000055752,
+          "bonus_evaluate_sort": 8.297699999439828,
+          "bonus_channel_publication": 4.25070000275673,
+          "bonus_depth_advance": 4.339500000679891,
+          "bonus_depth_work_other": 41.50129999603405,
+          "skill_depth": 2.539400000001933,
+          "lazy_cross": 0,
+          "composition": 0,
+          "delivery": 0
+        },
+        "categoryShare": {
+          "kernel_search_wrapper": 0.000004781942497348953,
+          "search_setup": 3.6508434123471294e-7,
+          "initial_route_registration": 9.903865960650462e-7,
+          "scheduler_checkpoint": 0.000004696167993604815,
+          "queue_dispatch_or_unclassified": 0.000011443966376789743,
+          "scheduler_post_settle": 4.087230251736442e-7,
+          "route_base_work": 6.514632001513503e-7,
+          "bonus_depth_read": 0.6946272145508018,
+          "bonus_notice_scan": 0.025239054205608243,
+          "bonus_ideal_filter": 0.28004334361897104,
+          "bonus_route_materialization": 0.00003184861314572615,
+          "bonus_evaluate_sort": 0.0000046186314042688475,
+          "bonus_channel_publication": 0.0000023660070289578176,
+          "bonus_depth_advance": 0.0000024154345159885134,
+          "bonus_depth_work_other": 0.000023100281703677596,
+          "skill_depth": 0.000001413470309700402,
+          "lazy_cross": 0,
+          "composition": 0,
+          "delivery": 0
+        },
+        "measuredMs": 1796568.8512999986,
+        "coverage": 0.9999987125475197,
+        "strictCoverage": 0.9999615179173686,
+        "unattributedSearchMs": 2.3130000014789402,
+        "unattributedSearchShare": 0.0000012874524802807668,
+        "maxCategory": "bonus_depth_read",
+        "maxCategoryShare": 0.6946272145508018,
+        "groups": {
+          "bonus_depth_work_inclusive": {
+            "ms": 1796524.3839999996,
+            "share": 0.9999739613431797
+          },
+          "bonus_post_read": {
+            "ms": 548577.1603999997,
+            "share": 0.30534674679237794
+          },
+          "skill_total": {
+            "ms": 2.539400000001933,
+            "share": 0.000001413470309700402
+          },
+          "lazy_cross_total": {
+            "ms": 0,
+            "share": 0
+          },
+          "composition_total": {
+            "ms": 0,
+            "share": 0
+          },
+          "delivery_total": {
+            "ms": 0,
+            "share": 0
+          },
+          "scheduler_checkpoint": {
+            "ms": 8.437000000018998,
+            "share": 0.000004696167993604815
+          },
+          "queue_dispatch_or_unclassified": {
+            "ms": 20.559899997759203,
+            "share": 0.000011443966376789743
+          },
+          "route_base_work": {
+            "ms": 1.1703999999945154,
+            "share": 6.514632001513503e-7
+          },
+          "initial_route_registration": {
+            "ms": 1.7792999999996937,
+            "share": 9.903865960650462e-7
+          }
+        },
+        "sections": [
+          {
+            "section": "search_runtime",
+            "parent": null,
+            "inclusiveMs": 1796562.5732,
+            "exclusiveMs": 2.3130000014789402,
+            "count": 0,
+            "exclusiveShare": 0.0000012874524802807668
+          },
+          {
+            "section": "search_setup",
+            "parent": "search_runtime",
+            "inclusiveMs": 0.6558999999997468,
+            "exclusiveMs": 0.6558999999997468,
+            "count": 1,
+            "exclusiveShare": 3.6508434123471294e-7
+          },
+          {
+            "section": "route_registration",
+            "parent": "search_runtime",
+            "inclusiveMs": 1.7792999999996937,
+            "exclusiveMs": 0.09829999999965366,
+            "count": 1,
+            "exclusiveShare": 5.471533883710885e-8
+          },
+          {
+            "section": "normal_route_registration",
+            "parent": "route_registration",
+            "inclusiveMs": 0.5564999999996871,
+            "exclusiveMs": 0.5564999999996871,
+            "count": 1,
+            "exclusiveShare": 3.09756724953624e-7
+          },
+          {
+            "section": "owned_normal_route_registration",
+            "parent": "route_registration",
+            "inclusiveMs": 0.11160000000018044,
+            "exclusiveMs": 0.11160000000018044,
+            "count": 1,
+            "exclusiveShare": 6.211832974824756e-8
+          },
+          {
+            "section": "existing_gogma_route_registration",
+            "parent": "route_registration",
+            "inclusiveMs": 1.0129000000001724,
+            "exclusiveMs": 1.0129000000001724,
+            "count": 1,
+            "exclusiveShare": 5.637962025260657e-7
+          },
+          {
+            "section": "scheduler_step",
+            "parent": "search_runtime",
+            "inclusiveMs": 1796557.8249999986,
+            "exclusiveMs": 1.4063999956970292,
+            "count": 496,
+            "exclusiveShare": 7.828245402374619e-7
+          },
+          {
+            "section": "scheduler_checkpoint",
+            "parent": "scheduler_step",
+            "inclusiveMs": 8.437000000018998,
+            "exclusiveMs": 8.437000000018998,
+            "count": 497,
+            "exclusiveShare": 0.000004696167993604815
+          },
+          {
+            "section": "scheduler_settle",
+            "parent": "scheduler_step",
+            "inclusiveMs": 1796547.2473000016,
+            "exclusiveMs": 20.32390000205669,
+            "count": 496,
+            "exclusiveShare": 0.000011312605036703633
+          },
+          {
+            "section": "scheduler_post_settle",
+            "parent": "scheduler_step",
+            "inclusiveMs": 0.7343000012124321,
+            "exclusiveMs": 0.7343000012124321,
+            "count": 496,
+            "exclusiveShare": 4.087230251736442e-7
+          },
+          {
+            "section": "bonus_depth_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 1796524.3839999996,
+            "exclusiveMs": 41.50129999603405,
+            "count": 484,
+            "exclusiveShare": 0.000023100281703677596
+          },
+          {
+            "section": "bonus_depth_read",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 1247947.2236,
+            "exclusiveMs": 1247947.2236,
+            "count": 484,
+            "exclusiveShare": 0.6946272145508018
+          },
+          {
+            "section": "bonus_notice_scan",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 45343.75700000041,
+            "exclusiveMs": 45343.75700000041,
+            "count": 484,
+            "exclusiveShare": 0.025239054205608243
+          },
+          {
+            "section": "bonus_ideal_filter",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 503117.7958999998,
+            "exclusiveMs": 503117.7958999998,
+            "count": 484,
+            "exclusiveShare": 0.28004334361897104
+          },
+          {
+            "section": "bonus_route_materialization",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 57.21830000055752,
+            "exclusiveMs": 57.21830000055752,
+            "count": 484,
+            "exclusiveShare": 0.00003184861314572615
+          },
+          {
+            "section": "bonus_evaluate_sort",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 8.297699999439828,
+            "exclusiveMs": 8.297699999439828,
+            "count": 484,
+            "exclusiveShare": 0.0000046186314042688475
+          },
+          {
+            "section": "bonus_channel_publication",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 4.25070000275673,
+            "exclusiveMs": 4.25070000275673,
+            "count": 484,
+            "exclusiveShare": 0.0000023660070289578176
+          },
+          {
+            "section": "cross_add_bonus",
+            "parent": "bonus_channel_publication",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "bonus_depth_advance",
+            "parent": "bonus_depth_work",
+            "inclusiveMs": 4.339500000679891,
+            "exclusiveMs": 4.339500000679891,
+            "count": 484,
+            "exclusiveShare": 0.0000024154345159885134
+          },
+          {
+            "section": "skill_depth_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 2.539400000001933,
+            "exclusiveMs": 0.284000000001015,
+            "count": 8,
+            "exclusiveShare": 1.580789036607243e-7
+          },
+          {
+            "section": "skill_depth_read",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 1.454999999996744,
+            "exclusiveMs": 1.454999999996744,
+            "count": 8,
+            "exclusiveShare": 8.098760733275251e-7
+          },
+          {
+            "section": "skill_ideal_filter",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.29050000000279397,
+            "exclusiveMs": 0.29050000000279397,
+            "count": 8,
+            "exclusiveShare": 1.616969067384435e-7
+          },
+          {
+            "section": "skill_route_materialization",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.08139999999593783,
+            "exclusiveMs": 0.08139999999593783,
+            "count": 8,
+            "exclusiveShare": 4.5308530835545163e-8
+          },
+          {
+            "section": "skill_evaluate_sort",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.095299999996314,
+            "exclusiveMs": 0.095299999996314,
+            "count": 8,
+            "exclusiveShare": 5.304549126137502e-8
+          },
+          {
+            "section": "skill_channel_publication",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.12860000000046057,
+            "exclusiveMs": 0.12860000000046057,
+            "count": 8,
+            "exclusiveShare": 7.15807993336947e-8
+          },
+          {
+            "section": "cross_add_skill",
+            "parent": "skill_channel_publication",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "skill_depth_advance",
+            "parent": "skill_depth_work",
+            "inclusiveMs": 0.20460000000866785,
+            "exclusiveMs": 0.20460000000866785,
+            "count": 8,
+            "exclusiveShare": 1.1388360454309439e-7
+          },
+          {
+            "section": "composition_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "composition_checkpoint",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "compose_route",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "composition_consumer",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "cross_open_next",
+            "parent": "composition_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "cross_wake_work",
+            "parent": "scheduler_settle",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "cross_wake",
+            "parent": "cross_wake_work",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_flush",
+            "parent": "search_runtime",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_sort",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_checkpoint",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_key_dedup",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          },
+          {
+            "section": "delivery_consumer",
+            "parent": "delivery_flush",
+            "inclusiveMs": 0,
+            "exclusiveMs": 0,
+            "count": 0,
+            "exclusiveShare": 0
+          }
+        ],
+        "routeRegistration": {
+          "normalMs": 0.5564999999996871,
+          "ownedNormalMs": 0.11160000000018044,
+          "existingGogmaMs": 1.0129000000001724,
+          "ownMs": 0.09829999999965366
+        },
+        "workCounts": {
+          "schedulerSteps": 496,
+          "bonusDepthWorks": 484,
+          "skillDepthWorks": 8,
+          "compositionWorks": 0,
+          "crossWakeWorks": 0,
+          "routeBaseWorks": 4,
+          "crossAddBonus": 0,
+          "crossAddSkill": 0,
+          "crossOpenNext": 0,
+          "deliveryFlushes": 0,
+          "deliveryConsumerCalls": 0
+        },
+        "bonusDepth": {
+          "works": 484,
+          "withCounts": 484,
+          "rawSolutions": 337048805,
+          "unsupportedPredictions": 0,
+          "idealSolutions": 0,
+          "evaluatedSolutions": 0,
+          "subscriberPublications": 0,
+          "maxRawSolutions": 788476,
+          "maxSubscriberCount": 1,
+          "maxRetainedCountAfter": 0,
+          "exhaustedWorks": 0
+        },
+        "skillDepth": {
+          "works": 8,
+          "withCounts": 8,
+          "rawSolutions": 8,
+          "unsupportedPredictions": 0,
+          "idealSolutions": 0,
+          "evaluatedSolutions": 0,
+          "subscriberPublications": 0,
+          "maxRawSolutions": 1,
+          "maxSubscriberCount": 4,
+          "maxRetainedCountAfter": 0,
+          "exhaustedWorks": 2
+        }
+      },
+      "activeAtEnd": {
+        "where": "section",
+        "lastDurable": {
+          "section": "bonus_depth_read",
+          "stack": [
+            "search_runtime",
+            "scheduler_step",
+            "scheduler_settle",
+            "bonus_depth_work",
+            "bonus_depth_read"
+          ],
+          "work": null,
+          "startedMs": 1798100.1275
+        },
+        "lastHeartbeatStack": [
+          {
+            "section": "search_runtime",
+            "elapsedMs": 1796562.5732,
+            "work": null
+          },
+          {
+            "section": "scheduler_step",
+            "elapsedMs": 94.87790000019595,
+            "work": null
+          },
+          {
+            "section": "scheduler_settle",
+            "elapsedMs": 94.87450000015087,
+            "work": null
+          },
+          {
+            "section": "bonus_depth_work",
+            "elapsedMs": 94.87300000013784,
+            "work": {
+              "channel": 8,
+              "depth": 51
+            }
+          },
+          {
+            "section": "bonus_depth_read",
+            "elapsedMs": 94.8660000001546,
+            "work": null
+          }
+        ],
+        "lastHeartbeatAtMs": 1798194.9935,
+        "killElapsedEstimateMs": 1799213.4968,
+        "lastDurableElapsedAtKillEstimateMs": 1113.3693000001367
+      },
+      "counters": {
+        "startedTargets": 1,
+        "completedTargets": 0,
+        "deliveredCandidates": 0,
+        "trialsStarted": 0,
+        "trialsCompleted": 0,
+        "fullPlannerRunsStarted": 0,
+        "fullPlannerRunsCompleted": 0
+      },
+      "bonusWork": {
+        "works": 484,
+        "phaseDistributions": {
+          "bonus_depth_read": {
+            "count": 484,
+            "totalMs": 1247852.3575999998,
+            "minMs": 2.3126000000002023,
+            "medianMs": 2819.922899999947,
+            "maxMs": 3520.3586000001524
+          },
+          "bonus_notice_scan": {
+            "count": 484,
+            "totalMs": 45343.75700000041,
+            "minMs": 0.10370000000011714,
+            "medianMs": 97.96679999999469,
+            "maxMs": 125.16049999999814
+          },
+          "bonus_ideal_filter": {
+            "count": 484,
+            "totalMs": 503117.79589999974,
+            "minMs": 0.5073999999949592,
+            "medianMs": 1092.2730000000447,
+            "maxMs": 1181.0635000000038
+          },
+          "bonus_route_materialization": {
+            "count": 484,
+            "totalMs": 57.21830000055752,
+            "minMs": 0.009500000000116415,
+            "medianMs": 0.08820000011473894,
+            "maxMs": 8.208499999949709
+          },
+          "bonus_evaluate_sort": {
+            "count": 484,
+            "totalMs": 8.297699999439828,
+            "minMs": 0.007599999997182749,
+            "medianMs": 0.014800000004470348,
+            "maxMs": 0.08190000000104192
+          },
+          "bonus_channel_publication": {
+            "count": 484,
+            "totalMs": 4.25070000275673,
+            "minMs": 0.005600000004051253,
+            "medianMs": 0.0071000000461936,
+            "maxMs": 0.085300000035204
+          },
+          "bonus_depth_advance": {
+            "count": 484,
+            "totalMs": 4.339500000679891,
+            "minMs": 0.006199999945238233,
+            "medianMs": 0.007400000002235174,
+            "maxMs": 0.08389999996870756
+          },
+          "self": {
+            "count": 484,
+            "totalMs": 41.49429999605081,
+            "minMs": 0.02209999999968204,
+            "medianMs": 0.06469999998807907,
+            "maxMs": 0.19900000002235174
+          }
+        },
+        "nsPerRawSolution": {
+          "bonus_depth_read": {
+            "count": 484,
+            "min": 1630.19,
+            "median": 3929.48,
+            "max": 30442.6
+          },
+          "bonus_notice_scan": {
+            "count": 484,
+            "min": 123.94,
+            "median": 132.13,
+            "max": 966.57
+          },
+          "bonus_ideal_filter": {
+            "count": 484,
+            "min": 1454.79,
+            "median": 1492.78,
+            "max": 2752.37
+          },
+          "bonus_route_materialization": {
+            "count": 484,
+            "min": 0.1,
+            "median": 0.12,
+            "max": 124.26
+          },
+          "bonus_evaluate_sort": {
+            "count": 484,
+            "min": 0.02,
+            "median": 0.02,
+            "max": 142.6
+          },
+          "bonus_channel_publication": {
+            "count": 484,
+            "min": 0.01,
+            "median": 0.01,
+            "max": 40.53
+          },
+          "bonus_depth_advance": {
+            "count": 484,
+            "min": 0.01,
+            "median": 0.01,
+            "max": 51.78
+          },
+          "self": {
+            "count": 484,
+            "min": 0.07,
+            "median": 0.1,
+            "max": 456.21
+          }
+        },
+        "correlations": {
+          "rawSolutions_vs_bonus_depth_read": 0.3535,
+          "rawSolutions_vs_bonus_notice_scan": 0.9407,
+          "rawSolutions_vs_bonus_ideal_filter": 0.9985,
+          "rawSolutions_vs_bonus_route_materialization": 0.0002,
+          "rawSolutions_vs_bonus_evaluate_sort": -0.0223,
+          "rawSolutions_vs_bonus_channel_publication": 0.0239,
+          "rawSolutions_vs_bonus_depth_advance": -0.0782,
+          "rawSolutions_vs_self": 0.2409
+        },
+        "maxRawSolutionsWork": {
+          "channel": 0,
+          "depth": 3,
+          "rawSolutions": 788476
+        }
+      },
+      "a3Reference": {
+        "orientationId": "c14-p0",
+        "childOutcome": "timeout",
+        "searchWallMs": 1797034.2427,
+        "measuredGogmaMs": 1248788.9005999966,
+        "coverage": 0.6949165858541024,
+        "dominantPhase": "frontier_reduction_sort",
+        "phaseShareOfMeasured": {
+          "window_collection": 0.006294373529604657,
+          "support_evaluation": 0.024363513789545217,
+          "state_generation": 0.3542434823751672,
+          "solution_materialization": 0.07826448950102076,
+          "frontier_reduction_sort": 0.5361019807097408,
+          "exhaustion_scan": 0.000732160094921657
+        }
+      },
+      "memory": {
+        "source": "last_heartbeat",
+        "sampledMaxHeapUsedBytes": 4461710896,
+        "sampledMaxRssBytes": 5150220288
+      },
+      "heartbeats": 274,
+      "maxHeartbeatGapMs": 8429.253399999812,
+      "predictionCounts": {
+        "predictNormalArtian": 12,
+        "predictSkills": 5,
+        "resetBonuses": 243,
+        "keepBonuses": 26996
+      },
+      "laterTargets": []
+    }
+  ],
+  "processes": [
+    {
+      "id": "baseline",
+      "role": "baseline",
+      "outcome": "completed",
+      "wallMs": 5806.270399999999,
+      "killedAtMs": null,
+      "lifecycleMessages": 0,
+      "heartbeatMessages": 0,
+      "sectionStartMessages": 0,
+      "workSummaryMessages": 0,
+      "searchSummaryMessages": 0,
+      "maxIpcHeartbeatGapMs": null,
+      "minClockOffsetMs": null,
+      "lastHeartbeatAgeAtEndMs": null,
+      "stderrTail": null
+    },
+    {
+      "id": "kernel-c6-p1",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800237.834,
+      "killedAtMs": 1800016.3773,
+      "lifecycleMessages": 2,
+      "heartbeatMessages": 289,
+      "sectionStartMessages": 4872,
+      "workSummaryMessages": 609,
+      "searchSummaryMessages": 0,
+      "maxIpcHeartbeatGapMs": 7120.220100000035,
+      "minClockOffsetMs": 25.691600000000108,
+      "lastHeartbeatAgeAtEndMs": 3335.46809999994,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    },
+    {
+      "id": "kernel-c13-p1",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800271.1121,
+      "killedAtMs": 1800016.8242000001,
+      "lifecycleMessages": 2,
+      "heartbeatMessages": 246,
+      "sectionStartMessages": 2128,
+      "workSummaryMessages": 266,
+      "searchSummaryMessages": 0,
+      "maxIpcHeartbeatGapMs": 8522.697900000028,
+      "minClockOffsetMs": 27.145999999833293,
+      "lastHeartbeatAgeAtEndMs": 8103.714900000021,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    },
+    {
+      "id": "kernel-c14-p0",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800257.1801,
+      "killedAtMs": 1800016.8418999999,
+      "lifecycleMessages": 2,
+      "heartbeatMessages": 274,
+      "sectionStartMessages": 3936,
+      "workSummaryMessages": 492,
+      "searchSummaryMessages": 0,
+      "maxIpcHeartbeatGapMs": 8429.16310000047,
+      "minClockOffsetMs": 26.12539999978617,
+      "lastHeartbeatAgeAtEndMs": 1258.5500999996439,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    }
+  ],
+  "conclusion": {
+    "statement": "Phase 2-C2.6-A3のprimary 3 orientationを、A3と同条件・Search section境界observerのみで各1回profileした: completed 0、timeout 3、OOM 0、process failure 0。coverage: c6-p1 1、c13-p1 1、c14-p0 1。最大outer category: c6-p1 bonus_depth_read 71.6%、c13-p1 bonus_depth_read 67.9%、c14-p0 bonus_depth_read 69.5%。decision case O_outer_bottleneck。",
+    "decision": {
+      "coverageThreshold": 0.9,
+      "categoryThreshold": 0.1,
+      "majority": 2,
+      "coverage": {
+        "c6-p1": 1,
+        "c13-p1": 1,
+        "c14-p0": 1
+      },
+      "maxCategoryByPrimary": {
+        "c6-p1": "bonus_depth_read",
+        "c13-p1": "bonus_depth_read",
+        "c14-p0": "bonus_depth_read"
+      },
+      "maxCategoryConsistentAcrossPrimaries": true,
+      "outerCandidates": [
+        {
+          "category": "bonus_ideal_filter",
+          "primaries": [
+            "c6-p1",
+            "c13-p1",
+            "c14-p0"
+          ],
+          "pooledShare": 0.2783
+        }
+      ],
+      "case": "O_outer_bottleneck",
+      "category": "bonus_ideal_filter",
+      "reason": "coverage >= 0.9 and bonus_ideal_filter >= 0.1 in c6-p1, c13-p1, c14-p0",
+      "recommendation": "bonus_ideal_filter: raw solution全件のsatisfiesIdealBonuses() filterを最適化設計（次Phaseで詳細化またはoptimization設計。本Phaseではoptimizationしない）"
+    }
+  },
+  "limitations": [
+    "Node child（Vite SSR loader）のみ。Browser Worker・他device・他heap条件は測っていない。",
+    "A3とはSearch instrumentationが異なる（A3 section observerは外し、Search全体のsection境界observerだけを付けた）ため、A3とのabsolute wall time比較はしない。比較はA4 run内のSearch wall構成比だけ。",
+    "各orientation 1回のみ（retryなし）。run間ばらつきは測っていない。",
+    "観測点はSearch完了時、またはtimeoutでは最後のheartbeat。最後のheartbeat以降（最大約5秒 + heartbeat遅延）は未観測で、unobservedTailMsとして別記する。kill時のactive sectionは最後のdurable section開始記録と最後のheartbeatのopen stackから読み、その経過時間はparentのkill時刻とIPC clock offset（最小値）からの推定。",
+    "section時間はResearch側performance.now()の差。section内のawait（checkpoint yield = setImmediate）とその間に走るtimer（250 ms memory sampler、5 s heartbeat）の時間は、その時openなsection（主にcheckpoint sectionとbonus_depth_read）に計上される。",
+    "bonus_depth_readはreadReservedDepth()全体を1 leafとして計時する（A3の内部6 sectionは再計時していない）。その内部の内訳はA3 evidenceを別authorityとして参照するだけで、A3 / A4のabsolute millisecondsを加算しない。",
+    "queue_dispatch_or_unclassifiedはscheduler_stepとscheduler_settleのsection自身の時間（heap pop / dispatch等、子sectionの間）で、直接の境界に囲まれたremainderである。route_base_workはscheduler所有work sectionを持たないsettle（Route search primitiveがqueueへ登録したRoute base work）で、heap popを含む。",
+    "Search rootの自身の時間（delivery loopのbookkeeping、境界間の隙間）だけをunattributedとして残す。container sectionのremainderを除いたstrictCoverageを併記する。",
+    "section境界の同期通知（Research child内の集計、durable section開始記録、depth work summary）は計算を変えないが、wall timeへのoverheadはゼロではない。",
+    "相関・ns per raw solutionは完了したBonus depth work記録のみの記述統計で、因果を示さない。"
+  ]
+}

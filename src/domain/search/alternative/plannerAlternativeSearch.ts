@@ -10,6 +10,7 @@ import { searchOwnedNormalArtianRoutes } from '../ownedNormalArtianRouteSearch'
 import type { RouteSearchContext } from '../routeSearchShared'
 import { createSearchExecutionContext } from '../searchExecution'
 import { createSearchPredictionSupport } from '../searchPredictionSupport'
+import type { SearchRuntimeObserver, SearchRuntimeSection } from '../searchRuntime'
 import { createTargetSkillStream, type ReservedSkillDepthObserver } from '../skillStream'
 import { TargetSearchScheduler } from '../targetSearchScheduler'
 import { createPlannerAlternativeCandidate } from './plannerAlternativeCandidateFactory'
@@ -46,6 +47,14 @@ export interface PlannerAlternativeSearchInstrumentation {
    * extra scan in the stream; the observer stamps them itself.
    */
   onGogmaReservedRuntime?: ReservedGogmaRuntimeObserver
+  /**
+   * The section boundaries of the whole Search (Issue #154 Phase 2-C2.6-A4
+   * outer runtime localization): the root, setup, Route registration, every
+   * scheduler step and its work, and every delivery flush, strictly nested in
+   * the registered hierarchy (`SEARCH_RUNTIME_SECTION_PARENT`). Boundaries
+   * only, no clock and no Search state; the observer stamps them itself.
+   */
+  onSearchRuntime?: SearchRuntimeObserver
 }
 
 /**
@@ -114,6 +123,9 @@ export async function visitPlannerAlternativeCandidates(
   onCandidate: PlannerAlternativeCandidateVisitor,
   options: PlannerAlternativeSearchExecutionOptions = {},
 ): Promise<PlannerAlternativeSearchExecution> {
+  const runtime = options.instrumentation?.onSearchRuntime
+  runtime?.({ type: 'section_started', section: 'search_runtime' })
+  runtime?.({ type: 'section_started', section: 'search_setup' })
   const { target, reservation } = assertPlannerAlternativeSearchInput(input)
   const { origin, extent } = input
   if (engine.version !== origin.calculationContext.rngEngineVersion) {
@@ -197,14 +209,24 @@ export async function visitPlannerAlternativeCandidates(
     if (candidate === null) return
     buffered.push(candidate)
     bufferedCost = composition.cost
-  })
+  }, runtime)
+  runtime?.({ type: 'section_completed', section: 'search_setup' })
   // The same registration order as the ordinary Search, with no route filter:
   // the scope is every currently legal Search Route. The searchers' own
   // searched / skipped reports and notices are ordinary Search presentation
   // and are not part of this API.
-  for (const search of [searchNormalArtianRoutes, searchOwnedNormalArtianRoutes, searchExistingGogmaRoutes]) {
+  const registrations: ReadonlyArray<readonly [SearchRuntimeSection, typeof searchNormalArtianRoutes]> = [
+    ['normal_route_registration', searchNormalArtianRoutes],
+    ['owned_normal_route_registration', searchOwnedNormalArtianRoutes],
+    ['existing_gogma_route_registration', searchExistingGogmaRoutes],
+  ]
+  runtime?.({ type: 'section_started', section: 'route_registration' })
+  for (const [section, search] of registrations) {
+    runtime?.({ type: 'section_started', section })
     await search(context, scheduler)
+    runtime?.({ type: 'section_completed', section })
   }
+  runtime?.({ type: 'section_completed', section: 'route_registration' })
 
   const excluded = new Set(input.excludedRouteKeys)
   const seen = new Set<string>()
@@ -216,28 +238,44 @@ export async function visitPlannerAlternativeCandidates(
   delivery: for (;;) {
     const next = scheduler.queue.nextLowerBound
     if (bufferedCost !== null && (next === null || next > bufferedCost)) {
+      runtime?.({ type: 'section_started', section: 'delivery_flush' })
+      runtime?.({ type: 'section_started', section: 'delivery_sort' })
       const ready = buffered.sort((left, right) =>
         compareConstrainedCandidates(left, right, target.preferredOwnedWeaponId))
+      runtime?.({ type: 'section_completed', section: 'delivery_sort' })
       buffered = []
       bufferedCost = null
       for (const candidate of ready) {
         // A long equal-cost flush stays cancellable and yields like any work.
+        runtime?.({ type: 'section_started', section: 'delivery_checkpoint' })
         await execution.checkpoint()
+        runtime?.({ type: 'section_completed', section: 'delivery_checkpoint' })
+        runtime?.({ type: 'section_started', section: 'delivery_key_dedup' })
         const key = candidateStableKey(candidate)
         // Only exact semantic duplicates collapse; this is not retention.
-        if (seen.has(key)) continue
+        if (seen.has(key)) {
+          runtime?.({ type: 'section_completed', section: 'delivery_key_dedup' })
+          continue
+        }
         seen.add(key)
         if (excluded.has(key)) {
           excludedCandidates += 1
           skippedExcludedRouteKeys.push(key)
+          runtime?.({ type: 'section_completed', section: 'delivery_key_dedup' })
           continue
         }
         deliveredCandidates += 1
-        if ((await onCandidate(candidate)) === 'stop') {
+        runtime?.({ type: 'section_completed', section: 'delivery_key_dedup' })
+        runtime?.({ type: 'section_started', section: 'delivery_consumer' })
+        const verdict = await onCandidate(candidate)
+        runtime?.({ type: 'section_completed', section: 'delivery_consumer' })
+        if (verdict === 'stop') {
           stoppedByConsumer = true
+          runtime?.({ type: 'section_completed', section: 'delivery_flush' })
           break delivery
         }
       }
+      runtime?.({ type: 'section_completed', section: 'delivery_flush' })
       continue
     }
     if (!(await scheduler.step())) break
@@ -247,6 +285,7 @@ export async function visitPlannerAlternativeCandidates(
   // The frontier ran out unless the consumer stopped first. Whether it ran out
   // naturally or an extent value cut reachable work is the scheduler's record.
   const stoppedByExtent = !stoppedByConsumer && scheduler.stoppedByExtent
+  runtime?.({ type: 'section_completed', section: 'search_runtime' })
   return {
     targetWeaponId: target.id,
     summary: {

@@ -56,8 +56,25 @@ describe('Planner Alternative Phase 3-A benchmark isolation', () => {
   })
 
   it('passes the Search instrumentation from no Production caller', () => {
-    const users = productionPaths.filter((path) => /\bonSkillReservedDepth\b|\bonGogmaReservedDepth\b|\bonGogmaReservedRuntime\b|\binstrumentation\?\.onWorkSettled\b/.test(production[path]))
+    const users = productionPaths.filter((path) => /\bonSkillReservedDepth\b|\bonGogmaReservedDepth\b|\bonGogmaReservedRuntime\b|\bonSearchRuntime\b|\binstrumentation\?\.onWorkSettled\b/.test(production[path]))
     expect(users).toEqual(['../domain/search/alternative/plannerAlternativeSearch.ts'])
+    // Issue #154 Phase 2-C2.6-A4: the section boundary observer reaches the scheduler only from the Planner Alternative
+    // Search, which reads it from its optional instrumentation; every other scheduler is constructed without one.
+    const runtimeUsers = productionPaths.filter((path) => /SearchRuntimeObserver/.test(production[path]))
+    expect(runtimeUsers.sort()).toEqual([
+      '../domain/search/alternative/plannerAlternativeSearch.ts',
+      '../domain/search/searchRuntime.ts',
+      '../domain/search/targetSearchScheduler.ts',
+    ])
+    expect(production['../domain/search/alternative/plannerAlternativeSearch.ts'])
+      .toMatch(/const runtime = options\.instrumentation\?\.onSearchRuntime\n/)
+    const schedulerConstructions = productionPaths.flatMap((path) =>
+      (production[path].match(/new TargetSearchScheduler\([^,)]*[,)]/g) ?? []).map((call) => `${path}: ${call}`))
+    expect(schedulerConstructions.sort()).toEqual([
+      '../domain/search/alternative/plannerAlternativeSearch.ts: new TargetSearchScheduler(context,',
+      '../domain/search/candidateSearch.ts: new TargetSearchScheduler(routeContext)',
+    ])
+    expect(production['../domain/search/alternative/plannerAlternativeSearch.ts']).toMatch(/^ {2}\}, runtime\)$/m)
     // Issue #154 Phase 2-C2.6-A2: the kernel's only Search instrumentation is the one its optional, observational
     // `PlannerAlternativeKernelOptions.instrumentation` hands it (undefined by default), and no Production module other
     // than the kernel names that seam.

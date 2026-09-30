@@ -1679,7 +1679,7 @@ identity、6キー順序、終了判定のいずれにも入らない。callback
 Productionの通常callerはinstrumentationを指定しない。Planner Alternative kernelはbenchmark / Research向けの任意の
 observational instrumentation seam（`PlannerAlternativeKernelOptions.instrumentation`、default undefined）を持ち、その
 `searchInstrumentationForTarget()` を介してTargetごとの `PlannerAlternativeSearchInstrumentation` をSearchへ渡せる
-（下の `onGogmaReservedRuntime` もこの経路で使われる）。これらはcalculation semanticsに入らず、Worker protocolには露出しない。
+（下の `onGogmaReservedRuntime` と `onSearchRuntime` もこの経路で使われる）。これらはcalculation semanticsに入らず、Worker protocolには露出しない。
 
 `onGogmaReservedRuntime`（Issue #154 Phase 2-C2.6-A3、execution-only）: held-aware Bonus（Gogma）streamの1 depth
 （`readReservedDepth()`）内部のexecution section境界を観測する任意のread-only observerである。上の3 callbackを置き換えるもの
@@ -1711,6 +1711,63 @@ depthは、それ以降の境界を通知しない。
 - optionalであり、Production callerは指定しない
 - Candidate生成結果、Candidate順序（6キー順序）、prediction内容・prediction呼び出し回数、stream state / frontier、
   Searchの終了判定を変更しない
+- `PlannerAlternativeSearchInput`、search identity、Candidate identityに入らない
+- persistせず、Worker protocol、Export / Importへ追加しない
+
+`onSearchRuntime`（Issue #154 Phase 2-C2.6-A4、execution-only）: Planner Alternative Search全体のexecution section境界を
+観測する任意のread-only observerである（型: `SearchRuntimeObserver`、`src/domain/search/searchRuntime.ts`）。上のcallbackを
+置き換えるものではなく併存する。`onGogmaReservedRuntime` が `readReservedDepth()` 内部を区切るのに対し、`onSearchRuntime` は
+`readReservedDepth()` 全体を1つのsection（`bonus_depth_read`）として含む、Search全体のouter hierarchyを区切る。目的は、Search
+のwall timeを二重計上なしに直接計時できる境界へ分解することである。
+
+sectionは次の登録済みhierarchy（`SEARCH_RUNTIME_SECTION_PARENT`）で厳密に入れ子になる。各sectionの親は1つに固定される。
+
+| section | 親 | 範囲 |
+| --- | --- | --- |
+| `search_runtime` | なし（root） | `visitPlannerAlternativeCandidates()` の入口からreturnまで |
+| `search_setup` | `search_runtime` | input検証、execution context、prediction support、reservation、Skill / Bonus stream、schedulerの構築 |
+| `route_registration` | `search_runtime` | 3つのRoute search primitiveによるRoute base登録全体 |
+| `normal_route_registration` / `owned_normal_route_registration` / `existing_gogma_route_registration` | `route_registration` | 各Route search primitive 1回 |
+| `scheduler_step` | `search_runtime` | `TargetSearchScheduler.step()` 1回 |
+| `scheduler_checkpoint` / `scheduler_settle` / `scheduler_post_settle` | `scheduler_step` | cancel / yield checkpoint、`SearchWorkQueue.settleNext()`（heap popとwork 1件のsettle）、`onWorkSettled()` |
+| `bonus_depth_work` / `skill_depth_work` | `scheduler_settle` | schedulerが登録したBonus / Skill stream depth work 1件 |
+| `bonus_depth_read` | `bonus_depth_work` | `readReservedDepth()` 全体（`onGogmaReservedRuntime` の6 sectionを含む） |
+| `bonus_notice_scan` | `bonus_depth_work` | raw solution全件のroute kind noticeとunsupported noticeの公開（dedup含む） |
+| `bonus_ideal_filter` | `bonus_depth_work` | raw solution全件への `satisfiesIdealBonuses()` |
+| `bonus_route_materialization` | `bonus_depth_work` | Ideal solutionのoperation / amendment result構築 |
+| `bonus_evaluate_sort` | `bonus_depth_work` | `evaluateBonusSolutions()` |
+| `bonus_channel_publication` | `bonus_depth_work` | channel retentionへの追加とsubscriberへの公開 |
+| `cross_add_bonus` | `bonus_channel_publication` | subscriber（Route baseのLazy Ideal Cross）1件の `addBonus()` |
+| `bonus_depth_advance` | `bonus_depth_work` | 次depthの登録、またはextent到達判定 |
+| `skill_depth_read` / `skill_ideal_filter` / `skill_route_materialization` / `skill_evaluate_sort` / `skill_channel_publication` / `skill_depth_advance` | `skill_depth_work` | Bonusと同じ区分のSkill側（Skillにnotice走査はない） |
+| `cross_add_skill` | `skill_channel_publication` | subscriber 1件の `addSkill()` |
+| `composition_work` | `scheduler_settle` | Cross pair 1件のsettle |
+| `composition_checkpoint` / `compose_route` / `composition_consumer` / `cross_open_next` | `composition_work` | checkpoint、Route合成、composition handler（Planner Alternative Candidate構築とbuffer）、rowの次cellのopen |
+| `cross_wake_work` | `scheduler_settle` | Lazy Ideal Crossの待機row wake-up 1件のsettle |
+| `cross_wake` | `cross_wake_work` | wake-upのresume（rowの次cellのopenと次wake-upの登録） |
+| `delivery_flush` | `search_runtime` | 同一costのbuffer 1回のflush |
+| `delivery_sort` / `delivery_checkpoint` / `delivery_key_dedup` / `delivery_consumer` | `delivery_flush` | 6キー順序のsort、Candidateごとのcheckpoint、stable key・重複・除外判定、consumer callback |
+
+Route search primitiveがqueueへ直接登録するRoute base work（Normal offset、blind base、owned Normal source）は独自の
+work sectionを持たず、`scheduler_settle` 自身の時間に含まれる。
+
+eventは `section_started` / `section_completed` の2種で、Search behaviorを制御するsignalではなく観測用eventである。
+`section_started` はその親がその時点で最内のopen sectionであるときだけ発生し、`section_completed` は最内のopen sectionを
+閉じる。`bonus_depth_work` / `skill_depth_work` の `section_started` だけがdepth detail（stream種別ごとのchannel生成順と
+depth）を持ち、held-aware読み取りのそれらの `section_completed` だけが既知の集計値（raw solution数、unsupported
+prediction数、Ideal solution数、評価済みsolution数、subscriber数、公開後のretained数、exhausted）を持つ。例外（cancel等）で
+中断したsectionは完了を通知せず、それ以降の境界も通知しない。
+
+- Domain側はclock（`performance.now()`、`Date.now()` 等）を読まず、eventにtimestampを含めない。section境界だけを同期的に
+  通知し、wall timeが必要なResearch consumerはcallback受信側で自ら時刻を計測する。inclusive時間とexclusive時間
+  （inclusiveから子sectionのinclusiveを引いたもの）の区別はconsumer側で行う
+- eventが渡すのは観測情報だけである。Candidate、solution、Bonus / Skill state、Route、frontierなどの内容そのものは渡さない。
+  観測のためだけにcollectionを追加走査・再構築しない
+- callbackは同期的に呼ばれ、awaitされず、戻り値をSearchが読まない
+- optionalであり、Production callerは指定しない。schedulerへは `TargetSearchScheduler` の任意の第3引数として
+  Planner Alternative Searchからだけ渡され、通常のCandidate Searchのschedulerは受け取らない。未指定時は境界の引数も評価されない
+- Candidate生成結果、delivered Candidate列（`candidateStableKey` 列）、Candidate順序（6キー順序）、prediction内容・
+  prediction呼び出し回数、stream state / frontier、queue順序、Searchの終了判定・summaryを変更しない
 - `PlannerAlternativeSearchInput`、search identity、Candidate identityに入らない
 - persistせず、Worker protocol、Export / Importへ追加しない
 
