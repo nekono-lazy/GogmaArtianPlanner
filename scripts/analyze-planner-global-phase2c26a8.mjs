@@ -164,6 +164,8 @@ try {
       scriptTable: kernel.capture?.scripts ? { scriptCount: kernel.capture.scripts.scriptCount, sourceMappedCount: kernel.capture.scripts.sourceMappedCount,
         requiredSourceMaps: kernel.capture.scripts.requiredSourceMaps } : null,
       captureIssues, intervalReconstruction: reconstructionView(reconstruction), profile: profileView(result), decisionRow,
+      profileQuality: { valid: decisionRow.valid, negativeTimeDeltas: decisionRow.negativeTimeDeltas, invalidReasons: decisionRow.invalidReasons,
+        decisionInput: decisionRow.valid },
       depthWorkWholeRun: depthTotals(kernel),
       semanticParity: { workPrefix: workPrefix.find(w => w.orientationId === kernel.orientationId)?.prefix ?? null,
         depthPrefix: depthPrefix.find(w => w.orientationId === kernel.orientationId)?.prefix ?? null },
@@ -270,6 +272,9 @@ try {
       trialsStarted: sum(primaryRows.map(row => row.searchOutcome.counters?.trialsStarted)),
       fullPlannerRunsStarted: sum(primaryRows.map(row => row.searchOutcome.counters?.fullPlannerRunsStarted)),
       frontierSamples: sum(primaryRows.map(row => row.decisionRow.frontierSamples)),
+      profileQuality: { validPrimaries: primaryRows.filter(row => row.decisionRow.valid).length,
+        byPrimary: primaryRows.map(row => ({ orientationId: row.orientationId, valid: row.decisionRow.valid, negativeTimeDeltas: row.decisionRow.negativeTimeDeltas,
+          frontierSamples: row.decisionRow.frontierSamples, invalidReasons: row.decisionRow.invalidReasons })) },
       pooledShares: pooled, decision,
     },
     perPrimary: primaryRows.map(({ _analysis, ...row }) => row),
@@ -282,7 +287,8 @@ try {
       statement: `Phase 2-C2.6-A7のprimary ${primaryRows.length} orientationを、A7と同条件（jit_default、A7の2 observer）にV8 sampling CPU profiler（10 ms、Search開始120〜720秒）を加えて各1回profileした: `
         + `completed ${childStatus.completed}、timeout ${childStatus.timeout}、OOM ${childStatus.out_of_memory}、process failure ${childStatus.process_failure}。`
         + `frontier_reduction_sort interval内sampleの構成: ${primaryRows.map(row => `${row.orientationId} (n=${row.decisionRow.frontierSamples}) ${analysis.PHASE2C26A8_CATEGORIES.map(c => `${c} ${pct(row.decisionRow.shares[c])}`).join(' / ')}`).join('、')}。`
-        + `decision case ${decision.case}。`,
+        + `negative timeDeltas: ${primaryRows.map(row => `${row.orientationId} ${String(row.decisionRow.negativeTimeDeltas)}`).join('、')}。`
+        + `有効primary ${decision.validPrimaries.length} / ${primaryRows.length}（${decision.validPrimaries.join(', ') || 'なし'}）。decision case ${decision.case}。`,
       decision,
     },
     limitations: [
@@ -290,6 +296,7 @@ try {
       'CPU profiler（10 ms sampling）が加わるため、A7とのabsolute wall time・30分進行量は比較しない。比較はA8 profile内のsample shareだけ。計算内容はA7 formal rawとの共通prefix（completed work / held-aware depth）で一致を確認した。',
       '各orientation 1回のみ（retryなし）、profile windowはSearch開始後120〜720秒（600秒）の1区間。run間ばらつき・window外の構成は測っていない。',
       'sampling profilerの統計的推定である。個々のgenerated stateの処理時間を直接測ったものではない。',
+      'negative timeDeltaを1件でも含むCPU profileは、累積sample時刻が逆行しinterval所属を保証できないため、profile全体をinvalid（decision input外）とする。timestamp補正は行わない。',
       'V8はMap get / set、Array.prototype.sortのbuiltin loop、spread（[...byKey.values()]）、JSON.stringify等のbuiltinを独立frameとして出さず、呼び出し元JavaScript frameに帰属させる。reduction_loop_or_inlinedはkey生成・Map操作・loop・frontier配列materialization・sort builtin loop・inline部分を分離しない。Map単独 / sort builtin単独のcostとは言わない。',
       'frontier_sortはcompareReservedFrontier（とその呼び出し先）のsampleで、sort builtin自身のmerge処理は含まない（reduction_loop_or_inlinedに入る）。',
       'TurboFan / Maglevのinlineで関数境界が失われたsampleは *_or_inlined categoryに入る。no_inlining diagnosticは関数単位attributionの補助で、Production-like割合ではない。',

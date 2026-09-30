@@ -644,9 +644,15 @@ export const PHASE2C26A8_DECISION_RULE = {
   dominantShareThreshold: 0.25,
   /** compareReservedRepresentative / compareReservedFrontier run only inside the section: outside-interval samples must stay rare. */
   maxComparatorOutsideShare: 0.01,
+  /**
+   * A sample's time is `startTime` + the cumulative `timeDeltas`; one negative delta makes that time run backwards, so
+   * which interval a sample belongs to is no longer evidence. Such a profile is invalid as a whole (no correction).
+   */
+  maxNegativeTimeDeltas: 0,
   validity: [
     'a complete capture (profile, script table with every required source map, window stopped by the registered stop, no error)',
     'a valid clock alignment (A5 rule) and a valid interval reconstruction (no open interval inside the profile)',
+    'no negative timeDelta in the CPU profile (negativeDeltas = 0; a profile with one is invalid as a whole and never a decision input; no timestamp correction)',
     'frontier_reduction_sort interval samples >= 5,000',
     'every named registered frame resolves to its declaration line',
     'comparator samples outside the intervals <= 1 % of all comparator samples',
@@ -684,6 +690,8 @@ export interface Phase2C26A8DecisionRow {
   valid: boolean
   invalidReasons: string[]
   frontierSamples: number
+  /** Negative `timeDeltas` of the profile (A5 alignment count); any > 0 makes the row invalid. */
+  negativeTimeDeltas: number | null
   shares: Record<Phase2C26A8Category, number>
   /** The unique largest category (null on a tie). */
   largestCategory: Phase2C26A8Category | null
@@ -696,6 +704,9 @@ export function phase2c26a8DecisionRow(orientationId: string, analysis: Phase2C2
   if (analysis === null) invalidReasons.push('no profile')
   else {
     if (!analysis.alignment.valid) invalidReasons.push(...analysis.alignment.issues.map(i => `clock: ${i}`))
+    // The A5 alignment only records negative deltas; A8 fails closed on any (a missing count is no evidence either).
+    const negative = analysis.alignment.negativeDeltas
+    if (!(typeof negative === 'number' && negative <= rule.maxNegativeTimeDeltas)) invalidReasons.push(`CPU profile contains negative timeDeltas: ${String(negative)}`)
     if (!analysis.intervalValidation.valid) invalidReasons.push(...analysis.intervalValidation.issues.map(i => `intervals: ${i}`))
     if (analysis.frontierSamples < rule.minimumFrontierSamples) invalidReasons.push(`frontierSamples ${analysis.frontierSamples} < ${rule.minimumFrontierSamples}`)
     if (analysis.registeredLineMismatches.length > 0) invalidReasons.push(`registered frame line mismatch: ${analysis.registeredLineMismatches.join(', ')}`)
@@ -705,7 +716,8 @@ export function phase2c26a8DecisionRow(orientationId: string, analysis: Phase2C2
   const shares = Object.fromEntries(PHASE2C26A8_CATEGORIES.map(c => [c, analysis === null ? 0 : phase2c26a8CategoryShare(analysis, c)])) as Record<Phase2C26A8Category, number>
   const max = Math.max(...PHASE2C26A8_CATEGORIES.map(c => shares[c]))
   const leaders = PHASE2C26A8_CATEGORIES.filter(c => shares[c] === max)
-  return { orientationId, valid: invalidReasons.length === 0, invalidReasons, frontierSamples: analysis?.frontierSamples ?? 0, shares,
+  return { orientationId, valid: invalidReasons.length === 0, invalidReasons, frontierSamples: analysis?.frontierSamples ?? 0,
+    negativeTimeDeltas: analysis === null ? null : (typeof analysis.alignment.negativeDeltas === 'number' ? analysis.alignment.negativeDeltas : null), shares,
     largestCategory: leaders.length === 1 && max > 0 ? leaders[0] : null, largestShare: max }
 }
 

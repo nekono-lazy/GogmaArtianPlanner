@@ -686,8 +686,8 @@ describe('Phase 2-C2.6-A8 profile analysis', () => {
 // ---------------------------------------------------------------- decision rule
 
 describe('Phase 2-C2.6-A8 pre-registered decision rule', () => {
-  const analysisWith = (n: number, shares: Partial<Record<Phase2C26A8Category, number>>, outsideShare = 0): Phase2C26A8ProfileAnalysis => ({
-    alignment: { valid: true, issues: [] } as never, intervalValidation: { valid: true, issues: [], count: 1 },
+  const analysisWith = (n: number, shares: Partial<Record<Phase2C26A8Category, number>>, outsideShare = 0, negativeDeltas = 0): Phase2C26A8ProfileAnalysis => ({
+    alignment: { valid: true, issues: [], negativeDeltas } as never, intervalValidation: { valid: true, issues: [], count: 1 },
     allProfileSamples: n * 2, windowSamples: n * 2, observedIntervalUs: { median: 10_000, mean: 10_000 }, intervalsInProfile: 1, intervalMsInProfile: 1, intervalShareOfProfile: 0.5,
     frontierSamples: n, frontierSampleShare: 0.5,
     categories: PHASE2C26A8_CATEGORIES.map(category => ({ category, samples: Math.round((shares[category] ?? 0) * n), share: shares[category] ?? 0 })),
@@ -708,7 +708,8 @@ describe('Phase 2-C2.6-A8 pre-registered decision rule', () => {
   const compare = { representative_compare_or_inlined: 0.4, reduction_loop_or_inlined: 0.3, representative_stable_serialization: 0.3 }
 
   it('decides S / T / R / C / M with majority 2 of 3, a unique largest category and a 0.25 floor', () => {
-    expect(PHASE2C26A8_DECISION_RULE).toMatchObject({ registeredPrimaryCount: 3, majority: 2, minimumFrontierSamples: 5_000, dominantShareThreshold: 0.25, maxComparatorOutsideShare: 0.01 })
+    expect(PHASE2C26A8_DECISION_RULE).toMatchObject({ registeredPrimaryCount: 3, majority: 2, minimumFrontierSamples: 5_000, dominantShareThreshold: 0.25, maxComparatorOutsideShare: 0.01,
+      maxNegativeTimeDeltas: 0 })
     const s = decide([[6_000, serialization], [6_000, serialization], [6_000, loop]])
     expect(s.case).toBe('S_stable_serialization_dominant')
     expect(s.category).toBe('representative_stable_serialization')
@@ -743,6 +744,79 @@ describe('Phase 2-C2.6-A8 pre-registered decision rule', () => {
     expect(phase2c26a8DecisionRow('none', null).valid).toBe(false)
     expect(phase2c26a8DecisionRow('capture', analysisWith(6_000, serialization), ['profile SHA-256 differs from the child record']).valid).toBe(false)
     expect(phase2c26a8DecisionRow('ok', analysisWith(6_000, serialization, 0.01)).valid).toBe(true)
+  })
+})
+
+describe('Phase 2-C2.6-A8 negative timeDelta fail-closed', () => {
+  const analysisWith = (n: number, shares: Partial<Record<Phase2C26A8Category, number>>, negativeDeltas: unknown = 0): Phase2C26A8ProfileAnalysis => ({
+    alignment: { valid: true, issues: [], negativeDeltas } as never, intervalValidation: { valid: true, issues: [], count: 1 },
+    allProfileSamples: n * 2, windowSamples: n * 2, observedIntervalUs: { median: 10_000, mean: 10_000 }, intervalsInProfile: 1, intervalMsInProfile: 1, intervalShareOfProfile: 0.5,
+    frontierSamples: n, frontierSampleShare: 0.5,
+    categories: PHASE2C26A8_CATEGORIES.map(category => ({ category, samples: Math.round((shares[category] ?? 0) * n), share: shares[category] ?? 0 })),
+    otherReasons: [], leafKinds: [], categoryLeafKinds: {} as never, repositoryAttributedSamples: n, unattributedOrNativeSamples: 0, gcSamples: 0, topLeaves: [], topStacks: [],
+    registeredInclusive: [], comparatorSamples: { inside: 100, outside: 0, outsideShare: 0 }, boundarySamples: 0, registeredLineMismatches: [], lineTicks: [],
+    reductionLeafCheck: { inIntervalLeafSamples: 0, frontierBlockLineTicks: 0, functionStartLineTicks: 0 },
+    workInWindow: { intervals: 1, partialIntervals: 0, generatedStates: 0, frontierStatesAfter: 0, representativeCompareCalls: 0 },
+  })
+  const serialization = { representative_stable_serialization: 0.6, reduction_loop_or_inlined: 0.3, gc: 0.1 }
+  const loop = { representative_stable_serialization: 0.3, reduction_loop_or_inlined: 0.6, gc: 0.1 }
+  const decideRows = (rows: [Partial<Record<Phase2C26A8Category, number>>, number][]) => {
+    const built = rows.map(([shares, negative], index) => ({ id: `p${index}`, analysis: analysisWith(6_000, shares, negative) }))
+    const decisionRows = built.map(row => phase2c26a8DecisionRow(row.id, row.analysis))
+    return phase2c26a8Decision(decisionRows, phase2c26a8PooledShares(built.map((row, index) => ({ valid: decisionRows[index].valid, analysis: row.analysis }))))
+  }
+
+  it('keeps a profile with no negative timeDelta valid and invalidates one with any (or with no count), even when the A5 alignment is valid', () => {
+    const ok = phase2c26a8DecisionRow('ok', analysisWith(6_000, serialization, 0))
+    expect(ok.valid).toBe(true)
+    expect(ok.negativeTimeDeltas).toBe(0)
+    const one = phase2c26a8DecisionRow('one', analysisWith(6_000, serialization, 1))
+    expect(one.valid).toBe(false)
+    expect(one.negativeTimeDeltas).toBe(1)
+    expect(one.invalidReasons).toContain('CPU profile contains negative timeDeltas: 1')
+    expect(phase2c26a8DecisionRow('many', analysisWith(6_000, serialization, 3)).invalidReasons).toContain('CPU profile contains negative timeDeltas: 3')
+    expect(phase2c26a8DecisionRow('missing', analysisWith(6_000, serialization, null)).valid).toBe(false)
+    expect(PHASE2C26A8_DECISION_RULE.validity.some(text => text.includes('negativeDeltas = 0'))).toBe(true)
+  })
+
+  it('invalidates a real profile whose cumulative sample times run backwards, although A5 accepts its alignment', () => {
+    const stack = [F.root, F.owner, F.representative, F.stringify, F.serialize]
+    const samples = Array.from({ length: 5_200 }, (_, index) => ({ atUs: us(110 + index * 0.01), stack }))
+    const profile = buildProfile(samples, us(100), us(200))
+    const clean = analyzePhase2C26A8Profile(profile, fakeScripts, spans, sources, block, window, reconstructionOf([[105, 190]]))
+    expect(clean.alignment.negativeDeltas).toBe(0)
+    expect(phase2c26a8DecisionRow('clean', clean).valid).toBe(true)
+    const backwards = structuredClone(profile)
+    backwards.timeDeltas[10] = -5
+    backwards.timeDeltas[11] += 5
+    const analyzed = analyzePhase2C26A8Profile(backwards, fakeScripts, spans, sources, block, window, reconstructionOf([[105, 190]]))
+    expect(analyzed.alignment.valid).toBe(true)
+    expect(analyzed.alignment.negativeDeltas).toBe(1)
+    const row = phase2c26a8DecisionRow('backwards', analyzed)
+    expect(row.valid).toBe(false)
+    expect(row.invalidReasons).toContain('CPU profile contains negative timeDeltas: 1')
+  })
+
+  it('never counts a negative-delta profile as a majority vote, decides with the valid primaries only, and falls to M below two', () => {
+    // 3 / 3 valid, all serialization: S.
+    expect(decideRows([[serialization, 0], [serialization, 0], [serialization, 0]]).case).toBe('S_stable_serialization_dominant')
+    // The serialization vote of a negative-delta profile is not counted: 1 valid S + 1 valid R -> M.
+    const excluded = decideRows([[serialization, 0], [serialization, 1], [loop, 0]])
+    expect(excluded.case).toBe('M_mixed_or_insufficient')
+    expect(excluded.validPrimaries).toEqual(['p0', 'p2'])
+    expect(excluded.invalidPrimaries).toEqual([{ orientationId: 'p1', reasons: ['CPU profile contains negative timeDeltas: 1'] }])
+    // 2 / 3 valid and both satisfy S: S (majority 2 of the registered 3 is unchanged).
+    const twoValid = decideRows([[serialization, 0], [serialization, 0], [serialization, 2]])
+    expect(twoValid.case).toBe('S_stable_serialization_dominant')
+    expect(twoValid.primariesAtThreshold.representative_stable_serialization).toEqual(['p0', 'p1'])
+    expect(decideRows([[loop, 1], [loop, 0], [loop, 0]]).case).toBe('R_reduction_loop_dominant_unresolved')
+    // 1 / 3 or 0 / 3 valid: M.
+    const oneValid = decideRows([[serialization, 0], [serialization, 1], [serialization, 1]])
+    expect(oneValid.case).toBe('M_mixed_or_insufficient')
+    expect(oneValid.reason).toBe('1 valid primaries (< 2)')
+    expect(decideRows([[serialization, 1], [serialization, 1], [serialization, 1]]).case).toBe('M_mixed_or_insufficient')
+    expect(PHASE2C26A8_DECISION_RULE.registeredPrimaryCount).toBe(3)
+    expect(PHASE2C26A8_DECISION_RULE.majority).toBe(2)
   })
 })
 
