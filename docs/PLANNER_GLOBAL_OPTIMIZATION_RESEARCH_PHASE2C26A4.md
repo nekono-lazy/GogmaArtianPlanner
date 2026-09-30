@@ -6,8 +6,9 @@ Planner Alternative Search / `TargetSearchScheduler` への任意の観測用sec
 
 ## 1. 結論: A3で未計測だった約30%は何だったか
 
-**A3の未計測約30%は、ほぼ全部が `readReservedDepth()` 直後のBonus Ideal filter（raw solution全件への `satisfiesIdealBonuses()`）で、
-残りの小部分がroute kind notice走査だった。** scheduler、Lazy Ideal Cross、Skill、composition、delivery、Route registrationは、
+**A3の未計測約30%は、ほぼ全部が `readReservedDepth()` 直後のBonus Ideal filter（`bonus_ideal_filter` section: raw solution全件を
+`Array.prototype.filter()` で走査し、各solutionについて `satisfiesIdealBonuses()` を評価する区間）で、残りの小部分がroute kind notice走査
+だった。** scheduler、Lazy Ideal Cross、Skill、composition、delivery、Route registrationは、
 3件とも合計で1秒未満（Search wallの0.01%未満）だった。
 
 A3のprimary 3 orientation（A3 RESULTのselectionから導出: c6-p1、c13-p1、c14-p0）を、A3と同条件で、Search全体のsection境界observer
@@ -34,8 +35,10 @@ categoryとして `bonus_ideal_filter` が3件ともSearch wallの10%以上（26
 - 各primaryはTarget 1件のSearchで3.1〜3.6億のraw solution（全Bonus depth workの合計）を受け取り、**Ideal solutionは3件とも0件**だった。
   したがってroute materialization、evaluate / sort、channel publication、Lazy Cross、composition、deliveryには処理対象が無く、
   いずれも実質0だった（Candidate 0件、composition work 0件、delivery 0回）。
-- Ideal filterの時間はraw solution数にほぼ比例する（Bonus depth work単位の相関 0.995〜0.999、raw solution 1件あたり中央値 約1.48〜1.50 µs）。
-  notice scanも同様に比例する（相関 0.94〜0.99、1件あたり中央値 約130〜138 ns）。
+- `bonus_ideal_filter` sectionの時間はraw solution数にほぼ比例する（Bonus depth work単位の相関 0.995〜0.999）。このsection全体の
+  raw solution 1件あたり中央値は約1.48〜1.50 µsだった。今回の計測ではfilter iteration、callback dispatch、`satisfiesIdealBonuses()` 本体、
+  GC等を分離していないため、この値を `satisfiesIdealBonuses()` 関数単体の実行時間とは扱わない。notice scan sectionも同様に比例する
+  （相関 0.94〜0.99、section全体でraw solution 1件あたり中央値 約130〜138 ns）。
 - kill時点の最後のdurable section開始は c6-p1 = `bonus_depth_read`、c13-p1 = `bonus_ideal_filter`、c14-p0 = `bonus_depth_read`。
 
 ## 2. A3との関係
@@ -182,7 +185,8 @@ primary 3件（majority 2）。coverage = sum(outer categories) / Search wall、
 | c13-p1 | 256 | 355,597,735 | 1,525,164 | 0 | 0 | 10 |
 | c14-p0 | 484 | 337,048,805 | 788,476 | 0 | 0 | 8 |
 
-Bonus depth work単位（完了したwork記録のみ、raw solution 1件あたり）:
+Bonus depth work単位（完了したwork記録のみ）。値は各section全体の時間をそのworkのraw solution数で割ったもの（section全体の
+raw solution 1件あたり時間）で、section内の個々の関数呼び出しの時間ではない:
 
 | phase | c6-p1 中央値 | c13-p1 中央値 | c14-p0 中央値 | raw solution数との相関 |
 | --- | ---: | ---: | ---: | ---: |
@@ -191,7 +195,9 @@ Bonus depth work単位（完了したwork記録のみ、raw solution 1件あた�
 | `bonus_notice_scan` | 130 ns | 138 ns | 132 ns | 0.99 / 0.99 / 0.94 |
 | route materialization / evaluate / publication / advance | < 1 ns | < 1 ns | < 1 ns | — |
 
-Ideal filterはraw solution 1件ごとにほぼ一定の約1.5 µsで、Ideal solution数が0件でも全件に対して実行される。notice scanは1件あたり約0.13 µs。
+`bonus_ideal_filter` section全体の時間はraw solution 1件あたりほぼ一定の約1.5 µsで、このsectionはIdeal solutionが0件でも全raw solutionを
+走査する。この値には `Array.prototype.filter` のiteration、callback呼び出し、`satisfiesIdealBonuses()` 本体、filter結果配列側の処理、
+section中のGC pause等が含まれ得るが、今回はそれらを分離していない。notice scan section全体はraw solution 1件あたり約0.13 µs。
 
 ### 9.2 scheduler / Lazy Cross / Skill / composition / delivery / registration
 
@@ -217,12 +223,14 @@ formalに言えること:
   26〜29%）とroute kind notice走査（2.3〜2.7%）でほぼ完全に説明される。
 - scheduler、Lazy Cross、Skill、composition、delivery、Route registrationは3件ともSearch wallに対して無視できる（合計0.01%未満）。
 - 30分間でIdeal Bonus solutionは3件とも1件も見つからず、Candidateも0件だった。
-- Ideal filterの時間はraw solution数にほぼ比例し、1件あたり約1.5 µsである。
+- `bonus_ideal_filter` sectionの時間はraw solution数にほぼ比例し、section全体でraw solution 1件あたり中央値約1.48〜1.50 µsである。
+  このsectionでは各raw solutionについて `satisfiesIdealBonuses()` を1回評価している。
 - 最大のcategoryは依然として `bonus_depth_read`（68〜72%）で、その内部はA3 evidenceでは `frontier_reduction_sort` > `state_generation`。
 
 まだ言えないこと:
 
-- `satisfiesIdealBonuses()` 1回（約1.5 µs）の内部内訳（multiset比較、Master rank参照、scope判定など）。
+- `bonus_ideal_filter` section（raw solution 1件あたり約1.48〜1.50 µs）の内部内訳。具体的には、`Array.prototype.filter` のiteration /
+  callback overhead、`satisfiesIdealBonuses()` 本体、GC等を今回分離していない。`satisfiesIdealBonuses()` 関数単体の実行時間は未計測である。
 - Ideal filterやnotice scanを短縮した場合に、これらのprimaryのSearchが30分以内に終わるか、Ideal Bonus solutionへ到達するか。
   filterを完全に除いても、残り約70%（read）は残る。
 - GCがどのsectionに計上されたか（GC pauseはその時openなsectionへ入る）。
@@ -230,13 +238,22 @@ formalに言えること:
 
 ## 11. 次Phase recommendation
 
-事前登録rule Oに従い、次Phaseは **`bonus_ideal_filter`（raw solution全件への `satisfiesIdealBonuses()`）を詳細化またはoptimization設計する**。
-本Phaseではoptimizationしていない。
+事前登録rule Oに従い、次の調査対象は **`bonus_ideal_filter` section** である。本Phaseではoptimizationしていない。
+
+次Phase（候補: **Phase 2-C2.6-A5: Bonus Ideal filter internal runtime localization**、本PRでは実装しない）では、まず `bonus_ideal_filter`
+sectionをさらに詳細化し、`satisfiesIdealBonuses()` 本体とfilter iteration / callback overhead等の内訳を確認する。optimization対象は
+その結果に基づいて決め、`satisfiesIdealBonuses()` を最適化対象と今回は決めない。内訳の候補（いずれも未確認で、断定しない）:
+
+- `Array.prototype.filter` のiteration / callback overhead
+- `satisfiesIdealBonuses()` 本体
+- その中のMaster rank assertion
+- bonus multiset / scope判定
+- その他の関数内部処理、section中のGC
 
 設計時の論点（本Phaseでは検証していない仮説）:
 
 - Ideal判定の意味（`satisfiesIdealBonuses()` がIdealのauthorityであること、Master rank assertionを含むこと）は変えずに、raw solution
-  全件に対する1件あたりの判定コストを下げられるか。
+  全件に対する `bonus_ideal_filter` sectionのコストを下げられるか。
 - 同じ処理を全件に対して行うnotice scan（2.5%）を同じ設計で扱えるか（単独では10%未満で候補ではない）。
 - Ideal filterを縮めてもSearch wallの約70%は `bonus_depth_read` に残るため、A3 evidenceの `frontier_reduction_sort` / `state_generation`
   の局所化・設計も並行して必要になる可能性が高い。filter単独の改善でprimaryが30分以内に終わるとは言えない。
