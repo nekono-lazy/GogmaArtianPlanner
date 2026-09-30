@@ -1676,7 +1676,10 @@ Phase 3のBrowser Worker benchmark（[PLANNER_ALTERNATIVE_BROWSER_WORKER_BENCHMA
 cancel / yieldと同じexecution-only境界であり、`PlannerAlternativeSearchInput`、search identity、Candidate
 identity、6キー順序、終了判定のいずれにも入らない。callbackは報告対象の処理の後に呼ばれ、戻り値をSearchが
 読まないため、有無でdeliverされる `candidateStableKey` 列、summary、prediction呼び出し回数は同一である。
-Production callerは渡さない（Planner Alternative kernelもWorker protocolも持たない）。
+Productionの通常callerはinstrumentationを指定しない。Planner Alternative kernelはbenchmark / Research向けの任意の
+observational instrumentation seam（`PlannerAlternativeKernelOptions.instrumentation`、default undefined）を持ち、その
+`searchInstrumentationForTarget()` を介してTargetごとの `PlannerAlternativeSearchInstrumentation` をSearchへ渡せる
+（下の `onGogmaReservedRuntime` もこの経路で使われる）。これらはcalculation semanticsに入らず、Worker protocolには露出しない。
 
 `onGogmaReservedRuntime`（Issue #154 Phase 2-C2.6-A3、execution-only）: held-aware Bonus（Gogma）streamの1 depth
 （`readReservedDepth()`）内部のexecution section境界を観測する任意のread-only observerである。上の3 callbackを置き換えるもの
