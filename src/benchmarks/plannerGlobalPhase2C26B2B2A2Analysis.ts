@@ -366,6 +366,14 @@ export function phase2c26b2b2a2Distribution(candidates: readonly Phase2C26B2B2A2
     estimatedSkillAdvance: countByNumber(candidates.map(c => c.orderingKeys.estimatedSkillAdvance)),
     estimatedNormalAdvance: countByNumber(candidates.map(c => c.orderingKeys.estimatedNormalAdvance)),
     preferredSourceRank: countByNumber(candidates.map(c => c.orderingKeys.preferredSourceRank)),
+    operationTypes: countBy(candidates, c => stableStringify(c.summary.operationTypes)),
+    sourceOwnedWeaponId: countBy(candidates, c => String(c.summary.sourceOwnedWeaponId)),
+    /** The Gogma positions of the Route's own units: first / last own position (positions are absolute Counter values). */
+    gogmaFirst: countByNumber(candidates.map(c => c.summary.gogma?.first ?? null)),
+    gogmaLast: countByNumber(candidates.map(c => c.summary.gogma?.last ?? null)),
+    /** Distinct final weapons (unordered five slots, scope, Series / Group Skill): how many Candidates share one result. */
+    distinctFinalWeapons: new Set(candidates.map(c => stableStringify([[...c.summary.finalBonuses.map(b => stableStringify(b))].sort(), c.summary.restorationBonusScope,
+      c.summary.seriesSkillId, c.summary.groupSkillId]))).size,
     heldRoute: candidates.filter(c => c.summary.heldRoute).length,
     lateStart: { any: candidates.filter(c => lateStart(c.summary)).length, gogma: candidates.filter(c => c.summary.gogma?.startsAfterOrigin).length,
       skill: candidates.filter(c => c.summary.skill?.startsAfterOrigin).length, normal: candidates.filter(c => c.summary.normal?.startsAfterOrigin).length },
