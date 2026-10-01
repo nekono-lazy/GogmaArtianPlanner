@@ -725,6 +725,11 @@ export type Phase2C26B2AContextClass =
 export const PHASE2C26B2A_PROBE_CLASSES: readonly Phase2C26B2AContextClass[] = ['default_context_unfinished', 'capture_or_ordering_unresolved', 'extent_insufficient', 'eligible_but_not_observed']
 
 /**
+ * The PRIMARY class of one context, exclusive by construction (the first matching rule wins). It is a summary label, not
+ * the cause set: the causes of a context are not exclusive (`phase2c26b2aContextCauses()`), and the Target cause flags
+ * are derived from the causes, never from this class. A compatible context outside the default extent whose B1 Search
+ * did not finish is `extent_insufficient` here and both `search_unfinished` and `extent_insufficient` as causes.
+ *
  * - reservation incompatible: some exclusive / blocked / held / Normal held-prefix condition fails;
  * - compatible but outside the default extent: `extent_insufficient`;
  * - compatible and inside: the B1 outcome decides - the oracle Candidate delivered (`observed`), no completed run
@@ -744,6 +749,41 @@ export function phase2c26b2aClassifyContext(input: { compatible: boolean; within
     return 'capture_or_ordering_unresolved'
   }
   return 'eligible_but_not_observed'
+}
+
+// ---------------------------------------------------------------- non-exclusive causes
+
+/**
+ * A searchable context whose B1 Search left no completed record (timeout, out of memory, process failure, context
+ * mismatch). `not_searched` - a blocked context, or a context without a B1 task - is not an execution failure.
+ */
+export const PHASE2C26B2A_UNFINISHED_STATUSES: readonly Phase2C26B2AB1ContextOutcome['status'][] = ['timeout', 'out_of_memory', 'process_failure', 'context_mismatch']
+export const phase2c26b2aSearchUnfinished = (b1: Phase2C26B2AB1ContextOutcome) => !b1.completed && PHASE2C26B2A_UNFINISHED_STATUSES.includes(b1.status)
+
+export type Phase2C26B2AContextCause =
+  | 'reservation_compatible'
+  | 'search_unfinished'
+  | 'capture_limited'
+  | 'completed_eligible_not_observed'
+  | 'extent_insufficient'
+  | 'observed'
+
+/**
+ * Every cause one context carries, several at once. Only a reservation-compatible context carries any of them:
+ * - `search_unfinished`: compatible and the B1 Search did not finish, inside or outside the default extent;
+ * - `extent_insufficient`: compatible and the oracle reach lies outside the default extent;
+ * - `capture_limited`: compatible, inside the extent, B1 completed with a consumer stop, the oracle Candidate not delivered;
+ * - `completed_eligible_not_observed`: compatible, inside the extent, B1 completed without a consumer stop, not delivered;
+ * - `observed`: the oracle Candidate was delivered.
+ */
+export function phase2c26b2aContextCauses(row: Pick<Phase2C26B2AContextRow, 'reservation' | 'b1' | 'deliveredOracle'>, withinDefaultExtent: boolean): Phase2C26B2AContextCause[] {
+  if (!row.reservation.compatible) return []
+  const causes: Phase2C26B2AContextCause[] = ['reservation_compatible']
+  if (phase2c26b2aSearchUnfinished(row.b1)) causes.push('search_unfinished')
+  if (!withinDefaultExtent) causes.push('extent_insufficient')
+  if (withinDefaultExtent && row.b1.completed && !row.deliveredOracle) causes.push(row.b1.status === 'consumer_stop' ? 'capture_limited' : 'completed_eligible_not_observed')
+  if (row.deliveredOracle) causes.push('observed')
+  return causes
 }
 
 // ---------------------------------------------------------------- per Target flags and aggregation
@@ -779,15 +819,16 @@ export interface Phase2C26B2AContextRow {
 
 export function phase2c26b2aTargetFlags(input: { covered: boolean; extent: Phase2C26B2ARouteExtent; support: Phase2C26B2ASupport; contexts: readonly Phase2C26B2AContextRow[] }): Phase2C26B2ATargetFlags {
   const { contexts } = input
-  const has = (cls: Phase2C26B2AContextClass) => contexts.some(row => row.classification === cls)
+  // Cause flags come from the non-exclusive causes, never from the primary class.
+  const has = (cause: Phase2C26B2AContextCause) => contexts.some(row => phase2c26b2aContextCauses(row, input.extent.withinDefaultExtent).includes(cause))
   return {
     alreadyCovered: input.covered,
     hasB1SearchContext: contexts.length > 0,
     hasReservationCompatibleContext: contexts.some(row => row.reservation.compatible),
     hasDefaultExtentCompatibleContext: contexts.some(row => row.reservation.compatible) && input.extent.withinDefaultExtent,
-    hasUnfinishedCompatibleContext: has('default_context_unfinished'),
-    hasCaptureLimitedCompatibleContext: has('capture_or_ordering_unresolved'),
-    hasCompletedEligibleButUnobservedContext: has('eligible_but_not_observed'),
+    hasUnfinishedCompatibleContext: has('search_unfinished'),
+    hasCaptureLimitedCompatibleContext: has('capture_limited'),
+    hasCompletedEligibleButUnobservedContext: has('completed_eligible_not_observed'),
     needsLargerExtent: !input.extent.withinDefaultExtent,
     hasExclusiveOwnedWeaponConflict: contexts.some(row => row.reservation.reasons.includes('exclusive_owned_weapon_conflict')),
     hasBlockedPositionConflict: contexts.some(row => row.reservation.reasons.includes('blocked_position_conflict')),
@@ -798,8 +839,14 @@ export function phase2c26b2aTargetFlags(input: { covered: boolean; extent: Phase
   }
 }
 
-/** A probe-able gap: some context could deliver the oracle Route under its reservation (Search completion / capture / extent). */
-export const phase2c26b2aHasProbeGap = (contexts: readonly Pick<Phase2C26B2AContextRow, 'classification'>[]) => contexts.some(row => PHASE2C26B2A_PROBE_CLASSES.includes(row.classification))
+/**
+ * A probe-able gap: some reservation-compatible context could deliver the oracle Route (Search completion / capture /
+ * extent / unobserved). Read from the cause flags; several may hold for one Route.
+ */
+export const phase2c26b2aHasProbeGap = (flags: Pick<Phase2C26B2ATargetFlags, 'hasReservationCompatibleContext' | 'hasUnfinishedCompatibleContext' | 'hasCaptureLimitedCompatibleContext'
+  | 'hasCompletedEligibleButUnobservedContext' | 'needsLargerExtent'>) =>
+  flags.hasUnfinishedCompatibleContext || flags.hasCaptureLimitedCompatibleContext || flags.hasCompletedEligibleButUnobservedContext
+  || (flags.hasReservationCompatibleContext && flags.needsLargerExtent)
 /** A context gap: no single-winner context exists, or none satisfies the reservation / held / exclusive conditions. */
 export const phase2c26b2aHasContextGap = (flags: Pick<Phase2C26B2ATargetFlags, 'noSingleWinnerSearchContext' | 'hasReservationCompatibleContext'>) =>
   flags.noSingleWinnerSearchContext || !flags.hasReservationCompatibleContext
@@ -832,6 +879,8 @@ export function phase2c26b2aAggregate(rows: readonly Phase2C26B2ATargetAudit[]) 
       gogma: rows.filter(row => row.extentRequiresLarger.includes('gogma')).length },
     compatibleButExtentInsufficient: rows.filter(row => row.flags.hasReservationCompatibleContext && row.flags.needsLargerExtent).length,
     compatibleContextUnfinished: flagCount(rows, 'hasUnfinishedCompatibleContext'),
+    /** Routes counted in BOTH compatibleContextUnfinished and compatibleButExtentInsufficient (cause flags overlap; never add them). */
+    compatibleContextUnfinishedAndExtentInsufficient: rows.filter(row => row.flags.hasUnfinishedCompatibleContext && row.flags.hasReservationCompatibleContext && row.flags.needsLargerExtent).length,
     compatibleContextCaptureUnresolved: flagCount(rows, 'hasCaptureLimitedCompatibleContext'),
     eligibleButNotObserved: flagCount(rows, 'hasCompletedEligibleButUnobservedContext'),
     heldCoverageGap: flagCount(rows, 'hasHeldCoverageGap'),
@@ -978,7 +1027,7 @@ export async function runPhase2C26B2AAudit({ snapshot, authority, manifest, orac
     }
     if (covered && !contexts.some(row => row.classification === 'observed')) inconsistencies.push(`${view.targetWeaponId}: covered by B1 but observed in no context the audit finds reachable`)
     const flags = phase2c26b2aTargetFlags({ covered, extent: routeExtent, support, contexts })
-    const probeGap = !covered && phase2c26b2aHasProbeGap(contexts)
+    const probeGap = !covered && phase2c26b2aHasProbeGap(flags)
     const contextGap = !covered && phase2c26b2aHasContextGap(flags)
     const extentRequiresLarger = (['normal', 'skill', 'gogma'] as const).filter(stream => routeExtent.verdict[stream] === 'requires_larger_extent')
     const audit: Phase2C26B2ATargetAudit = { targetWeaponId: view.targetWeaponId, conflictParticipant: participants.has(view.targetWeaponId), covered, oracleHeldRoute: view.oracleHeldRoute,
@@ -999,7 +1048,14 @@ export async function runPhase2C26B2AAudit({ snapshot, authority, manifest, orac
       participants: { total: audits.filter(r => r.conflictParticipant).length, covered: audits.filter(r => r.conflictParticipant && r.covered).length },
       nonParticipants: { total: audits.filter(r => !r.conflictParticipant).length, covered: audits.filter(r => !r.conflictParticipant && r.covered).length } },
     singleWinnerPatterns: countBy(routes.filter(r => !r.audit.covered), r => phase2c26b2aPattern(r.contexts, r.emptyReservation)),
+    /** The PRIMARY (exclusive) class of each context of an uncovered Route; not the cause set. */
     contextClasses: countBy(routes.filter(r => !r.audit.covered).flatMap(r => r.contexts), row => row.classification),
+    /** Non-exclusive causes of each context of an uncovered Route, one count per cause (a context may add to several). */
+    contextCauses: countBy(routes.filter(r => !r.audit.covered).flatMap(r => r.contexts.flatMap(row => phase2c26b2aContextCauses(row, r.extent.withinDefaultExtent))), cause => cause),
+    /** The full cause combination of each reservation-compatible context of an uncovered Route. */
+    compatibleContextCauseCombinations: countBy(routes.filter(r => !r.audit.covered).flatMap(r => r.contexts.filter(row => row.reservation.compatible)
+      .map(row => phase2c26b2aContextCauses(row, r.extent.withinDefaultExtent).join('+'))), key => key),
+    note: 'contextClasses is the primary (exclusive) context class; cause flags and contextCauses are non-exclusive. A Route may be counted in several cause aggregates at once (for example compatibleContextUnfinished and compatibleButExtentInsufficient); never add cause counts to obtain a Route count.',
     incompatibilityReasons: countBy(routes.filter(r => !r.audit.covered).flatMap(r => r.contexts.flatMap(row => row.reservation.reasons)), reason => reason),
     /** B1 outcome of every context of an uncovered Route, by audit class: a timeout context is never read as Candidate 0. */
     contextClassByB1Status: countBy(routes.filter(r => !r.audit.covered).flatMap(r => r.contexts), row => `${row.classification}|${row.b1.status}`),

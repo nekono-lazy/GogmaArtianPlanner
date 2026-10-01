@@ -109,9 +109,11 @@ try {
       classification: best.classification, reasons: best.reservation.reasons,
       missingHeld: Object.fromEntries(['normal', 'skill', 'gogma'].map(lane => [lane, best.reservation.lanes[lane]?.missingHeld.length ?? null])),
       blockedOwn: Object.fromEntries(['normal', 'skill', 'gogma'].map(lane => [lane, best.reservation.lanes[lane]?.blockedOwn.length ?? null])) })(analysis.phase2c26b2aBestContext(r.contexts)),
+    // Primary (exclusive) class per context; the non-exclusive causes are on each context row and in `flags`.
     contextClasses: r.contexts.reduce((acc, row) => { acc[row.classification] = (acc[row.classification] ?? 0) + 1; return acc }, {}),
     contexts: r.contexts.map(row => ({ orientationId: row.orientationId, workIndex: row.workIndex, fixedTargetWeaponId: row.fixedTargetWeaponId,
-      fixedTargetIsOracleSupporter: row.fixedTargetIsOracleSupporter, classification: row.classification, deliveredOracle: row.deliveredOracle,
+      fixedTargetIsOracleSupporter: row.fixedTargetIsOracleSupporter, classification: row.classification,
+      causes: analysis.phase2c26b2aContextCauses(row, r.extent.withinDefaultExtent), deliveredOracle: row.deliveredOracle,
       b1: { taskId: row.b1.taskId, status: row.b1.status, completedBy: row.b1.completedBy, delivered: row.b1.delivered, runs: row.b1.runs },
       reservation: reachRow(row.reservation) })),
   }))

@@ -27,6 +27,7 @@ import {
   parsePhase2C26B2AOracle,
   phase2c26b2aB1ContextOutcome,
   phase2c26b2aClassifyContext,
+  phase2c26b2aContextCauses,
   phase2c26b2aDecision,
   phase2c26b2aExpandRanges,
   phase2c26b2aExpandSegments,
@@ -427,6 +428,44 @@ describe('Phase 2-C2.6-B2-A classification', () => {
     const drifted = world()
     drifted.manifest = SPECS.map(spec => spec.targetWeaponId === 't-a' ? { ...spec, estimated: { ...spec.estimated, gogma: 9 } } : spec)
     expect((await runPhase2C26B2AAudit(drifted)).inconsistencies.some(i => /estimated advance/.test(i))).toBe(true)
+  })
+
+  it('keeps cause flags non-exclusive: a compatible timeout context outside the default extent is both unfinished and extent-insufficient', async () => {
+    // t-c (new Normal) gets a reservation-compatible context, its B1 Search timed out, and its Normal reach exceeds maxNormalAdvance.
+    const far: Phase2C26B2AOracleRouteSpec = { ...SPECS[2]!, operations: [{ type: 'create_normal_artian', from: 0, to: 4 }, ...SPECS[2]!.operations.slice(1)],
+      source: { kind: 'new_normal', normalPosition: 4 }, required: { ...SPECS[2]!.required, normal: 4 }, estimated: { ...SPECS[2]!.estimated, operations: 7, normal: 5 } }
+    const w = world({ contexts: [context('o0', 't-c', reservation({ gogma: [[10, 11, 12], []], skill: [[100], []] }))],
+      runs: [{ taskId: 's0', executionClass: 'stage1', process: 'timeout', record: null, searchStatus: null, delivered: null, candidateKeySha256s: [] }] })
+    w.manifest = [SPECS[0]!, SPECS[1]!, far]
+    w.oracle = oracleOf(w.manifest)
+    w.oracle.summary.normal[COUNTER] = { start: 0, end: 5 }
+    const audit = await runPhase2C26B2AAudit(w)
+    expect(audit.inconsistencies).toEqual([])
+    const c = audit.routes.find(r => r.view.targetWeaponId === 't-c')!
+    const row = c.contexts[0]!
+    expect([row.reservation.compatible, row.b1.status, c.extent.withinDefaultExtent]).toEqual([true, 'timeout', false])
+    expect(row.classification).toBe('extent_insufficient')
+    expect(phase2c26b2aContextCauses(row, c.extent.withinDefaultExtent)).toEqual(['reservation_compatible', 'search_unfinished', 'extent_insufficient'])
+    expect([c.audit.flags.hasReservationCompatibleContext, c.audit.flags.hasUnfinishedCompatibleContext, c.audit.flags.needsLargerExtent, c.audit.probeGap, c.audit.contextGap])
+      .toEqual([true, true, true, true, false])
+    const uncoveredC = audit.aggregates.uncovered
+    expect([uncoveredC.compatibleContextUnfinished, uncoveredC.compatibleButExtentInsufficient, uncoveredC.compatibleContextUnfinishedAndExtentInsufficient]).toEqual([1, 1, 1])
+    expect(audit.aggregates.contextClassByB1Status['extent_insufficient|timeout']).toBe(1)
+    expect(audit.aggregates.compatibleContextCauseCombinations).toEqual({ 'reservation_compatible+search_unfinished+extent_insufficient': 1 })
+  })
+
+  it('derives capture-limited and completed-unobserved causes only inside the default extent, and never from a non-searched context', () => {
+    const compatible = { reservation: { compatible: true } as never, deliveredOracle: false }
+    const outcome = (status: string, completed: boolean, delivered: number | null = null) => ({ taskId: 's', status, completed, completedBy: completed ? 'stage1' : null, delivered, runs: [], keySha256s: [] }) as never
+    expect(phase2c26b2aContextCauses({ ...compatible, b1: outcome('consumer_stop', true, 8) }, true)).toEqual(['reservation_compatible', 'capture_limited'])
+    expect(phase2c26b2aContextCauses({ ...compatible, b1: outcome('consumer_stop', true, 8) }, false)).toEqual(['reservation_compatible', 'extent_insufficient'])
+    expect(phase2c26b2aContextCauses({ ...compatible, b1: outcome('stopped_by_extent', true, 0) }, true)).toEqual(['reservation_compatible', 'completed_eligible_not_observed'])
+    expect(phase2c26b2aContextCauses({ ...compatible, b1: outcome('stopped_by_extent', true, 0) }, false)).toEqual(['reservation_compatible', 'extent_insufficient'])
+    for (const status of ['timeout', 'out_of_memory', 'process_failure', 'context_mismatch']) {
+      expect(phase2c26b2aContextCauses({ ...compatible, b1: outcome(status, false) }, true)).toEqual(['reservation_compatible', 'search_unfinished'])
+    }
+    expect(phase2c26b2aContextCauses({ ...compatible, b1: outcome('not_searched', false) }, true)).toEqual(['reservation_compatible'])
+    expect(phase2c26b2aContextCauses({ reservation: { compatible: false } as never, deliveredOracle: false, b1: outcome('timeout', false) }, true)).toEqual([])
   })
 
   it('decides B2A-BOTH / PROBE / CONTEXT / COVERED / INVALID by the registered rule', () => {
