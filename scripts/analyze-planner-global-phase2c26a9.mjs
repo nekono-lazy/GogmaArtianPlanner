@@ -214,6 +214,23 @@ try {
   const decision = analysis.phase2c26a9Decision(comparisonRows, primaryRows.map(row => ({ orientationId: row.orientationId, valid: row.semanticParity.valid })))
   const childStatus = Object.fromEntries(['completed', 'out_of_memory', 'timeout', 'process_failure'].map(status => [status, primaryRows.filter(row => row.childOutcome === status).length]))
   const formal = formalRunValidation.valid && calculationCodeChangedSinceMeasuredHead.length === 0 && fileIssues.length === 0
+  /** The child outcome limitation, from the measured child outcomes and the completed kernels' lifecycle (never a fixed premise). */
+  const outcomeLimitation = () => {
+    const ids = outcome => primaryRows.filter(row => row.childOutcome === outcome).map(row => row.orientationId)
+    const completedRows = primaryRows.filter(row => row.childOutcome === 'completed')
+    const completions = completedRows.map(row => completionOf(a9Kernel(row.orientationId)))
+    const parts = []
+    if (ids('timeout').length > 0) parts.push(`${ids('timeout').join(' / ')}は30分budgetでtimeoutし、Search完了までの総時間は測れていない。`)
+    if (completedRows.length > 0) {
+      const outcomes = [...new Set(completions.map(c => c?.targetOutcome ?? 'unknown'))].join(' / ')
+      const delivered = completions.map(c => c?.deliveredCandidates ?? null)
+      parts.push(`${completedRows.map(row => row.orientationId).join(' / ')}はSearchとkernelを完走した（target outcome ${outcomes}、deliveredCandidates ${delivered.join(' / ')}）`
+        + `${delivered.every(n => n === 0) ? '。いずれもextent内Candidate 0' : ''}。`)
+    }
+    for (const outcome of ['out_of_memory', 'process_failure']) if (ids(outcome).length > 0) parts.push(`${ids(outcome).join(' / ')}は${outcome}。`)
+    parts.push('route quality改善は本Phaseの評価対象ではない。')
+    return parts.join('')
+  }
   const serial = analysis.PHASE2C26A9_SERIALIZATION_CATEGORY
   const evidence = {
     phase: 'Issue #154 Phase 2-C2.6-A9: frontier_reduction_sort optimization effect (post-hoc analysis)',
@@ -337,7 +354,7 @@ try {
       'A8でprofile invalidだったprimaryのA8 profile shareは正式なbefore値として使わない（A9 validならA9単独のafter値として記述する）。',
       'reservedBonusStableKeyはA8の登録関数ではない。cache miss時のserializationはrepresentative_stable_serialization、lookup自体はrepresentative_compare_or_inlinedに入る（A8 ruleのまま）。helper frameの件数は記述的集計のみ。',
       'V8はWeakMap get / set等のbuiltinを独立frameとして出さない場合がある。TurboFan / Maglevのinlineで関数境界が失われたsampleは *_or_inlined categoryに入る。',
-      '各orientationは30分budgetでtimeoutしており、Search完了までの総時間・route qualityはここでは測っていない。',
+      outcomeLimitation(),
     ],
   }
   await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', { flag: 'wx' })
