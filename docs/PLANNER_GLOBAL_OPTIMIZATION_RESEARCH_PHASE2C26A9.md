@@ -6,7 +6,7 @@ Refs #154。A8 formal RESULT（Case S、`S_stable_serialization_dominant`）で�
 
 - Production変更: `src/domain/search/bonusStream.ts` の held-aware `compareReservedRepresentative()` のみ（§2）
 - measured HEAD: `a89b388`（Production変更・計測基盤・事前登録decision ruleを含むclean HEAD）
-- analysis HEAD: `5f487cf`（analyzerのsummary表示だけをpost-hoc修正。分類・validity・decision rule・比較対象setは不変。§9）
+- analysis HEAD: `cab6bf4`（analyzerのsummary表示とlimitations文言だけをpost-hoc修正。分類・validity・decision rule・比較対象setは不変。§9）
 - RESULT: [`docs/PLANNER_GLOBAL_PHASE2C26A9_RESULT.json`](PLANNER_GLOBAL_PHASE2C26A9_RESULT.json)（`provenance.formal = true`）
 
 ## 1. 結論
@@ -208,10 +208,12 @@ frontier配列materialization・sort builtin・inline部分。CPU profilerでは
 - measured HEAD `a89b388`（Production変更・benchmark・analysis rule・testをformal run前にcommit、clean tree、smokeなし）
 - formal raw: `PLANNER_GLOBAL_PHASE2C26A9_RAW.json.local`（46,806,775 bytes、SHA-256 `8e14d247…a01013`、Git管理外）、
   CPU profileとscript tableは`PLANNER_GLOBAL_PHASE2C26A9_PROFILES.local`（各child記録のSHA-256と一致を確認）
-- analysis HEAD `5f487cf`: formal run後、`scripts/analyze-planner-global-phase2c26a9.mjs`だけをpost-hoc修正した。
-  `summary.byPrimary.serializationShare.a8`にA8 profile invalidのprimary（c13-p1）のshareを出さない（`a8InvalidProfileDescriptive`
-  へ分離）ことと、lifecycle event種類・完走kernelのsearch / target outcomeの記述値追加のみ。分類・profile validity・
+- formal run後、`scripts/analyze-planner-global-phase2c26a9.mjs`だけを2回post-hoc修正した。分類・profile validity・
   decision rule・比較対象setは不変（RESULT `provenance.analysisCodeChangedSinceMeasuredHead`に記録）
+  - `5f487cf`: `summary.byPrimary.serializationShare.a8`にA8 profile invalidのprimary（c13-p1）のshareを出さない
+    （`a8InvalidProfileDescriptive`へ分離）ことと、lifecycle event種類・完走kernelのsearch / target outcomeの記述値追加
+  - `cab6bf4`（現在のanalysis HEAD）: limitationsの固定文言「各orientationは30分budgetでtimeoutしており」が実測
+    （completed 2 / timeout 1）と矛盾していたため、実測child outcomeと完走kernelのlifecycleから生成する文言に置き換え
 - 非formal smoke（c6-p1、budget 120 s、短縮window、未commit）はpipeline確認だけに使い、結果には使っていない
 - `npm test`の初回full実行で`src/components/rng/IdentificationWizardDialog.test.tsx`が並列負荷下のtimeoutで失敗したが、
   単独実行（58件）と再度のfull実行（330 files / 5,396 tests）は全件通過した。formal runは他の負荷が無い状態で実行した

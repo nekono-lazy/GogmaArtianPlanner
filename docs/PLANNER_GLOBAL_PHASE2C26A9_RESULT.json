@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 Phase 2-C2.6-A9: frontier_reduction_sort optimization effect (post-hoc analysis)",
-  "analyzedAt": "2026-10-01T02:23:18.068Z",
+  "analyzedAt": "2026-10-01T02:40:46.134Z",
   "sources": {
     "run": {
       "file": "PLANNER_GLOBAL_PHASE2C26A9_RAW.json.local",
@@ -55,7 +55,7 @@
   },
   "provenance": {
     "measuredHead": "a89b388faed8b52298822b4c5bdb8764c799f4be",
-    "analysisHead": "5f487cf0d774181039c04a196ccd96027e3a1a2e",
+    "analysisHead": "cab6bf44125a3f26b18a017ad9bf5cbce10f2775",
     "analysisCodeUncommitted": false,
     "codeChangedSinceMeasuredHead": [
       "scripts/analyze-planner-global-phase2c26a9.mjs"
@@ -4950,6 +4950,6 @@
     "A8でprofile invalidだったprimaryのA8 profile shareは正式なbefore値として使わない（A9 validならA9単独のafter値として記述する）。",
     "reservedBonusStableKeyはA8の登録関数ではない。cache miss時のserializationはrepresentative_stable_serialization、lookup自体はrepresentative_compare_or_inlinedに入る（A8 ruleのまま）。helper frameの件数は記述的集計のみ。",
     "V8はWeakMap get / set等のbuiltinを独立frameとして出さない場合がある。TurboFan / Maglevのinlineで関数境界が失われたsampleは *_or_inlined categoryに入る。",
-    "各orientationは30分budgetでtimeoutしており、Search完了までの総時間・route qualityはここでは測っていない。"
+    "c13-p1は30分budgetでtimeoutし、Search完了までの総時間は測れていない。c6-p1 / c14-p0はSearchとkernelを完走した（target outcome stopped_by_search_extent_bound、deliveredCandidates 0 / 0）。いずれもextent内Candidate 0。route quality改善は本Phaseの評価対象ではない。"
   ]
 }
