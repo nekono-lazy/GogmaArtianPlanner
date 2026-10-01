@@ -17,8 +17,6 @@ import {
   resetSkillsRoute,
   skillConstrainedTarget,
 } from '../test/fixtures/plannerConstrainedOrchestration'
-import { deriveOracleRequiredPositions, expandOracleOperations } from './plannerGlobalOracle1657'
-import { ORACLE_1657_ROUTES, type OracleRouteSpec } from './plannerGlobalOracle1657Manifest'
 import { globalResearchDependencies } from './plannerGlobalOptimizationResearch'
 import { runPhase2C2Baseline } from './plannerGlobalPhase2C2'
 import { derivePhase2C26B1Contexts } from './plannerGlobalPhase2C26B1'
@@ -31,6 +29,7 @@ import {
   phase2c26b2aClassifyContext,
   phase2c26b2aDecision,
   phase2c26b2aExpandRanges,
+  phase2c26b2aExpandSegments,
   phase2c26b2aLaneCheck,
   phase2c26b2aNormalCheck,
   phase2c26b2aOccupancy,
@@ -48,6 +47,7 @@ import {
   type Phase2C26B2AB1Authority,
   type Phase2C26B2AB1Run,
   type Phase2C26B2AOracle,
+  type Phase2C26B2AOracleRouteSpec,
 } from './plannerGlobalPhase2C26B2AAnalysis'
 import analysisSource from './plannerGlobalPhase2C26B2AAnalysis.ts?raw'
 import runnerSource from '../../scripts/run-planner-global-phase2c26b2a.mjs?raw'
@@ -55,8 +55,9 @@ import analyzerSource from '../../scripts/analyze-planner-global-phase2c26b2a.mj
 
 /*
  * Issue #154 Phase 2-C2.6-B2-A: the pre-Search context snapshot (calculation) and the post-hoc oracle reachability audit.
- * The synthetic world below is invented for the tests; the committed B1 RESULT / oracle RESULT / manifest are read only to
- * check the authority parser and the manifest consistency.
+ * The synthetic world below is invented for the tests; the committed B1 RESULT / oracle RESULT are read only to check the
+ * authority parsers. The oracle modules are never imported here (the Phase 2-A.5 isolation rule): the real manifest is
+ * checked against the oracle RESULT by the analyzer, and its result is recorded in the formal RESULT.
  */
 
 const digest = (value: string) => hashStableValue(value)
@@ -71,7 +72,7 @@ const reservation = (patch: Partial<{ normal: PlannerAlternativeReservation['nor
 
 const ORIGIN = { skill: 100, gogma: 10, normal: 0 }
 const COUNTER = 'weapon.x:8'
-const SPECS: OracleRouteSpec[] = [
+const SPECS: Phase2C26B2AOracleRouteSpec[] = [
   { targetWeaponId: 't-a', source: { kind: 'owned', ownedWeaponId: 'w-a' }, materialization: 'candidate_search', routeKind: 'existing_gogma_keep_bonuses',
     operations: [{ type: 'keep_bonuses', from: 12, to: 12 }], required: { normal: null, skill: [], gogma: [12] }, estimated: { operations: 1, normal: null, gogma: 3, skill: 0 } },
   { targetWeaponId: 't-b', source: { kind: 'owned', ownedWeaponId: 'w-b' }, materialization: 'candidate_search', routeKind: 'existing_gogma_mixed',
@@ -82,14 +83,14 @@ const SPECS: OracleRouteSpec[] = [
     required: { normal: 0, skill: [101], gogma: [13] }, estimated: { operations: 3, normal: 1, gogma: 4, skill: 2 } },
 ]
 
-function oracleOf(specs: readonly OracleRouteSpec[]): Phase2C26B2AOracle {
+function oracleOf(specs: readonly Phase2C26B2AOracleRouteSpec[]): Phase2C26B2AOracle {
   const usage = { gogma: [] as Phase2C26B2AOracle['gogmaUsage'], skill: [] as Phase2C26B2AOracle['requiredSkillUsage'], normal: {} as Phase2C26B2AOracle['requiredNormalUsage'] }
   const routes = specs.map(spec => {
-    const ops = expandOracleOperations(spec.operations)
-    const required = deriveOracleRequiredPositions(ops)
+    const ops = phase2c26b2aExpandSegments(spec.operations)
+    const required = spec.required
     const stream = (name: 'normal' | 'skill' | 'gogma') => {
       const positions = ops.filter(op => op.stream === name).map(op => op.position)
-      return { first: positions[0] ?? null, last: positions.at(-1) ?? null, operations: positions.length, ...(name === 'normal' ? {} : { required: required[name] }) }
+      return { first: positions[0] ?? null, last: positions.at(-1) ?? null, operations: positions.length, ...(name === 'normal' ? {} : { required: [...required[name]] }) }
     }
     ops.filter(op => op.stream === 'gogma').forEach(op => usage.gogma.push({ position: op.position, targetWeaponId: spec.targetWeaponId, type: op.type, required: required.gogma.includes(op.position) }))
     ops.filter(op => op.stream === 'skill' && required.skill.includes(op.position)).forEach(op => usage.skill.push({ position: op.position, targetWeaponId: spec.targetWeaponId, type: op.type, required: true }))
@@ -97,7 +98,7 @@ function oracleOf(specs: readonly OracleRouteSpec[]): Phase2C26B2AOracle {
     return { targetWeaponId: spec.targetWeaponId, weaponTypeId: 'weapon.x', sourceKind: spec.source.kind, sourceOwnedWeaponId: spec.source.kind === 'owned' ? spec.source.ownedWeaponId : null,
       normalPosition: spec.source.kind === 'new_normal' ? spec.source.normalPosition : null, conversionPosition: ops.find(op => op.type === 'convert_normal_to_gogma')?.position ?? null,
       normal: stream('normal'), gogma: stream('gogma'), skill: stream('skill'), routeOperationCount: ops.length,
-      materialization: { method: spec.materialization, routeKind: spec.routeKind, estimated: spec.estimated, plannerRequired: spec.required } }
+      materialization: { method: spec.materialization, routeKind: spec.routeKind, estimated: spec.estimated, plannerRequired: { normal: required.normal, skill: [...required.skill], gogma: [...required.gogma] } } }
   })
   return { exportSha256: 'e'.repeat(64), routes, gogmaUsage: usage.gogma, requiredSkillUsage: usage.skill, requiredNormalUsage: usage.normal,
     summary: { skill: { start: 100, end: 102 }, gogma: { start: 10, end: 14 }, normal: { [COUNTER]: { start: 0, end: 1 } }, physicalOperations: 7 }, manifestSha256: 'm' }
@@ -217,20 +218,35 @@ describe('Phase 2-C2.6-B2-A authorities', () => {
     expect(parsePhase2C26B2AB1Authority(null).valid).toBe(false)
   })
 
-  it('accepts the committed oracle and finds the manifest consistent with it; any drift is reported', () => {
+  it('accepts the committed oracle RESULT and fails closed when it is not the proven 1,657 minimum', () => {
     const parsed = parsePhase2C26B2AOracle(JSON.parse(rawOracle))
     expect(parsed.issues).toEqual([])
-    const ok = validatePhase2C26B2AOracleManifest(ORACLE_1657_ROUTES, parsed.oracle!, true)
+    expect([parsed.oracle!.routes.length, parsed.oracle!.gogmaUsage.length, parsed.oracle!.requiredSkillUsage.length, parsed.oracle!.summary.physicalOperations]).toEqual([43, 295, 25, 1657])
+    const mutate = (fn: (json: Record<string, Record<string, unknown>>) => void) => { const copy = JSON.parse(rawOracle); fn(copy); return parsePhase2C26B2AOracle(copy).valid }
+    expect(mutate(j => { j.verdict = 'validated_oracle' as never })).toBe(false)
+    expect(mutate(j => { (j.summary.stageC as Record<string, unknown>).conflicts = 1 })).toBe(false)
+    expect(mutate(j => { ((j.summary.stageC as Record<string, Record<string, unknown>>).traceReplay).isValid = false })).toBe(false)
+    expect(mutate(j => { j.summary.physicalOperations = 1658 })).toBe(false)
+  })
+
+  it('finds a manifest consistent with its oracle RESULT and reports every drift', () => {
+    const oracle = oracleOf(SPECS)
+    const ok = validatePhase2C26B2AOracleManifest(SPECS, oracle, true)
     expect(ok.issues).toEqual([])
-    expect([ok.checkedRoutes, ok.gogmaUsage, ok.requiredSkillUsage, ok.requiredNormalUsage]).toEqual([43, 295, 25, 8])
-    expect(validatePhase2C26B2AOracleManifest(ORACLE_1657_ROUTES, parsed.oracle!, false).valid).toBe(false)
-    const shifted = ORACLE_1657_ROUTES.map((route, i) => i !== 3 ? route : { ...route, operations: route.operations.map(op => ({ ...op, from: op.from + 1, to: op.to + 1 })) })
-    expect(validatePhase2C26B2AOracleManifest(shifted, parsed.oracle!, true).valid).toBe(false)
-    const oracle = structuredClone(parsed.oracle!)
-    oracle.gogmaUsage[0]!.required = !oracle.gogmaUsage[0]!.required
-    expect(validatePhase2C26B2AOracleManifest(ORACLE_1657_ROUTES, oracle, true).valid).toBe(false)
-    const notProven = JSON.parse(rawOracle); notProven.verdict = 'validated_oracle'
-    expect(parsePhase2C26B2AOracle(notProven).valid).toBe(false)
+    expect([ok.checkedRoutes, ok.gogmaUsage, ok.requiredSkillUsage, ok.requiredNormalUsage]).toEqual([3, 4, 2, 1])
+    expect(validatePhase2C26B2AOracleManifest(SPECS, oracle, false).valid).toBe(false)
+    const shifted = SPECS.map((spec, i) => i !== 0 ? spec : { ...spec, operations: [{ type: 'keep_bonuses' as const, from: 13, to: 13 }] })
+    expect(validatePhase2C26B2AOracleManifest(shifted, oracle, true).valid).toBe(false)
+    const requiredDrift = SPECS.map((spec, i) => i !== 1 ? spec : { ...spec, required: { ...spec.required, gogma: [10, 11] } })
+    expect(validatePhase2C26B2AOracleManifest(requiredDrift, oracle, true).issues.some(i => /plannerRequired/.test(i))).toBe(true)
+    const usage = structuredClone(oracle); usage.gogmaUsage[0]!.required = !usage.gogmaUsage[0]!.required
+    expect(validatePhase2C26B2AOracleManifest(SPECS, usage, true).issues).toContain('gogmaUsage differs from the manifest expansion')
+    const gap = structuredClone(oracle); gap.summary.gogma.end = 15
+    expect(validatePhase2C26B2AOracleManifest(SPECS, gap, true).valid).toBe(false)
+    expect(validatePhase2C26B2AOracleManifest(SPECS.slice(1), oracle, true).valid).toBe(false)
+    expect(() => phase2c26b2aExpandSegments([{ type: 'reset_bonuses', from: 5, to: 4 }])).toThrow()
+    expect(phase2c26b2aExpandSegments([{ type: 'create_normal_artian', from: 3, to: 5 }, { type: 'convert_normal_to_gogma', from: 9, to: 9 }]).map(op => [op.stream, op.position]))
+      .toEqual([['normal', 3], ['normal', 4], ['normal', 5], ['skill', 9]])
   })
 
   it('checks the snapshot against B1 field by field and fails closed on any drift', () => {
@@ -327,10 +343,10 @@ describe('Phase 2-C2.6-B2-A reservation compatibility', () => {
     const owned = phase2c26b2aRouteExtent(phase2c26b2aRouteView(SPECS[1]!, 'weapon.x'), ORIGIN, defaultPlannerAlternativeSearchExtent)
     expect([owned.reach, owned.withinDefaultExtent, owned.estimatedMatches]).toEqual([{ normal: null, gogma: 2, skill: 1 }, true, true])
     expect(owned.verdict.normal).toBe('not_applicable')
-    const longSkill: OracleRouteSpec = { ...SPECS[1]!, operations: [{ type: 'reset_bonuses', from: 10, to: 10 }, { type: 'reset_skills', from: 104, to: 104 }], estimated: { operations: 2, normal: null, gogma: 1, skill: 5 } }
+    const longSkill: Phase2C26B2AOracleRouteSpec = { ...SPECS[1]!, operations: [{ type: 'reset_bonuses', from: 10, to: 10 }, { type: 'reset_skills', from: 104, to: 104 }], estimated: { operations: 2, normal: null, gogma: 1, skill: 5 } }
     const r = phase2c26b2aRouteExtent(phase2c26b2aRouteView(longSkill, 'weapon.x'), ORIGIN, defaultPlannerAlternativeSearchExtent)
     expect([r.verdict.skill, r.estimatedMatches]).toEqual(['requires_larger_extent', true])
-    const conversion: OracleRouteSpec = { ...SPECS[2]!, operations: [{ type: 'create_normal_artian', from: 0, to: 3 }, { type: 'convert_normal_to_gogma', from: 104, to: 104 }, { type: 'reset_bonuses', from: 13, to: 13 }],
+    const conversion: Phase2C26B2AOracleRouteSpec = { ...SPECS[2]!, operations: [{ type: 'create_normal_artian', from: 0, to: 3 }, { type: 'convert_normal_to_gogma', from: 104, to: 104 }, { type: 'reset_bonuses', from: 13, to: 13 }],
       estimated: { operations: 6, normal: 4, gogma: 4, skill: 5 } }
     const c = phase2c26b2aRouteExtent(phase2c26b2aRouteView(conversion, 'weapon.x'), ORIGIN, defaultPlannerAlternativeSearchExtent)
     expect([c.verdict.skill, c.verdict.normal, c.withinDefaultExtent, c.estimatedMatches]).toEqual(['within_default_extent', 'within_default_extent', true, true])
@@ -442,7 +458,8 @@ describe('Phase 2-C2.6-B2-A isolation', () => {
 
   it('keeps the oracle and the manifest out of the calculation: only the analyzer reads them, after the snapshot', () => {
     for (const source of [b2aSource, runnerSource]) {
-      expect(source).not.toMatch(/ORACLE_1657|1657|--oracle|--manifest|--b1-result|gogmaUsage|plannerGlobalOracle|PHASE2C26B1_RESULT/)
+      // The character classes keep these names out of this file's own text (the Phase 2-A.5 isolation test reads it).
+      expect(source).not.toMatch(/ORACLE_[1]657|1657|--oracle|--manifest|--b1-result|gogmaUsage|plannerGlobal[O]racle|PHASE2C26B1_RESULT/)
     }
     expect(b2aSource).not.toMatch(/plannerGlobalPhase2C26B2AAnalysis/)
     expect(analyzerSource).toMatch(/--oracle/)

@@ -14,7 +14,7 @@ const args = process.argv.slice(2)
 const option = name => { const index = args.indexOf(name); return index < 0 ? undefined : args[index + 1] }
 const paths = { snapshot: option('--snapshot'), b1: option('--b1-result'), oracle: option('--oracle'), manifest: option('--manifest'), output: option('--output') }
 if (Object.values(paths).some(value => !value)) {
-  throw new Error('Usage: node scripts/analyze-planner-global-phase2c26b2a.mjs --snapshot <b2a-raw.json.local> --b1-result docs/PLANNER_GLOBAL_PHASE2C26B1_RESULT.json --oracle docs/PLANNER_GLOBAL_1657_ORACLE_RESULT.json --manifest src/benchmarks/plannerGlobalOracle1657Manifest.ts --output <new.json> [--allow-nonformal]')
+  throw new Error('Usage: node scripts/analyze-planner-global-phase2c26b2a.mjs --snapshot <b2a-raw.json.local> --b1-result docs/PLANNER_GLOBAL_PHASE2C26B1_RESULT.json --oracle docs/PLANNER_GLOBAL_1657_ORACLE_RESULT.json --manifest <oracle manifest .ts> --output <new.json> [--allow-nonformal]')
 }
 if (lstatSync(paths.output, { throwIfNoEntry: false }) !== undefined) throw new Error(`Output already exists: ${resolve(paths.output)}`)
 const sha = text => createHash('sha256').update(text).digest('hex')

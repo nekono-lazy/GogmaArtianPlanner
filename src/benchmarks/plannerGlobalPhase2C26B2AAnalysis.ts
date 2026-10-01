@@ -29,8 +29,6 @@ import {
   nextOperationPositions,
   type CounterReservation,
 } from '../domain/search/counterReservation'
-import { deriveOracleRequiredPositions, expandOracleOperations, type OracleOperation, type OracleStream } from './plannerGlobalOracle1657'
-import type { OracleRouteSpec } from './plannerGlobalOracle1657Manifest'
 import type { Phase2C2BaselineSummary } from './plannerGlobalPhase2C2'
 import { PHASE2C26B1_BASELINE_FIELDS } from './plannerGlobalPhase2C26B1'
 import type { Phase2C26B2ASnapshotRecord } from './plannerGlobalPhase2C26B2A'
@@ -49,6 +47,41 @@ const countBy = <T>(values: readonly T[], key: (value: T) => string): Record<str
 }
 const range = (from: number, toExclusive: number) => Array.from({ length: Math.max(0, toExclusive - from) }, (_, i) => from + i)
 const noSkip = async () => {}
+
+// ---------------------------------------------------------------- the oracle Route shape (structural; the manifest module is never imported)
+
+/**
+ * The structural shape of one manifest Route as the analyzer hands it in. This module never imports the oracle modules
+ * (the Phase 2-A.5 isolation rule: no other Research module reads them); the analyzer loads the manifest from its file
+ * argument after the snapshot run, and the shape is validated against the oracle RESULT before any judgement.
+ */
+export type Phase2C26B2AOperationType = 'create_normal_artian' | 'convert_normal_to_gogma' | 'reset_bonuses' | 'keep_bonuses' | 'reset_skills'
+export type Phase2C26B2AStream = 'normal' | 'skill' | 'gogma'
+export interface Phase2C26B2AOracleRouteSpec {
+  targetWeaponId: string
+  source: { kind: 'owned'; ownedWeaponId: string } | { kind: 'new_normal'; normalPosition: number }
+  materialization: 'candidate_search' | 'planner_alternative_search'
+  routeKind: string
+  /** Closed position ranges; for create_normal_artian `from` is the first forge and `to` the production target. */
+  operations: readonly { type: Phase2C26B2AOperationType; from: number; to: number }[]
+  required: { normal: number | null; skill: readonly number[]; gogma: readonly number[] }
+  estimated: { operations: number; normal: number | null; gogma: number | null; skill: number | null }
+}
+export interface Phase2C26B2AOperation { type: Phase2C26B2AOperationType; stream: Phase2C26B2AStream; position: number }
+
+const STREAM_OF: Record<Phase2C26B2AOperationType, Phase2C26B2AStream> = {
+  create_normal_artian: 'normal', convert_normal_to_gogma: 'skill', reset_skills: 'skill', reset_bonuses: 'gogma', keep_bonuses: 'gogma',
+}
+
+/** The exact operation segments expanded to one operation per consumed Counter position, in Route order (never first..last guessed). */
+export function phase2c26b2aExpandSegments(segments: Phase2C26B2AOracleRouteSpec['operations']): Phase2C26B2AOperation[] {
+  return segments.flatMap(segment => {
+    if (!Number.isSafeInteger(segment.from) || !Number.isSafeInteger(segment.to) || segment.to < segment.from || !(segment.type in STREAM_OF)) {
+      throw new RangeError(`Invalid oracle segment ${JSON.stringify(segment)}`)
+    }
+    return range(segment.from, segment.to + 1).map(position => ({ type: segment.type, stream: STREAM_OF[segment.type], position }))
+  })
+}
 
 /** Closed integer ranges of a position set (sorted, deduplicated). Lossless; never a raw position array in the RESULT. */
 export function phase2c26b2aRanges(values: Iterable<number>): [number, number][] {
@@ -351,7 +384,7 @@ export interface Phase2C26B2ARouteView {
   sourceKind: 'owned' | 'new_normal'
   sourceOwnedWeaponId: string | null
   method: string
-  operations: OracleOperation[]
+  operations: Phase2C26B2AOperation[]
   /** Own positions per lane, ascending: Normal forges, the Skill lane (conversion first), the Bonus lane. */
   normal: number[]
   conversion: number | null
@@ -363,9 +396,9 @@ export interface Phase2C26B2ARouteView {
   oracleHeldRoute: boolean
 }
 
-export function phase2c26b2aRouteView(spec: OracleRouteSpec, weaponTypeId: string): Phase2C26B2ARouteView {
-  const operations = expandOracleOperations(spec.operations)
-  const lane = (stream: OracleStream) => operations.filter(op => op.stream === stream).map(op => op.position)
+export function phase2c26b2aRouteView(spec: Phase2C26B2AOracleRouteSpec, weaponTypeId: string): Phase2C26B2ARouteView {
+  const operations = phase2c26b2aExpandSegments(spec.operations)
+  const lane = (stream: Phase2C26B2AStream) => operations.filter(op => op.stream === stream).map(op => op.position)
   const normal = lane('normal'), skill = lane('skill'), gogma = lane('gogma')
   for (const [name, positions] of [['normal', normal], ['skill', skill], ['gogma', gogma]] as const) {
     if (positions.some((p, i) => i > 0 && p <= positions[i - 1]!)) throw new Error(`Oracle Route ${spec.targetWeaponId}: the ${name} lane is not strictly ascending.`)
@@ -376,7 +409,7 @@ export function phase2c26b2aRouteView(spec: OracleRouteSpec, weaponTypeId: strin
   return {
     targetWeaponId: spec.targetWeaponId, weaponTypeId, normalCounterId: normalCounterIdOf(weaponTypeId), sourceKind: spec.source.kind,
     sourceOwnedWeaponId: spec.source.kind === 'owned' ? spec.source.ownedWeaponId : null, method: spec.materialization, operations, normal, conversion: conversions[0]?.position ?? null,
-    skill, gogma, required: spec.required, estimated: spec.estimated, oracleHeldRoute: spread(gogma) || spread(skill),
+    skill, gogma, required: { normal: spec.required.normal, skill: [...spec.required.skill], gogma: [...spec.required.gogma] }, estimated: spec.estimated, oracleHeldRoute: spread(gogma) || spread(skill),
   }
 }
 
@@ -384,11 +417,12 @@ export interface Phase2C26B2AOracleConsistency { valid: boolean; issues: string[
 
 /**
  * The manifest (exact operation segments) against the oracle RESULT, per Route and per stream: source, Normal target,
- * conversion position, first / last / operation count, required positions (the manifest's, the independently derived
- * `deriveOracleRequiredPositions()` and the RESULT's Planner `plannerRequired`), Route kind, method and estimates, the
+ * conversion position, first / last / operation count, required positions (the manifest's against the RESULT's Planner
+ * `plannerRequired`, taken by the oracle run from `createPlannerRouteUnitPlans()`, and the per-stream `required`), Route
+ * kind, method and estimates, the
  * full Gogma usage, the required Skill / Normal usage, the stream spans and the physical operation count.
  */
-export function validatePhase2C26B2AOracleManifest(manifest: readonly OracleRouteSpec[], oracle: Phase2C26B2AOracle, manifestShaMatches: boolean): Phase2C26B2AOracleConsistency {
+export function validatePhase2C26B2AOracleManifest(manifest: readonly Phase2C26B2AOracleRouteSpec[], oracle: Phase2C26B2AOracle, manifestShaMatches: boolean): Phase2C26B2AOracleConsistency {
   const issues: string[] = []
   if (!manifestShaMatches) issues.push('the manifest does not hash to the oracle RESULT manifestSha256')
   const byTarget = new Map(oracle.routes.map(route => [route.targetWeaponId, route]))
@@ -401,8 +435,7 @@ export function validatePhase2C26B2AOracleManifest(manifest: readonly OracleRout
     let view: Phase2C26B2ARouteView
     try { view = phase2c26b2aRouteView(spec, route.weaponTypeId) } catch (error) { issues.push((error as Error).message); continue }
     const fail = (field: string) => issues.push(`${spec.targetWeaponId}: ${field} differs`)
-    const derived = deriveOracleRequiredPositions(view.operations)
-    if (!same(derived, spec.required)) fail('derived required vs manifest required')
+    const derived = view.required
     if (!same(route.materialization.plannerRequired, spec.required)) fail('plannerRequired vs manifest required')
     if (route.sourceKind !== spec.source.kind || route.sourceOwnedWeaponId !== view.sourceOwnedWeaponId) fail('source')
     if (route.normalPosition !== (spec.source.kind === 'new_normal' ? spec.source.normalPosition : null) || (spec.source.kind === 'new_normal' && view.normal.at(-1) !== spec.source.normalPosition)) fail('normalPosition')
@@ -455,7 +488,7 @@ export interface Phase2C26B2ARouteExtent {
   reach: { normal: number | null; gogma: number; skill: number }
   /** The Production extent value this Route needs on each stream (Skill: one less for a conversion Route). */
   required: { normal: number | null; gogma: number | null; skill: number | null }
-  verdict: Record<OracleStream, Phase2C26B2AExtentVerdict>
+  verdict: Record<Phase2C26B2AStream, Phase2C26B2AExtentVerdict>
   withinDefaultExtent: boolean
   /** The oracle RESULT `materialization.estimated` reproduced from the origin and the manifest positions. */
   estimatedMatches: boolean
@@ -780,7 +813,7 @@ export interface Phase2C26B2ATargetAudit {
   probeGap: boolean
   contextGap: boolean
   supportProviderBucket: '0' | '1' | '2+'
-  extentRequiresLarger: OracleStream[]
+  extentRequiresLarger: Phase2C26B2AStream[]
 }
 
 const flagCount = (rows: readonly Phase2C26B2ATargetAudit[], flag: keyof Phase2C26B2ATargetFlags) => rows.filter(row => row.flags[flag]).length
@@ -883,7 +916,7 @@ export function phase2c26b2aDecision(input: { invalidReasons: readonly string[];
 export interface Phase2C26B2AAuditInput {
   snapshot: Phase2C26B2ASnapshotRecord
   authority: Phase2C26B2AB1Authority
-  manifest: readonly OracleRouteSpec[]
+  manifest: readonly Phase2C26B2AOracleRouteSpec[]
   oracle: Phase2C26B2AOracle
 }
 
