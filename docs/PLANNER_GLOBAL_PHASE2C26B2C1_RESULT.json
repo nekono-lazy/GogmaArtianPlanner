@@ -1,0 +1,6273 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-B2-C1: post-hoc oracle evaluation of the oracle-free fixed-set reservation context schedule (P0..P3)",
+  "analyzedAt": "2026-10-01T22:38:38.168Z",
+  "sources": {
+    "schedule": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C1_RAW.json.local",
+      "bytes": 37150692,
+      "sha256": "ea275571c7a4a026eed849f4cf5425a41ebabb220a6757e9ef4481742106b739"
+    },
+    "b2b1Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2B1_RESULT.json",
+      "bytes": 1286493,
+      "sha256": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d"
+    },
+    "b2b2a2Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2B2A2_RESULT.json",
+      "bytes": 80941,
+      "sha256": "d3a81b8f65033d8d05d72971e621ae8f4c3bc336a8a9b3f6edcc95c34880285b"
+    },
+    "oracle": {
+      "file": "PLANNER_GLOBAL_1657_ORACLE_RESULT.json",
+      "bytes": 183764,
+      "sha256": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1"
+    },
+    "oracleManifest": {
+      "file": "plannerGlobalOracle1657Manifest.ts",
+      "bytes": 22483,
+      "sha256": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af"
+    }
+  },
+  "provenance": {
+    "measuredHead": "4a0c4eb38097301550c82a886ab321497769e51d",
+    "analysisHead": "4a0c4eb38097301550c82a886ab321497769e51d",
+    "analysisCodeUncommitted": false,
+    "codeChangedSinceMeasuredHead": [],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "src/benchmarks/plannerGlobalPhase2C26B2C1Analysis.ts",
+      "scripts/analyze-planner-global-phase2c26b2c1.mjs",
+      "*.test.ts"
+    ],
+    "formal": true,
+    "benchmarkCodeSha256": "6d4b403722ff9239d72e7a48c751ce50240fd4c1b43b0ecc78a404ac1207ebfe",
+    "uncommittedBenchmarkCode": false,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "b2b1ResultSha256": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d",
+    "b2b1MeasuredHead": "b7d04bb32ae38676d9b6364a4a087779c9ba4368",
+    "b2b1AnalysisHead": "b7d04bb32ae38676d9b6364a4a087779c9ba4368",
+    "b2b2a2ResultSha256": "d3a81b8f65033d8d05d72971e621ae8f4c3bc336a8a9b3f6edcc95c34880285b",
+    "b2b2a2Use": "latest research provenance hash only; never parsed, never a policy input",
+    "oracleResultSha256": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1",
+    "oracleSha256RecordedByB2B1": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1",
+    "oracleManifestFileSha256": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af",
+    "oracleManifestFileSha256RecordedByB2B1": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af",
+    "oracleManifestRoutesSha256": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+    "oracleManifestSha256RecordedByOracle": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+    "oracleReadByCalculation": false,
+    "oracleGuidedPolicyEvaluation": true,
+    "measuredAt": "2026-10-01T22:38:37.101Z",
+    "scheduleWallMs": 4700.651
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one process, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "rngEngineVersion": "production-rng:c5-e7"
+  },
+  "conditions": {
+    "extent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "origins": {
+      "skill": 341,
+      "gogma": 55
+    },
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 20000,
+    "notRun": [
+      "planner_alternative_search",
+      "candidate_search",
+      "candidate_materialization",
+      "candidate_trial",
+      "planner_alternative_kernel",
+      "full_planner_rerun",
+      "global_assignment",
+      "extent_probe",
+      "extent_change",
+      "candidate_capture_policy_change",
+      "search_ordering_change",
+      "search_comparator_change",
+      "production_change",
+      "ui_change",
+      "runtime_optimization"
+    ],
+    "policies": [
+      {
+        "id": "P0",
+        "name": "stable_simple_first",
+        "keys": [
+          [
+            "targetEligibleMinCardinality",
+            "asc"
+          ],
+          [
+            "reservationDigest",
+            "asc"
+          ]
+        ]
+      },
+      {
+        "id": "P1",
+        "name": "default_simple_first",
+        "keys": [
+          [
+            "targetEligibleMinCardinality",
+            "asc"
+          ],
+          [
+            "exclusiveOwnedWeaponCount",
+            "asc"
+          ],
+          [
+            "blockedCountDefaultTotal",
+            "asc"
+          ],
+          [
+            "shareableHeldCountDefaultTotal",
+            "desc"
+          ],
+          [
+            "reservationDigest",
+            "asc"
+          ]
+        ]
+      },
+      {
+        "id": "P2",
+        "name": "default_utility_first",
+        "keys": [
+          [
+            "exclusiveOwnedWeaponCount",
+            "asc"
+          ],
+          [
+            "blockedCountDefaultTotal",
+            "asc"
+          ],
+          [
+            "shareableHeldCountDefaultTotal",
+            "desc"
+          ],
+          [
+            "targetEligibleMinCardinality",
+            "asc"
+          ],
+          [
+            "reservationDigest",
+            "asc"
+          ]
+        ]
+      },
+      {
+        "id": "P3",
+        "name": "full_utility_first",
+        "keys": [
+          [
+            "exclusiveOwnedWeaponCount",
+            "asc"
+          ],
+          [
+            "blockedCountFullTotal",
+            "asc"
+          ],
+          [
+            "shareableHeldCountFullTotal",
+            "desc"
+          ],
+          [
+            "targetEligibleMinCardinality",
+            "asc"
+          ],
+          [
+            "reservationDigest",
+            "asc"
+          ]
+        ]
+      }
+    ],
+    "budgets": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32,
+      64,
+      128,
+      256
+    ],
+    "percentile": "nearest rank: sorted[ceil(p / 100 * n) - 1]",
+    "compatible": "reservation compatibility only (phase2c26b2aReachability); extent is a separate axis",
+    "oracleUse": "post-hoc diagnostic fixture of Issue #154 only: never a context generator, a policy feature, a Search input, a Production heuristic or a game rule"
+  },
+  "parity": {
+    "exportSha256": {
+      "schedule": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "b2b1": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "oracle": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "matches": true
+    },
+    "authorityHashes": {
+      "oracleMatchesB2B1": true,
+      "manifestFileMatchesB2B1": true,
+      "manifestRoutesMatchesB2B1": true
+    },
+    "b2b1Authority": {
+      "valid": true,
+      "decisionCase": "B2B1_PARTIAL_ELIGIBLE_RECOVERY",
+      "measuredHead": "b7d04bb32ae38676d9b6364a4a087779c9ba4368"
+    },
+    "b2b1Universe": {
+      "valid": true,
+      "issues": []
+    },
+    "manifest": {
+      "valid": true,
+      "checkedRoutes": 43
+    }
+  },
+  "scheduleConsistency": {
+    "valid": true,
+    "issues": [],
+    "snapshotChecks": {
+      "k0IsEmptyReservation": true,
+      "reservationsNormalized": true,
+      "unitPlansMatchInitialContext": true,
+      "reservationDigestsUnique": true,
+      "k2ConflictPairs": {
+        "k2Invalid": 68,
+        "initialDetectionPairs": 68,
+        "onlyK2": [],
+        "onlyInitialDetection": [],
+        "matches": true
+      }
+    },
+    "checks": {
+      "ranksArePermutations": true,
+      "k0RankOne": true,
+      "digestsUniquePerTarget": true,
+      "contextsMatchSnapshot": true
+    }
+  },
+  "contextUniverse": {
+    "targets": 43,
+    "fixedSets": {
+      "K0": {
+        "proposed": 1,
+        "valid": 1,
+        "invalid": 0
+      },
+      "K1": {
+        "proposed": 43,
+        "valid": 43,
+        "invalid": 0
+      },
+      "K2": {
+        "proposed": 903,
+        "valid": 835,
+        "invalid": 68
+      }
+    },
+    "semanticReservations": 879,
+    "targetSpecificContexts": 36084,
+    "targetSpecificContextsByEligibleMinCardinality": {
+      "0": 43,
+      "1": 1806,
+      "2": 34235
+    },
+    "contextsWhoseTargetMinimumExceedsGroupMinimum": 0,
+    "perTarget": [
+      {
+        "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "contexts": 845,
+        "relevantNormalCounterId": "weapon.sword_and_shield:8",
+        "windows": {
+          "normal": {
+            "from": 7,
+            "toExclusive": 11
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+        "contexts": 836,
+        "relevantNormalCounterId": "weapon.sword_and_shield:8",
+        "windows": {
+          "normal": {
+            "from": 7,
+            "toExclusive": 11
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+        "contexts": 836,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "0d98b225-e5d4-4cd4-b8e9-4c62ba695893",
+        "contexts": 836,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "155a6831-7ff7-42d7-abf5-6e5a186edca6",
+        "contexts": 836,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+        "contexts": 837,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+        "contexts": 839,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+        "contexts": 837,
+        "relevantNormalCounterId": "weapon.heavy_bowgun:8",
+        "windows": {
+          "normal": {
+            "from": 4,
+            "toExclusive": 8
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+        "contexts": 838,
+        "relevantNormalCounterId": "weapon.great_sword:8",
+        "windows": {
+          "normal": {
+            "from": 156,
+            "toExclusive": 160
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+        "contexts": 839,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85",
+        "contexts": 837,
+        "relevantNormalCounterId": "weapon.great_sword:8",
+        "windows": {
+          "normal": {
+            "from": 156,
+            "toExclusive": 160
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+        "contexts": 846,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
+        "contexts": 838,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "contexts": 838,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+        "contexts": 845,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+        "contexts": 837,
+        "relevantNormalCounterId": "weapon.great_sword:8",
+        "windows": {
+          "normal": {
+            "from": 156,
+            "toExclusive": 160
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+        "contexts": 846,
+        "relevantNormalCounterId": "weapon.great_sword:8",
+        "windows": {
+          "normal": {
+            "from": 156,
+            "toExclusive": 160
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+        "contexts": 845,
+        "relevantNormalCounterId": "weapon.switch_axe:8",
+        "windows": {
+          "normal": {
+            "from": 0,
+            "toExclusive": 4
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+        "contexts": 845,
+        "relevantNormalCounterId": "weapon.charge_blade:8",
+        "windows": {
+          "normal": {
+            "from": 0,
+            "toExclusive": 4
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+        "contexts": 845,
+        "relevantNormalCounterId": "weapon.charge_blade:8",
+        "windows": {
+          "normal": {
+            "from": 0,
+            "toExclusive": 4
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+        "contexts": 846,
+        "relevantNormalCounterId": "weapon.sword_and_shield:8",
+        "windows": {
+          "normal": {
+            "from": 7,
+            "toExclusive": 11
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+        "contexts": 838,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+        "contexts": 845,
+        "relevantNormalCounterId": "weapon.sword_and_shield:8",
+        "windows": {
+          "normal": {
+            "from": 7,
+            "toExclusive": 11
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
+        "contexts": 837,
+        "relevantNormalCounterId": "weapon.heavy_bowgun:8",
+        "windows": {
+          "normal": {
+            "from": 4,
+            "toExclusive": 8
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+        "contexts": 838,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
+        "contexts": 838,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contexts": 838,
+        "relevantNormalCounterId": "weapon.great_sword:8",
+        "windows": {
+          "normal": {
+            "from": 156,
+            "toExclusive": 160
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+        "contexts": 839,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "contexts": 845,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "aa4e67d8-cc57-487c-b0f0-6a8b36f13dbb",
+        "contexts": 836,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+        "contexts": 837,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
+        "contexts": 838,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+        "contexts": 837,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "contexts": 839,
+        "relevantNormalCounterId": "weapon.great_sword:8",
+        "windows": {
+          "normal": {
+            "from": 156,
+            "toExclusive": 160
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
+        "contexts": 837,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
+        "contexts": 838,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "d453ca34-a142-4241-9dce-8551c96cb887",
+        "contexts": 836,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed",
+        "contexts": 836,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "e4147de7-587c-4106-a47d-b09f8796464d",
+        "contexts": 836,
+        "relevantNormalCounterId": "weapon.great_sword:8",
+        "windows": {
+          "normal": {
+            "from": 156,
+            "toExclusive": 160
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
+        "contexts": 837,
+        "relevantNormalCounterId": "weapon.sword_and_shield:8",
+        "windows": {
+          "normal": {
+            "from": 7,
+            "toExclusive": 11
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "contexts": 839,
+        "relevantNormalCounterId": "weapon.hammer:8",
+        "windows": {
+          "normal": {
+            "from": 24,
+            "toExclusive": 28
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "f5d20af4-86b4-4e3f-b9ad-80862917007d",
+        "contexts": 836,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      },
+      {
+        "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+        "contexts": 837,
+        "relevantNormalCounterId": "weapon.dual_blades:8",
+        "windows": {
+          "normal": {
+            "from": 349,
+            "toExclusive": 353
+          },
+          "skillExistingGogma": {
+            "from": 341,
+            "toExclusive": 345
+          },
+          "skillConversion": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "skill": {
+            "from": 341,
+            "toExclusive": 346
+          },
+          "gogma": {
+            "from": 55,
+            "toExclusive": 290
+          }
+        }
+      }
+    ]
+  },
+  "featureAggregates": {
+    "contexts": 36084,
+    "byCardinality": {
+      "0": 43,
+      "1": 1806,
+      "2": 34235
+    },
+    "exclusiveOwnedWeaponCountHistogram": {
+      "0": 421,
+      "1": 13482,
+      "2": 22181
+    },
+    "k1": {
+      "exclusiveOwnedWeaponCount": {
+        "contexts": 1806,
+        "zero": 378,
+        "min": 0,
+        "p25": 1,
+        "median": 1,
+        "p75": 1,
+        "p90": 1,
+        "max": 1
+      },
+      "blockedDefaultTotal": {
+        "contexts": 1806,
+        "zero": 42,
+        "min": 0,
+        "p25": 1,
+        "median": 2,
+        "p75": 2,
+        "p90": 2,
+        "max": 3
+      },
+      "shareableHeldDefaultTotal": {
+        "contexts": 1806,
+        "zero": 0,
+        "min": 4,
+        "p25": 28,
+        "median": 88,
+        "p75": 142,
+        "p90": 160,
+        "max": 235
+      },
+      "heldDefaultTotal": {
+        "contexts": 1806,
+        "zero": 0,
+        "min": 6,
+        "p25": 30,
+        "median": 90,
+        "p75": 144,
+        "p90": 162,
+        "max": 235
+      },
+      "blockedFullTotal": {
+        "contexts": 1806,
+        "zero": 0,
+        "min": 1,
+        "p25": 2,
+        "median": 2,
+        "p75": 3,
+        "p90": 3,
+        "max": 4
+      },
+      "shareableHeldFullTotal": {
+        "contexts": 1806,
+        "zero": 0,
+        "min": 15,
+        "p25": 64,
+        "median": 136,
+        "p75": 168,
+        "p90": 377,
+        "max": 1140
+      },
+      "heldFullTotal": {
+        "contexts": 1806,
+        "zero": 0,
+        "min": 17,
+        "p25": 66,
+        "median": 139,
+        "p75": 170,
+        "p90": 379,
+        "max": 1142
+      },
+      "normalRelevant.full.held": {
+        "contexts": 1806,
+        "zero": 1718,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 207
+      },
+      "normalRelevant.full.blocked": {
+        "contexts": 1806,
+        "zero": 1718,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 1
+      },
+      "normalRelevant.full.shareableHeld": {
+        "contexts": 1806,
+        "zero": 1742,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 206
+      },
+      "normalRelevant.default.held": {
+        "contexts": 1806,
+        "zero": 1718,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 4
+      },
+      "normalRelevant.default.blocked": {
+        "contexts": 1806,
+        "zero": 1782,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 1
+      },
+      "normalRelevant.default.shareableHeld": {
+        "contexts": 1806,
+        "zero": 1742,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 4
+      },
+      "skill.full.held": {
+        "contexts": 1806,
+        "zero": 966,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 59,
+        "p90": 308,
+        "max": 1083
+      },
+      "skill.full.blocked": {
+        "contexts": 1806,
+        "zero": 966,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 1,
+        "p90": 2,
+        "max": 2
+      },
+      "skill.full.shareableHeld": {
+        "contexts": 1806,
+        "zero": 1008,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 57,
+        "p90": 307,
+        "max": 1082
+      },
+      "skill.default.held": {
+        "contexts": 1806,
+        "zero": 966,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 5,
+        "p90": 5,
+        "max": 5
+      },
+      "skill.default.blocked": {
+        "contexts": 1806,
+        "zero": 1386,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 1,
+        "max": 2
+      },
+      "skill.default.shareableHeld": {
+        "contexts": 1806,
+        "zero": 1008,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 4,
+        "p90": 5,
+        "max": 5
+      },
+      "gogma.full.held": {
+        "contexts": 1806,
+        "zero": 0,
+        "min": 1,
+        "p25": 30,
+        "median": 90,
+        "p75": 139,
+        "p90": 162,
+        "max": 376
+      },
+      "gogma.full.blocked": {
+        "contexts": 1806,
+        "zero": 0,
+        "min": 1,
+        "p25": 1,
+        "median": 1,
+        "p75": 2,
+        "p90": 2,
+        "max": 2
+      },
+      "gogma.full.shareableHeld": {
+        "contexts": 1806,
+        "zero": 84,
+        "min": 0,
+        "p25": 28,
+        "median": 88,
+        "p75": 137,
+        "p90": 160,
+        "max": 374
+      },
+      "gogma.default.held": {
+        "contexts": 1806,
+        "zero": 0,
+        "min": 1,
+        "p25": 30,
+        "median": 90,
+        "p75": 139,
+        "p90": 162,
+        "max": 235
+      },
+      "gogma.default.blocked": {
+        "contexts": 1806,
+        "zero": 42,
+        "min": 0,
+        "p25": 1,
+        "median": 1,
+        "p75": 2,
+        "p90": 2,
+        "max": 2
+      },
+      "gogma.default.shareableHeld": {
+        "contexts": 1806,
+        "zero": 84,
+        "min": 0,
+        "p25": 28,
+        "median": 88,
+        "p75": 137,
+        "p90": 160,
+        "max": 235
+      }
+    },
+    "k2": {
+      "exclusiveOwnedWeaponCount": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 1,
+        "p25": 1,
+        "median": 2,
+        "p75": 2,
+        "p90": 2,
+        "max": 2
+      },
+      "blockedDefaultTotal": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 1,
+        "p25": 3,
+        "median": 3,
+        "p75": 4,
+        "p90": 4,
+        "max": 5
+      },
+      "shareableHeldDefaultTotal": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 5,
+        "p25": 87,
+        "median": 122,
+        "p75": 159,
+        "p90": 172,
+        "max": 242
+      },
+      "heldDefaultTotal": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 8,
+        "p25": 90,
+        "median": 125,
+        "p75": 162,
+        "p90": 175,
+        "max": 244
+      },
+      "blockedFullTotal": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 2,
+        "p25": 4,
+        "median": 4,
+        "p75": 5,
+        "p90": 6,
+        "max": 7
+      },
+      "shareableHeldFullTotal": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 17,
+        "p25": 144,
+        "median": 189,
+        "p75": 394,
+        "p90": 569,
+        "max": 1455
+      },
+      "heldFullTotal": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 20,
+        "p25": 147,
+        "median": 194,
+        "p75": 398,
+        "p90": 573,
+        "max": 1459
+      },
+      "normalRelevant.full.held": {
+        "contexts": 34235,
+        "zero": 31439,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 207
+      },
+      "normalRelevant.full.blocked": {
+        "contexts": 34235,
+        "zero": 31439,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 1
+      },
+      "normalRelevant.full.shareableHeld": {
+        "contexts": 34235,
+        "zero": 32209,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 206
+      },
+      "normalRelevant.default.held": {
+        "contexts": 34235,
+        "zero": 31439,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 4
+      },
+      "normalRelevant.default.blocked": {
+        "contexts": 34235,
+        "zero": 33465,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 1
+      },
+      "normalRelevant.default.shareableHeld": {
+        "contexts": 34235,
+        "zero": 32209,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 0,
+        "p90": 0,
+        "max": 4
+      },
+      "skill.full.held": {
+        "contexts": 34235,
+        "zero": 9881,
+        "min": 0,
+        "p25": 0,
+        "median": 56,
+        "p75": 308,
+        "p90": 417,
+        "max": 1083
+      },
+      "skill.full.blocked": {
+        "contexts": 34235,
+        "zero": 9881,
+        "min": 0,
+        "p25": 0,
+        "median": 1,
+        "p75": 2,
+        "p90": 3,
+        "max": 3
+      },
+      "skill.full.shareableHeld": {
+        "contexts": 34235,
+        "zero": 10824,
+        "min": 0,
+        "p25": 0,
+        "median": 54,
+        "p75": 305,
+        "p90": 416,
+        "max": 1082
+      },
+      "skill.default.held": {
+        "contexts": 34235,
+        "zero": 9881,
+        "min": 0,
+        "p25": 0,
+        "median": 5,
+        "p75": 5,
+        "p90": 5,
+        "max": 5
+      },
+      "skill.default.blocked": {
+        "contexts": 34235,
+        "zero": 20828,
+        "min": 0,
+        "p25": 0,
+        "median": 0,
+        "p75": 1,
+        "p90": 1,
+        "max": 2
+      },
+      "skill.default.shareableHeld": {
+        "contexts": 34235,
+        "zero": 10824,
+        "min": 0,
+        "p25": 0,
+        "median": 4,
+        "p75": 5,
+        "p90": 5,
+        "max": 5
+      },
+      "gogma.full.held": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 3,
+        "p25": 90,
+        "median": 119,
+        "p75": 158,
+        "p90": 170,
+        "max": 376
+      },
+      "gogma.full.blocked": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 2,
+        "p25": 2,
+        "median": 3,
+        "p75": 3,
+        "p90": 4,
+        "max": 4
+      },
+      "gogma.full.shareableHeld": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 1,
+        "p25": 86,
+        "median": 117,
+        "p75": 156,
+        "p90": 167,
+        "max": 373
+      },
+      "gogma.default.held": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 3,
+        "p25": 90,
+        "median": 119,
+        "p75": 158,
+        "p90": 170,
+        "max": 235
+      },
+      "gogma.default.blocked": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 1,
+        "p25": 2,
+        "median": 3,
+        "p75": 3,
+        "p90": 4,
+        "max": 4
+      },
+      "gogma.default.shareableHeld": {
+        "contexts": 34235,
+        "zero": 0,
+        "min": 1,
+        "p25": 86,
+        "median": 117,
+        "p75": 156,
+        "p90": 167,
+        "max": 234
+      }
+    }
+  },
+  "subgroupCounts": {
+    "recovered": 40,
+    "defaultExtent": 20,
+    "extentInsufficient": 20,
+    "contextGapRecovered": 37,
+    "b2aCovered": 2,
+    "probeGap": 1,
+    "k1Minimal": 31,
+    "k2Minimal": 9,
+    "unreached": 3
+  },
+  "policyAggregates": {
+    "P0": {
+      "recovered": {
+        "targets": 40,
+        "finite": 40,
+        "cdf": {
+          "top1": 0,
+          "top2": 3,
+          "top4": 5,
+          "top8": 7,
+          "top16": 17,
+          "top32": 26,
+          "top64": 35,
+          "top128": 38,
+          "top256": 40,
+          "all": 40
+        },
+        "rank": {
+          "min": 2,
+          "median": 21,
+          "p75": 43,
+          "p90": 96,
+          "p95": 117,
+          "max": 234
+        }
+      },
+      "defaultExtent": {
+        "targets": 20,
+        "finite": 20,
+        "cdf": {
+          "top1": 0,
+          "top2": 3,
+          "top4": 4,
+          "top8": 6,
+          "top16": 14,
+          "top32": 18,
+          "top64": 20,
+          "top128": 20,
+          "top256": 20,
+          "all": 20
+        },
+        "rank": {
+          "min": 2,
+          "median": 9,
+          "p75": 26,
+          "p90": 27,
+          "p95": 43,
+          "max": 43
+        }
+      },
+      "extentInsufficient": {
+        "targets": 20,
+        "finite": 20,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 1,
+          "top8": 1,
+          "top16": 3,
+          "top32": 8,
+          "top64": 15,
+          "top128": 18,
+          "top256": 20,
+          "all": 20
+        },
+        "rank": {
+          "min": 3,
+          "median": 37,
+          "p75": 47,
+          "p90": 117,
+          "p95": 233,
+          "max": 234
+        }
+      },
+      "contextGapRecovered": {
+        "targets": 37,
+        "finite": 37,
+        "cdf": {
+          "top1": 0,
+          "top2": 3,
+          "top4": 5,
+          "top8": 7,
+          "top16": 16,
+          "top32": 23,
+          "top64": 32,
+          "top128": 35,
+          "top256": 37,
+          "all": 37
+        },
+        "rank": {
+          "min": 2,
+          "median": 21,
+          "p75": 43,
+          "p90": 116,
+          "p95": 233,
+          "max": 234
+        }
+      },
+      "b2aCovered": {
+        "targets": 2,
+        "finite": 2,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 0,
+          "top16": 1,
+          "top32": 2,
+          "top64": 2,
+          "top128": 2,
+          "top256": 2,
+          "all": 2
+        },
+        "rank": {
+          "min": 9,
+          "median": 9,
+          "p75": 26,
+          "p90": 26,
+          "p95": 26,
+          "max": 26
+        }
+      },
+      "probeGap": {
+        "targets": 1,
+        "finite": 1,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 0,
+          "top16": 0,
+          "top32": 1,
+          "top64": 1,
+          "top128": 1,
+          "top256": 1,
+          "all": 1
+        },
+        "rank": {
+          "min": 21,
+          "median": 21,
+          "p75": 21,
+          "p90": 21,
+          "p95": 21,
+          "max": 21
+        }
+      },
+      "k1Minimal": {
+        "targets": 31,
+        "finite": 31,
+        "cdf": {
+          "top1": 0,
+          "top2": 3,
+          "top4": 5,
+          "top8": 7,
+          "top16": 17,
+          "top32": 26,
+          "top64": 31,
+          "top128": 31,
+          "top256": 31,
+          "all": 31
+        },
+        "rank": {
+          "min": 2,
+          "median": 11,
+          "p75": 26,
+          "p90": 37,
+          "p95": 43,
+          "max": 43
+        }
+      },
+      "k2Minimal": {
+        "targets": 9,
+        "finite": 9,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 0,
+          "top16": 0,
+          "top32": 0,
+          "top64": 4,
+          "top128": 7,
+          "top256": 9,
+          "all": 9
+        },
+        "rank": {
+          "min": 47,
+          "median": 96,
+          "p75": 117,
+          "p90": 234,
+          "p95": 234,
+          "max": 234
+        },
+        "k1ContextsBeforeFirstCompatible": {
+          "min": 42,
+          "median": 42,
+          "p75": 42,
+          "p90": 42,
+          "p95": 42,
+          "max": 42
+        }
+      },
+      "unreached": {
+        "targets": 3,
+        "finite": 0,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 0,
+          "top16": 0,
+          "top32": 0,
+          "top64": 0,
+          "top128": 0,
+          "top256": 0,
+          "all": 0
+        },
+        "rank": {
+          "min": null,
+          "median": null,
+          "p75": null,
+          "p90": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    },
+    "P1": {
+      "recovered": {
+        "targets": 40,
+        "finite": 40,
+        "cdf": {
+          "top1": 0,
+          "top2": 8,
+          "top4": 9,
+          "top8": 18,
+          "top16": 25,
+          "top32": 31,
+          "top64": 33,
+          "top128": 36,
+          "top256": 38,
+          "all": 40
+        },
+        "rank": {
+          "min": 2,
+          "median": 9,
+          "p75": 31,
+          "p90": 78,
+          "p95": 143,
+          "max": 306
+        }
+      },
+      "defaultExtent": {
+        "targets": 20,
+        "finite": 20,
+        "cdf": {
+          "top1": 0,
+          "top2": 7,
+          "top4": 7,
+          "top8": 15,
+          "top16": 20,
+          "top32": 20,
+          "top64": 20,
+          "top128": 20,
+          "top256": 20,
+          "all": 20
+        },
+        "rank": {
+          "min": 2,
+          "median": 8,
+          "p75": 8,
+          "p90": 11,
+          "p95": 11,
+          "max": 11
+        }
+      },
+      "extentInsufficient": {
+        "targets": 20,
+        "finite": 20,
+        "cdf": {
+          "top1": 0,
+          "top2": 1,
+          "top4": 2,
+          "top8": 3,
+          "top16": 5,
+          "top32": 11,
+          "top64": 13,
+          "top128": 16,
+          "top256": 18,
+          "all": 20
+        },
+        "rank": {
+          "min": 2,
+          "median": 31,
+          "p75": 76,
+          "p90": 143,
+          "p95": 305,
+          "max": 306
+        }
+      },
+      "contextGapRecovered": {
+        "targets": 37,
+        "finite": 37,
+        "cdf": {
+          "top1": 0,
+          "top2": 8,
+          "top4": 9,
+          "top8": 16,
+          "top16": 22,
+          "top32": 28,
+          "top64": 30,
+          "top128": 33,
+          "top256": 35,
+          "all": 37
+        },
+        "rank": {
+          "min": 2,
+          "median": 11,
+          "p75": 32,
+          "p90": 136,
+          "p95": 305,
+          "max": 306
+        }
+      },
+      "b2aCovered": {
+        "targets": 2,
+        "finite": 2,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 1,
+          "top16": 2,
+          "top32": 2,
+          "top64": 2,
+          "top128": 2,
+          "top256": 2,
+          "all": 2
+        },
+        "rank": {
+          "min": 8,
+          "median": 8,
+          "p75": 9,
+          "p90": 9,
+          "p95": 9,
+          "max": 9
+        }
+      },
+      "probeGap": {
+        "targets": 1,
+        "finite": 1,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 1,
+          "top16": 1,
+          "top32": 1,
+          "top64": 1,
+          "top128": 1,
+          "top256": 1,
+          "all": 1
+        },
+        "rank": {
+          "min": 8,
+          "median": 8,
+          "p75": 8,
+          "p90": 8,
+          "p95": 8,
+          "max": 8
+        }
+      },
+      "k1Minimal": {
+        "targets": 31,
+        "finite": 31,
+        "cdf": {
+          "top1": 0,
+          "top2": 8,
+          "top4": 9,
+          "top8": 18,
+          "top16": 25,
+          "top32": 31,
+          "top64": 31,
+          "top128": 31,
+          "top256": 31,
+          "all": 31
+        },
+        "rank": {
+          "min": 2,
+          "median": 8,
+          "p75": 11,
+          "p90": 18,
+          "p95": 31,
+          "max": 32
+        }
+      },
+      "k2Minimal": {
+        "targets": 9,
+        "finite": 9,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 0,
+          "top16": 0,
+          "top32": 0,
+          "top64": 2,
+          "top128": 5,
+          "top256": 7,
+          "all": 9
+        },
+        "rank": {
+          "min": 50,
+          "median": 78,
+          "p75": 143,
+          "p90": 306,
+          "p95": 306,
+          "max": 306
+        },
+        "k1ContextsBeforeFirstCompatible": {
+          "min": 42,
+          "median": 42,
+          "p75": 42,
+          "p90": 42,
+          "p95": 42,
+          "max": 42
+        }
+      },
+      "unreached": {
+        "targets": 3,
+        "finite": 0,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 0,
+          "top16": 0,
+          "top32": 0,
+          "top64": 0,
+          "top128": 0,
+          "top256": 0,
+          "all": 0
+        },
+        "rank": {
+          "min": null,
+          "median": null,
+          "p75": null,
+          "p90": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    },
+    "P2": {
+      "recovered": {
+        "targets": 40,
+        "finite": 40,
+        "cdf": {
+          "top1": 0,
+          "top2": 8,
+          "top4": 9,
+          "top8": 18,
+          "top16": 25,
+          "top32": 29,
+          "top64": 33,
+          "top128": 36,
+          "top256": 38,
+          "all": 40
+        },
+        "rank": {
+          "min": 2,
+          "median": 9,
+          "p75": 37,
+          "p90": 78,
+          "p95": 143,
+          "max": 306
+        }
+      },
+      "defaultExtent": {
+        "targets": 20,
+        "finite": 20,
+        "cdf": {
+          "top1": 0,
+          "top2": 7,
+          "top4": 7,
+          "top8": 15,
+          "top16": 20,
+          "top32": 20,
+          "top64": 20,
+          "top128": 20,
+          "top256": 20,
+          "all": 20
+        },
+        "rank": {
+          "min": 2,
+          "median": 8,
+          "p75": 8,
+          "p90": 11,
+          "p95": 11,
+          "max": 11
+        }
+      },
+      "extentInsufficient": {
+        "targets": 20,
+        "finite": 20,
+        "cdf": {
+          "top1": 0,
+          "top2": 1,
+          "top4": 2,
+          "top8": 3,
+          "top16": 5,
+          "top32": 9,
+          "top64": 13,
+          "top128": 16,
+          "top256": 18,
+          "all": 20
+        },
+        "rank": {
+          "min": 2,
+          "median": 37,
+          "p75": 76,
+          "p90": 143,
+          "p95": 305,
+          "max": 306
+        }
+      },
+      "contextGapRecovered": {
+        "targets": 37,
+        "finite": 37,
+        "cdf": {
+          "top1": 0,
+          "top2": 8,
+          "top4": 9,
+          "top8": 16,
+          "top16": 22,
+          "top32": 26,
+          "top64": 30,
+          "top128": 33,
+          "top256": 35,
+          "all": 37
+        },
+        "rank": {
+          "min": 2,
+          "median": 11,
+          "p75": 38,
+          "p90": 136,
+          "p95": 305,
+          "max": 306
+        }
+      },
+      "b2aCovered": {
+        "targets": 2,
+        "finite": 2,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 1,
+          "top16": 2,
+          "top32": 2,
+          "top64": 2,
+          "top128": 2,
+          "top256": 2,
+          "all": 2
+        },
+        "rank": {
+          "min": 8,
+          "median": 8,
+          "p75": 9,
+          "p90": 9,
+          "p95": 9,
+          "max": 9
+        }
+      },
+      "probeGap": {
+        "targets": 1,
+        "finite": 1,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 1,
+          "top16": 1,
+          "top32": 1,
+          "top64": 1,
+          "top128": 1,
+          "top256": 1,
+          "all": 1
+        },
+        "rank": {
+          "min": 8,
+          "median": 8,
+          "p75": 8,
+          "p90": 8,
+          "p95": 8,
+          "max": 8
+        }
+      },
+      "k1Minimal": {
+        "targets": 31,
+        "finite": 31,
+        "cdf": {
+          "top1": 0,
+          "top2": 8,
+          "top4": 9,
+          "top8": 18,
+          "top16": 25,
+          "top32": 28,
+          "top64": 31,
+          "top128": 31,
+          "top256": 31,
+          "all": 31
+        },
+        "rank": {
+          "min": 2,
+          "median": 8,
+          "p75": 11,
+          "p90": 18,
+          "p95": 38,
+          "max": 38
+        }
+      },
+      "k2Minimal": {
+        "targets": 9,
+        "finite": 9,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 0,
+          "top16": 0,
+          "top32": 1,
+          "top64": 2,
+          "top128": 5,
+          "top256": 7,
+          "all": 9
+        },
+        "rank": {
+          "min": 31,
+          "median": 78,
+          "p75": 143,
+          "p90": 306,
+          "p95": 306,
+          "max": 306
+        },
+        "k1ContextsBeforeFirstCompatible": {
+          "min": 23,
+          "median": 42,
+          "p75": 42,
+          "p90": 42,
+          "p95": 42,
+          "max": 42
+        }
+      },
+      "unreached": {
+        "targets": 3,
+        "finite": 0,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 0,
+          "top16": 0,
+          "top32": 0,
+          "top64": 0,
+          "top128": 0,
+          "top256": 0,
+          "all": 0
+        },
+        "rank": {
+          "min": null,
+          "median": null,
+          "p75": null,
+          "p90": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    },
+    "P3": {
+      "recovered": {
+        "targets": 40,
+        "finite": 40,
+        "cdf": {
+          "top1": 0,
+          "top2": 9,
+          "top4": 9,
+          "top8": 18,
+          "top16": 22,
+          "top32": 28,
+          "top64": 31,
+          "top128": 35,
+          "top256": 38,
+          "all": 40
+        },
+        "rank": {
+          "min": 2,
+          "median": 10,
+          "p75": 41,
+          "p90": 214,
+          "p95": 236,
+          "max": 492
+        }
+      },
+      "defaultExtent": {
+        "targets": 20,
+        "finite": 20,
+        "cdf": {
+          "top1": 0,
+          "top2": 7,
+          "top4": 7,
+          "top8": 15,
+          "top16": 18,
+          "top32": 20,
+          "top64": 20,
+          "top128": 20,
+          "top256": 20,
+          "all": 20
+        },
+        "rank": {
+          "min": 2,
+          "median": 7,
+          "p75": 8,
+          "p90": 11,
+          "p95": 21,
+          "max": 22
+        }
+      },
+      "extentInsufficient": {
+        "targets": 20,
+        "finite": 20,
+        "cdf": {
+          "top1": 0,
+          "top2": 2,
+          "top4": 2,
+          "top8": 3,
+          "top16": 4,
+          "top32": 8,
+          "top64": 11,
+          "top128": 15,
+          "top256": 18,
+          "all": 20
+        },
+        "rank": {
+          "min": 2,
+          "median": 41,
+          "p75": 119,
+          "p90": 236,
+          "p95": 491,
+          "max": 492
+        }
+      },
+      "contextGapRecovered": {
+        "targets": 37,
+        "finite": 37,
+        "cdf": {
+          "top1": 0,
+          "top2": 9,
+          "top4": 9,
+          "top8": 16,
+          "top16": 19,
+          "top32": 25,
+          "top64": 28,
+          "top128": 32,
+          "top256": 35,
+          "all": 37
+        },
+        "rank": {
+          "min": 2,
+          "median": 11,
+          "p75": 41,
+          "p90": 220,
+          "p95": 491,
+          "max": 492
+        }
+      },
+      "b2aCovered": {
+        "targets": 2,
+        "finite": 2,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 1,
+          "top16": 2,
+          "top32": 2,
+          "top64": 2,
+          "top128": 2,
+          "top256": 2,
+          "all": 2
+        },
+        "rank": {
+          "min": 8,
+          "median": 8,
+          "p75": 9,
+          "p90": 9,
+          "p95": 9,
+          "max": 9
+        }
+      },
+      "probeGap": {
+        "targets": 1,
+        "finite": 1,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 1,
+          "top16": 1,
+          "top32": 1,
+          "top64": 1,
+          "top128": 1,
+          "top256": 1,
+          "all": 1
+        },
+        "rank": {
+          "min": 8,
+          "median": 8,
+          "p75": 8,
+          "p90": 8,
+          "p95": 8,
+          "max": 8
+        }
+      },
+      "k1Minimal": {
+        "targets": 31,
+        "finite": 31,
+        "cdf": {
+          "top1": 0,
+          "top2": 9,
+          "top4": 9,
+          "top8": 18,
+          "top16": 22,
+          "top32": 28,
+          "top64": 31,
+          "top128": 31,
+          "top256": 31,
+          "all": 31
+        },
+        "rank": {
+          "min": 2,
+          "median": 7,
+          "p75": 18,
+          "p90": 24,
+          "p95": 41,
+          "max": 41
+        }
+      },
+      "k2Minimal": {
+        "targets": 9,
+        "finite": 9,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 0,
+          "top16": 0,
+          "top32": 0,
+          "top64": 0,
+          "top128": 4,
+          "top256": 7,
+          "all": 9
+        },
+        "rank": {
+          "min": 79,
+          "median": 214,
+          "p75": 236,
+          "p90": 492,
+          "p95": 492,
+          "max": 492
+        },
+        "k1ContextsBeforeFirstCompatible": {
+          "min": 42,
+          "median": 42,
+          "p75": 42,
+          "p90": 42,
+          "p95": 42,
+          "max": 42
+        }
+      },
+      "unreached": {
+        "targets": 3,
+        "finite": 0,
+        "cdf": {
+          "top1": 0,
+          "top2": 0,
+          "top4": 0,
+          "top8": 0,
+          "top16": 0,
+          "top32": 0,
+          "top64": 0,
+          "top128": 0,
+          "top256": 0,
+          "all": 0
+        },
+        "rank": {
+          "min": null,
+          "median": null,
+          "p75": null,
+          "p90": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    }
+  },
+  "selection": {
+    "rule": {
+      "oracleGuidedPolicyEvaluation": true,
+      "population": "recovered (B2-B1 minimal cardinality 0 / 1 / 2: 40 Routes)",
+      "keys": [
+        "top8 coverage DESC",
+        "top16 coverage DESC",
+        "top32 coverage DESC",
+        "p90 firstCompatibleRank ASC",
+        "max firstCompatibleRank ASC",
+        "policy ID ASC"
+      ],
+      "note": "The selection only picks the Research candidate among P0..P3 by post-hoc oracle coverage; it is not a Production policy adoption."
+    },
+    "rows": [
+      {
+        "policy": "P0",
+        "top8": 7,
+        "top16": 17,
+        "top32": 26,
+        "p90": 96,
+        "max": 234
+      },
+      {
+        "policy": "P1",
+        "top8": 18,
+        "top16": 25,
+        "top32": 31,
+        "p90": 78,
+        "max": 306
+      },
+      {
+        "policy": "P2",
+        "top8": 18,
+        "top16": 25,
+        "top32": 29,
+        "p90": 78,
+        "max": 306
+      },
+      {
+        "policy": "P3",
+        "top8": 18,
+        "top16": 22,
+        "top32": 28,
+        "p90": 214,
+        "max": 492
+      }
+    ],
+    "selected": {
+      "policy": "P1",
+      "top8": 18,
+      "top16": 25,
+      "top32": 31,
+      "p90": 78,
+      "max": 306
+    },
+    "oracleGuidedPolicyEvaluation": true,
+    "selectedPolicySummary": {
+      "policy": "P1",
+      "recovered": {
+        "targets": 40,
+        "finite": 40,
+        "cdf": {
+          "top1": 0,
+          "top2": 8,
+          "top4": 9,
+          "top8": 18,
+          "top16": 25,
+          "top32": 31,
+          "top64": 33,
+          "top128": 36,
+          "top256": 38,
+          "all": 40
+        },
+        "rank": {
+          "min": 2,
+          "median": 9,
+          "p75": 31,
+          "p90": 78,
+          "p95": 143,
+          "max": 306
+        }
+      },
+      "firstCompatibleCardinality": {
+        "1": 31,
+        "2": 9
+      },
+      "representativeIncludesOracleSupporter": 29
+    }
+  },
+  "routes": [
+    {
+      "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "probeGap",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": true,
+          "contextGap": false,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 845,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 3,
+        "2": 219
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 21,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 19,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": false
+        }
+      },
+      "contexts": 836,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 7,
+        "2": 381
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 14,
+          "reservationDigest": "fnv1a32:6ee53871",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-54dd2b4e",
+          "representativeFixedTargetWeaponIds": [
+            "9d817a9b-4a79-4430-aa13-48ecab0055d6"
+          ],
+          "k1Before": 12,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P1": {
+          "rank": 3,
+          "reservationDigest": "fnv1a32:72ca8e82",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-3e076416",
+          "representativeFixedTargetWeaponIds": [
+            "2378d3e0-c376-470d-86c4-32f2ace71ab7"
+          ],
+          "k1Before": 1,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 3,
+          "reservationDigest": "fnv1a32:72ca8e82",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-3e076416",
+          "representativeFixedTargetWeaponIds": [
+            "2378d3e0-c376-470d-86c4-32f2ace71ab7"
+          ],
+          "k1Before": 1,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:72ca8e82",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-3e076416",
+          "representativeFixedTargetWeaponIds": [
+            "2378d3e0-c376-470d-86c4-32f2ace71ab7"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        }
+      }
+    },
+    {
+      "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": false
+        }
+      },
+      "contexts": 836,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 1,
+        "2": 61
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 38,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 36,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 17,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 15,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 17,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 15,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 18,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 16,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "0d98b225-e5d4-4cd4-b8e9-4c62ba695893",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": false
+        }
+      },
+      "contexts": 836,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 9,
+        "2": 312
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:3e8da495",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a94b09cf",
+          "representativeFixedTargetWeaponIds": [
+            "fea60316-a05c-4252-bf1d-41c31b99b75a"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 7,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 5,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "155a6831-7ff7-42d7-abf5-6e5a186edca6",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": false
+        }
+      },
+      "contexts": 836,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 25,
+        "2": 672
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 3,
+          "reservationDigest": "fnv1a32:0c7aa234",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-f1d0f468",
+          "representativeFixedTargetWeaponIds": [
+            "c140578c-9aad-48d0-81db-95496636c459"
+          ],
+          "k1Before": 1,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        }
+      }
+    },
+    {
+      "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 837,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 5,
+        "2": 178
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:3e8da495",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a94b09cf",
+          "representativeFixedTargetWeaponIds": [
+            "fea60316-a05c-4252-bf1d-41c31b99b75a"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 7,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 5,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 839,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 1,
+        "2": 75
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 37,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 35,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 18,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 16,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 18,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 16,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 18,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 16,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 837,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 32,
+        "2": 726
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:0c7aa234",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-f1d0f468",
+          "representativeFixedTargetWeaponIds": [
+            "c140578c-9aad-48d0-81db-95496636c459"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:72ca8e82",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-3e076416",
+          "representativeFixedTargetWeaponIds": [
+            "2378d3e0-c376-470d-86c4-32f2ace71ab7"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        }
+      }
+    },
+    {
+      "targetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k2Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "2",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 838,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 44
+      },
+      "minimalCardinality": "2",
+      "firstCompatible": {
+        "P0": {
+          "rank": 47,
+          "reservationDigest": "fnv1a32:019280a7",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-58a4e590|build-list.fnv1a32-7df2bbec",
+          "representativeFixedTargetWeaponIds": [
+            "d453ca34-a142-4241-9dce-8551c96cb887",
+            "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed"
+          ],
+          "k1Before": 42,
+          "k2Before": 3,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 78,
+          "reservationDigest": "fnv1a32:86b8ed97",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-7df2bbec|build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "d453ca34-a142-4241-9dce-8551c96cb887"
+          ],
+          "k1Before": 42,
+          "k2Before": 34,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 78,
+          "reservationDigest": "fnv1a32:86b8ed97",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-7df2bbec|build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "d453ca34-a142-4241-9dce-8551c96cb887"
+          ],
+          "k1Before": 42,
+          "k2Before": 34,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 93,
+          "reservationDigest": "fnv1a32:a39c34cf",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-a3d6817e|build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 49,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k2Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "2",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 839,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 36
+      },
+      "minimalCardinality": "2",
+      "firstCompatible": {
+        "P0": {
+          "rank": 47,
+          "reservationDigest": "fnv1a32:019280a7",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-58a4e590|build-list.fnv1a32-7df2bbec",
+          "representativeFixedTargetWeaponIds": [
+            "d453ca34-a142-4241-9dce-8551c96cb887",
+            "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed"
+          ],
+          "k1Before": 42,
+          "k2Before": 3,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 76,
+          "reservationDigest": "fnv1a32:86b8ed97",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-7df2bbec|build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "d453ca34-a142-4241-9dce-8551c96cb887"
+          ],
+          "k1Before": 42,
+          "k2Before": 32,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 76,
+          "reservationDigest": "fnv1a32:86b8ed97",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-7df2bbec|build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "d453ca34-a142-4241-9dce-8551c96cb887"
+          ],
+          "k1Before": 42,
+          "k2Before": 32,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 79,
+          "reservationDigest": "fnv1a32:a39c34cf",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-a3d6817e|build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 35,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 837,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 36,
+        "2": 745
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:0a526466",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-2fdb4406",
+          "representativeFixedTargetWeaponIds": [
+            "1d916ff0-82cc-41fb-a15e-bdf60891cd91"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:72ca8e82",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-3e076416",
+          "representativeFixedTargetWeaponIds": [
+            "2378d3e0-c376-470d-86c4-32f2ace71ab7"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        }
+      }
+    },
+    {
+      "targetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k2Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "2",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 846,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 1
+      },
+      "minimalCardinality": "2",
+      "firstCompatible": {
+        "P0": {
+          "rank": 233,
+          "reservationDigest": "fnv1a32:42bed1ef",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 189,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 306,
+          "reservationDigest": "fnv1a32:42bed1ef",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 262,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 306,
+          "reservationDigest": "fnv1a32:42bed1ef",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 262,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 492,
+          "reservationDigest": "fnv1a32:42bed1ef",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 448,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 838,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 2,
+        "2": 72
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 27,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 25,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 7,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 5,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+      "subgroups": [
+        "unreached"
+      ],
+      "b2b1": {
+        "minimalCardinality": "unreached",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 838,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 0
+      },
+      "minimalCardinality": "unreached",
+      "firstCompatible": {
+        "P0": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 795,
+          "representativeIncludesOracleSupporter": null
+        },
+        "P1": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 795,
+          "representativeIncludesOracleSupporter": null
+        },
+        "P2": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 795,
+          "representativeIncludesOracleSupporter": null
+        },
+        "P3": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 795,
+          "representativeIncludesOracleSupporter": null
+        }
+      }
+    },
+    {
+      "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k2Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "2",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 845,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 3
+      },
+      "minimalCardinality": "2",
+      "firstCompatible": {
+        "P0": {
+          "rank": 234,
+          "reservationDigest": "fnv1a32:42bed1ef",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 190,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 305,
+          "reservationDigest": "fnv1a32:42bed1ef",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 261,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 305,
+          "reservationDigest": "fnv1a32:42bed1ef",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 261,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 491,
+          "reservationDigest": "fnv1a32:42bed1ef",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 447,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 837,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 1,
+        "2": 41
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 43,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 41,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 21,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 19,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "b2aCovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": true,
+          "probeGap": false,
+          "contextGap": false,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 846,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 4,
+        "2": 148
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:3e8da495",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a94b09cf",
+          "representativeFixedTargetWeaponIds": [
+            "fea60316-a05c-4252-bf1d-41c31b99b75a"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k2Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "2",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 845,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 9
+      },
+      "minimalCardinality": "2",
+      "firstCompatible": {
+        "P0": {
+          "rank": 116,
+          "reservationDigest": "fnv1a32:19d221f3",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 42,
+          "k2Before": 72,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 50,
+          "reservationDigest": "fnv1a32:ed07524f",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-bbf8125e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "813fb479-accd-454d-8fcd-fed51d4e891d"
+          ],
+          "k1Before": 42,
+          "k2Before": 6,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 31,
+          "reservationDigest": "fnv1a32:ed07524f",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-bbf8125e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "813fb479-accd-454d-8fcd-fed51d4e891d"
+          ],
+          "k1Before": 23,
+          "k2Before": 6,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 119,
+          "reservationDigest": "fnv1a32:ed07524f",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-bbf8125e",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "813fb479-accd-454d-8fcd-fed51d4e891d"
+          ],
+          "k1Before": 42,
+          "k2Before": 75,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+      "subgroups": [
+        "unreached"
+      ],
+      "b2b1": {
+        "minimalCardinality": "unreached",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 845,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 0
+      },
+      "minimalCardinality": "unreached",
+      "firstCompatible": {
+        "P0": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 802,
+          "representativeIncludesOracleSupporter": null
+        },
+        "P1": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 802,
+          "representativeIncludesOracleSupporter": null
+        },
+        "P2": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 802,
+          "representativeIncludesOracleSupporter": null
+        },
+        "P3": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 802,
+          "representativeIncludesOracleSupporter": null
+        }
+      }
+    },
+    {
+      "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k2Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "2",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 845,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 16
+      },
+      "minimalCardinality": "2",
+      "firstCompatible": {
+        "P0": {
+          "rank": 117,
+          "reservationDigest": "fnv1a32:19d221f3",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-32e817d9|build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 42,
+          "k2Before": 73,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 136,
+          "reservationDigest": "fnv1a32:392d3422",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-6aac5fa0|build-list.fnv1a32-fd6caf7b",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "b6780f04-da21-42b0-af8c-88f09a192e17"
+          ],
+          "k1Before": 42,
+          "k2Before": 92,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 136,
+          "reservationDigest": "fnv1a32:392d3422",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-6aac5fa0|build-list.fnv1a32-fd6caf7b",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "b6780f04-da21-42b0-af8c-88f09a192e17"
+          ],
+          "k1Before": 42,
+          "k2Before": 92,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 236,
+          "reservationDigest": "fnv1a32:a5f53b77",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-6aac5fa0|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 192,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "b2aCovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": true,
+          "probeGap": false,
+          "contextGap": false,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 846,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 1,
+        "2": 50
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 26,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 24,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k2Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "2",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 838,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 30
+      },
+      "minimalCardinality": "2",
+      "firstCompatible": {
+        "P0": {
+          "rank": 47,
+          "reservationDigest": "fnv1a32:019280a7",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-58a4e590|build-list.fnv1a32-7df2bbec",
+          "representativeFixedTargetWeaponIds": [
+            "d453ca34-a142-4241-9dce-8551c96cb887",
+            "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed"
+          ],
+          "k1Before": 42,
+          "k2Before": 3,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 143,
+          "reservationDigest": "fnv1a32:a5f53b77",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-6aac5fa0|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 99,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 143,
+          "reservationDigest": "fnv1a32:a5f53b77",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-6aac5fa0|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 99,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 220,
+          "reservationDigest": "fnv1a32:a5f53b77",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-6aac5fa0|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 176,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 845,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 6,
+        "2": 173
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:3e8da495",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a94b09cf",
+          "representativeFixedTargetWeaponIds": [
+            "fea60316-a05c-4252-bf1d-41c31b99b75a"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:81433033",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-c8772f02",
+          "representativeFixedTargetWeaponIds": [
+            "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 837,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 16,
+        "2": 498
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:3e8da495",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a94b09cf",
+          "representativeFixedTargetWeaponIds": [
+            "fea60316-a05c-4252-bf1d-41c31b99b75a"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:72ca8e82",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-3e076416",
+          "representativeFixedTargetWeaponIds": [
+            "2378d3e0-c376-470d-86c4-32f2ace71ab7"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        }
+      }
+    },
+    {
+      "targetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k2Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "2",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 838,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 66
+      },
+      "minimalCardinality": "2",
+      "firstCompatible": {
+        "P0": {
+          "rank": 47,
+          "reservationDigest": "fnv1a32:019280a7",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-58a4e590|build-list.fnv1a32-7df2bbec",
+          "representativeFixedTargetWeaponIds": [
+            "d453ca34-a142-4241-9dce-8551c96cb887",
+            "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed"
+          ],
+          "k1Before": 42,
+          "k2Before": 3,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 75,
+          "reservationDigest": "fnv1a32:86b8ed97",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-7df2bbec|build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "d453ca34-a142-4241-9dce-8551c96cb887"
+          ],
+          "k1Before": 42,
+          "k2Before": 31,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 75,
+          "reservationDigest": "fnv1a32:86b8ed97",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-7df2bbec|build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "d453ca34-a142-4241-9dce-8551c96cb887"
+          ],
+          "k1Before": 42,
+          "k2Before": 31,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 79,
+          "reservationDigest": "fnv1a32:a39c34cf",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-a3d6817e|build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 35,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 838,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 4,
+        "2": 143
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:3e8da495",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a94b09cf",
+          "representativeFixedTargetWeaponIds": [
+            "fea60316-a05c-4252-bf1d-41c31b99b75a"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 7,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 5,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 838,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 17,
+        "2": 194
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 3,
+          "reservationDigest": "fnv1a32:0c7aa234",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-f1d0f468",
+          "representativeFixedTargetWeaponIds": [
+            "c140578c-9aad-48d0-81db-95496636c459"
+          ],
+          "k1Before": 1,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:81433033",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-c8772f02",
+          "representativeFixedTargetWeaponIds": [
+            "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 839,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 1,
+        "2": 113
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 21,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 19,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 32,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 30,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 38,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 30,
+          "k2Before": 6,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 41,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 39,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k2Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "2",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 845,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 8
+      },
+      "minimalCardinality": "2",
+      "firstCompatible": {
+        "P0": {
+          "rank": 96,
+          "reservationDigest": "fnv1a32:10e80b5b",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-798019f2|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 52,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 64,
+          "reservationDigest": "fnv1a32:5f3b052a",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-798019f2|build-list.fnv1a32-a1d13672",
+          "representativeFixedTargetWeaponIds": [
+            "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "e4147de7-587c-4106-a47d-b09f8796464d"
+          ],
+          "k1Before": 42,
+          "k2Before": 20,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 64,
+          "reservationDigest": "fnv1a32:5f3b052a",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-798019f2|build-list.fnv1a32-a1d13672",
+          "representativeFixedTargetWeaponIds": [
+            "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "e4147de7-587c-4106-a47d-b09f8796464d"
+          ],
+          "k1Before": 42,
+          "k2Before": 20,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 214,
+          "reservationDigest": "fnv1a32:10e80b5b",
+          "cardinality": 2,
+          "representativeFixedSetId": "K2:build-list.fnv1a32-798019f2|build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 42,
+          "k2Before": 170,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "aa4e67d8-cc57-487c-b0f0-6a8b36f13dbb",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": false
+        }
+      },
+      "contexts": 836,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 13,
+        "2": 425
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:3e8da495",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a94b09cf",
+          "representativeFixedTargetWeaponIds": [
+            "fea60316-a05c-4252-bf1d-41c31b99b75a"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        }
+      }
+    },
+    {
+      "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 837,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 1,
+        "2": 112
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 21,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 19,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 31,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 29,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 37,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 29,
+          "k2Before": 6,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 41,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 39,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 838,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 2,
+        "2": 72
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 26,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 24,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 7,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 5,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 837,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 2,
+        "2": 149
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 20,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 18,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 14,
+          "reservationDigest": "fnv1a32:c6a7ab1a",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a1d13672",
+          "representativeFixedTargetWeaponIds": [
+            "e4147de7-587c-4106-a47d-b09f8796464d"
+          ],
+          "k1Before": 12,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 14,
+          "reservationDigest": "fnv1a32:c6a7ab1a",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a1d13672",
+          "representativeFixedTargetWeaponIds": [
+            "e4147de7-587c-4106-a47d-b09f8796464d"
+          ],
+          "k1Before": 12,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 24,
+          "reservationDigest": "fnv1a32:c6a7ab1a",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a1d13672",
+          "representativeFixedTargetWeaponIds": [
+            "e4147de7-587c-4106-a47d-b09f8796464d"
+          ],
+          "k1Before": 22,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        }
+      }
+    },
+    {
+      "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 839,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 1,
+        "2": 40
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 43,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 41,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 22,
+          "reservationDigest": "fnv1a32:ff85a91d",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+          "representativeFixedTargetWeaponIds": [
+            "070a1222-5e31-4c9f-a035-c557bfa7be73"
+          ],
+          "k1Before": 20,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 837,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 14,
+        "2": 428
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:3e8da495",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a94b09cf",
+          "representativeFixedTargetWeaponIds": [
+            "fea60316-a05c-4252-bf1d-41c31b99b75a"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        }
+      }
+    },
+    {
+      "targetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
+      "subgroups": [
+        "unreached"
+      ],
+      "b2b1": {
+        "minimalCardinality": "unreached",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 838,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 0,
+        "2": 0
+      },
+      "minimalCardinality": "unreached",
+      "firstCompatible": {
+        "P0": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 795,
+          "representativeIncludesOracleSupporter": null
+        },
+        "P1": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 795,
+          "representativeIncludesOracleSupporter": null
+        },
+        "P2": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 795,
+          "representativeIncludesOracleSupporter": null
+        },
+        "P3": {
+          "rank": null,
+          "reservationDigest": null,
+          "cardinality": null,
+          "representativeFixedSetId": null,
+          "representativeFixedTargetWeaponIds": [],
+          "k1Before": 42,
+          "k2Before": 795,
+          "representativeIncludesOracleSupporter": null
+        }
+      }
+    },
+    {
+      "targetWeaponId": "d453ca34-a142-4241-9dce-8551c96cb887",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": false
+        }
+      },
+      "contexts": 836,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 1,
+        "2": 39
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 37,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 35,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 18,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 16,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 18,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 16,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 18,
+          "reservationDigest": "fnv1a32:ef234c50",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+          "representativeFixedTargetWeaponIds": [
+            "a367c177-a0c2-4986-995e-4efcf4131b5c"
+          ],
+          "k1Before": 16,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": false
+        }
+      },
+      "contexts": 836,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 9,
+        "2": 312
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:3e8da495",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a94b09cf",
+          "representativeFixedTargetWeaponIds": [
+            "fea60316-a05c-4252-bf1d-41c31b99b75a"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 7,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 5,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "e4147de7-587c-4106-a47d-b09f8796464d",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": false
+        }
+      },
+      "contexts": 836,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 1,
+        "2": 89
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 21,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 19,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 31,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 29,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 38,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 29,
+          "k2Before": 7,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 41,
+          "reservationDigest": "fnv1a32:8b5e3514",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-b4b4c72c",
+          "representativeFixedTargetWeaponIds": [
+            "86439c85-0efc-40ba-b490-e39ab38aa1e0"
+          ],
+          "k1Before": 39,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
+      "subgroups": [
+        "recovered",
+        "extentInsufficient",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": false,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 837,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 10,
+        "2": 445
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 11,
+          "reservationDigest": "fnv1a32:443ec85a",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-c1fe111c",
+          "representativeFixedTargetWeaponIds": [
+            "05e6b206-21d4-447d-86dd-f5a62ff8479e"
+          ],
+          "k1Before": 9,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:72ca8e82",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-3e076416",
+          "representativeFixedTargetWeaponIds": [
+            "2378d3e0-c376-470d-86c4-32f2ace71ab7"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        }
+      }
+    },
+    {
+      "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 839,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 8,
+        "2": 271
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:3e8da495",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-a94b09cf",
+          "representativeFixedTargetWeaponIds": [
+            "fea60316-a05c-4252-bf1d-41c31b99b75a"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 9,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 7,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 10,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 8,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    },
+    {
+      "targetWeaponId": "f5d20af4-86b4-4e3f-b9ad-80862917007d",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": false
+        }
+      },
+      "contexts": 836,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 32,
+        "2": 757
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:0a526466",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-2fdb4406",
+          "representativeFixedTargetWeaponIds": [
+            "1d916ff0-82cc-41fb-a15e-bdf60891cd91"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P2": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        },
+        "P3": {
+          "rank": 2,
+          "reservationDigest": "fnv1a32:eee614ca",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-bb36c5ca",
+          "representativeFixedTargetWeaponIds": [
+            "02876df4-cd56-4c95-add9-9e3e9cc90801"
+          ],
+          "k1Before": 0,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": false
+        }
+      }
+    },
+    {
+      "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+      "subgroups": [
+        "recovered",
+        "defaultExtent",
+        "contextGapRecovered",
+        "k1Minimal"
+      ],
+      "b2b1": {
+        "minimalCardinality": "1",
+        "withinDefaultExtent": true,
+        "b2a": {
+          "covered": false,
+          "probeGap": false,
+          "contextGap": true,
+          "conflictParticipant": true
+        }
+      },
+      "contexts": 837,
+      "compatibleByCardinality": {
+        "0": 0,
+        "1": 2,
+        "2": 70
+      },
+      "minimalCardinality": "1",
+      "firstCompatible": {
+        "P0": {
+          "rank": 26,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 24,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P1": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P2": {
+          "rank": 8,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 6,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        },
+        "P3": {
+          "rank": 7,
+          "reservationDigest": "fnv1a32:bb1ec38e",
+          "cardinality": 1,
+          "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+          "representativeFixedTargetWeaponIds": [
+            "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+          ],
+          "k1Before": 5,
+          "k2Before": 0,
+          "representativeIncludesOracleSupporter": true
+        }
+      }
+    }
+  ],
+  "decisionRule": {
+    "order": [
+      "B2C1_INVALID: a formal context universe mismatch, a B2-B1 authority mismatch, an Export / oracle / manifest mismatch, a Target count mismatch, a K0 / K1 / K2 universe mismatch, a B2-B1 compatible count parity mismatch, a minimal cardinality mismatch, a policy definition drift, a nondeterministic ordering, an oracle isolation failure, a provenance failure, a raw / result inconsistency, an unreached Route with a finite rank, or a recovered Route without one",
+      "B2C1_TOP8: under the selected Research policy every recovered Route has a first compatible rank <= 8",
+      "B2C1_TOP16: <= 16 (not TOP8)",
+      "B2C1_TOP32: <= 32 (not above)",
+      "B2C1_WIDE: every recovered rank is finite, the maximum is > 32"
+    ],
+    "compatible": "reservation compatibility only (phase2c26b2aReachability); an extent-insufficient Route under a compatible reservation still counts",
+    "budgets": "powers-of-two diagnostic budgets for the next Research Search Phase, never Production defaults"
+  },
+  "invalidReasons": [],
+  "decision": {
+    "case": "B2C1_WIDE",
+    "reasons": [],
+    "recommendation": "現在のreservation geometryだけでは良いscheduler orderingになっていないため、Searchを大量実行する前にcontext feature / groupingを再研究"
+  }
+}
