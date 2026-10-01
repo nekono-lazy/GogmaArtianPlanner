@@ -5,8 +5,8 @@ schema / version、Persistence、UIは変更していない。`visitPlannerAlter
 Planner Alternative kernel、Planner trial、full Planner、global assignment、Candidate組合せ探索、runtime optimizationは行っていない。
 
 - measured HEAD: `ae2083f076c3ddfa6d2c7b45248be9a43c2da1d1`（context snapshot計算module・runner・analyzer・事前登録decision rule・testsを含むclean HEAD）
-- analysis HEAD: `0da244d35a02d7b3ea4af3179a52caf69ab946d3`（measured HEAD以降の変更はpost-hoc解析 `plannerGlobalPhase2C26B2AAnalysis.ts`・analyzer・testのみで
-  `calculationCodeChangedSinceMeasuredHead = []`。formal snapshotの再測定はしていない。§17）
+- analysis HEAD: `d671794e8b2bc1dfccb449d57accf3a0773f33d9`（measured HEAD以降の変更はpost-hoc解析 `plannerGlobalPhase2C26B2AAnalysis.ts`・analyzer・testのみで
+  `calculationCodeChangedSinceMeasuredHead = []`。formal snapshotの再測定はしていない。§17・§18）
 - RESULT: [`docs/PLANNER_GLOBAL_PHASE2C26B2A_RESULT.json`](PLANNER_GLOBAL_PHASE2C26B2A_RESULT.json)（`provenance.formal = true`）
 
 ## 1. 結論（`B2A_BOTH`）
@@ -23,14 +23,19 @@ B1でuncoveredだったoracle Route 41件の失われ方を分類した。
 | 説明不能 | 0 |
 
 事前登録ruleにより **B2A-BOTH**（probe可能gapとcontext gapが両方存在）。ただし量的には **context gapが40 / 41で支配的** で、
-probe可能gapは1件（`extent_insufficient`）のみである。
+probe可能gapは1件（02876df4）のみである。この1件は **reservation互換・B1 Search未完走（timeout）・default extent不足** の
+3つのcauseが重なったprobe gapで、extent拡張とcompatible Search contextの完走の **両方** が必要である（§7.4）。
+
+原因の件数は **cause flag集計（重複あり）** であり、排他的分類ではない。contextごとの `classification` は1つだけを選ぶ
+**primary context class** で、cause全体ではない（§6）。
 
 **formalに言えること**（このExport・current Production・B1の146 context・default extent `{ 4, 235, 4 }` について）:
 
-- B1の未完走（timeout）contextとcapture bound 8到達（consumer stop）contextは、**uncovered oracle Routeを1件も隠していない**。
-  uncovered Routeに関係するtimeout context 17件のうち16件はreservation非互換、1件は互換だがdefault extent外。consumer stop
-  context 29件はすべてreservation非互換。`default_context_unfinished` / `capture_or_ordering_unresolved` /
-  `eligible_but_not_observed` は **0件**。
+- uncovered Routeに関係するB1 timeout context 17件のうち16件はreservation非互換。**reservation互換でB1 timeoutなのは1件**
+  （02876df4 / c13-p1）で、このcontextは同時にdefault extent外でもある。したがってtimeoutだけが未coverage原因ではなく、
+  current default extentのままSearch完走だけを改善してもこのoracle Routeの回収には足りない。
+- consumer stop（capture bound 8到達）context 29件はすべてreservation非互換で、capture limitedなcompatible contextは **0件**。
+  default extent内でcompletedなのに未観測のcompatible contextも **0件**。
 - default extent内かつreservation互換のcontextを持つuncovered Routeは **0件**。
 - extent不足（23件: Skill 23 / Normal 6、Gogmaは0）は、1件（02876df4）を除き、すべてreservation非互換contextとの **重複** である。
   extent probeだけで既知Routeとして回収できる見込みがあるのは最大1件。
@@ -113,13 +118,29 @@ primitiveの判定と、その分解（missing held / blocked / held-prefix over
 
 contextの分類:
 
+`classification` は各contextに1つだけ付く **primary context class**（上から順に最初に当てはまるもの）であり、cause全体ではない。
+cause flagは別に、contextごとの非排他cause（`phase2c26b2aContextCauses()`、RESULTの各context行 `causes`）から導出する:
+
+| context cause（重複あり、reservation互換contextのみ） | 条件 |
+| --- | --- |
+| `search_unfinished` | B1で正常終了runが無い（timeout / out of memory / process failure / context mismatch）。extent内外を問わない。`not_searched`（blocked / task無し）は含めない |
+| `extent_insufficient` | oracle reachがdefault extent外 |
+| `capture_limited` | default extent内・B1 completed・consumer stop・oracle未deliver |
+| `completed_eligible_not_observed` | default extent内・B1 completed・consumer stop以外・oracle未deliver |
+| `observed` | oracle Candidateをdeliver |
+
+Target flag `hasUnfinishedCompatibleContext` / `hasCaptureLimitedCompatibleContext` / `hasCompletedEligibleButUnobservedContext` はそれぞれ
+`search_unfinished` / `capture_limited` / `completed_eligible_not_observed` を持つcontextの有無で、primary classからは導出しない。
+
+primary context class:
+
 | class | 条件 |
 | --- | --- |
 | `observed` | 互換・extent内・B1でoracle Candidateをdeliver |
 | `default_context_unfinished` | 互換・extent内・B1で正常終了runが無い（timeoutをCandidate 0として扱わない） |
 | `capture_or_ordering_unresolved` | 互換・extent内・consumer stop（8件到達）でoracle未deliver（「oracle Candidate無し」としない） |
 | `eligible_but_not_observed` | 互換・extent内・extent stop / exhaustedでoracle未deliver（即Search bugとはしない） |
-| `extent_insufficient` | 互換だがoracle reachがdefault extent外 |
+| `extent_insufficient` | 互換だがoracle reachがdefault extent外（B1未完走でもこのclass。causeには `search_unfinished` も付く） |
 | `reservation_incompatible` | exclusive / blocked / held coverage / Normal held-prefixのいずれかが不成立（複数同時可） |
 
 ## 7. oracle coverage audit
@@ -135,7 +156,7 @@ contextの分類:
 covered 2件（57126a5e、820831d0）は、監査上もreservation互換・extent内でB1がdeliverしたcontext（どちらもc13-p1）で `observed`
 と判定され、B1 coverageと矛盾しない。
 
-### 7.2 uncovered 41件の内訳（原因フラグは重複あり）
+### 7.2 uncovered 41件の内訳（cause flag集計、重複あり。行を足してRoute数にしない）
 
 | 項目 | uncovered | participant | non-participant |
 | --- | ---: | ---: | ---: |
@@ -147,7 +168,8 @@ covered 2件（57126a5e、820831d0）は、監査上もreservation互換・exten
 | larger extentが必要 | 23 | 19 | 4 |
 | └ Skill / Normal / Gogma | 23 / 6 / 0 | 19 / 5 / 0 | 4 / 1 / 0 |
 | 互換だがextent不足 | 1 | 1 | 0 |
-| 互換contextがtimeout（未完走） | **0** | 0 | 0 |
+| 互換contextがtimeout（未完走） | **1** | 1 | 0 |
+| └ うち互換だがextent不足とも重複（同じRoute） | 1 | 1 | 0 |
 | 互換contextがconsumer stop（capture未解決） | **0** | 0 | 0 |
 | completed + extent内 + 互換なのに未観測 | **0** | 0 | 0 |
 | held coverage gapあり | 28 | 28 | 0 |
@@ -157,8 +179,13 @@ covered 2件（57126a5e、820831d0）は、監査上もreservation互換・exten
 | probe可能gap | 1 | 1 | 0 |
 | context gap | 40 | 31 | 9 |
 
-uncovered Routeの全context 124件の分類: `reservation_incompatible` 123、`extent_insufficient` 1。
-B1状態との交差: 非互換 × consumer stop 29、非互換 × extent stop 78、非互換 × timeout 16、extent不足 × timeout 1。
+「互換だがextent不足」1件と「互換contextがtimeout」1件は **同じ02876df4** である。
+
+uncovered Routeの全context 124件のprimary class: `reservation_incompatible` 123、`extent_insufficient` 1。
+B1状態との交差: 非互換 × consumer stop 29、非互換 × extent stop 78、非互換 × timeout 16、extent不足 × timeout 1。最後の
+`extent_insufficient|timeout` 1件が、primary classでは `extent_insufficient` に1本化されたうえで `search_unfinished` causeも持つ
+重複causeのcontext（02876df4 / c13-p1）である。互換context causeの組合せは `reservation_compatible + search_unfinished +
+extent_insufficient` が1件のみ。
 非互換理由の延べ件数: held coverage gap 111、blocked position 42、Normal held-prefix 4、exclusive weapon 2。
 
 ### 7.3 oracle held Route 18件
@@ -177,10 +204,18 @@ B1状態との交差: 非互換 × consumer stop 29、非互換 × extent stop 7
 uncovered held Route 17件は **すべてcontext gap**。held Routeを作るのに必要な前方heldを、single fixed winnerのreservationが
 供給できていない。
 
-### 7.4 唯一のprobe可能gap
+### 7.4 唯一のprobe可能gap（重複cause）
 
 02876df4（new Normal、sword and shield）: c13-p1（fixed winner 6c65c924）のreservationで全laneが互換（missing held 0、blocked 0）。
-ただしNormal reach 5 > 4、Skill（conversion）reach 22 > 4でdefault extent外。このcontextはB1でtimeoutしている。
+このcontextは同時に次の3 causeを持つ:
+
+- reservation compatible
+- Search unfinished（B1 Stage 1 timeout、fallback対象外）
+- extent insufficient（Normal必要5 > 4、Skill（conversion）必要22 > 4）
+
+Target flagは `hasReservationCompatibleContext = true`、`hasUnfinishedCompatibleContext = true`、`needsLargerExtent = true`、
+probe gap、context gapではない。extentだけを広げても（timeoutしたcontextの完走が未確認）、timeoutだけを解消しても
+（default extent外）回収は確認できず、**extent拡張とcompatible context完走の両方** が必要なprobe対象である。
 
 ## 8. support analysis（oracle Planで前方positionを担当するTarget）
 
@@ -222,11 +257,13 @@ reservationはそのwinnerの **current baseline Route** のunit positionだけ�
 
 ## 10. 結論の整理（要因A〜Eとの対応）
 
+要因ごとの件数は **cause flag集計で重複あり**（排他的分類ではない）。
+
 | 要因 | 本Phaseの実測 |
 | --- | --- |
-| A. default-extent contextが10分budget内に未完走 | uncovered Routeを隠しているものは **0件**（timeout context 17件は非互換16 / extent外1） |
+| A. default-extent contextが10分budget内に未完走 | **1件**（02876df4 / c13-p1。uncovered Routeに関係するtimeout context 17件のうち互換は1件のみ、16件は非互換）。ただしこの1件は **Cとも重複**（default extent外）しており、timeoutだけが未coverage原因ではない。current default extentのままSearch完走だけを改善しても回収には足りない |
 | B. capture bound 8より後ろにoracle Route | **0件**（consumer stop context 29件はすべて非互換） |
-| C. Production default extent不足 | 23件で必要（Skill 23 / Normal 6）。ただしextentだけで回収可能性があるのは1件、22件はreservation非互換またはcontext無しと重複 |
+| C. Production default extent不足 | 23件で必要（Skill 23 / Normal 6）。reservation互換contextを持つのは1件（02876df4、Aとも重複）だけで、22件はreservation非互換またはcontext無しと重複 |
 | D. single fixed winner reservationでheld coverageを作れない | **31件**（held gap 28 / blocked 16 / exclusive 2 / Normal held-prefix 2、重複あり）。support providerは全件2+ |
 | E. oracle TargetにConflict orientation由来Search contextが無い | **9件**（non-participant全件） |
 
@@ -240,10 +277,11 @@ reservationはそのwinnerの **current baseline Route** のunit positionだけ�
    - held gap 23件: 複数のfixed Routeのheldを合わせたmulti-route reservation。oracleでは前方positionを2つ以上のTargetが担当している。
    B2-Bでは、まずSearchを回さずに **Productionから導出可能な候補context生成規則**（oracleを入力にしない）ごとにB2-Aと同じ
    post-hoc到達判定を行い、どの生成規則がoracle Routeを何件reservation互換にするかを測ってからSearchへ進むのが安価。
-2. **Search / extent側（従）**: extent不足23件（Skill 23 / Normal 6）はcontext gap解消後に効いてくる。単独で回収候補になるのは
-   02876df4（c13-p1、Normal 5・Skill 22が必要、B1でtimeout済み）のみで、extent拡張とcontext完走の両方が要る。
-   default-extent contextの完走（timeout 20 task）やcapture bound拡大は、current single-winner contextのままでは既知oracle Route（exact）の回収に
-   寄与しないことが本Phaseで分かった（alternative diversity全般への効果は別問題）。
+2. **Search / extent側（従）**: extent不足23件（Skill 23 / Normal 6）はcontext gap解消後に効いてくる。current contextで
+   回収候補になるのは02876df4（c13-p1）のみで、**extent拡張（Normal 5・Skill 22以上）とcompatible context完走の両方** が必要
+   （extentだけ、またはtimeout解消だけで回収できるとは言えない）。それ以外の既知oracle Route（exact）については、default-extent
+   contextの完走やcapture bound拡大は、current single-winner contextのままでは回収に寄与しない（alternative diversity全般への
+   効果は別問題）。
 
 ## 12. limitations
 
@@ -267,6 +305,8 @@ reservationはそのwinnerの **current baseline Route** のunit positionだけ�
 5. **B2A-CONTEXT**: context gapのみ。
 
 1 Routeについて2種のgapは構成上排他（reservation互換contextを持つか否か）で、caseはuncovered集合についての判定。原因フラグは排他にしない。
+probe可能gapはcause flag（互換contextの未完走・capture limited・完走未観測、または互換context + extent不足）から判定し、
+primary classに依存しない（§18の修正でも判定対象のRoute集合は変わらない）。
 
 ## 14. 変更ファイル
 
@@ -274,7 +314,7 @@ reservationはそのwinnerの **current baseline Route** のunit positionだけ�
 | --- | --- |
 | `src/benchmarks/plannerGlobalPhase2C26B2A.ts` | context snapshot（B1と同じ経路の再導出 + prepared originのCounter origin）。oracle / B1 RESULTを読まない |
 | `src/benchmarks/plannerGlobalPhase2C26B2AAnalysis.ts` | B1 authority parser、snapshot parity、oracle parser・manifest整合、Route lane展開、Production primitiveによる到達判定、extent判定、support導出、B1 context状態、分類・フラグ・集計・パターン、decision |
-| `src/benchmarks/plannerGlobalPhase2C26B2A.test.ts` | 19 tests |
+| `src/benchmarks/plannerGlobalPhase2C26B2A.test.ts` | 21 tests |
 | `scripts/run-planner-global-phase2c26b2a.mjs` | snapshot runner（Exportのみ読む） |
 | `scripts/analyze-planner-global-phase2c26b2a.mjs` | post-hoc analyzer（B1 RESULT・oracle RESULT・manifestを読む） |
 | `docs/PLANNER_GLOBAL_PHASE2C26B2A_RESULT.json` | formal RESULT |
@@ -284,7 +324,7 @@ Production source（`src/domain` / `src/services` / `src/workers` / UI / db）�
 
 ## 15. 検証
 
-- focused: `npx vitest run src/benchmarks/plannerGlobalPhase2C26B2A.test.ts`（19 pass）、および既存のoracle隔離test
+- focused: `npx vitest run src/benchmarks/plannerGlobalPhase2C26B2A.test.ts`（21 pass）、および既存のoracle隔離test
   `plannerGlobalOracle1657.test.ts` / `plannerGlobalLowerBound.test.ts`
 - `npm run lint`、`npx tsc -b --force`、`npm test`、`npm run build`、`git diff --check`
 
@@ -308,3 +348,19 @@ manifestはanalyzerが `--manifest` 引数から読み込み、解析moduleは�
 解析module内で行う。これに伴いrequired positionの照合から `deriveOracleRequiredPositions()` による独立導出を外し、manifestと
 oracle RESULTのPlanner側 `plannerRequired` / streamごとの `required` / usageとの照合に限った。計算module・runnerは無変更で、
 再生成したRESULTは `analyzedAt`・analysis HEAD・`codeChangedSinceMeasuredHead` を除き初回解析と全field一致した。
+
+## 18. レビュー対応（PR #190）: cause flagを主分類から切り離す
+
+formal snapshot（raw SHA-256 `ce55eecf…3112f945`）・計算module・runnerは無変更で、再測定はしていない。
+measured HEAD `ae2083f`、`formal = true`、`calculationCodeChangedSinceMeasuredHead = []` を維持し、analysis HEAD `d671794` でRESULTを再生成した。
+
+- 不具合: Target-level cause flag（`hasUnfinishedCompatibleContext` 等）を排他的なprimary context classから導出していたため、
+  reservation互換でB1 timeoutかつdefault extent外のcontext（02876df4 / c13-p1）が `extent_insufficient` に1本化され、
+  未完走causeが落ちていた（`compatibleContextUnfinished = 0`）。
+- 修正: contextごとの非排他cause（§6）を導入し、cause flagをそこから導出。未完走はtimeout / out of memory / process failure /
+  context mismatchで、`not_searched` は含めない。capture limitedとcompleted未観測はdefault extent内のみ。各context行に `causes`、
+  集計に `contextCauses` / `compatibleContextCauseCombinations` / `compatibleContextUnfinishedAndExtentInsufficient` と注記を追加した。
+- RESULTの変化はuncovered（およびparticipant / all）の `compatibleContextUnfinished` 0 → 1、重複件数の新設、02876df4のflagと
+  causeのみ。`compatibleButExtentInsufficient = 1`、primary class（非互換123 / extent不足1）、probe gap 1、context gap 40、
+  covered 2 / uncovered 41、parity・manifest整合・audit inconsistency 0、`B2A_BOTH` は不変。
+- 文書: 「互換contextのtimeoutは0件」「要因A = 0件」を、互換timeout 1件（Cと重複）へ修正した。

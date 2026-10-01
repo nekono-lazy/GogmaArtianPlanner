@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 Phase 2-C2.6-B2-A: post-hoc reachability audit of the 1,657 oracle Routes against the B1 single-winner pre-Search contexts",
-  "analyzedAt": "2026-10-01T12:08:05.139Z",
+  "analyzedAt": "2026-10-01T12:52:00.996Z",
   "sources": {
     "snapshot": {
       "file": "PLANNER_GLOBAL_PHASE2C26B2A_RAW.json.local",
@@ -25,7 +25,7 @@
   },
   "provenance": {
     "measuredHead": "ae2083f076c3ddfa6d2c7b45248be9a43c2da1d1",
-    "analysisHead": "0da244d35a02d7b3ea4af3179a52caf69ab946d3",
+    "analysisHead": "d671794e8b2bc1dfccb449d57accf3a0773f33d9",
     "analysisCodeUncommitted": false,
     "codeChangedSinceMeasuredHead": [
       "scripts/analyze-planner-global-phase2c26b2a.mjs",
@@ -12721,7 +12721,8 @@
         "gogma": 0
       },
       "compatibleButExtentInsufficient": 1,
-      "compatibleContextUnfinished": 0,
+      "compatibleContextUnfinished": 1,
+      "compatibleContextUnfinishedAndExtentInsufficient": 1,
       "compatibleContextCaptureUnresolved": 0,
       "eligibleButNotObserved": 0,
       "heldCoverageGap": 30,
@@ -12751,7 +12752,8 @@
         "gogma": 0
       },
       "compatibleButExtentInsufficient": 1,
-      "compatibleContextUnfinished": 0,
+      "compatibleContextUnfinished": 1,
+      "compatibleContextUnfinishedAndExtentInsufficient": 1,
       "compatibleContextCaptureUnresolved": 0,
       "eligibleButNotObserved": 0,
       "heldCoverageGap": 28,
@@ -12781,7 +12783,8 @@
         "gogma": 0
       },
       "compatibleButExtentInsufficient": 1,
-      "compatibleContextUnfinished": 0,
+      "compatibleContextUnfinished": 1,
+      "compatibleContextUnfinishedAndExtentInsufficient": 1,
       "compatibleContextCaptureUnresolved": 0,
       "eligibleButNotObserved": 0,
       "heldCoverageGap": 28,
@@ -12812,6 +12815,7 @@
       },
       "compatibleButExtentInsufficient": 0,
       "compatibleContextUnfinished": 0,
+      "compatibleContextUnfinishedAndExtentInsufficient": 0,
       "compatibleContextCaptureUnresolved": 0,
       "eligibleButNotObserved": 0,
       "heldCoverageGap": 0,
@@ -12842,6 +12846,7 @@
       },
       "compatibleButExtentInsufficient": 0,
       "compatibleContextUnfinished": 0,
+      "compatibleContextUnfinishedAndExtentInsufficient": 0,
       "compatibleContextCaptureUnresolved": 0,
       "eligibleButNotObserved": 0,
       "heldCoverageGap": 14,
@@ -12872,6 +12877,7 @@
       },
       "compatibleButExtentInsufficient": 0,
       "compatibleContextUnfinished": 0,
+      "compatibleContextUnfinishedAndExtentInsufficient": 0,
       "compatibleContextCaptureUnresolved": 0,
       "eligibleButNotObserved": 0,
       "heldCoverageGap": 13,
@@ -12920,6 +12926,15 @@
       "extent_insufficient": 1,
       "reservation_incompatible": 123
     },
+    "contextCauses": {
+      "extent_insufficient": 1,
+      "reservation_compatible": 1,
+      "search_unfinished": 1
+    },
+    "compatibleContextCauseCombinations": {
+      "reservation_compatible+search_unfinished+extent_insufficient": 1
+    },
+    "note": "contextClasses is the primary (exclusive) context class; cause flags and contextCauses are non-exclusive. A Route may be counted in several cause aggregates at once (for example compatibleContextUnfinished and compatibleButExtentInsufficient); never add cause counts to obtain a Route count.",
     "incompatibilityReasons": {
       "blocked_position_conflict": 42,
       "exclusive_owned_weapon_conflict": 2,
@@ -13110,7 +13125,7 @@
         "hasB1SearchContext": true,
         "hasReservationCompatibleContext": true,
         "hasDefaultExtentCompatibleContext": false,
-        "hasUnfinishedCompatibleContext": false,
+        "hasUnfinishedCompatibleContext": true,
         "hasCaptureLimitedCompatibleContext": false,
         "hasCompletedEligibleButUnobservedContext": false,
         "needsLargerExtent": true,
@@ -13156,6 +13171,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s030",
@@ -13208,6 +13224,11 @@
           "fixedTargetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
           "fixedTargetIsOracleSupporter": true,
           "classification": "extent_insufficient",
+          "causes": [
+            "reservation_compatible",
+            "search_unfinished",
+            "extent_insufficient"
+          ],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s038",
@@ -13253,6 +13274,7 @@
           "fixedTargetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s047",
@@ -13305,6 +13327,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s065",
@@ -13357,6 +13380,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s073",
@@ -13409,6 +13433,7 @@
           "fixedTargetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s081",
@@ -13461,6 +13486,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s089",
@@ -13524,6 +13550,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s097",
@@ -13576,6 +13603,7 @@
           "fixedTargetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s105",
@@ -14488,6 +14516,7 @@
           "fixedTargetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s015",
@@ -14719,6 +14748,7 @@
           "fixedTargetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s116",
@@ -14771,6 +14801,7 @@
           "fixedTargetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s130",
@@ -14817,6 +14848,7 @@
           "fixedTargetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s132",
@@ -15032,6 +15064,7 @@
           "fixedTargetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s019",
@@ -15278,6 +15311,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s024",
@@ -15329,6 +15363,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s026",
@@ -15594,6 +15629,7 @@
           "fixedTargetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s008",
@@ -15646,6 +15682,7 @@
           "fixedTargetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s010",
@@ -15698,6 +15735,7 @@
           "fixedTargetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s010",
@@ -15750,6 +15788,7 @@
           "fixedTargetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s126",
@@ -15955,6 +15994,7 @@
           "fixedTargetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s124",
@@ -16205,6 +16245,7 @@
           "fixedTargetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s002",
@@ -16256,6 +16297,7 @@
           "fixedTargetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s029",
@@ -16307,6 +16349,7 @@
           "fixedTargetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s039",
@@ -16358,6 +16401,7 @@
           "fixedTargetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s048",
@@ -16409,6 +16453,7 @@
           "fixedTargetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s056",
@@ -16460,6 +16505,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s066",
@@ -16511,6 +16557,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s074",
@@ -16562,6 +16609,7 @@
           "fixedTargetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s029",
@@ -16613,6 +16661,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s090",
@@ -16664,6 +16713,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s098",
@@ -16715,6 +16765,7 @@
           "fixedTargetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s106",
@@ -16965,6 +17016,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s003",
@@ -17005,6 +17057,7 @@
           "fixedTargetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s127",
@@ -17258,6 +17311,7 @@
           "fixedTargetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s006",
@@ -17315,6 +17369,7 @@
           "fixedTargetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s011",
@@ -17594,6 +17649,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s031",
@@ -17649,6 +17705,7 @@
           "fixedTargetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s040",
@@ -17700,6 +17757,7 @@
           "fixedTargetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s057",
@@ -17755,6 +17813,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s067",
@@ -17810,6 +17869,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s075",
@@ -17865,6 +17925,7 @@
           "fixedTargetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s082",
@@ -17920,6 +17981,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s091",
@@ -17975,6 +18037,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s099",
@@ -18030,6 +18093,7 @@
           "fixedTargetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s107",
@@ -18285,6 +18349,7 @@
           "fixedTargetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s014",
@@ -18508,6 +18573,7 @@
           "fixedTargetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s022",
@@ -18548,6 +18614,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s025",
@@ -18588,6 +18655,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s032",
@@ -18628,6 +18696,10 @@
           "fixedTargetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
           "fixedTargetIsOracleSupporter": true,
           "classification": "observed",
+          "causes": [
+            "reservation_compatible",
+            "observed"
+          ],
           "deliveredOracle": true,
           "b1": {
             "taskId": "s041",
@@ -18661,6 +18733,7 @@
           "fixedTargetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s049",
@@ -18701,6 +18774,7 @@
           "fixedTargetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s058",
@@ -18741,6 +18815,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s068",
@@ -18781,6 +18856,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s076",
@@ -18821,6 +18897,7 @@
           "fixedTargetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s083",
@@ -18861,6 +18938,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s025",
@@ -18901,6 +18979,7 @@
           "fixedTargetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s108",
@@ -19174,6 +19253,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s033",
@@ -19231,6 +19311,7 @@
           "fixedTargetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s050",
@@ -19288,6 +19369,7 @@
           "fixedTargetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s059",
@@ -19345,6 +19427,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s069",
@@ -19401,6 +19484,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s077",
@@ -19462,6 +19546,7 @@
           "fixedTargetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s084",
@@ -19519,6 +19604,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s092",
@@ -19576,6 +19662,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s100",
@@ -19633,6 +19720,7 @@
           "fixedTargetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s109",
@@ -19869,6 +19957,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s020",
@@ -19921,6 +20010,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s020",
@@ -19973,6 +20063,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s034",
@@ -20031,6 +20122,7 @@
           "fixedTargetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s042",
@@ -20087,6 +20179,7 @@
           "fixedTargetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s051",
@@ -20145,6 +20238,7 @@
           "fixedTargetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s060",
@@ -20203,6 +20297,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s020",
@@ -20255,6 +20350,7 @@
           "fixedTargetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s085",
@@ -20313,6 +20409,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s093",
@@ -20371,6 +20468,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s101",
@@ -20429,6 +20527,7 @@
           "fixedTargetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s110",
@@ -20706,6 +20805,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s021",
@@ -20775,6 +20875,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s021",
@@ -20844,6 +20945,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s035",
@@ -20901,6 +21003,7 @@
           "fixedTargetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s043",
@@ -20953,6 +21056,7 @@
           "fixedTargetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s052",
@@ -21010,6 +21114,7 @@
           "fixedTargetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s061",
@@ -21067,6 +21172,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s021",
@@ -21136,6 +21242,7 @@
           "fixedTargetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s086",
@@ -21193,6 +21300,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s094",
@@ -21250,6 +21358,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s102",
@@ -21307,6 +21416,7 @@
           "fixedTargetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s111",
@@ -21583,6 +21693,7 @@
           "fixedTargetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s023",
@@ -21633,6 +21744,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s027",
@@ -21683,6 +21795,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s036",
@@ -21733,6 +21846,10 @@
           "fixedTargetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
           "fixedTargetIsOracleSupporter": true,
           "classification": "observed",
+          "causes": [
+            "reservation_compatible",
+            "observed"
+          ],
           "deliveredOracle": true,
           "b1": {
             "taskId": "s044",
@@ -21772,6 +21889,7 @@
           "fixedTargetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s053",
@@ -21822,6 +21940,7 @@
           "fixedTargetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s062",
@@ -21872,6 +21991,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s070",
@@ -21922,6 +22042,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s078",
@@ -21972,6 +22093,7 @@
           "fixedTargetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s087",
@@ -22022,6 +22144,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s027",
@@ -22072,6 +22195,7 @@
           "fixedTargetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s112",
@@ -22340,6 +22464,7 @@
           "fixedTargetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s131",
@@ -22395,6 +22520,7 @@
           "fixedTargetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s134",
@@ -22644,6 +22770,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s037",
@@ -22696,6 +22823,7 @@
           "fixedTargetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s045",
@@ -22742,6 +22870,7 @@
           "fixedTargetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s054",
@@ -22794,6 +22923,7 @@
           "fixedTargetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s063",
@@ -22846,6 +22976,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s071",
@@ -22898,6 +23029,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s079",
@@ -22950,6 +23082,7 @@
           "fixedTargetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s088",
@@ -23002,6 +23135,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s095",
@@ -23054,6 +23188,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s103",
@@ -23293,6 +23428,7 @@
           "fixedTargetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s125",
@@ -23534,6 +23670,7 @@
           "fixedTargetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s133",
@@ -23580,6 +23717,7 @@
           "fixedTargetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s135",
@@ -23815,6 +23953,7 @@
           "fixedTargetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s004",
@@ -23856,6 +23995,7 @@
           "fixedTargetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s017",
@@ -24074,6 +24214,7 @@
           "fixedTargetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s118",
@@ -24120,6 +24261,7 @@
           "fixedTargetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s122",
@@ -24381,6 +24523,7 @@
           "fixedTargetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s007",
@@ -24432,6 +24575,7 @@
           "fixedTargetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s009",
@@ -24484,6 +24628,7 @@
           "fixedTargetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s007",
@@ -24535,6 +24680,7 @@
           "fixedTargetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s128",
@@ -24797,6 +24943,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s028",
@@ -24855,6 +25002,7 @@
           "fixedTargetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s028",
@@ -24913,6 +25061,7 @@
           "fixedTargetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s046",
@@ -24965,6 +25114,7 @@
           "fixedTargetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s055",
@@ -25017,6 +25167,7 @@
           "fixedTargetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s064",
@@ -25074,6 +25225,7 @@
           "fixedTargetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s072",
@@ -25131,6 +25283,7 @@
           "fixedTargetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s080",
@@ -25188,6 +25341,7 @@
           "fixedTargetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s096",
@@ -25250,6 +25404,7 @@
           "fixedTargetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s104",
@@ -25312,6 +25467,7 @@
           "fixedTargetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s113",
@@ -25725,6 +25881,7 @@
           "fixedTargetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s005",
@@ -25963,6 +26120,7 @@
           "fixedTargetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s115",
@@ -26003,6 +26161,7 @@
           "fixedTargetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s129",
@@ -26244,6 +26403,7 @@
           "fixedTargetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s018",
@@ -26494,6 +26654,7 @@
           "fixedTargetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s000",
@@ -26540,6 +26701,7 @@
           "fixedTargetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s120",
@@ -26580,6 +26742,7 @@
           "fixedTargetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s123",
@@ -26807,6 +26970,7 @@
           "fixedTargetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s016",
@@ -27054,6 +27218,7 @@
           "fixedTargetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s001",
@@ -27111,6 +27276,7 @@
           "fixedTargetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s117",
@@ -27894,6 +28060,7 @@
           "fixedTargetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s013",
@@ -28140,6 +28307,7 @@
           "fixedTargetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s012",
@@ -28180,6 +28348,7 @@
           "fixedTargetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s119",
@@ -28220,6 +28389,7 @@
           "fixedTargetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
           "fixedTargetIsOracleSupporter": true,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s121",
@@ -28591,6 +28761,7 @@
           "fixedTargetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
           "fixedTargetIsOracleSupporter": false,
           "classification": "reservation_incompatible",
+          "causes": [],
           "deliveredOracle": false,
           "b1": {
             "taskId": "s114",
