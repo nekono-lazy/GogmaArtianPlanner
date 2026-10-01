@@ -166,6 +166,17 @@ try {
       bonusDepthReadMs: phase('bonus_depth_read') }
   }
   const sum = values => values.reduce((total, value) => total + (value ?? 0), 0)
+  const lifecycleOf = child => (child?.events ?? []).filter(record => record.kind === 'lifecycle')
+  const lifecycleTypes = child => lifecycleOf(child).map(record => record.event?.type ?? null)
+  /** The Search / Target outcome a completed kernel reported (descriptive; null when the child did not get there). */
+  const completionOf = child => {
+    const events = lifecycleOf(child)
+    const search = events.find(record => record.event?.type === 'search_completed')?.event ?? null
+    const target = events.find(record => record.event?.type === 'target_completed')?.event ?? null
+    return search === null && target === null ? null : { searchCompletedAtMs: events.find(record => record.event?.type === 'search_completed')?.elapsedMs ?? null,
+      deliveredCandidates: search?.deliveredCandidates ?? null, exhausted: search?.exhausted ?? null, stoppedByExtent: search?.stoppedByExtent ?? null,
+      stoppedByConsumer: search?.stoppedByConsumer ?? null, targetOutcome: target?.outcome ?? null }
+  }
   const pct = value => (value === null || value === undefined ? '-' : `${(value * 100).toFixed(1)}%`)
   const fx = value => (value === null || value === undefined ? '-' : value.toFixed(3))
 
@@ -286,7 +297,10 @@ try {
           frontierSamples: row.decisionRow.frontierSamples, invalidReasons: row.decisionRow.invalidReasons, a8Valid: row.profileQuality.a8Valid })) },
       byPrimary: primaryRows.map(row => ({
         orientationId: row.orientationId, childOutcome: row.childOutcome, a8ProfileValid: row.a8Reference?.profileValid ?? null, a9ProfileValid: row.decisionRow.valid,
-        serializationShare: { a8: row.a8Reference?.shares?.[serial] ?? null, a9: row.decisionRow.valid ? row.decisionRow.shares[serial] : null },
+        // An A8-invalid profile is never a before value (its share is kept apart as a descriptive value only).
+        serializationShare: { a8: row.a8Reference?.profileValid ? row.a8Reference.shares[serial] : null, a9: row.decisionRow.valid ? row.decisionRow.shares[serial] : null,
+          a8InvalidProfileDescriptive: row.a8Reference && !row.a8Reference.profileValid ? row.a8Reference.shares[serial] : null },
+        lifecycle: { a8: lifecycleTypes(a8Kernel(row.orientationId)), a9: lifecycleTypes(a9Kernel(row.orientationId)), a9Completion: completionOf(a9Kernel(row.orientationId)) },
         a9LargestCategory: row.decisionRow.valid ? row.decisionRow.largestCategory : null,
         frontierCommonPrefix: { commonDepths: row.directTiming.commonDepths, beforeMs: row.directTiming.frontier.beforeMs, afterMs: row.directTiming.frontier.afterMs,
           beforeNsPerCompareCall: row.directTiming.frontier.beforeNsPerCompareCall, afterNsPerCompareCall: row.directTiming.frontier.afterNsPerCompareCall,
