@@ -127,6 +127,7 @@ try {
         kernelMetadata: c.origin === 'original' ? [] : analysis.phase2c26b1KernelMetadata(authority.rows, p.targetWeaponId, keySha256, c.provenance.map(x => x.orientationId)) }
     }),
   }))
+  const portfolioObservation = analysis.phase2c26b1PortfolioObservation(coverage.rows, new Map(portfolio.map(p => [p.targetWeaponId, p.candidates.length])))
   const kernelMetadataCounts = countBy(portfolioRows.flatMap(p => p.candidates.flatMap(c => c.kernelMetadata)), x => x.status)
 
   // 1,657 oracle: post-hoc default-extent portfolio coverage only.
@@ -194,8 +195,8 @@ try {
     runtime: { completedWallMs: { median: median(completedWall), max: completedWall.length ? Math.max(...completedWall) : null } },
     runs: runRows,
     participants: coverage,
-    portfolio: { summary: portfolioSummary, kernelMetadataCounts, targets: portfolioRows },
-    oracleCoverage: { scope: 'default-extent portfolio coverage (B1 runs no extent probe)', totals: oracleCoverage.totals, targets: oracleRows },
+    portfolio: { summary: portfolioSummary, observation: portfolioObservation, kernelMetadataCounts, targets: portfolioRows },
+    oracleCoverage: { scope: 'default-extent portfolio coverage over the Search contexts that ended normally (B1 runs no extent probe; timeout contexts are not Candidate 0)', totals: oracleCoverage.totals, targets: oracleRows },
     c2Historical,
     decisionRule: analysis.PHASE2C26B1_DECISION_RULE,
     semanticFailures,
@@ -205,7 +206,7 @@ try {
   console.log(JSON.stringify({ output: resolve(paths.output), formal, formalRun: formalRunValidation.failures, parity: { baseline: baselineParity.valid, conditions: conditionParity.valid,
     contexts: contextParity.valid, plan: planMatches, prefix: prefix.totals, c2Reference: c2ContextReference.matching !== undefined ? `${c2ContextReference.matching}/${c2ContextReference.orientations}` : c2ContextReference },
     stage1, fallback: fallbackSummary, participants: { total: coverage.total, explored: coverage.explored, unexplored: coverage.unexplored },
-    portfolio: portfolioSummary, oracle: oracleCoverage.totals, semanticFailures, decision }, null, 2))
+    portfolio: portfolioSummary, observation: { ...portfolioObservation, participants: undefined }, oracle: oracleCoverage.totals, semanticFailures, decision }, null, 2))
 } finally {
   await server.close()
 }

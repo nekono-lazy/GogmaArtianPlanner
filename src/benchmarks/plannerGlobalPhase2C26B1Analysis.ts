@@ -17,6 +17,7 @@ import {
   type Phase2C26B1Context,
   type Phase2C26B1ExecutionClass,
   type Phase2C26B1FallbackSelection,
+  type Phase2C26B1ParticipantRow,
   type Phase2C26B1SearchChildRecord,
   type Phase2C26B1SearchTask,
   type Phase2C26B1TargetPortfolio,
@@ -261,9 +262,53 @@ export const PHASE2C26B1_DECISION_RULE = {
 } as const
 
 export const PHASE2C26B1_RECOMMENDATION: Record<Phase2C26B1DecisionCase, string> = {
-  B1_M_measurement_complete: 'default extent portfolioを全participantで測定できた。B2でextent probe・oracle coverage gap・held / late-start不足・single fixed winner reservationの限界を評価する',
+  B1_M_measurement_complete: '全Conflict participantについて少なくとも1つのdefault-extent Search contextが正常終了した（participant measurement coverageの事前登録名称であり、全Search context完走を意味しない）。B2で未完走default context・extent不足・reservation / context制約を切り分け、extent probe・oracle coverage gap・held / late-start不足・single fixed winner reservationの限界を評価する',
   B1_I_measurement_incomplete: 'final diversity / C3判断へ進まず、残participantのSearch completion方法を検討する',
   B1_S_semantic_failure: '次へ進まず原因調査',
+}
+
+// ---------------------------------------------------------------- post-hoc interpretation of the observed portfolio
+
+/**
+ * What the observed portfolio can and cannot say per participant. Explored means at least one Search context of the Target
+ * ended normally; it never means every context of the Target completed. A timeout / OOM / failed context is never read as
+ * Candidate 0, so a portfolio of size 1 confirms "no alternative in the default extent" only when every derived context of
+ * the Target ended normally in Stage 1; with an unfinished context left, the absence is observed, not confirmed.
+ */
+export function phase2c26b1PortfolioObservation(rows: readonly Phase2C26B1ParticipantRow[], portfolioSizeByTarget: ReadonlyMap<string, number>) {
+  const unfinished = (row: Phase2C26B1ParticipantRow) => Object.entries(row.stage1).filter(([label]) => !label.startsWith('completed:')).reduce((sum, [, count]) => sum + count, 0)
+  const classify = (row: Phase2C26B1ParticipantRow) => {
+    const size = portfolioSizeByTarget.get(row.targetWeaponId)
+    if (size === undefined) throw new Error(`No portfolio for participant ${row.targetWeaponId}.`)
+    const unfinishedStage1Contexts = unfinished(row)
+    const allStage1ContextsCompleted = row.tasks > 0 && unfinishedStage1Contexts === 0
+    return { targetWeaponId: row.targetWeaponId, portfolioSize: size, explored: row.explored, exploredBy: row.exploredBy, stage1Tasks: row.tasks, unfinishedStage1Contexts, allStage1ContextsCompleted,
+      /** Only with every derived default-extent context completed is "no alternative" more than an observation. */
+      noAlternativeConfirmedInDefaultExtent: size === 1 && row.explored && allStage1ContextsCompleted }
+  }
+  const participants = rows.map(classify)
+  const singletons = participants.filter(p => p.portfolioSize === 1)
+  const multiple = participants.filter(p => p.portfolioSize > 1)
+  return {
+    note: 'explored = at least one default-extent Search context of the Target ended normally (Candidate 0 included); it is not every context completed. '
+      + 'Timeout contexts are never Candidate 0: portfolio size, diversity and oracle coverage are observations over the contexts that ended normally, '
+      + 'and a size-1 portfolio with an unfinished context does not confirm the absence of an alternative in the default extent.',
+    participantsWithUnfinishedStage1Contexts: participants.filter(p => p.unfinishedStage1Contexts > 0).length,
+    singleton: {
+      participants: singletons.length,
+      withUnfinishedStage1Contexts: singletons.filter(p => p.unfinishedStage1Contexts > 0).length,
+      allStage1ContextsCompleted: singletons.filter(p => p.allStage1ContextsCompleted).length,
+      exploredOnlyByFallback: singletons.filter(p => p.exploredBy === 'coverage_fallback').length,
+      noAlternativeConfirmedInDefaultExtent: singletons.filter(p => p.noAlternativeConfirmedInDefaultExtent).length,
+      unresolvedCauses: ['default-extent context unfinished within the Stage 1 budget', 'outside the Production default extent', 'single fixed winner reservation / context constraint'],
+    },
+    multiple: {
+      participants: multiple.length,
+      withUnfinishedStage1Contexts: multiple.filter(p => p.unfinishedStage1Contexts > 0).length,
+      note: 'The count of participants with portfolio > 1 is the one observed in this run; unfinished contexts may add Candidates, so it is not an upper bound of the default-extent diversity.',
+    },
+    participants,
+  }
 }
 
 export function phase2c26b1Decision(input: { semanticFailures: readonly string[]; participantsTotal: number; participantsExplored: number; unexploredWithOomOrFailure: number }) {

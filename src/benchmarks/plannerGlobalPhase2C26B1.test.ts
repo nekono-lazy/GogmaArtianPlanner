@@ -59,6 +59,7 @@ import {
   phase2c26b1ExecutionSummary,
   phase2c26b1KernelMetadata,
   phase2c26b1KernelPrefixParity,
+  phase2c26b1PortfolioObservation,
   phase2c26b1PortfolioSummary,
   phase2c26b1SemanticFailures,
   validatePhase2C26B1FormalRun,
@@ -363,6 +364,32 @@ describe('Phase 2-C2.6-B1 outcomes and participant coverage', () => {
     expect(coverage).toMatchObject({ total: 5, explored: 2, exploredInStage1: 1, newlyExploredByFallback: ['t2'], unexplored: ['t3', 't4', 't5'], unexploredWithOomOrFailure: ['t4'] })
     expect(coverage.rows.find(r => r.targetWeaponId === 't3')!.unexploredBy).toEqual(['timeout'])
     expect(coverage.rows.find(r => r.targetWeaponId === 't5')).toMatchObject({ contexts: 0, explored: false, unexploredBy: [] })
+  })
+
+  it('never reads an explored participant as every context completed, nor a size-1 portfolio with an unfinished context as a confirmed absence', () => {
+    const contexts = [fakeContext({ orientationId: 'o0', targetWeaponId: 't1' }), fakeContext({ orientationId: 'o1', targetWeaponId: 't1', fixedRouteBuildListEntryIds: ['x'] }),
+      fakeContext({ orientationId: 'o0', workIndex: 1, targetWeaponId: 't2' }), fakeContext({ orientationId: 'o2', targetWeaponId: 't3' }),
+      fakeContext({ orientationId: 'o3', targetWeaponId: 't4' }), fakeContext({ orientationId: 'o4', targetWeaponId: 't4', fixedRouteBuildListEntryIds: ['y'] })]
+    const { tasks } = planPhase2C26B1SearchTasks(contexts)
+    const taskOf = (orientationId: string) => tasks.find(t => t.aliases.some(a => a.orientationId === orientationId) && t.targetWeaponId === contexts.find(c => c.orientationId === orientationId)!.targetWeaponId)!.taskId
+    const t2Task = tasks.find(t => t.targetWeaponId === 't2')!.taskId
+    const stage1 = [completedOutcome(taskOf('o0'), 'stopped_by_extent', 0), failedOutcome(taskOf('o1'), 'timeout'), completedOutcome(t2Task, 'stopped_by_extent', 0),
+      failedOutcome(taskOf('o2'), 'timeout'), completedOutcome(taskOf('o3'), 'consumer_stop', 8), failedOutcome(taskOf('o4'), 'timeout')]
+    const fallback = [completedOutcome(taskOf('o2'), 'stopped_by_extent', 0, 'coverage_fallback')]
+    const coverage = phase2c26b1ParticipantCoverage(['t1', 't2', 't3', 't4'], contexts, tasks, stage1, fallback)
+    // Every participant is explored (measurement coverage 4 / 4) ...
+    expect(coverage).toMatchObject({ total: 4, explored: 4, unexplored: [] })
+    const observation = phase2c26b1PortfolioObservation(coverage.rows, new Map([['t1', 1], ['t2', 1], ['t3', 1], ['t4', 9]]))
+    const byTarget = new Map(observation.participants.map(p => [p.targetWeaponId, p]))
+    // ... but explored is not every context completed.
+    expect(byTarget.get('t1')).toMatchObject({ explored: true, unfinishedStage1Contexts: 1, allStage1ContextsCompleted: false, noAlternativeConfirmedInDefaultExtent: false })
+    expect(byTarget.get('t3')).toMatchObject({ explored: true, exploredBy: 'coverage_fallback', unfinishedStage1Contexts: 1, noAlternativeConfirmedInDefaultExtent: false })
+    expect(byTarget.get('t2')).toMatchObject({ allStage1ContextsCompleted: true, noAlternativeConfirmedInDefaultExtent: true })
+    expect(byTarget.get('t4')).toMatchObject({ portfolioSize: 9, unfinishedStage1Contexts: 1, noAlternativeConfirmedInDefaultExtent: false })
+    expect(observation.singleton).toMatchObject({ participants: 3, withUnfinishedStage1Contexts: 2, allStage1ContextsCompleted: 1, exploredOnlyByFallback: 1, noAlternativeConfirmedInDefaultExtent: 1 })
+    expect(observation.multiple).toMatchObject({ participants: 1, withUnfinishedStage1Contexts: 1 })
+    expect(observation.note).toMatch(/not every context completed/)
+    expect(() => phase2c26b1PortfolioObservation(coverage.rows, new Map())).toThrow(/No portfolio/)
   })
 
   it('selects one deterministic fallback context per unexplored participant, and none for an explored one', () => {
