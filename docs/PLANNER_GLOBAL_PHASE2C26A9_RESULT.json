@@ -1,0 +1,4955 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-A9: frontier_reduction_sort optimization effect (post-hoc analysis)",
+  "analyzedAt": "2026-10-01T02:23:18.068Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A9_RAW.json.local",
+      "bytes": 46806775,
+      "sha256": "8e14d247cc1aac572157910039ddf47aab339c143df114f6aa960ff11aa01013"
+    },
+    "c26aResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A_RESULT.json",
+      "bytes": 318778,
+      "sha256": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171"
+    },
+    "c26a2Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A2_RESULT.json",
+      "bytes": 642128,
+      "sha256": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2"
+    },
+    "c26a3Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A3_RESULT.json",
+      "bytes": 147318,
+      "sha256": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2"
+    },
+    "c26a4Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A4_RESULT.json",
+      "bytes": 95474,
+      "sha256": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529"
+    },
+    "c26a5Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A5_RESULT.json",
+      "bytes": 112320,
+      "sha256": "9d025a20cad23955adcb19fdee92d7c2e70eeb4b2429e875ddf5fb7bbdcd84c3"
+    },
+    "c26a6Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A6_RESULT.json",
+      "bytes": 131550,
+      "sha256": "a1b38a99ab08a99f536cdc675b75705e512622a27a555de38929839ddd81bf96"
+    },
+    "c26a7Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A7_RESULT.json",
+      "bytes": 224997,
+      "sha256": "4c4fddc0b2a769364e9674cad7b6e331566a4a2ba697c27d1a3492f539511922"
+    },
+    "c26a8Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A8_RESULT.json",
+      "bytes": 186087,
+      "sha256": "b80780df44ba1b8c7d074fb26439545a44db9ba39cb6d607b12b5de8c50d8530"
+    },
+    "a8Run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26A8_R2_RAW.json.local",
+      "bytes": 30313479,
+      "sha256": "b5154ff18c88e06687ed016ed2ee9713d4f7878857d0ee609bf8890bd8d4b393"
+    }
+  },
+  "provenance": {
+    "measuredHead": "a89b388faed8b52298822b4c5bdb8764c799f4be",
+    "analysisHead": "5f487cf0d774181039c04a196ccd96027e3a1a2e",
+    "analysisCodeUncommitted": false,
+    "codeChangedSinceMeasuredHead": [
+      "scripts/analyze-planner-global-phase2c26a9.mjs"
+    ],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "analysisCodeChangedSinceMeasuredHead": [
+      "scripts/analyze-planner-global-phase2c26a9.mjs"
+    ],
+    "postHocAllowedFiles": [
+      "scripts/analyze-planner-global-phase2c26a9.mjs",
+      "src/benchmarks/plannerGlobalPhase2C26A9Analysis.ts",
+      "*.test.ts"
+    ],
+    "formal": true,
+    "benchmarkCodeSha256": "96310636de22ffe1205ce884dd7f4e5918341ccb2f91e53dffff5f8d58cfae62",
+    "uncommittedBenchmarkCode": false,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "c26aResultSha256": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "c26aResultRecordedByRunner": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+    "c26aMeasuredHead": "525ed892acb09609fcce1f7589c6751038ae255d",
+    "c26a2ResultSha256": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+    "c26a2ResultRecordedByRunner": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+    "c26a2MeasuredHead": "9bb89e988c619965473cf5ef7a8413d49f97bf4f",
+    "c26a3ResultSha256": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+    "c26a3ResultRecordedByRunner": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+    "c26a3MeasuredHead": "0e2a5fea93882f4c7d121c305d7fa1ad7e3b8bf0",
+    "c26a4ResultSha256": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+    "c26a4ResultRecordedByRunner": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+    "c26a4MeasuredHead": "9fadd93d8e68c074f5784368976d593aeb50021f",
+    "c26a5ResultSha256": "9d025a20cad23955adcb19fdee92d7c2e70eeb4b2429e875ddf5fb7bbdcd84c3",
+    "c26a5ResultRecordedByRunner": "9d025a20cad23955adcb19fdee92d7c2e70eeb4b2429e875ddf5fb7bbdcd84c3",
+    "c26a5MeasuredHead": "a2e3c3ed489c0ff9bceabb2b66ff813ae8068906",
+    "c26a6ResultSha256": "a1b38a99ab08a99f536cdc675b75705e512622a27a555de38929839ddd81bf96",
+    "c26a6ResultRecordedByRunner": "a1b38a99ab08a99f536cdc675b75705e512622a27a555de38929839ddd81bf96",
+    "c26a6MeasuredHead": "65a2a5cb2b811809b6afa1b6a5abdd988f721247",
+    "c26a7ResultSha256": "4c4fddc0b2a769364e9674cad7b6e331566a4a2ba697c27d1a3492f539511922",
+    "c26a7ResultRecordedByRunner": "4c4fddc0b2a769364e9674cad7b6e331566a4a2ba697c27d1a3492f539511922",
+    "c26a7MeasuredHead": "b1319d0b128acf721c267fe948962617fbc7815d",
+    "c26a8ResultSha256": "b80780df44ba1b8c7d074fb26439545a44db9ba39cb6d607b12b5de8c50d8530",
+    "c26a8ResultRecordedByRunner": "b80780df44ba1b8c7d074fb26439545a44db9ba39cb6d607b12b5de8c50d8530",
+    "c26a8MeasuredHead": "32c582cdebc354f7dbeecaf6caedd6c4d02eaec4",
+    "a8RunSha256": "b5154ff18c88e06687ed016ed2ee9713d4f7878857d0ee609bf8890bd8d4b393",
+    "a8RunShaRecordedByA8": "b5154ff18c88e06687ed016ed2ee9713d4f7878857d0ee609bf8890bd8d4b393",
+    "a8RawShaMatches": true,
+    "authorityShaChain": {
+      "c26aShaRecordedByA8": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+      "a2ShaRecordedByA8": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+      "a3ShaRecordedByA8": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+      "a4ShaRecordedByA8": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+      "a5ShaRecordedByA8": "9d025a20cad23955adcb19fdee92d7c2e70eeb4b2429e875ddf5fb7bbdcd84c3",
+      "a6ShaRecordedByA8": "a1b38a99ab08a99f536cdc675b75705e512622a27a555de38929839ddd81bf96",
+      "a7ShaRecordedByA8": "4c4fddc0b2a769364e9674cad7b6e331566a4a2ba697c27d1a3492f539511922",
+      "a8ChainRecordedByA8": {
+        "c26aShaRecordedByA7": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+        "a2ShaRecordedByA7": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+        "a3ShaRecordedByA7": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+        "a4ShaRecordedByA7": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+        "a5ShaRecordedByA7": "9d025a20cad23955adcb19fdee92d7c2e70eeb4b2429e875ddf5fb7bbdcd84c3",
+        "a6ShaRecordedByA7": "a1b38a99ab08a99f536cdc675b75705e512622a27a555de38929839ddd81bf96",
+        "a7ChainRecordedByA7": {
+          "c26aShaRecordedByA6": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+          "a2ShaRecordedByA6": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+          "a3ShaRecordedByA6": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+          "a4ShaRecordedByA6": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+          "a5ShaRecordedByA6": "9d025a20cad23955adcb19fdee92d7c2e70eeb4b2429e875ddf5fb7bbdcd84c3",
+          "a6ChainRecordedByA6": {
+            "c26aShaRecordedByA5": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+            "a2ShaRecordedByA5": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+            "a3ShaRecordedByA5": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+            "a4ShaRecordedByA5": "15e415990fc48a77f2f890a52dd74e13f1ac349622cd266fc6cfe69b87e9d529",
+            "a5ChainRecordedByA5": {
+              "c26aShaRecordedByA4": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+              "a2ShaRecordedByA4": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+              "a3ShaRecordedByA4": "b5562342585899163c8d554bbc25ef6654bab12479ec403cf5d474f799beb3a2",
+              "a4ChainRecordedByA4": {
+                "c26aShaRecordedByA2": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+                "c26aShaRecordedByA3": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+                "c26aShaRecordedByA3ForA2": "dab2f27a1ca94e5db38279e3848f76d033710c38d6e838da227e36e78c67b171",
+                "a2ShaRecordedByA3": "4bde9a5bcd84cc5e29d5dcf666f9eafb6bbb64d5f49aace1b15f36cf913fadc2",
+                "allMatchFilesRead": true
+              },
+              "allMatchFilesRead": true
+            },
+            "allMatchFilesRead": true
+          },
+          "allMatchFilesRead": true
+        },
+        "allMatchFilesRead": true
+      },
+      "allMatchFilesRead": true
+    },
+    "productionChange": {
+      "registered": [
+        "src/domain/search/bonusStream.ts"
+      ],
+      "recordedByRunner": {
+        "registered": [
+          "src/domain/search/bonusStream.ts"
+        ],
+        "a8MeasuredHead": "32c582cdebc354f7dbeecaf6caedd6c4d02eaec4",
+        "sinceA8MeasuredHead": [
+          "src/benchmarks/plannerGlobalPhase2C26A9.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A9.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A9Analysis.ts",
+          "src/domain/search/bonusStream.ts",
+          "src/domain/search/reservedBonusStreamRepresentative.test.ts"
+        ]
+      },
+      "rederivedSinceA8MeasuredHead": {
+        "valid": true,
+        "issues": [],
+        "changed": [
+          "src/benchmarks/plannerGlobalPhase2C26A9.test.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A9.ts",
+          "src/benchmarks/plannerGlobalPhase2C26A9Analysis.ts",
+          "src/domain/search/bonusStream.ts",
+          "src/domain/search/reservedBonusStreamRepresentative.test.ts"
+        ],
+        "productionChanged": [
+          "src/domain/search/bonusStream.ts"
+        ]
+      },
+      "optimizationSourceAtMeasuredHead": {
+        "valid": true,
+        "issues": []
+      }
+    },
+    "profileFileIssues": [],
+    "measuredAt": "2026-10-01T01:01:18.376Z",
+    "runWallMs": 4852588.9746
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296
+  },
+  "productionChange": {
+    "file": "src/domain/search/bonusStream.ts",
+    "function": "createTargetBonusStream > compareReservedRepresentative (held-aware only)",
+    "cache": "reservedBonusStableKeys: WeakMap<RestorationBonusSet, string>, one per createTargetBonusStream() instance (instance-local, never global); key = the five-slot object identity (the Reset / Keep prediction objects the memos hand out); value = the unchanged stableStringify(bonuses) text (never a hash / short key); lazy (computed only when lastResetDepth ties); a cache hit never serializes again; null bonuses are serialized directly",
+    "unchanged": [
+      "the representative rule (lastResetDepth descending, then the stableStringify text ascending through compareStableKeys)",
+      "stableStringify / serializeStable / compareStableKeys",
+      "the ordinary compareRepresentative()",
+      "frontier key (position + familyLayoutKey), Map reduction, compareReservedFrontier and the frontier order",
+      "state generation, raw solutions, canonical history",
+      "Reset / Keep prediction and their memo keys",
+      "reservation window",
+      "Candidate semantics / Search ordering / extent / bounds / Planner / RNG / schema / version / Persistence / UI"
+    ]
+  },
+  "selectionRule": {
+    "source": "Phase 2-C2.6-A8 RESULT selectionValidation.expected (= its selectionRule.primaryOrientationIds = the A7 .. A3 selection; no ID fixed in source)",
+    "registeredCount": 3,
+    "primaryOrientationIds": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "selectedCount": 3,
+    "comparisonSetSource": "Phase 2-C2.6-A8 RESULT summary.decision.validPrimaries (the A8 profile-valid primaries)",
+    "comparisonSet": [
+      "c6-p1",
+      "c14-p0"
+    ]
+  },
+  "a8Authority": {
+    "measuredHead": "32c582cdebc354f7dbeecaf6caedd6c4d02eaec4",
+    "decisionCase": "S_stable_serialization_dominant",
+    "validPrimaryOrientationIds": [
+      "c6-p1",
+      "c14-p0"
+    ],
+    "references": [
+      {
+        "orientationId": "c6-p1",
+        "childOutcome": "timeout",
+        "profileValid": true,
+        "invalidReasons": [],
+        "negativeTimeDeltas": 0,
+        "frontierSamples": 29200,
+        "shares": {
+          "representative_stable_serialization": 0.6590410958904109,
+          "representative_compare_or_inlined": 0.047363013698630135,
+          "frontier_sort": 0.0025684931506849314,
+          "reduction_loop_or_inlined": 0.1668835616438356,
+          "gc": 0.054417808219178083,
+          "other_frontier": 0.06972602739726028
+        },
+        "largestCategory": "representative_stable_serialization",
+        "completedDepths": 765,
+        "generatedStates": 360210544,
+        "frontierStatesAfter": 13755646,
+        "representativeCompareCalls": 346454898
+      },
+      {
+        "orientationId": "c13-p1",
+        "childOutcome": "timeout",
+        "profileValid": false,
+        "invalidReasons": [
+          "CPU profile contains negative timeDeltas: 1"
+        ],
+        "negativeTimeDeltas": 1,
+        "frontierSamples": 24865,
+        "shares": {
+          "representative_stable_serialization": 0.6596018499899458,
+          "representative_compare_or_inlined": 0.04926603659762719,
+          "frontier_sort": 0.0030967223004222805,
+          "reduction_loop_or_inlined": 0.19529459079026745,
+          "gc": 0.08312889603860849,
+          "other_frontier": 0.009611904283128896
+        },
+        "largestCategory": "representative_stable_serialization",
+        "completedDepths": 313,
+        "generatedStates": 426890544,
+        "frontierStatesAfter": 7255313,
+        "representativeCompareCalls": 419635231
+      },
+      {
+        "orientationId": "c14-p0",
+        "childOutcome": "timeout",
+        "profileValid": true,
+        "invalidReasons": [],
+        "negativeTimeDeltas": 0,
+        "frontierSamples": 27441,
+        "shares": {
+          "representative_stable_serialization": 0.6773441201122408,
+          "representative_compare_or_inlined": 0.04562515943296527,
+          "frontier_sort": 0.0033162056776356546,
+          "reduction_loop_or_inlined": 0.20316315003097554,
+          "gc": 0.058088262089573996,
+          "other_frontier": 0.012463102656608724
+        },
+        "largestCategory": "representative_stable_serialization",
+        "completedDepths": 589,
+        "generatedStates": 397170302,
+        "frontierStatesAfter": 10741171,
+        "representativeCompareCalls": 386429131
+      }
+    ],
+    "registered": {
+      "orientations": 3,
+      "childStatus": {
+        "completed": 0,
+        "out_of_memory": 0,
+        "timeout": 3,
+        "process_failure": 0
+      },
+      "semanticFailures": 0,
+      "contractViolations": 0,
+      "decisionCase": "S_stable_serialization_dominant",
+      "decisionCategory": "representative_stable_serialization",
+      "minimumValidPrimaries": 2
+    }
+  },
+  "conditions": {
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "childHeapLimitMb": 8192,
+    "concurrency": 1,
+    "orientationBudgetMs": 1800000,
+    "nodeYield": "setImmediate",
+    "extent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "bounds": {
+      "maxCandidateTrialsPerTarget": 2,
+      "maxPlannerReruns": 8
+    },
+    "researchMaxPlanSteps": 20000,
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "lineage": {
+      "priorFixedBuildListEntryIds": [],
+      "priorExcludedRoutes": []
+    },
+    "nodeFlags": [
+      "--max-old-space-size=8192"
+    ],
+    "freshChildPerOrientation": true,
+    "memorySampleIntervalMs": 250,
+    "heartbeatIntervalMs": 5000,
+    "retry": "none (each orientation once)",
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": true,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "cpuProfiler": true,
+    "diagnostic": false,
+    "conditionNote": "Every A8 primary condition is unchanged (A7 / A6 / A5 conditions, concurrency 1, heap-only Node flags, 30-minute budget, the A7 pair of section observers, the A5 profiler window); the registered difference is the one Production change. No no-inlining diagnostic."
+  },
+  "profilerProbe": {
+    "valid": true,
+    "issues": [],
+    "steps": {
+      "Profiler.enable": {
+        "accepted": true
+      },
+      "Profiler.setSamplingInterval": {
+        "accepted": true
+      },
+      "Profiler.start": {
+        "accepted": true
+      },
+      "Profiler.stop": {
+        "accepted": true
+      }
+    },
+    "requestedSamplingIntervalUs": 10000,
+    "observedMedianIntervalUs": 10365,
+    "keysPresent": {
+      "nodes": true,
+      "samples": true,
+      "timeDeltas": true,
+      "startTime": true,
+      "endTime": true
+    },
+    "samples": 149,
+    "nodes": 26,
+    "checksum": -634,
+    "alignment": {
+      "valid": true,
+      "issues": [],
+      "offsetSpreadMs": 0.0026500001549720764,
+      "maxPairPrecisionMs": 0.01089999999999236,
+      "profileDurationMs": 1583.2979999929667,
+      "negativeDeltas": 0
+    },
+    "scripts": {
+      "file": "probe.scripts.json",
+      "sha256": "80c0c9762549499c5312504128d729a2367c2ce54ec8c0b33b1fe5c8d169182b",
+      "bytes": 3377151,
+      "scriptCount": 987,
+      "sourceMappedCount": 183,
+      "requiredSourceMaps": {
+        "src/domain/search/bonusStream.ts": true,
+        "src/domain/models/hashing.ts": true,
+        "src/domain/search/semanticKeys.ts": true
+      }
+    },
+    "spans": [
+      {
+        "file": "src/domain/search/bonusStream.ts",
+        "functionName": "generateReservedDepth",
+        "startLine": 808,
+        "endLine": 911,
+        "indent": 2
+      },
+      {
+        "file": "src/domain/search/bonusStream.ts",
+        "functionName": "compareReservedRepresentative",
+        "startLine": 707,
+        "endLine": 712,
+        "indent": 2
+      },
+      {
+        "file": "src/domain/search/bonusStream.ts",
+        "functionName": "compareReservedFrontier",
+        "startLine": 714,
+        "endLine": 717,
+        "indent": 2
+      },
+      {
+        "file": "src/domain/models/hashing.ts",
+        "functionName": "stableStringify",
+        "startLine": 68,
+        "endLine": 70,
+        "indent": 0
+      },
+      {
+        "file": "src/domain/models/hashing.ts",
+        "functionName": "serializeStable",
+        "startLine": 22,
+        "endLine": 66,
+        "indent": 0
+      },
+      {
+        "file": "src/domain/search/semanticKeys.ts",
+        "functionName": "compareStableKeys",
+        "startLine": 8,
+        "endLine": 10,
+        "indent": 0
+      }
+    ],
+    "frontierBlock": {
+      "startLine": 887,
+      "endLine": 897
+    },
+    "frameLines": {
+      "stableStringify": {
+        "declarationLine": 68,
+        "frameLines": [
+          68
+        ],
+        "matches": true
+      },
+      "serializeStable": {
+        "declarationLine": 22,
+        "frameLines": [
+          22,
+          22,
+          22,
+          22,
+          22,
+          22
+        ],
+        "matches": true
+      }
+    }
+  },
+  "profilerConfig": {
+    "requestedSamplingIntervalUs": 10000,
+    "warmupMs": 120000,
+    "profileStopMs": 720000,
+    "requestedProfileDurationMs": 600000,
+    "method": "node:inspector Session (main thread): Debugger.enable while the modules load (scriptParsed: url + inline source map), Debugger.disable, then Profiler.enable / setSamplingInterval / start / stop",
+    "windowAnchor": "the kernel's first Search start (first search_runtime section start)"
+  },
+  "registeredRule": {
+    "classification": "the unchanged A8 categories, category rules, function registry, interval reconstruction and profile validity (A8 analysis module, spans and frontier block from the A9 measured HEAD source)",
+    "categories": [
+      "representative_stable_serialization",
+      "representative_compare_or_inlined",
+      "frontier_sort",
+      "reduction_loop_or_inlined",
+      "gc",
+      "other_frontier"
+    ],
+    "categoryRules": [
+      {
+        "priority": 1,
+        "category": "gc",
+        "rule": "the stack contains the V8 \"(garbage collector)\" frame"
+      },
+      {
+        "priority": 2,
+        "category": "other_frontier",
+        "rule": "observer overhead: a Research harness frame (src/benchmarks/, scripts/) deeper than a bonusStream.ts frame (the A3 observer and its durable write, called from the section boundary)"
+      },
+      {
+        "priority": 3,
+        "category": "representative_stable_serialization",
+        "rule": "a serialization frame (stableStringify / serializeStable in hashing.ts, named, or an anonymous frame in their spans) deeper than a compareReservedRepresentative frame; a serialization frame without that ancestor is never this category"
+      },
+      {
+        "priority": 4,
+        "category": "frontier_sort",
+        "rule": "a compareReservedFrontier frame (and whatever it calls, e.g. compareStableKeys); or a native leaf named \"sort\" whose nearest non-native ancestor is generateReservedDepth. V8 folds the Array.prototype.sort builtin loop (and the [...byKey.values()] spread) into the generateReservedDepth frame, so only comparator samples are separable"
+      },
+      {
+        "priority": 5,
+        "category": "representative_compare_or_inlined",
+        "rule": "a compareReservedRepresentative frame without a serialization frame under it: the lastResetDepth comparison, compareStableKeys, a Vite SSR import accessor on the way to stableStringify, and anything JIT-inlined into it without a frame"
+      },
+      {
+        "priority": 6,
+        "category": "reduction_loop_or_inlined",
+        "rule": "the leaf is the generateReservedDepth frame (by name), or a native leaf whose nearest non-native ancestor is it: the key template, Map get / set, the loop, the frontier array spread, the sort builtin loop and anything inlined into generateReservedDepth. Never \"Map cost\" on its own"
+      },
+      {
+        "priority": 7,
+        "category": "other_frontier",
+        "rule": "anything else inside a frontier interval ((program), a serialization frame without a representative ancestor, a Vite SSR loader frame, a native / Node internal frame without the registered ancestor, other Repository frames)"
+      }
+    ],
+    "functionRegistry": [
+      {
+        "role": "reduction_owner",
+        "file": "src/domain/search/bonusStream.ts",
+        "functionName": "generateReservedDepth",
+        "anonymousBySpan": false
+      },
+      {
+        "role": "representative",
+        "file": "src/domain/search/bonusStream.ts",
+        "functionName": "compareReservedRepresentative",
+        "anonymousBySpan": false
+      },
+      {
+        "role": "frontier_comparator",
+        "file": "src/domain/search/bonusStream.ts",
+        "functionName": "compareReservedFrontier",
+        "anonymousBySpan": false
+      },
+      {
+        "role": "serialization",
+        "file": "src/domain/models/hashing.ts",
+        "functionName": "stableStringify",
+        "anonymousBySpan": true
+      },
+      {
+        "role": "serialization",
+        "file": "src/domain/models/hashing.ts",
+        "functionName": "serializeStable",
+        "anonymousBySpan": true
+      },
+      {
+        "role": "key_compare",
+        "file": "src/domain/search/semanticKeys.ts",
+        "functionName": "compareStableKeys",
+        "anonymousBySpan": true
+      }
+    ],
+    "functionSpansAtMeasuredHead": [
+      {
+        "file": "src/domain/search/bonusStream.ts",
+        "functionName": "generateReservedDepth",
+        "startLine": 808,
+        "endLine": 911,
+        "indent": 2
+      },
+      {
+        "file": "src/domain/search/bonusStream.ts",
+        "functionName": "compareReservedRepresentative",
+        "startLine": 707,
+        "endLine": 712,
+        "indent": 2
+      },
+      {
+        "file": "src/domain/search/bonusStream.ts",
+        "functionName": "compareReservedFrontier",
+        "startLine": 714,
+        "endLine": 717,
+        "indent": 2
+      },
+      {
+        "file": "src/domain/models/hashing.ts",
+        "functionName": "stableStringify",
+        "startLine": 68,
+        "endLine": 70,
+        "indent": 0
+      },
+      {
+        "file": "src/domain/models/hashing.ts",
+        "functionName": "serializeStable",
+        "startLine": 22,
+        "endLine": 66,
+        "indent": 0
+      },
+      {
+        "file": "src/domain/search/semanticKeys.ts",
+        "functionName": "compareStableKeys",
+        "startLine": 8,
+        "endLine": 10,
+        "indent": 0
+      }
+    ],
+    "frontierBlockAtMeasuredHead": {
+      "file": "src/domain/search/bonusStream.ts",
+      "startLine": 887,
+      "endLine": 897,
+      "lines": [
+        {
+          "line": 887,
+          "text": "}"
+        },
+        {
+          "line": 888,
+          "text": "const byKey = new Map<string, ReservedBonusState>()"
+        },
+        {
+          "line": 889,
+          "text": "for (const state of generated) {"
+        },
+        {
+          "line": 890,
+          "text": "const key = `${state.position}\\u0000${state.familyLayoutKey}`"
+        },
+        {
+          "line": 891,
+          "text": "const current = byKey.get(key)"
+        },
+        {
+          "line": 892,
+          "text": "if (!current || compareReservedRepresentative(state, current) < 0) byKey.set(key, state)"
+        },
+        {
+          "line": 893,
+          "text": "}"
+        },
+        {
+          "line": 894,
+          "text": "set.frontier = [...byKey.values()].sort(compareReservedFrontier)"
+        },
+        {
+          "line": 895,
+          "text": "if (runtime !== undefined) {"
+        },
+        {
+          "line": 896,
+          "text": "runtime.counts.frontierStatesAfter = set.frontier.length"
+        },
+        {
+          "line": 897,
+          "text": "runtime.phase('phase_completed', 'frontier_reduction_sort')"
+        }
+      ]
+    },
+    "a8ProfileValidity": [
+      "a complete capture (profile, script table with every required source map, window stopped by the registered stop, no error)",
+      "a valid clock alignment (A5 rule) and a valid interval reconstruction (no open interval inside the profile)",
+      "no negative timeDelta in the CPU profile (negativeDeltas = 0; a profile with one is invalid as a whole and never a decision input; no timestamp correction)",
+      "frontier_reduction_sort interval samples >= 5,000",
+      "every named registered frame resolves to its declaration line",
+      "comparator samples outside the intervals <= 1 % of all comparator samples"
+    ],
+    "cacheHelper": {
+      "file": "src/domain/search/bonusStream.ts",
+      "functionName": "reservedBonusStableKey",
+      "note": "not a registered A8 function: a helper sample with a serialization frame below it stays representative_stable_serialization (a cache miss), one without stays representative_compare_or_inlined (the WeakMap lookup); counted descriptively only"
+    },
+    "directTiming": "the leading gogma_depth records equal on both sides (A8 depth identity: Target / stream / start / depth / exhausted / counts); frontier_reduction_sort ms (A3 phaseMs) summed over exactly those, per representative comparison (generatedStates - frontierStatesAfter)",
+    "decision": {
+      "comparisonSet": "the A8 profile-valid primaries (A8 RESULT summary.decision.validPrimaries); an A8-invalid profile is never a before value",
+      "serializationCategory": "representative_stable_serialization",
+      "clearSerializationReductionMaxRatio": 0.5,
+      "clearDirectImprovementMaxRatio": 0.75,
+      "directRegressionMinRatio": 1,
+      "profileValidity": "the unchanged A8 rule (phase2c26a8DecisionRow): complete capture, valid clock alignment and interval reconstruction, negativeDeltas = 0 (no timestamp correction), >= 5,000 frontier samples, every named registered frame at its declaration line, comparator samples outside the intervals <= 1 %",
+      "semanticParity": "every primary (all three): the A6 completed-work prefix, the A8 held-aware depth prefix and the lifecycle prefix against the A8 formal raw run are valid, and the direct timing common prefix is mismatch-free",
+      "order": [
+        "N semantic_mismatch: any primary fails the semantic parity (whatever the performance)",
+        "O optimization_adopted: every comparison-set primary has a valid A9 profile with a serialization share <= 0.5 x its A8 share AND a direct frontier ns / comparison <= 0.75 x its A8 value",
+        "N regression: any comparison-set primary has a direct frontier ns / comparison > 1.0 x its A8 value",
+        "N no_effect: no comparison-set primary has a valid A9 serialization share below its A8 share, or none has a direct frontier ns / comparison below its A8 value",
+        "P partial_or_shifted: otherwise (semantic parity valid, some reduction, but not every O condition)"
+      ]
+    },
+    "recommendations": {
+      "O_optimization_adopted": "optimizationを採用する。次は54 orientation再評価へ進む候補（その前に必要ならA9後のhotspotを確認する）。",
+      "P_partial_or_shifted": "semantic parityは維持され一部改善したが、事前登録のO条件をすべては満たさない。optimization自体の効果とA9後のhotspot（最大category）を整理し、次hotspotを確認してから54 orientationへ進むか判断する。",
+      "N_not_adopted": "このoptimizationをそのまま採用しない（semantic mismatch、効果なし、または明確なregression）。原因を調査する。"
+    }
+  },
+  "selectionValidation": {
+    "valid": true,
+    "expected": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "actual": [
+      "c6-p1",
+      "c13-p1",
+      "c14-p0"
+    ],
+    "missing": [],
+    "duplicate": [],
+    "foreign": [],
+    "notPrimary": [],
+    "metadataMismatches": []
+  },
+  "conditionParity": {
+    "valid": true,
+    "issues": [],
+    "checks": [
+      {
+        "condition": "a8.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a8.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a8.concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a8.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a8.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a8.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a8.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8.nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a8.searchInstrumentation",
+        "current": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": true,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "authority": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": true,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8.profiler.requestedSamplingIntervalUs",
+        "current": 10000,
+        "authority": 10000,
+        "matches": true
+      },
+      {
+        "condition": "profiler.requestedSamplingIntervalUs is registered",
+        "current": 10000,
+        "authority": 10000,
+        "matches": true
+      },
+      {
+        "condition": "a8.profiler.warmupMs",
+        "current": 120000,
+        "authority": 120000,
+        "matches": true
+      },
+      {
+        "condition": "profiler.warmupMs is registered",
+        "current": 120000,
+        "authority": 120000,
+        "matches": true
+      },
+      {
+        "condition": "a8.profiler.profileStopMs",
+        "current": 720000,
+        "authority": 720000,
+        "matches": true
+      },
+      {
+        "condition": "profiler.profileStopMs is registered",
+        "current": 720000,
+        "authority": 720000,
+        "matches": true
+      },
+      {
+        "condition": "a8.profiler.requestedProfileDurationMs",
+        "current": 600000,
+        "authority": 600000,
+        "matches": true
+      },
+      {
+        "condition": "profiler.requestedProfileDurationMs is registered",
+        "current": 600000,
+        "authority": 600000,
+        "matches": true
+      },
+      {
+        "condition": "A8 ran the CPU profiler",
+        "current": true,
+        "authority": true,
+        "matches": true,
+        "note": "Same profiler, same window: the only registered difference from A8 is the Production change (and no diagnostic)."
+      },
+      {
+        "condition": "a8parity.a7.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7.searchInstrumentation",
+        "current": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": true,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "authority": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": true,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.nodeFlags are the A7 primary flags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a8parity.searchInstrumentation is the A7 pair of observers",
+        "current": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": true,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "authority": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": true,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.A7 ran no CPU profiler",
+        "current": false,
+        "authority": false,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.concurrency is 1",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a6.nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.nodeFlags are the A6 primary flags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.A6 searchInstrumentation is the A4 observer alone",
+        "current": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "authority": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.A7 searchInstrumentation",
+        "current": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": true,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "authority": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": true,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a5.nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.nodeFlags are the A4 / A5 primary flags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.A5 searchInstrumentation",
+        "current": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "authority": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.concurrency is 1",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.primary nodeFlags",
+        "current": [
+          "--max-old-space-size=8192"
+        ],
+        "authority": [
+          "--max-old-space-size=8192"
+        ],
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.A4 searchInstrumentation",
+        "current": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "authority": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.concurrency",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.concurrency is 1",
+        "current": 1,
+        "authority": 1,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.concurrency",
+        "current": 1,
+        "authority": 3,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.a2.exportSha256",
+        "current": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "authority": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.a2.childHeapLimitMb",
+        "current": 8192,
+        "authority": 8192,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.a2.orientationBudgetMs",
+        "current": 1800000,
+        "authority": 1800000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.a2.nodeYield",
+        "current": "setImmediate",
+        "authority": "setImmediate",
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.a2.extent",
+        "current": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "authority": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.a2.bounds",
+        "current": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "authority": {
+          "maxCandidateTrialsPerTarget": 2,
+          "maxPlannerReruns": 8
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.a2.researchMaxPlanSteps",
+        "current": 20000,
+        "authority": 20000,
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.a2.calculationContext",
+        "current": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "authority": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "matches": true
+      },
+      {
+        "condition": "a8parity.a7parity.a5.a4.a4.a3.a2.lineage",
+        "current": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "authority": {
+          "priorFixedBuildListEntryIds": [],
+          "priorExcludedRoutes": []
+        },
+        "matches": true
+      }
+    ]
+  },
+  "baselineParity": {
+    "valid": true,
+    "source": "validatePhase2C26A4FormalRun (C2.6-A authority: summary, ordered IDs, identity, metadata)"
+  },
+  "formalSeriesValidation": {
+    "valid": true,
+    "failures": [],
+    "a4FormalRun": {
+      "valid": true,
+      "failures": []
+    },
+    "shaMatches": {
+      "a4": true,
+      "a5": true,
+      "a6": true,
+      "a7": true,
+      "a8": true
+    },
+    "probeValid": true,
+    "profilerConfig": {
+      "requestedSamplingIntervalUs": 10000,
+      "warmupMs": 120000,
+      "profileStopMs": 720000,
+      "requestedProfileDurationMs": 600000
+    },
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": true,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "nodeFlags": [
+      "--max-old-space-size=8192"
+    ],
+    "productionChangeRecordedByRunner": {
+      "valid": true,
+      "issues": [],
+      "changed": [
+        "src/benchmarks/plannerGlobalPhase2C26A9.test.ts",
+        "src/benchmarks/plannerGlobalPhase2C26A9.ts",
+        "src/benchmarks/plannerGlobalPhase2C26A9Analysis.ts",
+        "src/domain/search/bonusStream.ts",
+        "src/domain/search/reservedBonusStreamRepresentative.test.ts"
+      ],
+      "productionChanged": [
+        "src/domain/search/bonusStream.ts"
+      ]
+    },
+    "productionChangeRederived": {
+      "valid": true,
+      "issues": [],
+      "changed": [
+        "src/benchmarks/plannerGlobalPhase2C26A9.test.ts",
+        "src/benchmarks/plannerGlobalPhase2C26A9.ts",
+        "src/benchmarks/plannerGlobalPhase2C26A9Analysis.ts",
+        "src/domain/search/bonusStream.ts",
+        "src/domain/search/reservedBonusStreamRepresentative.test.ts"
+      ],
+      "productionChanged": [
+        "src/domain/search/bonusStream.ts"
+      ]
+    },
+    "optimizationSource": {
+      "valid": true,
+      "issues": []
+    },
+    "a8RawShaMatches": true,
+    "parityCoverage": {
+      "work": [
+        "c6-p1",
+        "c13-p1",
+        "c14-p0"
+      ],
+      "depth": [
+        "c6-p1",
+        "c13-p1",
+        "c14-p0"
+      ],
+      "lifecycle": [
+        "c6-p1",
+        "c13-p1",
+        "c14-p0"
+      ]
+    },
+    "recordIssues": []
+  },
+  "summary": {
+    "orientations": 3,
+    "childStatus": {
+      "completed": 2,
+      "out_of_memory": 0,
+      "timeout": 1,
+      "process_failure": 0
+    },
+    "primarySearchCompleted": 2,
+    "semanticFailures": 0,
+    "contractViolations": 0,
+    "deliveredCandidates": 0,
+    "trialsStarted": 0,
+    "fullPlannerRunsStarted": 0,
+    "profileQuality": {
+      "validPrimaries": 3,
+      "byPrimary": [
+        {
+          "orientationId": "c6-p1",
+          "valid": true,
+          "negativeTimeDeltas": 0,
+          "frontierSamples": 7927,
+          "invalidReasons": [],
+          "a8Valid": true
+        },
+        {
+          "orientationId": "c13-p1",
+          "valid": true,
+          "negativeTimeDeltas": 0,
+          "frontierSamples": 7196,
+          "invalidReasons": [],
+          "a8Valid": false
+        },
+        {
+          "orientationId": "c14-p0",
+          "valid": true,
+          "negativeTimeDeltas": 0,
+          "frontierSamples": 8080,
+          "invalidReasons": [],
+          "a8Valid": true
+        }
+      ]
+    },
+    "byPrimary": [
+      {
+        "orientationId": "c6-p1",
+        "childOutcome": "completed",
+        "a8ProfileValid": true,
+        "a9ProfileValid": true,
+        "serializationShare": {
+          "a8": 0.6590410958904109,
+          "a9": 0.0006307556452630251,
+          "a8InvalidProfileDescriptive": null
+        },
+        "lifecycle": {
+          "a8": [
+            "target_started",
+            "search_started"
+          ],
+          "a9": [
+            "target_started",
+            "search_started",
+            "search_completed",
+            "target_completed",
+            "kernel_completed"
+          ],
+          "a9Completion": {
+            "searchCompletedAtMs": 1242406.7219,
+            "deliveredCandidates": 0,
+            "exhausted": false,
+            "stoppedByExtent": true,
+            "stoppedByConsumer": false,
+            "targetOutcome": "stopped_by_search_extent_bound"
+          }
+        },
+        "a9LargestCategory": "reduction_loop_or_inlined",
+        "frontierCommonPrefix": {
+          "commonDepths": 765,
+          "beforeMs": 959508.9556999989,
+          "afterMs": 126275.33660000042,
+          "beforeNsPerCompareCall": 2769.5061066794296,
+          "afterNsPerCompareCall": 364.4784280117189,
+          "perCompareCallRatio": 0.13160412505777777,
+          "compareCalls": 346454898
+        },
+        "bonusDepthReadCommonPrefix": {
+          "before": 1662476.8739999982,
+          "after": 826269.6556000005,
+          "ratio": 0.497,
+          "beforeNsPerRawSolution": 4615.29,
+          "afterNsPerRawSolution": 2293.85
+        },
+        "wholeRun": {
+          "a8": {
+            "completedDepths": 765,
+            "generatedStates": 360210544,
+            "compareCalls": 346454898,
+            "frontierMs": 959508.9556999989,
+            "completedWorks": 773,
+            "bonusDepthReadMs": 1662476.8739999982
+          },
+          "a9": {
+            "completedDepths": 1872,
+            "generatedStates": 411536452,
+            "compareCalls": 384634148,
+            "frontierMs": 146781.34009999633,
+            "completedWorks": 1880,
+            "bonusDepthReadMs": 1084836.960299998
+          }
+        },
+        "semanticParity": true
+      },
+      {
+        "orientationId": "c13-p1",
+        "childOutcome": "timeout",
+        "a8ProfileValid": false,
+        "a9ProfileValid": true,
+        "serializationShare": {
+          "a8": null,
+          "a9": 0.00027793218454697053,
+          "a8InvalidProfileDescriptive": 0.6596018499899458
+        },
+        "lifecycle": {
+          "a8": [
+            "target_started",
+            "search_started"
+          ],
+          "a9": [
+            "target_started",
+            "search_started"
+          ],
+          "a9Completion": null
+        },
+        "a9LargestCategory": "reduction_loop_or_inlined",
+        "frontierCommonPrefix": {
+          "commonDepths": 313,
+          "beforeMs": 880449.3181000003,
+          "afterMs": 129735.25349999942,
+          "beforeNsPerCompareCall": 2098.130121252856,
+          "afterNsPerCompareCall": 309.1619671466513,
+          "perCompareCallRatio": 0.14735118857263318,
+          "compareCalls": 419635231
+        },
+        "bonusDepthReadCommonPrefix": {
+          "before": 1629980.2674999996,
+          "after": 911578.5146000005,
+          "ratio": 0.5593,
+          "beforeNsPerRawSolution": 3818.26,
+          "afterNsPerRawSolution": 2135.39
+        },
+        "wholeRun": {
+          "a8": {
+            "completedDepths": 313,
+            "generatedStates": 426890544,
+            "compareCalls": 419635231,
+            "frontierMs": 880449.3181000003,
+            "completedWorks": 323,
+            "bonusDepthReadMs": 1629980.2674999996
+          },
+          "a9": {
+            "completedDepths": 572,
+            "generatedStates": 669086237,
+            "compareCalls": 656408968,
+            "frontierMs": 204999.3817000005,
+            "completedWorks": 582,
+            "bonusDepthReadMs": 1543129.5355999994
+          }
+        },
+        "semanticParity": true
+      },
+      {
+        "orientationId": "c14-p0",
+        "childOutcome": "completed",
+        "a8ProfileValid": true,
+        "a9ProfileValid": true,
+        "serializationShare": {
+          "a8": 0.6773441201122408,
+          "a9": 0.00012376237623762376,
+          "a8InvalidProfileDescriptive": null
+        },
+        "lifecycle": {
+          "a8": [
+            "target_started",
+            "search_started"
+          ],
+          "a9": [
+            "target_started",
+            "search_started",
+            "search_completed",
+            "target_completed",
+            "kernel_completed"
+          ],
+          "a9Completion": {
+            "searchCompletedAtMs": 1798303.4394,
+            "deliveredCandidates": 0,
+            "exhausted": false,
+            "stoppedByExtent": true,
+            "stoppedByConsumer": false,
+            "targetOutcome": "stopped_by_search_extent_bound"
+          }
+        },
+        "a9LargestCategory": "reduction_loop_or_inlined",
+        "frontierCommonPrefix": {
+          "commonDepths": 589,
+          "beforeMs": 930623.3319999991,
+          "afterMs": 133261.53350000005,
+          "beforeNsPerCompareCall": 2408.263915279201,
+          "afterNsPerCompareCall": 344.8537462875697,
+          "perCompareCallRatio": 0.14319599446707207,
+          "compareCalls": 386429131
+        },
+        "bonusDepthReadCommonPrefix": {
+          "before": 1647351.0570000012,
+          "after": 843338.6435000001,
+          "ratio": 0.5119,
+          "beforeNsPerRawSolution": 4147.72,
+          "afterNsPerRawSolution": 2123.37
+        },
+        "wholeRun": {
+          "a8": {
+            "completedDepths": 589,
+            "generatedStates": 397170302,
+            "compareCalls": 386429131,
+            "frontierMs": 930623.3319999991,
+            "completedWorks": 597,
+            "bonusDepthReadMs": 1647351.0570000012
+          },
+          "a9": {
+            "completedDepths": 2097,
+            "generatedStates": 602486059,
+            "compareCalls": 571225044,
+            "frontierMs": 213846.02120000488,
+            "completedWorks": 2105,
+            "bonusDepthReadMs": 1569057.2417999993
+          }
+        },
+        "semanticParity": true
+      }
+    ],
+    "decision": {
+      "rule": {
+        "comparisonSet": "the A8 profile-valid primaries (A8 RESULT summary.decision.validPrimaries); an A8-invalid profile is never a before value",
+        "serializationCategory": "representative_stable_serialization",
+        "clearSerializationReductionMaxRatio": 0.5,
+        "clearDirectImprovementMaxRatio": 0.75,
+        "directRegressionMinRatio": 1,
+        "profileValidity": "the unchanged A8 rule (phase2c26a8DecisionRow): complete capture, valid clock alignment and interval reconstruction, negativeDeltas = 0 (no timestamp correction), >= 5,000 frontier samples, every named registered frame at its declaration line, comparator samples outside the intervals <= 1 %",
+        "semanticParity": "every primary (all three): the A6 completed-work prefix, the A8 held-aware depth prefix and the lifecycle prefix against the A8 formal raw run are valid, and the direct timing common prefix is mismatch-free",
+        "order": [
+          "N semantic_mismatch: any primary fails the semantic parity (whatever the performance)",
+          "O optimization_adopted: every comparison-set primary has a valid A9 profile with a serialization share <= 0.5 x its A8 share AND a direct frontier ns / comparison <= 0.75 x its A8 value",
+          "N regression: any comparison-set primary has a direct frontier ns / comparison > 1.0 x its A8 value",
+          "N no_effect: no comparison-set primary has a valid A9 serialization share below its A8 share, or none has a direct frontier ns / comparison below its A8 value",
+          "P partial_or_shifted: otherwise (semantic parity valid, some reduction, but not every O condition)"
+        ]
+      },
+      "comparisonSet": [
+        "c6-p1",
+        "c14-p0"
+      ],
+      "rows": [
+        {
+          "orientationId": "c6-p1",
+          "a8Share": 0.6590410958904109,
+          "a9ProfileValid": true,
+          "a9InvalidReasons": [],
+          "a9Share": 0.0006307556452630251,
+          "shareRatio": 0.000957080900108103,
+          "directPerCompareCallRatio": 0.13160412505777777,
+          "serializationReduced": true,
+          "serializationLower": true,
+          "directImproved": true,
+          "directLower": true,
+          "directRegression": false
+        },
+        {
+          "orientationId": "c14-p0",
+          "a8Share": 0.6773441201122408,
+          "a9ProfileValid": true,
+          "a9InvalidReasons": [],
+          "a9Share": 0.00012376237623762376,
+          "shareRatio": 0.00018271713382130703,
+          "directPerCompareCallRatio": 0.14319599446707207,
+          "serializationReduced": true,
+          "serializationLower": true,
+          "directImproved": true,
+          "directLower": true,
+          "directRegression": false
+        }
+      ],
+      "semanticParity": [
+        {
+          "orientationId": "c6-p1",
+          "valid": true
+        },
+        {
+          "orientationId": "c13-p1",
+          "valid": true
+        },
+        {
+          "orientationId": "c14-p0",
+          "valid": true
+        }
+      ],
+      "case": "O_optimization_adopted",
+      "reason": "every comparison-set primary: serialization share <= 0.5 x A8 and frontier ns / comparison <= 0.75 x A8 (c6-p1: share 0.001 x, direct 0.132 x; c14-p0: share 0.000 x, direct 0.143 x)",
+      "recommendation": "optimizationを採用する。次は54 orientation再評価へ進む候補（その前に必要ならA9後のhotspotを確認する）。"
+    }
+  },
+  "perPrimary": [
+    {
+      "orientationId": "c6-p1",
+      "variant": "jit_default",
+      "childOutcome": "completed",
+      "childWallMs": 1243666.3209,
+      "killedAtMs": null,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "searchOutcome": {
+        "lastHeartbeatElapsedMs": 1242407.1883,
+        "stage": "after_kernel",
+        "counters": {
+          "startedTargets": 1,
+          "completedTargets": 1,
+          "deliveredCandidates": 0,
+          "trialsStarted": 0,
+          "trialsCompleted": 0,
+          "fullPlannerRunsStarted": 0,
+          "fullPlannerRunsCompleted": 0
+        },
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 254,
+          "keepBonuses": 29247
+        },
+        "activeStack": [],
+        "activeGogmaPhase": null,
+        "contractViolations": {
+          "outer": 0,
+          "inner": 0
+        }
+      },
+      "memory": {
+        "samples": 3335,
+        "sampledMaxHeapUsedBytes": 4503350240,
+        "sampledMaxRssBytes": 5177782272,
+        "maxRssKiB": 5062400,
+        "heapSizeLimitBytes": 8791261184
+      },
+      "window": {
+        "requestedSamplingIntervalUs": 10000,
+        "warmupMs": 120000,
+        "profileStopMs": 720000,
+        "requestedProfileDurationMs": 600000,
+        "actualStartElapsedMs": 120348.0108,
+        "actualStopElapsedMs": 720700.6506500001,
+        "actualProfileDurationMs": 600352.6398500002,
+        "startDelayMs": 348.01080000000366,
+        "stopDelayMs": 700.6506500000833,
+        "stoppedBy": "window",
+        "error": null
+      },
+      "scriptTable": {
+        "scriptCount": 987,
+        "sourceMappedCount": 183,
+        "requiredSourceMaps": {
+          "src/domain/search/bonusStream.ts": true,
+          "src/domain/models/hashing.ts": true,
+          "src/domain/search/semanticKeys.ts": true
+        }
+      },
+      "captureIssues": [],
+      "intervalReconstruction": {
+        "valid": true,
+        "issues": [],
+        "intervals": 1872,
+        "phaseStartRecords": 11232,
+        "depthRecords": 1872,
+        "openFrontier": null,
+        "gapToNextBoundaryMs": 22.188000000814554
+      },
+      "profile": {
+        "alignment": {
+          "valid": true,
+          "issues": [],
+          "offsetSpreadMs": 0.015050001442432404,
+          "maxPairPrecisionMs": 0.029799999989336357,
+          "profileDurationMs": 600706.2039999962,
+          "sumDeltasMs": 600706.07,
+          "negativeDeltas": 0
+        },
+        "intervalValidation": {
+          "valid": true,
+          "issues": [],
+          "count": 1872
+        },
+        "allProfileSamples": 58328,
+        "windowSamples": 58328,
+        "observedIntervalUs": {
+          "median": 10346,
+          "mean": 10298.759943766287
+        },
+        "intervalsInProfile": 438,
+        "intervalMsInProfile": 80884.20070000004,
+        "intervalShareOfProfile": 0.1346485189621923,
+        "frontierSamples": 7927,
+        "frontierSampleShare": 0.13590385406665753,
+        "categories": [
+          {
+            "category": "representative_stable_serialization",
+            "samples": 5,
+            "share": 0.0006307556452630251
+          },
+          {
+            "category": "representative_compare_or_inlined",
+            "samples": 188,
+            "share": 0.023716412261889745
+          },
+          {
+            "category": "frontier_sort",
+            "samples": 108,
+            "share": 0.013624321937681342
+          },
+          {
+            "category": "reduction_loop_or_inlined",
+            "samples": 6774,
+            "share": 0.8545477482023464
+          },
+          {
+            "category": "gc",
+            "samples": 583,
+            "share": 0.07354610823766873
+          },
+          {
+            "category": "other_frontier",
+            "samples": 269,
+            "share": 0.03393465371515075
+          }
+        ],
+        "otherReasons": [
+          {
+            "reason": "program",
+            "samples": 266,
+            "share": 0.03355620032799293
+          },
+          {
+            "reason": "observer_overhead",
+            "samples": 3,
+            "share": 0.0003784533871578151
+          }
+        ],
+        "leafKinds": [
+          {
+            "kind": "repository",
+            "samples": 7073,
+            "share": 0.8922669357890753
+          },
+          {
+            "kind": "gc",
+            "samples": 583,
+            "share": 0.07354610823766873
+          },
+          {
+            "kind": "program",
+            "samples": 266,
+            "share": 0.03355620032799293
+          },
+          {
+            "kind": "native",
+            "samples": 3,
+            "share": 0.0003784533871578151
+          },
+          {
+            "kind": "vite_ssr_unmapped",
+            "samples": 2,
+            "share": 0.00025230225810521004
+          }
+        ],
+        "gcSamples": 583,
+        "registeredInclusive": [
+          {
+            "registered": "src/domain/search/bonusStream.ts#generateReservedDepth",
+            "samples": 7076,
+            "share": 0.8926453891762332
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedRepresentative",
+            "samples": 193,
+            "share": 0.02434716790715277
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedFrontier",
+            "samples": 108,
+            "share": 0.013624321937681342
+          },
+          {
+            "registered": "src/domain/models/hashing.ts#stableStringify",
+            "samples": 5,
+            "share": 0.0006307556452630251
+          },
+          {
+            "registered": "src/domain/models/hashing.ts#serializeStable",
+            "samples": 3,
+            "share": 0.0003784533871578151
+          }
+        ],
+        "topLeaves": [
+          {
+            "leaf": "generateReservedDepth@src/domain/search/bonusStream.ts:808",
+            "category": "reduction_loop_or_inlined",
+            "samples": 6774,
+            "share": 0.8545477482023464
+          },
+          {
+            "leaf": "(garbage collector)@-",
+            "category": "gc",
+            "samples": 583,
+            "share": 0.07354610823766873
+          },
+          {
+            "leaf": "(program)@-",
+            "category": "other_frontier",
+            "samples": 266,
+            "share": 0.03355620032799293
+          },
+          {
+            "leaf": "reservedBonusStableKey@src/domain/search/bonusStream.ts:697",
+            "category": "representative_compare_or_inlined",
+            "samples": 122,
+            "share": 0.015390437744417812
+          },
+          {
+            "leaf": "compareReservedFrontier@src/domain/search/bonusStream.ts:714",
+            "category": "frontier_sort",
+            "samples": 108,
+            "share": 0.013624321937681342
+          },
+          {
+            "leaf": "compareReservedRepresentative@src/domain/search/bonusStream.ts:707",
+            "category": "representative_compare_or_inlined",
+            "samples": 64,
+            "share": 0.008073672259366721
+          },
+          {
+            "leaf": "(anonymous)@src/domain/search/semanticKeys.ts",
+            "category": "representative_compare_or_inlined",
+            "samples": 2,
+            "share": 0.00025230225810521004
+          },
+          {
+            "leaf": "stableStringify@src/domain/models/hashing.ts:68",
+            "category": "representative_stable_serialization",
+            "samples": 2,
+            "share": 0.00025230225810521004
+          },
+          {
+            "leaf": "writeString@-",
+            "category": "other_frontier",
+            "samples": 2,
+            "share": 0.00025230225810521004
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/hashing.ts:46",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00012615112905260502
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/hashing.ts:58",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00012615112905260502
+          },
+          {
+            "leaf": "serializeStable@src/domain/models/hashing.ts:22",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00012615112905260502
+          },
+          {
+            "leaf": "writeUtf8String@-",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00012615112905260502
+          }
+        ],
+        "topStacks": [
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808",
+            "category": "reduction_loop_or_inlined",
+            "samples": 6774,
+            "share": 0.8545477482023464
+          },
+          {
+            "stack": "(root)@- > (garbage collector)@-",
+            "category": "gc",
+            "samples": 583,
+            "share": 0.07354610823766873
+          },
+          {
+            "stack": "(root)@- > (program)@-",
+            "category": "other_frontier",
+            "samples": 266,
+            "share": 0.03355620032799293
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > reservedBonusStableKey@src/domain/search/bonusStream.ts:697",
+            "category": "representative_compare_or_inlined",
+            "samples": 122,
+            "share": 0.015390437744417812
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedFrontier@src/domain/search/bonusStream.ts:714",
+            "category": "frontier_sort",
+            "samples": 106,
+            "share": 0.013372019679576132
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707",
+            "category": "representative_compare_or_inlined",
+            "samples": 64,
+            "share": 0.008073672259366721
+          },
+          {
+            "stack": "(root)@- > compareReservedFrontier@src/domain/search/bonusStream.ts:714",
+            "category": "frontier_sort",
+            "samples": 2,
+            "share": 0.00025230225810521004
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > (anonymous)@src/domain/search/semanticKeys.ts",
+            "category": "representative_compare_or_inlined",
+            "samples": 2,
+            "share": 0.00025230225810521004
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > reservedBonusStableKey@src/domain/search/bonusStream.ts:697 > stableStringify@src/domain/models/hashing.ts:68",
+            "category": "representative_stable_serialization",
+            "samples": 2,
+            "share": 0.00025230225810521004
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > phase@src/domain/search/bonusStream.ts:940 > observe@src/benchmarks/plannerGlobalPhase2C26A3.ts:374 > emitGogmaPhaseStarted@D:/GogmaArtianPlanner/scripts/run-planner-global-phase2c26a9.mjs > writeSync@node:fs > writeString@-",
+            "category": "other_frontier",
+            "samples": 2,
+            "share": 0.00025230225810521004
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > reservedBonusStableKey@src/domain/search/bonusStream.ts:697 > stableStringify@src/domain/models/hashing.ts:68 > serializeStable@src/domain/models/hashing.ts:22 > (anonymous)@src/domain/models/hashing.ts:46",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00012615112905260502
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > reservedBonusStableKey@src/domain/search/bonusStream.ts:697 > stableStringify@src/domain/models/hashing.ts:68 > serializeStable@src/domain/models/hashing.ts:22 > (anonymous)@src/domain/models/hashing.ts:46 > serializeStable@src/domain/models/hashing.ts:22",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00012615112905260502
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > phase@src/domain/search/bonusStream.ts:940 > observe@src/benchmarks/plannerGlobalPhase2C26A3.ts:374 > emitGogmaPhaseStarted@D:/GogmaArtianPlanner/scripts/run-planner-global-phase2c26a9.mjs > target.send@node:internal/child_process > target._send@node:internal/child_process > writeUtf8String@-",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00012615112905260502
+          },
+          {
+            "stack": "generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > reservedBonusStableKey@src/domain/search/bonusStream.ts:697 > stableStringify@src/domain/models/hashing.ts:68 > serializeStable@src/domain/models/hashing.ts:22 > (anonymous)@src/domain/models/hashing.ts:46 > serializeStable@src/domain/models/hashing.ts:22 > (anonymous)@src/domain/models/hashing.ts:58",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00012615112905260502
+          }
+        ],
+        "comparatorSamples": {
+          "inside": 301,
+          "outside": 0,
+          "outsideShare": 0
+        },
+        "boundarySamples": 148,
+        "registeredLineMismatches": [],
+        "lineTicks": [
+          {
+            "registered": "src/domain/search/bonusStream.ts#generateReservedDepth",
+            "totalSelfTicks": 12071,
+            "unmappedTicks": 0,
+            "inSpan": [
+              {
+                "line": 808,
+                "text": "async function generateReservedDepth(",
+                "ticks": 842,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 814,
+                "text": "if (set.done) return []",
+                "ticks": 4,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 818,
+                "text": "for (const state of set.frontier) {",
+                "ticks": 3,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 819,
+                "text": "const window = await reservedWindow(set, base, state)",
+                "ticks": 4,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 820,
+                "text": "windows.push(new Set(window.positions))",
+                "ticks": 223,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 821,
+                "text": "window.positions.forEach((position) => positions.add(position))",
+                "ticks": 36,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 844,
+                "text": "for (const position of [...positions].sort((left, right) => left - right)) {",
+                "ticks": 1,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 846,
+                "text": "const parent = depth === 1",
+                "ticks": 46,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 851,
+                "text": "throw new Error(`Held-aware Bonus stream has no Reset chain reaching Gogma ${position} at depth ${depth}.`)",
+                "ticks": 12,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 853,
+                "text": "await execution.checkpoint()",
+                "ticks": 2,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 854,
+                "text": "const bonuses = predictReset(position)",
+                "ticks": 2,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 856,
+                "text": "generated.push(reservedGeneratedState(depth, depth, bonuses, parent?.results ?? null, position, gogmaCounterAfter))",
+                "ticks": 3,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 858,
+                "text": "for (const [index, state] of set.frontier.entries()) {",
+                "ticks": 677,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 859,
+                "text": "if (!keepSupported[index] || !windows[index].has(position) || state.bonuses === null || state.familyLayoutKey === null) continue",
+                "ticks": 1104,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 860,
+                "text": "await execution.checkpoint()",
+                "ticks": 400,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 861,
+                "text": "const bonuses = predictKeep(position, state.familyLayoutKey, state.bonuses)",
+                "ticks": 178,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 862,
+                "text": "const gogmaCounterAfter = engine.advanceGogmaCounter(position, { type: 'keep_bonuses' })",
+                "ticks": 53,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 863,
+                "text": "generated.push(reservedGeneratedState(depth, state.lastResetDepth, bonuses, state.results, position, gogmaCounterAfter))",
+                "ticks": 607,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 874,
+                "text": "runtime?.phase('phase_started', 'solution_materialization')",
+                "ticks": 1,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 876,
+                "text": "const solutions: ReservedBonusStreamSolution[] = generated.map((state) => ({",
+                "ticks": 528,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 889,
+                "text": "for (const state of generated) {",
+                "ticks": 144,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 890,
+                "text": "const key = `${state.position}\\u0000${state.familyLayoutKey}`",
+                "ticks": 819,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 891,
+                "text": "const current = byKey.get(key)",
+                "ticks": 5350,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 892,
+                "text": "if (!current || compareReservedRepresentative(state, current) < 0) byKey.set(key, state)",
+                "ticks": 156,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 894,
+                "text": "set.frontier = [...byKey.values()].sort(compareReservedFrontier)",
+                "ticks": 57,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 910,
+                "text": "return solutions",
+                "ticks": 711,
+                "inFrontierBlock": false
+              }
+            ],
+            "outsideSpanTicks": 108
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedRepresentative",
+            "totalSelfTicks": 64,
+            "unmappedTicks": 0,
+            "inSpan": [
+              {
+                "line": 707,
+                "text": "function compareReservedRepresentative(left: ReservedBonusState, right: ReservedBonusState): number {",
+                "ticks": 2,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 708,
+                "text": "return (",
+                "ticks": 60,
+                "inFrontierBlock": false
+              }
+            ],
+            "outsideSpanTicks": 2
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedFrontier",
+            "totalSelfTicks": 108,
+            "unmappedTicks": 0,
+            "inSpan": [
+              {
+                "line": 714,
+                "text": "function compareReservedFrontier(left: ReservedBonusState, right: ReservedBonusState): number {",
+                "ticks": 2,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 715,
+                "text": "return left.position - right.position ||",
+                "ticks": 60,
+                "inFrontierBlock": false
+              }
+            ],
+            "outsideSpanTicks": 46
+          }
+        ],
+        "reductionLeafCheck": {
+          "inIntervalLeafSamples": 6774,
+          "frontierBlockLineTicks": 6526,
+          "functionStartLineTicks": 842
+        },
+        "workInWindow": {
+          "intervals": 438,
+          "partialIntervals": 0,
+          "generatedStates": 232413581,
+          "frontierStatesAfter": 7691890,
+          "representativeCompareCalls": 224721691
+        }
+      },
+      "cacheHelperSamples": {
+        "withHelper": 127,
+        "helperWithSerialization": 5,
+        "helperWithoutSerialization": 122,
+        "frontierSamples": 7927
+      },
+      "decisionRow": {
+        "orientationId": "c6-p1",
+        "valid": true,
+        "invalidReasons": [],
+        "frontierSamples": 7927,
+        "negativeTimeDeltas": 0,
+        "shares": {
+          "representative_stable_serialization": 0.0006307556452630251,
+          "representative_compare_or_inlined": 0.023716412261889745,
+          "frontier_sort": 0.013624321937681342,
+          "reduction_loop_or_inlined": 0.8545477482023464,
+          "gc": 0.07354610823766873,
+          "other_frontier": 0.03393465371515075
+        },
+        "largestCategory": "reduction_loop_or_inlined",
+        "largestShare": 0.8545477482023464
+      },
+      "profileQuality": {
+        "valid": true,
+        "negativeTimeDeltas": 0,
+        "invalidReasons": [],
+        "a8Valid": true,
+        "formalComparison": true,
+        "note": "A8 profile valid: the formal before / after profile share comparison uses this primary (when the A9 profile is valid too)."
+      },
+      "directTiming": {
+        "valid": true,
+        "issues": [],
+        "beforeDepths": 765,
+        "afterDepths": 1872,
+        "commonDepths": 765,
+        "before": {
+          "depths": 765,
+          "generatedStates": 360210544,
+          "frontierStatesAfter": 13755646,
+          "representativeCompareCalls": 346454898,
+          "sectionMs": {
+            "window_collection": 9759.460000000829,
+            "support_evaluation": 49889.106799996836,
+            "state_generation": 493832.57399999787,
+            "solution_materialization": 147832.08310000238,
+            "frontier_reduction_sort": 959508.9556999989,
+            "exhaustion_scan": 1515.3808999996304
+          },
+          "inclusiveMs": 1662401.2684999974
+        },
+        "after": {
+          "depths": 765,
+          "generatedStates": 360210544,
+          "frontierStatesAfter": 13755646,
+          "representativeCompareCalls": 346454898,
+          "sectionMs": {
+            "window_collection": 9519.049400000702,
+            "support_evaluation": 50371.464500001035,
+            "state_generation": 490832.7032999987,
+            "solution_materialization": 147366.32110000117,
+            "frontier_reduction_sort": 126275.33660000042,
+            "exhaustion_scan": 1765.5323000004478
+          },
+          "inclusiveMs": 826194.410900001
+        },
+        "frontier": {
+          "beforeMs": 959508.9556999989,
+          "afterMs": 126275.33660000042,
+          "ratio": 0.13160412505777777,
+          "beforeNsPerCompareCall": 2769.5061066794296,
+          "afterNsPerCompareCall": 364.4784280117189,
+          "perCompareCallRatio": 0.13160412505777777,
+          "beforeNsPerGeneratedState": 2663.7447783871617,
+          "afterNsPerGeneratedState": 350.55980093686657
+        },
+        "sectionRatios": {
+          "window_collection": 0.9753664034690335,
+          "support_evaluation": 1.009668597634709,
+          "state_generation": 0.9939253284251777,
+          "solution_materialization": 0.9968493848545302,
+          "frontier_reduction_sort": 0.13160412505777777,
+          "exhaustion_scan": 1.1650749326462266
+        }
+      },
+      "wholeRun": {
+        "a9": {
+          "depths": 1872,
+          "generatedStates": 411536452,
+          "frontierStatesAfter": 26902304,
+          "representativeCompareCalls": 384634148,
+          "sectionMs": {
+            "window_collection": 13126.029800002914,
+            "support_evaluation": 99407.96940000296,
+            "state_generation": 584773.5252,
+            "solution_materialization": 237029.65869999962,
+            "frontier_reduction_sort": 146781.34009999633,
+            "exhaustion_scan": 3440.265400002381
+          },
+          "inclusiveMs": 1084675.394900001
+        },
+        "a8": {
+          "depths": 765,
+          "generatedStates": 360210544,
+          "frontierStatesAfter": 13755646,
+          "representativeCompareCalls": 346454898,
+          "sectionMs": {
+            "window_collection": 9759.460000000829,
+            "support_evaluation": 49889.106799996836,
+            "state_generation": 493832.57399999787,
+            "solution_materialization": 147832.08310000238,
+            "frontier_reduction_sort": 959508.9556999989,
+            "exhaustion_scan": 1515.3808999996304
+          },
+          "inclusiveMs": 1662401.2684999974
+        },
+        "a9Work": {
+          "completedWorks": 1880,
+          "bonusDepthWorks": 1872,
+          "rawSolutions": 411536452,
+          "bonusDepthReadMs": 1084836.960299998
+        },
+        "a8Work": {
+          "completedWorks": 773,
+          "bonusDepthWorks": 765,
+          "rawSolutions": 360210544,
+          "bonusDepthReadMs": 1662476.8739999982
+        },
+        "a8SearchOutcome": {
+          "lastHeartbeatElapsedMs": 1794936.3312,
+          "stage": "search_running",
+          "counters": {
+            "startedTargets": 1,
+            "completedTargets": 0,
+            "deliveredCandidates": 0,
+            "trialsStarted": 0,
+            "trialsCompleted": 0,
+            "fullPlannerRunsStarted": 0,
+            "fullPlannerRunsCompleted": 0
+          },
+          "predictionCounts": {
+            "predictNormalArtian": 12,
+            "predictSkills": 5,
+            "resetBonuses": 254,
+            "keepBonuses": 29247
+          },
+          "activeStack": [
+            "search_runtime",
+            "scheduler_step",
+            "scheduler_settle",
+            "bonus_depth_work",
+            "bonus_depth_read"
+          ],
+          "activeGogmaPhase": {
+            "targetOrdinal": 0,
+            "streamIndex": 5,
+            "depth": 95,
+            "phase": "state_generation",
+            "startedMs": 1794936.144,
+            "elapsedMs": 0.18719999981112778
+          },
+          "contractViolations": {
+            "outer": 0,
+            "inner": 0
+          }
+        },
+        "a8Memory": {
+          "samples": 2656,
+          "maxHeapUsedBytes": 4551828280,
+          "maxRssBytes": 5108035584,
+          "lastElapsedMs": 1795103.066
+        }
+      },
+      "semanticParity": {
+        "workPrefix": {
+          "valid": true,
+          "issues": [],
+          "beforeWorks": 773,
+          "afterWorks": 1880,
+          "commonWorks": 773,
+          "firstMismatch": null,
+          "afterCoversBefore": true,
+          "commonBonusWorks": 765,
+          "commonRawSolutions": 360210544,
+          "commonIdealSolutions": 0,
+          "prefixSpanMs": {
+            "before": 1796840.5833,
+            "after": 960484.3860999999,
+            "ratio": 0.5345
+          },
+          "phaseTotalsMs": {
+            "bonus_depth_read": {
+              "before": 1662476.8739999982,
+              "after": 826269.6556000005,
+              "ratio": 0.497,
+              "beforeNsPerRawSolution": 4615.29,
+              "afterNsPerRawSolution": 2293.85
+            },
+            "bonus_notice_scan": {
+              "before": 47794.983199998656,
+              "after": 47828.810099998795,
+              "ratio": 1.0007,
+              "beforeNsPerRawSolution": 132.69,
+              "afterNsPerRawSolution": 132.78
+            },
+            "bonus_ideal_filter": {
+              "before": 86357.39100000027,
+              "after": 86169.52040000084,
+              "ratio": 0.9978,
+              "beforeNsPerRawSolution": 239.74,
+              "afterNsPerRawSolution": 239.22
+            },
+            "bonus_route_materialization": {
+              "before": 77.88450000086141,
+              "after": 79.37970000056657,
+              "ratio": 1.0192,
+              "beforeNsPerRawSolution": 0.22,
+              "afterNsPerRawSolution": 0.22
+            },
+            "bonus_evaluate_sort": {
+              "before": 15.795800000619693,
+              "after": 12.755099998389596,
+              "ratio": 0.8075,
+              "beforeNsPerRawSolution": 0.04,
+              "afterNsPerRawSolution": 0.04
+            },
+            "bonus_channel_publication": {
+              "before": 7.190200002326492,
+              "after": 6.576099999868802,
+              "ratio": 0.9146,
+              "beforeNsPerRawSolution": 0.02,
+              "afterNsPerRawSolution": 0.02
+            },
+            "bonus_depth_advance": {
+              "before": 10.774600000415376,
+              "after": 9.521199998941029,
+              "ratio": 0.8837,
+              "beforeNsPerRawSolution": 0.03,
+              "afterNsPerRawSolution": 0.03
+            },
+            "self": {
+              "before": 54.45669999683196,
+              "after": 61.44100000294475,
+              "ratio": 1.1283,
+              "beforeNsPerRawSolution": 0.15,
+              "afterNsPerRawSolution": 0.17
+            }
+          }
+        },
+        "depthPrefix": {
+          "valid": true,
+          "issues": [],
+          "beforeDepths": 765,
+          "afterDepths": 1872,
+          "commonDepths": 765,
+          "firstMismatch": null,
+          "commonGeneratedStates": 360210544,
+          "commonFrontierStatesAfter": 13755646
+        },
+        "lifecyclePrefix": {
+          "valid": true,
+          "issues": [],
+          "beforeEvents": 2,
+          "afterEvents": 5,
+          "commonEvents": 2,
+          "firstMismatch": null
+        },
+        "directTimingPrefix": {
+          "valid": true,
+          "issues": [],
+          "commonDepths": 765
+        },
+        "valid": true
+      },
+      "a8Reference": {
+        "orientationId": "c6-p1",
+        "childOutcome": "timeout",
+        "profileValid": true,
+        "invalidReasons": [],
+        "negativeTimeDeltas": 0,
+        "frontierSamples": 29200,
+        "shares": {
+          "representative_stable_serialization": 0.6590410958904109,
+          "representative_compare_or_inlined": 0.047363013698630135,
+          "frontier_sort": 0.0025684931506849314,
+          "reduction_loop_or_inlined": 0.1668835616438356,
+          "gc": 0.054417808219178083,
+          "other_frontier": 0.06972602739726028
+        },
+        "largestCategory": "representative_stable_serialization",
+        "completedDepths": 765,
+        "generatedStates": 360210544,
+        "frontierStatesAfter": 13755646,
+        "representativeCompareCalls": 346454898
+      }
+    },
+    {
+      "orientationId": "c13-p1",
+      "variant": "jit_default",
+      "childOutcome": "timeout",
+      "childWallMs": 1800278.2585,
+      "killedAtMs": 1800016.1466,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "searchOutcome": {
+        "lastHeartbeatElapsedMs": 1798742.7597999999,
+        "stage": "search_running",
+        "counters": {
+          "startedTargets": 1,
+          "completedTargets": 0,
+          "deliveredCandidates": 0,
+          "trialsStarted": 0,
+          "trialsCompleted": 0,
+          "fullPlannerRunsStarted": 0,
+          "fullPlannerRunsCompleted": 0
+        },
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 4,
+          "resetBonuses": 253,
+          "keepBonuses": 28218
+        },
+        "activeStack": [
+          "search_runtime",
+          "scheduler_step",
+          "scheduler_settle",
+          "bonus_depth_work",
+          "bonus_depth_read"
+        ],
+        "activeGogmaPhase": {
+          "targetOrdinal": 0,
+          "streamIndex": 2,
+          "depth": 115,
+          "phase": "state_generation",
+          "startedMs": 1798742.6401,
+          "elapsedMs": 0.11969999992288649
+        },
+        "contractViolations": {
+          "outer": 0,
+          "inner": 0
+        }
+      },
+      "memory": {
+        "samples": 4328,
+        "maxHeapUsedBytes": 5146850232,
+        "maxRssBytes": 5535522816,
+        "lastElapsedMs": 1798894.4131
+      },
+      "window": {
+        "requestedSamplingIntervalUs": 10000,
+        "warmupMs": 120000,
+        "profileStopMs": 720000,
+        "requestedProfileDurationMs": 600000,
+        "actualStartElapsedMs": 120759.83870000001,
+        "actualStopElapsedMs": 720000.0825,
+        "actualProfileDurationMs": 599240.2438,
+        "startDelayMs": 759.8387000000075,
+        "stopDelayMs": 0.08250000001862645,
+        "stoppedBy": "window",
+        "error": null
+      },
+      "scriptTable": {
+        "scriptCount": 987,
+        "sourceMappedCount": 183,
+        "requiredSourceMaps": {
+          "src/domain/search/bonusStream.ts": true,
+          "src/domain/models/hashing.ts": true,
+          "src/domain/search/semanticKeys.ts": true
+        }
+      },
+      "captureIssues": [],
+      "intervalReconstruction": {
+        "valid": true,
+        "issues": [],
+        "intervals": 572,
+        "phaseStartRecords": 3435,
+        "depthRecords": 572,
+        "openFrontier": null,
+        "gapToNextBoundaryMs": 10.676400000203557
+      },
+      "profile": {
+        "alignment": {
+          "valid": true,
+          "issues": [],
+          "offsetSpreadMs": 0.016300000250339508,
+          "maxPairPrecisionMs": 0.03280000000086147,
+          "profileDurationMs": 600004.0370000005,
+          "sumDeltasMs": 600003.897,
+          "negativeDeltas": 0
+        },
+        "intervalValidation": {
+          "valid": true,
+          "issues": [],
+          "count": 572
+        },
+        "allProfileSamples": 57977,
+        "windowSamples": 57977,
+        "observedIntervalUs": {
+          "median": 10352,
+          "mean": 10348.998689135347
+        },
+        "intervalsInProfile": 166,
+        "intervalMsInProfile": 73889.36600000043,
+        "intervalShareOfProfile": 0.12314811475176854,
+        "frontierSamples": 7196,
+        "frontierSampleShare": 0.12411818479741966,
+        "categories": [
+          {
+            "category": "representative_stable_serialization",
+            "samples": 2,
+            "share": 0.00027793218454697053
+          },
+          {
+            "category": "representative_compare_or_inlined",
+            "samples": 132,
+            "share": 0.018343524180100056
+          },
+          {
+            "category": "frontier_sort",
+            "samples": 114,
+            "share": 0.01584213451917732
+          },
+          {
+            "category": "reduction_loop_or_inlined",
+            "samples": 6333,
+            "share": 0.8800722623679822
+          },
+          {
+            "category": "gc",
+            "samples": 447,
+            "share": 0.06211784324624792
+          },
+          {
+            "category": "other_frontier",
+            "samples": 168,
+            "share": 0.023346303501945526
+          }
+        ],
+        "otherReasons": [
+          {
+            "reason": "program",
+            "samples": 165,
+            "share": 0.022929405225125068
+          },
+          {
+            "reason": "observer_overhead",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "reason": "other_repository",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "reason": "vite_loader",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          }
+        ],
+        "leafKinds": [
+          {
+            "kind": "repository",
+            "samples": 6581,
+            "share": 0.9145358532518065
+          },
+          {
+            "kind": "gc",
+            "samples": 447,
+            "share": 0.06211784324624792
+          },
+          {
+            "kind": "program",
+            "samples": 165,
+            "share": 0.022929405225125068
+          },
+          {
+            "kind": "vite_ssr_unmapped",
+            "samples": 2,
+            "share": 0.00027793218454697053
+          },
+          {
+            "kind": "native",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          }
+        ],
+        "gcSamples": 447,
+        "registeredInclusive": [
+          {
+            "registered": "src/domain/search/bonusStream.ts#generateReservedDepth",
+            "samples": 6582,
+            "share": 0.91467481934408
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedRepresentative",
+            "samples": 134,
+            "share": 0.018621456364647026
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedFrontier",
+            "samples": 114,
+            "share": 0.01584213451917732
+          },
+          {
+            "registered": "src/domain/search/semanticKeys.ts#compareStableKeys",
+            "samples": 41,
+            "share": 0.005697609783212896
+          },
+          {
+            "registered": "src/domain/models/hashing.ts#serializeStable",
+            "samples": 2,
+            "share": 0.00027793218454697053
+          },
+          {
+            "registered": "src/domain/models/hashing.ts#stableStringify",
+            "samples": 2,
+            "share": 0.00027793218454697053
+          }
+        ],
+        "topLeaves": [
+          {
+            "leaf": "generateReservedDepth@src/domain/search/bonusStream.ts:808",
+            "category": "reduction_loop_or_inlined",
+            "samples": 6333,
+            "share": 0.8800722623679822
+          },
+          {
+            "leaf": "(garbage collector)@-",
+            "category": "gc",
+            "samples": 447,
+            "share": 0.06211784324624792
+          },
+          {
+            "leaf": "(program)@-",
+            "category": "other_frontier",
+            "samples": 165,
+            "share": 0.022929405225125068
+          },
+          {
+            "leaf": "compareReservedFrontier@src/domain/search/bonusStream.ts:714",
+            "category": "frontier_sort",
+            "samples": 73,
+            "share": 0.010144524735964425
+          },
+          {
+            "leaf": "reservedBonusStableKey@src/domain/search/bonusStream.ts:697",
+            "category": "representative_compare_or_inlined",
+            "samples": 70,
+            "share": 0.009727626459143969
+          },
+          {
+            "leaf": "compareReservedRepresentative@src/domain/search/bonusStream.ts:707",
+            "category": "representative_compare_or_inlined",
+            "samples": 61,
+            "share": 0.0084769316286826
+          },
+          {
+            "leaf": "compareStableKeys@src/domain/search/semanticKeys.ts:8",
+            "category": "frontier_sort",
+            "samples": 41,
+            "share": 0.005697609783212896
+          },
+          {
+            "leaf": "(anonymous)@src/domain/search/semanticKeys.ts",
+            "category": "representative_compare_or_inlined",
+            "samples": 2,
+            "share": 0.00027793218454697053
+          },
+          {
+            "leaf": "(anonymous)@src/domain/models/hashing.ts:58",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "leaf": "phase@src/domain/search/bonusStream.ts:940",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "leaf": "serializeStable@src/domain/models/hashing.ts:22",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "leaf": "writeString@-",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          }
+        ],
+        "topStacks": [
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808",
+            "category": "reduction_loop_or_inlined",
+            "samples": 6333,
+            "share": 0.8800722623679822
+          },
+          {
+            "stack": "(root)@- > (garbage collector)@-",
+            "category": "gc",
+            "samples": 447,
+            "share": 0.06211784324624792
+          },
+          {
+            "stack": "(root)@- > (program)@-",
+            "category": "other_frontier",
+            "samples": 165,
+            "share": 0.022929405225125068
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedFrontier@src/domain/search/bonusStream.ts:714",
+            "category": "frontier_sort",
+            "samples": 73,
+            "share": 0.010144524735964425
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > reservedBonusStableKey@src/domain/search/bonusStream.ts:697",
+            "category": "representative_compare_or_inlined",
+            "samples": 70,
+            "share": 0.009727626459143969
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707",
+            "category": "representative_compare_or_inlined",
+            "samples": 61,
+            "share": 0.0084769316286826
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedFrontier@src/domain/search/bonusStream.ts:714 > compareStableKeys@src/domain/search/semanticKeys.ts:8",
+            "category": "frontier_sort",
+            "samples": 40,
+            "share": 0.005558643690939411
+          },
+          {
+            "stack": "(root)@- > (anonymous)@src/domain/search/semanticKeys.ts",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "stack": "(root)@- > compareReservedFrontier@src/domain/search/bonusStream.ts:714 > compareStableKeys@src/domain/search/semanticKeys.ts:8",
+            "category": "frontier_sort",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > (anonymous)@src/domain/search/semanticKeys.ts",
+            "category": "representative_compare_or_inlined",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > reservedBonusStableKey@src/domain/search/bonusStream.ts:697 > stableStringify@src/domain/models/hashing.ts:68 > serializeStable@src/domain/models/hashing.ts:22 > (anonymous)@src/domain/models/hashing.ts:46 > serializeStable@src/domain/models/hashing.ts:22",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > phase@src/domain/search/bonusStream.ts:940",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > phase@src/domain/search/bonusStream.ts:940 > observe@src/benchmarks/plannerGlobalPhase2C26A3.ts:374 > emitGogmaPhaseStarted@D:/GogmaArtianPlanner/scripts/run-planner-global-phase2c26a9.mjs > writeSync@node:fs > writeString@-",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          },
+          {
+            "stack": "generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > reservedBonusStableKey@src/domain/search/bonusStream.ts:697 > stableStringify@src/domain/models/hashing.ts:68 > serializeStable@src/domain/models/hashing.ts:22 > (anonymous)@src/domain/models/hashing.ts:46 > serializeStable@src/domain/models/hashing.ts:22 > (anonymous)@src/domain/models/hashing.ts:58",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00013896609227348526
+          }
+        ],
+        "comparatorSamples": {
+          "inside": 248,
+          "outside": 0,
+          "outsideShare": 0
+        },
+        "boundarySamples": 60,
+        "registeredLineMismatches": [],
+        "lineTicks": [
+          {
+            "registered": "src/domain/search/bonusStream.ts#generateReservedDepth",
+            "totalSelfTicks": 11757,
+            "unmappedTicks": 0,
+            "inSpan": [
+              {
+                "line": 808,
+                "text": "async function generateReservedDepth(",
+                "ticks": 578,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 814,
+                "text": "if (set.done) return []",
+                "ticks": 5,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 818,
+                "text": "for (const state of set.frontier) {",
+                "ticks": 3,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 819,
+                "text": "const window = await reservedWindow(set, base, state)",
+                "ticks": 2,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 820,
+                "text": "windows.push(new Set(window.positions))",
+                "ticks": 166,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 821,
+                "text": "window.positions.forEach((position) => positions.add(position))",
+                "ticks": 22,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 844,
+                "text": "for (const position of [...positions].sort((left, right) => left - right)) {",
+                "ticks": 1,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 846,
+                "text": "const parent = depth === 1",
+                "ticks": 12,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 851,
+                "text": "throw new Error(`Held-aware Bonus stream has no Reset chain reaching Gogma ${position} at depth ${depth}.`)",
+                "ticks": 6,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 856,
+                "text": "generated.push(reservedGeneratedState(depth, depth, bonuses, parent?.results ?? null, position, gogmaCounterAfter))",
+                "ticks": 1,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 858,
+                "text": "for (const [index, state] of set.frontier.entries()) {",
+                "ticks": 503,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 859,
+                "text": "if (!keepSupported[index] || !windows[index].has(position) || state.bonuses === null || state.familyLayoutKey === null) continue",
+                "ticks": 1443,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 860,
+                "text": "await execution.checkpoint()",
+                "ticks": 436,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 861,
+                "text": "const bonuses = predictKeep(position, state.familyLayoutKey, state.bonuses)",
+                "ticks": 171,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 862,
+                "text": "const gogmaCounterAfter = engine.advanceGogmaCounter(position, { type: 'keep_bonuses' })",
+                "ticks": 84,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 863,
+                "text": "generated.push(reservedGeneratedState(depth, state.lastResetDepth, bonuses, state.results, position, gogmaCounterAfter))",
+                "ticks": 722,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 876,
+                "text": "const solutions: ReservedBonusStreamSolution[] = generated.map((state) => ({",
+                "ticks": 526,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 889,
+                "text": "for (const state of generated) {",
+                "ticks": 120,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 890,
+                "text": "const key = `${state.position}\\u0000${state.familyLayoutKey}`",
+                "ticks": 435,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 891,
+                "text": "const current = byKey.get(key)",
+                "ticks": 5479,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 892,
+                "text": "if (!current || compareReservedRepresentative(state, current) < 0) byKey.set(key, state)",
+                "ticks": 141,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 894,
+                "text": "set.frontier = [...byKey.values()].sort(compareReservedFrontier)",
+                "ticks": 15,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 910,
+                "text": "return solutions",
+                "ticks": 817,
+                "inFrontierBlock": false
+              }
+            ],
+            "outsideSpanTicks": 69
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedRepresentative",
+            "totalSelfTicks": 61,
+            "unmappedTicks": 0,
+            "inSpan": [
+              {
+                "line": 707,
+                "text": "function compareReservedRepresentative(left: ReservedBonusState, right: ReservedBonusState): number {",
+                "ticks": 1,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 708,
+                "text": "return (",
+                "ticks": 60,
+                "inFrontierBlock": false
+              }
+            ],
+            "outsideSpanTicks": 0
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedFrontier",
+            "totalSelfTicks": 73,
+            "unmappedTicks": 0,
+            "inSpan": [
+              {
+                "line": 715,
+                "text": "return left.position - right.position ||",
+                "ticks": 73,
+                "inFrontierBlock": false
+              }
+            ],
+            "outsideSpanTicks": 0
+          }
+        ],
+        "reductionLeafCheck": {
+          "inIntervalLeafSamples": 6333,
+          "frontierBlockLineTicks": 6190,
+          "functionStartLineTicks": 578
+        },
+        "workInWindow": {
+          "intervals": 166,
+          "partialIntervals": 0,
+          "generatedStates": 242028136,
+          "frontierStatesAfter": 3988453,
+          "representativeCompareCalls": 238039683
+        }
+      },
+      "cacheHelperSamples": {
+        "withHelper": 72,
+        "helperWithSerialization": 2,
+        "helperWithoutSerialization": 70,
+        "frontierSamples": 7196
+      },
+      "decisionRow": {
+        "orientationId": "c13-p1",
+        "valid": true,
+        "invalidReasons": [],
+        "frontierSamples": 7196,
+        "negativeTimeDeltas": 0,
+        "shares": {
+          "representative_stable_serialization": 0.00027793218454697053,
+          "representative_compare_or_inlined": 0.018343524180100056,
+          "frontier_sort": 0.01584213451917732,
+          "reduction_loop_or_inlined": 0.8800722623679822,
+          "gc": 0.06211784324624792,
+          "other_frontier": 0.023346303501945526
+        },
+        "largestCategory": "reduction_loop_or_inlined",
+        "largestShare": 0.8800722623679822
+      },
+      "profileQuality": {
+        "valid": true,
+        "negativeTimeDeltas": 0,
+        "invalidReasons": [],
+        "a8Valid": false,
+        "formalComparison": false,
+        "note": "A8 profile invalid: never a before value; the A9 share (when valid) is an A9-only after value."
+      },
+      "directTiming": {
+        "valid": true,
+        "issues": [],
+        "beforeDepths": 313,
+        "afterDepths": 572,
+        "commonDepths": 313,
+        "before": {
+          "depths": 313,
+          "generatedStates": 426890544,
+          "frontierStatesAfter": 7255313,
+          "representativeCompareCalls": 419635231,
+          "sectionMs": {
+            "window_collection": 11363.533000000181,
+            "support_evaluation": 28285.75999999851,
+            "state_generation": 563290.337799999,
+            "solution_materialization": 145313.54930000007,
+            "frontier_reduction_sort": 880449.3181000003,
+            "exhaustion_scan": 1197.5719999981716
+          },
+          "inclusiveMs": 1629932.150699999
+        },
+        "after": {
+          "depths": 313,
+          "generatedStates": 426890544,
+          "frontierStatesAfter": 7255313,
+          "representativeCompareCalls": 419635231,
+          "sectionMs": {
+            "window_collection": 10804.945799999452,
+            "support_evaluation": 27407.013499999244,
+            "state_generation": 602699.3867999999,
+            "solution_materialization": 139749.9262999989,
+            "frontier_reduction_sort": 129735.25349999942,
+            "exhaustion_scan": 1113.4493999993751
+          },
+          "inclusiveMs": 911543.1088000016
+        },
+        "frontier": {
+          "beforeMs": 880449.3181000003,
+          "afterMs": 129735.25349999942,
+          "ratio": 0.14735118857263316,
+          "beforeNsPerCompareCall": 2098.130121252856,
+          "afterNsPerCompareCall": 309.1619671466513,
+          "perCompareCallRatio": 0.14735118857263318,
+          "beforeNsPerGeneratedState": 2062.4708850426077,
+          "afterNsPerGeneratedState": 303.9075363074789
+        },
+        "sectionRatios": {
+          "window_collection": 0.9508438792758624,
+          "support_evaluation": 0.9689332547543601,
+          "state_generation": 1.069962231473591,
+          "solution_materialization": 0.961712978405647,
+          "frontier_reduction_sort": 0.14735118857263316,
+          "exhaustion_scan": 0.9297557057121202
+        }
+      },
+      "wholeRun": {
+        "a9": {
+          "depths": 572,
+          "generatedStates": 669086237,
+          "frontierStatesAfter": 12677269,
+          "representativeCompareCalls": 656408968,
+          "sectionMs": {
+            "window_collection": 16518.773500001105,
+            "support_evaluation": 48657.65140000038,
+            "state_generation": 932459.5466999981,
+            "solution_materialization": 338597.0165999982,
+            "frontier_reduction_sort": 204999.3817000005,
+            "exhaustion_scan": 1769.1058999989505
+          },
+          "inclusiveMs": 1543061.1709000007
+        },
+        "a8": {
+          "depths": 313,
+          "generatedStates": 426890544,
+          "frontierStatesAfter": 7255313,
+          "representativeCompareCalls": 419635231,
+          "sectionMs": {
+            "window_collection": 11363.533000000181,
+            "support_evaluation": 28285.75999999851,
+            "state_generation": 563290.337799999,
+            "solution_materialization": 145313.54930000007,
+            "frontier_reduction_sort": 880449.3181000003,
+            "exhaustion_scan": 1197.5719999981716
+          },
+          "inclusiveMs": 1629932.150699999
+        },
+        "a9Work": {
+          "completedWorks": 582,
+          "bonusDepthWorks": 572,
+          "rawSolutions": 669086237,
+          "bonusDepthReadMs": 1543129.5355999994
+        },
+        "a8Work": {
+          "completedWorks": 323,
+          "bonusDepthWorks": 313,
+          "rawSolutions": 426890544,
+          "bonusDepthReadMs": 1629980.2674999996
+        },
+        "a8SearchOutcome": {
+          "lastHeartbeatElapsedMs": 1797655.3354,
+          "stage": "search_running",
+          "counters": {
+            "startedTargets": 1,
+            "completedTargets": 0,
+            "deliveredCandidates": 0,
+            "trialsStarted": 0,
+            "trialsCompleted": 0,
+            "fullPlannerRunsStarted": 0,
+            "fullPlannerRunsCompleted": 0
+          },
+          "predictionCounts": {
+            "predictNormalArtian": 12,
+            "predictSkills": 4,
+            "resetBonuses": 253,
+            "keepBonuses": 28218
+          },
+          "activeStack": [
+            "search_runtime",
+            "scheduler_step",
+            "scheduler_settle",
+            "bonus_depth_work",
+            "bonus_depth_read"
+          ],
+          "activeGogmaPhase": {
+            "targetOrdinal": 0,
+            "streamIndex": 3,
+            "depth": 62,
+            "phase": "state_generation",
+            "startedMs": 1797655.1428,
+            "elapsedMs": 0.1925999999511987
+          },
+          "contractViolations": {
+            "outer": 0,
+            "inner": 0
+          }
+        },
+        "a8Memory": {
+          "samples": 2682,
+          "maxHeapUsedBytes": 5116494360,
+          "maxRssBytes": 5508939776,
+          "lastElapsedMs": 1797812.3277
+        }
+      },
+      "semanticParity": {
+        "workPrefix": {
+          "valid": true,
+          "issues": [],
+          "beforeWorks": 323,
+          "afterWorks": 582,
+          "commonWorks": 323,
+          "firstMismatch": null,
+          "afterCoversBefore": true,
+          "commonBonusWorks": 313,
+          "commonRawSolutions": 426890544,
+          "commonIdealSolutions": 0,
+          "prefixSpanMs": {
+            "before": 1795860.1959000002,
+            "after": 1073147.7856,
+            "ratio": 0.5976
+          },
+          "phaseTotalsMs": {
+            "bonus_depth_read": {
+              "before": 1629980.2674999996,
+              "after": 911578.5146000005,
+              "ratio": 0.5593,
+              "beforeNsPerRawSolution": 3818.26,
+              "afterNsPerRawSolution": 2135.39
+            },
+            "bonus_notice_scan": {
+              "before": 61148.60160000252,
+              "after": 59428.98239999978,
+              "ratio": 0.9719,
+              "beforeNsPerRawSolution": 143.24,
+              "afterNsPerRawSolution": 139.21
+            },
+            "bonus_ideal_filter": {
+              "before": 104638.15870000081,
+              "after": 102045.37620000022,
+              "ratio": 0.9752,
+              "beforeNsPerRawSolution": 245.12,
+              "afterNsPerRawSolution": 239.04
+            },
+            "bonus_route_materialization": {
+              "before": 29.23250000148846,
+              "after": 31.845700001674686,
+              "ratio": 1.0894,
+              "beforeNsPerRawSolution": 0.07,
+              "afterNsPerRawSolution": 0.07
+            },
+            "bonus_evaluate_sort": {
+              "before": 6.97200000022076,
+              "after": 5.566599998625406,
+              "ratio": 0.7984,
+              "beforeNsPerRawSolution": 0.02,
+              "afterNsPerRawSolution": 0.01
+            },
+            "bonus_channel_publication": {
+              "before": 3.1812000001873457,
+              "after": 3.139600000788505,
+              "ratio": 0.9869,
+              "beforeNsPerRawSolution": 0.01,
+              "afterNsPerRawSolution": 0.01
+            },
+            "bonus_depth_advance": {
+              "before": 5.073399999081175,
+              "after": 4.921699999222255,
+              "ratio": 0.9701,
+              "beforeNsPerRawSolution": 0.01,
+              "afterNsPerRawSolution": 0.01
+            },
+            "self": {
+              "before": 26.92479999687066,
+              "after": 27.157099998532885,
+              "ratio": 1.0086,
+              "beforeNsPerRawSolution": 0.06,
+              "afterNsPerRawSolution": 0.06
+            }
+          }
+        },
+        "depthPrefix": {
+          "valid": true,
+          "issues": [],
+          "beforeDepths": 313,
+          "afterDepths": 572,
+          "commonDepths": 313,
+          "firstMismatch": null,
+          "commonGeneratedStates": 426890544,
+          "commonFrontierStatesAfter": 7255313
+        },
+        "lifecyclePrefix": {
+          "valid": true,
+          "issues": [],
+          "beforeEvents": 2,
+          "afterEvents": 2,
+          "commonEvents": 2,
+          "firstMismatch": null
+        },
+        "directTimingPrefix": {
+          "valid": true,
+          "issues": [],
+          "commonDepths": 313
+        },
+        "valid": true
+      },
+      "a8Reference": {
+        "orientationId": "c13-p1",
+        "childOutcome": "timeout",
+        "profileValid": false,
+        "invalidReasons": [
+          "CPU profile contains negative timeDeltas: 1"
+        ],
+        "negativeTimeDeltas": 1,
+        "frontierSamples": 24865,
+        "shares": {
+          "representative_stable_serialization": 0.6596018499899458,
+          "representative_compare_or_inlined": 0.04926603659762719,
+          "frontier_sort": 0.0030967223004222805,
+          "reduction_loop_or_inlined": 0.19529459079026745,
+          "gc": 0.08312889603860849,
+          "other_frontier": 0.009611904283128896
+        },
+        "largestCategory": "representative_stable_serialization",
+        "completedDepths": 313,
+        "generatedStates": 426890544,
+        "frontierStatesAfter": 7255313,
+        "representativeCompareCalls": 419635231
+      }
+    },
+    {
+      "orientationId": "c14-p0",
+      "variant": "jit_default",
+      "childOutcome": "completed",
+      "childWallMs": 1799622.8699999996,
+      "killedAtMs": null,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "searchOutcome": {
+        "lastHeartbeatElapsedMs": 1798303.7358000001,
+        "stage": "after_kernel",
+        "counters": {
+          "startedTargets": 1,
+          "completedTargets": 1,
+          "deliveredCandidates": 0,
+          "trialsStarted": 0,
+          "trialsCompleted": 0,
+          "fullPlannerRunsStarted": 0,
+          "fullPlannerRunsCompleted": 0
+        },
+        "predictionCounts": {
+          "predictNormalArtian": 12,
+          "predictSkills": 5,
+          "resetBonuses": 253,
+          "keepBonuses": 29238
+        },
+        "activeStack": [],
+        "activeGogmaPhase": null,
+        "contractViolations": {
+          "outer": 0,
+          "inner": 0
+        }
+      },
+      "memory": {
+        "samples": 4624,
+        "sampledMaxHeapUsedBytes": 4875181928,
+        "sampledMaxRssBytes": 5346070528,
+        "maxRssKiB": 5223608,
+        "heapSizeLimitBytes": 8791261184
+      },
+      "window": {
+        "requestedSamplingIntervalUs": 10000,
+        "warmupMs": 120000,
+        "profileStopMs": 720000,
+        "requestedProfileDurationMs": 600000,
+        "actualStartElapsedMs": 120772.2702,
+        "actualStopElapsedMs": 720221.89955,
+        "actualProfileDurationMs": 599449.6293500001,
+        "startDelayMs": 772.270199999999,
+        "stopDelayMs": 221.8995499999728,
+        "stoppedBy": "window",
+        "error": null
+      },
+      "scriptTable": {
+        "scriptCount": 987,
+        "sourceMappedCount": 183,
+        "requiredSourceMaps": {
+          "src/domain/search/bonusStream.ts": true,
+          "src/domain/models/hashing.ts": true,
+          "src/domain/search/semanticKeys.ts": true
+        }
+      },
+      "captureIssues": [],
+      "intervalReconstruction": {
+        "valid": true,
+        "issues": [],
+        "intervals": 2097,
+        "phaseStartRecords": 12582,
+        "depthRecords": 2097,
+        "openFrontier": null,
+        "gapToNextBoundaryMs": 27.13840000144137
+      },
+      "profile": {
+        "alignment": {
+          "valid": true,
+          "issues": [],
+          "offsetSpreadMs": 0.014750003814697266,
+          "maxPairPrecisionMs": 0.028800000000046566,
+          "profileDurationMs": 599705.7599999979,
+          "sumDeltasMs": 599705.617,
+          "negativeDeltas": 0
+        },
+        "intervalValidation": {
+          "valid": true,
+          "issues": [],
+          "count": 2097
+        },
+        "allProfileSamples": 58132,
+        "windowSamples": 58132,
+        "observedIntervalUs": {
+          "median": 10354,
+          "mean": 10316.27360145875
+        },
+        "intervalsInProfile": 342,
+        "intervalMsInProfile": 82446.8112999998,
+        "intervalShareOfProfile": 0.1374787717563361,
+        "frontierSamples": 8080,
+        "frontierSampleShare": 0.1389940136241657,
+        "categories": [
+          {
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          },
+          {
+            "category": "representative_compare_or_inlined",
+            "samples": 186,
+            "share": 0.02301980198019802
+          },
+          {
+            "category": "frontier_sort",
+            "samples": 119,
+            "share": 0.014727722772277227
+          },
+          {
+            "category": "reduction_loop_or_inlined",
+            "samples": 7129,
+            "share": 0.8823019801980198
+          },
+          {
+            "category": "gc",
+            "samples": 503,
+            "share": 0.06225247524752475
+          },
+          {
+            "category": "other_frontier",
+            "samples": 142,
+            "share": 0.017574257425742576
+          }
+        ],
+        "otherReasons": [
+          {
+            "reason": "program",
+            "samples": 138,
+            "share": 0.01707920792079208
+          },
+          {
+            "reason": "observer_overhead",
+            "samples": 2,
+            "share": 0.00024752475247524753
+          },
+          {
+            "reason": "vite_loader",
+            "samples": 2,
+            "share": 0.00024752475247524753
+          }
+        ],
+        "leafKinds": [
+          {
+            "kind": "repository",
+            "samples": 7434,
+            "share": 0.9200495049504951
+          },
+          {
+            "kind": "gc",
+            "samples": 503,
+            "share": 0.06225247524752475
+          },
+          {
+            "kind": "program",
+            "samples": 138,
+            "share": 0.01707920792079208
+          },
+          {
+            "kind": "vite_ssr_unmapped",
+            "samples": 3,
+            "share": 0.0003712871287128713
+          },
+          {
+            "kind": "native",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          },
+          {
+            "kind": "node_internal",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          }
+        ],
+        "gcSamples": 503,
+        "registeredInclusive": [
+          {
+            "registered": "src/domain/search/bonusStream.ts#generateReservedDepth",
+            "samples": 7437,
+            "share": 0.9204207920792079
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedRepresentative",
+            "samples": 187,
+            "share": 0.023143564356435643
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedFrontier",
+            "samples": 119,
+            "share": 0.014727722772277227
+          },
+          {
+            "registered": "src/domain/search/semanticKeys.ts#compareStableKeys",
+            "samples": 44,
+            "share": 0.005445544554455445
+          },
+          {
+            "registered": "src/domain/models/hashing.ts#serializeStable",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          },
+          {
+            "registered": "src/domain/models/hashing.ts#stableStringify",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          }
+        ],
+        "topLeaves": [
+          {
+            "leaf": "generateReservedDepth@src/domain/search/bonusStream.ts:808",
+            "category": "reduction_loop_or_inlined",
+            "samples": 7129,
+            "share": 0.8823019801980198
+          },
+          {
+            "leaf": "(garbage collector)@-",
+            "category": "gc",
+            "samples": 503,
+            "share": 0.06225247524752475
+          },
+          {
+            "leaf": "(program)@-",
+            "category": "other_frontier",
+            "samples": 138,
+            "share": 0.01707920792079208
+          },
+          {
+            "leaf": "reservedBonusStableKey@src/domain/search/bonusStream.ts:697",
+            "category": "representative_compare_or_inlined",
+            "samples": 93,
+            "share": 0.01150990099009901
+          },
+          {
+            "leaf": "compareReservedRepresentative@src/domain/search/bonusStream.ts:707",
+            "category": "representative_compare_or_inlined",
+            "samples": 92,
+            "share": 0.011386138613861386
+          },
+          {
+            "leaf": "compareReservedFrontier@src/domain/search/bonusStream.ts:714",
+            "category": "frontier_sort",
+            "samples": 75,
+            "share": 0.009282178217821782
+          },
+          {
+            "leaf": "compareStableKeys@src/domain/search/semanticKeys.ts:8",
+            "category": "frontier_sort",
+            "samples": 44,
+            "share": 0.005445544554455445
+          },
+          {
+            "leaf": "(anonymous)@src/domain/search/semanticKeys.ts",
+            "category": "representative_compare_or_inlined",
+            "samples": 3,
+            "share": 0.0003712871287128713
+          },
+          {
+            "leaf": "serializeStable@src/domain/models/hashing.ts:22",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          },
+          {
+            "leaf": "target.send@node:internal/child_process",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          },
+          {
+            "leaf": "writeString@-",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          }
+        ],
+        "topStacks": [
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808",
+            "category": "reduction_loop_or_inlined",
+            "samples": 7129,
+            "share": 0.8823019801980198
+          },
+          {
+            "stack": "(root)@- > (garbage collector)@-",
+            "category": "gc",
+            "samples": 503,
+            "share": 0.06225247524752475
+          },
+          {
+            "stack": "(root)@- > (program)@-",
+            "category": "other_frontier",
+            "samples": 138,
+            "share": 0.01707920792079208
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > reservedBonusStableKey@src/domain/search/bonusStream.ts:697",
+            "category": "representative_compare_or_inlined",
+            "samples": 93,
+            "share": 0.01150990099009901
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707",
+            "category": "representative_compare_or_inlined",
+            "samples": 92,
+            "share": 0.011386138613861386
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedFrontier@src/domain/search/bonusStream.ts:714",
+            "category": "frontier_sort",
+            "samples": 75,
+            "share": 0.009282178217821782
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedFrontier@src/domain/search/bonusStream.ts:714 > compareStableKeys@src/domain/search/semanticKeys.ts:8",
+            "category": "frontier_sort",
+            "samples": 44,
+            "share": 0.005445544554455445
+          },
+          {
+            "stack": "(root)@- > (anonymous)@src/domain/search/semanticKeys.ts",
+            "category": "other_frontier",
+            "samples": 2,
+            "share": 0.00024752475247524753
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > (anonymous)@src/domain/search/semanticKeys.ts",
+            "category": "representative_compare_or_inlined",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > compareReservedRepresentative@src/domain/search/bonusStream.ts:707 > reservedBonusStableKey@src/domain/search/bonusStream.ts:697 > stableStringify@src/domain/models/hashing.ts:68 > serializeStable@src/domain/models/hashing.ts:22 > (anonymous)@src/domain/models/hashing.ts:46 > serializeStable@src/domain/models/hashing.ts:22",
+            "category": "representative_stable_serialization",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > phase@src/domain/search/bonusStream.ts:940 > observe@src/benchmarks/plannerGlobalPhase2C26A3.ts:374 > emitGogmaPhaseStarted@D:/GogmaArtianPlanner/scripts/run-planner-global-phase2c26a9.mjs > target.send@node:internal/child_process",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          },
+          {
+            "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > phase@src/domain/search/bonusStream.ts:940 > observe@src/benchmarks/plannerGlobalPhase2C26A3.ts:374 > emitGogmaPhaseStarted@D:/GogmaArtianPlanner/scripts/run-planner-global-phase2c26a9.mjs > writeSync@node:fs > writeString@-",
+            "category": "other_frontier",
+            "samples": 1,
+            "share": 0.00012376237623762376
+          }
+        ],
+        "comparatorSamples": {
+          "inside": 306,
+          "outside": 0,
+          "outsideShare": 0
+        },
+        "boundarySamples": 124,
+        "registeredLineMismatches": [],
+        "lineTicks": [
+          {
+            "registered": "src/domain/search/bonusStream.ts#generateReservedDepth",
+            "totalSelfTicks": 12604,
+            "unmappedTicks": 0,
+            "inSpan": [
+              {
+                "line": 808,
+                "text": "async function generateReservedDepth(",
+                "ticks": 796,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 814,
+                "text": "if (set.done) return []",
+                "ticks": 7,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 818,
+                "text": "for (const state of set.frontier) {",
+                "ticks": 6,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 819,
+                "text": "const window = await reservedWindow(set, base, state)",
+                "ticks": 4,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 820,
+                "text": "windows.push(new Set(window.positions))",
+                "ticks": 231,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 821,
+                "text": "window.positions.forEach((position) => positions.add(position))",
+                "ticks": 38,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 844,
+                "text": "for (const position of [...positions].sort((left, right) => left - right)) {",
+                "ticks": 1,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 846,
+                "text": "const parent = depth === 1",
+                "ticks": 38,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 851,
+                "text": "throw new Error(`Held-aware Bonus stream has no Reset chain reaching Gogma ${position} at depth ${depth}.`)",
+                "ticks": 12,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 853,
+                "text": "await execution.checkpoint()",
+                "ticks": 3,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 854,
+                "text": "const bonuses = predictReset(position)",
+                "ticks": 2,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 856,
+                "text": "generated.push(reservedGeneratedState(depth, depth, bonuses, parent?.results ?? null, position, gogmaCounterAfter))",
+                "ticks": 1,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 858,
+                "text": "for (const [index, state] of set.frontier.entries()) {",
+                "ticks": 615,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 859,
+                "text": "if (!keepSupported[index] || !windows[index].has(position) || state.bonuses === null || state.familyLayoutKey === null) continue",
+                "ticks": 1262,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 860,
+                "text": "await execution.checkpoint()",
+                "ticks": 468,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 861,
+                "text": "const bonuses = predictKeep(position, state.familyLayoutKey, state.bonuses)",
+                "ticks": 229,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 862,
+                "text": "const gogmaCounterAfter = engine.advanceGogmaCounter(position, { type: 'keep_bonuses' })",
+                "ticks": 104,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 863,
+                "text": "generated.push(reservedGeneratedState(depth, state.lastResetDepth, bonuses, state.results, position, gogmaCounterAfter))",
+                "ticks": 617,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 876,
+                "text": "const solutions: ReservedBonusStreamSolution[] = generated.map((state) => ({",
+                "ticks": 434,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 889,
+                "text": "for (const state of generated) {",
+                "ticks": 126,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 890,
+                "text": "const key = `${state.position}\\u0000${state.familyLayoutKey}`",
+                "ticks": 719,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 891,
+                "text": "const current = byKey.get(key)",
+                "ticks": 5831,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 892,
+                "text": "if (!current || compareReservedRepresentative(state, current) < 0) byKey.set(key, state)",
+                "ticks": 170,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 894,
+                "text": "set.frontier = [...byKey.values()].sort(compareReservedFrontier)",
+                "ticks": 25,
+                "inFrontierBlock": true
+              },
+              {
+                "line": 910,
+                "text": "return solutions",
+                "ticks": 763,
+                "inFrontierBlock": false
+              }
+            ],
+            "outsideSpanTicks": 102
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedRepresentative",
+            "totalSelfTicks": 92,
+            "unmappedTicks": 0,
+            "inSpan": [
+              {
+                "line": 707,
+                "text": "function compareReservedRepresentative(left: ReservedBonusState, right: ReservedBonusState): number {",
+                "ticks": 1,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 708,
+                "text": "return (",
+                "ticks": 91,
+                "inFrontierBlock": false
+              }
+            ],
+            "outsideSpanTicks": 0
+          },
+          {
+            "registered": "src/domain/search/bonusStream.ts#compareReservedFrontier",
+            "totalSelfTicks": 75,
+            "unmappedTicks": 0,
+            "inSpan": [
+              {
+                "line": 714,
+                "text": "function compareReservedFrontier(left: ReservedBonusState, right: ReservedBonusState): number {",
+                "ticks": 2,
+                "inFrontierBlock": false
+              },
+              {
+                "line": 715,
+                "text": "return left.position - right.position ||",
+                "ticks": 73,
+                "inFrontierBlock": false
+              }
+            ],
+            "outsideSpanTicks": 0
+          }
+        ],
+        "reductionLeafCheck": {
+          "inIntervalLeafSamples": 7129,
+          "frontierBlockLineTicks": 6871,
+          "functionStartLineTicks": 796
+        },
+        "workInWindow": {
+          "intervals": 342,
+          "partialIntervals": 0,
+          "generatedStates": 247631579,
+          "frontierStatesAfter": 6126186,
+          "representativeCompareCalls": 241505393
+        }
+      },
+      "cacheHelperSamples": {
+        "withHelper": 94,
+        "helperWithSerialization": 1,
+        "helperWithoutSerialization": 93,
+        "frontierSamples": 8080
+      },
+      "decisionRow": {
+        "orientationId": "c14-p0",
+        "valid": true,
+        "invalidReasons": [],
+        "frontierSamples": 8080,
+        "negativeTimeDeltas": 0,
+        "shares": {
+          "representative_stable_serialization": 0.00012376237623762376,
+          "representative_compare_or_inlined": 0.02301980198019802,
+          "frontier_sort": 0.014727722772277227,
+          "reduction_loop_or_inlined": 0.8823019801980198,
+          "gc": 0.06225247524752475,
+          "other_frontier": 0.017574257425742576
+        },
+        "largestCategory": "reduction_loop_or_inlined",
+        "largestShare": 0.8823019801980198
+      },
+      "profileQuality": {
+        "valid": true,
+        "negativeTimeDeltas": 0,
+        "invalidReasons": [],
+        "a8Valid": true,
+        "formalComparison": true,
+        "note": "A8 profile valid: the formal before / after profile share comparison uses this primary (when the A9 profile is valid too)."
+      },
+      "directTiming": {
+        "valid": true,
+        "issues": [],
+        "beforeDepths": 589,
+        "afterDepths": 2097,
+        "commonDepths": 589,
+        "before": {
+          "depths": 589,
+          "generatedStates": 397170302,
+          "frontierStatesAfter": 10741171,
+          "representativeCompareCalls": 386429131,
+          "sectionMs": {
+            "window_collection": 9982.11499999664,
+            "support_evaluation": 40531.219099999464,
+            "state_generation": 537925.5783000016,
+            "solution_materialization": 126816.71920000225,
+            "frontier_reduction_sort": 930623.3319999991,
+            "exhaustion_scan": 1338.497099998308
+          },
+          "inclusiveMs": 1647273.967800002
+        },
+        "after": {
+          "depths": 589,
+          "generatedStates": 397170302,
+          "frontierStatesAfter": 10741171,
+          "representativeCompareCalls": 386429131,
+          "sectionMs": {
+            "window_collection": 9923.816299999078,
+            "support_evaluation": 40445.413199999464,
+            "state_generation": 535788.6580000008,
+            "solution_materialization": 122314.12569999901,
+            "frontier_reduction_sort": 133261.53350000005,
+            "exhaustion_scan": 1488.177300000169
+          },
+          "inclusiveMs": 843276.8145000014
+        },
+        "frontier": {
+          "beforeMs": 930623.3319999991,
+          "afterMs": 133261.53350000005,
+          "ratio": 0.14319599446707207,
+          "beforeNsPerCompareCall": 2408.263915279201,
+          "afterNsPerCompareCall": 344.8537462875697,
+          "perCompareCallRatio": 0.14319599446707207,
+          "beforeNsPerGeneratedState": 2343.13423565088,
+          "afterNsPerGeneratedState": 335.5274370438705
+        },
+        "sectionRatios": {
+          "window_collection": 0.994159684596142,
+          "support_evaluation": 0.9978829676998292,
+          "state_generation": 0.9960274796622349,
+          "solution_materialization": 0.9644952690117917,
+          "frontier_reduction_sort": 0.14319599446707207,
+          "exhaustion_scan": 1.1118270633549003
+        }
+      },
+      "wholeRun": {
+        "a9": {
+          "depths": 2097,
+          "generatedStates": 602486059,
+          "frontierStatesAfter": 31261015,
+          "representativeCompareCalls": 571225044,
+          "sectionMs": {
+            "window_collection": 18391.08900000033,
+            "support_evaluation": 117512.78730000122,
+            "state_generation": 868096.625900002,
+            "solution_materialization": 346673.4259999929,
+            "frontier_reduction_sort": 213846.02120000488,
+            "exhaustion_scan": 4182.795299997741
+          },
+          "inclusiveMs": 1568847.2616000012
+        },
+        "a8": {
+          "depths": 589,
+          "generatedStates": 397170302,
+          "frontierStatesAfter": 10741171,
+          "representativeCompareCalls": 386429131,
+          "sectionMs": {
+            "window_collection": 9982.11499999664,
+            "support_evaluation": 40531.219099999464,
+            "state_generation": 537925.5783000016,
+            "solution_materialization": 126816.71920000225,
+            "frontier_reduction_sort": 930623.3319999991,
+            "exhaustion_scan": 1338.497099998308
+          },
+          "inclusiveMs": 1647273.967800002
+        },
+        "a9Work": {
+          "completedWorks": 2105,
+          "bonusDepthWorks": 2097,
+          "rawSolutions": 602486059,
+          "bonusDepthReadMs": 1569057.2417999993
+        },
+        "a8Work": {
+          "completedWorks": 597,
+          "bonusDepthWorks": 589,
+          "rawSolutions": 397170302,
+          "bonusDepthReadMs": 1647351.0570000012
+        },
+        "a8SearchOutcome": {
+          "lastHeartbeatElapsedMs": 1794388.6176,
+          "stage": "search_running",
+          "counters": {
+            "startedTargets": 1,
+            "completedTargets": 0,
+            "deliveredCandidates": 0,
+            "trialsStarted": 0,
+            "trialsCompleted": 0,
+            "fullPlannerRunsStarted": 0,
+            "fullPlannerRunsCompleted": 0
+          },
+          "predictionCounts": {
+            "predictNormalArtian": 12,
+            "predictSkills": 5,
+            "resetBonuses": 253,
+            "keepBonuses": 29233
+          },
+          "activeStack": [
+            "search_runtime",
+            "scheduler_step",
+            "scheduler_settle",
+            "bonus_depth_work",
+            "bonus_depth_read"
+          ],
+          "activeGogmaPhase": {
+            "targetOrdinal": 0,
+            "streamIndex": 4,
+            "depth": 67,
+            "phase": "state_generation",
+            "startedMs": 1794388.4476,
+            "elapsedMs": 0.1699999999254942
+          },
+          "contractViolations": {
+            "outer": 0,
+            "inner": 0
+          }
+        },
+        "a8Memory": {
+          "samples": 2675,
+          "maxHeapUsedBytes": 4822129240,
+          "maxRssBytes": 5246930944,
+          "lastElapsedMs": 1794537.718
+        }
+      },
+      "semanticParity": {
+        "workPrefix": {
+          "valid": true,
+          "issues": [],
+          "beforeWorks": 597,
+          "afterWorks": 2105,
+          "commonWorks": 597,
+          "firstMismatch": null,
+          "afterCoversBefore": true,
+          "commonBonusWorks": 589,
+          "commonRawSolutions": 397170302,
+          "commonIdealSolutions": 0,
+          "prefixSpanMs": {
+            "before": 1796229.0052,
+            "after": 991189.7469000001,
+            "ratio": 0.5518
+          },
+          "phaseTotalsMs": {
+            "bonus_depth_read": {
+              "before": 1647351.0570000012,
+              "after": 843338.6435000001,
+              "ratio": 0.5119,
+              "beforeNsPerRawSolution": 4147.72,
+              "afterNsPerRawSolution": 2123.37
+            },
+            "bonus_notice_scan": {
+              "before": 53260.9266000021,
+              "after": 52947.947900001214,
+              "ratio": 0.9941,
+              "beforeNsPerRawSolution": 134.1,
+              "afterNsPerRawSolution": 133.31
+            },
+            "bonus_ideal_filter": {
+              "before": 95438.15170000042,
+              "after": 94735.43619999984,
+              "ratio": 0.9926,
+              "beforeNsPerRawSolution": 240.3,
+              "afterNsPerRawSolution": 238.53
+            },
+            "bonus_route_materialization": {
+              "before": 63.248500001152024,
+              "after": 64.01540000020032,
+              "ratio": 1.0121,
+              "beforeNsPerRawSolution": 0.16,
+              "afterNsPerRawSolution": 0.16
+            },
+            "bonus_evaluate_sort": {
+              "before": 12.348000002550634,
+              "after": 10.388700001277812,
+              "ratio": 0.8413,
+              "beforeNsPerRawSolution": 0.03,
+              "afterNsPerRawSolution": 0.03
+            },
+            "bonus_channel_publication": {
+              "before": 5.752899998120938,
+              "after": 5.150800000040817,
+              "ratio": 0.8953,
+              "beforeNsPerRawSolution": 0.01,
+              "afterNsPerRawSolution": 0.01
+            },
+            "bonus_depth_advance": {
+              "before": 8.642600001648589,
+              "after": 8.11970000086012,
+              "ratio": 0.9395,
+              "beforeNsPerRawSolution": 0.02,
+              "afterNsPerRawSolution": 0.02
+            },
+            "self": {
+              "before": 47.731299992141885,
+              "after": 46.17309999748841,
+              "ratio": 0.9674,
+              "beforeNsPerRawSolution": 0.12,
+              "afterNsPerRawSolution": 0.12
+            }
+          }
+        },
+        "depthPrefix": {
+          "valid": true,
+          "issues": [],
+          "beforeDepths": 589,
+          "afterDepths": 2097,
+          "commonDepths": 589,
+          "firstMismatch": null,
+          "commonGeneratedStates": 397170302,
+          "commonFrontierStatesAfter": 10741171
+        },
+        "lifecyclePrefix": {
+          "valid": true,
+          "issues": [],
+          "beforeEvents": 2,
+          "afterEvents": 5,
+          "commonEvents": 2,
+          "firstMismatch": null
+        },
+        "directTimingPrefix": {
+          "valid": true,
+          "issues": [],
+          "commonDepths": 589
+        },
+        "valid": true
+      },
+      "a8Reference": {
+        "orientationId": "c14-p0",
+        "childOutcome": "timeout",
+        "profileValid": true,
+        "invalidReasons": [],
+        "negativeTimeDeltas": 0,
+        "frontierSamples": 27441,
+        "shares": {
+          "representative_stable_serialization": 0.6773441201122408,
+          "representative_compare_or_inlined": 0.04562515943296527,
+          "frontier_sort": 0.0033162056776356546,
+          "reduction_loop_or_inlined": 0.20316315003097554,
+          "gc": 0.058088262089573996,
+          "other_frontier": 0.012463102656608724
+        },
+        "largestCategory": "representative_stable_serialization",
+        "completedDepths": 589,
+        "generatedStates": 397170302,
+        "frontierStatesAfter": 10741171,
+        "representativeCompareCalls": 386429131
+      }
+    }
+  ],
+  "processes": [
+    {
+      "id": "probe",
+      "role": "probe",
+      "outcome": "completed",
+      "wallMs": 2643.0216,
+      "killedAtMs": null,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 0,
+      "gogmaPhaseStartMessages": 0,
+      "gogmaDepthMessages": 0,
+      "maxIpcHeartbeatGapMs": null,
+      "profileCapturedAtMs": null,
+      "lastHeartbeatAgeAtEndMs": null,
+      "stderrTail": null
+    },
+    {
+      "id": "baseline",
+      "role": "baseline",
+      "outcome": "completed",
+      "wallMs": 5571.540000000001,
+      "killedAtMs": null,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 0,
+      "gogmaPhaseStartMessages": 0,
+      "gogmaDepthMessages": 0,
+      "maxIpcHeartbeatGapMs": null,
+      "profileCapturedAtMs": null,
+      "lastHeartbeatAgeAtEndMs": null,
+      "stderrTail": null
+    },
+    {
+      "id": "kernel-c6-p1",
+      "role": "kernel",
+      "outcome": "completed",
+      "wallMs": 1243666.3209,
+      "killedAtMs": null,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 241,
+      "gogmaPhaseStartMessages": 11232,
+      "gogmaDepthMessages": 1872,
+      "maxIpcHeartbeatGapMs": 5728.296499999997,
+      "profileCapturedAtMs": 723477.9288999999,
+      "lastHeartbeatAgeAtEndMs": 235.61719999997877,
+      "stderrTail": null
+    },
+    {
+      "id": "kernel-c13-p1",
+      "role": "kernel",
+      "outcome": "timeout",
+      "wallMs": 1800278.2585,
+      "killedAtMs": 1800016.1466,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 327,
+      "gogmaPhaseStartMessages": 3435,
+      "gogmaDepthMessages": 572,
+      "maxIpcHeartbeatGapMs": 6662.343499999959,
+      "profileCapturedAtMs": 722742.2882000001,
+      "lastHeartbeatAgeAtEndMs": 548.7993999999017,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n"
+    },
+    {
+      "id": "kernel-c14-p0",
+      "role": "kernel",
+      "outcome": "completed",
+      "wallMs": 1799622.8699999996,
+      "killedAtMs": null,
+      "nodeFlags": [
+        "--max-old-space-size=8192"
+      ],
+      "heartbeatMessages": 346,
+      "gogmaPhaseStartMessages": 12582,
+      "gogmaDepthMessages": 2097,
+      "maxIpcHeartbeatGapMs": 5806.060200000182,
+      "profileCapturedAtMs": 723041.5099999998,
+      "lastHeartbeatAgeAtEndMs": 249.69900000002235,
+      "stderrTail": null
+    }
+  ],
+  "conclusion": {
+    "statement": "Phase 2-C2.6-A8のprimary 3 orientationを、A8 primaryと同条件（jit_default、A7の2 observer、Search開始120〜720秒のCPU profile）でA9 optimization後に各1回計測した: completed 2、timeout 1、OOM 0、process failure 0。semantic parity（A8 formal rawとの共通prefix）: c6-p1 valid、c13-p1 valid、c14-p0 valid。representative_stable_serialization share A8 → A9: c6-p1 65.9% → 0.1%、c13-p1 - → 0.0%、c14-p0 67.7% → 0.0%（A8 / A9でprofile invalidは「-」）。frontier_reduction_sort ns / representative comparison（共通prefix）A8 → A9: c6-p1 2769.506 → 364.478（0.132 x）、c13-p1 2098.130 → 309.162（0.147 x）、c14-p0 2408.264 → 344.854（0.143 x）。negative timeDeltas: c6-p1 0、c13-p1 0、c14-p0 0。decision case O_optimization_adopted。",
+    "decision": {
+      "rule": {
+        "comparisonSet": "the A8 profile-valid primaries (A8 RESULT summary.decision.validPrimaries); an A8-invalid profile is never a before value",
+        "serializationCategory": "representative_stable_serialization",
+        "clearSerializationReductionMaxRatio": 0.5,
+        "clearDirectImprovementMaxRatio": 0.75,
+        "directRegressionMinRatio": 1,
+        "profileValidity": "the unchanged A8 rule (phase2c26a8DecisionRow): complete capture, valid clock alignment and interval reconstruction, negativeDeltas = 0 (no timestamp correction), >= 5,000 frontier samples, every named registered frame at its declaration line, comparator samples outside the intervals <= 1 %",
+        "semanticParity": "every primary (all three): the A6 completed-work prefix, the A8 held-aware depth prefix and the lifecycle prefix against the A8 formal raw run are valid, and the direct timing common prefix is mismatch-free",
+        "order": [
+          "N semantic_mismatch: any primary fails the semantic parity (whatever the performance)",
+          "O optimization_adopted: every comparison-set primary has a valid A9 profile with a serialization share <= 0.5 x its A8 share AND a direct frontier ns / comparison <= 0.75 x its A8 value",
+          "N regression: any comparison-set primary has a direct frontier ns / comparison > 1.0 x its A8 value",
+          "N no_effect: no comparison-set primary has a valid A9 serialization share below its A8 share, or none has a direct frontier ns / comparison below its A8 value",
+          "P partial_or_shifted: otherwise (semantic parity valid, some reduction, but not every O condition)"
+        ]
+      },
+      "comparisonSet": [
+        "c6-p1",
+        "c14-p0"
+      ],
+      "rows": [
+        {
+          "orientationId": "c6-p1",
+          "a8Share": 0.6590410958904109,
+          "a9ProfileValid": true,
+          "a9InvalidReasons": [],
+          "a9Share": 0.0006307556452630251,
+          "shareRatio": 0.000957080900108103,
+          "directPerCompareCallRatio": 0.13160412505777777,
+          "serializationReduced": true,
+          "serializationLower": true,
+          "directImproved": true,
+          "directLower": true,
+          "directRegression": false
+        },
+        {
+          "orientationId": "c14-p0",
+          "a8Share": 0.6773441201122408,
+          "a9ProfileValid": true,
+          "a9InvalidReasons": [],
+          "a9Share": 0.00012376237623762376,
+          "shareRatio": 0.00018271713382130703,
+          "directPerCompareCallRatio": 0.14319599446707207,
+          "serializationReduced": true,
+          "serializationLower": true,
+          "directImproved": true,
+          "directLower": true,
+          "directRegression": false
+        }
+      ],
+      "semanticParity": [
+        {
+          "orientationId": "c6-p1",
+          "valid": true
+        },
+        {
+          "orientationId": "c13-p1",
+          "valid": true
+        },
+        {
+          "orientationId": "c14-p0",
+          "valid": true
+        }
+      ],
+      "case": "O_optimization_adopted",
+      "reason": "every comparison-set primary: serialization share <= 0.5 x A8 and frontier ns / comparison <= 0.75 x A8 (c6-p1: share 0.001 x, direct 0.132 x; c14-p0: share 0.000 x, direct 0.143 x)",
+      "recommendation": "optimizationを採用する。次は54 orientation再評価へ進む候補（その前に必要ならA9後のhotspotを確認する）。"
+    }
+  },
+  "limitations": [
+    "Node child（Vite SSR loader）のみ。Browser Worker・他device・他heap条件は測っていない。",
+    "各orientation 1回のみ（retryなし）、profile windowはSearch開始後120〜720秒（600秒）の1区間。run間ばらつきは測っていない。",
+    "A8 / A9ともCPU profiler（10 ms sampling）がSearch開始120〜720秒に動く。共通prefixの直接時間比較では、A9が同じworkに早く到達するためprofiler区間が対応するworkは両者で一致しない（profiler overhead自体は小さいが厳密には同一ではない）。",
+    "CPU sample shareは区間内の構成比であり、速度向上率ではない。速度の比較は共通prefixの直接section時間（frontier_reduction_sort ms / representative comparison）で行った。",
+    "negative timeDeltaを1件でも含むCPU profileはprofile全体をinvalid（profile-based decision input外）とした。timestamp補正は行わない。direct section timing・semantic prefix・child outcomeはCPU profile timestampに依存しないため、その記述は有効として扱う。",
+    "A8でprofile invalidだったprimaryのA8 profile shareは正式なbefore値として使わない（A9 validならA9単独のafter値として記述する）。",
+    "reservedBonusStableKeyはA8の登録関数ではない。cache miss時のserializationはrepresentative_stable_serialization、lookup自体はrepresentative_compare_or_inlinedに入る（A8 ruleのまま）。helper frameの件数は記述的集計のみ。",
+    "V8はWeakMap get / set等のbuiltinを独立frameとして出さない場合がある。TurboFan / Maglevのinlineで関数境界が失われたsampleは *_or_inlined categoryに入る。",
+    "各orientationは30分budgetでtimeoutしており、Search完了までの総時間・route qualityはここでは測っていない。"
+  ]
+}
