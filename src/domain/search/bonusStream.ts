@@ -684,11 +684,30 @@ export function createTargetBonusStream(
   }
   const reservedSets = new Map<string, ReservedSet>()
 
+  /**
+   * `stableStringify(bonuses)` of a held-aware state, computed lazily and kept
+   * per five-slot object (Issue #154 Phase 2-C2.6-A9). Generated states hold the
+   * Reset / Keep prediction objects of the memos above, which nothing mutates,
+   * so many states share one object and its serialization is computed once.
+   * The value is the unchanged `stableStringify()` text itself (never a hash),
+   * and the WeakMap holds no five-slot object alive.
+   */
+  const reservedBonusStableKeys = new WeakMap<RestorationBonusSet, string>()
+
+  function reservedBonusStableKey(bonuses: RestorationBonusSet | null): string {
+    if (bonuses === null) return stableStringify(null)
+    const cached = reservedBonusStableKeys.get(bonuses)
+    if (cached !== undefined) return cached
+    const key = stableStringify(bonuses)
+    reservedBonusStableKeys.set(bonuses, key)
+    return key
+  }
+
   /** The B2 representative rule of `compareRepresentative()`, for held-aware states. */
   function compareReservedRepresentative(left: ReservedBonusState, right: ReservedBonusState): number {
     return (
       right.lastResetDepth - left.lastResetDepth ||
-      compareStableKeys(stableStringify(left.bonuses), stableStringify(right.bonuses))
+      compareStableKeys(reservedBonusStableKey(left.bonuses), reservedBonusStableKey(right.bonuses))
     )
   }
 
