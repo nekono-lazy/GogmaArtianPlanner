@@ -5,7 +5,8 @@ Persistence、UIは変更していない。kernel trial、full Planner rerun、e
 oracle-guided Search、multi-decision reservation、新しいruntime optimizationは行っていない。
 
 - measured HEAD: `cef40343e7149e0612c8efb0ad97a40f572c6e42`（Research module・runner・analyzer・事前登録decision rule・testsを含むclean HEAD）
-- analysis HEAD: 同じ `cef4034`（測定後のcode変更なし、`calculationCodeChangedSinceMeasuredHead = []`）
+- analysis HEAD: `2dc72c0b4931dd039e8c52dc84e3abc3caab13c2`（PR #189レビュー対応。measured HEAD以降の変更はpost-hoc解析
+  `plannerGlobalPhase2C26B1Analysis.ts`・analyzer・testのみで `calculationCodeChangedSinceMeasuredHead = []`。formal再測定はしていない）
 - RESULT: [`docs/PLANNER_GLOBAL_PHASE2C26B1_RESULT.json`](PLANNER_GLOBAL_PHASE2C26B1_RESULT.json)（`provenance.formal = true`）
 
 ## 1. 結論（B1-M `B1_M_measurement_complete`）
@@ -25,15 +26,23 @@ kernel完走を前提にせず、current baselineの **54 orientation全部** �
 - coverage fallback: Stage 1でcompleted 0だったparticipant **3件** に1 contextずつ実行し、**3件ともcompleted**。
 - 事前登録ruleの判定は **B1-M**（34 / 34 explored、semantic mismatch 0、OOM / failureによるunexplored 0）。
 
-**formalに言えること**: current Productionの元Export・Production default extentで、Conflict participant 34件すべてについて少なくとも
-1つのSearch contextが正常終了した（Candidate 0も含む）。default extent portfolioは全participantで測定できた。
+**formalに言えること**: current Productionの元Export・Production default extentで、Conflict participant 34 / 34について
+少なくとも1つのdefault-extent Search contextを正常終了でき（consumer stop / stoppedByExtent / exhausted、Candidate 0も含む）、
+participant measurement coverageを34 / 34まで確保した。
 
-**まだ言えないこと**: portfolioのCandidateが実行可能Planに入ること（B1はSearch-only。kernel trial / Planner実行をしていない）。
+`B1_M_measurement_complete` はparticipant measurement coverageについての事前登録名称であり、**全Search context完走を意味しない**。
+Stage 1では136 unique context中20 contextがtimeoutしており、timeout contextを持つparticipantが13件残る（§9）。portfolio size・
+diversity・oracle coverageは、今回正常終了したcontextから得られた観測値である。
+
+**まだ言えないこと**: 全default-extent Search contextの測定完了。timeout contextにalternativeが無いこと。portfolio size 1の
+participantにdefault extent内alternativeが無いこと（17件中11件はtimeout contextが残る、§10）。
+portfolioのCandidateが実行可能Planに入ること（B1はSearch-only。kernel trial / Planner実行をしていない）。
 全Targetを競合なく完成できるRoute集合が存在すること。extent拡張で増えるCandidate。final C3 readiness（A / B / C）。
 oracle Routeがdefault extent外にあるのか、single fixed winner reservationで届かないのか（B2で評価）。
 
-**次Phase（B1-M）**: B2で、extent probe・oracle coverage gap（41 / 43 uncovered）・held / late-start不足・
-single fixed winner reservationの限界を評価する（§11）。
+**次Phase（B1-M）**: B2で、未観測の理由を「10分budgetで未完走のdefault-extent context / Production default extent不足 /
+single fixed winner reservation・context自体の制約」に切り分けたうえで、extent probe・oracle coverage gap（41 / 43 uncovered）・
+held / late-start不足・single fixed winner reservationの限界を評価する（§13）。
 
 ## 2. 方針: kernel完走をportfolio生成の前提にしない
 
@@ -156,6 +165,10 @@ provenanceに `coverage_fallback` を明示した（fallbackのみで得たalter
 | fallbackで初めてexplored | 3 |
 
 explored = そのTargetのSearch contextが少なくとも1つ正常終了（consumer stop / stoppedByExtent / exhausted、Candidate 0を含む）。
+**exploredはそのparticipantの全contextが完走したことを意味しない。** Stage 1でtimeout contextを1つ以上持つparticipantは
+34件中13件（portfolio size 1の11件、portfolio > 1の2件）で、うち15829bfe・fea60316はStage 1の全contextがtimeoutし、
+fallbackの1 contextだけが正常終了している。participantごとの内訳はRESULTの `participants.rows`（Stage 1 / fallbackの終了状態別件数）と
+`portfolio.observation.participants`（Stage 1未完走context数）に記録した。
 
 ## 10. portfolio
 
@@ -171,7 +184,7 @@ Target portfolio = original Candidate + 全completed contextのdelivered alterna
 | original | 43 |
 | alternative | 325 |
 | Target portfolio size分布 | 1: 26、9: 8、17: 6、43: 1、58: 1、67: 1 |
-| participant portfolio > 1 | **17 / 34** |
+| participant portfolio > 1（観測値） | **17 / 34** |
 | participant source alternativeあり | 12 |
 | participant Counter位置alternativeあり | 16 |
 | participant held Routeあり | 17 |
@@ -179,8 +192,22 @@ Target portfolio = original Candidate + 全completed contextのdelivered alterna
 | late-start alternative（originより後に開始） | 154（Gogma 144 / Skill 70 / Normal 4、重複あり） |
 | reservation違反 | 0 |
 
-portfolio size 1のparticipant 17件は、全contextが正常終了したうえでdefault extent内のalternativeが0だった（測定済みの0であり、
-未測定ではない）。
+portfolio size 1のparticipant 17件は、**今回正常終了したcontextからはalternativeを観測できなかった** participantである。
+内訳（`portfolio.observation.singleton`）:
+
+| 区分 | 件数 |
+| --- | ---: |
+| portfolio size 1のparticipant | 17 |
+| Stage 1にtimeout contextあり | **11**（うち2件はStage 1全timeoutで、coverage fallbackの1 contextのみ正常終了） |
+| Stage 1の全contextが正常終了 | **6** |
+
+全contextが正常終了した6件については、このrunで導出したそのTargetの全default-extent contextでalternativeが0だった。一方11件は
+timeout contextが残っており、timeout contextをCandidate 0として扱わないというB1自身の原則により、**そのTargetのdefault extent内に
+alternativeが存在しないとは言えない**。
+
+同様に `participant portfolio > 1 = 17 / 34` は今回のformal runで観測された値であり、timeout contextを残す（portfolio > 1の
+participantにも2件ある）ため下限側の観測値になり得る。default extentにおける最終的なdiversityの上限や、「残り17 participantには
+alternativeが無い」ことを意味しない。
 
 prefix別（各contextの先頭k件のみ）:
 
@@ -204,7 +231,8 @@ prefix別（各contextの先頭k件のみ）:
 | oracle held Route 18件のうちcovered | 1 |
 
 exactは57126a5e（non-held）と820831d0（oracle held Route）。uncovered 41件のうち26件はportfolio size 1（original以外なし）。
-B1はdefault extentだけなので、これは **default-extent portfolio coverage** であり、extent拡張後のcoverageではない。
+B1はdefault extentだけなので、これは **default-extent portfolio coverage** であり、extent拡張後のcoverageではない。さらに
+timeout contextのCandidateを含まない、**今回正常終了したcontextに基づく観測値** である（RESULT `oracleCoverage.scope`）。
 
 ## 12. 旧C2との比較（説明的比較のみ）
 
@@ -216,12 +244,22 @@ B1はdefault extentだけなので、これは **default-extent portfolio covera
 
 - uncovered oracle Route 41件のclosest差分は、多くがGogma開始位置・operation数（`gogma:first` / `gogma:operations`）。
   extent probeで届くのか、fixed winner 1つのreservationでは届かないのかの切り分けが必要。
-- portfolio size 1のparticipant 17件（Skill系Conflictに多い）のextent外Candidate。
+- portfolio size 1のparticipant 17件では、正常終了contextからalternativeを観測できなかった。ただし11件にはtimeout contextが残るため、
+  未観測の理由は
+  1. default extent内だが10分budgetで未完走のcontext
+  2. Production default extent外
+  3. single fixed winner reservation / context自体の制約
+  をまだ分離できない。B2でこの3要因を切り分ける（全contextが正常終了した6件は1を除外できる）。
 - oracle held Route 18件中covered 1件。held / late-start Routeの不足評価。
-- B1のtimeout 20 context（10分）。測定済みparticipantの補完であり、B1-M判定には影響しないが、B2でextentを広げる際のruntimeに注意。
+- B1のtimeout 20 context（10分）。B1-M判定（participant coverage）には影響しないが、上の要因1に直結する。B2でextentを広げる際の
+  runtimeにも注意。
 
 ## 14. limitations
 
+- Stage 1では136 unique context中20 contextがtimeoutしている。participant coverageは34 / 34だが、全default-extent Search contextが
+  測定済みという意味ではない（timeout contextを持つparticipant 13件）。
+- timeout contextはCandidate 0として扱っておらず、portfolio size / diversity / oracle coverageは今回正常終了したcontextから得られた
+  観測値である。portfolio size 1でもtimeout contextが残る11件については、default extent内alternativeの不在を確認していない。
 - Search-onlyのため、portfolio Candidateがfixed Route setと共存できるか（Planner trial）は未確認。
 - context parityのうちA10が記録しないfieldは比較していない（旧C2 11 orientationでは一致を確認）。
 - kernel trial prefix parityのnot comparable 2件は、A10ではkernel完走したc20-p1の2 TargetがB1の10分budgetでtimeoutしたため。
@@ -244,8 +282,8 @@ portfolio diversityの低さはsemantic failureではない。
 | file | 内容 |
 | --- | --- |
 | `src/benchmarks/plannerGlobalPhase2C26B1.ts` | A10 authority parser、parity、context導出・`searchInputDigest` dedup、Search task、outcome / coverage / fallback選択、portfolio |
-| `src/benchmarks/plannerGlobalPhase2C26B1Analysis.ts` | formal run検証、実行集計、kernel trial prefix parity、kernel metadata、portfolio集計、decision |
-| `src/benchmarks/plannerGlobalPhase2C26B1.test.ts` | 23 tests |
+| `src/benchmarks/plannerGlobalPhase2C26B1Analysis.ts` | formal run検証、実行集計、kernel trial prefix parity、kernel metadata、portfolio集計、observed portfolioの解釈境界（`phase2c26b1PortfolioObservation()`、レビュー対応で追加）、decision |
+| `src/benchmarks/plannerGlobalPhase2C26B1.test.ts` | 24 tests |
 | `scripts/run-planner-global-phase2c26b1.mjs` | runner（contexts child → gate → Stage 1 → fallback） |
 | `scripts/analyze-planner-global-phase2c26b1.mjs` | post-hoc analyzer |
 | `docs/PLANNER_GLOBAL_PHASE2C26B1_RESULT.json` | formal RESULT |
@@ -255,7 +293,7 @@ Production source（`src/domain` / `src/services` / `src/workers` / UI / db）�
 
 ## 17. 検証
 
-- focused: `npx vitest run src/benchmarks/plannerGlobalPhase2C26B1.test.ts`（23 pass）
+- focused: `npx vitest run src/benchmarks/plannerGlobalPhase2C26B1.test.ts`（24 pass）
 - `npm run lint`、`npx tsc -b --force`、`npm test`（332 files / 5442 tests pass）、`npm run build`、`git diff --check`
 
 ## 18. 再現
@@ -269,3 +307,19 @@ node scripts/analyze-planner-global-phase2c26b1.mjs --run .local/PLANNER_GLOBAL_
 ```
 
 raw evidence（`.local/`、Git管理外）: run wall 12,850秒（約3.6時間）。
+
+## 19. レビュー対応（PR #189）
+
+formal measurement・計算module・runner・decision rule・semantic failure rule・oracle比較contractは変更していない。formal再測定はしていない。
+
+- 解釈の修正: 「portfolio size 1 = 全contextを完走したうえでalternative 0」とした断定を、timeout context 11件 / 全context完走6件の
+  区別に改めた（§1・§9・§10・§11・§13・§14）。
+- RESULT: analyzerが生成していた `decision.recommendation`（「default extent portfolioを全participantで測定できた」）を、participant
+  coverageであり全context完走ではない旨に修正し、`portfolio.observation`（participantごとのStage 1未完走context数とsize 1の内訳）と
+  `oracleCoverage.scope` の説明を追加して再生成した。measured HEAD `cef4034`・`formal = true`・
+  `calculationCodeChangedSinceMeasuredHead = []` は維持。説明field（`decision.recommendation`・`portfolio.observation`・`oracleCoverage.scope`）と
+  analysis HEADを除き、旧RESULTとJSON全体が一致することを確認した（Stage 1 116 / 20、fallback 3 / 3、34 / 34、prefix 98 / 0 / 2、
+  reservation違反0、`B1_M_measurement_complete` はすべて同値）。
+- 改行コード: post-hoc解析TS・test・analyzer・本文書がCRLFでcommitされており、PR全体の `git diff --check` が行末空白として
+  検出していた（初回commitのdiff-checkは未追跡fileに対して実行していたため見逃した）。内容を変えずLFへ統一した（`4d8dda1`。解析TS末尾の余分な空行も `2dc72c0` で削除）。
+  計算module（`plannerGlobalPhase2C26B1.ts`）とrunnerは元からLFで、measured HEADのまま無変更。

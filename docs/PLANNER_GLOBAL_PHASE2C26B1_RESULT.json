@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 Phase 2-C2.6-B1: default-extent Candidate portfolio from every orientation pre-Search context (post-hoc analysis)",
-  "analyzedAt": "2026-10-01T10:26:45.997Z",
+  "analyzedAt": "2026-10-01T10:55:37.143Z",
   "sources": {
     "run": {
       "file": "PLANNER_GLOBAL_PHASE2C26B1_RAW.json.local",
@@ -30,9 +30,13 @@
   },
   "provenance": {
     "measuredHead": "cef40343e7149e0612c8efb0ad97a40f572c6e42",
-    "analysisHead": "cef40343e7149e0612c8efb0ad97a40f572c6e42",
+    "analysisHead": "2dc72c0b4931dd039e8c52dc84e3abc3caab13c2",
     "analysisCodeUncommitted": false,
-    "codeChangedSinceMeasuredHead": [],
+    "codeChangedSinceMeasuredHead": [
+      "scripts/analyze-planner-global-phase2c26b1.mjs",
+      "src/benchmarks/plannerGlobalPhase2C26B1.test.ts",
+      "src/benchmarks/plannerGlobalPhase2C26B1Analysis.ts"
+    ],
     "calculationCodeChangedSinceMeasuredHead": [],
     "postHocAllowedFiles": [
       "src/benchmarks/plannerGlobalPhase2C26B1Analysis.ts",
@@ -26524,6 +26528,369 @@
           "participantHeldRoutes": 270
         }
       }
+    },
+    "observation": {
+      "note": "explored = at least one default-extent Search context of the Target ended normally (Candidate 0 included); it is not every context completed. Timeout contexts are never Candidate 0: portfolio size, diversity and oracle coverage are observations over the contexts that ended normally, and a size-1 portfolio with an unfinished context does not confirm the absence of an alternative in the default extent.",
+      "participantsWithUnfinishedStage1Contexts": 13,
+      "singleton": {
+        "participants": 17,
+        "withUnfinishedStage1Contexts": 11,
+        "allStage1ContextsCompleted": 6,
+        "exploredOnlyByFallback": 2,
+        "noAlternativeConfirmedInDefaultExtent": 6,
+        "unresolvedCauses": [
+          "default-extent context unfinished within the Stage 1 budget",
+          "outside the Production default extent",
+          "single fixed winner reservation / context constraint"
+        ]
+      },
+      "multiple": {
+        "participants": 17,
+        "withUnfinishedStage1Contexts": 2,
+        "note": "The count of participants with portfolio > 1 is the one observed in this run; unfinished contexts may add Candidates, so it is not an upper bound of the default-extent diversity."
+      },
+      "participants": [
+        {
+          "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 9,
+          "unfinishedStage1Contexts": 2,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "coverage_fallback",
+          "stage1Tasks": 1,
+          "unfinishedStage1Contexts": 1,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 3,
+          "unfinishedStage1Contexts": 1,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+          "portfolioSize": 9,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 1,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 2,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": true
+        },
+        {
+          "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 3,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": true
+        },
+        {
+          "targetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85",
+          "portfolioSize": 9,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 1,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 10,
+          "unfinishedStage1Contexts": 3,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
+          "portfolioSize": 17,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 2,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+          "portfolioSize": 9,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 2,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+          "portfolioSize": 43,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 9,
+          "unfinishedStage1Contexts": 1,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+          "portfolioSize": 9,
+          "explored": true,
+          "exploredBy": "coverage_fallback",
+          "stage1Tasks": 1,
+          "unfinishedStage1Contexts": 1,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+          "portfolioSize": 58,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 10,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 9,
+          "unfinishedStage1Contexts": 1,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 9,
+          "unfinishedStage1Contexts": 2,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 9,
+          "unfinishedStage1Contexts": 2,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+          "portfolioSize": 67,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 10,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 2,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": true
+        },
+        {
+          "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 9,
+          "unfinishedStage1Contexts": 1,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
+          "portfolioSize": 9,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 1,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 2,
+          "unfinishedStage1Contexts": 1,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
+          "portfolioSize": 17,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 2,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 2,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": true
+        },
+        {
+          "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+          "portfolioSize": 17,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 3,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 9,
+          "unfinishedStage1Contexts": 3,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+          "portfolioSize": 9,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 1,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
+          "portfolioSize": 17,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 2,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 1,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": true
+        },
+        {
+          "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+          "portfolioSize": 9,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 3,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
+          "portfolioSize": 9,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 1,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
+          "portfolioSize": 17,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 2,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 1,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": true
+        },
+        {
+          "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
+          "portfolioSize": 17,
+          "explored": true,
+          "exploredBy": "stage1",
+          "stage1Tasks": 3,
+          "unfinishedStage1Contexts": 0,
+          "allStage1ContextsCompleted": true,
+          "noAlternativeConfirmedInDefaultExtent": false
+        },
+        {
+          "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+          "portfolioSize": 1,
+          "explored": true,
+          "exploredBy": "coverage_fallback",
+          "stage1Tasks": 1,
+          "unfinishedStage1Contexts": 1,
+          "allStage1ContextsCompleted": false,
+          "noAlternativeConfirmedInDefaultExtent": false
+        }
+      ]
     },
     "kernelMetadataCounts": {
       "kernel_found": 28,
@@ -71377,7 +71744,7 @@
     ]
   },
   "oracleCoverage": {
-    "scope": "default-extent portfolio coverage (B1 runs no extent probe)",
+    "scope": "default-extent portfolio coverage over the Search contexts that ended normally (B1 runs no extent probe; timeout contexts are not Candidate 0)",
     "totals": {
       "routes": 43,
       "exact": 2,
@@ -72398,6 +72765,6 @@
     "case": "B1_M_measurement_complete",
     "reasons": [],
     "participants": "34/34",
-    "recommendation": "default extent portfolioを全participantで測定できた。B2でextent probe・oracle coverage gap・held / late-start不足・single fixed winner reservationの限界を評価する"
+    "recommendation": "全Conflict participantについて少なくとも1つのdefault-extent Search contextが正常終了した（participant measurement coverageの事前登録名称であり、全Search context完走を意味しない）。B2で未完走default context・extent不足・reservation / context制約を切り分け、extent probe・oracle coverage gap・held / late-start不足・single fixed winner reservationの限界を評価する"
   }
 }
