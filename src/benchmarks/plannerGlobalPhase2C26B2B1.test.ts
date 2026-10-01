@@ -332,6 +332,11 @@ describe('Phase 2-C2.6-B2-B1 analysis', () => {
     expect([row('t-e').reach.minimalCardinality, row('t-e').reach.heldUnion]).toEqual(['unreached', { coversAllNeeded: false, missingHeld: { normal: 0, skill: 0, gogma: 1 } }])
     // t-d needs 10..15 held: 14 is held by no current Route either.
     expect([row('t-d').reach.minimalCardinality, row('t-d').reach.heldUnion.coversAllNeeded]).toEqual(['unreached', false])
+    // The non-blocking relaxation leaves out the Target's own Route and every Route blocking an own position:
+    // for t-a (own 12) E-a is its own and E-d blocks 12, so only E-b, E-c and E-e remain.
+    expect(row('t-a').reach.nonBlockingHeldUnion).toEqual({ members: 3, coversAllNeeded: true, missingHeld: { normal: 0, skill: 0, gogma: 0 } })
+    expect(row('t-e').reach.nonBlockingHeldUnion).toMatchObject({ coversAllNeeded: false, missingHeld: { gogma: 1 } })
+    expect(result.aggregates.contextGap).toMatchObject({ unreachedNonBlockingUnionMissesNeeded: 2, unreachedNonBlockingUnionCoversNeeded: 0 })
     const gaps = result.aggregates.contextGap
     expect([gaps.routes, gaps.newlyCompatibleByK0, gaps.newlyCompatibleByAllCurrentK1, gaps.newlyCompatibleByK2, gaps.stillUnreached]).toEqual([4, 0, 1, 1, 2])
     expect(result.decisionInput).toEqual({ searchEligibleContextGaps: 4, recovered: 2 })

@@ -94,7 +94,7 @@ try {
     minimalCardinality: row.reach.minimalCardinality, compatibleContexts: row.reach.compatibleContexts, anyK1Compatible: row.reach.anyK1Compatible, contextsChecked: row.reach.contextsChecked,
     representative: row.reach.representative, minimalAliases: row.reach.minimalAliases.map(a => a.fixedSetId),
     extent: { withinDefaultExtent: row.reach.extent.withinDefaultExtent, verdict: row.reach.extent.verdict, required: row.reach.extent.required, reach: row.reach.extent.reach },
-    unreachedPattern: row.reach.unreachedPattern, unreachedBestMissing: row.reach.unreachedBestMissing, heldUnion: row.reach.heldUnion, oracleSupport: row.oracleSupport,
+    unreachedPattern: row.reach.unreachedPattern, unreachedBestMissing: row.reach.unreachedBestMissing, heldUnion: row.reach.heldUnion, nonBlockingHeldUnion: row.reach.nonBlockingHeldUnion, oracleSupport: row.oracleSupport,
   }))
   const record = {
     ...base,

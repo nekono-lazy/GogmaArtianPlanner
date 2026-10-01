@@ -15,7 +15,7 @@
  * every context exists, to explain a recovery, never to choose a fixed set.
  */
 import { stableStringify } from '../domain/models/hashing'
-import { defaultPlannerAlternativeSearchExtent, type PlannerAlternativeReservation } from '../domain/search'
+import { defaultPlannerAlternativeSearchExtent, normalizePlannerAlternativeReservation, type PlannerAlternativeReservation } from '../domain/search'
 import { phase2c26b1SearchInputDigest } from './plannerGlobalPhase2C26B1'
 import type { Phase2C25APreSearchContext } from './plannerGlobalPhase2C25A'
 import {
@@ -356,12 +356,10 @@ export async function validatePhase2C26B2B1B2AParity(input: { snapshot: Phase2C2
 
 export type Phase2C26B2B1MinimalCardinality = '0' | '1' | '2' | 'unreached' | 'checkpoint_hard_constraint'
 
-/** The relaxation diagnostic: every current Route's held positions at once, nothing blocked, no exclusive OwnedWeapon. */
-export function phase2c26b2b1HeldUnionReservation(snapshot: Phase2C26B2B1Snapshot): PlannerAlternativeReservation {
+/** The held positions of several reservations at once, nothing blocked, no exclusive OwnedWeapon (a relaxation, never a context). */
+function unionHeldOnly(reservations: readonly PlannerAlternativeReservation[]): PlannerAlternativeReservation {
   const normal = new Map<string, Set<number>>(), skill = new Set<number>(), gogma = new Set<number>()
-  for (const row of snapshot.fixedSets) {
-    if (row.cardinality !== 1 || row.reservationGroupIndex === null) continue
-    const res = snapshot.reservationGroups[row.reservationGroupIndex]!.reservation
+  for (const res of reservations) {
     res.skill.held.forEach(p => skill.add(p))
     res.gogma.held.forEach(p => gogma.add(p))
     res.normal.forEach(n => { const set = normal.get(n.counterId) ?? new Set<number>(); n.held.forEach(p => set.add(p)); normal.set(n.counterId, set) })
@@ -369,6 +367,12 @@ export function phase2c26b2b1HeldUnionReservation(snapshot: Phase2C26B2B1Snapsho
   const sorted = (set: Set<number>) => [...set].sort((a, b) => a - b)
   return { normal: [...normal.entries()].sort(([a], [b]) => compare(a, b)).map(([counterId, held]) => ({ counterId, held: sorted(held), blocked: [] })),
     skill: { held: sorted(skill), blocked: [] }, gogma: { held: sorted(gogma), blocked: [] }, exclusiveOwnedWeaponIds: [] }
+}
+
+/** The relaxation diagnostic: every current Route's held positions at once, nothing blocked, no exclusive OwnedWeapon. */
+export function phase2c26b2b1HeldUnionReservation(snapshot: Phase2C26B2B1Snapshot): PlannerAlternativeReservation {
+  return unionHeldOnly(snapshot.fixedSets.filter(row => row.cardinality === 1 && row.reservationGroupIndex !== null)
+    .map(row => snapshot.reservationGroups[row.reservationGroupIndex!]!.reservation))
 }
 
 export interface Phase2C26B2B1RouteReach {
@@ -393,6 +397,14 @@ export interface Phase2C26B2B1RouteReach {
    * its compatibility itself is not a necessary condition and is not used.
    */
   heldUnion: { coversAllNeeded: boolean; missingHeld: { normal: number; skill: number; gogma: number } }
+  /**
+   * The tighter relaxation (post-hoc analysis addition): the held union of only those current Routes (never the Target's
+   * own) whose own K1 reservation neither blocks an own position of this Route nor holds its source OwnedWeapon exclusive.
+   * A compatible fixed set of any size consists of such Routes only (its blocked / exclusive sets contain every member's),
+   * so `coversAllNeeded = false` rules out every current fixed set of any size; `true` leaves K>=3 open (pairwise
+   * Conflicts and the Normal held prefix are not considered).
+   */
+  nonBlockingHeldUnion: { members: number; coversAllNeeded: boolean; missingHeld: { normal: number; skill: number; gogma: number } }
   extent: Phase2C26B2ARouteExtent
   inconsistencies: string[]
 }
@@ -408,8 +420,19 @@ export async function phase2c26b2b1RouteReach(input: { view: Phase2C26B2ARouteVi
   const unionReach = await phase2c26b2aReachability(view, input.heldUnion, origins, snapshot.extent)
   const unionMissing = Object.fromEntries(laneNames.map(lane => [lane, unionReach.lanes[lane]?.missingHeld.length ?? 0])) as { normal: number; skill: number; gogma: number }
   const heldUnion = { coversAllNeeded: laneNames.every(lane => unionMissing[lane] === 0), missingHeld: unionMissing }
+  const nonBlockingMembers: PlannerAlternativeReservation[] = []
+  for (const row of snapshot.fixedSets) {
+    if (row.cardinality !== 1 || row.reservationGroupIndex === null || row.fixedBuildListEntryIds[0] === target?.currentBuildListEntryId) continue
+    const member = snapshot.reservationGroups[row.reservationGroupIndex]!.reservation
+    const memberReach = await phase2c26b2aReachability(view, member, origins, snapshot.extent)
+    if (!memberReach.reasons.includes('blocked_position_conflict') && !memberReach.reasons.includes('exclusive_owned_weapon_conflict')) nonBlockingMembers.push(member)
+  }
+  const nonBlockingUnion = normalizePlannerAlternativeReservation(unionHeldOnly(nonBlockingMembers))
+  const nonBlockingReach = await phase2c26b2aReachability(view, nonBlockingUnion, origins, snapshot.extent)
+  const nonBlockingMissing = Object.fromEntries(laneNames.map(lane => [lane, nonBlockingReach.lanes[lane]?.missingHeld.length ?? 0])) as { normal: number; skill: number; gogma: number }
+  const nonBlockingHeldUnion = { members: nonBlockingMembers.length, coversAllNeeded: laneNames.every(lane => nonBlockingMissing[lane] === 0), missingHeld: nonBlockingMissing }
   const base = { targetWeaponId: view.targetWeaponId, compatibleContexts: { '0': 0, '1': 0, '2': 0 }, anyK1Compatible: false, contextsChecked: 0, representative: null,
-    minimalAliases: [], unreachedPattern: null, unreachedBestMissing: null, heldUnion, extent, inconsistencies }
+    minimalAliases: [], unreachedPattern: null, unreachedBestMissing: null, heldUnion, nonBlockingHeldUnion, extent, inconsistencies }
   if (!target || !contextsRow) return { ...base, minimalCardinality: 'unreached', inconsistencies: [`${view.targetWeaponId}: not a snapshot Target`] }
   if (target.checkpointHardConstraint) return { ...base, minimalCardinality: 'checkpoint_hard_constraint' }
   const fixedById = new Map(snapshot.fixedSets.map(row => [row.fixedSetId, row]))
@@ -486,6 +509,10 @@ export function phase2c26b2b1Distribution(rows: readonly Phase2C26B2B1RouteRow[]
     unreachedHeldByNoCurrentRoute: rows.filter(row => row.reach.minimalCardinality === 'unreached' && !row.reach.heldUnion.coversAllNeeded).length,
     /** Unreached, though every needed position is held by some current Route: K>=3 is not ruled out by this relaxation. */
     unreachedHeldUnionCoversNeeded: rows.filter(row => row.reach.minimalCardinality === 'unreached' && row.reach.heldUnion.coversAllNeeded).length,
+    /** Unreached, and the current Routes that neither block it nor take its source cannot hold every needed position: no current fixed set of any size. */
+    unreachedNonBlockingUnionMissesNeeded: rows.filter(row => row.reach.minimalCardinality === 'unreached' && !row.reach.nonBlockingHeldUnion.coversAllNeeded).length,
+    /** Unreached, though the non-blocking current Routes together hold every needed position: K>=3 is not ruled out. */
+    unreachedNonBlockingUnionCoversNeeded: rows.filter(row => row.reach.minimalCardinality === 'unreached' && row.reach.nonBlockingHeldUnion.coversAllNeeded).length,
     recoveredWithSupporterInMinimalAlias: recovered.filter(row => row.oracleSupport.aliasesWithSupporter > 0).length,
     recoveredWithoutSupporterInMinimalAlias: recovered.filter(row => row.reach.minimalCardinality !== '0' && row.oracleSupport.aliasesWithSupporter === 0).length,
   }
