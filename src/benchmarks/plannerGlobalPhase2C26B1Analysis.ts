@@ -343,4 +343,3 @@ export function phase2c26b1SemanticFailures(input: {
   if (input.reservationViolations > 0) out.push('reservation_violation')
   return out
 }
-
