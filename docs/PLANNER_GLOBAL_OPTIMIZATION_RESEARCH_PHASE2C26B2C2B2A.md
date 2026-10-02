@@ -5,9 +5,10 @@ extent、Search algorithm / ordering / comparator、P1は変更していない�
 K2 feature / grouping、E2 9件のSearch、residual unreached 3件、Candidate trial、Planner Alternative kernel、full Planner rerun、
 global assignment、Production scheduler採用判断、runtime optimization、UIも行っていない。timeout / OOM taskのretry・fallbackもしていない。
 
-- measurement candidate HEAD（`reconstructedMeasuredHead`）: `32130e843cabcb3777f6675a84fa580d114ed27d`。E1 manifest rule・P1 top32 task構築・
-  L2 context置換・C4C capture・実行条件・analyzer・事前登録decision rule・testsを含むcommitで、Stage 1 measurementはこのcommitから
-  起動した。**ただしこれはpost-hoc再構成時に指定した値であり、runnerが実測開始時にattestしたHEADではない**（§2.2）
+- 作業記録上のmeasurement candidate HEAD（`reconstructedMeasuredHead`）: `32130e843cabcb3777f6675a84fa580d114ed27d`。E1 manifest rule・
+  P1 top32 task構築・L2 context置換・C4C capture・実行条件・analyzer・事前登録decision rule・testsを含むcommitで、post-hoc reconstruction
+  ではこのcommitをmeasurement candidate HEADとして指定している。**ただしrunnerによるlaunch-time attestationは存在しないため、RESULT上では
+  実測開始時HEADとしてverifiedとは扱わない**（`measuredHeadSource = post_hoc_reconstruction_argument`、`launchProvenanceVerified = false`、§2.2）
 - analysis HEAD: `bfe0dd8285c114d4667f335b9548997ab249aa00`（measurement candidate HEAD以後の変更はpost-hoc許可対象の
   `src/benchmarks/plannerGlobalPhase2C26B2C2B2AAnalysis.ts`・`scripts/analyze-planner-global-phase2c26b2c2b2a.mjs`・
   `scripts/reconstruct-planner-global-phase2c26b2c2b2a-partial-raw.mjs`・testだけ。`calculationCodeChangedSinceMeasuredHead = []`）
@@ -94,7 +95,7 @@ run dir・child record・runner logから同じ形のrawを組み立てた。
 
 | 項目 | 値 |
 | --- | --- |
-| reconstructed raw | `PLANNER_GLOBAL_PHASE2C26B2C2B2A_RAW.json.local`、SHA-256 `d393c263d17a05e769d024df62a929efac2c260741e5e2273234c61e344dcb6f`（committed scriptで再生成して同一） |
+| reconstructed raw | `PLANNER_GLOBAL_PHASE2C26B2C2B2A_RAW.json.local`、SHA-256 `d393c263d17a05e769d024df62a929efac2c260741e5e2273234c61e344dcb6f`。provenance修正前のreconstruction scriptで生成し、そのまま保持しているraw。現在のreconstruction scriptはlaunch provenanceの表現を修正している（`uncommittedBenchmarkCode: null`、`launchWorkingTreeCleanVerified: false`、`repositoryHeadSource: post_hoc_reconstruction_argument`、`launchProvenanceVerified: false` 等）ため、同一入力から再生成してもraw JSONとSHA-256は一致しない。既存run dir / child record / runner log / Search結果は変更していない |
 | run dir inventory | 127 files、inventory SHA-256 `35516f7d87dd16db0fcdd3e05683a98522ba47987e25b2f945f3011687c9b7d2`（全file名とSHA-256） |
 | child record | 35件 + tasks record。各recordのtaskはtask fileと構築taskに一致 |
 | logから再構成した値 | process wall（0.1 s分解能）、失敗childの最終IPC heap（log値とsubsampleされたmemory.jsonl最終行の大きい方。RSSは下限） |
