@@ -922,7 +922,10 @@ describe('IdentificationWizardDialog STEP 1', () => {
   })
 })
 
-describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
+// These integration tests render the relatively heavy Wizard UI and exercise
+// user interactions; under full `npm test` parallel load they have repeatedly
+// hit the 15 s boundary while passing alone, so they get 30 s (Refs #142).
+describe('IdentificationWizardDialog STEP 2', { timeout: 30_000 }, () => {
   it('starts with four unentered five-slot Reset observation drafts', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
@@ -1090,7 +1093,8 @@ describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
   })
 })
 
-describe('IdentificationWizardDialog Review and lifecycle', { timeout: 15_000 }, () => {
+// Same full-test load boundary as STEP 2 above (Refs #142).
+describe('IdentificationWizardDialog Review and lifecycle', { timeout: 30_000 }, () => {
   it('shows exact starting values, requires restoration confirmation, and adopts only through Coordinator', async () => {
     const user = userEvent.setup()
     const { coordinator, onAdopted } = renderWizard()
