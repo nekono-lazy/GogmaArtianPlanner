@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import rawB2C2B1 from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B1_RESULT.json?raw'
 import rawB2C1 from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C1_RESULT.json?raw'
 import rawB2C2A from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2A_RESULT.json?raw'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2A_RESULT.json?raw'
 import type { TargetWeapon } from '../domain/models/publicTypes'
 import { createPlannerStartSearchOrigin } from '../domain/planner/replacement/plannerSearchOrigin'
 import { defaultPlannerAlternativeSearchExtent, type PlannerAlternativeCandidate, type PlannerAlternativeSearchExecution } from '../domain/search'
@@ -618,6 +619,44 @@ describe('Phase 2-C2.6-B2-C2B2A analysis', () => {
     expect(() => d(11, 10, 11)).toThrow()
     expect(() => d(5, 7, 10, { unresolvedSafetyCapTargets: 2 })).toThrow()
     expect(PHASE2C26B2C2B2A_DECISION_RULE.order.map(line => line.split(':')[0])).toEqual(['B2C2B2A_INVALID', 'B2C2B2A_INCOMPLETE', 'B2C2B2A_ALL_C8', 'B2C2B2A_ALL_C32', 'B2C2B2A_ALL_C4C', 'B2C2B2A_INCOMPLETE', 'B2C2B2A_PARTIAL'])
+  })
+})
+
+// ---------------------------------------------------------------- the committed formal RESULT
+
+describe('Phase 2-C2.6-B2-C2B2A committed RESULT', () => {
+  const result = JSON.parse(rawResult)
+  it('pins the intentionally stopped formal run: INCOMPLETE, 44 / 352 started, 308 notRun, never promoted, no invalid reason', () => {
+    expect(result.provenance).toMatchObject({ formal: true, partialRun: true, calculationCodeChangedSinceMeasuredHead: [], analysisCodeUncommitted: false, uncommittedBenchmarkCode: false,
+      smoke: null, b2c2b1ResultSha256: PHASE2C26B2C2B2A_REGISTERED_B2C2B1.resultSha256, b2c1ResultSha256: b2c1Sha, perTargetExtent: false, targetIndividualOracleExtentAsSearchInput: false,
+      oracleReadBySearchChild: false, oracleMatchUsedForEarlyStop: false })
+    expect(result.provenance.reconstruction).toMatchObject({ postHoc: true, childRecordsModified: false, searchRun: false })
+    expect(result.provenance.intentionalStop).toMatchObject({ ranTasks: 44, notRunTasks: 308, noRetry: true, conditionsUnchanged: true })
+    expect(result.decision).toMatchObject({ case: 'B2C2B2A_INCOMPLETE', reasons: [] })
+    expect(result.invalidReasons).toEqual([])
+    expect(Object.values(result.parity.hashChain).every(Boolean)).toBe(true)
+    expect(Object.values(result.parity.scheduleParity).every(v => v === true || v === 352)).toBe(true)
+    expect(result.conditions).toMatchObject({ searchExtent: L2, scheduleExtent: { ...defaultPlannerAlternativeSearchExtent }, contextBudget: 32, expectedTasks: 352,
+      stage1: { ...PHASE2C26B2C2B2A_STAGE1 }, ladderRungsSearched: ['L2'] })
+    expect(result.aggregates.execution).toMatchObject({ tasks: 352, started: 44, completed: 35, timeout: 7, outOfMemory: 2, processFailure: 0, contextMismatch: 0, notRun: 308,
+      targets: { total: 11, fullyMeasured: 0, partiallyMeasured: 2, unmeasured: 9 } })
+    expect(result.aggregates.execution.perTarget.map((r: { started: number; completed: number; timeout: number; outOfMemory: number; notRun: number }) =>
+      [r.started, r.completed, r.timeout, r.outOfMemory, r.notRun])).toEqual([[32, 25, 5, 2, 0], [12, 10, 2, 0, 20], ...Array(9).fill([0, 0, 0, 0, 32])])
+    expect(result.aggregates.exactTargets).toEqual({ C8: 2, C32: 2, C4C: 2 })
+    expect(result.aggregates.compatibility).toMatchObject({ measured: 35, compatibleSearched: 6, compatibleWithExact: { C4C: 6 }, incompatibleWithExact: 0, incompatibleWithPartial: 0 })
+    expect(result.aggregates.candidates.reservationViolations).toBe(0)
+    expect(result.aggregates.firstExactEqualsFirstCompatible).toEqual({ recoveredC4C: 2, equal: 2, later: 0 })
+    // Every timeout / OOM task is unmeasured (never Candidate 0) and every notRun task is neither a Search nor a failure.
+    const rows = result.taskRows as { process: string; candidateCount: number | null; coverage: string | null; compatible: boolean }[]
+    expect(rows.filter(r => r.process === 'timeout' || r.process === 'out_of_memory').every(r => r.candidateCount === null && r.coverage === null)).toBe(true)
+    expect(rows.filter(r => r.process === 'not_run')).toHaveLength(308)
+    expect(rows.filter(r => r.process === 'not_run').every(r => r.candidateCount === null && r.coverage === null)).toBe(true)
+    expect(rows.filter(r => r.process === 'timeout' || r.process === 'out_of_memory').every(r => !r.compatible)).toBe(true)
+    // The t00 diagnostic: first covering rung L1, yet timeouts / OOM at the common L2.
+    expect(result.extentDiagnostic[0].b2c2b1).toMatchObject({ required: { normal: 5, gogma: 119, skill: 22 }, firstLadderRung: 'L1' })
+    // The registered rule over the recorded counts: 352 - 35 completed = 317 unmeasured (9 timeout / OOM + 308 notRun).
+    expect(phase2c26b2c2b2aDecision({ invalidReasons: [], tasks: 352, targets: 11, unmeasuredTasks: 352 - result.aggregates.execution.completed,
+      exactTargets: result.aggregates.exactTargets, unresolvedSafetyCapTargets: 0 }).case).toBe('B2C2B2A_INCOMPLETE')
   })
 })
 
