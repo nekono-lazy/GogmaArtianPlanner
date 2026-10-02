@@ -1,0 +1,3068 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-B2-C2B1: post-hoc extent requirement characterization of the extent-insufficient Targets (E1 K1-minimal / E2 K2-minimal) and the E1 extent ladder",
+  "analyzedAt": "2026-10-02T08:11:50.675Z",
+  "sources": {
+    "calculation": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B1_RAW.json.local",
+      "bytes": 37158562,
+      "sha256": "47b8ffc88cd52f34ba6a1459583ea0c6e83cab0ab0f99fe0b43878674cec3555"
+    },
+    "b2b1Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2B1_RESULT.json",
+      "bytes": 1286493,
+      "sha256": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d"
+    },
+    "b2c1Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C1_RESULT.json",
+      "bytes": 170945,
+      "sha256": "04904fafb93664ecfed5f3bd654b29d9c39029dde34aa88a59d1d11de8fc2bac"
+    },
+    "b2aResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2A_RESULT.json",
+      "bytes": 807311,
+      "sha256": "7f425ca46d7908280793440570d8af6e85fe589ec8772160021f15f2e814b883"
+    },
+    "r2Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2AR2_RESULT.json",
+      "bytes": 48411,
+      "sha256": "5014571404310d287eaa03391d7f31c3d64621c6f68ee740e82fad8690ba6402"
+    },
+    "oracle": {
+      "file": "PLANNER_GLOBAL_1657_ORACLE_RESULT.json",
+      "bytes": 183764,
+      "sha256": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1"
+    },
+    "oracleManifest": {
+      "file": "plannerGlobalOracle1657Manifest.ts",
+      "bytes": 22483,
+      "sha256": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af"
+    }
+  },
+  "provenance": {
+    "measuredHead": "2ce4d3c70426ffaa462ae12c3a4cfd99d51ac0af",
+    "analysisHead": "2ce4d3c70426ffaa462ae12c3a4cfd99d51ac0af",
+    "analysisCodeUncommitted": false,
+    "codeChangedSinceMeasuredHead": [],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B1Analysis.ts",
+      "scripts/analyze-planner-global-phase2c26b2c2b1.mjs",
+      "*.test.ts"
+    ],
+    "formal": true,
+    "benchmarkCodeSha256": "85b9caaa04711fab3431c7ed2c42fe0185eda1821e4c0ccd7dffc02510917f94",
+    "uncommittedBenchmarkCode": false,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "b2c1ResultSha256": "04904fafb93664ecfed5f3bd654b29d9c39029dde34aa88a59d1d11de8fc2bac",
+    "b2b1ResultSha256": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d",
+    "b2aResultSha256": "7f425ca46d7908280793440570d8af6e85fe589ec8772160021f15f2e814b883",
+    "r2ResultSha256": "5014571404310d287eaa03391d7f31c3d64621c6f68ee740e82fad8690ba6402",
+    "oracleResultSha256": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1",
+    "oracleManifestFileSha256": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af",
+    "oracleManifestRoutesSha256": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+    "r2Use": "authority that the default-extent Search validation is complete (B2C2AR2_ALL_C4C) and that its 20 Targets are the defaultExtent subgroup; no extent requirement is derived from it",
+    "oracleReadByCalculation": false,
+    "oracleReadByAnalyzerOnly": true,
+    "oracleInformedLadder": true,
+    "targetIndividualOracleExtentAsSearchInput": false,
+    "oracleFedBackToCalculation": false,
+    "searchRun": false,
+    "measuredAt": "2026-10-02T08:11:49.653Z",
+    "calculationWallMs": 4200.3703
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one process, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "rngEngineVersion": "production-rng:c5-e7"
+  },
+  "conditions": {
+    "defaultExtent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "origins": {
+      "skill": 341,
+      "gogma": 55
+    },
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 20000,
+    "notRun": [
+      "planner_alternative_search",
+      "candidate_search",
+      "actual_search_probe",
+      "candidate_capture_comparison",
+      "candidate_materialization",
+      "candidate_trial",
+      "planner_alternative_kernel",
+      "full_planner_rerun",
+      "global_assignment",
+      "extent_change",
+      "production_default_change",
+      "search_ordering_change",
+      "search_comparator_change",
+      "policy_change",
+      "k2_feature_grouping",
+      "residual_unreached_support",
+      "production_change",
+      "ui_change"
+    ],
+    "orderingPolicy": "P1",
+    "p1": {
+      "id": "P1",
+      "name": "default_simple_first",
+      "keys": [
+        [
+          "targetEligibleMinCardinality",
+          "asc"
+        ],
+        [
+          "exclusiveOwnedWeaponCount",
+          "asc"
+        ],
+        [
+          "blockedCountDefaultTotal",
+          "asc"
+        ],
+        [
+          "shareableHeldCountDefaultTotal",
+          "desc"
+        ],
+        [
+          "reservationDigest",
+          "asc"
+        ]
+      ]
+    },
+    "extentSemantics": "phase2c26b2aRouteExtent(): required = last own position - origin + 1 (conversion Route Skill: one less); within the extent iff required <= the extent value",
+    "percentile": "nearest rank: sorted[ceil(p / 100 * n) - 1]",
+    "ladderRule": {
+      "population": "E1: K1-minimal extent-insufficient Targets (B2-C1 post-hoc subgroups extentInsufficient and k1Minimal)",
+      "rungs": [
+        "L0 default: the Production default extent (defaultPlannerAlternativeSearchExtent)",
+        "L1 intermediate: per stream, grid(nearest-rank median of the required extent over the E1 Targets insufficient on that stream)",
+        "L2 larger: per stream, grid(maximum of the required extent over the E1 Targets insufficient on that stream)"
+      ],
+      "grid": "a stream no E1 Target exceeds keeps its default; otherwise max(default, the smallest power of two >= the value), lowered to the ceiling when that power exceeds it; a value above the ceiling is unbounded",
+      "ceiling": "recommendedCandidateSearchDefaults (the Candidate Search initial search range with the same max*Advance meanings, Browser-measured in Issue #104 / #125)",
+      "dedup": "a rung equal to the previous rung is dropped",
+      "percentile": "nearest rank: sorted[ceil(p / 100 * n) - 1]",
+      "note": "The rung values read the E1 cohort required extents post hoc (oracleInformedLadder = true). The next Phase searches every E1 Target with the same rungs, in order; no rung is a Production default."
+    },
+    "ladderCeiling": {
+      "maxNormalAdvance": 350,
+      "maxGogmaAdvance": 500,
+      "maxSkillAdvance": 1500
+    },
+    "oracleUse": "post-hoc diagnostic fixture of Issue #154 only: never a context generator, a policy feature, a Search input, a Production heuristic or a game rule"
+  },
+  "hashChain": {
+    "exportSha256": {
+      "calculation": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "b2b1": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "b2c1": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "b2a": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "r2": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+      "oracle": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "oracleResultSha256": {
+      "file": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1",
+      "b2b1": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1",
+      "b2c1": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1",
+      "b2a": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1",
+      "r2": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1"
+    },
+    "oracleManifestFileSha256": {
+      "file": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af",
+      "b2b1": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af",
+      "b2c1": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af",
+      "b2a": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af",
+      "r2": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af"
+    },
+    "oracleManifestRoutesSha256": {
+      "file": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+      "oracle": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+      "b2b1": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+      "b2c1": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+      "b2a": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+      "r2": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc"
+    },
+    "b2c1ResultSha256": {
+      "file": "04904fafb93664ecfed5f3bd654b29d9c39029dde34aa88a59d1d11de8fc2bac",
+      "r2": "04904fafb93664ecfed5f3bd654b29d9c39029dde34aa88a59d1d11de8fc2bac"
+    },
+    "b2b1ResultSha256": {
+      "file": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d",
+      "b2c1": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d",
+      "r2": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d"
+    }
+  },
+  "hashChainIssues": [],
+  "parity": {
+    "authorities": {
+      "b2b1": {
+        "valid": true,
+        "measuredHead": "b7d04bb32ae38676d9b6364a4a087779c9ba4368"
+      },
+      "b2c1": {
+        "valid": true,
+        "measuredHead": "4a0c4eb38097301550c82a886ab321497769e51d"
+      },
+      "b2a": {
+        "valid": true,
+        "measuredHead": "ae2083f076c3ddfa6d2c7b45248be9a43c2da1d1"
+      },
+      "r2": {
+        "valid": true,
+        "measuredHead": "00794872bd70609920ab1054739244a8496ebf00",
+        "defaultExtentTargets": 20
+      }
+    },
+    "manifest": {
+      "valid": true,
+      "checkedRoutes": 43
+    },
+    "b2c1Audit": {
+      "scheduleConsistency": true,
+      "b2b1Universe": true,
+      "subgroupCounts": {
+        "recovered": 40,
+        "defaultExtent": 20,
+        "extentInsufficient": 20,
+        "contextGapRecovered": 37,
+        "b2aCovered": 2,
+        "probeGap": 1,
+        "k1Minimal": 31,
+        "k2Minimal": 9,
+        "unreached": 3
+      },
+      "invalidReasons": []
+    },
+    "calculation": {
+      "checks": {
+        "p1CardinalityFirst": true,
+        "p1OrderingCoversTargets": true
+      },
+      "scheduleChecks": {
+        "ranksArePermutations": true,
+        "k0RankOne": true,
+        "digestsUniquePerTarget": true,
+        "contextsMatchSnapshot": true
+      },
+      "snapshotChecks": {
+        "k0IsEmptyReservation": true,
+        "reservationsNormalized": true,
+        "unitPlansMatchInitialContext": true,
+        "reservationDigestsUnique": true,
+        "k2ConflictPairs": {
+          "k2Invalid": 68,
+          "initialDetectionPairs": 68,
+          "onlyK2": [],
+          "onlyInitialDetection": [],
+          "matches": true
+        }
+      }
+    }
+  },
+  "contextUniverse": {
+    "targets": 43,
+    "semanticReservations": 879,
+    "targetSpecificContexts": 36084,
+    "p1Ordering": [
+      {
+        "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "contexts": 845,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 802
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            845
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+        "contexts": 836,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 793
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            836
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+        "contexts": 836,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 793
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            836
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "0d98b225-e5d4-4cd4-b8e9-4c62ba695893",
+        "contexts": 836,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 793
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            836
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "155a6831-7ff7-42d7-abf5-6e5a186edca6",
+        "contexts": 836,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 793
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            836
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+        "contexts": 837,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 794
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            837
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+        "contexts": 839,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 796
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            839
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+        "contexts": 837,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 794
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            837
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+        "contexts": 838,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 795
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            838
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+        "contexts": 839,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 796
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            839
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85",
+        "contexts": 837,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 794
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            837
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+        "contexts": 846,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 803
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            846
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
+        "contexts": 838,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 795
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            838
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "contexts": 838,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 795
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            838
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+        "contexts": 845,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 802
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            845
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+        "contexts": 837,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 794
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            837
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+        "contexts": 846,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 803
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            846
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+        "contexts": 845,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 802
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            845
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+        "contexts": 845,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 802
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            845
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+        "contexts": 845,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 802
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            845
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+        "contexts": 846,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 803
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            846
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+        "contexts": 838,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 795
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            838
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+        "contexts": 845,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 802
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            845
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
+        "contexts": 837,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 794
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            837
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+        "contexts": 838,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 795
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            838
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
+        "contexts": 838,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 795
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            838
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contexts": 838,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 795
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            838
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+        "contexts": 839,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 796
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            839
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "contexts": 845,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 802
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            845
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "aa4e67d8-cc57-487c-b0f0-6a8b36f13dbb",
+        "contexts": 836,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 793
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            836
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+        "contexts": 837,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 794
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            837
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
+        "contexts": 838,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 795
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            838
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+        "contexts": 837,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 794
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            837
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "contexts": 839,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 796
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            839
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
+        "contexts": 837,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 794
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            837
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
+        "contexts": 838,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 795
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            838
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "d453ca34-a142-4241-9dce-8551c96cb887",
+        "contexts": 836,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 793
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            836
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed",
+        "contexts": 836,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 793
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            836
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "e4147de7-587c-4106-a47d-b09f8796464d",
+        "contexts": 836,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 793
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            836
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
+        "contexts": 837,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 794
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            837
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "contexts": 839,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 796
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            839
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "f5d20af4-86b4-4e3f-b9ad-80862917007d",
+        "contexts": 836,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 793
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            836
+          ]
+        }
+      },
+      {
+        "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+        "contexts": 837,
+        "byEligibleMinCardinality": {
+          "0": 1,
+          "1": 42,
+          "2": 794
+        },
+        "p1": {
+          "k0Rank": 1,
+          "k1Ranks": [
+            2,
+            43
+          ],
+          "k2Ranks": [
+            44,
+            837
+          ]
+        }
+      }
+    ]
+  },
+  "cohorts": {
+    "counts": {
+      "extentInsufficient": 20,
+      "e1": 11,
+      "e2": 9,
+      "defaultExtent": 20,
+      "unreached": 3
+    },
+    "e1": [
+      "02876df4-cd56-4c95-add9-9e3e9cc90801",
+      "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+      "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "188571a7-b480-4085-a8f5-59666c0e4cc5",
+      "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+      "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+      "b6780f04-da21-42b0-af8c-88f09a192e17",
+      "d453ca34-a142-4241-9dce-8551c96cb887",
+      "e4147de7-587c-4106-a47d-b09f8796464d",
+      "e523209e-57e8-4316-a7f0-329f64fd0b00"
+    ],
+    "e2": [
+      "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+      "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+      "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+      "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+      "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+      "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+      "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+      "a830a376-e596-495e-b458-fc1705204e2c"
+    ]
+  },
+  "aggregates": {
+    "all": {
+      "targets": 20,
+      "insufficientTargetsByStream": {
+        "normal": 4,
+        "gogma": 0,
+        "skill": 20
+      },
+      "operatedTargetsByStream": {
+        "normal": 5,
+        "gogma": 20,
+        "skill": 20
+      },
+      "multiStreamInsufficient": 4,
+      "insufficientCombination": {
+        "normal+skill": 4,
+        "skill": 16
+      },
+      "required": {
+        "normal": {
+          "n": 5,
+          "min": 1,
+          "median": 19,
+          "p75": 126,
+          "p90": 207,
+          "max": 207
+        },
+        "gogma": {
+          "n": 20,
+          "min": 17,
+          "median": 90,
+          "p75": 125,
+          "p90": 213,
+          "max": 233
+        },
+        "skill": {
+          "n": 20,
+          "min": 8,
+          "median": 248,
+          "p75": 446,
+          "p90": 547,
+          "max": 1083
+        }
+      },
+      "shortage": {
+        "normal": {
+          "n": 4,
+          "min": 1,
+          "median": 15,
+          "p75": 122,
+          "p90": 203,
+          "max": 203
+        },
+        "gogma": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p75": null,
+          "p90": null,
+          "max": null
+        },
+        "skill": {
+          "n": 20,
+          "min": 4,
+          "median": 244,
+          "p75": 442,
+          "p90": 543,
+          "max": 1079
+        }
+      },
+      "p1FirstCompatibleRank": {
+        "n": 20,
+        "min": 2,
+        "median": 31,
+        "p75": 76,
+        "p90": 143,
+        "max": 306
+      },
+      "sourceKind": {
+        "new_normal": 5,
+        "owned": 15
+      },
+      "routeKind": {
+        "existing_gogma_mixed": 15,
+        "normal_artian_to_gogma": 5
+      },
+      "conversionRoutes": 5
+    },
+    "e1": {
+      "targets": 11,
+      "insufficientTargetsByStream": {
+        "normal": 2,
+        "gogma": 0,
+        "skill": 11
+      },
+      "operatedTargetsByStream": {
+        "normal": 2,
+        "gogma": 11,
+        "skill": 11
+      },
+      "multiStreamInsufficient": 2,
+      "insufficientCombination": {
+        "normal+skill": 2,
+        "skill": 9
+      },
+      "required": {
+        "normal": {
+          "n": 2,
+          "min": 5,
+          "median": 5,
+          "p75": 126,
+          "p90": 126,
+          "max": 126
+        },
+        "gogma": {
+          "n": 11,
+          "min": 17,
+          "median": 59,
+          "p75": 110,
+          "p90": 119,
+          "max": 125
+        },
+        "skill": {
+          "n": 11,
+          "min": 8,
+          "median": 226,
+          "p75": 450,
+          "p90": 547,
+          "max": 1083
+        }
+      },
+      "shortage": {
+        "normal": {
+          "n": 2,
+          "min": 1,
+          "median": 1,
+          "p75": 122,
+          "p90": 122,
+          "max": 122
+        },
+        "gogma": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p75": null,
+          "p90": null,
+          "max": null
+        },
+        "skill": {
+          "n": 11,
+          "min": 4,
+          "median": 222,
+          "p75": 446,
+          "p90": 543,
+          "max": 1079
+        }
+      },
+      "p1FirstCompatibleRank": {
+        "n": 11,
+        "min": 2,
+        "median": 17,
+        "p75": 31,
+        "p90": 31,
+        "max": 32
+      },
+      "sourceKind": {
+        "new_normal": 2,
+        "owned": 9
+      },
+      "routeKind": {
+        "existing_gogma_mixed": 9,
+        "normal_artian_to_gogma": 2
+      },
+      "conversionRoutes": 2
+    },
+    "e2": {
+      "targets": 9,
+      "insufficientTargetsByStream": {
+        "normal": 2,
+        "gogma": 0,
+        "skill": 9
+      },
+      "operatedTargetsByStream": {
+        "normal": 3,
+        "gogma": 9,
+        "skill": 9
+      },
+      "multiStreamInsufficient": 2,
+      "insufficientCombination": {
+        "normal+skill": 2,
+        "skill": 7
+      },
+      "required": {
+        "normal": {
+          "n": 3,
+          "min": 1,
+          "median": 19,
+          "p75": 207,
+          "p90": 207,
+          "max": 207
+        },
+        "gogma": {
+          "n": 9,
+          "min": 71,
+          "median": 139,
+          "p75": 213,
+          "p90": 233,
+          "max": 233
+        },
+        "skill": {
+          "n": 9,
+          "min": 55,
+          "median": 368,
+          "p75": 417,
+          "p90": 552,
+          "max": 552
+        }
+      },
+      "shortage": {
+        "normal": {
+          "n": 2,
+          "min": 15,
+          "median": 15,
+          "p75": 203,
+          "p90": 203,
+          "max": 203
+        },
+        "gogma": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p75": null,
+          "p90": null,
+          "max": null
+        },
+        "skill": {
+          "n": 9,
+          "min": 51,
+          "median": 364,
+          "p75": 413,
+          "p90": 548,
+          "max": 548
+        }
+      },
+      "p1FirstCompatibleRank": {
+        "n": 9,
+        "min": 50,
+        "median": 78,
+        "p75": 143,
+        "p90": 306,
+        "max": 306
+      },
+      "sourceKind": {
+        "new_normal": 3,
+        "owned": 6
+      },
+      "routeKind": {
+        "existing_gogma_mixed": 6,
+        "normal_artian_to_gogma": 3
+      },
+      "conversionRoutes": 3
+    }
+  },
+  "ladder": {
+    "inputs": {
+      "normal": {
+        "values": [
+          5,
+          126
+        ],
+        "median": 5,
+        "max": 126
+      },
+      "gogma": {
+        "values": [],
+        "median": null,
+        "max": null
+      },
+      "skill": {
+        "values": [
+          8,
+          22,
+          46,
+          145,
+          168,
+          226,
+          248,
+          446,
+          450,
+          547,
+          1083
+        ],
+        "median": 226,
+        "max": 1083
+      }
+    },
+    "bounded": true,
+    "unboundedStreams": [],
+    "rungs": [
+      {
+        "id": "L0",
+        "name": "default",
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        }
+      },
+      {
+        "id": "L1",
+        "name": "intermediate",
+        "extent": {
+          "maxNormalAdvance": 8,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 256
+        }
+      },
+      {
+        "id": "L2",
+        "name": "larger",
+        "extent": {
+          "maxNormalAdvance": 128,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1500
+        }
+      }
+    ]
+  },
+  "ladderCoverage": {
+    "e1": {
+      "byRung": [
+        {
+          "id": "L0",
+          "covered": 0,
+          "of": 11
+        },
+        {
+          "id": "L1",
+          "covered": 7,
+          "of": 11
+        },
+        {
+          "id": "L2",
+          "covered": 11,
+          "of": 11
+        }
+      ],
+      "firstRungHistogram": {
+        "L1": 7,
+        "L2": 4
+      }
+    },
+    "e2Diagnostic": {
+      "byRung": [
+        {
+          "id": "L0",
+          "covered": 0,
+          "of": 9
+        },
+        {
+          "id": "L1",
+          "covered": 1,
+          "of": 9
+        },
+        {
+          "id": "L2",
+          "covered": 8,
+          "of": 9
+        }
+      ],
+      "firstRungHistogram": {
+        "L1": 1,
+        "L2": 7,
+        "none": 1
+      }
+    }
+  },
+  "routes": [
+    {
+      "targetWeaponId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 8,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:bb1ec38e",
+      "route": {
+        "sourceKind": "new_normal",
+        "method": "candidate_search",
+        "routeKind": "normal_artian_to_gogma",
+        "conversion": true,
+        "operations": 7
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 7
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": 5,
+        "gogma": 119,
+        "skill": 23
+      },
+      "required": {
+        "normal": 5,
+        "gogma": 119,
+        "skill": 22
+      },
+      "verdict": {
+        "normal": "requires_larger_extent",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 1,
+        "gogma": 0,
+        "skill": 18
+      },
+      "insufficientStreams": [
+        "normal",
+        "skill"
+      ],
+      "multiStream": true,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L1",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "normal": true,
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "normal": true,
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 3,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:72ca8e82",
+      "route": {
+        "sourceKind": "owned",
+        "method": "planner_alternative_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 3
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 7
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 46,
+        "skill": 46
+      },
+      "required": {
+        "normal": null,
+        "gogma": 46,
+        "skill": 46
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 42
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L1",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 17,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:ef234c50",
+      "route": {
+        "sourceKind": "new_normal",
+        "method": "candidate_search",
+        "routeKind": "normal_artian_to_gogma",
+        "conversion": true,
+        "operations": 128
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": 126,
+        "gogma": 23,
+        "skill": 451
+      },
+      "required": {
+        "normal": 126,
+        "gogma": 23,
+        "skill": 450
+      },
+      "verdict": {
+        "normal": "requires_larger_extent",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 122,
+        "gogma": 0,
+        "skill": 446
+      },
+      "insufficientStreams": [
+        "normal",
+        "skill"
+      ],
+      "multiStream": true,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "normal": true,
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "normal": true,
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 18,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:ef234c50",
+      "route": {
+        "sourceKind": "owned",
+        "method": "candidate_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 2
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 17,
+        "skill": 446
+      },
+      "required": {
+        "normal": null,
+        "gogma": 17,
+        "skill": 446
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 442
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+      "cohort": "E2",
+      "minimalCardinality": "2",
+      "p1FirstCompatibleRank": 78,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:86b8ed97",
+      "route": {
+        "sourceKind": "owned",
+        "method": "candidate_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 2
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 156
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 83,
+        "skill": 417
+      },
+      "required": {
+        "normal": null,
+        "gogma": 83,
+        "skill": 417
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 413
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+      "cohort": "E2",
+      "minimalCardinality": "2",
+      "p1FirstCompatibleRank": 76,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:86b8ed97",
+      "route": {
+        "sourceKind": "owned",
+        "method": "planner_alternative_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 3
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 90,
+        "skill": 514
+      },
+      "required": {
+        "normal": null,
+        "gogma": 90,
+        "skill": 514
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 510
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+      "cohort": "E2",
+      "minimalCardinality": "2",
+      "p1FirstCompatibleRank": 306,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:42bed1ef",
+      "route": {
+        "sourceKind": "owned",
+        "method": "candidate_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 2
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 233,
+        "skill": 552
+      },
+      "required": {
+        "normal": null,
+        "gogma": 233,
+        "skill": 552
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 548
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+      "cohort": "E2",
+      "minimalCardinality": "2",
+      "p1FirstCompatibleRank": 305,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:42bed1ef",
+      "route": {
+        "sourceKind": "owned",
+        "method": "planner_alternative_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 3
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 223,
+        "skill": 368
+      },
+      "required": {
+        "normal": null,
+        "gogma": 223,
+        "skill": 368
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 364
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+      "cohort": "E2",
+      "minimalCardinality": "2",
+      "p1FirstCompatibleRank": 50,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:ed07524f",
+      "route": {
+        "sourceKind": "new_normal",
+        "method": "planner_alternative_search",
+        "routeKind": "normal_artian_to_gogma",
+        "conversion": true,
+        "operations": 4
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 0
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": 1,
+        "gogma": 213,
+        "skill": 70
+      },
+      "required": {
+        "normal": 1,
+        "gogma": 213,
+        "skill": 69
+      },
+      "verdict": {
+        "normal": "within_default_extent",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 65
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L1",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+      "cohort": "E2",
+      "minimalCardinality": "2",
+      "p1FirstCompatibleRank": 136,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:392d3422",
+      "route": {
+        "sourceKind": "new_normal",
+        "method": "candidate_search",
+        "routeKind": "normal_artian_to_gogma",
+        "conversion": true,
+        "operations": 209
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 0
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": 207,
+        "gogma": 176,
+        "skill": 138
+      },
+      "required": {
+        "normal": 207,
+        "gogma": 176,
+        "skill": 137
+      },
+      "verdict": {
+        "normal": "requires_larger_extent",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 203,
+        "gogma": 0,
+        "skill": 133
+      },
+      "insufficientStreams": [
+        "normal",
+        "skill"
+      ],
+      "multiStream": true,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": null,
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "normal": true,
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "normal": true,
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+      "cohort": "E2",
+      "minimalCardinality": "2",
+      "p1FirstCompatibleRank": 143,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:a5f53b77",
+      "route": {
+        "sourceKind": "owned",
+        "method": "planner_alternative_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 3
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 139,
+        "skill": 400
+      },
+      "required": {
+        "normal": null,
+        "gogma": 139,
+        "skill": 400
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 396
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+      "cohort": "E2",
+      "minimalCardinality": "2",
+      "p1FirstCompatibleRank": 75,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:86b8ed97",
+      "route": {
+        "sourceKind": "owned",
+        "method": "candidate_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 2
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 71,
+        "skill": 308
+      },
+      "required": {
+        "normal": null,
+        "gogma": 71,
+        "skill": 308
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 304
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 11,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:ff85a91d",
+      "route": {
+        "sourceKind": "owned",
+        "method": "candidate_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 1084
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 156
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 59,
+        "skill": 1083
+      },
+      "required": {
+        "normal": null,
+        "gogma": 59,
+        "skill": 1083
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 1079
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 32,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:8b5e3514",
+      "route": {
+        "sourceKind": "owned",
+        "method": "planner_alternative_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 3
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 107,
+        "skill": 248
+      },
+      "required": {
+        "normal": null,
+        "gogma": 107,
+        "skill": 248
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 244
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L1",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "a830a376-e596-495e-b458-fc1705204e2c",
+      "cohort": "E2",
+      "minimalCardinality": "2",
+      "p1FirstCompatibleRank": 64,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:5f3b052a",
+      "route": {
+        "sourceKind": "new_normal",
+        "method": "candidate_search",
+        "routeKind": "normal_artian_to_gogma",
+        "conversion": true,
+        "operations": 3
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": 19,
+        "gogma": 76,
+        "skill": 56
+      },
+      "required": {
+        "normal": 19,
+        "gogma": 76,
+        "skill": 55
+      },
+      "verdict": {
+        "normal": "requires_larger_extent",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 15,
+        "gogma": 0,
+        "skill": 51
+      },
+      "insufficientStreams": [
+        "normal",
+        "skill"
+      ],
+      "multiStream": true,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "normal": true,
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "normal": true,
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 31,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:8b5e3514",
+      "route": {
+        "sourceKind": "owned",
+        "method": "candidate_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 2
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 99,
+        "skill": 226
+      },
+      "required": {
+        "normal": null,
+        "gogma": 99,
+        "skill": 226
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 222
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L1",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 14,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:c6a7ab1a",
+      "route": {
+        "sourceKind": "owned",
+        "method": "candidate_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 2
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 110,
+        "skill": 145
+      },
+      "required": {
+        "normal": null,
+        "gogma": 110,
+        "skill": 145
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 141
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L1",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "d453ca34-a142-4241-9dce-8551c96cb887",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 18,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:ef234c50",
+      "route": {
+        "sourceKind": "owned",
+        "method": "candidate_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 2
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 349
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 22,
+        "skill": 547
+      },
+      "required": {
+        "normal": null,
+        "gogma": 22,
+        "skill": 547
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 543
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L2",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "e4147de7-587c-4106-a47d-b09f8796464d",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 31,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:8b5e3514",
+      "route": {
+        "sourceKind": "owned",
+        "method": "candidate_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 2
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 156
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 125,
+        "skill": 168
+      },
+      "required": {
+        "normal": null,
+        "gogma": 125,
+        "skill": 168
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 164
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L1",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    },
+    {
+      "targetWeaponId": "e523209e-57e8-4316-a7f0-329f64fd0b00",
+      "cohort": "E1",
+      "minimalCardinality": "1",
+      "p1FirstCompatibleRank": 2,
+      "p1FirstCompatibleReservationDigest": "fnv1a32:eee614ca",
+      "route": {
+        "sourceKind": "owned",
+        "method": "planner_alternative_search",
+        "routeKind": "existing_gogma_mixed",
+        "conversion": false,
+        "operations": 3
+      },
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": 7
+      },
+      "defaultExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "reach": {
+        "normal": null,
+        "gogma": 42,
+        "skill": 8
+      },
+      "required": {
+        "normal": null,
+        "gogma": 42,
+        "skill": 8
+      },
+      "verdict": {
+        "normal": "not_applicable",
+        "gogma": "within_default_extent",
+        "skill": "requires_larger_extent"
+      },
+      "shortage": {
+        "normal": 0,
+        "gogma": 0,
+        "skill": 4
+      },
+      "insufficientStreams": [
+        "skill"
+      ],
+      "multiStream": false,
+      "unreadableStreams": [],
+      "estimatedMatches": true,
+      "firstLadderRung": "L1",
+      "windowBoundary": {
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "walkBoundary": {
+        "compatible": true,
+        "acceptedAtRequired": true,
+        "rejectedBelow": {
+          "gogma": true,
+          "skill": true
+        },
+        "valid": true
+      },
+      "parity": {
+        "b2b1Extent": true,
+        "b2aExtent": true,
+        "b2c1Subgroups": true,
+        "b2c1P1Rank": true
+      }
+    }
+  ],
+  "unreadableTargets": [],
+  "decisionRule": {
+    "order": [
+      "B2C2B1_INVALID: an authority / hash chain / provenance / population / extent semantics / B2-A or B2-B1 extent parity / B2-C1 subgroup or P1 rank parity / window or Production walk boundary / oracle isolation / raw-result inconsistency, a cohort Target the authority calls extent-insufficient with no insufficient stream, or a stream count that is not the registered B2-B1 one",
+      "B2C2B1_UNDETERMINED: no invalid reason, but some extent-insufficient Target has a non-finite or unreadable required extent on a stream it operates on, so no Search condition can be fixed",
+      "B2C2B1_UNBOUNDED: every required extent is finite, but some E1 required extent exceeds the ladder ceiling, so no bounded ladder exists",
+      "B2C2B1_CHARACTERIZED: 20 / 20 extent-insufficient Targets characterized (E1 11 / E2 9), every required extent finite and equal to the B2-A / B2-B1 authority, no invalid reason, and a bounded ladder whose top rung covers every E1 Target"
+    ],
+    "extent": "phase2c26b2aRouteExtent(): required = last own position - origin + 1 (conversion Route Skill: one less); within the extent iff required <= the extent value"
+  },
+  "invalidReasons": [],
+  "decision": {
+    "case": "B2C2B1_CHARACTERIZED",
+    "reasons": [],
+    "recommendation": "E1（K1-minimal extent不足）11件を対象に、P1 scheduler ordering + 登録したextent ladder（L0 → L1 → L2）でactual Search probeへ。E2（K2-minimal）9件はextent拡張ではなくTarget-relative K2 feature / grouping研究を先に行う"
+  }
+}
