@@ -922,7 +922,10 @@ describe('IdentificationWizardDialog STEP 1', () => {
   })
 })
 
-describe('IdentificationWizardDialog STEP 2', { timeout: 15_000 }, () => {
+// These integration tests drive STEP 1 through STEP 2 with userEvent and take
+// several seconds each; under full `npm test` parallel load they repeatedly hit
+// a 15 s boundary while passing alone, so they get 30 s (Refs #142).
+describe('IdentificationWizardDialog STEP 2', { timeout: 30_000 }, () => {
   it('starts with four unentered five-slot Reset observation drafts', async () => {
     const user = userEvent.setup()
     const { coordinator } = renderWizard()
