@@ -145,9 +145,10 @@ try {
     originDigestMatches: summary.originDigest === schedule.snapshot.originDigest,
     extentMatches: JSON.stringify(summary.extent) === JSON.stringify(schedule.extent),
     policiesMatch: JSON.stringify(summary.policies) === JSON.stringify(schedule.policies),
-    calculationContextMatches: r.stage1.every(run => run.record === null || JSON.stringify(run.calculationContext) === JSON.stringify(input.calculationContext))
+    // Only a completed child carries a CalculationContext; a timeout / failure records null and is judged as unmeasured, not here.
+    calculationContextMatches: r.stage1.every(run => (run.outcome.process !== 'completed' && run.calculationContext === null) || JSON.stringify(run.calculationContext) === JSON.stringify(input.calculationContext))
       && JSON.stringify(r.tasksChild.calculationContext) === JSON.stringify(input.calculationContext),
-    engineMatches: r.stage1.every(run => run.rngEngineVersion === null || run.rngEngineVersion === engine.version) && r.environment.rngEngineVersion === engine.version,
+    engineMatches: r.stage1.every(run => (run.outcome.process !== 'completed' && run.rngEngineVersion === null) || run.rngEngineVersion === engine.version) && r.environment.rngEngineVersion === engine.version,
     taskCount: r.tasks.length,
     ranksPerTarget: targetManifest.targetWeaponIds.every(id => JSON.stringify(r.tasks.filter(t => t.targetWeaponId === id).map(t => t.contextRank))
       === JSON.stringify(Array.from({ length: c2a.PHASE2C26B2C2A_CONTEXT_BUDGET }, (_, i) => i + 1))),
