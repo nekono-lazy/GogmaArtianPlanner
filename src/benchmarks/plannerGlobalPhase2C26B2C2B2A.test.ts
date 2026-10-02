@@ -57,6 +57,8 @@ import {
 import targetsSource from './plannerGlobalPhase2C26B2C2B2ATargets.ts?raw'
 import {
   parsePhase2C26B2C2B2AB2C2ADiagnostic,
+  phase2c26b2c2b2aEvidenceGrade,
+  phase2c26b2c2b2aLaunchProvenance,
   phase2c26b2c2b2aBudgetCoverage,
   phase2c26b2c2b2aCompareContext,
   phase2c26b2c2b2aDecision,
@@ -591,6 +593,37 @@ describe('Phase 2-C2.6-B2-C2B2A analysis', () => {
     expect(validatePhase2C26B2C2B2ARaw({ tasks, runs: ran, smoke: false, intentionalStop: { ...stop, notRunTaskIds: stop.notRunTaskIds.slice(1) } }).join()).toMatch(/notRun tasks are not exactly/)
   })
 
+  it('verifies launch provenance only from the runner itself: a reconstructed raw without a start attestation is never formal', () => {
+    const environment = { repositoryHead: 'a'.repeat(40), uncommittedBenchmarkCode: false, benchmarkCodeSha256: 'b'.repeat(64), exportSha256: 'c'.repeat(64), targetManifestSha256: 'd'.repeat(64),
+      stage1: { ...PHASE2C26B2C2B2A_STAGE1 } }
+    const reconstruction = { postHoc: true, childRecordsModified: false }
+    // A completed raw written by the runner attests its own launch environment.
+    expect(phase2c26b2c2b2aLaunchProvenance({ status: 'completed', environment })).toMatchObject({ verified: true, source: 'runner_raw', workingTreeCleanVerified: true })
+    expect(phase2c26b2c2b2aLaunchProvenance({ status: 'completed', environment: { ...environment, uncommittedBenchmarkCode: true } }).verified).toBe(false)
+    // The reconstructed intentional stop: no start attestation, whatever HEAD / cleanliness the reconstruction wrote.
+    const none = phase2c26b2c2b2aLaunchProvenance({ status: 'intentionally_stopped', environment, reconstruction })
+    expect(none).toMatchObject({ verified: false, source: 'none', workingTreeCleanVerified: false })
+    expect(none.reason).toMatch(/did not persist an immutable start attestation/)
+    expect(phase2c26b2c2b2aLaunchProvenance({ status: 'intentionally_stopped', environment: { ...environment, uncommittedBenchmarkCode: null }, reconstruction }).verified).toBe(false)
+    expect(phase2c26b2c2b2aLaunchProvenance({ status: 'completed', environment, reconstruction }).verified).toBe(false)
+    // An arbitrary --measured-head given to the reconstruction cannot make it formal.
+    for (const head of ['0'.repeat(40), 'f'.repeat(40)]) expect(phase2c26b2c2b2aLaunchProvenance({ status: 'intentionally_stopped', environment: { ...environment, repositoryHead: head }, reconstruction }).verified).toBe(false)
+    // A runner start attestation verifies only when complete, runner-authored, clean and equal to the environment.
+    const attestation = { ...environment, createdAt: '2026-10-02T10:13:21.000Z', attestedBy: 'runner' }
+    expect(phase2c26b2c2b2aLaunchProvenance({ status: 'intentionally_stopped', environment, reconstruction, launchAttestation: attestation })).toMatchObject({ verified: true, source: 'runner_start_attestation' })
+    expect(phase2c26b2c2b2aLaunchProvenance({ status: 'intentionally_stopped', environment, reconstruction, launchAttestation: { ...attestation, attestedBy: 'reconstruction' } }).verified).toBe(false)
+    expect(phase2c26b2c2b2aLaunchProvenance({ status: 'intentionally_stopped', environment, reconstruction, launchAttestation: { ...attestation, repositoryHead: '0'.repeat(40) } }).verified).toBe(false)
+    expect(phase2c26b2c2b2aLaunchProvenance({ status: 'intentionally_stopped', environment, reconstruction, launchAttestation: { ...attestation, uncommittedBenchmarkCode: null } }).verified).toBe(false)
+    const missing: Record<string, unknown> = { ...attestation }
+    delete missing.createdAt
+    expect(phase2c26b2c2b2aLaunchProvenance({ status: 'intentionally_stopped', environment, reconstruction, launchAttestation: missing }).verified).toBe(false)
+    // The evidence grade: formal needs both axes; a partial run without verified launch provenance is diagnostic.
+    expect(phase2c26b2c2b2aEvidenceGrade({ formalConditions: true, launchProvenanceVerified: true, partialRun: true })).toBe('formal')
+    expect(phase2c26b2c2b2aEvidenceGrade({ formalConditions: true, launchProvenanceVerified: false, partialRun: true })).toBe('diagnostic_partial')
+    expect(phase2c26b2c2b2aEvidenceGrade({ formalConditions: true, launchProvenanceVerified: false, partialRun: false })).toBe('non_formal')
+    expect(phase2c26b2c2b2aEvidenceGrade({ formalConditions: false, launchProvenanceVerified: true, partialRun: false })).toBe('non_formal')
+  })
+
   it('counts an unresolved safety cap only on a compatible context of a Target without a C4C exact', () => {
     const tasks = Array.from({ length: 32 }, (_, i) => taskOf(i + 1))
     const capped = (task: Phase2C26B2C2B2ATaskInput) => capture(task, filler(1024, 2), 'candidate_safety_cap')
@@ -626,11 +659,23 @@ describe('Phase 2-C2.6-B2-C2B2A analysis', () => {
 
 describe('Phase 2-C2.6-B2-C2B2A committed RESULT', () => {
   const result = JSON.parse(rawResult)
-  it('pins the intentionally stopped formal run: INCOMPLETE, 44 / 352 started, 308 notRun, never promoted, no invalid reason', () => {
-    expect(result.provenance).toMatchObject({ formal: true, partialRun: true, calculationCodeChangedSinceMeasuredHead: [], analysisCodeUncommitted: false, uncommittedBenchmarkCode: false,
-      smoke: null, b2c2b1ResultSha256: PHASE2C26B2C2B2A_REGISTERED_B2C2B1.resultSha256, b2c1ResultSha256: b2c1Sha, perTargetExtent: false, targetIndividualOracleExtentAsSearchInput: false,
+  it('pins the intentionally stopped partial run: non-formal diagnostic evidence, INCOMPLETE, 44 / 352 started, 308 notRun, no invalid reason', () => {
+    // Evidence grade (provenance) and the Search decision are separate axes.
+    expect(result.provenance).toMatchObject({ formal: false, evidenceGrade: 'diagnostic_partial', partialRun: true, launchProvenanceVerified: false, launchProvenanceSource: 'none',
+      launchWorkingTreeCleanVerified: false, launchAttestation: null, uncommittedBenchmarkCode: null, measuredHeadSource: 'post_hoc_reconstruction_argument',
+      reconstructedMeasuredHead: '32130e843cabcb3777f6675a84fa580d114ed27d', measuredHead: '32130e843cabcb3777f6675a84fa580d114ed27d',
+      calculationCodeChangedSinceMeasuredHead: [], measurementCodeChangedSinceMeasuredHead: [], analysisCodeUncommitted: false, smoke: null, b2c2b1ResultSha256: PHASE2C26B2C2B2A_REGISTERED_B2C2B1.resultSha256, b2c1ResultSha256: b2c1Sha, perTargetExtent: false, targetIndividualOracleExtentAsSearchInput: false,
       oracleReadBySearchChild: false, oracleMatchUsedForEarlyStop: false })
+    expect(result.provenance.launchProvenanceReason).toMatch(/did not persist an immutable start attestation .*reconstructed post hoc/)
+    expect(result.provenance.benchmarkCodeSha256Source).toMatch(/recomputed post hoc/)
     expect(result.provenance.reconstruction).toMatchObject({ postHoc: true, childRecordsModified: false, searchRun: false })
+    // Only post-hoc analysis files and tests changed after the measurement candidate HEAD.
+    expect(result.provenance.codeChangedSinceMeasuredHead.every((path: string) => result.provenance.postHocAllowedFiles.includes(path) || path.endsWith('.test.ts'))).toBe(true)
+    expect(result.provenance.postHocAllowedFiles).toEqual(['src/benchmarks/plannerGlobalPhase2C26B2C2B2AAnalysis.ts', 'scripts/analyze-planner-global-phase2c26b2c2b2a.mjs',
+      'scripts/reconstruct-planner-global-phase2c26b2c2b2a-partial-raw.mjs', '*.test.ts'])
+    // The retained raw is the one reconstructed before this provenance correction; its recorded flag is kept only as such.
+    expect(result.sources.run.sha256).toBe('d393c263d17a05e769d024df62a929efac2c260741e5e2273234c61e344dcb6f')
+    expect(result.provenance.rawRecordedUncommittedBenchmarkCode).toBe(false)
     expect(result.provenance.intentionalStop).toMatchObject({ ranTasks: 44, notRunTasks: 308, noRetry: true, conditionsUnchanged: true })
     expect(result.decision).toMatchObject({ case: 'B2C2B2A_INCOMPLETE', reasons: [] })
     expect(result.invalidReasons).toEqual([])
@@ -710,11 +755,16 @@ describe('Phase 2-C2.6-B2-C2B2A isolation and provenance', () => {
     for (const source of [analysisSource, analyzerSource, targetsSource, prepareSource]) expect(source).not.toMatch(/visitPlannerAlternativeCandidates|runPhase2C26B2C2B2ASearch|runPhase2C26B2C2B2ATask\(/)
   })
 
-  it('records formal provenance only for committed code, no smoke option and no calculation change after the measured HEAD', () => {
+  it('records formal provenance only for committed code, no smoke option, no calculation change after the measured HEAD and verified launch provenance', () => {
     expect(runnerSource).toMatch(/Commit ALL benchmark code before a formal measurement/)
     expect(runnerSource).toMatch(/non-formal smoke options and need --allow-uncommitted/)
-    expect(analyzerSource).toMatch(/const formal = formalRun && calculationCodeChangedSinceMeasuredHead\.length === 0 && !analysisUncommitted/)
-    expect(analyzerSource).toMatch(/const formalRun = \(r\.status === 'completed' \|\| intentionallyStopped\) && !r\.environment\.uncommittedBenchmarkCode && !smoke/)
+    // formal = the ordinary formal conditions AND launch provenance the runner itself attested; --allow-nonformal never enters it.
+    expect(analyzerSource).toMatch(/const formalConditions = formalRunConditions && calculationCodeChangedSinceMeasuredHead\.length === 0 && !analysisUncommitted\s+const formal = formalConditions && launchProvenance\.verified\n/)
+    expect(analyzerSource).toMatch(/const launchProvenance = analysis\.phase2c26b2c2b2aLaunchProvenance\(r\)/)
+    expect(analyzerSource).toMatch(/if \(!launchProvenance\.verified && !allowNonformal\) throw/)
+    expect(analyzerSource.match(/const formal = [^\n]*/)![0]).not.toMatch(/allowNonformal|intentionallyStopped|reconstruction/)
+    expect(analyzerSource.match(/const formalRunConditions = [^\n]*/)![0]).not.toMatch(/allowNonformal|uncommittedBenchmarkCode/)
+    expect(analyzerSource).toMatch(/uncommittedBenchmarkCode: reconstructedLaunch \? null/)
     expect(analyzerSource).toMatch(/plannerGlobalPhase2C26B2C2B2AAnalysis\.ts', 'scripts\/analyze-planner-global-phase2c26b2c2b2a\.mjs', 'scripts\/reconstruct-planner-global-phase2c26b2c2b2a-partial-raw\.mjs'/)
   })
 
@@ -724,6 +774,11 @@ describe('Phase 2-C2.6-B2-C2B2A isolation and provenance', () => {
     expect(reconstructSource).toMatch(/writeFile\(paths\.output, text, \{ flag: 'wx' \}\)/)
     expect(reconstructSource).toMatch(/status: 'intentionally_stopped'/)
     expect(reconstructSource).toMatch(/childRecordsModified: false, searchRun: false/)
+    // The reconstruction never asserts the launch: working tree unknown (null), no attestation, HEAD / hash marked as reconstruction inputs.
+    expect(reconstructSource).toMatch(/uncommittedBenchmarkCode: null, launchWorkingTreeCleanVerified: false/)
+    expect(reconstructSource).toMatch(/repositoryHeadSource: 'post_hoc_reconstruction_argument'/)
+    expect(reconstructSource).toMatch(/launchProvenanceVerified: false/)
+    expect(reconstructSource).not.toMatch(/uncommittedBenchmarkCode: false|launchAttestation:|attestedBy/)
     expect(reconstructSource).toMatch(/The ran tasks are not a prefix of the task order/)
     expect(analyzerSource).toMatch(/r\.reconstruction\?\.postHoc === true && r\.reconstruction\?\.childRecordsModified === false/)
   })

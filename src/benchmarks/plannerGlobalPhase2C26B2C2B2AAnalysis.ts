@@ -52,7 +52,7 @@ const countByNumber = (values: readonly number[]): { value: number; count: numbe
   return [...map.entries()].sort(([a], [b]) => a - b).map(([value, count]) => ({ value, count }))
 }
 
-// ---------------------------------------------------------------- registered before the formal run
+// ---------------------------------------------------------------- registered before the Stage 1 measurement
 
 export type Phase2C26B2C2B2ACapturePolicy = Phase2C26B2C2ACapturePolicy
 export const PHASE2C26B2C2B2A_CAPTURE_POLICIES = PHASE2C26B2C2A_CAPTURE_POLICIES
@@ -80,10 +80,10 @@ const deliveries = (s: Phase2C26B2C2B2ASearchRecord): Phase2C26B2B2A2DeliveredCa
 const searchOf = (run: Phase2C26B2C2B2ARun | undefined): Phase2C26B2C2B2ASearchRecord | null =>
   run && run.outcome.process === 'completed' && run.outcome.record === 'searched' && run.record?.status === 'searched' ? run.record.search : null
 
-// ---------------------------------------------------------------- intentional stop (post hoc; registered after the formal run started)
+// ---------------------------------------------------------------- intentional stop (post hoc; registered after the Stage 1 measurement started)
 
 /**
- * The project owner stopped the formal Stage 1 at a child boundary once the evidence sufficed. The ran tasks are analyzed
+ * The project owner stopped the Stage 1 measurement at a child boundary once the evidence sufficed. The ran tasks are analyzed
  * exactly as recorded; the rest are `notRun`: never Candidate 0, never a Search failure, and they keep the decision at
  * B2C2B2A_INCOMPLETE through the unmeasured-task rule (an intentional stop never promotes a partial run to ALL_*).
  */
@@ -91,6 +91,58 @@ export interface Phase2C26B2C2B2AIntentionalStop {
   stoppedAt: string
   reason: string
   notRunTaskIds: string[]
+}
+
+// ---------------------------------------------------------------- launch provenance (evidence grade, separate from the Search decision)
+
+/** Who vouches for the launch HEAD / working-tree cleanliness / benchmark code hash of a raw run. */
+export type Phase2C26B2C2B2ALaunchProvenanceSource = 'runner_raw' | 'runner_start_attestation' | 'none'
+export type Phase2C26B2C2B2AEvidenceGrade = 'formal' | 'diagnostic_partial' | 'non_formal'
+
+export interface Phase2C26B2C2B2ALaunchProvenance {
+  verified: boolean
+  source: Phase2C26B2C2B2ALaunchProvenanceSource
+  /** The launch working tree is attested clean (never inferred after the fact). */
+  workingTreeCleanVerified: boolean
+  reason: string | null
+}
+
+const START_ATTESTATION_FIELDS = ['repositoryHead', 'uncommittedBenchmarkCode', 'benchmarkCodeSha256', 'exportSha256', 'targetManifestSha256', 'stage1', 'createdAt', 'attestedBy'] as const
+
+/**
+ * Whether the launch provenance of a raw run is attested by the runner itself, before any Search:
+ *   - a completed run: the runner wrote the raw, environment included (HEAD, uncommitted check, code hash computed at launch);
+ *   - an intentionally stopped run: only an immutable start attestation the runner persisted before Stage 1
+ *     (`launchAttestation`, `attestedBy: 'runner'`, every field present and equal to the raw environment) verifies it.
+ * A post-hoc reconstruction never verifies it, whatever HEAD it was given: its HEAD and code hash are reconstruction
+ * inputs, not launch observations, and the launch working-tree state is unknown.
+ */
+export function phase2c26b2c2b2aLaunchProvenance(raw: { status?: unknown; environment?: unknown; reconstruction?: unknown; launchAttestation?: unknown }): Phase2C26B2C2B2ALaunchProvenance {
+  const environment = isObject(raw.environment) ? raw.environment : {}
+  if (raw.status === 'completed' && raw.reconstruction === undefined) {
+    const clean = environment.uncommittedBenchmarkCode === false
+    return { verified: clean, source: 'runner_raw', workingTreeCleanVerified: clean, reason: clean ? null : 'The runner recorded uncommitted benchmark code at launch.' }
+  }
+  const attestation = isObject(raw.launchAttestation) ? raw.launchAttestation : null
+  if (attestation === null) {
+    return { verified: false, source: 'none', workingTreeCleanVerified: false,
+      reason: 'The stopped parent runner did not persist an immutable start attestation containing the actual repository HEAD, working-tree cleanliness and benchmark code hash. measuredHead and benchmarkCodeSha256 were reconstructed post hoc.' }
+  }
+  const issues: string[] = []
+  for (const field of START_ATTESTATION_FIELDS) if (!(field in attestation)) issues.push(`missing ${field}`)
+  if (attestation.attestedBy !== 'runner') issues.push('not attested by the runner')
+  if (attestation.uncommittedBenchmarkCode !== false) issues.push('uncommitted benchmark code at launch')
+  for (const field of ['repositoryHead', 'benchmarkCodeSha256', 'exportSha256', 'targetManifestSha256', 'stage1'] as const) {
+    if (!same(attestation[field], environment[field])) issues.push(`${field} differs from the raw environment`)
+  }
+  const verified = issues.length === 0
+  return { verified, source: 'runner_start_attestation', workingTreeCleanVerified: verified, reason: verified ? null : `The start attestation does not verify: ${issues.join('; ')}.` }
+}
+
+/** The evidence grade: formal only with every formal condition AND verified launch provenance; a partial run otherwise diagnostic. */
+export function phase2c26b2c2b2aEvidenceGrade(input: { formalConditions: boolean; launchProvenanceVerified: boolean; partialRun: boolean }): Phase2C26B2C2B2AEvidenceGrade {
+  if (input.formalConditions && input.launchProvenanceVerified) return 'formal'
+  return input.partialRun ? 'diagnostic_partial' : 'non_formal'
 }
 
 // ---------------------------------------------------------------- raw consistency (fails the run closed)
@@ -365,7 +417,7 @@ export function phase2c26b2c2b2aCandidates(tasks: readonly Phase2C26B2C2B2ATaskI
   }
 }
 
-// ---------------------------------------------------------------- decision (registered before the formal run)
+// ---------------------------------------------------------------- decision (registered before the Stage 1 measurement)
 
 export type Phase2C26B2C2B2ADecisionCase = 'B2C2B2A_ALL_C8' | 'B2C2B2A_ALL_C32' | 'B2C2B2A_ALL_C4C' | 'B2C2B2A_PARTIAL' | 'B2C2B2A_INCOMPLETE' | 'B2C2B2A_INVALID'
 

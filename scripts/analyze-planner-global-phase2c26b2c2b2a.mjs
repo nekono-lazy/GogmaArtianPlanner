@@ -40,11 +40,12 @@ const changedSinceMeasured = git('diff', '--name-only', measuredHead, 'HEAD', '-
 const calculationCodeChangedSinceMeasuredHead = changedSinceMeasured.filter(path => !analysisPaths.includes(path) && !path.endsWith('.test.ts'))
 if (calculationCodeChangedSinceMeasuredHead.length > 0 && !allowNonformal) throw new Error(`Calculation code changed since the measured HEAD: ${calculationCodeChangedSinceMeasuredHead.join(', ')}`)
 const smoke = r.environment.smoke !== null
-// An intentionally stopped formal run is formal evidence of the tasks it ran: its raw is the post-hoc reconstruction.
+// An intentionally stopped run is analyzed from its post-hoc reconstruction. Being intentionally stopped and reconstructed
+// never makes it formal on its own: formal also needs launch provenance the runner itself attested (see launchProvenance).
 const intentionallyStopped = r.status === 'intentionally_stopped' && r.intentionalStop !== undefined && r.reconstruction?.postHoc === true && r.reconstruction?.childRecordsModified === false
-const formalRun = (r.status === 'completed' || intentionallyStopped) && !r.environment.uncommittedBenchmarkCode && !smoke
-const formal = formalRun && calculationCodeChangedSinceMeasuredHead.length === 0 && !analysisUncommitted
-if (!formalRun && !allowNonformal) throw new Error('The raw run is not a formal run (uncommitted benchmark code, smoke options or incomplete).')
+// A reconstructed raw's environment.uncommittedBenchmarkCode is a reconstruction value, not a launch observation: it is not read here.
+const formalRunConditions = (r.status === 'completed' || intentionallyStopped) && !smoke
+if (!formalRunConditions && !allowNonformal) throw new Error('The raw run is not a formal run (smoke options or incomplete).')
 if (r.status !== 'completed' && !intentionallyStopped) throw new Error(`The raw run did not complete (${r.status}).`)
 const intentionalStop = intentionallyStopped ? { stoppedAt: r.intentionalStop.stoppedAt, reason: r.intentionalStop.reason, notRunTaskIds: r.intentionalStop.notRunTaskIds } : null
 
@@ -70,6 +71,15 @@ try {
   const { ProductionRngEngine } = await server.ssrLoadModule('/src/domain/rng/production/productionRngEngine.ts')
   const manifestModule = await server.ssrLoadModule('/' + paths.manifest.replace(/\\/g, '/').replace(/^\.?\//, ''))
   const manifest = manifestModule.ORACLE_1657_ROUTES
+
+  // Launch provenance (evidence grade) is a separate axis from the Search decision. --allow-nonformal only lets a
+  // non-formal RESULT be written; it never makes it formal.
+  const launchProvenance = analysis.phase2c26b2c2b2aLaunchProvenance(r)
+  if (!launchProvenance.verified && !allowNonformal) throw new Error(`The launch provenance is not verified (${launchProvenance.reason}); pass --allow-nonformal for a non-formal RESULT.`)
+  const formalConditions = formalRunConditions && calculationCodeChangedSinceMeasuredHead.length === 0 && !analysisUncommitted
+  const formal = formalConditions && launchProvenance.verified
+  const evidenceGrade = analysis.phase2c26b2c2b2aEvidenceGrade({ formalConditions, launchProvenanceVerified: launchProvenance.verified, partialRun: intentionallyStopped })
+  const reconstructedLaunch = launchProvenance.source === 'none'
 
   // Authorities, re-read here; nothing the runner wrote is trusted for them.
   const invalidReasons = []
@@ -256,9 +266,20 @@ try {
     analyzedAt: new Date().toISOString(),
     sources: { run: runFile.source, targetManifest: targetsFile.source, export: exportFile.source, b2c2b1Result: b2c2b1File.source, b2c1Result: b2c1File.source, b2b1Result: b2b1File.source,
       b2c2aResult: b2c2aFile.source, oracle: oracleFile.source, oracleManifest: manifestFile.source },
-    provenance: { measuredHead, analysisHead: git('rev-parse', 'HEAD'), analysisCodeUncommitted: analysisUncommitted, codeChangedSinceMeasuredHead: changedSinceMeasured,
-      calculationCodeChangedSinceMeasuredHead, postHocAllowedFiles: [...analysisPaths, '*.test.ts'], formal,
-      benchmarkCodeSha256: r.environment.benchmarkCodeSha256, uncommittedBenchmarkCode: r.environment.uncommittedBenchmarkCode, smoke: r.environment.smoke,
+    provenance: { formal, evidenceGrade, partialRun: intentionalStop !== null,
+      launchProvenanceVerified: launchProvenance.verified, launchProvenanceSource: launchProvenance.source, launchProvenanceReason: launchProvenance.reason,
+      launchWorkingTreeCleanVerified: launchProvenance.workingTreeCleanVerified, launchAttestation: r.launchAttestation ?? null,
+      measuredHead, measuredHeadSource: reconstructedLaunch ? 'post_hoc_reconstruction_argument' : 'runner',
+      reconstructedMeasuredHead: reconstructedLaunch ? measuredHead : null,
+      measuredHeadNote: reconstructedLaunch ? 'The measurement candidate HEAD given to the post-hoc reconstruction; NOT a HEAD the runner attested at launch. The diff below is taken from it.' : null,
+      analysisHead: git('rev-parse', 'HEAD'), analysisCodeUncommitted: analysisUncommitted, codeChangedSinceMeasuredHead: changedSinceMeasured,
+      calculationCodeChangedSinceMeasuredHead, measurementCodeChangedSinceMeasuredHead: calculationCodeChangedSinceMeasuredHead, postHocAllowedFiles: [...analysisPaths, '*.test.ts'],
+      benchmarkCodeSha256: r.environment.benchmarkCodeSha256,
+      benchmarkCodeSha256Source: reconstructedLaunch ? 'recomputed post hoc from the git objects of the reconstruction-argument HEAD (runner rule); not a launch observation' : 'runner',
+      // Unknown, never inferred: the launch working tree of a reconstructed run cannot be proven clean after the fact.
+      uncommittedBenchmarkCode: reconstructedLaunch ? null : r.environment.uncommittedBenchmarkCode,
+      rawRecordedUncommittedBenchmarkCode: reconstructedLaunch ? r.environment.uncommittedBenchmarkCode ?? null : undefined,
+      smoke: r.environment.smoke,
       exportFileName: r.environment.exportFileName, exportSha256, exportBytes: exportFile.source.bytes,
       b2c2b1ResultSha256: b2c2b1File.source.sha256, b2c2b1MeasuredHead: authority.measuredHead, b2c1ResultSha256: b2c1File.source.sha256, b2c1MeasuredHead: b2c1Authority.measuredHead,
       b2b1ResultSha256: b2b1File.source.sha256, b2c2aResultSha256: b2c2aFile.source.sha256, oracleResultSha256: oracleFile.source.sha256, oracleManifestFileSha256: manifestFile.source.sha256,
@@ -266,7 +287,7 @@ try {
       oracleGuidedPolicySelection: true, oracleGuidedTargetPopulation: true, oracleInformedCommonExtent: true, contextOrderingUsesOracle: false, oracleReadBySearchChild: false,
       oracleMatchUsedForEarlyStop: false, perTargetExtent: false, targetIndividualOracleExtentAsSearchInput: false,
       measuredAt: r.measuredAt, runWallMs: r.wallMs,
-      partialRun: intentionalStop !== null, intentionalStop: intentionalStop === null ? null : r.intentionalStop, reconstruction: r.reconstruction ?? null },
+      intentionalStop: intentionalStop === null ? null : r.intentionalStop, reconstruction: r.reconstruction ?? null },
     environment: { runtime: r.environment.runtime, node: r.environment.node, v8: r.environment.v8, platform: r.environment.platform, arch: r.environment.arch, osRelease: r.environment.osRelease,
       cpu: r.environment.cpu, logicalCpuCount: r.environment.logicalCpuCount, totalMemoryBytes: r.environment.totalMemoryBytes, rngEngineVersion: r.environment.rngEngineVersion },
     conditions: { stage1: r.environment.stage1, tasksBudgetMs: r.environment.tasksBudgetMs, contextBudget: r.environment.contextBudget, e1Targets: r.environment.e1Targets,
@@ -299,7 +320,7 @@ try {
     decision,
   }
   await writeFile(paths.output, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' })
-  console.log(JSON.stringify({ output: resolve(paths.output), formal, hashChain, population: populationParity, scheduleParity, recordIssues: recordIssues.length,
+  console.log(JSON.stringify({ output: resolve(paths.output), formal, evidenceGrade, launchProvenance, hashChain, population: populationParity, scheduleParity, recordIssues: recordIssues.length,
     exactTargets: audit.aggregates.exactTargets, budgetCoverage: audit.aggregates.budgetCoverage, cascade: audit.aggregates.cascade, compatibility: { ...audit.aggregates.compatibility, byRank: undefined },
     firstExactEqualsFirstCompatible: audit.aggregates.firstExactEqualsFirstCompatible, missClasses: audit.aggregates.missClasses, execution: { ...audit.aggregates.execution, byRank: undefined },
     runtimeRatios: runtimeComparison?.ratios ?? null, intentionalStop: intentionalStop === null ? null : { notRun: intentionalStop.notRunTaskIds.length },

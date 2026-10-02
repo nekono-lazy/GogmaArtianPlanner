@@ -1,13 +1,15 @@
-// Issue #154 Phase 2-C2.6-B2-C2B2A post-hoc only: the raw record of an INTENTIONALLY STOPPED formal Stage 1.
+// Issue #154 Phase 2-C2.6-B2-C2B2A post-hoc only: the raw record of an INTENTIONALLY STOPPED Stage 1 measurement.
 //
-// run-planner-global-phase2c26b2c2b2a.mjs writes its aggregate raw only when every task ended. The formal Stage 1 was
+// run-planner-global-phase2c26b2c2b2a.mjs writes its aggregate raw only when every task ended. The Stage 1 measurement was
 // stopped on purpose at a child boundary (the project owner closed the Phase as B2C2B2A_INCOMPLETE once the resource
 // evidence sufficed), so this script rebuilds the raw from what the run left, WITHOUT running anything and WITHOUT
 // changing any child record:
 //   - the run dir: tasks.record.json (task construction), stage1-*.task.json / *.record.json / *.memory.jsonl;
 //   - the runner log: one outcome line per ended child (COMPLETED / TIMEOUT / OUT_OF_MEMORY / PROCESS_FAILURE, wall seconds,
 //     last IPC heap);
-//   - the measured HEAD (git objects, for the benchmark code SHA-256 the runner computed the same way) and the inputs.
+//   - a measurement candidate HEAD given as --measured-head (its git objects give a benchmark code SHA-256 by the runner's
+//     rule) and the inputs. Neither is a launch observation: the result is never formal evidence by itself (see the analyzer's
+//     launch provenance), and the launch working-tree state is recorded as unknown.
 // Child records are read and hashed only. A task the parent never ran is `notRun` (never Candidate 0, never a failure);
 // a task file the parent wrote right before the stop without a child process is `notRun` too, and is named.
 // Every field the runner would have taken from its in-memory process table and that only the log keeps (process wall,
@@ -134,8 +136,11 @@ try {
     nodeYield: c2b2a.PHASE2C26B2C2B2A_NODE_YIELD, notRun: [...c2b2a.PHASE2C26B2C2B2A_NOT_RUN], registeredP1: c2b2a.PHASE2C26B2C2B2A_REGISTERED_P1,
     oracleGuidedPolicySelection: true, oracleGuidedTargetPopulation: true, contextOrderingUsesOracle: false, oracleReadBySearchChild: false, oracleMatchUsedForEarlyStop: false,
     oracleInformedCommonExtent: true, commonExtentForEveryTask: true, perTargetExtent: false, targetIndividualOracleExtentAsSearchInput: false, ladderRungsSearched: ['L2'],
-    // The runner refuses uncommitted code without --allow-uncommitted; the formal launch passed no such option (see reconstruction.launch).
-    repositoryHead: measuredHead, uncommittedBenchmarkCode: false, benchmarkCodeSha256,
+    // NOT launch observations: repositoryHead is the --measured-head argument of this reconstruction and benchmarkCodeSha256 is
+    // recomputed from its git objects. The launch working tree cannot be proven clean after the fact, so it is unknown (null),
+    // never false. No launchAttestation is written: only the runner itself could attest the launch.
+    repositoryHead: measuredHead, repositoryHeadSource: 'post_hoc_reconstruction_argument', uncommittedBenchmarkCode: null, launchWorkingTreeCleanVerified: false,
+    benchmarkCodeSha256, benchmarkCodeSha256Source: 'recomputed post hoc from the git objects of the reconstruction-argument HEAD',
     exportFileName: basename(paths.export), exportSha256: sha256(rawExport), exportBytes: rawExport.length, rngEngineVersion: new ProductionRngEngine().version,
     targetManifestFileName: basename(paths.targets), targetManifestSha256: sha256(rawTargets), targetManifestBytes: rawTargets.length, targetManifestSourceResultSha256: manifest.sourceResultSha256,
     smoke: null }
@@ -151,7 +156,9 @@ try {
       taskFileWrittenWithoutChild: extraTaskFiles.map(t => t.taskId), noRetry: true, conditionsUnchanged: true },
     reconstruction: { script: 'scripts/reconstruct-planner-global-phase2c26b2c2b2a-partial-raw.mjs', postHoc: true, childRecordsModified: false, searchRun: false,
       runDir: basename(resolve(paths.runDir)), runDirFiles: inventory.length, runDirInventorySha256, log: { file: basename(paths.log), bytes: Buffer.byteLength(logText), sha256: sha256(logText) },
-      launch: 'node scripts/run-planner-global-phase2c26b2c2b2a.mjs --export <Export> --targets <manifest> --run-dir .local/c2b2a-formal.run --output .local/PLANNER_GLOBAL_PHASE2C26B2C2B2A_RAW.json.local (no --allow-uncommitted / smoke option), detached process from a clean working tree at the measured HEAD',
+      launchProvenanceVerified: false,
+      launchProvenanceReason: 'The stopped parent runner did not persist an immutable start attestation containing the actual repository HEAD, working-tree cleanliness and benchmark code hash. measuredHead and benchmarkCodeSha256 were reconstructed post hoc.',
+      launch: 'node scripts/run-planner-global-phase2c26b2c2b2a.mjs --export <Export> --targets <manifest> --run-dir .local/c2b2a-formal.run --output .local/PLANNER_GLOBAL_PHASE2C26B2C2B2A_RAW.json.local (no --allow-uncommitted / smoke option), detached process; the launch HEAD, working-tree state and code hash were not persisted by the runner and are not attested',
       lostFields: ['processes (the parent in-memory process table)', 'failed-child exit codes / stderr tails'], environmentRecomputed: 'host / Node / module constants recomputed at reconstruction; benchmarkCodeSha256 from the measured HEAD git objects by the runner rule' },
     tasksChild, tasks, stage1, notRun, processes: null, wallMs: Date.parse(stoppedAt) - firstEnd }
   const text = JSON.stringify(out, null, 2) + '\n'
