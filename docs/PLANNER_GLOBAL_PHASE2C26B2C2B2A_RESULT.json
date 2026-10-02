@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 Phase 2-C2.6-B2-C2B2A: E1 P1 top-32 reservation contexts searched at the common L2 extent (post-hoc analysis)",
-  "analyzedAt": "2026-10-02T12:49:37.527Z",
+  "analyzedAt": "2026-10-02T13:09:56.086Z",
   "sources": {
     "run": {
       "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2A_RAW.json.local",
@@ -49,8 +49,19 @@
     }
   },
   "provenance": {
+    "formal": false,
+    "evidenceGrade": "diagnostic_partial",
+    "partialRun": true,
+    "launchProvenanceVerified": false,
+    "launchProvenanceSource": "none",
+    "launchProvenanceReason": "The stopped parent runner did not persist an immutable start attestation containing the actual repository HEAD, working-tree cleanliness and benchmark code hash. measuredHead and benchmarkCodeSha256 were reconstructed post hoc.",
+    "launchWorkingTreeCleanVerified": false,
+    "launchAttestation": null,
     "measuredHead": "32130e843cabcb3777f6675a84fa580d114ed27d",
-    "analysisHead": "c2b323a862937939edb9bb0a8d3a1f310fe9f530",
+    "measuredHeadSource": "post_hoc_reconstruction_argument",
+    "reconstructedMeasuredHead": "32130e843cabcb3777f6675a84fa580d114ed27d",
+    "measuredHeadNote": "The measurement candidate HEAD given to the post-hoc reconstruction; NOT a HEAD the runner attested at launch. The diff below is taken from it.",
+    "analysisHead": "bfe0dd8285c114d4667f335b9548997ab249aa00",
     "analysisCodeUncommitted": false,
     "codeChangedSinceMeasuredHead": [
       "scripts/analyze-planner-global-phase2c26b2c2b2a.mjs",
@@ -59,15 +70,17 @@
       "src/benchmarks/plannerGlobalPhase2C26B2C2B2AAnalysis.ts"
     ],
     "calculationCodeChangedSinceMeasuredHead": [],
+    "measurementCodeChangedSinceMeasuredHead": [],
     "postHocAllowedFiles": [
       "src/benchmarks/plannerGlobalPhase2C26B2C2B2AAnalysis.ts",
       "scripts/analyze-planner-global-phase2c26b2c2b2a.mjs",
       "scripts/reconstruct-planner-global-phase2c26b2c2b2a-partial-raw.mjs",
       "*.test.ts"
     ],
-    "formal": true,
     "benchmarkCodeSha256": "adc9631a6574eb75dffcd6f26d1a8ea595e3fe3e3551edfe3fa87f6563f3596c",
-    "uncommittedBenchmarkCode": false,
+    "benchmarkCodeSha256Source": "recomputed post hoc from the git objects of the reconstruction-argument HEAD (runner rule); not a launch observation",
+    "uncommittedBenchmarkCode": null,
+    "rawRecordedUncommittedBenchmarkCode": false,
     "smoke": null,
     "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
     "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
@@ -92,7 +105,6 @@
     "targetIndividualOracleExtentAsSearchInput": false,
     "measuredAt": "2026-10-02T10:13:21.212Z",
     "runWallMs": 9056707,
-    "partialRun": true,
     "intentionalStop": {
       "stoppedAt": "2026-10-02T12:44:17.919Z",
       "reason": "The project owner closed the Phase as B2C2B2A_INCOMPLETE: the 44 tasks already run (t00 all 32 contexts: 25 completed, 5 timeouts, 2 out-of-memory; t01 ranks 1..12: 10 completed, 2 timeouts) gave sufficient negative evidence on the resource feasibility of applying the common L2 extent to every E1 Target; finishing all 352 tasks was not required. No condition was changed, no task was retried.",

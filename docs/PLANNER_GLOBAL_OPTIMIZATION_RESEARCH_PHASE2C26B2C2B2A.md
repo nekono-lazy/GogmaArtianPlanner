@@ -5,19 +5,20 @@ extent、Search algorithm / ordering / comparator、P1は変更していない�
 K2 feature / grouping、E2 9件のSearch、residual unreached 3件、Candidate trial、Planner Alternative kernel、full Planner rerun、
 global assignment、Production scheduler採用判断、runtime optimization、UIも行っていない。timeout / OOM taskのretry・fallbackもしていない。
 
-- measured HEAD: `32130e843cabcb3777f6675a84fa580d114ed27d`（E1 manifest rule・P1 top32 task構築・L2 context置換・C4C capture・実行条件・
-  analyzer・事前登録decision rule・testsを含むclean HEAD）
-- analysis HEAD: `c2b323a862937939edb9bb0a8d3a1f310fe9f530`（measured HEAD以後の変更はpost-hoc許可対象の
+- measurement candidate HEAD（`reconstructedMeasuredHead`）: `32130e843cabcb3777f6675a84fa580d114ed27d`。E1 manifest rule・P1 top32 task構築・
+  L2 context置換・C4C capture・実行条件・analyzer・事前登録decision rule・testsを含むcommitで、Stage 1 measurementはこのcommitから
+  起動した。**ただしこれはpost-hoc再構成時に指定した値であり、runnerが実測開始時にattestしたHEADではない**（§2.2）
+- analysis HEAD: `bfe0dd8285c114d4667f335b9548997ab249aa00`（measurement candidate HEAD以後の変更はpost-hoc許可対象の
   `src/benchmarks/plannerGlobalPhase2C26B2C2B2AAnalysis.ts`・`scripts/analyze-planner-global-phase2c26b2c2b2a.mjs`・
   `scripts/reconstruct-planner-global-phase2c26b2c2b2a-partial-raw.mjs`・testだけ。`calculationCodeChangedSinceMeasuredHead = []`）
-- RESULT: [`docs/PLANNER_GLOBAL_PHASE2C26B2C2B2A_RESULT.json`](PLANNER_GLOBAL_PHASE2C26B2C2B2A_RESULT.json)（`provenance.formal = true`、
-  `provenance.partialRun = true`、invalid reason 0）
+- RESULT: [`docs/PLANNER_GLOBAL_PHASE2C26B2C2B2A_RESULT.json`](PLANNER_GLOBAL_PHASE2C26B2C2B2A_RESULT.json)（**`provenance.formal = false`**、
+  `evidenceGrade = diagnostic_partial`、`partialRun = true`、`launchProvenanceVerified = false`、decision `B2C2B2A_INCOMPLETE`、invalid reason 0）
 
 ## 0. 最重要limitation
 
 > **E1 population・P1・L2 extentは、いずれも過去のoracle post-hoc評価（B2-C1 / B2-C2B1）の影響を受けている。**
 > **一方、各Target内でどのcontextを何番目にSearchしたか、どのextentでSearchしたかに、Target個別のoracle情報は使っていない。**
-> **さらに本Phaseはformal Stage 1を352 task中44 taskで意図的に停止したpartial runである。**
+> **さらに本PhaseのStage 1 measurementは352 task中44 taskで意図的に停止したpartial runで、RESULTはformalではなくdiagnostic partial evidenceである（§2.2）。**
 
 | provenance flag | 値 |
 | --- | --- |
@@ -28,11 +29,23 @@ global assignment、Production scheduler採用判断、runtime optimization、UI
 | `targetIndividualOracleExtentAsSearchInput` | `false` |
 | `contextOrderingUsesOracle` / `oracleReadBySearchChild` / `oracleMatchUsedForEarlyStop` | `false` / `false` / `false` |
 | `partialRun` | `true`（§2 intentional stop） |
+| `formal` / `evidenceGrade` | `false` / `diagnostic_partial`（launch provenance未検証、§2.2） |
+| `launchProvenanceVerified` / `launchWorkingTreeCleanVerified` | `false` / `false` |
 
 本Phaseが示すのは「この実利用Exportで、E1 Targetを共通L2 extentのまま P1上位32 context でSearchすると、実行できたtaskの範囲で何が
 起きたか」まで。P1・context budget 32・L2・どのcapture policyもProduction defaultとして採用できるとは結論しない。
 
-## 1. 結論（`B2C2B2A_INCOMPLETE`）
+## 1. 結論（`B2C2B2A_INCOMPLETE`、non-formal diagnostic partial evidence）
+
+二つの軸を分けて記録する。
+
+| 軸 | 値 | 意味 |
+| --- | --- | --- |
+| Search semantic decision | **`B2C2B2A_INCOMPLETE`**、`invalidReasons = []` | 事前登録ruleによる判定。semantic INVALIDではない |
+| evidence provenance grade | **`formal = false`**、`evidenceGrade = diagnostic_partial` | 停止したrunnerがlaunch時のHEAD / Working Tree clean状態 / code hashを永続化しておらず、launch provenanceを証明できない |
+
+観測したchild record（44 started task）はdiagnostic partial evidenceとして保持する。provenance gradeの格下げは、測定結果を無効・失敗と
+するものではない。
 
 事前登録ruleにより **`B2C2B2A_INCOMPLETE`**。理由は二重で、どちらもINCOMPLETEに落ちる:
 
@@ -58,7 +71,7 @@ semantic failure・reservation violation・incompatible contextからのexact / 
 
 | 項目 | 値 |
 | --- | --- |
-| formal Stage 1開始 | 2026-10-02 10:13:21 UTC頃（tasks child終了 10:13:26.8 UTC、wall 5.6 s） |
+| Stage 1 measurement開始 | 2026-10-02 10:13:21 UTC頃（tasks child終了 10:13:26.8 UTC、wall 5.6 s） |
 | 停止 | **2026-10-02 12:44:17.919 UTC** |
 | 停止境界 | 実行中child `t01-r12` が自力で終了（timeout 600.2 s）しlogに結果が記録された直後に、parent runnerをkill。次のchildは起動していない |
 | 実行 / 未実行 | planned 352、started 44（completed 35、timeout 7、OOM 2、process failure 0、context mismatch 0）、**notRun 308** |
@@ -69,11 +82,11 @@ semantic failure・reservation violation・incompatible contextからのexact / 
   record fileも無い。**notRun** として扱う（Search failureでもCandidate 0でもない）。
 - runnerのlog末尾の `EXIT 0` は、detached起動に使った `cmd /c` の `%ERRORLEVEL%` が行の解析時点で展開された値で、runnerの終了状態を
   表さない（runnerはkillされた）。
-- formal起動は2回目である。1回目は、Claude Code sessionのbackground実行上限（2時間）に巻き込まれないようsession外のdetached process
-  で起動し直すため、**tasks child（schedule再導出・task構築、Searchなし）の途中で停止**した（`.local/c2b2a-aborted1.run`: task file /
-  memory fileのみ、record無し）。条件・コードは同一（同じmeasured HEAD、`--allow-uncommitted` / smoke optionなし）。
+- Stage 1 measurementの起動は2回目である。1回目は、Claude Code sessionのbackground実行上限（2時間）に巻き込まれないようsession外の
+  detached processで起動し直すため、**tasks child（schedule再導出・task構築、Searchなし）の途中で停止**した（`.local/c2b2a-aborted1.run`:
+  task file / memory fileのみ、record無し）。起動command・条件は同一（`--allow-uncommitted` / smoke optionなし）。
 
-### partial rawのpost-hoc再構成
+### 2.1 partial rawのpost-hoc再構成
 
 runnerは全taskが終わったときにだけaggregate rawを書く構造だったため、停止したrunのaggregate rawは存在しない。そこで
 `scripts/reconstruct-planner-global-phase2c26b2c2b2a-partial-raw.mjs`（post-hoc、Searchを実行しない、child recordを書き換えない）で、
@@ -86,12 +99,47 @@ run dir・child record・runner logから同じ形のrawを組み立てた。
 | child record | 35件 + tasks record。各recordのtaskはtask fileと構築taskに一致 |
 | logから再構成した値 | process wall（0.1 s分解能）、失敗childの最終IPC heap（log値とsubsampleされたmemory.jsonl最終行の大きい方。RSSは下限） |
 | 失われた値 | parentのin-memory process table、失敗childのexit code / stderr tail（`null`で記録） |
-| benchmarkCodeSha256 | `adc9631a6574eb75dffcd6f26d1a8ea595e3fe3e3551edfe3fa87f6563f3596c`（measured HEADのgit objectからrunnerと同じ規則で再計算） |
+| benchmarkCodeSha256 | `adc9631a6574eb75dffcd6f26d1a8ea595e3fe3e3551edfe3fa87f6563f3596c`（再構成時に指定したmeasurement candidate HEADのgit objectから、runnerと同じ規則でpost-hoc再計算。launch時の観測値ではない） |
 | `status` | `intentionally_stopped`（`reconstruction.postHoc = true`、`childRecordsModified = false`、`searchRun = false`） |
 
-analyzer / analysis moduleの変更はpost-hocのみ: `intentionally_stopped` rawをformal evidenceとして受け付け、実行taskがtask順の
+analyzer / analysis moduleの変更はpost-hocのみ: `intentionally_stopped` rawを解析対象として受け付け、実行taskがtask順の
 prefixであること・残りがちょうど `notRunTaskIds` であることをfail-close確認し、notRunを未計測として数える。決定ロジックは不変
 （decision ruleの文言にnotRunを明記しただけ）。
+
+### 2.2 launch provenanceとevidence grade（formalではない理由）
+
+> Stage 1 measurementは44 / 352 taskで意図的に停止した。観測したchild recordはdiagnostic partial evidenceとして保持する。
+> 停止したrunnerはlaunch時のrepository HEAD / Working Tree clean状態 / code hashのattestationを永続化していなかったため、
+> 再構成したrunはformal evidenceと分類できるほど強くlaunch provenanceを証明できない。
+>
+> `provenance.formal = false`、decision = `B2C2B2A_INCOMPLETE`、`invalidReasons = []`
+
+runnerは全task終了時にだけraw（launch時に計算したHEAD・uncommitted判定・benchmark code hashを含むenvironment）を書く。停止したrunでは
+そのrawが無く、Search開始前にrunnerが永続化したimmutableなattestationも無い。したがって:
+
+| RESULT provenance field | 値 | 意味 |
+| --- | --- | --- |
+| `formal` | `false` | 通常のformal条件（calc変更なし・analysis commit済み・smokeなし）は満たすが、launch provenanceが未検証 |
+| `evidenceGrade` | `diagnostic_partial` | |
+| `launchProvenanceVerified` / `launchProvenanceSource` | `false` / `none` | runner raw（完走時）もrunner start attestationも無い |
+| `launchProvenanceReason` | The stopped parent runner did not persist an immutable start attestation containing the actual repository HEAD, working-tree cleanliness and benchmark code hash. measuredHead and benchmarkCodeSha256 were reconstructed post hoc. | |
+| `measuredHead` / `reconstructedMeasuredHead` | `32130e8…` | `measuredHeadSource = post_hoc_reconstruction_argument`。再構成時に指定したmeasurement candidate HEAD。`codeChangedSinceMeasuredHead` はこのcommitからのdiff |
+| `benchmarkCodeSha256Source` | recomputed post hoc … | 上記HEADのgit objectからの再計算値 |
+| `uncommittedBenchmarkCode` / `launchWorkingTreeCleanVerified` | `null` / `false` | launch時のWorking Tree状態は不明。「uncommittedではなかった」とは後付けで断定しない |
+| `rawRecordedUncommittedBenchmarkCode` | `false` | 保持している再構成raw（SHA-256 `d393c263…`）は本修正前のscriptで作られ、`false` を書いていた。analyzerはこの値を読まず、記録値として残すだけ |
+| `calculationCodeChangedSinceMeasuredHead` / `measurementCodeChangedSinceMeasuredHead` | `[]` / `[]` | |
+| `analysisCodeUncommitted` | `false` | |
+
+analyzerのformal判定は `formal = 通常のformal条件 AND launch provenance verified` で、launch provenanceは
+`phase2c26b2c2b2aLaunchProvenance()` が判定する。完走したrunner raw、またはrunnerがSearch前に永続化した完全なstart attestation
+（`attestedBy: 'runner'`、clean、environmentと一致）だけがverifiedになる。`intentionally_stopped` かつ `reconstruction.postHoc` で
+あることや、再構成scriptに任意の `--measured-head` を渡すことではformalにならない。今回のRESULTは `--allow-nonformal` で生成したが、
+このoptionはnon-formal RESULTの書き出しを許すだけで、formalへは昇格させない（testで固定）。
+
+再構成scriptも修正し、launch時の値を断定しないようにした（`uncommittedBenchmarkCode: null`、`launchWorkingTreeCleanVerified: false`、
+`repositoryHeadSource` / `benchmarkCodeSha256Source` の明示、attestationは書かない）。Search / measurement code、run dir、child record、
+runner log、保持している再構成rawは変更していない。RESULTの測定部分（aggregates・taskRows・targets・parity・decision・invalidReasons等）は
+修正前と完全に同一で、変わったのはprovenanceだけである。
 
 ## 3. 方針
 
@@ -122,7 +170,7 @@ Search childが知るのは Target・P1 rank・group / reservation digest / repr
 minimum extent・expected stable key / Candidate index / cost / route kind / exact context・compatibility・L1でcoverされるか否かは
 知らない（testで固定）。visitorの `'stop'` はsentinelとsafety capの2箇所だけで、oracle matchによるearly stopは無い。
 
-## 4. 実行条件（formal前に登録、変更なし）
+## 4. 実行条件（Stage 1 measurement前に登録、変更なし）
 
 | 項目 | 値 |
 | --- | --- |
@@ -133,7 +181,7 @@ minimum extent・expected stable key / Candidate index / cost / route kind / exa
 | Stage 1 | fresh child / task、heap 8192 MB、**concurrency 1**、budget 10分、`setImmediate` yield、memory sampling 250 ms、retry / fallbackなし |
 | 環境 | Node v24.19.0（Vite SSR loader、NOT a Browser Worker）、AMD Ryzen 7 9700X（16 logical）、32 GB |
 
-formal前のnon-formal smoke（4 task、`--allow-uncommitted`）は配線確認だけに使い、smoke結果を見て条件を変えていない。
+Stage 1 measurement前のnon-formal smoke（4 task、`--allow-uncommitted`）は配線確認だけに使い、smoke結果を見て条件を変えていない。
 
 ## 5. 実行結果
 
@@ -335,11 +383,17 @@ Production default、全taskが共通L2、Target個別extentなし、notRunがin
 
 - 9 Target（E1の大半、L2でしかcoverされない4件を含む）は1 contextもSearchしていない。L2でE1を回収できるかは本Phaseでは不明。
 - timeout / OOM 9 taskの結果（Candidate有無、exact有無）は不明。incompatibleなのでexactを出さないという読みは条件付き解釈にすぎない。
+- launch provenance（実測開始時のHEAD・Working Tree clean状態・benchmark code hash）はrunnerにattestされておらず、RESULTはformalではない（§2.2）。
 - process wall・失敗childのheapはlogからの再構成値、失敗childのRSSは下限、exit code / stderr tailは失われた。
 - Node / Vite SSRでの計測で、Browser Workerの計測ではない。concurrency 1。
 - Production RNG・Search・Plannerの挙動は変更していない。新しいRNG挙動は導入していない。
 
 ## 13. 次Phase候補（本PRでは実行しない、レビュー後に決める）
+
+- **runner start attestation**: formal runを途中停止してもprovenanceを保てるよう、parent runnerがSearch開始前に、少なくとも
+  repository HEAD、Working Tree clean / uncommitted benchmark状態、benchmarkCodeSha256、Export SHA-256、Target manifest SHA-256、
+  registered execution conditions、createdAtを含むimmutableなstart attestationをrun dirへ永続化する（本PRでは実装しない。analyzer側の
+  検証関数 `phase2c26b2c2b2aLaunchProvenance()` はこの形を受け付ける）
 
 - L1（`{8, 235, 256}`）などTargetのfirst covering rungを使うladder escalation（E1のうちL1でcoverされる7件はL1で済む可能性）
 - incompatible contextでのresource explosion（Skill 1500 / Normal 128のheld-aware Search）の原因調査
