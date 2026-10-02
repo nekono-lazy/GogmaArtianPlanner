@@ -30,7 +30,8 @@ const allowNonformal = args.includes('--allow-nonformal')
 
 // Provenance: only the post-hoc analysis code (and tests) may change after the measured HEAD.
 const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim()
-const analysisPaths = ['src/benchmarks/plannerGlobalPhase2C26B2C2B2AAnalysis.ts', 'scripts/analyze-planner-global-phase2c26b2c2b2a.mjs']
+// The partial-raw reconstruction of the intentionally stopped run is post-hoc code too (it runs no Search and rewrites no record).
+const analysisPaths = ['src/benchmarks/plannerGlobalPhase2C26B2C2B2AAnalysis.ts', 'scripts/analyze-planner-global-phase2c26b2c2b2a.mjs', 'scripts/reconstruct-planner-global-phase2c26b2c2b2a-partial-raw.mjs']
 const analysisUncommitted = Boolean(git('diff', 'HEAD', '--', ...analysisPaths) || git('ls-files', '--others', '--exclude-standard', '--', ...analysisPaths))
 if (analysisUncommitted && !allowNonformal) throw new Error('Commit the post-hoc analysis code before regenerating evidence (or pass --allow-nonformal).')
 const measuredHead = r.environment.repositoryHead
@@ -39,10 +40,13 @@ const changedSinceMeasured = git('diff', '--name-only', measuredHead, 'HEAD', '-
 const calculationCodeChangedSinceMeasuredHead = changedSinceMeasured.filter(path => !analysisPaths.includes(path) && !path.endsWith('.test.ts'))
 if (calculationCodeChangedSinceMeasuredHead.length > 0 && !allowNonformal) throw new Error(`Calculation code changed since the measured HEAD: ${calculationCodeChangedSinceMeasuredHead.join(', ')}`)
 const smoke = r.environment.smoke !== null
-const formalRun = r.status === 'completed' && !r.environment.uncommittedBenchmarkCode && !smoke
+// An intentionally stopped formal run is formal evidence of the tasks it ran: its raw is the post-hoc reconstruction.
+const intentionallyStopped = r.status === 'intentionally_stopped' && r.intentionalStop !== undefined && r.reconstruction?.postHoc === true && r.reconstruction?.childRecordsModified === false
+const formalRun = (r.status === 'completed' || intentionallyStopped) && !r.environment.uncommittedBenchmarkCode && !smoke
 const formal = formalRun && calculationCodeChangedSinceMeasuredHead.length === 0 && !analysisUncommitted
 if (!formalRun && !allowNonformal) throw new Error('The raw run is not a formal run (uncommitted benchmark code, smoke options or incomplete).')
-if (r.status !== 'completed') throw new Error(`The raw run did not complete (${r.status}).`)
+if (r.status !== 'completed' && !intentionallyStopped) throw new Error(`The raw run did not complete (${r.status}).`)
+const intentionalStop = intentionallyStopped ? { stoppedAt: r.intentionalStop.stoppedAt, reason: r.intentionalStop.reason, notRunTaskIds: r.intentionalStop.notRunTaskIds } : null
 
 const stream = s => s === null ? null : { first: s.first, last: s.last, operations: s.operations, positions: s.positions, crossesHeldPositions: s.crossesHeldPositions, startsAfterOrigin: s.startsAfterOrigin }
 const compactCandidate = c => c === null || c === undefined ? null : { deliveryIndex: c.deliveryIndex, stableKeySha256: sha(c.stableKey), orderingKeys: c.orderingKeys,
@@ -150,6 +154,8 @@ try {
     policiesMatch: JSON.stringify(summary.policies) === JSON.stringify(schedule.policies),
     everyTaskAtCommonL2: r.tasks.every(t => JSON.stringify(t.extent) === commonExtent) && JSON.stringify(r.environment.extent) === commonExtent,
     noTargetSpecificExtent: new Set(r.tasks.map(t => JSON.stringify(t.extent))).size === 1 && r.environment.perTargetExtent === false && r.environment.targetIndividualOracleExtentAsSearchInput === false,
+    notRunMatchesIntentionalStop: intentionalStop === null ? r.stage1.length === r.tasks.length || smoke
+      : r.stage1.length + intentionalStop.notRunTaskIds.length === r.tasks.length && JSON.stringify(r.notRun.map(t => t.taskId)) === JSON.stringify(intentionalStop.notRunTaskIds),
     calculationContextMatches: r.stage1.every(run => (run.outcome.process !== 'completed' && run.calculationContext === null) || JSON.stringify(run.calculationContext) === JSON.stringify(input.calculationContext))
       && JSON.stringify(r.tasksChild.calculationContext) === JSON.stringify(input.calculationContext),
     engineMatches: r.stage1.every(run => (run.outcome.process !== 'completed' && run.rngEngineVersion === null) || run.rngEngineVersion === engine.version) && r.environment.rngEngineVersion === engine.version,
@@ -189,7 +195,7 @@ try {
   const reach = await c2aAnalysis.phase2c26b2c2aReach(schedule, targetManifest.targetWeaponIds, manifest, oracle)
   const b2c1FirstCompatible = new Map(b2c1Authority.routes.map(route => [route.targetWeaponId, route.p1FirstCompatible.rank]))
   const audit = analysis.runPhase2C26B2C2B2AAnalysis({ targetWeaponIds: targetManifest.targetWeaponIds, tasks: r.tasks, runs, reach, b2c1FirstCompatible,
-    oracle: { routes: oracle.routes, gogmaUsage: oracle.gogmaUsage }, smoke })
+    oracle: { routes: oracle.routes, gogmaUsage: oracle.gogmaUsage }, smoke, intentionalStop })
   invalidReasons.push(...audit.invalidReasons)
 
   // Diagnostic runtime comparison with the B2-C2A default-extent Stage 1 (never a decision input).
@@ -211,6 +217,14 @@ try {
       yieldsMedian: ratio(ex.yields.median, b2c2aParse.diagnostic.execution.yields?.median) },
   }
 
+  // Post-hoc diagnostic: what B2-C2B1 recorded about each E1 Route's extent, beside what this run did on that Target.
+  const b2c2b1Routes = new Map((json(b2c2b1File).routes ?? []).map(route => [route.targetWeaponId, route]))
+  const extentDiagnostic = targetManifest.targetWeaponIds.map((id, index) => {
+    const route = b2c2b1Routes.get(id)
+    const execution = audit.aggregates.execution.perTarget.find(row => row.targetWeaponId === id)
+    return { targetIndex: index, targetWeaponId: id, b2c2b1: route === undefined ? null : { required: route.required, reach: route.reach, insufficientStreams: route.insufficientStreams,
+      firstLadderRung: route.firstLadderRung, p1FirstCompatibleRank: route.p1FirstCompatibleRank, route: route.route }, searchExtent: r.environment.extent, execution }
+  })
   const runOf = new Map(runs.map(run => [run.taskId, run]))
   const searchOf = run => run?.record?.status === 'searched' ? run.record.search : null
   const peak = run => ({ heap: Math.max(run?.memory?.sampledMaxHeapUsedBytes ?? 0, run?.lastIpcMemory?.maxHeapUsedBytes ?? 0),
@@ -251,7 +265,8 @@ try {
       oracleManifestRoutesSha256: manifestRoutesSha256, targetManifestSha256: targetsFile.source.sha256,
       oracleGuidedPolicySelection: true, oracleGuidedTargetPopulation: true, oracleInformedCommonExtent: true, contextOrderingUsesOracle: false, oracleReadBySearchChild: false,
       oracleMatchUsedForEarlyStop: false, perTargetExtent: false, targetIndividualOracleExtentAsSearchInput: false,
-      measuredAt: r.measuredAt, runWallMs: r.wallMs },
+      measuredAt: r.measuredAt, runWallMs: r.wallMs,
+      partialRun: intentionalStop !== null, intentionalStop: intentionalStop === null ? null : r.intentionalStop, reconstruction: r.reconstruction ?? null },
     environment: { runtime: r.environment.runtime, node: r.environment.node, v8: r.environment.v8, platform: r.environment.platform, arch: r.environment.arch, osRelease: r.environment.osRelease,
       cpu: r.environment.cpu, logicalCpuCount: r.environment.logicalCpuCount, totalMemoryBytes: r.environment.totalMemoryBytes, rngEngineVersion: r.environment.rngEngineVersion },
     conditions: { stage1: r.environment.stage1, tasksBudgetMs: r.environment.tasksBudgetMs, contextBudget: r.environment.contextBudget, e1Targets: r.environment.e1Targets,
@@ -276,6 +291,7 @@ try {
     tasks: { total: r.tasks.length, targets: targetManifest.targetWeaponIds.length, contextBudget: c2b2a.PHASE2C26B2C2B2A_CONTEXT_BUDGET },
     aggregates: audit.aggregates,
     runtimeComparison,
+    extentDiagnostic,
     targets: audit.rows.map(row => ({ ...row, firstLadderRung: authority.routes.find(x => x.targetWeaponId === row.targetWeaponId)?.firstLadderRung ?? null })),
     taskRows,
     decisionRule: analysis.PHASE2C26B2C2B2A_DECISION_RULE,
@@ -286,7 +302,8 @@ try {
   console.log(JSON.stringify({ output: resolve(paths.output), formal, hashChain, population: populationParity, scheduleParity, recordIssues: recordIssues.length,
     exactTargets: audit.aggregates.exactTargets, budgetCoverage: audit.aggregates.budgetCoverage, cascade: audit.aggregates.cascade, compatibility: { ...audit.aggregates.compatibility, byRank: undefined },
     firstExactEqualsFirstCompatible: audit.aggregates.firstExactEqualsFirstCompatible, missClasses: audit.aggregates.missClasses, execution: { ...audit.aggregates.execution, byRank: undefined },
-    runtimeRatios: runtimeComparison?.ratios ?? null,
+    runtimeRatios: runtimeComparison?.ratios ?? null, intentionalStop: intentionalStop === null ? null : { notRun: intentionalStop.notRunTaskIds.length },
+    perTarget: audit.aggregates.execution.perTarget.map(row => [row.targetWeaponId.slice(0, 8), row.started, row.completed, row.timeout, row.outOfMemory, row.notRun].join(' ')),
     targets: audit.rows.map(row => ({ t: row.targetWeaponId.slice(0, 8), firstCompatible: row.b2c1FirstCompatibleRank, C8: row.policies.C8.firstExactContextRank, C32: row.policies.C32.firstExactContextRank,
       C4C: row.policies.C4C.firstExactContextRank, idx: row.policies.C4C.firstExactCandidateIndex, cost: row.policies.C4C.firstExactOperationCost, miss: row.missClass })),
     invalidReasons: invalidReasons.slice(0, 30), invalidReasonCount: invalidReasons.length, decision }, null, 2))

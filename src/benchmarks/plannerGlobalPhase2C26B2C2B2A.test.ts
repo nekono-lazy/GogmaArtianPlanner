@@ -72,6 +72,7 @@ import analysisSource from './plannerGlobalPhase2C26B2C2B2AAnalysis.ts?raw'
 import prepareSource from '../../scripts/prepare-planner-global-phase2c26b2c2b2a-targets.mjs?raw'
 import runnerSource from '../../scripts/run-planner-global-phase2c26b2c2b2a.mjs?raw'
 import analyzerSource from '../../scripts/analyze-planner-global-phase2c26b2c2b2a.mjs?raw'
+import reconstructSource from '../../scripts/reconstruct-planner-global-phase2c26b2c2b2a-partial-raw.mjs?raw'
 
 /*
  * Issue #154 Phase 2-C2.6-B2-C2B2A: the E1 Targets searched in their P1 top-32 contexts at the common L2 extent. The
@@ -571,6 +572,24 @@ describe('Phase 2-C2.6-B2-C2B2A analysis', () => {
     expect(outside.invalidReasons.join()).toMatch(/a task outside the manifest/)
   })
 
+  it('analyzes an intentionally stopped run: ran tasks a prefix, the rest notRun (never Candidate 0), never promoted past INCOMPLETE', () => {
+    const tasks = Array.from({ length: 32 }, (_, i) => taskOf(i + 1))
+    const ran = tasks.slice(0, 12).map(task => runOf(task, task.contextRank === 2 ? withMatchAt(task, 3) : task.contextRank === 10 ? null : miss(task), task.contextRank === 10 ? 'timeout' : 'completed'))
+    const stop = { stoppedAt: '2026-10-02T12:44:17.919Z', reason: 'owner stop', notRunTaskIds: tasks.slice(12).map(t => t.taskId) }
+    const result = runPhase2C26B2C2B2AAnalysis({ targetWeaponIds: [TARGET], tasks, runs: ran, reach: reachOf([102]), b2c1FirstCompatible: new Map([[TARGET, 2]]), oracle: ORACLE, smoke: false, intentionalStop: stop })
+    expect(result.invalidReasons).toEqual([])
+    expect(result.aggregates.execution).toMatchObject({ tasks: 32, started: 12, completed: 11, timeout: 1, notRun: 20,
+      perTarget: [{ targetWeaponId: TARGET, planned: 32, started: 12, completed: 11, timeout: 1, outOfMemory: 0, notRun: 20 }] })
+    expect(result.contexts.filter(c => !c.measured).map(c => c.candidateCount)).toEqual(Array(21).fill(null))
+    expect(result.decisionInput).toMatchObject({ unmeasuredTasks: 21, exactTargets: { C8: 1, C32: 1, C4C: 1 } })
+    // Even with every Target recovered, notRun tasks keep the case INCOMPLETE.
+    expect(phase2c26b2c2b2aDecision({ invalidReasons: [], ...result.decisionInput, tasks: 352, targets: 11, exactTargets: { C8: 11, C32: 11, C4C: 11 } }).case).toBe('B2C2B2A_INCOMPLETE')
+    // Without the stop record the missing tasks are a raw failure; a non-prefix or a wrong notRun list fails closed.
+    expect(runPhase2C26B2C2B2AAnalysis({ targetWeaponIds: [TARGET], tasks, runs: ran, reach: reachOf([102]), b2c1FirstCompatible: new Map([[TARGET, 2]]), oracle: ORACLE, smoke: false }).invalidReasons.join()).toMatch(/ran 12 of 32/)
+    expect(validatePhase2C26B2C2B2ARaw({ tasks, runs: [ran[0]!, ran[2]!], smoke: false, intentionalStop: { ...stop, notRunTaskIds: tasks.slice(2).map(t => t.taskId) } }).join()).toMatch(/not a prefix/)
+    expect(validatePhase2C26B2C2B2ARaw({ tasks, runs: ran, smoke: false, intentionalStop: { ...stop, notRunTaskIds: stop.notRunTaskIds.slice(1) } }).join()).toMatch(/notRun tasks are not exactly/)
+  })
+
   it('counts an unresolved safety cap only on a compatible context of a Target without a C4C exact', () => {
     const tasks = Array.from({ length: 32 }, (_, i) => taskOf(i + 1))
     const capped = (task: Phase2C26B2C2B2ATaskInput) => capture(task, filler(1024, 2), 'candidate_safety_cap')
@@ -656,7 +675,17 @@ describe('Phase 2-C2.6-B2-C2B2A isolation and provenance', () => {
     expect(runnerSource).toMatch(/Commit ALL benchmark code before a formal measurement/)
     expect(runnerSource).toMatch(/non-formal smoke options and need --allow-uncommitted/)
     expect(analyzerSource).toMatch(/const formal = formalRun && calculationCodeChangedSinceMeasuredHead\.length === 0 && !analysisUncommitted/)
-    expect(analyzerSource).toMatch(/const formalRun = r\.status === 'completed' && !r\.environment\.uncommittedBenchmarkCode && !smoke/)
-    expect(analyzerSource).toMatch(/plannerGlobalPhase2C26B2C2B2AAnalysis\.ts', 'scripts\/analyze-planner-global-phase2c26b2c2b2a\.mjs'/)
+    expect(analyzerSource).toMatch(/const formalRun = \(r\.status === 'completed' \|\| intentionallyStopped\) && !r\.environment\.uncommittedBenchmarkCode && !smoke/)
+    expect(analyzerSource).toMatch(/plannerGlobalPhase2C26B2C2B2AAnalysis\.ts', 'scripts\/analyze-planner-global-phase2c26b2c2b2a\.mjs', 'scripts\/reconstruct-planner-global-phase2c26b2c2b2a-partial-raw\.mjs'/)
+  })
+
+  it('rebuilds an intentionally stopped raw post hoc without running a Search or rewriting a child record', () => {
+    expect(reconstructSource).not.toMatch(/visitPlannerAlternativeCandidates|runPhase2C26B2C2B2ATask\(|runPhase2C26B2C2B2ASearch|spawn\(|derivePhase2C26B2C1Schedule|--oracle|--manifest|_RESULT/)
+    expect(reconstructSource).not.toMatch(/writeFile\([^)]*runDir|\brm\(|\bunlink\(|\brename\(|\bcopyFile\(/)
+    expect(reconstructSource).toMatch(/writeFile\(paths\.output, text, \{ flag: 'wx' \}\)/)
+    expect(reconstructSource).toMatch(/status: 'intentionally_stopped'/)
+    expect(reconstructSource).toMatch(/childRecordsModified: false, searchRun: false/)
+    expect(reconstructSource).toMatch(/The ran tasks are not a prefix of the task order/)
+    expect(analyzerSource).toMatch(/r\.reconstruction\?\.postHoc === true && r\.reconstruction\?\.childRecordsModified === false/)
   })
 })

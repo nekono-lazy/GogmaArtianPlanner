@@ -80,6 +80,19 @@ const deliveries = (s: Phase2C26B2C2B2ASearchRecord): Phase2C26B2B2A2DeliveredCa
 const searchOf = (run: Phase2C26B2C2B2ARun | undefined): Phase2C26B2C2B2ASearchRecord | null =>
   run && run.outcome.process === 'completed' && run.outcome.record === 'searched' && run.record?.status === 'searched' ? run.record.search : null
 
+// ---------------------------------------------------------------- intentional stop (post hoc; registered after the formal run started)
+
+/**
+ * The project owner stopped the formal Stage 1 at a child boundary once the evidence sufficed. The ran tasks are analyzed
+ * exactly as recorded; the rest are `notRun`: never Candidate 0, never a Search failure, and they keep the decision at
+ * B2C2B2A_INCOMPLETE through the unmeasured-task rule (an intentional stop never promotes a partial run to ALL_*).
+ */
+export interface Phase2C26B2C2B2AIntentionalStop {
+  stoppedAt: string
+  reason: string
+  notRunTaskIds: string[]
+}
+
 // ---------------------------------------------------------------- raw consistency (fails the run closed)
 
 /**
@@ -89,10 +102,17 @@ const searchOf = (run: Phase2C26B2C2B2ARun | undefined): Phase2C26B2C2B2ASearchR
  * verdict is "earlier first" and agrees with the six keys; the captured costs are the first <= 4 distinct costs and the
  * sentinel a fifth; the termination agrees with the flags. A cheaper Candidate after a dearer one is a semantic failure.
  */
-export function validatePhase2C26B2C2B2ARaw(input: { tasks: readonly Phase2C26B2C2B2ATaskInput[]; runs: readonly Phase2C26B2C2B2ARun[]; smoke: boolean }): string[] {
+export function validatePhase2C26B2C2B2ARaw(input: { tasks: readonly Phase2C26B2C2B2ATaskInput[]; runs: readonly Phase2C26B2C2B2ARun[]; smoke: boolean; intentionalStop?: Phase2C26B2C2B2AIntentionalStop | null }): string[] {
   const issues: string[] = []
   const { tasks, runs } = input
-  if (!input.smoke && runs.length !== tasks.length) issues.push(`Stage 1 ran ${runs.length} of ${tasks.length} tasks`)
+  const stop = input.intentionalStop ?? null
+  if (stop !== null) {
+    // An intentional stop (post hoc): the ran tasks are a prefix of the task order (concurrency 1) and every other task is
+    // named notRun - never Candidate 0, never a failure.
+    const ranIds = runs.map(r => r.taskId)
+    if (!same(ranIds, tasks.slice(0, runs.length).map(t => t.taskId))) issues.push('the ran tasks of the intentionally stopped run are not a prefix of the task order')
+    if (!same(stop.notRunTaskIds, tasks.slice(runs.length).map(t => t.taskId))) issues.push('the notRun tasks are not exactly the tasks after the stop')
+  } else if (!input.smoke && runs.length !== tasks.length) issues.push(`Stage 1 ran ${runs.length} of ${tasks.length} tasks`)
   if (new Set(runs.map(r => r.taskId)).size !== runs.length) issues.push('a task ran twice')
   if (new Set(tasks.map(t => t.taskId)).size !== tasks.length) issues.push('a planned task repeats')
   for (const task of tasks) if (!same(task.extent, { ...PHASE2C26B2C2B2A_EXTENT })) issues.push(`${task.taskId}: the task extent is not the common L2 extent`)
@@ -289,10 +309,17 @@ export function phase2c26b2c2b2aExecution(tasks: readonly Phase2C26B2C2B2ATaskIn
     timeout: runs.filter(r => r.outcome.process === 'timeout').length,
     outOfMemory: runs.filter(r => r.outcome.process === 'out_of_memory').length,
     processFailure: runs.filter(r => r.outcome.process === 'process_failure').length,
+    started: runs.length,
     notRun: tasks.filter(t => !runOf.has(t.taskId)).length,
     safetyCapUnresolved: measured.filter(r => searchOf(r)!.safetyCapHit).length,
     targets: { total: targets.length, fullyMeasured: measuredPerTarget.filter(n => n === PHASE2C26B2C2B2A_CONTEXT_BUDGET).length,
       partiallyMeasured: measuredPerTarget.filter(n => n > 0 && n < PHASE2C26B2C2B2A_CONTEXT_BUDGET).length, unmeasured: measuredPerTarget.filter(n => n === 0).length },
+    perTarget: targets.map(id => {
+      const own = runs.filter(r => r.task.targetWeaponId === id)
+      return { targetWeaponId: id, planned: tasks.filter(t => t.targetWeaponId === id).length, started: own.length, completed: own.filter(r => searchOf(r) !== null).length,
+        timeout: own.filter(r => r.outcome.process === 'timeout').length, outOfMemory: own.filter(r => r.outcome.process === 'out_of_memory').length,
+        processFailure: own.filter(r => r.outcome.process === 'process_failure').length, notRun: tasks.filter(t => t.targetWeaponId === id && !runOf.has(t.taskId)).length }
+    }),
     processWallMs: stats(runs.map(r => r.process.wallMs)),
     processWallMsTotal: runs.reduce((sum, r) => sum + r.process.wallMs, 0),
     searchElapsedMs: stats(measured.map(searchMs)),
@@ -345,7 +372,7 @@ export type Phase2C26B2C2B2ADecisionCase = 'B2C2B2A_ALL_C8' | 'B2C2B2A_ALL_C32' 
 export const PHASE2C26B2C2B2A_DECISION_RULE = {
   order: [
     'B2C2B2A_INVALID: a B2-C2B1 / B2-C1 / B2-B1 authority mismatch, an E1 population or Target manifest mismatch, a Target count other than 11, a task count other than 352, a P1 definition drift, a P1 schedule parity mismatch, a context rank duplicated / missing, a reservation digest / origin drift, a task or record extent other than the common L2 extent (a Target-specific extent included), a default / L2 Search input digest drift, an oracle / hash-chain / Export / CalculationContext / RNG mismatch, a recomputed P1 first compatible rank other than B2-C1\'s, a context mismatch in a Search child, a task outside the manifest or run twice, a Candidate reservation violation (sentinel included), an exact or partial Candidate (or an exact / partial sentinel) from a reservation-incompatible context, a first exact rank before the first compatible rank, a nonmonotonic Candidate cost sequence, a provenance failure, or a raw / result inconsistency',
-    'B2C2B2A_INCOMPLETE: no invalid reason, and a task was not measured (timeout / out of memory / process failure: never Candidate 0, never retried in this Phase)',
+    'B2C2B2A_INCOMPLETE: no invalid reason, and a task was not measured (timeout / out of memory / process failure / notRun after an intentional stop: never Candidate 0, never retried in this Phase)',
     'B2C2B2A_ALL_C8: all 352 tasks measured and C8 reaches an exact Candidate for 11 / 11 E1 Targets within P1 rank <= 32',
     'B2C2B2A_ALL_C32: all measured, C8 < 11, C32 11 / 11',
     'B2C2B2A_ALL_C4C: all measured, C32 < 11, C4C 11 / 11 (a safety-capped capture still counts its exact Candidates: they lie inside the first four cohorts)',
@@ -442,11 +469,12 @@ export interface Phase2C26B2C2B2AAnalysisInput {
   b2c1FirstCompatible: ReadonlyMap<string, number | null>
   oracle: Oracle
   smoke: boolean
+  intentionalStop?: Phase2C26B2C2B2AIntentionalStop | null
 }
 
 /** Raw consistency, the per-context comparison, the per-Target first exact, every aggregate and every invalid reason found here. */
-export function runPhase2C26B2C2B2AAnalysis({ targetWeaponIds, tasks, runs, reach, b2c1FirstCompatible, oracle, smoke }: Phase2C26B2C2B2AAnalysisInput) {
-  const invalidReasons: string[] = validatePhase2C26B2C2B2ARaw({ tasks, runs, smoke }).map(issue => issue.startsWith('semantic_failure') ? issue : `raw: ${issue}`)
+export function runPhase2C26B2C2B2AAnalysis({ targetWeaponIds, tasks, runs, reach, b2c1FirstCompatible, oracle, smoke, intentionalStop = null }: Phase2C26B2C2B2AAnalysisInput) {
+  const invalidReasons: string[] = validatePhase2C26B2C2B2ARaw({ tasks, runs, smoke, intentionalStop }).map(issue => issue.startsWith('semantic_failure') ? issue : `raw: ${issue}`)
   const manifestTargets = new Set(targetWeaponIds)
   for (const task of tasks) if (!manifestTargets.has(task.targetWeaponId)) invalidReasons.push(`raw: ${task.taskId}: a task outside the manifest`)
   const runOf = new Map(runs.map(r => [r.taskId, r]))
