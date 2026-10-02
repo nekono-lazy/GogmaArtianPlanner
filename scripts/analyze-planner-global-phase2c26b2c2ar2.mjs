@@ -281,7 +281,7 @@ try {
       memorySampleIntervalMs: r.environment.memorySampleIntervalMs, registeredP1: r.environment.registeredP1, calculationContext: input.calculationContext,
       researchMaxPlanSteps: input.options.maxPlanSteps, notRun: r.environment.notRun,
       changedFromR1: 'execution budget 30 -> 60 minutes per task, for the task still unmeasured after the R1 overlay only. Concurrency 1, heap 8192 MB, fresh child, setImmediate yield, memory sampling 250 ms, Search input, algorithm, ordering, comparator, extent, context, capture (4 cost cohorts + sentinel) and safety cap 1024 are unchanged (the child is the unchanged B2-C2A child script).',
-      retrySelection: 'the B2-C2A RESULT task rows that B2-C2A did not measure (child not completed with a Search record) and whose R1 RESULT retry row did not measure them either; nothing else read (no compatibility, coverage, exact, first compatible rank, oracle operation cost, route kind or other-rank exact)',
+      retrySelection: 'the R1 RESULT retry rows with process = timeout and record = null (R1 retry rows = the B2-C2A unmeasured rows, checked as a chain); nothing else read (no compatibility, coverage, exact, first compatible rank, Candidate count, oracle operation cost, route kind or other-rank exact)',
       searchChildKnows: ['targetWeaponId', 'P1 context rank', 'reservation digest / group / representative alias (re-derived and checked)', 'Planner-start origin (re-derived)',
         'reservation (re-derived)', 'excluded current Route key (re-derived)', 'Production default extent', 'capture rule (4 cost cohorts)', 'safety cap 1024'],
       searchChildNeverKnows: ['oracle RESULT', 'oracle manifest', 'B2-C2A RESULT', 'R1 RESULT', 'compatibility', 'B2-C1 firstCompatible', 'expected exact stable key', 'expected Candidate index',
@@ -290,7 +290,7 @@ try {
     authority: {
       b2c2a: { sha256: authority.resultSha256, decisionCase: json(b2c2aFile).decision.case, execution: authority.execution, exactTargets: authority.exactTargets, budgetCoverage: authority.budgetCoverage },
       r1: { sha256: r1.resultSha256, decisionCase: json(r1File).decision.case, overlay: r1.overlay, combinedExactTargets: r1.combined.exactTargets, retryTaskIds: r1.retryTaskIds,
-        unmeasuredAfterR1: r2Authority.phase2c26b2c2ar2UnmeasuredTaskIds(authority.taskRows, r1.retryRows) } },
+        timeoutTaskIds: r2Authority.phase2c26b2c2ar2TimeoutTaskIds(r1.retryRows) } },
     parity: { b2c2aAuthority: { valid: parsedB2C2A.valid }, r1Authority: { valid: parsedR1.valid }, chain: r2Authority.phase2c26b2c2ar2ChainIssues(authority, r1), b2c1Authority: { valid: parsedB2C1.valid },
       b2b1Authority: { valid: parsedB2B1.valid }, b2b2aAuthority: { valid: parsedB2B2A.valid }, b2b2a2Authority: { valid: parsedB2B2A2.valid }, oracle: { valid: oracleParse.valid },
       retryManifest: { valid: retryParse.valid, taskIds: retryManifest.taskIds }, hashChain, manifestConsistency: { valid: manifestConsistency.valid, checkedRoutes: manifestConsistency.checkedRoutes },

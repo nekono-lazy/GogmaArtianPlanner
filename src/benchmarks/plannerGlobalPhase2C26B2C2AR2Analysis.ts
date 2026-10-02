@@ -42,7 +42,7 @@ import { PHASE2C26B2C2AR2_EXPECTED_RETRY_TASKS, type Phase2C26B2C2AR2RetryManife
 import {
   phase2c26b2c2ar2ChainIssues,
   phase2c26b2c2ar2R1RetryMeasured,
-  phase2c26b2c2ar2UnmeasuredTaskIds,
+  phase2c26b2c2ar2TimeoutTaskIds,
   type Phase2C26B2C2AR2R1Authority,
   type Phase2C26B2C2AR2R1RetryRow,
 } from './plannerGlobalPhase2C26B2C2AR2Authority'
@@ -166,11 +166,11 @@ const samePolicies = (row: Phase2C26B2C2ATargetRow, recorded: { policies: Record
  */
 export function runPhase2C26B2C2AR2Analysis({ b2c2a, r1, retryManifest, tasks, selectedTasks, runs, reach, oracle, oracleOperationCost, smoke }: Phase2C26B2C2AR2AnalysisInput) {
   const invalidReasons: string[] = []
-  // The authorities describe one chain, and the retry selection is the tasks unmeasured after the R1 overlay, nothing else.
+  // The authorities describe one chain (the R1 retry rows are the B2-C2A unmeasured rows), and the retry selection is the R1
+  // timeout rows, nothing else.
   invalidReasons.push(...phase2c26b2c2ar2ChainIssues(b2c2a, r1))
-  let unmeasuredIds: string[] = []
-  try { unmeasuredIds = phase2c26b2c2ar2UnmeasuredTaskIds(b2c2a.taskRows, r1.retryRows) } catch (error) { invalidReasons.push(`retry_manifest: ${(error as Error).message}`) }
-  if (!same(retryManifest.taskIds, unmeasuredIds)) invalidReasons.push(`retry_manifest: taskIds ${retryManifest.taskIds.join(',')} are not the tasks unmeasured after the R1 overlay ${unmeasuredIds.join(',')}`)
+  const timeoutIds = phase2c26b2c2ar2TimeoutTaskIds(r1.retryRows)
+  if (!same(retryManifest.taskIds, timeoutIds)) invalidReasons.push(`retry_manifest: taskIds ${retryManifest.taskIds.join(',')} are not the R1 timeout rows ${timeoutIds.join(',')}`)
   if (retryManifest.taskIds.length !== PHASE2C26B2C2AR2_EXPECTED_RETRY_TASKS) invalidReasons.push(`retry_manifest: ${retryManifest.taskIds.length} tasks, not ${PHASE2C26B2C2AR2_EXPECTED_RETRY_TASKS}`)
   if (retryManifest.sourceR1ResultSha256 !== r1.resultSha256) invalidReasons.push('retry_manifest: sourceR1ResultSha256 is not the R1 authority')
   if (retryManifest.sourceR1RetryManifestSha256 !== r1.retryManifestSha256) invalidReasons.push('retry_manifest: sourceR1RetryManifestSha256 is not the R1 authority')

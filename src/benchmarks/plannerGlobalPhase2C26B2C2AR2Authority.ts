@@ -4,11 +4,11 @@
  * (`plannerGlobalPhase2C26B2C2AR2.ts`'s runner never reads this module).
  *
  * The B2-C2A and R1 RESULTs are post-hoc evidence (they hold compatibility, oracle coverage and first exact ranks). Only two
- * consumers read them: the retry-manifest step before the run, which takes from them nothing but the IDs of the tasks that
- * are still unmeasured after the R1 completion overlay, and the R2 analyzer after the run. The retry selection is purely
- * "B2-C2A did not measure it, and its R1 retry did not measure it either" (measured = the child completed with a Search
- * record); it never reads `compatible`, `coverage`, an exact index, a first compatible rank, an oracle operation cost, a
- * route kind, or whether the Target already holds an exact Candidate at another rank.
+ * consumers read them: the retry-manifest step before the run, which takes from them nothing but the IDs of the R1 retry
+ * rows R1 could not measure because their child timed out, and the R2 analyzer after the run. The retry selection is purely
+ * the R1 retry rows with `process === 'timeout' && record === null`; it never reads `compatible`, `coverage`, an exact
+ * index, a first compatible rank, a Candidate count, an oracle operation cost, a route kind, or whether the Target already
+ * holds an exact Candidate at another rank.
  *
  * The B2-C2A RESULT itself is parsed by the unchanged R1 authority (`parsePhase2C26B2C2AR1Authority()`).
  */
@@ -22,7 +22,7 @@ import {
 } from './plannerGlobalPhase2C26B2C2A'
 import type { Phase2C26B2C2ACapturePolicy } from './plannerGlobalPhase2C26B2C2AAnalysis'
 import { PHASE2C26B2C2AR1_EXPECTED_RETRY_TASKS, PHASE2C26B2C2AR1_RETRY } from './plannerGlobalPhase2C26B2C2AR1'
-import type { Phase2C26B2C2AR1Authority, Phase2C26B2C2AR1OriginalTaskRow } from './plannerGlobalPhase2C26B2C2AR1Authority'
+import type { Phase2C26B2C2AR1Authority } from './plannerGlobalPhase2C26B2C2AR1Authority'
 import { PHASE2C26B2C2AR2_EXPECTED_RETRY_TASKS, PHASE2C26B2C2AR2_SOURCE, type Phase2C26B2C2AR2RetryManifest } from './plannerGlobalPhase2C26B2C2AR2'
 
 type Json = Record<string, unknown>
@@ -317,30 +317,21 @@ export function phase2c26b2c2ar2ChainIssues(b2c2a: Phase2C26B2C2AR1Authority, r1
 // ---------------------------------------------------------------- the still-unmeasured subset and the retry manifest
 
 /**
- * The tasks that are still unmeasured after the R1 completion overlay: B2-C2A did not measure them (its child did not
- * complete with a Search record) and their R1 retry did not measure them either. Nothing else is read (no compatibility,
- * coverage, exact, first compatible rank, oracle operation cost, route kind, or another rank's exact). Sorted by task ID.
- * An originally unmeasured task without an R1 retry row is an inconsistency and throws.
+ * The R1 retry rows R1 did not measure because their child timed out: `process === 'timeout' && record === null`, nothing
+ * else read (no compatibility, coverage, exact, first compatible rank, Candidate count, oracle operation cost, route kind, or
+ * another rank's exact), sorted by task ID. That the R1 retry rows are exactly the B2-C2A unmeasured rows is checked
+ * separately by `phase2c26b2c2ar2ChainIssues()`.
  */
-export function phase2c26b2c2ar2UnmeasuredTaskIds(taskRows: readonly Pick<Phase2C26B2C2AR1OriginalTaskRow, 'taskId' | 'process' | 'record'>[],
-  r1RetryRows: readonly Pick<Phase2C26B2C2AR2R1RetryRow, 'taskId' | 'process' | 'record'>[]): string[] {
-  const retryOf = new Map(r1RetryRows.map(row => [row.taskId, row]))
-  const ids: string[] = []
-  for (const row of taskRows) {
-    if (row.process === 'completed' && row.record === 'searched') continue
-    const retry = retryOf.get(row.taskId)
-    if (retry === undefined) throw new Error(`${row.taskId} was unmeasured by B2-C2A and has no R1 retry row.`)
-    if (!(retry.process === 'completed' && retry.record === 'searched')) ids.push(row.taskId)
-  }
-  return ids.sort(compare)
+export function phase2c26b2c2ar2TimeoutTaskIds(r1RetryRows: readonly Pick<Phase2C26B2C2AR2R1RetryRow, 'taskId' | 'process' | 'record'>[]): string[] {
+  return r1RetryRows.filter(row => row.process === 'timeout' && row.record === null).map(row => row.taskId).sort(compare)
 }
 
-/** The retry manifest: task IDs and source hashes only. Throws unless the still-unmeasured subset is exactly the registered size. */
-export function phase2c26b2c2ar2RetryManifest(b2c2a: Pick<Phase2C26B2C2AR1Authority, 'taskRows'>, r1: Pick<Phase2C26B2C2AR2R1Authority, 'resultSha256' | 'retryManifestSha256'
-  | 'b2c2aResultSha256' | 'targetManifestSha256' | 'exportSha256' | 'retryRows'>): Phase2C26B2C2AR2RetryManifest {
-  const taskIds = phase2c26b2c2ar2UnmeasuredTaskIds(b2c2a.taskRows, r1.retryRows)
-  if (taskIds.length !== PHASE2C26B2C2AR2_EXPECTED_RETRY_TASKS) throw new Error(`The still-unmeasured subset holds ${taskIds.length} tasks, not ${PHASE2C26B2C2AR2_EXPECTED_RETRY_TASKS}.`)
-  return { phase: 'Issue #154 Phase 2-C2.6-B2-C2A-R2 retry manifest (tasks unmeasured after the R1 completion overlay)', sourceR1ResultSha256: r1.resultSha256,
+/** The retry manifest: task IDs and source hashes only. Throws unless the R1 timeout subset is exactly the registered size. */
+export function phase2c26b2c2ar2RetryManifest(r1: Pick<Phase2C26B2C2AR2R1Authority, 'resultSha256' | 'retryManifestSha256' | 'b2c2aResultSha256' | 'targetManifestSha256'
+  | 'exportSha256' | 'retryRows'>): Phase2C26B2C2AR2RetryManifest {
+  const taskIds = phase2c26b2c2ar2TimeoutTaskIds(r1.retryRows)
+  if (taskIds.length !== PHASE2C26B2C2AR2_EXPECTED_RETRY_TASKS) throw new Error(`The R1 timeout subset holds ${taskIds.length} tasks, not ${PHASE2C26B2C2AR2_EXPECTED_RETRY_TASKS}.`)
+  return { phase: 'Issue #154 Phase 2-C2.6-B2-C2A-R2 retry manifest (R1 timeout subset)', sourceR1ResultSha256: r1.resultSha256,
     sourceR1RetryManifestSha256: r1.retryManifestSha256, sourceB2C2AResultSha256: r1.b2c2aResultSha256, sourceTargetManifestSha256: r1.targetManifestSha256,
     exportSha256: r1.exportSha256, taskIds }
 }

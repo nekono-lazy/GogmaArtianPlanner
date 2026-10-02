@@ -29,7 +29,7 @@ import {
   parsePhase2C26B2C2AR2R1Authority,
   phase2c26b2c2ar2ChainIssues,
   phase2c26b2c2ar2RetryManifest,
-  phase2c26b2c2ar2UnmeasuredTaskIds,
+  phase2c26b2c2ar2TimeoutTaskIds,
   PHASE2C26B2C2AR2_REGISTERED_R1,
   type Phase2C26B2C2AR2R1Authority,
   type Phase2C26B2C2AR2R1RetryRow,
@@ -138,41 +138,38 @@ describe('Phase 2-C2.6-B2-C2A-R2 retry manifest', () => {
   const b2c2a = parsePhase2C26B2C2AR1Authority(b2c2aJson, b2c2aSha).authority!
   const r1 = parsePhase2C26B2C2AR2R1Authority(r1Json, r1Sha).authority!
 
-  it('takes exactly the tasks unmeasured by B2-C2A and by their R1 retry, whatever their compatibility, coverage or other-rank exact', () => {
-    const ids = phase2c26b2c2ar2UnmeasuredTaskIds(b2c2a.taskRows, r1.retryRows)
+  it('takes exactly the R1 retry rows with process = timeout and record = null, whatever their compatibility, coverage or other-rank exact', () => {
+    const ids = phase2c26b2c2ar2TimeoutTaskIds(r1.retryRows)
     expect(ids).toHaveLength(1)
-    const measured = (row: { process: string; record: string | null }) => row.process === 'completed' && row.record === 'searched'
-    expect(ids).toEqual(r1.retryRows.filter(row => !measured(row)).map(row => row.taskId))
-    expect(ids.every(id => !measured(b2c2a.taskRows.find(row => row.taskId === id)!))).toBe(true)
-    // Selection never reads compatibility, coverage, exact information, cost or route data, nor another rank's exact.
+    expect(ids).toEqual(r1.retryRows.filter(row => row.process === 'timeout' && row.record === null).map(row => row.taskId))
+    // The R1 retry rows are the B2-C2A unmeasured rows, so the selected task was never measured by B2-C2A either.
+    expect(ids.every(id => b2c2a.taskRows.find(row => row.taskId === id)!.record === null)).toBe(true)
+    // Selection never reads compatibility, coverage, exact information, Candidate count, cost or route data, nor another rank's exact.
     const scramble = <T extends object>(row: T) => ({ ...row, compatible: true, coverage: 'exact', firstExactIndex: 0, exactCount: 9, hit: { C8: true, C32: true, C4C: true },
-      firstExactCost: 1, partialCount: 3 })
-    expect(phase2c26b2c2ar2UnmeasuredTaskIds(b2c2a.taskRows.map(scramble), r1.retryRows.map(scramble))).toEqual(ids)
-    // An R1-measured task is never selected, an R1 timeout always is; a B2-C2A-measured task never is.
-    expect(phase2c26b2c2ar2UnmeasuredTaskIds([{ taskId: 't00-r01', process: 'timeout', record: null }, { taskId: 't00-r02', process: 'timeout', record: null },
-      { taskId: 't00-r03', process: 'completed', record: 'searched' }],
-    [{ taskId: 't00-r01', process: 'completed', record: 'searched' }, { taskId: 't00-r02', process: 'timeout', record: null }])).toEqual(['t00-r02'])
-    expect(phase2c26b2c2ar2UnmeasuredTaskIds([{ taskId: 't00-r01', process: 'timeout', record: null }], [{ taskId: 't00-r01', process: 'out_of_memory', record: null }])).toEqual(['t00-r01'])
-    // An originally unmeasured task without an R1 retry row is an inconsistency.
-    expect(() => phase2c26b2c2ar2UnmeasuredTaskIds([{ taskId: 't00-r01', process: 'timeout', record: null }], [])).toThrow(/no R1 retry row/)
+      firstExactCost: 1, partialCount: 3, candidateCount: 7, termination: 'four_cost_cohorts_drained' })
+    expect(phase2c26b2c2ar2TimeoutTaskIds(r1.retryRows.map(scramble))).toEqual(ids)
+    // An R1-measured row is never selected, an R1 timeout without a record always is; any other outcome or a timeout holding a record is not.
+    expect(phase2c26b2c2ar2TimeoutTaskIds([{ taskId: 't00-r03', process: 'timeout', record: null }, { taskId: 't00-r01', process: 'completed', record: 'searched' },
+      { taskId: 't00-r02', process: 'timeout', record: null }, { taskId: 't00-r04', process: 'out_of_memory', record: null }, { taskId: 't00-r05', process: 'timeout', record: 'searched' },
+      { taskId: 't00-r06', process: 'process_failure', record: null }])).toEqual(['t00-r02', 't00-r03'])
     // The function body reads nothing post-hoc.
-    const body = authoritySource.slice(authoritySource.indexOf('export function phase2c26b2c2ar2UnmeasuredTaskIds'), authoritySource.indexOf('/** The retry manifest:'))
-    expect(body).not.toMatch(/compatible|coverage|exact|firstCompatible|routeKind|oracle|cost|rank|hit\b/i)
+    const body = authoritySource.slice(authoritySource.indexOf('export function phase2c26b2c2ar2TimeoutTaskIds'), authoritySource.indexOf('/** The retry manifest:'))
+    expect(body).not.toMatch(/compatible|coverage|exact|firstCompatible|routeKind|oracle|cost|rank|hit\b|candidate/i)
   })
 
   it('writes task IDs and source hashes only, exactly what the retry runner accepts', () => {
-    const manifest = phase2c26b2c2ar2RetryManifest(b2c2a, r1)
+    const manifest = phase2c26b2c2ar2RetryManifest(r1)
     expect(Object.keys(manifest).sort()).toEqual(['exportSha256', 'phase', 'sourceB2C2AResultSha256', 'sourceR1ResultSha256', 'sourceR1RetryManifestSha256', 'sourceTargetManifestSha256', 'taskIds'])
     expect(manifest).toMatchObject({ sourceR1ResultSha256: r1Sha, sourceR1RetryManifestSha256: PHASE2C26B2C2AR2_SOURCE.r1RetryManifestSha256, sourceB2C2AResultSha256: b2c2aSha,
-      sourceTargetManifestSha256: PHASE2C26B2C2AR2_SOURCE.targetManifestSha256, exportSha256: r1.exportSha256, taskIds: phase2c26b2c2ar2UnmeasuredTaskIds(b2c2a.taskRows, r1.retryRows) })
+      sourceTargetManifestSha256: PHASE2C26B2C2AR2_SOURCE.targetManifestSha256, exportSha256: r1.exportSha256, taskIds: phase2c26b2c2ar2TimeoutTaskIds(r1.retryRows) })
     expect(JSON.stringify({ ...manifest, phase: '' })).not.toMatch(/compatib|coverage|exact|oracle|firstCompatible|rank|candidate|stableKey|cost|fnv1a32|[0-9a-f]{8}-[0-9a-f]{4}-/i)
     expect(parsePhase2C26B2C2AR2RetryManifest(structuredClone(manifest))).toMatchObject({ valid: true, issues: [] })
     // If R1 had measured every retry task, there would be nothing to retry: the manifest refuses an empty subset.
-    expect(() => phase2c26b2c2ar2RetryManifest(b2c2a, { ...r1, retryRows: r1.retryRows.map(row => ({ ...row, process: 'completed', record: 'searched' as const })) })).toThrow(/holds 0 tasks, not 1/)
+    expect(() => phase2c26b2c2ar2RetryManifest({ ...r1, retryRows: r1.retryRows.map(row => ({ ...row, process: 'completed', record: 'searched' as const })) })).toThrow(/holds 0 tasks, not 1/)
   })
 
   it('fails closed on another count, a duplicate, an extra key or another source', () => {
-    const manifest = phase2c26b2c2ar2RetryManifest(b2c2a, r1)
+    const manifest = phase2c26b2c2ar2RetryManifest(r1)
     const bad = (patch: (m: Record<string, unknown> & Phase2C26B2C2AR2RetryManifest) => void) => {
       const copy = structuredClone(manifest) as Record<string, unknown> & Phase2C26B2C2AR2RetryManifest
       patch(copy)
@@ -205,7 +202,7 @@ describe('Phase 2-C2.6-B2-C2A-R2 retry selection', () => {
   const b2c2a = parsePhase2C26B2C2AR1Authority(b2c2aJson, b2c2aSha).authority!
   const r1 = parsePhase2C26B2C2AR2R1Authority(r1Json, r1Sha).authority!
   const tasks = b2c2a.taskRows.map(taskFromRow)
-  const ids = phase2c26b2c2ar2UnmeasuredTaskIds(b2c2a.taskRows, r1.retryRows)
+  const ids = phase2c26b2c2ar2TimeoutTaskIds(r1.retryRows)
 
   it('selects exactly the retry task out of 320, unchanged, and fails closed otherwise', () => {
     const construction = { valid: true, issues: [], tasks }
@@ -429,13 +426,13 @@ describe('Phase 2-C2.6-B2-C2A-R2 analysis', () => {
   it('fails closed on a retry selection that is not the tasks unmeasured after R1, a chain break, or a compatibility drift', () => {
     const runs = SELECTED.map(t => runOf(t, miss(t)))
     // The R1-measured task, or both B2-C2A timeouts, are not the R2 subset.
-    expect(analyze(runs, { manifest: { ...MANIFEST, taskIds: ['t00-r04'] } }).invalidReasons.join()).toMatch(/retry_manifest: taskIds t00-r04 are not the tasks unmeasured after the R1 overlay t00-r06/)
+    expect(analyze(runs, { manifest: { ...MANIFEST, taskIds: ['t00-r04'] } }).invalidReasons.join()).toMatch(/retry_manifest: taskIds t00-r04 are not the R1 timeout rows t00-r06/)
     expect(analyze(runs, { manifest: { ...MANIFEST, taskIds: ['t00-r04', 't00-r06'] } }).invalidReasons.join()).toMatch(/retry_manifest: 2 tasks, not 1/)
     expect(analyze(runs, { manifest: { ...MANIFEST, sourceR1ResultSha256: SHA('0') } }).invalidReasons.join()).toMatch(/sourceR1ResultSha256 is not the R1 authority/)
     expect(analyze(runs, { manifest: { ...MANIFEST, sourceB2C2AResultSha256: SHA('0') } }).invalidReasons.join()).toMatch(/sourceB2C2AResultSha256 is not the B2-C2A authority/)
     expect(analyze(runs, { manifest: { ...MANIFEST, exportSha256: SHA('0') } }).invalidReasons.join()).toMatch(/exportSha256 is not the authority/)
     expect(analyze(runs, { r1: syntheticR1(a => { a.exportSha256 = SHA('9') }) }).invalidReasons.join()).toMatch(/chain: the R1 exportSha256 is not the B2-C2A one/)
-    expect(analyze(runs, { r1: syntheticR1(a => { a.retryRows = a.retryRows.slice(1); a.retryTaskIds = ['t00-r06'] }) }).invalidReasons.join()).toMatch(/no R1 retry row/)
+    expect(analyze(runs, { r1: syntheticR1(a => { a.retryRows = a.retryRows.slice(1); a.retryTaskIds = ['t00-r06'] }) }).invalidReasons.join()).toMatch(/chain: the R1 retry rows t00-r06 are not the B2-C2A unmeasured rows t00-r04,t00-r06/)
     expect(analyze([...runs, runOf(TASKS[3]!, miss(TASKS[3]!))]).invalidReasons.join()).toMatch(/retry_run: t00-r04 is not a retry manifest task/)
     expect(analyze(runs, { selected: [{ ...SELECTED[0]!, searchInputDigest: 'other' }] }).invalidReasons.join()).toMatch(/retry_selection: t00-r06 is not the reconstructed task/)
     // Compatibility: the B2-C2A row, the R1 row and the recomputation must agree.

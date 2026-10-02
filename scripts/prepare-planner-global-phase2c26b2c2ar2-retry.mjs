@@ -3,8 +3,8 @@
 // Reads the committed B2-C2A RESULT (--b2c2a-result) and the committed R1 RESULT (--r1-result), fails closed unless they are
 // the registered formal B2C2A_INCOMPLETE result (the unchanged parsePhase2C26B2C2AR1Authority()) and the registered formal
 // B2C2AR1_INCOMPLETE result (parsePhase2C26B2C2AR2R1Authority()) describing one chain (phase2c26b2c2ar2ChainIssues()), and
-// writes the task IDs that are still unmeasured after the R1 completion overlay (B2-C2A did not measure them and their R1
-// retry did not measure them either: phase2c26b2c2ar2RetryManifest()) with the source hashes and nothing else: no
+// writes the task IDs of the R1 retry rows R1 never measured because their child timed out (`process === 'timeout' &&
+// record === null`, phase2c26b2c2ar2RetryManifest()) with the source hashes and nothing else: no
 // compatibility, coverage, exact index, first-compatible rank, oracle operation cost, route kind or other-rank exact.
 // With --export, the Export SHA-256 must be the one both RESULTs recorded; with --targets, the Target manifest SHA-256 must
 // be the one both recorded. The retry runner reads this manifest, never a RESULT.
@@ -44,7 +44,7 @@ try {
     const targetsSha = sha256(await readFile(targetsPath))
     if (targetsSha !== r1.authority.targetManifestSha256) throw new Error(`The Target manifest ${targetsSha} is not the one B2-C2A / R1 recorded (${r1.authority.targetManifestSha256}).`)
   }
-  const manifest = r2AuthorityModule.phase2c26b2c2ar2RetryManifest(b2c2a.authority, r1.authority)
+  const manifest = r2AuthorityModule.phase2c26b2c2ar2RetryManifest(r1.authority)
   // The manifest must be exactly what the retry runner accepts.
   const check = r2.parsePhase2C26B2C2AR2RetryManifest(JSON.parse(JSON.stringify(manifest)))
   if (!check.valid) throw new Error(`The retry manifest does not parse: ${check.issues.join('; ')}`)
