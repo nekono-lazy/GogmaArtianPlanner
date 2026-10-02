@@ -1,0 +1,1535 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-B2-C2A-R1: B2-C2A timeout subset searched again, completion overlay (post-hoc analysis)",
+  "analyzedAt": "2026-10-02T03:24:50.587Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2AR1_RAW.json.local",
+      "bytes": 200437,
+      "sha256": "24c0393cfa25372f8d979562c630428d129969704d7759f0e2a1d68307665778"
+    },
+    "retryManifest": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2AR1_RETRY.json.local",
+      "bytes": 422,
+      "sha256": "fadc1d7f4c35ac3f2e3dbfabf324d84654b96f5bf1f9dde62b35dc182844e253"
+    },
+    "targetManifest": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2AR1_TARGETS.json.local",
+      "bytes": 1291,
+      "sha256": "1634163db4e749bef9346f5f24b39fb6478493a7d478aae869538474f5d48a30"
+    },
+    "export": {
+      "file": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "b2c2aResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2A_RESULT.json",
+      "bytes": 718500,
+      "sha256": "9b2736cc0a58c039837207d4caa41a6360715e7dd72e26237a6366b80d1bd74f"
+    },
+    "b2c1Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C1_RESULT.json",
+      "bytes": 170945,
+      "sha256": "04904fafb93664ecfed5f3bd654b29d9c39029dde34aa88a59d1d11de8fc2bac"
+    },
+    "b2b1Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2B1_RESULT.json",
+      "bytes": 1286493,
+      "sha256": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d"
+    },
+    "b2b2aResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2B2A_RESULT.json",
+      "bytes": 1070835,
+      "sha256": "b1ae4e8112772ebc75cba14de3fdead48a55ce34c6871ec03ca6f628c73fa9cb"
+    },
+    "b2b2a2Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2B2A2_RESULT.json",
+      "bytes": 80941,
+      "sha256": "d3a81b8f65033d8d05d72971e621ae8f4c3bc336a8a9b3f6edcc95c34880285b"
+    },
+    "oracle": {
+      "file": "PLANNER_GLOBAL_1657_ORACLE_RESULT.json",
+      "bytes": 183764,
+      "sha256": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1"
+    },
+    "oracleManifest": {
+      "file": "plannerGlobalOracle1657Manifest.ts",
+      "bytes": 22483,
+      "sha256": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af"
+    }
+  },
+  "provenance": {
+    "measuredHead": "62524dedbd89263014eadafcadce2f82e83410d6",
+    "analysisHead": "62524dedbd89263014eadafcadce2f82e83410d6",
+    "analysisCodeUncommitted": false,
+    "codeChangedSinceMeasuredHead": [],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "src/benchmarks/plannerGlobalPhase2C26B2C2AR1Analysis.ts",
+      "scripts/analyze-planner-global-phase2c26b2c2ar1.mjs",
+      "*.test.ts"
+    ],
+    "formal": true,
+    "benchmarkCodeSha256": "1673c41c9d19fcdf4584ec88325b3daa0c542bcc92596683c309a9f59b78515d",
+    "uncommittedBenchmarkCode": false,
+    "smoke": null,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "b2c2aResultSha256": "9b2736cc0a58c039837207d4caa41a6360715e7dd72e26237a6366b80d1bd74f",
+    "b2c2aMeasuredHead": "6ae33ab4e7ad0d2de14c67abe85f89ebbcaf0bd1",
+    "b2c2aAnalysisHead": "611b8ae8e24ab218e351f8a59a49271925f8caef",
+    "b2c2aBenchmarkCodeSha256": "b52c10229adf610a7b718473f33dc51dc3ef343017597d726779f97b752307fc",
+    "b2c1ResultSha256": "04904fafb93664ecfed5f3bd654b29d9c39029dde34aa88a59d1d11de8fc2bac",
+    "b2b1ResultSha256": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d",
+    "b2b2aResultSha256": "b1ae4e8112772ebc75cba14de3fdead48a55ce34c6871ec03ca6f628c73fa9cb",
+    "b2b2a2ResultSha256": "d3a81b8f65033d8d05d72971e621ae8f4c3bc336a8a9b3f6edcc95c34880285b",
+    "oracleResultSha256": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1",
+    "oracleManifestFileSha256": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af",
+    "oracleManifestRoutesSha256": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+    "targetManifestSha256": "1634163db4e749bef9346f5f24b39fb6478493a7d478aae869538474f5d48a30",
+    "retryManifestSha256": "fadc1d7f4c35ac3f2e3dbfabf324d84654b96f5bf1f9dde62b35dc182844e253",
+    "oracleGuidedPolicySelection": true,
+    "oracleGuidedTargetPopulation": true,
+    "contextOrderingUsesOracle": false,
+    "retrySelectionUsesOracle": false,
+    "oracleReadBySearchChild": false,
+    "oracleMatchUsedForEarlyStop": false,
+    "originalEvidenceRerun": false,
+    "b2c2aResultRewritten": false,
+    "measuredAt": "2026-10-02T02:33:25.508Z",
+    "runWallMs": 3064391.7695000004
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh unchanged B2-C2A child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "rngEngineVersion": "production-rng:c5-e7"
+  },
+  "conditions": {
+    "retry": {
+      "executionClass": "r1_retry",
+      "childHeapMb": 8192,
+      "concurrency": 1,
+      "budgetMs": 1800000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "b2c2aStage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 8192,
+      "concurrency": 3,
+      "budgetMs": 600000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "childScript": "scripts/run-planner-global-phase2c26b2c2a.mjs",
+    "tasksBudgetMs": 600000,
+    "contextBudget": 16,
+    "validationTargets": 20,
+    "expectedTasks": 320,
+    "expectedRetryTasks": 2,
+    "maxCostCohorts": 4,
+    "candidateSafetyCap": 1024,
+    "capturePrefixes": {
+      "C8": 8,
+      "C32": 32
+    },
+    "extent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "extentLabel": "default",
+    "nodeYield": "setImmediate",
+    "memorySampleIntervalMs": 250,
+    "registeredP1": {
+      "id": "P1",
+      "name": "default_simple_first",
+      "keys": [
+        [
+          "targetEligibleMinCardinality",
+          "asc"
+        ],
+        [
+          "exclusiveOwnedWeaponCount",
+          "asc"
+        ],
+        [
+          "blockedCountDefaultTotal",
+          "asc"
+        ],
+        [
+          "shareableHeldCountDefaultTotal",
+          "desc"
+        ],
+        [
+          "reservationDigest",
+          "asc"
+        ]
+      ]
+    },
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 20000,
+    "notRun": [
+      "production_change",
+      "search_algorithm_change",
+      "search_ordering_change",
+      "search_comparator_change",
+      "extent_change",
+      "capture_change",
+      "cost_cohort_change",
+      "safety_cap_change",
+      "policy_change",
+      "context_ordering_change",
+      "context_budget_change",
+      "population_change",
+      "reservation_change",
+      "oracle_matching_change",
+      "original_task_rerun",
+      "retry_selection_by_compatibility",
+      "retry_selection_by_oracle",
+      "oracle_guided_early_stop",
+      "second_retry",
+      "longer_budget_fallback",
+      "concurrency_fallback",
+      "runtime_optimization",
+      "extent_insufficient_search",
+      "alternative_to_alternative_support",
+      "ui_change"
+    ],
+    "inherited": {
+      "maxCostCohorts": 4,
+      "candidateSafetyCap": 1024,
+      "expectedTasks": 320,
+      "stage1HeapMb": 8192
+    },
+    "changedFromB2C2A": "execution budget 10 -> 30 minutes per task and concurrency 3 -> 1, for the timeout subset only. Search input, algorithm, ordering, comparator, extent, context, capture (4 cost cohorts + sentinel), safety cap 1024, heap 8192 MB, fresh child, setImmediate yield and memory sampling 250 ms are unchanged (the child is the unchanged B2-C2A child script). The concurrency change is for completing the unmeasured tasks, not for comparing Search semantics.",
+    "retrySelection": "the B2-C2A RESULT task rows with process = timeout and record = null, nothing else read (no compatibility, coverage, exact, first compatible rank, oracle operation cost or route kind)",
+    "searchChildKnows": [
+      "targetWeaponId",
+      "P1 context rank",
+      "reservation digest / group / representative alias (re-derived and checked)",
+      "Planner-start origin (re-derived)",
+      "reservation (re-derived)",
+      "excluded current Route key (re-derived)",
+      "Production default extent",
+      "capture rule (4 cost cohorts)",
+      "safety cap 1024"
+    ],
+    "searchChildNeverKnows": [
+      "oracle RESULT",
+      "oracle manifest",
+      "B2-C2A RESULT",
+      "compatibility",
+      "B2-C1 firstCompatible",
+      "expected exact stable key",
+      "expected Candidate index",
+      "expected Candidate count",
+      "expected operation cost",
+      "B2-C2A Target first exact"
+    ],
+    "limitation": "P1 and the defaultExtent population were chosen with B2-C1 post-hoc oracle evidence. Inside each Target, the context ordering and the retry Search used no oracle compatibility or firstCompatible. R1 only completes the B2-C2A measurement of this Export and population; it is not evidence that P1, a budget of 16, C4C or a 30-minute budget is right for Production or another Export."
+  },
+  "authority": {
+    "b2c2a": {
+      "sha256": "9b2736cc0a58c039837207d4caa41a6360715e7dd72e26237a6366b80d1bd74f",
+      "decisionCase": "B2C2A_INCOMPLETE",
+      "execution": {
+        "tasks": 320,
+        "completed": 318,
+        "timeout": 2,
+        "outOfMemory": 0,
+        "processFailure": 0,
+        "contextMismatch": 0,
+        "notRun": 0
+      },
+      "exactTargets": {
+        "C8": 18,
+        "C32": 18,
+        "C4C": 20
+      },
+      "budgetCoverage": {
+        "C8": {
+          "top1": 0,
+          "top2": 6,
+          "top4": 6,
+          "top8": 14,
+          "top12": 18,
+          "top16": 18
+        },
+        "C32": {
+          "top1": 0,
+          "top2": 6,
+          "top4": 6,
+          "top8": 14,
+          "top12": 18,
+          "top16": 18
+        },
+        "C4C": {
+          "top1": 0,
+          "top2": 7,
+          "top4": 7,
+          "top8": 15,
+          "top12": 20,
+          "top16": 20
+        }
+      },
+      "timeoutTaskIds": [
+        "t02-r12",
+        "t09-r09"
+      ]
+    }
+  },
+  "parity": {
+    "b2c2aAuthority": {
+      "valid": true
+    },
+    "b2c1Authority": {
+      "valid": true
+    },
+    "b2b1Authority": {
+      "valid": true
+    },
+    "b2b2aAuthority": {
+      "valid": true
+    },
+    "b2b2a2Authority": {
+      "valid": true
+    },
+    "oracle": {
+      "valid": true
+    },
+    "retryManifest": {
+      "valid": true,
+      "taskIds": [
+        "t02-r12",
+        "t09-r09"
+      ]
+    },
+    "hashChain": {
+      "b2c2aResultIsRegistered": true,
+      "retryManifestFromB2C2A": true,
+      "retryManifestMatchesRunner": true,
+      "retryManifestTargetManifest": true,
+      "targetManifestIsRegistered": true,
+      "targetManifestMatchesB2C2A": true,
+      "targetManifestMatchesRunner": true,
+      "targetManifestFromB2C1": true,
+      "b2c1MatchesB2C2A": true,
+      "b2b1MatchesB2C2A": true,
+      "b2b1MatchesB2C1": true,
+      "b2b2aMatchesB2C2A": true,
+      "b2b2aMatchesB2B2A2": true,
+      "b2b2a2MatchesB2C2A": true,
+      "b2b2a2MatchesB2C1": true,
+      "oracleMatchesB2C2A": true,
+      "oracleMatchesB2C1": true,
+      "manifestFileMatchesB2C2A": true,
+      "manifestRoutesMatchesB2C2A": true,
+      "manifestRoutesMatchesOracle": true,
+      "exportMatchesRunner": true,
+      "exportMatchesB2C2A": true,
+      "exportMatchesRetryManifest": true,
+      "exportMatchesTargetManifest": true,
+      "exportMatchesB2C1": true,
+      "exportMatchesOracle": true
+    },
+    "manifestConsistency": {
+      "valid": true,
+      "checkedRoutes": 43
+    },
+    "population": {
+      "manifestEqualsB2C1DefaultExtent": true,
+      "manifestEqualsB2C2ATargets": true,
+      "runnerTargetsEqualManifest": true,
+      "runnerRetryTasksEqualManifest": true,
+      "targets": 20
+    },
+    "scheduleConsistency": {
+      "valid": true,
+      "issues": []
+    },
+    "b2b1Parity": {
+      "valid": true,
+      "issues": []
+    },
+    "policyDrift": [],
+    "taskConstruction": {
+      "valid": true,
+      "issues": []
+    },
+    "retrySelection": {
+      "valid": true,
+      "issues": []
+    },
+    "scheduleParity": {
+      "tasksMatchReDerivedSchedule": true,
+      "selectedTasksMatchReDerivedSelection": true,
+      "contextsDigestMatches": true,
+      "originDigestMatches": true,
+      "extentMatches": true,
+      "policiesMatch": true,
+      "calculationContextMatches": true,
+      "engineMatches": true,
+      "taskCount": 320,
+      "retryTaskCount": 2
+    },
+    "conditionIssues": [],
+    "recordIssues": [],
+    "reconstructionVsB2C2A": [],
+    "compatibilityParity": {
+      "contexts": 320,
+      "mismatches": [],
+      "retry": [
+        {
+          "taskId": "t02-r12",
+          "recorded": false,
+          "recomputed": false
+        },
+        {
+          "taskId": "t09-r09",
+          "recorded": false,
+          "recomputed": false
+        }
+      ]
+    },
+    "firstCompatibleParity": [
+      {
+        "targetWeaponId": "0d98b225-e5d4-4cd4-b8e9-4c62ba695893",
+        "recomputed": 8,
+        "b2c1": 8
+      },
+      {
+        "targetWeaponId": "155a6831-7ff7-42d7-abf5-6e5a186edca6",
+        "recomputed": 2,
+        "b2c1": 2
+      },
+      {
+        "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+        "recomputed": 8,
+        "b2c1": 8
+      },
+      {
+        "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+        "recomputed": 2,
+        "b2c1": 2
+      },
+      {
+        "targetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85",
+        "recomputed": 2,
+        "b2c1": 2
+      },
+      {
+        "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
+        "recomputed": 8,
+        "b2c1": 8
+      },
+      {
+        "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+        "recomputed": 11,
+        "b2c1": 11
+      },
+      {
+        "targetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+        "recomputed": 8,
+        "b2c1": 8
+      },
+      {
+        "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+        "recomputed": 9,
+        "b2c1": 9
+      },
+      {
+        "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+        "recomputed": 11,
+        "b2c1": 11
+      },
+      {
+        "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
+        "recomputed": 2,
+        "b2c1": 2
+      },
+      {
+        "targetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
+        "recomputed": 8,
+        "b2c1": 8
+      },
+      {
+        "targetWeaponId": "aa4e67d8-cc57-487c-b0f0-6a8b36f13dbb",
+        "recomputed": 2,
+        "b2c1": 2
+      },
+      {
+        "targetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
+        "recomputed": 8,
+        "b2c1": 8
+      },
+      {
+        "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "recomputed": 11,
+        "b2c1": 11
+      },
+      {
+        "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
+        "recomputed": 2,
+        "b2c1": 2
+      },
+      {
+        "targetWeaponId": "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed",
+        "recomputed": 8,
+        "b2c1": 8
+      },
+      {
+        "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "recomputed": 9,
+        "b2c1": 9
+      },
+      {
+        "targetWeaponId": "f5d20af4-86b4-4e3f-b9ad-80862917007d",
+        "recomputed": 2,
+        "b2c1": 2
+      },
+      {
+        "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+        "recomputed": 8,
+        "b2c1": 8
+      }
+    ],
+    "originalReproduction": {
+      "exactTargets": true,
+      "budgetCoverage": true,
+      "cascade": true,
+      "targets": true
+    }
+  },
+  "retryRows": [
+    {
+      "taskId": "t02-r12",
+      "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+      "contextRank": 12,
+      "groupIndex": 30,
+      "reservationDigest": "fnv1a32:81433033",
+      "targetEligibleMinCardinality": 1,
+      "representativeFixedSetId": "K1:build-list.fnv1a32-c8772f02",
+      "representativeFixedTargetWeaponIds": [
+        "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0"
+      ],
+      "searchInputDigest": "fnv1a32:090d3e77",
+      "extent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 4
+      },
+      "excludedRouteKeySha256": "08cce11032577a536426f158d74314fcd8b61c20219275696546957209af0424",
+      "original": {
+        "process": "timeout",
+        "record": null,
+        "wallMs": 600210.6660999999,
+        "peakHeapBytes": 3850361704,
+        "peakRssBytes": 4220096512,
+        "yields": 4632571,
+        "budgetMs": 600000,
+        "compatible": false
+      },
+      "process": "completed",
+      "record": "searched",
+      "budgetMs": 1800000,
+      "wallMs": 1258689.5296,
+      "searchElapsedMs": 1253488.1949,
+      "scheduleMs": 4239.0899,
+      "peakHeapBytes": 4573405104,
+      "peakRssBytes": 5163622400,
+      "yields": 8232776,
+      "status": "stopped_by_extent",
+      "termination": "stopped_by_extent",
+      "candidateCount": 0,
+      "deliveredCandidates": 0,
+      "excludedCandidates": 0,
+      "distinctCostCohorts": 0,
+      "capturedCosts": [],
+      "captureComplete": true,
+      "safetyCapHit": false,
+      "nextCostSentinel": null,
+      "compatible": false,
+      "compatibleRecordedByB2C2A": false,
+      "coverage": "uncovered",
+      "exactCount": 0,
+      "partialCount": 0,
+      "firstExactIndex": null,
+      "firstPartialIndex": null,
+      "hit": {
+        "C8": false,
+        "C32": false,
+        "C4C": false
+      },
+      "sentinelExact": false,
+      "reservationViolations": 0,
+      "contextMismatchIssues": null,
+      "stderrTail": null,
+      "firstExactCandidate": null,
+      "routeKinds": {}
+    },
+    {
+      "taskId": "t09-r09",
+      "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+      "contextRank": 9,
+      "groupIndex": 14,
+      "reservationDigest": "fnv1a32:bb1ec38e",
+      "targetEligibleMinCardinality": 1,
+      "representativeFixedSetId": "K1:build-list.fnv1a32-6aac5fa0",
+      "representativeFixedTargetWeaponIds": [
+        "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7"
+      ],
+      "searchInputDigest": "fnv1a32:51272666",
+      "extent": null,
+      "excludedRouteKeySha256": null,
+      "original": {
+        "process": "timeout",
+        "record": null,
+        "wallMs": 600252.1953999996,
+        "peakHeapBytes": 4743111112,
+        "peakRssBytes": 5411069952,
+        "yields": 3598492,
+        "budgetMs": 600000,
+        "compatible": false
+      },
+      "process": "timeout",
+      "record": null,
+      "budgetMs": 1800000,
+      "wallMs": 1800262.3043,
+      "searchElapsedMs": null,
+      "scheduleMs": null,
+      "peakHeapBytes": 5162602480,
+      "peakRssBytes": 5571371008,
+      "yields": 13624887,
+      "status": null,
+      "termination": null,
+      "candidateCount": null,
+      "deliveredCandidates": null,
+      "excludedCandidates": null,
+      "distinctCostCohorts": null,
+      "capturedCosts": [],
+      "captureComplete": null,
+      "safetyCapHit": null,
+      "nextCostSentinel": null,
+      "compatible": false,
+      "compatibleRecordedByB2C2A": false,
+      "coverage": null,
+      "exactCount": 0,
+      "partialCount": 0,
+      "firstExactIndex": null,
+      "firstPartialIndex": null,
+      "hit": {
+        "C8": false,
+        "C32": false,
+        "C4C": false
+      },
+      "sentinelExact": false,
+      "reservationViolations": 0,
+      "contextMismatchIssues": null,
+      "stderrTail": "\u001b[31mWebSocket server error: Port 24678 is already in use\u001b[39m\n",
+      "firstExactCandidate": null,
+      "routeKinds": null
+    }
+  ],
+  "overlay": {
+    "original": {
+      "tasks": 320,
+      "measured": 318,
+      "timeout": 2
+    },
+    "retry": {
+      "selected": 2,
+      "runs": 2,
+      "measured": 1,
+      "timeout": 1,
+      "outOfMemory": 0,
+      "processFailure": 0,
+      "contextMismatch": 0,
+      "notRun": 0
+    },
+    "combined": {
+      "tasks": 320,
+      "measured": 319,
+      "unmeasured": 1,
+      "resolvedByRetry": 1,
+      "unresolved": 1
+    }
+  },
+  "aggregates": {
+    "original": {
+      "exactTargets": {
+        "C8": 18,
+        "C32": 18,
+        "C4C": 20
+      },
+      "budgetCoverage": {
+        "C8": {
+          "top1": 0,
+          "top2": 6,
+          "top4": 6,
+          "top8": 14,
+          "top12": 18,
+          "top16": 18
+        },
+        "C32": {
+          "top1": 0,
+          "top2": 6,
+          "top4": 6,
+          "top8": 14,
+          "top12": 18,
+          "top16": 18
+        },
+        "C4C": {
+          "top1": 0,
+          "top2": 7,
+          "top4": 7,
+          "top8": 15,
+          "top12": 20,
+          "top16": 20
+        }
+      },
+      "cascade": {
+        "c8": 18,
+        "c8MissC32": 0,
+        "c32MissC4C": 2,
+        "c4cMiss": 0
+      }
+    },
+    "combined": {
+      "exactTargets": {
+        "C8": 18,
+        "C32": 18,
+        "C4C": 20
+      },
+      "budgetCoverage": {
+        "C8": {
+          "top1": 0,
+          "top2": 6,
+          "top4": 6,
+          "top8": 14,
+          "top12": 18,
+          "top16": 18
+        },
+        "C32": {
+          "top1": 0,
+          "top2": 6,
+          "top4": 6,
+          "top8": 14,
+          "top12": 18,
+          "top16": 18
+        },
+        "C4C": {
+          "top1": 0,
+          "top2": 7,
+          "top4": 7,
+          "top8": 15,
+          "top12": 20,
+          "top16": 20
+        }
+      },
+      "cascade": {
+        "c8": 18,
+        "c8MissC32": 0,
+        "c32MissC4C": 2,
+        "c4cMiss": 0
+      },
+      "unresolvedSafetyCapTargets": 0,
+      "fullyMeasuredTargets": 19
+    },
+    "retrySemantics": {
+      "measured": 1,
+      "compatible": 0,
+      "exact": 0,
+      "partial": 0,
+      "sentinelExact": 0,
+      "reservationViolations": 0,
+      "capturedCandidates": 0
+    }
+  },
+  "combinedTargets": [
+    {
+      "targetWeaponId": "0d98b225-e5d4-4cd4-b8e9-4c62ba695893",
+      "b2c1FirstCompatibleRank": 8,
+      "recomputedFirstCompatibleRank": 8,
+      "compatibleRanksInBudget": [
+        8,
+        11,
+        12
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "155a6831-7ff7-42d7-abf5-6e5a186edca6",
+      "b2c1FirstCompatibleRank": 2,
+      "recomputedFirstCompatibleRank": 2,
+      "compatibleRanksInBudget": [
+        2,
+        3,
+        4,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+      "b2c1FirstCompatibleRank": 8,
+      "recomputedFirstCompatibleRank": 8,
+      "compatibleRanksInBudget": [
+        8,
+        11
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 15
+    },
+    {
+      "targetWeaponId": "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+      "b2c1FirstCompatibleRank": 2,
+      "recomputedFirstCompatibleRank": 2,
+      "compatibleRanksInBudget": [
+        2,
+        3,
+        4,
+        5,
+        9,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 2,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "2123eaa6-2df4-4003-8d20-8904e375aa85",
+      "b2c1FirstCompatibleRank": 2,
+      "recomputedFirstCompatibleRank": 2,
+      "compatibleRanksInBudget": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "27ac3237-543b-4887-85e6-28ccc7564294",
+      "b2c1FirstCompatibleRank": 8,
+      "recomputedFirstCompatibleRank": 8,
+      "compatibleRanksInBudget": [
+        8,
+        11
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 2,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 4,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 4,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 4,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+      "b2c1FirstCompatibleRank": 11,
+      "recomputedFirstCompatibleRank": 11,
+      "compatibleRanksInBudget": [
+        11
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": null,
+          "firstExactCandidateIndex": null,
+          "firstExactOperationCost": null,
+          "deltaFromFirstCompatible": null
+        },
+        "C32": {
+          "firstExactContextRank": null,
+          "firstExactCandidateIndex": null,
+          "firstExactOperationCost": null,
+          "deltaFromFirstCompatible": null
+        },
+        "C4C": {
+          "firstExactContextRank": 11,
+          "firstExactCandidateIndex": 158,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C4C",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+      "b2c1FirstCompatibleRank": 8,
+      "recomputedFirstCompatibleRank": 8,
+      "compatibleRanksInBudget": [
+        8,
+        10
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+      "b2c1FirstCompatibleRank": 9,
+      "recomputedFirstCompatibleRank": 9,
+      "compatibleRanksInBudget": [
+        9
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 3,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 9,
+          "firstExactCandidateIndex": 3,
+          "firstExactOperationCost": 3,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 9,
+          "firstExactCandidateIndex": 3,
+          "firstExactOperationCost": 3,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 9,
+          "firstExactCandidateIndex": 3,
+          "firstExactOperationCost": 3,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "8d233d8b-f366-42cb-a559-62666f079b58",
+      "b2c1FirstCompatibleRank": 11,
+      "recomputedFirstCompatibleRank": 11,
+      "compatibleRanksInBudget": [
+        11,
+        12
+      ],
+      "measuredContexts": 15,
+      "fullyMeasured": false,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 11,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 11,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 11,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 15
+    },
+    {
+      "targetWeaponId": "9733b090-9901-49fa-aaab-983379f1edae",
+      "b2c1FirstCompatibleRank": 2,
+      "recomputedFirstCompatibleRank": 2,
+      "compatibleRanksInBudget": [
+        2,
+        3,
+        9,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 3,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 3,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 3,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 3,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
+      "b2c1FirstCompatibleRank": 8,
+      "recomputedFirstCompatibleRank": 8,
+      "compatibleRanksInBudget": [
+        8,
+        11
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 2,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 1,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 1,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 1,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "aa4e67d8-cc57-487c-b0f0-6a8b36f13dbb",
+      "b2c1FirstCompatibleRank": 2,
+      "recomputedFirstCompatibleRank": 2,
+      "compatibleRanksInBudget": [
+        2,
+        8,
+        11,
+        12,
+        13,
+        14
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "b4f252cd-9530-46f2-b387-b99e3904a66e",
+      "b2c1FirstCompatibleRank": 8,
+      "recomputedFirstCompatibleRank": 8,
+      "compatibleRanksInBudget": [
+        8,
+        11
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 2,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "be881717-f092-4be7-870c-c6bd19f2141f",
+      "b2c1FirstCompatibleRank": 11,
+      "recomputedFirstCompatibleRank": 11,
+      "compatibleRanksInBudget": [
+        11
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 11,
+          "firstExactCandidateIndex": 1,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 11,
+          "firstExactCandidateIndex": 1,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 11,
+          "firstExactCandidateIndex": 1,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "c140578c-9aad-48d0-81db-95496636c459",
+      "b2c1FirstCompatibleRank": 2,
+      "recomputedFirstCompatibleRank": 2,
+      "compatibleRanksInBudget": [
+        2,
+        8,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": null,
+          "firstExactCandidateIndex": null,
+          "firstExactOperationCost": null,
+          "deltaFromFirstCompatible": null
+        },
+        "C32": {
+          "firstExactContextRank": null,
+          "firstExactCandidateIndex": null,
+          "firstExactOperationCost": null,
+          "deltaFromFirstCompatible": null
+        },
+        "C4C": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 99,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C4C",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed",
+      "b2c1FirstCompatibleRank": 8,
+      "recomputedFirstCompatibleRank": 8,
+      "compatibleRanksInBudget": [
+        8,
+        11,
+        12,
+        13
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "e96249b4-cb24-4fff-a852-4055904161ad",
+      "b2c1FirstCompatibleRank": 9,
+      "recomputedFirstCompatibleRank": 9,
+      "compatibleRanksInBudget": [
+        9,
+        11,
+        12
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 9,
+          "firstExactCandidateIndex": 1,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 9,
+          "firstExactCandidateIndex": 1,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 9,
+          "firstExactCandidateIndex": 1,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "f5d20af4-86b4-4e3f-b9ad-80862917007d",
+      "b2c1FirstCompatibleRank": 2,
+      "recomputedFirstCompatibleRank": 2,
+      "compatibleRanksInBudget": [
+        2,
+        3,
+        4,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 2,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 1,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    },
+    {
+      "targetWeaponId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+      "b2c1FirstCompatibleRank": 8,
+      "recomputedFirstCompatibleRank": 8,
+      "compatibleRanksInBudget": [
+        8,
+        11
+      ],
+      "measuredContexts": 16,
+      "fullyMeasured": true,
+      "safetyCapContexts": 0,
+      "policies": {
+        "C8": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C32": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        },
+        "C4C": {
+          "firstExactContextRank": 8,
+          "firstExactCandidateIndex": 0,
+          "firstExactOperationCost": 2,
+          "deltaFromFirstCompatible": 0
+        }
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "originalMeasuredContexts": 16
+    }
+  ],
+  "decisionRule": {
+    "order": [
+      "B2C2AR1_INVALID: a B2-C2A RESULT authority mismatch (SHA-256, formal, calculation change, case other than B2C2A_INCOMPLETE, counts other than 318 completed / 2 timeout / 0 OOM / 0 failure / 0 context mismatch, exact Targets other than C8 18 / C32 18 / C4C 20, invalid reasons), a retry manifest other than the B2-C2A timeout rows (count, IDs, source hashes), a Target manifest / Export / oracle / hash-chain mismatch, a 320-task or retry-task reconstruction mismatch, a schedule parity failure, an extent / capture / budget condition drift, a retry run outside the manifest or run twice, a context mismatch, a raw / record inconsistency (validatePhase2C26B2C2ARaw), a Candidate reservation violation (sentinel included), an exact or partial Candidate (or exact sentinel) from a reservation-incompatible context, a recomputed compatibility other than the B2-C2A row, a recomputed P1 first compatible rank other than B2-C1's, a first exact rank before the first compatible rank, the original rows not reproducing the B2-C2A Target aggregates, a combined exact count below the original, or a provenance failure",
+      "B2C2AR1_INCOMPLETE: no invalid reason, and a retry task was not measured (timeout / out of memory / process failure: never Candidate 0, never retried again in this Phase), or the combined B2-C2A decision semantics are otherwise INCOMPLETE",
+      "B2C2AR1_ALL_C8 / B2C2AR1_ALL_C32 / B2C2AR1_ALL_C4C: retry 2 / 2 measured, combined 320 / 320 measured, no invalid reason, and the B2-C2A decision semantics over the combined rows give ALL_C8 / ALL_C32 / ALL_C4C (ALL_C4C: C4C 20 / 20 with C32 < 20)",
+      "a combined B2C2A_PARTIAL cannot arise from a valid overlay (the original authority already holds C4C 20 / 20 and an overlay never removes an exact) and is recorded as B2C2AR1_INVALID"
+    ],
+    "overlay": "original B2-C2A rows for every task outside the retry manifest; a retry task row is replaced only by its R1 retry comparison when the retry child completed with a Search record; no task counted twice; no task outside the retry manifest overlaid",
+    "semantics": "phase2c26b2c2aDecision() over the combined 320 contexts: 20 Targets, unmeasured = combined contexts without a Search record, exact Targets per capture policy, unresolved safety cap only for Targets without a C4C exact"
+  },
+  "invalidReasons": [],
+  "decision": {
+    "case": "B2C2AR1_INCOMPLETE",
+    "reasons": [],
+    "combinedB2C2ACase": "B2C2A_INCOMPLETE",
+    "recommendation": "未完走taskだけについてruntime completionを継続する（このPhaseでは60分retry・extent変更・capture縮小・concurrency変更・Search最適化を追加しない）"
+  }
+}
