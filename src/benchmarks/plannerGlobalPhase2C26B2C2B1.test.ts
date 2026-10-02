@@ -3,6 +3,7 @@ import rawB2A from '../../docs/PLANNER_GLOBAL_PHASE2C26B2A_RESULT.json?raw'
 import rawB2B1 from '../../docs/PLANNER_GLOBAL_PHASE2C26B2B1_RESULT.json?raw'
 import rawB2C1 from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C1_RESULT.json?raw'
 import rawR2 from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2AR2_RESULT.json?raw'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B1_RESULT.json?raw'
 import { stableStringify } from '../domain/models/hashing'
 import { recommendedCandidateSearchDefaults } from '../domain/models/common'
 import type { BuildListEntry, TargetWeapon } from '../domain/models/publicTypes'
@@ -478,6 +479,31 @@ describe('Phase 2-C2.6-B2-C2B1 authorities', () => {
       ['L2', { maxNormalAdvance: 128, maxGogmaAdvance: 235, maxSkillAdvance: 1500 }],
     ])
     expect(phase2c26b2c2b1LadderCoverage(ladder.rungs, rows).byRung.map(x => x.covered)).toEqual([0, 7, 11])
+  })
+
+  it('pins the committed formal B2-C2B1 RESULT: CHARACTERIZED, E1 11 / E2 9, the registered ladder and every boundary / parity check', () => {
+    const result = JSON.parse(rawResult)
+    expect(result.provenance).toMatchObject({ formal: true, calculationCodeChangedSinceMeasuredHead: [], uncommittedBenchmarkCode: false, oracleReadByCalculation: false,
+      oracleInformedLadder: true, targetIndividualOracleExtentAsSearchInput: false, searchRun: false, b2c1ResultSha256: PHASE2C26B2C2A_REGISTERED_B2C1.resultSha256,
+      b2b1ResultSha256: PHASE2C26B2C2A_REGISTERED_B2C1.b2b1ResultSha256, b2aResultSha256: sha.b2a.resultSha256, r2ResultSha256: sha.r2.resultSha256 })
+    expect(result.provenance.analysisHead).toBe(result.provenance.measuredHead)
+    expect([result.decision.case, result.invalidReasons, result.hashChainIssues, result.unreadableTargets]).toEqual(['B2C2B1_CHARACTERIZED', [], [], []])
+    expect(result.cohorts.counts).toEqual(PHASE2C26B2C2B1_EXPECTED_POPULATION)
+    expect(result.aggregates.all.insufficientTargetsByStream).toEqual({ normal: 4, gogma: 0, skill: 20 })
+    expect([result.aggregates.e1.targets, result.aggregates.e2.targets]).toEqual([11, 9])
+    expect(result.ladder.rungs.map((rung: { id: string; extent: unknown }) => [rung.id, rung.extent])).toEqual([
+      ['L0', { maxNormalAdvance: 4, maxGogmaAdvance: 235, maxSkillAdvance: 4 }],
+      ['L1', { maxNormalAdvance: 8, maxGogmaAdvance: 235, maxSkillAdvance: 256 }],
+      ['L2', { maxNormalAdvance: 128, maxGogmaAdvance: 235, maxSkillAdvance: 1500 }],
+    ])
+    expect(result.ladderCoverage.e1.byRung.map((x: { covered: number }) => x.covered)).toEqual([0, 7, 11])
+    expect(result.routes).toHaveLength(20)
+    for (const route of result.routes) {
+      expect(route.windowBoundary.valid && route.walkBoundary.valid).toBe(true)
+      expect(Object.values(route.parity).every(Boolean)).toBe(true)
+      expect(route.insufficientStreams.length).toBeGreaterThan(0)
+    }
+    expect(result.contextUniverse.p1Ordering).toHaveLength(43)
   })
 
   it('reports every disagreeing recorder of the hash chain', () => {
