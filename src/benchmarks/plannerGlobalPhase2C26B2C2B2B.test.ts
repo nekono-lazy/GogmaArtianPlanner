@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import rawB2C2B1 from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B1_RESULT.json?raw'
 import rawB2C1 from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C1_RESULT.json?raw'
 import rawB2C2B2A from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2A_RESULT.json?raw'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2B_RESULT.json?raw'
 import type { TargetWeapon } from '../domain/models/publicTypes'
 import { createPlannerStartSearchOrigin } from '../domain/planner/replacement/plannerSearchOrigin'
 import { defaultPlannerAlternativeSearchExtent, type PlannerAlternativeCandidate, type PlannerAlternativeSearchExecution } from '../domain/search'
@@ -681,6 +682,65 @@ describe('Phase 2-C2.6-B2-C2B2B analysis', () => {
     expect(result.l1).toMatchObject({ started: 3, completed: 3, timeout: 0, outOfMemory: 0, exactC4C: 1 })
     expect(result.bothCompletedRatios).toMatchObject({ searchElapsedSumL1OverL2: 0.5, peakHeapMedianOfRatios: 0.5 })
     expect(phase2c26b2c2b2bL2Comparison([row('t00-r01', 1, 'completed', { reservationDigest: 'other' })], [row('t00-r01', 1, 'completed')]).issues.join()).toMatch(/not this context/)
+  })
+})
+
+// ---------------------------------------------------------------- the committed formal RESULT
+
+describe('Phase 2-C2.6-B2-C2B2B committed RESULT', () => {
+  const result = JSON.parse(rawResult)
+  it('pins the formal run: runner-attested launch, 224 / 224 started, 33 timeouts unmeasured, INCOMPLETE with no invalid reason', () => {
+    expect(result.provenance).toMatchObject({ formal: true, evidenceGrade: 'formal', partialRun: false, launchProvenanceVerified: true, launchProvenanceSource: 'runner_start_attestation',
+      launchWorkingTreeCleanVerified: true, launchProvenanceIssues: [], launchProvenanceIntegrityIssues: [], uncommittedBenchmarkCode: false, smoke: null,
+      measuredHead: 'a84357490cc23b14b383c30510bf5a55a3491b7c', measuredHeadSource: 'runner_start_attestation', measuredHeadIsAncestor: true,
+      calculationCodeChangedSinceMeasuredHead: [], measurementCodeChangedSinceMeasuredHead: [], analysisCodeUncommitted: false, interruption: null, reconstruction: null,
+      b2c2b1ResultSha256: PHASE2C26B2C2B2A_REGISTERED_B2C2B1.resultSha256, b2c1ResultSha256: b2c1Sha, b2c2b2aResultSha256: PHASE2C26B2C2B2B_REGISTERED_B2C2B2A.resultSha256,
+      oracleGuidedTargetPopulation: true, oracleInformedCommonExtent: true, perTargetExtent: false, targetIndividualOracleExtentAsSearchInput: false, oracleReadBySearchChild: false, oracleMatchUsedForEarlyStop: false })
+    // The start attestation the runner wrote before the tasks child, and the code hash recomputed from the measured HEAD.
+    expect(result.provenance.startAttestation).toMatchObject({ file: 'start-attestation.json', sha256: 'b8ccded581bb74cbc8d9e818d709f25ff5c04836486796b57d3db607b2ffdeda',
+      body: { attestedBy: 'runner', repositoryHead: 'a84357490cc23b14b383c30510bf5a55a3491b7c', uncommittedBenchmarkCode: false, smoke: null, extent: L1, stage1: PHASE2C26B2C2B2B_STAGE1 } })
+    expect(result.provenance.recordedStartAttestation.sha256).toBe(result.provenance.startAttestation.sha256)
+    expect(result.provenance.benchmarkCodeSha256).toBe(result.provenance.recomputedBenchmarkCodeSha256)
+    expect(result.provenance.startAttestation.body.createdAt).toBe(result.provenance.measuredAt)
+    expect(result.provenance.codeChangedSinceMeasuredHead.every((path: string) => result.provenance.postHocAllowedFiles.includes(path) || path.endsWith('.test.ts'))).toBe(true)
+    expect(result.decision).toMatchObject({ case: 'B2C2B2B_INCOMPLETE', reasons: [] })
+    expect(result.invalidReasons).toEqual([])
+    expect(Object.values(result.parity.hashChain).every(Boolean)).toBe(true)
+    expect(Object.values(result.parity.scheduleParity).every(v => v === true || v === 224)).toBe(true)
+    expect(result.parity.population).toMatchObject({ manifestEqualsE1L1: true, targets: 7, everyTargetFirstRungL1: true, overlapsE2: 0, overlapsDefaultExtent: 0, overlapsUnreached: 0 })
+    expect(result.conditions).toMatchObject({ searchExtent: L1, scheduleExtent: { ...defaultPlannerAlternativeSearchExtent }, contextBudget: 32, expectedTasks: 224, stage1: PHASE2C26B2C2B2B_STAGE1, ladderRungsSearched: ['L1'] })
+    expect(result.aggregates.execution).toMatchObject({ tasks: 224, started: 224, completed: 191, timeout: 33, outOfMemory: 0, processFailure: 0, contextMismatch: 0, notRun: 0,
+      targets: { total: 7, fullyMeasured: 3, partiallyMeasured: 4, unmeasured: 0 } })
+    expect(result.aggregates.execution.perTarget.map((r: { completed: number; timeout: number }) => [r.completed, r.timeout])).toEqual([[31, 1], [25, 7], [32, 0], [32, 0], [19, 13], [20, 12], [32, 0]])
+  })
+
+  it('pins the Search outcome: C8 6 / C32 6 / C4C 7 of 7, first exact = first compatible for 7 / 7, nothing from an incompatible context', () => {
+    expect(result.aggregates.exactTargets).toEqual({ C8: 6, C32: 6, C4C: 7 })
+    expect(result.aggregates.cascade).toEqual({ c8: 6, c8MissC32: 0, c32MissC4C: 1, c4cMiss: 0 })
+    expect(result.aggregates.firstExactEqualsFirstCompatible).toEqual({ recoveredC4C: 7, equal: 7, later: 0 })
+    expect(result.aggregates.compatibility).toMatchObject({ measured: 191, compatibleSearched: 24, compatibleWithExact: { C8: 23, C32: 23, C4C: 24 }, incompatibleSearched: 167, incompatibleWithExact: 0, incompatibleWithPartial: 0 })
+    expect(result.aggregates.candidates.reservationViolations).toBe(0)
+    expect(result.targets.map((t: { b2c1FirstCompatibleRank: number; policies: Record<string, { firstExactContextRank: number | null; firstExactCandidateIndex: number | null }> }) =>
+      [t.b2c1FirstCompatibleRank, t.policies.C8.firstExactContextRank, t.policies.C4C.firstExactContextRank, t.policies.C4C.firstExactCandidateIndex])).toEqual([[8, 8, 8, 0], [3, 3, 3, 0], [32, null, 32, 84], [31, 31, 31, 0], [14, 14, 14, 1], [31, 31, 31, 0], [2, 2, 2, 0]])
+    expect(result.targets.every((t: { firstLadderRung: string }) => t.firstLadderRung === 'L1')).toBe(true)
+    // Every timeout is unmeasured (never Candidate 0) and lies on a reservation-incompatible context.
+    const rows = result.taskRows as { process: string; candidateCount: number | null; coverage: string | null; compatible: boolean }[]
+    expect(rows.filter(r => r.process === 'timeout')).toHaveLength(33)
+    expect(rows.filter(r => r.process === 'timeout').every(r => r.candidateCount === null && r.coverage === null && !r.compatible)).toBe(true)
+    // The registered rule over the recorded counts: 224 - 191 = 33 unmeasured tasks keep the case INCOMPLETE although 7 / 7 are recovered.
+    expect(phase2c26b2c2b2bDecision({ invalidReasons: [], tasks: 224, targets: 7, unmeasuredTasks: 224 - result.aggregates.execution.completed, exactTargets: result.aggregates.exactTargets,
+      unresolvedSafetyCapTargets: 0 }).case).toBe('B2C2B2B_INCOMPLETE')
+  })
+
+  it('pins the diagnostic B2-C2B2A L2 comparison on the 44 contexts both phases started', () => {
+    const c = result.b2c2b2aComparison
+    expect(c.issues).toEqual([])
+    expect(c).toMatchObject({ pairs: 44, bothCompleted: 35, processTransitions: { 'completed->completed': 35, 'out_of_memory->completed': 2, 'timeout->completed': 4, 'timeout->timeout': 3 } })
+    expect(c.l2).toMatchObject({ started: 44, completed: 35, timeout: 7, outOfMemory: 2 })
+    expect(c.l1).toMatchObject({ started: 44, completed: 41, timeout: 3, outOfMemory: 0 })
+    expect(c.perTarget.map((t: { l2: { completed: number; timeout: number; outOfMemory: number }; l1: { completed: number; timeout: number; outOfMemory: number } }) =>
+      [t.l2.completed, t.l2.timeout, t.l2.outOfMemory, t.l1.completed, t.l1.timeout, t.l1.outOfMemory])).toEqual([[25, 5, 2, 31, 1, 0], [10, 2, 0, 10, 2, 0]])
+    expect(c.bothCompletedRatios).toMatchObject({ terminationSame: 35, candidateCountSame: 34 })
   })
 })
 
