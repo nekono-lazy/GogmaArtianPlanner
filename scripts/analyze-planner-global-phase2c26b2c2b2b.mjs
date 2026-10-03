@@ -264,7 +264,7 @@ try {
     const compatibleContexts = audit.contexts.filter(c => c.targetWeaponId === row.targetWeaponId && c.compatible)
     return { targetIndex: index, ...row, firstLadderRung: authority.routes.find(x => x.targetWeaponId === row.targetWeaponId)?.firstLadderRung ?? null,
       b2c2b1: route === undefined ? null : { required: route.required, insufficientStreams: route.insufficientStreams, firstLadderRung: route.firstLadderRung, p1FirstCompatibleRank: route.p1FirstCompatibleRank,
-        routeKind: route.route?.routeKind ?? null, sourceKind: route.route?.sourceKind ?? null, routeOperationCount: route.route?.routeOperationCount ?? null },
+        routeKind: route.route?.routeKind ?? null, sourceKind: route.route?.sourceKind ?? null, conversion: route.route?.conversion ?? null, routeOperationCount: route.route?.operations ?? null },
       firstExactEqualsFirstCompatible: row.policies.C4C.firstExactContextRank === null ? null : row.policies.C4C.firstExactContextRank === row.b2c1FirstCompatibleRank,
       compatibleContexts: compatibleContexts.map(c => ({ contextRank: c.contextRank, measured: c.measured, coverage: c.coverage, firstExactIndex: c.firstExactIndex, firstExactCost: c.firstExactCost,
         partialCount: c.partialIndexes.length, safetyCapHit: c.safetyCapHit, hit: c.hit })),
