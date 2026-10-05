@@ -6,7 +6,9 @@ timeout 33件の再実行、Search最適化、Production extent / rung selector�
 full Planner、UIは行っていない。
 
 - measurement HEAD: `3b35ee178174e2cb53958d38497a1a3f8fc26c20`（runnerがSearch開始前にstart attestationで記録。`measuredHeadSource = runner_start_attestation`）
-- analysis HEAD: `3b35ee178174e2cb53958d38497a1a3f8fc26c20`（analyzerはmeasurement HEADのままで実行。`codeChangedSinceMeasuredHead = []`）
+- analysis HEAD: `d90124a6c8b501320974090c9ea8355fcfdb5761`（レビュー対応でpaired excluded Route identityの再導出をpost-hoc analysisに追加し、同じraw runを再解析した。
+  measurement HEAD以降に変わったのはpost-hoc analysis・analyzer・testだけで、`calculationCodeChangedSinceMeasuredHead = []`、`measurementCodeChangedSinceMeasuredHead = []`。
+  Searchは再実行しておらず、measurement値は再解析前のRESULTと同一）
 - RESULT: [`docs/PLANNER_GLOBAL_PHASE2C26B2C2B2D_RESULT.json`](PLANNER_GLOBAL_PHASE2C26B2C2B2D_RESULT.json)（**`provenance.formal = true`**、
   `evidenceGrade = formal`、`partialRun = false`、`launchProvenanceVerified = true`、decision **`B2C2B2D_INCOMPLETE`**、invalid reason 0）
 
@@ -132,11 +134,31 @@ timeout 2件のheap推移（memory.jsonl、参考）:
 
 ## 7. B2-C2B2Cとのpaired comparison（同一Target・同一P1 rank）
 
-identity（targetWeaponId、P1 rank、groupIndex、reservationDigest、targetEligibleMinCardinality、representativeFixedSetId / Target IDs、
-defaultSearchInputDigest）は4 / 4で一致。defaultSearchInputDigestはPlanner-start origin digest・reservation・excluded current Route key・
-fixed setを含むB1 digestなので、origin / reservation / excluded current Routeの一致もここで担保される。excluded current RouteのSHA-256は、
-両側が記録している2件（t01・t03）で直接比較し一致。Planner-start origin（Skill 341 / Gogma 55）、CalculationContext、researchMaxPlanSteps、
-RNG Engine `production-rng:c5-e7` もB2-C2B2C RESULTと一致。差はextentとそれに伴うSearch input digestだけ。
+**paired context identityは4 / 4で一致**した（targetWeaponId、P1 rank、groupIndex、reservationDigest、targetEligibleMinCardinality、
+representativeFixedSetId / Target IDs、defaultSearchInputDigest、excluded current Route key）。B2-C2B2C側がtimeout / OOMだった2 task
+（t00・t02）のexcluded current Routeは、同じdefault contextからpost-hoc再導出して照合した。Planner-start origin（Skill 341 / Gogma 55）、
+CalculationContext、researchMaxPlanSteps、RNG Engine `production-rng:c5-e7` もB2-C2B2C RESULTと一致。差はextentと、それに伴うSearch input digestだけ。
+
+excluded current Routeの証明方法（RESULT `parity.pairedIdentity[].excludedRouteKeyComparison`、`parity.baselineRederivations`）:
+
+1. analyzerがExportから再導出したscheduleで、baseline taskのTarget・P1 rankに該当するschedule行がちょうど1件であることを確認する。
+   その行のgroup / reservation digest / representative / cardinalityはbaseline taskと一致する
+2. 既存の `reconstructPhase2C26B2B2AContext()` でdefault contextを再構築する（excluded Route keysはSearch開始前にsnapshotのTargetから決まる）
+3. 再構築したcontextのSearch input digestと、そのbody（excluded Route keysを含む）から再計算したB1 digestが、どちらもbaseline taskの
+   committed `defaultSearchInputDigest` と一致することを確認する
+4. excluded Route keyがちょうど1件で、Targetのcurrent Route keyであることを確認し、そのSHA-256を再導出値とする
+5. 再導出値を、存在するrecordと照合する
+
+| task | baseline側（B2-C2B2C） | B2-C2B2D側 | 判定 |
+| --- | --- | --- | --- |
+| t00-r17 | OOMでrecordなし → 再導出値をbaseline identityとして使用 | timeoutでrecordなし → 同一default digest（Search childがSearch前に同じ再構築と照合済み） | verified |
+| t01-r18 | record値 = 再導出値 | Search record値 = 再導出値 | verified |
+| t02-r11 | timeoutでrecordなし → 再導出値 | timeoutでrecordなし → 同一default digest | verified |
+| t03-r18 | record値 = 再導出値 | Search record値 = 再導出値 | verified |
+
+再導出不能、行数不一致、identity drift、key 1件以外、record値との不一致は、すべてinvalid reasonになる登録である（今回は0件）。
+`identity.matches` は、excluded current Routeまで証明できた場合のみtrueになる。注記: default digestはfnv1a32（非暗号）で、
+record無しの側の一致は、決定的な再構築とdigest一致に基づく。
 
 | task | outcome（L2 → tight） | wall（L2 → tight、差） | peak heap（L2 → tight、差） | peak RSS（L2 → tight） | yields（L2 → tight） | delivered | exact（L2 → tight） |
 | --- | --- | --- | --- | --- | --- | --- | --- |

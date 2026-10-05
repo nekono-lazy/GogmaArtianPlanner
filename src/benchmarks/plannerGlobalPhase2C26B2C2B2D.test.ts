@@ -931,7 +931,7 @@ describe('Phase 2-C2.6-B2-C2B2D committed RESULT', () => {
     expect(result.provenance).toMatchObject({ formal: true, evidenceGrade: 'formal', partialRun: false, launchProvenanceVerified: true, launchProvenanceSource: 'runner_start_attestation',
       launchWorkingTreeCleanVerified: true, launchProvenanceIssues: [], launchProvenanceIntegrityIssues: [], uncommittedBenchmarkCode: false, smoke: null,
       measuredHead: '3b35ee178174e2cb53958d38497a1a3f8fc26c20', measuredHeadSource: 'runner_start_attestation', measuredHeadIsAncestor: true,
-      calculationCodeChangedSinceMeasuredHead: [], analysisCodeUncommitted: false, interruption: null, reconstruction: null,
+      calculationCodeChangedSinceMeasuredHead: [], measurementCodeChangedSinceMeasuredHead: [], analysisCodeUncommitted: false, interruption: null, reconstruction: null,
       b2c2b1ResultSha256: b2c2b1Sha, b2c1ResultSha256: b2c1Sha, b2c2b2bResultSha256: b2c2b2bSha, b2c2b2cResultSha256: b2c2b2cSha, ...PHASE2C26B2C2B2D_PROVENANCE_FLAGS })
     expect(result.provenance).toMatchObject({ oracleGuidedContextSelection: true, targetIndividualOracleExtentAsSearchInput: true, perTargetExtent: true })
     expect(result.provenance.startAttestation).toMatchObject({ file: 'start-attestation.json', sha256: '008e1b615945d1c034dd6a67e8de589550b86c3e3def25aa876f55f565c8f0ff',
