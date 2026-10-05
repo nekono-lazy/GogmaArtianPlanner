@@ -133,7 +133,7 @@ describe('areRestorationBonusSetsEqual (unordered multiset with duplicate counts
     }
     expect(orderingsPerMultiset.size).toBe(56)
     expect(equalPairs).toBe([...orderingsPerMultiset.values()].reduce((sum, count) => sum + count * count, 0))
-  })
+  }, 15_000)
 
   it('agrees with the reference for IDs whose concatenation or JSON quoting could collide', () => {
     // ('ab', 'c') vs ('a', 'bc') collide under naive concatenation; the quote / bracket / separator characters

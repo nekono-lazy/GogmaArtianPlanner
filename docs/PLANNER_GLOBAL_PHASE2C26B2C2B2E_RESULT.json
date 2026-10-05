@@ -1,0 +1,1983 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-B2-C2B2E: the B2-C2B2D unmeasured unrecovered Targets, same first compatible context x tight extent, 60 minutes / 12 GB (oracle-guided diagnostic, post-hoc analysis)",
+  "analyzedAt": "2026-10-05T11:03:22.124Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2E_RAW.json.local",
+      "bytes": 18546,
+      "sha256": "1b0680050c0ec6721d94a021a51724eb045ab84cc8bbb545b34a56ef59d665b1"
+    },
+    "startAttestation": {
+      "file": "start-attestation.json",
+      "bytes": 3888,
+      "sha256": "d11cd8b6d3e861bade6e987bdbf5fde70731f25cb088712d47007b313c340f30"
+    },
+    "probeManifest": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2E_PROBES.json.local",
+      "bytes": 1225,
+      "sha256": "a506881c34e23007a850c106cd7eb5d9b66c265fb4ff8bbe1073af05136ed0c2"
+    },
+    "export": {
+      "file": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "b2c2b1Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B1_RESULT.json",
+      "bytes": 74371,
+      "sha256": "418166d2a7ff40145d8650f418c025783f9b5039673ee19e722bab4836b22eae"
+    },
+    "b2c1Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C1_RESULT.json",
+      "bytes": 170945,
+      "sha256": "04904fafb93664ecfed5f3bd654b29d9c39029dde34aa88a59d1d11de8fc2bac"
+    },
+    "b2b1Result": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2B1_RESULT.json",
+      "bytes": 1286493,
+      "sha256": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d"
+    },
+    "b2c2b2bResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2B_RESULT.json",
+      "bytes": 590905,
+      "sha256": "2066506462159ae7d7045268e2d5c670de2ec157322265f970786c5ad29684c9"
+    },
+    "b2c2b2cResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2C_RESULT.json",
+      "bytes": 276447,
+      "sha256": "b04ecace9ee6b5f36fe83e7680922d2d76c6cf4dfcdd677b408c856678313c9d"
+    },
+    "b2c2b2dResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2D_RESULT.json",
+      "bytes": 83899,
+      "sha256": "644962a942622a0da25e02c83b87866319618e9ceddb24ca9c5dbee5a55130e3"
+    },
+    "oracle": {
+      "file": "PLANNER_GLOBAL_1657_ORACLE_RESULT.json",
+      "bytes": 183764,
+      "sha256": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1"
+    },
+    "oracleManifest": {
+      "file": "plannerGlobalOracle1657Manifest.ts",
+      "bytes": 22483,
+      "sha256": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af"
+    }
+  },
+  "provenance": {
+    "formal": true,
+    "evidenceGrade": "formal",
+    "partialRun": false,
+    "launchProvenanceVerified": true,
+    "launchProvenanceSource": "runner_start_attestation",
+    "launchProvenanceReason": null,
+    "launchProvenanceIssues": [],
+    "launchProvenanceIntegrityIssues": [],
+    "launchWorkingTreeCleanVerified": true,
+    "startAttestation": {
+      "file": "start-attestation.json",
+      "sha256": "d11cd8b6d3e861bade6e987bdbf5fde70731f25cb088712d47007b313c340f30",
+      "bytes": 3888,
+      "body": {
+        "phase": "Issue #154 Phase 2-C2.6-B2-C2B2E runner start attestation",
+        "attestedBy": "runner",
+        "stage1": {
+          "executionClass": "stage1",
+          "childHeapMb": 12288,
+          "concurrency": 1,
+          "budgetMs": 3600000,
+          "retry": "none",
+          "fallback": "none"
+        },
+        "b2c2b2dStage1": {
+          "executionClass": "stage1",
+          "childHeapMb": 8192,
+          "concurrency": 1,
+          "budgetMs": 600000,
+          "retry": "none",
+          "fallback": "none"
+        },
+        "changedStage1Fields": [
+          "budgetMs",
+          "childHeapMb"
+        ],
+        "tasksBudgetMs": 600000,
+        "targets": 2,
+        "contextsPerTarget": 1,
+        "expectedTasks": 2,
+        "population": "E1_L2_B2C2B2D_UNMEASURED_UNRECOVERED",
+        "contextSelection": "b2c1_recorded_p1_first_compatible_rank",
+        "extentRule": "b2c2b2d_tight_max_production_default_b2c2b1_required_v1",
+        "extentFloor": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 4
+        },
+        "extentCeiling": {
+          "maxNormalAdvance": 128,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1500
+        },
+        "captureRule": {
+          "policy": "C4C",
+          "maxCostCohorts": 4,
+          "sentinel": "first delivery of the fifth distinct operation cost (never captured)",
+          "prefixes": {
+            "C8": 8,
+            "C32": 32
+          }
+        },
+        "candidateSafetyCap": 1024,
+        "registeredP1": {
+          "id": "P1",
+          "name": "default_simple_first",
+          "keys": [
+            [
+              "targetEligibleMinCardinality",
+              "asc"
+            ],
+            [
+              "exclusiveOwnedWeaponCount",
+              "asc"
+            ],
+            [
+              "blockedCountDefaultTotal",
+              "asc"
+            ],
+            [
+              "shareableHeldCountDefaultTotal",
+              "desc"
+            ],
+            [
+              "reservationDigest",
+              "asc"
+            ]
+          ]
+        },
+        "nodeYield": "setImmediate",
+        "memorySampleIntervalMs": 250,
+        "provenanceFlags": {
+          "oracleGuidedPolicySelection": true,
+          "oracleGuidedTargetPopulation": true,
+          "oracleGuidedContextSelection": true,
+          "oracleInformedPerTargetExtent": true,
+          "targetIndividualOracleExtentAsSearchInput": true,
+          "perTargetExtent": true,
+          "commonExtentForEveryTask": false,
+          "contextOrderingUsesOracle": true,
+          "oracleReadBySearchChild": false,
+          "oracleMatchUsedForEarlyStop": false,
+          "expectedOutcomeKnownBySearchChild": false,
+          "productionSchedulerEvidence": false,
+          "productionExtentSelectionEvidence": false
+        },
+        "createdAt": "2026-10-05T09:52:52.665Z",
+        "runnerScript": "scripts/run-planner-global-phase2c26b2c2b2e.mjs",
+        "node": "v24.19.0",
+        "repositoryHead": "e69a94ea0fdd1ef39a39286dffab1bfc44fb1f0b",
+        "uncommittedBenchmarkCode": false,
+        "benchmarkCodeSha256": "0800363f2ed56b3ad325cede8296a1cdc1556796b016acb6a02a964bf2a7e66a",
+        "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+        "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "exportBytes": 19424064,
+        "probeManifestFileName": "PLANNER_GLOBAL_PHASE2C26B2C2B2E_PROBES.json.local",
+        "probeManifestSha256": "a506881c34e23007a850c106cd7eb5d9b66c265fb4ff8bbe1073af05136ed0c2",
+        "probeManifestSourceResultSha256": "418166d2a7ff40145d8650f418c025783f9b5039673ee19e722bab4836b22eae",
+        "probeManifestB2C2B2DResultSha256": "644962a942622a0da25e02c83b87866319618e9ceddb24ca9c5dbee5a55130e3",
+        "targetWeaponIds": [
+          "070a1222-5e31-4c9f-a035-c557bfa7be73",
+          "a367c177-a0c2-4986-995e-4efcf4131b5c"
+        ],
+        "probes": [
+          {
+            "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+            "b2c2b2dTaskId": "t00-r17",
+            "contextRank": 17,
+            "extent": {
+              "maxNormalAdvance": 126,
+              "maxGogmaAdvance": 235,
+              "maxSkillAdvance": 450
+            }
+          },
+          {
+            "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+            "b2c2b2dTaskId": "t02-r11",
+            "contextRank": 11,
+            "extent": {
+              "maxNormalAdvance": 4,
+              "maxGogmaAdvance": 235,
+              "maxSkillAdvance": 1083
+            }
+          }
+        ],
+        "smoke": null
+      }
+    },
+    "recordedStartAttestation": {
+      "file": "start-attestation.json",
+      "bytes": 3888,
+      "sha256": "d11cd8b6d3e861bade6e987bdbf5fde70731f25cb088712d47007b313c340f30",
+      "createdAt": "2026-10-05T09:52:52.665Z"
+    },
+    "measuredHead": "e69a94ea0fdd1ef39a39286dffab1bfc44fb1f0b",
+    "measuredHeadSource": "runner_start_attestation",
+    "measuredHeadIsAncestor": true,
+    "recomputedBenchmarkCodeSha256": "0800363f2ed56b3ad325cede8296a1cdc1556796b016acb6a02a964bf2a7e66a",
+    "benchmarkCodeSha256": "0800363f2ed56b3ad325cede8296a1cdc1556796b016acb6a02a964bf2a7e66a",
+    "analysisHead": "e69a94ea0fdd1ef39a39286dffab1bfc44fb1f0b",
+    "analysisCodeUncommitted": false,
+    "codeChangedSinceMeasuredHead": [],
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "measurementCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B2EAnalysis.ts",
+      "scripts/analyze-planner-global-phase2c26b2c2b2e.mjs",
+      "scripts/reconstruct-planner-global-phase2c26b2c2b2e-partial-raw.mjs",
+      "*.test.ts"
+    ],
+    "uncommittedBenchmarkCode": false,
+    "smoke": null,
+    "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "exportBytes": 19424064,
+    "b2c2b1ResultSha256": "418166d2a7ff40145d8650f418c025783f9b5039673ee19e722bab4836b22eae",
+    "b2c1ResultSha256": "04904fafb93664ecfed5f3bd654b29d9c39029dde34aa88a59d1d11de8fc2bac",
+    "b2b1ResultSha256": "5a56ab010828519df00e7084c8b9cf6bd9276ad7425f609d520ba1392071309d",
+    "b2c2b2bResultSha256": "2066506462159ae7d7045268e2d5c670de2ec157322265f970786c5ad29684c9",
+    "b2c2b2cResultSha256": "b04ecace9ee6b5f36fe83e7680922d2d76c6cf4dfcdd677b408c856678313c9d",
+    "b2c2b2dResultSha256": "644962a942622a0da25e02c83b87866319618e9ceddb24ca9c5dbee5a55130e3",
+    "b2c2b2dMeasuredHead": "3b35ee178174e2cb53958d38497a1a3f8fc26c20",
+    "b2c2b2dAnalysisHead": "d90124a6c8b501320974090c9ea8355fcfdb5761",
+    "oracleResultSha256": "be51e7cdb69bec75e2b6640d6c28c774f4fa712643dfbc2f1d1e420f16b584a1",
+    "oracleManifestFileSha256": "c8b240f6d79cbad192882c2ec9654f8649ec79383df6e1abc029d58c3c9d81af",
+    "oracleManifestRoutesSha256": "ffb6db5a39e248b950a75f9094ae641a4a35f256a035e37564227bdc6e0e73cc",
+    "probeManifestSha256": "a506881c34e23007a850c106cd7eb5d9b66c265fb4ff8bbe1073af05136ed0c2",
+    "oracleGuidedPolicySelection": true,
+    "oracleGuidedTargetPopulation": true,
+    "oracleGuidedContextSelection": true,
+    "oracleInformedPerTargetExtent": true,
+    "targetIndividualOracleExtentAsSearchInput": true,
+    "perTargetExtent": true,
+    "commonExtentForEveryTask": false,
+    "contextOrderingUsesOracle": true,
+    "oracleReadBySearchChild": false,
+    "oracleMatchUsedForEarlyStop": false,
+    "expectedOutcomeKnownBySearchChild": false,
+    "productionSchedulerEvidence": false,
+    "productionExtentSelectionEvidence": false,
+    "measuredAt": "2026-10-05T09:52:52.665Z",
+    "runWallMs": 4158171.7094,
+    "freeMemoryBytesAtLaunch": 17512464384,
+    "interruption": null,
+    "reconstruction": null
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "rngEngineVersion": "production-rng:c5-e7"
+  },
+  "conditions": {
+    "stage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 12288,
+      "concurrency": 1,
+      "budgetMs": 3600000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "b2c2b2dStage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 8192,
+      "concurrency": 1,
+      "budgetMs": 600000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "changedStage1Fields": [
+      "budgetMs",
+      "childHeapMb"
+    ],
+    "conditionChecks": {
+      "stage1IsRegistered": true,
+      "b2c2b2dStage1IsItsRegistered": true,
+      "onlyBudgetAndHeapDiffer": true,
+      "budgetIs60Minutes": true,
+      "heapIs12288Mb": true,
+      "concurrencyIs1": true,
+      "noRetry": true,
+      "noFallback": true,
+      "everyChildAtTheBudget": true,
+      "everyChildAtTheHeap": true,
+      "captureUnchanged": true,
+      "yieldAndSamplingUnchanged": true,
+      "expectedTasks": true,
+      "contextSelectionAndExtentRuleUnchanged": true,
+      "childCalculationIsB2C2B2D": true
+    },
+    "tasksBudgetMs": 600000,
+    "targets": 2,
+    "contextsPerTarget": 1,
+    "expectedTasks": 2,
+    "maxCostCohorts": 4,
+    "candidateSafetyCap": 1024,
+    "capturePrefixes": {
+      "C8": 8,
+      "C32": 32
+    },
+    "capturePolicies": [
+      "C8",
+      "C32",
+      "C4C"
+    ],
+    "population": "E1_L2_B2C2B2D_UNMEASURED_UNRECOVERED",
+    "contextSelection": {
+      "id": "b2c1_recorded_p1_first_compatible_rank",
+      "rule": "per Target the one P1 rank B2-C1 recorded as its first reservation-compatible context; B2-C2B1 recorded the same rank and the B2-C2B2C analyzer recomputed it"
+    },
+    "extentRule": {
+      "id": "b2c2b2d_tight_max_production_default_b2c2b1_required_v1",
+      "rule": "per stream: max(Production default extent, B2-C2B1 recorded required extent); a stream the Route does not operate on (required = null) keeps the Production default",
+      "coverage": "required <= extent per stream (the unchanged B2-A / B2-C2B1 coverage judgement, applied by the Targets module)",
+      "bounds": "Production default <= tight <= common L2 on every stream, and strictly below common L2 on at least one stream"
+    },
+    "extentFloor": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "extentCeiling": {
+      "maxNormalAdvance": 128,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 1500
+    },
+    "probes": [
+      {
+        "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+        "b2c2b2dTaskId": "t00-r17",
+        "contextRank": 17,
+        "extent": {
+          "maxNormalAdvance": 126,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 450
+        }
+      },
+      {
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "b2c2b2dTaskId": "t02-r11",
+        "contextRank": 11,
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      }
+    ],
+    "scheduleExtent": {
+      "maxNormalAdvance": 4,
+      "maxGogmaAdvance": 235,
+      "maxSkillAdvance": 4
+    },
+    "nodeYield": "setImmediate",
+    "memorySampleIntervalMs": 250,
+    "registeredP1": {
+      "id": "P1",
+      "name": "default_simple_first",
+      "keys": [
+        [
+          "targetEligibleMinCardinality",
+          "asc"
+        ],
+        [
+          "exclusiveOwnedWeaponCount",
+          "asc"
+        ],
+        [
+          "blockedCountDefaultTotal",
+          "asc"
+        ],
+        [
+          "shareableHeldCountDefaultTotal",
+          "desc"
+        ],
+        [
+          "reservationDigest",
+          "asc"
+        ]
+      ]
+    },
+    "origins": {
+      "skill": 341,
+      "gogma": 55
+    },
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 20000,
+    "notRun": [
+      "production_change",
+      "production_default_extent_change",
+      "production_extent_selector",
+      "production_rung_selector",
+      "production_scheduler_adoption",
+      "heap_16gb_retry",
+      "budget_over_60min",
+      "retry",
+      "timeout_fallback",
+      "oom_fallback",
+      "automatic_fallback",
+      "b2c2b2d_recovered_target_rerun",
+      "b2c2b2c_timeout_retry",
+      "b2c2b2b_timeout_retry",
+      "context_change",
+      "extent_change",
+      "common_l2_search",
+      "search_algorithm_change",
+      "search_ordering_change",
+      "search_comparator_change",
+      "search_optimization",
+      "p1_change",
+      "capture_change",
+      "e2_search",
+      "k2_feature_grouping",
+      "residual_unreached_support",
+      "context_level_early_stop",
+      "exact_early_stop",
+      "candidate_trial",
+      "planner_alternative_kernel",
+      "full_planner_rerun",
+      "global_assignment",
+      "ui_change",
+      "b2c2b2d_result_regeneration",
+      "b2c2b2c_result_regeneration"
+    ],
+    "changedFromB2C2B2D": [
+      "budget: 10 minutes (600,000 ms) -> 60 minutes (3,600,000 ms)",
+      "child heap: 8,192 MB -> 12,288 MB",
+      "population: the 4 E1 ∩ L2 Targets -> the 2 B2-C2B2D left unmeasured and unrecovered (the 2 B2-C2B2D recovered are not re-run)"
+    ],
+    "unchangedFromB2C2B2D": [
+      "the Target / B2-C1 P1 first compatible context / target-relative tight extent of every task (identical Search input digests)",
+      "Planner-start origin and reservation universe",
+      "P1 ordering",
+      "the B2-C2B2D task construction and child calculation (the same function objects) and the B2-C2B2A Search body",
+      "Search comparator and Candidate materializer",
+      "C4C capture, max 4 distinct cost cohorts, 5th-cost sentinel, safety cap 1024",
+      "fresh child per task, concurrency 1",
+      "setImmediate yield",
+      "250 ms memory sampling",
+      "oracle isolation",
+      "no exact early stop, no context early stop",
+      "no retry, no fallback",
+      "runner start attestation contract"
+    ],
+    "searchChildKnows": [
+      "targetWeaponId",
+      "P1 context rank (the oracle-guided first compatible rank, given as a number)",
+      "reservation digest / group / representative alias (re-derived and checked)",
+      "Planner-start origin (re-derived)",
+      "reservation (re-derived)",
+      "excluded current Route key (re-derived)",
+      "default / tight Search input digests",
+      "the tight extent (oracle-informed, given as numbers)",
+      "capture rule (4 cost cohorts)",
+      "safety cap 1024"
+    ],
+    "searchChildNeverKnows": [
+      "oracle RESULT",
+      "oracle manifest",
+      "B2-C1 / B2-C2B1 / B2-C2B2B / B2-C2B2C / B2-C2B2D RESULTs",
+      "B2-C2B2D measurements",
+      "that the rank is the first compatible one",
+      "the required extent itself",
+      "expected exact stable key",
+      "expected Candidate index",
+      "expected operation cost",
+      "expected route kind",
+      "oracle Route body",
+      "exact / partial expectation"
+    ],
+    "limitation": "An oracle-guided diagnostic: the population, the context and the extent all come from post-hoc oracle evidence, and the execution budget is beyond what B2-C2B2D used. It measures only whether, given the same known compatible context and tight extent, the existing Search delivers the exact oracle Route within 60 minutes and a 12 GB heap. It is not evidence that Production could pick the context, know the extent or afford the budget, and not evidence for a Production scheduler or runtime."
+  },
+  "parity": {
+    "b2c2b1Authority": {
+      "valid": true,
+      "decisionCase": "B2C2B1_CHARACTERIZED"
+    },
+    "b2c1Authority": {
+      "valid": true
+    },
+    "b2b1Authority": {
+      "valid": true
+    },
+    "oracle": {
+      "valid": true
+    },
+    "b2c2b2bAuthority": {
+      "valid": true,
+      "issues": [],
+      "decisionCase": "B2C2B2B_INCOMPLETE"
+    },
+    "b2c2b2cAuthority": {
+      "valid": true,
+      "issues": [],
+      "decisionCase": "B2C2B2C_INCOMPLETE"
+    },
+    "b2c2b2dAuthority": {
+      "valid": true,
+      "issues": [],
+      "decisionCase": "B2C2B2D_INCOMPLETE"
+    },
+    "hashChain": {
+      "b2c2b1ResultIsRegistered": true,
+      "probeManifestFromB2C2B1": true,
+      "probeManifestFromB2C2B2D": true,
+      "probeManifestMatchesRunner": true,
+      "probeManifestSourceMatchesRunner": true,
+      "probeManifestB2C2B2DMatchesRunner": true,
+      "b2c1MatchesB2C2B1": true,
+      "b2b1MatchesB2C2B1": true,
+      "b2b1MatchesB2C1": true,
+      "oracleMatchesB2C2B1": true,
+      "oracleMatchesB2C1": true,
+      "oracleMatchesB2B1": true,
+      "manifestFileMatchesB2C2B1": true,
+      "manifestFileMatchesB2C1": true,
+      "manifestFileMatchesB2B1": true,
+      "manifestRoutesMatchesB2C2B1": true,
+      "manifestRoutesMatchesB2C1": true,
+      "manifestRoutesMatchesOracle": true,
+      "exportMatchesRunner": true,
+      "exportMatchesProbeManifest": true,
+      "exportMatchesB2C2B1": true,
+      "exportMatchesB2C1": true,
+      "exportMatchesB2B1": true,
+      "exportMatchesOracle": true,
+      "b2c2b2bResultIsRegistered": true,
+      "b2c2b2bMatchesB2C2B1": true,
+      "exportMatchesB2C2B2B": true,
+      "b2c2b2cResultIsRegistered": true,
+      "b2c2b2cMatchesB2C2B1": true,
+      "b2c2b2cMatchesB2C1": true,
+      "b2c2b2cMatchesB2C2B2B": true,
+      "exportMatchesB2C2B2C": true,
+      "b2c2b2dResultIsRegistered": true,
+      "b2c2b2dMatchesB2C2B1": true,
+      "b2c2b2dMatchesB2C1": true,
+      "b2c2b2dMatchesB2B1": true,
+      "b2c2b2dMatchesB2C2B2B": true,
+      "b2c2b2dMatchesB2C2B2C": true,
+      "exportMatchesB2C2B2D": true
+    },
+    "manifestConsistency": {
+      "valid": true,
+      "checkedRoutes": 43
+    },
+    "population": {
+      "manifestEqualsDerivedProbes": true,
+      "runnerTargetsEqualManifest": true,
+      "runnerProbesEqualManifest": true,
+      "targets": 2,
+      "previouslyUnrecovered": 2,
+      "previouslyRecovered": 2,
+      "otherwiseUnrecovered": 0,
+      "populationIsB2C2B2DUnmeasuredUnrecovered": true,
+      "populationInsideB2C2B2D": true,
+      "e1": 11,
+      "e1L1": 7,
+      "e1L2": 4,
+      "e1Overlap": 0,
+      "e1Union": 11,
+      "everyTargetFirstRungL2": true,
+      "overlapsB2C2B2B": 0,
+      "overlapsE2": 0,
+      "issues": []
+    },
+    "scheduleConsistency": {
+      "valid": true,
+      "issues": []
+    },
+    "b2b1Parity": {
+      "valid": true,
+      "issues": []
+    },
+    "policyDrift": [],
+    "taskConstruction": {
+      "valid": true,
+      "issues": []
+    },
+    "scheduleParity": {
+      "tasksMatchReDerivedSchedule": true,
+      "contextsDigestMatches": true,
+      "originDigestMatches": true,
+      "scheduleExtentIsDefault": true,
+      "policiesMatch": true,
+      "originsMatchB2C2B2D": true,
+      "everyTaskAtB2C2B2DTightExtent": true,
+      "everyTaskAtB2C2B2DRank": true,
+      "everyTaskAtB2C2B2DSearchInputDigest": true,
+      "everyTaskNamedByB2C2B2DTaskId": true,
+      "everyTaskInsideBounds": true,
+      "notRunMatchesInterruption": true,
+      "calculationContextMatches": true,
+      "researchMaxPlanStepsMatchesB2C2B2D": true,
+      "engineMatches": true,
+      "taskCount": 2
+    },
+    "recordIssues": [],
+    "pairedIdentity": [
+      {
+        "taskId": "t00-r17",
+        "b2c2b2dTaskId": "t00-r17",
+        "matches": true,
+        "issues": [],
+        "excludedRouteKeyComparison": {
+          "verified": true,
+          "rederivedExcludedRouteKeySha256": "5b5f8cd70f2314efa218ae3ced31eb3850a480d3ada4c6efba1c2e9efb994256",
+          "b2c2b2dRederivedExcludedRouteKeySha256": "5b5f8cd70f2314efa218ae3ced31eb3850a480d3ada4c6efba1c2e9efb994256",
+          "b2c2b2dRecordMatchesRederived": null,
+          "b2c2b2eSource": "b2c2b2e_record",
+          "b2c2b2eRecordMatchesRederived": true
+        }
+      },
+      {
+        "taskId": "t02-r11",
+        "b2c2b2dTaskId": "t02-r11",
+        "matches": true,
+        "issues": [],
+        "excludedRouteKeyComparison": {
+          "verified": true,
+          "rederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+          "b2c2b2dRederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+          "b2c2b2dRecordMatchesRederived": null,
+          "b2c2b2eSource": "rederived_default_context",
+          "b2c2b2eRecordMatchesRederived": null
+        }
+      }
+    ],
+    "rederivations": [
+      {
+        "taskId": "t00-r17",
+        "valid": true,
+        "issues": [],
+        "scheduleRows": 1,
+        "groupIndex": 23,
+        "reservationDigest": "fnv1a32:ef234c50",
+        "targetEligibleMinCardinality": 1,
+        "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+        "representativeFixedTargetWeaponIds": [
+          "a367c177-a0c2-4986-995e-4efcf4131b5c"
+        ],
+        "defaultSearchInputDigest": "fnv1a32:0b82981c",
+        "bodyDigestMatches": true,
+        "excludedRouteKeyCount": 1,
+        "excludedRouteIsCurrentRoute": true,
+        "excludedRouteKeySha256": "5b5f8cd70f2314efa218ae3ced31eb3850a480d3ada4c6efba1c2e9efb994256"
+      },
+      {
+        "taskId": "t02-r11",
+        "valid": true,
+        "issues": [],
+        "scheduleRows": 1,
+        "groupIndex": 3,
+        "reservationDigest": "fnv1a32:ff85a91d",
+        "targetEligibleMinCardinality": 1,
+        "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+        "representativeFixedTargetWeaponIds": [
+          "070a1222-5e31-4c9f-a035-c557bfa7be73"
+        ],
+        "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+        "bodyDigestMatches": true,
+        "excludedRouteKeyCount": 1,
+        "excludedRouteIsCurrentRoute": true,
+        "excludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba"
+      }
+    ]
+  },
+  "probes": [
+    {
+      "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "b2c1FirstCompatibleRank": 17,
+      "b2c2b1P1FirstCompatibleRank": 17,
+      "b2c2b2cRecomputedFirstCompatibleRank": 17,
+      "required": {
+        "normal": 126,
+        "gogma": 23,
+        "skill": 450
+      },
+      "tightExtent": {
+        "maxNormalAdvance": 126,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 450
+      },
+      "commonL2Extent": {
+        "maxNormalAdvance": 128,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 1500
+      },
+      "extentDeltaFromCommonL2": {
+        "maxNormalAdvance": -2,
+        "maxGogmaAdvance": 0,
+        "maxSkillAdvance": -1050
+      },
+      "extentRatioToCommonL2": {
+        "maxNormalAdvance": 0.984375,
+        "maxGogmaAdvance": 1,
+        "maxSkillAdvance": 0.3
+      },
+      "strictlySmallerStreams": [
+        "maxNormalAdvance",
+        "maxSkillAdvance"
+      ],
+      "b2c2b2dTaskId": "t00-r17",
+      "b2c2b2dProcess": "timeout",
+      "b2c2b2cSameContextProcess": "out_of_memory"
+    },
+    {
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "b2c1FirstCompatibleRank": 11,
+      "b2c2b1P1FirstCompatibleRank": 11,
+      "b2c2b2cRecomputedFirstCompatibleRank": 11,
+      "required": {
+        "normal": null,
+        "gogma": 59,
+        "skill": 1083
+      },
+      "tightExtent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 1083
+      },
+      "commonL2Extent": {
+        "maxNormalAdvance": 128,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 1500
+      },
+      "extentDeltaFromCommonL2": {
+        "maxNormalAdvance": -124,
+        "maxGogmaAdvance": 0,
+        "maxSkillAdvance": -417
+      },
+      "extentRatioToCommonL2": {
+        "maxNormalAdvance": 0.03125,
+        "maxGogmaAdvance": 1,
+        "maxSkillAdvance": 0.722
+      },
+      "strictlySmallerStreams": [
+        "maxNormalAdvance",
+        "maxSkillAdvance"
+      ],
+      "b2c2b2dTaskId": "t02-r11",
+      "b2c2b2dProcess": "timeout",
+      "b2c2b2cSameContextProcess": "timeout"
+    }
+  ],
+  "tasks": {
+    "total": 2,
+    "targets": 2,
+    "contextsPerTarget": 1
+  },
+  "aggregates": {
+    "exactTargets": {
+      "C8": 1,
+      "C32": 1,
+      "C4C": 1
+    },
+    "cascade": {
+      "c8": 1,
+      "c8MissC32": 0,
+      "c32MissC4C": 0,
+      "c4cMiss": 1
+    },
+    "missClasses": {
+      "unmeasured": 1
+    },
+    "execution": {
+      "tasks": 2,
+      "started": 2,
+      "completed": 1,
+      "contextMismatch": 0,
+      "timeout": 1,
+      "outOfMemory": 0,
+      "processFailure": 0,
+      "notRun": 0,
+      "safetyCap": 1,
+      "processWallMs": {
+        "count": 2,
+        "min": 552288.7194,
+        "max": 3600376.8257,
+        "total": 4152665.5450999998
+      },
+      "searchElapsedMs": {
+        "count": 1,
+        "min": 546728.7873,
+        "max": 546728.7873,
+        "total": 546728.7873
+      },
+      "peakHeapBytesMax": 8922136048,
+      "peakRssBytesMax": 10933686272
+    },
+    "candidates": {
+      "contexts": 1,
+      "totalDelivered": 1024,
+      "totalCaptured": 1024,
+      "sentinels": 0,
+      "uniqueStableKeysPerTarget": {
+        "count": 2,
+        "min": 0,
+        "median": 0,
+        "p90": 1024,
+        "p95": 1024,
+        "max": 1024,
+        "total": 1024
+      },
+      "captureLength": {
+        "count": 1,
+        "min": 1024,
+        "median": 1024,
+        "p90": 1024,
+        "p95": 1024,
+        "max": 1024,
+        "zero": 0,
+        "belowC8": 0,
+        "belowC32": 0
+      },
+      "termination": {
+        "candidate_safety_cap": 1
+      },
+      "costCohorts": {
+        "3": 1
+      },
+      "routeKind": {
+        "normal_artian_to_gogma": 1024
+      },
+      "sourceKind": {
+        "new_normal": 1024
+      },
+      "heldRoute": 1021,
+      "lateStart": {
+        "any": 1023,
+        "gogma": 999,
+        "skill": 1000,
+        "normal": 0
+      },
+      "estimatedOperationCount": [
+        {
+          "value": 128,
+          "count": 1
+        },
+        {
+          "value": 129,
+          "count": 472
+        },
+        {
+          "value": 130,
+          "count": 551
+        }
+      ],
+      "reservationViolations": 0
+    },
+    "measurementCompleteness": {
+      "status": "incomplete",
+      "tasks": 2,
+      "measured": 1,
+      "unmeasured": 1,
+      "breakdown": {
+        "contextMismatch": 0,
+        "timeout": 1,
+        "outOfMemory": 0,
+        "processFailure": 0,
+        "notRun": 0
+      }
+    }
+  },
+  "pairedComparison": [
+    {
+      "taskId": "t00-r17",
+      "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "contextRank": 17,
+      "b2c2b2dTaskId": "t00-r17",
+      "identity": {
+        "matches": true,
+        "issues": [],
+        "excludedRouteKeyComparison": {
+          "verified": true,
+          "rederivedExcludedRouteKeySha256": "5b5f8cd70f2314efa218ae3ced31eb3850a480d3ada4c6efba1c2e9efb994256",
+          "b2c2b2dRederivedExcludedRouteKeySha256": "5b5f8cd70f2314efa218ae3ced31eb3850a480d3ada4c6efba1c2e9efb994256",
+          "b2c2b2dRecordMatchesRederived": null,
+          "b2c2b2eSource": "b2c2b2e_record",
+          "b2c2b2eRecordMatchesRederived": true
+        }
+      },
+      "b2c2b2cSameContextProcess": "out_of_memory",
+      "b2c2b2d": {
+        "process": "timeout",
+        "budgetMs": 600000,
+        "childHeapMb": 8192,
+        "wallMs": 600632.8404999999,
+        "searchElapsedMs": null,
+        "peakHeapBytes": 6400752408,
+        "peakRssBytes": 8065253376,
+        "yields": 2693463,
+        "termination": null,
+        "deliveredCandidates": null,
+        "candidateCount": null,
+        "safetyCapHit": null,
+        "hit": {
+          "C8": false,
+          "C32": false,
+          "C4C": false
+        },
+        "firstExactIndex": null,
+        "firstExactCost": null
+      },
+      "b2c2b2e": {
+        "process": "completed",
+        "budgetMs": 3600000,
+        "childHeapMb": 12288,
+        "wallMs": 552288.7194,
+        "searchElapsedMs": 546728.7873,
+        "peakHeapBytes": 8922136048,
+        "peakRssBytes": 10933686272,
+        "yields": 3093698,
+        "termination": "candidate_safety_cap",
+        "deliveredCandidates": 1024,
+        "candidateCount": 1024,
+        "safetyCapHit": true,
+        "hit": {
+          "C8": true,
+          "C32": true,
+          "C4C": true
+        },
+        "firstExactIndex": 0,
+        "firstExactCost": 128
+      },
+      "outcomeTransition": "timeout -> completed",
+      "delta": {
+        "wallMs": -48344.12109999999,
+        "peakHeapBytes": 2521383640,
+        "peakRssBytes": 2868432896,
+        "yields": 400235
+      }
+    },
+    {
+      "taskId": "t02-r11",
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "contextRank": 11,
+      "b2c2b2dTaskId": "t02-r11",
+      "identity": {
+        "matches": true,
+        "issues": [],
+        "excludedRouteKeyComparison": {
+          "verified": true,
+          "rederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+          "b2c2b2dRederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+          "b2c2b2dRecordMatchesRederived": null,
+          "b2c2b2eSource": "rederived_default_context",
+          "b2c2b2eRecordMatchesRederived": null
+        }
+      },
+      "b2c2b2cSameContextProcess": "timeout",
+      "b2c2b2d": {
+        "process": "timeout",
+        "budgetMs": 600000,
+        "childHeapMb": 8192,
+        "wallMs": 600330.4387,
+        "searchElapsedMs": null,
+        "peakHeapBytes": 4995287984,
+        "peakRssBytes": 5367422976,
+        "yields": 2854034,
+        "termination": null,
+        "deliveredCandidates": null,
+        "candidateCount": null,
+        "safetyCapHit": null,
+        "hit": {
+          "C8": false,
+          "C32": false,
+          "C4C": false
+        },
+        "firstExactIndex": null,
+        "firstExactCost": null
+      },
+      "b2c2b2e": {
+        "process": "timeout",
+        "budgetMs": 3600000,
+        "childHeapMb": 12288,
+        "wallMs": 3600376.8257,
+        "searchElapsedMs": null,
+        "peakHeapBytes": 7829608456,
+        "peakRssBytes": 8320086016,
+        "yields": 25774814,
+        "termination": null,
+        "deliveredCandidates": null,
+        "candidateCount": null,
+        "safetyCapHit": null,
+        "hit": {
+          "C8": false,
+          "C32": false,
+          "C4C": false
+        },
+        "firstExactIndex": null,
+        "firstExactCost": null
+      },
+      "outcomeTransition": "timeout -> timeout",
+      "delta": {
+        "wallMs": 3000046.387,
+        "peakHeapBytes": 2834320472,
+        "peakRssBytes": 2952663040,
+        "yields": 22920780
+      }
+    }
+  ],
+  "trajectories": [
+    {
+      "taskId": "t00-r17",
+      "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "trajectory": {
+        "samples": 104,
+        "lastReceivedAtMs": 547553.3448,
+        "checkpoints": [
+          {
+            "atMs": 60000,
+            "receivedAtMs": 55887.9755,
+            "maxHeapUsedBytes": 3398707712,
+            "maxRssBytes": 3813019648,
+            "yields": 783728
+          },
+          {
+            "atMs": 300000,
+            "receivedAtMs": 296357.7878,
+            "maxHeapUsedBytes": 7916129600,
+            "maxRssBytes": 8888180736,
+            "yields": 2207481
+          },
+          {
+            "atMs": 600000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          },
+          {
+            "atMs": 1200000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          },
+          {
+            "atMs": 1800000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          },
+          {
+            "atMs": 2400000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          },
+          {
+            "atMs": 3000000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          },
+          {
+            "atMs": 3600000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          }
+        ],
+        "yieldsPerSecond": [
+          {
+            "fromMs": 0,
+            "toMs": 600000,
+            "value": null
+          },
+          {
+            "fromMs": 600000,
+            "toMs": 1800000,
+            "value": null
+          },
+          {
+            "fromMs": 1800000,
+            "toMs": 3600000,
+            "value": null
+          }
+        ],
+        "peakHeapBytes": 8922136048,
+        "heapReached90PctAtMs": 333634.92819999997,
+        "heapReached99PctAtMs": 488235.16839999997,
+        "heapPlateauInLastThird": false
+      }
+    },
+    {
+      "taskId": "t02-r11",
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "trajectory": {
+        "samples": 361,
+        "lastReceivedAtMs": 3596963.9885,
+        "checkpoints": [
+          {
+            "atMs": 60000,
+            "receivedAtMs": 58019.73290000006,
+            "maxHeapUsedBytes": 5741422936,
+            "maxRssBytes": 6067720192,
+            "yields": 504231
+          },
+          {
+            "atMs": 300000,
+            "receivedAtMs": 295752.5529,
+            "maxHeapUsedBytes": 6090417168,
+            "maxRssBytes": 6454444032,
+            "yields": 2640486
+          },
+          {
+            "atMs": 600000,
+            "receivedAtMs": 593342.5158,
+            "maxHeapUsedBytes": 7316141464,
+            "maxRssBytes": 7706750976,
+            "yields": 5258197
+          },
+          {
+            "atMs": 1200000,
+            "receivedAtMs": 1192541.5726,
+            "maxHeapUsedBytes": 7403504888,
+            "maxRssBytes": 8095076352,
+            "yields": 10281563
+          },
+          {
+            "atMs": 1800000,
+            "receivedAtMs": 1793710.5378,
+            "maxHeapUsedBytes": 7471079952,
+            "maxRssBytes": 8107675648,
+            "yields": 14395631
+          },
+          {
+            "atMs": 2400000,
+            "receivedAtMs": 2393856.5272,
+            "maxHeapUsedBytes": 7829608456,
+            "maxRssBytes": 8320086016,
+            "yields": 18581679
+          },
+          {
+            "atMs": 3000000,
+            "receivedAtMs": 2993389.5203,
+            "maxHeapUsedBytes": 7829608456,
+            "maxRssBytes": 8320086016,
+            "yields": 22403509
+          },
+          {
+            "atMs": 3600000,
+            "receivedAtMs": 3596963.9885,
+            "maxHeapUsedBytes": 7829608456,
+            "maxRssBytes": 8320086016,
+            "yields": 25759217
+          }
+        ],
+        "yieldsPerSecond": [
+          {
+            "fromMs": 0,
+            "toMs": 600000,
+            "value": 8873.11259302132
+          },
+          {
+            "fromMs": 600000,
+            "toMs": 1800000,
+            "value": 7612.193787681559
+          },
+          {
+            "fromMs": 1800000,
+            "toMs": 3600000,
+            "value": 6301.713159394649
+          }
+        ],
+        "peakHeapBytes": 7829608456,
+        "heapReached90PctAtMs": 518952.5795000001,
+        "heapReached99PctAtMs": 2249931.559,
+        "heapPlateauInLastThird": true
+      }
+    }
+  ],
+  "nextBranch": {
+    "branch": "C",
+    "perTarget": [
+      {
+        "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+        "taskId": "t00-r17",
+        "type": "heap_growth",
+        "b2c2b2cSameContextProcess": "out_of_memory",
+        "result": "recovered"
+      },
+      {
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "taskId": "t02-r11",
+        "type": "time_bound",
+        "b2c2b2cSameContextProcess": "timeout",
+        "result": "timeout"
+      }
+    ],
+    "typesUnambiguous": true,
+    "recoveredOf": {
+      "recovered": 1,
+      "of": 2
+    },
+    "rule": {
+      "types": "heap_growth = the Target whose B2-C2B2C same-context task ran out of memory; time_bound = the Target whose B2-C2B2C same-context task timed out (both from the B2-C2B2D RESULT). Exactly one of each is required for B / C.",
+      "A": "both recovered (C4C exact): the existing Search delivers the Routes. Next: research choosing an appropriate context / extent / budget without the oracle",
+      "B": "only the time_bound Target recovered: it was a plain time-budget problem; the heap_growth Target is a memory / search-explosion problem. Next: heap_growth-Target profiling",
+      "C": "only the heap_growth Target recovered: heap / budget fixed it; the time_bound Target is a time-complexity problem. Next: time_bound-Target profiling",
+      "D": "neither recovered: before raising any budget further, profile the Search runtime. A 16 GB heap retry is never the automatic next step",
+      "note": "Never a decision input. With an invalid reason, a not_run Target, or an ambiguous type assignment (for B / C) the branch is null. \"Recovered\" is a C4C exact; a measured miss is unrecovered too and is reported as measured_without_exact."
+    },
+    "meaning": "only the heap_growth Target recovered: heap / budget fixed it; the time_bound Target is a time-complexity problem. Next: time_bound-Target profiling"
+  },
+  "e1Aggregate": {
+    "issues": [],
+    "e1Total": 11,
+    "commonLadder": {
+      "source": "B2-C2B2B RESULT (common L1) + B2-C2B2C RESULT (common L2), as the B2-C2B2D RESULT carried them; not re-run here",
+      "total": {
+        "C8": {
+          "recovered": 7,
+          "of": 11
+        },
+        "C32": {
+          "recovered": 7,
+          "of": 11
+        },
+        "C4C": {
+          "recovered": 9,
+          "of": 11
+        }
+      },
+      "statement": null,
+      "note": "unchanged by this phase: the registered common ladder evidence stays C4C 9 / 11"
+    },
+    "diagnostic": {
+      "source": "B2-C2B2B RESULT (L1 at common L1) + B2-C2B2D RESULT (the L2 Targets it recovered at first compatible context x tight extent, 10 minutes / 8 GB) + this phase (the remaining L2 Targets, same Search input, 60 minutes / 12 GB)",
+      "previous": {
+        "C8": {
+          "recovered": 7,
+          "of": 11
+        },
+        "C32": {
+          "recovered": 8,
+          "of": 11
+        },
+        "C4C": {
+          "recovered": 9,
+          "of": 11
+        }
+      },
+      "l1": {
+        "population": 7,
+        "exactTargets": {
+          "C8": 6,
+          "C32": 6,
+          "C4C": 7
+        },
+        "conditions": "common L1 extent, P1 ranks 1..32 (no oracle-guided context selection)"
+      },
+      "l2": {
+        "population": 4,
+        "exactTargets": {
+          "C8": 2,
+          "C32": 3,
+          "C4C": 3
+        },
+        "fromB2C2B2D": {
+          "targets": 2,
+          "exactTargets": {
+            "C8": 1,
+            "C32": 2,
+            "C4C": 2
+          }
+        },
+        "fromB2C2B2E": {
+          "targets": 2,
+          "exactTargets": {
+            "C8": 1,
+            "C32": 1,
+            "C4C": 1
+          },
+          "decision": "B2C2B2E_INCOMPLETE",
+          "evidenceGrade": "formal"
+        },
+        "conditions": "oracle-guided: B2-C1 first compatible context x max(Production default, B2-C2B1 required) extent; B2-C2B2E extends only the execution budget"
+      },
+      "total": {
+        "C8": {
+          "recovered": 8,
+          "of": 11
+        },
+        "C32": {
+          "recovered": 9,
+          "of": 11
+        },
+        "C4C": {
+          "recovered": 10,
+          "of": 11
+        }
+      },
+      "allRecovered": false,
+      "statement": null,
+      "statementScope": "oracle-guided diagnostic only: not \"11 / 11 under the registered common L1 / L2 ladder\", not a Production scheduler result, not a Production extent selector, not an acceptable Production runtime"
+    },
+    "limitations": [
+      "The L2 half is oracle-guided: the population, the context (B2-C1 first compatible) and the extent (max(Production default, B2-C2B1 required)) all come from post-hoc oracle evidence, and two of its Routes needed an execution budget beyond B2-C2B2D's (60 minutes / 12 GB). It does not show that Production could choose the context, know the extent or afford the budget in advance.",
+      "The registered common ladder evidence (B2-C2B2B common L1 + B2-C2B2C common L2) stays C4C 9 / 11; this aggregate does not turn it into 11 / 11.",
+      "It does not show that a Production scheduler finds these Routes (no Planner trial, kernel, full Planner rerun or global assignment ran), nor that the Production runtime would be acceptable.",
+      "Unmeasured tasks (timeout / OOM / notRun) are unknown, never Candidate 0."
+    ]
+  },
+  "targets": [
+    {
+      "targetIndex": 0,
+      "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "taskId": "t00-r17",
+      "selectedRank": 17,
+      "b2c1FirstCompatibleRank": 17,
+      "recomputedFirstCompatibleRank": 17,
+      "compatible": true,
+      "measured": true,
+      "process": "completed",
+      "termination": "candidate_safety_cap",
+      "candidateCount": 1024,
+      "captureComplete": false,
+      "safetyCapHit": true,
+      "capturedCosts": [
+        128,
+        129,
+        130
+      ],
+      "coverage": "exact",
+      "firstExactIndex": 0,
+      "firstExactCost": 128,
+      "oracleOperationCost": 128,
+      "hit": {
+        "C8": true,
+        "C32": true,
+        "C4C": true
+      },
+      "recovery": "C8",
+      "missClass": null,
+      "partialWithoutExact": false,
+      "type": "heap_growth",
+      "b2c2b1": {
+        "required": {
+          "normal": 126,
+          "gogma": 23,
+          "skill": 450
+        },
+        "insufficientStreams": [
+          "normal",
+          "skill"
+        ],
+        "firstLadderRung": "L2",
+        "p1FirstCompatibleRank": 17,
+        "routeKind": "normal_artian_to_gogma",
+        "sourceKind": "new_normal",
+        "conversion": true,
+        "routeOperationCount": 128
+      },
+      "extents": {
+        "required": {
+          "normal": 126,
+          "gogma": 23,
+          "skill": 450
+        },
+        "tight": {
+          "maxNormalAdvance": 126,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 450
+        },
+        "commonL2": {
+          "maxNormalAdvance": 128,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1500
+        }
+      },
+      "paired": {
+        "taskId": "t00-r17",
+        "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+        "contextRank": 17,
+        "b2c2b2dTaskId": "t00-r17",
+        "identity": {
+          "matches": true,
+          "issues": [],
+          "excludedRouteKeyComparison": {
+            "verified": true,
+            "rederivedExcludedRouteKeySha256": "5b5f8cd70f2314efa218ae3ced31eb3850a480d3ada4c6efba1c2e9efb994256",
+            "b2c2b2dRederivedExcludedRouteKeySha256": "5b5f8cd70f2314efa218ae3ced31eb3850a480d3ada4c6efba1c2e9efb994256",
+            "b2c2b2dRecordMatchesRederived": null,
+            "b2c2b2eSource": "b2c2b2e_record",
+            "b2c2b2eRecordMatchesRederived": true
+          }
+        },
+        "b2c2b2cSameContextProcess": "out_of_memory",
+        "b2c2b2d": {
+          "process": "timeout",
+          "budgetMs": 600000,
+          "childHeapMb": 8192,
+          "wallMs": 600632.8404999999,
+          "searchElapsedMs": null,
+          "peakHeapBytes": 6400752408,
+          "peakRssBytes": 8065253376,
+          "yields": 2693463,
+          "termination": null,
+          "deliveredCandidates": null,
+          "candidateCount": null,
+          "safetyCapHit": null,
+          "hit": {
+            "C8": false,
+            "C32": false,
+            "C4C": false
+          },
+          "firstExactIndex": null,
+          "firstExactCost": null
+        },
+        "b2c2b2e": {
+          "process": "completed",
+          "budgetMs": 3600000,
+          "childHeapMb": 12288,
+          "wallMs": 552288.7194,
+          "searchElapsedMs": 546728.7873,
+          "peakHeapBytes": 8922136048,
+          "peakRssBytes": 10933686272,
+          "yields": 3093698,
+          "termination": "candidate_safety_cap",
+          "deliveredCandidates": 1024,
+          "candidateCount": 1024,
+          "safetyCapHit": true,
+          "hit": {
+            "C8": true,
+            "C32": true,
+            "C4C": true
+          },
+          "firstExactIndex": 0,
+          "firstExactCost": 128
+        },
+        "outcomeTransition": "timeout -> completed",
+        "delta": {
+          "wallMs": -48344.12109999999,
+          "peakHeapBytes": 2521383640,
+          "peakRssBytes": 2868432896,
+          "yields": 400235
+        }
+      },
+      "trajectory": {
+        "samples": 104,
+        "lastReceivedAtMs": 547553.3448,
+        "checkpoints": [
+          {
+            "atMs": 60000,
+            "receivedAtMs": 55887.9755,
+            "maxHeapUsedBytes": 3398707712,
+            "maxRssBytes": 3813019648,
+            "yields": 783728
+          },
+          {
+            "atMs": 300000,
+            "receivedAtMs": 296357.7878,
+            "maxHeapUsedBytes": 7916129600,
+            "maxRssBytes": 8888180736,
+            "yields": 2207481
+          },
+          {
+            "atMs": 600000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          },
+          {
+            "atMs": 1200000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          },
+          {
+            "atMs": 1800000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          },
+          {
+            "atMs": 2400000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          },
+          {
+            "atMs": 3000000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          },
+          {
+            "atMs": 3600000,
+            "receivedAtMs": null,
+            "maxHeapUsedBytes": null,
+            "maxRssBytes": null,
+            "yields": null
+          }
+        ],
+        "yieldsPerSecond": [
+          {
+            "fromMs": 0,
+            "toMs": 600000,
+            "value": null
+          },
+          {
+            "fromMs": 600000,
+            "toMs": 1800000,
+            "value": null
+          },
+          {
+            "fromMs": 1800000,
+            "toMs": 3600000,
+            "value": null
+          }
+        ],
+        "peakHeapBytes": 8922136048,
+        "heapReached90PctAtMs": 333634.92819999997,
+        "heapReached99PctAtMs": 488235.16839999997,
+        "heapPlateauInLastThird": false
+      }
+    },
+    {
+      "targetIndex": 1,
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "taskId": "t02-r11",
+      "selectedRank": 11,
+      "b2c1FirstCompatibleRank": 11,
+      "recomputedFirstCompatibleRank": 11,
+      "compatible": true,
+      "measured": false,
+      "process": "timeout",
+      "termination": null,
+      "candidateCount": null,
+      "captureComplete": null,
+      "safetyCapHit": null,
+      "capturedCosts": [],
+      "coverage": null,
+      "firstExactIndex": null,
+      "firstExactCost": null,
+      "oracleOperationCost": 1084,
+      "hit": {
+        "C8": false,
+        "C32": false,
+        "C4C": false
+      },
+      "recovery": "none",
+      "missClass": "unmeasured",
+      "partialWithoutExact": false,
+      "type": "time_bound",
+      "b2c2b1": {
+        "required": {
+          "normal": null,
+          "gogma": 59,
+          "skill": 1083
+        },
+        "insufficientStreams": [
+          "skill"
+        ],
+        "firstLadderRung": "L2",
+        "p1FirstCompatibleRank": 11,
+        "routeKind": "existing_gogma_mixed",
+        "sourceKind": "owned",
+        "conversion": false,
+        "routeOperationCount": 1084
+      },
+      "extents": {
+        "required": {
+          "normal": null,
+          "gogma": 59,
+          "skill": 1083
+        },
+        "tight": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        },
+        "commonL2": {
+          "maxNormalAdvance": 128,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1500
+        }
+      },
+      "paired": {
+        "taskId": "t02-r11",
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contextRank": 11,
+        "b2c2b2dTaskId": "t02-r11",
+        "identity": {
+          "matches": true,
+          "issues": [],
+          "excludedRouteKeyComparison": {
+            "verified": true,
+            "rederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+            "b2c2b2dRederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+            "b2c2b2dRecordMatchesRederived": null,
+            "b2c2b2eSource": "rederived_default_context",
+            "b2c2b2eRecordMatchesRederived": null
+          }
+        },
+        "b2c2b2cSameContextProcess": "timeout",
+        "b2c2b2d": {
+          "process": "timeout",
+          "budgetMs": 600000,
+          "childHeapMb": 8192,
+          "wallMs": 600330.4387,
+          "searchElapsedMs": null,
+          "peakHeapBytes": 4995287984,
+          "peakRssBytes": 5367422976,
+          "yields": 2854034,
+          "termination": null,
+          "deliveredCandidates": null,
+          "candidateCount": null,
+          "safetyCapHit": null,
+          "hit": {
+            "C8": false,
+            "C32": false,
+            "C4C": false
+          },
+          "firstExactIndex": null,
+          "firstExactCost": null
+        },
+        "b2c2b2e": {
+          "process": "timeout",
+          "budgetMs": 3600000,
+          "childHeapMb": 12288,
+          "wallMs": 3600376.8257,
+          "searchElapsedMs": null,
+          "peakHeapBytes": 7829608456,
+          "peakRssBytes": 8320086016,
+          "yields": 25774814,
+          "termination": null,
+          "deliveredCandidates": null,
+          "candidateCount": null,
+          "safetyCapHit": null,
+          "hit": {
+            "C8": false,
+            "C32": false,
+            "C4C": false
+          },
+          "firstExactIndex": null,
+          "firstExactCost": null
+        },
+        "outcomeTransition": "timeout -> timeout",
+        "delta": {
+          "wallMs": 3000046.387,
+          "peakHeapBytes": 2834320472,
+          "peakRssBytes": 2952663040,
+          "yields": 22920780
+        }
+      },
+      "trajectory": {
+        "samples": 361,
+        "lastReceivedAtMs": 3596963.9885,
+        "checkpoints": [
+          {
+            "atMs": 60000,
+            "receivedAtMs": 58019.73290000006,
+            "maxHeapUsedBytes": 5741422936,
+            "maxRssBytes": 6067720192,
+            "yields": 504231
+          },
+          {
+            "atMs": 300000,
+            "receivedAtMs": 295752.5529,
+            "maxHeapUsedBytes": 6090417168,
+            "maxRssBytes": 6454444032,
+            "yields": 2640486
+          },
+          {
+            "atMs": 600000,
+            "receivedAtMs": 593342.5158,
+            "maxHeapUsedBytes": 7316141464,
+            "maxRssBytes": 7706750976,
+            "yields": 5258197
+          },
+          {
+            "atMs": 1200000,
+            "receivedAtMs": 1192541.5726,
+            "maxHeapUsedBytes": 7403504888,
+            "maxRssBytes": 8095076352,
+            "yields": 10281563
+          },
+          {
+            "atMs": 1800000,
+            "receivedAtMs": 1793710.5378,
+            "maxHeapUsedBytes": 7471079952,
+            "maxRssBytes": 8107675648,
+            "yields": 14395631
+          },
+          {
+            "atMs": 2400000,
+            "receivedAtMs": 2393856.5272,
+            "maxHeapUsedBytes": 7829608456,
+            "maxRssBytes": 8320086016,
+            "yields": 18581679
+          },
+          {
+            "atMs": 3000000,
+            "receivedAtMs": 2993389.5203,
+            "maxHeapUsedBytes": 7829608456,
+            "maxRssBytes": 8320086016,
+            "yields": 22403509
+          },
+          {
+            "atMs": 3600000,
+            "receivedAtMs": 3596963.9885,
+            "maxHeapUsedBytes": 7829608456,
+            "maxRssBytes": 8320086016,
+            "yields": 25759217
+          }
+        ],
+        "yieldsPerSecond": [
+          {
+            "fromMs": 0,
+            "toMs": 600000,
+            "value": 8873.11259302132
+          },
+          {
+            "fromMs": 600000,
+            "toMs": 1800000,
+            "value": 7612.193787681559
+          },
+          {
+            "fromMs": 1800000,
+            "toMs": 3600000,
+            "value": 6301.713159394649
+          }
+        ],
+        "peakHeapBytes": 7829608456,
+        "heapReached90PctAtMs": 518952.5795000001,
+        "heapReached99PctAtMs": 2249931.559,
+        "heapPlateauInLastThird": true
+      }
+    }
+  ],
+  "taskRows": [
+    {
+      "taskId": "t00-r17",
+      "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+      "contextRank": 17,
+      "groupIndex": 23,
+      "reservationDigest": "fnv1a32:ef234c50",
+      "targetEligibleMinCardinality": 1,
+      "representativeFixedSetId": "K1:build-list.fnv1a32-a3d6817e",
+      "representativeFixedTargetWeaponIds": [
+        "a367c177-a0c2-4986-995e-4efcf4131b5c"
+      ],
+      "defaultSearchInputDigest": "fnv1a32:0b82981c",
+      "searchInputDigest": "fnv1a32:4fd28612",
+      "extent": {
+        "maxNormalAdvance": 126,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 450
+      },
+      "excludedRouteKeySha256": "5b5f8cd70f2314efa218ae3ced31eb3850a480d3ada4c6efba1c2e9efb994256",
+      "process": "completed",
+      "record": "searched",
+      "budgetMs": 3600000,
+      "wallMs": 552288.7194,
+      "searchElapsedMs": 546728.7873,
+      "scheduleMs": 4178.0816,
+      "peakHeapBytes": 8922136048,
+      "peakRssBytes": 10933686272,
+      "yields": 3093698,
+      "status": "consumer_stop",
+      "termination": "candidate_safety_cap",
+      "candidateCount": 1024,
+      "deliveredCandidates": 1024,
+      "excludedCandidates": 0,
+      "distinctCostCohorts": 3,
+      "capturedCosts": [
+        128,
+        129,
+        130
+      ],
+      "captureComplete": false,
+      "safetyCapHit": true,
+      "nextCostSentinel": null,
+      "compatible": true,
+      "coverage": "exact",
+      "firstExactIndex": 0,
+      "firstExactCost": 128,
+      "firstPartialIndex": null,
+      "exactCount": 1,
+      "partialCount": 0,
+      "hit": {
+        "C8": true,
+        "C32": true,
+        "C4C": true
+      },
+      "sentinelExact": false,
+      "sentinelPartial": false,
+      "reservationViolations": 0,
+      "firstExactCandidate": {
+        "deliveryIndex": 0,
+        "stableKeySha256": "ad27170cdfc7518ee45d438671b251bb324a189b8663deef33d39065e90701fd",
+        "orderingKeys": {
+          "estimatedOperationCount": 128,
+          "estimatedGogmaAdvance": 23,
+          "estimatedSkillAdvance": 451,
+          "estimatedNormalAdvance": 126,
+          "preferredSourceRank": 1
+        },
+        "respectsReservation": true,
+        "routeKind": "normal_artian_to_gogma",
+        "sourceKind": "new_normal",
+        "estimatedOperationCount": 128,
+        "estimatedAdvances": {
+          "normal": 126,
+          "gogma": 23,
+          "skill": 451
+        },
+        "operationTypes": {
+          "create_normal_artian": 126,
+          "convert_normal_to_gogma": 1,
+          "keep_bonuses": 1
+        },
+        "normal": {
+          "first": 349,
+          "last": 474,
+          "operations": 126,
+          "positions": [
+            [
+              349,
+              474
+            ]
+          ],
+          "crossesHeldPositions": false,
+          "startsAfterOrigin": false
+        },
+        "gogma": {
+          "first": 77,
+          "last": 77,
+          "operations": 1,
+          "positions": [
+            [
+              77,
+              77
+            ]
+          ],
+          "crossesHeldPositions": false,
+          "startsAfterOrigin": true
+        },
+        "skill": {
+          "first": 791,
+          "last": 791,
+          "operations": 1,
+          "positions": [
+            [
+              791,
+              791
+            ]
+          ],
+          "crossesHeldPositions": false,
+          "startsAfterOrigin": true
+        },
+        "heldRoute": false
+      }
+    },
+    {
+      "taskId": "t02-r11",
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "contextRank": 11,
+      "groupIndex": 3,
+      "reservationDigest": "fnv1a32:ff85a91d",
+      "targetEligibleMinCardinality": 1,
+      "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+      "representativeFixedTargetWeaponIds": [
+        "070a1222-5e31-4c9f-a035-c557bfa7be73"
+      ],
+      "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+      "searchInputDigest": "fnv1a32:824a0ec4",
+      "extent": {
+        "maxNormalAdvance": 4,
+        "maxGogmaAdvance": 235,
+        "maxSkillAdvance": 1083
+      },
+      "excludedRouteKeySha256": null,
+      "process": "timeout",
+      "record": null,
+      "budgetMs": 3600000,
+      "wallMs": 3600376.8257,
+      "searchElapsedMs": null,
+      "scheduleMs": null,
+      "peakHeapBytes": 7829608456,
+      "peakRssBytes": 8320086016,
+      "yields": 25774814,
+      "status": null,
+      "termination": null,
+      "candidateCount": null,
+      "deliveredCandidates": null,
+      "excludedCandidates": null,
+      "distinctCostCohorts": null,
+      "capturedCosts": [],
+      "captureComplete": null,
+      "safetyCapHit": null,
+      "nextCostSentinel": null,
+      "compatible": true,
+      "coverage": null,
+      "firstExactIndex": null,
+      "firstExactCost": null,
+      "firstPartialIndex": null,
+      "exactCount": 0,
+      "partialCount": 0,
+      "hit": {
+        "C8": false,
+        "C32": false,
+        "C4C": false
+      },
+      "sentinelExact": false,
+      "sentinelPartial": false,
+      "reservationViolations": 0,
+      "firstExactCandidate": null
+    }
+  ],
+  "decisionRule": {
+    "scope": "An oracle-guided diagnostic decision (B2-C2B2D's first compatible context x target-relative tight extent, with an extended execution budget). It is never a scheduler decision and never evidence for a Production scheduler, a Production extent selector, a Production rung selector or an acceptable Production runtime.",
+    "order": [
+      "B2C2B2E_INVALID: an authority mismatch (B2-C2B1 / B2-C1 / B2-B1 / B2-C2B2B / B2-C2B2C / B2-C2B2D / oracle / hash chain / Export / CalculationContext / RNG), a population other than exactly the B2-C2B2D Targets with recovery none and a timeout / out-of-memory task (previously unrecovered 2, previously recovered 2), a probe manifest other than the re-derived one, a selected rank or tight extent other than B2-C2B2D's, a task count other than 2, a P1 definition drift or schedule parity mismatch, a Search input identity (task ID / group / reservation / representative / default and tight Search input digests / extent / excluded current Route) other than B2-C2B2D's task of the same Target, an execution condition other than 60 minutes / 12,288 MB / concurrency 1 / no retry / no fallback with every other Stage 1 field B2-C2B2D's, a context mismatch in a Search child, a Candidate reservation violation, an exact or partial Candidate from an incompatible context, a nonmonotonic Candidate cost sequence, a provenance flag reported other than registered, a start attestation that is present but does not verify, or a raw / result inconsistency",
+      "B2C2B2E_INCOMPLETE: no invalid reason, and a task was not measured (timeout / out of memory / process failure / notRun after an interruption: never Candidate 0, never retried in this Phase, never followed by an automatic 16 GB or longer fallback)",
+      "B2C2B2E_ALL_C8: both tasks measured and the first 8 captured Candidates hold the exact oracle Route for 2 / 2 Targets",
+      "B2C2B2E_ALL_C32: both measured, C8 < 2, C32 2 / 2",
+      "B2C2B2E_ALL_C4C: both measured, C32 < 2, C4C 2 / 2 (a safety-capped capture still counts its exact Candidates)",
+      "B2C2B2E_PARTIAL: both measured, no invalid reason, C4C < 2 (a miss is classified - safety cap unresolved / capture insufficient / compatible non-delivery - and never read as \"the Route does not exist\")"
+    ],
+    "policies": "C8 / C32 = the first 8 / 32 Candidates of the one C4C capture; C4C = every captured Candidate (up to four complete operation-cost cohorts; the sentinel never counts). C8 ⊆ C32 ⊆ C4C",
+    "exact": "phase2c26b2c2b2aCompareContext() -> phase2c26b2c2aCompareContext() -> phase2c26b2b2aCompare() -> phase2c2OracleCoverage() per Candidate; partial_comparable is recorded and never counted as exact",
+    "evidence": "separate axis: formal = the ordinary formal conditions AND a verified runner start attestation; an interrupted run is partialRun = true and is graded by the attestation, never promoted by --allow-nonformal",
+    "nextBranch": "separate axis, never a decision input: A / B / C / D from which of the two Targets recovered (see PHASE2C26B2C2B2E_NEXT_BRANCH_RULE)"
+  },
+  "invalidReasons": [],
+  "decision": {
+    "case": "B2C2B2E_INCOMPLETE",
+    "reasons": [],
+    "scope": "An oracle-guided diagnostic decision (B2-C2B2D's first compatible context x target-relative tight extent, with an extended execution budget). It is never a scheduler decision and never evidence for a Production scheduler, a Production extent selector, a Production rung selector or an acceptable Production runtime.",
+    "recommendation": "未計測taskがある（timeout / OOM / process failure / notRun）。branch B / C / Dに従いtarget別のprofilingへ。16 GB heap retryや60分超を自動的な次手にしない"
+  }
+}
