@@ -4,6 +4,7 @@ import rawB2C1 from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C1_RESULT.json?raw'
 import rawB2C2B2B from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2B_RESULT.json?raw'
 import rawB2C2B2C from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2C_RESULT.json?raw'
 import rawB2C2B2D from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2D_RESULT.json?raw'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json?raw'
 import type { TargetWeapon } from '../domain/models/publicTypes'
 import type { PlannerAlternativeCandidate, PlannerAlternativeSearchExecution } from '../domain/search'
 import { belowPracticalBonuses, idealBonuses } from '../test/fixtures/constrainedEnumeration'
@@ -743,6 +744,68 @@ describe('Phase 2-C2.6-B2-C2B2E analysis', () => {
     expect(short.yieldsPerSecond.every(w => w.value === null)).toBe(true)
     expect(short.heapPlateauInLastThird).toBeNull()
     expect(phase2c26b2c2b2eTrajectory([])).toMatchObject({ samples: 0, peakHeapBytes: null, heapReached90PctAtMs: null })
+  })
+})
+
+// ---------------------------------------------------------------- the committed RESULT
+
+describe('Phase 2-C2.6-B2-C2B2E committed RESULT', () => {
+  const result = JSON.parse(rawResult)
+  const MEASURED_HEAD = 'e69a94ea0fdd1ef39a39286dffab1bfc44fb1f0b'
+  type TargetJson = Json & { paired: { b2c2b2e: { peakHeapBytes: number; wallMs: number } }; trajectory: { heapPlateauInLastThird: boolean | null } }
+  const byTask = (id: string) => (result.targets as TargetJson[]).find(t => t.taskId === id)!
+
+  it('pins the formal run: runner-attested launch at the measurement HEAD before any child, 60 minutes / 12,288 MB, 2 / 2 started, INCOMPLETE with no invalid reason, the oracle-guided flags true', () => {
+    expect(result.provenance).toMatchObject({ formal: true, evidenceGrade: 'formal', partialRun: false, launchProvenanceVerified: true, launchProvenanceSource: 'runner_start_attestation',
+      launchProvenanceIssues: [], launchProvenanceIntegrityIssues: [], launchWorkingTreeCleanVerified: true, measuredHead: MEASURED_HEAD, measuredHeadSource: 'runner_start_attestation',
+      measuredHeadIsAncestor: true, uncommittedBenchmarkCode: false, smoke: null, calculationCodeChangedSinceMeasuredHead: [], measurementCodeChangedSinceMeasuredHead: [],
+      b2c2b2dResultSha256: sha.b2c2b2d, b2c2b2cResultSha256: sha.b2c2b2c, b2c2b1ResultSha256: sha.b2c2b1, exportSha256: exportSha,
+      oracleGuidedTargetPopulation: true, oracleGuidedContextSelection: true, oracleInformedPerTargetExtent: true, targetIndividualOracleExtentAsSearchInput: true, perTargetExtent: true,
+      productionSchedulerEvidence: false, productionExtentSelectionEvidence: false })
+    expect(result.provenance.benchmarkCodeSha256).toBe(result.provenance.recomputedBenchmarkCodeSha256)
+    const attestation = result.provenance.startAttestation.body
+    expect(attestation).toMatchObject({ attestedBy: 'runner', phase: PHASE2C26B2C2B2E_START_ATTESTATION_PHASE, repositoryHead: MEASURED_HEAD, uncommittedBenchmarkCode: false, smoke: null,
+      stage1: { childHeapMb: 12_288, budgetMs: 3_600_000, concurrency: 1, retry: 'none', fallback: 'none' }, b2c2b2dStage1: PHASE2C26B2C2B2D_STAGE1, changedStage1Fields: ['budgetMs', 'childHeapMb'],
+      expectedTasks: 2, candidateSafetyCap: 1024, captureRule: { policy: 'C4C', maxCostCohorts: 4 }, probeManifestB2C2B2DResultSha256: sha.b2c2b2d })
+    // createdAt <= the tasks child start is part of the verification the analyzer recorded as launchProvenanceVerified.
+    expect(attestation.createdAt).toBe(result.provenance.measuredAt)
+    expect(result.provenance.recordedStartAttestation.sha256).toBe(result.provenance.startAttestation.sha256)
+    expect(Object.values(result.parity.hashChain).every(v => v === true)).toBe(true)
+    expect(Object.entries(result.parity.scheduleParity).filter(([, v]) => v === false)).toEqual([])
+    expect(Object.values(result.conditions.conditionChecks).every(v => v === true)).toBe(true)
+    expect(result.conditions.stage1).toEqual(PHASE2C26B2C2B2E_STAGE1)
+    expect(result.decision.case).toBe('B2C2B2E_INCOMPLETE')
+    expect(result.invalidReasons).toEqual([])
+    expect(result.aggregates.measurementCompleteness).toMatchObject({ status: 'incomplete', tasks: 2, measured: 1, unmeasured: 1, breakdown: { timeout: 1, outOfMemory: 0, processFailure: 0, notRun: 0, contextMismatch: 0 } })
+  })
+
+  it('pins the population and probes as B2-C2B2D\'s unmeasured unrecovered Targets at B2-C2B2D\'s rank, tight extent, task ID and Search input digests', () => {
+    const { b2c2b1, b2c1, b2c2b2b, b2c2b2c, b2c2b2d } = authorities()
+    const derived = phase2c26b2c2b2eProbes(b2c2b1, b2c1, b2c2b1Json, b2c2b2b, b2c2b2c, b2c2b2d)
+    expect(result.parity.population).toMatchObject({ manifestEqualsDerivedProbes: true, populationIsB2C2B2DUnmeasuredUnrecovered: true, targets: 2, previouslyUnrecovered: 2, previouslyRecovered: 2, otherwiseUnrecovered: 0 })
+    expect(result.conditions.probes).toEqual(derived.probes)
+    for (const row of result.taskRows as Json[]) {
+      const d = (b2c2b2dJson.taskRows as Json[]).find(r => r.targetWeaponId === row.targetWeaponId)!
+      for (const field of ['taskId', 'contextRank', 'groupIndex', 'reservationDigest', 'representativeFixedSetId', 'defaultSearchInputDigest', 'searchInputDigest', 'extent']) expect(row[field]).toEqual(d[field])
+    }
+    expect((result.parity.pairedIdentity as Json[]).every(p => p.matches === true && (p.excludedRouteKeyComparison as Json).verified === true)).toBe(true)
+  })
+
+  it('pins the outcome: the heap-growth Target recovered at C8 (index 0, cost 128) within 60 minutes / 12 GB, the time-bound Target timed out again (unmeasured, never Candidate 0), branch C, E1 diagnostic C4C 10 / 11 and the common ladder 9 / 11', () => {
+    expect(result.aggregates.exactTargets).toEqual({ C8: 1, C32: 1, C4C: 1 })
+    expect(byTask('t00-r17')).toMatchObject({ type: 'heap_growth', process: 'completed', termination: 'candidate_safety_cap', recovery: 'C8', firstExactIndex: 0, firstExactCost: 128, oracleOperationCost: 128,
+      paired: { outcomeTransition: 'timeout -> completed', b2c2b2cSameContextProcess: 'out_of_memory' } })
+    expect(byTask('t02-r11')).toMatchObject({ type: 'time_bound', process: 'timeout', measured: false, candidateCount: null, coverage: null, recovery: 'none', missClass: 'unmeasured',
+      paired: { outcomeTransition: 'timeout -> timeout', b2c2b2cSameContextProcess: 'timeout' } })
+    expect(byTask('t00-r17').paired.b2c2b2e.peakHeapBytes).toBeGreaterThan(8192 * 2 ** 20)
+    expect(byTask('t02-r11').paired.b2c2b2e.wallMs).toBeGreaterThanOrEqual(3_600_000)
+    expect(byTask('t02-r11').trajectory.heapPlateauInLastThird).toBe(true)
+    expect(result.nextBranch).toMatchObject({ branch: 'C', typesUnambiguous: true, recoveredOf: { recovered: 1, of: 2 } })
+    expect(result.e1Aggregate.commonLadder.total.C4C).toEqual({ recovered: 9, of: 11 })
+    expect(result.e1Aggregate.diagnostic.total).toEqual({ C8: { recovered: 8, of: 11 }, C32: { recovered: 9, of: 11 }, C4C: { recovered: 10, of: 11 } })
+    expect(result.e1Aggregate.diagnostic.allRecovered).toBe(false)
+    expect(result.e1Aggregate.diagnostic.statement).toBeNull()
+    expect(result.e1Aggregate.diagnostic.l2.fromB2C2B2E.decision).toBe('B2C2B2E_INCOMPLETE')
   })
 })
 
