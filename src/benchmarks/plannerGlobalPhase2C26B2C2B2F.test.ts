@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import rawB2C2B2E from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json?raw'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2F_RESULT.json?raw'
 import type { TargetWeapon } from '../domain/models/publicTypes'
 import type { PlannerAlternativeSearchExecution } from '../domain/search'
 import { SEARCH_RUNTIME_SECTION_PARENT, SEARCH_RUNTIME_SECTIONS, type SearchRuntimeEvent, type SearchRuntimeSection } from '../domain/search/searchRuntime'
@@ -532,3 +533,67 @@ describe('Phase 2-C2.6-B2-C2B2F isolation and provenance', () => {
   })
 })
 
+
+// ---------------------------------------------------------------- the committed formal RESULT
+
+describe('Phase 2-C2.6-B2-C2B2F committed RESULT', () => {
+  const result = JSON.parse(rawResult)
+  const MEASURED_HEAD = 'dd41061d492d91c0ebc9a2ecdc13ebc0a857f280'
+
+  it('is formal: runner start attestation verified against the independently obtained HEAD / code / Export / manifest / B2-C2B2E RESULT, no invalid reason', () => {
+    expect(result.provenance).toMatchObject({ formal: true, evidenceGrade: 'formal', partialRun: false, launchProvenanceVerified: true, launchProvenanceSource: 'runner_start_attestation',
+      launchProvenanceIssues: [], launchProvenanceIntegrityIssues: [], measuredHead: MEASURED_HEAD, analysisHead: MEASURED_HEAD, measuredHeadIsAncestor: true, uncommittedBenchmarkCode: false,
+      smoke: null, calculationCodeChangedSinceMeasuredHead: [], b2c2b2eResultSha256: PHASE2C26B2C2B2F_REGISTERED_B2C2B2E.resultSha256, exportSha256: eJson.provenance.exportSha256,
+      profilingOnly: true, routeExactJudged: false, oracleReadBySearchChild: false, expectedOutcomeKnownBySearchChild: false, productionSchedulerEvidence: false })
+    expect(result.provenance.benchmarkCodeSha256).toBe(result.provenance.recomputedBenchmarkCodeSha256)
+    expect(result.provenance.startAttestation.body).toMatchObject({ attestedBy: 'runner', phase: PHASE2C26B2C2B2F_START_ATTESTATION_PHASE, repositoryHead: MEASURED_HEAD, smoke: null,
+      stage1: PHASE2C26B2C2B2F_STAGE1, b2c2b2eStage1: PHASE2C26B2C2B2E_STAGE1, changedStage1Fields: ['budgetMs'], searchInstrumentation: PHASE2C26A4_SEARCH_INSTRUMENTATION, cpuProfiler: false })
+    expect(result.provenance.startAttestation.body.createdAt).toBe(result.provenance.measuredAt)
+    expect(Object.values(result.parity.hashChain).every(v => v === true)).toBe(true)
+    expect(Object.values(result.conditions.conditionChecks).every(v => v === true)).toBe(true)
+    expect(result.invalidReasons).toEqual([])
+  })
+
+  it('profiled exactly the B2-C2B2E time-bound timeout Target in B2-C2B2E\'s Search input (identity, rebuilt task, excluded current Route, child-attested identity)', () => {
+    const { authority } = parsePhase2C26B2C2B2FB2C2B2EAuthority(eJson, PHASE2C26B2C2B2F_REGISTERED_B2C2B2E.resultSha256)
+    const derived = phase2c26b2c2b2fPopulation(authority)
+    expect(result.population.targetWeaponIds).toEqual(derived.targetWeaponIds)
+    expect(result.population.probes).toEqual(derived.probes)
+    expect(result.parity.population).toMatchObject({ manifestEqualsDerived: true, runnerTargetsEqualManifest: true, runnerProbesEqualManifest: true, runnerIdentitiesEqualManifest: true, targets: 1 })
+    expect(result.parity.identity.rawEqualsExpected).toBe(true)
+    expect(result.parity.identity.expected).toEqual(derived.expectedTaskIdentities[0])
+    expect(result.parity.taskRebuild).toMatchObject({ valid: true, tasksEqualRebuilt: true })
+    expect(Object.values(result.parity.childIdentity).every(v => v === true)).toBe(true)
+    const route = result.parity.excludedRoute
+    expect(route).toMatchObject({ valid: true, excludedRouteKeyCount: 1, excludedRouteIsCurrentRoute: true })
+    expect([route.childAttestedExcludedRouteKeySha256, route.b2c2b2eRederivedExcludedRouteKeySha256]).toEqual([route.rederivedExcludedRouteKeySha256, route.rederivedExcludedRouteKeySha256])
+    expect(route.rederivedExcludedRouteKeySha256).toBe(derived.b2c2b2e[0]!.rederivedExcludedRouteKeySha256)
+  })
+
+  it('pins the outcome and the decision: a 30-minute timeout (never Candidate 0, no delivery), coverage ~1, BONUS dominant with no secondary, stable across the windows', () => {
+    expect(result.outcome).toMatchObject({ process: 'timeout', record: null, naturalCompletion: false, candidateCount: null, budgetMs: 1_800_000, profileSource: 'last_durable_snapshot',
+      deliveredBeforeKill: { deliveryFlushes: 0, deliveryConsumerCalls: 0 } })
+    expect(result.outcome.tail.unobservedTailMs).toBeLessThan(10_000)
+    expect(result.profile.contractViolations).toBe(0)
+    expect(result.profile.partition.matches).toBe(true)
+    expect(result.profile.coverage).toBeGreaterThanOrEqual(0.999)
+    expect(result.profile.searchWallMs).toBeGreaterThan(1_700_000)
+    expect(result.profile.categoryShares.BONUS).toBeGreaterThan(0.999)
+    expect(result.profile.categoryShares.SKILL).toBeLessThan(0.001)
+    expect(result.decision).toMatchObject({ case: 'B2C2B2F_BONUS_DOMINANT', dominant: 'BONUS', secondary: [], reasons: [] })
+    // Recomputing from the recorded totals gives the same categories and decision.
+    const recomputed = phase2c26b2c2b2fCategories({ inclusiveMs: result.profile.inclusiveMs, exclusiveMs: result.profile.exclusiveMs })
+    expect(recomputed.shares).toEqual(result.profile.categoryShares)
+    expect(phase2c26b2c2b2fDecision({ invalidReasons: [], insufficientReasons: [], categories: recomputed }).case).toBe('B2C2B2F_BONUS_DOMINANT')
+    // Inside BONUS: the held-aware Bonus stream read dominates, then the Ideal filter and the notice scan.
+    const bonus = result.profile.sectionExclusiveMs.BONUS
+    expect(bonus.bonus_depth_read / result.profile.searchWallMs).toBeGreaterThan(0.8)
+    expect(Object.entries(bonus).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 3).map(([k]) => k)).toEqual(['bonus_depth_read', 'bonus_ideal_filter', 'bonus_notice_scan'])
+    expect(result.profile.yields.bySection.bonus_depth_read.count / result.profile.yields.count).toBeGreaterThan(0.999)
+    expect(result.profile.depth.skill).toMatchObject({ completedWorks: 97, rawSolutions: 97, idealSolutions: 0 })
+    expect(result.profile.depth.bonus).toMatchObject({ completedWorks: 281, channels: 6, maxDepth: 49, idealSolutions: 61_693 })
+    expect(result.profile.activeStackAtLastSnapshot.map((f: { section: string }) => f.section)).toEqual(['search_runtime', 'scheduler_step', 'scheduler_settle', 'bonus_depth_work', 'bonus_depth_read'])
+    expect(result.windows.map((w: { partial: boolean }) => w.partial)).toEqual([false, false, true])
+    for (const w of result.windows) expect(w.categories.shares.BONUS).toBeGreaterThan(0.999)
+  })
+})
