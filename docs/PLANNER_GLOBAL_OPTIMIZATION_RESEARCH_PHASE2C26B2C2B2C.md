@@ -125,8 +125,16 @@ B2-C2B2Bのattestationを持ち込むとintegrity issueになる）。
 runnerは各childの `START` 行をlogに出し、終了childを `processes.jsonl` に追記した。formal runは完走したため途中停止runの再構成
 （`scripts/reconstruct-planner-global-phase2c26b2c2b2c-partial-raw.mjs`）は使っていない。再構成経路はnon-formal smoke（§4）で確認した。
 
-途中停止は「OOMが3連続」またはhostのresource safetyなどoperational reasonでのみchild境界で行うと決めていたが、OOMは2件（非連続）で
-条件に達せず、停止していない。
+停止条件の履歴（事前登録された停止条件ではない）:
+
+- formal run開始時には、固定の「3連続OOM」停止thresholdは登録していなかった（途中停止はhost safetyなどoperational reasonに限り、
+  child境界で行うという方針のみ）
+- 実行中、t00-r17（2026-10-03T17:03:06Z）で1件目、t00-r20（17:32:05Z）で2件目のOOMを観測した。2件は連続していなかった
+  （間のr18・r19はtimeout）
+- 2件目のOOM確認後、host safetyのoperational thresholdとして「以後3件連続でOOMした場合はchild境界で停止する」方針を設定した
+- この時点ではoracle comparison / route recovery結果は参照しておらず、Search条件・extent・timeout・heap・ordering・capture・
+  retry / fallbackは変更していない
+- その後3連続OOMは発生せず（thresholdは発火せず）、formal runは128 / 128 taskを完走した。Search measurement dataは変更されていない
 
 ## 4. smokeと計測時の環境
 
