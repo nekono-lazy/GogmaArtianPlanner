@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import rawB2C2B2E from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json?raw'
 import rawB2C2B2F from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2F_RESULT.json?raw'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2G_RESULT.json?raw'
 import type { TargetWeapon } from '../domain/models/publicTypes'
 import type { PlannerAlternativeSearchExecution } from '../domain/search'
 import { RESERVED_GOGMA_RUNTIME_PHASES, type ReservedGogmaRuntimeEvent } from '../domain/search/bonusStream'
@@ -647,5 +648,71 @@ describe('Phase 2-C2.6-B2-C2B2G isolation and provenance', () => {
     expect(searchSource).toMatch(/createPhase2C26A3RuntimeTracker\(/)
     expect(searchSource).not.toMatch(/onSkillReservedDepth:|onGogmaReservedDepth:|onWorkSettled:/)
     expect(searchSource).not.toMatch(/Date\.now/)
+  })
+})
+
+// ---------------------------------------------------------------- the committed formal RESULT
+
+describe('Phase 2-C2.6-B2-C2B2G committed RESULT', () => {
+  const result = JSON.parse(rawResult)
+  const MEASURED_HEAD = '03e2f73ca58330f3d55afb49b29a02328c341e4e'
+
+  it('is formal: runner start attestation verified against the independently obtained HEAD / code / Export / manifest / B2-C2B2F and B2-C2B2E RESULTs, no invalid reason', () => {
+    expect(result.provenance).toMatchObject({ formal: true, evidenceGrade: 'formal', partialRun: false, launchProvenanceVerified: true, launchProvenanceSource: 'runner_start_attestation',
+      launchProvenanceIssues: [], launchProvenanceIntegrityIssues: [], measuredHead: MEASURED_HEAD, analysisHead: MEASURED_HEAD, measuredHeadIsAncestor: true, uncommittedBenchmarkCode: false,
+      smoke: null, calculationCodeChangedSinceMeasuredHead: [], b2c2b2fResultSha256: PHASE2C26B2C2B2G_REGISTERED_B2C2B2F.resultSha256,
+      b2c2b2eResultSha256: PHASE2C26B2C2B2F_REGISTERED_B2C2B2E.resultSha256, exportSha256: fJson.provenance.exportSha256, profilingOnly: true, innerRuntimeProfiling: true,
+      absoluteRuntimeComparedWithB2C2B2F: false, routeExactJudged: false, oracleReadBySearchChild: false, expectedOutcomeKnownBySearchChild: false })
+    expect(result.provenance.benchmarkCodeSha256).toBe(result.provenance.recomputedBenchmarkCodeSha256)
+    expect(result.provenance.startAttestation.body).toMatchObject({ attestedBy: 'runner', phase: PHASE2C26B2C2B2G_START_ATTESTATION_PHASE, repositoryHead: MEASURED_HEAD, smoke: null,
+      stage1: PHASE2C26B2C2B2G_STAGE1, b2c2b2fStage1: PHASE2C26B2C2B2F_STAGE1, changedFromB2C2B2F: ['searchInstrumentation.onGogmaReservedRuntime'],
+      searchInstrumentation: PHASE2C26A7_SEARCH_INSTRUMENTATION, b2c2b2fSearchInstrumentation: PHASE2C26A4_SEARCH_INSTRUMENTATION, cpuProfiler: false })
+    expect(result.provenance.startAttestation.body.createdAt).toBe(result.provenance.measuredAt)
+    expect(Object.values(result.parity.hashChain).every(v => v === true)).toBe(true)
+    expect(Object.values(result.conditions.conditionChecks).every(v => v === true)).toBe(true)
+    expect(result.invalidReasons).toEqual([])
+  })
+
+  it('profiled exactly the B2-C2B2F BONUS-dominant Target in B2-C2B2F\'s Search input (identity, rebuilt task, excluded current Route, child-attested identity)', () => {
+    const f = parsePhase2C26B2C2B2GB2C2B2FAuthority(fJson, PHASE2C26B2C2B2G_REGISTERED_B2C2B2F.resultSha256).authority
+    const derived = phase2c26b2c2b2gPopulation(f, parsedE.authority)
+    expect(result.population.targetWeaponIds).toEqual(derived.targetWeaponIds)
+    expect(result.population.probes).toEqual(derived.probes)
+    expect(result.parity.population).toMatchObject({ manifestEqualsDerived: true, runnerTargetsEqualManifest: true, runnerProbesEqualManifest: true, runnerIdentitiesEqualManifest: true,
+      probesEqualB2C2B2FProfiled: true, identitiesEqualB2C2B2FProfiled: true, targets: 1 })
+    expect(Object.values(result.parity.population.chain).every(v => v === true)).toBe(true)
+    expect(result.parity.identity.rawEqualsExpected).toBe(true)
+    expect(result.parity.identity.expected).toEqual(derived.expectedTaskIdentities[0])
+    expect(result.parity.identity.expected).toEqual(fJson.parity.identity.expected)
+    expect(result.parity.taskRebuild).toMatchObject({ valid: true, tasksEqualRebuilt: true })
+    expect(Object.values(result.parity.childIdentity).every(v => v === true)).toBe(true)
+    const route = result.parity.excludedRoute
+    expect(route).toMatchObject({ valid: true, excludedRouteKeyCount: 1, excludedRouteIsCurrentRoute: true })
+    expect([route.childAttestedExcludedRouteKeySha256, route.b2c2b2fExcludedRouteKeySha256]).toEqual([route.rederivedExcludedRouteKeySha256, route.rederivedExcludedRouteKeySha256])
+    expect(route.rederivedExcludedRouteKeySha256).toBe(derived.excludedRouteKeySha256)
+  })
+
+  it('pins the outcome and the decision: a 30-minute timeout before any delivery, inner coverage ~1, state_generation dominant with no secondary, stable across the windows', () => {
+    expect(result.outcome).toMatchObject({ process: 'timeout', record: null, naturalCompletion: false, candidateCount: null, budgetMs: 1_800_000, profileSource: 'last_durable_snapshot',
+      deliveredBeforeKill: { deliveryFlushes: 0, deliveryConsumerCalls: 0 } })
+    expect(result.outcome.tail.unobservedTailMs).toBeLessThan(10_000)
+    expect(result.outerSanity.checks).toEqual({ bonusIsLargestCategory: true, bonusDepthReadObserved: true, beforeFirstDelivery: true, outerContractViolationsZero: true, outerPartitionMatches: true })
+    expect(result.profile.inner).toMatchObject({ contractViolations: 0, outsideReadViolations: 0, completedDepths: 403, streams: 6, maxDepthReached: 69 })
+    expect(result.depthRecords).toMatchObject({ valid: true, issues: [], collected: 403 })
+    const r = result.profile.reconciliation
+    expect(r.issues).toEqual([])
+    expect(r.searchWallMs).toBeGreaterThan(1_700_000)
+    expect(r.innerCoverageOfBonusDepthRead).toBeGreaterThan(0.9999)
+    expect(r.remainderSplitMs.inDepthOutsideSections + r.remainderSplitMs.outsideDepthBoundaries).toBeCloseTo(r.remainderMs, 6)
+    expect(r.ranked.slice(0, 3)).toEqual(['state_generation', 'solution_materialization', 'frontier_reduction_sort'])
+    expect(result.decision).toMatchObject({ case: 'B2C2B2G_STATE_GENERATION_DOMINANT', dominant: 'state_generation', secondary: [], reasons: [], nextPhaseSections: ['state_generation'] })
+    expect(result.decision.dominantShareOfBonusDepthRead).toBeGreaterThan(0.6)
+    // Recomputing from the recorded reconciliation gives the same decision.
+    expect(phase2c26b2c2b2gDecision({ invalidReasons: [], insufficientReasons: [], reconciliation: r }).case).toBe('B2C2B2G_STATE_GENERATION_DOMINANT')
+    expect(result.windows.map((w: { partial: boolean }) => w.partial)).toEqual([false, false, true])
+    for (const w of result.windows) {
+      expect(w.dominantSection).toBe('state_generation')
+      expect(w.innerCoverageOfBonusDepthRead).toBeGreaterThan(0.9999)
+    }
   })
 })
