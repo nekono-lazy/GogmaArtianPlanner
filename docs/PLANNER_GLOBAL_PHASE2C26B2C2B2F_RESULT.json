@@ -1,0 +1,1163 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-B2-C2B2F (post-hoc analysis): B2-C2B2E time-bound Target, B2-C2B2E Search input, 30-minute outer runtime profiling",
+  "analyzedAt": "2026-10-05T13:22:53.355Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2F_RAW.json.local",
+      "bytes": 14125,
+      "sha256": "f27ea3aa368765e6f56b23bf7b20ce86f828ea8924b324cabe137ef27c78738b"
+    },
+    "startAttestation": {
+      "file": "start-attestation.json",
+      "bytes": 4404,
+      "sha256": "1ecde10b1230e66379175b2458ed5758507bd75c2012d245bfa19a64fe94812a"
+    },
+    "processes": {
+      "file": "processes.jsonl",
+      "bytes": 1282,
+      "sha256": "6704928c2d759d7d3b32ee900d37103ad9a96e8bb526fe37fd49b068db4b519b"
+    },
+    "profile": {
+      "file": "stage1-t02-r11.profile.jsonl",
+      "bytes": 2381472,
+      "sha256": "d9af9d640a235b81522bc9c40e65b82cc615c097e849f7259e29f558dd3762e5"
+    },
+    "probeManifest": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2F_PROBES.json.local",
+      "bytes": 1457,
+      "sha256": "800338afa09205c2b6b0abf653cf6f9b5fdaa4447f8dd942d52a7e6046f5b216"
+    },
+    "export": {
+      "file": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "b2c2b2eResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json",
+      "bytes": 65368,
+      "sha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe"
+    }
+  },
+  "provenance": {
+    "formal": true,
+    "evidenceGrade": "formal",
+    "partialRun": false,
+    "launchProvenanceVerified": true,
+    "launchProvenanceSource": "runner_start_attestation",
+    "launchProvenanceReason": null,
+    "launchProvenanceIssues": [],
+    "launchProvenanceIntegrityIssues": [],
+    "startAttestation": {
+      "file": "start-attestation.json",
+      "sha256": "1ecde10b1230e66379175b2458ed5758507bd75c2012d245bfa19a64fe94812a",
+      "bytes": 4404,
+      "body": {
+        "phase": "Issue #154 Phase 2-C2.6-B2-C2B2F runner start attestation",
+        "attestedBy": "runner",
+        "stage1": {
+          "executionClass": "stage1",
+          "childHeapMb": 12288,
+          "concurrency": 1,
+          "budgetMs": 1800000,
+          "retry": "none",
+          "fallback": "none"
+        },
+        "b2c2b2eStage1": {
+          "executionClass": "stage1",
+          "childHeapMb": 12288,
+          "concurrency": 1,
+          "budgetMs": 3600000,
+          "retry": "none",
+          "fallback": "none"
+        },
+        "changedStage1Fields": [
+          "budgetMs"
+        ],
+        "tasksBudgetMs": 600000,
+        "targets": 1,
+        "contextsPerTarget": 1,
+        "expectedTasks": 1,
+        "population": "B2C2B2E_BRANCH_C_TIME_BOUND_TIMEOUT",
+        "contextSelection": "b2c1_recorded_p1_first_compatible_rank",
+        "extentRule": "b2c2b2d_tight_max_production_default_b2c2b1_required_v1",
+        "captureRule": {
+          "policy": "C4C",
+          "maxCostCohorts": 4,
+          "sentinel": "first delivery of the fifth distinct operation cost (never captured)",
+          "prefixes": {
+            "C8": 8,
+            "C32": 32
+          }
+        },
+        "candidateSafetyCap": 1024,
+        "registeredP1": {
+          "id": "P1",
+          "name": "default_simple_first",
+          "keys": [
+            [
+              "targetEligibleMinCardinality",
+              "asc"
+            ],
+            [
+              "exclusiveOwnedWeaponCount",
+              "asc"
+            ],
+            [
+              "blockedCountDefaultTotal",
+              "asc"
+            ],
+            [
+              "shareableHeldCountDefaultTotal",
+              "desc"
+            ],
+            [
+              "reservationDigest",
+              "asc"
+            ]
+          ]
+        },
+        "nodeYield": "setImmediate",
+        "memorySampleIntervalMs": 250,
+        "searchInstrumentation": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "cpuProfiler": false,
+        "heartbeatIntervalMs": 5000,
+        "windowsMs": [
+          [
+            0,
+            600000
+          ],
+          [
+            600000,
+            1200000
+          ],
+          [
+            1200000,
+            1800000
+          ]
+        ],
+        "provenanceFlags": {
+          "oracleGuidedPolicySelection": true,
+          "oracleGuidedTargetPopulation": true,
+          "oracleGuidedContextSelection": true,
+          "oracleInformedPerTargetExtent": true,
+          "targetIndividualOracleExtentAsSearchInput": true,
+          "perTargetExtent": true,
+          "commonExtentForEveryTask": false,
+          "contextOrderingUsesOracle": true,
+          "oracleReadBySearchChild": false,
+          "oracleMatchUsedForEarlyStop": false,
+          "expectedOutcomeKnownBySearchChild": false,
+          "productionSchedulerEvidence": false,
+          "productionExtentSelectionEvidence": false,
+          "oracleGuidedProfilingTarget": true,
+          "routeExactJudged": false,
+          "profilingOnly": true
+        },
+        "createdAt": "2026-10-05T12:51:55.411Z",
+        "runnerScript": "scripts/run-planner-global-phase2c26b2c2b2f.mjs",
+        "node": "v24.19.0",
+        "repositoryHead": "dd41061d492d91c0ebc9a2ecdc13ebc0a857f280",
+        "uncommittedBenchmarkCode": false,
+        "benchmarkCodeSha256": "8bc4e399861595b289262ad23d033afd1fa14411e5970f76562b8b7b0f07f44c",
+        "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+        "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "exportBytes": 19424064,
+        "probeManifestFileName": "PLANNER_GLOBAL_PHASE2C26B2C2B2F_PROBES.json.local",
+        "probeManifestSha256": "800338afa09205c2b6b0abf653cf6f9b5fdaa4447f8dd942d52a7e6046f5b216",
+        "probeManifestB2C2B2EResultSha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe",
+        "targetWeaponIds": [
+          "a367c177-a0c2-4986-995e-4efcf4131b5c"
+        ],
+        "probes": [
+          {
+            "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+            "b2c2b2dTaskId": "t02-r11",
+            "contextRank": 11,
+            "extent": {
+              "maxNormalAdvance": 4,
+              "maxGogmaAdvance": 235,
+              "maxSkillAdvance": 1083
+            }
+          }
+        ],
+        "expectedTaskIdentities": [
+          {
+            "taskId": "t02-r11",
+            "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+            "contextRank": 11,
+            "groupIndex": 3,
+            "reservationDigest": "fnv1a32:ff85a91d",
+            "targetEligibleMinCardinality": 1,
+            "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+            "representativeFixedTargetWeaponIds": [
+              "070a1222-5e31-4c9f-a035-c557bfa7be73"
+            ],
+            "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+            "searchInputDigest": "fnv1a32:824a0ec4",
+            "extent": {
+              "maxNormalAdvance": 4,
+              "maxGogmaAdvance": 235,
+              "maxSkillAdvance": 1083
+            }
+          }
+        ],
+        "smoke": null
+      }
+    },
+    "measuredHead": "dd41061d492d91c0ebc9a2ecdc13ebc0a857f280",
+    "measuredHeadSource": "runner_start_attestation",
+    "measuredHeadIsAncestor": true,
+    "measuredAt": "2026-10-05T12:51:55.411Z",
+    "recomputedBenchmarkCodeSha256": "8bc4e399861595b289262ad23d033afd1fa14411e5970f76562b8b7b0f07f44c",
+    "benchmarkCodeSha256": "8bc4e399861595b289262ad23d033afd1fa14411e5970f76562b8b7b0f07f44c",
+    "analysisHead": "dd41061d492d91c0ebc9a2ecdc13ebc0a857f280",
+    "analysisCodeUncommitted": false,
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B2FAnalysis.ts",
+      "scripts/analyze-planner-global-phase2c26b2c2b2f.mjs",
+      "*.test.ts"
+    ],
+    "uncommittedBenchmarkCode": false,
+    "smoke": null,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "b2c2b2eResultSha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe",
+    "b2c2b2eMeasuredHead": "e69a94ea0fdd1ef39a39286dffab1bfc44fb1f0b",
+    "probeManifestSha256": "800338afa09205c2b6b0abf653cf6f9b5fdaa4447f8dd942d52a7e6046f5b216",
+    "oracleGuidedPolicySelection": true,
+    "oracleGuidedTargetPopulation": true,
+    "oracleGuidedContextSelection": true,
+    "oracleInformedPerTargetExtent": true,
+    "targetIndividualOracleExtentAsSearchInput": true,
+    "perTargetExtent": true,
+    "commonExtentForEveryTask": false,
+    "contextOrderingUsesOracle": true,
+    "oracleReadBySearchChild": false,
+    "oracleMatchUsedForEarlyStop": false,
+    "expectedOutcomeKnownBySearchChild": false,
+    "productionSchedulerEvidence": false,
+    "productionExtentSelectionEvidence": false,
+    "oracleGuidedProfilingTarget": true,
+    "routeExactJudged": false,
+    "profilingOnly": true
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "freeMemoryBytesAtLaunch": 18377076736,
+    "rngEngineVersion": "production-rng:c5-e7"
+  },
+  "conditions": {
+    "stage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 12288,
+      "concurrency": 1,
+      "budgetMs": 1800000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "b2c2b2eStage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 12288,
+      "concurrency": 1,
+      "budgetMs": 3600000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "changedStage1Fields": [
+      "budgetMs"
+    ],
+    "conditionChecks": {
+      "stage1IsRegistered": true,
+      "onlyBudgetDiffersFromB2C2B2E": true,
+      "b2c2b2eStage1MatchesAuthority": true,
+      "budgetIs30Minutes": true,
+      "heapIs12288Mb": true,
+      "concurrencyIs1": true,
+      "noRetry": true,
+      "noFallback": true,
+      "onlyOnSearchRuntime": true,
+      "noCpuProfiler": true,
+      "conditionIssues": true
+    },
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": false,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "cpuProfiler": false,
+    "heartbeatIntervalMs": 5000,
+    "windowsMs": [
+      [
+        0,
+        600000
+      ],
+      [
+        600000,
+        1200000
+      ],
+      [
+        1200000,
+        1800000
+      ]
+    ],
+    "memorySampleIntervalMs": 250,
+    "nodeYield": "setImmediate",
+    "candidateSafetyCap": 1024,
+    "maxCostCohorts": 4,
+    "notRun": [
+      "production_change",
+      "production_optimization",
+      "search_semantics_change",
+      "search_ordering_change",
+      "search_comparator_change",
+      "candidate_materializer_change",
+      "capture_change",
+      "extent_change",
+      "context_change",
+      "p1_change",
+      "heap_16gb_retry",
+      "budget_60min_or_more",
+      "automatic_longer_retry",
+      "retry",
+      "timeout_fallback",
+      "oom_fallback",
+      "v8_cpu_profiler",
+      "a3_section_observer",
+      "reserved_depth_observer",
+      "exact_route_judgement",
+      "e2_search",
+      "k2_feature_grouping",
+      "residual_unreached_support",
+      "global_assignment",
+      "full_planner_rerun",
+      "ui_change",
+      "a3_a9_result_regeneration",
+      "b2c2b2e_result_regeneration",
+      "heap_growth_target_rerun"
+    ],
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 20000
+  },
+  "population": {
+    "rule": "B2-C2B2E nextBranch.branch = C and nextBranch.perTarget with type = time_bound and result = timeout",
+    "targetWeaponIds": [
+      "a367c177-a0c2-4986-995e-4efcf4131b5c"
+    ],
+    "others": [
+      {
+        "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+        "type": "heap_growth",
+        "result": "recovered"
+      }
+    ],
+    "probes": [
+      {
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "b2c2b2dTaskId": "t02-r11",
+        "contextRank": 11,
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      }
+    ],
+    "b2c2b2eBackground": {
+      "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+      "taskId": "t02-r11",
+      "process": "timeout",
+      "peakHeapBytes": 7829608456,
+      "yields": 25774814,
+      "wallMs": 3600376.8257,
+      "rederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba"
+    }
+  },
+  "parity": {
+    "b2c2b2eAuthority": {
+      "valid": true,
+      "issues": [],
+      "decisionCase": "B2C2B2E_INCOMPLETE",
+      "nextBranch": "C"
+    },
+    "hashChain": {
+      "b2c2b2eResultIsRegistered": true,
+      "probeManifestFromB2C2B2E": true,
+      "probeManifestMatchesRunner": true,
+      "probeManifestB2C2B2EMatchesRunner": true,
+      "exportMatchesRunner": true,
+      "exportMatchesProbeManifest": true,
+      "exportMatchesB2C2B2E": true
+    },
+    "population": {
+      "manifestEqualsDerived": true,
+      "runnerTargetsEqualManifest": true,
+      "runnerProbesEqualManifest": true,
+      "runnerIdentitiesEqualManifest": true,
+      "targets": 1,
+      "others": [
+        {
+          "targetWeaponId": "070a1222-5e31-4c9f-a035-c557bfa7be73",
+          "type": "heap_growth",
+          "result": "recovered"
+        }
+      ]
+    },
+    "taskRebuild": {
+      "valid": true,
+      "issues": [],
+      "tasksEqualRebuilt": true
+    },
+    "identity": {
+      "expected": {
+        "taskId": "t02-r11",
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contextRank": 11,
+        "groupIndex": 3,
+        "reservationDigest": "fnv1a32:ff85a91d",
+        "targetEligibleMinCardinality": 1,
+        "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+        "representativeFixedTargetWeaponIds": [
+          "070a1222-5e31-4c9f-a035-c557bfa7be73"
+        ],
+        "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+        "searchInputDigest": "fnv1a32:824a0ec4",
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      },
+      "raw": {
+        "taskId": "t02-r11",
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contextRank": 11,
+        "groupIndex": 3,
+        "reservationDigest": "fnv1a32:ff85a91d",
+        "targetEligibleMinCardinality": 1,
+        "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+        "representativeFixedTargetWeaponIds": [
+          "070a1222-5e31-4c9f-a035-c557bfa7be73"
+        ],
+        "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+        "searchInputDigest": "fnv1a32:824a0ec4",
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      },
+      "rawEqualsExpected": true
+    },
+    "excludedRoute": {
+      "valid": true,
+      "issues": [],
+      "excludedRouteKeyCount": 1,
+      "excludedRouteIsCurrentRoute": true,
+      "rederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+      "b2c2b2eRederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+      "childAttestedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba"
+    },
+    "childIdentity": {
+      "present": true,
+      "searchInputDigest": true,
+      "defaultSearchInputDigest": true,
+      "extent": true,
+      "groupIndex": true,
+      "reservationDigest": true,
+      "excludedRouteIsCurrentRoute": true,
+      "excludedRouteEqualsRederived": true,
+      "excludedRouteEqualsB2C2B2E": true
+    }
+  },
+  "outcome": {
+    "process": "timeout",
+    "record": null,
+    "naturalCompletion": false,
+    "termination": null,
+    "candidateCount": null,
+    "searchElapsedMs": null,
+    "childWallMs": 1800375.1512,
+    "killedAtMs": 1800008.2743,
+    "budgetMs": 1800000,
+    "deliveredBeforeKill": {
+      "deliveryFlushes": 0,
+      "deliveryConsumerCalls": 0
+    },
+    "peakHeapBytes": 7605793072,
+    "peakRssBytes": 8120107008,
+    "yields": 10430718,
+    "profileSnapshots": 271,
+    "profileSource": "last_durable_snapshot",
+    "tail": {
+      "profilerOriginChildProcessMs": 6108.1793,
+      "lastSnapshotAtMs": 1789851.745,
+      "lastSnapshotSearchElapsedMs": 1789841.4856,
+      "unobservedTailMs": 4415.226899999892
+    },
+    "note": "A timeout is the normal profiling outcome and is never Candidate 0; no Route exact judgement is made."
+  },
+  "profile": {
+    "source": "last_durable_snapshot",
+    "snapshots": 271,
+    "contractViolations": 0,
+    "events": 132313,
+    "searchWallMs": 1789841.3849000002,
+    "coverage": 0.9999990776277627,
+    "partition": {
+      "sumMs": 1789841.3849000002,
+      "matches": true
+    },
+    "categoryMs": {
+      "BONUS": 1789795.6990999994,
+      "SKILL": 12.178400001187583,
+      "COMPOSITION": 0,
+      "SCHEDULER_OVERHEAD": 29.047599996973986,
+      "DELIVERY": 0,
+      "REGISTRATION_SETUP": 2.8088999999990847,
+      "UNACCOUNTED": 1.6509000025689602
+    },
+    "categoryShares": {
+      "BONUS": 0.9999744749448827,
+      "SKILL": 0.000006804178350065361,
+      "COMPOSITION": 0,
+      "SCHEDULER_OVERHEAD": 0.00001622914758929708,
+      "DELIVERY": 0,
+      "REGISTRATION_SETUP": 0.000001569356940618523,
+      "UNACCOUNTED": 9.223722372813484e-7
+    },
+    "sectionExclusiveMs": {
+      "BONUS": {
+        "bonus_depth_work": 16.974000003990113,
+        "bonus_depth_read": 1455411.7245000005,
+        "bonus_notice_scan": 118527.3033999989,
+        "bonus_ideal_filter": 214847.2019999987,
+        "bonus_route_materialization": 165.21499999946718,
+        "bonus_evaluate_sort": 790.0420999992757,
+        "bonus_channel_publication": 17.801500003587535,
+        "cross_add_bonus": 16.914699994909824,
+        "bonus_depth_advance": 2.5219000001525274
+      },
+      "SKILL": {
+        "skill_depth_work": 1.2525000007599374,
+        "skill_depth_read": 9.684100000964463,
+        "skill_ideal_filter": 0.5224999991505683,
+        "skill_route_materialization": 0.08450000000721047,
+        "skill_evaluate_sort": 0.28370000101222104,
+        "skill_channel_publication": 0.10879999993812817,
+        "cross_add_skill": 0,
+        "skill_depth_advance": 0.24229999935505475
+      },
+      "COMPOSITION": {
+        "composition_work": 0,
+        "composition_checkpoint": 0,
+        "compose_route": 0,
+        "composition_consumer": 0,
+        "cross_open_next": 0,
+        "cross_wake_work": 0,
+        "cross_wake": 0
+      },
+      "SCHEDULER_OVERHEAD": {
+        "scheduler_step": 0.8808999982311434,
+        "scheduler_checkpoint": 21.56679999944754,
+        "scheduler_settle": 6.177399997521206,
+        "scheduler_post_settle": 0.4225000017959246
+      },
+      "DELIVERY": {
+        "delivery_flush": 0,
+        "delivery_sort": 0,
+        "delivery_checkpoint": 0,
+        "delivery_key_dedup": 0,
+        "delivery_consumer": 0
+      },
+      "REGISTRATION_SETUP": {
+        "search_setup": 0.9112999999997555,
+        "route_registration": 0.06930000000011205,
+        "normal_route_registration": 0.5320000000001528,
+        "owned_normal_route_registration": 0.11679999999978463,
+        "existing_gogma_route_registration": 1.1794999999992797
+      },
+      "UNACCOUNTED": {
+        "search_runtime": 1.6509000025689602
+      }
+    },
+    "scheduler": {
+      "stepExclusiveMs": 0.8808999982311434,
+      "checkpointMs": 21.56679999944754,
+      "settleExclusiveMs": 6.177399997521206,
+      "postSettleMs": 0.4225000017959246
+    },
+    "inclusiveMs": {
+      "search_runtime": 1789841.3849000002,
+      "search_setup": 0.9112999999997555,
+      "route_registration": 1.8975999999993292,
+      "normal_route_registration": 0.5320000000001528,
+      "owned_normal_route_registration": 0.11679999999978463,
+      "existing_gogma_route_registration": 1.1794999999992797,
+      "scheduler_step": 1789836.9250999975,
+      "scheduler_checkpoint": 21.56679999944754,
+      "scheduler_settle": 1789814.054899998,
+      "scheduler_post_settle": 0.4225000017959246,
+      "bonus_depth_work": 1789795.6990999994,
+      "bonus_depth_read": 1455411.7245000005,
+      "bonus_notice_scan": 118527.3033999989,
+      "bonus_ideal_filter": 214847.2019999987,
+      "bonus_route_materialization": 165.21499999946718,
+      "bonus_evaluate_sort": 790.0420999992757,
+      "bonus_channel_publication": 34.71619999849736,
+      "cross_add_bonus": 16.914699994909824,
+      "bonus_depth_advance": 2.5219000001525274,
+      "skill_depth_work": 12.178400001187583,
+      "skill_depth_read": 9.684100000964463,
+      "skill_ideal_filter": 0.5224999991505683,
+      "skill_route_materialization": 0.08450000000721047,
+      "skill_evaluate_sort": 0.28370000101222104,
+      "skill_channel_publication": 0.10879999993812817,
+      "cross_add_skill": 0,
+      "skill_depth_advance": 0.24229999935505475,
+      "composition_work": 0,
+      "composition_checkpoint": 0,
+      "compose_route": 0,
+      "composition_consumer": 0,
+      "cross_open_next": 0,
+      "cross_wake_work": 0,
+      "cross_wake": 0,
+      "delivery_flush": 0,
+      "delivery_sort": 0,
+      "delivery_checkpoint": 0,
+      "delivery_key_dedup": 0,
+      "delivery_consumer": 0
+    },
+    "exclusiveMs": {
+      "search_runtime": 1.6509000025689602,
+      "search_setup": 0.9112999999997555,
+      "route_registration": 0.06930000000011205,
+      "normal_route_registration": 0.5320000000001528,
+      "owned_normal_route_registration": 0.11679999999978463,
+      "existing_gogma_route_registration": 1.1794999999992797,
+      "scheduler_step": 0.8808999982311434,
+      "scheduler_checkpoint": 21.56679999944754,
+      "scheduler_settle": 6.177399997521206,
+      "scheduler_post_settle": 0.4225000017959246,
+      "bonus_depth_work": 16.974000003990113,
+      "bonus_depth_read": 1455411.7245000005,
+      "bonus_notice_scan": 118527.3033999989,
+      "bonus_ideal_filter": 214847.2019999987,
+      "bonus_route_materialization": 165.21499999946718,
+      "bonus_evaluate_sort": 790.0420999992757,
+      "bonus_channel_publication": 17.801500003587535,
+      "cross_add_bonus": 16.914699994909824,
+      "bonus_depth_advance": 2.5219000001525274,
+      "skill_depth_work": 1.2525000007599374,
+      "skill_depth_read": 9.684100000964463,
+      "skill_ideal_filter": 0.5224999991505683,
+      "skill_route_materialization": 0.08450000000721047,
+      "skill_evaluate_sort": 0.28370000101222104,
+      "skill_channel_publication": 0.10879999993812817,
+      "cross_add_skill": 0,
+      "skill_depth_advance": 0.24229999935505475,
+      "composition_work": 0,
+      "composition_checkpoint": 0,
+      "compose_route": 0,
+      "composition_consumer": 0,
+      "cross_open_next": 0,
+      "cross_wake_work": 0,
+      "cross_wake": 0,
+      "delivery_flush": 0,
+      "delivery_sort": 0,
+      "delivery_checkpoint": 0,
+      "delivery_key_dedup": 0,
+      "delivery_consumer": 0
+    },
+    "sectionCounts": {
+      "search_runtime": 0,
+      "search_setup": 1,
+      "route_registration": 1,
+      "normal_route_registration": 1,
+      "owned_normal_route_registration": 1,
+      "existing_gogma_route_registration": 1,
+      "scheduler_step": 382,
+      "scheduler_checkpoint": 383,
+      "scheduler_settle": 382,
+      "scheduler_post_settle": 382,
+      "bonus_depth_work": 281,
+      "bonus_depth_read": 281,
+      "bonus_notice_scan": 281,
+      "bonus_ideal_filter": 281,
+      "bonus_route_materialization": 281,
+      "bonus_evaluate_sort": 281,
+      "bonus_channel_publication": 281,
+      "cross_add_bonus": 61693,
+      "bonus_depth_advance": 281,
+      "skill_depth_work": 97,
+      "skill_depth_read": 97,
+      "skill_ideal_filter": 97,
+      "skill_route_materialization": 97,
+      "skill_evaluate_sort": 97,
+      "skill_channel_publication": 97,
+      "cross_add_skill": 0,
+      "skill_depth_advance": 97,
+      "composition_work": 0,
+      "composition_checkpoint": 0,
+      "compose_route": 0,
+      "composition_consumer": 0,
+      "cross_open_next": 0,
+      "cross_wake_work": 0,
+      "cross_wake": 0,
+      "delivery_flush": 0,
+      "delivery_sort": 0,
+      "delivery_checkpoint": 0,
+      "delivery_key_dedup": 0,
+      "delivery_consumer": 0
+    },
+    "settleWithoutWork": {
+      "count": 4,
+      "inclusiveMs": 1.186400000001413
+    },
+    "activeStackAtLastSnapshot": [
+      {
+        "section": "search_runtime",
+        "startedMs": 10.360099999999875,
+        "elapsedMs": 1789841.3849000002,
+        "work": null
+      },
+      {
+        "section": "scheduler_step",
+        "startedMs": 1789637.4248000002,
+        "elapsedMs": 214.32019999995828,
+        "work": null
+      },
+      {
+        "section": "scheduler_settle",
+        "startedMs": 1789637.4286,
+        "elapsedMs": 214.31640000012703,
+        "work": null
+      },
+      {
+        "section": "bonus_depth_work",
+        "startedMs": 1789637.4333000001,
+        "elapsedMs": 214.311699999962,
+        "work": {
+          "channel": 3,
+          "depth": 47
+        }
+      },
+      {
+        "section": "bonus_depth_read",
+        "startedMs": 1789637.4343,
+        "elapsedMs": 214.31070000003092,
+        "work": null
+      }
+    ],
+    "yields": {
+      "count": 10396004,
+      "totalMs": 147763.7403001216,
+      "bySection": {
+        "bonus_depth_read": {
+          "count": 10395984,
+          "totalMs": 147743.17760012252
+        },
+        "scheduler_checkpoint": {
+          "count": 20,
+          "totalMs": 20.56269999910728
+        }
+      }
+    },
+    "depth": {
+      "bonus": {
+        "startedWorks": 282,
+        "completedWorks": 281,
+        "withCounts": 281,
+        "channels": 6,
+        "maxDepth": 49,
+        "subscriberCountSum": 281,
+        "retainedCountAfterSum": 1503871,
+        "lastRetainedCountAfter": 10220,
+        "exhaustedWorks": 0,
+        "rawSolutions": 519634795,
+        "unsupportedPredictions": 0,
+        "idealSolutions": 61693,
+        "evaluatedSolutions": 61693,
+        "subscriberPublications": 61693,
+        "maxRawSolutions": 2011282,
+        "maxSubscriberCount": 1,
+        "maxRetainedCountAfter": 12055,
+        "openAtSnapshot": 1
+      },
+      "skill": {
+        "startedWorks": 97,
+        "completedWorks": 97,
+        "withCounts": 97,
+        "channels": 2,
+        "maxDepth": 49,
+        "subscriberCountSum": 284,
+        "retainedCountAfterSum": 0,
+        "lastRetainedCountAfter": 0,
+        "exhaustedWorks": 0,
+        "rawSolutions": 97,
+        "unsupportedPredictions": 0,
+        "idealSolutions": 0,
+        "evaluatedSolutions": 0,
+        "subscriberPublications": 0,
+        "maxRawSolutions": 1,
+        "maxSubscriberCount": 4,
+        "maxRetainedCountAfter": 0,
+        "openAtSnapshot": 0
+      }
+    },
+    "memoryAtLastSnapshot": {
+      "heapUsed": 6804989152,
+      "rss": 8072437760,
+      "maxima": {
+        "samples": 4250,
+        "maxHeapUsedBytes": 7605793072,
+        "maxRssBytes": 8120107008,
+        "lastElapsedMs": 1795169.4818999998
+      }
+    }
+  },
+  "windows": [
+    {
+      "fromMs": 0,
+      "toMs": 600000,
+      "observedFromMs": 0,
+      "observedToMs": 599999.0003000001,
+      "partial": false,
+      "categories": {
+        "searchWallMs": 599998.8996,
+        "ms": {
+          "BONUS": 599980.0183999998,
+          "SKILL": 4.758299999918563,
+          "COMPOSITION": 0,
+          "SCHEDULER_OVERHEAD": 10.436000000171589,
+          "DELIVERY": 0,
+          "REGISTRATION_SETUP": 2.8088999999990847,
+          "UNACCOUNTED": 0.8780000001424924
+        },
+        "shares": {
+          "BONUS": 0.9999685312756194,
+          "SKILL": 0.000007930514544427946,
+          "COMPOSITION": 0,
+          "SCHEDULER_OVERHEAD": 0.000017393365233051154,
+          "DELIVERY": 0,
+          "REGISTRATION_SETUP": 0.000004681508585885221,
+          "UNACCOUNTED": 0.0000014633360173290765
+        },
+        "coverage": 0.9999985366639826,
+        "partition": {
+          "sumMs": 599998.8996,
+          "matches": true
+        },
+        "sectionExclusiveMs": {
+          "BONUS": {
+            "bonus_depth_work": 6.602099999422535,
+            "bonus_depth_read": 484312.01230000006,
+            "bonus_notice_scan": 40919.385399999876,
+            "bonus_ideal_filter": 74395.68980000021,
+            "bonus_route_materialization": 45.682600000140155,
+            "bonus_evaluate_sort": 284.1963999999107,
+            "bonus_channel_publication": 8.08830000137732,
+            "cross_add_bonus": 7.359599998753765,
+            "bonus_depth_advance": 1.0019000000174856
+          },
+          "SKILL": {
+            "skill_depth_work": 0.5960999996177634,
+            "skill_depth_read": 3.6358000001255277,
+            "skill_ideal_filter": 0.20549999992636003,
+            "skill_route_materialization": 0.03639999999268184,
+            "skill_evaluate_sort": 0.1251000001147986,
+            "skill_channel_publication": 0.04990000010911899,
+            "cross_add_skill": 0,
+            "skill_depth_advance": 0.10950000003231253
+          },
+          "COMPOSITION": {
+            "composition_work": 0,
+            "composition_checkpoint": 0,
+            "compose_route": 0,
+            "composition_consumer": 0,
+            "cross_open_next": 0,
+            "cross_wake_work": 0,
+            "cross_wake": 0
+          },
+          "SCHEDULER_OVERHEAD": {
+            "scheduler_step": 0.4175999999160922,
+            "scheduler_checkpoint": 6.215399999869987,
+            "scheduler_settle": 3.6202000002758723,
+            "scheduler_post_settle": 0.1828000001314649
+          },
+          "DELIVERY": {
+            "delivery_flush": 0,
+            "delivery_sort": 0,
+            "delivery_checkpoint": 0,
+            "delivery_key_dedup": 0,
+            "delivery_consumer": 0
+          },
+          "REGISTRATION_SETUP": {
+            "search_setup": 0.9112999999997555,
+            "route_registration": 0.06930000000011205,
+            "normal_route_registration": 0.5320000000001528,
+            "owned_normal_route_registration": 0.11679999999978463,
+            "existing_gogma_route_registration": 1.1794999999992797
+          },
+          "UNACCOUNTED": {
+            "search_runtime": 0.8780000001424924
+          }
+        },
+        "scheduler": {
+          "stepExclusiveMs": 0.4175999999160922,
+          "checkpointMs": 6.215399999869987,
+          "settleExclusiveMs": 3.6202000002758723,
+          "postSettleMs": 0.1828000001314649
+        }
+      },
+      "depth": {
+        "bonusCompletedWorks": 103,
+        "skillCompletedWorks": 37,
+        "bonusMaxDepth": 19,
+        "skillMaxDepth": 19
+      },
+      "yieldsCount": 3684552
+    },
+    {
+      "fromMs": 600000,
+      "toMs": 1200000,
+      "observedFromMs": 599999.0003000001,
+      "observedToMs": 1199998.98,
+      "partial": false,
+      "categories": {
+        "searchWallMs": 599999.9797000001,
+        "ms": {
+          "BONUS": 599985.3844999993,
+          "SKILL": 3.801600000471808,
+          "COMPOSITION": 0,
+          "SCHEDULER_OVERHEAD": 10.386599999270402,
+          "DELIVERY": 0,
+          "REGISTRATION_SETUP": 0,
+          "UNACCOUNTED": 0.40700000093784183
+        },
+        "shares": {
+          "BONUS": 0.9999756746658424,
+          "SKILL": 0.000006336000215154353,
+          "COMPOSITION": 0,
+          "SCHEDULER_OVERHEAD": 0.000017311000584472853,
+          "DELIVERY": 0,
+          "REGISTRATION_SETUP": 0,
+          "UNACCOUNTED": 6.783333578466815e-7
+        },
+        "coverage": 0.9999993216666422,
+        "partition": {
+          "sumMs": 599999.9797,
+          "matches": true
+        },
+        "sectionExclusiveMs": {
+          "BONUS": {
+            "bonus_depth_work": 5.091400000499561,
+            "bonus_depth_read": 488661.24560000026,
+            "bonus_notice_scan": 39553.976799999255,
+            "bonus_ideal_filter": 71442.09559999955,
+            "bonus_route_materialization": 50.20100000023376,
+            "bonus_evaluate_sort": 261.6396999998251,
+            "bonus_channel_publication": 5.248399999458343,
+            "cross_add_bonus": 5.133700000238605,
+            "bonus_depth_advance": 0.7523000001674518
+          },
+          "SKILL": {
+            "skill_depth_work": 0.36160000087693334,
+            "skill_depth_read": 3.074100000085309,
+            "skill_ideal_filter": 0.16079999913927168,
+            "skill_route_materialization": 0.025400000158697367,
+            "skill_evaluate_sort": 0.08120000036433339,
+            "skill_channel_publication": 0.02980000013485551,
+            "cross_add_skill": 0,
+            "skill_depth_advance": 0.06869999971240759
+          },
+          "COMPOSITION": {
+            "composition_work": 0,
+            "composition_checkpoint": 0,
+            "compose_route": 0,
+            "composition_consumer": 0,
+            "cross_open_next": 0,
+            "cross_wake_work": 0,
+            "cross_wake": 0
+          },
+          "SCHEDULER_OVERHEAD": {
+            "scheduler_step": 0.22700000018812716,
+            "scheduler_checkpoint": 8.68529999954626,
+            "scheduler_settle": 1.3532999987946823,
+            "scheduler_post_settle": 0.12100000074133277
+          },
+          "DELIVERY": {
+            "delivery_flush": 0,
+            "delivery_sort": 0,
+            "delivery_checkpoint": 0,
+            "delivery_key_dedup": 0,
+            "delivery_consumer": 0
+          },
+          "REGISTRATION_SETUP": {
+            "search_setup": 0,
+            "route_registration": 0,
+            "normal_route_registration": 0,
+            "owned_normal_route_registration": 0,
+            "existing_gogma_route_registration": 0
+          },
+          "UNACCOUNTED": {
+            "search_runtime": 0.40700000093784183
+          }
+        },
+        "scheduler": {
+          "stepExclusiveMs": 0.22700000018812716,
+          "checkpointMs": 8.68529999954626,
+          "settleExclusiveMs": 1.3532999987946823,
+          "postSettleMs": 0.12100000074133277
+        }
+      },
+      "depth": {
+        "bonusCompletedWorks": 89,
+        "skillCompletedWorks": 30,
+        "bonusMaxDepth": 34,
+        "skillMaxDepth": 34
+      },
+      "yieldsCount": 3445417
+    },
+    {
+      "fromMs": 1200000,
+      "toMs": 1800000,
+      "observedFromMs": 1199998.98,
+      "observedToMs": 1789841.4856,
+      "partial": true,
+      "categories": {
+        "searchWallMs": 589842.5056,
+        "ms": {
+          "BONUS": 589830.2962000002,
+          "SKILL": 3.618500000797212,
+          "COMPOSITION": 0,
+          "SCHEDULER_OVERHEAD": 8.224999997531995,
+          "DELIVERY": 0,
+          "REGISTRATION_SETUP": 0,
+          "UNACCOUNTED": 0.365900001488626
+        },
+        "shares": {
+          "BONUS": 0.9999793005761981,
+          "SKILL": 0.000006134688440461575,
+          "COMPOSITION": 0,
+          "SCHEDULER_OVERHEAD": 0.000013944400275401235,
+          "DELIVERY": 0,
+          "REGISTRATION_SETUP": 0,
+          "UNACCOUNTED": 6.203350860861153e-7
+        },
+        "coverage": 0.9999993796649139,
+        "partition": {
+          "sumMs": 589842.5056,
+          "matches": true
+        },
+        "sectionExclusiveMs": {
+          "BONUS": {
+            "bonus_depth_work": 5.280500004068017,
+            "bonus_depth_read": 482438.46660000016,
+            "bonus_notice_scan": 38053.94119999977,
+            "bonus_ideal_filter": 69009.41659999895,
+            "bonus_route_materialization": 69.33139999909326,
+            "bonus_evaluate_sort": 244.20599999953993,
+            "bonus_channel_publication": 4.464800002751872,
+            "cross_add_bonus": 4.421399995917454,
+            "bonus_depth_advance": 0.76769999996759
+          },
+          "SKILL": {
+            "skill_depth_work": 0.29480000026524067,
+            "skill_depth_read": 2.9742000007536262,
+            "skill_ideal_filter": 0.15620000008493662,
+            "skill_route_materialization": 0.022699999855831265,
+            "skill_evaluate_sort": 0.07740000053308904,
+            "skill_channel_publication": 0.029099999694153666,
+            "cross_add_skill": 0,
+            "skill_depth_advance": 0.06409999961033463
+          },
+          "COMPOSITION": {
+            "composition_work": 0,
+            "composition_checkpoint": 0,
+            "compose_route": 0,
+            "composition_consumer": 0,
+            "cross_open_next": 0,
+            "cross_wake_work": 0,
+            "cross_wake": 0
+          },
+          "SCHEDULER_OVERHEAD": {
+            "scheduler_step": 0.23629999812692404,
+            "scheduler_checkpoint": 6.666100000031292,
+            "scheduler_settle": 1.2038999984506518,
+            "scheduler_post_settle": 0.11870000092312694
+          },
+          "DELIVERY": {
+            "delivery_flush": 0,
+            "delivery_sort": 0,
+            "delivery_checkpoint": 0,
+            "delivery_key_dedup": 0,
+            "delivery_consumer": 0
+          },
+          "REGISTRATION_SETUP": {
+            "search_setup": 0,
+            "route_registration": 0,
+            "normal_route_registration": 0,
+            "owned_normal_route_registration": 0,
+            "existing_gogma_route_registration": 0
+          },
+          "UNACCOUNTED": {
+            "search_runtime": 0.365900001488626
+          }
+        },
+        "scheduler": {
+          "stepExclusiveMs": 0.23629999812692404,
+          "checkpointMs": 6.666100000031292,
+          "settleExclusiveMs": 1.2038999984506518,
+          "postSettleMs": 0.11870000092312694
+        }
+      },
+      "depth": {
+        "bonusCompletedWorks": 89,
+        "skillCompletedWorks": 30,
+        "bonusMaxDepth": 49,
+        "skillMaxDepth": 49
+      },
+      "yieldsCount": 3266035
+    }
+  ],
+  "decisionRule": {
+    "categories": "BONUS = bonus_depth_work incl.; SKILL = skill_depth_work incl.; COMPOSITION = composition_work incl. + cross_wake_work incl.; SCHEDULER_OVERHEAD = scheduler_step incl. - BONUS - SKILL - COMPOSITION; DELIVERY = delivery_flush incl.; REGISTRATION_SETUP = search_setup incl. + route_registration incl.; UNACCOUNTED = search_runtime excl. A partition of the search_runtime inclusive time (no double count).",
+    "denominator": "the Search wall of this profiling run itself (search_runtime inclusive, open sections up to the last durable snapshot); never a B2-C2B2E wall time",
+    "coverage": "1 - UNACCOUNTED / Search wall; INSUFFICIENT below 0.9",
+    "invalid": "B2C2B2F_INVALID: an authority / population / identity / excluded Route / provenance issue, a section nesting contract violation, or a broken partition",
+    "insufficient": "B2C2B2F_INSUFFICIENT: no usable profile snapshot, a Search wall below 60000 ms, or coverage below 0.9",
+    "dominant": "<CATEGORY>_DOMINANT: one category share >= 0.5 (BONUS / SKILL / COMPOSITION / SCHEDULER(_OVERHEAD) / DELIVERY / REGISTRATION_SETUP)",
+    "mixed": "B2C2B2F_MIXED: valid, no category >= 0.5",
+    "secondary": "every other category with share >= 0.2 is reported as secondary",
+    "timeout": "a timeout is a normal profiling outcome (never Candidate 0); a natural completion is profiled whole",
+    "windows": "descriptive only, never a decision input"
+  },
+  "invalidReasons": [],
+  "decision": {
+    "scope": "A profiling decision about which Search runtime section dominates the wall time of this one oracle-guided Search input on the current main. It is never an optimization decision, never a Route exact judgement and never Production evidence.",
+    "case": "B2C2B2F_BONUS_DOMINANT",
+    "reasons": [],
+    "dominant": "BONUS",
+    "secondary": [],
+    "nextPhase": "Bonus depth work内部の現行hotspot再局所化。まず既存A7 / A8 instrumentation（onGogmaReservedRuntime等）で足りるか確認する"
+  }
+}
