@@ -93,6 +93,8 @@ import {
   validatePhase2C26B2C2B2DRaw,
   PHASE2C26B2C2B2D_DECISION_RULE,
   PHASE2C26B2C2B2D_E1_DIAGNOSTIC_LIMITATIONS,
+  phase2c26b2c2b2dRederiveBaselineContext,
+  type Phase2C26B2C2B2DBaselineRederivation,
   type Phase2C26B2C2B2DRun,
   type Phase2C26B2C2B2DTargetRow,
 } from './plannerGlobalPhase2C26B2C2B2DAnalysis'
@@ -513,6 +515,57 @@ describe('Phase 2-C2.6-B2-C2B2D Search child', () => {
   })
 })
 
+// ---------------------------------------------------------------- the baseline default context, re-derived from the schedule
+
+describe('Phase 2-C2.6-B2-C2B2D baseline default context re-derivation (excluded current Route identity)', () => {
+  const hashKey = (key: string) => `h:${key}`
+  const baselineOf = (task: Phase2C26B2C2B2DTaskInput, patch: Partial<Phase2C26B2C2B2DB2C2B2CTaskRow> = {}) => baselineRow(task, { excludedRouteKeySha256: null, ...patch })
+
+  it('rebuilds the baseline task\'s default context from the schedule (Target, P1 rank, representative, reservation) and its one excluded current Route key, reproducing the default digest', async () => {
+    const { built, schedule } = world()
+    const task = buildPhase2C26B2C2B2DTasks(schedule, PROBES).tasks[1]!
+    const rederived = phase2c26b2c2b2dRederiveBaselineContext(schedule, baselineOf(task), hashKey)
+    expect(rederived.issues).toEqual([])
+    const base = defaultContextOf(schedule, task.targetWeaponId, task.contextRank)
+    expect(rederived).toMatchObject({ valid: true, scheduleRows: 1, groupIndex: task.groupIndex, reservationDigest: task.reservationDigest, defaultSearchInputDigest: task.defaultSearchInputDigest,
+      bodyDigestMatches: true, excludedRouteKeyCount: 1, excludedRouteIsCurrentRoute: true, excludedRouteKeySha256: hashKey(base.currentRouteKey) })
+    // The digest the re-derivation reproduces is the one both the baseline (L2) and this phase's (tight) contexts carry as their default digest.
+    const l2 = phase2c26b2c2b2aL2Context(base)
+    expect(l2.valid && l2.context.defaultSearchInputDigest).toBe(rederived.defaultSearchInputDigest)
+    expect(tightContextOf(schedule).defaultSearchInputDigest).toBe(rederived.defaultSearchInputDigest)
+    // ... and its key is the excluded key the Search record carries.
+    searchCalls.script = [1, 2, 3, 4, 5]
+    const child = await runPhase2C26B2C2B2DTask(built.input, schedule, task, built.engine)
+    if (child.status !== 'searched') throw new Error('not searched')
+    expect(child.search.excludedRouteKeys.map(hashKey)).toEqual([rederived.excludedRouteKeySha256])
+  })
+
+  it('fails closed on a Target / rank without exactly one schedule row, a group / reservation / representative / cardinality / default digest drift, an unrebuildable context and an excluded Route other than the one current Route', () => {
+    const { schedule } = world()
+    const task = buildPhase2C26B2C2B2DTasks(schedule, PROBES).tasks[1]!
+    const issues = (baseline: Phase2C26B2C2B2DB2C2B2CTaskRow, s = schedule) => { const r = phase2c26b2c2b2dRederiveBaselineContext(s, baseline, hashKey); expect(r.valid).toBe(false); return r.issues.join('\n') }
+    expect(issues(baselineOf(task, { contextRank: 31 }))).toMatch(/0 schedule rows hold the Target at P1 rank 31/)
+    expect(issues(baselineOf(task, { groupIndex: task.groupIndex + 1000 }))).toMatch(/group differs/)
+    expect(issues(baselineOf(task, { reservationDigest: 'other' }))).toMatch(/reservation digest differs/)
+    expect(issues(baselineOf(task, { representativeFixedSetId: 'K1:other' }))).toMatch(/representative differs/)
+    expect(issues(baselineOf(task, { representativeFixedTargetWeaponIds: ['other'] }))).toMatch(/representative differs/)
+    expect(issues(baselineOf(task, { targetEligibleMinCardinality: task.targetEligibleMinCardinality + 1 }))).toMatch(/cardinality differs/)
+    expect(issues(baselineOf(task, { defaultSearchInputDigest: 'other' }))).toMatch(/rebuilt default Search input digest is not the baseline default digest/)
+    const snapshotTarget = (s: Phase2C26B2C1Schedule) => s.snapshot.targets.find(t => t.targetWeaponId === task.targetWeaponId)!
+    const twoKeys = structuredClone(schedule)
+    snapshotTarget(twoKeys).excludedRouteKeys = [snapshotTarget(twoKeys).currentRouteKey, 'another-route']
+    expect(issues(baselineOf(task), twoKeys)).toMatch(/2 excluded Route keys, not exactly one/)
+    const notCurrent = structuredClone(schedule)
+    snapshotTarget(notCurrent).excludedRouteKeys = ['another-route']
+    const notCurrentIssues = issues(baselineOf(task), notCurrent)
+    expect(notCurrentIssues).toMatch(/excluded Route is not the current Route/)
+    expect(notCurrentIssues).toMatch(/not the baseline default digest/)
+    const noTarget = structuredClone(schedule)
+    noTarget.snapshot.targets = noTarget.snapshot.targets.filter(t => t.targetWeaponId !== task.targetWeaponId)
+    expect(issues(baselineOf(task), noTarget)).toMatch(/default context cannot be rebuilt \(target_not_in_snapshot\)/)
+  })
+})
+
 // ---------------------------------------------------------------- the runner start attestation
 
 const HEAD = 'a'.repeat(40)
@@ -693,9 +746,17 @@ function baselineRow(task: Phase2C26B2C2B2DTaskInput, patch: Partial<Phase2C26B2
 }
 const reachOf = (groups: number[], first: number | null) => [{ targetWeaponId: TARGET, compatibleGroupIndexes: groups, p1FirstCompatibleRank: first, inconsistencies: [] }]
 const authorityWith = (rows: Phase2C26B2C2B2DB2C2B2CTaskRow[]) => ({ ...authorities().b2c2b2c, taskRows: rows })
-const analyze = (task: Phase2C26B2C2B2DTaskInput, run: Phase2C26B2C2B2DRun | null, opts: { groups?: number[]; first?: number; baseline?: Phase2C26B2C2B2DB2C2B2CTaskRow[]; rank?: number } = {}) =>
+/** A valid re-derived baseline default context of a synthetic task whose excluded current Route key hashes to `h:current`. */
+const rederivationOf = (task: Phase2C26B2C2B2DTaskInput, patch: Partial<Phase2C26B2C2B2DBaselineRederivation> = {}): Phase2C26B2C2B2DBaselineRederivation => ({ taskId: task.taskId, valid: true, issues: [],
+  scheduleRows: 1, groupIndex: task.groupIndex, reservationDigest: task.reservationDigest, targetEligibleMinCardinality: task.targetEligibleMinCardinality,
+  representativeFixedSetId: task.representativeFixedSetId, representativeFixedTargetWeaponIds: [...task.representativeFixedTargetWeaponIds], defaultSearchInputDigest: task.defaultSearchInputDigest,
+  bodyDigestMatches: true, excludedRouteKeyCount: 1, excludedRouteIsCurrentRoute: true, excludedRouteKeySha256: 'h:current', ...patch })
+const analyze = (task: Phase2C26B2C2B2DTaskInput, run: Phase2C26B2C2B2DRun | null, opts: { groups?: number[]; first?: number; baseline?: Phase2C26B2C2B2DB2C2B2CTaskRow[]; rank?: number;
+  rederivation?: Phase2C26B2C2B2DBaselineRederivation | null; ourSha?: string | null } = {}) =>
   runPhase2C26B2C2B2DAnalysis({ derivations: [derivationOf(opts.rank ?? task.contextRank)], tasks: [task], runs: run === null ? [] : [run], reach: reachOf(opts.groups ?? [task.groupIndex], opts.first ?? task.contextRank),
-    excludedRouteKeySha256: new Map([[task.taskId, null]]), b2c2b2c: authorityWith(opts.baseline ?? [baselineRow(task)]), oracle: ORACLE, smoke: run === null, interruption: null })
+    excludedRouteKeySha256: new Map([[task.taskId, opts.ourSha !== undefined ? opts.ourSha : run?.record?.status === 'searched' ? 'h:current' : null]]),
+    baselineRederivations: new Map(opts.rederivation === null ? [] : [[task.taskId, opts.rederivation ?? rederivationOf(task)]]),
+    b2c2b2c: authorityWith(opts.baseline ?? [baselineRow(task)]), oracle: ORACLE, smoke: run === null, interruption: null })
 
 describe('Phase 2-C2.6-B2-C2B2D analysis', () => {
   it('validates the raw capture at the Target\'s tight extent: another extent, the common L2 extent, a digest drift, a capture drift and nonmonotonic costs fail closed', () => {
@@ -723,7 +784,9 @@ describe('Phase 2-C2.6-B2-C2B2D analysis', () => {
     expect(result.invalidReasons).toEqual([])
     expect(result.rows[0]).toMatchObject({ selectedRank: 17, compatible: true, measured: true, recovery: 'C8', firstExactIndex: 3, firstExactCost: 2, missClass: null, hit: { C8: true, C32: true, C4C: true } })
     expect(result.aggregates.exactTargets).toEqual({ C8: 1, C32: 1, C4C: 1 })
-    expect(result.paired[0]).toMatchObject({ b2c2b2cTaskId: 't00-r17', outcomeTransition: 'out_of_memory -> completed', identity: { matches: true, issues: [] },
+    expect(result.paired[0]).toMatchObject({ b2c2b2cTaskId: 't00-r17', outcomeTransition: 'out_of_memory -> completed', identity: { matches: true, issues: [],
+      excludedRouteKeyComparison: { verified: true, rederivedExcludedRouteKeySha256: 'h:current', baselineSource: 'rederived_default_context', baselineRecordMatchesRederived: null,
+        b2c2b2dSource: 'b2c2b2d_record', b2c2b2dRecordMatchesRederived: true } },
       delta: { wallMs: 10 - 476_000, peakHeapBytes: 100 - 8_300_000_000, extent: { maxNormalAdvance: -124, maxGogmaAdvance: 0, maxSkillAdvance: -1054 } } })
     expect(result.paired[0]!.b2c2b2c).toMatchObject({ process: 'out_of_memory', searchElapsedMs: null, candidateCount: null })
     expect(result.paired[0]!.delta.searchElapsedMs).toBeNull()
@@ -742,11 +805,48 @@ describe('Phase 2-C2.6-B2-C2B2D analysis', () => {
     expect(reasons({ groups: [] })).toMatch(/not reservation-compatible/)
     expect(reasons({ first: 11 })).toMatch(/recomputed P1 first compatible rank 11/)
     expect(reasons({ rank: 11 })).toMatch(/task rank is not the B2-C1 first compatible rank/)
-    // The excluded current Route is compared whenever both sides recorded it.
-    const pair = (sha: string | null, theirs: string | null) => phase2c26b2c2b2dPairedRow(task, run, analyze(task, run).contexts[0]!, sha, [baselineRow(task, { excludedRouteKeySha256: theirs })])
-    expect(pair('a', 'a').identity).toEqual({ matches: true, issues: [], excludedRouteKeyCompared: true })
-    expect(pair('a', 'b').identity.issues.join()).toMatch(/excluded current Route differs/)
-    expect(pair('a', null).identity).toMatchObject({ matches: true, excludedRouteKeyCompared: false })
+  })
+
+  it('proves the excluded current Route of every pair through the re-derived baseline default context: record = re-derived = B2-C2B2D record, or re-derived for a record-less side', () => {
+    const task = taskOf(17)
+    const searched = runOf(task, withMatchAt(task, 3))
+    const context = analyze(task, searched).contexts[0]!
+    const pair = (ourSha: string | null, baseline: Phase2C26B2C2B2DB2C2B2CTaskRow, rederivation: Phase2C26B2C2B2DBaselineRederivation | null = rederivationOf(task), run: Phase2C26B2C2B2DRun = searched) =>
+      phase2c26b2c2b2dPairedRow(task, run, context, ourSha, [baseline], rederivation).identity
+    // A completed baseline with a record: B2-C2B2C record = re-derived = B2-C2B2D record.
+    const completed = baselineRow(task, { process: 'completed', record: 'searched', excludedRouteKeySha256: 'h:current' })
+    expect(pair('h:current', completed)).toEqual({ matches: true, issues: [], excludedRouteKeyComparison: { verified: true, rederivedExcludedRouteKeySha256: 'h:current',
+      baselineSource: 'b2c2b2c_record', baselineRecordMatchesRederived: true, b2c2b2dSource: 'b2c2b2d_record', b2c2b2dRecordMatchesRederived: true } })
+    // A timeout / OOM baseline without a record: the re-derived key is the baseline identity, and the proof still holds.
+    for (const process of ['timeout', 'out_of_memory']) {
+      expect(pair('h:current', baselineRow(task, { process, record: null, excludedRouteKeySha256: null }))).toMatchObject({ matches: true,
+        excludedRouteKeyComparison: { verified: true, baselineSource: 'rederived_default_context', baselineRecordMatchesRederived: null } })
+    }
+    // Both sides without a record (timeout -> timeout): bound by the identical default digest of both tasks.
+    const timedOut = runOf(task, null, 'timeout')
+    expect(pair(null, baselineRow(task, { process: 'timeout' }), rederivationOf(task), timedOut)).toMatchObject({ matches: true,
+      excludedRouteKeyComparison: { verified: true, baselineSource: 'rederived_default_context', b2c2b2dSource: 'rederived_default_context', b2c2b2dRecordMatchesRederived: null } })
+    // Mismatches fail closed: never matches without the excluded current Route proved.
+    const fails = (identity: ReturnType<typeof pair>, issue: RegExp) => {
+      expect(identity.matches).toBe(false)
+      expect(identity.excludedRouteKeyComparison.verified).toBe(false)
+      expect(identity.issues.join('\n')).toMatch(issue)
+    }
+    fails(pair('h:current', completed, rederivationOf(task, { excludedRouteKeySha256: 'h:other' })), /B2-C2B2C record's excluded current Route differs from the re-derived one/)
+    fails(pair('h:other', completed), /B2-C2B2D record's excluded current Route differs from the re-derived one/)
+    fails(pair('h:current', baselineRow(task, { process: 'completed', record: 'searched', excludedRouteKeySha256: 'h:other' })), /B2-C2B2C record's excluded current Route differs/)
+    fails(pair('h:current', baselineRow(task, { process: 'completed', record: 'searched', excludedRouteKeySha256: null })), /searched B2-C2B2C task without a recorded excluded current Route/)
+    fails(pair(null, completed), /searched B2-C2B2D task without a recorded excluded current Route/)
+    fails(pair('h:current', completed, null), /no re-derived baseline default context/)
+    fails(pair('h:current', completed, rederivationOf(task, { taskId: 't09-r17' })), /no re-derived baseline default context/)
+    fails(pair('h:current', completed, rederivationOf(task, { defaultSearchInputDigest: 'other' })), /re-derived default digest is not this task's default digest/)
+    fails(pair('h:current', completed, rederivationOf(task, { valid: false, issues: ['t00-r17 (B2-C2B2C): 2 excluded Route keys, not exactly one'], excludedRouteKeyCount: 2 })),
+      /not exactly one/)
+    fails(pair('h:current', completed, rederivationOf(task, { valid: false, issues: [] })), /re-derived baseline default context is not valid/)
+    fails(pair('h:current', completed, rederivationOf(task, { excludedRouteKeySha256: null })), /no re-derived excluded current Route key/)
+    // Through the whole analysis: a mismatch is an invalid reason.
+    expect(analyze(task, searched, { ourSha: 'h:other' }).invalidReasons.join()).toMatch(/paired: .*B2-C2B2D record's excluded current Route differs/)
+    expect(analyze(task, searched, { rederivation: null }).invalidReasons.join()).toMatch(/paired: .*no re-derived baseline default context/)
   })
 
   it('never reads a timeout / OOM as Candidate 0, and classifies a completed miss (capture insufficient / safety cap / non-delivery)', () => {
@@ -825,7 +925,7 @@ describe('Phase 2-C2.6-B2-C2B2D committed RESULT', () => {
   const result = JSON.parse(rawResult)
   type Row = { taskId: string; targetWeaponId: string; selectedRank: number; process: string; candidateCount: number | null; coverage: string | null; recovery: string; missClass: string | null;
     firstExactIndex: number | null; firstExactCost: number | null; hit: Record<'C8' | 'C32' | 'C4C', boolean>; extents: { tight: unknown; required: unknown; strictlySmallerStreams: string[] };
-    paired: { outcomeTransition: string; identity: { matches: boolean } } }
+    paired: { outcomeTransition: string; identity: { matches: boolean; excludedRouteKeyComparison: { verified: boolean; baselineSource: string; b2c2b2dSource: string } } } }
 
   it('pins the formal run: runner-attested launch at the measurement HEAD, 4 / 4 started, 2 timeouts unmeasured, INCOMPLETE with no invalid reason, the oracle-guided flags true', () => {
     expect(result.provenance).toMatchObject({ formal: true, evidenceGrade: 'formal', partialRun: false, launchProvenanceVerified: true, launchProvenanceSource: 'runner_start_attestation',
@@ -848,6 +948,30 @@ describe('Phase 2-C2.6-B2-C2B2D committed RESULT', () => {
     expect(result.parity.population).toMatchObject({ manifestEqualsDerivedProbes: true, populationEqualsB2C2B2CTargets: true, targets: 4, e1: 11, e1L1: 7, e1L2: 4, e1Overlap: 0, e1Union: 11,
       e1L1EqualsB2C2B2BTargets: true, everyTargetFirstRungL2: true, overlapsB2C2B2B: 0, overlapsE2: 0 })
     expect(result.parity.pairedIdentity.every((p: { matches: boolean }) => p.matches)).toBe(true)
+    // The excluded current Route is proved for 4 / 4: the two completed baselines by their record, the two timeout / OOM baselines by re-derivation.
+    type Identity = { taskId: string; matches: boolean; excludedRouteKeyComparison: { verified: boolean; baselineSource: string; b2c2b2dSource: string; baselineRecordMatchesRederived: boolean | null;
+      b2c2b2dRecordMatchesRederived: boolean | null; rederivedExcludedRouteKeySha256: string } }
+    expect((result.parity.pairedIdentity as Identity[]).map(p => [p.taskId, p.matches, p.excludedRouteKeyComparison.verified, p.excludedRouteKeyComparison.baselineSource,
+      p.excludedRouteKeyComparison.baselineRecordMatchesRederived, p.excludedRouteKeyComparison.b2c2b2dSource, p.excludedRouteKeyComparison.b2c2b2dRecordMatchesRederived])).toEqual([
+      ['t00-r17', true, true, 'rederived_default_context', null, 'rederived_default_context', null],
+      ['t01-r18', true, true, 'b2c2b2c_record', true, 'b2c2b2d_record', true],
+      ['t02-r11', true, true, 'rederived_default_context', null, 'rederived_default_context', null],
+      ['t03-r18', true, true, 'b2c2b2c_record', true, 'b2c2b2d_record', true],
+    ])
+    type Rederivation = { taskId: string; valid: boolean; issues: string[]; scheduleRows: number; bodyDigestMatches: boolean; excludedRouteKeyCount: number; excludedRouteIsCurrentRoute: boolean;
+      excludedRouteKeySha256: string; defaultSearchInputDigest: string }
+    const rederivations = result.parity.baselineRederivations as Rederivation[]
+    expect(rederivations.map(r => [r.taskId, r.valid, r.issues, r.scheduleRows, r.bodyDigestMatches, r.excludedRouteKeyCount, r.excludedRouteIsCurrentRoute])).toEqual(
+      ['t00-r17', 't01-r18', 't02-r11', 't03-r18'].map(id => [id, true, [], 1, true, 1, true]))
+    const baseline = new Map((b2c2b2cJson.taskRows as { taskId: string; excludedRouteKeySha256: string | null; defaultSearchInputDigest: string }[]).map(row => [row.taskId, row]))
+    for (const r of rederivations) {
+      expect(r.defaultSearchInputDigest).toBe(baseline.get(r.taskId)!.defaultSearchInputDigest)
+      const recorded = baseline.get(r.taskId)!.excludedRouteKeySha256
+      if (recorded !== null) expect(r.excludedRouteKeySha256).toBe(recorded)
+      const ours = (result.taskRows as { taskId: string; excludedRouteKeySha256: string | null }[]).find(row => row.taskId === r.taskId)!.excludedRouteKeySha256
+      if (ours !== null) expect(r.excludedRouteKeySha256).toBe(ours)
+    }
+    expect((result.parity.pairedIdentity as Identity[]).map(p => p.excludedRouteKeyComparison.rederivedExcludedRouteKeySha256)).toEqual(rederivations.map(r => r.excludedRouteKeySha256))
     expect(result.conditions).toMatchObject({ stage1: PHASE2C26B2C2B2D_STAGE1, expectedTasks: 4, scheduleExtent: DEFAULT, extentFloor: DEFAULT, extentCeiling: L2 })
     expect(result.aggregates.execution).toMatchObject({ tasks: 4, started: 4, completed: 2, timeout: 2, outOfMemory: 0, processFailure: 0, contextMismatch: 0, notRun: 0 })
   })
@@ -875,6 +999,7 @@ describe('Phase 2-C2.6-B2-C2B2D committed RESULT', () => {
     // A timeout is never Candidate 0.
     expect(rows.filter(r => r.process !== 'completed').every(r => r.candidateCount === null && r.coverage === null)).toBe(true)
     expect(rows.every(r => r.extents.strictlySmallerStreams.includes('maxSkillAdvance'))).toBe(true)
+    expect(rows.every(r => r.paired.identity.matches && r.paired.identity.excludedRouteKeyComparison.verified)).toBe(true)
     expect(result.interpretation).toMatchObject({ case: 'B', recoveredOf: { recovered: 0, of: 2 }, previouslyRecoveredStillRecovered: true,
       previouslyUnrecovered: [{ result: 'still_unmeasured' }, { result: 'still_unmeasured' }] })
     expect(result.aggregates.measurementCompleteness).toMatchObject({ status: 'incomplete', tasks: 4, measured: 2, unmeasured: 2, breakdown: { timeout: 2 } })

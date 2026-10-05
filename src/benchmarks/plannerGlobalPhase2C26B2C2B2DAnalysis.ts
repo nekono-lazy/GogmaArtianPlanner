@@ -14,9 +14,13 @@
  * and the E1 aggregate under oracle-guided diagnostic conditions kept apart from the common-ladder evidence (still 9 / 11).
  */
 import { stableStringify } from '../domain/models/hashing'
-import type { PlannerAlternativeSearchExtent } from '../domain/search'
+import { defaultPlannerAlternativeSearchExtent, type PlannerAlternativeSearchExtent } from '../domain/search'
+import type { Phase2C25APreSearchContext } from './plannerGlobalPhase2C25A'
+import { phase2c26b1SearchInputDigest } from './plannerGlobalPhase2C26B1'
+import { reconstructPhase2C26B2B2AContext, type Phase2C26B2B2AContext } from './plannerGlobalPhase2C26B2B2A'
 import { phase2c26b2b2a2FirstDecidingKey, phase2c26b2b2a2OracleOperationCost } from './plannerGlobalPhase2C26B2B2A2Analysis'
 import type { Phase2C26B2B2A2DeliveredCandidate } from './plannerGlobalPhase2C26B2B2A2'
+import type { Phase2C26B2C1Schedule } from './plannerGlobalPhase2C26B2C1'
 import type { Phase2C26B2C2AReach } from './plannerGlobalPhase2C26B2C2AAnalysis'
 import {
   phase2c26b2c2b2aCandidates,
@@ -253,6 +257,101 @@ export function phase2c26b2c2b2dTargetRow(task: Phase2C26B2C2B2DTaskInput, compa
 
 // ---------------------------------------------------------------- paired comparison with B2-C2B2C (same Target, same P1 rank)
 
+// ---------------------------------------------------------------- the baseline default context, re-derived post hoc (excluded current Route identity)
+
+/**
+ * B2-C2B2C's default context of one task, rebuilt post hoc from the analyzer's own re-derived schedule (never from a Search
+ * record): the one schedule row of the baseline task's Target at its P1 rank, the unchanged `reconstructPhase2C26B2B2AContext()`
+ * from that row's representative / cardinality / reservation digest, and its excluded current Route key. It exists so that a
+ * baseline task without a record (timeout / OOM) still has an excluded current Route identity: the key is fixed by the
+ * snapshot before any Search starts, and the baseline task's committed default Search input digest - the B1 digest of a body
+ * that holds the excluded Route keys - must be reproduced by the rebuilt body.
+ */
+export interface Phase2C26B2C2B2DBaselineRederivation {
+  taskId: string
+  valid: boolean
+  issues: string[]
+  /** Schedule rows holding the baseline Target at the baseline P1 rank (exactly 1 is required). */
+  scheduleRows: number
+  groupIndex: number | null
+  reservationDigest: string | null
+  targetEligibleMinCardinality: number | null
+  representativeFixedSetId: string | null
+  representativeFixedTargetWeaponIds: string[] | null
+  /** The rebuilt default context's Search input digest (must be the baseline task's default digest). */
+  defaultSearchInputDigest: string | null
+  /** The B1 digest recomputed from the rebuilt body (excluded Route keys included) equals the baseline default digest. */
+  bodyDigestMatches: boolean
+  excludedRouteKeyCount: number | null
+  /** The one excluded key is the Target's current Route key (the "excluded current Route"). */
+  excludedRouteIsCurrentRoute: boolean
+  /** SHA-256 (the analyzer's own digest, injected) of the one excluded current Route key. */
+  excludedRouteKeySha256: string | null
+}
+
+/** The B1 pre-Search body of a reconstructed default context, exactly as `reconstructPhase2C26B2B2AContext()` builds it. */
+function defaultBodyOf(context: Phase2C26B2B2AContext): Phase2C25APreSearchContext {
+  return { orientationId: '', workIndex: 0, targetWeaponId: context.targetWeaponId, status: 'searchable', invalidatedBuildListEntryId: context.currentBuildListEntryId,
+    invalidatedRouteKey: context.currentRouteKey, fixedRouteBuildListEntryIds: [...context.fixedBuildListEntryIds], reservation: context.reservation, searchReservation: context.reservation,
+    excludedRouteKeys: [...context.excludedRouteKeys], extent: { ...context.extent }, originDigest: context.originDigest, contextDigest: '' }
+}
+
+/**
+ * Re-derives the excluded current Route of one B2-C2B2C task from the schedule (see `Phase2C26B2C2B2DBaselineRederivation`).
+ * Fails closed (valid = false, with issues) when the Target / rank holds other than exactly one schedule row, that row's group /
+ * reservation / representative / cardinality differ from the baseline task, the context cannot be rebuilt, the rebuilt context
+ * is not at the Production default extent, its digest or the recomputed body digest is not the baseline default digest, or the
+ * excluded Route is not exactly the one current Route key. `hashKey` is the analyzer's SHA-256 over the raw key.
+ */
+export function phase2c26b2c2b2dRederiveBaselineContext(schedule: Phase2C26B2C1Schedule, baseline: Phase2C26B2C2B2DB2C2B2CTaskRow, hashKey: (key: string) => string): Phase2C26B2C2B2DBaselineRederivation {
+  const issues: string[] = []
+  const at = `${baseline.taskId} (B2-C2B2C)`
+  const empty = { taskId: baseline.taskId, groupIndex: null, reservationDigest: null, targetEligibleMinCardinality: null, representativeFixedSetId: null, representativeFixedTargetWeaponIds: null,
+    defaultSearchInputDigest: null, bodyDigestMatches: false, excludedRouteKeyCount: null, excludedRouteIsCurrentRoute: false, excludedRouteKeySha256: null }
+  const rows = schedule.contexts.filter(c => c.targetWeaponId === baseline.targetWeaponId && c.ranks.P1 === baseline.contextRank)
+  if (rows.length !== 1) return { ...empty, valid: false, scheduleRows: rows.length, issues: [`${at}: ${rows.length} schedule rows hold the Target at P1 rank ${baseline.contextRank}`] }
+  const row = rows[0]!
+  if (row.groupIndex !== baseline.groupIndex) issues.push(`${at}: the schedule row group differs from the baseline task`)
+  if (row.reservationDigest !== baseline.reservationDigest) issues.push(`${at}: the schedule row reservation digest differs from the baseline task`)
+  if (row.targetEligibleMinCardinality !== baseline.targetEligibleMinCardinality) issues.push(`${at}: the schedule row cardinality differs from the baseline task`)
+  if (row.representativeFixedSetId !== baseline.representativeFixedSetId || !same(row.representativeFixedTargetWeaponIds, baseline.representativeFixedTargetWeaponIds)) {
+    issues.push(`${at}: the schedule row representative differs from the baseline task`)
+  }
+  const fields = { groupIndex: row.groupIndex, reservationDigest: row.reservationDigest, targetEligibleMinCardinality: row.targetEligibleMinCardinality,
+    representativeFixedSetId: row.representativeFixedSetId, representativeFixedTargetWeaponIds: [...row.representativeFixedTargetWeaponIds] }
+  const rebuilt = reconstructPhase2C26B2B2AContext(schedule.snapshot, { targetWeaponId: row.targetWeaponId, fixedSetId: row.representativeFixedSetId, cardinality: row.targetEligibleMinCardinality,
+    reservationDigest: row.reservationDigest })
+  if (!rebuilt.valid) return { ...empty, ...fields, valid: false, scheduleRows: 1, issues: [...issues, `${at}: the default context cannot be rebuilt (${rebuilt.issues.join('/')})`] }
+  const context = rebuilt.context
+  if (context.groupIndex !== baseline.groupIndex || context.reservationDigest !== baseline.reservationDigest) issues.push(`${at}: the rebuilt context group / reservation differs from the baseline task`)
+  if (!same(context.extent, { ...defaultPlannerAlternativeSearchExtent })) issues.push(`${at}: the rebuilt context is not at the Production default extent`)
+  if (context.searchInputDigest !== baseline.defaultSearchInputDigest) issues.push(`${at}: the rebuilt default Search input digest is not the baseline default digest`)
+  const bodyDigestMatches = phase2c26b1SearchInputDigest(defaultBodyOf(context)) === baseline.defaultSearchInputDigest
+  if (!bodyDigestMatches) issues.push(`${at}: the B1 digest of the rebuilt body (excluded Route keys included) is not the baseline default digest`)
+  const excludedRouteKeyCount = context.excludedRouteKeys.length
+  if (excludedRouteKeyCount !== 1) issues.push(`${at}: ${excludedRouteKeyCount} excluded Route keys, not exactly one`)
+  const excludedRouteIsCurrentRoute = excludedRouteKeyCount === 1 && context.excludedRouteKeys[0] === context.currentRouteKey
+  if (!excludedRouteIsCurrentRoute) issues.push(`${at}: the excluded Route is not the current Route`)
+  return { taskId: baseline.taskId, valid: issues.length === 0, issues, scheduleRows: 1, ...fields, defaultSearchInputDigest: context.searchInputDigest, bodyDigestMatches,
+    excludedRouteKeyCount, excludedRouteIsCurrentRoute, excludedRouteKeySha256: excludedRouteKeyCount === 1 ? hashKey(context.excludedRouteKeys[0]!) : null }
+}
+
+/**
+ * How the excluded current Route identity of one pair was proved. The re-derived default-context key is compared with the
+ * baseline record when B2-C2B2C kept one (`b2c2b2c_record`), or used as the baseline identity when its task ended without a
+ * record (`rederived_default_context`: the key is fixed before the Search and bound by the baseline default digest); it is
+ * compared with this phase's Search record when that exists (`b2c2b2d_record`), or else bound by this task's identical default
+ * digest, which the Search child itself checked against the same rebuild before searching (`rederived_default_context`).
+ */
+export interface Phase2C26B2C2B2DExcludedRouteComparison {
+  verified: boolean
+  rederivedExcludedRouteKeySha256: string | null
+  baselineSource: 'b2c2b2c_record' | 'rederived_default_context' | null
+  baselineRecordMatchesRederived: boolean | null
+  b2c2b2dSource: 'b2c2b2d_record' | 'rederived_default_context' | null
+  b2c2b2dRecordMatchesRederived: boolean | null
+}
+
 /** The task fields that must be identical to B2-C2B2C's task of the same Target and rank (the context identity). */
 export const PHASE2C26B2C2B2D_PAIRED_IDENTITY_FIELDS = ['targetWeaponId', 'contextRank', 'groupIndex', 'reservationDigest', 'targetEligibleMinCardinality', 'representativeFixedSetId',
   'representativeFixedTargetWeaponIds', 'defaultSearchInputDigest'] as const
@@ -280,7 +379,7 @@ export interface Phase2C26B2C2B2DPairedRow {
   targetWeaponId: string
   contextRank: number
   b2c2b2cTaskId: string | null
-  identity: { matches: boolean; issues: string[]; excludedRouteKeyCompared: boolean }
+  identity: { matches: boolean; issues: string[]; excludedRouteKeyComparison: Phase2C26B2C2B2DExcludedRouteComparison }
   b2c2b2c: Phase2C26B2C2B2DPairedSide | null
   b2c2b2d: Phase2C26B2C2B2DPairedSide
   /** `<B2-C2B2C process> -> <B2-C2B2D process>`. */
@@ -300,28 +399,52 @@ export interface Phase2C26B2C2B2DPairedRow {
 const diff = (a: number | null, b: number | null) => a === null || b === null ? null : a - b
 
 /**
- * One B2-C2B2D task against B2-C2B2C's task of the same Target and P1 rank: the context identity (every identity field; the
- * excluded current Route key when both sides recorded it) must hold, the extent and the Search input digest must differ (the
- * intended change), and the resource / outcome deltas are reported. A missing or non-identical counterpart is an issue. An
- * unmeasured side (timeout / OOM) keeps null Search fields: never Candidate 0.
+ * One B2-C2B2D task against B2-C2B2C's task of the same Target and P1 rank: the context identity (every identity field and the
+ * excluded current Route key) must hold, the extent and the Search input digest must differ (the intended change), and the
+ * resource / outcome deltas are reported. The excluded current Route is proved through the re-derived baseline default context
+ * (`phase2c26b2c2b2dRederiveBaselineContext()`), compared with every recorded key (see `Phase2C26B2C2B2DExcludedRouteComparison`).
+ * A missing or non-identical counterpart, a missing / invalid re-derivation or any key mismatch is an issue; `matches` is true
+ * only with the excluded current Route proved too. An unmeasured side (timeout / OOM) keeps null Search fields: never Candidate 0.
  */
 export function phase2c26b2c2b2dPairedRow(task: Phase2C26B2C2B2DTaskInput, run: Phase2C26B2C2B2DRun | undefined, comparison: Phase2C26B2C2B2DContextComparison,
-  excludedRouteKeySha256: string | null, baseline: readonly Phase2C26B2C2B2DB2C2B2CTaskRow[]): Phase2C26B2C2B2DPairedRow {
+  excludedRouteKeySha256: string | null, baseline: readonly Phase2C26B2C2B2DB2C2B2CTaskRow[], rederivation: Phase2C26B2C2B2DBaselineRederivation | null): Phase2C26B2C2B2DPairedRow {
   const issues: string[] = []
   const counterparts = baseline.filter(r => r.targetWeaponId === task.targetWeaponId && r.contextRank === task.contextRank)
   if (counterparts.length !== 1) issues.push(`${task.taskId}: ${counterparts.length} B2-C2B2C tasks hold this Target and rank`)
   const c = counterparts.length === 1 ? counterparts[0]! : null
-  let excludedRouteKeyCompared = false
+  const route: Phase2C26B2C2B2DExcludedRouteComparison = { verified: false, rederivedExcludedRouteKeySha256: null, baselineSource: null, baselineRecordMatchesRederived: null,
+    b2c2b2dSource: null, b2c2b2dRecordMatchesRederived: null }
   if (c !== null) {
     if (c.taskId !== task.taskId) issues.push(`${task.taskId}: the B2-C2B2C task ID is ${c.taskId}`)
     for (const field of PHASE2C26B2C2B2D_PAIRED_IDENTITY_FIELDS) if (!same(task[field], c[field])) issues.push(`${task.taskId}: ${field} differs from B2-C2B2C`)
     if (c.searchInputDigest === task.searchInputDigest) issues.push(`${task.taskId}: the Search input digest equals B2-C2B2C's (the extent did not change)`)
     if (same(task.extent, PHASE2C26B2C2B2D_COMMON_L2_EXTENT)) issues.push(`${task.taskId}: the extent is the common L2 extent`)
-    if (excludedRouteKeySha256 !== null && c.excludedRouteKeySha256 !== null) {
-      excludedRouteKeyCompared = true
-      if (excludedRouteKeySha256 !== c.excludedRouteKeySha256) issues.push(`${task.taskId}: the excluded current Route differs from B2-C2B2C`)
+    // The excluded current Route identity, through the re-derived baseline default context.
+    const routeIssues: string[] = []
+    if (rederivation === null || rederivation.taskId !== c.taskId) routeIssues.push(`${task.taskId}: no re-derived baseline default context`)
+    else {
+      routeIssues.push(...rederivation.issues.map(i => `${task.taskId}: ${i}`))
+      if (!rederivation.valid && rederivation.issues.length === 0) routeIssues.push(`${task.taskId}: the re-derived baseline default context is not valid`)
+      if (rederivation.defaultSearchInputDigest !== task.defaultSearchInputDigest) routeIssues.push(`${task.taskId}: the re-derived default digest is not this task's default digest`)
+      const rederived = rederivation.excludedRouteKeySha256
+      route.rederivedExcludedRouteKeySha256 = rederived
+      if (rederived === null) routeIssues.push(`${task.taskId}: no re-derived excluded current Route key`)
+      if (c.excludedRouteKeySha256 !== null) {
+        route.baselineSource = 'b2c2b2c_record'
+        route.baselineRecordMatchesRederived = c.excludedRouteKeySha256 === rederived
+        if (!route.baselineRecordMatchesRederived) routeIssues.push(`${task.taskId}: the B2-C2B2C record's excluded current Route differs from the re-derived one`)
+      } else if (c.record === 'searched') routeIssues.push(`${task.taskId}: a searched B2-C2B2C task without a recorded excluded current Route`)
+      else route.baselineSource = 'rederived_default_context'
+      if (excludedRouteKeySha256 !== null) {
+        route.b2c2b2dSource = 'b2c2b2d_record'
+        route.b2c2b2dRecordMatchesRederived = excludedRouteKeySha256 === rederived
+        if (!route.b2c2b2dRecordMatchesRederived) routeIssues.push(`${task.taskId}: the B2-C2B2D record's excluded current Route differs from the re-derived one`)
+      } else if (searchOf(run) !== null) routeIssues.push(`${task.taskId}: a searched B2-C2B2D task without a recorded excluded current Route`)
+      else route.b2c2b2dSource = 'rederived_default_context'
     }
-  }
+    route.verified = routeIssues.length === 0
+    issues.push(...routeIssues)
+  } else issues.push(`${task.taskId}: the excluded current Route cannot be proved without the B2-C2B2C counterpart`)
   const s = searchOf(run)
   const peak = run ? peakOf(run) : null
   const ours: Phase2C26B2C2B2DPairedSide = { process: run?.outcome.record === 'context_mismatch' ? 'context_mismatch' : run?.process.outcome ?? 'not_run', wallMs: run?.process.wallMs ?? null,
@@ -333,7 +456,7 @@ export function phase2c26b2c2b2dPairedRow(task: Phase2C26B2C2B2DTaskInput, run: 
     hit: { ...c.hit }, firstExactIndex: c.firstExactIndex, firstExactCost: c.firstExactCost, extent: { ...PHASE2C26B2C2B2D_COMMON_L2_EXTENT }, searchInputDigest: c.searchInputDigest }
   const keys = ['maxNormalAdvance', 'maxGogmaAdvance', 'maxSkillAdvance'] as const
   return { taskId: task.taskId, targetWeaponId: task.targetWeaponId, contextRank: task.contextRank, b2c2b2cTaskId: c?.taskId ?? null,
-    identity: { matches: issues.length === 0, issues, excludedRouteKeyCompared }, b2c2b2c: theirs, b2c2b2d: ours,
+    identity: { matches: issues.length === 0 && route.verified, issues, excludedRouteKeyComparison: route }, b2c2b2c: theirs, b2c2b2d: ours,
     outcomeTransition: theirs === null ? null : `${theirs.process} -> ${ours.process}`,
     delta: { wallMs: diff(ours.wallMs, theirs?.wallMs ?? null), peakHeapBytes: diff(ours.peakHeapBytes, theirs?.peakHeapBytes ?? null), peakRssBytes: diff(ours.peakRssBytes, theirs?.peakRssBytes ?? null),
       searchElapsedMs: diff(ours.searchElapsedMs, theirs?.searchElapsedMs ?? null), yields: diff(ours.yields, theirs?.yields ?? null),
@@ -348,7 +471,7 @@ export type Phase2C26B2C2B2DDecisionCase = 'B2C2B2D_ALL_C8' | 'B2C2B2D_ALL_C32' 
 export const PHASE2C26B2C2B2D_DECISION_RULE = {
   scope: 'An oracle-guided diagnostic decision (first compatible context x target-relative tight extent). It is never a scheduler decision and never evidence for a Production scheduler, a Production extent selector or a Production rung selector.',
   order: [
-    'B2C2B2D_INVALID: an authority mismatch (B2-C2B1 / B2-C1 / B2-B1 / B2-C2B2B / B2-C2B2C / oracle / hash chain / Export / CalculationContext / RNG), a population other than exactly the B2-C2B2C 4 Targets (E1 11 = L1 7 + L2 4, overlap 0, union 11), a probe manifest other than the re-derived one, a selected rank other than the B2-C1 / B2-C2B1 / B2-C2B2C first compatible rank, a selected context that is not reservation-compatible, a tight extent other than max(Production default, B2-C2B1 required) or outside the bounds or not covering the required extent, a task count other than 4, a P1 definition drift or schedule parity mismatch, a context identity (group / reservation / representative / default Search input digest / excluded current Route) other than B2-C2B2C\'s task of the same Target and rank, a context mismatch in a Search child, a Candidate reservation violation, an exact or partial Candidate from an incompatible context, a nonmonotonic Candidate cost sequence, a provenance flag reported other than registered, a start attestation that is present but does not verify, or a raw / result inconsistency',
+    'B2C2B2D_INVALID: an authority mismatch (B2-C2B1 / B2-C1 / B2-B1 / B2-C2B2B / B2-C2B2C / oracle / hash chain / Export / CalculationContext / RNG), a population other than exactly the B2-C2B2C 4 Targets (E1 11 = L1 7 + L2 4, overlap 0, union 11), a probe manifest other than the re-derived one, a selected rank other than the B2-C1 / B2-C2B1 / B2-C2B2C first compatible rank, a selected context that is not reservation-compatible, a tight extent other than max(Production default, B2-C2B1 required) or outside the bounds or not covering the required extent, a task count other than 4, a P1 definition drift or schedule parity mismatch, a context identity (group / reservation / representative / default Search input digest / excluded current Route) other than B2-C2B2C\'s task of the same Target and rank, an excluded current Route identity not proved for every pair (a baseline default context that cannot be re-derived from the schedule, a Target / rank holding other than one schedule row, a re-derived group / reservation / representative / default digest other than the baseline task\'s, other than exactly one excluded key or a key that is not the current Route, a re-derived key other than the baseline record\'s or this phase\'s Search record\'s),a context mismatch in a Search child, a Candidate reservation violation, an exact or partial Candidate from an incompatible context, a nonmonotonic Candidate cost sequence, a provenance flag reported other than registered, a start attestation that is present but does not verify, or a raw / result inconsistency',
     'B2C2B2D_INCOMPLETE: no invalid reason, and a task was not measured (timeout / out of memory / process failure / notRun after an interruption: never Candidate 0, never retried in this Phase)',
     'B2C2B2D_ALL_C8: all 4 tasks measured and the first 8 captured Candidates hold the exact oracle Route for 4 / 4 Targets',
     'B2C2B2D_ALL_C32: all measured, C8 < 4, C32 4 / 4',
@@ -507,6 +630,8 @@ export interface Phase2C26B2C2B2DAnalysisInput {
   reach: readonly Phase2C26B2C2AReach[]
   /** Per task ID the SHA-256 of the record's excluded current Route key (computed by the analyzer), or null when unmeasured. */
   excludedRouteKeySha256: ReadonlyMap<string, string | null>
+  /** Per B2-C2B2D task ID the re-derived baseline default context of its B2-C2B2C counterpart (`phase2c26b2c2b2dRederiveBaselineContext()`). */
+  baselineRederivations: ReadonlyMap<string, Phase2C26B2C2B2DBaselineRederivation>
   b2c2b2c: Phase2C26B2C2B2DB2C2B2CAuthority
   oracle: Oracle
   smoke: boolean
@@ -514,7 +639,7 @@ export interface Phase2C26B2C2B2DAnalysisInput {
 }
 
 /** Raw consistency, the per-context comparison, the per-Target rows, the paired comparison, the execution summary and every invalid reason found here. */
-export function runPhase2C26B2C2B2DAnalysis({ derivations, tasks, runs, reach, excludedRouteKeySha256, b2c2b2c, oracle, smoke, interruption = null }: Phase2C26B2C2B2DAnalysisInput) {
+export function runPhase2C26B2C2B2DAnalysis({ derivations, tasks, runs, reach, excludedRouteKeySha256, baselineRederivations, b2c2b2c, oracle, smoke, interruption = null }: Phase2C26B2C2B2DAnalysisInput) {
   const expectedExtents = new Map(derivations.map(d => [d.targetWeaponId, d.tightExtent]))
   const invalidReasons: string[] = validatePhase2C26B2C2B2DRaw({ tasks, runs, smoke, expectedExtents, interruption }).map(issue => issue.startsWith('semantic_failure') ? issue : `raw: ${issue}`)
   const runOf = new Map(runs.map(r => [r.taskId, r]))
@@ -535,7 +660,8 @@ export function runPhase2C26B2C2B2DAnalysis({ derivations, tasks, runs, reach, e
     const row = phase2c26b2c2b2dTargetRow(task, contexts[index]!, runOf.get(task.taskId), derivation.b2c1FirstCompatibleRank, recomputed, phase2c26b2b2a2OracleOperationCost(oracle, task.targetWeaponId))
     if (!row.compatible) invalidReasons.push(`authority: ${task.taskId}: the selected first compatible context is not reservation-compatible under the recomputation`)
     rows.push(row)
-    const pair = phase2c26b2c2b2dPairedRow(task, runOf.get(task.taskId), contexts[index]!, excludedRouteKeySha256.get(task.taskId) ?? null, b2c2b2c.taskRows)
+    const pair = phase2c26b2c2b2dPairedRow(task, runOf.get(task.taskId), contexts[index]!, excludedRouteKeySha256.get(task.taskId) ?? null, b2c2b2c.taskRows,
+      baselineRederivations.get(task.taskId) ?? null)
     invalidReasons.push(...pair.identity.issues.map(i => `paired: ${i}`))
     paired.push(pair)
   })

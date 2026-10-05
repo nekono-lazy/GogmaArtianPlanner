@@ -243,7 +243,13 @@ try {
   const reach = await c2aAnalysis.phase2c26b2c2aReach(schedule, targetWeaponIds, manifest, oracle)
   const searchOf = run => run?.record?.status === 'searched' ? run.record.search : null
   const excludedRouteKeySha256 = new Map(runs.map(run => [run.taskId, searchOf(run) ? sha(searchOf(run).excludedRouteKeys[0]) : null]))
-  const audit = analysis.runPhase2C26B2C2B2DAnalysis({ derivations: derived.derivations, tasks: r.tasks, runs, reach, excludedRouteKeySha256, b2c2b2c: b2c2b2cAuthority,
+  // The baseline (B2-C2B2C) default context of every pair, re-derived post hoc from this schedule: its excluded current Route
+  // key is fixed before any Search, and a timeout / OOM baseline task has no record of it.
+  const baselineRederivations = new Map(r.tasks.flatMap(task => {
+    const rows = b2c2b2cAuthority.taskRows.filter(row => row.targetWeaponId === task.targetWeaponId && row.contextRank === task.contextRank)
+    return rows.length === 1 ? [[task.taskId, analysis.phase2c26b2c2b2dRederiveBaselineContext(schedule, rows[0], sha)]] : []
+  }))
+  const audit = analysis.runPhase2C26B2C2B2DAnalysis({ derivations: derived.derivations, tasks: r.tasks, runs, reach, excludedRouteKeySha256, baselineRederivations, b2c2b2c: b2c2b2cAuthority,
     oracle: { routes: oracle.routes, gogmaUsage: oracle.gogmaUsage }, smoke, interruption })
   invalidReasons.push(...audit.invalidReasons)
 
@@ -339,7 +345,8 @@ try {
       b2c2b2cAuthority: { valid: parsedB2C2B2C.valid, issues: parsedB2C2B2C.issues, decisionCase: b2c2b2cAuthority.decisionCase }, hashChain,
       manifestConsistency: { valid: manifestConsistency.valid, checkedRoutes: manifestConsistency.checkedRoutes }, population: { ...populationParity, issues: derived.issues },
       scheduleConsistency: { valid: scheduleConsistency.valid, issues: scheduleConsistency.issues }, b2b1Parity, policyDrift, taskConstruction: { valid: rebuilt.valid, issues: rebuilt.issues },
-      scheduleParity, recordIssues, pairedIdentity: audit.paired.map(p => ({ taskId: p.taskId, b2c2b2cTaskId: p.b2c2b2cTaskId, ...p.identity })) },
+      scheduleParity, recordIssues, pairedIdentity: audit.paired.map(p => ({ taskId: p.taskId, b2c2b2cTaskId: p.b2c2b2cTaskId, ...p.identity })),
+      baselineRederivations: [...baselineRederivations.values()] },
     probes: derived.derivations,
     tasks: { total: r.tasks.length, targets: targetWeaponIds.length, contextsPerTarget: c2b2d.PHASE2C26B2C2B2D_CONTEXTS_PER_TARGET },
     aggregates: audit.aggregates,
