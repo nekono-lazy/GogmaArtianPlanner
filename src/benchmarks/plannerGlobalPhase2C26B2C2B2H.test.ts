@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import rawB2C2B2E from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json?raw'
 import rawB2C2B2F from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2F_RESULT.json?raw'
 import rawB2C2B2G from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2G_RESULT.json?raw'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2H_RESULT.json?raw'
 import bonusStreamSource from '../domain/search/bonusStream.ts?raw'
 import searchExecutionSource from '../domain/search/searchExecution.ts?raw'
 import engineSource from '../domain/rng/production/productionRngEngine.ts?raw'
@@ -816,5 +817,75 @@ describe('Phase 2-C2.6-B2-C2B2H isolation and provenance', () => {
     expect(searchSource).toMatch(/createPhase2C26B2C2B2GProfiler\(/)
     expect(searchSource).not.toMatch(/onSkillReservedDepth:|onGogmaReservedDepth:|onWorkSettled:/)
     expect(searchSource).not.toMatch(/Date\.now|performance\.now/)
+  })
+})
+
+// ---------------------------------------------------------------- the committed formal RESULT
+
+describe('Phase 2-C2.6-B2-C2B2H committed RESULT', () => {
+  const result = JSON.parse(rawResult)
+  const MEASURED_HEAD = '435fe0b53f56fed74ace9e16cf42281996c68514'
+  const share = (category: string) => result.cpuAttribution.categories.find((c: { category: string }) => c.category === category)
+
+  it('is formal: runner start attestation verified against the independently obtained HEAD / code / Export / manifest / B2-C2B2G, B2-C2B2F and B2-C2B2E RESULTs, no invalid or insufficient reason', () => {
+    expect(result.provenance).toMatchObject({ formal: true, evidenceGrade: 'formal', partialRun: false, launchProvenanceVerified: true, launchProvenanceSource: 'runner_start_attestation',
+      launchProvenanceIssues: [], launchProvenanceIntegrityIssues: [], measuredHead: MEASURED_HEAD, analysisHead: MEASURED_HEAD, measuredHeadIsAncestor: true, uncommittedBenchmarkCode: false,
+      smoke: null, calculationCodeChangedSinceMeasuredHead: [], b2c2b2gResultSha256: PHASE2C26B2C2B2H_REGISTERED_B2C2B2G.resultSha256,
+      b2c2b2fResultSha256: PHASE2C26B2C2B2G_REGISTERED_B2C2B2F.resultSha256, b2c2b2eResultSha256: PHASE2C26B2C2B2F_REGISTERED_B2C2B2E.resultSha256, exportSha256: gJson.provenance.exportSha256,
+      profilingOnly: true, cpuProfiling: true, absoluteRuntimeComparedWithB2C2B2G: false, optimization: false, routeExactJudged: false, oracleReadBySearchChild: false })
+    expect(result.provenance.benchmarkCodeSha256).toBe(result.provenance.recomputedBenchmarkCodeSha256)
+    expect(result.provenance.startAttestation.body).toMatchObject({ attestedBy: 'runner', phase: PHASE2C26B2C2B2H_START_ATTESTATION_PHASE, repositoryHead: MEASURED_HEAD, smoke: null,
+      stage1: PHASE2C26B2C2B2H_STAGE1, changedFromB2C2B2G: ['cpuProfiler'], searchInstrumentation: PHASE2C26A7_SEARCH_INSTRUMENTATION, cpuProfiler: true,
+      cpuProfilerConfig: PHASE2C26A5_PROFILER, nodeFlags: ['--max-old-space-size=12288'] })
+    expect(result.provenance.startAttestation.body.createdAt).toBe(result.provenance.measuredAt)
+    expect(Object.values(result.parity.hashChain).every(v => v === true)).toBe(true)
+    expect(Object.values(result.conditions.conditionChecks).every(v => v === true)).toBe(true)
+    expect(result.invalidReasons).toEqual([])
+    expect(result.insufficientReasons).toEqual([])
+    expect(result.probe).toMatchObject({ valid: true, issues: [] })
+  })
+
+  it('profiled exactly the B2-C2B2G STATE_GENERATION-dominant Target in B2-C2B2G\'s Search input, and the CPU profiler changed no computed held-aware depth', () => {
+    const g = parsePhase2C26B2C2B2HB2C2B2GAuthority(gJson, PHASE2C26B2C2B2H_REGISTERED_B2C2B2G.resultSha256).authority
+    const derived = phase2c26b2c2b2hPopulation(g, parsedF.authority, parsedE.authority)
+    expect(result.population.targetWeaponIds).toEqual(derived.targetWeaponIds)
+    expect(result.population.probes).toEqual(derived.probes)
+    expect(result.parity.population).toMatchObject({ manifestEqualsDerived: true, runnerTargetsEqualManifest: true, runnerProbesEqualManifest: true, runnerIdentitiesEqualManifest: true,
+      probesEqualB2C2B2GProfiled: true, identitiesEqualB2C2B2GProfiled: true, targets: 1 })
+    expect(Object.values(result.parity.population.chain).every(v => v === true)).toBe(true)
+    expect(result.parity.identity.rawEqualsExpected).toBe(true)
+    expect(result.parity.identity.expected).toEqual(gJson.parity.identity.expected)
+    expect(result.parity.taskRebuild).toMatchObject({ valid: true, tasksEqualRebuilt: true })
+    expect(Object.values(result.parity.childIdentity).every(v => v === true)).toBe(true)
+    const route = result.parity.excludedRoute
+    expect([route.childAttestedExcludedRouteKeySha256, route.b2c2b2gExcludedRouteKeySha256]).toEqual([route.rederivedExcludedRouteKeySha256, route.rederivedExcludedRouteKeySha256])
+    expect(result.parity.semanticParityWithB2C2B2G).toMatchObject({ valid: true, firstMismatch: null, b2c2b2gDepths: 403, commonDepths: 403 })
+  })
+
+  it('pins the profile quality, the active-CPU shares and the decision: MIXED with keep_prediction the only hotspot >= 0.20', () => {
+    expect(result.outcome).toMatchObject({ process: 'timeout', record: null, naturalCompletion: false, budgetMs: 1_800_000, deliveredBeforeKill: { deliveryFlushes: 0, deliveryConsumerCalls: 0 } })
+    expect(result.profilerWindow).toMatchObject({ requestedStartElapsedMs: 120_000, requestedStopElapsedMs: 720_000, stoppedBy: 'window', error: null, clockAlignment: { valid: true, negativeTimeDeltas: 0 } })
+    expect(result.profilerWindow.actualProfileDurationMs).toBeGreaterThan(PHASE2C26B2C2B2H_MIN_PROFILE_DURATION_MS)
+    expect(result.intervals).toMatchObject({ valid: true, issues: [], openInterval: null, boundaryWriteFailures: 0 })
+    const a = result.cpuAttribution
+    expect(a.intervalValidation).toMatchObject({ valid: true, openIntervalInsideProfile: false })
+    expect([a.intervalSamples, a.idleSamples, a.activeSamples]).toEqual([32_810, 563, 32_247])
+    expect(a.registeredLineMismatches).toEqual([])
+    expect(a.stateGenerationOnlySamples.outside).toBe(0)
+    expect(share('keep_prediction').samples).toBe(10_102)
+    expect(share('program').samples).toBe(8_865)
+    expect(share('generation_owner_or_inlined').samples).toBe(4_936)
+    expect(share('state_construction_family_layout').samples).toBe(4_440)
+    expect(share('gc').samples).toBe(3_585)
+    expect(share('reset_prediction').samples + share('gogma_prediction_shared').samples + share('counter_advance').samples).toBeLessThan(100)
+    expect(a.unattributedActiveShare).toBeLessThan(0.5)
+    expect(result.decision).toMatchObject({ case: 'B2C2B2H_MIXED', dominant: null, reasons: [], nextPhaseCategories: ['keep_prediction'] })
+    expect(result.decision.secondary).toEqual([{ category: 'keep_prediction', shareOfActive: share('keep_prediction').shareOfActive }])
+    // The Keep prediction samples are the memo path: the template key and the Map lookup of predictKeep, no Production Keep draw.
+    const keep = a.lineTicks.find((l: { registered: string }) => l.registered.endsWith('#predictKeep'))
+    expect(keep.inSpan.filter((l: { ticks: number }) => l.ticks > 1000).map((l: { text: string }) => l.text)).toEqual(['const key = `${gogmaCounter}\\u0000${familyLayoutKey}`','const cached = keepPredictions.get(key)'])
+    expect(a.registeredInclusive.some((r: { registered: string }) => r.registered.endsWith('#predictGogmaBonus'))).toBe(false)
+    // Recomputing the decision from the recorded attribution gives the same case.
+    expect(phase2c26b2c2b2hDecision({ invalidReasons: [], insufficientReasons: [], analysis: a }).case).toBe('B2C2B2H_MIXED')
   })
 })

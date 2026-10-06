@@ -1,0 +1,2583 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-B2-C2B2H (post-hoc analysis): B2-C2B2G STATE_GENERATION-dominant Target, B2-C2B2G Search input, V8 CPU attribution inside state_generation",
+  "analyzedAt": "2026-10-06T01:20:48.915Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2H_RAW.json.local",
+      "bytes": 31386,
+      "sha256": "a5728e9b387a132ff3dfa8dbd3435704316f8aa49c8069cefdf1a0c389450427"
+    },
+    "startAttestation": {
+      "file": "start-attestation.json",
+      "bytes": 5402,
+      "sha256": "7d0410f9edfdc6e0107808b27ed32a636a526a9fb5b04c996bddaa6afa283d68"
+    },
+    "processes": {
+      "file": "processes.jsonl",
+      "bytes": 3579,
+      "sha256": "12926b845de22daeaaf7953a33c685599de69cb2c99c6f3fe8ad0c2062c43b08"
+    },
+    "profile": {
+      "file": "stage1-t02-r11.profile.jsonl",
+      "bytes": 3833885,
+      "sha256": "a231ced3ccb9afe8ee9dd1a42b716c5a13b8bc292fbb6c4871de3b77b500950e"
+    },
+    "sections": {
+      "file": "stage1-t02-r11.sections.jsonl",
+      "bytes": 1008370,
+      "sha256": "3112475b90a9fc471bcd983ce5bc66b67d3e0324c171e9a6b2f124dc0171048e"
+    },
+    "cpuProfile": {
+      "file": "stage1-t02-r11.cpuprofile",
+      "bytes": 558370,
+      "sha256": "c7226676ebeea7523391b369234981be1a8e827796efd0ff6aeaa6982feb82a2"
+    },
+    "capture": {
+      "file": "stage1-t02-r11.capture.json",
+      "bytes": 1468,
+      "sha256": "711d4fc4ed8eae8671cc016fce3178d4295637c2b3be4d490694d310f73b6db9"
+    },
+    "scripts": {
+      "file": "stage1-t02-r11.scripts.json",
+      "bytes": 3741574,
+      "sha256": "e1228d860697469cabd22d380c4132b1d80ce83c252a81d5203a84fee5167b93"
+    },
+    "probeManifest": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2H_PROBES.json.local",
+      "bytes": 1664,
+      "sha256": "90da013fba12f0acbb21e4a7c49579a2905157801e9a1e61b9b1771d25cc8e90"
+    },
+    "export": {
+      "file": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "b2c2b2gResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2G_RESULT.json",
+      "bytes": 45996,
+      "sha256": "ff163148a5dc32218868838d24985ba64a2b664618545033cddd9b162cd9a011"
+    },
+    "b2c2b2fResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2F_RESULT.json",
+      "bytes": 40291,
+      "sha256": "b7b707bbf34a851131eba1a312f228f2948fb5c15d3a9ffad18443365279333d"
+    },
+    "b2c2b2eResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json",
+      "bytes": 65368,
+      "sha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe"
+    },
+    "b2c2b2gProfile": {
+      "file": "stage1-t02-r11.profile.jsonl",
+      "bytes": 3815811,
+      "sha256": "3c0aa7d9c7836f478e16aee2c0f1685f79d508a96ca61da02fd030dac8cd499e"
+    }
+  },
+  "provenance": {
+    "formal": true,
+    "evidenceGrade": "formal",
+    "partialRun": false,
+    "launchProvenanceVerified": true,
+    "launchProvenanceSource": "runner_start_attestation",
+    "launchProvenanceReason": null,
+    "launchProvenanceIssues": [],
+    "launchProvenanceIntegrityIssues": [],
+    "startAttestation": {
+      "file": "start-attestation.json",
+      "sha256": "7d0410f9edfdc6e0107808b27ed32a636a526a9fb5b04c996bddaa6afa283d68",
+      "bytes": 5402,
+      "body": {
+        "phase": "Issue #154 Phase 2-C2.6-B2-C2B2H runner start attestation",
+        "attestedBy": "runner",
+        "stage1": {
+          "executionClass": "stage1",
+          "childHeapMb": 12288,
+          "concurrency": 1,
+          "budgetMs": 1800000,
+          "retry": "none",
+          "fallback": "none"
+        },
+        "b2c2b2gStage1": {
+          "executionClass": "stage1",
+          "childHeapMb": 12288,
+          "concurrency": 1,
+          "budgetMs": 1800000,
+          "retry": "none",
+          "fallback": "none"
+        },
+        "changedStage1Fields": [],
+        "changedFromB2C2B2G": [
+          "cpuProfiler"
+        ],
+        "tasksBudgetMs": 600000,
+        "targets": 1,
+        "expectedTasks": 1,
+        "population": "B2C2B2G_STATE_GENERATION_DOMINANT_PROFILED_TARGET",
+        "section": "state_generation",
+        "contextSelection": "b2c1_recorded_p1_first_compatible_rank",
+        "extentRule": "b2c2b2d_tight_max_production_default_b2c2b1_required_v1",
+        "captureRule": {
+          "policy": "C4C",
+          "maxCostCohorts": 4,
+          "sentinel": "first delivery of the fifth distinct operation cost (never captured)",
+          "prefixes": {
+            "C8": 8,
+            "C32": 32
+          }
+        },
+        "candidateSafetyCap": 1024,
+        "registeredP1": {
+          "id": "P1",
+          "name": "default_simple_first",
+          "keys": [
+            [
+              "targetEligibleMinCardinality",
+              "asc"
+            ],
+            [
+              "exclusiveOwnedWeaponCount",
+              "asc"
+            ],
+            [
+              "blockedCountDefaultTotal",
+              "asc"
+            ],
+            [
+              "shareableHeldCountDefaultTotal",
+              "desc"
+            ],
+            [
+              "reservationDigest",
+              "asc"
+            ]
+          ]
+        },
+        "nodeYield": "setImmediate",
+        "memorySampleIntervalMs": 250,
+        "searchInstrumentation": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": true,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "innerSections": [
+          "window_collection",
+          "support_evaluation",
+          "state_generation",
+          "solution_materialization",
+          "frontier_reduction_sort",
+          "exhaustion_scan"
+        ],
+        "b2c2b2gCpuProfiler": false,
+        "cpuProfiler": true,
+        "cpuProfilerConfig": {
+          "requestedSamplingIntervalUs": 10000,
+          "warmupMs": 120000,
+          "profileStopMs": 720000,
+          "requestedProfileDurationMs": 600000
+        },
+        "nodeFlags": [
+          "--max-old-space-size=12288"
+        ],
+        "sectionStream": {
+          "kind": "gogma_boundary",
+          "perBoundary": true,
+          "perGeneratedState": false
+        },
+        "heartbeatIntervalMs": 5000,
+        "windowsMs": [
+          [
+            0,
+            600000
+          ],
+          [
+            600000,
+            1200000
+          ],
+          [
+            1200000,
+            1800000
+          ]
+        ],
+        "provenanceFlags": {
+          "oracleGuidedPolicySelection": true,
+          "oracleGuidedTargetPopulation": true,
+          "oracleGuidedContextSelection": true,
+          "oracleInformedPerTargetExtent": true,
+          "targetIndividualOracleExtentAsSearchInput": true,
+          "perTargetExtent": true,
+          "commonExtentForEveryTask": false,
+          "contextOrderingUsesOracle": true,
+          "oracleReadBySearchChild": false,
+          "oracleMatchUsedForEarlyStop": false,
+          "expectedOutcomeKnownBySearchChild": false,
+          "productionSchedulerEvidence": false,
+          "productionExtentSelectionEvidence": false,
+          "oracleGuidedProfilingTarget": true,
+          "routeExactJudged": false,
+          "profilingOnly": true,
+          "innerRuntimeProfiling": true,
+          "absoluteRuntimeComparedWithB2C2B2F": false,
+          "cpuProfiling": true,
+          "absoluteRuntimeComparedWithB2C2B2G": false,
+          "optimization": false
+        },
+        "createdAt": "2026-10-06T00:50:03.045Z",
+        "runnerScript": "scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+        "node": "v24.19.0",
+        "repositoryHead": "435fe0b53f56fed74ace9e16cf42281996c68514",
+        "uncommittedBenchmarkCode": false,
+        "benchmarkCodeSha256": "f1dfb463ffa9da1487c4ad0c982a4aac2e770f8d6e934d030fa082e5d5bd757e",
+        "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+        "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "exportBytes": 19424064,
+        "probeManifestFileName": "PLANNER_GLOBAL_PHASE2C26B2C2B2H_PROBES.json.local",
+        "probeManifestSha256": "90da013fba12f0acbb21e4a7c49579a2905157801e9a1e61b9b1771d25cc8e90",
+        "probeManifestB2C2B2GResultSha256": "ff163148a5dc32218868838d24985ba64a2b664618545033cddd9b162cd9a011",
+        "probeManifestB2C2B2FResultSha256": "b7b707bbf34a851131eba1a312f228f2948fb5c15d3a9ffad18443365279333d",
+        "probeManifestB2C2B2EResultSha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe",
+        "targetWeaponIds": [
+          "a367c177-a0c2-4986-995e-4efcf4131b5c"
+        ],
+        "probes": [
+          {
+            "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+            "b2c2b2dTaskId": "t02-r11",
+            "contextRank": 11,
+            "extent": {
+              "maxNormalAdvance": 4,
+              "maxGogmaAdvance": 235,
+              "maxSkillAdvance": 1083
+            }
+          }
+        ],
+        "expectedTaskIdentities": [
+          {
+            "taskId": "t02-r11",
+            "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+            "contextRank": 11,
+            "groupIndex": 3,
+            "reservationDigest": "fnv1a32:ff85a91d",
+            "targetEligibleMinCardinality": 1,
+            "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+            "representativeFixedTargetWeaponIds": [
+              "070a1222-5e31-4c9f-a035-c557bfa7be73"
+            ],
+            "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+            "searchInputDigest": "fnv1a32:824a0ec4",
+            "extent": {
+              "maxNormalAdvance": 4,
+              "maxGogmaAdvance": 235,
+              "maxSkillAdvance": 1083
+            }
+          }
+        ],
+        "smoke": null
+      }
+    },
+    "measuredHead": "435fe0b53f56fed74ace9e16cf42281996c68514",
+    "measuredHeadSource": "runner_start_attestation",
+    "measuredHeadIsAncestor": true,
+    "measuredAt": "2026-10-06T00:50:03.045Z",
+    "recomputedBenchmarkCodeSha256": "f1dfb463ffa9da1487c4ad0c982a4aac2e770f8d6e934d030fa082e5d5bd757e",
+    "benchmarkCodeSha256": "f1dfb463ffa9da1487c4ad0c982a4aac2e770f8d6e934d030fa082e5d5bd757e",
+    "analysisHead": "435fe0b53f56fed74ace9e16cf42281996c68514",
+    "analysisCodeUncommitted": false,
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B2HAnalysis.ts",
+      "scripts/analyze-planner-global-phase2c26b2c2b2h.mjs",
+      "*.test.ts"
+    ],
+    "uncommittedBenchmarkCode": false,
+    "smoke": null,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "b2c2b2gResultSha256": "ff163148a5dc32218868838d24985ba64a2b664618545033cddd9b162cd9a011",
+    "b2c2b2gMeasuredHead": "03e2f73ca58330f3d55afb49b29a02328c341e4e",
+    "b2c2b2fResultSha256": "b7b707bbf34a851131eba1a312f228f2948fb5c15d3a9ffad18443365279333d",
+    "b2c2b2fMeasuredHead": "dd41061d492d91c0ebc9a2ecdc13ebc0a857f280",
+    "b2c2b2eResultSha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe",
+    "b2c2b2eMeasuredHead": "e69a94ea0fdd1ef39a39286dffab1bfc44fb1f0b",
+    "probeManifestSha256": "90da013fba12f0acbb21e4a7c49579a2905157801e9a1e61b9b1771d25cc8e90",
+    "oracleGuidedPolicySelection": true,
+    "oracleGuidedTargetPopulation": true,
+    "oracleGuidedContextSelection": true,
+    "oracleInformedPerTargetExtent": true,
+    "targetIndividualOracleExtentAsSearchInput": true,
+    "perTargetExtent": true,
+    "commonExtentForEveryTask": false,
+    "contextOrderingUsesOracle": true,
+    "oracleReadBySearchChild": false,
+    "oracleMatchUsedForEarlyStop": false,
+    "expectedOutcomeKnownBySearchChild": false,
+    "productionSchedulerEvidence": false,
+    "productionExtentSelectionEvidence": false,
+    "oracleGuidedProfilingTarget": true,
+    "routeExactJudged": false,
+    "profilingOnly": true,
+    "innerRuntimeProfiling": true,
+    "absoluteRuntimeComparedWithB2C2B2F": false,
+    "cpuProfiling": true,
+    "absoluteRuntimeComparedWithB2C2B2G": false,
+    "optimization": false
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "freeMemoryBytesAtLaunch": 17984757760,
+    "rngEngineVersion": "production-rng:c5-e7",
+    "profilerMethod": "node:inspector Session (main thread): Debugger.enable while the modules load (scriptParsed: url + inline source map), Debugger.disable, then Profiler.enable / setSamplingInterval / start / stop (A5 profile controller, Search start anchor)"
+  },
+  "conditions": {
+    "stage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 12288,
+      "concurrency": 1,
+      "budgetMs": 1800000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "b2c2b2gStage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 12288,
+      "concurrency": 1,
+      "budgetMs": 1800000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "changedStage1Fields": [],
+    "changedFromB2C2B2G": [
+      "cpuProfiler"
+    ],
+    "conditionChecks": {
+      "stage1IsRegistered": true,
+      "stage1EqualsB2C2B2G": true,
+      "b2c2b2gStage1MatchesAuthority": true,
+      "budgetIs30Minutes": true,
+      "heapIs12288Mb": true,
+      "concurrencyIs1": true,
+      "noRetry": true,
+      "noFallback": true,
+      "instrumentationIsB2C2B2GTwoObservers": true,
+      "instrumentationEqualsB2C2B2GAuthority": true,
+      "innerSectionsAreRegistered": true,
+      "b2c2b2gRanNoCpuProfiler": true,
+      "cpuProfilerIsTheOnlyChange": true,
+      "cpuProfilerOn": true,
+      "cpuProfilerConfigIsRegistered": true,
+      "nodeFlagsAreHeapOnly": true,
+      "conditionIssues": true
+    },
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": true,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "innerSections": [
+      "window_collection",
+      "support_evaluation",
+      "state_generation",
+      "solution_materialization",
+      "frontier_reduction_sort",
+      "exhaustion_scan"
+    ],
+    "section": "state_generation",
+    "b2c2b2gCpuProfiler": false,
+    "cpuProfiler": true,
+    "cpuProfilerConfig": {
+      "requestedSamplingIntervalUs": 10000,
+      "warmupMs": 120000,
+      "profileStopMs": 720000,
+      "requestedProfileDurationMs": 600000
+    },
+    "nodeFlags": [
+      "--max-old-space-size=12288"
+    ],
+    "sectionStream": {
+      "kind": "gogma_boundary",
+      "perBoundary": true,
+      "perGeneratedState": false
+    },
+    "heartbeatIntervalMs": 5000,
+    "windowsMs": [
+      [
+        0,
+        600000
+      ],
+      [
+        600000,
+        1200000
+      ],
+      [
+        1200000,
+        1800000
+      ]
+    ],
+    "memorySampleIntervalMs": 250,
+    "nodeYield": "setImmediate",
+    "candidateSafetyCap": 1024,
+    "maxCostCohorts": 4,
+    "notRun": [
+      "production_change",
+      "production_optimization",
+      "search_semantics_change",
+      "search_ordering_change",
+      "search_comparator_change",
+      "candidate_materializer_change",
+      "capture_change",
+      "extent_change",
+      "context_change",
+      "p1_change",
+      "new_production_instrumentation_seam",
+      "new_inner_section",
+      "per_state_timer_or_callback",
+      "no_inlining_diagnostic",
+      "heap_allocation_profiler",
+      "heap_snapshot",
+      "heap_16gb",
+      "budget_60min_or_more",
+      "automatic_longer_retry",
+      "retry",
+      "timeout_fallback",
+      "oom_fallback",
+      "reserved_depth_observer",
+      "work_settled_observer",
+      "exact_route_judgement",
+      "e2_search",
+      "k2_feature_grouping",
+      "residual_unreached_support",
+      "global_assignment",
+      "full_planner_rerun",
+      "ui_change",
+      "solution_materialization_optimization",
+      "a3_a9_result_regeneration",
+      "b2c2b2e_result_regeneration",
+      "b2c2b2f_result_regeneration",
+      "b2c2b2g_result_regeneration"
+    ],
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 20000
+  },
+  "population": {
+    "rule": "B2-C2B2G decision.case = B2C2B2G_STATE_GENERATION_DOMINANT, decision.dominant = state_generation and decision.nextPhaseSections = [state_generation]: the Target(s) B2-C2B2G profiled, cross-checked against the population B2-C2B2G's derivation re-derives from B2-C2B2F and B2-C2B2E",
+    "targetWeaponIds": [
+      "a367c177-a0c2-4986-995e-4efcf4131b5c"
+    ],
+    "probes": [
+      {
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "b2c2b2dTaskId": "t02-r11",
+        "contextRank": 11,
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      }
+    ],
+    "b2c2b2gBackground": {
+      "searchWallMs": 1790899.1756,
+      "bonusDepthReadMs": 1517072.7574000016,
+      "stateGenerationMs": 974984.5314000018,
+      "stateGenerationShareOfBonusDepthRead": 0.6426748662146933,
+      "stateGenerationYieldCount": 14537230,
+      "stateGenerationYieldWaitMs": 160996.1387997324,
+      "generatedStates": 725971613,
+      "completedDepths": 403,
+      "childOutcome": "timeout"
+    }
+  },
+  "parity": {
+    "b2c2b2gAuthority": {
+      "valid": true,
+      "issues": [],
+      "decisionCase": "B2C2B2G_STATE_GENERATION_DOMINANT",
+      "dominant": "state_generation"
+    },
+    "b2c2b2fAuthority": {
+      "valid": true,
+      "issues": []
+    },
+    "b2c2b2eAuthority": {
+      "valid": true,
+      "issues": []
+    },
+    "hashChain": {
+      "b2c2b2gResultIsRegistered": true,
+      "b2c2b2fResultIsRegistered": true,
+      "b2c2b2eResultIsRegistered": true,
+      "b2c2b2gMadeAgainstB2C2B2F": true,
+      "b2c2b2gMadeAgainstB2C2B2E": true,
+      "b2c2b2fMadeAgainstB2C2B2E": true,
+      "probeManifestFromB2C2B2G": true,
+      "probeManifestFromB2C2B2F": true,
+      "probeManifestFromB2C2B2E": true,
+      "probeManifestMatchesRunner": true,
+      "probeManifestB2C2B2GMatchesRunner": true,
+      "exportMatchesRunner": true,
+      "exportMatchesProbeManifest": true,
+      "exportMatchesB2C2B2G": true,
+      "exportMatchesB2C2B2F": true,
+      "exportMatchesB2C2B2E": true,
+      "b2c2b2gProfileIsRecorded": true
+    },
+    "population": {
+      "manifestEqualsDerived": true,
+      "runnerTargetsEqualManifest": true,
+      "runnerProbesEqualManifest": true,
+      "runnerIdentitiesEqualManifest": true,
+      "probesEqualB2C2B2GProfiled": true,
+      "identitiesEqualB2C2B2GProfiled": true,
+      "targets": 1,
+      "chain": {
+        "b2c2b2fAuthorityIsB2C2B2GAuthority": true,
+        "b2c2b2eAuthorityIsB2C2B2GAuthority": true,
+        "targetsEqualB2C2B2GDerived": true,
+        "probesEqualB2C2B2GDerived": true,
+        "identitiesEqualB2C2B2GDerived": true,
+        "excludedRouteEqualsB2C2B2GDerived": true,
+        "exportEqualsB2C2B2F": true
+      }
+    },
+    "taskRebuild": {
+      "valid": true,
+      "issues": [],
+      "tasksEqualRebuilt": true
+    },
+    "identity": {
+      "expected": {
+        "taskId": "t02-r11",
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contextRank": 11,
+        "groupIndex": 3,
+        "reservationDigest": "fnv1a32:ff85a91d",
+        "targetEligibleMinCardinality": 1,
+        "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+        "representativeFixedTargetWeaponIds": [
+          "070a1222-5e31-4c9f-a035-c557bfa7be73"
+        ],
+        "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+        "searchInputDigest": "fnv1a32:824a0ec4",
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      },
+      "raw": {
+        "taskId": "t02-r11",
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contextRank": 11,
+        "groupIndex": 3,
+        "reservationDigest": "fnv1a32:ff85a91d",
+        "targetEligibleMinCardinality": 1,
+        "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+        "representativeFixedTargetWeaponIds": [
+          "070a1222-5e31-4c9f-a035-c557bfa7be73"
+        ],
+        "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+        "searchInputDigest": "fnv1a32:824a0ec4",
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      },
+      "rawEqualsExpected": true
+    },
+    "excludedRoute": {
+      "valid": true,
+      "issues": [],
+      "excludedRouteKeyCount": 1,
+      "excludedRouteIsCurrentRoute": true,
+      "rederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+      "b2c2b2gExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+      "childAttestedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba"
+    },
+    "childIdentity": {
+      "present": true,
+      "taskId": true,
+      "targetWeaponId": true,
+      "searchInputDigest": true,
+      "defaultSearchInputDigest": true,
+      "extent": true,
+      "groupIndex": true,
+      "reservationDigest": true,
+      "excludedRouteIsCurrentRoute": true,
+      "excludedRouteEqualsRederived": true,
+      "excludedRouteEqualsB2C2B2G": true
+    },
+    "semanticParityWithB2C2B2G": {
+      "valid": true,
+      "issues": [],
+      "b2c2b2gDepths": 403,
+      "b2c2b2hDepths": 411,
+      "commonDepths": 403,
+      "firstMismatch": null,
+      "commonGeneratedStates": 725971613
+    }
+  },
+  "probe": {
+    "valid": true,
+    "issues": [],
+    "samples": 149,
+    "observedMedianIntervalUs": 10506,
+    "alignment": {
+      "valid": true,
+      "issues": [],
+      "offsetSpreadMs": 0.002950012683868408,
+      "maxPairPrecisionMs": 0.010299999999915599,
+      "profileDurationMs": 1580.42199999094,
+      "negativeDeltas": 0
+    },
+    "requiredSourceMaps": {
+      "src/domain/search/bonusStream.ts": true,
+      "src/domain/rng/production/gogmaPrediction.ts": true,
+      "src/domain/rng/production/gameGogmaBonuses.ts": true,
+      "src/domain/rng/production/productionRngEngine.ts": true,
+      "src/domain/rng/gogmaBonusFamily.ts": true,
+      "src/domain/search/searchExecution.ts": true
+    },
+    "frameLines": {
+      "predictGogmaBonus": {
+        "declarationLine": 165,
+        "frameLines": [
+          165
+        ],
+        "matches": true
+      },
+      "keepFamilyLayoutKey": {
+        "declarationLine": 68,
+        "frameLines": [
+          68
+        ],
+        "matches": true
+      }
+    },
+    "stateGenerationBlock": {
+      "startLine": 841,
+      "endLine": 868,
+      "subBlocks": [
+        {
+          "label": "block_head",
+          "startLine": 841,
+          "endLine": 843
+        },
+        {
+          "label": "sorted_position_loop",
+          "startLine": 844,
+          "endLine": 844
+        },
+        {
+          "label": "reset_branch",
+          "startLine": 845,
+          "endLine": 845
+        },
+        {
+          "label": "reset_parent_lookup",
+          "startLine": 846,
+          "endLine": 849
+        },
+        {
+          "label": "reset_parent_guard",
+          "startLine": 850,
+          "endLine": 852
+        },
+        {
+          "label": "reset_checkpoint",
+          "startLine": 853,
+          "endLine": 853
+        },
+        {
+          "label": "reset_prediction",
+          "startLine": 854,
+          "endLine": 854
+        },
+        {
+          "label": "reset_counter_advance",
+          "startLine": 855,
+          "endLine": 855
+        },
+        {
+          "label": "reset_state_construction",
+          "startLine": 856,
+          "endLine": 857
+        },
+        {
+          "label": "frontier_scan",
+          "startLine": 858,
+          "endLine": 858
+        },
+        {
+          "label": "keep_eligibility_windows_has",
+          "startLine": 859,
+          "endLine": 859
+        },
+        {
+          "label": "keep_checkpoint",
+          "startLine": 860,
+          "endLine": 860
+        },
+        {
+          "label": "keep_prediction",
+          "startLine": 861,
+          "endLine": 861
+        },
+        {
+          "label": "keep_counter_advance",
+          "startLine": 862,
+          "endLine": 862
+        },
+        {
+          "label": "keep_state_construction",
+          "startLine": 863,
+          "endLine": 866
+        },
+        {
+          "label": "generation_end",
+          "startLine": 867,
+          "endLine": 868
+        }
+      ]
+    }
+  },
+  "outcome": {
+    "process": "timeout",
+    "record": null,
+    "naturalCompletion": false,
+    "termination": null,
+    "candidateCount": null,
+    "searchElapsedMs": null,
+    "childWallMs": 1800370.3532,
+    "killedAtMs": 1800016.4682,
+    "budgetMs": 1800000,
+    "deliveredBeforeKill": {
+      "deliveryFlushes": 0,
+      "deliveryConsumerCalls": 0
+    },
+    "peakHeapBytes": 7500556712,
+    "peakRssBytes": 8110092288,
+    "yields": 14806198,
+    "profileSnapshots": 339,
+    "profileSource": "last_durable_snapshot",
+    "lastSnapshot": {
+      "atMs": 1792578.3912,
+      "searchElapsedMs": 1792572.038,
+      "unobservedTailMs": 2412.0231000001077
+    },
+    "note": "A timeout is the normal profiling outcome and is never Candidate 0; no Route exact judgement is made. Runtime is never compared with B2-C2B2G (the CPU profiler changes it)."
+  },
+  "profilerWindow": {
+    "requestedSamplingIntervalUs": 10000,
+    "requestedStartElapsedMs": 120000,
+    "requestedStopElapsedMs": 720000,
+    "requestedProfileDurationMs": 600000,
+    "actualStartElapsedMs": 121131.83720000001,
+    "actualStopElapsedMs": 720477.28715,
+    "actualProfileDurationMs": 599345.44995,
+    "startDelayMs": 1131.837200000009,
+    "stopDelayMs": 477.2871499999892,
+    "stoppedBy": "window",
+    "error": null,
+    "clockAlignment": {
+      "valid": true,
+      "issues": [],
+      "offsetSpreadMs": 0.017549991607666016,
+      "maxPairPrecisionMs": 0.035799999997834675,
+      "profileDurationMs": 600210.0379999876,
+      "sumDeltasMs": 600209.878,
+      "negativeTimeDeltas": 0
+    }
+  },
+  "intervals": {
+    "valid": true,
+    "issues": [],
+    "records": 5768,
+    "intervals": 412,
+    "depthsCompleted": 412,
+    "phaseCompletions": {
+      "window_collection": 412,
+      "support_evaluation": 412,
+      "state_generation": 412,
+      "solution_materialization": 412,
+      "frontier_reduction_sort": 412,
+      "exhaustion_scan": 412
+    },
+    "openInterval": null,
+    "boundaryRecordsEmitted": 5760,
+    "boundaryWriteFailures": 0,
+    "depthRecordsCollected": 411
+  },
+  "spans": [
+    {
+      "file": "src/domain/search/bonusStream.ts",
+      "functionName": "generateReservedDepth",
+      "startLine": 808,
+      "endLine": 911,
+      "indent": 2
+    },
+    {
+      "file": "src/domain/search/bonusStream.ts",
+      "functionName": "predictReset",
+      "startLine": 462,
+      "endLine": 475,
+      "indent": 2
+    },
+    {
+      "file": "src/domain/rng/production/gogmaPrediction.ts",
+      "functionName": "predictProductionGogmaReset",
+      "startLine": 122,
+      "endLine": 135,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/gogmaPrediction.ts",
+      "functionName": "predictProductionGogmaResetSlotsFromRawValues",
+      "startLine": 90,
+      "endLine": 104,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/gameGogmaBonuses.ts",
+      "functionName": "productionGogmaResetCandidatesForWeaponAndElement",
+      "startLine": 142,
+      "endLine": 152,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/gameGogmaBonuses.ts",
+      "functionName": "buildProductionWeightedGogmaResetPool",
+      "startLine": 162,
+      "endLine": 174,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/search/bonusStream.ts",
+      "functionName": "predictKeep",
+      "startLine": 482,
+      "endLine": 500,
+      "indent": 2
+    },
+    {
+      "file": "src/domain/rng/production/gogmaPrediction.ts",
+      "functionName": "predictReferenceGogmaKeep",
+      "startLine": 147,
+      "endLine": 162,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/gogmaPrediction.ts",
+      "functionName": "requireReferenceKeepFamily",
+      "startLine": 138,
+      "endLine": 144,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/productionRngEngine.ts",
+      "functionName": "hasKeepMaster",
+      "startLine": 69,
+      "endLine": 71,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/productionRngEngine.ts",
+      "functionName": "hasUnreadableKeepFamily",
+      "startLine": 73,
+      "endLine": 75,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/gameGogmaBonuses.ts",
+      "functionName": "keepCurrentBonusFamily",
+      "startLine": 25,
+      "endLine": 30,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/gameGogmaBonuses.ts",
+      "functionName": "toReferenceKeepCurrentBonus",
+      "startLine": 40,
+      "endLine": 49,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/gameGogmaBonuses.ts",
+      "functionName": "toReferenceKeepCurrentBonuses",
+      "startLine": 51,
+      "endLine": 65,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/productionRngEngine.ts",
+      "functionName": "predictGogmaBonus",
+      "startLine": 165,
+      "endLine": 185,
+      "indent": 2
+    },
+    {
+      "file": "src/domain/rng/production/productionRngEngine.ts",
+      "functionName": "getPredictionSupport",
+      "startLine": 95,
+      "endLine": 148,
+      "indent": 2
+    },
+    {
+      "file": "src/domain/rng/production/productionRngEngine.ts",
+      "functionName": "requireSupport",
+      "startLine": 53,
+      "endLine": 55,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/productionRngEngine.ts",
+      "functionName": "normalizedBaseSeed",
+      "startLine": 48,
+      "endLine": 51,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/gogmaPrediction.ts",
+      "functionName": "referenceGogmaBlock",
+      "startLine": 53,
+      "endLine": 64,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/gogmaPrediction.ts",
+      "functionName": "predictReferenceGogmaSlots",
+      "startLine": 66,
+      "endLine": 80,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/gogmaPrediction.ts",
+      "functionName": "requireNonNegativeSafeInteger",
+      "startLine": 47,
+      "endLine": 51,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/productionRngEngine.ts",
+      "functionName": "advanceGogmaCounter",
+      "startLine": 187,
+      "endLine": 187,
+      "indent": 2
+    },
+    {
+      "file": "src/domain/rng/production/productionRngEngine.ts",
+      "functionName": "advanceOneCounter",
+      "startLine": 61,
+      "endLine": 66,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/production/productionRngEngine.ts",
+      "functionName": "validateCounter",
+      "startLine": 57,
+      "endLine": 59,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/search/bonusStream.ts",
+      "functionName": "reservedGeneratedState",
+      "startLine": 973,
+      "endLine": 996,
+      "indent": 2
+    },
+    {
+      "file": "src/domain/rng/gogmaBonusFamily.ts",
+      "functionName": "keepFamilyLayoutKey",
+      "startLine": 68,
+      "endLine": 73,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/gogmaBonusFamily.ts",
+      "functionName": "keepFamilyLayout",
+      "startLine": 61,
+      "endLine": 66,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/gogmaBonusFamily.ts",
+      "functionName": "keepFamilyOfBonus",
+      "startLine": 45,
+      "endLine": 50,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/rng/gogmaBonusFamily.ts",
+      "functionName": "keepFamilyBonusTypeId",
+      "startLine": 34,
+      "endLine": 42,
+      "indent": 0
+    },
+    {
+      "file": "src/domain/search/searchExecution.ts",
+      "functionName": "checkpoint",
+      "startLine": 99,
+      "endLine": 113,
+      "indent": 4
+    }
+  ],
+  "stateGenerationBlock": {
+    "file": "src/domain/search/bonusStream.ts",
+    "startLine": 841,
+    "endLine": 868,
+    "subBlocks": [
+      {
+        "label": "block_head",
+        "startLine": 841,
+        "endLine": 843
+      },
+      {
+        "label": "sorted_position_loop",
+        "startLine": 844,
+        "endLine": 844
+      },
+      {
+        "label": "reset_branch",
+        "startLine": 845,
+        "endLine": 845
+      },
+      {
+        "label": "reset_parent_lookup",
+        "startLine": 846,
+        "endLine": 849
+      },
+      {
+        "label": "reset_parent_guard",
+        "startLine": 850,
+        "endLine": 852
+      },
+      {
+        "label": "reset_checkpoint",
+        "startLine": 853,
+        "endLine": 853
+      },
+      {
+        "label": "reset_prediction",
+        "startLine": 854,
+        "endLine": 854
+      },
+      {
+        "label": "reset_counter_advance",
+        "startLine": 855,
+        "endLine": 855
+      },
+      {
+        "label": "reset_state_construction",
+        "startLine": 856,
+        "endLine": 857
+      },
+      {
+        "label": "frontier_scan",
+        "startLine": 858,
+        "endLine": 858
+      },
+      {
+        "label": "keep_eligibility_windows_has",
+        "startLine": 859,
+        "endLine": 859
+      },
+      {
+        "label": "keep_checkpoint",
+        "startLine": 860,
+        "endLine": 860
+      },
+      {
+        "label": "keep_prediction",
+        "startLine": 861,
+        "endLine": 861
+      },
+      {
+        "label": "keep_counter_advance",
+        "startLine": 862,
+        "endLine": 862
+      },
+      {
+        "label": "keep_state_construction",
+        "startLine": 863,
+        "endLine": 866
+      },
+      {
+        "label": "generation_end",
+        "startLine": 867,
+        "endLine": 868
+      }
+    ]
+  },
+  "cpuAttribution": {
+    "alignment": {
+      "valid": true,
+      "issues": [],
+      "offsetMs": 468489890.6772,
+      "offsetSpreadMs": 0.017549991607666016,
+      "maxPairPrecisionMs": 0.035799999997834675,
+      "startBracketMs": [
+        468615547.7714,
+        468616408.9679
+      ],
+      "stopBracketMs": [
+        469215754.4354,
+        469215765.6014
+      ],
+      "researchProfileStartMs": 125657.23979997635,
+      "researchProfileEndMs": 725867.277799964,
+      "profileStartMs": 468615547.917,
+      "profileEndMs": 469215757.955,
+      "profileDurationMs": 600210.0379999876,
+      "sumDeltasMs": 600209.878,
+      "negativeDeltas": 0
+    },
+    "intervalValidation": {
+      "valid": true,
+      "issues": [],
+      "count": 412,
+      "openIntervalInsideProfile": false
+    },
+    "allProfileSamples": 57271,
+    "windowSamples": 57271,
+    "observedIntervalUs": {
+      "median": 10505,
+      "mean": 10480.171081350072
+    },
+    "intervalsInProfile": 133,
+    "partialIntervalsInProfile": 2,
+    "intervalMsInProfile": 345294.0899999871,
+    "intervalShareOfProfile": 0.5752887624981611,
+    "intervalSamples": 32810,
+    "idleSamples": 563,
+    "activeSamples": 32247,
+    "programSamples": 8865,
+    "gcSamples": 3585,
+    "idleShareOfInterval": 0.01715940262115209,
+    "idleOrProgramShareOfInterval": 0.2873514172508382,
+    "programShareOfActive": 0.2749092938878035,
+    "gcShareOfActive": 0.11117313238440785,
+    "unattributedActiveShare": 0.28064626166775203,
+    "categories": [
+      {
+        "category": "generation_owner_or_inlined",
+        "samples": 4936,
+        "shareOfActive": 0.15306850249635626,
+        "shareOfInterval": 0.15044193843340445
+      },
+      {
+        "category": "reset_prediction",
+        "samples": 5,
+        "shareOfActive": 0.00015505318324185194,
+        "shareOfInterval": 0.00015239256324291374
+      },
+      {
+        "category": "keep_prediction",
+        "samples": 10102,
+        "shareOfActive": 0.3132694514218377,
+        "shareOfInterval": 0.3078939347759829
+      },
+      {
+        "category": "gogma_prediction_shared",
+        "samples": 0,
+        "shareOfActive": 0,
+        "shareOfInterval": 0
+      },
+      {
+        "category": "state_construction_family_layout",
+        "samples": 4440,
+        "shareOfActive": 0.13768722671876454,
+        "shareOfInterval": 0.1353245961597074
+      },
+      {
+        "category": "counter_advance",
+        "samples": 19,
+        "shareOfActive": 0.0005892020963190374,
+        "shareOfInterval": 0.0005790917403230723
+      },
+      {
+        "category": "checkpoint_cpu",
+        "samples": 110,
+        "shareOfActive": 0.003411170031320743,
+        "shareOfInterval": 0.0033526363913441025
+      },
+      {
+        "category": "gc",
+        "samples": 3585,
+        "shareOfActive": 0.11117313238440785,
+        "shareOfInterval": 0.10926546784516916
+      },
+      {
+        "category": "observer_overhead",
+        "samples": 177,
+        "shareOfActive": 0.0054888826867615596,
+        "shareOfInterval": 0.005394696738799147
+      },
+      {
+        "category": "program",
+        "samples": 8865,
+        "shareOfActive": 0.2749092938878035,
+        "shareOfInterval": 0.27019201462968606
+      },
+      {
+        "category": "idle",
+        "samples": 563,
+        "shareOfActive": null,
+        "shareOfInterval": 0.01715940262115209
+      },
+      {
+        "category": "other_state_generation",
+        "samples": 8,
+        "shareOfActive": 0.00024808509318696313,
+        "shareOfInterval": 0.000243828101188662
+      }
+    ],
+    "otherReasons": [
+      {
+        "reason": "native_or_node_internal",
+        "samples": 7,
+        "shareOfActive": 0.00021707445653859273
+      },
+      {
+        "reason": "vite_loader",
+        "samples": 1,
+        "shareOfActive": 0.00003101063664837039
+      }
+    ],
+    "ownerDetails": [
+      {
+        "detail": "self",
+        "samples": 4935,
+        "shareOfActive": 0.15303749185970789
+      },
+      {
+        "detail": "closure:848",
+        "samples": 1,
+        "shareOfActive": 0.00003101063664837039
+      }
+    ],
+    "leafKinds": [
+      {
+        "kind": "repository",
+        "samples": 19602,
+        "shareOfInterval": 0.597439804937519
+      },
+      {
+        "kind": "program",
+        "samples": 8865,
+        "shareOfInterval": 0.27019201462968606
+      },
+      {
+        "kind": "gc",
+        "samples": 3585,
+        "shareOfInterval": 0.10926546784516916
+      },
+      {
+        "kind": "idle",
+        "samples": 563,
+        "shareOfInterval": 0.01715940262115209
+      },
+      {
+        "kind": "research_harness",
+        "samples": 99,
+        "shareOfInterval": 0.003017372752209692
+      },
+      {
+        "kind": "native",
+        "samples": 64,
+        "shareOfInterval": 0.001950624809509296
+      },
+      {
+        "kind": "node_internal",
+        "samples": 21,
+        "shareOfInterval": 0.0006400487656202377
+      },
+      {
+        "kind": "vite_ssr_unmapped",
+        "samples": 11,
+        "shareOfInterval": 0.00033526363913441025
+      }
+    ],
+    "ownerOnStackActiveShare": 0.6113126802493255,
+    "topFunctions": [
+      {
+        "function": "(root)@-",
+        "samples": 32247,
+        "shareOfActive": 1
+      },
+      {
+        "function": "generateReservedDepth@src/domain/search/bonusStream.ts",
+        "samples": 19713,
+        "shareOfActive": 0.6113126802493255
+      },
+      {
+        "function": "predictKeep@src/domain/search/bonusStream.ts",
+        "samples": 10102,
+        "shareOfActive": 0.3132694514218377
+      },
+      {
+        "function": "(program)@-",
+        "samples": 8865,
+        "shareOfActive": 0.2749092938878035
+      },
+      {
+        "function": "reservedGeneratedState@src/domain/search/bonusStream.ts",
+        "samples": 4440,
+        "shareOfActive": 0.13768722671876454
+      },
+      {
+        "function": "(garbage collector)@-",
+        "samples": 3585,
+        "shareOfActive": 0.11117313238440785
+      },
+      {
+        "function": "keepFamilyLayoutKey@src/domain/rng/gogmaBonusFamily.ts",
+        "samples": 2365,
+        "shareOfActive": 0.07334015567339597
+      },
+      {
+        "function": "checkpoint@src/domain/search/searchExecution.ts",
+        "samples": 222,
+        "shareOfActive": 0.006884361335938227
+      },
+      {
+        "function": "(anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts",
+        "samples": 131,
+        "shareOfActive": 0.004062393400936521
+      },
+      {
+        "function": "now@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+        "samples": 83,
+        "shareOfActive": 0.0025738828418147425
+      },
+      {
+        "function": "(anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts",
+        "samples": 76,
+        "shareOfActive": 0.0023568083852761497
+      },
+      {
+        "function": "now@node:internal/perf/performance",
+        "samples": 55,
+        "shareOfActive": 0.0017055850156603716
+      },
+      {
+        "function": "now@-",
+        "samples": 51,
+        "shareOfActive": 0.00158154246906689
+      },
+      {
+        "function": "clock@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts",
+        "samples": 48,
+        "shareOfActive": 0.0014885105591217788
+      },
+      {
+        "function": "(anonymous)@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+        "samples": 26,
+        "shareOfActive": 0.0008062765528576302
+      },
+      {
+        "function": "advanceGogmaCounter@src/domain/rng/production/productionRngEngine.ts",
+        "samples": 19,
+        "shareOfActive": 0.0005892020963190374
+      },
+      {
+        "function": "listOnTimeout@node:internal/timers",
+        "samples": 17,
+        "shareOfActive": 0.0005271808230222966
+      },
+      {
+        "function": "processTimers@node:internal/timers",
+        "samples": 17,
+        "shareOfActive": 0.0005271808230222966
+      },
+      {
+        "function": "sample@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+        "samples": 12,
+        "shareOfActive": 0.0003721276397804447
+      },
+      {
+        "function": "(anonymous)@src/domain/rng/gogmaBonusFamily.ts",
+        "samples": 11,
+        "shareOfActive": 0.0003411170031320743
+      },
+      {
+        "function": "target._send@node:internal/child_process",
+        "samples": 7,
+        "shareOfActive": 0.00021707445653859273
+      },
+      {
+        "function": "target.send@node:internal/child_process",
+        "samples": 7,
+        "shareOfActive": 0.00021707445653859273
+      },
+      {
+        "function": "Immediate@node:internal/timers",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "function": "processImmediate@node:internal/timers",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "function": "ref@node:internal/timers",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "function": "setImmediate@node:timers",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "function": "toggleImmediateRef@-",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "function": "writeChannelMessage@node:internal/child_process/serialization",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "function": "predictReset@src/domain/search/bonusStream.ts",
+        "samples": 5,
+        "shareOfActive": 0.00015505318324185194
+      },
+      {
+        "function": "(anonymous)@node:internal/validators",
+        "samples": 4,
+        "shareOfActive": 0.00012404254659348157
+      }
+    ],
+    "topLeaves": [
+      {
+        "leaf": "predictKeep@src/domain/search/bonusStream.ts:482",
+        "category": "keep_prediction",
+        "samples": 10102,
+        "shareOfActive": 0.3132694514218377
+      },
+      {
+        "leaf": "(program)@-",
+        "category": "program",
+        "samples": 8865,
+        "shareOfActive": 0.2749092938878035
+      },
+      {
+        "leaf": "generateReservedDepth@src/domain/search/bonusStream.ts:808",
+        "category": "generation_owner_or_inlined",
+        "samples": 4935,
+        "shareOfActive": 0.15303749185970789
+      },
+      {
+        "leaf": "(garbage collector)@-",
+        "category": "gc",
+        "samples": 3585,
+        "shareOfActive": 0.11117313238440785
+      },
+      {
+        "leaf": "keepFamilyLayoutKey@src/domain/rng/gogmaBonusFamily.ts:68",
+        "category": "state_construction_family_layout",
+        "samples": 2362,
+        "shareOfActive": 0.07324712376345087
+      },
+      {
+        "leaf": "reservedGeneratedState@src/domain/search/bonusStream.ts:973",
+        "category": "state_construction_family_layout",
+        "samples": 2065,
+        "shareOfActive": 0.06403696467888485
+      },
+      {
+        "leaf": "checkpoint@src/domain/search/searchExecution.ts:99",
+        "category": "checkpoint_cpu",
+        "samples": 110,
+        "shareOfActive": 0.003411170031320743
+      },
+      {
+        "leaf": "now@-",
+        "category": "observer_overhead",
+        "samples": 51,
+        "shareOfActive": 0.00158154246906689
+      },
+      {
+        "leaf": "(anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508",
+        "category": "observer_overhead",
+        "samples": 37,
+        "shareOfActive": 0.0011473935559897044
+      },
+      {
+        "leaf": "now@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+        "category": "observer_overhead",
+        "samples": 24,
+        "shareOfActive": 0.0007442552795608894
+      },
+      {
+        "leaf": "advanceGogmaCounter@src/domain/rng/production/productionRngEngine.ts:187",
+        "category": "counter_advance",
+        "samples": 19,
+        "shareOfActive": 0.0005892020963190374
+      },
+      {
+        "leaf": "(anonymous)@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+        "category": "observer_overhead",
+        "samples": 18,
+        "shareOfActive": 0.0005581914596706671
+      },
+      {
+        "leaf": "(anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:457",
+        "category": "observer_overhead",
+        "samples": 17,
+        "shareOfActive": 0.0005271808230222966
+      },
+      {
+        "leaf": "(anonymous)@src/domain/rng/gogmaBonusFamily.ts",
+        "category": "state_construction_family_layout",
+        "samples": 11,
+        "shareOfActive": 0.0003411170031320743
+      },
+      {
+        "leaf": "processImmediate@node:internal/timers",
+        "category": "other_state_generation",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "leaf": "toggleImmediateRef@-",
+        "category": "observer_overhead",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "leaf": "predictReset@src/domain/search/bonusStream.ts:462",
+        "category": "reset_prediction",
+        "samples": 5,
+        "shareOfActive": 0.00015505318324185194
+      },
+      {
+        "leaf": "(anonymous)@node:internal/validators",
+        "category": "observer_overhead",
+        "samples": 4,
+        "shareOfActive": 0.00012404254659348157
+      },
+      {
+        "leaf": "get@node:internal/util",
+        "category": "observer_overhead",
+        "samples": 4,
+        "shareOfActive": 0.00012404254659348157
+      },
+      {
+        "leaf": "writeUtf8String@-",
+        "category": "observer_overhead",
+        "samples": 4,
+        "shareOfActive": 0.00012404254659348157
+      },
+      {
+        "leaf": "keepFamilyLayout@src/domain/rng/gogmaBonusFamily.ts:61",
+        "category": "state_construction_family_layout",
+        "samples": 3,
+        "shareOfActive": 0.00009303190994511117
+      },
+      {
+        "leaf": "memoryUsage@-",
+        "category": "observer_overhead",
+        "samples": 2,
+        "shareOfActive": 0.00006202127329674078
+      },
+      {
+        "leaf": "sample@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+        "category": "observer_overhead",
+        "samples": 2,
+        "shareOfActive": 0.00006202127329674078
+      },
+      {
+        "leaf": "structuredClone@node:internal/worker/js_transferable",
+        "category": "observer_overhead",
+        "samples": 2,
+        "shareOfActive": 0.00006202127329674078
+      },
+      {
+        "leaf": "writeChannelMessage@node:internal/child_process/serialization",
+        "category": "observer_overhead",
+        "samples": 2,
+        "shareOfActive": 0.00006202127329674078
+      },
+      {
+        "leaf": "(anonymous)@src/domain/search/bonusStream.ts:848",
+        "category": "generation_owner_or_inlined",
+        "samples": 1,
+        "shareOfActive": 0.00003101063664837039
+      },
+      {
+        "leaf": "dispatch@-",
+        "category": "observer_overhead",
+        "samples": 1,
+        "shareOfActive": 0.00003101063664837039
+      },
+      {
+        "leaf": "popAsyncContext@node:internal/async_hooks",
+        "category": "other_state_generation",
+        "samples": 1,
+        "shareOfActive": 0.00003101063664837039
+      },
+      {
+        "leaf": "post@node:inspector",
+        "category": "observer_overhead",
+        "samples": 1,
+        "shareOfActive": 0.00003101063664837039
+      },
+      {
+        "leaf": "sample@src/benchmarks/plannerGlobalPhase2C26A.ts:88",
+        "category": "observer_overhead",
+        "samples": 1,
+        "shareOfActive": 0.00003101063664837039
+      }
+    ],
+    "topStacks": [
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > predictKeep@src/domain/search/bonusStream.ts:482",
+        "category": "keep_prediction",
+        "samples": 10102,
+        "shareOfActive": 0.3132694514218377
+      },
+      {
+        "stack": "(root)@- > (program)@-",
+        "category": "program",
+        "samples": 8865,
+        "shareOfActive": 0.2749092938878035
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808",
+        "category": "generation_owner_or_inlined",
+        "samples": 4935,
+        "shareOfActive": 0.15303749185970789
+      },
+      {
+        "stack": "(root)@- > (garbage collector)@-",
+        "category": "gc",
+        "samples": 3585,
+        "shareOfActive": 0.11117313238440785
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > reservedGeneratedState@src/domain/search/bonusStream.ts:973 > keepFamilyLayoutKey@src/domain/rng/gogmaBonusFamily.ts:68",
+        "category": "state_construction_family_layout",
+        "samples": 2362,
+        "shareOfActive": 0.07324712376345087
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > reservedGeneratedState@src/domain/search/bonusStream.ts:973",
+        "category": "state_construction_family_layout",
+        "samples": 2064,
+        "shareOfActive": 0.06400595404223648
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > checkpoint@src/domain/search/searchExecution.ts:99",
+        "category": "checkpoint_cpu",
+        "samples": 105,
+        "shareOfActive": 0.0032561168480788913
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > checkpoint@src/domain/search/searchExecution.ts:99 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508",
+        "category": "observer_overhead",
+        "samples": 24,
+        "shareOfActive": 0.0007442552795608894
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > checkpoint@src/domain/search/searchExecution.ts:99 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508 > clock@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:389 > now@scripts/run-planner-global-phase2c26b2c2b2h.mjs > now@node:internal/perf/performance > now@-",
+        "category": "observer_overhead",
+        "samples": 19,
+        "shareOfActive": 0.0005892020963190374
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > checkpoint@src/domain/search/searchExecution.ts:99 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508 > clock@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:389 > now@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+        "category": "observer_overhead",
+        "samples": 17,
+        "shareOfActive": 0.0005271808230222966
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > advanceGogmaCounter@src/domain/rng/production/productionRngEngine.ts:187",
+        "category": "counter_advance",
+        "samples": 14,
+        "shareOfActive": 0.00043414891307718545
+      },
+      {
+        "stack": "(root)@- > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508",
+        "category": "observer_overhead",
+        "samples": 13,
+        "shareOfActive": 0.0004031382764288151
+      },
+      {
+        "stack": "(root)@- > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:457 > now@scripts/run-planner-global-phase2c26b2c2b2h.mjs > now@node:internal/perf/performance > now@-",
+        "category": "observer_overhead",
+        "samples": 13,
+        "shareOfActive": 0.0004031382764288151
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > checkpoint@src/domain/search/searchExecution.ts:99 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:457 > now@scripts/run-planner-global-phase2c26b2c2b2h.mjs > now@node:internal/perf/performance > now@-",
+        "category": "observer_overhead",
+        "samples": 13,
+        "shareOfActive": 0.0004031382764288151
+      },
+      {
+        "stack": "(root)@- > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:457",
+        "category": "observer_overhead",
+        "samples": 12,
+        "shareOfActive": 0.0003721276397804447
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > checkpoint@src/domain/search/searchExecution.ts:99 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:457 > (anonymous)@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+        "category": "observer_overhead",
+        "samples": 10,
+        "shareOfActive": 0.0003101063664837039
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > reservedGeneratedState@src/domain/search/bonusStream.ts:973 > (anonymous)@src/domain/rng/gogmaBonusFamily.ts",
+        "category": "state_construction_family_layout",
+        "samples": 10,
+        "shareOfActive": 0.0003101063664837039
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > checkpoint@src/domain/search/searchExecution.ts:99 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:457 > (anonymous)@scripts/run-planner-global-phase2c26b2c2b2h.mjs > (anonymous)@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+        "category": "observer_overhead",
+        "samples": 8,
+        "shareOfActive": 0.00024808509318696313
+      },
+      {
+        "stack": "(anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:457 > (anonymous)@scripts/run-planner-global-phase2c26b2c2b2h.mjs > (anonymous)@scripts/run-planner-global-phase2c26b2c2b2h.mjs > setImmediate@node:timers > Immediate@node:internal/timers > ref@node:internal/timers > toggleImmediateRef@-",
+        "category": "observer_overhead",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "stack": "(root)@- > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508 > clock@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:389 > now@scripts/run-planner-global-phase2c26b2c2b2h.mjs > now@node:internal/perf/performance > now@-",
+        "category": "observer_overhead",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "stack": "(root)@- > processImmediate@node:internal/timers",
+        "category": "other_state_generation",
+        "samples": 6,
+        "shareOfActive": 0.00018606381989022235
+      },
+      {
+        "stack": "(root)@- > advanceGogmaCounter@src/domain/rng/production/productionRngEngine.ts:187",
+        "category": "counter_advance",
+        "samples": 5,
+        "shareOfActive": 0.00015505318324185194
+      },
+      {
+        "stack": "(root)@- > checkpoint@src/domain/search/searchExecution.ts:99",
+        "category": "checkpoint_cpu",
+        "samples": 5,
+        "shareOfActive": 0.00015505318324185194
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > checkpoint@src/domain/search/searchExecution.ts:99 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508 > (anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2G.ts:457",
+        "category": "observer_overhead",
+        "samples": 5,
+        "shareOfActive": 0.00015505318324185194
+      },
+      {
+        "stack": "(root)@- > generateReservedDepth@src/domain/search/bonusStream.ts:808 > predictReset@src/domain/search/bonusStream.ts:462",
+        "category": "reset_prediction",
+        "samples": 5,
+        "shareOfActive": 0.00015505318324185194
+      }
+    ],
+    "registeredInclusive": [
+      {
+        "registered": "src/domain/search/bonusStream.ts#generateReservedDepth",
+        "role": "owner",
+        "samples": 19713,
+        "shareOfActive": 0.6113126802493255
+      },
+      {
+        "registered": "src/domain/search/bonusStream.ts#predictKeep",
+        "role": "keep_prediction",
+        "samples": 10102,
+        "shareOfActive": 0.3132694514218377
+      },
+      {
+        "registered": "src/domain/search/bonusStream.ts#reservedGeneratedState",
+        "role": "state_construction",
+        "samples": 4440,
+        "shareOfActive": 0.13768722671876454
+      },
+      {
+        "registered": "src/domain/rng/gogmaBonusFamily.ts#keepFamilyLayoutKey",
+        "role": "state_construction",
+        "samples": 2365,
+        "shareOfActive": 0.07334015567339597
+      },
+      {
+        "registered": "src/domain/search/searchExecution.ts#checkpoint",
+        "role": "checkpoint",
+        "samples": 222,
+        "shareOfActive": 0.006884361335938227
+      },
+      {
+        "registered": "src/domain/rng/production/productionRngEngine.ts#advanceGogmaCounter",
+        "role": "counter_advance",
+        "samples": 19,
+        "shareOfActive": 0.0005892020963190374
+      },
+      {
+        "registered": "src/domain/search/bonusStream.ts#predictReset",
+        "role": "reset_prediction",
+        "samples": 5,
+        "shareOfActive": 0.00015505318324185194
+      },
+      {
+        "registered": "src/domain/rng/gogmaBonusFamily.ts#keepFamilyLayout",
+        "role": "state_construction",
+        "samples": 3,
+        "shareOfActive": 0.00009303190994511117
+      }
+    ],
+    "boundaryNearSamples": 191,
+    "stateGenerationOnlySamples": {
+      "inside": 4440,
+      "outside": 0
+    },
+    "registeredLineMismatches": [],
+    "sourceMapResolution": {
+      "repositoryNodes": 141,
+      "mappedNodes": 129,
+      "unmappedNodes": 12,
+      "registeredNamedNodes": 11,
+      "registeredAnonymousNodes": 5
+    },
+    "lineTicks": [
+      {
+        "registered": "src/domain/search/bonusStream.ts#generateReservedDepth",
+        "totalSelfTicks": 12600,
+        "unmappedTicks": 0,
+        "inSpan": [
+          {
+            "line": 808,
+            "text": "async function generateReservedDepth(",
+            "ticks": 559,
+            "subBlock": null
+          },
+          {
+            "line": 814,
+            "text": "if (set.done) return []",
+            "ticks": 8,
+            "subBlock": null
+          },
+          {
+            "line": 819,
+            "text": "const window = await reservedWindow(set, base, state)",
+            "ticks": 1,
+            "subBlock": null
+          },
+          {
+            "line": 820,
+            "text": "windows.push(new Set(window.positions))",
+            "ticks": 147,
+            "subBlock": null
+          },
+          {
+            "line": 821,
+            "text": "window.positions.forEach((position) => positions.add(position))",
+            "ticks": 26,
+            "subBlock": null
+          },
+          {
+            "line": 844,
+            "text": "for (const position of [...positions].sort((left, right) => left - right)) {",
+            "ticks": 3,
+            "subBlock": "sorted_position_loop"
+          },
+          {
+            "line": 846,
+            "text": "const parent = depth === 1",
+            "ticks": 4,
+            "subBlock": "reset_parent_lookup"
+          },
+          {
+            "line": 851,
+            "text": "throw new Error(`Held-aware Bonus stream has no Reset chain reaching Gogma ${position} at depth ${depth}.`)",
+            "ticks": 16,
+            "subBlock": "reset_parent_guard"
+          },
+          {
+            "line": 858,
+            "text": "for (const [index, state] of set.frontier.entries()) {",
+            "ticks": 559,
+            "subBlock": "frontier_scan"
+          },
+          {
+            "line": 859,
+            "text": "if (!keepSupported[index] || !windows[index].has(position) || state.bonuses === null || state.familyLayoutKey === null) continue",
+            "ticks": 1677,
+            "subBlock": "keep_eligibility_windows_has"
+          },
+          {
+            "line": 860,
+            "text": "await execution.checkpoint()",
+            "ticks": 472,
+            "subBlock": "keep_checkpoint"
+          },
+          {
+            "line": 861,
+            "text": "const bonuses = predictKeep(position, state.familyLayoutKey, state.bonuses)",
+            "ticks": 149,
+            "subBlock": "keep_prediction"
+          },
+          {
+            "line": 862,
+            "text": "const gogmaCounterAfter = engine.advanceGogmaCounter(position, { type: 'keep_bonuses' })",
+            "ticks": 92,
+            "subBlock": "keep_counter_advance"
+          },
+          {
+            "line": 863,
+            "text": "generated.push(reservedGeneratedState(depth, state.lastResetDepth, bonuses, state.results, position, gogmaCounterAfter))",
+            "ticks": 693,
+            "subBlock": "keep_state_construction"
+          },
+          {
+            "line": 876,
+            "text": "const solutions: ReservedBonusStreamSolution[] = generated.map((state) => ({",
+            "ticks": 526,
+            "subBlock": null
+          },
+          {
+            "line": 889,
+            "text": "for (const state of generated) {",
+            "ticks": 113,
+            "subBlock": null
+          },
+          {
+            "line": 890,
+            "text": "const key = `${state.position}\\u0000${state.familyLayoutKey}`",
+            "ticks": 601,
+            "subBlock": null
+          },
+          {
+            "line": 891,
+            "text": "const current = byKey.get(key)",
+            "ticks": 5763,
+            "subBlock": null
+          },
+          {
+            "line": 892,
+            "text": "if (!current || compareReservedRepresentative(state, current) < 0) byKey.set(key, state)",
+            "ticks": 160,
+            "subBlock": null
+          },
+          {
+            "line": 894,
+            "text": "set.frontier = [...byKey.values()].sort(compareReservedFrontier)",
+            "ticks": 41,
+            "subBlock": null
+          },
+          {
+            "line": 910,
+            "text": "return solutions",
+            "ticks": 931,
+            "subBlock": null
+          }
+        ],
+        "outsideSpan": [
+          {
+            "into": "unregistered",
+            "ticks": 59
+          }
+        ]
+      },
+      {
+        "registered": "src/domain/search/bonusStream.ts#predictReset",
+        "totalSelfTicks": 5,
+        "unmappedTicks": 0,
+        "inSpan": [
+          {
+            "line": 462,
+            "text": "function predictReset(gogmaCounter: number): RestorationBonusSet {",
+            "ticks": 5,
+            "subBlock": null
+          }
+        ],
+        "outsideSpan": []
+      },
+      {
+        "registered": "src/domain/search/bonusStream.ts#predictKeep",
+        "totalSelfTicks": 10102,
+        "unmappedTicks": 0,
+        "inSpan": [
+          {
+            "line": 482,
+            "text": "function predictKeep(",
+            "ticks": 8,
+            "subBlock": null
+          },
+          {
+            "line": 487,
+            "text": "const key = `${gogmaCounter}\\u0000${familyLayoutKey}`",
+            "ticks": 2411,
+            "subBlock": null
+          },
+          {
+            "line": 488,
+            "text": "const cached = keepPredictions.get(key)",
+            "ticks": 7609,
+            "subBlock": null
+          },
+          {
+            "line": 489,
+            "text": "if (cached) return cached",
+            "ticks": 74,
+            "subBlock": null
+          }
+        ],
+        "outsideSpan": []
+      },
+      {
+        "registered": "src/domain/rng/production/productionRngEngine.ts#advanceGogmaCounter",
+        "totalSelfTicks": 19,
+        "unmappedTicks": 0,
+        "inSpan": [
+          {
+            "line": 187,
+            "text": "advanceGogmaCounter(current: number, operation: GogmaOperation): number { void operation; return advanceOneCounter(current, 'Gogma counter') }",
+            "ticks": 9,
+            "subBlock": null
+          }
+        ],
+        "outsideSpan": [
+          {
+            "into": "src/domain/rng/production/productionRngEngine.ts#advanceOneCounter",
+            "ticks": 5
+          },
+          {
+            "into": "src/domain/rng/production/productionRngEngine.ts#validateCounter",
+            "ticks": 5
+          }
+        ]
+      },
+      {
+        "registered": "src/domain/search/bonusStream.ts#reservedGeneratedState",
+        "totalSelfTicks": 2065,
+        "unmappedTicks": 295,
+        "inSpan": [
+          {
+            "line": 973,
+            "text": "function reservedGeneratedState(",
+            "ticks": 5,
+            "subBlock": null
+          },
+          {
+            "line": 981,
+            "text": "return {",
+            "ticks": 47,
+            "subBlock": null
+          },
+          {
+            "line": 982,
+            "text": "depth,",
+            "ticks": 1,
+            "subBlock": null
+          },
+          {
+            "line": 983,
+            "text": "lastResetDepth,",
+            "ticks": 4,
+            "subBlock": null
+          },
+          {
+            "line": 984,
+            "text": "bonuses,",
+            "ticks": 4,
+            "subBlock": null
+          },
+          {
+            "line": 986,
+            "text": "familyLayoutKey: keepFamilyLayoutKey(bonuses, input.master),",
+            "ticks": 209,
+            "subBlock": null
+          },
+          {
+            "line": 987,
+            "text": "results: {",
+            "ticks": 26,
+            "subBlock": null
+          },
+          {
+            "line": 988,
+            "text": "depth,",
+            "ticks": 3,
+            "subBlock": null
+          },
+          {
+            "line": 989,
+            "text": "result: { restorationBonuses: bonuses, restorationBonusScope: 'gogma_artian' },",
+            "ticks": 20,
+            "subBlock": null
+          },
+          {
+            "line": 990,
+            "text": "previous,",
+            "ticks": 6,
+            "subBlock": null
+          },
+          {
+            "line": 991,
+            "text": "step: { gogmaCounterBefore: position, gogmaCounterAfter },",
+            "ticks": 19,
+            "subBlock": null
+          },
+          {
+            "line": 993,
+            "text": "position,",
+            "ticks": 1,
+            "subBlock": null
+          },
+          {
+            "line": 995,
+            "text": "}",
+            "ticks": 288,
+            "subBlock": null
+          }
+        ],
+        "outsideSpan": [
+          {
+            "into": "unregistered",
+            "ticks": 1137
+          }
+        ]
+      },
+      {
+        "registered": "src/domain/rng/gogmaBonusFamily.ts#keepFamilyLayoutKey",
+        "totalSelfTicks": 2362,
+        "unmappedTicks": 0,
+        "inSpan": [
+          {
+            "line": 68,
+            "text": "export function keepFamilyLayoutKey(",
+            "ticks": 1,
+            "subBlock": null
+          },
+          {
+            "line": 72,
+            "text": "return keepFamilyLayout(bonuses, master).join('\\u0000')",
+            "ticks": 2361,
+            "subBlock": null
+          }
+        ],
+        "outsideSpan": []
+      },
+      {
+        "registered": "src/domain/rng/gogmaBonusFamily.ts#keepFamilyLayout",
+        "totalSelfTicks": 3,
+        "unmappedTicks": 0,
+        "inSpan": [
+          {
+            "line": 65,
+            "text": "return bonuses.map((bonus) => keepFamilyOfBonus(bonus, master))",
+            "ticks": 3,
+            "subBlock": null
+          }
+        ],
+        "outsideSpan": []
+      },
+      {
+        "registered": "src/domain/search/searchExecution.ts#checkpoint",
+        "totalSelfTicks": 110,
+        "unmappedTicks": 0,
+        "inSpan": [
+          {
+            "line": 99,
+            "text": "checkpoint: async () => {",
+            "ticks": 34,
+            "subBlock": null
+          },
+          {
+            "line": 103,
+            "text": "checkpointCount += 1",
+            "ticks": 6,
+            "subBlock": null
+          },
+          {
+            "line": 104,
+            "text": "if (checkpointCount % 50 === 0) {",
+            "ticks": 4,
+            "subBlock": null
+          },
+          {
+            "line": 105,
+            "text": "await yieldControl()",
+            "ticks": 21,
+            "subBlock": null
+          },
+          {
+            "line": 106,
+            "text": "if (shouldCancel()) {",
+            "ticks": 1,
+            "subBlock": null
+          },
+          {
+            "line": 107,
+            "text": "throw new CandidateSearchError(",
+            "ticks": 44,
+            "subBlock": null
+          }
+        ],
+        "outsideSpan": []
+      }
+    ],
+    "ownerSubBlockTicks": [
+      {
+        "subBlock": "keep_eligibility_windows_has",
+        "ticks": 1677
+      },
+      {
+        "subBlock": "keep_state_construction",
+        "ticks": 693
+      },
+      {
+        "subBlock": "frontier_scan",
+        "ticks": 559
+      },
+      {
+        "subBlock": "keep_checkpoint",
+        "ticks": 472
+      },
+      {
+        "subBlock": "keep_prediction",
+        "ticks": 149
+      },
+      {
+        "subBlock": "keep_counter_advance",
+        "ticks": 92
+      },
+      {
+        "subBlock": "reset_parent_guard",
+        "ticks": 16
+      },
+      {
+        "subBlock": "reset_parent_lookup",
+        "ticks": 4
+      },
+      {
+        "subBlock": "sorted_position_loop",
+        "ticks": 3
+      }
+    ],
+    "workInWindow": {
+      "intervals": 133,
+      "partialIntervals": 2,
+      "generatedStates": 262478726
+    }
+  },
+  "yieldWait": {
+    "wholeRun": {
+      "stateGenerationWallMs": 971542.5068999992,
+      "yieldCount": 14796663,
+      "yieldWaitMs": 154367.0962000667,
+      "stateGenerationYieldWaitShare": 0.15888866941357171
+    },
+    "profileWindow": {
+      "fromAtMs": 120276.81120000001,
+      "toAtMs": 722410.3940000001,
+      "stateGenerationWallMs": 347216.72489999933,
+      "yieldCount": 5239727,
+      "yieldWaitMs": 43932.68599996656,
+      "stateGenerationYieldWaitShare": 0.12652813890983927
+    }
+  },
+  "b2c2b2gStyleProfile": {
+    "reconciliation": {
+      "observedAtMs": {
+        "outer": 1792578.3912,
+        "inner": 1792578.3912
+      },
+      "searchWallMs": 1792571.9642999999,
+      "bonusDepthReadMs": 1516870.0759000017,
+      "bonusDepthReadShareOfSearchWall": 0.8461975898927663,
+      "innerSectionsMs": 1516596.085799999,
+      "innerInclusiveMs": 1516849.276299999,
+      "innerCoverageOfBonusDepthRead": 0.9998193714119912,
+      "innerShareOfSearchWall": 0.8460447424169274,
+      "remainderMs": 273.9901000026148,
+      "remainderShareOfBonusDepthRead": 0.0001806285880087975,
+      "remainderSplitMs": {
+        "inDepthOutsideSections": 253.19050000002608,
+        "outsideDepthBoundaries": 20.799600002588704
+      },
+      "sections": [
+        {
+          "section": "window_collection",
+          "totalMs": 19068.117100000996,
+          "shareOfBonusDepthRead": 0.012570698969512828,
+          "shareOfSearchWall": 0.010637295171269235,
+          "count": 412
+        },
+        {
+          "section": "support_evaluation",
+          "totalMs": 36610.14479999943,
+          "shareOfBonusDepthRead": 0.024135320078931346,
+          "shareOfSearchWall": 0.020423249682082194,
+          "count": 412
+        },
+        {
+          "section": "state_generation",
+          "totalMs": 971542.5068999992,
+          "shareOfBonusDepthRead": 0.640491576922668,
+          "shareOfSearchWall": 0.5419824287385789,
+          "count": 411
+        },
+        {
+          "section": "solution_materialization",
+          "totalMs": 265629.19419999764,
+          "shareOfBonusDepthRead": 0.17511664210423056,
+          "shareOfSearchWall": 0.14818328049871402,
+          "count": 411
+        },
+        {
+          "section": "frontier_reduction_sort",
+          "totalMs": 222195.3689000026,
+          "shareOfBonusDepthRead": 0.14648279534960687,
+          "shareOfSearchWall": 0.12395338838559264,
+          "count": 411
+        },
+        {
+          "section": "exhaustion_scan",
+          "totalMs": 1550.753899999184,
+          "shareOfBonusDepthRead": 0.0010223379870415586,
+          "shareOfSearchWall": 0.0008650999406903889,
+          "count": 411
+        }
+      ],
+      "ranked": [
+        "state_generation",
+        "solution_materialization",
+        "frontier_reduction_sort",
+        "support_evaluation",
+        "window_collection",
+        "exhaustion_scan"
+      ],
+      "dominantSection": "state_generation",
+      "dominantShareOfBonusDepthRead": 0.640491576922668,
+      "secondLargestSection": "solution_materialization",
+      "secondLargestShareOfBonusDepthRead": 0.17511664210423056,
+      "issues": []
+    },
+    "inner": {
+      "atMs": 1792578.3912,
+      "sectionMs": {
+        "window_collection": 19068.117100000996,
+        "support_evaluation": 36610.14479999943,
+        "state_generation": 971542.5068999992,
+        "solution_materialization": 265629.19419999764,
+        "frontier_reduction_sort": 222195.3689000026,
+        "exhaustion_scan": 1550.753899999184
+      },
+      "completedSectionMs": {
+        "window_collection": 19068.117100000996,
+        "support_evaluation": 36610.14479999943,
+        "state_generation": 969911.3156999992,
+        "solution_materialization": 265629.19419999764,
+        "frontier_reduction_sort": 222195.3689000026,
+        "exhaustion_scan": 1550.753899999184
+      },
+      "sectionCounts": {
+        "window_collection": 412,
+        "support_evaluation": 412,
+        "state_generation": 411,
+        "solution_materialization": 411,
+        "frontier_reduction_sort": 411,
+        "exhaustion_scan": 411
+      },
+      "inclusiveMs": 1516849.276299999,
+      "completedDepths": 411,
+      "maxDepthReached": 71,
+      "streams": 6,
+      "activePhase": {
+        "streamIndex": 1,
+        "depth": 71,
+        "phase": "state_generation",
+        "elapsedMs": 1631.1912000000011
+      },
+      "activeDepth": {
+        "streamIndex": 1,
+        "depth": 71,
+        "elapsedMs": 1756.0212999999058,
+        "phaseMs": {
+          "window_collection": 37.78890000004321,
+          "support_evaluation": 86.88540000002831
+        }
+      },
+      "contractViolations": 0,
+      "contractViolationSamples": [],
+      "outsideReadViolations": 0,
+      "outsideReadViolationSamples": []
+    },
+    "innerCounts": {
+      "completedDepths": 411,
+      "exhaustedDepths": 0,
+      "frontierStatesBeforeSum": 9654680,
+      "frontierStatesBeforeMax": 24990,
+      "legalPositionCountSum": 82705,
+      "legalPositionCountMax": 235,
+      "generatedStatesSum": 738616871,
+      "generatedStatesMax": 2011282,
+      "frontierStatesAfterSum": 9790583,
+      "frontierStatesAfterMax": 24990,
+      "windowMemoEntriesMax": 236
+    },
+    "yields": {
+      "count": 14799986,
+      "totalMs": 156235.95790012612,
+      "bySection": {
+        "bonus_depth_read": {
+          "count": 14799963,
+          "totalMs": 156201.23880012648
+        },
+        "scheduler_checkpoint": {
+          "count": 23,
+          "totalMs": 34.719099999638274
+        }
+      }
+    },
+    "yieldsByInnerSection": {
+      "window_collection": {
+        "count": 28,
+        "totalMs": 6.620099999995546
+      },
+      "state_generation": {
+        "count": 14796663,
+        "totalMs": 154367.0962000667
+      },
+      "exhaustion_scan": {
+        "count": 3272,
+        "totalMs": 5.029400000060377
+      }
+    },
+    "outerSanity": {
+      "checks": {
+        "bonusIsLargestCategory": true,
+        "bonusDepthReadObserved": true,
+        "beforeFirstDelivery": true,
+        "outerContractViolationsZero": true,
+        "outerPartitionMatches": true
+      },
+      "largestCategory": "BONUS",
+      "categoryShares": {
+        "BONUS": 0.9999640750824613,
+        "SKILL": 0.000008872056640688051,
+        "COMPOSITION": 0,
+        "SCHEDULER_OVERHEAD": 0.000024871916378790852,
+        "DELIVERY": 0,
+        "REGISTRATION_SETUP": 0.0000011155479611560177,
+        "UNACCOUNTED": 0.000001065396558123789
+      }
+    },
+    "note": "B2-C2B2G's section timings of this run, recorded for context only: the CPU profiler changes the runtime, so nothing here is compared with B2-C2B2G."
+  },
+  "categoryRules": [
+    {
+      "priority": 1,
+      "category": "gc",
+      "rule": "the stack contains the V8 \"(garbage collector)\" frame"
+    },
+    {
+      "priority": 2,
+      "category": "idle",
+      "rule": "the leaf is the V8 \"(idle)\" frame (excluded from the active denominator)"
+    },
+    {
+      "priority": 3,
+      "category": "program",
+      "rule": "the leaf is \"(program)\" or \"(root)\": V8 / native work without a JavaScript stack, never re-classified as Repository CPU"
+    },
+    {
+      "priority": 4,
+      "category": "observer_overhead",
+      "rule": "a Research harness frame (src/benchmarks/, scripts/) is deeper than every Repository frame (the two observers, B2-C2B2G's profiler, the section stream write, the yield wrapper and the runner timers / snapshots / memory sampling)"
+    },
+    {
+      "priority": 5,
+      "category": "checkpoint_cpu",
+      "rule": "a SearchExecutionContext.checkpoint frame (searchExecution.ts): its cancellation check and counter; the setImmediate wait it awaits is not CPU and is measured as yield wall time"
+    },
+    {
+      "priority": 6,
+      "category": "reset_prediction",
+      "rule": "a Reset-only prediction frame: predictReset (bonusStream.ts), predictProductionGogmaReset / predictProductionGogmaResetSlotsFromRawValues (gogmaPrediction.ts), productionGogmaResetCandidatesForWeaponAndElement / buildProductionWeightedGogmaResetPool (gameGogmaBonuses.ts), and whatever they call"
+    },
+    {
+      "priority": 7,
+      "category": "keep_prediction",
+      "rule": "a Keep-only prediction frame: predictKeep (bonusStream.ts, its memo key and lookup included), predictReferenceGogmaKeep / requireReferenceKeepFamily, hasKeepMaster / hasUnreadableKeepFamily, keepCurrentBonusFamily / toReferenceKeepCurrentBonus(es), and whatever they call"
+    },
+    {
+      "priority": 8,
+      "category": "gogma_prediction_shared",
+      "rule": "a prediction frame both operations reach (predictGogmaBonus, getPredictionSupport, requireSupport, normalizedBaseSeed, referenceGogmaBlock, predictReferenceGogmaSlots, requireNonNegativeSafeInteger) or any other src/domain/rng/production/ frame, without a Reset-only / Keep-only frame (the operation is not separable then)"
+    },
+    {
+      "priority": 9,
+      "category": "counter_advance",
+      "rule": "an advanceGogmaCounter / advanceOneCounter / validateCounter frame (productionRngEngine.ts)"
+    },
+    {
+      "priority": 10,
+      "category": "state_construction_family_layout",
+      "rule": "a reservedGeneratedState (bonusStream.ts) or keepFamilyLayoutKey / keepFamilyLayout / keepFamilyOfBonus / keepFamilyBonusTypeId (gogmaBonusFamily.ts, their map / find callbacks included) frame"
+    },
+    {
+      "priority": 11,
+      "category": "generation_owner_or_inlined",
+      "rule": "the leaf is generateReservedDepth (by name, or an anonymous closure in its span: the Reset parent find predicate, the position sort comparator), or a native leaf whose nearest non-native ancestor is it: the sorted position loop, the Reset parent lookup, the position x frontier Keep scan, windows[index].has, array iteration / push and anything JIT-inlined into it. Never \"Set.has cost\" or \"find cost\" on its own"
+    },
+    {
+      "priority": 12,
+      "category": "other_state_generation",
+      "rule": "anything else inside a state_generation interval (a native / Node internal leaf outside the owner such as the event loop turn of a yield, a Vite SSR loader frame, an unregistered Repository frame, a dependency)"
+    }
+  ],
+  "decisionRule": {
+    "population": "CPU samples whose Research time lies inside a state_generation interval rebuilt from the durable section stream ([phase_started, phase_completed) of this run itself)",
+    "denominator": "active CPU samples = state_generation interval samples - explicit \"(idle)\" samples; \"(program)\", GC, observer overhead and other stay in the denominator and are reported on their own. The all-interval-sample shares are reported beside them",
+    "invalid": "B2C2B2H_INVALID: an authority / population / Search input identity / excluded Route / hash chain / provenance / registered condition issue, or a semantic parity failure of the held-aware depth records against B2-C2B2G's formal run",
+    "insufficient": "B2C2B2H_INSUFFICIENT: an unusable capture (no profile / script table / required source map, a profiler error, a window not stopped by the registered stop or by the Search end), an invalid clock alignment, any negative timeDelta, an invalid interval reconstruction (gap, unknown record, reversed time, missing boundary, overlap, an open interval inside the profile), a profile shorter than 300000 ms, fewer than 1000 state_generation interval samples, a span derivation failure, a named registered frame not resolving to its declaration line, a Search / inner tracker contract violation or section stream write failure, or an unattributed active share >= 0.5",
+    "dominant": "B2C2B2H_<CATEGORY>_DOMINANT: one hotspot category (generation_owner_or_inlined, reset_prediction, keep_prediction, gogma_prediction_shared, state_construction_family_layout, counter_advance, checkpoint_cpu, gc) has an active share >= 0.5",
+    "mixed": "B2C2B2H_MIXED: valid, no hotspot category >= 0.5; the next phase takes the (at most 2) largest hotspot categories >= 0.2",
+    "secondary": "every other hotspot category with an active share >= 0.2 is reported as secondary",
+    "lineTicks": "descriptive only (whole profile, self ticks of the registered functions, source-mapped); never a decision input, never a claim about an inlined callee from a caller line",
+    "yieldWait": "the Research yield wait inside state_generation is wall time (B2-C2B2G's wrapper), reported beside the CPU shares and never counted as checkpoint CPU",
+    "runtime": "nothing is compared numerically with B2-C2B2G (wall, depth / s, generated states / s, yields / s, heap): the CPU profiler changes the runtime; only the sample shares of this run are evidence"
+  },
+  "invalidReasons": [],
+  "insufficientReasons": [],
+  "decision": {
+    "scope": "A profiling decision about where the CPU of the held-aware state_generation section goes for this one oracle-guided Search input on the current main (active CPU sample shares). It is never an optimization decision, never a Route exact judgement and never Production evidence.",
+    "case": "B2C2B2H_MIXED",
+    "reasons": [],
+    "dominant": null,
+    "dominantShareOfActive": null,
+    "secondary": [
+      {
+        "category": "keep_prediction",
+        "shareOfActive": 0.3132694514218377
+      }
+    ],
+    "nextPhaseCategories": [
+      "keep_prediction"
+    ],
+    "nextPhase": ">= 20 %のhotspot categoryを最大2つ選び、次Phaseでそれぞれ絞る"
+  }
+}
