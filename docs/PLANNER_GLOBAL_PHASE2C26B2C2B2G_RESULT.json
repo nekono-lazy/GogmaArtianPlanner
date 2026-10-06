@@ -1,0 +1,1382 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-B2-C2B2G (post-hoc analysis): B2-C2B2F BONUS-dominant Target, B2-C2B2F Search input, 30-minute bonus_depth_read inner runtime re-localization",
+  "analyzedAt": "2026-10-05T14:56:37.570Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2G_RAW.json.local",
+      "bytes": 14916,
+      "sha256": "2f0af48140f5953905810e2cbca8cf26b7401f2a0635e0befc06b28b3bc47928"
+    },
+    "startAttestation": {
+      "file": "start-attestation.json",
+      "bytes": 5050,
+      "sha256": "9eb3f24c3e92870c88d199e781b6b2d3d4e79c0b21271dadfd6a52b93314546c"
+    },
+    "processes": {
+      "file": "processes.jsonl",
+      "bytes": 1290,
+      "sha256": "6b493e00d9494b4dd886f40749391ebc76572326514a307f9bd00e69ed3df960"
+    },
+    "profile": {
+      "file": "stage1-t02-r11.profile.jsonl",
+      "bytes": 3815811,
+      "sha256": "3c0aa7d9c7836f478e16aee2c0f1685f79d508a96ca61da02fd030dac8cd499e"
+    },
+    "probeManifest": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2G_PROBES.json.local",
+      "bytes": 1549,
+      "sha256": "1171d40039598129ea7da40cb6032051d7f8060b1e4d23d608a1cd6c8a4de858"
+    },
+    "export": {
+      "file": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "b2c2b2fResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2F_RESULT.json",
+      "bytes": 40291,
+      "sha256": "b7b707bbf34a851131eba1a312f228f2948fb5c15d3a9ffad18443365279333d"
+    },
+    "b2c2b2eResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json",
+      "bytes": 65368,
+      "sha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe"
+    }
+  },
+  "provenance": {
+    "formal": true,
+    "evidenceGrade": "formal",
+    "partialRun": false,
+    "launchProvenanceVerified": true,
+    "launchProvenanceSource": "runner_start_attestation",
+    "launchProvenanceReason": null,
+    "launchProvenanceIssues": [],
+    "launchProvenanceIntegrityIssues": [],
+    "startAttestation": {
+      "file": "start-attestation.json",
+      "sha256": "9eb3f24c3e92870c88d199e781b6b2d3d4e79c0b21271dadfd6a52b93314546c",
+      "bytes": 5050,
+      "body": {
+        "phase": "Issue #154 Phase 2-C2.6-B2-C2B2G runner start attestation",
+        "attestedBy": "runner",
+        "stage1": {
+          "executionClass": "stage1",
+          "childHeapMb": 12288,
+          "concurrency": 1,
+          "budgetMs": 1800000,
+          "retry": "none",
+          "fallback": "none"
+        },
+        "b2c2b2fStage1": {
+          "executionClass": "stage1",
+          "childHeapMb": 12288,
+          "concurrency": 1,
+          "budgetMs": 1800000,
+          "retry": "none",
+          "fallback": "none"
+        },
+        "changedStage1Fields": [],
+        "changedFromB2C2B2F": [
+          "searchInstrumentation.onGogmaReservedRuntime"
+        ],
+        "tasksBudgetMs": 600000,
+        "targets": 1,
+        "contextsPerTarget": 1,
+        "expectedTasks": 1,
+        "population": "B2C2B2F_BONUS_DOMINANT_PROFILED_TARGET",
+        "contextSelection": "b2c1_recorded_p1_first_compatible_rank",
+        "extentRule": "b2c2b2d_tight_max_production_default_b2c2b1_required_v1",
+        "captureRule": {
+          "policy": "C4C",
+          "maxCostCohorts": 4,
+          "sentinel": "first delivery of the fifth distinct operation cost (never captured)",
+          "prefixes": {
+            "C8": 8,
+            "C32": 32
+          }
+        },
+        "candidateSafetyCap": 1024,
+        "registeredP1": {
+          "id": "P1",
+          "name": "default_simple_first",
+          "keys": [
+            [
+              "targetEligibleMinCardinality",
+              "asc"
+            ],
+            [
+              "exclusiveOwnedWeaponCount",
+              "asc"
+            ],
+            [
+              "blockedCountDefaultTotal",
+              "asc"
+            ],
+            [
+              "shareableHeldCountDefaultTotal",
+              "desc"
+            ],
+            [
+              "reservationDigest",
+              "asc"
+            ]
+          ]
+        },
+        "nodeYield": "setImmediate",
+        "memorySampleIntervalMs": 250,
+        "searchInstrumentation": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": true,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "b2c2b2fSearchInstrumentation": {
+          "onSearchRuntime": true,
+          "onGogmaReservedRuntime": false,
+          "onGogmaReservedDepth": false,
+          "onSkillReservedDepth": false,
+          "onWorkSettled": false
+        },
+        "innerSections": [
+          "window_collection",
+          "support_evaluation",
+          "state_generation",
+          "solution_materialization",
+          "frontier_reduction_sort",
+          "exhaustion_scan"
+        ],
+        "cpuProfiler": false,
+        "heartbeatIntervalMs": 5000,
+        "windowsMs": [
+          [
+            0,
+            600000
+          ],
+          [
+            600000,
+            1200000
+          ],
+          [
+            1200000,
+            1800000
+          ]
+        ],
+        "provenanceFlags": {
+          "oracleGuidedPolicySelection": true,
+          "oracleGuidedTargetPopulation": true,
+          "oracleGuidedContextSelection": true,
+          "oracleInformedPerTargetExtent": true,
+          "targetIndividualOracleExtentAsSearchInput": true,
+          "perTargetExtent": true,
+          "commonExtentForEveryTask": false,
+          "contextOrderingUsesOracle": true,
+          "oracleReadBySearchChild": false,
+          "oracleMatchUsedForEarlyStop": false,
+          "expectedOutcomeKnownBySearchChild": false,
+          "productionSchedulerEvidence": false,
+          "productionExtentSelectionEvidence": false,
+          "oracleGuidedProfilingTarget": true,
+          "routeExactJudged": false,
+          "profilingOnly": true,
+          "innerRuntimeProfiling": true,
+          "absoluteRuntimeComparedWithB2C2B2F": false
+        },
+        "createdAt": "2026-10-05T14:25:52.409Z",
+        "runnerScript": "scripts/run-planner-global-phase2c26b2c2b2g.mjs",
+        "node": "v24.19.0",
+        "repositoryHead": "03e2f73ca58330f3d55afb49b29a02328c341e4e",
+        "uncommittedBenchmarkCode": false,
+        "benchmarkCodeSha256": "f47b42178dfbc1efa6249667a2f9fbb823134fcfe0838d9609d79738d4fda556",
+        "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+        "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "exportBytes": 19424064,
+        "probeManifestFileName": "PLANNER_GLOBAL_PHASE2C26B2C2B2G_PROBES.json.local",
+        "probeManifestSha256": "1171d40039598129ea7da40cb6032051d7f8060b1e4d23d608a1cd6c8a4de858",
+        "probeManifestB2C2B2FResultSha256": "b7b707bbf34a851131eba1a312f228f2948fb5c15d3a9ffad18443365279333d",
+        "probeManifestB2C2B2EResultSha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe",
+        "targetWeaponIds": [
+          "a367c177-a0c2-4986-995e-4efcf4131b5c"
+        ],
+        "probes": [
+          {
+            "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+            "b2c2b2dTaskId": "t02-r11",
+            "contextRank": 11,
+            "extent": {
+              "maxNormalAdvance": 4,
+              "maxGogmaAdvance": 235,
+              "maxSkillAdvance": 1083
+            }
+          }
+        ],
+        "expectedTaskIdentities": [
+          {
+            "taskId": "t02-r11",
+            "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+            "contextRank": 11,
+            "groupIndex": 3,
+            "reservationDigest": "fnv1a32:ff85a91d",
+            "targetEligibleMinCardinality": 1,
+            "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+            "representativeFixedTargetWeaponIds": [
+              "070a1222-5e31-4c9f-a035-c557bfa7be73"
+            ],
+            "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+            "searchInputDigest": "fnv1a32:824a0ec4",
+            "extent": {
+              "maxNormalAdvance": 4,
+              "maxGogmaAdvance": 235,
+              "maxSkillAdvance": 1083
+            }
+          }
+        ],
+        "smoke": null
+      }
+    },
+    "measuredHead": "03e2f73ca58330f3d55afb49b29a02328c341e4e",
+    "measuredHeadSource": "runner_start_attestation",
+    "measuredHeadIsAncestor": true,
+    "measuredAt": "2026-10-05T14:25:52.409Z",
+    "recomputedBenchmarkCodeSha256": "f47b42178dfbc1efa6249667a2f9fbb823134fcfe0838d9609d79738d4fda556",
+    "benchmarkCodeSha256": "f47b42178dfbc1efa6249667a2f9fbb823134fcfe0838d9609d79738d4fda556",
+    "analysisHead": "03e2f73ca58330f3d55afb49b29a02328c341e4e",
+    "analysisCodeUncommitted": false,
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B2GAnalysis.ts",
+      "scripts/analyze-planner-global-phase2c26b2c2b2g.mjs",
+      "*.test.ts"
+    ],
+    "uncommittedBenchmarkCode": false,
+    "smoke": null,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "b2c2b2fResultSha256": "b7b707bbf34a851131eba1a312f228f2948fb5c15d3a9ffad18443365279333d",
+    "b2c2b2fMeasuredHead": "dd41061d492d91c0ebc9a2ecdc13ebc0a857f280",
+    "b2c2b2eResultSha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe",
+    "b2c2b2eMeasuredHead": "e69a94ea0fdd1ef39a39286dffab1bfc44fb1f0b",
+    "probeManifestSha256": "1171d40039598129ea7da40cb6032051d7f8060b1e4d23d608a1cd6c8a4de858",
+    "oracleGuidedPolicySelection": true,
+    "oracleGuidedTargetPopulation": true,
+    "oracleGuidedContextSelection": true,
+    "oracleInformedPerTargetExtent": true,
+    "targetIndividualOracleExtentAsSearchInput": true,
+    "perTargetExtent": true,
+    "commonExtentForEveryTask": false,
+    "contextOrderingUsesOracle": true,
+    "oracleReadBySearchChild": false,
+    "oracleMatchUsedForEarlyStop": false,
+    "expectedOutcomeKnownBySearchChild": false,
+    "productionSchedulerEvidence": false,
+    "productionExtentSelectionEvidence": false,
+    "oracleGuidedProfilingTarget": true,
+    "routeExactJudged": false,
+    "profilingOnly": true,
+    "innerRuntimeProfiling": true,
+    "absoluteRuntimeComparedWithB2C2B2F": false
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "freeMemoryBytesAtLaunch": 19142627328,
+    "rngEngineVersion": "production-rng:c5-e7"
+  },
+  "conditions": {
+    "stage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 12288,
+      "concurrency": 1,
+      "budgetMs": 1800000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "b2c2b2fStage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 12288,
+      "concurrency": 1,
+      "budgetMs": 1800000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "changedStage1Fields": [],
+    "changedFromB2C2B2F": [
+      "searchInstrumentation.onGogmaReservedRuntime"
+    ],
+    "conditionChecks": {
+      "stage1IsRegistered": true,
+      "stage1EqualsB2C2B2F": true,
+      "b2c2b2fStage1MatchesAuthority": true,
+      "budgetIs30Minutes": true,
+      "heapIs12288Mb": true,
+      "concurrencyIs1": true,
+      "noRetry": true,
+      "noFallback": true,
+      "instrumentationIsTheTwoBoundaryObservers": true,
+      "b2c2b2fInstrumentationMatchesAuthority": true,
+      "onlyOnGogmaReservedRuntimeAdded": true,
+      "innerSectionsAreRegistered": true,
+      "noCpuProfiler": true,
+      "conditionIssues": true
+    },
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": true,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "b2c2b2fSearchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": false,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "innerSections": [
+      "window_collection",
+      "support_evaluation",
+      "state_generation",
+      "solution_materialization",
+      "frontier_reduction_sort",
+      "exhaustion_scan"
+    ],
+    "cpuProfiler": false,
+    "heartbeatIntervalMs": 5000,
+    "windowsMs": [
+      [
+        0,
+        600000
+      ],
+      [
+        600000,
+        1200000
+      ],
+      [
+        1200000,
+        1800000
+      ]
+    ],
+    "memorySampleIntervalMs": 250,
+    "nodeYield": "setImmediate",
+    "candidateSafetyCap": 1024,
+    "maxCostCohorts": 4,
+    "notRun": [
+      "production_change",
+      "production_optimization",
+      "search_semantics_change",
+      "search_ordering_change",
+      "search_comparator_change",
+      "candidate_materializer_change",
+      "capture_change",
+      "extent_change",
+      "context_change",
+      "p1_change",
+      "new_production_instrumentation_seam",
+      "new_inner_section",
+      "heap_16gb",
+      "budget_60min_or_more",
+      "automatic_longer_retry",
+      "retry",
+      "timeout_fallback",
+      "oom_fallback",
+      "v8_cpu_profiler",
+      "reserved_depth_observer",
+      "work_settled_observer",
+      "exact_route_judgement",
+      "e2_search",
+      "k2_feature_grouping",
+      "residual_unreached_support",
+      "global_assignment",
+      "full_planner_rerun",
+      "ui_change",
+      "a3_a9_result_regeneration",
+      "b2c2b2e_result_regeneration",
+      "b2c2b2f_result_regeneration"
+    ],
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 20000
+  },
+  "population": {
+    "rule": "B2-C2B2F decision.case = B2C2B2F_BONUS_DOMINANT and decision.dominant = BONUS: the Target(s) B2-C2B2F profiled, cross-checked against the B2-C2B2E-derived population",
+    "targetWeaponIds": [
+      "a367c177-a0c2-4986-995e-4efcf4131b5c"
+    ],
+    "probes": [
+      {
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "b2c2b2dTaskId": "t02-r11",
+        "contextRank": 11,
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      }
+    ],
+    "b2c2b2fBackground": {
+      "searchWallMs": 1789841.3849000002,
+      "bonusShare": 0.9999744749448827,
+      "bonusDepthReadMs": 1455411.7245000005,
+      "childOutcome": "timeout",
+      "deliveryFlushes": 0
+    }
+  },
+  "parity": {
+    "b2c2b2fAuthority": {
+      "valid": true,
+      "issues": [],
+      "decisionCase": "B2C2B2F_BONUS_DOMINANT",
+      "dominant": "BONUS"
+    },
+    "b2c2b2eAuthority": {
+      "valid": true,
+      "issues": [],
+      "decisionCase": "B2C2B2E_INCOMPLETE"
+    },
+    "hashChain": {
+      "b2c2b2fResultIsRegistered": true,
+      "b2c2b2eResultIsRegistered": true,
+      "b2c2b2fMadeAgainstB2C2B2E": true,
+      "probeManifestFromB2C2B2F": true,
+      "probeManifestFromB2C2B2E": true,
+      "probeManifestMatchesRunner": true,
+      "probeManifestB2C2B2FMatchesRunner": true,
+      "probeManifestB2C2B2EMatchesRunner": true,
+      "exportMatchesRunner": true,
+      "exportMatchesProbeManifest": true,
+      "exportMatchesB2C2B2F": true,
+      "exportMatchesB2C2B2E": true
+    },
+    "population": {
+      "manifestEqualsDerived": true,
+      "runnerTargetsEqualManifest": true,
+      "runnerProbesEqualManifest": true,
+      "runnerIdentitiesEqualManifest": true,
+      "probesEqualB2C2B2FProfiled": true,
+      "identitiesEqualB2C2B2FProfiled": true,
+      "targets": 1,
+      "chain": {
+        "b2c2b2eAuthorityIsB2C2B2FAuthority": true,
+        "probesEqualB2C2B2EDerived": true,
+        "identitiesEqualB2C2B2EDerived": true,
+        "targetsEqualB2C2B2EDerived": true,
+        "excludedRouteEqualsB2C2B2E": true,
+        "exportEqualsB2C2B2E": true
+      }
+    },
+    "taskRebuild": {
+      "valid": true,
+      "issues": [],
+      "tasksEqualRebuilt": true
+    },
+    "identity": {
+      "expected": {
+        "taskId": "t02-r11",
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contextRank": 11,
+        "groupIndex": 3,
+        "reservationDigest": "fnv1a32:ff85a91d",
+        "targetEligibleMinCardinality": 1,
+        "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+        "representativeFixedTargetWeaponIds": [
+          "070a1222-5e31-4c9f-a035-c557bfa7be73"
+        ],
+        "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+        "searchInputDigest": "fnv1a32:824a0ec4",
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      },
+      "raw": {
+        "taskId": "t02-r11",
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contextRank": 11,
+        "groupIndex": 3,
+        "reservationDigest": "fnv1a32:ff85a91d",
+        "targetEligibleMinCardinality": 1,
+        "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+        "representativeFixedTargetWeaponIds": [
+          "070a1222-5e31-4c9f-a035-c557bfa7be73"
+        ],
+        "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+        "searchInputDigest": "fnv1a32:824a0ec4",
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      },
+      "rawEqualsExpected": true
+    },
+    "excludedRoute": {
+      "valid": true,
+      "issues": [],
+      "excludedRouteKeyCount": 1,
+      "excludedRouteIsCurrentRoute": true,
+      "rederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+      "b2c2b2fExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+      "childAttestedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba"
+    },
+    "childIdentity": {
+      "present": true,
+      "taskId": true,
+      "targetWeaponId": true,
+      "searchInputDigest": true,
+      "defaultSearchInputDigest": true,
+      "extent": true,
+      "groupIndex": true,
+      "reservationDigest": true,
+      "excludedRouteIsCurrentRoute": true,
+      "excludedRouteEqualsRederived": true,
+      "excludedRouteEqualsB2C2B2F": true
+    }
+  },
+  "outcome": {
+    "process": "timeout",
+    "record": null,
+    "naturalCompletion": false,
+    "termination": null,
+    "candidateCount": null,
+    "searchElapsedMs": null,
+    "childWallMs": 1800385.2049999998,
+    "killedAtMs": 1800016.2611,
+    "budgetMs": 1800000,
+    "deliveredBeforeKill": {
+      "deliveryFlushes": 0,
+      "deliveryConsumerCalls": 0
+    },
+    "peakHeapBytes": 7471127232,
+    "peakRssBytes": 8086642688,
+    "yields": 14561139,
+    "profileSnapshots": 341,
+    "profileSource": "last_durable_snapshot",
+    "tail": {
+      "profilerOriginChildProcessMs": 5146.2828,
+      "lastSnapshotAtMs": 1790905.446,
+      "lastSnapshotSearchElapsedMs": 1790899.2493,
+      "unobservedTailMs": 4333.476199999917
+    },
+    "note": "A timeout is the normal profiling outcome and is never Candidate 0; no Route exact judgement is made."
+  },
+  "outerSanity": {
+    "checks": {
+      "bonusIsLargestCategory": true,
+      "bonusDepthReadObserved": true,
+      "beforeFirstDelivery": true,
+      "outerContractViolationsZero": true,
+      "outerPartitionMatches": true
+    },
+    "largestCategory": "BONUS",
+    "deliveryFlushes": 0,
+    "bonusDepthReadShareOfSearchWall": 0.8471011534704297,
+    "coverage": 0.9999990096594912,
+    "partition": {
+      "sumMs": 1790899.1756,
+      "matches": true
+    },
+    "categoryMs": {
+      "BONUS": 1790857.7585999994,
+      "SKILL": 14.948000000286811,
+      "COMPOSITION": 0,
+      "SCHEDULER_OVERHEAD": 22.14079999950718,
+      "DELIVERY": 0,
+      "REGISTRATION_SETUP": 2.5546000000003914,
+      "UNACCOUNTED": 1.7736000008881092
+    },
+    "categoryShares": {
+      "BONUS": 0.9999768736283065,
+      "SKILL": 0.000008346645195857452,
+      "COMPOSITION": 0,
+      "SCHEDULER_OVERHEAD": 0.000012362951695529933,
+      "DELIVERY": 0,
+      "REGISTRATION_SETUP": 0.0000014264342933457049,
+      "UNACCOUNTED": 9.903405088641604e-7
+    },
+    "bonusSectionExclusiveMs": {
+      "bonus_depth_work": 17.724599997945916,
+      "bonus_depth_read": 1517072.7574000016,
+      "bonus_notice_scan": 101835.6144000013,
+      "bonus_ideal_filter": 171031.31059999747,
+      "bonus_route_materialization": 176.20350000191593,
+      "bonus_evaluate_sort": 690.9894999999315,
+      "bonus_channel_publication": 14.420400026546304,
+      "cross_add_bonus": 15.682599972278695,
+      "bonus_depth_advance": 3.055600000366212
+    },
+    "activeStackAtLastSnapshot": [
+      {
+        "section": "search_runtime",
+        "startedMs": 6.270400000000336,
+        "elapsedMs": 1790899.1756,
+        "work": null
+      },
+      {
+        "section": "scheduler_step",
+        "startedMs": 1789525.5515,
+        "elapsedMs": 1379.8944999999367,
+        "work": null
+      },
+      {
+        "section": "scheduler_settle",
+        "startedMs": 1789525.5537,
+        "elapsedMs": 1379.8922999999486,
+        "work": null
+      },
+      {
+        "section": "bonus_depth_work",
+        "startedMs": 1789525.5567,
+        "elapsedMs": 1379.8892999999225,
+        "work": {
+          "channel": 5,
+          "depth": 65
+        }
+      },
+      {
+        "section": "bonus_depth_read",
+        "startedMs": 1789525.5573,
+        "elapsedMs": 1379.8887000000104,
+        "work": null
+      }
+    ],
+    "outerContractViolations": 0,
+    "note": "Recorded for this run only. The added observer can move absolute shares, so nothing is required to equal B2-C2B2F."
+  },
+  "profile": {
+    "source": "last_durable_snapshot",
+    "snapshots": 341,
+    "events": {
+      "outer": 175893,
+      "inner": 5648
+    },
+    "reconciliation": {
+      "observedAtMs": {
+        "outer": 1790905.446,
+        "inner": 1790905.446
+      },
+      "searchWallMs": 1790899.1756,
+      "bonusDepthReadMs": 1517072.7574000016,
+      "bonusDepthReadShareOfSearchWall": 0.8471011534704297,
+      "innerSectionsMs": 1517019.1976999962,
+      "innerInclusiveMs": 1517055.0695999998,
+      "innerCoverageOfBonusDepthRead": 0.9999646953649756,
+      "innerShareOfSearchWall": 0.8470712468733778,
+      "remainderMs": 53.55970000545494,
+      "remainderShareOfBonusDepthRead": 0.00003530463502439193,
+      "remainderSplitMs": {
+        "inDepthOutsideSections": 35.871900003636256,
+        "outsideDepthBoundaries": 17.687800001818687
+      },
+      "sections": [
+        {
+          "section": "window_collection",
+          "totalMs": 18459.12369999727,
+          "shareOfBonusDepthRead": 0.01216759289227037,
+          "shareOfSearchWall": 0.010307181974000833,
+          "count": 404
+        },
+        {
+          "section": "support_evaluation",
+          "totalMs": 37024.91129999973,
+          "shareOfBonusDepthRead": 0.024405494805307806,
+          "shareOfSearchWall": 0.020673922800592825,
+          "count": 404
+        },
+        {
+          "section": "state_generation",
+          "totalMs": 974984.5314000018,
+          "shareOfBonusDepthRead": 0.6426748662146933,
+          "shareOfSearchWall": 0.5444106204769208,
+          "count": 403
+        },
+        {
+          "section": "solution_materialization",
+          "totalMs": 260466.00439999963,
+          "shareOfBonusDepthRead": 0.17168985675175724,
+          "shareOfSearchWall": 0.1454386756935864,
+          "count": 403
+        },
+        {
+          "section": "frontier_reduction_sort",
+          "totalMs": 224625.66979999814,
+          "shareOfBonusDepthRead": 0.14806519245983127,
+          "shareOfSearchWall": 0.12542619532154423,
+          "count": 403
+        },
+        {
+          "section": "exhaustion_scan",
+          "totalMs": 1458.9570999995603,
+          "shareOfBonusDepthRead": 0.0009616922411156856,
+          "shareOfSearchWall": 0.0008146506067326599,
+          "count": 403
+        }
+      ],
+      "ranked": [
+        "state_generation",
+        "solution_materialization",
+        "frontier_reduction_sort",
+        "support_evaluation",
+        "window_collection",
+        "exhaustion_scan"
+      ],
+      "dominantSection": "state_generation",
+      "dominantShareOfBonusDepthRead": 0.6426748662146933,
+      "secondLargestSection": "solution_materialization",
+      "secondLargestShareOfBonusDepthRead": 0.17168985675175724,
+      "issues": []
+    },
+    "inner": {
+      "atMs": 1790905.446,
+      "sectionMs": {
+        "window_collection": 18459.12369999727,
+        "support_evaluation": 37024.91129999973,
+        "state_generation": 974984.5314000018,
+        "solution_materialization": 260466.00439999963,
+        "frontier_reduction_sort": 224625.66979999814,
+        "exhaustion_scan": 1458.9570999995603
+      },
+      "completedSectionMs": {
+        "window_collection": 18459.12369999727,
+        "support_evaluation": 37024.91129999973,
+        "state_generation": 973734.2837000019,
+        "solution_materialization": 260466.00439999963,
+        "frontier_reduction_sort": 224625.66979999814,
+        "exhaustion_scan": 1458.9570999995603
+      },
+      "sectionCounts": {
+        "window_collection": 404,
+        "support_evaluation": 404,
+        "state_generation": 403,
+        "solution_materialization": 403,
+        "frontier_reduction_sort": 403,
+        "exhaustion_scan": 403
+      },
+      "inclusiveMs": 1517055.0695999998,
+      "completedDepths": 403,
+      "maxDepthReached": 69,
+      "streams": 6,
+      "activePhase": {
+        "streamIndex": 5,
+        "depth": 65,
+        "phase": "state_generation",
+        "elapsedMs": 1250.247699999949
+      },
+      "activeDepth": {
+        "streamIndex": 5,
+        "depth": 65,
+        "elapsedMs": 1379.8673999998719,
+        "phaseMs": {
+          "window_collection": 42.213700000196695,
+          "support_evaluation": 87.3780999998562
+        }
+      },
+      "contractViolations": 0,
+      "contractViolationSamples": [],
+      "outsideReadViolations": 0,
+      "outsideReadViolationSamples": []
+    },
+    "innerCounts": {
+      "completedDepths": 403,
+      "exhaustedDepths": 0,
+      "frontierStatesBeforeSum": 9472814,
+      "frontierStatesBeforeMax": 24990,
+      "legalPositionCountSum": 81363,
+      "legalPositionCountMax": 235,
+      "generatedStatesSum": 725971613,
+      "generatedStatesMax": 2011282,
+      "frontierStatesAfterSum": 9609239,
+      "frontierStatesAfterMax": 24990,
+      "windowMemoEntriesMax": 236
+    },
+    "yields": {
+      "count": 14540553,
+      "totalMs": 162742.45690009702,
+      "bySection": {
+        "bonus_depth_read": {
+          "count": 14540530,
+          "totalMs": 162728.96730009705
+        },
+        "scheduler_checkpoint": {
+          "count": 23,
+          "totalMs": 13.489599999942584
+        }
+      }
+    },
+    "yieldsByInnerSection": {
+      "window_collection": {
+        "count": 28,
+        "totalMs": 0.41810000000441505
+      },
+      "state_generation": {
+        "count": 14537230,
+        "totalMs": 160996.1387997324
+      },
+      "exhaustion_scan": {
+        "count": 3272,
+        "totalMs": 5.565499999896019
+      }
+    },
+    "outerDepth": {
+      "bonus": {
+        "startedWorks": 404,
+        "completedWorks": 403,
+        "withCounts": 403,
+        "channels": 6,
+        "maxDepth": 69,
+        "subscriberCountSum": 403,
+        "retainedCountAfterSum": 2976914,
+        "lastRetainedCountAfter": 13139,
+        "exhaustedWorks": 0
+      },
+      "skill": {
+        "startedWorks": 137,
+        "completedWorks": 137,
+        "withCounts": 137,
+        "channels": 2,
+        "maxDepth": 69,
+        "subscriberCountSum": 404,
+        "retainedCountAfterSum": 0,
+        "lastRetainedCountAfter": 0,
+        "exhaustedWorks": 0
+      }
+    },
+    "memoryAtLastSnapshot": {
+      "heapUsed": 6595023096,
+      "rss": 8068808704,
+      "maxima": {
+        "samples": 4450,
+        "maxHeapUsedBytes": 7471127232,
+        "maxRssBytes": 8086642688,
+        "lastElapsedMs": 1795254.0123
+      }
+    }
+  },
+  "depthRecords": {
+    "valid": true,
+    "issues": [],
+    "collected": 403,
+    "statistics": {
+      "depths": 403,
+      "counts": {
+        "frontierStatesBefore": {
+          "count": 403,
+          "min": 1,
+          "median": 24363,
+          "mean": 23505.7419,
+          "max": 24990,
+          "sum": 9472814
+        },
+        "legalPositionCount": {
+          "count": 403,
+          "min": 167,
+          "median": 202,
+          "mean": 201.8933,
+          "max": 235,
+          "sum": 81363
+        },
+        "generatedStates": {
+          "count": 403,
+          "min": 470,
+          "median": 1878182,
+          "mean": 1801418.3945,
+          "max": 2011282,
+          "sum": 725971613
+        },
+        "frontierStatesAfter": {
+          "count": 403,
+          "min": 469,
+          "median": 24363,
+          "mean": 23844.2655,
+          "max": 24990,
+          "sum": 9609239
+        },
+        "windowMemoEntries": {
+          "count": 403,
+          "min": 236,
+          "median": 236,
+          "mean": 236,
+          "max": 236,
+          "sum": 95108
+        }
+      },
+      "sectionMsPerDepth": {
+        "window_collection": {
+          "count": 403,
+          "min": 0.0805,
+          "median": 46.1324,
+          "mean": 45.6995,
+          "max": 127.7763,
+          "sum": 18416.91
+        },
+        "support_evaluation": {
+          "count": 403,
+          "min": 0.0061,
+          "median": 93.2466,
+          "mean": 91.6564,
+          "max": 186.1246,
+          "sum": 36937.5332
+        },
+        "state_generation": {
+          "count": 403,
+          "min": 4.9938,
+          "median": 2496.9622,
+          "mean": 2416.2141,
+          "max": 2966.8709,
+          "sum": 973734.2837
+        },
+        "solution_materialization": {
+          "count": 403,
+          "min": 0.0232,
+          "median": 554.0533,
+          "mean": 646.3176,
+          "max": 1280.8071,
+          "sum": 260466.0044
+        },
+        "frontier_reduction_sort": {
+          "count": 403,
+          "min": 0.1639,
+          "median": 570.1761,
+          "mean": 557.3838,
+          "max": 966.477,
+          "sum": 224625.6698
+        },
+        "exhaustion_scan": {
+          "count": 403,
+          "min": 2.0259,
+          "median": 2.9384,
+          "mean": 3.6202,
+          "max": 8.4692,
+          "sum": 1458.9571
+        }
+      },
+      "inclusiveMsPerDepth": {
+        "count": 403,
+        "min": 8.0064,
+        "median": 3862.93,
+        "mean": 3760.9807,
+        "max": 4539.9538,
+        "sum": 1515675.2022
+      },
+      "perUnitNs": {
+        "window_collection": {
+          "unit": "frontierStatesBefore",
+          "count": 403,
+          "min": 1649.2177,
+          "median": 1908.4268,
+          "mean": 4410.9643,
+          "max": 518100,
+          "sum": 1777618.6087
+        },
+        "support_evaluation": {
+          "unit": "frontierStatesBefore",
+          "count": 403,
+          "min": 3460.6383,
+          "median": 3849.7468,
+          "mean": 3980.9376,
+          "max": 22000,
+          "sum": 1604317.8695
+        },
+        "state_generation": {
+          "unit": "generatedStates",
+          "count": 403,
+          "min": 903.358,
+          "median": 1338.398,
+          "mean": 1570.0038,
+          "max": 25135.5319,
+          "sum": 632711.5281
+        },
+        "solution_materialization": {
+          "unit": "generatedStates",
+          "count": 403,
+          "min": 31.2998,
+          "median": 292.8862,
+          "mean": 362.8505,
+          "max": 771.156,
+          "sum": 146228.7691
+        },
+        "frontier_reduction_sort": {
+          "unit": "generatedStates",
+          "count": 403,
+          "min": 284.8987,
+          "median": 308.1284,
+          "mean": 314.2332,
+          "max": 781.9149,
+          "sum": 126635.9822
+        },
+        "exhaustion_scan": {
+          "unit": "frontierStatesAfter",
+          "count": 403,
+          "min": 88.3554,
+          "median": 122.8307,
+          "mean": 238.4307,
+          "max": 7136.8085,
+          "sum": 96087.5705
+        }
+      },
+      "correlations": {
+        "generatedStates_vs_sectionsMs": 0.8329,
+        "generatedStates_vs_stateGenerationMs": 0.9757,
+        "frontierStatesBefore_vs_sectionsMs": 0.9182,
+        "legalPositionCount_vs_sectionsMs": -0.4087
+      },
+      "byStream": [
+        {
+          "streamIndex": 0,
+          "depths": 69,
+          "maxDepth": 69,
+          "generatedStates": 123904649,
+          "startGogmaCounter": 55,
+          "exhausted": false,
+          "sectionMs": 259169.26749999775
+        },
+        {
+          "streamIndex": 1,
+          "depths": 69,
+          "maxDepth": 69,
+          "generatedStates": 123904649,
+          "startGogmaCounter": 55,
+          "exhausted": false,
+          "sectionMs": 259195.9134999995
+        },
+        {
+          "streamIndex": 2,
+          "depths": 68,
+          "maxDepth": 68,
+          "generatedStates": 122326818,
+          "startGogmaCounter": 55,
+          "exhausted": false,
+          "sectionMs": 257642.82119999838
+        },
+        {
+          "streamIndex": 3,
+          "depths": 67,
+          "maxDepth": 67,
+          "generatedStates": 120748386,
+          "startGogmaCounter": 55,
+          "exhausted": false,
+          "sectionMs": 250793.6647000007
+        },
+        {
+          "streamIndex": 4,
+          "depths": 66,
+          "maxDepth": 66,
+          "generatedStates": 119153977,
+          "startGogmaCounter": 55,
+          "exhausted": false,
+          "sectionMs": 246820.27889999907
+        },
+        {
+          "streamIndex": 5,
+          "depths": 64,
+          "maxDepth": 64,
+          "generatedStates": 115933134,
+          "startGogmaCounter": 55,
+          "exhausted": false,
+          "sectionMs": 242017.4124000008
+        }
+      ],
+      "top": [
+        {
+          "streamIndex": 0,
+          "depth": 3,
+          "counts": {
+            "frontierStatesBefore": 24990,
+            "legalPositionCount": 233,
+            "generatedStates": 2011282,
+            "frontierStatesAfter": 24987,
+            "windowMemoEntries": 236
+          },
+          "phaseMs": {
+            "window_collection": 49.26209999999992,
+            "support_evaluation": 95.8219999999992,
+            "state_generation": 2281.1282,
+            "solution_materialization": 189.10969999999907,
+            "frontier_reduction_sort": 574.9159999999993,
+            "exhaustion_scan": 4.16530000000057
+          },
+          "inclusiveMs": 3194.5103
+        },
+        {
+          "streamIndex": 1,
+          "depth": 3,
+          "counts": {
+            "frontierStatesBefore": 24990,
+            "legalPositionCount": 233,
+            "generatedStates": 2011282,
+            "frontierStatesAfter": 24987,
+            "windowMemoEntries": 236
+          },
+          "phaseMs": {
+            "window_collection": 45.82369999999901,
+            "support_evaluation": 106.28459999999905,
+            "state_generation": 2521.574699999999,
+            "solution_materialization": 220.19350000000122,
+            "frontier_reduction_sort": 590.7050000000008,
+            "exhaustion_scan": 3.557699999997567
+          },
+          "inclusiveMs": 3488.215000000001
+        },
+        {
+          "streamIndex": 3,
+          "depth": 3,
+          "counts": {
+            "frontierStatesBefore": 24990,
+            "legalPositionCount": 233,
+            "generatedStates": 2011282,
+            "frontierStatesAfter": 24987,
+            "windowMemoEntries": 236
+          },
+          "phaseMs": {
+            "window_collection": 47.689800000000105,
+            "support_evaluation": 96.16909999999916,
+            "state_generation": 2622.6777999999977,
+            "solution_materialization": 201.03600000000006,
+            "frontier_reduction_sort": 599.250199999995,
+            "exhaustion_scan": 3.6774999999979627
+          },
+          "inclusiveMs": 3570.5679999999993
+        },
+        {
+          "streamIndex": 4,
+          "depth": 3,
+          "counts": {
+            "frontierStatesBefore": 24990,
+            "legalPositionCount": 233,
+            "generatedStates": 2011282,
+            "frontierStatesAfter": 24987,
+            "windowMemoEntries": 236
+          },
+          "phaseMs": {
+            "window_collection": 49.25669999999809,
+            "support_evaluation": 87.32470000000467,
+            "state_generation": 2513.241299999994,
+            "solution_materialization": 353.7219999999943,
+            "frontier_reduction_sort": 625.4345999999932,
+            "exhaustion_scan": 3.1981999999989057
+          },
+          "inclusiveMs": 3632.2962000000043
+        },
+        {
+          "streamIndex": 5,
+          "depth": 3,
+          "counts": {
+            "frontierStatesBefore": 24990,
+            "legalPositionCount": 233,
+            "generatedStates": 2011282,
+            "frontierStatesAfter": 24987,
+            "windowMemoEntries": 236
+          },
+          "phaseMs": {
+            "window_collection": 46.39069999998901,
+            "support_evaluation": 93.73719999998866,
+            "state_generation": 2273.2131999999983,
+            "solution_materialization": 347.44430000000284,
+            "frontier_reduction_sort": 582.1211000000039,
+            "exhaustion_scan": 3.0274999999965075
+          },
+          "inclusiveMs": 3346.0337
+        }
+      ]
+    }
+  },
+  "windows": [
+    {
+      "fromMs": 0,
+      "toMs": 600000,
+      "observedFromMs": 0,
+      "observedToMs": 599999.3428,
+      "partial": false,
+      "outerShares": {
+        "BONUS": 0.9999711979649137,
+        "SKILL": 0.000009185677856029392,
+        "COMPOSITION": 0,
+        "SCHEDULER_OVERHEAD": 0.000013960017005768696,
+        "DELIVERY": 0,
+        "REGISTRATION_SETUP": 0.000004257671853221249,
+        "UNACCOUNTED": 0.000001398668371330325
+      },
+      "bonusDepthReadMs": 501183.73010000045,
+      "innerSectionsMs": 501164.2498999991,
+      "innerCoverageOfBonusDepthRead": 0.9999611316193416,
+      "sections": {
+        "window_collection": {
+          "ms": 6764.928400000161,
+          "shareOfBonusDepthRead": 0.013497901056465589
+        },
+        "support_evaluation": {
+          "ms": 12792.7072999997,
+          "shareOfBonusDepthRead": 0.02552498521340106
+        },
+        "state_generation": {
+          "ms": 351117.3924000001,
+          "shareOfBonusDepthRead": 0.7005761985329056
+        },
+        "solution_materialization": {
+          "ms": 49314.18939999969,
+          "shareOfBonusDepthRead": 0.09839543153198549
+        },
+        "frontier_reduction_sort": {
+          "ms": 80548.01689999967,
+          "shareOfBonusDepthRead": 0.16071554614098912
+        },
+        "exhaustion_scan": {
+          "ms": 627.015499999773,
+          "shareOfBonusDepthRead": 0.0012510691435946367
+        }
+      },
+      "dominantSection": "state_generation",
+      "completedDepths": 144,
+      "generatedStates": 262767796,
+      "frontierStatesBefore": 3287547,
+      "frontierStatesAfter": 3435675,
+      "legalPositions": 32173,
+      "maxDepthReached": 26,
+      "yieldsCount": 5290336
+    },
+    {
+      "fromMs": 600000,
+      "toMs": 1200000,
+      "observedFromMs": 599999.3428,
+      "observedToMs": 1200000.3669,
+      "partial": false,
+      "outerShares": {
+        "BONUS": 0.9999728590463245,
+        "SKILL": 0.000007730986803436352,
+        "COMPOSITION": 0,
+        "SCHEDULER_OVERHEAD": 0.000018638134856829032,
+        "DELIVERY": 0,
+        "REGISTRATION_SETUP": 0,
+        "UNACCOUNTED": 7.718320152549223e-7
+      },
+      "bonusDepthReadMs": 507354.0335000016,
+      "innerSectionsMs": 507336.6411000021,
+      "innerCoverageOfBonusDepthRead": 0.9999657194013428,
+      "sections": {
+        "window_collection": {
+          "ms": 6197.936899999273,
+          "shareOfBonusDepthRead": 0.012216197153775567
+        },
+        "support_evaluation": {
+          "ms": 12445.678800001158,
+          "shareOfBonusDepthRead": 0.024530560473017545
+        },
+        "state_generation": {
+          "ms": 330273.75540000095,
+          "shareOfBonusDepthRead": 0.6509729569342232
+        },
+        "solution_materialization": {
+          "ms": 82455.2470000002,
+          "shareOfBonusDepthRead": 0.16252013693708015
+        },
+        "frontier_reduction_sort": {
+          "ms": 75524.46100000036,
+          "shareOfBonusDepthRead": 0.14885948669608856
+        },
+        "exhaustion_scan": {
+          "ms": 439.5620000001509,
+          "shareOfBonusDepthRead": 0.00086638120715788
+        }
+      },
+      "dominantSection": "state_generation",
+      "completedDepths": 132,
+      "generatedStates": 247913157,
+      "frontierStatesBefore": 3215105,
+      "frontierStatesAfter": 3210443,
+      "legalPositions": 26466,
+      "maxDepthReached": 48,
+      "yieldsCount": 4940239
+    },
+    {
+      "fromMs": 1200000,
+      "toMs": 1800000,
+      "observedFromMs": 1200000.3669,
+      "observedToMs": 1790899.2493,
+      "partial": true,
+      "outerShares": {
+        "BONUS": 0.9999867131243031,
+        "SKILL": 0.000008119832587308553,
+        "COMPOSITION": 0,
+        "SCHEDULER_OVERHEAD": 0.000004369444713661329,
+        "DELIVERY": 0,
+        "REGISTRATION_SETUP": 0,
+        "UNACCOUNTED": 7.975983959832019e-7
+      },
+      "bonusDepthReadMs": 508534.9937999996,
+      "innerSectionsMs": 508518.30669999495,
+      "innerCoverageOfBonusDepthRead": 0.999967185935662,
+      "sections": {
+        "window_collection": {
+          "ms": 5496.258399997838,
+          "shareOfBonusDepthRead": 0.010808023964933763
+        },
+        "support_evaluation": {
+          "ms": 11786.525199998872,
+          "shareOfBonusDepthRead": 0.02317741226011747
+        },
+        "state_generation": {
+          "ms": 293593.38360000076,
+          "shareOfBonusDepthRead": 0.5773317218666516
+        },
+        "solution_materialization": {
+          "ms": 128696.56799999974,
+          "shareOfBonusDepthRead": 0.25307317995625384
+        },
+        "frontier_reduction_sort": {
+          "ms": 68553.19189999811,
+          "shareOfBonusDepthRead": 0.13480525968869553
+        },
+        "exhaustion_scan": {
+          "ms": 392.3795999996364,
+          "shareOfBonusDepthRead": 0.0007715881990098686
+        }
+      },
+      "dominantSection": "state_generation",
+      "completedDepths": 127,
+      "generatedStates": 215290660,
+      "frontierStatesBefore": 2970162,
+      "frontierStatesAfter": 2963121,
+      "legalPositions": 22724,
+      "maxDepthReached": 69,
+      "yieldsCount": 4309978
+    }
+  ],
+  "decisionRule": {
+    "sections": "the six RESERVED_GOGMA_RUNTIME_PHASES (window_collection, support_evaluation, state_generation, solution_materialization, frontier_reduction_sort, exhaustion_scan), mutually exclusive inside one held-aware readReservedDepth(); no section of this phase's own",
+    "denominator": "bonusDepthReadMs = the outer bonus_depth_read inclusive time of this run itself, observed on the same frozen instant as the inner sections (open read / phase / depth up to that instant); never a B2-C2B2F or A7 time",
+    "coverage": "innerCoverageOfBonusDepthRead = sum(six inner sections) / bonusDepthReadMs; INSUFFICIENT below 0.9",
+    "remainder": "bonusDepthReadMs - innerSectionsMs = inDepthOutsideSections (inner inclusive depth - sections) + outsideDepthBoundaries (bonusDepthReadMs - inner inclusive depth)",
+    "invalid": "B2C2B2G_INVALID: an authority / population / Search input identity / excluded Route / provenance issue, an outer or inner tracker contract violation (an inner boundary outside an open bonus_depth_read included), a negative duration, or broken reconciliation (sections > inclusive > read beyond tolerance, depth records not summing to the tracker totals, the outer categories not a partition, outer / inner instants differing)",
+    "insufficient": "B2C2B2G_INSUFFICIENT: no usable profile snapshot, a Search wall below 60000 ms, no observed bonus_depth_read, or innerCoverageOfBonusDepthRead below 0.9",
+    "dominant": "B2C2B2G_<SECTION>_DOMINANT: one inner section share of bonus_depth_read >= 0.5",
+    "mixed": "B2C2B2G_MIXED: valid, no inner section >= 0.5; the next phase takes the (at most 2) largest sections >= 0.2",
+    "secondary": "every other inner section with share of bonus_depth_read >= 0.2 is reported as secondary",
+    "outerSanity": "the outer categories of this run are recorded (BONUS the largest, bonus_depth_read observed, before delivery, no outer nesting violation) and never compared numerically with B2-C2B2F",
+    "timeout": "a timeout is a normal profiling outcome (never Candidate 0); a natural completion is profiled whole",
+    "windows": "descriptive only, never a decision input",
+    "a7": "A7 / A8 / A9 results are taxonomy and implementation references only, never decision inputs"
+  },
+  "invalidReasons": [],
+  "decision": {
+    "scope": "A profiling decision about which held-aware readReservedDepth() section dominates bonus_depth_read of this one oracle-guided Search input on the current main. It is never an optimization decision, never a Route exact judgement and never Production evidence.",
+    "case": "B2C2B2G_STATE_GENERATION_DOMINANT",
+    "reasons": [],
+    "dominant": "state_generation",
+    "dominantShareOfBonusDepthRead": 0.6426748662146933,
+    "secondary": [],
+    "nextPhaseSections": [
+      "state_generation"
+    ],
+    "nextPhase": "state generation内部のCPU / allocation hotspot局所化（legal position iteration、Reset parent lookup、position × frontier Keep scan、windows[index].has、predictReset / predictKeep memo、advanceGogmaCounter、reservedGeneratedState()、execution.checkpoint()）"
+  }
+}
