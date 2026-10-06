@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import rawB2C2B2E from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json?raw'
 import rawB2C2B2I from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2I_RESULT.json?raw'
 import rawB2C2B2J from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2J_RESULT.json?raw'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2K_RESULT.json?raw'
 import { runPhase2C26B2C2B2DTask } from './plannerGlobalPhase2C26B2C2B2D'
 import type { Phase2C26B2C2B2DBaselineRederivation, Phase2C26B2C2B2DContextComparison } from './plannerGlobalPhase2C26B2C2B2DAnalysis'
 import { runPhase2C26B2C2B2ETask, PHASE2C26B2C2B2E_PROVENANCE_FLAGS, PHASE2C26B2C2B2E_STAGE1 } from './plannerGlobalPhase2C26B2C2B2E'
@@ -147,8 +148,9 @@ describe('Phase 2-C2.6-B2-C2B2K authorities and population', () => {
     expect(derived.probes).toHaveLength(PHASE2C26B2C2B2K_EXPECTED_TASKS)
     expect(derived.probes[0]!.b2c2b2dTaskId).toBe(timeBound[0]!.taskId)
     // The historical identity this phase expects, re-derived (never written in the source).
-    expect(derived.probes[0]).toEqual({ targetWeaponId: 'a367c177-a0c2-4986-995e-4efcf4131b5c', b2c2b2dTaskId: 't02-r11', contextRank: 11,
+    expect(derived.probes[0]).toEqual({ targetWeaponId: timeBound[0]!.targetWeaponId, b2c2b2dTaskId: 't02-r11', contextRank: 11,
       extent: { maxNormalAdvance: 4, maxGogmaAdvance: 235, maxSkillAdvance: 1083 } })
+    expect(derived.targetWeaponIds[0]!.slice(0, 8)).toBe('a367c177')
     const eTask = (eJson.taskRows as Json[]).find(t => t.taskId === 't02-r11')!
     for (const field of ['groupIndex', 'reservationDigest', 'targetEligibleMinCardinality', 'representativeFixedSetId', 'representativeFixedTargetWeaponIds', 'defaultSearchInputDigest', 'searchInputDigest', 'extent']) {
       expect((derived.expectedTaskIdentities[0] as unknown as Json)[field]).toEqual(eTask[field])
@@ -417,6 +419,61 @@ describe('Phase 2-C2.6-B2-C2B2K analysis', () => {
       expect(aggregate.diagnostic.statement).toBeNull()
     }
     expect(phase2c26b2c2b2kE1Aggregate({ facts: facts(), row: miss, decision: 'B2C2B2K_INCOMPLETE', evidenceGrade: 'formal' }).diagnostic.total.C4C).toEqual({ recovered: 10, of: 11 })
+  })
+})
+
+// ---------------------------------------------------------------- the committed RESULT
+
+describe('Phase 2-C2.6-B2-C2B2K committed RESULT', () => {
+  const result = JSON.parse(rawResult)
+  const MEASURED_HEAD = '9017a61fe84020f0de64283e44b8d4e8a1866c19'
+
+  it('pins the formal run: runner-attested launch at the measurement HEAD before any child, B2-C2B2E\'s Stage 1 unchanged, no instrumentation, no Production change of this phase, no invalid reason', () => {
+    expect(result.provenance).toMatchObject({ formal: true, evidenceGrade: 'formal', partialRun: false, launchProvenanceVerified: true, launchProvenanceSource: 'runner_start_attestation',
+      launchProvenanceIssues: [], launchProvenanceIntegrityIssues: [], measuredHead: MEASURED_HEAD, measuredHeadSource: 'runner_start_attestation', measuredHeadIsAncestor: true,
+      uncommittedBenchmarkCode: false, smoke: null, calculationCodeChangedSinceMeasuredHead: [], b2c2b2eResultSha256: E_SHA, b2c2b2iResultSha256: I_SHA, b2c2b2jResultSha256: J_SHA,
+      b2c2b2eDecisionCase: 'B2C2B2E_INCOMPLETE', b2c2b2iDecisionCase: 'B2C2B2I_ADOPTED', b2c2b2jDecisionCase: 'B2C2B2J_ADOPTED', productionChangedFilesInThisPhase: [],
+      oracleGuidedTargetPopulation: true, oracleGuidedContextSelection: true, oracleReadBySearchChild: false, productionSchedulerEvidence: false, productionExtentSelectionEvidence: false })
+    expect(result.provenance.benchmarkCodeSha256).toBe(result.provenance.recomputedBenchmarkCodeSha256)
+    expect(result.provenance.startAttestation.body).toMatchObject({ attestedBy: 'runner', phase: PHASE2C26B2C2B2K_START_ATTESTATION_PHASE, repositoryHead: MEASURED_HEAD, uncommittedBenchmarkCode: false,
+      smoke: null, stage1: PHASE2C26B2C2B2E_STAGE1, changedStage1Fields: [], instrumentation: PHASE2C26B2C2B2K_INSTRUMENTATION })
+    // createdAt <= the tasks child start is part of the verification the analyzer recorded as launchProvenanceVerified.
+    expect(result.provenance.startAttestation.body.createdAt).toBe(result.provenance.measuredAt)
+    expect(result.provenance.recordedStartAttestation.sha256).toBe(result.provenance.startAttestation.sha256)
+    expect(Object.values(result.parity.hashChain).every(v => v === true)).toBe(true)
+    expect(Object.entries(result.parity.scheduleParity).filter(([, v]) => v === false)).toEqual([])
+    expect(Object.values(result.conditions.conditionChecks).every(v => v === true)).toBe(true)
+    expect(Object.values(result.conditions.childIsolation).every(v => v === true)).toBe(true)
+    expect(Object.values(result.parity.b2c2b2eEvidence as Record<string, Json>).every(e => e.matches === true)).toBe(true)
+    expect(result.productionAudit).toMatchObject({ productionChangedSinceB2C2B2E: [BONUS_STREAM], productionChangedSinceBaseMain: [], baseMainIsAncestor: true, issues: [], matchesRunnerAttested: true,
+      optimizedFilesEqualMeasured: [{ file: BONUS_STREAM, measuredHead: PHASE2C26B2C2B2K_REGISTERED_B2C2B2J.measuredHead, equal: true }] })
+    expect(result.invalidReasons).toEqual([])
+  })
+
+  it('pins the Search input as B2-C2B2E\'s own task of the time-bound Target, the excluded current Route proved by re-derivation and the record', () => {
+    expect(result.parity.population).toMatchObject({ manifestEqualsDerived: true, populationIsB2C2B2ETimeBoundTimeout: true, reDerivedB2C2B2EProbesEqualB2C2B2EResult: true,
+      derivationIsB2C2B2ERecordedProbe: true, probeIsDerivation: true, targets: 1 })
+    const eTask = (eJson.taskRows as Json[]).find(t => t.taskId === 't02-r11')!
+    const row = result.taskRows[0] as Json
+    for (const field of ['taskId', 'targetWeaponId', 'contextRank', 'groupIndex', 'reservationDigest', 'targetEligibleMinCardinality', 'representativeFixedSetId', 'representativeFixedTargetWeaponIds',
+      'defaultSearchInputDigest', 'searchInputDigest', 'extent']) expect(row[field]).toEqual(eTask[field])
+    expect(result.pairedComparison[0].identity).toMatchObject({ matches: true, issues: [], excludedRouteKeyComparison: { verified: true, b2c2b2kSource: 'b2c2b2k_record',
+      b2c2b2kRecordMatchesRederived: true, rederivedExcludedRouteKeySha256: parsedE().facts!.rederivedExcludedRouteKeySha256 } })
+  })
+
+  it('pins the outcome: RECOVERED - the exact oracle Route delivered at C8 index 0 (cost 1084, existing_gogma_mixed) within 60 minutes / 12 GB, E1 oracle-guided diagnostic C4C 11 / 11 and the common ladder 9 / 11', () => {
+    expect(result.decision.case).toBe('B2C2B2K_RECOVERED')
+    expect(result.decision.nextPhase).toBe(PHASE2C26B2C2B2K_NEXT_PHASE.B2C2B2K_RECOVERED)
+    expect(result.recovery).toMatchObject({ recovered: true, policy: 'C8', hit: { C8: true, C32: true, C4C: true }, exactIndex: 0, operationCost: 1084, oracleOperationCost: 1084,
+      routeKind: 'existing_gogma_mixed', capturedCount: 1024, capturedCosts: [1084, 1085, 1086, 1087], termination: 'candidate_safety_cap' })
+    expect(result.recovery.searchElapsedMs).toBeLessThan(3_600_000)
+    expect(result.pairedComparison[0]).toMatchObject({ outcomeTransition: 'timeout -> completed', b2c2b2e: { process: 'timeout', candidateCount: null }, b2c2b2k: { process: 'completed' } })
+    expect(result.e1Aggregate.diagnostic.total).toEqual({ C8: { recovered: 9, of: 11 }, C32: { recovered: 10, of: 11 }, C4C: { recovered: 11, of: 11 } })
+    expect(result.e1Aggregate.diagnostic).toMatchObject({ allRecovered: true, statement: PHASE2C26B2C2B2K_E1_STATEMENT_JA })
+    expect(result.e1Aggregate.commonLadder.total.C4C).toEqual({ recovered: 9, of: 11 })
+    expect(result.e1Aggregate.commonLadder.statement).toBeNull()
+    // The external load observed during the run is recorded as an observation, never a decision input.
+    expect(result.provenance.machineDuringRun).toMatchObject({ samples: 54, encoderSamples: 16 })
   })
 })
 
