@@ -449,7 +449,8 @@ export function createTargetBonusStream(
   observeReservedRuntime?: ReservedGogmaRuntimeObserver,
 ): TargetBonusStream {
   const resetPredictions = new Map<number, RestorationBonusSet>()
-  const keepPredictions = new Map<string, RestorationBonusSet>()
+  /** Keep memo: Gogma Counter -> ordered family layout key -> prediction. */
+  const keepPredictions = new Map<number, Map<string, RestorationBonusSet>>()
   const sets = new Map<string, {
     iterator: AsyncGenerator<BonusStreamSolutionSet, BonusStreamSolutionSet>
     value: BonusStreamSolutionSet
@@ -477,15 +478,17 @@ export function createTargetBonusStream(
   /**
    * Keep depends on the current slots only through their families, so states
    * that share a layout share this prediction. The representative's five slots
-   * are the explicit Engine input; a tier difference never adds a call.
+   * are the explicit Engine input; a tier difference never adds a call. The
+   * memo is keyed by the `(gogmaCounter, familyLayoutKey)` pair as two nested
+   * Maps, so a lookup builds no composite string key.
    */
   function predictKeep(
     gogmaCounter: number,
     familyLayoutKey: string,
     currentBonuses: RestorationBonusSet,
   ): RestorationBonusSet {
-    const key = `${gogmaCounter}\u0000${familyLayoutKey}`
-    const cached = keepPredictions.get(key)
+    const byFamilyLayout = keepPredictions.get(gogmaCounter)
+    const cached = byFamilyLayout?.get(familyLayoutKey)
     if (cached) return cached
     const predicted = engine.predictGogmaBonus({
       baseSeed: input.rngState.baseSeed.value as string,
@@ -495,7 +498,8 @@ export function createTargetBonusStream(
       operation: { type: 'keep_bonuses', currentBonuses },
       master: input.master,
     })
-    keepPredictions.set(key, predicted)
+    if (byFamilyLayout) byFamilyLayout.set(familyLayoutKey, predicted)
+    else keepPredictions.set(gogmaCounter, new Map([[familyLayoutKey, predicted]]))
     return predicted
   }
 
