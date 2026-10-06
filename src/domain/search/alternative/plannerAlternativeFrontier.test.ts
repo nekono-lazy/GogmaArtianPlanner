@@ -11,6 +11,7 @@ import {
   counters,
   frontierFixture,
   IDEAL_SERIES,
+  keepCompatiblePracticalBonuses,
   originOf,
   type FrontierFixtureOptions,
 } from '../../../test/fixtures/plannerAlternativeFrontier'
@@ -246,13 +247,14 @@ describe('six-key ordering over the whole frontier (SEARCH_SPEC 5.6.3 / 5.6.8)',
 })
 
 describe('exhausted versus stopped by extent (SEARCH_SPEC 5.6.8)', () => {
-  const practicalKey = stableStringify(practicalOnlyBonuses())
+  const practicalKey = stableStringify(keepCompatiblePracticalBonuses())
 
   it('is exhausted when the Bonus stream runs out naturally inside the extent', async () => {
-    // Reset is unsupported and Keep is supported only from the Practical-only
-    // slots, whose Keep yields the Ideal: after one Keep nothing is generable.
+    // Reset is unsupported and Keep is supported only from the Ideal-layout
+    // Practical slots, whose Keep rerolls the tiers to the Ideal (RNG_SPEC 6.1):
+    // after one Keep nothing is generable.
     const options: FrontierFixtureOptions = {
-      owned: [{ bonuses: 'practical', idealSkill: true }],
+      owned: [{ bonuses: 'keep_compatible_practical', idealSkill: true }],
       resetSupported: false,
       keepResult: () => 'ideal',
       keepSupportedFor: (current) => stableStringify(current) === practicalKey,
@@ -273,7 +275,7 @@ describe('exhausted versus stopped by extent (SEARCH_SPEC 5.6.8)', () => {
 
   it('is stopped by extent when a Gogma position beyond the extent is still reachable', async () => {
     const { input, engine } = frontierFixture({
-      owned: [{ bonuses: 'practical', idealSkill: true }],
+      owned: [{ bonuses: 'keep_compatible_practical', idealSkill: true }],
       keepResult: () => 'ideal',
     })
     const { execution } = await collect(input, engine)
@@ -297,7 +299,7 @@ describe('exhausted versus stopped by extent (SEARCH_SPEC 5.6.8)', () => {
     // work is the next Normal offset.
     const options: FrontierFixtureOptions = {
       normalCounter: true,
-      owned: [{ bonuses: 'practical', idealSkill: true }],
+      owned: [{ bonuses: 'keep_compatible_practical', idealSkill: true }],
       resetSupported: false,
       keepResult: () => 'ideal',
       keepSupportedFor: (current) => stableStringify(current) === practicalKey,
@@ -528,6 +530,10 @@ describe('the ordinary Candidate Search is unchanged', () => {
  * The ordinary Search prediction sequence of the off-axis fixture, recorded
  * against the pre-Phase-1-C implementation: canonical-Ideal stop, retention
  * and the #104 reduction (Normal 5 predicted, never registered) all intact.
+ * Issue #154 (before B2J): re-recorded ONCE on that same implementation
+ * (7a4fb35, the parent of PR #141, through a temporary worktree) with the
+ * RNG_SPEC 6.1 contract-valid frontier fixture, whose Keep of the Ideal layout
+ * keeps that layout (one more Keep at 12); not taken from the current code.
  */
 function ordinaryOffAxisCalls(input: CandidateSearchInput): string[] {
   const practical = keepFamilyLayoutKey(practicalOnlyBonuses(), input.master)
@@ -535,6 +541,6 @@ function ordinaryOffAxisCalls(input: CandidateSearchInput): string[] {
   return [
     'skill:7', 'reset:10', `keep:10:${practical}`, 'normal:4',
     'skill:8', 'reset:11', `keep:11:${ideal}`, `keep:11:${practical}`, 'normal:5',
-    'skill:9', 'reset:12', `keep:12:${practical}`,
+    'skill:9', 'reset:12', `keep:12:${ideal}`, `keep:12:${practical}`,
   ]
 }

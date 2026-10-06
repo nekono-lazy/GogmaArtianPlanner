@@ -1,5 +1,5 @@
 {
-  "provenance": "Recorded once by recordParityPattern() on the pre-D2 Planner Alternative publication (main 83e89753de2afc8fa7eab170f10f66f933ea81c5). Never regenerate.",
+  "provenance": "Re-recorded once (Issue #154, before B2J) by recordParityPattern() on the historical pre-D2 Planner Alternative publication (main 83e89753de2afc8fa7eab170f10f66f933ea81c5, run in a temporary worktree) with the RNG_SPEC 6.1 contract-valid frontier fixture: the fake Keep keeps the slot family layout and rerolls tiers only, never reading the current ranks. Not produced by the current implementation. It supersedes the first recording on the same commit, whose fake Keep changed slot families. Never regenerate.",
   "records": [
     {
       "name": "existing:bonus[]:skill[7,9]",
@@ -47,9 +47,9 @@
           "normal": 0,
           "skill": 4,
           "reset": 4,
-          "keep": 5
+          "keep": 7
         },
-        "predictionCallsSha256": "5732edd4072e5b2c04cc7ba43152ad92d99f2d17a851eddbe81a47372fe5eef1"
+        "predictionCallsSha256": "6b97b0f606e6665c4f1361898cd52cd02fcd81319af3858e36839f09faffb98c"
       },
       "excluded": {
         "excludedIndex": 1,
@@ -74,9 +74,9 @@
             "normal": 0,
             "skill": 4,
             "reset": 4,
-            "keep": 5
+            "keep": 7
           },
-          "predictionCallsSha256": "5732edd4072e5b2c04cc7ba43152ad92d99f2d17a851eddbe81a47372fe5eef1"
+          "predictionCallsSha256": "6b97b0f606e6665c4f1361898cd52cd02fcd81319af3858e36839f09faffb98c"
         }
       }
     },
@@ -102,9 +102,9 @@
           "normal": 0,
           "skill": 4,
           "reset": 4,
-          "keep": 5
+          "keep": 6
         },
-        "predictionCallsSha256": "0b07d03f539274548f557eeb29d9778e388fc0b12e072b02f870435d79061568"
+        "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
       },
       "excluded": {
         "excludedIndex": 1,
@@ -129,9 +129,9 @@
             "normal": 0,
             "skill": 4,
             "reset": 4,
-            "keep": 5
+            "keep": 6
           },
-          "predictionCallsSha256": "0b07d03f539274548f557eeb29d9778e388fc0b12e072b02f870435d79061568"
+          "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
         }
       }
     },
@@ -215,9 +215,9 @@
           "normal": 0,
           "skill": 4,
           "reset": 4,
-          "keep": 6
+          "keep": 7
         },
-        "predictionCallsSha256": "73f03dd42bb382830394f626a8b29d157ee77bca476662cd3a198b23b2979790"
+        "predictionCallsSha256": "6b97b0f606e6665c4f1361898cd52cd02fcd81319af3858e36839f09faffb98c"
       },
       "excluded": {
         "excludedIndex": 3,
@@ -245,9 +245,9 @@
             "normal": 0,
             "skill": 4,
             "reset": 4,
-            "keep": 6
+            "keep": 7
           },
-          "predictionCallsSha256": "73f03dd42bb382830394f626a8b29d157ee77bca476662cd3a198b23b2979790"
+          "predictionCallsSha256": "6b97b0f606e6665c4f1361898cd52cd02fcd81319af3858e36839f09faffb98c"
         }
       }
     },
@@ -276,9 +276,9 @@
           "normal": 0,
           "skill": 4,
           "reset": 4,
-          "keep": 5
+          "keep": 6
         },
-        "predictionCallsSha256": "0b07d03f539274548f557eeb29d9778e388fc0b12e072b02f870435d79061568"
+        "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
       },
       "excluded": {
         "excludedIndex": 3,
@@ -306,9 +306,9 @@
             "normal": 0,
             "skill": 4,
             "reset": 4,
-            "keep": 5
+            "keep": 6
           },
-          "predictionCallsSha256": "0b07d03f539274548f557eeb29d9778e388fc0b12e072b02f870435d79061568"
+          "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
         }
       }
     },
@@ -340,9 +340,9 @@
           "normal": 0,
           "skill": 4,
           "reset": 4,
-          "keep": 6
+          "keep": 7
         },
-        "predictionCallsSha256": "d2cd330590a2d30910c09cfd100a8631ffb538e073ec74a473dc6d080b7d00ba"
+        "predictionCallsSha256": "6b97b0f606e6665c4f1361898cd52cd02fcd81319af3858e36839f09faffb98c"
       },
       "excluded": {
         "excludedIndex": 4,
@@ -373,9 +373,9 @@
             "normal": 0,
             "skill": 4,
             "reset": 4,
-            "keep": 6
+            "keep": 7
           },
-          "predictionCallsSha256": "d2cd330590a2d30910c09cfd100a8631ffb538e073ec74a473dc6d080b7d00ba"
+          "predictionCallsSha256": "6b97b0f606e6665c4f1361898cd52cd02fcd81319af3858e36839f09faffb98c"
         }
       }
     },
@@ -397,9 +397,9 @@
           "normal": 0,
           "skill": 5,
           "reset": 4,
-          "keep": 5
+          "keep": 6
         },
-        "predictionCallsSha256": "816b0c1c2e1954302a907b973825eae27aeafc3af5d7a789c85e28eb348e82ae"
+        "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8"
       },
       "excluded": null
     },
@@ -424,9 +424,9 @@
           "normal": 0,
           "skill": 4,
           "reset": 4,
-          "keep": 5
+          "keep": 6
         },
-        "predictionCallsSha256": "0b07d03f539274548f557eeb29d9778e388fc0b12e072b02f870435d79061568"
+        "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
       },
       "excluded": {
         "excludedIndex": 1,
@@ -450,9 +450,9 @@
             "normal": 0,
             "skill": 4,
             "reset": 4,
-            "keep": 5
+            "keep": 6
           },
-          "predictionCallsSha256": "0b07d03f539274548f557eeb29d9778e388fc0b12e072b02f870435d79061568"
+          "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
         }
       }
     },
@@ -477,9 +477,9 @@
           "normal": 0,
           "skill": 5,
           "reset": 4,
-          "keep": 5
+          "keep": 6
         },
-        "predictionCallsSha256": "816b0c1c2e1954302a907b973825eae27aeafc3af5d7a789c85e28eb348e82ae"
+        "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8"
       },
       "excluded": {
         "excludedIndex": 1,
@@ -503,9 +503,9 @@
             "normal": 0,
             "skill": 5,
             "reset": 4,
-            "keep": 5
+            "keep": 6
           },
-          "predictionCallsSha256": "816b0c1c2e1954302a907b973825eae27aeafc3af5d7a789c85e28eb348e82ae"
+          "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8"
         }
       }
     },
@@ -530,9 +530,9 @@
           "normal": 0,
           "skill": 5,
           "reset": 4,
-          "keep": 5
+          "keep": 6
         },
-        "predictionCallsSha256": "816b0c1c2e1954302a907b973825eae27aeafc3af5d7a789c85e28eb348e82ae"
+        "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8"
       },
       "excluded": {
         "excludedIndex": 1,
@@ -556,9 +556,9 @@
             "normal": 0,
             "skill": 5,
             "reset": 4,
-            "keep": 5
+            "keep": 6
           },
-          "predictionCallsSha256": "816b0c1c2e1954302a907b973825eae27aeafc3af5d7a789c85e28eb348e82ae"
+          "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8"
         }
       }
     },
@@ -584,9 +584,9 @@
           "normal": 0,
           "skill": 4,
           "reset": 4,
-          "keep": 5
+          "keep": 6
         },
-        "predictionCallsSha256": "0b07d03f539274548f557eeb29d9778e388fc0b12e072b02f870435d79061568"
+        "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
       },
       "excluded": {
         "excludedIndex": 1,
@@ -611,9 +611,9 @@
             "normal": 0,
             "skill": 4,
             "reset": 4,
-            "keep": 5
+            "keep": 6
           },
-          "predictionCallsSha256": "0b07d03f539274548f557eeb29d9778e388fc0b12e072b02f870435d79061568"
+          "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
         }
       }
     },
@@ -640,9 +640,9 @@
           "normal": 0,
           "skill": 5,
           "reset": 4,
-          "keep": 5
+          "keep": 6
         },
-        "predictionCallsSha256": "816b0c1c2e1954302a907b973825eae27aeafc3af5d7a789c85e28eb348e82ae"
+        "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8"
       },
       "excluded": {
         "excludedIndex": 2,
@@ -668,9 +668,9 @@
             "normal": 0,
             "skill": 5,
             "reset": 4,
-            "keep": 5
+            "keep": 6
           },
-          "predictionCallsSha256": "816b0c1c2e1954302a907b973825eae27aeafc3af5d7a789c85e28eb348e82ae"
+          "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8"
         }
       }
     },
@@ -697,9 +697,9 @@
           "normal": 0,
           "skill": 4,
           "reset": 4,
-          "keep": 5
+          "keep": 6
         },
-        "predictionCallsSha256": "0b07d03f539274548f557eeb29d9778e388fc0b12e072b02f870435d79061568"
+        "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
       },
       "excluded": {
         "excludedIndex": 2,
@@ -725,9 +725,9 @@
             "normal": 0,
             "skill": 4,
             "reset": 4,
-            "keep": 5
+            "keep": 6
           },
-          "predictionCallsSha256": "0b07d03f539274548f557eeb29d9778e388fc0b12e072b02f870435d79061568"
+          "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
         }
       }
     },
@@ -738,12 +738,12 @@
         "projection": [
           "existing_gogma_mixed|n|c|sowned.fixture.0|BR10|S7,8",
           "normal_artian_to_gogma|n1|c7|s-|BR10|S8",
-          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12|S7,8",
-          "normal_artian_to_gogma|n1|c7|s-|BR10,R11,K12|S8",
-          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12,K13|S7,8",
-          "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12,K13|S8"
+          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,K11,K12|S7,8",
+          "normal_artian_to_gogma|n1|c7|s-|BR10,K11,K12|S8",
+          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,K11,K12,K13|S7,8",
+          "normal_artian_to_gogma|n1|c7|s-|BR10,K11,K12,K13|S8"
         ],
-        "stableKeysSha256": "993eef6448c3e15c8819e6589dd5bb6769e3ae81e505b8c8eb5bcb247c720f20",
+        "stableKeysSha256": "bbbae79c042c60ad0394610725150339d18c2a4a3ebb4575d6def56100085487",
         "summary": {
           "deliveredCandidates": 6,
           "excludedCandidates": 0,
@@ -756,9 +756,9 @@
           "normal": 0,
           "skill": 5,
           "reset": 4,
-          "keep": 6
+          "keep": 7
         },
-        "predictionCallsSha256": "eca9ac7ca25a574ca607d05516499fe82489adc4646fc9d7e4b48a61eb831c79"
+        "predictionCallsSha256": "b204a26674cc8e2514aa3eb97b90aac9ca0f5f558709ae53beaeba52e8c4ac90"
       },
       "excluded": {
         "excludedIndex": 3,
@@ -767,11 +767,11 @@
           "projection": [
             "existing_gogma_mixed|n|c|sowned.fixture.0|BR10|S7,8",
             "normal_artian_to_gogma|n1|c7|s-|BR10|S8",
-            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12|S7,8",
-            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12,K13|S7,8",
-            "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12,K13|S8"
+            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,K11,K12|S7,8",
+            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,K11,K12,K13|S7,8",
+            "normal_artian_to_gogma|n1|c7|s-|BR10,K11,K12,K13|S8"
           ],
-          "stableKeysSha256": "6229fc1dd696ea07f92041d930c025d3decf4eb3c400eaea9fe9e11ec6f1dbec",
+          "stableKeysSha256": "7da683989a205fdf1d3b93107fa1407808857561cc80bc7efefbe2103e3b7dc4",
           "summary": {
             "deliveredCandidates": 5,
             "excludedCandidates": 1,
@@ -780,39 +780,33 @@
           },
           "stoppedByConsumer": false,
           "skippedExcludedRouteKeysSha256": [
-            "75030f83118e41510ff4d41b6ae18204e64715c65b95bc34d84d10cf01bab4a0"
+            "8813c754957cac3afa7d9e5946b7c759a4e4ebad7c452d9a8fe8087f7b1ec3c1"
           ],
           "predictionCounts": {
             "normal": 0,
             "skill": 5,
             "reset": 4,
-            "keep": 6
+            "keep": 7
           },
-          "predictionCallsSha256": "eca9ac7ca25a574ca607d05516499fe82489adc4646fc9d7e4b48a61eb831c79"
+          "predictionCallsSha256": "b204a26674cc8e2514aa3eb97b90aac9ca0f5f558709ae53beaeba52e8c4ac90"
         }
       }
     },
     {
       "name": "existing:keep-current:bonus[11,13]:skill[7,10]",
       "full": {
-        "candidateCount": 12,
+        "candidateCount": 6,
         "projection": [
           "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11|S7",
           "normal_artian_to_gogma|n1|c7|s-|BR10,R11|S",
-          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12|S7",
-          "normal_artian_to_gogma|n1|c7|s-|BR10,R11,K12|S",
-          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12,K13|S7",
           "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12,R13|S7",
           "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11|S7,8,9,10",
-          "normal_artian_to_gogma|n1|c7|s-|BR10,R11,K12,K13|S",
           "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12,R13|S",
-          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12|S7,8,9,10",
-          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12,K13|S7,8,9,10",
           "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12,R13|S7,8,9,10"
         ],
-        "stableKeysSha256": "d53db26f7b16a7a073ad96ca24e02a99284fd99b79a2df1a424f267dca4e65cd",
+        "stableKeysSha256": "4c9642c4a9ecff8c832ce91fb5378c3d946db0332c0133a8d58b12fb31ef8419",
         "summary": {
-          "deliveredCandidates": 12,
+          "deliveredCandidates": 6,
           "excludedCandidates": 0,
           "exhausted": false,
           "stoppedByExtent": true
@@ -828,25 +822,19 @@
         "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b"
       },
       "excluded": {
-        "excludedIndex": 6,
+        "excludedIndex": 3,
         "run": {
-          "candidateCount": 11,
+          "candidateCount": 5,
           "projection": [
             "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11|S7",
             "normal_artian_to_gogma|n1|c7|s-|BR10,R11|S",
-            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12|S7",
-            "normal_artian_to_gogma|n1|c7|s-|BR10,R11,K12|S",
-            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12,K13|S7",
             "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12,R13|S7",
-            "normal_artian_to_gogma|n1|c7|s-|BR10,R11,K12,K13|S",
             "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12,R13|S",
-            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12|S7,8,9,10",
-            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12,K13|S7,8,9,10",
             "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12,R13|S7,8,9,10"
           ],
-          "stableKeysSha256": "9b7c165f998ee96975dc68264023bbbae45dc17636c680716a0616c55d51f251",
+          "stableKeysSha256": "1b57699c7e90ac4e456e7228e7f291c84ae33003a2f2a680c05942b81b02ce9e",
           "summary": {
-            "deliveredCandidates": 11,
+            "deliveredCandidates": 5,
             "excludedCandidates": 1,
             "exhausted": false,
             "stoppedByExtent": true
@@ -886,9 +874,9 @@
           "normal": 0,
           "skill": 5,
           "reset": 4,
-          "keep": 6
+          "keep": 7
         },
-        "predictionCallsSha256": "2d789234297fb198bc0b38e8676ba8b018862d27e3564cdfc05a66f983e0f5be"
+        "predictionCallsSha256": "63cc0528a8b1cff5597d588122feba62fa81f74dd3d51ab9c91adab1b6cf9465"
       },
       "excluded": {
         "excludedIndex": 1,
@@ -912,9 +900,9 @@
             "normal": 0,
             "skill": 5,
             "reset": 4,
-            "keep": 6
+            "keep": 7
           },
-          "predictionCallsSha256": "2d789234297fb198bc0b38e8676ba8b018862d27e3564cdfc05a66f983e0f5be"
+          "predictionCallsSha256": "63cc0528a8b1cff5597d588122feba62fa81f74dd3d51ab9c91adab1b6cf9465"
         }
       }
     },
@@ -1004,9 +992,9 @@
           "normal": 0,
           "skill": 4,
           "reset": 4,
-          "keep": 5
+          "keep": 7
         },
-        "predictionCallsSha256": "5732edd4072e5b2c04cc7ba43152ad92d99f2d17a851eddbe81a47372fe5eef1"
+        "predictionCallsSha256": "6b97b0f606e6665c4f1361898cd52cd02fcd81319af3858e36839f09faffb98c"
       },
       "excluded": {
         "excludedIndex": 5,
@@ -1038,9 +1026,9 @@
             "normal": 0,
             "skill": 4,
             "reset": 4,
-            "keep": 5
+            "keep": 7
           },
-          "predictionCallsSha256": "5732edd4072e5b2c04cc7ba43152ad92d99f2d17a851eddbe81a47372fe5eef1"
+          "predictionCallsSha256": "6b97b0f606e6665c4f1361898cd52cd02fcd81319af3858e36839f09faffb98c"
         }
       }
     },
@@ -1067,9 +1055,9 @@
           "normal": 4,
           "skill": 5,
           "reset": 4,
-          "keep": 5
+          "keep": 7
         },
-        "predictionCallsSha256": "b7208fb3b8fa78d8cde7c6072d724cfd8339290d11315c1c1499af92ca9ffc4b"
+        "predictionCallsSha256": "6429f60ce45e6d72276053e4ed3f4de0205c8de0bac28322c32486c0ead9a507"
       },
       "excluded": {
         "excludedIndex": 2,
@@ -1095,9 +1083,9 @@
             "normal": 4,
             "skill": 5,
             "reset": 4,
-            "keep": 5
+            "keep": 7
           },
-          "predictionCallsSha256": "b7208fb3b8fa78d8cde7c6072d724cfd8339290d11315c1c1499af92ca9ffc4b"
+          "predictionCallsSha256": "6429f60ce45e6d72276053e4ed3f4de0205c8de0bac28322c32486c0ead9a507"
         }
       }
     },
@@ -1201,9 +1189,9 @@
           "normal": 4,
           "skill": 5,
           "reset": 4,
-          "keep": 5
+          "keep": 7
         },
-        "predictionCallsSha256": "b7208fb3b8fa78d8cde7c6072d724cfd8339290d11315c1c1499af92ca9ffc4b"
+        "predictionCallsSha256": "6429f60ce45e6d72276053e4ed3f4de0205c8de0bac28322c32486c0ead9a507"
       },
       "excluded": {
         "excludedIndex": 8,
@@ -1241,9 +1229,9 @@
             "normal": 4,
             "skill": 5,
             "reset": 4,
-            "keep": 5
+            "keep": 7
           },
-          "predictionCallsSha256": "b7208fb3b8fa78d8cde7c6072d724cfd8339290d11315c1c1499af92ca9ffc4b"
+          "predictionCallsSha256": "6429f60ce45e6d72276053e4ed3f4de0205c8de0bac28322c32486c0ead9a507"
         }
       }
     },
@@ -1308,30 +1296,30 @@
           "normal_artian_to_gogma|n3|c7|s-|BR10|S8",
           "normal_artian_to_gogma|n1|c7|s-|BR10|S8,9,10",
           "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12|S8",
-          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12,K13|S7,8",
+          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12,K13|S7,8",
           "normal_artian_to_gogma|n4|c7|s-|BR10|S8",
           "normal_artian_to_gogma|n2|c7|s-|BR10|S8,9,10",
           "normal_artian_to_gogma|n2|c7|s-|BR10,R11,R12|S8",
           "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12|S7,8,9,10",
-          "normal_artian_to_gogma|n1|c7|s-|BR10,R11,K12,K13|S8",
+          "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12,K13|S8",
           "normal_artian_to_gogma|n3|c7|s-|BR10|S8,9,10",
           "normal_artian_to_gogma|n3|c7|s-|BR10,R11,R12|S8",
           "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12|S8,9,10",
-          "normal_artian_to_gogma|n2|c7|s-|BR10,R11,K12,K13|S8",
-          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12,K13|S7,8,9,10",
+          "normal_artian_to_gogma|n2|c7|s-|BR10,R11,R12,K13|S8",
+          "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12,K13|S7,8,9,10",
           "normal_artian_to_gogma|n4|c7|s-|BR10|S8,9,10",
           "normal_artian_to_gogma|n4|c7|s-|BR10,R11,R12|S8",
           "normal_artian_to_gogma|n2|c7|s-|BR10,R11,R12|S8,9,10",
-          "normal_artian_to_gogma|n3|c7|s-|BR10,R11,K12,K13|S8",
-          "normal_artian_to_gogma|n1|c7|s-|BR10,R11,K12,K13|S8,9,10",
+          "normal_artian_to_gogma|n3|c7|s-|BR10,R11,R12,K13|S8",
+          "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12,K13|S8,9,10",
           "normal_artian_to_gogma|n3|c7|s-|BR10,R11,R12|S8,9,10",
-          "normal_artian_to_gogma|n4|c7|s-|BR10,R11,K12,K13|S8",
-          "normal_artian_to_gogma|n2|c7|s-|BR10,R11,K12,K13|S8,9,10",
+          "normal_artian_to_gogma|n4|c7|s-|BR10,R11,R12,K13|S8",
+          "normal_artian_to_gogma|n2|c7|s-|BR10,R11,R12,K13|S8,9,10",
           "normal_artian_to_gogma|n4|c7|s-|BR10,R11,R12|S8,9,10",
-          "normal_artian_to_gogma|n3|c7|s-|BR10,R11,K12,K13|S8,9,10",
-          "normal_artian_to_gogma|n4|c7|s-|BR10,R11,K12,K13|S8,9,10"
+          "normal_artian_to_gogma|n3|c7|s-|BR10,R11,R12,K13|S8,9,10",
+          "normal_artian_to_gogma|n4|c7|s-|BR10,R11,R12,K13|S8,9,10"
         ],
-        "stableKeysSha256": "796587cffd854b07d880cbb86cde6e9ccb4979f91d033c79fe0fffcb6cb0f640",
+        "stableKeysSha256": "cf3bd5614b753809c57ddc4690029d00dbb88229bcb0a54fe3f43d78240055e0",
         "summary": {
           "deliveredCandidates": 30,
           "excludedCandidates": 0,
@@ -1344,9 +1332,9 @@
           "normal": 4,
           "skill": 5,
           "reset": 4,
-          "keep": 6
+          "keep": 7
         },
-        "predictionCallsSha256": "13eb5ee18757f1d34cea29086d923724ddf22b23d8ff797a15991d380bc3efa6"
+        "predictionCallsSha256": "7f0720c269fb15c6af7eae2f6e85585bc73277ba5c6215237a25f8457be283a6"
       },
       "excluded": {
         "excludedIndex": 15,
@@ -1361,29 +1349,29 @@
             "normal_artian_to_gogma|n3|c7|s-|BR10|S8",
             "normal_artian_to_gogma|n1|c7|s-|BR10|S8,9,10",
             "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12|S8",
-            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12,K13|S7,8",
+            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12,K13|S7,8",
             "normal_artian_to_gogma|n4|c7|s-|BR10|S8",
             "normal_artian_to_gogma|n2|c7|s-|BR10|S8,9,10",
             "normal_artian_to_gogma|n2|c7|s-|BR10,R11,R12|S8",
             "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12|S7,8,9,10",
-            "normal_artian_to_gogma|n1|c7|s-|BR10,R11,K12,K13|S8",
+            "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12,K13|S8",
             "normal_artian_to_gogma|n3|c7|s-|BR10|S8,9,10",
             "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12|S8,9,10",
-            "normal_artian_to_gogma|n2|c7|s-|BR10,R11,K12,K13|S8",
-            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,K12,K13|S7,8,9,10",
+            "normal_artian_to_gogma|n2|c7|s-|BR10,R11,R12,K13|S8",
+            "existing_gogma_mixed|n|c|sowned.fixture.0|BR10,R11,R12,K13|S7,8,9,10",
             "normal_artian_to_gogma|n4|c7|s-|BR10|S8,9,10",
             "normal_artian_to_gogma|n4|c7|s-|BR10,R11,R12|S8",
             "normal_artian_to_gogma|n2|c7|s-|BR10,R11,R12|S8,9,10",
-            "normal_artian_to_gogma|n3|c7|s-|BR10,R11,K12,K13|S8",
-            "normal_artian_to_gogma|n1|c7|s-|BR10,R11,K12,K13|S8,9,10",
+            "normal_artian_to_gogma|n3|c7|s-|BR10,R11,R12,K13|S8",
+            "normal_artian_to_gogma|n1|c7|s-|BR10,R11,R12,K13|S8,9,10",
             "normal_artian_to_gogma|n3|c7|s-|BR10,R11,R12|S8,9,10",
-            "normal_artian_to_gogma|n4|c7|s-|BR10,R11,K12,K13|S8",
-            "normal_artian_to_gogma|n2|c7|s-|BR10,R11,K12,K13|S8,9,10",
+            "normal_artian_to_gogma|n4|c7|s-|BR10,R11,R12,K13|S8",
+            "normal_artian_to_gogma|n2|c7|s-|BR10,R11,R12,K13|S8,9,10",
             "normal_artian_to_gogma|n4|c7|s-|BR10,R11,R12|S8,9,10",
-            "normal_artian_to_gogma|n3|c7|s-|BR10,R11,K12,K13|S8,9,10",
-            "normal_artian_to_gogma|n4|c7|s-|BR10,R11,K12,K13|S8,9,10"
+            "normal_artian_to_gogma|n3|c7|s-|BR10,R11,R12,K13|S8,9,10",
+            "normal_artian_to_gogma|n4|c7|s-|BR10,R11,R12,K13|S8,9,10"
           ],
-          "stableKeysSha256": "b58c3a7553323783f9442afa02c70933c5fefad4768c91dc67b65270576fd4cb",
+          "stableKeysSha256": "92a5e9e67bf48f4e822530944f7e7a13d3ec877f864263cfc5993c3267350a27",
           "summary": {
             "deliveredCandidates": 29,
             "excludedCandidates": 1,
@@ -1398,9 +1386,9 @@
             "normal": 4,
             "skill": 5,
             "reset": 4,
-            "keep": 6
+            "keep": 7
           },
-          "predictionCallsSha256": "13eb5ee18757f1d34cea29086d923724ddf22b23d8ff797a15991d380bc3efa6"
+          "predictionCallsSha256": "7f0720c269fb15c6af7eae2f6e85585bc73277ba5c6215237a25f8457be283a6"
         }
       }
     },
@@ -1427,9 +1415,9 @@
           "normal": 0,
           "skill": 5,
           "reset": 4,
-          "keep": 4
+          "keep": 5
         },
-        "predictionCallsSha256": "70caeadac94b30cac8eaf9f515696d9cf4439d2c450e0ef600af751f3fd730b5"
+        "predictionCallsSha256": "7b5910d9749ab51abe69de2ebe230e357fd44552c39b02d0f785d371c1de350d"
       },
       "excluded": {
         "excludedIndex": 2,
@@ -1455,9 +1443,9 @@
             "normal": 0,
             "skill": 5,
             "reset": 4,
-            "keep": 4
+            "keep": 5
           },
-          "predictionCallsSha256": "70caeadac94b30cac8eaf9f515696d9cf4439d2c450e0ef600af751f3fd730b5"
+          "predictionCallsSha256": "7b5910d9749ab51abe69de2ebe230e357fd44552c39b02d0f785d371c1de350d"
         }
       }
     },
@@ -1684,9 +1672,9 @@
           "normal": 0,
           "skill": 5,
           "reset": 3,
-          "keep": 4
+          "keep": 5
         },
-        "predictionCallsSha256": "dd39aa4d8a7e4402cf48c75a8c8a1791cd4a83d7fd50651395e3e0cefcafb177"
+        "predictionCallsSha256": "5a4561ee20e95938f821cf2584ecf3941635db610a47d8a6e74aade5e73a3b33"
       },
       "excluded": {
         "excludedIndex": 2,
@@ -1712,9 +1700,9 @@
             "normal": 0,
             "skill": 5,
             "reset": 3,
-            "keep": 4
+            "keep": 5
           },
-          "predictionCallsSha256": "dd39aa4d8a7e4402cf48c75a8c8a1791cd4a83d7fd50651395e3e0cefcafb177"
+          "predictionCallsSha256": "5a4561ee20e95938f821cf2584ecf3941635db610a47d8a6e74aade5e73a3b33"
         }
       }
     },
@@ -1743,9 +1731,9 @@
           "normal": 0,
           "skill": 4,
           "reset": 4,
-          "keep": 5
+          "keep": 6
         },
-        "predictionCallsSha256": "981546272da4ecb9a5f985d28ab016ac61e80252902e8ad55ae9a7be4365c263"
+        "predictionCallsSha256": "75188f06cebc15262d38f60104b12ca1669893433c95222c33835e3459bf7c35"
       },
       "excluded": {
         "excludedIndex": 3,
@@ -1773,9 +1761,9 @@
             "normal": 0,
             "skill": 4,
             "reset": 4,
-            "keep": 5
+            "keep": 6
           },
-          "predictionCallsSha256": "981546272da4ecb9a5f985d28ab016ac61e80252902e8ad55ae9a7be4365c263"
+          "predictionCallsSha256": "75188f06cebc15262d38f60104b12ca1669893433c95222c33835e3459bf7c35"
         }
       }
     },

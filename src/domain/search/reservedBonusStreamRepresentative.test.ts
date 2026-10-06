@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RestorationBonus, RestorationBonusSet } from '../models/publicTypes'
 import { stableStringify } from '../models/publicTypes'
-import { keepFamilyLayoutKey } from '../rng/gogmaBonusFamily'
+import { keepFamilyLayoutKey, keepFamilyOfBonus } from '../rng/gogmaBonusFamily'
 import { restorationBonus, restorationBonusSet } from '../../test/fixtures/targetEvaluation'
 import { practicalOnlyBonuses } from '../../test/fixtures/candidateSearch'
-import { frontierFixture } from '../../test/fixtures/plannerAlternativeFrontier'
+import { frontierFixture, keepContractGuard } from '../../test/fixtures/plannerAlternativeFrontier'
 import { reservedBonusStreamCases, reservedBonusStreamOf } from '../../test/fixtures/reservedBonusStreamSinglePass'
 import { createTargetBonusStream, type BonusStreamBase, type ReservedBonusStreamSolution } from './bonusStream'
 import { createCounterReservation } from './counterReservation'
@@ -94,42 +94,48 @@ const MIDDLE = 'bonus_rank.fixture.middle'
 const HIGH = 'bonus_rank.fixture.high'
 
 const set = (...bonuses: RestorationBonus[]): RestorationBonusSet => restorationBonusSet(...(bonuses as [RestorationBonus, RestorationBonus, RestorationBonus, RestorationBonus, RestorationBonus]))
-/** Layout A = attack / attack / element / utility / utility (the base layout). */
+/** Layout A = attack / attack / element / utility / utility (the base layout, `practicalOnlyBonuses()`). */
 const layoutA = (firstAttack: string) => set(restorationBonus(ATTACK, firstAttack), restorationBonus(ATTACK, HIGH), restorationBonus(ELEMENT, MIDDLE),
-  restorationBonus(UTILITY, LOW), restorationBonus(UTILITY, LOW))
-/** Layout B = element / attack / attack / utility / utility. */
-const layoutB = () => set(restorationBonus(ELEMENT, MIDDLE), restorationBonus(ATTACK, HIGH), restorationBonus(ATTACK, HIGH),
   restorationBonus(UTILITY, LOW), restorationBonus(UTILITY, LOW))
 /** Layout S = sharpness x 5 (only ever a Reset result). */
 const layoutS = (rank: string) => set(...Array.from({ length: 5 }, () => restorationBonus(SHARPNESS, rank)))
-/** Layout U = utility x 5 (a Keep result no other state shares). */
-const layoutU = () => set(...Array.from({ length: 5 }, () => restorationBonus(UTILITY, LOW)))
 
 /**
- * Gogma 10, extent 4 (positions 10 .. 13), positions 10 and 11 held: a depth-1 Reset may stand at 10, 11 or 12, so two
- * depth-1 Resets (at 10 and 11, both lastResetDepth 1, different layouts) both reach Gogma 12 at depth 2, where their
- * Keeps yield the same layout A with different tiers: a lastResetDepth tie the stable serialization breaks.
+ * Gogma 10, extent 4 (positions 10 .. 13), positions 10 and 11 held: a depth-1 Reset may stand at 10, 11 or 12, so the
+ * depth-1 Resets at 10 and 11 (both lastResetDepth 1, both layout A with different tiers) both reach Gogma 12 at depth 2.
+ *
+ * The fake Keep obeys RNG_SPEC 6.1 (checked by `keepContractGuard()`): it keeps the family layout and reads the current
+ * slots only through it, so the Keep at Gogma 12 of every layout A state is `keepAt12` (a layout A tier reroll), and
+ * every other Keep rerolls the current families to their low tier. Before Issue #154 B2J this fixture let a Keep of
+ * layout B yield layout A to build a tie of two different five slots; a Keep can never change families, so it no
+ * longer does. With a contract-valid Keep, two states of one (position, family layout, lastResetDepth) are Keeps of one
+ * memoized (Gogma Counter, family layout) prediction and hold the same five slots, so through the real stream the stable
+ * serialization tie-break only ever compares equal texts.
  */
-function tieFixture(keepAt12FromA: RestorationBonusSet, keepAt12FromB: RestorationBonusSet, resetAt12: RestorationBonusSet) {
+function tieFixture(keepAt12: RestorationBonusSet, resetAt12: RestorationBonusSet) {
   const fixture = frontierFixture({ extent: 4 })
   const master = fixture.input.master
+  const guardKeep = keepContractGuard(master)
   const objects = new Map<string, RestorationBonusSet>()
   // One object per distinct prediction, as the real memos hand out (the stream must not depend on that either).
   const once = (key: string, make: () => RestorationBonusSet) => {
     if (!objects.has(key)) objects.set(key, make())
     return objects.get(key) as RestorationBonusSet
   }
+  const layoutAKey = keepFamilyLayoutKey(layoutA(LOW), master)
   vi.mocked(fixture.engine.predictGogmaBonus).mockImplementation(({ gogmaCounter, operation }) => {
     if (operation.type === 'reset_bonuses') {
       if (gogmaCounter === 10) return once('reset:10', () => layoutA(MIDDLE))
-      if (gogmaCounter === 11) return once('reset:11', layoutB)
+      if (gogmaCounter === 11) return once('reset:11', () => layoutA(LOW))
       if (gogmaCounter === 12) return once('reset:12', () => resetAt12)
       return once(`reset:${gogmaCounter}`, () => layoutS(LOW))
     }
     const layout = keepFamilyLayoutKey(operation.currentBonuses, master)
-    if (gogmaCounter === 12 && layout === keepFamilyLayoutKey(layoutA(LOW), master)) return once('keep:12:A', () => keepAt12FromA)
-    if (gogmaCounter === 12 && layout === keepFamilyLayoutKey(layoutB(), master)) return once('keep:12:B', () => keepAt12FromB)
-    return once(`keep:${gogmaCounter}:${layout}`, layoutU)
+    const result = gogmaCounter === 12 && layout === layoutAKey
+      ? once('keep:12:A', () => keepAt12)
+      : once(`keep:${gogmaCounter}:${layout}`, () => operation.currentBonuses.map((bonus) =>
+        restorationBonus(keepFamilyOfBonus(bonus, master), LOW)) as RestorationBonusSet)
+    return guardKeep(gogmaCounter, operation.currentBonuses, result)
   })
   const target = fixture.input.targetWeapons[0]
   const stream = createTargetBonusStream(
@@ -144,8 +150,8 @@ function tieFixture(keepAt12FromA: RestorationBonusSet, keepAt12FromB: Restorati
 }
 
 /** The depth-2 states at Gogma 12 of layout A, and the depth-3 histories through Gogma 12. */
-async function readTie(keepAt12FromA: RestorationBonusSet, keepAt12FromB: RestorationBonusSet, resetAt12: RestorationBonusSet) {
-  const { stream, base, master } = tieFixture(keepAt12FromA, keepAt12FromB, resetAt12)
+async function readTie(keepAt12: RestorationBonusSet, resetAt12: RestorationBonusSet) {
+  const { stream, base, master } = tieFixture(keepAt12, resetAt12)
   const { depths, checkedParents } = await checkRepresentativeRule(stream, base, master)
   const layoutAKey = keepFamilyLayoutKey(layoutA(LOW), master)
   const depth2AtTieKey = depths[1].filter((solution) => positionOf(solution) === 12 && keepFamilyLayoutKey(solution.bonuses, master) === layoutAKey)
@@ -157,37 +163,36 @@ async function readTie(keepAt12FromA: RestorationBonusSet, keepAt12FromB: Restor
 }
 
 describe('held-aware representative tie-break through the real stream', () => {
-  const low = layoutA(LOW), high = layoutA(HIGH)
-  // stableStringify orders the rank id first: "bonus_rank.fixture.high" < "bonus_rank.fixture.low".
-  it('the fixture tiers really order by the stable serialization', () => {
-    expect(compareStableKeys(stableStringify(high), stableStringify(low))).toBeLessThan(0)
-  })
-
-  it.each([
-    ['the later generated state', low, high, high],
-    ['the earlier generated state', high, low, high],
-  ] as const)('same position, same layout, same lastResetDepth: the smaller stable serialization wins (%s)', async (_, fromA, fromB, winner) => {
-    const { depth2AtTieKey, parentsThrough12, checkedParents } = await readTie(fromA, fromB, layoutS(MIDDLE))
-    expect(checkedParents).toBeGreaterThan(0)
-    // Both tied states are published as raw solutions before the reduction.
-    expect(depth2AtTieKey).toHaveLength(2)
-    expect(depth2AtTieKey.map((solution) => solution.lastResetDepth)).toEqual([1, 1])
-    expect(depth2AtTieKey.map((solution) => solution.bonuses)).toEqual([fromA, fromB])
-    // Only the winner is extended at depth 3.
-    const representative = depth2AtTieKey.find((solution) => solution.bonuses === winner) as ReservedBonusStreamSolution
-    const loser = depth2AtTieKey.find((solution) => solution !== representative) as ReservedBonusStreamSolution
-    expect(parentsThrough12.has(representative.results)).toBe(true)
-    expect(parentsThrough12.has(loser.results)).toBe(false)
-  })
+  const keepAt12 = layoutA(HIGH)
 
   it('a larger lastResetDepth wins before the stable serialization is read', async () => {
-    // The depth-2 Reset at Gogma 12 has layout A too (lastResetDepth 2), with the largest serialization of the three.
+    // The depth-2 Reset at Gogma 12 has layout A too (lastResetDepth 2), with a larger serialization than the Keeps.
     const resetAt12 = layoutA(MIDDLE)
-    expect(compareStableKeys(stableStringify(resetAt12), stableStringify(high))).toBeGreaterThan(0)
-    expect(compareStableKeys(stableStringify(resetAt12), stableStringify(low))).toBeGreaterThan(0)
-    const { depth2AtTieKey, parentsThrough12 } = await readTie(low, high, resetAt12)
+    expect(compareStableKeys(stableStringify(resetAt12), stableStringify(keepAt12))).toBeGreaterThan(0)
+    const { depth2AtTieKey, parentsThrough12, checkedParents } = await readTie(keepAt12, resetAt12)
+    expect(checkedParents).toBeGreaterThan(0)
+    // The Keeps of the depth-1 Resets at 10 and 11 (lastResetDepth 1) and the depth-2 Reset (lastResetDepth 2).
     expect(depth2AtTieKey.map((solution) => solution.lastResetDepth).sort()).toEqual([1, 1, 2])
     const reset = depth2AtTieKey.find((solution) => solution.lastResetDepth === 2) as ReservedBonusStreamSolution
+    expect(reset.bonuses).toBe(resetAt12)
     expect([...parentsThrough12]).toEqual([reset.results])
+  })
+
+  it('same position, same layout, same lastResetDepth: one state is extended, and the tie holds the same five slots', async () => {
+    // No Reset of layout A at Gogma 12: the Keeps of the two depth-1 Resets tie on lastResetDepth 1.
+    const { depth2AtTieKey, parentsThrough12, checkedParents } = await readTie(keepAt12, layoutS(MIDDLE))
+    expect(checkedParents).toBeGreaterThan(0)
+    const tied = depth2AtTieKey.filter((solution) => solution.lastResetDepth === 1)
+    // Both tied states are published as raw solutions before the reduction, from two different parents.
+    expect(tied).toHaveLength(2)
+    expect(tied[0].results.previous).not.toBe(tied[1].results.previous)
+    // A Keep reads its current slots only through their family layout (RNG_SPEC 6.1), so both tied states hold the
+    // one Keep prediction of (Gogma 12, layout A): the stable serialization tie-break compares equal texts.
+    expect(tied.map((solution) => solution.bonuses)).toEqual([keepAt12, keepAt12])
+    expect(tied[0].bonuses).toBe(tied[1].bonuses)
+    // Exactly one of them is the representative extended at depth 3.
+    const extended = tied.filter((solution) => parentsThrough12.has(solution.results))
+    expect(extended).toHaveLength(1)
+    expect([...parentsThrough12]).toEqual([extended[0].results])
   })
 })
