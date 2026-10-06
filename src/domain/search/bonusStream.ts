@@ -857,14 +857,16 @@ export function createTargetBonusStream(
         await execution.checkpoint()
         const bonuses = predictReset(position)
         const gogmaCounterAfter = engine.advanceGogmaCounter(position, { type: 'reset_bonuses' })
-        generated.push(reservedGeneratedState(depth, depth, bonuses, parent?.results ?? null, position, gogmaCounterAfter))
+        generated.push(reservedGeneratedState(depth, depth, bonuses, keepFamilyLayoutKey(bonuses, input.master), parent?.results ?? null, position, gogmaCounterAfter))
       }
       for (const [index, state] of set.frontier.entries()) {
         if (!keepSupported[index] || !windows[index].has(position) || state.bonuses === null || state.familyLayoutKey === null) continue
         await execution.checkpoint()
         const bonuses = predictKeep(position, state.familyLayoutKey, state.bonuses)
         const gogmaCounterAfter = engine.advanceGogmaCounter(position, { type: 'keep_bonuses' })
-        generated.push(reservedGeneratedState(depth, state.lastResetDepth, bonuses, state.results, position, gogmaCounterAfter))
+        // Keep preserves the family of every slot (RNG_SPEC 6.1), so the result
+        // has the parent's ordered family layout; it is reused, not recomputed.
+        generated.push(reservedGeneratedState(depth, state.lastResetDepth, bonuses, state.familyLayoutKey, state.results, position, gogmaCounterAfter))
       }
     }
     if (runtime !== undefined) {
@@ -974,10 +976,16 @@ export function createTargetBonusStream(
     set.nextDepth = depth + 1
   }
 
+  /**
+   * One generated held-aware state. `familyLayoutKey` is the caller's
+   * `keepFamilyLayoutKey(bonuses)`: computed from a Reset result, and the
+   * parent's key for a Keep result, whose ordered families Keep preserves.
+   */
   function reservedGeneratedState(
     depth: number,
     lastResetDepth: number,
     bonuses: RestorationBonusSet,
+    familyLayoutKey: string,
     previous: ReservedBonusResultNode | null,
     position: number,
     gogmaCounterAfter: number,
@@ -987,7 +995,7 @@ export function createTargetBonusStream(
       lastResetDepth,
       bonuses,
       scope: 'gogma_artian',
-      familyLayoutKey: keepFamilyLayoutKey(bonuses, input.master),
+      familyLayoutKey,
       results: {
         depth,
         result: { restorationBonuses: bonuses, restorationBonusScope: 'gogma_artian' },
