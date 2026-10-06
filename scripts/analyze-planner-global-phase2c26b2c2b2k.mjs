@@ -20,7 +20,7 @@ const paths = { run: option('--run'), runDir: option('--run-dir'), probes: optio
   b2c2b2i: option('--b2c2b2i-result'), b2c2b2j: option('--b2c2b2j-result'), b2c2b2eRaw: option('--b2c2b2e-raw'), b2c2b2eRunDir: option('--b2c2b2e-run-dir'),
   b2c2b2eProbes: option('--b2c2b2e-probes'), oracle: option('--oracle'), manifest: option('--manifest'), output: option('--output') }
 if (Object.values(paths).some(value => !value)) {
-  throw new Error('Usage: node --max-old-space-size=8192 scripts/analyze-planner-global-phase2c26b2c2b2k.mjs --run <raw.json.local> --run-dir <run dir> --probes <probe manifest> --export <external.json> --b2c2b1-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B1_RESULT.json --b2c1-result docs/PLANNER_GLOBAL_PHASE2C26B2C1_RESULT.json --b2b1-result docs/PLANNER_GLOBAL_PHASE2C26B2B1_RESULT.json --b2c2b2b-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2B_RESULT.json --b2c2b2c-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2C_RESULT.json --b2c2b2d-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2D_RESULT.json --b2c2b2e-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json --b2c2b2i-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2I_RESULT.json --b2c2b2j-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2J_RESULT.json --b2c2b2e-raw <B2-C2B2E raw> --b2c2b2e-run-dir <B2-C2B2E run dir> --b2c2b2e-probes <B2-C2B2E probe manifest> --oracle docs/PLANNER_GLOBAL_1657_ORACLE_RESULT.json --manifest <oracle manifest .ts> --output <new.json> [--allow-nonformal]')
+  throw new Error('Usage: node --max-old-space-size=8192 scripts/analyze-planner-global-phase2c26b2c2b2k.mjs --run <raw.json.local> --run-dir <run dir> --probes <probe manifest> --export <external.json> --b2c2b1-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B1_RESULT.json --b2c1-result docs/PLANNER_GLOBAL_PHASE2C26B2C1_RESULT.json --b2b1-result docs/PLANNER_GLOBAL_PHASE2C26B2B1_RESULT.json --b2c2b2b-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2B_RESULT.json --b2c2b2c-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2C_RESULT.json --b2c2b2d-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2D_RESULT.json --b2c2b2e-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json --b2c2b2i-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2I_RESULT.json --b2c2b2j-result docs/PLANNER_GLOBAL_PHASE2C26B2C2B2J_RESULT.json --b2c2b2e-raw <B2-C2B2E raw> --b2c2b2e-run-dir <B2-C2B2E run dir> --b2c2b2e-probes <B2-C2B2E probe manifest> --oracle docs/PLANNER_GLOBAL_1657_ORACLE_RESULT.json --manifest <oracle manifest .ts> --output <new.json> [--monitor-log <operator machine monitor log>] [--allow-nonformal]')
 }
 if (lstatSync(paths.output, { throwIfNoEntry: false }) !== undefined) throw new Error(`Output already exists: ${resolve(paths.output)}`)
 const sha = text => createHash('sha256').update(text).digest('hex')
@@ -31,6 +31,9 @@ const [runFile, probesFile, exportFile, b2c2b1File, b2c1File, b2b1File, b2c2b2bF
 const json = file => JSON.parse(file.raw.toString('utf8'))
 const r = json(runFile)
 const allowNonformal = args.includes('--allow-nonformal')
+// Optional: the operator's machine monitor log of the run (one line per minute: free memory, CPU load, encoder processes). An
+// observation of the environment only, never a decision input and never a reason to re-run.
+const monitorPath = option('--monitor-log')
 const lines = text => text.split(/\r?\n/).filter(Boolean)
 
 // Provenance: only the post-hoc analysis code (and tests) may change after the measured HEAD.
@@ -475,6 +478,18 @@ try {
     invalidReasons,
     decision,
   }
+  record.provenance.machineDuringRun = monitorPath === undefined ? null : (() => {
+    const raw = readFileSync(monitorPath)
+    const samples = lines(raw.toString('utf8')).map(line => /^(\S+) freeGB=(\S+) cpu=(\S+) encoders=(\d+)/.exec(line)).filter(Boolean)
+      .map(m => ({ at: m[1], freeGB: Number(m[2]), cpu: Number(m[3]), encoders: Number(m[4]) }))
+    const busy = samples.filter(s => s.encoders > 0)
+    return { file: basename(monitorPath), sha256: sha(raw), intervalSeconds: 60, samples: samples.length, firstAt: samples[0]?.at ?? null, lastAt: samples.at(-1)?.at ?? null,
+      encoderSamples: busy.length, encoderFirstAt: busy[0]?.at ?? null, encoderLastAt: busy.at(-1)?.at ?? null,
+      maxCpuPercent: samples.length === 0 ? null : Math.max(...samples.map(s => s.cpu)),
+      maxCpuPercentWithoutEncoder: samples.filter(s => s.encoders === 0).reduce((max, s) => Math.max(max, s.cpu), 0),
+      minFreeGB: samples.length === 0 ? null : Math.min(...samples.map(s => s.freeGB)),
+      note: 'Observation only (sampled once a minute by the operator, outside the runner). An external encoder load during the run can only slow the single-threaded Search; it changes no Search input, ordering or result. Never a decision input; the run was not repeated.' }
+  })()
   await writeFile(paths.output, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' })
   console.log(JSON.stringify({ output: resolve(paths.output), formal, evidenceGrade, launchProvenance: { verified: launchProvenance.verified, issues: launchProvenance.issues },
     hashChainAllTrue: hashChain !== null && Object.values(hashChain).every(v => v === true), population: populationParity, scheduleParity, conditionChecks, childIsolation,
