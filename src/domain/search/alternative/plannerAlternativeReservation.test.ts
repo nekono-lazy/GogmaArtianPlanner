@@ -6,13 +6,20 @@ import {
   SEARCH_FIXTURE_TIME,
 } from '../../../test/fixtures/candidateSearch'
 import { ownedWeaponId } from '../../../test/fixtures/domainData'
+import {
+  frontierKeepResult,
+  frontierKeepTierRanks,
+  keepCompatiblePracticalBonuses,
+  keepContractGuard,
+  type FrontierKeepTier,
+} from '../../../test/fixtures/plannerAlternativeFrontier'
 import type {
+  BonusTypeId,
   OwnedGogmaArtianWeapon,
   OwnedNormalArtianWeapon,
-  RestorationBonusSet,
   RouteOperation,
 } from '../../models/publicTypes'
-import { keepFamilyLayoutKey } from '../../rng/gogmaBonusFamily'
+import { keepFamilyLayout, keepFamilyLayoutKey } from '../../rng/gogmaBonusFamily'
 import type { RngEngine } from '../../rng/rngEngine'
 import { candidateStableKey } from '../candidateProcessing'
 import { createCandidateRouteEstimates } from '../candidateFactory'
@@ -35,6 +42,9 @@ import { normalizePlannerAlternativeReservation } from './plannerAlternativeVali
  * Phase 2 of SEARCH_SPEC 5.6.8 / 13.2.6: Planner Alternative Search under a
  * resource reservation. Fixture Counters: Normal 4 (`weapon.fixture.a:8`),
  * Skill 7, Gogma 10; every advance is +1 (+count for a Normal creation).
+ *
+ * The fake Keep is the RNG_SPEC 6.1 Keep of the frontier fixture: it keeps the
+ * slot family layout and rerolls tiers only (Issue #154, before B2J).
  */
 
 const IDEAL_SERIES = 'series_skill.fixture.a'
@@ -46,7 +56,10 @@ interface Options {
   ownedNormal?: boolean
   normalCounter?: boolean
   resetIdealAt?: (gogmaCounter: number) => boolean
-  keepResult?: (gogmaCounter: number, current: RestorationBonusSet) => 'ideal' | 'practical' | 'current'
+  /** A non-Ideal Reset result in the Ideal family layout (`keepCompatiblePracticalBonuses()`) instead of the Practical-only one. */
+  resetKeepCompatibleAt?: (gogmaCounter: number) => boolean
+  /** The RNG_SPEC 6.1 Keep tier at a Gogma Counter; handed the family layout only. The default is `practical`. */
+  keepResult?: (gogmaCounter: number, familyLayout: readonly BonusTypeId[]) => FrontierKeepTier
   skillIdealAt?: (skillCounter: number) => boolean
 }
 
@@ -99,15 +112,18 @@ function fixture(options: Options = {}) {
     calls.push('skill:' + skillCounter)
     return { seriesSkillId: skillIdealAt(skillCounter) ? IDEAL_SERIES : 'series.other.' + skillCounter, groupSkillId: null }
   })
+  const keepRanks = frontierKeepTierRanks(ideal, input.master)
+  const guardKeep = keepContractGuard(input.master)
   vi.spyOn(engine, 'predictGogmaBonus').mockImplementation(({ gogmaCounter, operation }) => {
     if (operation.type === 'reset_bonuses') {
       calls.push('reset:' + gogmaCounter)
-      return resetIdealAt(gogmaCounter) ? structuredClone(ideal) : practicalOnlyBonuses()
+      return resetIdealAt(gogmaCounter) ? structuredClone(ideal)
+        : options.resetKeepCompatibleAt?.(gogmaCounter) ? keepCompatiblePracticalBonuses() : practicalOnlyBonuses()
     }
     calls.push('keep:' + gogmaCounter + ':' + keepFamilyLayoutKey(operation.currentBonuses, input.master))
-    const result = options.keepResult?.(gogmaCounter, operation.currentBonuses) ?? 'practical'
-    return result === 'ideal' ? structuredClone(ideal)
-      : result === 'current' ? structuredClone(operation.currentBonuses) : practicalOnlyBonuses()
+    const tier = options.keepResult?.(gogmaCounter, keepFamilyLayout(operation.currentBonuses, input.master)) ?? 'practical'
+    return guardKeep(gogmaCounter, operation.currentBonuses,
+      frontierKeepResult(operation.currentBonuses, tier, keepRanks, input.master))
   })
   vi.spyOn(engine, 'advanceNormalCounter').mockImplementation((counter, operation) => counter + operation.count)
   vi.spyOn(engine, 'advanceSkillCounter').mockImplementation((counter) => counter + 1)
@@ -336,7 +352,9 @@ describe('held Gogma traversal (SEARCH_SPEC 5.6.8)', () => {
   it('keeps the Bonus state across a held skip and memoizes Reset per position and Keep per (position, layout)', async () => {
     const { input, engine, calls } = fixture({
       owned: [{ bonuses: 'practical', idealSkill: true }],
-      // Keep at 12 turns the Gogma Reset result of 10 Ideal.
+      // Keep at 12 turns the Gogma Reset result of 10 Ideal: that Reset result
+      // has the Ideal family layout, so a tier reroll reaches the Ideal (RNG_SPEC 6.1).
+      resetKeepCompatibleAt: (gogma) => gogma === 10,
       keepResult: (gogma) => (gogma === 12 ? 'ideal' : 'practical'),
     })
     const reserved = reservation({ gogma: { held: [11], blocked: [] } })

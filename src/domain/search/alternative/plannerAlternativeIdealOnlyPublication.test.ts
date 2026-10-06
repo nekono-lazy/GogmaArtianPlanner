@@ -190,8 +190,10 @@ describe('Ideal-only channel retention on the real streams', () => {
     normalCounter: true,
     owned: [{ bonuses: 'practical', idealSkill: false }],
     resetIdealAt: (gogma) => gogma === 10 || gogma === 12,
-    keepResult: (gogma, current) =>
-      gogma === 13 && JSON.stringify(current) === JSON.stringify(practicalOnlyBonuses()) ? 'ideal' : 'practical',
+    // A Keep reads the current slots only through their families (RNG_SPEC 6.1):
+    // at 13 every Ideal-layout state rerolls to the Ideal tiers, while the
+    // Practical-only layout keeps its own families and never becomes the Ideal.
+    keepResult: (gogma) => (gogma === 13 ? 'ideal' : 'practical'),
     skillIdealAt: (skill) => skill === 8 || skill === 10,
   }
 

@@ -1,4 +1,3 @@
-import type { RestorationBonusSet } from '../../domain/models/publicTypes'
 import { candidateStableKey } from '../../domain/search/candidateProcessing'
 import { visitPlannerAlternativeCandidates } from '../../domain/search/alternative/plannerAlternativeSearch'
 import {
@@ -6,8 +5,7 @@ import {
   type PlannerAlternativeCandidate,
   type PlannerAlternativeReservation,
 } from '../../domain/search/alternative/plannerAlternativeTypes'
-import { practicalOnlyBonuses } from './candidateSearch'
-import { counters, frontierFixture, originOf, type FrontierFixtureOptions } from './plannerAlternativeFrontier'
+import { counters, frontierFixture, originOf, type FrontierFixtureOptions, type FrontierKeepTier } from './plannerAlternativeFrontier'
 
 /*
  * Global Planner Research Phase 2-C2.5-D2-a (Issue #154): the exhaustive
@@ -24,6 +22,17 @@ import { counters, frontierFixture, originOf, type FrontierFixtureOptions } from
  * The expected records were produced ONCE by this very function on the pre-D2
  * publication (main 83e8975, before the Ideal-only change) and are frozen in
  * `plannerAlternativeIdealPublicationPreD2.json`. A test never regenerates them.
+ *
+ * Issue #154 (before B2J): the frontier fixture's fake Keep used to change the
+ * slot families, which RNG_SPEC 6.1 forbids, and `keepIdealFromPractical()` and
+ * the former `current` Keep (now the `low` tier) read the current ranks. The
+ * fake Keep now keeps the family layout and rerolls the tiers only, so a Keep
+ * reaches the Ideal only from an Ideal-layout state (the Keep of an Ideal Reset
+ * result rerolled to the Practical tiers, then to the Ideal ones); the pattern
+ * options are otherwise unchanged. The frozen records were re-recorded ONCE by
+ * this function with that contract-valid fixture on the same historical
+ * publication (main 83e8975, through a temporary worktree), not on the current
+ * implementation; see the JSON `provenance`.
  */
 
 export interface ParityPattern {
@@ -43,10 +52,14 @@ function skillReservation(held: number[], blocked: number[] = []): PlannerAltern
   return { ...emptyPlannerAlternativeReservation, skill: { held, blocked } }
 }
 
-const practicalKey = JSON.stringify(practicalOnlyBonuses())
+/**
+ * A Keep rerolling to the Ideal tier at `positions`: only a state of the Ideal
+ * family layout (the Practical-tier Keep of an Ideal Reset result, or an Ideal)
+ * reaches the Ideal there; a Practical-only layout keeps its own families
+ * (RNG_SPEC 6.1). It never reads the current ranks.
+ */
 const keepIdealFromPractical = (positions: number[]) =>
-  (gogma: number, current: RestorationBonusSet): 'ideal' | 'practical' | 'current' =>
-    positions.includes(gogma) && JSON.stringify(current) === practicalKey ? 'ideal' : 'practical'
+  (gogma: number): FrontierKeepTier => (positions.includes(gogma) ? 'ideal' : 'practical')
 
 /**
  * The parity grid. Counters: Normal 4, Skill 7, Gogma 10; extent 4 unless
@@ -83,7 +96,7 @@ export const parityPatterns: readonly ParityPattern[] = [
     name: 'existing:keep-current:bonus[11,13]:skill[7,10]',
     options: {
       extent: 4, owned: [{ bonuses: 'practical', idealSkill: false }],
-      resetIdealAt: at(11, 13), keepResult: () => 'current', skillIdealAt: at(7, 10),
+      resetIdealAt: at(11, 13), keepResult: () => 'low', skillIdealAt: at(7, 10),
     },
   },
   // Current Ideal axis on one side: only the other axis streams.
@@ -141,7 +154,7 @@ export const parityPatterns: readonly ParityPattern[] = [
     name: 'existing:reset-unsupported:keep-unsupported:idealSkill',
     options: {
       extent: 4, owned: [{ bonuses: 'practical', idealSkill: true }],
-      resetSupported: false, keepResult: () => 'current', keepSupportedFor: () => false,
+      resetSupported: false, keepResult: () => 'low', keepSupportedFor: () => false,
     },
   },
   // Held / blocked reservations: non-contiguous absolute positions.

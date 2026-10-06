@@ -6,6 +6,7 @@ import {
   SEARCH_FIXTURE_TIME,
 } from '../../../test/fixtures/candidateSearch'
 import { candidateId, ownedWeaponId } from '../../../test/fixtures/domainData'
+import { frontierKeepResult, frontierKeepTierRanks, keepContractGuard } from '../../../test/fixtures/plannerAlternativeFrontier'
 import type { BuildCandidate, OwnedGogmaArtianWeapon, RestorationBonusSet } from '../../models/publicTypes'
 import { keepFamilyLayoutKey } from '../../rng/gogmaBonusFamily'
 import { satisfiesIdealTarget } from '../../target'
@@ -59,9 +60,18 @@ function fixture(bound = 5) {
     calls.push('skill:' + skillCounter)
     return { seriesSkillId: skillCounter === 8 ? 'series_skill.fixture.a' : 'series.other.' + skillCounter, groupSkillId: 'group_skill.fixture.a' }
   })
+  // The RNG_SPEC 6.1 Keep (Issue #154, before B2J): a Keep keeps the slot family
+  // layout and rerolls the tiers to the Practical floor, so a Keep of the Ideal
+  // Reset result is the Ideal-layout Practical, never the Practical-only slots.
+  const keepRanks = frontierKeepTierRanks(input.targetWeapons[0].idealBonuses, input.master)
+  const guardKeep = keepContractGuard(input.master)
   vi.spyOn(engine, 'predictGogmaBonus').mockImplementation(({ gogmaCounter, operation }) => {
     calls.push(operation.type + ':' + gogmaCounter + (operation.type === 'keep_bonuses' ? ':' + keepFamilyLayoutKey(operation.currentBonuses, input.master) : ''))
-    if (operation.type === 'reset_bonuses' && gogmaCounter === 10) return structuredClone(input.targetWeapons[0].idealBonuses)
+    if (operation.type === 'keep_bonuses') {
+      return guardKeep(gogmaCounter, operation.currentBonuses,
+        frontierKeepResult(operation.currentBonuses, 'practical', keepRanks, input.master))
+    }
+    if (gogmaCounter === 10) return structuredClone(input.targetWeapons[0].idealBonuses)
     return practicalOnlyBonuses()
   })
   vi.spyOn(engine, 'advanceNormalCounter').mockImplementation((counter, operation) => counter + operation.count)
