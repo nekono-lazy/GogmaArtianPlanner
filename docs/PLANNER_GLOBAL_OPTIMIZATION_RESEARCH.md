@@ -260,3 +260,10 @@ synchronousなTrace Replay / projection中やBrowser Workerの応答性は保証
   現在の固定ID Factory / Clockは再現性のためのResearch依存である。
 - ゲーム実機での正当性の確認範囲を広げていない。既存RNGのgame-verified / reference-verified / unverifiedの
   境界はそのまま。Synthetic fixture成功は実ゲームの証明ではない。
+
+## 現在地（Phase 2-C2.7-A以降）
+
+Phase 2-C2.6-B2-C2B2K（`B2C2B2K_RECOVERED`）までで、E1 11 Targetはoracle-guided diagnostic上11 / 11となった。
+oracleなしでcontext / extent / budgetを選ぶResearch execution policy、Phase 2-C2.7-Bの事前登録acceptance、
+本Phase 0 prototypeとreservation探索の関係、Production復帰境界は
+[Phase 2-C2.7-A](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27A.md)（docs-only）で整理した。
