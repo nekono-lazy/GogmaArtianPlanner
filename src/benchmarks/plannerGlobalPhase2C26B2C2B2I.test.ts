@@ -3,6 +3,8 @@ import rawB2C2B2E from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json?r
 import rawB2C2B2F from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2F_RESULT.json?raw'
 import rawB2C2B2G from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2G_RESULT.json?raw'
 import rawB2C2B2H from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2H_RESULT.json?raw'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2I_RESULT.json?raw'
+import rawFrozen from '../test/fixtures/predictKeepCachePreB2I.json?raw'
 import bonusStreamSource from '../domain/search/bonusStream.ts?raw'
 import { RESERVED_GOGMA_RUNTIME_PHASES, type ReservedGogmaRuntimeEvent } from '../domain/search/bonusStream'
 import type { Phase2C26B2C2B2EProbe } from './plannerGlobalPhase2C26B2C2B2E'
@@ -502,5 +504,90 @@ describe('Phase 2-C2.6-B2-C2B2I isolation and provenance', () => {
     for (const source of [analysisSource, analyzerSource, targetsSource, prepareSource]) expect(source).not.toMatch(/visitPlannerAlternativeCandidates|runPhase2C26B2C2B2[DFGHI]Search\(|runPhase2C26B2C2B2[DFGHI]Task\(/)
     expect(searchSource).not.toMatch(/onSkillReservedDepth:|onGogmaReservedDepth:|onWorkSettled:/)
     expect(searchSource).not.toMatch(/Date\.now|performance\.now/)
+  })
+})
+
+// ---------------------------------------------------------------- the committed formal RESULT
+
+describe('Phase 2-C2.6-B2-C2B2I committed RESULT', () => {
+  const result = JSON.parse(rawResult)
+  const MEASURED_HEAD = '8f34b9772937c13c36102106722eab23094a9cb7'
+  const after = (category: string) => result.profiles.after.categories.find((c: { category: string }) => c.category === category)
+
+  it('is formal: runner start attestation verified against the independently obtained HEAD / code / Export / manifest / B2-C2B2H (and its before files) / B2-C2B2G / B2-C2B2F / B2-C2B2E, no invalid reason', () => {
+    expect(result.provenance).toMatchObject({ formal: true, evidenceGrade: 'formal', partialRun: false, launchProvenanceVerified: true, launchProvenanceSource: 'runner_start_attestation',
+      launchProvenanceIssues: [], launchProvenanceIntegrityIssues: [], measuredHead: MEASURED_HEAD, analysisHead: MEASURED_HEAD, measuredHeadIsAncestor: true, uncommittedBenchmarkCode: false,
+      smoke: null, calculationCodeChangedSinceMeasuredHead: [], b2c2b2hResultSha256: reg.resultSha256, b2c2b2hMeasuredHead: reg.measuredHead, b2c2b2gResultSha256: reg.b2c2b2gResultSha256,
+      b2c2b2fResultSha256: reg.b2c2b2fResultSha256, b2c2b2eResultSha256: reg.b2c2b2eResultSha256, exportSha256: hJson.provenance.exportSha256, optimization: true,
+      productionOptimizationId: PHASE2C26B2C2B2I_OPTIMIZATION.id, routeExactJudged: false, oracleReadBySearchChild: false })
+    expect(result.provenance.benchmarkCodeSha256).toBe(result.provenance.recomputedBenchmarkCodeSha256)
+    expect(result.provenance.startAttestation.body).toMatchObject({ attestedBy: 'runner', phase: PHASE2C26B2C2B2I_START_ATTESTATION_PHASE, repositoryHead: MEASURED_HEAD, smoke: null,
+      uncommittedBenchmarkCode: false, stage1: PHASE2C26B2C2B2I_STAGE1, cpuProfilerConfig: PHASE2C26B2C2B2I_CPU_PROFILER, productionChangedFiles: ['src/domain/search/bonusStream.ts'],
+      optimizationSourceCheckValid: true, b2c2b2hResultSha256: reg.resultSha256, changedFromB2C2B2H: [...PHASE2C26B2C2B2I_CHANGED_FROM_B2C2B2H] })
+    expect(result.provenance.startAttestation.body.createdAt).toBe(result.provenance.measuredAt)
+    expect(result.invalidReasons).toEqual([])
+    expect(result.afterProfileQualityIssues).toEqual([])
+    expect(Object.values(result.parity.hashChain).every(v => v === true)).toBe(true)
+    expect(Object.values(result.conditions.conditionChecks).every(v => v === true)).toBe(true)
+    // The before evidence: every local B2-C2B2H raw file is the one the B2-C2B2H RESULT recorded.
+    for (const name of PHASE2C26B2C2B2I_BEFORE_FILES) expect(result.sources.b2c2b2hBefore[name]).toMatchObject({ recordedSha256: hJson.sources[name].sha256, localSha256: hJson.sources[name].sha256, matches: true })
+    expect(result.provenance.startAttestation.body.b2c2b2hBeforeFiles).toEqual(Object.fromEntries(PHASE2C26B2C2B2I_BEFORE_FILES.map(name => [name, hJson.sources[name].sha256])))
+  })
+
+  it('changed exactly the registered Production source since B2-C2B2H\'s measured HEAD, in the registered shape, and searched B2-C2B2H\'s Target in B2-C2B2H\'s Search input', async () => {
+    expect(result.productionChange).toMatchObject({ beforeHead: reg.measuredHead, afterHead: MEASURED_HEAD, productionChangedFiles: ['src/domain/search/bonusStream.ts'], equalsRegistered: true,
+      equalsRunnerAttested: true, sourceCheck: { valid: true, onlyRegisteredRegionsChanged: true, afterHasCompositeKey: false, frontierReductionKeyUnchanged: true, resetMemoUnchanged: true } })
+    expect(result.productionChange.changedPaths.filter((path: string) => !isPhase2C26B2C2B2IResearchOrTestPath(path))).toEqual(['src/domain/search/bonusStream.ts'])
+    const derived = phase2c26b2c2b2iPopulation(authorityH(), parsedG.authority, parsedF.authority, parsedE.authority)
+    expect(result.population.targetWeaponIds).toEqual(derived.targetWeaponIds)
+    expect(result.population.probes).toEqual(hJson.population.probes)
+    expect(result.parity.population).toMatchObject({ manifestEqualsDerived: true, runnerTargetsEqualManifest: true, runnerProbesEqualManifest: true, runnerIdentitiesEqualManifest: true,
+      probesEqualB2C2B2HProfiled: true, identitiesEqualB2C2B2HProfiled: true, targets: 1 })
+    expect(result.parity.identity).toMatchObject({ rawEqualsExpected: true, expected: hJson.parity.identity.expected })
+    expect(result.parity.taskRebuild).toMatchObject({ valid: true, tasksEqualRebuilt: true })
+    expect(Object.values(result.parity.childIdentity).every(v => v === true)).toBe(true)
+    const route = result.parity.excludedRoute
+    expect([route.childAttestedExcludedRouteKeySha256, route.b2c2b2hExcludedRouteKeySha256]).toEqual([route.rederivedExcludedRouteKeySha256, route.rederivedExcludedRouteKeySha256])
+    expect(route.rederivedExcludedRouteKeySha256).toBe(hJson.parity.excludedRoute.rederivedExcludedRouteKeySha256)
+    // The frozen pre-optimization record the committed regression test compares with is the one at the measured HEAD.
+    expect(result.semanticParity.committedRegressionTests.files['src/test/fixtures/predictKeepCachePreB2I.json']).toBe(await sha256(rawFrozen))
+  })
+
+  it('pins semantic parity and the direct comparison: 411 identical common held-aware depths, state_generation 969.9 s -> 715.1 s (ratio 0.737)', () => {
+    expect(result.semanticParity).toMatchObject({ valid: true, searchInputAndExcludedRoute: { valid: true } })
+    const d = result.directComparison
+    expect(d).toMatchObject({ valid: true, issues: [], semanticParity: true, beforeDepths: 411, afterDepths: 480, commonDepths: 411, firstMismatch: null, commonGeneratedStates: 738_616_871 })
+    expect(d.beforeDepths).toBe(hJson.intervals.depthRecordsCollected)
+    expect(d.stateGenerationDirectRatio).toBeCloseTo(d.afterStateGenerationMs / d.beforeStateGenerationMs, 12)
+    expect(d.stateGenerationDirectRatio).toBeGreaterThan(0.73)
+    expect(d.stateGenerationDirectRatio).toBeLessThan(0.74)
+    expect(d.byThird.every((t: { ratio: number }) => t.ratio < PHASE2C26B2C2B2I_ADOPT_MAX_DIRECT_RATIO)).toBe(true)
+    // The sections the optimization does not touch stay within 5 % on the same work.
+    expect(d.otherSections.every((s: { ratio: number }) => Math.abs(s.ratio - 1) < 0.05)).toBe(true)
+  })
+
+  it('pins the hotspot: keep_prediction 31.33 % -> 14.27 % of active CPU (ratio 0.455), the composite key and its lookup gone from predictKeep', () => {
+    const cpu = result.cpuHotspot
+    expect(cpu).toMatchObject({ beforeRecordedShare: hJson.decision.secondary[0].shareOfActive, beforeReproduced: true, beforeProfileValid: true, afterProfileValid: true, afterSourceHasCompositeKey: false })
+    expect(cpu.beforeRecomputedShare).toBe(cpu.beforeRecordedShare)
+    expect(cpu.keepPredictionShareRatio).toBeCloseTo(cpu.afterShare / cpu.beforeRecordedShare, 12)
+    expect(cpu.keepPredictionShareRatio).toBeGreaterThan(0.45)
+    expect(cpu.keepPredictionShareRatio).toBeLessThan(0.46)
+    expect(after('keep_prediction').samples).toBe(3_926)
+    expect(result.profiles.after.samples).toEqual({ all: 57_425, interval: 28_304, idle: 788, active: 27_516 })
+    expect(result.profiles.after).toMatchObject({ valid: true, registeredLineMismatches: [], clockAlignment: { valid: true, negativeTimeDeltas: 0 }, window: { stoppedBy: 'window', error: null } })
+    expect(result.profiles.after.unattributedActiveShare).toBeLessThan(0.5)
+    expect(cpu.afterPredictKeepLineTicks.inSpan.map((l: { text: string }) => l.text).join('\n')).not.toMatch(/\\u0000/)
+    expect(cpu.afterPredictKeepLineTicks.inSpan.find((l: { ticks: number }) => l.ticks > 1000).text).toBe('const cached = byFamilyLayout?.get(familyLayoutKey)')
+    expect(result.profiles.after.registeredInclusive.some((r: { registered: string }) => r.registered.endsWith('#predictGogmaBonus'))).toBe(false)
+  })
+
+  it('pins the pre-registered decision: ADOPTED, recomputed from the recorded comparisons', () => {
+    expect(result.thresholds).toEqual({ adoptMaxKeepShareRatio: 0.75, adoptMaxDirectRatio: 0.9, regressionDirectRatio: 1.05, noEffectRatio: 0.95 })
+    expect(result.decision).toMatchObject({ case: 'B2C2B2I_ADOPTED', adoption: 'adopt', reasons: [], stateGenerationDirectRatio: result.directComparison.stateGenerationDirectRatio,
+      keepPredictionShareRatio: result.cpuHotspot.keepPredictionShareRatio })
+    expect(phase2c26b2c2b2iDecision({ invalidReasons: [], identityParity: true, direct: result.directComparison, cpu: result.cpuHotspot }).case).toBe('B2C2B2I_ADOPTED')
+    expect(result.outcome).toMatchObject({ process: 'timeout', record: null, naturalCompletion: false, budgetMs: 1_800_000, completedDepths: 480, deliveredBeforeKill: { deliveryFlushes: 0, deliveryConsumerCalls: 0 } })
+    expect(result.memory.heapRatio).toBeLessThan(1.05)
   })
 })

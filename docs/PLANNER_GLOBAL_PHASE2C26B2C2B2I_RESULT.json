@@ -1,0 +1,1927 @@
+{
+  "phase": "Issue #154 Phase 2-C2.6-B2-C2B2I (post-hoc analysis): predictKeep nested (counter, family layout) memo, formal before (B2-C2B2H) / after check on the B2-C2B2H keep_prediction Target",
+  "analyzedAt": "2026-10-06T04:14:38.115Z",
+  "sources": {
+    "run": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2I_RAW.json.local",
+      "bytes": 33567,
+      "sha256": "d064262e7ccde9015b8f2720dff4002f698e99e94a2d667ad6e1d16289624bf6"
+    },
+    "startAttestation": {
+      "file": "start-attestation.json",
+      "bytes": 9511,
+      "sha256": "f21d889bc0a982f1698e1f22c8b3a0ec153455124584513985c34d4802830ab5"
+    },
+    "processes": {
+      "file": "processes.jsonl",
+      "bytes": 3583,
+      "sha256": "e9b2d2213352e1950c7dcdc188b36ce982f41ab94d3b913c84a74f6803561eaa"
+    },
+    "profile": {
+      "file": "stage1-t02-r11.profile.jsonl",
+      "bytes": 3645628,
+      "sha256": "284c5bb2b0e8d2cbee73bd0de87bb607853eb0f686e778548e14d903ec978a89"
+    },
+    "sections": {
+      "file": "stage1-t02-r11.sections.jsonl",
+      "bytes": 1176205,
+      "sha256": "2a6ac8f2413465a06366c479445cca00819e3a1772694d92b1e1f7ec126b9865"
+    },
+    "cpuProfile": {
+      "file": "stage1-t02-r11.cpuprofile",
+      "bytes": 556460,
+      "sha256": "b0caa89a6ad2efb5d4832d88ea2e0f25602803dac626295f0cd0381fa8dd7205"
+    },
+    "capture": {
+      "file": "stage1-t02-r11.capture.json",
+      "bytes": 1460,
+      "sha256": "a3b4bdfcf8b990c19bcc10fd742e77a57a5bbcb442cd0a1fbb184a9421d0c971"
+    },
+    "scripts": {
+      "file": "stage1-t02-r11.scripts.json",
+      "bytes": 3778076,
+      "sha256": "9437b8555f7c6b7200e9ffdd0c85de402343a727a23895b532a96e825a41e3bc"
+    },
+    "probeManifest": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2I_PROBES.json.local",
+      "bytes": 1746,
+      "sha256": "fb427c99ab720e32ad9e970b29395a07ad97e9b77f9e129986adeaf6a9b9e443"
+    },
+    "export": {
+      "file": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "b2c2b2hResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2H_RESULT.json",
+      "bytes": 85059,
+      "sha256": "e03fa2bb7065906e26fb05cd74e755977edbdfb67ada5cacaea380a6ab9aff6b"
+    },
+    "b2c2b2gResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2G_RESULT.json",
+      "bytes": 45996,
+      "sha256": "ff163148a5dc32218868838d24985ba64a2b664618545033cddd9b162cd9a011"
+    },
+    "b2c2b2fResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2F_RESULT.json",
+      "bytes": 40291,
+      "sha256": "b7b707bbf34a851131eba1a312f228f2948fb5c15d3a9ffad18443365279333d"
+    },
+    "b2c2b2eResult": {
+      "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2E_RESULT.json",
+      "bytes": 65368,
+      "sha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe"
+    },
+    "b2c2b2hBefore": {
+      "run": {
+        "file": "PLANNER_GLOBAL_PHASE2C26B2C2B2H_RAW.json.local",
+        "recordedSha256": "a5728e9b387a132ff3dfa8dbd3435704316f8aa49c8069cefdf1a0c389450427",
+        "localSha256": "a5728e9b387a132ff3dfa8dbd3435704316f8aa49c8069cefdf1a0c389450427",
+        "matches": true
+      },
+      "profile": {
+        "file": "stage1-t02-r11.profile.jsonl",
+        "recordedSha256": "a231ced3ccb9afe8ee9dd1a42b716c5a13b8bc292fbb6c4871de3b77b500950e",
+        "localSha256": "a231ced3ccb9afe8ee9dd1a42b716c5a13b8bc292fbb6c4871de3b77b500950e",
+        "matches": true
+      },
+      "sections": {
+        "file": "stage1-t02-r11.sections.jsonl",
+        "recordedSha256": "3112475b90a9fc471bcd983ce5bc66b67d3e0324c171e9a6b2f124dc0171048e",
+        "localSha256": "3112475b90a9fc471bcd983ce5bc66b67d3e0324c171e9a6b2f124dc0171048e",
+        "matches": true
+      },
+      "cpuProfile": {
+        "file": "stage1-t02-r11.cpuprofile",
+        "recordedSha256": "c7226676ebeea7523391b369234981be1a8e827796efd0ff6aeaa6982feb82a2",
+        "localSha256": "c7226676ebeea7523391b369234981be1a8e827796efd0ff6aeaa6982feb82a2",
+        "matches": true
+      },
+      "capture": {
+        "file": "stage1-t02-r11.capture.json",
+        "recordedSha256": "711d4fc4ed8eae8671cc016fce3178d4295637c2b3be4d490694d310f73b6db9",
+        "localSha256": "711d4fc4ed8eae8671cc016fce3178d4295637c2b3be4d490694d310f73b6db9",
+        "matches": true
+      },
+      "scripts": {
+        "file": "stage1-t02-r11.scripts.json",
+        "recordedSha256": "e1228d860697469cabd22d380c4132b1d80ce83c252a81d5203a84fee5167b93",
+        "localSha256": "e1228d860697469cabd22d380c4132b1d80ce83c252a81d5203a84fee5167b93",
+        "matches": true
+      }
+    }
+  },
+  "provenance": {
+    "formal": true,
+    "evidenceGrade": "formal",
+    "partialRun": false,
+    "launchProvenanceVerified": true,
+    "launchProvenanceSource": "runner_start_attestation",
+    "launchProvenanceReason": null,
+    "launchProvenanceIssues": [],
+    "launchProvenanceIntegrityIssues": [],
+    "startAttestation": {
+      "file": "start-attestation.json",
+      "sha256": "f21d889bc0a982f1698e1f22c8b3a0ec153455124584513985c34d4802830ab5",
+      "bytes": 9511,
+      "body": {
+        "phase": "Issue #154 Phase 2-C2.6-B2-C2B2I runner start attestation",
+        "attestedBy": "runner",
+        "b2c2b2hConditions": {
+          "stage1": {
+            "executionClass": "stage1",
+            "childHeapMb": 12288,
+            "concurrency": 1,
+            "budgetMs": 1800000,
+            "retry": "none",
+            "fallback": "none"
+          },
+          "b2c2b2gStage1": {
+            "executionClass": "stage1",
+            "childHeapMb": 12288,
+            "concurrency": 1,
+            "budgetMs": 1800000,
+            "retry": "none",
+            "fallback": "none"
+          },
+          "changedStage1Fields": [],
+          "changedFromB2C2B2G": [
+            "cpuProfiler"
+          ],
+          "tasksBudgetMs": 600000,
+          "targets": 1,
+          "expectedTasks": 1,
+          "population": "B2C2B2G_STATE_GENERATION_DOMINANT_PROFILED_TARGET",
+          "section": "state_generation",
+          "contextSelection": "b2c1_recorded_p1_first_compatible_rank",
+          "extentRule": "b2c2b2d_tight_max_production_default_b2c2b1_required_v1",
+          "captureRule": {
+            "policy": "C4C",
+            "maxCostCohorts": 4,
+            "sentinel": "first delivery of the fifth distinct operation cost (never captured)",
+            "prefixes": {
+              "C8": 8,
+              "C32": 32
+            }
+          },
+          "candidateSafetyCap": 1024,
+          "registeredP1": {
+            "id": "P1",
+            "name": "default_simple_first",
+            "keys": [
+              [
+                "targetEligibleMinCardinality",
+                "asc"
+              ],
+              [
+                "exclusiveOwnedWeaponCount",
+                "asc"
+              ],
+              [
+                "blockedCountDefaultTotal",
+                "asc"
+              ],
+              [
+                "shareableHeldCountDefaultTotal",
+                "desc"
+              ],
+              [
+                "reservationDigest",
+                "asc"
+              ]
+            ]
+          },
+          "nodeYield": "setImmediate",
+          "memorySampleIntervalMs": 250,
+          "searchInstrumentation": {
+            "onSearchRuntime": true,
+            "onGogmaReservedRuntime": true,
+            "onGogmaReservedDepth": false,
+            "onSkillReservedDepth": false,
+            "onWorkSettled": false
+          },
+          "innerSections": [
+            "window_collection",
+            "support_evaluation",
+            "state_generation",
+            "solution_materialization",
+            "frontier_reduction_sort",
+            "exhaustion_scan"
+          ],
+          "b2c2b2gCpuProfiler": false,
+          "cpuProfiler": true,
+          "cpuProfilerConfig": {
+            "requestedSamplingIntervalUs": 10000,
+            "warmupMs": 120000,
+            "profileStopMs": 720000,
+            "requestedProfileDurationMs": 600000
+          },
+          "nodeFlags": [
+            "--max-old-space-size=12288"
+          ],
+          "sectionStream": {
+            "kind": "gogma_boundary",
+            "perBoundary": true,
+            "perGeneratedState": false
+          },
+          "heartbeatIntervalMs": 5000,
+          "windowsMs": [
+            [
+              0,
+              600000
+            ],
+            [
+              600000,
+              1200000
+            ],
+            [
+              1200000,
+              1800000
+            ]
+          ],
+          "provenanceFlags": {
+            "oracleGuidedPolicySelection": true,
+            "oracleGuidedTargetPopulation": true,
+            "oracleGuidedContextSelection": true,
+            "oracleInformedPerTargetExtent": true,
+            "targetIndividualOracleExtentAsSearchInput": true,
+            "perTargetExtent": true,
+            "commonExtentForEveryTask": false,
+            "contextOrderingUsesOracle": true,
+            "oracleReadBySearchChild": false,
+            "oracleMatchUsedForEarlyStop": false,
+            "expectedOutcomeKnownBySearchChild": false,
+            "productionSchedulerEvidence": false,
+            "productionExtentSelectionEvidence": false,
+            "oracleGuidedProfilingTarget": true,
+            "routeExactJudged": false,
+            "profilingOnly": true,
+            "innerRuntimeProfiling": true,
+            "absoluteRuntimeComparedWithB2C2B2F": false,
+            "cpuProfiling": true,
+            "absoluteRuntimeComparedWithB2C2B2G": false,
+            "optimization": false
+          }
+        },
+        "changedFromB2C2B2H": [
+          "production_optimization:predict_keep_nested_counter_family_cache_v1"
+        ],
+        "targets": 1,
+        "expectedTasks": 1,
+        "population": "B2C2B2H_KEEP_PREDICTION_PROFILED_TARGET",
+        "optimization": {
+          "id": "predict_keep_nested_counter_family_cache_v1",
+          "file": "src/domain/search/bonusStream.ts",
+          "function": "predictKeep",
+          "old": "Map<composite-string, Prediction>: key `${gogmaCounter}\\u0000${familyLayoutKey}` built on every lookup",
+          "new": "Map<counter, Map<family-layout-key, Prediction>>: outer key gogmaCounter, inner key familyLayoutKey, no composite string",
+          "pair": "(gogmaCounter, familyLayoutKey), unchanged",
+          "unchanged": [
+            "prediction input",
+            "familyLayoutKey definition",
+            "slot order",
+            "family normalization",
+            "currentBonuses (the first requesting state's five slots)",
+            "Reset prediction / memo",
+            "RNG counters",
+            "Production RNG",
+            "memo scope (one createTargetBonusStream() instance)",
+            "memo lifetime",
+            "lazy prediction",
+            "cache sharing across tiers of one family layout",
+            "Search ordering",
+            "Candidate semantics",
+            "frontier reduction key",
+            "checkpoint / yield frequency"
+          ]
+        },
+        "registeredProductionChangedFiles": [
+          "src/domain/search/bonusStream.ts"
+        ],
+        "provenanceFlags": {
+          "oracleGuidedPolicySelection": true,
+          "oracleGuidedTargetPopulation": true,
+          "oracleGuidedContextSelection": true,
+          "oracleInformedPerTargetExtent": true,
+          "targetIndividualOracleExtentAsSearchInput": true,
+          "perTargetExtent": true,
+          "commonExtentForEveryTask": false,
+          "contextOrderingUsesOracle": true,
+          "oracleReadBySearchChild": false,
+          "oracleMatchUsedForEarlyStop": false,
+          "expectedOutcomeKnownBySearchChild": false,
+          "productionSchedulerEvidence": false,
+          "productionExtentSelectionEvidence": false,
+          "oracleGuidedProfilingTarget": true,
+          "routeExactJudged": false,
+          "profilingOnly": false,
+          "innerRuntimeProfiling": true,
+          "absoluteRuntimeComparedWithB2C2B2F": false,
+          "cpuProfiling": true,
+          "absoluteRuntimeComparedWithB2C2B2G": false,
+          "optimization": true,
+          "productionOptimizationId": "predict_keep_nested_counter_family_cache_v1",
+          "beforeAuthority": "B2-C2B2H formal RESULT and its local raw / profile / sections / cpuprofile (SHA-256 checked)",
+          "absoluteRuntimeComparedWithB2C2B2H": "only through the semantic-identical common held-aware depth prefix (state_generation section ms); CPU shares of the same classification"
+        },
+        "createdAt": "2026-10-06T03:43:48.656Z",
+        "runnerScript": "scripts/run-planner-global-phase2c26b2c2b2i.mjs",
+        "node": "v24.19.0",
+        "repositoryHead": "8f34b9772937c13c36102106722eab23094a9cb7",
+        "uncommittedBenchmarkCode": false,
+        "benchmarkCodeSha256": "e2b044e189fd18a32b599b46f9b13d7e7f3592397a1f8384c18724307dbb5a3b",
+        "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
+        "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+        "exportBytes": 19424064,
+        "probeManifestFileName": "PLANNER_GLOBAL_PHASE2C26B2C2B2I_PROBES.json.local",
+        "probeManifestSha256": "fb427c99ab720e32ad9e970b29395a07ad97e9b77f9e129986adeaf6a9b9e443",
+        "probeManifestB2C2B2HResultSha256": "e03fa2bb7065906e26fb05cd74e755977edbdfb67ada5cacaea380a6ab9aff6b",
+        "probeManifestB2C2B2GResultSha256": "ff163148a5dc32218868838d24985ba64a2b664618545033cddd9b162cd9a011",
+        "probeManifestB2C2B2FResultSha256": "b7b707bbf34a851131eba1a312f228f2948fb5c15d3a9ffad18443365279333d",
+        "probeManifestB2C2B2EResultSha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe",
+        "targetWeaponIds": [
+          "a367c177-a0c2-4986-995e-4efcf4131b5c"
+        ],
+        "probes": [
+          {
+            "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+            "b2c2b2dTaskId": "t02-r11",
+            "contextRank": 11,
+            "extent": {
+              "maxNormalAdvance": 4,
+              "maxGogmaAdvance": 235,
+              "maxSkillAdvance": 1083
+            }
+          }
+        ],
+        "expectedTaskIdentities": [
+          {
+            "taskId": "t02-r11",
+            "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+            "contextRank": 11,
+            "groupIndex": 3,
+            "reservationDigest": "fnv1a32:ff85a91d",
+            "targetEligibleMinCardinality": 1,
+            "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+            "representativeFixedTargetWeaponIds": [
+              "070a1222-5e31-4c9f-a035-c557bfa7be73"
+            ],
+            "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+            "searchInputDigest": "fnv1a32:824a0ec4",
+            "extent": {
+              "maxNormalAdvance": 4,
+              "maxGogmaAdvance": 235,
+              "maxSkillAdvance": 1083
+            }
+          }
+        ],
+        "b2c2b2hResultSha256": "e03fa2bb7065906e26fb05cd74e755977edbdfb67ada5cacaea380a6ab9aff6b",
+        "b2c2b2hMeasuredHead": "435fe0b53f56fed74ace9e16cf42281996c68514",
+        "b2c2b2hBeforeFiles": {
+          "run": "a5728e9b387a132ff3dfa8dbd3435704316f8aa49c8069cefdf1a0c389450427",
+          "profile": "a231ced3ccb9afe8ee9dd1a42b716c5a13b8bc292fbb6c4871de3b77b500950e",
+          "sections": "3112475b90a9fc471bcd983ce5bc66b67d3e0324c171e9a6b2f124dc0171048e",
+          "cpuProfile": "c7226676ebeea7523391b369234981be1a8e827796efd0ff6aeaa6982feb82a2",
+          "capture": "711d4fc4ed8eae8671cc016fce3178d4295637c2b3be4d490694d310f73b6db9",
+          "scripts": "e1228d860697469cabd22d380c4132b1d80ce83c252a81d5203a84fee5167b93"
+        },
+        "productionChangedFiles": [
+          "src/domain/search/bonusStream.ts"
+        ],
+        "optimizationSourceCheckValid": true,
+        "stage1": {
+          "executionClass": "stage1",
+          "childHeapMb": 12288,
+          "concurrency": 1,
+          "budgetMs": 1800000,
+          "retry": "none",
+          "fallback": "none"
+        },
+        "cpuProfilerConfig": {
+          "requestedSamplingIntervalUs": 10000,
+          "warmupMs": 120000,
+          "profileStopMs": 720000,
+          "requestedProfileDurationMs": 600000
+        },
+        "smoke": null
+      }
+    },
+    "measuredHead": "8f34b9772937c13c36102106722eab23094a9cb7",
+    "measuredHeadSource": "runner_start_attestation",
+    "measuredHeadIsAncestor": true,
+    "measuredAt": "2026-10-06T03:43:48.656Z",
+    "recomputedBenchmarkCodeSha256": "e2b044e189fd18a32b599b46f9b13d7e7f3592397a1f8384c18724307dbb5a3b",
+    "benchmarkCodeSha256": "e2b044e189fd18a32b599b46f9b13d7e7f3592397a1f8384c18724307dbb5a3b",
+    "analysisHead": "8f34b9772937c13c36102106722eab23094a9cb7",
+    "analysisCodeUncommitted": false,
+    "calculationCodeChangedSinceMeasuredHead": [],
+    "postHocAllowedFiles": [
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B2IAnalysis.ts",
+      "scripts/analyze-planner-global-phase2c26b2c2b2i.mjs",
+      "*.test.ts"
+    ],
+    "uncommittedBenchmarkCode": false,
+    "smoke": null,
+    "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "b2c2b2hResultSha256": "e03fa2bb7065906e26fb05cd74e755977edbdfb67ada5cacaea380a6ab9aff6b",
+    "b2c2b2hMeasuredHead": "435fe0b53f56fed74ace9e16cf42281996c68514",
+    "b2c2b2gResultSha256": "ff163148a5dc32218868838d24985ba64a2b664618545033cddd9b162cd9a011",
+    "b2c2b2fResultSha256": "b7b707bbf34a851131eba1a312f228f2948fb5c15d3a9ffad18443365279333d",
+    "b2c2b2eResultSha256": "5bf6bba389bb3c4f1089ddc9b079426930be203bd5e88f3d3f9b2032a42ecabe",
+    "probeManifestSha256": "fb427c99ab720e32ad9e970b29395a07ad97e9b77f9e129986adeaf6a9b9e443",
+    "oracleGuidedPolicySelection": true,
+    "oracleGuidedTargetPopulation": true,
+    "oracleGuidedContextSelection": true,
+    "oracleInformedPerTargetExtent": true,
+    "targetIndividualOracleExtentAsSearchInput": true,
+    "perTargetExtent": true,
+    "commonExtentForEveryTask": false,
+    "contextOrderingUsesOracle": true,
+    "oracleReadBySearchChild": false,
+    "oracleMatchUsedForEarlyStop": false,
+    "expectedOutcomeKnownBySearchChild": false,
+    "productionSchedulerEvidence": false,
+    "productionExtentSelectionEvidence": false,
+    "oracleGuidedProfilingTarget": true,
+    "routeExactJudged": false,
+    "profilingOnly": false,
+    "innerRuntimeProfiling": true,
+    "absoluteRuntimeComparedWithB2C2B2F": false,
+    "cpuProfiling": true,
+    "absoluteRuntimeComparedWithB2C2B2G": false,
+    "optimization": true,
+    "productionOptimizationId": "predict_keep_nested_counter_family_cache_v1",
+    "beforeAuthority": "B2-C2B2H formal RESULT and its local raw / profile / sections / cpuprofile (SHA-256 checked)",
+    "absoluteRuntimeComparedWithB2C2B2H": "only through the semantic-identical common held-aware depth prefix (state_generation section ms); CPU shares of the same classification"
+  },
+  "environment": {
+    "runtime": "Node (Vite SSR loader, one fresh child process per task, NOT a Browser Worker)",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "platform": "win32",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "freeMemoryBytesAtLaunch": 17695543296,
+    "rngEngineVersion": "production-rng:c5-e7",
+    "profilerMethod": "node:inspector Session (main thread): Debugger.enable while the modules load (scriptParsed: url + inline source map), Debugger.disable, then Profiler.enable / setSamplingInterval / start / stop (A5 profile controller, Search start anchor)"
+  },
+  "productionChange": {
+    "beforeHead": "435fe0b53f56fed74ace9e16cf42281996c68514",
+    "afterHead": "8f34b9772937c13c36102106722eab23094a9cb7",
+    "changedPaths": [
+      "scripts/analyze-planner-global-phase2c26b2c2b2i.mjs",
+      "scripts/prepare-planner-global-phase2c26b2c2b2i-probes.mjs",
+      "scripts/run-planner-global-phase2c26b2c2b2i.mjs",
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B2H.test.ts",
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B2I.test.ts",
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B2I.ts",
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B2IAnalysis.ts",
+      "src/benchmarks/plannerGlobalPhase2C26B2C2B2ITargets.ts",
+      "src/domain/search/bonusStream.ts",
+      "src/domain/search/predictKeepNestedCache.test.ts",
+      "src/test/fixtures/predictKeepCacheParity.ts",
+      "src/test/fixtures/predictKeepCachePreB2I.json"
+    ],
+    "productionChangedFiles": [
+      "src/domain/search/bonusStream.ts"
+    ],
+    "registered": [
+      "src/domain/search/bonusStream.ts"
+    ],
+    "equalsRegistered": true,
+    "equalsRunnerAttested": true,
+    "sourceCheck": {
+      "valid": true,
+      "issues": [],
+      "onlyRegisteredRegionsChanged": true,
+      "beforeHasCompositeKey": true,
+      "afterHasCompositeKey": false,
+      "afterHasNestedLookup": true,
+      "afterDeclaresNestedMemo": true,
+      "frontierReductionKeyUnchanged": true,
+      "resetMemoUnchanged": true,
+      "afterRegistersOnlyAfterPrediction": true
+    },
+    "optimization": {
+      "id": "predict_keep_nested_counter_family_cache_v1",
+      "file": "src/domain/search/bonusStream.ts",
+      "function": "predictKeep",
+      "old": "Map<composite-string, Prediction>: key `${gogmaCounter}\\u0000${familyLayoutKey}` built on every lookup",
+      "new": "Map<counter, Map<family-layout-key, Prediction>>: outer key gogmaCounter, inner key familyLayoutKey, no composite string",
+      "pair": "(gogmaCounter, familyLayoutKey), unchanged",
+      "unchanged": [
+        "prediction input",
+        "familyLayoutKey definition",
+        "slot order",
+        "family normalization",
+        "currentBonuses (the first requesting state's five slots)",
+        "Reset prediction / memo",
+        "RNG counters",
+        "Production RNG",
+        "memo scope (one createTargetBonusStream() instance)",
+        "memo lifetime",
+        "lazy prediction",
+        "cache sharing across tiers of one family layout",
+        "Search ordering",
+        "Candidate semantics",
+        "frontier reduction key",
+        "checkpoint / yield frequency"
+      ]
+    }
+  },
+  "conditions": {
+    "stage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 12288,
+      "concurrency": 1,
+      "budgetMs": 1800000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "b2c2b2hStage1": {
+      "executionClass": "stage1",
+      "childHeapMb": 12288,
+      "concurrency": 1,
+      "budgetMs": 1800000,
+      "retry": "none",
+      "fallback": "none"
+    },
+    "changedFromB2C2B2H": [
+      "production_optimization:predict_keep_nested_counter_family_cache_v1"
+    ],
+    "conditionChecks": {
+      "stage1IsRegistered": true,
+      "stage1EqualsB2C2B2H": true,
+      "budgetIs30Minutes": true,
+      "heapIs12288Mb": true,
+      "concurrencyIs1": true,
+      "noRetry": true,
+      "noFallback": true,
+      "instrumentationIsTwoObservers": true,
+      "instrumentationEqualsB2C2B2H": true,
+      "innerSectionsAreRegistered": true,
+      "optimizationIsTheOnlyChange": true,
+      "cpuProfilerOn": true,
+      "cpuProfilerConfigEqualsB2C2B2H": true,
+      "cpuProfilerConfigIsRegistered": true,
+      "nodeFlagsEqualB2C2B2H": true,
+      "nodeFlagsAreHeapOnly": true,
+      "conditionIssues": true
+    },
+    "searchInstrumentation": {
+      "onSearchRuntime": true,
+      "onGogmaReservedRuntime": true,
+      "onGogmaReservedDepth": false,
+      "onSkillReservedDepth": false,
+      "onWorkSettled": false
+    },
+    "innerSections": [
+      "window_collection",
+      "support_evaluation",
+      "state_generation",
+      "solution_materialization",
+      "frontier_reduction_sort",
+      "exhaustion_scan"
+    ],
+    "section": "state_generation",
+    "cpuProfiler": true,
+    "cpuProfilerConfig": {
+      "requestedSamplingIntervalUs": 10000,
+      "warmupMs": 120000,
+      "profileStopMs": 720000,
+      "requestedProfileDurationMs": 600000
+    },
+    "nodeFlags": [
+      "--max-old-space-size=12288"
+    ],
+    "sectionStream": {
+      "kind": "gogma_boundary",
+      "perBoundary": true,
+      "perGeneratedState": false
+    },
+    "heartbeatIntervalMs": 5000,
+    "windowsMs": [
+      [
+        0,
+        600000
+      ],
+      [
+        600000,
+        1200000
+      ],
+      [
+        1200000,
+        1800000
+      ]
+    ],
+    "memorySampleIntervalMs": 250,
+    "nodeYield": "setImmediate",
+    "candidateSafetyCap": 1024,
+    "maxCostCohorts": 4,
+    "notRun": [
+      "search_semantics_change",
+      "search_ordering_change",
+      "search_comparator_change",
+      "candidate_materializer_change",
+      "capture_change",
+      "extent_change",
+      "context_change",
+      "p1_change",
+      "new_production_instrumentation_seam",
+      "new_inner_section",
+      "per_state_timer_or_callback",
+      "no_inlining_diagnostic",
+      "heap_allocation_profiler",
+      "heap_snapshot",
+      "heap_16gb",
+      "budget_60min_or_more",
+      "automatic_longer_retry",
+      "retry",
+      "timeout_fallback",
+      "oom_fallback",
+      "reserved_depth_observer",
+      "work_settled_observer",
+      "exact_route_judgement",
+      "e2_search",
+      "k2_feature_grouping",
+      "residual_unreached_support",
+      "global_assignment",
+      "full_planner_rerun",
+      "ui_change",
+      "solution_materialization_optimization",
+      "a3_a9_result_regeneration",
+      "b2c2b2e_result_regeneration",
+      "b2c2b2f_result_regeneration",
+      "b2c2b2g_result_regeneration",
+      "second_production_optimization",
+      "frontier_reduction_key_change",
+      "keep_family_layout_key_optimization",
+      "reserved_generated_state_optimization",
+      "checkpoint_or_yield_change",
+      "reset_memo_change",
+      "new_production_instrumentation",
+      "schema_change",
+      "persistence_change",
+      "rng_change",
+      "b2c2b2h_rerun",
+      "b2c2b2h_result_regeneration",
+      "allocation_profiler"
+    ],
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    },
+    "researchMaxPlanSteps": 20000
+  },
+  "population": {
+    "rule": "B2-C2B2H decision.case = B2C2B2H_MIXED and decision.nextPhaseCategories = [keep_prediction]: the Target B2-C2B2H profiled, cross-checked against the population B2-C2B2H's derivation re-derives from B2-C2B2G, B2-C2B2F and B2-C2B2E",
+    "targetWeaponIds": [
+      "a367c177-a0c2-4986-995e-4efcf4131b5c"
+    ],
+    "probes": [
+      {
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "b2c2b2dTaskId": "t02-r11",
+        "contextRank": 11,
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      }
+    ]
+  },
+  "parity": {
+    "b2c2b2hAuthority": {
+      "valid": true,
+      "issues": [],
+      "decisionCase": "B2C2B2H_MIXED",
+      "keepPredictionShareOfActive": 0.3132694514218377
+    },
+    "b2c2b2gAuthority": {
+      "valid": true,
+      "issues": []
+    },
+    "b2c2b2fAuthority": {
+      "valid": true,
+      "issues": []
+    },
+    "b2c2b2eAuthority": {
+      "valid": true,
+      "issues": []
+    },
+    "hashChain": {
+      "b2c2b2hResultIsRegistered": true,
+      "b2c2b2gResultIsRegistered": true,
+      "b2c2b2fResultIsRegistered": true,
+      "b2c2b2eResultIsRegistered": true,
+      "b2c2b2hMadeAgainstB2C2B2G": true,
+      "b2c2b2hMadeAgainstB2C2B2F": true,
+      "b2c2b2hMadeAgainstB2C2B2E": true,
+      "b2c2b2gMadeAgainstB2C2B2F": true,
+      "b2c2b2gMadeAgainstB2C2B2E": true,
+      "b2c2b2fMadeAgainstB2C2B2E": true,
+      "probeManifestFromB2C2B2H": true,
+      "probeManifestFromB2C2B2G": true,
+      "probeManifestFromB2C2B2F": true,
+      "probeManifestFromB2C2B2E": true,
+      "probeManifestMatchesRunner": true,
+      "b2c2b2hMatchesRunner": true,
+      "beforeFilesMatchRunner": true,
+      "beforeFilesMatchRecorded": true,
+      "exportMatchesRunner": true,
+      "exportMatchesProbeManifest": true,
+      "exportMatchesB2C2B2H": true,
+      "exportMatchesB2C2B2G": true,
+      "exportMatchesB2C2B2F": true,
+      "exportMatchesB2C2B2E": true
+    },
+    "population": {
+      "manifestEqualsDerived": true,
+      "runnerTargetsEqualManifest": true,
+      "runnerProbesEqualManifest": true,
+      "runnerIdentitiesEqualManifest": true,
+      "probesEqualB2C2B2HProfiled": true,
+      "identitiesEqualB2C2B2HProfiled": true,
+      "targets": 1,
+      "chain": {
+        "b2c2b2gAuthorityIsB2C2B2HAuthority": true,
+        "b2c2b2fAuthorityIsB2C2B2HAuthority": true,
+        "b2c2b2eAuthorityIsB2C2B2HAuthority": true,
+        "targetsEqualB2C2B2HDerived": true,
+        "probesEqualB2C2B2HDerived": true,
+        "identitiesEqualB2C2B2HDerived": true,
+        "excludedRouteEqualsB2C2B2HDerived": true,
+        "exportEqualsB2C2B2G": true
+      }
+    },
+    "taskRebuild": {
+      "valid": true,
+      "issues": [],
+      "tasksEqualRebuilt": true
+    },
+    "identity": {
+      "expected": {
+        "taskId": "t02-r11",
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contextRank": 11,
+        "groupIndex": 3,
+        "reservationDigest": "fnv1a32:ff85a91d",
+        "targetEligibleMinCardinality": 1,
+        "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+        "representativeFixedTargetWeaponIds": [
+          "070a1222-5e31-4c9f-a035-c557bfa7be73"
+        ],
+        "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+        "searchInputDigest": "fnv1a32:824a0ec4",
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      },
+      "raw": {
+        "taskId": "t02-r11",
+        "targetWeaponId": "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "contextRank": 11,
+        "groupIndex": 3,
+        "reservationDigest": "fnv1a32:ff85a91d",
+        "targetEligibleMinCardinality": 1,
+        "representativeFixedSetId": "K1:build-list.fnv1a32-32e817d9",
+        "representativeFixedTargetWeaponIds": [
+          "070a1222-5e31-4c9f-a035-c557bfa7be73"
+        ],
+        "defaultSearchInputDigest": "fnv1a32:d80ff6de",
+        "searchInputDigest": "fnv1a32:824a0ec4",
+        "extent": {
+          "maxNormalAdvance": 4,
+          "maxGogmaAdvance": 235,
+          "maxSkillAdvance": 1083
+        }
+      },
+      "rawEqualsExpected": true
+    },
+    "excludedRoute": {
+      "valid": true,
+      "issues": [],
+      "excludedRouteKeyCount": 1,
+      "excludedRouteIsCurrentRoute": true,
+      "rederivedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+      "b2c2b2hExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba",
+      "childAttestedExcludedRouteKeySha256": "4a875aac19fe2ecb92343266fd50ae0a2c94e3072c48660d8656cf1e1aec68ba"
+    },
+    "childIdentity": {
+      "present": true,
+      "taskId": true,
+      "targetWeaponId": true,
+      "searchInputDigest": true,
+      "defaultSearchInputDigest": true,
+      "extent": true,
+      "groupIndex": true,
+      "reservationDigest": true,
+      "excludedRouteIsCurrentRoute": true,
+      "excludedRouteEqualsRederived": true,
+      "excludedRouteEqualsB2C2B2H": true
+    }
+  },
+  "semanticParity": {
+    "valid": true,
+    "commonDepthPrefix": {
+      "semanticParity": true,
+      "beforeDepths": 411,
+      "afterDepths": 480,
+      "commonDepths": 411,
+      "firstMismatch": null,
+      "commonGeneratedStates": 738616871,
+      "issues": []
+    },
+    "searchInputAndExcludedRoute": {
+      "valid": true,
+      "checks": {
+        "present": true,
+        "taskId": true,
+        "targetWeaponId": true,
+        "searchInputDigest": true,
+        "defaultSearchInputDigest": true,
+        "extent": true,
+        "groupIndex": true,
+        "reservationDigest": true,
+        "excludedRouteIsCurrentRoute": true,
+        "excludedRouteEqualsRederived": true,
+        "excludedRouteEqualsB2C2B2H": true
+      }
+    },
+    "committedRegressionTests": {
+      "note": "bounded ordinary / held-aware stream, bounded Candidate Search / Planner Alternative Search records, Candidate ordering / termination and every Engine call with its exact input, frozen from main 4007ef1 (the composite key) and compared at the measured HEAD by these committed tests",
+      "files": {
+        "src/domain/search/predictKeepNestedCache.test.ts": "3285cb3862072328fa7d076e5f2ec900f408862b299ca5f1c2ddf4c6d3001bb7",
+        "src/test/fixtures/predictKeepCachePreB2I.json": "1556ab3abf2c04bc9283d7c2372917cc08bcbb4ceeca2493b6edbdd048ffa4aa",
+        "src/test/fixtures/predictKeepCacheParity.ts": "6dfea3a1cea37753008f3cba0aef0585e0bb1887421fc26df6d93111668fb96e",
+        "src/domain/search/reservedBonusStreamSinglePass.test.ts": "6ce922afdd6eca6b61d4d61e5d088bd70ac3b00da8375628516b2ac7a2ec85f4",
+        "src/test/fixtures/reservedBonusStreamPreD2D.json": "1783ef20a188621885549006a72f7784e84ef8cf8f045e6d3de0e96e1f03f279",
+        "src/domain/search/bonusStreamIndependence.test.ts": "f7f59de94a79d600246c7cdbb680bc0ec058bc2b4f6bafc2b61e62b6d8243f27"
+      }
+    }
+  },
+  "directComparison": {
+    "valid": true,
+    "issues": [],
+    "semanticParity": true,
+    "beforeDepths": 411,
+    "afterDepths": 480,
+    "commonDepths": 411,
+    "firstMismatch": null,
+    "commonGeneratedStates": 738616871,
+    "beforeStateGenerationMs": 969911.3156999992,
+    "afterStateGenerationMs": 715055.1334999993,
+    "stateGenerationDirectRatio": 0.7372376442313527,
+    "beforeNsPerGeneratedState": 1313.1453582787162,
+    "afterNsPerGeneratedState": 968.1001904707363,
+    "byThird": [
+      {
+        "fromIndex": 0,
+        "toIndex": 137,
+        "generatedStates": 249106995,
+        "beforeMs": 332327.4757999998,
+        "afterMs": 241675.2508999997,
+        "ratio": 0.7272201924268334
+      },
+      {
+        "fromIndex": 137,
+        "toIndex": 274,
+        "generatedStates": 257983281,
+        "beforeMs": 337236.05999999994,
+        "afterMs": 248596.00989999977,
+        "ratio": 0.7371572598137928
+      },
+      {
+        "fromIndex": 274,
+        "toIndex": 411,
+        "generatedStates": 231526595,
+        "beforeMs": 300347.7798999995,
+        "afterMs": 224783.87269999983,
+        "ratio": 0.7484119668700112
+      }
+    ],
+    "otherSections": [
+      {
+        "section": "window_collection",
+        "beforeMs": 19030.328200000953,
+        "afterMs": 18942.308600004028,
+        "ratio": 0.9953747723595792
+      },
+      {
+        "section": "support_evaluation",
+        "beforeMs": 36523.2593999994,
+        "afterMs": 36815.48889999818,
+        "ratio": 1.0080011889628553
+      },
+      {
+        "section": "solution_materialization",
+        "beforeMs": 265629.19419999764,
+        "afterMs": 278177.9578,
+        "ratio": 1.0472416581987374
+      },
+      {
+        "section": "frontier_reduction_sort",
+        "beforeMs": 222195.3689000026,
+        "afterMs": 220644.40020000047,
+        "ratio": 0.9930197973626529
+      },
+      {
+        "section": "exhaustion_scan",
+        "beforeMs": 1550.753899999184,
+        "afterMs": 1547.4000999994232,
+        "ratio": 0.9978373099691947
+      }
+    ],
+    "inclusive": {
+      "beforeMs": 1515093.2549999992,
+      "afterMs": 1271398.5699000002,
+      "ratio": 0.8391553230827372
+    }
+  },
+  "cpuHotspot": {
+    "beforeRecordedShare": 0.3132694514218377,
+    "beforeRecomputedShare": 0.3132694514218377,
+    "beforeReproduced": true,
+    "beforeProfileValid": true,
+    "beforeQualityIssues": [],
+    "afterShare": 0.1426806221834569,
+    "afterProfileValid": true,
+    "afterQualityIssues": [],
+    "keepPredictionShareRatio": 0.45545654558997567,
+    "descriptiveShareRatio": 0.45545654558997567,
+    "categories": [
+      {
+        "category": "generation_owner_or_inlined",
+        "beforeShareOfActive": 0.15306850249635626,
+        "afterShareOfActive": 0.17120947812182002
+      },
+      {
+        "category": "reset_prediction",
+        "beforeShareOfActive": 0.00015505318324185194,
+        "afterShareOfActive": 0
+      },
+      {
+        "category": "keep_prediction",
+        "beforeShareOfActive": 0.3132694514218377,
+        "afterShareOfActive": 0.1426806221834569
+      },
+      {
+        "category": "gogma_prediction_shared",
+        "beforeShareOfActive": 0,
+        "afterShareOfActive": 0
+      },
+      {
+        "category": "state_construction_family_layout",
+        "beforeShareOfActive": 0.13768722671876454,
+        "afterShareOfActive": 0.1351213839220817
+      },
+      {
+        "category": "counter_advance",
+        "beforeShareOfActive": 0.0005892020963190374,
+        "afterShareOfActive": 0.0008722197993894462
+      },
+      {
+        "category": "checkpoint_cpu",
+        "beforeShareOfActive": 0.003411170031320743,
+        "afterShareOfActive": 0.0049425788632068614
+      },
+      {
+        "category": "gc",
+        "beforeShareOfActive": 0.11117313238440785,
+        "afterShareOfActive": 0.21772786742259048
+      },
+      {
+        "category": "observer_overhead",
+        "beforeShareOfActive": 0.0054888826867615596,
+        "afterShareOfActive": 0.006250908562291031
+      },
+      {
+        "category": "program",
+        "beforeShareOfActive": 0.2749092938878035,
+        "afterShareOfActive": 0.3205771187672627
+      },
+      {
+        "category": "idle",
+        "beforeShareOfActive": null,
+        "afterShareOfActive": null
+      },
+      {
+        "category": "other_state_generation",
+        "beforeShareOfActive": 0.00024808509318696313,
+        "afterShareOfActive": 0.0006178223579008577
+      }
+    ],
+    "beforePredictKeepLineTicks": [
+      {
+        "line": 482,
+        "text": "function predictKeep(",
+        "ticks": 8
+      },
+      {
+        "line": 487,
+        "text": "const key = `${gogmaCounter}\\u0000${familyLayoutKey}`",
+        "ticks": 2411
+      },
+      {
+        "line": 488,
+        "text": "const cached = keepPredictions.get(key)",
+        "ticks": 7609
+      },
+      {
+        "line": 489,
+        "text": "if (cached) return cached",
+        "ticks": 74
+      }
+    ],
+    "afterPredictKeepLineTicks": {
+      "totalSelfTicks": 3926,
+      "unmappedTicks": 0,
+      "inSpan": [
+        {
+          "line": 485,
+          "text": "function predictKeep(",
+          "ticks": 8
+        },
+        {
+          "line": 490,
+          "text": "const byFamilyLayout = keepPredictions.get(gogmaCounter)",
+          "ticks": 18
+        },
+        {
+          "line": 491,
+          "text": "const cached = byFamilyLayout?.get(familyLayoutKey)",
+          "ticks": 3846
+        },
+        {
+          "line": 492,
+          "text": "if (cached) return cached",
+          "ticks": 54
+        }
+      ],
+      "outsideSpan": []
+    },
+    "afterSourceHasCompositeKey": false
+  },
+  "profiles": {
+    "before": {
+      "qualityIssues": [],
+      "valid": true,
+      "intervals": {
+        "valid": true,
+        "issues": [],
+        "records": 5768,
+        "intervals": 412,
+        "depthsCompleted": 412,
+        "openInterval": null
+      },
+      "window": {
+        "requestedStartElapsedMs": 120000,
+        "requestedStopElapsedMs": 720000,
+        "actualStartElapsedMs": 121131.83720000001,
+        "actualStopElapsedMs": 720477.28715,
+        "actualProfileDurationMs": 599345.44995,
+        "stoppedBy": "window",
+        "error": null
+      },
+      "clockAlignment": {
+        "valid": true,
+        "issues": [],
+        "offsetSpreadMs": 0.017549991607666016,
+        "profileDurationMs": 600210.0379999876,
+        "negativeTimeDeltas": 0
+      },
+      "samples": {
+        "all": 57271,
+        "interval": 32810,
+        "idle": 563,
+        "active": 32247
+      },
+      "categories": [
+        {
+          "category": "generation_owner_or_inlined",
+          "samples": 4936,
+          "shareOfActive": 0.15306850249635626,
+          "shareOfInterval": 0.15044193843340445
+        },
+        {
+          "category": "reset_prediction",
+          "samples": 5,
+          "shareOfActive": 0.00015505318324185194,
+          "shareOfInterval": 0.00015239256324291374
+        },
+        {
+          "category": "keep_prediction",
+          "samples": 10102,
+          "shareOfActive": 0.3132694514218377,
+          "shareOfInterval": 0.3078939347759829
+        },
+        {
+          "category": "gogma_prediction_shared",
+          "samples": 0,
+          "shareOfActive": 0,
+          "shareOfInterval": 0
+        },
+        {
+          "category": "state_construction_family_layout",
+          "samples": 4440,
+          "shareOfActive": 0.13768722671876454,
+          "shareOfInterval": 0.1353245961597074
+        },
+        {
+          "category": "counter_advance",
+          "samples": 19,
+          "shareOfActive": 0.0005892020963190374,
+          "shareOfInterval": 0.0005790917403230723
+        },
+        {
+          "category": "checkpoint_cpu",
+          "samples": 110,
+          "shareOfActive": 0.003411170031320743,
+          "shareOfInterval": 0.0033526363913441025
+        },
+        {
+          "category": "gc",
+          "samples": 3585,
+          "shareOfActive": 0.11117313238440785,
+          "shareOfInterval": 0.10926546784516916
+        },
+        {
+          "category": "observer_overhead",
+          "samples": 177,
+          "shareOfActive": 0.0054888826867615596,
+          "shareOfInterval": 0.005394696738799147
+        },
+        {
+          "category": "program",
+          "samples": 8865,
+          "shareOfActive": 0.2749092938878035,
+          "shareOfInterval": 0.27019201462968606
+        },
+        {
+          "category": "idle",
+          "samples": 563,
+          "shareOfActive": null,
+          "shareOfInterval": 0.01715940262115209
+        },
+        {
+          "category": "other_state_generation",
+          "samples": 8,
+          "shareOfActive": 0.00024808509318696313,
+          "shareOfInterval": 0.000243828101188662
+        }
+      ],
+      "unattributedActiveShare": 0.28064626166775203,
+      "registeredLineMismatches": [],
+      "topLeaves": [
+        {
+          "leaf": "predictKeep@src/domain/search/bonusStream.ts:482",
+          "category": "keep_prediction",
+          "samples": 10102,
+          "shareOfActive": 0.3132694514218377
+        },
+        {
+          "leaf": "(program)@-",
+          "category": "program",
+          "samples": 8865,
+          "shareOfActive": 0.2749092938878035
+        },
+        {
+          "leaf": "generateReservedDepth@src/domain/search/bonusStream.ts:808",
+          "category": "generation_owner_or_inlined",
+          "samples": 4935,
+          "shareOfActive": 0.15303749185970789
+        },
+        {
+          "leaf": "(garbage collector)@-",
+          "category": "gc",
+          "samples": 3585,
+          "shareOfActive": 0.11117313238440785
+        },
+        {
+          "leaf": "keepFamilyLayoutKey@src/domain/rng/gogmaBonusFamily.ts:68",
+          "category": "state_construction_family_layout",
+          "samples": 2362,
+          "shareOfActive": 0.07324712376345087
+        },
+        {
+          "leaf": "reservedGeneratedState@src/domain/search/bonusStream.ts:973",
+          "category": "state_construction_family_layout",
+          "samples": 2065,
+          "shareOfActive": 0.06403696467888485
+        },
+        {
+          "leaf": "checkpoint@src/domain/search/searchExecution.ts:99",
+          "category": "checkpoint_cpu",
+          "samples": 110,
+          "shareOfActive": 0.003411170031320743
+        },
+        {
+          "leaf": "now@-",
+          "category": "observer_overhead",
+          "samples": 51,
+          "shareOfActive": 0.00158154246906689
+        },
+        {
+          "leaf": "(anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508",
+          "category": "observer_overhead",
+          "samples": 37,
+          "shareOfActive": 0.0011473935559897044
+        },
+        {
+          "leaf": "now@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+          "category": "observer_overhead",
+          "samples": 24,
+          "shareOfActive": 0.0007442552795608894
+        },
+        {
+          "leaf": "advanceGogmaCounter@src/domain/rng/production/productionRngEngine.ts:187",
+          "category": "counter_advance",
+          "samples": 19,
+          "shareOfActive": 0.0005892020963190374
+        },
+        {
+          "leaf": "(anonymous)@scripts/run-planner-global-phase2c26b2c2b2h.mjs",
+          "category": "observer_overhead",
+          "samples": 18,
+          "shareOfActive": 0.0005581914596706671
+        }
+      ],
+      "registeredInclusive": [
+        {
+          "registered": "src/domain/search/bonusStream.ts#generateReservedDepth",
+          "role": "owner",
+          "samples": 19713,
+          "shareOfActive": 0.6113126802493255
+        },
+        {
+          "registered": "src/domain/search/bonusStream.ts#predictKeep",
+          "role": "keep_prediction",
+          "samples": 10102,
+          "shareOfActive": 0.3132694514218377
+        },
+        {
+          "registered": "src/domain/search/bonusStream.ts#reservedGeneratedState",
+          "role": "state_construction",
+          "samples": 4440,
+          "shareOfActive": 0.13768722671876454
+        },
+        {
+          "registered": "src/domain/rng/gogmaBonusFamily.ts#keepFamilyLayoutKey",
+          "role": "state_construction",
+          "samples": 2365,
+          "shareOfActive": 0.07334015567339597
+        },
+        {
+          "registered": "src/domain/search/searchExecution.ts#checkpoint",
+          "role": "checkpoint",
+          "samples": 222,
+          "shareOfActive": 0.006884361335938227
+        },
+        {
+          "registered": "src/domain/rng/production/productionRngEngine.ts#advanceGogmaCounter",
+          "role": "counter_advance",
+          "samples": 19,
+          "shareOfActive": 0.0005892020963190374
+        },
+        {
+          "registered": "src/domain/search/bonusStream.ts#predictReset",
+          "role": "reset_prediction",
+          "samples": 5,
+          "shareOfActive": 0.00015505318324185194
+        },
+        {
+          "registered": "src/domain/rng/gogmaBonusFamily.ts#keepFamilyLayout",
+          "role": "state_construction",
+          "samples": 3,
+          "shareOfActive": 0.00009303190994511117
+        }
+      ],
+      "ownerSubBlockTicks": [
+        {
+          "subBlock": "keep_eligibility_windows_has",
+          "ticks": 1677
+        },
+        {
+          "subBlock": "keep_state_construction",
+          "ticks": 693
+        },
+        {
+          "subBlock": "frontier_scan",
+          "ticks": 559
+        },
+        {
+          "subBlock": "keep_checkpoint",
+          "ticks": 472
+        },
+        {
+          "subBlock": "keep_prediction",
+          "ticks": 149
+        },
+        {
+          "subBlock": "keep_counter_advance",
+          "ticks": 92
+        },
+        {
+          "subBlock": "reset_parent_guard",
+          "ticks": 16
+        },
+        {
+          "subBlock": "reset_parent_lookup",
+          "ticks": 4
+        },
+        {
+          "subBlock": "sorted_position_loop",
+          "ticks": 3
+        }
+      ],
+      "predictKeepLineTicks": {
+        "totalSelfTicks": 10102,
+        "unmappedTicks": 0,
+        "inSpan": [
+          {
+            "line": 482,
+            "text": "function predictKeep(",
+            "ticks": 8
+          },
+          {
+            "line": 487,
+            "text": "const key = `${gogmaCounter}\\u0000${familyLayoutKey}`",
+            "ticks": 2411
+          },
+          {
+            "line": 488,
+            "text": "const cached = keepPredictions.get(key)",
+            "ticks": 7609
+          },
+          {
+            "line": 489,
+            "text": "if (cached) return cached",
+            "ticks": 74
+          }
+        ],
+        "outsideSpan": []
+      },
+      "workInWindow": {
+        "intervals": 133,
+        "partialIntervals": 2,
+        "generatedStates": 262478726
+      }
+    },
+    "after": {
+      "qualityIssues": [],
+      "valid": true,
+      "intervals": {
+        "valid": true,
+        "issues": [],
+        "records": 6726,
+        "intervals": 480,
+        "depthsCompleted": 480,
+        "openInterval": {
+          "streamIndex": 4,
+          "depth": 79,
+          "startMs": 1799418.9723
+        }
+      },
+      "window": {
+        "requestedStartElapsedMs": 120000,
+        "requestedStopElapsedMs": 720000,
+        "actualStartElapsedMs": 120818.07169999999,
+        "actualStopElapsedMs": 720345.88625,
+        "actualProfileDurationMs": 599527.81455,
+        "stoppedBy": "window",
+        "error": null
+      },
+      "clockAlignment": {
+        "valid": true,
+        "issues": [],
+        "offsetSpreadMs": 0.019349992275238037,
+        "profileDurationMs": 600354.7350000143,
+        "negativeTimeDeltas": 0
+      },
+      "samples": {
+        "all": 57425,
+        "interval": 28304,
+        "idle": 788,
+        "active": 27516
+      },
+      "categories": [
+        {
+          "category": "generation_owner_or_inlined",
+          "samples": 4711,
+          "shareOfActive": 0.17120947812182002,
+          "shareOfInterval": 0.16644290559638214
+        },
+        {
+          "category": "reset_prediction",
+          "samples": 0,
+          "shareOfActive": 0,
+          "shareOfInterval": 0
+        },
+        {
+          "category": "keep_prediction",
+          "samples": 3926,
+          "shareOfActive": 0.1426806221834569,
+          "shareOfInterval": 0.13870830977953647
+        },
+        {
+          "category": "gogma_prediction_shared",
+          "samples": 0,
+          "shareOfActive": 0,
+          "shareOfInterval": 0
+        },
+        {
+          "category": "state_construction_family_layout",
+          "samples": 3718,
+          "shareOfActive": 0.1351213839220817,
+          "shareOfInterval": 0.13135952515545507
+        },
+        {
+          "category": "counter_advance",
+          "samples": 24,
+          "shareOfActive": 0.0008722197993894462,
+          "shareOfInterval": 0.0008479366873940079
+        },
+        {
+          "category": "checkpoint_cpu",
+          "samples": 136,
+          "shareOfActive": 0.0049425788632068614,
+          "shareOfInterval": 0.004804974561899378
+        },
+        {
+          "category": "gc",
+          "samples": 5991,
+          "shareOfActive": 0.21772786742259048,
+          "shareOfInterval": 0.21166619559072922
+        },
+        {
+          "category": "observer_overhead",
+          "samples": 172,
+          "shareOfActive": 0.006250908562291031,
+          "shareOfInterval": 0.00607687959299039
+        },
+        {
+          "category": "program",
+          "samples": 8821,
+          "shareOfActive": 0.3205771187672627,
+          "shareOfInterval": 0.311652063312606
+        },
+        {
+          "category": "idle",
+          "samples": 788,
+          "shareOfActive": null,
+          "shareOfInterval": 0.027840587902769928
+        },
+        {
+          "category": "other_state_generation",
+          "samples": 17,
+          "shareOfActive": 0.0006178223579008577,
+          "shareOfInterval": 0.0006006218202374222
+        }
+      ],
+      "unattributedActiveShare": 0.32744584968745455,
+      "registeredLineMismatches": [],
+      "topLeaves": [
+        {
+          "leaf": "(program)@-",
+          "category": "program",
+          "samples": 8821,
+          "shareOfActive": 0.3205771187672627
+        },
+        {
+          "leaf": "(garbage collector)@-",
+          "category": "gc",
+          "samples": 5991,
+          "shareOfActive": 0.21772786742259048
+        },
+        {
+          "leaf": "generateReservedDepth@src/domain/search/bonusStream.ts:812",
+          "category": "generation_owner_or_inlined",
+          "samples": 4709,
+          "shareOfActive": 0.17113679313853758
+        },
+        {
+          "leaf": "predictKeep@src/domain/search/bonusStream.ts:485",
+          "category": "keep_prediction",
+          "samples": 3926,
+          "shareOfActive": 0.1426806221834569
+        },
+        {
+          "leaf": "keepFamilyLayoutKey@src/domain/rng/gogmaBonusFamily.ts:68",
+          "category": "state_construction_family_layout",
+          "samples": 2160,
+          "shareOfActive": 0.07849978194505015
+        },
+        {
+          "leaf": "reservedGeneratedState@src/domain/search/bonusStream.ts:977",
+          "category": "state_construction_family_layout",
+          "samples": 1552,
+          "shareOfActive": 0.056403547027184184
+        },
+        {
+          "leaf": "checkpoint@src/domain/search/searchExecution.ts:99",
+          "category": "checkpoint_cpu",
+          "samples": 136,
+          "shareOfActive": 0.0049425788632068614
+        },
+        {
+          "leaf": "now@-",
+          "category": "observer_overhead",
+          "samples": 57,
+          "shareOfActive": 0.0020715220235499347
+        },
+        {
+          "leaf": "(anonymous)@scripts/run-planner-global-phase2c26b2c2b2i.mjs",
+          "category": "observer_overhead",
+          "samples": 24,
+          "shareOfActive": 0.0008722197993894462
+        },
+        {
+          "leaf": "advanceGogmaCounter@src/domain/rng/production/productionRngEngine.ts:187",
+          "category": "counter_advance",
+          "samples": 24,
+          "shareOfActive": 0.0008722197993894462
+        },
+        {
+          "leaf": "now@scripts/run-planner-global-phase2c26b2c2b2i.mjs",
+          "category": "observer_overhead",
+          "samples": 20,
+          "shareOfActive": 0.0007268498328245384
+        },
+        {
+          "leaf": "(anonymous)@src/benchmarks/plannerGlobalPhase2C26B2C2B2F.ts:508",
+          "category": "observer_overhead",
+          "samples": 19,
+          "shareOfActive": 0.0006905073411833116
+        }
+      ],
+      "registeredInclusive": [
+        {
+          "registered": "src/domain/search/bonusStream.ts#generateReservedDepth",
+          "role": "owner",
+          "samples": 12630,
+          "shareOfActive": 0.45900566942869603
+        },
+        {
+          "registered": "src/domain/search/bonusStream.ts#predictKeep",
+          "role": "keep_prediction",
+          "samples": 3926,
+          "shareOfActive": 0.1426806221834569
+        },
+        {
+          "registered": "src/domain/search/bonusStream.ts#reservedGeneratedState",
+          "role": "state_construction",
+          "samples": 3718,
+          "shareOfActive": 0.1351213839220817
+        },
+        {
+          "registered": "src/domain/rng/gogmaBonusFamily.ts#keepFamilyLayoutKey",
+          "role": "state_construction",
+          "samples": 2162,
+          "shareOfActive": 0.07857246692833261
+        },
+        {
+          "registered": "src/domain/search/searchExecution.ts#checkpoint",
+          "role": "checkpoint",
+          "samples": 261,
+          "shareOfActive": 0.009485390318360227
+        },
+        {
+          "registered": "src/domain/rng/production/productionRngEngine.ts#advanceGogmaCounter",
+          "role": "counter_advance",
+          "samples": 24,
+          "shareOfActive": 0.0008722197993894462
+        },
+        {
+          "registered": "src/domain/rng/gogmaBonusFamily.ts#keepFamilyLayout",
+          "role": "state_construction",
+          "samples": 2,
+          "shareOfActive": 0.00007268498328245384
+        }
+      ],
+      "ownerSubBlockTicks": [
+        {
+          "subBlock": "keep_eligibility_windows_has",
+          "ticks": 1751
+        },
+        {
+          "subBlock": "keep_state_construction",
+          "ticks": 568
+        },
+        {
+          "subBlock": "frontier_scan",
+          "ticks": 500
+        },
+        {
+          "subBlock": "keep_checkpoint",
+          "ticks": 442
+        },
+        {
+          "subBlock": "keep_prediction",
+          "ticks": 196
+        },
+        {
+          "subBlock": "keep_counter_advance",
+          "ticks": 52
+        },
+        {
+          "subBlock": "reset_parent_guard",
+          "ticks": 7
+        },
+        {
+          "subBlock": "reset_parent_lookup",
+          "ticks": 3
+        },
+        {
+          "subBlock": "reset_state_construction",
+          "ticks": 2
+        },
+        {
+          "subBlock": "reset_counter_advance",
+          "ticks": 1
+        },
+        {
+          "subBlock": "sorted_position_loop",
+          "ticks": 1
+        }
+      ],
+      "predictKeepLineTicks": {
+        "totalSelfTicks": 3926,
+        "unmappedTicks": 0,
+        "inSpan": [
+          {
+            "line": 485,
+            "text": "function predictKeep(",
+            "ticks": 8
+          },
+          {
+            "line": 490,
+            "text": "const byFamilyLayout = keepPredictions.get(gogmaCounter)",
+            "ticks": 18
+          },
+          {
+            "line": 491,
+            "text": "const cached = byFamilyLayout?.get(familyLayoutKey)",
+            "ticks": 3846
+          },
+          {
+            "line": 492,
+            "text": "if (cached) return cached",
+            "ticks": 54
+          }
+        ],
+        "outsideSpan": []
+      },
+      "workInWindow": {
+        "intervals": 157,
+        "partialIntervals": 2,
+        "generatedStates": 307559441
+      }
+    }
+  },
+  "probe": {
+    "valid": true,
+    "issues": [],
+    "samples": 149,
+    "observedMedianIntervalUs": 10500,
+    "alignment": {
+      "valid": true,
+      "issues": [],
+      "offsetSpreadMs": 0.0022500157356262207,
+      "maxPairPrecisionMs": 0.010700000000042564,
+      "profileDurationMs": 1571.4710000157356,
+      "negativeDeltas": 0
+    },
+    "requiredSourceMaps": {
+      "src/domain/search/bonusStream.ts": true,
+      "src/domain/rng/production/gogmaPrediction.ts": true,
+      "src/domain/rng/production/gameGogmaBonuses.ts": true,
+      "src/domain/rng/production/productionRngEngine.ts": true,
+      "src/domain/rng/gogmaBonusFamily.ts": true,
+      "src/domain/search/searchExecution.ts": true
+    },
+    "frameLines": {
+      "predictGogmaBonus": {
+        "declarationLine": 165,
+        "frameLines": [
+          165
+        ],
+        "matches": true
+      },
+      "keepFamilyLayoutKey": {
+        "declarationLine": 68,
+        "frameLines": [
+          68
+        ],
+        "matches": true
+      }
+    },
+    "stateGenerationBlock": {
+      "startLine": 845,
+      "endLine": 872,
+      "subBlocks": [
+        {
+          "label": "block_head",
+          "startLine": 845,
+          "endLine": 847
+        },
+        {
+          "label": "sorted_position_loop",
+          "startLine": 848,
+          "endLine": 848
+        },
+        {
+          "label": "reset_branch",
+          "startLine": 849,
+          "endLine": 849
+        },
+        {
+          "label": "reset_parent_lookup",
+          "startLine": 850,
+          "endLine": 853
+        },
+        {
+          "label": "reset_parent_guard",
+          "startLine": 854,
+          "endLine": 856
+        },
+        {
+          "label": "reset_checkpoint",
+          "startLine": 857,
+          "endLine": 857
+        },
+        {
+          "label": "reset_prediction",
+          "startLine": 858,
+          "endLine": 858
+        },
+        {
+          "label": "reset_counter_advance",
+          "startLine": 859,
+          "endLine": 859
+        },
+        {
+          "label": "reset_state_construction",
+          "startLine": 860,
+          "endLine": 861
+        },
+        {
+          "label": "frontier_scan",
+          "startLine": 862,
+          "endLine": 862
+        },
+        {
+          "label": "keep_eligibility_windows_has",
+          "startLine": 863,
+          "endLine": 863
+        },
+        {
+          "label": "keep_checkpoint",
+          "startLine": 864,
+          "endLine": 864
+        },
+        {
+          "label": "keep_prediction",
+          "startLine": 865,
+          "endLine": 865
+        },
+        {
+          "label": "keep_counter_advance",
+          "startLine": 866,
+          "endLine": 866
+        },
+        {
+          "label": "keep_state_construction",
+          "startLine": 867,
+          "endLine": 870
+        },
+        {
+          "label": "generation_end",
+          "startLine": 871,
+          "endLine": 872
+        }
+      ]
+    }
+  },
+  "outcome": {
+    "process": "timeout",
+    "record": null,
+    "naturalCompletion": false,
+    "termination": null,
+    "candidateCount": null,
+    "searchElapsedMs": null,
+    "safetyCapHit": null,
+    "childWallMs": 1800456.586,
+    "killedAtMs": 1800012.1908999998,
+    "budgetMs": 1800000,
+    "deliveredBeforeKill": {
+      "deliveryFlushes": 0,
+      "deliveryConsumerCalls": 0
+    },
+    "peakHeapBytes": 7515321736,
+    "peakRssBytes": 8130957312,
+    "yields": 16864021,
+    "profileSnapshots": 317,
+    "profileSource": "last_durable_snapshot",
+    "completedDepths": 480,
+    "generatedStates": 842597754,
+    "lastSnapshot": {
+      "atMs": 1794196.9867,
+      "searchElapsedMs": 1794190.2757,
+      "unobservedTailMs": 1037.46669999999
+    },
+    "note": "A timeout is a normal outcome and is never Candidate 0; a natural completion is recorded as it is. Route quality is no decision input and no Route exact judgement is made."
+  },
+  "progress": {
+    "before": {
+      "completedDepths": 411,
+      "generatedStates": 738616871,
+      "searchElapsedMs": 1792572.038,
+      "process": "timeout"
+    },
+    "after": {
+      "completedDepths": 480,
+      "generatedStates": 842597754,
+      "searchElapsedMs": 1794190.2757,
+      "process": "timeout"
+    },
+    "note": "whole-run progress of two single runs (descriptive; never the speed-up evidence)"
+  },
+  "memory": {
+    "before": {
+      "peakHeapBytes": 7500556712,
+      "peakRssBytes": 8110092288
+    },
+    "after": {
+      "peakHeapBytes": 7515321736,
+      "peakRssBytes": 8130957312
+    },
+    "heapRatio": 1.001968523746561,
+    "rssRatio": 1.0025727233746615,
+    "note": "single-run peaks (sampled every 250 ms and at the child exit); descriptive only, never a rejection on their own"
+  },
+  "yieldWait": {
+    "wholeRun": {
+      "stateGenerationWallMs": 811887.7969999984,
+      "yieldCount": 16851947,
+      "yieldWaitMs": 192697.84479996483,
+      "stateGenerationYieldWaitShare": 0.2373454133834767
+    },
+    "profileWindow": {
+      "fromAtMs": 116041.9483,
+      "toAtMs": 721575.9295,
+      "stateGenerationWallMs": 300795.2234999993,
+      "yieldCount": 6179850,
+      "yieldWaitMs": 70588.09589992791,
+      "stateGenerationYieldWaitShare": 0.23467159843357044
+    }
+  },
+  "profilerWindow": {
+    "requestedSamplingIntervalUs": 10000,
+    "requestedStartElapsedMs": 120000,
+    "requestedStopElapsedMs": 720000,
+    "requestedProfileDurationMs": 600000,
+    "actualStartElapsedMs": 120818.07169999999,
+    "actualStopElapsedMs": 720345.88625,
+    "actualProfileDurationMs": 599527.81455,
+    "startDelayMs": 818.0716999999859,
+    "stopDelayMs": 345.8862499999814,
+    "stoppedBy": "window",
+    "error": null
+  },
+  "decisionRule": {
+    "order": "INVALID, then INSUFFICIENT (no direct comparison), then semantic mismatch, then O, then regression, then no effect, then P",
+    "invalid": "B2C2B2I_INVALID: an authority / before evidence SHA-256 / population / Search input identity / excluded Route / hash chain / provenance / registered condition / Production change registration / optimization source shape issue, or the before CPU profile re-analysis not reproducing the B2-C2B2H RESULT",
+    "insufficient": "B2C2B2I_INSUFFICIENT: no direct comparison (a depth record collection of either run is not valid, no common held-aware depth, or a common depth without a state_generation section time)",
+    "semanticMismatch": "B2C2B2I_REJECTED_SEMANTIC_MISMATCH (Case N): one common held-aware depth record differs (identity or counts), or the child-attested Search input / excluded Route is not the expected one. The optimization is rejected whatever the speed",
+    "adopted": "B2C2B2I_ADOPTED (Case O): semantic parity valid, the after CPU profile and the before CPU profile both valid (B2-C2B2H's quality rule), keepPredictionShareRatio <= 0.75 and stateGenerationDirectRatio <= 0.9",
+    "regression": "B2C2B2I_REJECTED_REGRESSION (Case N): semantic parity valid and stateGenerationDirectRatio > 1.05",
+    "noEffect": "B2C2B2I_REJECTED_NO_EFFECT (Case N): semantic parity valid, keepPredictionShareRatio >= 0.95 AND stateGenerationDirectRatio >= 0.95 (a revert candidate)",
+    "partial": "B2C2B2I_PARTIAL (Case P): semantic parity valid, none of the above (an improvement short of both Case O conditions, or a CPU share not usable for the formal comparison); never adopted automatically",
+    "keepPredictionShareRatio": "after keep_prediction active share / before keep_prediction active share (B2-C2B2H's stack-aware classification over the state_generation intervals, unchanged); null when either profile fails B2-C2B2H's quality rule",
+    "stateGenerationDirectRatio": "Σ after state_generation section ms / Σ before state_generation section ms over the semantic-identical common held-aware depth prefix (the depth records' own section times, Research yield wait included in both)",
+    "cpuShare": "a CPU sample share is hotspot evidence, never a speed-up; whole-run progress (depths, generated states, wall) is descriptive"
+  },
+  "thresholds": {
+    "adoptMaxKeepShareRatio": 0.75,
+    "adoptMaxDirectRatio": 0.9,
+    "regressionDirectRatio": 1.05,
+    "noEffectRatio": 0.95
+  },
+  "invalidReasons": [],
+  "afterProfileQualityIssues": [],
+  "decision": {
+    "scope": "A before / after decision about one Production optimization (predictKeep memo representation) on one oracle-guided Search input (B2-C2B2H's), from the semantic-identical common depth prefix and the CPU share of the same classification. Never a Route exact judgement.",
+    "case": "B2C2B2I_ADOPTED",
+    "reasons": [],
+    "adoption": "adopt",
+    "stateGenerationDirectRatio": 0.7372376442313527,
+    "keepPredictionShareRatio": 0.45545654558997567,
+    "nextPhase": "optimizationを採用する。次のhotspot（B2-C2B2Hのprogram / owner / state construction / GC等）は別Phaseで1つずつ扱う"
+  }
+}
