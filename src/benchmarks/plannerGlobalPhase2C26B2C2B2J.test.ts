@@ -4,6 +4,7 @@ import rawB2C2B2F from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2F_RESULT.json?r
 import rawB2C2B2G from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2G_RESULT.json?raw'
 import rawB2C2B2H from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2H_RESULT.json?raw'
 import rawB2C2B2I from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2I_RESULT.json?raw'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C26B2C2B2J_RESULT.json?raw'
 import bonusStreamSource from '../domain/search/bonusStream.ts?raw'
 import type { Phase2C26B2C2B2EProbe } from './plannerGlobalPhase2C26B2C2B2E'
 import type { Phase2C26B2C2B2FTaskIdentity } from './plannerGlobalPhase2C26B2C2B2F'
@@ -468,5 +469,95 @@ describe('Phase 2-C2.6-B2-C2B2J isolation and provenance', () => {
     expect(analyzerSource).not.toMatch(/--oracle|ORACLE_[1]657|PHASE2C26A5_RESULT|PHASE2C26A8_RESULT|PHASE2C26A9_RESULT/)
     for (const source of [analysisSource, analyzerSource, targetsSource, prepareSource]) expect(source).not.toMatch(/visitPlannerAlternativeCandidates|runPhase2C26B2C2B2[DFGHIJ]Search\(|runPhase2C26B2C2B2[DFGHIJ]Task\(/)
     expect(searchSource).not.toMatch(/Date\.now|performance\.now/)
+  })
+})
+
+// ---------------------------------------------------------------- the committed formal RESULT
+
+describe('Phase 2-C2.6-B2-C2B2J committed RESULT', () => {
+  const result = JSON.parse(rawResult)
+  const MEASURED_HEAD = '4ed9fb9ff93490f04178c50844b9eb5e2e95fb8e'
+  const after = (category: string) => result.profiles.after.categories.find((c: { category: string }) => c.category === category)
+
+  it('is formal: runner start attestation verified against the independently obtained HEAD / code / Export / manifest / B2-C2B2I (and its before files) / B2-C2B2H / G / F / E, no invalid reason', () => {
+    expect(result.provenance).toMatchObject({ formal: true, evidenceGrade: 'formal', partialRun: false, launchProvenanceVerified: true, launchProvenanceSource: 'runner_start_attestation',
+      launchProvenanceIssues: [], launchProvenanceIntegrityIssues: [], measuredHead: MEASURED_HEAD, measuredHeadIsAncestor: true, uncommittedBenchmarkCode: false,
+      smoke: null, calculationCodeChangedSinceMeasuredHead: [], b2c2b2iResultSha256: reg.resultSha256, b2c2b2iMeasuredHead: reg.measuredHead, b2c2b2hResultSha256: reg.b2c2b2hResultSha256,
+      b2c2b2gResultSha256: reg.b2c2b2gResultSha256, b2c2b2fResultSha256: reg.b2c2b2fResultSha256, b2c2b2eResultSha256: reg.b2c2b2eResultSha256, exportSha256: iJson.provenance.exportSha256,
+      optimization: true, productionOptimizationId: PHASE2C26B2C2B2J_OPTIMIZATION.id, baseMain: PHASE2C26B2C2B2J_BASE_MAIN, routeExactJudged: false, oracleReadBySearchChild: false })
+    expect(result.provenance.benchmarkCodeSha256).toBe(result.provenance.recomputedBenchmarkCodeSha256)
+    expect(result.provenance.startAttestation.body).toMatchObject({ attestedBy: 'runner', phase: PHASE2C26B2C2B2J_START_ATTESTATION_PHASE, repositoryHead: MEASURED_HEAD, smoke: null,
+      uncommittedBenchmarkCode: false, baseMainIsAncestor: true, stage1: PHASE2C26B2C2B2J_STAGE1, cpuProfilerConfig: PHASE2C26B2C2B2J_CPU_PROFILER,
+      productionChangedFiles: ['src/domain/search/bonusStream.ts'], productionChangedB2C2B2IToBaseMain: [], optimizationSourceCheckValid: true, b2c2b2iResultSha256: reg.resultSha256,
+      b2c2b2iExcludedRouteKeySha256: iJson.parity.excludedRoute.rederivedExcludedRouteKeySha256, changedFromB2C2B2I: [...PHASE2C26B2C2B2J_CHANGED_FROM_B2C2B2I] })
+    expect(result.provenance.startAttestation.body.createdAt).toBe(result.provenance.measuredAt)
+    expect(result.invalidReasons).toEqual([])
+    expect(result.afterProfileQualityIssues).toEqual([])
+    expect(Object.values(result.parity.hashChain).every(v => v === true)).toBe(true)
+    expect(Object.keys(result.parity.hashChain)).toHaveLength(31)
+    expect(Object.values(result.conditions.conditionChecks).every(v => v === true)).toBe(true)
+    // The before evidence: every local B2-C2B2I raw file is the one the B2-C2B2I RESULT recorded.
+    for (const name of PHASE2C26B2C2B2J_BEFORE_FILES) expect(result.sources.b2c2b2iBefore[name]).toMatchObject({ recordedSha256: iJson.sources[name].sha256, localSha256: iJson.sources[name].sha256, matches: true })
+    expect(result.provenance.startAttestation.body.b2c2b2iBeforeFiles).toEqual(Object.fromEntries(PHASE2C26B2C2B2J_BEFORE_FILES.map(name => [name, iJson.sources[name].sha256])))
+  })
+
+  it('changed exactly the registered Production source (none between B2-C2B2I\'s measured HEAD and the PR #209 main), in the registered shape, and searched B2-C2B2I\'s Target in B2-C2B2I\'s Search input', () => {
+    expect(result.productionChange).toMatchObject({ beforeHead: reg.measuredHead, afterHead: MEASURED_HEAD, baseMain: PHASE2C26B2C2B2J_BASE_MAIN.sha, baseMainIsAncestorOfMeasuredHead: true,
+      productionChangedB2C2B2IToBaseMain: [], productionChangedBaseMainToMeasuredHead: ['src/domain/search/bonusStream.ts'], productionChangedFiles: ['src/domain/search/bonusStream.ts'],
+      equalsRegistered: true, equalsRunnerAttested: true, sourceCheck: { valid: true, onlyRegisteredRegionsChanged: true, afterReservedGeneratedStateComputesNoKey: true,
+        afterResetCallComputesKeyFromResult: true, afterKeepCallPassesParentKey: true, predictKeepUnchanged: true, frontierReductionKeyUnchanged: true, resetMemoUnchanged: true } })
+    const derived = phase2c26b2c2b2jPopulation(authorityI(), parsedH.authority, parsedG.authority, parsedF.authority, parsedE.authority)
+    expect(result.population.targetWeaponIds).toEqual(derived.targetWeaponIds)
+    expect(result.population.probes).toEqual(iJson.population.probes)
+    expect(result.parity.population).toMatchObject({ manifestEqualsDerived: true, runnerTargetsEqualManifest: true, runnerProbesEqualManifest: true, runnerIdentitiesEqualManifest: true,
+      probesEqualB2C2B2IProfiled: true, identitiesEqualB2C2B2IProfiled: true, targets: 1 })
+    expect(result.parity.identity).toMatchObject({ rawEqualsExpected: true, expected: iJson.parity.identity.expected })
+    expect(result.parity.taskRebuild).toMatchObject({ valid: true, tasksEqualRebuilt: true })
+    expect(Object.values(result.parity.childIdentity).every(v => v === true)).toBe(true)
+    const route = result.parity.excludedRoute
+    expect([route.childAttestedExcludedRouteKeySha256, route.b2c2b2iExcludedRouteKeySha256]).toEqual([route.rederivedExcludedRouteKeySha256, route.rederivedExcludedRouteKeySha256])
+    expect(route.rederivedExcludedRouteKeySha256).toBe(iJson.parity.excludedRoute.rederivedExcludedRouteKeySha256)
+    // The PR #209 contract-valid fixtures and frozen records were not changed for this phase.
+    expect(result.semanticParity.committedRegressionTests.fixturesChangedSinceBaseMain).toEqual([])
+    expect(Object.values(result.semanticParity.committedRegressionTests.files).every(v => typeof v === 'string')).toBe(true)
+  })
+
+  it('pins semantic parity and the direct comparison: 480 identical common held-aware depths, state_generation 811.9 s -> 463.9 s (ratio 0.571)', () => {
+    expect(result.semanticParity).toMatchObject({ valid: true, searchInputAndExcludedRoute: { valid: true } })
+    const d = result.directComparison
+    expect(d).toMatchObject({ valid: true, issues: [], semanticParity: true, beforeDepths: 480, afterDepths: 624, commonDepths: 480, firstMismatch: null, commonGeneratedStates: 842_597_754 })
+    // The before run is B2-C2B2I's after run: the same depth count and generated states as the B2-C2B2I RESULT recorded.
+    expect(d.beforeDepths).toBe(iJson.directComparison.afterDepths)
+    expect(d.commonGeneratedStates).toBe(iJson.outcome.generatedStates)
+    expect(d.stateGenerationDirectRatio).toBeCloseTo(d.afterStateGenerationMs / d.beforeStateGenerationMs, 12)
+    expect(d.stateGenerationDirectRatio).toBeGreaterThan(0.57)
+    expect(d.stateGenerationDirectRatio).toBeLessThan(0.58)
+    expect(d.byThird.every((t: { ratio: number }) => t.ratio < PHASE2C26B2C2B2J_ADOPT_MAX_DIRECT_RATIO)).toBe(true)
+  })
+
+  it('pins the target function: keepFamilyLayoutKey registered inclusive 7.857 % -> 0.020 % of active CPU (ratio 0.0025), reproduced from the B2-C2B2I after profile', () => {
+    const cpu = result.cpuTarget
+    const recorded = iJson.profiles.after.registeredInclusive.find((r: { registered: string }) => r.registered === PHASE2C26B2C2B2J_TARGET_FUNCTION).shareOfActive
+    expect(cpu).toMatchObject({ targetFunction: PHASE2C26B2C2B2J_TARGET_FUNCTION, beforeRecordedShare: recorded, beforeReproduced: true, beforeProfileValid: true, afterProfileValid: true })
+    expect(cpu.beforeRecomputedShare).toBe(cpu.beforeRecordedShare)
+    expect(cpu.keepFamilyLayoutKeyShareRatio).toBeCloseTo(cpu.afterShare / cpu.beforeRecordedShare, 12)
+    expect(cpu.keepFamilyLayoutKeyShareRatio).toBeLessThan(0.01)
+    // Not 0: the Reset path still computes the key.
+    expect(cpu.afterShare).toBeGreaterThan(0)
+    expect(result.profiles.after.samples).toEqual({ all: 58_032, interval: 21_121, idle: 900, active: 20_221 })
+    expect(result.profiles.after).toMatchObject({ valid: true, registeredLineMismatches: [], clockAlignment: { valid: true, negativeTimeDeltas: 0 }, window: { stoppedBy: 'window', error: null } })
+    expect(result.profiles.after.unattributedActiveShare).toBeLessThan(0.5)
+    expect(after('state_construction_family_layout').samples).toBe(184)
+    expect(result.profiles.after.reservedGeneratedStateLineTicks.inSpan.map((l: { text: string }) => l.text).join('\n')).not.toMatch(/keepFamilyLayoutKey\(/)
+    expect(result.gc).toMatchObject({ before: { samples: 5_991 }, after: { samples: 4_079 } })
+  })
+
+  it('pins the pre-registered decision: ADOPTED, recomputed from the recorded comparisons', () => {
+    expect(result.thresholds).toEqual({ adoptMaxKeyShareRatio: 0.5, adoptMaxDirectRatio: 0.95, regressionDirectRatio: 1.05, noEffectKeyShareRatio: 0.9, noEffectDirectRatio: 0.98 })
+    expect(result.decision).toMatchObject({ case: 'B2C2B2J_ADOPTED', adoption: 'adopt', reasons: [], stateGenerationDirectRatio: result.directComparison.stateGenerationDirectRatio,
+      keepFamilyLayoutKeyShareRatio: result.cpuTarget.keepFamilyLayoutKeyShareRatio })
+    expect(phase2c26b2c2b2jDecision({ invalidReasons: [], identityParity: true, direct: result.directComparison, cpu: result.cpuTarget }).case).toBe('B2C2B2J_ADOPTED')
+    expect(result.outcome).toMatchObject({ process: 'timeout', record: null, naturalCompletion: false, budgetMs: 1_800_000, completedDepths: 624, deliveredBeforeKill: { deliveryFlushes: 0, deliveryConsumerCalls: 0 } })
+    expect(result.memory.heapRatio).toBeLessThan(1.05)
   })
 })
