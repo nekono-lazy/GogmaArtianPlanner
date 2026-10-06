@@ -6,6 +6,7 @@ import { restorationBonus, restorationBonusSet } from '../../test/fixtures/targe
 import { practicalOnlyBonuses } from '../../test/fixtures/candidateSearch'
 import { frontierFixture, keepContractGuard } from '../../test/fixtures/plannerAlternativeFrontier'
 import { reservedBonusStreamCases, reservedBonusStreamOf } from '../../test/fixtures/reservedBonusStreamSinglePass'
+import bonusStreamSource from './bonusStream.ts?raw'
 import { createTargetBonusStream, type BonusStreamBase, type ReservedBonusStreamSolution } from './bonusStream'
 import { createCounterReservation } from './counterReservation'
 import { createSearchExecutionContext } from './searchExecution'
@@ -194,5 +195,41 @@ describe('held-aware representative tie-break through the real stream', () => {
     const extended = tied.filter((solution) => parentsThrough12.has(solution.results))
     expect(extended).toHaveLength(1)
     expect([...parentsThrough12]).toEqual([extended[0].results])
+  })
+})
+
+// ---------------------------------------------------------------- the source shape of the serialization fallback
+
+/**
+ * The stable serialization tie-break of `compareReservedRepresentative()` is a defensive fallback: through the real
+ * stream a contract-valid Keep never reaches it with two different five slots (see `tieFixture()`), so the behavioral
+ * tests above cannot fix its direction. These source-shape checks do. Comments and whitespace are dropped first, so a
+ * reformatting does not break them; only the comparison operands, their order and their directions are pinned.
+ */
+describe('held-aware representative serialization fallback: source shape', () => {
+  const compact = (source: string) => source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '')
+    .replace(/\s+/g, '')
+    .replace(/,\)/g, ')')
+  const body = compact(/\n {2}function compareReservedRepresentative\(([\s\S]*?)\n {2}\}\n/.exec(bonusStreamSource)?.[1] ?? '')
+
+  it('compares the larger lastResetDepth first, then falls back to the stable serialization of left before right', () => {
+    expect(body).not.toBe('')
+    // A: the larger lastResetDepth sorts first; B: only an equal one reaches the fallback, which follows `||` directly.
+    expect(body).toContain('right.lastResetDepth-left.lastResetDepth||compareStableKeys(')
+    // C: the fallback compares left with right, never right with left.
+    expect(body).toContain('compareStableKeys(reservedBonusStableKey(left.bonuses),reservedBonusStableKey(right.bonuses))')
+    expect(body.match(/compareStableKeys\(/g)).toHaveLength(1)
+    expect(body.match(/lastResetDepth/g)).toHaveLength(2)
+  })
+
+  it('replaces the frontier representative only when the new state compares strictly smaller', () => {
+    // D: the reduction of `readReservedDepth()` keeps the current state on a full tie and on a larger comparison.
+    // Every call site (the declaration's typed parameters excluded), up to the end of its statement.
+    const calls = [...compact(bonusStreamSource).matchAll(/compareReservedRepresentative\(([^()]*)\)([^;{}]*)/g)]
+      .filter((match) => !match[1].includes(':'))
+      .map((match) => `(${match[1]})${match[2]}`)
+    expect(calls).toEqual(['(state,current)<0)byKey.set(key,state)'])
   })
 })
