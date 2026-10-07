@@ -5,7 +5,7 @@ Working Tree cleanを確認）。
 
 Production source、Search algorithm / ordering / comparator、Planner scheduler、Planner Alternative kernel、Worker protocol、UI、Persistence、
 schema / version、RNG、`defaultPlannerAlternativeSearchExtent`、Candidate Search default、`maxCandidateTrialsPerTarget`、`maxPlannerReruns`、
-`maxPlanSteps` は変更していない。formal Search run、benchmark run、RESULT JSON生成、oracle再計算、Candidate生成も行っていない
+`defaultPlannerOptions`、`conflictResolutionPlannerOptions` は変更していない。formal Search run、benchmark run、RESULT JSON生成、oracle再計算、Candidate生成も行っていない
 （このPhaseのProduction changed files = `[]`）。
 
 ## 0. 位置づけ
@@ -42,14 +42,22 @@ exact oracle Routeをdeliverするevidenceが揃った。一方、そのcontext 
 E1の11 Targetは、oracle-guided diagnosticの合算として回収済みである（Phaseごとに回収条件が異なり、1回のrunで11件を回収したのではない）。
 **registered common ladder（Target別rung割当はoracle由来）ではC4C 9 / 11のまま** であり、oracleなしの選択では1件も評価していない。
 
-現在のProduction defaultは次のままであり、本Phaseでも変えない。
+現在のProduction authorityは次のままであり、本Phaseでも変えない。
 
 | 項目 | 値 | authority |
 | --- | --- | --- |
 | Planner Alternative extent | Normal 4 / Gogma 235 / Skill 4 | `defaultPlannerAlternativeSearchExtent`（PLANNER_SPEC 9.2.19.12） |
 | `maxCandidateTrialsPerTarget` | 2 | `defaultPlannerAlternativeTrialBounds` |
 | `maxPlannerReruns` | 8（request-global） | `defaultPlannerAlternativeTrialBounds`（9.2.19.12） |
-| `maxPlanSteps` | 1000 | `defaultPlannerOptions`（PLANNER_SPEC 7.2.1） |
+| `maxPlanSteps` | 下記A / Bの2つを区別する（固定の1つの値ではない） | PLANNER_SPEC 7.2.1「runtime `maxPlanSteps` の導出（Issue #130）」 |
+
+`maxPlanSteps` は次の3つを混同しない。
+
+| 区分 | 値 | 性格 |
+| --- | --- | --- |
+| A. Domain default | `defaultPlannerOptions.maxPlanSteps = 1000` | Domain / Applicationのdefault / fallback。Planner Alternative競合解決時の固定Production値ではない |
+| B. Planner Alternative Production runtime | `conflictResolutionPlannerOptions(表示中Plan)`（`src/services/planner/plannerRuntimeOptions.ts`）が導出する `max(defaultPlannerOptions.maxPlanSteps, ceilTo500(表示中Plan.steps.length) + 500)` | what-if（9.2.19.7）/ actual repair（9.2.19.8）の各full Planner runの `PlannerInput.options` のauthority。Application callerが書き込み、表示中PlanのStep数に応じて1000を超え得る（UI_FLOW 11.2 / 11.4） |
+| C. Research条件 | `researchMaxPlanSteps = 20000` | B2系列（Phase 0以来）から継続するResearch専用条件。A / BのProduction contractとは別物で、Production default・Production runtime導出の変更を意味しない |
 
 ## 2. 用語の分離（本Phaseの中心）
 
@@ -140,6 +148,8 @@ Target IDだけを持つmanifestとして渡すことを許可し、provenance�
 | G8 | 架空のSearch work unitを正式仕様として捏造しない（§7.5） |
 | G9 | context / extent / task生成ruleとtask順序をformal run開始前に確定し、run後に条件を追加・変更しない（§9.2） |
 | G10 | 現行9.2.19の1段repair semantics（what-if / actual repairのauthority、found判定、lineage）を変更しない |
+| G11 | 上位extent rungへ進めるのは `stopped_by_search_extent_bound` のcontextだけ。trial bound / rerun bound / unmeasuredを理由にextentを広げず、extent経由でtrial / rerun budgetを再付与しない。retryは別axis（§6.2） |
+| G12 | `maxPlanSteps` のDomain default（1000）、Planner Alternative Production runtime（`conflictResolutionPlannerOptions(表示中Plan)`）、Research条件（20000）を混同しない（§1） |
 
 ## 4. context policy
 
@@ -225,52 +235,89 @@ oracleを読まない以上、「このcontext / extentで十分か」をexact h
 
 ### 6.2 escalationの単位と規則
 
-execution unit = **(Target, context, rung)**。1 unitは独立した1 requestとして扱い、Production trial bound（`maxCandidateTrialsPerTarget = 2`、
-`maxPlannerReruns = 8`）をそのunitに適用する（値は変えない）。
+execution unit = **(Target, context, rung)**。各unitはProductionのPlanner Alternative 1 requestと同じ単位で、Production trial bound
+（`maxCandidateTrialsPerTarget = 2`、`maxPlannerReruns = 8`）をそのunitに適用する（値は変えない）。
+
+**上位extent rungへ進めるのは、下位rungで `stopped_by_search_extent_bound` になったcontextだけである。** extentを広げる理由になるのは
+extentが到達可能workを未確認のまま残したという直接のsignalだけで、trial bound・rerun bound・unmeasuredはextent不足のevidenceではない。
+したがってそれらのcontextは上位rungで再実行せず、extent escalationを経由したtrial / rerun budgetの再付与（budget refill）も起きない。
+これにより、Phase Bの結果で次を分離できる。
+
+```text
+context selector deficiency      compatible contextを実行していない
+extent deficiency                extent boundで止まり、上位rungで初めて回収 / ladder上限でも不足
+Candidate trial bound            stopped_by_candidate_trial_bound
+Planner rerun bound              stopped_by_planner_rerun_bound
+Search execution cost            timeout / OOM / process failure / interruption / 未実行（unmeasured）
+```
+
+contextの状態（概念名。実装名はPhase Bで決めてよい）:
+
+| 状態 | 入る条件 | 上位rung |
+| --- | --- | --- |
+| `extentEscalationContexts` | そのrungのunitが `stopped_by_search_extent_bound` | 次rungで再実行する（唯一のescalation対象） |
+| `closedContexts` | `not_found_within_search_extent`（Searchがextent内外ともworkを使い切った） | 再実行しない（extentを広げても結果が変わらない） |
+| `boundStoppedContexts` | `stopped_by_candidate_trial_bound`（`candidate_trial_bound_reached`）/ `stopped_by_planner_rerun_bound`（`planner_rerun_bound_reached`） | 再実行しない（extent不足と判断しない） |
+| `unmeasuredContexts` | timeout / OOM / process failure / interruption / 未実行 | 再実行しない（extent不足と判断しない） |
 
 Targetごとの手順（**rung-major**。各Targetは独立に、同じbaselineから評価する。他Targetの結果を入力にしない）:
 
 ```text
-open = P1 order over K ≤ 1 (rank 1 .. 1 + K1 context数)
+Targetがrequired checkpoint Entryを持つ（kernelの blockedBySelectedCheckpoint と同じ判定）
+                                          -> unitを実行せずTargetを停止（stopReason = blocked_by_selected_checkpoint）
+activeContexts = P1 order over K ≤ 1 (rank 1 .. 1 + K1 context数)
 for rung in [L0, L1, L2]:
-  for context in open（P1順）:
-    unit(Target, context, rung) を実行し typed outcome を得る
-    outcome = found_R                     -> Targetを停止（stopReason = found_R）
-    outcome ∈ { not_found_within_search_extent, blocked_by_selected_checkpoint }
-                                          -> contextを open から外す（上位rungでも同じ結果になるので再実行しない）
-    それ以外                              -> 次のcontextへ
-  rung内に found_R が無いとき:
-    open が空                             -> Targetを停止（stopReason = policy_exhausted。extentを広げても変わらない）
-    それ以外（extent bound / trial bound / rerun bound / unmeasured のcontextが残る） -> 次のrungへ
-  L2でも found_R が無いとき               -> Targetを停止（stopReason = ladder_exhausted）
+  extentEscalationContexts = []
+  for context in activeContexts（P1順）:
+    outcome = unit(Target, context, rung)
+    found_R                               -> Targetを停止（stopReason = found_R）
+    not_found_within_search_extent        -> closedContextsへ
+    stopped_by_search_extent_bound        -> extentEscalationContextsへ
+    stopped_by_candidate_trial_bound      -> boundStoppedContextsへ（candidate_trial_bound_reached）
+    stopped_by_planner_rerun_bound        -> boundStoppedContextsへ（planner_rerun_bound_reached）
+    timeout / OOM / failure / interrupted -> unmeasuredContextsへ
+    （同じrung内の次のcontextへ進むことは、どのoutcomeでも許す）
+  extentEscalationContexts が空            -> Targetを停止（stopReason = no_extent_escalation_context）
+  activeContexts = extentEscalationContexts（P1順を保つ）
+L2の後も extentEscalationContexts が残る   -> Targetを停止（stopReason = ladder_exhausted）
 ```
 
 - rung-majorにするのは、Production default extent（L0）の全contextを先に試し、狭いextentで共存Routeが無いときだけ広げるためである
   （同じrungの中ではcontextを先に替える）。context-majorとの比較はPhase Bの対象外
 - escalation判定はtyped outcomeだけを読む。oracle hit / miss、exact index、required extentは読まない
 - `not_found_within_search_extent` は、Planner Alternative Searchが `exhausted`（extent内外に到達可能なworkが無い、SEARCH_SPEC 5.6.8 /
-  `PlannerAlternativeSearchSummary`）で終わったことを意味するので、そのcontextはrungを上げても結果が変わらず、上位rungで再実行しない。
-  open contextが残らなければextent escalationを止める
-- `blocked_by_selected_checkpoint` はこのExportでは0件（B1 / B2-B1）。発生した場合はSearchしない（9.5.2）
+  `PlannerAlternativeSearchSummary`）で終わったことを意味するので、そのcontextはrungを上げても結果が変わらない
+- `blocked_by_selected_checkpoint` は、Production kernelでもreservation導出・context Searchより前にTarget単位で判定される状態
+  （`work.blockedBySelectedCheckpoint`、9.5.2）なので、Phase BでもTarget単位で停止し、K0 / K1の各contextをno-op評価しない。
+  このExportでは既存evidence上0件（B1 / B2-B1）
+- **同じcontextの上位rungでのtrial**: escalationしたcontextでは、下位rungでtrial不採用になったCandidate（`candidateStableKey` が同じもの）を
+  上位rungで再trialせず、trial budgetも消費しない（記録だけする、`skippedPreviouslyRejected`）。trial入力（baseline、support context、`G`）は
+  同一なので結果も同じであり、これは9.2.19.10の「1回の代替探索の中でtrial不採用になったCandidateは再試行しない」をcontextのladder全体へ
+  適用したものである。下位rungが `stopped_by_search_extent_bound` で終わった時点で、下位extent内のCandidateはすべてdeliver・trial済みなので
+  （trial boundに達していない）、上位rungで新たにtrialされるCandidateは下位extentの外にある。analyzerはこのsuperset関係を検証し、
+  破れていれば診断として記録する。こうして上位rungでの `found_R` を「extentを広げたため」と帰属させる
+- **retryは別axis**。trial / rerun / timeout / OOMの再試行Research（retry policy、retry budget、execution envelope retry、trial-bound escalation、
+  rerun-bound escalation等）を将来行うことは禁止しないが、extent escalationとは別のaxis・別Phase / 別Research conditionとして事前登録する。
+  Phase Bには暗黙に含めない
 
 ### 6.3 typed outcomeの扱い
 
-| outcome / 実行状態 | 意味（authority） | escalation上の扱い | measured |
-| --- | --- | --- | --- |
-| `found_R` | §6.4のResearch trialが成立 | Target停止 | yes |
-| `not_found_within_search_extent` | Searchがextent内外ともworkを使い切り、trialがfoundにならなかった（9.2.19.13、kernel `settled` 導出） | contextをopenから外す（open空ならTarget停止） | yes |
-| `stopped_by_search_extent_bound` | extentが到達可能workを未確認のまま残した | 次context、rung終了時はescalate | yes |
-| `stopped_by_candidate_trial_bound` | 2 trialがfoundにならず、3件目のCandidateがdeliverされた（kernel実装） | 次context、rung終了時はescalate | yes |
-| `stopped_by_planner_rerun_bound` | unitのrerun budget 8が尽きた | 次context、rung終了時はescalate | yes |
-| `blocked_by_selected_checkpoint` | required checkpoint Entry（9.5.2） | 探索せず、contextをopenから外す | yes |
-| process timeout | Research execution envelopeのwall-clock到達 | **unmeasured**。次context、rung終了時はescalate | **no** |
-| OOM | heap limit到達 | **unmeasured**。同上 | **no** |
-| process failure / interrupted / unit未実行 | 異常終了・中断・policyが要求したのに実行されなかった | **unmeasured**。同上 | **no** |
+| outcome / 実行状態 | 意味（authority） | 扱い | 上位rung | measured |
+| --- | --- | --- | --- | --- |
+| `found_R` | §6.4のResearch trialが成立 | Target停止 | — | yes |
+| `not_found_within_search_extent` | Searchがextent内外ともworkを使い切り、trialがfoundにならなかった（9.2.19.13、kernel `settled` 導出） | context close | しない | yes |
+| `stopped_by_search_extent_bound` | extentが到達可能workを未確認のまま残した | extent escalation対象 | **する（唯一）** | yes |
+| `stopped_by_candidate_trial_bound` | 2 trialがfoundにならず、3件目のCandidateがdeliverされた（kernel実装） | `candidate_trial_bound_reached` として記録 | しない | yes |
+| `stopped_by_planner_rerun_bound` | unitのrerun budget 8が尽きた | `planner_rerun_bound_reached` として記録 | しない | yes |
+| `blocked_by_selected_checkpoint` | required checkpoint Entry（9.5.2、Target単位） | unitを実行せずTarget停止 | — | yes |
+| process timeout | Research execution envelopeのwall-clock到達 | **unmeasured** | しない | **no** |
+| OOM | heap limit到達 | **unmeasured** | しない | **no** |
+| process failure / interrupted / unit未実行 | 異常終了・中断・policyが要求したのに実行されなかった | **unmeasured** | しない | **no** |
 
 - timeout / OOM / process failure / interruption / 未実行を、Candidate 0、`not_found_within_search_extent`、`stopped_by_search_extent_bound`、
   extent不足のいずれへも読み替えない（B2-C2B2E〜Kと同じ）。unmeasured unitはincomplete evidenceであり、§9.4のcompletenessに必ず数える
-- unmeasuredを理由にpolicyを止めないのは、それがextentや共存について何も示さないからである。止めない代わりに、そのTargetの判定は
-  必ずunmeasuredを含むものとして記録する
+- unmeasured / bound-stoppedなcontextがあっても、同じrung内の他contextへは進む。それはextentや共存について何も示さないので、そのcontextの
+  上位rungは実行しない。そのTargetの判定には必ず記録として残す（§9.6）
 
 ### 6.4 Research trial `found_R`（9.2.19.6のResearch写像、Production semanticsではない）
 
@@ -286,7 +333,7 @@ Trace Replay → 判定）と同じ部品で行う。ただし入力と判定の
 | 条件2 | 明示決定Entryがすべてselected | **support Entryがすべてselected**（reservationが前提とするCounter進行が実際に起きることの確認。明示決定Entryではない） |
 | 条件3 | `G` とfixed Route集合のEntryを同時participantとするConflictが無い | `G` とsupport Entryを同時participantとするConflictが無い |
 | 条件4 | `G` がselected、またはfixed Route集合外Entryとの暫定帰結だけで外れた | `G` がselected、またはsupport集合外Entryとの暫定帰結だけで外れた（`PlannerRunResult.routeCommitment` evidence） |
-| `PlannerInput.options` | `conflictResolutionPlannerOptions(表示中Plan)` | Research `maxPlanSteps = 20000`（B2系列の `researchMaxPlanSteps` と同じResearch条件。Production 1000を変えない） |
+| `PlannerInput.options` | `conflictResolutionPlannerOptions(表示中Plan)`（§1のB。表示中PlanのStep数から導出し1000を超え得る） | §1のC `researchMaxPlanSteps = 20000`（B2系列と同じResearch条件。Phase Bには「表示中Plan」が無く、Bの導出をResearchで再現・置換しない。A / Bを変えない） |
 | 保存 | actual repairのみ保存 | **保存しない**。lineageも作らない |
 
 - `found_R` はPhase Bのpolicy停止信号であり、ProductionのPlanner Alternative outcome `found`、REQUIREMENTS 23.1の「代替として成立」とは
@@ -305,7 +352,7 @@ Trace Replay → 判定）と同じ部品で行う。ただし入力と判定の
 | Candidate trial bound | 1 request内で1 Targetにtrialする代替Candidate数 | `maxCandidateTrialsPerTarget = 2` | unitごとに2（変更しない） |
 | Planner rerun budget | 1 requestで開始するfull Planner run数（retry含む） | `maxPlannerReruns = 8`（request-global） | unitごとに8（変更しない） |
 | Search execution budget | Search 1回の計算時間・memory | **存在しない**（§7.5） | Research measurement envelope（wall-clock / heap） |
-| Plan step bound | 1 full Planner runのPlanStep上限 | `maxPlanSteps = 1000` | Research 20000（B2系列と同じ） |
+| Plan step bound | 1 full Planner runのPlanStep上限 | A. `defaultPlannerOptions.maxPlanSteps = 1000`（default / fallback）、B. Planner Alternativeのwhat-if / actual repairでは `conflictResolutionPlannerOptions(表示中Plan)` の導出値（1000を超え得る）（§1） | C. `researchMaxPlanSteps = 20000`（B2系列と同じResearch条件。A / Bと別物） |
 
 これらを同じ「budget」として混同しない。特に、context数やextent rungの試行回数を `maxCandidateTrialsPerTarget` や `maxPlannerReruns` に
 読み替えたり、それらへ合算したりしない。Phase Bで生じるunit数 × trial / rerunの総量は、Production budgetではなくResearch上の観測値である。
@@ -313,11 +360,16 @@ Trace Replay → 判定）と同じ部品で行う。ただし入力と判定の
 ### 7.2 Planner rerun budget
 
 `maxPlannerReruns = 8` はfull Planner runの開始回数を数えるrequest-global budgetである（9.2.19.12）。Search、reservation導出、
-materialization、preflightは数えず、**Searchの計算時間を制限しない**。変更しない。
+materialization、preflightは数えず、**Searchの計算時間を制限しない**。変更しない。Phase Bでもunit単位にこの値を使う。
+`stopped_by_planner_rerun_bound` で止まったcontextは上位extent rungへ進めない（§6.2）ので、extent escalationを経由したrerun budgetの
+再付与は起きない。
 
 ### 7.3 Candidate trial bound
 
 `maxCandidateTrialsPerTarget = 2` も現行Production authorityのままである。変更しない。Phase Bでもunit単位にこの値を使う。
+`stopped_by_candidate_trial_bound` で止まったcontextは上位extent rungへ進めない（§6.2）。extent escalationしたcontextでも、下位rungで
+trial不採用になったCandidateは再trialせずbudgetを消費しない（§6.2）ので、上位rungのtrial budgetは下位extent外のCandidateにだけ使われる。
+trial / rerun boundの再試行を研究する場合は、extent escalationとは別axisとして事前登録する（§6.2）。
 
 ### 7.4 context budget
 
@@ -396,10 +448,10 @@ formal run前にcommitしてよいが、本節の規則と矛盾させない。�
 | population | E1 11 Target（B2-C2B1 RESULTのcohort E1からauthority parserで機械導出、IDをsourceへ書かない）。`oracleGuidedTargetPopulation = true` |
 | context | P1（§4.1）、K ≤ 1全context（§4.4） |
 | extent | L0 → L1 → L2 共通ladder（§5） |
-| escalation | §6.2のrung-major規則、§6.3のtyped outcome |
+| escalation | §6.2のrung-major規則。上位rungへ進めるのは `stopped_by_search_extent_bound` のcontextだけ。trial bound / rerun bound / unmeasuredのcontextは上位rungで再実行しない。checkpoint blockはTarget単位で停止。retryなし（別axis） |
 | trial | §6.4の `found_R`、unitごとに `maxCandidateTrialsPerTarget = 2` / `maxPlannerReruns = 8` |
 | Search | 現行mainの `visitPlannerAlternativeCandidates()` 無変更。capture policy（C4C等）は付けない（Production kernelと同じlazy delivery） |
-| CalculationContext / RNG | B2系列と同じ（`production-rng:c5-e7`、Research `maxPlanSteps = 20000`） |
+| CalculationContext / RNG | B2系列と同じ（`production-rng:c5-e7`、`researchMaxPlanSteps = 20000`。§1のC。Production A / Bを表さない） |
 | execution envelope | unitごとに共通のwall-clock上限・heap上限、retryなし、fallbackなし。値はPhase BのPRでformal run前に固定する。B2-C2B2Kの所要時間を見て値を選ぶ場合は `oracleInformedExecutionEnvelope = true` と記録する |
 | instrumentation | Production behaviorを変えないものだけ。profiler等を付ける場合はformal runと分ける |
 
@@ -414,14 +466,18 @@ formal run前にcommitしてよいが、本節の規則と矛盾させない。�
 - context ordering（P1 key、K ≤ 1 scope）、extent ladder、escalation規則、task生成順序、execution envelopeをformal run開始前に確定し、
   start attestationへ記録する。run終了後に条件を追加・変更しない
 - Production source changed files（`src/domain` / `services` / `workers` / `pages` / `components` / `db`）= `[]`、Production defaultの
-  extent / trial / rerun / `maxPlanSteps` 不変
+  extent / trial / rerun、`defaultPlannerOptions`、`conflictResolutionPlannerOptions` 不変
 - speculative support Entryについて `PlannerConflictResolution` / lineageを合成していない（G1、testで確認）
+- 上位rungで実行したunitのcontextが、すべて直前rungで `stopped_by_search_extent_bound` だった（§6.2の遵守）。checkpoint block Targetで
+  unitを実行していない。下位rungでtrial不採用になったCandidateを上位rungで再trialしていない
 - `found_R` RouteのSearch reservation違反0、delivered costの非単調0、Search child内のcontext再導出不一致0
 - raw / RESULT不整合0
 
 ### 9.3 policy-required unit
 
 policy-required unitは、§6.2の規則がformal run中に実際に要求したunitである（`found_R` で停止した後のunitは要求されない）。
+L1 / L2で要求されるのは、直前rungで `stopped_by_search_extent_bound` になったcontextのunitだけであり、trial bound / rerun bound / unmeasuredの
+contextの上位rungは要求されない（したがって未実行としても数えない）。
 task生成は決定的で、同じtyped outcome列からは同じunit列が出る。ただしtimeoutはwall-clockに依存するので、**実行環境が実現unit集合を
 変え得る**。analyzerは実現したunit列とその理由をすべて記録する。
 
@@ -446,19 +502,42 @@ oracle Routeと `candidateStableKey()` で一致する」ことである。`foun
 ### 9.6 per-Target class（post-hoc、排他、上から順に判定）
 
 compatible context / required extentはanalyzerがB2-C1 / B2-C2B1 RESULTから読む（schedulerは読まない）。
-「covering unit」= compatible context × そのTargetのrequired extentをcoverするrungのunit。
+「covering rung」= そのTargetのrequired extentをcoverする最小のrung、「covering unit」= compatible context × covering rung以上のunit。
+
+まずcompatible contextごとに、このrunで最後に実行したunitから **context verdict** を決める。trial bound / rerun bound / unmeasuredの
+contextは上位rungへ進まない（§6.2）ので、verdictはその時点のoutcomeで確定し、他contextを上位rungまで走らせた結果で書き換わらない。
+
+| context verdict | 条件 |
+| --- | --- |
+| `not_executed` | どのrungでも実行していない（Targetがそれより前に停止した） |
+| `covered_measured` | covering unitを実行し、measuredだった |
+| `covered_unmeasured` | covering unitを実行したが、timeout / OOM / failure / interruption / 未実行 |
+| `unmeasured_below_covering` | covering rungより下のrungでunmeasuredになり、上位rungへ進まなかった |
+| `trial_bound_below_covering` | covering rungより下のrungで `stopped_by_candidate_trial_bound`（`candidate_trial_bound_reached`） |
+| `rerun_bound_below_covering` | covering rungより下のrungで `stopped_by_planner_rerun_bound`（`planner_rerun_bound_reached`） |
+| `closed_below_covering` | covering rungより下のrungで `not_found_within_search_extent`。compatibleでrequired extentが上位にあるのに `exhausted` になったことを意味するので、authority間の不整合候補として診断にも記録する |
+| `extent_bound_at_ladder_top` | L2でも `stopped_by_search_extent_bound` で、L2がcovering rungでない（E1はL2で全件coverされるので理論上0件） |
+
+Target class（上から順に最初に当てはまるもの）:
 
 | class | 条件 | 意味 |
 | --- | --- | --- |
 | `exact_recovered` | `found_R` Route = oracle exact | 成功 |
 | `found_non_oracle` | `found_R` で停止したがRouteはoracle exactでない | oracle-free信号が別のRouteで止まった。共存可能な別解かどうかは本Phaseでは主張しない（Global共存は2-C2.8で検証） |
-| `context_not_reached` | `found_R` 無しで停止し、compatible contextをどのrungでも実行していない | selectorで必要contextへ到達しない |
-| `extent_ladder_insufficient` | compatible contextは実行したが、covering unitを実行していない（policy_exhausted等で停止、またはladder上限が不足） | allowed extent ladderでは届かない |
-| `execution_unmeasured` | covering unitを要求したがtimeout / OOM / failure / 未実行 | execution cost上限で未測定 |
-| `searched_not_recovered` | covering unitがmeasuredだが `found_R` にならなかった（exact未delivery、trial reject、trial / rerun bound到達のいずれかをsub-reasonとして記録） | Searchは完走したがexactを回収しない |
+| `blocked_by_selected_checkpoint` | Target単位のcheckpoint blockで停止（E1では既存evidence上0件） | 探索対象外 |
+| `context_not_reached` | compatible contextのverdictがすべて `not_executed` | selectorで必要contextへ到達しない |
+| `searched_not_recovered` | `covered_measured` が1件以上、または `closed_below_covering` が1件以上 | Searchは完走したがexactを回収しない。sub-reason: covering unitのoutcome（`not_found_within_search_extent` / `stopped_by_search_extent_bound` / `candidate_trial_bound_reached` / `planner_rerun_bound_reached`）、exact未delivery / trial reject、`closed_below_covering` |
+| `execution_unmeasured` | `covered_unmeasured` または `unmeasured_below_covering` が1件以上 | execution cost上限で未測定 |
+| `stopped_by_trial_or_rerun_bound` | `trial_bound_below_covering` または `rerun_bound_below_covering` が1件以上 | covering rungより前にtrial / rerun boundで止まった。sub-reason: `candidate_trial_bound_reached` / `planner_rerun_bound_reached`。extent不足ではない |
+| `extent_ladder_insufficient` | 残り（`extent_bound_at_ladder_top`） | allowed extent ladderでは届かない |
 
-stopReason（`found_R` / `policy_exhausted` / `ladder_exhausted`）、停止rung、停止context rank、各unitのtyped outcome、Search elapsed、
-heap / RSS、trial数、full Planner run数はclassとは別に記録する。
+- Target classは1つだが、それと独立に、Targetごとに全contextの最終状態別件数（closed / extent escalation / `candidate_trial_bound_reached` /
+  `planner_rerun_bound_reached` / unmeasured）とcompatible contextごとのverdictをfieldとして保持する。class判定の優先順位で他の事実を消さない
+- trial bound / rerun bound / unmeasuredのcontextを `extent_ladder_insufficient` へ分類しない。extent不足と言えるのは、extent boundで
+  escalationを続けてladder上限でも届かなかった場合だけである
+
+stopReason（`found_R` / `blocked_by_selected_checkpoint` / `no_extent_escalation_context` / `ladder_exhausted`）、停止rung、停止context rank、
+各unitのtyped outcome、`skippedPreviouslyRejected`、Search elapsed、heap / RSS、trial数、full Planner run数はclassとは別に記録する。
 
 ### 9.7 aggregate decision（上から順に判定）
 
@@ -479,6 +558,7 @@ PARTIAL / NOT_RECOVERED / INCOMPLETEは、必ず §9.6のclass別件数を併記
 | `exact_recovered`（RECOVERED） | Phase C（Production compatible architecture） |
 | `found_non_oracle` | 停止信号は機能している。oracle exactより、`found_R` Route集合のGlobal共存（2-C2.8）を先に検証する |
 | `context_not_reached` | context ordering / scopeの再研究 |
+| `stopped_by_trial_or_rerun_bound` | trial / rerun boundの研究。extent escalationとは別axisとして事前登録する（§6.2） |
 | `extent_ladder_insufficient` | ladderの再研究（oracle-freeなrung判定） |
 | `execution_unmeasured` | Search execution budgetのauthority（§7.5）またはruntime |
 | `searched_not_recovered` | trial bound / lazy delivery順序とoracle Routeの関係 |
@@ -515,7 +595,9 @@ Phase Bが成立した場合（RECOVERED、または `found_non_oracle` を含�
 - **REQUIREMENTS 23の契約変更が先**。現行契約は「明示的な選択が無い競合については自動で再検索を行わず、競合としてそのまま提示する」
   であり、speculative support contextによる自動代替探索はこれと両立しない。docs-onlyの契約変更PRとプロジェクトオーナーの決定が必要
 - speculative support contextを試した事実を、Conflictの選択済み状態、explicit resolution、lineage decisionとして保存しない
-- Production default（extent / trial / rerun / `maxPlanSteps`）の変更は、Research ladderではなくBrowser Worker測定とdocsで決める
+- Production default（extent / trial / rerun）と `maxPlanSteps` のauthority（§1のA `defaultPlannerOptions`、B `conflictResolutionPlannerOptions`）の
+  変更は、Research ladderやResearch `researchMaxPlanSteps = 20000` ではなくBrowser Worker測定とdocsで決める。speculative support探索を
+  Productionへ入れる場合も、そのfull Planner runの `PlannerInput.options` を決めるのはPhase Cの設計であり、Cの20000を流用しない
 - Search work budgetのsemantic authority（§7.5）
 - 同じPlannerInputに対するPlanner出力が変わる場合は、AGENTS.mdの規則どおり `CURRENT_CALCULATION_APP_SCHEMA_VERSION` の境界を判断する
 - E1以外（E2、residual 3、別Export）での評価
@@ -536,7 +618,7 @@ Issue #154はCloseしない。
 Production source、Search algorithm、Search ordering / comparator、Planner scheduler、Planner Alternative kernel、Worker protocol、UI、Persistence、
 schema / version（`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、`DATABASE_SCHEMA_VERSION` 10、`ExportRoot.schemaVersion` 13）、RNG
 （`production-rng:c5-e7`）、`defaultPlannerAlternativeSearchExtent`、Candidate Search default、`maxCandidateTrialsPerTarget`、`maxPlannerReruns`、
-`maxPlanSteps`、B2-C2B2I / B2-C2B2J optimization、既存RESULT JSON。formal Search run、benchmark run、RESULT JSON生成、oracle再計算、
+`defaultPlannerOptions`、`conflictResolutionPlannerOptions`、B2-C2B2I / B2-C2B2J optimization、既存RESULT JSON。formal Search run、benchmark run、RESULT JSON生成、oracle再計算、
 新しいCandidate生成は行っていない。
 
 ## 12. 本Phaseのacceptance criteria
@@ -548,7 +630,7 @@ schema / version（`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、`DATABASE_SCHEM
 | 3 | L1 / L2をProduction default extentとして確定していない | §5.2 / G4 |
 | 4 | oracle-informed policy designとoracle-free executionを区別 | §2.3 / §2.4 |
 | 5 | Phase Bのcalculation / schedulerからoracle情報を排除する契約 | §2.4 / §9.2 / G2 |
-| 6 | extent / trial / Planner rerun / Search execution budgetを別概念として整理 | §7 / G5 |
+| 6 | extent / trial / Planner rerun / Search execution budgetを別概念として整理（extent escalationでtrial / rerun budgetを再付与しない、maxPlanStepsのA / B / Cを分離） | §1 / §6.2 / §7 / G5 / G11 / G12 |
 | 7 | wall-clock timeout / OOMをnot-foundへ読み替えない | §6.3 / §7.5 / G6 / G7 |
 | 8 | E1 / E2 / residual 3の役割分離 | §4.3 |
 | 9 | Phase 0 prototype 42 / 43との関係 | §8 |
@@ -564,3 +646,15 @@ schema / version（`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、`DATABASE_SCHEM
 - `npm run check:nul`、`npm run lint`、`npm test`、`npm run build`（docs-onlyのため挙動変化は無いが、既存testがdocsを参照していないことの確認として実行。
   結果はPRに記載）
 - 長時間のformal benchmark / Search measurementは実行していない
+
+## 14. レビュー対応（PR #212、初版 `0c8e5d9` に対する修正）
+
+- `maxPlanSteps` を、A. Domain default（`defaultPlannerOptions.maxPlanSteps = 1000`、default / fallback）、B. Planner Alternative
+  Production runtime（`conflictResolutionPlannerOptions(表示中Plan)` の導出値、1000を超え得る）、C. Research条件（`researchMaxPlanSteps = 20000`）に
+  分離した（§1 / §6.4 / §7.1 / §9 / §10.3 / §11、G12）。初版の「Production `maxPlanSteps = 1000`」はPlanner Alternativeについて不正確だった
+- extent escalationを `stopped_by_search_extent_bound` のcontextだけに限定した。trial bound / rerun bound / unmeasuredのcontextは上位rungへ
+  進めず、extent経由のbudget再付与をしない。上位rungでは下位rungのtrial不採用Candidateを再trialしない。retryは別axisとした（§6.2 / §6.3 / §7.2 /
+  §7.3、G11）
+- `blocked_by_selected_checkpoint` をProduction kernelと同じくTarget単位の停止にした（§6.2 / §6.3）
+- per-Target classをcontext verdictから決める形にし、trial bound / rerun bound / unmeasuredを `extent_ladder_insufficient` と誤分類しないよう
+  `stopped_by_trial_or_rerun_bound` とsub-reason / fieldを追加した。aggregate decision名は変更していない（§9.3 / §9.6 / §9.7）
