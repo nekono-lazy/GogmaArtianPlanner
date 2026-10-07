@@ -148,7 +148,7 @@ Target IDだけを持つmanifestとして渡すことを許可し、provenance�
 | G8 | 架空のSearch work unitを正式仕様として捏造しない（§7.5） |
 | G9 | context / extent / task生成ruleとtask順序をformal run開始前に確定し、run後に条件を追加・変更しない（§9.2） |
 | G10 | 現行9.2.19の1段repair semantics（what-if / actual repairのauthority、found判定、lineage）を変更しない |
-| G11 | 上位extent rungへ進めるのは `stopped_by_search_extent_bound` のcontextだけ。trial bound / rerun bound / unmeasuredを理由にextentを広げず、extent経由でtrial / rerun budgetを再付与しない。retryは別axis（§6.2） |
+| G11 | 上位extent rungへ進めるのは `stopped_by_search_extent_bound` のcontextだけ。trial bound / rerun bound / unmeasuredを理由にextentを広げない。extent escalationで増えるのはSearch extentだけで、trial 2 / rerun 8は同一 (Target, context) のladder全体で累積共有する。retryは別axis（§6.2） |
 | G12 | `maxPlanSteps` のDomain default（1000）、Planner Alternative Production runtime（`conflictResolutionPlannerOptions(表示中Plan)`）、Research条件（20000）を混同しない（§1） |
 
 ## 4. context policy
@@ -235,12 +235,50 @@ oracleを読まない以上、「このcontext / extentで十分か」をexact h
 
 ### 6.2 escalationの単位と規則
 
-execution unit = **(Target, context, rung)**。各unitはProductionのPlanner Alternative 1 requestと同じ単位で、Production trial bound
-（`maxCandidateTrialsPerTarget = 2`、`maxPlannerReruns = 8`）をそのunitに適用する（値は変えない）。
+**execution unitとbudget scopeを分ける。**
+
+```text
+execution unit              (Target, context, rung)    Search 1回の実行単位（rungごとに別unit）
+trial / rerun budget scope  (Target, context)           L0 → L1 → L2のladder全体で1つ
+```
+
+Production trial boundの値（`maxCandidateTrialsPerTarget = 2`、`maxPlannerReruns = 8`）は変えない。Phase Bではこの2値を、
+**同一 (Target, context) のextent ladder全体で累積共有する上限** として使い、rungごとに2 / 8を新規付与（reset）しない。
+同じ (Target, context) のunit間では、次の **ladder state** を引き継ぐ（概念名。型名・field名はPhase Bの実装で決めてよい）。
+
+```text
+candidateTrialsUsed                     ladder全体で開始したCandidate trialの累計（上限 maxCandidateTrialsPerTarget = 2）
+plannerRerunsUsed                       ladder全体で開始したfull Planner runの累計（runtime-unsupported retryを含む、上限 maxPlannerReruns = 8）
+previouslyRejectedCandidateStableKeys   ladder全体でtrial不採用になったCandidateの candidateStableKey
+remainingCandidateTrials = maxCandidateTrialsPerTarget - candidateTrialsUsed
+remainingPlannerReruns   = maxPlannerReruns - plannerRerunsUsed
+```
+
+unit内のCandidate処理（Production kernelのtrial loopと同じ順で、上限だけをladder stateから読む）:
+
+```text
+Candidateがdeliverされた:
+  candidateStableKey ∈ previouslyRejectedCandidateStableKeys
+                                     -> skip（trialしない、budgetを消費しない、skippedPreviouslyRejectedに記録）
+  remainingCandidateTrials = 0       -> stopped_by_candidate_trial_bound でcontextを終了
+  remainingPlannerReruns = 0         -> stopped_by_planner_rerun_bound でcontextを終了（full Planner runを開始しない）
+  それ以外                           -> trial（candidateTrialsUsed += 1、開始したfull Planner runごとに plannerRerunsUsed += 1）
+    found_R                          -> Target停止
+    trial reject                     -> previouslyRejectedCandidateStableKeysへ追加し、次のCandidateを要求
+    trial中にrerun budgetが尽きた    -> stopped_by_planner_rerun_bound でcontextを終了
+```
+
+例: L0でAをtrialしてreject（candidateTrialsUsed = 1）、その後 `stopped_by_search_extent_bound`。L1でAはskip、Bをtrial
+（candidateTrialsUsed = 2）、Cがdeliverされた時点でtrial budgetが0なので `stopped_by_candidate_trial_bound`（Cはtrialしない）。最初から
+L1 extentを1 requestとして実行した場合（A reject、B reject、C delivery時点でtrial bound）とtrial総数は同じであり、extent rungを上げても
+trial可能件数・full Planner run数の総量は増えない。
 
 **上位extent rungへ進めるのは、下位rungで `stopped_by_search_extent_bound` になったcontextだけである。** extentを広げる理由になるのは
 extentが到達可能workを未確認のまま残したという直接のsignalだけで、trial bound・rerun bound・unmeasuredはextent不足のevidenceではない。
-したがってそれらのcontextは上位rungで再実行せず、extent escalationを経由したtrial / rerun budgetの再付与（budget refill）も起きない。
+したがってそれらのcontextは上位rungで再実行しない。さらに、`stopped_by_search_extent_bound` からL0 → L1 → L2へ進むcontextでも、
+**増えるのはSearch extentだけ** であり、Candidate trial budgetとPlanner rerun budgetは上記ladder stateの残量のまま増えない（budget refillは起きない）。
+上位rungで初めて `found_R` になった場合は、「同じCandidate / Planner evaluation budgetの範囲内で、extentを広げたことで新しいCandidateへ到達し
+回収できた」と解釈できる。
 これにより、Phase Bの結果で次を分離できる。
 
 ```text
@@ -291,7 +329,8 @@ L2の後も extentEscalationContexts が残る   -> Targetを停止（stopReason
   （`work.blockedBySelectedCheckpoint`、9.5.2）なので、Phase BでもTarget単位で停止し、K0 / K1の各contextをno-op評価しない。
   このExportでは既存evidence上0件（B1 / B2-B1）
 - **同じcontextの上位rungでのtrial**: escalationしたcontextでは、下位rungでtrial不採用になったCandidate（`candidateStableKey` が同じもの）を
-  上位rungで再trialせず、trial budgetも消費しない（記録だけする、`skippedPreviouslyRejected`）。trial入力（baseline、support context、`G`）は
+  上位rungで再trialせず、trial budgetを追加消費しない（記録だけする、`skippedPreviouslyRejected`）。新しいCandidateは、ladder stateの
+  残budgetがある場合だけtrialする（上記）。trial入力（baseline、support context、`G`）は
   同一なので結果も同じであり、これは9.2.19.10の「1回の代替探索の中でtrial不採用になったCandidateは再試行しない」をcontextのladder全体へ
   適用したものである。下位rungが `stopped_by_search_extent_bound` で終わった時点で、下位extent内のCandidateはすべてdeliver・trial済みなので
   （trial boundに達していない）、上位rungで新たにtrialされるCandidateは下位extentの外にある。analyzerはこのsuperset関係を検証し、
@@ -307,8 +346,8 @@ L2の後も extentEscalationContexts が残る   -> Targetを停止（stopReason
 | `found_R` | §6.4のResearch trialが成立 | Target停止 | — | yes |
 | `not_found_within_search_extent` | Searchがextent内外ともworkを使い切り、trialがfoundにならなかった（9.2.19.13、kernel `settled` 導出） | context close | しない | yes |
 | `stopped_by_search_extent_bound` | extentが到達可能workを未確認のまま残した | extent escalation対象 | **する（唯一）** | yes |
-| `stopped_by_candidate_trial_bound` | 2 trialがfoundにならず、3件目のCandidateがdeliverされた（kernel実装） | `candidate_trial_bound_reached` として記録 | しない | yes |
-| `stopped_by_planner_rerun_bound` | unitのrerun budget 8が尽きた | `planner_rerun_bound_reached` として記録 | しない | yes |
+| `stopped_by_candidate_trial_bound` | **その (Target, context) ladder全体の累積** trialが2件に達した後に、skip対象でない新しいCandidateがdeliverされた（そのrungだけのbudgetではない。kernel実装の判定をladder stateへ写したもの） | `candidate_trial_bound_reached` として記録 | しない | yes |
+| `stopped_by_planner_rerun_bound` | **その (Target, context) ladder全体の累積** full Planner run数が8に達し、必要なrunを開始できなかった（そのrungだけのbudgetではない） | `planner_rerun_bound_reached` として記録 | しない | yes |
 | `blocked_by_selected_checkpoint` | required checkpoint Entry（9.5.2、Target単位） | unitを実行せずTarget停止 | — | yes |
 | process timeout | Research execution envelopeのwall-clock到達 | **unmeasured** | しない | **no** |
 | OOM | heap limit到達 | **unmeasured** | しない | **no** |
@@ -349,8 +388,8 @@ Trace Replay → 判定）と同じ部品で行う。ただし入力と判定の
 | --- | --- | --- | --- |
 | Search extent | Counter位置windowの上限（held位置も数える） | `PlannerAlternativeSearchExtent`、default `{ 4, 235, 4 }` | Research ladder L0 / L1 / L2（§5） |
 | context budget | 1 Targetについて試すspeculative support contextの数・範囲 | **存在しない**（Productionはspeculative contextを生成しない） | K ≤ 1全context（§4.4） |
-| Candidate trial bound | 1 request内で1 Targetにtrialする代替Candidate数 | `maxCandidateTrialsPerTarget = 2` | unitごとに2（変更しない） |
-| Planner rerun budget | 1 requestで開始するfull Planner run数（retry含む） | `maxPlannerReruns = 8`（request-global） | unitごとに8（変更しない） |
+| Candidate trial bound | 1 request内で1 Targetにtrialする代替Candidate数 | `maxCandidateTrialsPerTarget = 2` | 値2は維持。同一 (Target, context) のextent ladder全体で累積共有（rungごとにresetしない） |
+| Planner rerun budget | 1 requestで開始するfull Planner run数（retry含む） | `maxPlannerReruns = 8`（request-global） | 値8は維持。同一 (Target, context) のextent ladder全体で累積共有（rungごとにresetしない） |
 | Search execution budget | Search 1回の計算時間・memory | **存在しない**（§7.5） | Research measurement envelope（wall-clock / heap） |
 | Plan step bound | 1 full Planner runのPlanStep上限 | A. `defaultPlannerOptions.maxPlanSteps = 1000`（default / fallback）、B. Planner Alternativeのwhat-if / actual repairでは `conflictResolutionPlannerOptions(表示中Plan)` の導出値（1000を超え得る）（§1） | C. `researchMaxPlanSteps = 20000`（B2系列と同じResearch条件。A / Bと別物） |
 
@@ -360,15 +399,16 @@ Trace Replay → 判定）と同じ部品で行う。ただし入力と判定の
 ### 7.2 Planner rerun budget
 
 `maxPlannerReruns = 8` はfull Planner runの開始回数を数えるrequest-global budgetである（9.2.19.12）。Search、reservation導出、
-materialization、preflightは数えず、**Searchの計算時間を制限しない**。変更しない。Phase Bでもunit単位にこの値を使う。
-`stopped_by_planner_rerun_bound` で止まったcontextは上位extent rungへ進めない（§6.2）ので、extent escalationを経由したrerun budgetの
-再付与は起きない。
+materialization、preflightは数えず、**Searchの計算時間を制限しない**。変更しない。Phase BではProduction値8を維持し、同一 (Target, context) のL0 → L1 → L2 ladder全体で累積共有する
+（`plannerRerunsUsed`、§6.2）。下位rungで開始したfull Planner run（runtime-unsupported retryを含む）はすべて累積に含め、上位rungで8回分を
+再付与しない。`stopped_by_planner_rerun_bound` で止まったcontextは上位extent rungへ進めない。
 
 ### 7.3 Candidate trial bound
 
-`maxCandidateTrialsPerTarget = 2` も現行Production authorityのままである。変更しない。Phase Bでもunit単位にこの値を使う。
-`stopped_by_candidate_trial_bound` で止まったcontextは上位extent rungへ進めない（§6.2）。extent escalationしたcontextでも、下位rungで
-trial不採用になったCandidateは再trialせずbudgetを消費しない（§6.2）ので、上位rungのtrial budgetは下位extent外のCandidateにだけ使われる。
+`maxCandidateTrialsPerTarget = 2` も現行Production authorityのままである。変更しない。Phase BではProduction値2を維持し、同一 (Target, context) のL0 → L1 → L2 ladder全体で累積共有する（`candidateTrialsUsed`、§6.2）。
+`stopped_by_candidate_trial_bound` で止まったcontextは上位extent rungへ進めない。extent escalationしたcontextでは、下位rungでtrial不採用になった
+Candidateを再trialせずbudgetを追加消費しない一方、新しいCandidateには残budget（`remainingCandidateTrials`）しか使えない。したがって上位rungの
+trialは下位extent外のCandidateにだけ、かつladder全体で2件以内で行われる。
 trial / rerun boundの再試行を研究する場合は、extent escalationとは別axisとして事前登録する（§6.2）。
 
 ### 7.4 context budget
@@ -449,7 +489,7 @@ formal run前にcommitしてよいが、本節の規則と矛盾させない。�
 | context | P1（§4.1）、K ≤ 1全context（§4.4） |
 | extent | L0 → L1 → L2 共通ladder（§5） |
 | escalation | §6.2のrung-major規則。上位rungへ進めるのは `stopped_by_search_extent_bound` のcontextだけ。trial bound / rerun bound / unmeasuredのcontextは上位rungで再実行しない。checkpoint blockはTarget単位で停止。retryなし（別axis） |
-| trial | §6.4の `found_R`、unitごとに `maxCandidateTrialsPerTarget = 2` / `maxPlannerReruns = 8` |
+| trial | §6.4の `found_R`。`maxCandidateTrialsPerTarget = 2` / `maxPlannerReruns = 8`（値は維持）を、同一 (Target, context) のextent ladder全体で累積共有する（§6.2。rungごとにresetしない） |
 | Search | 現行mainの `visitPlannerAlternativeCandidates()` 無変更。capture policy（C4C等）は付けない（Production kernelと同じlazy delivery） |
 | CalculationContext / RNG | B2系列と同じ（`production-rng:c5-e7`、`researchMaxPlanSteps = 20000`。§1のC。Production A / Bを表さない） |
 | execution envelope | unitごとに共通のwall-clock上限・heap上限、retryなし、fallbackなし。値はPhase BのPRでformal run前に固定する。B2-C2B2Kの所要時間を見て値を選ぶ場合は `oracleInformedExecutionEnvelope = true` と記録する |
@@ -470,6 +510,9 @@ formal run前にcommitしてよいが、本節の規則と矛盾させない。�
 - speculative support Entryについて `PlannerConflictResolution` / lineageを合成していない（G1、testで確認）
 - 上位rungで実行したunitのcontextが、すべて直前rungで `stopped_by_search_extent_bound` だった（§6.2の遵守）。checkpoint block Targetで
   unitを実行していない。下位rungでtrial不採用になったCandidateを上位rungで再trialしていない
+- 同一 (Target, context) について `candidateTrialsUsed <= 2`、`plannerRerunsUsed <= 8`（ladder全体の累積）。各上位rung unitの開始時のladder state
+  （`candidateTrialsUsed` / `plannerRerunsUsed` / `previouslyRejectedCandidateStableKeys`）が、直前rung unitの終了時のladder stateと一致する
+  （消費量が引き継がれている）ことをanalyzerがunit記録から検証できるよう、unitごとに開始時・終了時のladder stateを記録する
 - `found_R` RouteのSearch reservation違反0、delivered costの非単調0、Search child内のcontext再導出不一致0
 - raw / RESULT不整合0
 
@@ -477,7 +520,8 @@ formal run前にcommitしてよいが、本節の規則と矛盾させない。�
 
 policy-required unitは、§6.2の規則がformal run中に実際に要求したunitである（`found_R` で停止した後のunitは要求されない）。
 L1 / L2で要求されるのは、直前rungで `stopped_by_search_extent_bound` になったcontextのunitだけであり、trial bound / rerun bound / unmeasuredの
-contextの上位rungは要求されない（したがって未実行としても数えない）。
+contextの上位rungは要求されない（したがって未実行としても数えない）。execution unit（rungごと）とtrial / rerun budget scope（(Target, context)）は
+異なり、上位rungのunitがpolicy-requiredになってもtrial / rerun budgetは回復しない（§6.2）。
 task生成は決定的で、同じtyped outcome列からは同じunit列が出る。ただしtimeoutはwall-clockに依存するので、**実行環境が実現unit集合を
 変え得る**。analyzerは実現したunit列とその理由をすべて記録する。
 
@@ -537,7 +581,9 @@ Target class（上から順に最初に当てはまるもの）:
   escalationを続けてladder上限でも届かなかった場合だけである
 
 stopReason（`found_R` / `blocked_by_selected_checkpoint` / `no_extent_escalation_context` / `ladder_exhausted`）、停止rung、停止context rank、
-各unitのtyped outcome、`skippedPreviouslyRejected`、Search elapsed、heap / RSS、trial数、full Planner run数はclassとは別に記録する。
+各unitのtyped outcome、unit開始時・終了時のladder state（`candidateTrialsUsed` / `plannerRerunsUsed` / `remainingCandidateTrials` /
+`remainingPlannerReruns`）、`skippedPreviouslyRejected`、Search elapsed、heap / RSS、trial数、full Planner run数はclassとは別に記録する
+（JSON schemaと実装名はPhase Bで決める）。
 
 ### 9.7 aggregate decision（上から順に判定）
 
@@ -654,7 +700,17 @@ schema / version（`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、`DATABASE_SCHEM
   分離した（§1 / §6.4 / §7.1 / §9 / §10.3 / §11、G12）。初版の「Production `maxPlanSteps = 1000`」はPlanner Alternativeについて不正確だった
 - extent escalationを `stopped_by_search_extent_bound` のcontextだけに限定した。trial bound / rerun bound / unmeasuredのcontextは上位rungへ
   進めず、extent経由のbudget再付与をしない。上位rungでは下位rungのtrial不採用Candidateを再trialしない。retryは別axisとした（§6.2 / §6.3 / §7.2 /
-  §7.3、G11）
+  §7.3、G11）。ただしこの時点ではtrial / rerun budgetをunitごとに与えていたため、escalationしたcontextでbudget再付与が起き得た。§15で累積共有に修正した
 - `blocked_by_selected_checkpoint` をProduction kernelと同じくTarget単位の停止にした（§6.2 / §6.3）
 - per-Target classをcontext verdictから決める形にし、trial bound / rerun bound / unmeasuredを `extent_ladder_insufficient` と誤分類しないよう
   `stopped_by_trial_or_rerun_bound` とsub-reason / fieldを追加した。aggregate decision名は変更していない（§9.3 / §9.6 / §9.7）
+
+## 15. 再レビュー対応（PR #212、`a83f02e` に対する修正）
+
+- extent escalationの際にtrial / rerun budgetがrungごとに再付与されないよう、execution unit（(Target, context, rung)）とtrial / rerun budget
+  scope（(Target, context)）を分けた。`maxCandidateTrialsPerTarget = 2` / `maxPlannerReruns = 8` の値は維持し、L0 → L1 → L2のladder全体で
+  累積共有する（`candidateTrialsUsed` / `plannerRerunsUsed` / `previouslyRejectedCandidateStableKeys` を引き継ぐ）。extent escalationで
+  増えるのはSearch extentだけである（§6.2 / §6.3 / §7.1〜§7.3、G11）
+- `stopped_by_candidate_trial_bound` / `stopped_by_planner_rerun_bound` を、ladder全体の累積budgetに基づくoutcomeとした（§6.3）
+- formal validityへ累積上限（2 / 8）と、上位rung unit開始時のladder stateが直前rung終了時と一致することのanalyzer検証を追加した（§9.2）。
+  policy-required unitとbudget scopeが異なることを明記した（§9.3）。診断fieldの案を追加した（§9.6）
