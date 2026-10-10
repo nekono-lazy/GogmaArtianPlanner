@@ -468,8 +468,8 @@ A   A-a → A-b → A-c-01 → … → A-c-11（A-cは前段の結果に依存�
   集合としてR5を満たした。43 / 43、Conflict 0、Issue #154のacceptance（R6）は言えない
 - `D1_FOUND_R_SET_PARTIAL`: 評価したP / `A-b` / `A-c` の集合のうちR5を満たしたものがあることと、その集合・件数・最大の大きさまで。
   評価していない部分集合や、`A-a` で `G` だけがselectedになった件数を共存部分集合として数えない
-- `D1_FOUND_R_SET_COEXISTENCE_NOT_OBSERVED`: **共存不能の証明ではない**。言えるのは「登録した79の評価（P 55、`A-a`、`A-b`、`A-c` 11）の中で、
-  2件以上の置換集合のR5成立を観測しなかった」ことだけである。未評価の組合せ（3件以上の部分集合の大半）、他のCandidate、他のsupport context、
+- `D1_FOUND_R_SET_COEXISTENCE_NOT_OBSERVED`: **共存不能の証明ではない**。言えるのは「登録した68件の集合評価（P 55、`A-a` 1、`A-b` 1、`A-c` 11）のうち、
+  2件以上の置換集合についてR5成立を観測しなかった」ことだけである（68件には `A-c` のsingleton段も含まれるが、singletonでのR5成立は共存の観測に数えない）。未評価の組合せ（3件以上の部分集合の大半）、他のCandidate、他のsupport context、
   別のextent・別のExportで共存できないことは言えない。Target単体の `found_R` で止める方式がGlobal共存の候補選択として不十分であることの
   evidenceにはなるが、oracle-free policyが存在しないことは言えない
 - いずれの場合も、R5成立はsupportが外れた・失効した集合では主張しない（G18）。Pの勝者 / participantはD2の入力設計に使えるが、D1の中で新しいSearchは行わない
