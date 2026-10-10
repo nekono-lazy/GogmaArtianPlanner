@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, useParams } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -183,6 +183,16 @@ function renderPage(deps: BuildListPageDependencies) {
     },
   ], { initialEntries: ['/build-list'] })
   return { router, ...render(<RouterProvider router={router} />) }
+}
+
+/**
+ * Renders the page and opens every Target group (Issue #124: the groups start
+ * closed), for tests that act on an Entry's Candidate card or delete button.
+ */
+async function renderExpanded(deps: BuildListPageDependencies) {
+  const view = renderPage(deps)
+  fireEvent.click(await screen.findByRole('button', { name: 'すべて展開' }))
+  return view
 }
 
 function PlanDestination() {
@@ -391,7 +401,7 @@ describe('BuildListPage', () => {
   })
 
   it('renders from Candidate Snapshot and shows stale reasons', async () => {
-    renderPage(dependencies(['rng_state_changed']))
+    await renderExpanded(dependencies(['rng_state_changed']))
     expect(await screen.findByText('Domain fixture target')).toBeInTheDocument()
     expect(screen.getByText('再検索が必要')).toBeInTheDocument()
     expect(screen.getByText('RNG状態が検索時から変更されています')).toBeInTheDocument()
@@ -400,7 +410,7 @@ describe('BuildListPage', () => {
   it('removes only the Build List entry', async () => {
     const user = userEvent.setup()
     const deps = dependencies()
-    renderPage(deps)
+    await renderExpanded(deps)
     await user.click(await screen.findByRole('button', { name: 'ビルドリストから削除' }))
     expect(deps.deleteEntry).toHaveBeenCalledOnce()
     expect(screen.queryByText('Domain fixture target')).not.toBeInTheDocument()
@@ -514,7 +524,7 @@ describe('BuildListPage', () => {
   it('never replaces a user edit when the Entries change, and the reset follows the current Build List', async () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
-    renderPage(dependenciesWithOperationCounts([1470, 300], client))
+    await renderExpanded(dependenciesWithOperationCounts([1470, 300], client))
     await user.click(await screen.findByRole('button', { name: '詳細設定' }))
     await waitFor(() => expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1500))
     await user.clear(screen.getByLabelText('最大計画ステップ数'))
@@ -658,7 +668,7 @@ describe('BuildListPage', () => {
         return entry
       }),
     }
-    renderPage(deps)
+    await renderExpanded(deps)
     const bonus = await screen.findByRole('checkbox', { name: BONUS_ONE })
     const skill = screen.getByRole('checkbox', { name: SKILL_ONE })
 
@@ -689,7 +699,7 @@ describe('BuildListPage', () => {
 
 describe('BuildListPage presentation', () => {
   it('lays the page out as summary, Planner panel and Target groups with a sequential outline', async () => {
-    renderPage(dependencies())
+    await renderExpanded(dependencies())
     expect(await screen.findByRole('heading', { level: 1, name: 'ビルドリスト' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: 'ページ概要' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: '生産計画の作成' })).toBeInTheDocument()
@@ -739,11 +749,11 @@ describe('BuildListPage presentation', () => {
     ]
     const deps = dependencies()
     deps.refresh = vi.fn(async () => ({ entries, targets: [target], ownedWeapons: [] }))
-    renderPage(deps)
+    await renderExpanded(deps)
 
     const group = await screen.findByRole('region', { name: 'Domain fixture target' })
     expect(screen.getAllByRole('heading', { level: 3, name: 'Domain fixture target' })).toHaveLength(1)
-    expect(within(group).getByText('候補 2件')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Domain fixture target' })).toHaveAccessibleDescription(/候補 2件/)
     expect(within(group).getAllByRole('heading', { level: 4, name: '理想候補' })).toHaveLength(2)
     expect(within(group).getAllByRole('button', { name: 'ビルドリストから削除' })).toHaveLength(2)
     // Persisted order inside the group is kept.
@@ -790,10 +800,12 @@ describe('BuildListPage presentation', () => {
     ])('marks the Target holding %s, recommends neither, and clears the guidance once one is left', async (_label, staleSecond) => {
       const user = userEvent.setup()
       const { deps, a1 } = duplicateFixture(staleSecond)
-      renderPage(deps)
+      await renderExpanded(deps)
 
       const group = await screen.findByRole('region', { name: /Domain fixture target/ })
-      expect(within(group).getByText('要整理')).toBeInTheDocument()
+      // 「要整理」 sits in the group header, readable while the group is closed.
+      const toggle = screen.getByRole('button', { name: 'Domain fixture target' })
+      expect(toggle).toHaveAccessibleDescription(/要整理/)
       expect(within(group).getByText(DUPLICATE_TITLE)).toBeInTheDocument()
       expect(within(group).getByText(DUPLICATE_LINE)).toBeInTheDocument()
       // Both Entries stay listed and deletable; nothing is picked for the user.
@@ -802,7 +814,7 @@ describe('BuildListPage presentation', () => {
       expect(within(group).queryByText(/おすすめ|推奨/)).toBeNull()
       // A Target with one Entry carries no guidance.
       const otherGroup = screen.getByRole('region', { name: /Other fixture target/ })
-      expect(within(otherGroup).queryByText('要整理')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Other fixture target' })).not.toHaveAccessibleDescription(/要整理/)
       expect(within(otherGroup).queryByText(DUPLICATE_TITLE)).toBeNull()
 
       // The ordinary guarded delete tidies it.
@@ -810,9 +822,9 @@ describe('BuildListPage presentation', () => {
       expect(deps.inspectEntryDelete).toHaveBeenCalledWith(a1.id)
       expect(deps.deleteEntry).toHaveBeenCalledWith(a1.id, null)
       await waitFor(() => expect(within(group).queryByText(DUPLICATE_TITLE)).toBeNull())
-      expect(within(group).queryByText('要整理')).toBeNull()
+      expect(toggle).not.toHaveAccessibleDescription(/要整理/)
       expect(within(group).getAllByRole('heading', { level: 4, name: '理想候補' })).toHaveLength(1)
-      expect(within(group).getByText('候補 1件')).toBeInTheDocument()
+      expect(toggle).toHaveAccessibleDescription(/候補 1件/)
     })
   })
 
@@ -828,7 +840,7 @@ describe('BuildListPage presentation', () => {
   })
 
   it('keeps the Candidate Snapshot of a stale Entry readable and marks the Target group', async () => {
-    renderPage(dependencies(['owned_weapon_changed']))
+    await renderExpanded(dependencies(['owned_weapon_changed']))
     expect(await screen.findByText('参照している所持武器が変更されています')).toBeInTheDocument()
     expect(screen.getByText('再検索が必要 1件')).toBeInTheDocument()
     // The stored Candidate stays visible below the warning.
@@ -857,7 +869,7 @@ describe('BuildListPage presentation', () => {
         return entry
       }),
     }
-    renderPage(deps)
+    await renderExpanded(deps)
 
     const checkbox = await screen.findByRole('checkbox', { name: BONUS_ONE })
     expect(checkbox).toBeChecked()
@@ -895,7 +907,7 @@ describe('BuildListPage presentation', () => {
         throw new Error('checkpoint: 選択内容が不正です。')
       }),
     }
-    renderPage(deps)
+    await renderExpanded(deps)
     await user.click(await screen.findByRole('checkbox', { name: BONUS_ONE }))
     expect(await screen.findByText('checkpoint: 選択内容が不正です。')).toBeInTheDocument()
     // Nothing else is presented as a load failure.
@@ -991,7 +1003,7 @@ describe('BuildListPage intermediate state save chain recovery', () => {
   it('continues from the last persisted selection after a failed save (success -> failure -> success)', async () => {
     const user = userEvent.setup()
     const { deps, ids, attempts, latestEntry } = chainFixture()
-    renderPage(deps)
+    await renderExpanded(deps)
     const bonus = await screen.findByRole('checkbox', { name: BONUS_ONE })
     const skill = screen.getByRole('checkbox', { name: SKILL_ONE })
     const skillFirst = screen.getByRole('radio', { name: 'スキルを優先' })
@@ -1045,7 +1057,7 @@ describe('BuildListPage intermediate state save chain recovery', () => {
     // deterministic, so a throwaway fixture can name it.
     const ids = chainFixture().ids
     const fixture = chainFixture({ bonusOpportunityId: ids.bonus })
-    renderPage(fixture.deps)
+    await renderExpanded(fixture.deps)
     const skill = await screen.findByRole('checkbox', { name: SKILL_ONE })
     const bonusFirst = screen.getByRole('radio', { name: '復元ボーナスを優先' })
 
@@ -1086,7 +1098,7 @@ describe('BuildListPage intermediate state save chain recovery', () => {
       ...dependencies(),
       refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
     }
-    renderPage(deps)
+    await renderExpanded(deps)
 
     expect(await screen.findByRole('heading', { level: 4, name: '理想候補' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 5, name: '途中採用できる状態と改善優先' })).toBeInTheDocument()
@@ -1194,5 +1206,248 @@ describe('BuildListPage registration order and display filter (Issue #123)', () 
     await user.click(clearButtons[clearButtons.length - 1])
     expect(screen.getByRole('heading', { name: '先に登録した目標' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '後に登録した目標' })).toBeInTheDocument()
+  })
+})
+
+describe('BuildListPage collapsible Target groups (Issue #124)', () => {
+  /** Two Targets of different weapon types; the first has a stale Entry. */
+  function twoTargetDependencies(client: PlannerWorkerClient = createPlannerClient()) {
+    const deps = dependencies([], client)
+    const first = {
+      ...createValidTargetWeapon(),
+      id: targetWeaponId('target.collapse.first'),
+      name: '一本目の目標',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+    const second = {
+      ...createValidTargetWeapon(),
+      id: targetWeaponId('target.collapse.second'),
+      name: '二本目の目標',
+      weaponTypeId: 'weapon.fixture.b',
+      priority: 5 as const,
+      createdAt: '2026-02-01T00:00:00.000Z',
+    }
+    const entryFor = (target: typeof first, id: string) => {
+      const candidate = { ...createValidBuildCandidate(), id: candidateId(`candidate.${id}`), targetWeaponId: target.id }
+      candidate.searchStateHash = createSearchStateHash(candidate.route, createValidRngState(), [createValidNormalArtianCounter()])
+      const entry = createBuildListEntry(candidate, target, { id: buildListEntryId(id), createdAt: '2026-03-01T00:00:00.000Z' })
+      entry.targetDefinitionHash = createTargetDefinitionHash(target)
+      return entry
+    }
+    const stale = entryFor(first, 'build-list.collapse.first')
+    stale.isStale = true
+    stale.staleReasons = ['rng_state_changed']
+    const entries = [stale, entryFor(second, 'build-list.collapse.second')]
+    // Returned in the reverse of the registration order on purpose.
+    deps.refresh = vi.fn(async () => ({ entries, targets: [second, first], ownedWeapons: [] }))
+    return deps
+  }
+
+  const toggleOf = (name: string) => screen.getByRole('button', { name })
+
+  it('starts with every group closed and still names each Target, its weapon type and element', async () => {
+    renderPage(twoTargetDependencies())
+    const first = await screen.findByRole('button', { name: '一本目の目標' })
+    const second = toggleOf('二本目の目標')
+    expect(first).toHaveAttribute('aria-expanded', 'false')
+    expect(second).toHaveAttribute('aria-expanded', 'false')
+    // The toggle sits in the Target heading, named by the Target alone.
+    expect(screen.getByRole('heading', { level: 3, name: '一本目の目標' })).toContainElement(first)
+    expect(first).toHaveAccessibleDescription(/A fixture \/ 属性A fixture/)
+    expect(first).toHaveAccessibleDescription(/優先度 3/)
+    expect(first).toHaveAccessibleDescription(/候補 1件/)
+    expect(second).toHaveAccessibleDescription(/B fixture \/ 属性A fixture/)
+    expect(second).toHaveAccessibleDescription(/優先度 5/)
+    // A closed group holds no Candidate card and no delete control.
+    expect(screen.queryByRole('heading', { level: 4, name: '理想候補' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'ビルドリストから削除' })).toBeNull()
+  })
+
+  it('keeps the stale state readable as text while the group is closed', async () => {
+    renderPage(twoTargetDependencies())
+    const first = await screen.findByRole('button', { name: '一本目の目標' })
+    expect(first).toHaveAttribute('aria-expanded', 'false')
+    expect(within(first).getByText('再検索が必要 1件')).toBeInTheDocument()
+    expect(toggleOf('二本目の目標')).not.toHaveAccessibleDescription(/再検索が必要/)
+  })
+
+  it('shows a selected intermediate state on the closed group', async () => {
+    const candidate = checkpointCandidate([checkpointPracticalBonuses(), checkpointIdealBonuses()])
+    const target = checkpointTarget()
+    const entry = createBuildListEntry(candidate, target, {
+      id: buildListEntryId('build-list.collapse.selected'),
+      createdAt: '2026-09-12T00:00:00.000Z',
+      intermediateStateSelection: {
+        ...defaultIntermediateStateSelection(),
+        bonusOpportunityId: intermediateOpportunityAt(candidate, 'bonus', 1).opportunity.id,
+      },
+    })
+    const deps: BuildListPageDependencies = {
+      ...dependencies(),
+      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
+    }
+    renderPage(deps)
+    const toggle = await screen.findByRole('button', { name: target.name })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveAccessibleDescription(/途中採用状態を選択中 1件/)
+  })
+
+  it('shows the legacy duplicate 「要整理」 on the closed group and every Entry once opened', async () => {
+    const user = userEvent.setup()
+    const target = createValidTargetWeapon()
+    const entries = [
+      createBuildListEntry(createValidBuildCandidate(), target, {
+        id: buildListEntryId('build-list.collapse.dup.a'),
+        createdAt: '2026-09-01T00:00:00.000Z',
+      }),
+      createBuildListEntry(
+        { ...createValidBuildCandidate(), id: candidateId('candidate.collapse.dup.b') },
+        target,
+        { id: buildListEntryId('build-list.collapse.dup.b'), createdAt: '2026-09-02T00:00:00.000Z' },
+      ),
+    ]
+    const deps = dependencies()
+    deps.refresh = vi.fn(async () => ({ entries, targets: [target], ownedWeapons: [] }))
+    renderPage(deps)
+    const toggle = await screen.findByRole('button', { name: 'Domain fixture target' })
+    expect(toggle).toHaveAccessibleDescription(/要整理/)
+    expect(toggle).toHaveAccessibleDescription(/候補 2件/)
+    expect(screen.queryByText('候補が複数登録されています')).toBeNull()
+
+    await user.click(toggle)
+    const group = screen.getByRole('region', { name: 'Domain fixture target' })
+    expect(within(group).getByText('候補が複数登録されています')).toBeInTheDocument()
+    expect(within(group).getAllByRole('button', { name: 'ビルドリストから削除' })).toHaveLength(2)
+  })
+
+  it('opens and closes one group at a time from the pointer and the keyboard', async () => {
+    const user = userEvent.setup()
+    renderPage(twoTargetDependencies())
+    const first = await screen.findByRole('button', { name: '一本目の目標' })
+    await user.click(first)
+    expect(first).toHaveAttribute('aria-expanded', 'true')
+    expect(toggleOf('二本目の目標')).toHaveAttribute('aria-expanded', 'false')
+    const region = screen.getByRole('region', { name: '一本目の目標' })
+    expect(first).toHaveAttribute('aria-controls', region.id)
+    expect(within(region).getByRole('heading', { level: 4, name: '理想候補' })).toBeInTheDocument()
+    expect(within(region).getByText('RNG状態が検索時から変更されています')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'ビルドリストから削除' })).toHaveLength(1)
+
+    first.focus()
+    await user.keyboard('{Enter}')
+    expect(first).toHaveAttribute('aria-expanded', 'false')
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 4, name: '理想候補' })).toBeNull())
+    await user.keyboard(' ')
+    expect(first).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('opens and closes every shown group at once, keeping the registration order', async () => {
+    const user = userEvent.setup()
+    renderPage(twoTargetDependencies())
+    await screen.findByRole('button', { name: '一本目の目標' })
+    await user.click(screen.getByRole('button', { name: 'すべて展開' }))
+    expect(toggleOf('一本目の目標')).toHaveAttribute('aria-expanded', 'true')
+    expect(toggleOf('二本目の目標')).toHaveAttribute('aria-expanded', 'true')
+    const first = screen.getByRole('heading', { level: 3, name: '一本目の目標' })
+    const second = screen.getByRole('heading', { level: 3, name: '二本目の目標' })
+    expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'ビルドリストから削除' })).toHaveLength(2)
+
+    await user.click(screen.getByRole('button', { name: 'すべて折りたたむ' }))
+    expect(toggleOf('一本目の目標')).toHaveAttribute('aria-expanded', 'false')
+    expect(toggleOf('二本目の目標')).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('acts only on the groups the filter shows and keeps a hidden group as it was', async () => {
+    const user = userEvent.setup()
+    renderPage(twoTargetDependencies())
+    // The first group is opened before the filter hides it.
+    await user.click(await screen.findByRole('button', { name: '一本目の目標' }))
+    await user.click(screen.getByRole('combobox', { name: '武器種で絞り込み' }))
+    await user.click(await screen.findByRole('option', { name: 'B fixture' }))
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
+    expect(screen.queryByRole('button', { name: '一本目の目標' })).toBeNull()
+    expect(screen.getByText('すべて展開・すべて折りたたむは、表示中の目標武器だけが対象です。')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'すべて展開' }))
+    expect(toggleOf('二本目の目標')).toHaveAttribute('aria-expanded', 'true')
+    await user.click(screen.getByRole('button', { name: 'すべて折りたたむ' }))
+    expect(toggleOf('二本目の目標')).toHaveAttribute('aria-expanded', 'false')
+
+    const clearButtons = screen.getAllByRole('button', { name: '絞り込みを解除' })
+    await user.click(clearButtons[clearButtons.length - 1])
+    // The hidden group was neither closed nor opened by the bulk controls.
+    expect(toggleOf('一本目の目標')).toHaveAttribute('aria-expanded', 'true')
+    expect(toggleOf('二本目の目標')).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('keeps the group of a missing Target identifiable and openable', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies()
+    const loaded = await deps.refresh(createBuildListCalculationContext(createValidMasterDataFixture()))
+    deps.refresh = vi.fn(async () => ({ ...loaded, targets: [] }))
+    renderPage(deps)
+    const toggle = await screen.findByRole('button', { name: '削除済みの目標武器' })
+    expect(toggle).toHaveAccessibleDescription(/目標武器が見つかりません/)
+    expect(toggle).toHaveAccessibleDescription(/候補 1件/)
+    await user.click(toggle)
+    const group = screen.getByRole('region', { name: '削除済みの目標武器' })
+    expect(within(group).getByRole('button', { name: 'ビルドリストから削除' })).toBeInTheDocument()
+  })
+
+  it('lands a selection save that finished while its group was closed', async () => {
+    const user = userEvent.setup()
+    const candidate = checkpointCandidate([checkpointPracticalBonuses(), checkpointIdealBonuses()])
+    const target = checkpointTarget()
+    let entry = createBuildListEntry(candidate, target, {
+      id: buildListEntryId('build-list.collapse.pending'),
+      createdAt: '2026-09-12T00:00:00.000Z',
+    })
+    const releases: Array<() => void> = []
+    const deps: BuildListPageDependencies = {
+      ...dependencies(),
+      refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [checkpointSource()] })),
+      updateIntermediateStateSelection: vi.fn(async (_id, selection) => {
+        await new Promise<void>((resolve) => releases.push(resolve))
+        entry = { ...entry, intermediateStateSelection: { ...selection } }
+        return entry
+      }),
+    }
+    renderPage(deps)
+    const toggle = await screen.findByRole('button', { name: target.name })
+    await user.click(toggle)
+    await user.click(screen.getByRole('checkbox', { name: BONUS_ONE }))
+    await waitFor(() => expect(releases).toHaveLength(1))
+
+    // The group is closed while the save is in flight; the save still lands
+    // and the group stays as the user left it.
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    releases[0]()
+    expect(await screen.findByText('途中採用する状態と改善優先を更新しました。生産計画を再作成してください。')).toBeInTheDocument()
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveAccessibleDescription(/途中採用状態を選択中 1件/)
+
+    await user.click(toggle)
+    expect(screen.getByRole('checkbox', { name: BONUS_ONE })).toBeChecked()
+  })
+
+  it.each([
+    ['every group closed', false],
+    ['every group open', true],
+  ])('hands the Planner the same input with %s', async (_label, open) => {
+    const user = userEvent.setup()
+    const client = createPlannerClient()
+    const deps = twoTargetDependencies(client)
+    renderPage(deps)
+    await screen.findByRole('button', { name: '一本目の目標' })
+    if (open) await user.click(screen.getByRole('button', { name: 'すべて展開' }))
+    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await screen.findByText(/^Plan destination:/)
+    // The input comes from the persisted state alone; the open state never reaches it.
+    expect(deps.createInput).toHaveBeenCalledOnce()
+    expect(deps.createInput).toHaveBeenCalledWith(expect.objectContaining({ rngEngineVersion: client.engineVersion }))
+    const input = await vi.mocked(deps.createInput).mock.results[0].value
+    expect(client.createPlan).toHaveBeenCalledWith(expect.any(String), input)
   })
 })

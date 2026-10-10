@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -118,6 +118,16 @@ function renderPage(deps: BuildListPageDependencies) {
   return render(<RouterProvider router={router} />)
 }
 
+/**
+ * Renders the page and opens every Target group (Issue #124: the groups start
+ * closed), for tests that act on an Entry's Candidate card or delete button.
+ */
+async function renderExpanded(deps: BuildListPageDependencies) {
+  const view = renderPage(deps)
+  fireEvent.click(await screen.findByRole('button', { name: 'すべて展開' }))
+  return view
+}
+
 async function stored<T>(table: { get(id: string): Promise<T | undefined> }, id: string): Promise<T> {
   return (await table.get(id)) as T
 }
@@ -136,7 +146,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       const entry = await stored<BuildListEntry>(database.buildListEntries, ENTRY_ID)
       const other = { ...structuredClone(entry), id: 'entry.guard.independent' as BuildListEntry['id'], createdAt: '2026-09-13T00:00:00.000Z' }
       await database.buildListEntries.put(other)
-      renderPage(deps)
+      await renderExpanded(deps)
       const radios = await screen.findAllByRole('radio', { name: SKILL_FIRST })
       expect(radios).toHaveLength(2)
       const before = await dump(database)
@@ -159,7 +169,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
     withDatabase(async (database) => {
       const user = userEvent.setup()
       const { deps } = await started(database, { confirmedSteps: 1 })
-      renderPage(deps)
+      await renderExpanded(deps)
       await skillFirst()
       const before = await dump(database)
 
@@ -181,7 +191,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       const { fixture, deps } = await started(database, { confirmedSteps: 1 })
       const plan = await currentPlan(database, fixture.plan)
       expect(await stored<OwnedWeapon>(database.ownedWeapons, SOURCE_ID)).toMatchObject({ executionInProgress: { productionPlanId: plan.id } })
-      renderPage(deps)
+      await renderExpanded(deps)
       expect(await screen.findByRole('heading', { name: '現在地点からの再計画' })).toBeInTheDocument()
       const before = await dump(database)
 
@@ -207,7 +217,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       const user = userEvent.setup()
       const { fixture, deps, savePoint } = await started(database, { savePoint: true, confirmedSteps: 1 })
       const plan = await currentPlan(database, fixture.plan)
-      renderPage(deps)
+      await renderExpanded(deps)
       await user.click(await skillFirst())
       await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '生産計画を破棄して保存' }))
 
@@ -232,7 +242,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       const confirmedSource = await stored<OwnedWeapon>(database.ownedWeapons, SOURCE_ID)
       const snapshotSource = savePoint!.ownedWeapons.find(({ id }) => id === SOURCE_ID) as OwnedWeapon
       expect(confirmedSource.restorationBonuses).not.toEqual(snapshotSource.restorationBonuses)
-      renderPage(deps)
+      await renderExpanded(deps)
       await user.click(await skillFirst())
       await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '生産計画を破棄して保存' }))
       await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '最後のゲーム内セーブ地点へ戻す' }))
@@ -262,7 +272,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
       await execution.recordOperationUncertain({ planId: fixture.plan.id, planStepId: stale.currentStepId as NonNullable<ProductionPlan['currentStepId']> })
       const plan = await currentPlan(database, fixture.plan)
       expect(plan.status).toBe('stale')
-      renderPage(deps)
+      await renderExpanded(deps)
       const before = await dump(database)
 
       await user.click(await skillFirst())
@@ -281,7 +291,7 @@ describe('BuildListPage over the real breaking-change guard', () => {
     withDatabase(async (database) => {
       const user = userEvent.setup()
       const { fixture, execution, deps } = await started(database)
-      renderPage(deps)
+      await renderExpanded(deps)
       await user.click(await skillFirst())
       await screen.findByRole('dialog', WARNING)
       // Another tab confirms a Step while the warning is open.
