@@ -57,7 +57,7 @@ jobs:
       # `shard` is the only matrix dimension, so `strategy.job-total` is the
       # shard count and always matches the matrix.
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
 
     steps:
       - name: Checkout
