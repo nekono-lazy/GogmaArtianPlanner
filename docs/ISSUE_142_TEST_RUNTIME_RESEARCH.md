@@ -215,3 +215,117 @@ PR #219（このPR）のCI。runner image は変更前と同じ `ubuntu-24.04` `
 - ファイル別時間はCIログの `✓ <file> (<n> tests) <ms>` 行から集計できる（`gh run view <run-id> --log`）。projects導入後は `✓  jsdom  <file>` のようにproject名が入る。
 - テスト件数の一致は `npx vitest list --json=<file>` の比較で確認する（標準出力にはテストのconsole出力が混ざるため、ファイル出力を使う）。
 - ローカルで他の重い処理が動いているときは `--maxWorkers` を制限し、全件の反復計測は避ける。
+
+## 11. Phase 2-A：Domain以外のテストのNode環境への追加移行
+
+基準は `origin/main` `545d6ed`（PR #218 / #219 反映後）。Phase 1の構成（`node` / `jsdom` の2 project、`isolate` 既定、CI workflow無変更）を維持し、jsdom projectに残っていたテストのうちNode環境でも同一の検証経路を実行すると示せたものだけを `node` projectへ移した。
+
+### 11.1 調査対象と分類
+
+優先順位に従い、`src/presentation`（4）、`src/services`（40）、`src/db`（13）の `.test.ts` 計57ファイルを調査した（`.test.tsx` は対象外）。
+
+| 分類 | ファイル数 | 内容 |
+| --- | ---: | --- |
+| A. Node移行可能 | 55 | 今回移行した（一覧は `vitest.config.ts` の `auditedNodeTestFiles`） |
+| B. 要追加検証 | 0 | 該当なし |
+| C. jsdom必須 | 2 | `src/services/dataTransfer/importExportService.test.ts`：`window.localStorage` に置いたテーマ設定がExport / 全消去の対象外であることを検証する。`src/services/appVersion/appVersionChecker.test.ts`：`document.visibilityState` と `visibilitychange` イベントでの再確認を検証する |
+
+### 11.2 Node化可能と判断した根拠
+
+ファイル単位で、テスト本体とその推移的import先（相対importを再帰的に辿った `src` 配下のモジュール、`vi.mock` の対象を含む）を確認した。
+
+1. **テスト本体**：55ファイルにReact / React Testing Library / jest-dom matcher、`document`、`localStorage`、`matchMedia` の使用はない（`window` の一致は `productionPlanOperationCountRecovery.test.ts` 等のRecovery Windowというローカル変数）。`vi.mock` はDomainモジュールのみ。
+2. **import先のfeature detection**：該当するのはWorker client（`typeof Worker`）と `multiWorkerSkillIdentificationClient.ts` の `navigator.hardwareConcurrency` だけ。`Worker` はjsdom環境・Node環境のどちらでも未定義で、テストは `vi.stubGlobal('Worker', FakeWorker | undefined)` で明示的に差し替えている。FakeWorkerはDOMイベントを使わないプレーンなclass。`hardwareConcurrency` はテストが値を明示的に渡すか `vi.stubGlobal('navigator', …)` で差し替える。`productionIdentificationAvailability.test.ts` の環境判定テストは `detectProductionIdentificationEnvironment()` と `typeof Worker` の一致を見るもので、両環境とも `Worker` 未定義の同じ経路を通る。
+3. **両環境のグローバル差（実測）**：一時的なprobeテストで両project のグローバルを比較した。差は `window` / `document` / `location` / `localStorage` / グローバルの `addEventListener` / `dispatchEvent` の有無と `navigator.userAgent` だけで、`Worker` は両方未定義、`setImmediate` / `queueMicrotask` / `structuredClone` / `crypto` / `BroadcastChannel` / `MessageChannel` / IndexedDB（fake-indexeddb）は両方同じものが使われる。Vitestのjsdom環境は `DOMException` / `Event` / `CustomEvent` / `Blob` / 型付き配列等をjsdom実装へ差し替えるが、アプリのProductionコードとテストはこれらでの `instanceof` 判定を行わず（`instanceof` はすべてアプリ定義のエラークラス）、IDは文字列、レコードはプレーンオブジェクトなので、fake-indexeddbの `ArrayBuffer` / `Blob` 判定も通らない。
+4. **Dexie 4.4.5 の環境分岐**：`dexie.mjs` を確認した。
+   - `debug` は `location.href` がlocalhostのときtrueになり、jsdom（`http://localhost:3000/`）ではtrue、Nodeではfalse。影響は `console.createTask`（両環境とも未定義）、`console.debug` / `console.warn` の出力のみで、戻り値・制御フローは変わらない。55ファイルにconsole出力を検証するテストはない。
+   - グローバルの `addEventListener` があるとき（jsdomのみ）、`storagemutated` をDOMイベントとして再送する。同一window内では `propagatingLocally` により受信側が無視するため、別タブ通知以外の効果はない。`pagehide` / `pageshow` リスナーも登録されるだけで発火しない。
+   - `idbReady()`（Safari回避）は両環境ともSafariと判定されず即resolve。`setImmediate` / `BroadcastChannel` は両環境とも同じNode実装を使う。
+5. **実行経路の実測比較（V8カバレッジ）**：検証用に `@vitest/coverage-v8@4.1.11` を一時導入（`--no-save`、終了後 `npm ci` で除去）し、55ファイルをjsdom環境とNode環境で実行して `src` 配下の到達状況を比較した。対象は520モジュール（文47,059、分岐37,817）。
+   - 到達した文・分岐・関数の集合の差：**0件**（文・分岐・関数とも）。
+   - ヒット回数の差：`entityCrudServices.ts` の `find(({ id }) => id === …)` 等で±1が3件。同じ環境同士の再実行（jsdom 3回、Node 2回）でも同種の差（同ファイルの±1、`buildListCardinality.ts` の `compareStableStrings` の分岐）が出ており、`crypto.randomUUID()` で生成したIDの大小関係に依存する揺らぎで、環境差ではない。
+6. **件数**：`vitest list --json` の比較で、変更前後のテスト（ファイル＋テスト名）6049件が多重集合として完全一致。
+
+### 11.3 構成
+
+- `vitest.config.ts`：`domainTestFiles`（Phase 1のglob、無変更）と、監査済みファイルの明示リスト `auditedNodeTestFiles`（55件）を `node` projectのincludeと `jsdom` projectのexcludeで共有する。両projectが同じ配列から作られるため、重複・欠落は構成上起きない。
+  - ディレクトリglobにしなかったのは、新規テストが監査なしでNode環境へ入り、`typeof window` 等のfeature detectionで黙って別経路を通ることを防ぐため。新規ファイルは既定でjsdomに入り、監査後にリストへ追加する。
+  - リストのファイルが改名・削除された場合はconfig読込時に例外で止める（古い記載が残らない）。
+- `src/test/setup.node.ts`：コメントのみ更新（`fake-indexeddb/auto` のみの構成は維持）。
+- テストコード、Productionコード、CI workflow、timeout、retry、`isolate` は変更していない。
+
+| 項目 | 変更前 | 変更後 |
+| --- | --- | --- |
+| テストファイル（`vitest list`） | node 146 / jsdom 214 | node 201 / jsdom 159 |
+| テスト（`vitest list`） | node 2461 / jsdom 3588 | node 3419 / jsdom 2630 |
+| node ∩ jsdom | 0 | 0 |
+| 実行結果（全体） | 360 passed / 1 skipped（361）、6049 passed / 3 skipped | 同左 |
+
+残るjsdom 159ファイルの内訳：`.test.tsx` 57（UI）、今回C判定の2、今回の調査範囲外の `.test.ts` 100（`src/benchmarks` 74、`src/components` 11、`src/workers` 9、`src/stores` 2、`src/research` 2、`scripts` 2）。
+
+### 11.4 ローカル計測
+
+環境：Windows 11、Ryzen 7 9700X（8コア16スレッド）、Node v24.19.0、Vitest 4.1.11。同じWorktree・同じ `node_modules`（`npm ci`）で、変更前の設定（`vitest.config.ts` の `545d6ed` 版を一時的に別名で保存したもの）と変更後の設定を `--config` で切り替え、交互に実行した。Issue #154のResearchが同じマシンで並行しているため、各runの前と実行中5秒ごとに元Repositoryのnodeプロセスを確認し、重なったrunは無効とした。
+
+**(1) 移行した55ファイルのみ**（`--maxWorkers=4`、交互に各3回）
+
+| run | 変更前 Duration | 変更後 Duration |
+| --- | ---: | ---: |
+| 1 | 21.20s（初回、キャッシュ未温） | 6.05s |
+| 2 | 14.17s | 6.15s |
+| 3 | 14.48s | 6.69s |
+
+- 2・3回目の比較で約 −57%（14.2〜14.5s → 6.1〜6.7s）。
+- 内訳（2回目）：environment 27.32s → 0.003s、setup 5.96s → 1.16s。transform（約3s）、import（約9s）、tests（約7.5〜8s）はほぼ同じで、テスト本体の計算量は変わっていない。
+- 958 passed（両方）。
+
+**(2) Node移行対象全体＝Domain 146 + 55ファイル**（201ファイル / 3419件、`--maxWorkers=4`、交互に各2回）
+
+| run | 変更前 Duration | 変更後 Duration |
+| --- | ---: | ---: |
+| 1 | 40.28s | 29.56s |
+| 2 | 38.31s | 29.54s |
+
+- 約 −23〜−27%。wall-clockはDomainの重いPlanner系テスト（`plannerSearchLimitRegression.test.ts` 等）が支配するため、短縮幅は(1)より小さい。
+
+**(3) 全体（`npm test` 相当、worker数既定＝15）**
+
+| run | 順序 | 変更前 Duration | 変更後 Duration | 有効性 |
+| --- | --- | ---: | ---: | --- |
+| 1 | 前→後 | 143.87s | 130.45s | 参考値（このrunはプロセスの途中監視なし。変更後runの終了直後に#154のlintが始まっており、末尾が重なった可能性がある） |
+| 2 | 後→前 | 146.30s | 131.06s | 有効（重なりなし） |
+| 3 | 前→後 | 152.57s | — | 変更前runは11.6のtimeout 1件（重なりなし）。変更後runは#154の処理と重なったため無効 |
+| 3' | 後→前 | 149.07s | 141.01s | 有効（重なりなし） |
+
+有効な2組（2・3'）の内訳（全worker合計）：
+
+| 指標 | 変更前（2 / 3'） | 変更後（2 / 3'） |
+| --- | --- | --- |
+| Duration | 146.30s / 149.07s | 131.06s / 141.01s |
+| environment | 239.06s / 240.23s | 163.95s / 172.71s |
+| setup | 57.66s / 58.40s | 45.00s / 46.72s |
+| import | 371.00s / 381.44s | 332.99s / 369.36s |
+| tests | 1203.79s / 1208.46s | 1128.79s / 1217.02s |
+| `Duration / tests` | 0.1215 / 0.1234 | 0.1161 / 0.1159 |
+
+- **実測**：同じ組の比較で −15.2s（−10.4%）/ −8.1s（−5.4%）。並行作業による負荷変動が大きく、run間の揺れ（変更後 131〜141s）は効果と同程度ある。
+- テスト本体量（`tests`）あたりの `Duration` では約 −5〜6%。environment は約 −67〜−76s、setup は約 −12s。
+- 最終確認の `npm test`（変更後、重なりなし）：126.92s、360 passed / 1 skipped、6049 passed / 3 skipped。
+- いずれも 360 passed / 1 skipped（361）、6049 passed / 3 skipped（6052）で変更前後同一（3回目の変更前runのtimeout 1件を除く）。
+
+### 11.5 GitHub Actions
+
+変更前の参考（変更前の最新main相当のテスト構成）：PR #218 の最終CI（run `38035176146`、head `1486d5d`）は test step 5分2秒、Vitest Duration 301.51s（environment 107.46s、setup 22.34s、import 103.09s、tests 629.57s）、360 passed / 1 skipped、6049 passed / 3 skipped。`tests` が Phase 1 の速い群（約830〜850s）よりさらに小さく、より速いrunnerだったと推定する。
+
+変更後（このPR）のCI結果は、CI完了後にこの節へ追記する。
+
+### 11.6 確認したflaky
+
+- 全体計測の変更前3回目で、`src/workers/planner.worker.production.test.ts` の「answers the ordinary and Planner Alternative requests with their result alone」が既定の5000msでtimeoutした（`|jsdom|`、5025ms）。このファイルは変更前後ともjsdom projectで、今回の変更対象外。単独実行でも4320ms（#154の処理と並行時）で、余裕が小さい。CI（4 vCPU、3 worker）では未観測。timeoutの引き上げは高速化として認めない方針のため、今回は変更していない。
+
+### 11.7 Phase 2-Bへの提案
+
+1. **残る `.test.ts` 100ファイルの監査**：特に `src/benchmarks`（74ファイル）。Phase 1の計測ではファイル別時間が大きいが、テスト本体が `navigator` / `userAgent` / `hardwareConcurrency` / `MessageChannel` / `vi.stubGlobal` 等の環境関連の参照を直接含むファイルが19あり、benchmark harnessの記録値などが環境で変わり得るため個別確認が必要。`src/workers`（9）、`src/stores`（2）、`scripts`（2）、`src/research`（2）、`src/components` の `.test.ts`（11）も同様に、カバレッジ比較で経路一致を確認してから移す。
+2. **CI job分割 / shard**：Phase 1の9章の計画どおり。Node化の効果はenvironment / setupの削減に限られ、残るwall-clockの大半はテスト本体（Planner parity / regression、MUI UIテスト）なので、5分以内にはjob並列化が必要。
+3. **余裕の小さいテストの確認**：11.6の `planner.worker.production.test.ts` はshard化やworker数変更で負荷配分が変わると顕在化し得るため、Phase 2-Bで実行時間の内訳を確認する（timeout引き上げではなく、テストが行う計算量の確認）。
+4. 監査には今回のカバレッジ比較（両環境で同じファイルを実行し、`coverage-final.json` の到達集合を比較、同一環境の再実行による揺らぎと区別する）が有効だった。
