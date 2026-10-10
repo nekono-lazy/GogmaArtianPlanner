@@ -113,6 +113,7 @@ import {
   routeKindLabels,
   skippedRouteReasonLabels,
 } from '../presentation/labels'
+import { sortByRegistrationOrder } from '../presentation/managementListOrder'
 
 const loadedMaster = loadMasterData()
 const defaultMaster = loadedMaster.ok ? loadedMaster.data : null
@@ -210,6 +211,16 @@ interface AddFeedback {
   severity: 'info' | 'warning' | 'error'
   message: string
   buildListLinkLabel?: string
+}
+
+/**
+ * The Targets the Select offers (`docs/UI_FLOW.md` 9): eligible ones only
+ * (enabled, not completed - 8.2), in registration order like the Target
+ * Weapons list (3.2). The first one is the default selection. Display order
+ * only: the batch keeps its own Target order.
+ */
+function selectableSearchTargets(targets: readonly TargetWeapon[]): TargetWeapon[] {
+  return sortByRegistrationOrder(targets.filter(isTargetWeaponPlanningEligible))
 }
 
 /** A Target's name with 「登録済み」 when the Build List already holds its Entry. */
@@ -315,7 +326,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
         setTargets(loadedTargets)
         setOwnedWeapons(loadedWeapons)
         setTargetWeaponId((current) => {
-          const eligible = loadedTargets.filter(isTargetWeaponPlanningEligible)
+          const eligible = selectableSearchTargets(loadedTargets)
           return eligible.some(({ id }) => id === current) ? current : (eligible[0]?.id ?? '')
         })
       })
@@ -406,7 +417,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
         setTargets(loadedTargets)
         setOwnedWeapons(loadedWeapons)
         setBuildListEntries(loadedEntries)
-        setTargetWeaponId(loadedTargets.find(isTargetWeaponPlanningEligible)?.id ?? '')
+        setTargetWeaponId(selectableSearchTargets(loadedTargets)[0]?.id ?? '')
       })
       .catch((caught: unknown) => {
         if (active) setLoadError(caught instanceof Error ? caught.message : '検索データの読み込みに失敗しました。')
@@ -426,7 +437,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   }, [dependencies])
 
   // Completed Targets are not offered for a new search (`docs/UI_FLOW.md` 8.2).
-  const enabledTargets = useMemo(() => targets.filter(isTargetWeaponPlanningEligible), [targets])
+  const enabledTargets = useMemo(() => selectableSearchTargets(targets), [targets])
   const targetById = useMemo(() => new Map(targets.map((target) => [target.id, target])), [targets])
   // Registered means the Build List holds an Entry for the Target - stale and
   // legacy duplicates included - and never forbids a single re-search.

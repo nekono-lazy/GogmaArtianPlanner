@@ -54,6 +54,15 @@ import type {
 } from '../domain/planner'
 import { defaultIntermediateStateSelection, findBuildListTargetDuplicates } from '../domain/buildList'
 import { plannerWarningLabels, productionPlanStatusLabels, staleReasonLabels } from '../presentation/labels'
+import { compareByRegistrationOrder, sortByRegistrationOrder } from '../presentation/managementListOrder'
+import {
+  emptyWeaponListFilter,
+  isWeaponListFilterActive,
+  matchesWeaponListFilter,
+  type WeaponListFilter,
+} from '../presentation/weaponListFilter'
+import { WeaponListFilterBar, WeaponListFilterEmpty } from '../components/WeaponListFilterBar'
+import { getEnabledElements, getEnabledWeaponTypes } from '../domain/master/masterSelectors'
 import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
@@ -286,12 +295,14 @@ type DraftPlanState =
   | { status: 'error' }
 
 /**
- * Entries grouped by the Target they belong to, in first-appearance order.
+ * Entries grouped by the Target they belong to (`docs/UI_FLOW.md` 3.2 / 10).
  *
- * Presentation only: the persisted Entry order is kept inside each group, and
- * the group order is derived from that same order rather than from priority
- * or any other new meaning. The Target is the current persisted one; a Target
- * that no longer exists still keeps its Entries together under its ID.
+ * Presentation only. The groups follow the Targets' registration order - the
+ * order of the Target Weapons list and the Search Select - and the Entries of
+ * one group follow their own registration order; neither uses priority or any
+ * other new meaning. The Target is the current persisted one; a Target that no
+ * longer exists still keeps its Entries together under its ID, after every
+ * existing Target's group.
  */
 interface BuildListTargetGroup {
   targetWeaponId: TargetWeaponId
@@ -305,7 +316,7 @@ function groupEntriesByTarget(
 ): BuildListTargetGroup[] {
   const targetById = new Map(targets.map((target) => [target.id, target]))
   const groups = new Map<TargetWeaponId, BuildListTargetGroup>()
-  for (const entry of entries) {
+  for (const entry of sortByRegistrationOrder(entries)) {
     const group = groups.get(entry.targetWeaponId)
     if (group) group.entries.push(entry)
     else {
@@ -316,7 +327,13 @@ function groupEntriesByTarget(
       })
     }
   }
-  return [...groups.values()]
+  // A stable sort: the missing-Target groups keep their first-Entry order.
+  return [...groups.values()].sort((left, right) => {
+    if (left.target === null || right.target === null) {
+      return Number(left.target === null) - Number(right.target === null)
+    }
+    return compareByRegistrationOrder(left.target, right.target)
+  })
 }
 
 function entrySelection(entry: BuildListEntry): IntermediateStateSelection {
@@ -550,6 +567,18 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     [optionInputs],
   )
   const groups = useMemo(() => groupEntriesByTarget(entries, targets), [entries, targets])
+  // Display-only filter by the group's Target (`docs/UI_FLOW.md` 10): never
+  // persisted, and the Planner always receives the whole Build List. A group
+  // whose Target no longer exists has no weapon type to match, so it is shown
+  // only while the filter is cleared.
+  const [filter, setFilter] = useState<WeaponListFilter>(emptyWeaponListFilter)
+  const shownGroups = useMemo(
+    () =>
+      isWeaponListFilterActive(filter)
+        ? groups.filter(({ target }) => target !== null && matchesWeaponListFilter(target, filter))
+        : groups,
+    [filter, groups],
+  )
   // The Build List cardinality authority decides which Targets hold a legacy
   // duplicate; the page only turns its answer into a lookup for display.
   const legacyDuplicateTargetIds = useMemo(
@@ -1125,7 +1154,29 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
             {checkpointFeedback && (
               <Alert severity={checkpointFeedback.severity}>{checkpointFeedback.message}</Alert>
             )}
-            {groups.map((group) => (
+            <WeaponListFilterBar
+              label="作成リストの絞り込み"
+              filter={filter}
+              onChange={setFilter}
+              weaponTypes={getEnabledWeaponTypes(masterForDisplay)}
+              elements={getEnabledElements(masterForDisplay)}
+              totalCount={groups.length}
+              shownCount={shownGroups.length}
+              unit="件"
+              countLabel="目標武器"
+            />
+            {isWeaponListFilterActive(filter) && (
+              <Alert severity="info">
+                目標武器の武器種・属性で表示だけを絞り込んでいます。生産計画の作成と再計画の試算は、絞り込みに関係なく作成リストのすべての候補を対象にします。
+              </Alert>
+            )}
+            {shownGroups.length === 0 && (
+              <WeaponListFilterEmpty
+                message="条件に一致する目標武器の候補はありません。"
+                onClear={() => setFilter(emptyWeaponListFilter)}
+              />
+            )}
+            {shownGroups.map((group) => (
               <TargetGroupSection
                 key={group.targetWeaponId}
                 group={group}
