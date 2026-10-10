@@ -317,7 +317,22 @@ PR #219（このPR）のCI。runner image は変更前と同じ `ubuntu-24.04` `
 
 変更前の参考（変更前の最新main相当のテスト構成）：PR #218 の最終CI（run `38035176146`、head `1486d5d`）は test step 5分2秒、Vitest Duration 301.51s（environment 107.46s、setup 22.34s、import 103.09s、tests 629.57s）、360 passed / 1 skipped、6049 passed / 3 skipped。`tests` が Phase 1 の速い群（約830〜850s）よりさらに小さく、より速いrunnerだったと推定する。
 
-変更後（このPR）のCI結果は、CI完了後にこの節へ追記する。
+変更後（このPR、PR #221）のCI：
+
+| 回 | head SHA | run ID | job全体 | test step | Vitest Duration | environment | setup | import | tests | 結果 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `5252885` | 38039770311 | 7分30秒 | 6分31秒 | 389.42s | 109.96s | 25.52s | 135.45s | 846.29s | 360 passed / 1 skipped、6049 passed / 3 skipped |
+
+runner差を除くため、テスト本体量（`tests`、全worker合計）を基準にした比率で比べる。
+
+| 指標 | 変更前（PR #218 最終CI） | 変更後1回目 |
+| --- | ---: | ---: |
+| `Duration / tests` | 0.479 | 0.460 |
+| `(environment + setup) / tests` | 0.206 | 0.160 |
+
+- 変更後1回目のrunnerは `tests` が846秒で、PR #218のrunner（630秒）より約1.34倍遅い。wall-clockは直接比べられない。
+- 同じテスト本体量あたりのwall-clockは約4%短い（推定、各1サンプル）。environment + setup の比率は約22%下がった。
+- CIのサンプルは変更前後各1回で、runner差の影響を十分に除けていない。ローカル計測（11.4）と合わせ、効果は全体で数%〜10%程度と見る。
 
 ### 11.6 確認したflaky
 
