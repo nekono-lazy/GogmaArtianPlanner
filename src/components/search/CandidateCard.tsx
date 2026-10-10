@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react'
 import {
   Alert,
+  AlertTitle,
   Box,
   Button,
   Card,
@@ -18,6 +19,12 @@ import {
   type IntermediateStateSelectionContext,
 } from './IntermediateStateSelector'
 import { SearchDefinitionItem, SearchDefinitionList } from './SearchDefinitionList'
+import {
+  candidateRouteOriginLabel,
+  describePreferredOwnedWeaponNotice,
+  preferredOwnedWeaponNoticeExplanation,
+  preferredOwnedWeaponNoticeTitle,
+} from './preferredOwnedWeaponNotice'
 import { CostEstimateSummary } from '../cost/CostEstimateSummary'
 import { estimateCandidateCost } from '../../domain/cost'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
@@ -88,6 +95,15 @@ interface CandidateCardProps {
    * section heading (Search).
    */
   headingLevel?: 'h3' | 'h4'
+  /**
+   * Whether to say so when the Route does not start from the Target's preferred
+   * owned weapon (Issue #128, `docs/UI_FLOW.md` 9). The Search screen compares
+   * a fresh result with the Target it was searched for. The Build List leaves
+   * it off: an Entry keeps its Candidate snapshot while Execution later links
+   * the Target to the weapon the Plan registers, so the comparison would no
+   * longer describe the choice the Search made.
+   */
+  showPreferredOwnedWeaponNotice?: boolean
 }
 
 /** One figure of the operation summary. */
@@ -123,6 +139,7 @@ export function CandidateCard({
   intermediateStateSelectionDisabled = false,
   intermediateStateSelectionContext = 'search',
   headingLevel = 'h3',
+  showPreferredOwnedWeaponNotice = false,
 }: CandidateCardProps) {
   const headingId = useId()
   const sectionLevel = nextHeadingLevel(headingLevel)
@@ -163,6 +180,9 @@ export function CandidateCard({
     ? null
     : ownedWeapons.find(({ id }) => id === candidate.route.sourceOwnedWeaponId)?.name ??
       '参照元の所持武器が見つかりません'
+  const preferredOwnedWeaponNotice = showPreferredOwnedWeaponNotice
+    ? describePreferredOwnedWeaponNotice(candidate, target, ownedWeapons)
+    : null
   const scope = candidate.restorationBonusScope
   // Display-only, derived from the saved Route at render time: never persisted,
   // never a Search or Planner input (`docs/SEARCH_SPEC.md` 4.3).
@@ -223,7 +243,22 @@ export function CandidateCard({
             <SummaryTile label="スキル進行" value={`${candidate.estimatedSkillAdvance}`} />
           </Box>
 
-          {sourceName && (
+          {/* The notice names the Route's own origin too, so it takes the
+              plain origin Alert's place rather than stacking beside it. */}
+          {preferredOwnedWeaponNotice ? (
+            <Alert severity="warning">
+              <AlertTitle>{preferredOwnedWeaponNoticeTitle}</AlertTitle>
+              <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                  優先する所持武器: {preferredOwnedWeaponNotice.preferredWeaponName}
+                </Typography>
+                <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                  このルートの起点: {candidateRouteOriginLabel(preferredOwnedWeaponNotice.routeOrigin)}
+                </Typography>
+                <Typography variant="body2">{preferredOwnedWeaponNoticeExplanation}</Typography>
+              </Stack>
+            </Alert>
+          ) : sourceName && (
             <Alert severity={sourceName.startsWith('参照元') ? 'warning' : 'info'}>
               起点武器: {sourceName}
             </Alert>

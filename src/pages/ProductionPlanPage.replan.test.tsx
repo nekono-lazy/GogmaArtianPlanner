@@ -299,6 +299,20 @@ describe('ProductionPlanPage replan Preview', () => {
     expect(screen.getByRole('table', { name: '現在の生産計画と再計画の試算の比較' })).toBeInTheDocument()
     // The Preview's Conflicts are read-only, and adoption offers no later resolution either.
     expect(screen.getByText('試算の競合はここでは変更できません。Plannerが選択したこの試算内容を確認したうえで採用してください。')).toBeInTheDocument()
+    // The Preview follows the UI_FLOW 11.0 order too (Issue #121): its
+    // read-only Conflicts sit after the materials and before the Target routes.
+    const preview = await previewShown()
+    const ordered = [
+      within(preview).getByRole('heading', { name: '計画全体の実行順' }),
+      within(preview).getByRole('heading', { name: '必要素材・費用の目安' }),
+      within(preview).getByRole('heading', { name: '競合（試算）' }),
+      within(preview).getByRole('heading', { name: '目標武器ごとの作成ルート' }),
+    ]
+    for (let index = 1; index < ordered.length; index += 1) {
+      expect(
+        ordered[index - 1].compareDocumentPosition(ordered[index]) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    }
     expect(screen.getByRole('button', { name: ADOPT })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'この試算を破棄' })).toBeEnabled()
     // Nothing was adopted, saved, or started.

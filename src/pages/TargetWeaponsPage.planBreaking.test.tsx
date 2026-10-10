@@ -112,7 +112,11 @@ describe('TargetWeaponsPage breaking-change warning', () => {
     const user = userEvent.setup()
     const weapon = gogma('owned.shared')
     const deps = dependencies(
-      [target('target.other'), target('target.dependent', { preferredOwnedWeaponId: weapon.id })],
+      // Registered in this order, so `target.other` is the first list item (UI_FLOW 3.2).
+      [
+        target('target.other', { createdAt: '2026-01-01T00:00:00.000Z' }),
+        target('target.dependent', { preferredOwnedWeaponId: weapon.id, createdAt: '2026-01-02T00:00:00.000Z' }),
+      ],
       [weapon],
     )
     const inspection = planBreakingInspection({ reasons: ['target_changed'] })

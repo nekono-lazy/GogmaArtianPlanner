@@ -6,11 +6,14 @@ import type {
   CandidateBonusAmendmentStep,
   CandidateConversionSkillStep,
   CandidateSkillAmendmentStep,
+  OwnedWeaponId,
   RestorationBonusSet,
   RouteOperation,
+  TargetWeapon,
 } from '../../domain/models/publicTypes'
 import {
   createValidBuildCandidate,
+  createValidOwnedWeapon,
   createValidTargetWeapon,
   ownedWeaponId,
 } from '../../test/fixtures/domainData'
@@ -762,5 +765,122 @@ describe('CandidateCard cost estimate', () => {
     const section = await renderCostEstimate(candidate)
     expect(within(section).getByText('追加の素材・ゼニーは不要')).toBeInTheDocument()
     expect(within(section).queryByRole('group', { name: '必要素材・費用の目安' })).not.toBeInTheDocument()
+  })
+})
+
+describe('CandidateCard preferred owned weapon notice', () => {
+  const title = '優先する所持武器を使用しないルートです'
+  const weaponA = ownedWeaponId('owned.fixture.preferred')
+  const weaponB = ownedWeaponId('owned.fixture.other')
+  const ownedWeapons = [
+    { ...createValidOwnedWeapon(weaponA), name: '武器A', isProtected: false },
+    { ...createValidOwnedWeapon(weaponB), name: '武器B', isProtected: false },
+  ]
+  const preferring = (preferredOwnedWeaponId: OwnedWeaponId | null): TargetWeapon => ({
+    ...createValidTargetWeapon(),
+    preferredOwnedWeaponId,
+  })
+
+  /** The fixture new-Normal Route, or an existing-Gogma Reset Skills Route from `source`. */
+  function routeFrom(source: OwnedWeaponId | null): BuildCandidate {
+    const candidate = createValidBuildCandidate()
+    if (source === null) return candidate
+    candidate.route = {
+      kind: 'existing_gogma_reset_skills',
+      sourceOwnedWeaponId: source,
+      operations: [
+        { type: 'reset_skills', sourceOwnedWeaponId: source, skillCounterBefore: 8, skillCounterAfter: 9 },
+      ],
+    }
+    return candidate
+  }
+
+  /** The notice Alert, found by its own title rather than by being the only Alert. */
+  const noticeAlert = () => screen.getByText(title).closest<HTMLElement>('[role="alert"]')!
+
+  function renderNotice(candidate: BuildCandidate, targetWeapon: TargetWeapon, show = true) {
+    return render(
+      <CandidateCard
+        candidate={candidate}
+        target={targetWeapon}
+        master={createValidMasterDataFixture()}
+        ownedWeapons={ownedWeapons}
+        showPreferredOwnedWeaponNotice={show}
+      />,
+    )
+  }
+
+  it('shows nothing extra when the Target prefers no weapon', () => {
+    renderNotice(routeFrom(null), preferring(null))
+    expect(screen.queryByText(title)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^起点武器:/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the plain origin when the Route starts from the preferred weapon', () => {
+    renderNotice(routeFrom(weaponA), preferring(weaponA))
+    expect(screen.queryByText(title)).not.toBeInTheDocument()
+    expect(screen.getByText('起点武器: 武器A')).toBeInTheDocument()
+  })
+
+  it('replaces the plain origin with the notice when the Route starts from another owned weapon', () => {
+    renderNotice(routeFrom(weaponB), preferring(weaponA))
+    const alert = noticeAlert()
+    expect(alert.className).toMatch(/MuiAlert-colorWarning/)
+    expect(within(alert).getByText('優先する所持武器: 武器A')).toBeInTheDocument()
+    expect(within(alert).getByText('このルートの起点: 所持武器「武器B」')).toBeInTheDocument()
+    // The notice takes the plain origin Alert's place instead of stacking beside it.
+    expect(screen.queryByText('起点武器: 武器B')).not.toBeInTheDocument()
+  })
+
+  it('names the new Normal Artian when the Route forges one', () => {
+    renderNotice(routeFrom(null), preferring(weaponA))
+    const alert = noticeAlert()
+    expect(within(alert).getByText('優先する所持武器: 武器A')).toBeInTheDocument()
+    expect(within(alert).getByText('このルートの起点: 新しく作成する通常アーティア')).toBeInTheDocument()
+  })
+
+  it('judges each card on its own Route', () => {
+    const targetWeapon = preferring(weaponA)
+    render(
+      <>
+        {[routeFrom(weaponA), routeFrom(weaponB), routeFrom(null)].map((candidate, index) => (
+          <CandidateCard
+            key={index}
+            candidate={candidate}
+            target={targetWeapon}
+            master={createValidMasterDataFixture()}
+            ownedWeapons={ownedWeapons}
+            showPreferredOwnedWeaponNotice
+          />
+        ))}
+      </>,
+    )
+    const cards = screen.getAllByRole('region', { name: '理想候補' })
+    expect(cards.map((card) => within(card).queryByText(title) !== null)).toEqual([false, true, true])
+  })
+
+  it('stays off unless the owner asks for it', () => {
+    renderNotice(routeFrom(weaponB), preferring(weaponA), false)
+    expect(screen.queryByText(title)).not.toBeInTheDocument()
+    expect(screen.getByText('起点武器: 武器B')).toBeInTheDocument()
+  })
+
+  it('adds the very Candidate it shows, unchanged', async () => {
+    const candidate = routeFrom(null)
+    const before = structuredClone(candidate)
+    const added: BuildCandidate[] = []
+    render(
+      <CandidateCard
+        candidate={candidate}
+        target={preferring(weaponA)}
+        master={createValidMasterDataFixture()}
+        ownedWeapons={ownedWeapons}
+        showPreferredOwnedWeaponNotice
+        onAdd={(selected) => added.push(selected)}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'ビルドリストへ追加' }))
+    expect(added).toEqual([before])
+    expect(added[0]).toBe(candidate)
   })
 })

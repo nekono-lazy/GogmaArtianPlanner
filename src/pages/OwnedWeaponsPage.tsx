@@ -63,7 +63,13 @@ import {
   restorationBonusScopeGogmaHelpText,
   restorationBonusScopeLabels,
 } from '../presentation/labels'
-import { upsertPreservingOrder } from '../presentation/managementListOrder'
+import { sortByRegistrationOrder, upsertPreservingOrder } from '../presentation/managementListOrder'
+import {
+  emptyWeaponListFilter,
+  matchesWeaponListFilter,
+  type WeaponListFilter,
+} from '../presentation/weaponListFilter'
+import { WeaponListFilterBar, WeaponListFilterEmpty } from '../components/WeaponListFilterBar'
 
 const masterResult = loadMasterData()
 
@@ -159,6 +165,12 @@ export function OwnedWeaponsPage({
   const planGuard = usePlanBreakingChangeApproval()
   const listHeadingId = useId()
   const kindHelpId = useId()
+  // Display-only (`docs/UI_FLOW.md` 3.2 / 7): never persisted, never a query.
+  const [filter, setFilter] = useState<WeaponListFilter>(emptyWeaponListFilter)
+  const shownWeapons = useMemo(
+    () => weapons.filter((weapon) => matchesWeaponListFilter(weapon, filter)),
+    [filter, weapons],
+  )
 
   useEffect(() => {
     if (!api) return
@@ -166,7 +178,9 @@ export function OwnedWeaponsPage({
     void Promise.all([api.getAll(), api.getTargets()])
       .then(([loaded, loadedTargets]) => {
         if (active) {
-          setWeapons(loaded)
+          // Loaded in registration order; later saves keep the in-place /
+          // append contract through `upsertPreservingOrder` (UI_FLOW 3.2).
+          setWeapons(sortByRegistrationOrder(loaded))
           setTargets(loadedTargets)
         }
       })
@@ -421,6 +435,20 @@ export function OwnedWeaponsPage({
               </Typography>
             )}
           </Stack>
+          {!loading && !loadFailed && weapons.length > 0 && (
+            <Box sx={{ px: { xs: 2, md: 2.5 }, pb: 2 }}>
+              <WeaponListFilterBar
+                label="所持武器の絞り込み"
+                filter={filter}
+                onChange={setFilter}
+                weaponTypes={weaponTypes}
+                elements={elements}
+                totalCount={weapons.length}
+                shownCount={shownWeapons.length}
+                unit="本"
+              />
+            </Box>
+          )}
           {loading && <LinearProgress aria-label="所持武器を読み込み中" />}
           {!loading && !loadFailed && weapons.length === 0 && (
             <Box sx={{ px: { xs: 2, md: 2.5 }, py: 3, borderTop: 1, borderColor: 'divider' }}>
@@ -430,9 +458,17 @@ export function OwnedWeaponsPage({
               </Typography>
             </Box>
           )}
-          {!loading && weapons.length > 0 && (
+          {!loading && weapons.length > 0 && shownWeapons.length === 0 && (
+            <Box sx={{ px: { xs: 2, md: 2.5 }, py: 3, borderTop: 1, borderColor: 'divider' }}>
+              <WeaponListFilterEmpty
+                message="条件に一致する所持武器はありません。"
+                onClear={() => setFilter(emptyWeaponListFilter)}
+              />
+            </Box>
+          )}
+          {!loading && shownWeapons.length > 0 && (
             <Box component="ul" sx={{ m: 0, p: 0 }}>
-              {weapons.map((weapon) => (
+              {shownWeapons.map((weapon) => (
                 <ManagementListItem
                   key={weapon.id}
                   title={weapon.name}

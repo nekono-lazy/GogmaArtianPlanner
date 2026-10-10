@@ -1220,6 +1220,234 @@ export function ProductionPlanPage({
           conflict.participants.some(({ isAvailable }) => !isAvailable),
         )))
 
+  // The Worker preparation indicator and the Conflict section. The page keeps
+  // building and owning them - every what-if / repair / preparation state and
+  // handler stays here - and only hands the node to the read-only Plan view,
+  // which places it after the material sections and before the Target routes
+  // (UI_FLOW 11.0, Issue #121). Presentation order only.
+  const conflictSection = (
+    <>
+      {state.status === 'preparing' && (
+        <Stack spacing={1} role="status" aria-live="polite">
+          <LinearProgress aria-label="現在のPlanner入力を準備中" />
+          <Typography variant="body2">現在の保存状態から操作可否を確認しています。</Typography>
+        </Stack>
+      )}
+
+      {conflictDisplays !== null && (
+        <PlanPageSection title="競合と解決">
+          <Typography variant="body2" color="text.secondary">
+            保存された生産計画の競合と、その解決状態です。操作できるかどうかは現在の保存状態から判定します。
+          </Typography>
+          {state.status === 'ready' && (
+            <>
+              {replanState.status === 'loading' && (
+                <Paper
+                  component="section"
+                  variant="outlined"
+                  role="status"
+                  aria-live="polite"
+                  aria-labelledby={replanHeadingId}
+                  sx={{ p: { xs: 1.5, md: 2 } }}
+                >
+                  <Stack spacing={1.5}>
+                    <Typography id={replanHeadingId} component="h3" variant="h3">
+                      {productionPlannerRunningTitles.recalculation}
+                    </Typography>
+                    <LinearProgress aria-label="Planner再計算中" variant="indeterminate" />
+                    <Button
+                      variant="outlined"
+                      onClick={cancelReplanning}
+                      sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+                    >
+                      再計算をキャンセル
+                    </Button>
+                  </Stack>
+                </Paper>
+              )}
+              {replanState.status === 'saving' && (
+                // Atomic persistence has started: no cancel is offered.
+                <Paper
+                  component="section"
+                  variant="outlined"
+                  role="status"
+                  aria-live="polite"
+                  aria-labelledby={savingHeadingId}
+                  sx={{ p: { xs: 1.5, md: 2 } }}
+                >
+                  <Stack spacing={1.5}>
+                    <Typography id={savingHeadingId} component="h3" variant="h3">
+                      生産計画を保存しています。
+                    </Typography>
+                    <LinearProgress aria-label="生産計画を保存中" />
+                    <Typography variant="caption" color="text.secondary">
+                      保存中はキャンセルできません。
+                    </Typography>
+                  </Stack>
+                </Paper>
+              )}
+              {replanState.status === 'failure' && <Alert severity="error">{replanState.message}</Alert>}
+              {replanState.status === 'notice' && <Alert severity="info">{replanState.message}</Alert>}
+              {replanState.status === 'invalid_resolution' && (
+                <Alert severity="warning">
+                  ユーザーが選択した競合候補を現在の状態では固定できませんでした。
+                  再選択またはビルドリストから再計算してください。
+                </Alert>
+              )}
+              {replanState.status === 'not_saved' && (
+                <Stack spacing={1.5}>
+                  <Alert severity="info">
+                    {presentPlannerAlternativeRepairNotSaved(
+                      replanState.reason,
+                      replanState.comparison.scenario.status === 'stopped_by_plan_step_bound'
+                        ? replanState.comparison.scenario.maxPlanSteps
+                        : null,
+                    )}
+                  </Alert>
+                  <ProductionPlanAlternativeComparison
+                    result={{ status: 'completed', comparison: replanState.comparison }}
+                    targetWeapons={replanState.targetWeapons}
+                    headingLevel="h3"
+                    title="この候補を優先した結果（保存していません）"
+                  />
+                </Stack>
+              )}
+              {replanState.status === 'preparation_failure' && (
+                <ProductionPlanAlternativeComparison
+                  result={replanState.result}
+                  targetWeapons={[]}
+                  headingLevel="h3"
+                />
+              )}
+              {whatIfNotice && <Alert severity="info">{whatIfNotice}</Alert>}
+              {state.viewModel.planStatusMessage && (
+                <Alert
+                  severity={state.viewModel.planStatus === 'stale' ? 'warning' : 'info'}
+                >
+                  {state.viewModel.planStatusMessage}
+                </Alert>
+              )}
+              {state.preparation.status === 'invalid' && (
+                <Alert severity="warning">
+                  <AlertTitle>現在の入力では競合を準備できません。再計算が必要です。</AlertTitle>
+                  {state.preparation.issues.map((issue, index) => (
+                    <Typography
+                      variant="body2"
+                      key={`issue:${issue.path}:${issue.code}:${index}`}
+                    >
+                      {issue.message}
+                    </Typography>
+                  ))}
+                  {state.preparation.warnings.map((warning, index) => (
+                    <Typography
+                      variant="body2"
+                      key={`warning:${warning.kind}:${index}`}
+                    >
+                      {warning.message}
+                    </Typography>
+                  ))}
+                </Alert>
+              )}
+            </>
+          )}
+          {conflictDisplays.length === 0 ? (
+            <Alert severity="info">この生産計画に表示する競合はありません。</Alert>
+          ) : (
+            <Stack component="ul" spacing={2} sx={{ m: 0, p: 0, listStyle: 'none' }}>
+              {conflictDisplays.map((conflict, conflictIndex) => (
+                <ConflictItem key={conflict.id} conflict={conflict} index={conflictIndex}>
+                  {conflict.participants.map((participant, participantIndex) => {
+                    // A what-if belongs to the interactive state only; a
+                    // read-only projection never shows one.
+                    const showsWhatIf =
+                      state.status === 'ready' &&
+                      whatIfState.status !== 'idle' &&
+                      whatIfState.conflictId === conflict.id &&
+                      whatIfState.buildListEntryId === participant.buildListEntryId
+                    return (
+                      <ConflictParticipantCard
+                        key={participant.buildListEntryId}
+                        participant={participant}
+                        index={participantIndex}
+                        compareDisabled={
+                          !participant.isAvailable ||
+                          replanBusy ||
+                          (whatIfState.status === 'loading' &&
+                            whatIfState.conflictId === conflict.id &&
+                            whatIfState.buildListEntryId ===
+                              participant.buildListEntryId)
+                        }
+                        selectDisabled={!participant.isAvailable || replanBusy}
+                        onCompare={() => void startWhatIfComparison(
+                          conflict.id,
+                          participant.buildListEntryId,
+                        )}
+                        onSelect={() => void startReplanning(
+                          conflict.id,
+                          participant.buildListEntryId,
+                        )}
+                      >
+                        {showsWhatIf && whatIfState.status === 'loading' && (
+                          <Stack
+                            spacing={1}
+                            role="status"
+                            aria-live="polite"
+                            sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}
+                          >
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {productionPlannerRunningTitles.whatIf}
+                            </Typography>
+                            <LinearProgress aria-label="what-if比較中" variant="indeterminate" />
+                            <Button
+                              variant="outlined"
+                              onClick={cancelWhatIfComparison}
+                              sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+                            >
+                              比較をキャンセル
+                            </Button>
+                          </Stack>
+                        )}
+                        {showsWhatIf && whatIfState.status === 'completed' && (
+                          <ProductionPlanAlternativeComparison
+                            result={whatIfState.result}
+                            targetWeapons={whatIfState.targetWeapons}
+                            headingLevel="h5"
+                          />
+                        )}
+                        {showsWhatIf && whatIfState.status === 'failure' &&
+                          (whatIfState.failure.kind === 'typed' ? (
+                            <ProductionPlanAlternativeComparison
+                              result={whatIfState.failure.result}
+                              targetWeapons={[]}
+                              headingLevel="h5"
+                            />
+                          ) : (
+                            <Alert severity="error">
+                              {whatIfState.failure.message}
+                            </Alert>
+                          ))}
+                      </ConflictParticipantCard>
+                    )
+                  })}
+                </ConflictItem>
+              ))}
+            </Stack>
+          )}
+          {showBuildListLink && state.status === 'ready' && (
+            <Button
+              component={RouterLink}
+              to="/build-list"
+              variant="outlined"
+              sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+            >
+              ビルドリストへ戻る
+            </Button>
+          )}
+        </PlanPageSection>
+      )}
+    </>
+  )
+
   return (
     <PageShell
       title="生産計画"
@@ -1299,232 +1527,16 @@ export function ProductionPlanPage({
             so they render as soon as it is loaded - while the Worker
             preparation is still running, after it failed, and for a stale Plan
             whose Conflict controls stay disabled. */}
-        {dependencies && loadedPlan && (
+        {dependencies && loadedPlan ? (
           <ProductionPlanContent
             plan={loadedPlan}
             targetWeapons={targetWeapons}
             master={dependencies.master}
             debugMode={debugMode}
+            conflictSection={conflictSection}
           />
-        )}
-
-        {state.status === 'preparing' && (
-          <Stack spacing={1} role="status" aria-live="polite">
-            <LinearProgress aria-label="現在のPlanner入力を準備中" />
-            <Typography variant="body2">現在の保存状態から操作可否を確認しています。</Typography>
-          </Stack>
-        )}
-
-        {conflictDisplays !== null && (
-          <PlanPageSection title="競合と解決">
-            <Typography variant="body2" color="text.secondary">
-              保存された生産計画の競合と、その解決状態です。操作できるかどうかは現在の保存状態から判定します。
-            </Typography>
-            {state.status === 'ready' && (
-              <>
-                {replanState.status === 'loading' && (
-                  <Paper
-                    component="section"
-                    variant="outlined"
-                    role="status"
-                    aria-live="polite"
-                    aria-labelledby={replanHeadingId}
-                    sx={{ p: { xs: 1.5, md: 2 } }}
-                  >
-                    <Stack spacing={1.5}>
-                      <Typography id={replanHeadingId} component="h3" variant="h3">
-                        {productionPlannerRunningTitles.recalculation}
-                      </Typography>
-                      <LinearProgress aria-label="Planner再計算中" variant="indeterminate" />
-                      <Button
-                        variant="outlined"
-                        onClick={cancelReplanning}
-                        sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
-                      >
-                        再計算をキャンセル
-                      </Button>
-                    </Stack>
-                  </Paper>
-                )}
-                {replanState.status === 'saving' && (
-                  // Atomic persistence has started: no cancel is offered.
-                  <Paper
-                    component="section"
-                    variant="outlined"
-                    role="status"
-                    aria-live="polite"
-                    aria-labelledby={savingHeadingId}
-                    sx={{ p: { xs: 1.5, md: 2 } }}
-                  >
-                    <Stack spacing={1.5}>
-                      <Typography id={savingHeadingId} component="h3" variant="h3">
-                        生産計画を保存しています。
-                      </Typography>
-                      <LinearProgress aria-label="生産計画を保存中" />
-                      <Typography variant="caption" color="text.secondary">
-                        保存中はキャンセルできません。
-                      </Typography>
-                    </Stack>
-                  </Paper>
-                )}
-                {replanState.status === 'failure' && <Alert severity="error">{replanState.message}</Alert>}
-                {replanState.status === 'notice' && <Alert severity="info">{replanState.message}</Alert>}
-                {replanState.status === 'invalid_resolution' && (
-                  <Alert severity="warning">
-                    ユーザーが選択した競合候補を現在の状態では固定できませんでした。
-                    再選択またはビルドリストから再計算してください。
-                  </Alert>
-                )}
-                {replanState.status === 'not_saved' && (
-                  <Stack spacing={1.5}>
-                    <Alert severity="info">
-                      {presentPlannerAlternativeRepairNotSaved(
-                        replanState.reason,
-                        replanState.comparison.scenario.status === 'stopped_by_plan_step_bound'
-                          ? replanState.comparison.scenario.maxPlanSteps
-                          : null,
-                      )}
-                    </Alert>
-                    <ProductionPlanAlternativeComparison
-                      result={{ status: 'completed', comparison: replanState.comparison }}
-                      targetWeapons={replanState.targetWeapons}
-                      headingLevel="h3"
-                      title="この候補を優先した結果（保存していません）"
-                    />
-                  </Stack>
-                )}
-                {replanState.status === 'preparation_failure' && (
-                  <ProductionPlanAlternativeComparison
-                    result={replanState.result}
-                    targetWeapons={[]}
-                    headingLevel="h3"
-                  />
-                )}
-                {whatIfNotice && <Alert severity="info">{whatIfNotice}</Alert>}
-                {state.viewModel.planStatusMessage && (
-                  <Alert
-                    severity={state.viewModel.planStatus === 'stale' ? 'warning' : 'info'}
-                  >
-                    {state.viewModel.planStatusMessage}
-                  </Alert>
-                )}
-                {state.preparation.status === 'invalid' && (
-                  <Alert severity="warning">
-                    <AlertTitle>現在の入力では競合を準備できません。再計算が必要です。</AlertTitle>
-                    {state.preparation.issues.map((issue, index) => (
-                      <Typography
-                        variant="body2"
-                        key={`issue:${issue.path}:${issue.code}:${index}`}
-                      >
-                        {issue.message}
-                      </Typography>
-                    ))}
-                    {state.preparation.warnings.map((warning, index) => (
-                      <Typography
-                        variant="body2"
-                        key={`warning:${warning.kind}:${index}`}
-                      >
-                        {warning.message}
-                      </Typography>
-                    ))}
-                  </Alert>
-                )}
-              </>
-            )}
-            {conflictDisplays.length === 0 ? (
-              <Alert severity="info">この生産計画に表示する競合はありません。</Alert>
-            ) : (
-              <Stack component="ul" spacing={2} sx={{ m: 0, p: 0, listStyle: 'none' }}>
-                {conflictDisplays.map((conflict, conflictIndex) => (
-                  <ConflictItem key={conflict.id} conflict={conflict} index={conflictIndex}>
-                    {conflict.participants.map((participant, participantIndex) => {
-                      // A what-if belongs to the interactive state only; a
-                      // read-only projection never shows one.
-                      const showsWhatIf =
-                        state.status === 'ready' &&
-                        whatIfState.status !== 'idle' &&
-                        whatIfState.conflictId === conflict.id &&
-                        whatIfState.buildListEntryId === participant.buildListEntryId
-                      return (
-                        <ConflictParticipantCard
-                          key={participant.buildListEntryId}
-                          participant={participant}
-                          index={participantIndex}
-                          compareDisabled={
-                            !participant.isAvailable ||
-                            replanBusy ||
-                            (whatIfState.status === 'loading' &&
-                              whatIfState.conflictId === conflict.id &&
-                              whatIfState.buildListEntryId ===
-                                participant.buildListEntryId)
-                          }
-                          selectDisabled={!participant.isAvailable || replanBusy}
-                          onCompare={() => void startWhatIfComparison(
-                            conflict.id,
-                            participant.buildListEntryId,
-                          )}
-                          onSelect={() => void startReplanning(
-                            conflict.id,
-                            participant.buildListEntryId,
-                          )}
-                        >
-                          {showsWhatIf && whatIfState.status === 'loading' && (
-                            <Stack
-                              spacing={1}
-                              role="status"
-                              aria-live="polite"
-                              sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}
-                            >
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                {productionPlannerRunningTitles.whatIf}
-                              </Typography>
-                              <LinearProgress aria-label="what-if比較中" variant="indeterminate" />
-                              <Button
-                                variant="outlined"
-                                onClick={cancelWhatIfComparison}
-                                sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
-                              >
-                                比較をキャンセル
-                              </Button>
-                            </Stack>
-                          )}
-                          {showsWhatIf && whatIfState.status === 'completed' && (
-                            <ProductionPlanAlternativeComparison
-                              result={whatIfState.result}
-                              targetWeapons={whatIfState.targetWeapons}
-                              headingLevel="h5"
-                            />
-                          )}
-                          {showsWhatIf && whatIfState.status === 'failure' &&
-                            (whatIfState.failure.kind === 'typed' ? (
-                              <ProductionPlanAlternativeComparison
-                                result={whatIfState.failure.result}
-                                targetWeapons={[]}
-                                headingLevel="h5"
-                              />
-                            ) : (
-                              <Alert severity="error">
-                                {whatIfState.failure.message}
-                              </Alert>
-                            ))}
-                        </ConflictParticipantCard>
-                      )
-                    })}
-                  </ConflictItem>
-                ))}
-              </Stack>
-            )}
-            {showBuildListLink && state.status === 'ready' && (
-              <Button
-                component={RouterLink}
-                to="/build-list"
-                variant="outlined"
-                sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
-              >
-                ビルドリストへ戻る
-              </Button>
-            )}
-          </PlanPageSection>
+        ) : (
+          conflictSection
         )}
 
         {debugMode && dependencies && loadedPlan && (

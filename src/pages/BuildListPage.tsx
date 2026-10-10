@@ -54,6 +54,15 @@ import type {
 } from '../domain/planner'
 import { defaultIntermediateStateSelection, findBuildListTargetDuplicates } from '../domain/buildList'
 import { plannerWarningLabels, productionPlanStatusLabels, staleReasonLabels } from '../presentation/labels'
+import { compareByRegistrationOrder, sortByRegistrationOrder } from '../presentation/managementListOrder'
+import {
+  emptyWeaponListFilter,
+  isWeaponListFilterActive,
+  matchesWeaponListFilter,
+  type WeaponListFilter,
+} from '../presentation/weaponListFilter'
+import { WeaponListFilterBar, WeaponListFilterEmpty } from '../components/WeaponListFilterBar'
+import { getEnabledElements, getEnabledWeaponTypes } from '../domain/master/masterSelectors'
 import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
@@ -286,12 +295,14 @@ type DraftPlanState =
   | { status: 'error' }
 
 /**
- * Entries grouped by the Target they belong to, in first-appearance order.
+ * Entries grouped by the Target they belong to (`docs/UI_FLOW.md` 3.2 / 10).
  *
- * Presentation only: the persisted Entry order is kept inside each group, and
- * the group order is derived from that same order rather than from priority
- * or any other new meaning. The Target is the current persisted one; a Target
- * that no longer exists still keeps its Entries together under its ID.
+ * Presentation only. The groups follow the Targets' registration order - the
+ * order of the Target Weapons list and the Search Select - and the Entries of
+ * one group follow their own registration order; neither uses priority or any
+ * other new meaning. The Target is the current persisted one; a Target that no
+ * longer exists still keeps its Entries together under its ID, after every
+ * existing Target's group.
  */
 interface BuildListTargetGroup {
   targetWeaponId: TargetWeaponId
@@ -305,7 +316,7 @@ function groupEntriesByTarget(
 ): BuildListTargetGroup[] {
   const targetById = new Map(targets.map((target) => [target.id, target]))
   const groups = new Map<TargetWeaponId, BuildListTargetGroup>()
-  for (const entry of entries) {
+  for (const entry of sortByRegistrationOrder(entries)) {
     const group = groups.get(entry.targetWeaponId)
     if (group) group.entries.push(entry)
     else {
@@ -316,7 +327,13 @@ function groupEntriesByTarget(
       })
     }
   }
-  return [...groups.values()]
+  // A stable sort: the missing-Target groups keep their first-Entry order.
+  return [...groups.values()].sort((left, right) => {
+    if (left.target === null || right.target === null) {
+      return Number(left.target === null) - Number(right.target === null)
+    }
+    return compareByRegistrationOrder(left.target, right.target)
+  })
 }
 
 function entrySelection(entry: BuildListEntry): IntermediateStateSelection {
@@ -393,59 +410,93 @@ function PageSection({
   )
 }
 
+const MISSING_TARGET_NAME = '削除済みの目標武器'
+const MISSING_TARGET_WEAPON_LABEL = '武器種・属性: 目標武器が見つかりません'
+
 /**
- * One Target's Entries.
+ * One Target's Entries as a disclosure (`docs/UI_FLOW.md` 10, Issue #124).
+ *
+ * Closed, the group still names its Target - the name, the weapon type and the
+ * element - with the priority, the Entry count and every state that needs the
+ * user's attention as text chips: the legacy duplicate 「要整理」, the stale
+ * Entries and the selected intermediate states. Open, it shows the legacy
+ * duplicate guidance and the Entries exactly as before. The open state is the
+ * page's runtime UI state, keyed by the Target ID; it is never persisted and
+ * decides nothing the Planner reads.
  *
  * The Target name, its priority and the Entry count come from the current
  * persisted Target and from the Entries themselves. The priority is shown for
  * orientation only: changing it belongs to the Target Weapons screen's full
- * edit path, and no Target write happens here.
+ * edit path, and no Target write happens here. A Target that no longer exists
+ * keeps its own group, which still opens.
  */
 function TargetGroupSection({
   group,
   legacyDuplicate,
+  weaponLabel,
+  expanded,
+  onExpandedChange,
   children,
 }: {
   group: BuildListTargetGroup
   /** The Target holds two or more Entries, as `findBuildListTargetDuplicates()` decided. */
   legacyDuplicate: boolean
+  /** The Target's weapon type and element, or `null` when the Target no longer exists. */
+  weaponLabel: string | null
+  expanded: boolean
+  onExpandedChange: (expanded: boolean) => void
   children: ReactNode
 }) {
-  const headingId = useId()
   const staleCount = group.entries.filter(({ isStale }) => isStale).length
+  const selectionCount = group.entries.filter((entry) => selectedIntermediateStateCount(entry) > 0).length
+  const summary = (
+    <Stack component="span" spacing={0.75} sx={{ minWidth: 0 }}>
+      <Typography
+        component="span"
+        variant="body2"
+        color="text.secondary"
+        sx={{ display: 'block', overflowWrap: 'anywhere' }}
+      >
+        {weaponLabel ?? MISSING_TARGET_WEAPON_LABEL}
+      </Typography>
+      <Stack
+        component="span"
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{ flexWrap: 'wrap', alignItems: 'center', minWidth: 0 }}
+      >
+        {group.target && (
+          <StatusChip component="span" label={`優先度 ${group.target.priority}`} tone="info" />
+        )}
+        <Typography component="span" variant="body2" color="text.secondary" className="tabular-nums">
+          候補 {group.entries.length}件
+        </Typography>
+        {legacyDuplicate && <StatusChip component="span" label={LEGACY_DUPLICATE_CHIP_LABEL} tone="caution" />}
+        {staleCount > 0 && (
+          <StatusChip component="span" label={`再検索が必要 ${staleCount}件`} tone="caution" />
+        )}
+        {selectionCount > 0 && (
+          <StatusChip component="span" label={`途中採用状態を選択中 ${selectionCount}件`} tone="info" />
+        )}
+      </Stack>
+    </Stack>
+  )
   return (
-    <Paper
-      component="section"
-      variant="outlined"
-      aria-labelledby={headingId}
-      sx={{ p: { xs: 2, md: 2.5 }, minWidth: 0 }}
+    <DisclosureAccordion
+      title={group.target?.name ?? MISSING_TARGET_NAME}
+      titleVariant="h3"
+      headingLevel="h3"
+      summary={summary}
+      expanded={expanded}
+      onExpandedChange={onExpandedChange}
+      // A closed group holds no Candidate card: a long Build List keeps only
+      // its headers in the DOM. Nothing is lost on close, because every
+      // selection and its save chain live in the page, and the warning dialog
+      // is the page's own.
+      unmountOnExit
     >
-      <Stack spacing={2}>
-        <Stack
-          direction="row"
-          spacing={1}
-          useFlexGap
-          sx={{ flexWrap: 'wrap', alignItems: 'center', minWidth: 0 }}
-        >
-          <Typography
-            id={headingId}
-            component="h3"
-            variant="h3"
-            sx={{ overflowWrap: 'anywhere', minWidth: 0 }}
-          >
-            {group.target?.name ?? '削除済みの目標武器'}
-          </Typography>
-          {group.target && (
-            <StatusChip label={`優先度 ${group.target.priority}`} tone="info" />
-          )}
-          <Typography variant="body2" color="text.secondary" className="tabular-nums">
-            候補 {group.entries.length}件
-          </Typography>
-          {legacyDuplicate && <StatusChip label={LEGACY_DUPLICATE_CHIP_LABEL} tone="caution" />}
-          {staleCount > 0 && (
-            <StatusChip label={`再検索が必要 ${staleCount}件`} tone="caution" />
-          )}
-        </Stack>
+      <Stack spacing={2} sx={{ minWidth: 0 }}>
         {legacyDuplicate && (
           <Alert severity="warning">
             <AlertTitle>{LEGACY_DUPLICATE_TITLE}</AlertTitle>
@@ -462,7 +513,7 @@ function TargetGroupSection({
           {children}
         </Stack>
       </Stack>
-    </Paper>
+    </DisclosureAccordion>
   )
 }
 
@@ -550,6 +601,58 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     [optionInputs],
   )
   const groups = useMemo(() => groupEntriesByTarget(entries, targets), [entries, targets])
+  // Display-only filter by the group's Target (`docs/UI_FLOW.md` 10): never
+  // persisted, and the Planner always receives the whole Build List. A group
+  // whose Target no longer exists has no weapon type to match, so it is shown
+  // only while the filter is cleared.
+  const [filter, setFilter] = useState<WeaponListFilter>(emptyWeaponListFilter)
+  const shownGroups = useMemo(
+    () =>
+      isWeaponListFilterActive(filter)
+        ? groups.filter(({ target }) => target !== null && matchesWeaponListFilter(target, filter))
+        : groups,
+    [filter, groups],
+  )
+  // Which Target groups are open (`docs/UI_FLOW.md` 10, Issue #124): runtime UI
+  // state keyed by Target ID, never by position, so a filter change, a re-read
+  // or a saved selection keeps every group as the user left it. Every group
+  // starts closed. It is never persisted and the Planner never reads it.
+  const [expandedTargetIds, setExpandedTargetIds] = useState<ReadonlySet<TargetWeaponId>>(
+    () => new Set(),
+  )
+  const setGroupExpanded = (targetWeaponId: TargetWeaponId, expanded: boolean) =>
+    setExpandedTargetIds((current) => {
+      if (current.has(targetWeaponId) === expanded) return current
+      const next = new Set(current)
+      if (expanded) next.add(targetWeaponId)
+      else next.delete(targetWeaponId)
+      return next
+    })
+  // The bulk controls act on the groups shown now; a group the filter hides
+  // keeps its own state.
+  const setShownGroupsExpanded = (expanded: boolean) =>
+    setExpandedTargetIds((current) => {
+      const next = new Set(current)
+      for (const { targetWeaponId } of shownGroups) {
+        if (expanded) next.add(targetWeaponId)
+        else next.delete(targetWeaponId)
+      }
+      return next
+    })
+  const weaponLabelOf = useMemo(() => {
+    const weaponTypeNames = new Map(
+      (masterForDisplay?.weaponTypes ?? []).map((type) => [type.id, type.displayNameJa] as const),
+    )
+    const elementNames = new Map(
+      (masterForDisplay?.elements ?? []).map((element) => [element.id, element.displayNameJa] as const),
+    )
+    return (target: TargetWeapon | null): string | null =>
+      target === null
+        ? null
+        : `${weaponTypeNames.get(target.weaponTypeId) ?? target.weaponTypeId} / ${
+            elementNames.get(target.elementId) ?? target.elementId
+          }`
+  }, [masterForDisplay])
   // The Build List cardinality authority decides which Targets hold a legacy
   // duplicate; the page only turns its answer into a lookup for display.
   const legacyDuplicateTargetIds = useMemo(
@@ -1125,11 +1228,68 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
             {checkpointFeedback && (
               <Alert severity={checkpointFeedback.severity}>{checkpointFeedback.message}</Alert>
             )}
-            {groups.map((group) => (
+            <WeaponListFilterBar
+              label="作成リストの絞り込み"
+              filter={filter}
+              onChange={setFilter}
+              weaponTypes={getEnabledWeaponTypes(masterForDisplay)}
+              elements={getEnabledElements(masterForDisplay)}
+              totalCount={groups.length}
+              shownCount={shownGroups.length}
+              unit="件"
+              countLabel="目標武器"
+            />
+            {isWeaponListFilterActive(filter) && (
+              <Alert severity="info">
+                目標武器の武器種・属性で表示だけを絞り込んでいます。生産計画の作成と再計画の試算は、絞り込みに関係なく作成リストのすべての候補を対象にします。
+              </Alert>
+            )}
+            {shownGroups.length > 0 && (
+              <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  useFlexGap
+                  role="group"
+                  aria-label="候補一覧の開閉"
+                  sx={{ flexWrap: 'wrap' }}
+                >
+                  <Button
+                    variant="outlined"
+                    onClick={() => setShownGroupsExpanded(true)}
+                    sx={{ minHeight: 44, flex: { xs: '1 1 0', sm: '0 0 auto' } }}
+                  >
+                    すべて展開
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setShownGroupsExpanded(false)}
+                    sx={{ minHeight: 44, flex: { xs: '1 1 0', sm: '0 0 auto' } }}
+                  >
+                    すべて折りたたむ
+                  </Button>
+                </Stack>
+                {isWeaponListFilterActive(filter) && (
+                  <Typography variant="caption" color="text.secondary">
+                    すべて展開・すべて折りたたむは、表示中の目標武器だけが対象です。
+                  </Typography>
+                )}
+              </Stack>
+            )}
+            {shownGroups.length === 0 && (
+              <WeaponListFilterEmpty
+                message="条件に一致する目標武器の候補はありません。"
+                onClear={() => setFilter(emptyWeaponListFilter)}
+              />
+            )}
+            {shownGroups.map((group) => (
               <TargetGroupSection
                 key={group.targetWeaponId}
                 group={group}
                 legacyDuplicate={legacyDuplicateTargetIds.has(group.targetWeaponId)}
+                weaponLabel={weaponLabelOf(group.target)}
+                expanded={expandedTargetIds.has(group.targetWeaponId)}
+                onExpandedChange={(expanded) => setGroupExpanded(group.targetWeaponId, expanded)}
               >
                 {group.entries.map((entry) => (
                   <Box
