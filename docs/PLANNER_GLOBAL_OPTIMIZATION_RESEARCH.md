@@ -269,3 +269,5 @@ oracleなしでcontext / extent / budgetを選ぶResearch execution policy、Pha
 [Phase 2-C2.7-A](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27A.md)（docs-only）で整理した。
 その事前登録のformal executionは [Phase 2-C2.7-B](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27B.md)（`B2C27B_INCOMPLETE`）、
 結果を受けたCandidate発見とGlobal採用の分離方針は [Phase 2-C2.7-B follow-up](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27B_FOLLOWUP.md)（docs-only）にある。
+follow-upが提案したD1（Phase B `found_R` 11 Candidateの共存診断、Phase 2-C2.7-Cとは別）の実行条件は
+[D1-A事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D1_SPEC.md)（docs-only）で確定した。
