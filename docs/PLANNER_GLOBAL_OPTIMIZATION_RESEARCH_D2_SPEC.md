@@ -13,6 +13,13 @@ Working Tree clean、stashなし、worktreeは1件だけ、実行中のResearch 
 Candidate delivery、full Planner run、formal measurement、RESULT JSON生成、oracle読み取りは行っていない（§1の値は既存committed RESULT、既存
 `.local` record、既存文書のSHA-256照合と読み取り・数え上げだけで得た）。
 
+> **改訂（D2-B初回formal run後、PR #226のRequired fix）**: 当初の登録（PR #225）では、D1-A §4.5 S5の後半（support Entryから導出した
+> reservation bodyがPhase B recordの `result.reservation` と一致すること）を検証する入力が§8.1に無く、D2-Bの初回formal run（measurement HEAD
+> `810c5f09`）はS5をdigest一致だけで判定していた。また§8.1はD1-A文書を「hash照合だけ」としていたが、§2.3 / §5はD1-A §1.3の登録値を参照していた。
+> 本改訂でD1-A §1.3から読むfieldを限定して入力に明記し、t09のPhase B unit recordを登録入力に追加し、S5をD1-A §4.5と同じ2条件にした（§5、§8.1、
+> §10、§17）。当初からこれらを登録していたのではない。初回formal runは新仕様の正式evidenceとして採用せず、改訂後の新しいmeasurement HEADから
+> `V → DSC → B0 → ADM → CMP → Z` を最初から再計測する。それ以外の実行条件・判定規則は変更していない。
+
 本書の各節は次の4種類のどれかであり、見出しに明記する。
 
 | 種類 | 意味 | 節 |
@@ -282,7 +289,7 @@ final = accepted、finalResult = 最後に受理した評価の結果（受理�
 | 対象Target | seed外のdropped 7（t00 / t02 / t03 / t04 / t05 / t06 / t10）を **Target ID昇順** |
 | 候補 | 各Targetの **D2 admitted K0 Candidate**（§3）。discovery ordinal昇順。seed内Target（t01 / t07 / t08 / t09）のD2 Candidateは使わない（seedを置き換えない） |
 | 手順 | §4.1と同じ（`accepted = seed`、`reference = Z0の結果` から開始）。評価IDは `Z-<t>-c<ordinal>` |
-| R5 | D1-A §4.4をproposed全体へ適用。`S_sup = { build-list.fnv1a32-e396d352 }`（t09由来）。t09のsupport依存はD1-A §4.5のS1〜S5で検査し、動的check（S1〜S3）不成立は `support_expired_R`（R5偽、measured）、静的check（S4 / S5）不成立は `D2A_INVALID` |
+| R5 | D1-A §4.4をproposed全体へ適用。`S_sup = { build-list.fnv1a32-e396d352 }`（t09由来）。t09のsupport依存はD1-A §4.5のS1〜S5で検査し、動的check（S1〜S3）不成立は `support_expired_R`（R5偽、measured）、静的check（S4 / S5）不成立は `D2A_INVALID`。S5（改訂、§17）は (a) `hashStableValue(derivePlannerAlternativeReservation([Exportのsupport Entry], engine))` がD1-A §1.3のt09 `reservationDigest` と一致し、かつ (b) 導出したreservationが§8.1のPhase B t09 unit recordの `result.reservation` と `stableStringify()` で一致すること。両方が成立した場合だけS5成立 |
 | gate・選択順 | §4.2 / §4.3と同じ |
 | 上限 | Z0 1件 + `Σ_{t ∈ dropped 7} |admitted(t)|`（≤ 21）= 22件以下 |
 
@@ -462,12 +469,14 @@ D2が読む入力は次に限る。いずれもRepositoryへ追加しない（co
 | Phase 2-C2 RESULT（committed） | `docs/PLANNER_GLOBAL_PHASE2C2_RESULT.json` | 1,195,107 | `afb70e9745bc56c264c8892075e6adbb8886b82cec1491177aa75d265f1833a4` | `baseline.summary` だけ |
 | D1 formal RESULT（committed） | `docs/PLANNER_GLOBAL_D1_RESULT.json` | 1,588,705 | `b846363fb5cfc9b9e31b8ae655faaf8b6a17f0be7d715fd42e63ed56ff35c971` | allowlist（下記） |
 | D1 G store 4件（Zのseedだけ） | `.local/d1-formal2.run/t01-r01-L1.generated-entry.json` ほか | D1 RESULT `sources.d1.generatedEntries` | 同左（t01 `3c3f5cc8…8f14`、t07 `27b098e0…5e6f`、t08 `825e8a9e…44cc`、t09 `52f36e8e…48ccf`） | body全体（Zの評価入力） |
-| Phase A / Phase B / follow-up / D1-A / D1-B文書 | `docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27A.md` / `…_PHASE2C27B.md` / `…_PHASE2C27B_FOLLOWUP.md` / `…_D1_SPEC.md` / `…_D1B.md` | — | `b45daa27…4147` / `e05eea56…ff9c` / `335a6710…7083` / `39974cbb…359f` / `536f8cd4…fb4f` | hash照合だけ |
+| Phase A / Phase B / follow-up / D1-B文書 | `docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27A.md` / `…_PHASE2C27B.md` / `…_PHASE2C27B_FOLLOWUP.md` / `…_D1B.md` | — | `b45daa27…4147` / `e05eea56…ff9c` / `335a6710…7083` / `536f8cd4…fb4f` | hash照合だけ |
+| D1-A文書（改訂、§17） | `docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D1_SPEC.md` | — | `39974cbb…359f` | §1.3のfound表の `t` / TargetWeapon ID / unit / support Entry / `reservationDigest` / `O_t` / `G_t` と、record digest表のt09行（record SHA-256）だけ |
+| Phase B t09 unit record（改訂、§17） | `.local/c27b-formal.run/t09-r10-L1.record.json`（D1-A §1.3のt09行のunit） | 203,547 | `4de5f215bcd2d752c336ce1c92968880be9512c0df30c857f75469edd3bc7214`（Phase B RESULT `sources.unitRecords` とD1-A §1.3 record digest表の値。両方と一致しなければfail closed） | `result.reservation` だけ（S5(b)の比較対象） |
 | 本書 | `docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2_SPEC.md` | — | D2-Bのmeasurement HEADでgit objectから計算し、start attestationへ記録する | — |
 
 **Phase B RESULTの読み取りallowlist**（post-hocのoracle由来fieldを読まない。D1-A §1.2と同じ趣旨）:
 
-- `sources` のうち `export` / `targets`（`oracle` / `oracleManifest` / `oracleModule` のentryは開かず、digest照合にも使わない）
+- `sources` のうち `export` / `targets`、および `unitRecords` のうちt09 unit recordのentry（`file` / `bytes` / `sha256`。改訂、§17）（`oracle` / `oracleManifest` / `oracleModule` のentryは開かず、digest照合にも使わない）
 - `provenance.formal` / `measuredHead` / `runStatus` / `calculationCodeChangedSinceMeasuredHead`、`decision.case`
 - `units[]` のうち `contextRank === 1` のentryの `unitId` / `targetIndex` / `contextRank` / `rung` / `result` / `search` / `deliveries[]`（`i` / `keySha256` / `cost` /
   `action` / `respectsReservation`）
@@ -595,7 +604,7 @@ phase                      "Issue #154 D2: K0-first candidate discovery and set 
 analyzedAt
 sources
   specDocument             { file, sha256 }                        本書（measurement HEADのgit object）
-  phaseB                   { result, targetsManifest } 各 { file, bytes, sha256 }
+  phaseB                   { result, targetsManifest, t09Record（改訂、§17） } 各 { file, bytes, sha256 }
   phase2c2Result           { file, sha256 }
   d1                       { result, generatedEntriesUsedBySeed[4] } 各 { file, bytes, sha256 }
   export                   { file, bytes, sha256, committed: false }
@@ -774,3 +783,16 @@ Issue #154はCloseしない。
 
 - `git diff --check`
 - `npm run check:nul`、`npm run lint`、`npm test`、`npm run build`（docs-onlyのため挙動変化は無い。結果はPRに記載）
+
+## 17. 改訂記録（D2-B初回formal run後、PR #226 Required fix）
+
+| 項目 | 旧（PR #225の登録） | 改訂後 |
+| --- | --- | --- |
+| D1-A文書 | §8.1で「hash照合だけ」。一方§2.3 / §5は§1.3の登録値（`O_t`、t09 support Entry、reservation digest）を名指ししていた | SHA-256照合に加え、§1.3のfound表の `t` / TargetWeapon ID / unit / support Entry / `reservationDigest` / `O_t` / `G_t` と、record digest表のt09行だけを読む。それ以外の記述は入力authorityにしない |
+| Phase B t09 unit record | 入力でない | `.local/c27b-formal.run/t09-r10-L1.record.json`（203,547 bytes、SHA-256 `4de5f215…7214`）を登録。同一性はPhase B RESULT `sources.unitRecords` とD1-A §1.3 record digest表の両方で照合し、`result.reservation` だけを読む。欠損・SHA-256 / bytes不一致・parse不能・`result.reservation` 欠落はV失敗（`D2A_INVALID`、`input_evidence`）で、childを起動しない |
+| S5 | 実装は (a) digest一致だけで判定（D1-A §4.5と不一致） | (a) digest一致 ∧ (b) 導出reservation bodyとPhase B recordの `result.reservation` の `stableStringify()` 一致。どちらかが不成立なら静的check違反（guardrail、`D2A_INVALID`）。S5の各条件の判定値と比較したbodyを評価recordに記録し、analyzerがV（record）と独立に照合する |
+| start attestation / RESULT | — | 追加入力のdigestを登録入力として記録し、RESULT `sources.phaseB.t09Record` に出す |
+
+- 変更しないもの: K0-only探索、ladder、`POOL_CAP`、R1、R5 / R6、gate、選択順位、主軸 / Z軸の分離、budget、envelope、§7.3のparity規則、§9のdecision順序
+- 初回formal run（measurement HEAD `810c5f090d532e67e40c7b0cbdc6d2b8deebec49`）のraw / record / G store / attestationは監査用に `.local` に保持し、正式evidenceとして採用しない。
+  改訂後の新しいmeasurement HEADから全段階を再計測し、旧runのrecordを流用・混在させない
