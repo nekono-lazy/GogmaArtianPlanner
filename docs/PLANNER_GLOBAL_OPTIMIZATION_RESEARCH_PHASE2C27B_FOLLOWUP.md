@@ -219,8 +219,14 @@ Research写像ではfixed Route集合がspeculative support（K0では空）に�
 ### 4.3 区別すべき評価項目（Research-only typed outcomeの提案）
 
 Productionの `found` と混同しないよう、すべて `_R` で終わるResearch-only literalとする。R0〜R6は **一本道の強さのレベルではなく、
-依存関係を持つ別々の評価項目** である。各項目は「何に対して評価したか」（`evaluatedAgainst`）を必ず持つ。`baseline` はbaseline PlannerInputへ
-1 Targetの置換だけを入れた評価、`replacement_set` は複数Targetの置換集合を同時に入れた評価である。
+依存関係を持つ別々の評価項目** である。各項目は「何に対して評価したか」（`evaluatedAgainst`）を必ず持つ。`evaluatedAgainst` は置換件数ではなく、
+**評価の目的と記録する評価コンテキスト** で区別する。
+
+- `baseline`: baseline PlannerInputへ1 Targetの置換を入れ、そのCandidate単体を評価する（R1〜R4の記録、Phase B trialとのparity確認）
+- `replacement_set`: 1件以上のTarget置換から構成されるResearch評価用集合を、集合評価（R5判定）を目的として評価する。**singleton（1件の置換集合）も含む**
+
+同じ1件の置換（`-O + G`）でPlanner入力が同じになる場合でも、`baseline` の評価結果を `replacement_set` のR5成立へ暗黙に読み替えない。R5は
+`replacement_set` として明示的に評価・記録したrunだけで判定する。
 
 ```text
 R0  Candidate delivery
@@ -243,6 +249,8 @@ R6  全planning Targetの完成、未解決Conflict 0、resource_conflict脱落0
   R3相当でR2不成立、K0のdropped 7件は条件2・3が空でR3不成立）
 - R5 / R6は評価対象が単体Candidateではなく置換集合 / 全体Planなので、R4を一段強くしたものではない。単体のR1〜R4は `evaluatedAgainst = baseline`
   でも記録できるが、R5は `replacement_set` だけ、R6は全体Planだけで判定する
+- singletonの `replacement_set` でR5が成立しても、示すのは「その1件の `G` と前提supportが同じ評価runで成立した」ことだけで、複数Target間の共存や
+  全体完成（43 / 43）を意味しない
 
 | 項目 | literal案 | 評価対象 | 成立条件 | 示すこと | 示さないこと |
 | --- | --- | --- | --- | --- | --- |
@@ -251,7 +259,7 @@ R6  全planning Targetの完成、未解決Conflict 0、resource_conflict脱落0
 | R2 | `support_consistent_R` | Candidate + support | R1かつ、reservationの前提となるsupport Entryがすべてselected、`G` とsupportの同時participant Conflictなし。K0では `support_vacuous` として区別する | supportの前提が評価対象のrunで実際に成立した | `G` 自身のselected、supportがGlobalに残ること |
 | R3 | `generated_selected_R` | Candidate | R1かつ `G` がselected | 評価対象のrunで `G` が暫定帰結に負けなかった | supportの前提成立、評価対象run外での共存 |
 | R4 | `joint_selected_R` | Candidate + support | R2かつR3（`G` とsupport Entryが同じrunで同時selected） | Candidateとその前提が同じrunで同時に成立した | 他TargetのCandidateとの共存 |
-| R5 | `set_coexistent_R` | 置換集合（`replacement_set` のみ） | 次の5条件をすべて満たす。(1) 集合内のすべての `G` がselected、(2) 各Candidateの `requiresSupport` のEntryが評価runでselected（K0は空集合）、(3) support依存が有効（§5.2。失効・不整合なし）、(4) participantに「集合内の `G` ∪ それらが前提とするsupport」の要素を2件以上含むConflictが無い、(5) Planが存在しTrace Replay成功 | 置換集合としての共存（Candidateとその前提supportを含む） | 集合外Targetの完成、Conflict 0 |
+| R5 | `set_coexistent_R` | 置換集合（`replacement_set` のみ） | 次の5条件をすべて満たす。(1) 集合内のすべての `G` がselected、(2) 各Candidateの `requiresSupport` のEntryが評価runでselected（K0は空集合）、(3) support依存が有効（§5.2。失効・不整合なし）、(4) participantに「集合内の `G` ∪ それらが前提とするsupport」の要素を2件以上含むConflictが無い、(5) Planが存在しTrace Replay成功 | 置換集合としての共存（Candidateとその前提supportを含む） | 集合外Targetの完成、Conflict 0。singletonでは複数Target間の共存も示さない |
 | R6 | `global_complete_R` | 全体Plan | 全planning Target（このExportでは43）がcompleted、未解決Conflict 0、`resource_conflict` による脱落0、Trace Replay成功 | Issue #154のacceptance（計算時間・memoryを除く） | Production runtimeとしての許容、別Exportへの一般化 |
 
 - R5の条件(1)はK0でも省略しない（support集合が空になるのは条件(2)(3)だけである）
@@ -414,15 +422,31 @@ policyを事前登録する（§9.2）。X4 / X5は、X3の集合評価が成立
 | --- | --- |
 | 入力 | Export（`cc35fb5b…`）、Phase B RESULT（`d79ea0de…`）、raw（`f8c16d9f…`）、found_R unit record 11件（RESULT `sources.unitRecords` のSHA-256と一致するものだけ）、対応するunit task |
 | R: 再delivery | 各found unitについて、記録済みtask（context、extent、開始時ladder state、excluded Route key）からExportだけでSearch入力を再導出し、`visitPlannerAlternativeCandidates()` を記録済みdelivery indexまで実行して `createPlannerAlternativeMaterializer()` でmaterializeする。`candidateStableKey()`・generated Entry ID・`route.operations` が記録とbyte一致しなければfail closed。Routeから直接BuildListEntryを組み立てない |
-| S: 単体parity | 各 `G_i` についてPhase Bと同じtrial（`-O_i + G_i`、`conflictResolutions = []`、fixed constraint `[]`、`researchMaxPlanSteps = 20000`）を実行し、記録済みsummary（plan有無、termination、completed、step数、selected件数、Conflict件数、`G` のcommitmentと勝者）と一致することを確認する。同時に、記録に無かったselected Entry ID全体とConflict詳細（kind、resource identity、participant、暫定帰結）を記録する |
+| S: 単体parity | 各 `G_i` についてPhase Bと同じtrial（`-O_i + G_i`、`conflictResolutions = []`、fixed constraint `[]`、`researchMaxPlanSteps = 20000`）を実行し、記録済みsummary（plan有無、termination、completed、step数、selected件数、Conflict件数、`G` のcommitmentと勝者）と一致することを確認する（`evaluatedAgainst = baseline`。R5は判定しない）。同時に、記録に無かったselected Entry ID全体とConflict詳細（kind、resource identity、participant、暫定帰結）を記録する |
 | P: pairwise | 55組 `{i, j}` について `-O_i -O_j + G_i + G_j` を1 runで評価し、各 `G` のselected、`G_i` と `G_j` の同時participant Conflict、completed / Conflictのbaseline差分を記録する（診断） |
-| A: 集合 | 事前登録した集合だけを評価し、各集合をR5の5条件（§4.3）で判定する。(a) 11件全部、(b) 単体で `G` securedだった4件（t01 / t07 / t08 / t09）、(c) 決定的規則による単調合成: Target ID昇順に、受理済み集合 + 1件の置換集合を1 runで評価し、**その集合全体がR5を満たす**（追加した `G` だけでなく、受理済みの全 `G` のselected、全Candidateの `requiresSupport` のselected、support依存の有効性、resource / Conflict条件、Plan + Trace Replayを再確認する）ときだけ受理する。満たさなければ追加した1件だけを不受理とし、受理済み集合は戻さない。最初の受理は、S（単体run）がR5を満たす最初のCandidate。(c)のrun数は高々11 |
+| A: 集合 | 事前登録した集合だけを評価し、各集合をR5の5条件（§4.3）で判定する。(a) 11件全部、(b) 単体で `G` securedだった4件（t01 / t07 / t08 / t09）、(c) 決定的規則による単調合成: 空の受理済み集合から始め、Target ID昇順に、受理済み集合 + 1件の置換集合を `replacement_set` として1 runで評価し、**その集合全体がR5を満たす**（追加した `G` だけでなく、受理済みの全 `G` のselected、全Candidateの `requiresSupport` のselected、support依存の有効性、resource / Conflict条件、Plan + Trace Replayを再確認する）ときだけ受理する。満たさなければ追加した1件だけを不受理とし、受理済み集合は戻さない。最初のCandidateも例外にせず、singleton集合として同じR5条件で評価する（手順は表の下）。(c)のrun数は候補ごとに1回の11回 |
 | support依存 | D1のCandidateのうちsupportを持つのは `t09`（K1 rank 10、support `820831d0`）だけで、他10件はK0（support集合が空）。`820831d0` はE1外のEntryなのでD1の集合で置換されることは無いが、各runでselectedかどうかを確認し、§5.2の有効性（同じEntry ID・同じRoute、reservation再導出が `reservationDigest` と一致）を検査する。support Entryが置換・除外された集合では `t09` を `support_expired_R` とし、置換後Routeが前提を満たすとは扱わない |
 | authority | 判定はordinary full Planner run（`createProductionPlanWithObserver()`）+ Trace Replayだけ。置換は9.2.18の部品、preflightは9.2.3.1。support / `G` のresolution、lineage、`selectedBuildListEntryId` を作らない（G1）。`t09` のsupport `820831d0` は通常Entryのまま |
 | decision案 | `D1_INVALID`（再delivery / parity不一致、入力hash不一致、resolution 0件違反）→ `D1_INCOMPLETE`（登録runにunmeasured）→ `D1_FOUND_R_SET_COEXISTS`（(a)がR5を満たす: 11件すべての `G` がselected、`t09` のsupport `820831d0` がselected、support依存が有効、participantに「11件の `G` ∪ `820831d0`」の要素を2件以上含むConflictが無い、Plan + Trace Replay成功）→ `D1_FOUND_R_SET_PARTIAL`（(a)はR5を満たさないが、(b)または(c)で2件以上の置換集合がR5を満たした）→ `D1_FOUND_R_SET_NOT_COEXISTENT`（それ以外） |
 | 併記 | 各runのcompleted / 43、Conflict件数、baseline（20 / 21）との差、`target_regressed_R`、各 `G` のR3、support selected、R5の5条件ごとの成否。(a)で `G` がselectedだった件数は診断として記録するが、R5を満たした部分集合の件数とは別fieldにし、PARTIALの判定に使わない |
 | envelope案 | 再deliveryはunitごと60分（Phase Bと同じ）、full runごと30分、child heap 12,288 MB、concurrency 1、retry / fallbackなし |
-| 計測量の見積もり | 再delivery: Phase Bのfound unit wall合計約487 s（trial込み）。full run: S 11 + P 55 + A 高々13 = 約79回。Phase Bのfull run実績7〜25 s / 回から約10〜35分。全体で約1時間程度（見積もりであり、事前登録値ではない） |
+| 計測量の見積もり | 再delivery: Phase Bのfound unit wall合計約487 s（trial込み）。full run: S 11 + P 55 + A 13（(a) 1 + (b) 1 + (c) 11）= 79回。Sと(c)のsingleton runは入力が同じになり得るが、目的と評価コンテキストが異なる別runとして数え、Sの結果を(c)で流用しない。Phase Bのfull run実績7〜25 s / 回から約10〜35分。全体で約1時間程度（見積もりであり、事前登録値ではない） |
+
+集合(c)の手順（案）:
+
+```text
+accepted = []
+for candidate in Target ID昇順:
+    proposed = accepted + [candidate]
+    proposedを evaluatedAgainst = replacement_set として1 runで評価する（proposedがsingletonでも同じ）
+    proposed全体がR5の5条件を満たす -> accepted = proposed
+    それ以外                         -> candidateだけ不受理、acceptedは維持
+```
+
+- SとA(c)は役割が異なる。SはPhase Bとの単体parityを確かめる診断（`evaluatedAgainst = baseline`）で、R5を判定しない。A(c)は候補集合を
+  構成するための集合評価（`evaluatedAgainst = replacement_set`）で、singletonでも明示的に評価・記録したrunでR5を判定する
+- singletonの受理は、その1件の `G` と前提supportが同じrunで成立したことを示すだけで、複数Target間の共存を示さない。共存の主張は2件以上の
+  受理済み集合についてだけ行う（decisionの `PARTIAL` も2件以上の集合を要求する）
 
 言えること・言えないこと:
 
