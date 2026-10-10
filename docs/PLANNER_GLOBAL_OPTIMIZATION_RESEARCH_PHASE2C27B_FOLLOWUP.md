@@ -216,23 +216,46 @@ Research写像ではfixed Route集合がspeculative support（K0では空）に�
 次Phaseで使わない**ことを推奨する。比較可能性のために、次Phaseでも同じ規則で計算した値を診断fieldとして記録するのは構わない
 （その場合もliteralは `found_R` のまま、意味はPhase A §6.4のまま）。
 
-### 4.3 区別すべき段階（Research-only typed outcomeの提案）
+### 4.3 区別すべき評価項目（Research-only typed outcomeの提案）
 
-Productionの `found` と混同しないよう、すべて `_R` で終わるResearch-only literalとする。下の段階ほど強い。各段階は「何に対して評価したか」
-（`evaluatedAgainst`）を必ず持つ。`baseline` はbaseline PlannerInputへ1 Targetの置換だけを入れた評価、`replacement_set` は複数Targetの置換集合を
-同時に入れた評価である。
+Productionの `found` と混同しないよう、すべて `_R` で終わるResearch-only literalとする。R0〜R6は **一本道の強さのレベルではなく、
+依存関係を持つ別々の評価項目** である。各項目は「何に対して評価したか」（`evaluatedAgainst`）を必ず持つ。`baseline` はbaseline PlannerInputへ
+1 Targetの置換だけを入れた評価、`replacement_set` は複数Targetの置換集合を同時に入れた評価である。
 
-| 段階 | literal案 | 成立条件 | 示すこと | 示さないこと |
-| --- | --- | --- | --- | --- |
-| R0 | `candidate_delivered_R` | Planner Alternative SearchがIdeal Candidateをdeliverし、reservation checkが通る | Search上の存在 | materialize可能性、Planner上の実行可能性 |
-| R1 | `candidate_admissible_R` | materializer成功（`reusedExisting` でない）、9.2.18 replacement、preflight `ready`、full Planner run + Trace Replay成功（`plan !== null`） | Candidate単体がIdeal Routeとして既存Planner authorityで実行可能 | `G` の採用、他Targetとの共存 |
-| R2 | `support_consistent_R` | R1かつ、reservationの前提となるsupport Entryがすべてselected、`G` とsupportの同時participant Conflictなし。K0では `support_vacuous` として区別する | supportの前提が評価対象のrunで実際に成立した | supportがGlobalに残ること |
-| R3 | `generated_selected_R` | R1かつ `G` がselected | 評価対象のrunで `G` が暫定帰結に負けなかった | 評価対象run外での共存 |
-| R4 | `joint_selected_R` | R2かつR3（`G` とsupport Entryが同時selected） | Candidateとその前提が同じrunで同時に成立した | 他TargetのCandidateとの共存 |
-| R5 | `set_coexistent_R` | `evaluatedAgainst = replacement_set` で、集合内のすべての `G` とそのsupportが同時selected、集合内の2件以上を同時participantとするConflictなし、Trace Replay成功 | 置換集合としての共存 | 集合外Targetの完成、Conflict 0 |
-| R6 | `global_complete_R` | 全planning Target（このExportでは43）がcompleted、未解決Conflict 0、`resource_conflict` による脱落0、Trace Replay成功 | Issue #154のacceptance（計算時間・memoryを除く） | Production runtimeとしての許容、別Exportへの一般化 |
+```text
+R0  Candidate delivery
+ |
+R1  materialization / replacement / preflight / Plan生成 + Trace Replay成立
+ |\
+ | \
+R2  R3        R2: supportの前提が成立（Gのselectedは問わない）
+ |   |        R3: G自身がselected（supportは問わない）
+ +---+
+   |
+  R4  R2 かつ R3（同じrunで）
 
-- Phase Bの `found_R` は概ね「R1かつ（R2の条件2・3）かつ条件4」に当たり、R3 / R4より弱い（条件4がR3を要求しない）。Phase Bの記録に
+R5  置換集合全体（evaluatedAgainst = replacement_set）について、集合内のすべてのGと
+    それぞれが前提とするsupportの同時成立・support依存の有効性・resource整合を評価
+R6  全planning Targetの完成、未解決Conflict 0、resource_conflict脱落0、Trace Replay成功
+```
+
+- R2とR3は互いに独立な観測である。R3（`G` selected）からR2（supportの前提成立）は導けず、R2からR3も導けない（Phase Bの `t09` K1 rank 2〜8は
+  R3相当でR2不成立、K0のdropped 7件は条件2・3が空でR3不成立）
+- R5 / R6は評価対象が単体Candidateではなく置換集合 / 全体Planなので、R4を一段強くしたものではない。単体のR1〜R4は `evaluatedAgainst = baseline`
+  でも記録できるが、R5は `replacement_set` だけ、R6は全体Planだけで判定する
+
+| 項目 | literal案 | 評価対象 | 成立条件 | 示すこと | 示さないこと |
+| --- | --- | --- | --- | --- | --- |
+| R0 | `candidate_delivered_R` | Candidate | Planner Alternative SearchがIdeal Candidateをdeliverし、reservation checkが通る | Search上の存在 | materialize可能性、Planner上の扱い |
+| R1 | `candidate_admissible_R` | Candidate（`baseline` / `replacement_set`） | materializer成功（`reusedExisting` でない）、9.2.18 replacement、preflight `ready`、Candidateを含むPlanner入力でfull Planner runのPlanが存在（`plan !== null`）しTrace Replay成功 | Candidateのmaterialization・replacement・preflightが成立し、Candidateを含むPlanner入力についてPlan生成とTrace Replayが成功したこと | `G` 自身のselected、`G` のRouteがそのPlanで実際に実行されること、supportとの共存、Global共存 |
+| R2 | `support_consistent_R` | Candidate + support | R1かつ、reservationの前提となるsupport Entryがすべてselected、`G` とsupportの同時participant Conflictなし。K0では `support_vacuous` として区別する | supportの前提が評価対象のrunで実際に成立した | `G` 自身のselected、supportがGlobalに残ること |
+| R3 | `generated_selected_R` | Candidate | R1かつ `G` がselected | 評価対象のrunで `G` が暫定帰結に負けなかった | supportの前提成立、評価対象run外での共存 |
+| R4 | `joint_selected_R` | Candidate + support | R2かつR3（`G` とsupport Entryが同じrunで同時selected） | Candidateとその前提が同じrunで同時に成立した | 他TargetのCandidateとの共存 |
+| R5 | `set_coexistent_R` | 置換集合（`replacement_set` のみ） | 次の5条件をすべて満たす。(1) 集合内のすべての `G` がselected、(2) 各Candidateの `requiresSupport` のEntryが評価runでselected（K0は空集合）、(3) support依存が有効（§5.2。失効・不整合なし）、(4) participantに「集合内の `G` ∪ それらが前提とするsupport」の要素を2件以上含むConflictが無い、(5) Planが存在しTrace Replay成功 | 置換集合としての共存（Candidateとその前提supportを含む） | 集合外Targetの完成、Conflict 0 |
+| R6 | `global_complete_R` | 全体Plan | 全planning Target（このExportでは43）がcompleted、未解決Conflict 0、`resource_conflict` による脱落0、Trace Replay成功 | Issue #154のacceptance（計算時間・memoryを除く） | Production runtimeとしての許容、別Exportへの一般化 |
+
+- R5の条件(1)はK0でも省略しない（support集合が空になるのは条件(2)(3)だけである）
+- Phase Bの `found_R` は「R1かつ（R2の条件）かつ条件4」に当たる。条件4はR3を要求しないので、`found_R` はR3もR4も含意しない。Phase Bの記録に
   R0〜R6を遡って付与しない
 - R2の「supportがselectedでない」は、そのrunでsupportが暫定帰結に負けたことを示すだけで、supportと `G` の資源両立不能を示さない（§5.2）
 - R3 / R4を `evaluatedAgainst = baseline` で満たしても、R5の証拠にはならない。baselineの暫定帰結は、他Targetを置換すると変わる
@@ -266,12 +289,18 @@ ConditionalCandidate_R（Research-only、概念名）
   generatedEntryId       決定的ID（materializer出力）
   requiresSupport        support Entry ID集合（K0では空）
   reservationDigest      reservationの導出元を照合するため
-  evidence               R0〜R4の段階（evaluatedAgainst付き）、baseline差分、target_regressed_R等
+  evidence               R0〜R4の各評価項目の成否（evaluatedAgainst付き）、baseline差分、target_regressed_R等
 ```
 
 - `requiresSupport` は「このCandidateはこれらのEntryのRouteが実行される前提でSearchされた」という **依存関係の記録** であり、resolutionではない
-- Global評価（§6）で `requiresSupport` のEntryが別Routeへ置換された、または集合から外れた場合、そのCandidateは失効（`support_expired_R`）
-  とし、新しいsupport集合からreservationを導出し直してSearchし直す（自動で別support上の結果として読み替えない）
+- **support依存の有効性**: 評価runのEntry集合に、`requiresSupport` の各Entryが **同じEntry ID・Searchに使ったRouteのまま**（そのEntryから
+  `derivePlannerAlternativeReservation()` で再導出したreservationが `reservationDigest` と一致する）含まれていることを、有効の条件とする
+- Global評価（§6）で `requiresSupport` のEntryのTargetが別の `G` へ置換された、またはEntryが評価集合から外れた場合、そのCandidateは失効
+  （`support_expired_R`）とし、その集合ではR5を満たさない。新しいsupport集合からreservationを導出し直してSearchし直す（自動で別support上の結果として
+  読み替えない）
+- support Entryの現在Routeが別の `G` へ置換されたとき、置換後の `G` が元のsupport Routeの前提（Counter進行・OwnedWeapon使用）を満たすとは扱わない。
+  新しいRouteをsupportとする仕組みはalternative-to-alternative supportとして今後の設計対象であり（§6.3 / §10）、それまでは未定義の依存を
+  成立扱いしない
 - support Entryがbaselineで非selectedであることは、contextの優先順位づけ（どのcontextを先に試すか）の材料には使ってよいが、contextや
   Candidateをcloseする理由にはしない。closeしてよいのは既存typed outcome（`not_found_within_search_extent`）だけである
 
@@ -289,13 +318,15 @@ G1の対象である。導出規則とその上限は事前登録する（§9.2�
 
 ```text
 1. 発見      Target × support context × extentでSearchし、R0 Candidateを得る
-2. 単体評価  R1（materialize、replacement、preflight、full Planner run + Trace Replay）。support contextではR2を記録
-3. 候補集合  R1以上のCandidateをConditionalCandidate_Rとして保持（Targetあたり上限あり）
-4. 集合評価  候補集合から各Target高々1件を選んだ置換集合を作り、full Planner run + Trace ReplayでR5を判定
-5. 採用      最終の置換集合をordinary full Planner + Trace Replayで評価し、R6（または到達できた段階）を記録
+2. 単体評価  R1（materialize、replacement、preflight、Plan生成 + Trace Replay）。R2 / R3 / R4は別の観測として記録する
+3. 候補集合  R1を満たすCandidateをConditionalCandidate_Rとして保持する（admission。Targetあたり上限あり）
+4. 集合評価  候補集合から各Target高々1件を選んだ置換集合を作り、full Planner run + Trace ReplayでR5（G、support、support依存、resource整合）を判定
+5. 採用      最終の置換集合をordinary full Planner + Trace Replayで評価し、R6（または成立した評価項目）を記録
 ```
 
-この5段階は本書の検討仮説であり、確定した正式仕様ではない。
+この5段階は本書の検討仮説であり、確定した正式仕様ではない。**admission（段階3）と採用（段階4・5）を分ける**。R1は候補を保持するための
+最低限の構造・計算上の確認であり、`G` 自身のselected（R3）、`G` とsupportの同時成立（R4）、置換集合としての共存（R5）のいずれも示さない。
+Global Planへの採用の根拠になるのはR5 / R6だけである。
 
 ### 6.2 メリット
 
@@ -314,7 +345,7 @@ G1の対象である。導出規則とその上限は事前登録する（§9.2�
 | 組合せ数 | 43 Target × Targetあたりk件の候補で、置換集合は最大 (k+1)^43。全列挙は不可能。full Planner run 1回約10 sでも、集合評価は単調合成（9.2.19.8.1型）、Conflict graphに沿った局所探索など、有界な手順に限る必要がある |
 | 条件づけの連鎖 | support上で見つかったCandidateは、supportが置換されると失効する。alternative Routeがさらに別Targetのsupportになる（alternative-to-alternative）と依存がDAG化し、失効の伝播と循環防止（9.2.19.10と同種）が必要になる |
 | 発見の停止 | `found_R` で止めないなら、Targetごとの発見をいつ止めるかを別に決める必要がある。deterministicなSearch work unitは存在しない（Phase A §7.5）ので、delivered件数・context件数・rungなどのsemanticな上限で表し、wall-clockはenvelopeとしてだけ使う |
-| baseline依存の残存 | 単体評価（R1〜R4）は依然baseline-relativeで、候補集合へのadmissionをbaselineの暫定帰結に依存させると、§4.2の問題が形を変えて残る。admission条件はR1までにし、R3 / R4は優先順位づけに使うのが安全 |
+| baseline依存の残存 | 単体評価（R1〜R4）は依然baseline-relativeで、候補集合へのadmissionをbaselineの暫定帰結に依存させると、§4.2の問題が形を変えて残る。admission条件はR1（Plan生成とTrace Replayの成立という構造・計算上の確認）までにする。R3（`G` 自身のselected）とR4（`G` とsupportの同時selected）は別の観測として記録し、集合評価の試行順など優先順位づけにだけ使う。採用はR5（置換集合としての共存）/ R6で判定し、R1 admissionを採用と混同しない |
 | 置換のcardinality | 9.2.18 / Build List cardinalityにより、1回のrunで1 Targetにtemporary Entryは高々1件（`-O + G`）。候補集合はPlannerInputの外に保持し、runごとに各Target高々1件だけを入れる |
 | Plan長 | Phase 0 prototypeは7,330 steps。集合評価でもResearch `maxPlanSteps = 20000` を使うことになり、Production A / B（Phase A §1）とは別物である |
 | Production semantics | 自動で複数Routeを置換する集合評価は、REQUIREMENTS 23「明示的な選択が無い競合については自動で再検索を行わない」と両立しない。Research限定であり、Production化には契約変更が先に必要（§10） |
@@ -377,6 +408,7 @@ policyを事前登録する（§9.2）。X4 / X5は、X3の集合評価が成立
 
 位置づけ: **診断** であり、新しいoracle-free formal executionではない。context・extent・Candidateを新しく選ばず、Phase Bが停止した11 Candidateだけを
 使う。結果はPhase BのRESULT・decision・classを変更しない。oracle（RESULT、manifest、module）は読まない（post-hocでも読まない）。
+本節はD1の事前登録 **案** であり、本書でformal policyとして確定しない。実装前に決める事項は§11に残す。
 
 | 項目 | 案 |
 | --- | --- |
@@ -384,17 +416,22 @@ policyを事前登録する（§9.2）。X4 / X5は、X3の集合評価が成立
 | R: 再delivery | 各found unitについて、記録済みtask（context、extent、開始時ladder state、excluded Route key）からExportだけでSearch入力を再導出し、`visitPlannerAlternativeCandidates()` を記録済みdelivery indexまで実行して `createPlannerAlternativeMaterializer()` でmaterializeする。`candidateStableKey()`・generated Entry ID・`route.operations` が記録とbyte一致しなければfail closed。Routeから直接BuildListEntryを組み立てない |
 | S: 単体parity | 各 `G_i` についてPhase Bと同じtrial（`-O_i + G_i`、`conflictResolutions = []`、fixed constraint `[]`、`researchMaxPlanSteps = 20000`）を実行し、記録済みsummary（plan有無、termination、completed、step数、selected件数、Conflict件数、`G` のcommitmentと勝者）と一致することを確認する。同時に、記録に無かったselected Entry ID全体とConflict詳細（kind、resource identity、participant、暫定帰結）を記録する |
 | P: pairwise | 55組 `{i, j}` について `-O_i -O_j + G_i + G_j` を1 runで評価し、各 `G` のselected、`G_i` と `G_j` の同時participant Conflict、completed / Conflictのbaseline差分を記録する（診断） |
-| A: 集合 | 事前登録した集合だけを評価する。(a) 11件全部、(b) 単体で `G` securedだった4件（t01 / t07 / t08 / t09）、(c) Pの結果から決定的規則（Target ID昇順の単調合成: 受理済み集合 + 1件のrunで全 `G` selectedかつ集合内Conflict無しなら受理）で作った集合。(c)のrun数は高々11 |
+| A: 集合 | 事前登録した集合だけを評価し、各集合をR5の5条件（§4.3）で判定する。(a) 11件全部、(b) 単体で `G` securedだった4件（t01 / t07 / t08 / t09）、(c) 決定的規則による単調合成: Target ID昇順に、受理済み集合 + 1件の置換集合を1 runで評価し、**その集合全体がR5を満たす**（追加した `G` だけでなく、受理済みの全 `G` のselected、全Candidateの `requiresSupport` のselected、support依存の有効性、resource / Conflict条件、Plan + Trace Replayを再確認する）ときだけ受理する。満たさなければ追加した1件だけを不受理とし、受理済み集合は戻さない。最初の受理は、S（単体run）がR5を満たす最初のCandidate。(c)のrun数は高々11 |
+| support依存 | D1のCandidateのうちsupportを持つのは `t09`（K1 rank 10、support `820831d0`）だけで、他10件はK0（support集合が空）。`820831d0` はE1外のEntryなのでD1の集合で置換されることは無いが、各runでselectedかどうかを確認し、§5.2の有効性（同じEntry ID・同じRoute、reservation再導出が `reservationDigest` と一致）を検査する。support Entryが置換・除外された集合では `t09` を `support_expired_R` とし、置換後Routeが前提を満たすとは扱わない |
 | authority | 判定はordinary full Planner run（`createProductionPlanWithObserver()`）+ Trace Replayだけ。置換は9.2.18の部品、preflightは9.2.3.1。support / `G` のresolution、lineage、`selectedBuildListEntryId` を作らない（G1）。`t09` のsupport `820831d0` は通常Entryのまま |
-| decision案 | `D1_INVALID`（再delivery / parity不一致、入力hash不一致、resolution 0件違反）→ `D1_INCOMPLETE`（登録runにunmeasured）→ `D1_FOUND_R_SET_COEXISTS`（(a)で11件すべての `G` がselected、集合内2件以上の同時participant Conflict無し、Trace Replay成功）→ `D1_FOUND_R_SET_PARTIAL`（(a)でselected 1〜10件、または(c)が2件以上）→ `D1_FOUND_R_SET_NOT_COEXISTENT`（それ以外） |
-| 併記 | 各runのcompleted / 43、Conflict件数、baseline（20 / 21）との差、`target_regressed_R`、R3 / R5の該当 |
+| decision案 | `D1_INVALID`（再delivery / parity不一致、入力hash不一致、resolution 0件違反）→ `D1_INCOMPLETE`（登録runにunmeasured）→ `D1_FOUND_R_SET_COEXISTS`（(a)がR5を満たす: 11件すべての `G` がselected、`t09` のsupport `820831d0` がselected、support依存が有効、participantに「11件の `G` ∪ `820831d0`」の要素を2件以上含むConflictが無い、Plan + Trace Replay成功）→ `D1_FOUND_R_SET_PARTIAL`（(a)はR5を満たさないが、(b)または(c)で2件以上の置換集合がR5を満たした）→ `D1_FOUND_R_SET_NOT_COEXISTENT`（それ以外） |
+| 併記 | 各runのcompleted / 43、Conflict件数、baseline（20 / 21）との差、`target_regressed_R`、各 `G` のR3、support selected、R5の5条件ごとの成否。(a)で `G` がselectedだった件数は診断として記録するが、R5を満たした部分集合の件数とは別fieldにし、PARTIALの判定に使わない |
 | envelope案 | 再deliveryはunitごと60分（Phase Bと同じ）、full runごと30分、child heap 12,288 MB、concurrency 1、retry / fallbackなし |
 | 計測量の見積もり | 再delivery: Phase Bのfound unit wall合計約487 s（trial込み）。full run: S 11 + P 55 + A 高々13 = 約79回。Phase Bのfull run実績7〜25 s / 回から約10〜35分。全体で約1時間程度（見積もりであり、事前登録値ではない） |
 
 言えること・言えないこと:
 
-- `D1_FOUND_R_SET_COEXISTS` でも、言えるのは「Phase Bで止めた11 Candidateが、他32 Targetを元Routeのまま置いた状態で集合として共存した」ことまでで、
-  43 / 43、Conflict 0、Issue #154のacceptanceは言えない（E1以外のTargetは元Routeのまま）
+- `D1_FOUND_R_SET_COEXISTS` でも、言えるのは「Phase Bで止めた11 Candidateが、`t09` の前提supportを含めて、他32 Targetを元Routeのまま置いた状態で
+  集合としてR5を満たした」ことまでで、43 / 43、Conflict 0、Issue #154のacceptanceは言えない（E1以外のTargetは元Routeのまま）
+- `D1_FOUND_R_SET_PARTIAL` で言えるのは、評価した(b) / (c)の集合のうちR5を満たしたものがあることと、その件数までである。評価していない部分集合や、
+  (a)で `G` だけがselectedになった件数を共存部分集合として数えない
+- supportが外れた・失効した集合で `G` だけがselectedでも、共存とは判定しない。alternative-to-alternative supportはD1で定義しないので、置換後の
+  Routeがsupportの前提を満たすことも主張しない
 - `D1_FOUND_R_SET_NOT_COEXISTENT` は、Target単体の `found_R` で止める方式がGlobal共存の候補選択として不十分であることの直接evidenceになる。
   ただし、oracle-free policyが存在しないことは言えない
 - Pの勝者 / participantは、§5.3の阻害Entry由来support導出（D2）の入力設計に使えるが、D1の中で新しいSearchは行わない
@@ -433,6 +470,7 @@ K0早期停止を回避するpolicy候補ごとの計測量の見積もり（Pha
 | G15 | 候補集合はPlannerInputの外に保持し、1 runでは各Target高々1件の置換（`-O + G`）だけを入れる |
 | G16 | D1はPhase B evidenceの診断であり、Phase BのRESULT・decision・classを変更しない。D1の結果をPhase Bのdecision inputへ戻さない |
 | G17 | Research集合評価で選んだRouteを、user-fixed Route、resolution、lineage、`selectedBuildListEntryId` として記録しない |
+| G18 | 集合の共存（R5）は、`G` のselectedだけでなく、前提supportのselectedとsupport依存の有効性まで確認して判定する。置換・失効したsupportの前提を、置換後のRouteが満たすと推測しない |
 
 ## 10. Phase 2-C2.8 / Production復帰の前提条件
 
@@ -467,6 +505,9 @@ Production復帰の前提（Phase A §10.3の再確認と追加）:
 1. D1を次Phaseとして実施するか、その名称（本書では仮に「D1」。Phase A §10.2の「2-C2.7-C」はProduction compatible architecture設計を指すので、
    名称を混同しない）
 2. D1の集合(c)の構成規則（Target ID昇順の単調合成で良いか、別の決定的順序にするか）と、decision名
+   - R5の条件(4)のConflict範囲（participantに「集合内の `G` ∪ 前提support」の要素を2件以上含むもの、で十分か）と、support依存の有効性を
+     どう検査するか（Entry ID・Route同一性の照合方法、reservation再導出の位置づけ）
+   - PARTIALの閾値（R5を満たす置換集合の最小件数を2とするか）
 3. R0〜R6のliteral名、`evaluatedAgainst` の値、`target_regressed_R` の扱い（候補集合から自動除外するか、記録だけにするか）
 4. 候補集合へのadmission条件をR1にするか、R3（`G` selected）まで要求するか
 5. Targetあたりの候補上限、発見の上限（delivered件数 / context件数 / rung）の値
