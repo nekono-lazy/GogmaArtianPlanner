@@ -344,3 +344,137 @@ runner差を除くため、テスト本体量（`tests`、全worker合計）を�
 2. **CI job分割 / shard**：Phase 1の9章の計画どおり。Node化の効果はenvironment / setupの削減に限られ、残るwall-clockの大半はテスト本体（Planner parity / regression、MUI UIテスト）なので、5分以内にはjob並列化が必要。
 3. **余裕の小さいテストの確認**：11.6の `planner.worker.production.test.ts` はshard化やworker数変更で負荷配分が変わると顕在化し得るため、Phase 2-Bで実行時間の内訳を確認する（timeout引き上げではなく、テストが行う計算量の確認）。
 4. 監査には今回のカバレッジ比較（両環境で同じファイルを実行し、`coverage-final.json` の到達集合を比較、同一環境の再実行による揺らぎと区別する）が有効だった。
+
+## 12. Phase 2-B：CI job並列化とVitest shard分割
+
+基準は `origin/main` `3ffd378`（PR #221 反映後）。テスト構成（`node` / `jsdom` の2 project、テストコード、timeout、retry、`isolate`）は変更せず、`.github/workflows/ci.yml` だけを変えてPR CIのwall-clockを短縮した。`deploy.yml`（mainへのpush時のPages deploy）は対象外で、無変更。
+
+### 12.1 採用した構成
+
+| job id | チェック名 | 内容 |
+| --- | --- | --- |
+| `static-checks` | `Lint / NUL / Build` | `npm ci` → lint → NUL check → build → `dist/licenses.md` の確認（変更前の `verify` job からTest以外をそのまま移した） |
+| `test`（matrix `shard: [1, 2, 3]`、`fail-fast: false`） | `Test (shard i/3)` | `npm ci` → `npm test -- --shard=i/3`（分母は `strategy.job-total`。matrixの次元はshardだけなので、shard数とmatrixは常に一致する） |
+| `verify`（`needs: [static-checks, test]`、`if: always()`） | `Lint / Test / Build` | `toJSON(needs)` の全jobの `result` を表示し、すべて `success` のときだけ成功する |
+
+- `static-checks` と3つの `test` jobは並列に走り、`verify` は全jobの終了後に走る。
+- ローカルの `npm test` は無変更（全テストを実行）。特定shardだけをローカルで実行する場合は `npm test -- --shard=1/3`。npm scriptは追加していない。
+- 追加したscript・テストはない。shardの完全性は12.3の方法で確認した（Vitestのshardは構成上の分割なので、CIに常設の検査は置いていない）。
+
+#### required checkとの互換性
+
+- mainのRuleset「Protect main branch」は required status check として `Lint / Test / Build`（GitHub Actions、strict）を要求している（`gh api repos/{owner}/{repo}/rules/branches/main` で確認）。
+- そのため変更前のjob id `verify` とチェック名 `Lint / Test / Build` を、全jobを集約する最終判定jobとして残した。GitHub側の設定変更は不要。新しいjob（`Lint / NUL / Build`、`Test (shard i/3)`）はrequiredにしていない。
+- GitHubはskipされたrequired checkを成功扱いにするため、`verify` は `if: always()` で依存jobの失敗・cancel・skip時にも必ず実行し、`result == "success"` 以外（`failure` / `cancelled` / `skipped`）を失敗にする。
+- matrix jobの `needs.test.result` は、1つでも失敗したshardがあれば `failure` になる。実地で確認した：一時commit `a5602c6`（shard 2/2 だけ `exit 1` する一時step。次のcommit `78bdb30` で取り消し済み）のrun `38044138198` で、`Test (shard 2/2)` failure → `verify` のログ `test: failure` → `Lint / Test / Build` failure、workflow全体もfailure。`fail-fast: false` によりshard 1/2は最後まで実行され（181 passed）、`verify` は全job終了後に判定した。
+- `continue-on-error`、retry、`passWithNoTests`、timeout延長、テスト除外はどこにも使っていない。
+
+### 12.2 Vitest 4.1.11 のshardの仕組み（実装を確認）
+
+`node_modules/vitest/dist/chunks/coverage.*.js` の `BaseSequencer.shard()` と `cli-api.*.js` の `executeTests()` を読んだ。
+
+- 全projectのテストファイル（spec）を、root相対パスのSHA-1ハッシュでソートし、ファイル数で均等にスライスする（`calculateShardRange()`、余りは前のshardへ1件ずつ）。分割単位はファイルで、所要時間は考慮しない。
+- spec一覧は `node` / `jsdom` 両projectを合わせたものなので、projectの分類はshard後もそのまま保たれる（同じファイルが両projectにある場合も同じshardへ入るが、本repoでは両projectは排他）。
+- 各shardは同じcommit・同じconfigから同じspec一覧を作り、同じ順序でスライスするため、和集合は全体と一致し重複は起きない（構成上の保証）。
+- `vitest list`（collect）も同じ `executeTests()` を通るため `--shard` が効く。一方 `vitest list --filesOnly` はこの経路を通らず `--shard` を無視して全ファイルを返すので、shard検証には使えない。
+- ファイルの追加・削除でスライス境界がずれるため、どのファイルがどのshardへ入るかは時間とともに変わる（完全性は変わらない）。
+
+### 12.3 全テスト実行の確認
+
+**(1) `vitest list --json`（ローカル、`3ffd378`）**
+
+| 構成 | shard別ファイル（node / jsdom） | shard別テスト | 和集合 |
+| --- | --- | --- | --- |
+| 全体 | 360（201 / 159） | 6049 | — |
+| 2 shard | 181（100 / 81）、179（101 / 78） | 3140、2909 | 6049件。全体と多重集合（project・ファイル・テスト名）で完全一致。複数shardにまたがるファイル0、欠落0、余分0、project不一致0 |
+| 3 shard | 121（65 / 56）、120（68 / 52）、119（68 / 51） | 2092、1891、2066 | 同上 |
+
+`vitest list` はskipされたテストを含まないため、`describe.skipIf` で全件skipされる `src/research/issue74/normalSeedIdentificationMeasurement.test.ts`（3件）は一覧に出ない。この1ファイルの扱いは(2)の実行結果で確認した。
+
+**(2) 実際のshard実行結果（ローカルとCIで同じ件数）**
+
+| 構成 | shard別 Test Files | shard別 Tests | 合計 |
+| --- | --- | --- | --- |
+| 2 shard | 181 passed ／ 179 passed・1 skipped | 3140 passed ／ 2909 passed・3 skipped | 361ファイル（360 passed / 1 skipped）、6052件（6049 passed / 3 skipped） |
+| 3 shard | 121 passed ／ 120 passed ／ 119 passed・1 skipped | 2092 passed ／ 1891 passed ／ 2066 passed・3 skipped | 同上 |
+
+- 合計は単一実行（`npm test`：360 passed / 1 skipped（361）、6049 passed / 3 skipped（6052））と一致する。skipファイルはちょうど1つのshardに入る。
+- 12.5のファイル別時間からの割当予測は、Vitestと同じハッシュ・スライスを再現した計算で、実際のshard別ファイル数（181 / 180、121 / 120 / 120）と一致した。
+
+### 12.4 GitHub Actions 実測
+
+時間はGitHub APIのrun / job / stepの時刻。「workflow」はrunの開始（`run_started_at`）から最終更新（`updated_at`）まで。queue待ちは各runで「run開始 → job開始」が1〜3秒、「最後の依存job終了 → `verify` 開始」が約2秒で、ほぼすべてが実行時間である。`tests` は各shard（変更前は単一job）のVitest summaryの全worker合計で、runnerの速さの目安。
+
+**A. 変更前（単一job、現mainと同じテスト構成：PR #221 の3 run）**
+
+| run | workflow | job | test step | Vitest Duration | tests |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 38041635211 | 5分51秒 | 5分48秒 | 4分59秒 | 298.38s | 639.98s |
+| 38039770311 | 7分33秒 | 7分30秒 | 6分31秒 | 389.42s | 846.29s |
+| 38040480174 | 10分0秒 | 9分57秒 | 8分47秒 | 525.53s | 1153.88s |
+
+**B. 2 shard（run `38043808327`、head `44117e3`、attempt 1〜3。2・3回目は計測のためのrerun）**
+
+| 回 | workflow | `Lint / NUL / Build` | shard 1/2 job（test step、Duration / tests） | shard 2/2 job（test step、Duration / tests） | `verify` | job合計 |
+| --- | ---: | ---: | --- | --- | ---: | ---: |
+| 1 | 4分59秒 | 59秒 | 4分51秒（4分23秒、262.42s / 580.23s） | 4分44秒（4分24秒、262.42s / 514.18s） | 3秒 | 10分37秒 |
+| 2 | 4分43秒 | 1分9秒 | 2分39秒（2分27秒、146.15s / 313.57s） | 4分35秒（4分19秒、258.27s / 504.64s） | 2秒 | 8分25秒 |
+| 3 | 5分6秒 | 1分8秒 | 4分56秒（4分38秒、277.55s / 607.90s） | 3分39秒（3分18秒、196.85s / 389.35s） | 4秒 | 9分47秒 |
+
+（1回目の両shardのDurationが同値なのは偶然。開始・終了時刻から各262〜263秒。）
+
+**C. 3 shard（1〜3回目：run `38044466556`、head `b898f53`、attempt 1〜3。2・3回目は計測のためのrerun。4回目：最終head `311e640`（文書のみのcommit）のrun `38046298291`）**
+
+| 回 | workflow | `Lint / NUL / Build` | shard 1/3 job（test step、Duration / tests） | shard 2/3 job | shard 3/3 job | `verify` | job合計 |
+| --- | ---: | ---: | --- | --- | --- | ---: | ---: |
+| 1 | 3分21秒 | 1分14秒 | 2分53秒（2分42秒、160.74s / 350.86s） | 3分14秒（2分58秒、177.57s / 311.90s） | 2分59秒（2分47秒、166.06s / 310.92s） | 3秒 | 10分23秒 |
+| 2 | 3分15秒 | 1分14秒 | 2分8秒（1分57秒、116.29s / 251.29s） | 2分23秒（2分8秒、127.60s / 221.69s） | 3分5秒（2分52秒、171.54s / 324.43s） | 3秒 | 8分53秒 |
+| 3 | 4分2秒 | 1分14秒 | 3分51秒（3分35秒、214.13s / 478.21s） | 3分15秒（3分1秒、180.86s / 319.95s） | 2分19秒（2分4秒、123.96s / 230.93s） | 4秒 | 10分43秒 |
+| 4 | 3分57秒 | 48秒 | 3分48秒（3分33秒、212.58s / 462.44s） | 2分29秒（2分13秒、131.61s / 229.83s） | 2分0秒（1分44秒、102.64s / 193.05s） | 4秒 | 9分9秒 |
+
+**まとめ**
+
+| 構成 | workflow | 中央値 | 変更前中央値比 | job合計の中央値 |
+| --- | --- | ---: | ---: | ---: |
+| A. 単一job | 5分51秒〜10分0秒（3 run） | 7分33秒 | — | 7分30秒 |
+| B. 2 shard + 並列 | 4分43秒〜5分6秒（3 run） | 4分59秒 | 約 −34% | 9分47秒（約 +30%） |
+| C. 3 shard + 並列 | 3分15秒〜4分2秒（4 run） | 3分39秒 | 約 −52% | 9分46秒（約 +30%） |
+
+- **実測**：3 shardは4 runとも5分以内（最長4分2秒）。2 shardは3 run中1回が5分を超えた（5分6秒）。
+- runner差：同じrun内でもjobごとにrunnerの速さが違う（例：3 shard 3回目のshard 1/3は `tests` 478s、shard 3/3は231s）。workflowは最も遅いshardで決まるため、runnerの当たり外れがそのまま効く。各shardの `tests` 合計は2 shard 818〜1094s、3 shard 797〜1029sで、変更前の中央値（846s）と同等以上の遅さのrunnerが多く、今回のサンプルが速いrunnerに偏った比較ではない。ただし各構成3〜4 runで、分布の把握は十分ではない。
+- `Duration / tests` は2 shard 0.45〜0.51、3 shard 0.45〜0.58で、変更前（0.46〜0.47）より小さいshardほど高い。shardあたりのファイル数が減り、起動・transform等の固定分とshard末尾の待ち（tail）の比率が上がったためと推定する。
+- job合計（GitHub Actionsの実行時間の合計）は、変更前より約30〜40%増える。各jobで checkout・setup-node・`npm ci` に約10〜25秒かかり、Vitestのimport / environment等もshardごとに発生するため。2 shardと3 shardでほぼ同じ（中央値 9分47秒 / 9分46秒）。Phase 1の記録どおり、公開repoの標準runner（4 vCPU）で動いている。
+- `Lint / NUL / Build`（48秒〜1分14秒）はどの回もcritical pathではない。`verify` は2〜4秒。
+
+### 12.5 shardの負荷の偏り
+
+変更前3 runのファイル別時間（Vitestの `✓ <file> (<n> tests) <ms>`）に、Vitestと同じハッシュ・スライスを当てはめた予測（テスト本体時間のみ、import / environmentを含まない）：
+
+| 構成 | 最も重いshardのtests割合 | 主な重いファイルの配置 |
+| --- | --- | --- |
+| 2 shard | 約52〜54% | 1/2：`IdentificationWizardDialog.test.tsx`、`plannerSchedulerParity.conflicts` / `.acceptance`。2/2：`plannerSchedulerParity.representative`、`plannerSearchLimitRegression` |
+| 3 shard | 約41〜42%（理想は33%） | 1/3：`IdentificationWizardDialog.test.tsx`、`plannerSchedulerParity.conflicts` / `.acceptance`。2/3：`plannerSchedulerParity.representative`。3/3：`plannerSearchLimitRegression` |
+| 4 shard（参考、CI未実施） | 約28%（理想は25%） | 重いファイルはほぼ1 shardに1件ずつになるが、job数とjob合計が増える |
+
+- 3 shardでは、最も重い4ファイルのうち3つがハッシュの偶然でshard 1/3に集まり、偏りが出ている。CI実測では1・2回目はrunner差の方が大きく表に出ず、3回目は遅いrunnerがshard 1/3に当たって最長（3分51秒）になった。4回目はshard 1/3の `tests` が462s（他の2 shardは230s / 193s、shard 1/3の割合52%）で、偏りそのものが最長（3分48秒）の原因になった。
+- 重いファイルのCI実測（3 shardの4 run）：`IdentificationWizardDialog.test.tsx` 62.6〜134.0s、`plannerSchedulerParity.representative` 62.2〜86.6s、`.conflicts` 38.6〜71.8s、`.acceptance` 37.2〜69.9s、`plannerSearchLimitRegression` 18.4〜32.0s。1ファイルはshard内で1 workerが処理するため、`IdentificationWizardDialog.test.tsx` の時間（遅いrunnerで2分強）はshard数を増やしても下がらない下限になる。
+- **推定**：3 shardの全jobが変更前最遅（`tests` 1154s）級のrunnerに当たった場合、shard 1/3の `tests` は約486s、`Duration / tests` を0.46とすると test step 約3分45秒、workflow 約4分10秒。
+- 独自のテスト割当（所要時間に基づくsequencer）は今回導入していない（12.7）。
+
+### 12.6 flaky / timeout
+
+- CI（2 shard 3 run＋故障注入runのshard 1/2、3 shard 4 run）でtimeout・失敗・retryはない。
+- Phase 2-Aで記録した `src/workers/planner.worker.production.test.ts` の「answers the ordinary and Planner Alternative requests with their result alone」は、CIで1.5〜3.1s（既定timeout 5000ms）。
+- ローカルで `src/pages/TargetWeaponsPage.test.tsx` の「creates priority-3 Target with five Ideal slots and condition editors」が既定5000msでtimeoutした（`|jsdom|`、shard 2/3の実行で5152ms / 5071ms / 5022msの3回）。いずれも同じマシンで元Repositoryの `vitest run`（Issue #154側の作業）が並行していた、または並行していた可能性を否定できない回である（1回目は直後の確認では並行プロセスなし、2・3回目は並行を確認）。前後で並行プロセスがないことを確認した再実行では成功（4265ms）し、単一の `npm test`（並行なし）も成功した。CIでは2.3〜3.5s（2 shard 1回目 2.9s、3 shard 4 run 3.3s / 2.4s / 3.5s / 2.3s）。
+  - このテストはMUIダイアログで多くの入力を行うUIテストで、ローカル（15 worker）では負荷次第で5000msに近づく。shard化はshard内のworker数（CIでは4 vCPUで3 worker）を変えないため、CIでの1テストあたりの負荷は変更前と同じである。
+  - timeoutの引き上げは高速化として認めない方針のため、変更していない。Phase 3のUIテスト高速化の対象候補とする。
+
+### 12.7 5分目標の達成状況と次の改善候補
+
+- **達成状況（実測）**：3 shard構成で4 runとも5分以内（3分15秒 / 3分21秒 / 3分57秒 / 4分2秒、中央値3分39秒、変更前中央値7分33秒から約 −52%）。全テストを毎PR実行し、検出能力は変えていない。ただし各構成3〜4 runのサンプルで、runner差の分布は十分には把握していない。
+- **3 shardを採用した理由**：2 shardは中央値4分59秒で5分の境界にあり、遅いrunnerで5分を超えた。3 shardはjob合計が2 shardとほぼ同じ（中央値 9分46秒 / 9分47秒）で、wall-clockの中央値は約1分20秒短い。構成上の複雑さは同じ（matrixの要素数だけ）。
+- 次の候補：
+  1. **`IdentificationWizardDialog.test.tsx` の高速化**（Phase 1の9章のPhase 3）：shard化後のwall-clockの下限で、偏りの主因。
+  2. **所要時間に基づくshard割当**：Vitestの `sequence.sequencer` を拡張し、重いファイルを分散させる。分割の完全性（全ファイルがちょうど1 shard）を保つ検査と、所要時間データの保守が必要になるため、1の後に効果を見て判断する。
+  3. **4 shard**：予測では最大shardの割合が約28%に下がるが、`IdentificationWizardDialog.test.tsx` の下限と、jobあたりの固定費（約10〜25秒）・job合計の増加があるため、現時点では不要。
+  4. Phase 2-Aの11.7で提案した、jsdomに残る `.test.ts` 100ファイルの監査（environment / setupの削減）。
