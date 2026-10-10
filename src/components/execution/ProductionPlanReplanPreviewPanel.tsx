@@ -212,9 +212,16 @@ function PreviewResult({
           {runningPlan !== null && <PlanComparison runningPlan={runningPlan} previewPlan={plan} />}
           {/* The same read-only view as a persisted Plan (UI_FLOW 11.0), over
               the transient Preview Plan. Its status reads 下書き because the
-              Preview is a draft-equivalent that no runtime has started. */}
-          <ProductionPlanContent plan={plan} targetWeapons={targetWeapons} master={master} debugMode={debugMode} />
-          <PreviewConflicts plan={plan} />
+              Preview is a draft-equivalent that no runtime has started. Its
+              read-only Conflict list takes the same place as the persisted
+              Plan's Conflict section: before the Target routes. */}
+          <ProductionPlanContent
+            plan={plan}
+            targetWeapons={targetWeapons}
+            master={master}
+            debugMode={debugMode}
+            conflictSection={<PreviewConflicts plan={plan} />}
+          />
         </>
       )}
     </Stack>

@@ -32,6 +32,18 @@ export interface ProductionPlanSummary {
    * of the legacy form without `executionEffects` and the count is unknown.
    */
   plannedCompletionTargetCount: number | null
+  /**
+   * The number of persisted `ProductionPlan.conflicts` records. A Conflict
+   * record count - never a Target or weapon count, and never re-derived from
+   * the current input or `rejectedBuildListEntries`.
+   */
+  conflictCount: number
+  /**
+   * The persisted Conflicts whose `selectedBuildListEntryId` names a selected
+   * participant. Only what is stored; it says nothing about the others being
+   * unresolved.
+   */
+  selectedConflictCount: number
   isLegacy: boolean
 }
 
@@ -120,6 +132,10 @@ export function hasPlanTargetCompletionAuthority(plan: ProductionPlan): boolean 
  * twice counts once. Neither `expectedResult.shouldSecure`, the number of
  * completing or reserve Steps, the Target count, nor
  * `selectedBuildListEntryIds.length` is used; a legacy Plan reports `null`.
+ *
+ * `conflictCount` is `plan.conflicts.length` of this exact persisted Plan
+ * (UI_FLOW 11.0): neither recalculated from the current input nor added to
+ * the rejected Entries, and never read as a number of Targets.
  */
 export function createProductionPlanSummary(
   plan: ProductionPlan,
@@ -143,6 +159,10 @@ export function createProductionPlanSummary(
     plannedCompletionTargetCount: hasPlanTargetCompletionAuthority(plan)
       ? completedTargetWeaponIds.size
       : null,
+    conflictCount: plan.conflicts.length,
+    selectedConflictCount: plan.conflicts.filter(
+      ({ selectedBuildListEntryId }) => selectedBuildListEntryId !== null,
+    ).length,
     isLegacy: isLegacyProductionPlan(plan),
   }
 }

@@ -5,6 +5,7 @@ import type {
   TargetWeaponId,
 } from '../../domain/models/publicTypes'
 import {
+  buildListEntryId,
   createValidProductionPlan,
   planStepId,
   targetWeaponId,
@@ -195,5 +196,41 @@ describe('productionPlanPresentation', () => {
       step('step.b', 2, targetB, [targetB], true),
     ])
     expect(createProductionPlanSummary(plan).plannedCompletionTargetCount).toBeNull()
+  })
+  it('counts the persisted Conflict records and their stored selections only', () => {
+    const plan = planWith([
+      completing(step('step.a', 1, targetA, [targetA]), [targetA]),
+    ])
+    const record = {
+      id: 'conflict.presentation.a',
+      kind: 'same_gogma_counter' as const,
+      buildListEntryIds: [buildListEntryId('build-list.presentation.a')],
+      reason: 'fixture',
+      recommendedBuildListEntryId: null,
+      selectedBuildListEntryId: buildListEntryId('build-list.presentation.a'),
+      resolutionNote: null,
+    }
+    plan.conflicts = [
+      record,
+      { ...record, id: 'conflict.presentation.b', selectedBuildListEntryId: null },
+    ]
+    plan.rejectedBuildListEntries = [{
+      buildListEntryId: buildListEntryId('build-list.presentation.rejected'),
+      reason: 'resource_conflict',
+      detail: 'fixture',
+    }]
+    const summary = createProductionPlanSummary(plan)
+    // Records, not Targets, and the rejected Entries are not added.
+    expect(summary.conflictCount).toBe(2)
+    expect(summary.selectedConflictCount).toBe(1)
+    expect(summary.targetWeaponCount).toBe(1)
+  })
+
+  it('reports zero Conflicts for a Plan that recorded none', () => {
+    const plan = planWith([step('step.a', 1, targetA, [targetA])])
+    plan.conflicts = []
+    const summary = createProductionPlanSummary(plan)
+    expect(summary.conflictCount).toBe(0)
+    expect(summary.selectedConflictCount).toBe(0)
   })
 })
