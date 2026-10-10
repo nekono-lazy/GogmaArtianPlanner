@@ -934,6 +934,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   target={target}
                   master={masterForDisplay}
                   ownedWeapons={ownedWeapons}
+                  showPreferredOwnedWeaponNotice
                   debugMode={debugMode}
                   buildListStatus={buildListStatus}
                   intermediateStateSelection={intermediateSelection}

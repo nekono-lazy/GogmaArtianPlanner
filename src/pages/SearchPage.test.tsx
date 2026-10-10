@@ -25,7 +25,9 @@ import type {
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import {
   createValidBuildCandidate,
+  createValidOwnedWeapon,
   createValidTargetWeapon,
+  ownedWeaponId,
   targetWeaponId,
 } from '../test/fixtures/domainData'
 import { createCandidateSearchInput as createFixtureInput } from '../test/fixtures/candidateSearch'
@@ -152,6 +154,27 @@ describe('SearchPage', () => {
     client.resolve(resultFor(target, candidate))
     expect(await screen.findByText('理想候補')).toBeInTheDocument()
     expect(deps.saveCandidates).toHaveBeenCalledWith(target.id, [candidate])
+  })
+
+  it('flags a result that does not start from the preferred owned weapon without changing the search or the addition', async () => {
+    const user = userEvent.setup()
+    const client = new ControlledClient()
+    const preferred = { ...createValidOwnedWeapon(ownedWeaponId('owned.fixture.preferred')), name: '武器A', isProtected: false }
+    const target = { ...createValidTargetWeapon(), preferredOwnedWeaponId: preferred.id }
+    const deps = { ...dependencies(client, [target]), getOwnedWeapons: async () => [preferred] }
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
+    await user.click(await screen.findByRole('button', { name: '検索開始' }))
+    // The search input is the ordinary one: the notice is decided after it.
+    expect(client.input?.targetWeaponId).toBe(target.id)
+    const candidate = createValidBuildCandidate()
+    client.resolve(resultFor(target, candidate))
+    const card = await screen.findByRole('region', { name: '理想候補' })
+    expect(within(card).getByText('優先する所持武器を使用しないルートです')).toBeInTheDocument()
+    expect(within(card).getByText('優先する所持武器: 武器A')).toBeInTheDocument()
+    expect(within(card).getByText('このルートの起点: 新しく作成する通常アーティア')).toBeInTheDocument()
+    await user.click(within(card).getByRole('button', { name: 'ビルドリストへ追加' }))
+    await waitFor(() => expect(deps.addCandidate).toHaveBeenCalled())
+    expect(vi.mocked(deps.addCandidate).mock.calls[0][0]).toBe(candidate)
   })
 
   it('keeps a long Target selectable and search cancellable with the small-screen control contracts', async () => {
