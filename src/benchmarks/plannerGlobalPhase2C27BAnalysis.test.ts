@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import rawResult from '../../docs/PLANNER_GLOBAL_PHASE2C27B_RESULT.json?raw'
 import { belowPracticalBonuses, idealBonuses } from '../test/fixtures/constrainedEnumeration'
 import {
   ORCHESTRATION_SOURCE_A,
@@ -251,5 +252,67 @@ describe('Phase 2-C2.7-B escalation superset diagnostic', () => {
     expect(phase2c27bEscalationDiagnostics([unit(lower, 'L0'), unit(upper, 'L1')]).violations).toBe(1)
     upper.deliveries[0]!.stableKey = 'a new key'
     expect(phase2c27bEscalationDiagnostics([unit(lower, 'L0'), unit(upper, 'L1')]).violations).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------- the committed formal RESULT
+
+describe('Phase 2-C2.7-B committed formal RESULT', () => {
+  const result = JSON.parse(rawResult)
+  const sha256 = async (text: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2, '0')).join('')
+
+  it('is the analyzed formal run of the measurement HEAD, with no Production change and the registered conditions', async () => {
+    expect(await sha256(rawResult)).toBe('d79ea0ded7824f8ba1828d1cffd897ed74dd68681a5759cbb194da80aa79b8e4')
+    expect(result.provenance.formal).toBe(true)
+    expect(result.provenance.measuredHead).toBe('b24bf5dc7d98cb8341a24d27fabbd1a36843a004')
+    expect(result.provenance.runStatus).toBe('completed')
+    expect(result.provenance.startAttestation.verified).toBe(true)
+    expect(result.provenance.calculationCodeChangedSinceMeasuredHead).toEqual([])
+    expect(result.provenance.productionChangedFiles).toEqual({ toMeasuredHead: [], toAnalysisHead: [] })
+    expect(result.provenance.oracleGuidedTargetPopulation).toBe(true)
+    expect(result.provenance.oracleInformedExecutionEnvelope).toBe(true)
+    expect(result.provenance.oracleReadByScheduler).toBe(false)
+    expect(result.provenance.oracleReadBySearchChild).toBe(false)
+    expect(result.conditions.ladderBudget).toEqual({ maxCandidateTrialsPerTarget: 2, maxPlannerReruns: 8, scope: '(Target, context)', resetPerRung: false })
+    expect(result.conditions.researchMaxPlanSteps).toBe(20_000)
+    expect(result.environment.appliedExecutionEnvelope).toEqual({ unitBudgetMs: 3_600_000, childHeapMb: 12_288, concurrency: 1, retry: 'none', fallback: 'none' })
+    expect(Object.values(result.hashChain).every(Boolean)).toBe(true)
+    expect(result.oracleMaterialization).toEqual({ passed: true, entriesSha256Matches: true, candidateIdsMatch: true })
+    expect(result.populationParity).toMatchObject({ manifestEqualsE1: true, manifestKeysAreTargetIdsOnly: true, targets: 11 })
+    expect(result.p1Order.every((p: { contexts: number; k0: number; k1: number; independentP1Matches: boolean }) => p.independentP1Matches && p.contexts === 43 && p.k0 === 1 && p.k1 === 42)).toBe(true)
+  })
+
+  it('records B2C27B_INCOMPLETE: 0 invalid, 8 timeouts, every Target stopped by found_R, exact_recovered 0 / 11 as a lower bound', () => {
+    expect(result.invalidReasons).toEqual([])
+    expect(result.decision.case).toBe('B2C27B_INCOMPLETE')
+    expect(result.aggregates).toMatchObject({ units: 575, measured: 567, unmeasured: 8, requiredNotExecuted: 0, unmeasuredByReason: { timeout: 8 }, stops: { found_R: 11 },
+      exactRecovered: 0, exactRecoveredOf: 11, reservationViolations: 0, escalationSupersetViolations: 0, contextsReachingRerunBound: 0 })
+    expect(result.aggregates.classCounts).toEqual({ exact_recovered: 0, found_non_oracle: 11, blocked_by_selected_checkpoint: 0, context_not_reached: 0, searched_not_recovered: 0,
+      execution_unmeasured: 0, stopped_by_trial_or_rerun_bound: 0, extent_ladder_insufficient: 0 })
+    expect(phase2c27bDecision({ invalidReasons: result.invalidReasons, unmeasuredUnits: result.aggregates.unmeasured, requiredNotExecuted: result.aggregates.requiredNotExecuted,
+      exactRecovered: result.aggregates.exactRecovered, targets: result.targets.length })).toEqual(result.decision)
+  })
+
+  it('re-derives every Target class and keeps every unit inside the registered ladder rules', () => {
+    for (const t of result.targets) {
+      expect(phase2c27bTargetClass({ checkpointBlocked: t.checkpointBlocked, stop: t.stop, foundStableKey: t.found?.stableKeySha256 ?? null, oracleStableKey: t.oracle.stableKeySha256,
+        verdicts: t.compatibleContextVerdicts.map((v: { verdict: string }) => v.verdict) })).toBe(t.class)
+      expect(t.exactDeliveredButNotFound).toBe(false)
+    }
+    const units = result.units as { unitId: string; targetIndex: number; contextRank: number; rung: 'L0' | 'L1' | 'L2'; result: string; ladderStateAtStart: { candidateTrialsUsed: number; plannerRerunsUsed: number }; ladderStateAtEnd: { candidateTrialsUsed: number; plannerRerunsUsed: number } | null }[]
+    expect(new Set(units.map(u => u.unitId)).size).toBe(units.length)
+    for (const u of units) {
+      if (u.rung !== 'L0') {
+        const below = units.find(x => x.targetIndex === u.targetIndex && x.contextRank === u.contextRank && x.rung === (u.rung === 'L1' ? 'L0' : 'L1'))
+        expect(below?.result, u.unitId).toBe('stopped_by_search_extent_bound')
+        expect(u.ladderStateAtStart).toEqual({ candidateTrialsUsed: below!.ladderStateAtEnd!.candidateTrialsUsed, plannerRerunsUsed: below!.ladderStateAtEnd!.plannerRerunsUsed,
+          previouslyRejectedSha256: (below!.ladderStateAtEnd as unknown as { previouslyRejectedSha256: string[] }).previouslyRejectedSha256 })
+      }
+      if (u.ladderStateAtEnd) {
+        expect(u.ladderStateAtEnd.candidateTrialsUsed).toBeLessThanOrEqual(2)
+        expect(u.ladderStateAtEnd.plannerRerunsUsed).toBeLessThanOrEqual(8)
+      }
+    }
+    expect(rawResult).not.toMatch(/"stableKey"|"candidateStableKey"/)
   })
 })

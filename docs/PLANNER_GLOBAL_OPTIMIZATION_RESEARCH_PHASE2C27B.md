@@ -13,7 +13,7 @@ schema / version、`defaultPlannerAlternativeSearchExtent`、Candidate Search de
 
 ## 1. 事前登録（measurement HEAD、formal run開始前に固定）
 
-本節はformal run開始前にcommitしたmeasurement HEADの内容であり、run後に変更しない。Phase A §9.1の「Phase B固有の実装値」に当たるものと、
+本節はformal run開始前にcommitしたmeasurement HEAD（`b24bf5dc`）の内容であり、run後に変更していない。Phase A §9.1の「Phase B固有の実装値」に当たるものと、
 Phase Aの規則を既存部品で表現するための実装上の決定をここに固定する。
 
 ### 1.1 対象・context・extent・budget（Phase Aのまま）
@@ -118,6 +118,144 @@ formal runとは別に、未commitのコードで次の非formal smokeを行い�
 - trial経路の確認: 手で作ったL1・K0の1 unitを子roleで直接実行（found_R判定、full run 1回、ladder state記録）
 - analyzer smoke: 上記runner smokeに対して `--allow-nonformal` で実行（authority chain、oracle再materializeのbyte一致、P1独立再計算、scheduler replayが通ることを確認）
 
-## 2. 結果
+## 2. 結論（`B2C27B_INCOMPLETE`）
 
-（formal run後に追記する。）
+| 項目 | 値 |
+| --- | --- |
+| measurement HEAD | `b24bf5dc7d98cb8341a24d27fabbd1a36843a004`（runner / analyzer / tests / 本書§1を含むclean HEAD） |
+| RESULT | [`docs/PLANNER_GLOBAL_PHASE2C27B_RESULT.json`](PLANNER_GLOBAL_PHASE2C27B_RESULT.json)（SHA-256 `d79ea0de…b8e4`、`provenance.formal = true`） |
+| raw | `PLANNER_GLOBAL_PHASE2C27B_RAW.json.local`（2,567,122 bytes、SHA-256 `f8c16d9f…3bed`）、run dir（start attestation `d76ebc4d…5c31`、unit record 567件のSHA-256はRESULTの `sources.unitRecords`）。いずれもcommitしない |
+| run | 2026-10-07T03:54:55Z〜2026-10-10T06:19Z、wall 267,868 s（約74.4時間）、status `completed` |
+| decision | **`B2C27B_INCOMPLETE`**（invalid 0、policy-required unitのunmeasured 8件 = すべてtimeout、required unit未実行 0） |
+| exact recovered | **0 / 11（下限）** |
+| per-Target class | `found_non_oracle` 11、ほかの7 classはすべて0 |
+
+事前登録のdecision順（§9.7）により、unmeasuredが1件でもあるとINCOMPLETEになる。11 Targetはすべて `found_R` で停止しているので、
+Targetのclassはunmeasuredの有無と無関係に `exact_recovered` / `found_non_oracle` のどちらかで決まり、このrunではすべて `found_non_oracle` だった。
+「0 / 11」は下限である（§4.3）。条件変更・再実行はしていない。
+
+## 3. formal validity（違反0）
+
+| 検査 | 結果 |
+| --- | --- |
+| start attestation（child起動前、`wx`・read-only）| verified。HEAD `b24bf5dc`、benchmark code SHA-256をmeasurement HEADのgit objectから再計算して一致、uncommitted false、smokeなし、appliedExecutionEnvelope = 登録値 |
+| Production source changed files | base main `e696ef4` → measurement HEAD: `[]`、→ analysis HEAD: `[]` |
+| calculation code changed since measurement HEAD | `[]` |
+| Phase A文書 / Export / manifest | SHA-256一致（Exportは `cc35fb5b…1e6b`、manifestはB2-C2B1 / B2-C1から機械導出したものと一致、keyはTarget ID等のみ） |
+| authority hash chain | B2-C2B1 / B2-C1 / B2-B1 RESULT、oracle RESULT、oracle manifest（file / routes）、Exportの相互照合19項目すべて一致 |
+| Production RNG / CalculationContext / `researchMaxPlanSteps` | 全unit record一致（`production-rng:c5-e7`、calculation schema 17、20000） |
+| P1 ordering / K ≤ 1 scope | 11 Targetとも独立再計算したP1のK ≤ 1 prefixと一致（各43 = K0 1 + K1 42） |
+| scheduler replay | 575 unitの実現列（unit ID、context、rung、開始時ladder state）とTarget stopが登録schedulerのreplayと一致。retry / fallbackなし（child process数 = unit + 1） |
+| ladder state / budget | 全unitで終了時state = 開始時state + 自unitのtrial記録、累積trial ≤ 2、累積full run ≤ 8、上位rung開始時state = 直前rung終了時state、下位rung不採用Candidateの再trial 0 |
+| G1 | 全trial runの `conflictResolutions` 0件、preflightのfixed constraint 0件 |
+| reservation違反 / delivered cost非単調 / context再導出不一致 | 0 / 0 / 0 |
+| oracle key authority | `materializeOracleRoutes()` の再実行結果がoracle RESULTの `entriesSha256` とbyte一致、43 Routeの `candidateId` / `buildListEntryId` 一致 |
+
+## 4. 実行結果
+
+### 4.1 unit
+
+| rung | unit | `found_R` | extent bound | trial bound | rerun bound | not found | timeout | OOM / failure |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| L0 | 389 | 2 | 382 | 0 | 0 | 0 | 5 | 0 |
+| L1 | 182 | 5 | 167 | 7 | 0 | 0 | 3 | 0 |
+| L2 | 4 | 4 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 計 | **575** | 11 | 549 | 7 | 0 | 0 | **8** | 0 |
+
+- timeout（unmeasured）8件: `t02-r08-L1`、`t03-r08-L0`、`t03-r11-L0`、`t04-r11-L0`、`t07-r11-L0`、`t08-r11-L0`、`t08-r08-L1`、`t09-r09-L1`。いずれも上位rungへ
+  進めず、再実行していない
+- extent escalation: 186 unit（L1 182 + L2 4）。superset診断の違反（上位rungでtrialしたCandidateが下位rungで既にdeliverされていた件数）0
+- trial 25件（full Planner run 25回、runtime-unsupported retry 0）。trial時間合計413 s。Search（trial時間を除く）合計234,119 s（約65.0時間、unit wallの約87 %）、
+  timeout分28,800 s（8.0時間）。中央値unit wall 237 s、最大3,600 s（timeout）
+- memory: child heap peak 9.26 GB、RSS peak 10.60 GB（12,288 MB上限内、OOM 0）、unitごとheap peakの中央値3.78 GB
+
+### 4.2 per-Target
+
+| Target | 停止rung | 停止context（P1 rank） | `G` selected | found Route kind | 推定操作数 | oracleのcovering rung | oracleのP1 first compatible rank | unit L0 / L1 / L2 | unmeasured | trial | wall h | oracle意味照合 |
+| --- | --- | --- | --- | --- | ---: | --- | ---: | --- | ---: | ---: | ---: | --- |
+| t00 | L1 | 1 (K0) | false | normal_artian_to_gogma | 179 | L1 | 8 | 43 / 1 / 0 | 0 | 1 | 3.45 | uncovered |
+| t01 | L1 | 1 (K0) | true | existing_gogma_mixed | 92 | L1 | 3 | 43 / 1 / 0 | 0 | 1 | 3.56 | uncovered |
+| t02 | L2 | 1 (K0) | false | normal_artian_to_gogma | 600 | L2 | 17 | 43 / 43 / 1 | 1 | 1 | 11.67 | uncovered |
+| t03 | L2 | 1 (K0) | false | normal_artian_to_gogma | 335 | L2 | 18 | 43 / 41 / 1 | 2 | 1 | 14.14 | uncovered |
+| t04 | L2 | 1 (K0) | false | existing_gogma_mixed | 1142 | L2 | 11 | 43 / 42 / 1 | 1 | 1 | 10.93 | uncovered |
+| t05 | L0 | 1 (K0) | false | existing_gogma_mixed | 97 | L1 | 32 | 1 / 0 / 0 | 0 | 1 | 0.01 | uncovered |
+| t06 | L0 | 1 (K0) | false | existing_gogma_mixed | 162 | L1 | 31 | 1 / 0 / 0 | 0 | 1 | 0.01 | uncovered |
+| t07 | L1 | 1 (K0) | true | existing_gogma_mixed | 255 | L1 | 14 | 43 / 1 / 0 | 1 | 1 | 5.45 | uncovered |
+| t08 | L2 | 1 (K0) | true | existing_gogma_mixed | 551 | L2 | 18 | 43 / 42 / 1 | 2 | 1 | 15.10 | uncovered |
+| t09 | L1 | 10 (K1) | true | existing_gogma_mixed | 267 | L1 | 31 | 43 / 10 / 0 | 1 | 15 | 6.18 | uncovered |
+| t10 | L1 | 1 (K0) | false | normal_artian_to_gogma | 51 | L1 | 2 | 43 / 1 / 0 | 0 | 1 | 3.90 | uncovered |
+
+- covering rung / first compatible rankはanalyzerがB2-C2B1 / B2-C1 RESULTと再計算から読んだpost-hoc値で、schedulerは読んでいない
+- oracleと `candidateStableKey()` が一致した `found_R` Routeは0件。Phase 2-Cの意味照合でも全件 `uncovered`（exactもpartialも無し）。
+  `exactDeliveredButNotFound`（`found_R` 以外のdeliveryにoracle exactが含まれていた）も0件
+- compatible contextのverdict（45件）: `escalation_pending_at_target_stop` 42、`unmeasured_below_covering` 1（`t04` rank 11、L0 timeout）、
+  `not_executed` 2（`t05`、`t06`）
+
+### 4.3 INCOMPLETEの範囲（下限の意味）
+
+unmeasured 8件のcontextのうち7件は、post-hocにoracle Routeとreservation-incompatibleなcontextである（そのcontextのSearchはoracle Routeを
+deliverできない）。残る1件 `t04-r11-L0` はcompatibleだが、covering rung L2より下のL0でtimeoutしたもので、L0 extentではoracle Routeを
+deliverできない。ただし、これらが計測できていれば同じrung内の後続contextやrungの進み方が変わり、Targetの停止点が変わり得る（例: timeoutした
+unitが `stopped_by_search_extent_bound` なら上位rungで再実行対象になる）ので、「unmeasuredが無ければ結果が同じだった」とは主張しない。
+exact recovered 0 / 11は下限である。
+
+## 5. 観察（事前登録decisionの外の診断）
+
+### 5.1 K0での停止
+
+- 11 Targetのうち10 Targetが **P1 rank 1のK0 context**（support Entryなし、empty reservation）で停止した。K0は各rungでdeliverが0件なら
+  extent boundで次rungへ進み、**K0が初めて1件以上deliverしたrungの最初のCandidateが、そのまま1回目のtrialで `found_R`** になった（10 / 10）
+- そのうち7件は `G` がselectedではなく、support集合外Entryとの暫定帰結で外れただけの `found_R` だった（Phase A §6.4の条件4。K0ではsupport集合が
+  空なので、どのEntryに負けても条件を満たす）。trial runはいずれも `exhausted`（Target 43件のうち完成19〜21、Conflict 20〜22件）
+- K0はreservationを持たないので、oracle Route（held位置をまたぐRoute）はK0ではdeliverされ得ない（B2-C1: E1のK0 compatible 0件）。P1が
+  K0を常にrank 1に置き、K0の `found_R` がほぼ無条件に成立するため、policyはcompatibleなK1 contextの上位rungへ到達する前に停止した。
+  compatible contextのverdictの大半（42 / 45）は「下位rungでextent boundのまま、Targetが停止したため上位rungへ進まなかった」である
+
+### 5.2 K1でのsupport Entry非選択（`t09`）
+
+- `t09` はL1でK0がdeliver 0だったため、K1 context（rank 2〜10）でtrialした。rank 2〜8の14 trialはすべて `G` 自体はselectedだったが、
+  **support Entryがselectedにならず**（条件2、`explicit_decision_not_selected`）、各contextが2 trialでtrial boundに達した。rank 9はtimeout、
+  rank 10でsupport EntryもselectedになりK1の `found_R` となったが、oracle Routeではなかった
+- G1によりsupport Entryはresolutionを持たない通常のEntryとして扱われ、baselineのfull Planner run（Conflict約21件、43 Entry中20前後がselected）
+  の暫定帰結でsupport Entry自身が外れやすい。Phase A §2.2が予告した「暫定帰結で外れることもあり、resolutionを合成して救済しない」が、
+  K1 trialの棄却理由の主因として観測された
+
+### 5.3 cost
+
+- unit wallの約87 %がSearch（trial時間を除く）で、trial（full Planner run 25回）は413 sにとどまった。L0 / L1で多数のcontextがdeliver 0のまま
+  extentを使い切る（extent bound）Searchに時間を使っており、Targetあたりwallは0.01〜15.1時間と大きく偏った
+- timeoutはrank 8 / 9 / 11の特定contextに集中した（reservationの形に依存するheld-aware Searchのcostと読めるが、本Phaseでは原因を調べていない）
+
+## 6. このPhaseで言えること・言えないこと（Phase A §9.8）
+
+- 言えること: このExport・E1 11 Target・事前登録policy・Research envelopeで、oracleを実行入力に使わずにpolicyを実行したところ、全Targetが
+  `found_R` で停止し、停止RouteはいずれもoracleのexactRouteではなかった（exact 0 / 11、下限）。formal validityの違反は無い
+- 言えないこと: oracle非依存policyが存在しないこと、`found_R` Route集合が43 Target全体として共存すること、E2 / residual 3、Production default、
+  Production runtimeとしての許容。`found_non_oracle` のRouteが「共存可能な別解」であることも本Phaseは主張しない（Phase A §9.6）
+
+## 7. 次Phaseへのrecommendation（decision条件ではない）
+
+- Phase A §9.7の分岐では、支配的class `found_non_oracle` は「停止信号は機能している。oracle exactより、`found_R` Route集合のGlobal共存（2-C2.8）を先に
+  検証する」に当たる
+- ただし§5.1のとおり、このrunの停止の10 / 11はK0の `found_R` で、そのうち7件は `G` が暫定帰結で外れただけである。K0の `found_R` は「reservationなしで
+  最初にdeliverされたCandidateが、通常のEntryとしてbaselineに入れても破綻しない」ことしか確かめておらず、共存の証拠としては弱い。2-C2.8へ進む前に、
+  次をdocs-onlyで再検討する（Phase Aの事前登録の改訂であり、プロジェクトオーナーの判断が必要）ことを推奨する
+  - K0 contextの扱い: K0の `found_R` に `G` のselectedを要求するか、K0をordering上の別位置に置くか、K0を停止信号から外すか
+  - support Entryの非選択（§5.2）: G1を守ったまま、support Entryがbaselineの暫定帰結で外れることを `found_R` の前提とどう両立させるか
+    （例: support EntryがbaselineのPlanで既にselectedのcontextだけを対象にする、等。いずれも新しい意味論なので本Phaseでは決めない）
+  - Search execution budget（Phase A §7.5）: extent boundまでdeliver 0のまま走るSearchがcostの大半を占めたこと
+- unmeasured（timeout）を減らすためのenvelope変更や再実行は、事前登録どおり本Phaseでは行わない。行う場合は別axis・別Phaseとして事前登録する
+
+Issue #154はCloseしない。
+
+## 8. validation
+
+- measurement HEAD時点（formal run前）: `git diff --check`、`npm run check:nul`、`npm run lint`、`npm test`（356 files / 5,968 tests）、`npm run build` すべて成功
+- RESULT追加後: 同じ5項目すべて成功（Draft PRに記載）
+
+## 9. 変更していないもの
+
+Production source、Search algorithm / ordering / comparator、Planner scheduler、Planner Alternative kernel、Worker protocol、UI、Persistence、
+schema / version（`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、`DATABASE_SCHEMA_VERSION` 10、`ExportRoot.schemaVersion` 13）、RNG（`production-rng:c5-e7`）、
+`defaultPlannerAlternativeSearchExtent`、Candidate Search default、`maxCandidateTrialsPerTarget`、`maxPlannerReruns`、`defaultPlannerOptions`、
+`conflictResolutionPlannerOptions`、B2-C2B2I / B2-C2B2J optimization、既存RESULT JSON、Production test fixture。
