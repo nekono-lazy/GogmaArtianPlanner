@@ -1112,3 +1112,87 @@ describe('BuildListPage intermediate state save chain recovery', () => {
     }
   })
 })
+
+describe('BuildListPage registration order and display filter (Issue #123)', () => {
+  /** Two Targets of different weapon types, returned in the reverse of their registration order. */
+  function orderedDependencies(client: PlannerWorkerClient = createPlannerClient()) {
+    const deps = dependencies([], client)
+    const older = {
+      ...createValidTargetWeapon(),
+      id: targetWeaponId('target.z.older'),
+      name: '先に登録した目標',
+      weaponTypeId: 'weapon.fixture.b',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+    const newer = {
+      ...createValidTargetWeapon(),
+      id: targetWeaponId('target.a.newer'),
+      name: '後に登録した目標',
+      createdAt: '2026-02-01T00:00:00.000Z',
+    }
+    const entryFor = (target: typeof older, id: string, createdAt: string) => {
+      const candidate = { ...createValidBuildCandidate(), id: candidateId(`candidate.${id}`), targetWeaponId: target.id }
+      candidate.searchStateHash = createSearchStateHash(candidate.route, createValidRngState(), [createValidNormalArtianCounter()])
+      const entry = createBuildListEntry(candidate, target, { id: buildListEntryId(id), createdAt })
+      entry.targetDefinitionHash = createTargetDefinitionHash(target)
+      return entry
+    }
+    // Entry IDs sort the other way round, so neither the ID nor the array
+    // order can stand in for the registration order.
+    const entries = [
+      entryFor(newer, 'build-list.a', '2026-03-01T00:00:00.000Z'),
+      entryFor(older, 'build-list.b', '2026-03-02T00:00:00.000Z'),
+    ]
+    deps.refresh = vi.fn(async () => ({ entries, targets: [newer, older], ownedWeapons: [] }))
+    return deps
+  }
+
+  function precedes(first: HTMLElement, second: HTMLElement): boolean {
+    return Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING)
+  }
+
+  it('orders the Target groups by the Targets\' registration order, like the Target Weapons list', async () => {
+    renderPage(orderedDependencies())
+    const older = await screen.findByRole('heading', { name: '先に登録した目標' })
+    const newer = screen.getByRole('heading', { name: '後に登録した目標' })
+    expect(precedes(older, newer)).toBe(true)
+  })
+
+  it('narrows the shown groups by the Target weapon type while the Planner still receives the whole Build List', async () => {
+    const user = userEvent.setup()
+    const client = createPlannerClient()
+    const deps = orderedDependencies(client)
+    renderPage(deps)
+    await screen.findByRole('heading', { name: '先に登録した目標' })
+
+    await user.click(screen.getByRole('combobox', { name: '武器種で絞り込み' }))
+    await user.click(await screen.findByRole('option', { name: 'B fixture' }))
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
+    expect(screen.getByRole('heading', { name: '先に登録した目標' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '後に登録した目標' })).toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('目標武器2件中 1件を表示')
+    expect(screen.getByText(/絞り込みに関係なく作成リストのすべての候補を対象にします/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await screen.findByText(/^Plan destination:/)
+    // The input comes from the persisted state alone; the filter never reaches it.
+    expect(deps.createInput).toHaveBeenCalledOnce()
+    expect(deps.createInput).toHaveBeenCalledWith(expect.objectContaining({ rngEngineVersion: client.engineVersion }))
+    const input = await vi.mocked(deps.createInput).mock.results[0].value
+    expect(client.createPlan).toHaveBeenCalledWith(expect.any(String), input)
+  })
+
+  it('shows an empty state with the way back when the filter hides every group', async () => {
+    const user = userEvent.setup()
+    renderPage(orderedDependencies())
+    await screen.findByRole('heading', { name: '先に登録した目標' })
+    await user.click(screen.getByRole('combobox', { name: '武器種で絞り込み' }))
+    await user.click(await screen.findByRole('option', { name: '先頭fixture' }))
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
+    expect(screen.getByText('条件に一致する目標武器の候補はありません。')).toBeInTheDocument()
+    const clearButtons = screen.getAllByRole('button', { name: '絞り込みを解除' })
+    await user.click(clearButtons[clearButtons.length - 1])
+    expect(screen.getByRole('heading', { name: '先に登録した目標' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '後に登録した目標' })).toBeInTheDocument()
+  })
+})

@@ -113,8 +113,10 @@ describe('SearchPage batch search and registration', () => {
   it('labels only registered Targets and keeps them selectable for a single re-search', async () => {
     const user = userEvent.setup()
     const client = new QueueClient()
-    const registered = target('target.registered', '登録済みの目標')
-    const open = target('target.open', '未登録の目標')
+    // Registered first, so the Select's registration order (UI_FLOW 3.2 / 9)
+    // selects it by default.
+    const registered = { ...target('target.registered', '登録済みの目標'), createdAt: '2026-01-01T00:00:00.000Z' }
+    const open = { ...target('target.open', '未登録の目標'), createdAt: '2026-01-02T00:00:00.000Z' }
     const staleEntry: BuildListEntry = {
       ...createBuildListEntry(candidateFor(registered), registered),
       isStale: true,
@@ -272,6 +274,29 @@ describe('SearchPage batch search and registration', () => {
  * screen starts from them, and an edit made here applies to this screen's
  * single and batch searches only - nothing on this screen writes them.
  */
+describe('SearchPage target Select order (Issue #123)', () => {
+  it('offers eligible Targets in registration order and selects the oldest by default', async () => {
+    const user = userEvent.setup()
+    const at = (id: string, name: string, createdAt: string, patch: Partial<TargetWeapon> = {}) =>
+      ({ ...target(id, name), createdAt, ...patch })
+    // Returned out of registration order, with IDs sorting the other way.
+    const targets = [
+      at('target.a', '三番目', '2026-03-01T00:00:00.000Z'),
+      at('target.b', '無効の目標', '2026-01-15T00:00:00.000Z', { isEnabled: false }),
+      at('target.c', '二番目', '2026-02-01T00:00:00.000Z'),
+      at('target.d', '一番目', '2026-01-01T00:00:00.000Z'),
+    ]
+    const { deps } = dependencies(new QueueClient(), targets)
+    render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
+
+    const selector = await screen.findByRole('combobox', { name: '検索対象の目標武器' })
+    expect(selector).toHaveTextContent('一番目')
+    await user.click(selector)
+    const options = within(await screen.findByRole('listbox')).getAllByRole('option')
+    expect(options.map((option) => option.textContent)).toEqual(['一番目', '二番目', '三番目'])
+  })
+})
+
 describe('SearchPage saved Candidate Search defaults', () => {
   const SAVED = { maxNormalAdvance: 1000, maxGogmaAdvance: 200, maxSkillAdvance: 2500 }
 

@@ -652,6 +652,81 @@ describe('OwnedWeaponsPage list order', () => {
   })
 })
 
+describe('OwnedWeaponsPage registration order and display filter (Issue #123)', () => {
+  function registered(id: string, name: string, createdAt: string, patch: Partial<OwnedGogmaArtianWeapon> = {}): OwnedGogmaArtianWeapon {
+    return { ...existingWeapon(), id: id as OwnedWeapon['id'], name, isProtected: false, createdAt, ...patch }
+  }
+
+  function listedNames(): string[] {
+    const list = screen.getByRole('region', { name: '登録済みの所持武器' }).querySelector('ul')
+    if (!list) return []
+    return Array.from(list.children).map(
+      (item) => within(item as HTMLElement).getAllByRole('heading')[0].textContent ?? '',
+    )
+  }
+
+  async function choose(user: ReturnType<typeof userEvent.setup>, name: string, option: string) {
+    await user.click(screen.getByRole('combobox', { name }))
+    await user.click(await screen.findByRole('option', { name: option }))
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
+  }
+
+  it('lists weapons oldest-registered first whatever order the repository returns', async () => {
+    const deps = dependencies()
+    deps.getAll = vi.fn(async () => [
+      registered('owned.0', '三番目', '2026-03-01T00:00:00.000Z'),
+      registered('owned.1', '一番目', '2026-01-01T00:00:00.000Z'),
+      registered('owned.2', '二番目', '2026-02-01T00:00:00.000Z'),
+    ])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await screen.findByRole('heading', { name: '一番目' })
+    expect(listedNames()).toEqual(['一番目', '二番目', '三番目'])
+  })
+
+  it('narrows the list by weapon type and element for display only, and shows an empty state with the way back', async () => {
+    const user = userEvent.setup()
+    const deps = dependencies()
+    deps.getAll = vi.fn(async () => [
+      registered('owned.a', '双剣雷', '2026-01-01T00:00:00.000Z'),
+      registered('owned.b', '弓火', '2026-01-02T00:00:00.000Z', { weaponTypeId: 'weapon.bow', elementId: 'element.fire' }),
+      registered('owned.c', '双剣火', '2026-01-03T00:00:00.000Z', { elementId: 'element.fire' }),
+    ])
+    render(<OwnedWeaponsPage dependencies={deps} />)
+    await screen.findByRole('heading', { name: '双剣雷' })
+    const master = loadedMaster()
+    const name = (collection: { id: string; displayNameJa: string }[], id: string) =>
+      collection.find((entry) => entry.id === id)?.displayNameJa ?? id
+
+    await choose(user, '属性で絞り込み', name(master.elements, 'element.fire'))
+    expect(listedNames()).toEqual(['弓火', '双剣火'])
+    expect(screen.getByRole('status')).toHaveTextContent('3本中 2本を表示')
+    // The header still counts every registered weapon.
+    expect(screen.getByText('3本')).toBeInTheDocument()
+
+    await choose(user, '武器種で絞り込み', name(master.weaponTypes, 'weapon.dual_blades'))
+    expect(listedNames()).toEqual(['双剣火'])
+
+    await choose(user, '属性で絞り込み', name(master.elements, 'element.water'))
+    expect(listedNames()).toEqual([])
+    expect(screen.getByText('条件に一致する所持武器はありません。')).toBeInTheDocument()
+    expect(screen.queryByText('所持武器は未登録です。')).toBeNull()
+
+    const clearButtons = screen.getAllByRole('button', { name: '絞り込みを解除' })
+    await user.click(clearButtons[clearButtons.length - 1])
+    expect(listedNames()).toEqual(['双剣雷', '弓火', '双剣火'])
+    // Filtering is display only: nothing was saved, deleted or re-read.
+    expect(deps.save).not.toHaveBeenCalled()
+    expect(deps.delete).not.toHaveBeenCalled()
+    expect(deps.getAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows no filter while nothing is registered', async () => {
+    render(<OwnedWeaponsPage dependencies={dependencies()} />)
+    expect(await screen.findByText('所持武器は未登録です。')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '所持武器の絞り込み' })).toBeNull()
+  })
+})
+
 describe('OwnedWeaponsPage restoration bonus scope wording', () => {
   it('names the scope field 復元ボーナスの種類 with everyday labels and the conversion note', async () => {
     const user = userEvent.setup()

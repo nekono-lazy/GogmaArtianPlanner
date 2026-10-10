@@ -69,7 +69,13 @@ import type {
 } from '../domain/models/publicTypes'
 import { ownedWeaponRepository } from '../db/repositories'
 import { artianWeaponKindLabels, ownedWeaponStatusLabels } from '../presentation/labels'
-import { upsertPreservingOrder } from '../presentation/managementListOrder'
+import { sortByRegistrationOrder, upsertPreservingOrder } from '../presentation/managementListOrder'
+import {
+  emptyWeaponListFilter,
+  matchesWeaponListFilter,
+  type WeaponListFilter,
+} from '../presentation/weaponListFilter'
+import { WeaponListFilterBar, WeaponListFilterEmpty } from '../components/WeaponListFilterBar'
 import {
   EntityFormValidationError,
   ReferencedEntityDeleteError,
@@ -272,6 +278,9 @@ export function TargetWeaponsPage({
   const [reopening, setReopening] = useState<TargetWeapon | null>(null)
   const [reopenSubmitting, setReopenSubmitting] = useState(false)
   const [reopenError, setReopenError] = useState<string | null>(null)
+  // Display-only filter of the active list (`docs/UI_FLOW.md` 3.2 / 8): never
+  // persisted, and never a Search / Planner input.
+  const [filter, setFilter] = useState<WeaponListFilter>(emptyWeaponListFilter)
 
   useEffect(() => {
     if (!api) return
@@ -279,7 +288,9 @@ export function TargetWeaponsPage({
     void Promise.all([api.getAll(), api.getOwnedWeapons()])
       .then(([loaded, loadedWeapons]) => {
         if (active) {
-          setTargets(loaded)
+          // Loaded in registration order; later saves keep the in-place /
+          // append contract through `upsertPreservingOrder` (UI_FLOW 3.2).
+          setTargets(sortByRegistrationOrder(loaded))
           setOwnedWeapons(loadedWeapons)
         }
       })
@@ -316,6 +327,7 @@ export function TargetWeaponsPage({
   // own read-only section (`docs/UI_FLOW.md` 8 / 8.3).
   const activeTargets = targets.filter(({ lifecycleStatus }) => lifecycleStatus === 'active')
   const completedTargets = targets.filter(({ lifecycleStatus }) => lifecycleStatus === 'completed')
+  const shownActiveTargets = activeTargets.filter((target) => matchesWeaponListFilter(target, filter))
   // The owned Ideal notice per active Target (`docs/UI_FLOW.md` 8.2), judged by
   // the shared Domain authority from the loaded Targets and weapons - after a
   // save too, with no reload. A judgement failure is reported, never read as
@@ -584,6 +596,20 @@ export function TargetWeaponsPage({
               </Typography>
             )}
           </Stack>
+          {!loading && !loadFailed && activeTargets.length > 0 && (
+            <Box sx={{ px: { xs: 2, md: 2.5 }, pb: 2 }}>
+              <WeaponListFilterBar
+                label="目標武器の絞り込み"
+                filter={filter}
+                onChange={setFilter}
+                weaponTypes={weaponTypes}
+                elements={elements}
+                totalCount={activeTargets.length}
+                shownCount={shownActiveTargets.length}
+                unit="件"
+              />
+            </Box>
+          )}
           {loading && <LinearProgress aria-label="目標武器を読み込み中" />}
           {!loading && !loadFailed && activeTargets.length === 0 && (
             <Box sx={{ px: { xs: 2, md: 2.5 }, py: 3, borderTop: 1, borderColor: 'divider' }}>
@@ -593,9 +619,17 @@ export function TargetWeaponsPage({
               </Typography>
             </Box>
           )}
-          {!loading && activeTargets.length > 0 && (
+          {!loading && activeTargets.length > 0 && shownActiveTargets.length === 0 && (
+            <Box sx={{ px: { xs: 2, md: 2.5 }, py: 3, borderTop: 1, borderColor: 'divider' }}>
+              <WeaponListFilterEmpty
+                message="条件に一致する目標武器はありません。"
+                onClear={() => setFilter(emptyWeaponListFilter)}
+              />
+            </Box>
+          )}
+          {!loading && shownActiveTargets.length > 0 && (
             <Box component="ul" aria-labelledby={listHeadingId} sx={{ m: 0, p: 0 }}>
-              {activeTargets.map((target) => (
+              {shownActiveTargets.map((target) => (
                 <ManagementListItem
                   key={target.id}
                   title={target.name}
