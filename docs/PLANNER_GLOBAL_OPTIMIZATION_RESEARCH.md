@@ -271,3 +271,6 @@ oracleなしでcontext / extent / budgetを選ぶResearch execution policy、Pha
 結果を受けたCandidate発見とGlobal採用の分離方針は [Phase 2-C2.7-B follow-up](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27B_FOLLOWUP.md)（docs-only）にある。
 follow-upが提案したD1（Phase B `found_R` 11 Candidateの共存診断、Phase 2-C2.7-Cとは別）の実行条件は
 [D1-A事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D1_SPEC.md)（docs-only）で確定した。
+その実装と正式計測は [D1-B](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D1B.md)（`D1_FOUND_R_SET_PARTIAL`）にある。
+D1を受けたD2（Candidate発見とGlobal採用を分離するK0先行policy）の最初の実行条件は
+[D2-A事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2_SPEC.md)（docs-only）で確定した。
