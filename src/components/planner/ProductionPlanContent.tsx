@@ -36,6 +36,13 @@ interface ProductionPlanContentProps {
   master: MasterDataRoot
   /** Debug Mode only adds raw identifiers to Step details; it changes nothing else. */
   debugMode?: boolean
+  /**
+   * The caller's Conflict section, placed after the material sections and
+   * before the Target routes (UI_FLOW 11.0). Presentation only: the caller
+   * keeps rendering and owning it - its Worker preparation, what-if and repair
+   * state never move into this read-only view.
+   */
+  conflictSection?: ReactNode
 }
 
 /** A titled, border-based section of the read-only Plan view. */
@@ -67,11 +74,11 @@ function PlanSection({ title, children }: { title: string; children: ReactNode }
  * what-if / replan preparation lifecycle, so a stale Plan or a failed Worker
  * preparation still shows the stored contents.
  *
- * The order is the one UI_FLOW 11.0 fixes: overview, Target routes, global
+ * The order is the one UI_FLOW 11.0 fixes (Issue #121): overview, global
  * timeline, the whole-Plan cost estimate derived from the persisted physical
- * Steps. The persisted item material totals (only when any were recorded) and
- * the rejected Entries follow as supplementary sections, before the Conflict
- * UI the page renders after this component.
+ * Steps, the persisted item material totals (only when any were recorded), the
+ * caller's Conflict section, the Target routes, and the rejected Entries as a
+ * supplementary section last.
  *
  * A Plan reaches a few hundred steps, so both step sections are disclosures
  * whose contents are unmounted while collapsed, and the grouping is computed
@@ -82,6 +89,7 @@ export function ProductionPlanContent({
   targetWeapons,
   master,
   debugMode = false,
+  conflictSection,
 }: ProductionPlanContentProps) {
   const orderedSteps = useMemo(() => orderPlanSteps(plan), [plan])
   const targetGroups = useMemo(() => groupPlanStepsByTargetWeapon(plan), [plan])
@@ -94,47 +102,6 @@ export function ProductionPlanContent({
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
       <ProductionPlanSummary plan={plan} />
-
-      <PlanSection title="目標武器ごとの作成ルート">
-        {isLegacy && (
-          <Alert severity="info">
-            この計画は共有Target進行情報の保存機能追加前に作成されたため、
-            目標武器ごとのルートでは一部の共有操作が表示されない可能性があります。
-            計画全体の実行順を確認してください。
-          </Alert>
-        )}
-        {targetGroups.length === 0 ? (
-          <Typography variant="body2">
-            目標武器に紐づく手順はありません。
-          </Typography>
-        ) : (
-          <Stack spacing={1}>
-            {targetGroups.map((group) => {
-              const target = lookup.byId(group.targetWeaponId)
-              const name = target
-                ? target.name
-                : `削除済みまたは参照できない目標武器（${group.targetWeaponId}）`
-              return (
-                <DisclosureAccordion
-                  key={group.targetWeaponId}
-                  title={`${name}（${group.steps.length}ステップ）`}
-                  headingLevel="h3"
-                  unmountOnExit
-                >
-                  <ProductionPlanStepList
-                    steps={group.steps}
-                    lookup={lookup}
-                    master={master}
-                    showSharedBadge
-                    label={`${name}の作成ルート`}
-                    debugMode={debugMode}
-                  />
-                </DisclosureAccordion>
-              )
-            })}
-          </Stack>
-        )}
-      </PlanSection>
 
       <PlanSection title="計画全体の実行順">
         <Typography variant="body2" color="text.secondary">
@@ -200,6 +167,49 @@ export function ProductionPlanContent({
           </Box>
         </PlanSection>
       )}
+
+      {conflictSection}
+
+      <PlanSection title="目標武器ごとの作成ルート">
+        {isLegacy && (
+          <Alert severity="info">
+            この計画は共有Target進行情報の保存機能追加前に作成されたため、
+            目標武器ごとのルートでは一部の共有操作が表示されない可能性があります。
+            計画全体の実行順を確認してください。
+          </Alert>
+        )}
+        {targetGroups.length === 0 ? (
+          <Typography variant="body2">
+            目標武器に紐づく手順はありません。
+          </Typography>
+        ) : (
+          <Stack spacing={1}>
+            {targetGroups.map((group) => {
+              const target = lookup.byId(group.targetWeaponId)
+              const name = target
+                ? target.name
+                : `削除済みまたは参照できない目標武器（${group.targetWeaponId}）`
+              return (
+                <DisclosureAccordion
+                  key={group.targetWeaponId}
+                  title={`${name}（${group.steps.length}ステップ）`}
+                  headingLevel="h3"
+                  unmountOnExit
+                >
+                  <ProductionPlanStepList
+                    steps={group.steps}
+                    lookup={lookup}
+                    master={master}
+                    showSharedBadge
+                    label={`${name}の作成ルート`}
+                    debugMode={debugMode}
+                  />
+                </DisclosureAccordion>
+              )
+            })}
+          </Stack>
+        )}
+      </PlanSection>
 
       {plan.rejectedBuildListEntries.length === 0 ? (
         <PlanSection title="採用されなかった候補">

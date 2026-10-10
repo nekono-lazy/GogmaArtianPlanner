@@ -1523,16 +1523,27 @@ statusやStepを読取時に書き換えずexact persisted内容を表示する�
 `calculation_context_changed` による再計算対象として扱い、Worker preparation、what-if、
 競合選択、実行へ進めない。version 2 ProductionPlanはversion 3 runtimeでこの扱いになる。
 
-構成は次の順とする。
+構成は次の順とする（Issue #121で、計画全体を先に、目標武器ごとの詳細を後に読む順へ改訂）。
 
 ```text
 Plan概要
-目標武器ごとの作成ルート
 計画全体の実行順
 必要素材・費用の目安（計画全体）
 必要素材（アイテム）合計（記録がある場合だけ）
-既存のConflict / what-if UI
+競合と解決（既存のConflict / what-if UI）
+目標武器ごとの作成ルート
+採用されなかった候補（補足情報）
 ```
+
+- この順序はpresentationだけの規定であり、Conflictの検出・判定、participantの表示と利用可否、
+  「比較する」「この候補を優先」、what-if結果、Planner Alternative repair、再計算・保存・キャンセル、
+  Worker preparationの状態遷移、Plan statusごとの操作可否を変えない。競合と解決の表示と状態は
+  これまでどおりページ側が保持し、読み取り専用のPlan内容表示へ移さない（Plan内容表示は差し込まれた
+  競合セクションを上記の位置に置くだけである）。Worker preparationの確認中表示も競合と解決の直前に置く
+- Worker preparationの実行中・失敗後・`status === 'stale'` でも、上記の順で保存済み内容を表示する
+- 現在地点からの再計画Preview（16.4）は同じPlan内容表示を使い、その読み取り専用の競合一覧
+  （競合（試算））も同じ位置（素材の後、目標武器ごとの作成ルートの前）に置く
+- Debug Modeだけの補助情報（生成時CalculationContext等）は、これまでどおり主要情報の後に置く
 
 #### Plan概要
 
@@ -1542,6 +1553,8 @@ Plan概要
 - 全Step数
 - 目標武器数
 - 完成予定の目標武器数
+- 採用候補（BuildListEntry）数
+- 競合（記録件数）
 
 目標武器数は、そのPlanのStepから確認できるdistinct TargetWeapon ID数とする。
 完成予定の目標武器数は `steps[].executionEffects.targetCompletions` のdistinct TargetWeapon ID数だけを
@@ -1549,6 +1562,22 @@ authorityとし、Target件数や `selectedBuildListEntryIds.length` を武器�
 独立した `reserve_weapon` Stepの数や `expectedResult.shouldSecure` は完成予定のauthorityにしない
 （[DATA_MODEL.md](./DATA_MODEL.md) 11.4）。`executionEffects` を持たないlegacy Planでは、完成予定数を
 推測せず「不明（旧形式の計画）」と表示する。
+
+採用候補（BuildListEntry）数は `selectedBuildListEntryIds.length` であり、武器本数として扱わない。
+
+競合（記録件数）のauthorityは、表示中のexact persisted `ProductionPlan.conflicts` の件数とする。
+
+- Conflictレコードの件数であり、競合した目標武器の本数や作成できない武器の本数ではない
+- `rejectedBuildListEntries` を加算しない。現在の入力から再計算して件数を生成しない
+- 競合がある場合は件数を、無い場合は「なし」を表示し、見出し横の状態表示も「競合あり（N件）」
+  /「競合なし」の文字で示す（色だけに依存しない）
+- `selectedBuildListEntryId` を持つConflictは保存されたとおり「候補を選択済み」の件数として示し、
+  すべてを未解決と断定しない
+- 競合がある場合は、保存・表示されている計画でもすべての目標武器が完成予定とは限らないこと、
+  件数は作成できない目標武器の数ではないことを、エラーではない案内として示す。不採用・未完成の
+  目標武器数は推測して表示しない
+- 生成時点のBuild List全体件数はPlanに保存されていないため、「作成予定 / 登録」のような比率は
+  表示しない（現在のBuild List件数を生成時点の件数として扱わない）
 
 #### 目標武器ごとの作成ルート
 

@@ -3170,3 +3170,186 @@ describe('ProductionPlanPage conflict resolution maxPlanSteps', () => {
     expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
   })
 })
+
+describe('ProductionPlanPage section order and overview Conflicts (Issue #121)', () => {
+  /** Each element follows the previous one in document order. */
+  function expectDocumentOrder(elements: readonly HTMLElement[]) {
+    for (let index = 1; index < elements.length; index += 1) {
+      expect(
+        elements[index - 1].compareDocumentPosition(elements[index]) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    }
+  }
+
+  function sectionHeadings(): HTMLElement[] {
+    return [
+      screen.getByRole('heading', { level: 2, name: '計画の概要' }),
+      screen.getByRole('heading', { level: 2, name: '計画全体の実行順' }),
+      screen.getByRole('heading', { level: 2, name: '必要素材・費用の目安' }),
+      screen.getByRole('heading', { level: 2, name: '必要素材（アイテム）合計' }),
+      screen.getByRole('heading', { level: 2, name: '競合と解決' }),
+      screen.getByRole('heading', { level: 2, name: '目標武器ごとの作成ルート' }),
+      screen.getByRole('heading', { level: 2, name: /^採用されなかった候補/ }),
+    ]
+  }
+
+  function orderFixture() {
+    const fixture = contentFixture()
+    fixture.plan.requiredMaterials = [{ materialId: 'material.fixture.active', quantity: 12 }]
+    fixture.plan.rejectedBuildListEntries = [{
+      buildListEntryId: buildListEntryId('build-list.rejected.order'),
+      reason: 'resource_conflict',
+      detail: 'Persisted rejection detail',
+    }]
+    return fixture
+  }
+
+  /** The overview's `dd` for a label, its detail line included. */
+  function overviewValue(label: string): HTMLElement {
+    const overview = screen.getByRole('region', { name: '計画の概要' })
+    const value = within(overview).getByText(label).nextElementSibling
+    if (!(value instanceof HTMLElement)) throw new Error(`Missing overview value ${label}`)
+    return value
+  }
+
+  it('orders overview, global order, materials, Conflicts, Target routes and rejected Entries', async () => {
+    const fixture = orderFixture()
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    await screen.findByRole('heading', { level: 2, name: '計画の概要' })
+    // The current availability arrives once the Worker preparation is ready.
+    await screen.findByText('利用可能')
+    expectDocumentOrder(sectionHeadings())
+
+    // The global order still lists one shared physical Step exactly once.
+    await openPanel('全4ステップを表示')
+    const global = screen.getByRole('list', { name: '計画全体の実行順' })
+    expect(within(global).getAllByText(/^ステップ \d+$/)).toHaveLength(4)
+    expect(within(global).getAllByText('ステップ 1')).toHaveLength(1)
+
+    // The moved Target routes keep their Target grouping and still expand.
+    await openPanel('双剣・火（2ステップ）')
+    const route = screen.getByRole('list', { name: '双剣・火の作成ルート' })
+    expect(within(route).getByText('ステップ 1')).toBeInTheDocument()
+    expect(within(route).getByText('ステップ 2')).toBeInTheDocument()
+  })
+
+  it('keeps the preparation indicator and the read-only Conflicts before the Target routes while preparing', async () => {
+    const fixture = orderFixture()
+    const pending = deferred<PlannerInteractionPreparationResult>()
+    renderPage(
+      contentDependencies(fixture, [fixture.targetA, fixture.targetB], plannerClient(() => pending.promise)),
+      fixture.plan.id,
+    )
+
+    await screen.findByRole('heading', { level: 2, name: '計画の概要' })
+    const preparing = screen.getByText('現在の保存状態から操作可否を確認しています。')
+    const headings = sectionHeadings()
+    expectDocumentOrder(headings)
+    expectDocumentOrder([headings[3], preparing, headings[4], headings[5]])
+  })
+
+  it('keeps the same order after a preparation failure', async () => {
+    const fixture = orderFixture()
+    renderPage(
+      contentDependencies(fixture, [fixture.targetA, fixture.targetB], plannerClient(async () => {
+        throw new Error('準備に失敗しました。')
+      })),
+      fixture.plan.id,
+    )
+    expect(await screen.findByText('準備に失敗しました。')).toBeInTheDocument()
+    expectDocumentOrder(sectionHeadings())
+  })
+
+  it('keeps the same order for a stale Plan whose Conflict controls stay disabled', async () => {
+    const fixture = orderFixture()
+    fixture.plan.status = 'stale'
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+    expect(await screen.findByText('再計算が必要な生産計画です')).toBeInTheDocument()
+    expectDocumentOrder(sectionHeadings())
+    for (const name of ['比較する', 'この候補を優先']) {
+      expect(screen.getByRole('button', { name })).toBeDisabled()
+    }
+  })
+
+  it('counts persisted Conflict records apart from Targets, adopted Entries and rejected Entries', async () => {
+    const fixture = orderFixture()
+    const [persisted] = fixture.plan.conflicts
+    // Three records: one with a stored selection, two without.
+    fixture.plan.conflicts = [
+      persisted,
+      { ...persisted, id: 'conflict.order.second', selectedBuildListEntryId: null },
+      { ...persisted, id: 'conflict.order.third', selectedBuildListEntryId: null },
+    ]
+    fixture.plan.selectedBuildListEntryIds = [
+      buildListEntryId('build-list.content.a'),
+      buildListEntryId('build-list.content.b'),
+    ]
+    fixture.plan.rejectedBuildListEntries.push({
+      buildListEntryId: buildListEntryId('build-list.rejected.order.second'),
+      reason: 'lower_priority',
+      detail: 'Persisted rejection detail',
+    })
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    const overview = await screen.findByRole('region', { name: '計画の概要' })
+    expect(within(overview).getByText('競合あり（3件）')).toBeInTheDocument()
+    // The record count - never the Targets (2), the adopted Entries (2) or the
+    // Conflicts plus the rejected Entries (5).
+    expect(overviewValue('競合（記録件数）').textContent).toBe('3件うち候補を選択済み 1件')
+    // The stored selection is shown as stored; nothing is called unresolved.
+    expect(within(overview).queryByText(/未解決/)).not.toBeInTheDocument()
+    expect(overviewValue('目標武器数').textContent).toBe('2')
+    expect(overviewValue('採用候補（BuildListEntry）').textContent).toBe('2')
+    // A legacy-form Plan keeps its unknown planned completion count.
+    expect(overviewValue('完成予定の目標武器数').textContent).toBe('不明（旧形式の計画）')
+
+    const note = within(overview).getByRole('note')
+    expect(note).toHaveTextContent('この計画には競合が3件記録されています。')
+    expect(note).toHaveTextContent('件数は競合の記録数で、作成できない目標武器の数ではありません。')
+    // It names no guessed number of Targets that will not be completed.
+    expect(note.textContent).not.toMatch(/\d+(本|個|つ)/)
+    // A static note, never an alert.
+    expect(within(overview).queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('states that a Plan without persisted Conflicts has none', async () => {
+    const fixture = orderFixture()
+    fixture.plan.conflicts = []
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+
+    const overview = await screen.findByRole('region', { name: '計画の概要' })
+    expect(within(overview).getByText('競合なし')).toBeInTheDocument()
+    expect(overviewValue('競合（記録件数）').textContent).toBe('なし')
+    expect(within(overview).queryByRole('note')).not.toBeInTheDocument()
+    expect(await screen.findByText('この生産計画に表示する競合はありません。')).toBeInTheDocument()
+  })
+
+  it('keeps comparing, cancelling and selecting a Conflict participant in the new place', async () => {
+    const user = userEvent.setup()
+    const fixture = pageFixture('order')
+    const pending = deferred<PlannerAlternativeWhatIfCalculationResult>()
+    const client = plannerClient(
+      async () => fixture.preparation,
+      async () => pending.promise,
+    )
+    renderPage(dependencies(fixture, client), fixture.plan.id)
+
+    await user.click(await screen.findByRole('button', { name: '比較する' }))
+    const cancel = await screen.findByRole('button', { name: '比較をキャンセル' })
+    const requestId = vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0][0]
+    await user.click(cancel)
+    expect(client.cancelPlan).toHaveBeenCalledWith(requestId)
+    expect(screen.queryByRole('button', { name: '比較をキャンセル' })).not.toBeInTheDocument()
+
+    expectDocumentOrder([
+      screen.getByRole('heading', { level: 2, name: '必要素材・費用の目安' }),
+      screen.getByRole('heading', { level: 2, name: '競合と解決' }),
+      screen.getByRole('heading', { level: 2, name: '目標武器ごとの作成ルート' }),
+    ])
+
+    await user.click(screen.getByRole('button', { name: 'この候補を優先' }))
+    await waitFor(() => expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce())
+  })
+})
