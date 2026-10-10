@@ -1,10 +1,10 @@
 {
   "phase": "Issue #154 D2: K0-first candidate discovery and set evaluation (post-hoc analysis)",
-  "analyzedAt": "2026-10-10T15:55:54.498Z",
+  "analyzedAt": "2026-10-10T23:36:47.203Z",
   "sources": {
     "specDocument": {
       "file": "docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2_SPEC.md",
-      "sha256": "e45a033310696e83aad92fc38b849dfd0aaf1c73f66877b8b77512e69c515ae3"
+      "sha256": "a250925a5f25474db1b86f71906b51613608e33ec7b612822ba862e0f7bd1625"
     },
     "phaseB": {
       "result": {
@@ -16,6 +16,11 @@
         "file": ".local/PLANNER_GLOBAL_PHASE2C27B_FORMAL_TARGETS.json.local",
         "bytes": 967,
         "sha256": "d4486ba399cb8c0f9272e2c3335e543c8727955f8d9686481fc2975d7874d9de"
+      },
+      "t09Record": {
+        "file": ".local/c27b-formal.run/t09-r10-L1.record.json",
+        "bytes": 203547,
+        "sha256": "4de5f215bcd2d752c336ce1c92968880be9512c0df30c857f75469edd3bc7214"
       }
     },
     "phase2c2Result": {
@@ -90,576 +95,576 @@
     },
     "d2": {
       "raw": {
-        "file": "PLANNER_GLOBAL_D2_RAW.json.local",
-        "bytes": 328412,
-        "sha256": "3b97e66ecf7303fe91dcce650e6266b5874d82a8bd486f65fbcb83024cee9439"
+        "file": "PLANNER_GLOBAL_D2_RAW_2.json.local",
+        "bytes": 328373,
+        "sha256": "c671eb54bb55103e4a0ed87f9c39580bc6e76fea5e32958ea2e129e903689882"
       },
-      "runDir": "d2-formal.run",
+      "runDir": "d2-formal2.run",
       "attestation": {
         "file": "start-attestation.json",
-        "bytes": 16533,
-        "sha256": "a976efd81d058eb5370c5c1f4cf18c5e6b4b1f3ca40bc334c53e6199e5b87c5e"
+        "bytes": 17164,
+        "sha256": "8c0843167d2b8037d2c532e2c1646540be29354c3c39f254a125c1da9becd56b"
       },
       "records": [
         {
           "file": "DSC-t00-L0.record.json",
-          "bytes": 17237,
-          "sha256": "e22fa0cb06b95889c04eb81f951357098b75270889a72be99f7547e962465d9e"
+          "bytes": 17247,
+          "sha256": "ab06d3d1de524eb9d91a83e2a0b2e5b205cf14399cc9fd8cb3b173f7be4a5d6b"
         },
         {
           "file": "DSC-t00-L1.record.json",
-          "bytes": 145218,
-          "sha256": "e3e62d201eab006d6bdce9274f39f52bbc299cd9edfb9a61d8b9a51a437a8ee5"
+          "bytes": 145226,
+          "sha256": "446d8e6e4bee806b1dbd42c63a0dd53de523cd4e47a42c7a092129e993389d8b"
         },
         {
           "file": "DSC-t01-L0.record.json",
-          "bytes": 14912,
-          "sha256": "36ee66ad8067b90836c3f1b4f278fd28a0e2aba93d24d7de3fb40c55f3496c2d"
+          "bytes": 14928,
+          "sha256": "53296bc6c49a07305ba41a68af40a496cd142b592ff7a71232ea5cb579e0e69f"
         },
         {
           "file": "DSC-t01-L1.record.json",
           "bytes": 88742,
-          "sha256": "488ae673ff64b2520d407e59b282a011915e2423ca30438c42b2dc8cca35bce3"
+          "sha256": "254907e0c9559c3c0025f96b6803709327ad4da6e86a81d252fece76c650b48a"
         },
         {
           "file": "DSC-t02-L0.record.json",
-          "bytes": 56712,
-          "sha256": "71e0de1bbe84379e7ea7a8c109e377732897dbe27ca968c1233db86999b9bcdc"
+          "bytes": 56702,
+          "sha256": "0ad937cdb9bfae79bbfcb68ec0eb266397bcc8748bf10912db250aee8ebf0f0f"
         },
         {
           "file": "DSC-t02-L1.record.json",
-          "bytes": 56713,
-          "sha256": "57ab455d133598acb0de216cc905e5cc5e2c7657bc86ca9777c80ae7eeddba6e"
+          "bytes": 56712,
+          "sha256": "344331f36a6f73dcbcf8de2e5430d8002b18711b8379b05110ccf149ec744748"
         },
         {
           "file": "DSC-t02-L2.record.json",
-          "bytes": 296353,
-          "sha256": "0aa2339c2bacf5e1d48207488df186b508c1047003f64622ea9bee0cb980668b"
+          "bytes": 296359,
+          "sha256": "147f91178f612a1d48988c58407d1ea0eebe0be97163645ed5270c571fe6e53c"
         },
         {
           "file": "DSC-t03-L0.record.json",
-          "bytes": 48981,
-          "sha256": "8b4bdb6ca90e7ac0a4d8c804c804e3a661ed4af587d49e3abc0a36847c367e28"
+          "bytes": 48990,
+          "sha256": "f4ecb3b7f5fcd70ecedd74b80652fac881bf533a5bd7789d776c7604e878d2c2"
         },
         {
           "file": "DSC-t03-L1.record.json",
-          "bytes": 48988,
-          "sha256": "d99b30b2657109bd099180ddb3610dc639c8d66d795bd33ca3845c3ed75a4e01"
+          "bytes": 48979,
+          "sha256": "8ddd498c7659b67aeaab4fdacfe0b25620e79c958f8aab9edbd43a2c651a5810"
         },
         {
           "file": "DSC-t03-L2.record.json",
-          "bytes": 332105,
-          "sha256": "2f842952a7a11c320c51a09d39501809c9ddc20042c6f841ab81c483dd0e633c"
+          "bytes": 332114,
+          "sha256": "76e1049fb40273e7b02387a4d072d90fba125c16293759142517bf8cab3fd512"
         },
         {
           "file": "DSC-t04-L0.record.json",
-          "bytes": 169047,
-          "sha256": "ac0aa675880fc54ba26e6642b76d043a174132133bf1a260289f37fecf31148d"
+          "bytes": 169039,
+          "sha256": "5421254049bf0874e9bd1c40fd973eddfc094bb044b1e4943bf0792c22e82bfe"
         },
         {
           "file": "DSC-t04-L1.record.json",
-          "bytes": 169047,
-          "sha256": "dc272ed4220859ac7b132627b74a7a830d9930e12dde386694868c914ed3b063"
+          "bytes": 169057,
+          "sha256": "8ebb6f52b1c1028daea12504b4bef497024ebe0f21f7b0292d9f7f0483c47048"
         },
         {
           "file": "DSC-t04-L2.record.json",
-          "bytes": 1098367,
-          "sha256": "549e05bda550186ced4e6dccf3264a8181f897500404b9bd0129d853345d0cef"
+          "bytes": 1098374,
+          "sha256": "8a63ca3599993fa5a7185754eaadec7785e17847d5b523167bcb5d3a3b74b29e"
         },
         {
           "file": "DSC-t05-L0.record.json",
-          "bytes": 114838,
-          "sha256": "e211b87f30b6ffd55111c7aad6f1a1ebc72222449adc36b4bf7224d884bc8cc2"
+          "bytes": 114828,
+          "sha256": "0bab4fbdc297a29c829d1c5a6669c09a5992e706de2359aaea98c11693c2661b"
         },
         {
           "file": "DSC-t06-L0.record.json",
-          "bytes": 74707,
-          "sha256": "40b098e7d6fd73a163643cee16e4b929bcb8ff15fb4710fe6f8b7b4c73ae1778"
+          "bytes": 74713,
+          "sha256": "3a7659ba546f925b1101a335a760cdf6b2b2d835571e0f6e01acb85d2031253d"
         },
         {
           "file": "DSC-t06-L1.record.json",
-          "bytes": 261945,
-          "sha256": "942c8336667506504afa261bdbedd6f2eaa490d6e8793373fece3e87b26e80a0"
+          "bytes": 261946,
+          "sha256": "4836ef12b2b300f90a40da821c3d17363c09a06e2d789037f79e857569c29ea7"
         },
         {
           "file": "DSC-t07-L0.record.json",
-          "bytes": 25479,
-          "sha256": "94b572b85bb7308de316f1ea5f217d55b85f3de0d60d55d77b59d0db8fd069f2"
+          "bytes": 25471,
+          "sha256": "7ec98ea68d99649b6d897e20fa385d77075ca4f57143920cf2f46924e4ec63f9"
         },
         {
           "file": "DSC-t07-L1.record.json",
-          "bytes": 288200,
-          "sha256": "c914a701323f0811aacc755860ebdace8203c84a1563893b647ede72745893d7"
+          "bytes": 288215,
+          "sha256": "739829954c2b2f2d6c38cc37dd06393dc02eb3fddec091407aecd041f439a46f"
         },
         {
           "file": "DSC-t08-L0.record.json",
           "bytes": 81844,
-          "sha256": "f1f7da5bcd1518dfa7351394a1d7dea169c4f8fd76ce84bb723b1ae6dff3da51"
+          "sha256": "67da33f0dcbc3cfa6a325ea0ca6e2439b6cbef0d57fbb6c8d5d311e22817103e"
         },
         {
           "file": "DSC-t08-L1.record.json",
-          "bytes": 81850,
-          "sha256": "6716380271e68a667e38fc2ebcaebdbd27c80918fa4bb10b02645a396544dbd0"
+          "bytes": 81842,
+          "sha256": "e739d5df568bf37b68586411e67838a60c23b9ab63581c4d76e9025902e66bf8"
         },
         {
           "file": "DSC-t08-L2.record.json",
-          "bytes": 572338,
-          "sha256": "eea598c79aa2e41c553fc5d9406f647d2eb88444291182cf614d17b8d8339b24"
+          "bytes": 572339,
+          "sha256": "1ba920c8d31e4bba18c0ef5eedec407f3559171fedf776d557dff19534049ff7"
         },
         {
           "file": "DSC-t09-L0.record.json",
-          "bytes": 44270,
-          "sha256": "e599a8c89c081e88b52f8d5eefad02948cdf5ceddb96cdb50f756ab2915a4ef6"
+          "bytes": 44253,
+          "sha256": "a87cad6d98307fc46026986eca193ad3b40f42cb527ba82fd4a2ab76be71aa35"
         },
         {
           "file": "DSC-t09-L1.record.json",
           "bytes": 44236,
-          "sha256": "cfd42bf988215848dedcb54fcc4a53ccf42ed2bdcf96c36ff6a1a9ff18bab46d"
+          "sha256": "3574f214eabdb41faf17899d0bcf1c33b5a920a7b43fadfbc22e19d623adf592"
         },
         {
           "file": "DSC-t09-L2.record.json",
-          "bytes": 728388,
-          "sha256": "2a73f0a515842bcaa1679650ab470b0530e212fbd83c94d2e57aa76d98e1a17c"
+          "bytes": 728385,
+          "sha256": "351f2f8f2e47db65a3bafa4d24e1e9220d779ca40542f8d5040a81ee050c217c"
         },
         {
           "file": "DSC-t10-L0.record.json",
-          "bytes": 8797,
-          "sha256": "da15b3eaff3e25b22331c918968b68e996718ad9ee426fe365f32a9807ad7ee2"
+          "bytes": 8822,
+          "sha256": "da68cadc11c204364bb4693ca336e044bc7104c2d305f7ec7b1ca30a373d48a9"
         },
         {
           "file": "DSC-t10-L1.record.json",
-          "bytes": 48555,
-          "sha256": "734c0b7e22dc393537202eddd0d6ae4a29aa2e354a445588a0311c1bc17b569e"
+          "bytes": 48553,
+          "sha256": "bcc8a1686fdca831671276f28619bb403da0f45e105bbcdcb091bf98a719d2f6"
         },
         {
           "file": "B0.record.json",
-          "bytes": 507732,
-          "sha256": "f272b678c9621c38ad2c08a2fbf2a06bf548bc136881ae10b2140af2d91d2f52"
+          "bytes": 507751,
+          "sha256": "49b02508f843ef3dd6581a7153562d9575c72c2b435b8166b72366b782d55f4d"
         },
         {
           "file": "ADM-t00-c1.record.json",
-          "bytes": 504901,
-          "sha256": "e177cc0fde00a3f12fe35fcefa45ce320eab4ae91c8becc4da26dd95574a2b66"
+          "bytes": 504926,
+          "sha256": "954468d48c4eadf0ca4f0505b04813388b3a664aa163dad1cf2a23be273a44c6"
         },
         {
           "file": "ADM-t00-c2.record.json",
-          "bytes": 504909,
-          "sha256": "cff2a9c73ef5552c3409a76de1980b8990dbb326c135956fa642b11ff625b5e1"
+          "bytes": 504926,
+          "sha256": "1d4f4ab1c0a290cda70c118cbb96a0df13a5129e98e7b2dacd3fc7fc968c4451"
         },
         {
           "file": "ADM-t00-c3.record.json",
-          "bytes": 504901,
-          "sha256": "9508d954322456df9676e4cdecce39ab471e2bb3e600e84dfe9f97ab318f17db"
+          "bytes": 504926,
+          "sha256": "3ba24e0c9153db64ae9b4315ad13cee682107e8e85fb1b6e6b07abb1b3f77b78"
         },
         {
           "file": "ADM-t01-c1.record.json",
-          "bytes": 505754,
-          "sha256": "4c289ba5e38286f5d2cd3f12da0260b91c72d13da8aafc14284db9004d48afea"
+          "bytes": 505779,
+          "sha256": "00553c3aa2186c59ac51bc3ecee837d6a75fc59f6828106c58109cd4e4850f34"
         },
         {
           "file": "ADM-t01-c2.record.json",
-          "bytes": 504953,
-          "sha256": "507443228162ed19985bef3086697a45a761c14b545362cb34e13d33c915f74d"
+          "bytes": 504970,
+          "sha256": "3dfc4156f5f8e02c233d75d03aef79ffa35534f4e907df686138dcfefeac242f"
         },
         {
           "file": "ADM-t01-c3.record.json",
-          "bytes": 505349,
-          "sha256": "cc1925375a63f613c53604cd7884244d144e4349d9d64acfc35a893adbbc2b6d"
+          "bytes": 505374,
+          "sha256": "e3b642fe8304851604e387b962dde38d0eff074faee79007f0ba08b60f5f6ec9"
         },
         {
           "file": "ADM-t02-c1.record.json",
-          "bytes": 435586,
-          "sha256": "12caea9d24c878d78ed2dd9186327babd692cbcc5e8dc3ad30a2759144f1ffd3"
+          "bytes": 435612,
+          "sha256": "16966c06bd453d783e7aa9244483456f53bdf3b846299cd49b0d925aa503b9cf"
         },
         {
           "file": "ADM-t02-c2.record.json",
-          "bytes": 435590,
-          "sha256": "ff380e91294ba560d8005c9f65ddf36159fca1d21f8aa2983d60fcdee94c64da"
+          "bytes": 435612,
+          "sha256": "ca73ddabdd73ac84fa06d6be329b5b73a6e36aeefc87e5e47fa3b6c39a34c793"
         },
         {
           "file": "ADM-t03-c1.record.json",
-          "bytes": 505400,
-          "sha256": "558640bdf4eba85d20aba7c3128528bcb224d6a2fae2d50e2aee4000bbca6f46"
+          "bytes": 505425,
+          "sha256": "bd9cd4178967039ec2f7c4f8ea730214f292bd2027fb2258fb8d79b88ce554cd"
         },
         {
           "file": "ADM-t03-c2.record.json",
-          "bytes": 504957,
-          "sha256": "9afae55d87c0ac60d20c89f2636251c03170d63febaa840955acc1875baf8049"
+          "bytes": 504981,
+          "sha256": "f5f4a8d82b422f826622794312afd1d021e375abae064eb31c9817ff93fd529e"
         },
         {
           "file": "ADM-t03-c3.record.json",
-          "bytes": 504877,
-          "sha256": "05e69f36cb6e0f0df592658b92c294b88c3bbd2a7d228b383de8c677da356d93"
+          "bytes": 504896,
+          "sha256": "f21e86c21c01a3d406757c6c937aa19a7081d0d60141bb4e2441ed08b60d192b"
         },
         {
           "file": "ADM-t04-c1.record.json",
-          "bytes": 324918,
-          "sha256": "c0f3664c0fecb0d9f20c44520648bebaf74ec32bb262b65052dae389833706d6"
+          "bytes": 324935,
+          "sha256": "bd1f81419a83f14cdba5d03121077a7e552364d23b7b614018dd828a9c93114d"
         },
         {
           "file": "ADM-t04-c2.record.json",
-          "bytes": 325359,
-          "sha256": "4a55957d543582e61185dab12ef787d1ff76bbbb4cff644799e9d43cc5a4d51a"
+          "bytes": 325376,
+          "sha256": "8949796da88894f3bbf7576d13ce0051843595a46a64ea623aca0137a44e62c7"
         },
         {
           "file": "ADM-t04-c3.record.json",
-          "bytes": 324962,
-          "sha256": "6b91310342b60caea37baaaaed951556d6b5a6420d2dfd0c1218cd8c9e87527b"
+          "bytes": 324979,
+          "sha256": "3616698e2209c2bef8b3821e28e7b83d61105b58c9898515b1d040464df76b2c"
         },
         {
           "file": "ADM-t05-c1.record.json",
-          "bytes": 504903,
-          "sha256": "60a90593d766d75672065f3ae940dff679c1e6a9df90e7f65da866b54c4679a2"
+          "bytes": 504920,
+          "sha256": "0bb946243894717f2e7bc3e5fc21179ce903df712ff3a994cfa0392269ae6ba6"
         },
         {
           "file": "ADM-t05-c2.record.json",
-          "bytes": 504497,
-          "sha256": "60db81f1f0b5cf39e4a11e4b47d7754aa4cb833d523c9f675974e23b946a2ba9"
+          "bytes": 504523,
+          "sha256": "15703e078922ae8eb0de3d92073e985d72425da69c6619773509640d15152316"
         },
         {
           "file": "ADM-t05-c3.record.json",
-          "bytes": 504498,
-          "sha256": "5d8ba96d80cdc7e5cdf3f17e9fe68d13093319dd59dee73fd9dfe2df4936279f"
+          "bytes": 504531,
+          "sha256": "406ae289f619667596d2ec9cd7f8ff070c5af78e1428533602aba2023cfc3c43"
         },
         {
           "file": "ADM-t06-c1.record.json",
-          "bytes": 504907,
-          "sha256": "91516a7c89d129ee04644f92ce064c56178aba171d1826883df491bf3c2ee114"
+          "bytes": 504926,
+          "sha256": "fa3f833f2dee99092752becbe3287b72a13e39f80f859f414eb7163efc7871b6"
         },
         {
           "file": "ADM-t06-c2.record.json",
-          "bytes": 504502,
-          "sha256": "633e8a693405bfd739cccc54e3173e1d475dc813dc9994bc9a0f1e1e21f9d994"
+          "bytes": 504527,
+          "sha256": "54d0a7a4a9202c9101d08e3a29d59b5e4c40d530e4ec3795b8fa28a5e83ea367"
         },
         {
           "file": "ADM-t06-c3.record.json",
-          "bytes": 504676,
-          "sha256": "8c894f47794df20b86f1a8bbaf9617401eaeedfea2ca733c0ad7491cd787f8f0"
+          "bytes": 504703,
+          "sha256": "afe61427a55914fcedde51fb65b36636e27e87bbb51a2bf005bbd7290f375ca3"
         },
         {
           "file": "ADM-t07-c1.record.json",
-          "bytes": 504580,
-          "sha256": "3abd40809b5295273670ae84b96ee52054aecfd8fb2d7cf6c9fef1c82ec578d4"
+          "bytes": 504598,
+          "sha256": "6dd8a8062f4c99b2780a2f8828ff1af14428d779f7461e71fa342ad61884e4eb"
         },
         {
           "file": "ADM-t07-c2.record.json",
-          "bytes": 504901,
-          "sha256": "214f96e8f61c7ec7d2ca166fce93b45937767084ad6e531156fd393bae322b8b"
+          "bytes": 504926,
+          "sha256": "28d3c7a5afce333f62f40a231236a8759f3a502bbc95bd4ce81171d60175fa61"
         },
         {
           "file": "ADM-t07-c3.record.json",
-          "bytes": 504704,
-          "sha256": "89ec40c30e2a2c296bd95aaea4f362a607608cd3b5ff5417307865766ddca028"
+          "bytes": 504729,
+          "sha256": "4235cd50df3d02db2ddd28ed2039ce92a012d34aa06d698b48dfa13b915948e3"
         },
         {
           "file": "ADM-t08-c1.record.json",
-          "bytes": 507717,
-          "sha256": "d29f60a89ae0b4832dc3996e1c0cd05a02d9bfd7abfa2a717c9ae3a6016b776e"
+          "bytes": 507742,
+          "sha256": "e0945390a9fa6e4c488fc6afd5905daee944b1939ffaa6f737383327afc6f871"
         },
         {
           "file": "ADM-t08-c2.record.json",
-          "bytes": 507753,
-          "sha256": "bc54c84c3efcf327a38f2fbf6fc50d4f67f6576ebc1fb3d4ca5d05b8cbfbbe09"
+          "bytes": 507778,
+          "sha256": "0fdaadb969716252d310c3c585366bbb7c97a036e8ae01bb73b94a36937d3b16"
         },
         {
           "file": "ADM-t08-c3.record.json",
-          "bytes": 507718,
-          "sha256": "63affb706b931f4bd3032b63f1d9c221254a41f86d95b5d0d562abea3affbb6b"
+          "bytes": 507751,
+          "sha256": "f8466e6c439aa09220005689fe8d2022e2d1e845884995340a27c72d9829db8e"
         },
         {
           "file": "ADM-t09-c1.record.json",
-          "bytes": 505601,
-          "sha256": "3c251caeb58b45cf886f0b8813e46624505f52db00966e2f55854a68093325db"
+          "bytes": 505618,
+          "sha256": "bb1981053e9d6dd76d0b898a6bdc7684c1b97274a9145a5a67c8da182e48ee7a"
         },
         {
           "file": "ADM-t09-c2.record.json",
-          "bytes": 507423,
-          "sha256": "5e34623eea5b4b71de71cc25ab7d45af370e243bcbffc362ff35afd25b795847"
+          "bytes": 507450,
+          "sha256": "c68b3fbefe685526a836db2d52f91e10905d104422ea954feb91038bca1f09fb"
         },
         {
           "file": "ADM-t09-c3.record.json",
-          "bytes": 513895,
-          "sha256": "29b7a6500f9547e2cf603ea37ca2d1641302213754b23161061f0be9f6e8692b"
+          "bytes": 513922,
+          "sha256": "51b1d7906dd9ddeeb4a86e7f430bce1133f6e0ec9eee3581a29c0e7df5a9103e"
         },
         {
           "file": "ADM-t10-c1.record.json",
-          "bytes": 324932,
-          "sha256": "6bdc86167c81bb0a83681853c998a37480f5f488e2a8da7e46d5664d2542facb"
+          "bytes": 324957,
+          "sha256": "7479926cd19e693b047947a918271db9e337913283603139895ebd2bf20f850d"
         },
         {
           "file": "ADM-t10-c2.record.json",
-          "bytes": 324934,
-          "sha256": "bb95b8db377d4114282720d1e1bcc370117681f4e03e754110ed71dcdf316382"
+          "bytes": 324965,
+          "sha256": "6a89f77a4fd6d8da2444c0f0413b966f641b306aa556df68126f0d521abd78a1"
         },
         {
           "file": "ADM-t10-c3.record.json",
-          "bytes": 324932,
-          "sha256": "50a78e834dffea1d925a7607aa337f7615bf6bcd6b9e0c39529742d06f6887d5"
+          "bytes": 324959,
+          "sha256": "c231a765c5068b7efb9fd5c5cb61d806d4bc41b3b5b08233f223e27ebd6889ec"
         },
         {
           "file": "CMP-t00-c1.record.json",
-          "bytes": 504399,
-          "sha256": "ca317214f4850280af8c78141a06efdab2ec570dd9015bb9c8338318e23a9b4c"
+          "bytes": 504418,
+          "sha256": "f61efed210e4f18fbe65bc4d992489fffd6df500a72b0d54498bf14118c6fea6"
         },
         {
           "file": "CMP-t00-c2.record.json",
-          "bytes": 504393,
-          "sha256": "49903841716ff38d5850f2a17c955d6b296378c0b96255e473c35c7b5aac2af7"
+          "bytes": 504418,
+          "sha256": "f678e75af2520420b288c93a413306778566270948fc071711cf8e3d537d2062"
         },
         {
           "file": "CMP-t00-c3.record.json",
-          "bytes": 504401,
-          "sha256": "4bd7e64a1b0babbed2d2d0ed6e4f29f34c4c8918174d7b4af3cb2dca2ea4efa2"
+          "bytes": 504426,
+          "sha256": "f31192b768c7cbc0cab2f58645a86932461076b478adb38ccb0ac01af1b61376"
         },
         {
           "file": "CMP-t01-c1.record.json",
-          "bytes": 505297,
-          "sha256": "8f1e0b6c6a97f622d052f8cecf0f64bd14a45967a02f46283ac9aca553f3d3b0"
+          "bytes": 505322,
+          "sha256": "2cc60d7debc78ae1944592a24deec693c4e39acd9950a4872867e2a18397dcb0"
         },
         {
           "file": "CMP-t01-c2.record.json",
-          "bytes": 504436,
-          "sha256": "22b8cc27c88d68a5e6804793d540c1848e80a5d55c5124d39846f20150a9c350"
+          "bytes": 504461,
+          "sha256": "b277fb598af69cd2abfaba8b933c3c63dc795ce3b1a73adf80292438c37b7a9d"
         },
         {
           "file": "CMP-t01-c3.record.json",
-          "bytes": 504833,
-          "sha256": "57367eb012ebfc6b29968a3800c4e4b3a279607146654fa51b0e6c34c043b310"
+          "bytes": 504858,
+          "sha256": "7a9ae54bf7d1f5a7478418fa6137d7f34aae072c5f78cb084db9d616f0fd92e3"
         },
         {
           "file": "CMP-t02-c1.record.json",
-          "bytes": 436237,
-          "sha256": "9bff9713034209feec2f0c9ac1f3ccf19df2a011ede675f627cbb421fafd99f2"
+          "bytes": 436254,
+          "sha256": "17367a2ed0b8fbea7fca3a2746dbf268b45d7bbfd29d8d2003940340eb91504f"
         },
         {
           "file": "CMP-t02-c2.record.json",
-          "bytes": 436231,
-          "sha256": "dc30e862a4aa3eec3c4eb31b7c4c0d659c5d0c2c0384593e6ae36a396892cfe1"
+          "bytes": 436256,
+          "sha256": "079605665db87170bc07ef84b83a8ddb9d87694e2754c3b82f4ec0b7f2aea2c6"
         },
         {
           "file": "CMP-t03-c1.record.json",
-          "bytes": 506040,
-          "sha256": "9128163afb27bd92beda24c3a3f75d42225b4243a1063a59bed43e89319b7ea9"
+          "bytes": 506075,
+          "sha256": "8b0225c695b24b3abf100f1e332cca3cf698dfea99d2c210c016c2599d437d3f"
         },
         {
           "file": "CMP-t03-c2.record.json",
-          "bytes": 505598,
-          "sha256": "34f521bfac4f40eef5df4c0f39d8117132cfdc9752d4d86be73e9cad53b4e2cb"
+          "bytes": 505621,
+          "sha256": "14045920db2ac6226e1c3f27396054b424e65cc2d60faf25ada85f2c4d514318"
         },
         {
           "file": "CMP-t03-c3.record.json",
-          "bytes": 505513,
-          "sha256": "ec58f1ed3bd875736df390e6d3457ae0cce0fc714c95d57b037af30cb4bfa29e"
+          "bytes": 505538,
+          "sha256": "1fd9da772cbb8482301b376b1d6c7d49292fb1d30e35b30b6b037c263931efc0"
         },
         {
           "file": "CMP-t04-c1.record.json",
-          "bytes": 325555,
-          "sha256": "a48d4402586bd4357bfabeafd5df30efd12607f7c7de0ae6c67d8c117ce08906"
+          "bytes": 325578,
+          "sha256": "bc6b6646db60f9556c8df8dd72816298bbf6d4cae69585c462d217584f8f1a77"
         },
         {
           "file": "CMP-t04-c2.record.json",
-          "bytes": 325996,
-          "sha256": "6ee7e372b1ec402063cde68776c8be16cd1e8311cea118d614bafe1ea717430f"
+          "bytes": 326021,
+          "sha256": "2f724150dd1c58d89a4e567fb9148a0e714c0270e991bb69f8f935286ca258fd"
         },
         {
           "file": "CMP-t04-c3.record.json",
-          "bytes": 325595,
-          "sha256": "c4b673fd1f26c4656a94e599b08662b7394e3c51c0563fb7dfb066ad48ead510"
+          "bytes": 325619,
+          "sha256": "1a3a065ea561dce6f0b449f03f6dbd174ac22ee0f79482f8fed4c3d180a9b5e7"
         },
         {
           "file": "CMP-t05-c1.record.json",
-          "bytes": 505537,
-          "sha256": "41f8bd56113b59c2983b99f2aec68dabbf97bddb8a78976673894a1d713fc744"
+          "bytes": 505570,
+          "sha256": "eb431df2c97004a14817a91f50c531aa84c93a9b05c59a87e4d9700c9d5222e3"
         },
         {
           "file": "CMP-t05-c2.record.json",
-          "bytes": 505140,
-          "sha256": "cad81209b159b78f891297f60a098a6458de088473656cee44782d356042a3c4"
+          "bytes": 505165,
+          "sha256": "af0d9179fba41d3193c376bbbe54421232cfee224c9d9859c6eee59069ecf594"
         },
         {
           "file": "CMP-t05-c3.record.json",
-          "bytes": 505138,
-          "sha256": "d43898a90452d3cd4a9386f4bcbfcf01b8b15d51ca039d875ed02aebf4b8f050"
+          "bytes": 505173,
+          "sha256": "08a3370d246280c8cc4fcbdc6cafd619c55642b6909c4025b58a32fcc227170d"
         },
         {
           "file": "CMP-t06-c1.record.json",
-          "bytes": 505557,
-          "sha256": "380efe82c1d68ac4ec0d536384e5e61457ea00c6df5cc0012ec3244bfbd43f85"
+          "bytes": 505573,
+          "sha256": "aa61d2e3e4033ca4a800d35a39edbb317a48118e5b84fa1b54c504082a055fb6"
         },
         {
           "file": "CMP-t06-c2.record.json",
-          "bytes": 505150,
-          "sha256": "14a95d738de34bbc60051df56900b077c71f947f47d4a2b3432d89f32dffe480"
+          "bytes": 505175,
+          "sha256": "6067821f21a3805fc5ec23d1c5630d8d5cd91fa3b206ce25ebf5c97b9fd950f1"
         },
         {
           "file": "CMP-t06-c3.record.json",
-          "bytes": 505385,
-          "sha256": "060dc3457a7c2ca7ece4c8bb9336e6759ba69d50475672f3105b75e6671521d9"
+          "bytes": 505402,
+          "sha256": "4bb9382c4e1955c14c956f2d11ef9db9c2092b95fa6404416c148ad88d9f6073"
         },
         {
           "file": "CMP-t07-c1.record.json",
-          "bytes": 505862,
-          "sha256": "1c085f56fd3b6b0bcf93ca74586e4b6c0c4d0660ab51e0eac9e97f1928588ca9"
+          "bytes": 505894,
+          "sha256": "50094f5b7e1082b632cd0740d48dc1d0c190f38173c4ea5b9be6255118bdd13d"
         },
         {
           "file": "CMP-t07-c2.record.json",
-          "bytes": 505623,
-          "sha256": "b4005e42dae3d759935f9143919a3700edf5250806c138e6e03ef5f0b3d2d705"
+          "bytes": 505647,
+          "sha256": "6415f428d705bc253e542fb64a1429eabaa49b4f9c882627e2bb922e3a32d96f"
         },
         {
           "file": "CMP-t07-c3.record.json",
-          "bytes": 505583,
-          "sha256": "248081d63d181c72159268538161dbb0d031b40b0650d05d097929ea48a29e85"
+          "bytes": 505600,
+          "sha256": "75c1b23f039482b875c8f9fd85d56479f3851e28b5d8d840c9330833fe6acbc2"
         },
         {
           "file": "CMP-t08-c1.record.json",
-          "bytes": 508982,
-          "sha256": "3b61d7a9a4f656c6ef221bf7d7b3156dd1975ad1b74404e54a535445482deb83"
+          "bytes": 508999,
+          "sha256": "83d4ae4454d6c3447d513af2501859f2dc74a9e6a817f882eba3e8cecb80979a"
         },
         {
           "file": "CMP-t08-c2.record.json",
-          "bytes": 509018,
-          "sha256": "6a50764158862785f5c105dc748a4275ec5b08b350fe7b668765b527c99d09d5"
+          "bytes": 509035,
+          "sha256": "29cd19ab88ebca1cbb5547a63fd6fa818309e4a98d3ba51eb8549e93931364b5"
         },
         {
           "file": "CMP-t08-c3.record.json",
-          "bytes": 508979,
-          "sha256": "e6cdf9047574dacfa7d3f806a383b63415c4ed4abb118d0d9177570f6c44298d"
+          "bytes": 509004,
+          "sha256": "7367ee5f7cd8e851f4830f2754ae539874f1ff790c125e17a05e55e155dd44a3"
         },
         {
           "file": "CMP-t09-c1.record.json",
-          "bytes": 509649,
-          "sha256": "af36cafccc5d88f7c1a41e6ef42e8af23ac9b48a7e86141121e0a9f60f3df572"
+          "bytes": 509674,
+          "sha256": "38ae59414e9291487e3e30f606a089de2d564432da3c2ddf5532679e444592dc"
         },
         {
           "file": "CMP-t09-c2.record.json",
-          "bytes": 509641,
-          "sha256": "42c72c8a0b9987f17748f6c0ea5bac2a7239711791c95b5541036ded5ef66a8d"
+          "bytes": 509664,
+          "sha256": "a01d8aa2d211b3388cffba7e03b7b2c40fea4c78948a3135357b62affdb46bf4"
         },
         {
           "file": "CMP-t09-c3.record.json",
-          "bytes": 515793,
-          "sha256": "e857f4d50421530bdb62bda6a037e2792385cb7a73acbcfb6949e84a3c14e2ba"
+          "bytes": 515818,
+          "sha256": "39bf1dc87d31d8fede287de1e4337f8b0a8d60f2b5232fc4a9676057c7b8e4e3"
         },
         {
           "file": "CMP-t10-c1.record.json",
-          "bytes": 330868,
-          "sha256": "f62409cca8571b9223b3e59f48133a0ac29648767b5b865af30b14aba45ece81"
+          "bytes": 330891,
+          "sha256": "100d46923813e28155d97bbf4ed346a31e8e90e05fdd2a77743d5c798c6fdcf2"
         },
         {
           "file": "CMP-t10-c2.record.json",
-          "bytes": 330869,
-          "sha256": "3821cd68c4fecccf35490b388eaa6298c2ae4c80ca3fa48f1ee877a7941a909b"
+          "bytes": 330902,
+          "sha256": "0a65cfd35510a6573981269269bf1fda52f183eca528b4fe773cd45e2eb90882"
         },
         {
           "file": "CMP-t10-c3.record.json",
-          "bytes": 330869,
-          "sha256": "e1907a919c68d2b839979b6b4e4f831afb42d4c4d19e8f2aec9436bfdb808983"
+          "bytes": 330892,
+          "sha256": "fee14588e1ea60c9c00486d8ecab9929128aeebbe11dd4dca0669c8650249513"
         },
         {
           "file": "Z0.record.json",
-          "bytes": 508986,
-          "sha256": "5d9d47f7aaf4c488d79d0e33389b61432a3607be3725ff2e52e8192fac9fd084"
+          "bytes": 509773,
+          "sha256": "8186ec7f7b90668a2c9a4bd57bc59de48d4a98789f554631cf0e90919ce7db76"
         },
         {
           "file": "Z-t00-c1.record.json",
-          "bytes": 509238,
-          "sha256": "008fbb50237a303ed68fb4c27fb3489d910bcf3a0aa19a6d3123e05587d6a22b"
+          "bytes": 510025,
+          "sha256": "ee1c612e83c9de7f6fce8ff2ef00f1e824d1db502c915696fb13fd83d2c8eb9a"
         },
         {
           "file": "Z-t00-c2.record.json",
-          "bytes": 509247,
-          "sha256": "2dc03403fd39d8bdfbfc8294a7bba544486557656065f28f345c893bd8442235"
+          "bytes": 510025,
+          "sha256": "feabb28d630926112b8f7273521d3168a7f40e599abf0bbb9d9c500102bda70f"
         },
         {
           "file": "Z-t00-c3.record.json",
-          "bytes": 509239,
-          "sha256": "789df655dc0677797e994113c35e1f6f1ab34853452d1e2d7b4987abceba8fa7"
+          "bytes": 510025,
+          "sha256": "bbc68581e05d65a702e311e55339acec3cfd34e09a653d21e8b10867fa3f145c"
         },
         {
           "file": "Z-t02-c1.record.json",
-          "bytes": 439927,
-          "sha256": "6bbec765d6a0bbbe0cb96a718912cbd52fc8647e48fd6379b58ab8260dc837d2"
+          "bytes": 440721,
+          "sha256": "e04e0458e85a3d84d67727a6c1273464de8639435ab4e4f03e853e2b6ef0dc3b"
         },
         {
           "file": "Z-t02-c2.record.json",
-          "bytes": 439927,
-          "sha256": "802fbc3b1c99dd2b1fd1a12996a831dd31f1d39ae1fa91e37eb43f6cb7eba9ff"
+          "bytes": 440721,
+          "sha256": "52056847571b6e4e6d044360dd553699909081efab714eb33efb60f5c5f981b5"
         },
         {
           "file": "Z-t03-c1.record.json",
-          "bytes": 509746,
-          "sha256": "4b82e9efdf975d7c5e69630b2bfc6433aa84a7e28e1b517ecf6c3468fae70caa"
+          "bytes": 510523,
+          "sha256": "24a05691ddd703e44173242909468503d0f680264d49f4c65bfe3c457c6a67ce"
         },
         {
           "file": "Z-t03-c2.record.json",
-          "bytes": 509292,
-          "sha256": "79fc76373988a9e7e84c27756c8a97758bb879d4a69fb6b3e258915b43cca241"
+          "bytes": 510088,
+          "sha256": "23a4db8c34e61405605e4334d12fc654795a66d1043f8ef057571a648156a17a"
         },
         {
           "file": "Z-t03-c3.record.json",
-          "bytes": 509209,
-          "sha256": "ab1931ec25f9120f3b0a243f5f274a4d9ee906e42f029a4013ab4017d203dbfb"
+          "bytes": 509995,
+          "sha256": "cb32e2c36bb7ad93366a8bb7998de2005708ed04c7aae1f3af6fad816cfb125e"
         },
         {
           "file": "Z-t04-c1.record.json",
-          "bytes": 329491,
-          "sha256": "a9e9726ea2d6bf8d1fbbf91d008a044a882679426f15c429582c77da47b52d03"
+          "bytes": 330279,
+          "sha256": "1d552461e0257bca6b21c9b7952c742c29edc29f33d868dc9e2d2ada968eb1a3"
         },
         {
           "file": "Z-t04-c2.record.json",
-          "bytes": 329940,
-          "sha256": "33462287cc34133599930adf38078b5ec699ff5bf0ae18b1995caf7415651dad"
+          "bytes": 330720,
+          "sha256": "7610b9211f0fb2e67ce387bae577606b50cca5178d8d9d5c07e87a283e025cc1"
         },
         {
           "file": "Z-t04-c3.record.json",
-          "bytes": 329533,
-          "sha256": "3059309c308bec0480ca01bfc4d589a765e2e8a0a3da6faa7834e16cbb08665f"
+          "bytes": 330321,
+          "sha256": "340a50811c29aa32b5f0b094581294bce6c9d7e08f46a4f8038c7a6e996b4ed0"
         },
         {
           "file": "Z-t05-c1.record.json",
-          "bytes": 509239,
-          "sha256": "3e19b7bc7719f240fcaea9c70408323eaa10f5da70a3a9b23850d3c74c7e136b"
+          "bytes": 510019,
+          "sha256": "01872a3f29351e9f8c5996473752192e4dcffec38fcb82d196e29c8d1159ca47"
         },
         {
           "file": "Z-t05-c2.record.json",
-          "bytes": 508844,
-          "sha256": "3ac8fdaa177baf7cb468c7e7da5ab59a891d53cf458981cca5f598b8fcc12639"
+          "bytes": 509622,
+          "sha256": "76b44ee60cd075e7a326e8f2f92da57bb784f0a98fa48b6ceb2ca1c0db5c8d10"
         },
         {
           "file": "Z-t05-c3.record.json",
-          "bytes": 508836,
-          "sha256": "103147408323e4729141e094bff60d294cc024695c43dc87c4068fb6f5e0ff82"
+          "bytes": 509630,
+          "sha256": "edd4980b6fbfea8495911fb9b89118d0cc02881e83c41185a24fdb517aec9798"
         },
         {
           "file": "Z-t06-c1.record.json",
-          "bytes": 509341,
-          "sha256": "c5f9f940c6064e90afcc96d7535098afb9b4ed3217e2a978c99c3c5cf74c56a7"
+          "bytes": 510127,
+          "sha256": "d71a2f7a032873a35a4e059c5493d73c3a87a68b4fa138815c463f6fd305a530"
         },
         {
           "file": "Z-t06-c2.record.json",
-          "bytes": 508942,
-          "sha256": "36e4f0a8a1bf7ab1264cf859981f764a75ba5d9a5a2869dea8ef029bb5bea883"
+          "bytes": 509726,
+          "sha256": "017f1146921aa24e1f3bd7f394be88c55c6ef36e55abf778a09c695a5bade8be"
         },
         {
           "file": "Z-t06-c3.record.json",
-          "bytes": 509589,
-          "sha256": "dbe9ec3ec0ee6b7df4b7af8a6f6780dc20938f81bc164feca54db31eaa58b237"
+          "bytes": 510383,
+          "sha256": "d084094f64afbd9ea4462f0540bc03d0407abf2cd745d3c493852382a53b1145"
         },
         {
           "file": "Z-t10-c1.record.json",
-          "bytes": 330133,
-          "sha256": "a119743f09e4d88740a2b5f407b09e4f4c919d5593fe8497b0ae1b6b5f512be8"
+          "bytes": 330921,
+          "sha256": "b07c6acbc5b6a628658fe51fd3b6d30ecd6a1e060e3fb1509f651b4316b8f77f"
         },
         {
           "file": "Z-t10-c2.record.json",
-          "bytes": 330141,
-          "sha256": "4bc8e9900ec0062f81ecca618cb290479b681e247530ea5e03ee66aed65d0996"
+          "bytes": 330919,
+          "sha256": "a3720ff5d9ed7841c6c80b52ee1fff62fa9cc0e79bab4b0b9971d0cc8808b449"
         },
         {
           "file": "Z-t10-c3.record.json",
-          "bytes": 330135,
-          "sha256": "93d59ef2620a48fd734aa0b5368e8c9892f45e87b98bc3dfafebacc12bafa6cf"
+          "bytes": 330921,
+          "sha256": "59ee6399740c6ea05cba853c092722b2cc1c9072796208834eba3d904d12ad25"
         }
       ],
       "generatedEntries": [
@@ -828,12 +833,12 @@
   },
   "provenance": {
     "formal": true,
-    "measuredHead": "810c5f090d532e67e40c7b0cbdc6d2b8deebec49",
-    "analysisHead": "810c5f090d532e67e40c7b0cbdc6d2b8deebec49",
+    "measuredHead": "6f66c168e9163dab02bb60b2f1dc5b1cfc531e71",
+    "analysisHead": "6f66c168e9163dab02bb60b2f1dc5b1cfc531e71",
     "measuredHeadIsAncestor": true,
     "runStatus": "completed",
-    "benchmarkCodeSha256": "45744c820b5ba16c1c9540a8c9d38662ba4da3a1012ab622ac54eaea48810f3d",
-    "registeredPolicySha256": "2597ff751ddb3a1e0247010090cb9711dd2f16271c24628a19199451617ed6aa",
+    "benchmarkCodeSha256": "40bad5bceb3516accf3af6d50b3d6f3c29151c4d6c8cb7195432478d002868de",
+    "registeredPolicySha256": "5846f99d70341a21c9fb16b24e27937b8ac1d2be46f8ace188a3933205db7f55",
     "calculationCodeChangedSinceMeasuredHead": [],
     "analysisCodeUncommitted": false,
     "productionChangedFiles": {
@@ -841,7 +846,7 @@
       "toAnalysisHead": []
     },
     "startAttestation": {
-      "sha256": "a976efd81d058eb5370c5c1f4cf18c5e6b4b1f3ca40bc334c53e6199e5b87c5e",
+      "sha256": "8c0843167d2b8037d2c532e2c1646540be29354c3c39f254a125c1da9becd56b",
       "verified": true,
       "issues": [],
       "body": {
@@ -977,7 +982,7 @@
           "S2 dynamic: the final run input holds the support Entry ID",
           "S3 dynamic: the final run input initial context holds the support Entry as a valid Entry",
           "S4 static: the support Entry body equals the Export body (stableStringify)",
-          "S5 static (D2): hashStableValue(derivePlannerAlternativeReservation([support from the Export])) is the D1-A §1.3 / D2-A §5 registered reservationDigest (the Phase B record body is not a D2 input)"
+          "S5 static: hashStableValue(derivePlannerAlternativeReservation([support from the Export])) is the D1-A §1.3 t09 reservationDigest AND the derived reservation equals the Phase B t09 unit record result.reservation (stableStringify); both, or D2A_INVALID"
         ],
         "decisionRule": [
           "D2A_INVALID: any formal validity violation (§7.3 / §8): a parity mismatched on either axis, input_evidence / provenance / phase_b_k0_parity / d1_parity / baseline_parity_mismatch / guardrail / determinism / evidence_integrity / raw_result_mismatch",
@@ -1061,6 +1066,11 @@
             "file": "docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D1B.md",
             "bytes": null,
             "sha256": "536f8cd4073a880e27aab84c8b0c7e3339b6b669ef65889e982813bcab72fb4f"
+          },
+          "phaseBT09Record": {
+            "file": ".local/c27b-formal.run/t09-r10-L1.record.json",
+            "bytes": 203547,
+            "sha256": "4de5f215bcd2d752c336ce1c92968880be9512c0df30c857f75469edd3bc7214"
           }
         },
         "seedFiles": [
@@ -1105,6 +1115,7 @@
         },
         "phaseBResultFieldsRead": [
           "sources.{export,targets}",
+          "sources.unitRecords[file = the t09 unit record].{file,bytes,sha256} (§17)",
           "provenance.{formal,measuredHead,runStatus,calculationCodeChangedSinceMeasuredHead}",
           "decision.case",
           "units[].contextRank (to select the K0 units)",
@@ -1119,7 +1130,11 @@
           "aggregates.aCFinalAccepted"
         ],
         "d1SpecFieldsRead": [
-          "§1.3 found table: t, TargetWeapon ID, support Entry, reservationDigest, O_t (current Entry)"
+          "§1.3 found table: t, TargetWeapon ID, unit, support Entry, reservationDigest, O_t (current Entry), G_t (generated Entry)",
+          "§1.3 record digest table: the t09 row (record SHA-256)"
+        ],
+        "phaseBT09RecordFieldsRead": [
+          "result.reservation"
         ],
         "provenanceFlags": {
           "oracleReadByRunner": false,
@@ -1158,14 +1173,14 @@
           "production_default_change",
           "alternative_to_alternative_support"
         ],
-        "createdAt": "2026-10-10T15:30:27.406Z",
+        "createdAt": "2026-10-10T23:11:26.463Z",
         "runnerScript": "scripts/run-planner-global-d2.mjs",
         "node": "v24.19.0",
-        "repositoryHead": "810c5f090d532e67e40c7b0cbdc6d2b8deebec49",
+        "repositoryHead": "6f66c168e9163dab02bb60b2f1dc5b1cfc531e71",
         "uncommittedBenchmarkCode": false,
-        "benchmarkCodeSha256": "45744c820b5ba16c1c9540a8c9d38662ba4da3a1012ab622ac54eaea48810f3d",
-        "specDocumentSha256": "e45a033310696e83aad92fc38b849dfd0aaf1c73f66877b8b77512e69c515ae3",
-        "registeredPolicySha256": "2597ff751ddb3a1e0247010090cb9711dd2f16271c24628a19199451617ed6aa",
+        "benchmarkCodeSha256": "40bad5bceb3516accf3af6d50b3d6f3c29151c4d6c8cb7195432478d002868de",
+        "specDocumentSha256": "a250925a5f25474db1b86f71906b51613608e33ec7b612822ba862e0f7bd1625",
+        "registeredPolicySha256": "5846f99d70341a21c9fb16b24e27937b8ac1d2be46f8ace188a3933205db7f55",
         "observedInputs": {
           "export": {
             "bytes": 19424064,
@@ -1206,6 +1221,10 @@
           "d1bDocument": {
             "bytes": 5795,
             "sha256": "536f8cd4073a880e27aab84c8b0c7e3339b6b669ef65889e982813bcab72fb4f"
+          },
+          "phaseBT09Record": {
+            "bytes": 203547,
+            "sha256": "4de5f215bcd2d752c336ce1c92968880be9512c0df30c857f75469edd3bc7214"
           }
         },
         "observedSeedFiles": {
@@ -1233,10 +1252,10 @@
           "productionChangedSinceBaseMain": []
         },
         "machine": {
-          "freeMemoryBytes": 15177342976,
+          "freeMemoryBytes": 13566926848,
           "totalMemoryBytes": 33377591296,
           "otherNodeProcesses": 0,
-          "cpuBusyShare": 0.11908274929300382
+          "cpuBusyShare": 0.10123456790123457
         },
         "appliedExecutionEnvelope": {
           "discoveryUnitBudgetMs": 3600000,
@@ -1270,6 +1289,7 @@
     "productionSemanticsChanged": false,
     "phaseBResultFieldsRead": [
       "sources.{export,targets}",
+      "sources.unitRecords[file = the t09 unit record].{file,bytes,sha256} (§17)",
       "provenance.{formal,measuredHead,runStatus,calculationCodeChangedSinceMeasuredHead}",
       "decision.case",
       "units[].contextRank (to select the K0 units)",
@@ -1284,7 +1304,11 @@
       "aggregates.aCFinalAccepted"
     ],
     "d1SpecFieldsRead": [
-      "§1.3 found table: t, TargetWeapon ID, support Entry, reservationDigest, O_t (current Entry)"
+      "§1.3 found table: t, TargetWeapon ID, unit, support Entry, reservationDigest, O_t (current Entry), G_t (generated Entry)",
+      "§1.3 record digest table: the t09 row (record SHA-256)"
+    ],
+    "phaseBT09RecordFieldsRead": [
+      "result.reservation"
     ]
   },
   "environment": {
@@ -1297,11 +1321,11 @@
     "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
     "logicalCpuCount": 16,
     "totalMemoryBytes": 33377591296,
-    "repositoryHead": "810c5f090d532e67e40c7b0cbdc6d2b8deebec49",
+    "repositoryHead": "6f66c168e9163dab02bb60b2f1dc5b1cfc531e71",
     "uncommittedBenchmarkCode": false,
-    "benchmarkCodeSha256": "45744c820b5ba16c1c9540a8c9d38662ba4da3a1012ab622ac54eaea48810f3d",
-    "specDocumentSha256": "e45a033310696e83aad92fc38b849dfd0aaf1c73f66877b8b77512e69c515ae3",
-    "registeredPolicySha256": "2597ff751ddb3a1e0247010090cb9711dd2f16271c24628a19199451617ed6aa",
+    "benchmarkCodeSha256": "40bad5bceb3516accf3af6d50b3d6f3c29151c4d6c8cb7195432478d002868de",
+    "specDocumentSha256": "a250925a5f25474db1b86f71906b51613608e33ec7b612822ba862e0f7bd1625",
+    "registeredPolicySha256": "5846f99d70341a21c9fb16b24e27937b8ac1d2be46f8ace188a3933205db7f55",
     "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
     "rngEngineVersion": "production-rng:c5-e7",
     "calculationContext": {
@@ -1327,10 +1351,10 @@
       "productionChangedSinceBaseMain": []
     },
     "machine": {
-      "freeMemoryBytes": 15177342976,
+      "freeMemoryBytes": 13566926848,
       "totalMemoryBytes": 33377591296,
       "otherNodeProcesses": 0,
-      "cpuBusyShare": 0.11908274929300382
+      "cpuBusyShare": 0.10123456790123457
     },
     "smoke": null
   },
@@ -1457,7 +1481,7 @@
       "S2 dynamic: the final run input holds the support Entry ID",
       "S3 dynamic: the final run input initial context holds the support Entry as a valid Entry",
       "S4 static: the support Entry body equals the Export body (stableStringify)",
-      "S5 static (D2): hashStableValue(derivePlannerAlternativeReservation([support from the Export])) is the D1-A §1.3 / D2-A §5 registered reservationDigest (the Phase B record body is not a D2 input)"
+      "S5 static: hashStableValue(derivePlannerAlternativeReservation([support from the Export])) is the D1-A §1.3 t09 reservationDigest AND the derived reservation equals the Phase B t09 unit record result.reservation (stableStringify); both, or D2A_INVALID"
     ],
     "decisionRule": [
       "D2A_INVALID: any formal validity violation (§7.3 / §8): a parity mismatched on either axis, input_evidence / provenance / phase_b_k0_parity / d1_parity / baseline_parity_mismatch / guardrail / determinism / evidence_integrity / raw_result_mismatch",
@@ -1535,16 +1559,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:30:27.419Z",
-          "endedAt": "2026-10-10T15:30:36.482Z",
-          "wallMs": 9062.5065,
+          "startedAt": "2026-10-10T23:11:26.477Z",
+          "endedAt": "2026-10-10T23:11:35.369Z",
+          "wallMs": 8892.6659,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 10,
-            "maxHeapUsedBytes": 358167992,
-            "maxRssBytes": 948961280,
-            "lastElapsedMs": 8286.0127
+            "maxHeapUsedBytes": 378079592,
+            "maxRssBytes": 750448640,
+            "lastElapsedMs": 8084.3275
           }
         },
         "poolSizeAtStart": 0,
@@ -1565,11 +1589,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 1960.280600000001,
+        "searchOnlyMs": 1920.4519999999993,
         "materializeMs": 0,
-        "wallMs": 9062.5065,
-        "peakHeapBytes": 358167992,
-        "peakRssBytes": 985681920
+        "wallMs": 8892.6659,
+        "peakHeapBytes": 378079592,
+        "peakRssBytes": 752791552
       },
       {
         "unitId": "DSC-t00-L1",
@@ -1585,16 +1609,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:30:36.492Z",
-          "endedAt": "2026-10-10T15:30:45.738Z",
-          "wallMs": 9245.5343,
+          "startedAt": "2026-10-10T23:11:35.380Z",
+          "endedAt": "2026-10-10T23:11:44.448Z",
+          "wallMs": 9068.3123,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 11,
-            "maxHeapUsedBytes": 347658192,
-            "maxRssBytes": 915111936,
-            "lastElapsedMs": 8477.525099999999
+            "maxHeapUsedBytes": 367659808,
+            "maxRssBytes": 950222848,
+            "lastElapsedMs": 8289.4399
           }
         },
         "poolSizeAtStart": 0,
@@ -1634,11 +1658,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 2191.8471999999983,
-        "materializeMs": 18.326900000001842,
-        "wallMs": 9245.5343,
-        "peakHeapBytes": 347658192,
-        "peakRssBytes": 918892544
+        "searchOnlyMs": 2044.423200000001,
+        "materializeMs": 15.010399999999208,
+        "wallMs": 9068.3123,
+        "peakHeapBytes": 367659808,
+        "peakRssBytes": 984440832
       },
       {
         "unitId": "DSC-t01-L0",
@@ -1654,16 +1678,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:30:45.750Z",
-          "endedAt": "2026-10-10T15:30:54.798Z",
-          "wallMs": 9047.984400000001,
+          "startedAt": "2026-10-10T23:11:44.460Z",
+          "endedAt": "2026-10-10T23:11:52.796Z",
+          "wallMs": 8336.035399999997,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 10,
-            "maxHeapUsedBytes": 380129312,
-            "maxRssBytes": 753315840,
-            "lastElapsedMs": 8263.9255
+            "maxHeapUsedBytes": 370084864,
+            "maxRssBytes": 948391936,
+            "lastElapsedMs": 7563.6573
           }
         },
         "poolSizeAtStart": 0,
@@ -1684,11 +1708,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 1930.4389,
+        "searchOnlyMs": 1794.6983,
         "materializeMs": 0,
-        "wallMs": 9047.984400000001,
-        "peakHeapBytes": 380129312,
-        "peakRssBytes": 756457472
+        "wallMs": 8336.035399999997,
+        "peakHeapBytes": 370084864,
+        "peakRssBytes": 984817664
       },
       {
         "unitId": "DSC-t01-L1",
@@ -1704,16 +1728,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:30:54.800Z",
-          "endedAt": "2026-10-10T15:31:02.156Z",
-          "wallMs": 7356.120200000001,
+          "startedAt": "2026-10-10T23:11:52.797Z",
+          "endedAt": "2026-10-10T23:11:59.631Z",
+          "wallMs": 6833.938600000001,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 4,
-            "maxHeapUsedBytes": 300906904,
-            "maxRssBytes": 943267840,
-            "lastElapsedMs": 6591.9667
+            "maxHeapUsedBytes": 341798696,
+            "maxRssBytes": 945623040,
+            "lastElapsedMs": 6051.744
           }
         },
         "poolSizeAtStart": 0,
@@ -1753,11 +1777,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 295.7695999999996,
-        "materializeMs": 8.857500000000982,
-        "wallMs": 7356.120200000001,
-        "peakHeapBytes": 300906904,
-        "peakRssBytes": 980783104
+        "searchOnlyMs": 256.7519000000002,
+        "materializeMs": 8.041900000000169,
+        "wallMs": 6833.938600000001,
+        "peakHeapBytes": 341798696,
+        "peakRssBytes": 983011328
       },
       {
         "unitId": "DSC-t02-L0",
@@ -1773,16 +1797,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:31:02.159Z",
-          "endedAt": "2026-10-10T15:31:12.106Z",
-          "wallMs": 9946.913399999998,
+          "startedAt": "2026-10-10T23:11:59.634Z",
+          "endedAt": "2026-10-10T23:12:08.909Z",
+          "wallMs": 9274.754,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 14,
-            "maxHeapUsedBytes": 382529200,
-            "maxRssBytes": 943996928,
-            "lastElapsedMs": 9172.0034
+            "samples": 13,
+            "maxHeapUsedBytes": 393091152,
+            "maxRssBytes": 752259072,
+            "lastElapsedMs": 8498.333999999999
           }
         },
         "poolSizeAtStart": 0,
@@ -1803,11 +1827,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 2937.6649000000007,
+        "searchOnlyMs": 2720.5194,
         "materializeMs": 0,
-        "wallMs": 9946.913399999998,
-        "peakHeapBytes": 382529200,
-        "peakRssBytes": 980217856
+        "wallMs": 9274.754,
+        "peakHeapBytes": 393091152,
+        "peakRssBytes": 754921472
       },
       {
         "unitId": "DSC-t02-L1",
@@ -1823,16 +1847,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:31:12.107Z",
-          "endedAt": "2026-10-10T15:31:23.155Z",
-          "wallMs": 11047.7396,
+          "startedAt": "2026-10-10T23:12:08.911Z",
+          "endedAt": "2026-10-10T23:12:19.179Z",
+          "wallMs": 10268.146100000005,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 18,
-            "maxHeapUsedBytes": 383749768,
-            "maxRssBytes": 948293632,
-            "lastElapsedMs": 10269.3704
+            "samples": 17,
+            "maxHeapUsedBytes": 395573944,
+            "maxRssBytes": 752467968,
+            "lastElapsedMs": 9486.7346
           }
         },
         "poolSizeAtStart": 0,
@@ -1853,11 +1877,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 3977.1188999999995,
+        "searchOnlyMs": 3680.4427000000005,
         "materializeMs": 0,
-        "wallMs": 11047.7396,
-        "peakHeapBytes": 383749768,
-        "peakRssBytes": 985546752
+        "wallMs": 10268.146100000005,
+        "peakHeapBytes": 395573944,
+        "peakRssBytes": 754716672
       },
       {
         "unitId": "DSC-t02-L2",
@@ -1873,16 +1897,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:31:23.157Z",
-          "endedAt": "2026-10-10T15:32:08.203Z",
-          "wallMs": 45046.489299999994,
+          "startedAt": "2026-10-10T23:12:19.180Z",
+          "endedAt": "2026-10-10T23:13:02.383Z",
+          "wallMs": 43203.2581,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 153,
-            "maxHeapUsedBytes": 765459176,
-            "maxRssBytes": 1028112384,
-            "lastElapsedMs": 44268.0941
+            "samples": 149,
+            "maxHeapUsedBytes": 677163688,
+            "maxRssBytes": 886771712,
+            "lastElapsedMs": 42427.881799999996
           }
         },
         "poolSizeAtStart": 0,
@@ -1916,11 +1940,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 37793.0091,
-        "materializeMs": 21.14850000000297,
-        "wallMs": 45046.489299999994,
-        "peakHeapBytes": 765459176,
-        "peakRssBytes": 1028599808
+        "searchOnlyMs": 36638.29529999999,
+        "materializeMs": 18.556900000003225,
+        "wallMs": 43203.2581,
+        "peakHeapBytes": 677163688,
+        "peakRssBytes": 886779904
       },
       {
         "unitId": "DSC-t03-L0",
@@ -1936,16 +1960,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:32:08.215Z",
-          "endedAt": "2026-10-10T15:32:17.988Z",
-          "wallMs": 9772.520099999994,
+          "startedAt": "2026-10-10T23:13:02.387Z",
+          "endedAt": "2026-10-10T23:13:11.852Z",
+          "wallMs": 9464.5815,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 14,
-            "maxHeapUsedBytes": 309812456,
-            "maxRssBytes": 915283968,
-            "lastElapsedMs": 9029.8978
+            "maxHeapUsedBytes": 379766376,
+            "maxRssBytes": 946106368,
+            "lastElapsedMs": 8691.6462
           }
         },
         "poolSizeAtStart": 0,
@@ -1966,11 +1990,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 2956.6650999999993,
+        "searchOnlyMs": 2934.5146000000004,
         "materializeMs": 0,
-        "wallMs": 9772.520099999994,
-        "peakHeapBytes": 309812456,
-        "peakRssBytes": 920186880
+        "wallMs": 9464.5815,
+        "peakHeapBytes": 379766376,
+        "peakRssBytes": 982233088
       },
       {
         "unitId": "DSC-t03-L1",
@@ -1986,16 +2010,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:32:17.989Z",
-          "endedAt": "2026-10-10T15:32:28.841Z",
-          "wallMs": 10851.764599999995,
+          "startedAt": "2026-10-10T23:13:11.854Z",
+          "endedAt": "2026-10-10T23:13:22.598Z",
+          "wallMs": 10744.392899999992,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 19,
-            "maxHeapUsedBytes": 400599968,
-            "maxRssBytes": 950181888,
-            "lastElapsedMs": 10114.347300000001
+            "maxHeapUsedBytes": 402060368,
+            "maxRssBytes": 949260288,
+            "lastElapsedMs": 9960.524
           }
         },
         "poolSizeAtStart": 0,
@@ -2016,11 +2040,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 4126.038799999999,
+        "searchOnlyMs": 4180.150599999999,
         "materializeMs": 0,
-        "wallMs": 10851.764599999995,
-        "peakHeapBytes": 400599968,
-        "peakRssBytes": 985763840
+        "wallMs": 10744.392899999992,
+        "peakHeapBytes": 402060368,
+        "peakRssBytes": 986140672
       },
       {
         "unitId": "DSC-t03-L2",
@@ -2036,16 +2060,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:32:28.842Z",
-          "endedAt": "2026-10-10T15:33:10.802Z",
-          "wallMs": 41959.42520000001,
+          "startedAt": "2026-10-10T23:13:22.600Z",
+          "endedAt": "2026-10-10T23:14:04.024Z",
+          "wallMs": 41423.254299999986,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 143,
-            "maxHeapUsedBytes": 664003040,
-            "maxRssBytes": 949948416,
-            "lastElapsedMs": 41219.2709
+            "samples": 142,
+            "maxHeapUsedBytes": 705452648,
+            "maxRssBytes": 897245184,
+            "lastElapsedMs": 40642.811400000006
           }
         },
         "poolSizeAtStart": 0,
@@ -2085,11 +2109,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 35241.23059999999,
-        "materializeMs": 19.471500000006927,
-        "wallMs": 41959.42520000001,
-        "peakHeapBytes": 664003040,
-        "peakRssBytes": 985513984
+        "searchOnlyMs": 34859.119099999996,
+        "materializeMs": 17.958299999998417,
+        "wallMs": 41423.254299999986,
+        "peakHeapBytes": 705452648,
+        "peakRssBytes": 897249280
       },
       {
         "unitId": "DSC-t04-L0",
@@ -2105,16 +2129,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:33:10.805Z",
-          "endedAt": "2026-10-10T15:33:19.582Z",
-          "wallMs": 8777.056500000006,
+          "startedAt": "2026-10-10T23:14:04.028Z",
+          "endedAt": "2026-10-10T23:14:12.700Z",
+          "wallMs": 8671.80309999999,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 11,
-            "maxHeapUsedBytes": 382193928,
-            "maxRssBytes": 800800768,
-            "lastElapsedMs": 8045.141299999999
+            "maxHeapUsedBytes": 384263064,
+            "maxRssBytes": 751157248,
+            "lastElapsedMs": 7890.836
           }
         },
         "poolSizeAtStart": 0,
@@ -2135,11 +2159,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 2077.5017,
+        "searchOnlyMs": 2099.8247,
         "materializeMs": 0,
-        "wallMs": 8777.056500000006,
-        "peakHeapBytes": 382193928,
-        "peakRssBytes": 804065280
+        "wallMs": 8671.80309999999,
+        "peakHeapBytes": 384263064,
+        "peakRssBytes": 753954816
       },
       {
         "unitId": "DSC-t04-L1",
@@ -2155,16 +2179,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:33:19.592Z",
-          "endedAt": "2026-10-10T15:33:29.554Z",
-          "wallMs": 9961.624299999996,
+          "startedAt": "2026-10-10T23:14:12.710Z",
+          "endedAt": "2026-10-10T23:14:22.542Z",
+          "wallMs": 9832.106499999994,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 15,
-            "maxHeapUsedBytes": 388608736,
-            "maxRssBytes": 754352128,
-            "lastElapsedMs": 9223.7292
+            "maxHeapUsedBytes": 394918040,
+            "maxRssBytes": 942153728,
+            "lastElapsedMs": 9059.6669
           }
         },
         "poolSizeAtStart": 0,
@@ -2185,11 +2209,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 3227.6152,
+        "searchOnlyMs": 3250.2183000000005,
         "materializeMs": 0,
-        "wallMs": 9961.624299999996,
-        "peakHeapBytes": 388608736,
-        "peakRssBytes": 756850688
+        "wallMs": 9832.106499999994,
+        "peakHeapBytes": 394918040,
+        "peakRssBytes": 977489920
       },
       {
         "unitId": "DSC-t04-L2",
@@ -2205,16 +2229,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:33:29.556Z",
-          "endedAt": "2026-10-10T15:34:13.133Z",
-          "wallMs": 43577.45300000001,
+          "startedAt": "2026-10-10T23:14:22.544Z",
+          "endedAt": "2026-10-10T23:15:06.017Z",
+          "wallMs": 43473.35130000001,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 150,
-            "maxHeapUsedBytes": 710272616,
-            "maxRssBytes": 992444416,
-            "lastElapsedMs": 42832.273
+            "maxHeapUsedBytes": 756573336,
+            "maxRssBytes": 958885888,
+            "lastElapsedMs": 42688.643800000005
           }
         },
         "poolSizeAtStart": 0,
@@ -2254,11 +2278,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 36784.6305,
-        "materializeMs": 87.66400000000431,
-        "wallMs": 43577.45300000001,
-        "peakHeapBytes": 710272616,
-        "peakRssBytes": 1011580928
+        "searchOnlyMs": 36854.719600000004,
+        "materializeMs": 78.07400000000052,
+        "wallMs": 43473.35130000001,
+        "peakHeapBytes": 756573336,
+        "peakRssBytes": 977895424
       },
       {
         "unitId": "DSC-t05-L0",
@@ -2274,16 +2298,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:34:13.139Z",
-          "endedAt": "2026-10-10T15:34:20.299Z",
-          "wallMs": 7160.215100000001,
+          "startedAt": "2026-10-10T23:15:06.023Z",
+          "endedAt": "2026-10-10T23:15:12.985Z",
+          "wallMs": 6962.664499999984,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 4,
-            "maxHeapUsedBytes": 334267720,
-            "maxRssBytes": 950423552,
-            "lastElapsedMs": 6407.7516000000005
+            "maxHeapUsedBytes": 339060720,
+            "maxRssBytes": 748498944,
+            "lastElapsedMs": 6193.606699999999
           }
         },
         "poolSizeAtStart": 0,
@@ -2323,11 +2347,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 473.7367000000004,
-        "materializeMs": 12.910399999999754,
-        "wallMs": 7160.215100000001,
-        "peakHeapBytes": 334267720,
-        "peakRssBytes": 986398720
+        "searchOnlyMs": 461.178899999999,
+        "materializeMs": 11.582800000001043,
+        "wallMs": 6962.664499999984,
+        "peakHeapBytes": 339060720,
+        "peakRssBytes": 754270208
       },
       {
         "unitId": "DSC-t06-L0",
@@ -2343,16 +2367,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:34:20.302Z",
-          "endedAt": "2026-10-10T15:34:30.238Z",
-          "wallMs": 9935.725000000006,
+          "startedAt": "2026-10-10T23:15:12.989Z",
+          "endedAt": "2026-10-10T23:15:22.543Z",
+          "wallMs": 9553.901600000012,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 14,
-            "maxHeapUsedBytes": 372834936,
-            "maxRssBytes": 758673408,
-            "lastElapsedMs": 9199.4528
+            "samples": 15,
+            "maxHeapUsedBytes": 399287472,
+            "maxRssBytes": 806506496,
+            "lastElapsedMs": 8789.6484
           }
         },
         "poolSizeAtStart": 0,
@@ -2380,11 +2404,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 2945.4577,
-        "materializeMs": 5.593300000000454,
-        "wallMs": 9935.725000000006,
-        "peakHeapBytes": 372834936,
-        "peakRssBytes": 761696256
+        "searchOnlyMs": 3010.473100000001,
+        "materializeMs": 5.836099999999533,
+        "wallMs": 9553.901600000012,
+        "peakHeapBytes": 399287472,
+        "peakRssBytes": 808636416
       },
       {
         "unitId": "DSC-t06-L1",
@@ -2400,16 +2424,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:34:30.240Z",
-          "endedAt": "2026-10-10T15:34:40.844Z",
-          "wallMs": 10603.51079999999,
+          "startedAt": "2026-10-10T23:15:22.545Z",
+          "endedAt": "2026-10-10T23:15:33.331Z",
+          "wallMs": 10786.679499999998,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 19,
-            "maxHeapUsedBytes": 417797768,
-            "maxRssBytes": 808132608,
-            "lastElapsedMs": 9841.3313
+            "maxHeapUsedBytes": 408619488,
+            "maxRssBytes": 755187712,
+            "lastElapsedMs": 10005.0117
           }
         },
         "poolSizeAtStart": 1,
@@ -2449,11 +2473,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 4117.193100000001,
-        "materializeMs": 16.373199999999088,
-        "wallMs": 10603.51079999999,
-        "peakHeapBytes": 417797768,
-        "peakRssBytes": 808312832
+        "searchOnlyMs": 4214.370099999999,
+        "materializeMs": 16.868000000000393,
+        "wallMs": 10786.679499999998,
+        "peakHeapBytes": 408619488,
+        "peakRssBytes": 755187712
       },
       {
         "unitId": "DSC-t07-L0",
@@ -2469,16 +2493,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:34:40.847Z",
-          "endedAt": "2026-10-10T15:34:50.038Z",
-          "wallMs": 9190.7794,
+          "startedAt": "2026-10-10T23:15:33.334Z",
+          "endedAt": "2026-10-10T23:15:42.789Z",
+          "wallMs": 9454.374900000024,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 14,
-            "maxHeapUsedBytes": 388979520,
-            "maxRssBytes": 794923008,
-            "lastElapsedMs": 8459.7307
+            "maxHeapUsedBytes": 391654120,
+            "maxRssBytes": 943849472,
+            "lastElapsedMs": 8682.7119
           }
         },
         "poolSizeAtStart": 0,
@@ -2499,11 +2523,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 2825.2780000000002,
+        "searchOnlyMs": 2905.3575999999994,
         "materializeMs": 0,
-        "wallMs": 9190.7794,
-        "peakHeapBytes": 388979520,
-        "peakRssBytes": 797040640
+        "wallMs": 9454.374900000024,
+        "peakHeapBytes": 391654120,
+        "peakRssBytes": 980668416
       },
       {
         "unitId": "DSC-t07-L1",
@@ -2519,16 +2543,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:34:50.039Z",
-          "endedAt": "2026-10-10T15:35:00.407Z",
-          "wallMs": 10367.727600000042,
+          "startedAt": "2026-10-10T23:15:42.790Z",
+          "endedAt": "2026-10-10T23:15:53.439Z",
+          "wallMs": 10648.414299999975,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 18,
-            "maxHeapUsedBytes": 389660240,
-            "maxRssBytes": 952844288,
-            "lastElapsedMs": 9623.837000000001
+            "samples": 19,
+            "maxHeapUsedBytes": 393706768,
+            "maxRssBytes": 758431744,
+            "lastElapsedMs": 9871.227499999999
           }
         },
         "poolSizeAtStart": 0,
@@ -2568,11 +2592,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 3934.4793,
-        "materializeMs": 17.764900000000125,
-        "wallMs": 10367.727600000042,
-        "peakHeapBytes": 389660240,
-        "peakRssBytes": 986202112
+        "searchOnlyMs": 4106.447799999998,
+        "materializeMs": 17.990300000001298,
+        "wallMs": 10648.414299999975,
+        "peakHeapBytes": 393706768,
+        "peakRssBytes": 758435840
       },
       {
         "unitId": "DSC-t08-L0",
@@ -2588,16 +2612,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:35:00.410Z",
-          "endedAt": "2026-10-10T15:35:09.678Z",
-          "wallMs": 9267.946999999986,
+          "startedAt": "2026-10-10T23:15:53.442Z",
+          "endedAt": "2026-10-10T23:16:03.064Z",
+          "wallMs": 9621.672399999981,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 14,
-            "maxHeapUsedBytes": 381617352,
-            "maxRssBytes": 946053120,
-            "lastElapsedMs": 8528.8371
+            "samples": 15,
+            "maxHeapUsedBytes": 403077808,
+            "maxRssBytes": 801726464,
+            "lastElapsedMs": 8862.1633
           }
         },
         "poolSizeAtStart": 0,
@@ -2618,11 +2642,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 2879.5367000000006,
+        "searchOnlyMs": 3091.1333000000004,
         "materializeMs": 0,
-        "wallMs": 9267.946999999986,
-        "peakHeapBytes": 381617352,
-        "peakRssBytes": 982843392
+        "wallMs": 9621.672399999981,
+        "peakHeapBytes": 403077808,
+        "peakRssBytes": 804859904
       },
       {
         "unitId": "DSC-t08-L1",
@@ -2638,16 +2662,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:35:09.680Z",
-          "endedAt": "2026-10-10T15:35:20.328Z",
-          "wallMs": 10648.083999999973,
+          "startedAt": "2026-10-10T23:16:03.065Z",
+          "endedAt": "2026-10-10T23:16:13.923Z",
+          "wallMs": 10857.111799999955,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 19,
-            "maxHeapUsedBytes": 408517680,
-            "maxRssBytes": 944537600,
-            "lastElapsedMs": 9892.4887
+            "samples": 20,
+            "maxHeapUsedBytes": 416230808,
+            "maxRssBytes": 750354432,
+            "lastElapsedMs": 10082.0909
           }
         },
         "poolSizeAtStart": 0,
@@ -2668,11 +2692,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 4174.838000000001,
+        "searchOnlyMs": 4295.772,
         "materializeMs": 0,
-        "wallMs": 10648.083999999973,
-        "peakHeapBytes": 408517680,
-        "peakRssBytes": 981016576
+        "wallMs": 10857.111799999955,
+        "peakHeapBytes": 416230808,
+        "peakRssBytes": 752549888
       },
       {
         "unitId": "DSC-t08-L2",
@@ -2688,16 +2712,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:35:20.330Z",
-          "endedAt": "2026-10-10T15:36:04.780Z",
-          "wallMs": 44450.8603,
+          "startedAt": "2026-10-10T23:16:13.924Z",
+          "endedAt": "2026-10-10T23:16:56.955Z",
+          "wallMs": 43030.389199999976,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 153,
-            "maxHeapUsedBytes": 707019744,
-            "maxRssBytes": 994099200,
-            "lastElapsedMs": 43690.9374
+            "samples": 148,
+            "maxHeapUsedBytes": 709199352,
+            "maxRssBytes": 986578944,
+            "lastElapsedMs": 42255.3491
           }
         },
         "poolSizeAtStart": 0,
@@ -2737,11 +2761,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 37613.2728,
-        "materializeMs": 27.03770000000077,
-        "wallMs": 44450.8603,
-        "peakHeapBytes": 707019744,
-        "peakRssBytes": 994594816
+        "searchOnlyMs": 36445.724899999994,
+        "materializeMs": 24.431100000001607,
+        "wallMs": 43030.389199999976,
+        "peakHeapBytes": 709199352,
+        "peakRssBytes": 986959872
       },
       {
         "unitId": "DSC-t09-L0",
@@ -2757,16 +2781,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:36:04.785Z",
-          "endedAt": "2026-10-10T15:36:13.696Z",
-          "wallMs": 8910.95630000002,
+          "startedAt": "2026-10-10T23:16:56.960Z",
+          "endedAt": "2026-10-10T23:17:05.255Z",
+          "wallMs": 8294.957800000033,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 10,
-            "maxHeapUsedBytes": 384333568,
-            "maxRssBytes": 914993152,
-            "lastElapsedMs": 8154.2892999999995
+            "samples": 9,
+            "maxHeapUsedBytes": 365246832,
+            "maxRssBytes": 749608960,
+            "lastElapsedMs": 7523.983300000001
           }
         },
         "poolSizeAtStart": 0,
@@ -2787,11 +2811,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 1824.4605999999994,
+        "searchOnlyMs": 1688.3823000000011,
         "materializeMs": 0,
-        "wallMs": 8910.95630000002,
-        "peakHeapBytes": 384333568,
-        "peakRssBytes": 918347776
+        "wallMs": 8294.957800000033,
+        "peakHeapBytes": 365246832,
+        "peakRssBytes": 753025024
       },
       {
         "unitId": "DSC-t09-L1",
@@ -2807,16 +2831,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:36:13.697Z",
-          "endedAt": "2026-10-10T15:36:23.657Z",
-          "wallMs": 9960.727899999998,
+          "startedAt": "2026-10-10T23:17:05.257Z",
+          "endedAt": "2026-10-10T23:17:14.736Z",
+          "wallMs": 9478.639000000025,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 14,
-            "maxHeapUsedBytes": 390697480,
-            "maxRssBytes": 753766400,
-            "lastElapsedMs": 9179.323600000002
+            "maxHeapUsedBytes": 385782576,
+            "maxRssBytes": 943845376,
+            "lastElapsedMs": 8705.3073
           }
         },
         "poolSizeAtStart": 0,
@@ -2837,11 +2861,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 3002.0714,
+        "searchOnlyMs": 2906.3228,
         "materializeMs": 0,
-        "wallMs": 9960.727899999998,
-        "peakHeapBytes": 390697480,
-        "peakRssBytes": 755494912
+        "wallMs": 9478.639000000025,
+        "peakHeapBytes": 385782576,
+        "peakRssBytes": 981430272
       },
       {
         "unitId": "DSC-t09-L2",
@@ -2857,16 +2881,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:36:23.659Z",
-          "endedAt": "2026-10-10T15:37:07.045Z",
-          "wallMs": 43385.91880000004,
+          "startedAt": "2026-10-10T23:17:14.738Z",
+          "endedAt": "2026-10-10T23:17:57.019Z",
+          "wallMs": 42281.76560000004,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 148,
-            "maxHeapUsedBytes": 814546720,
-            "maxRssBytes": 1031917568,
-            "lastElapsedMs": 42636.9067
+            "samples": 145,
+            "maxHeapUsedBytes": 716364016,
+            "maxRssBytes": 950697984,
+            "lastElapsedMs": 41503.711200000005
           }
         },
         "poolSizeAtStart": 0,
@@ -2906,11 +2930,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 36428.9136,
-        "materializeMs": 45.248099999997066,
-        "wallMs": 43385.91880000004,
-        "peakHeapBytes": 814546720,
-        "peakRssBytes": 1032306688
+        "searchOnlyMs": 35696.383299999994,
+        "materializeMs": 40.58020000000397,
+        "wallMs": 42281.76560000004,
+        "peakHeapBytes": 716364016,
+        "peakRssBytes": 986804224
       },
       {
         "unitId": "DSC-t10-L0",
@@ -2926,16 +2950,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:37:07.049Z",
-          "endedAt": "2026-10-10T15:37:15.699Z",
-          "wallMs": 8649.24940000003,
+          "startedAt": "2026-10-10T23:17:57.026Z",
+          "endedAt": "2026-10-10T23:18:05.392Z",
+          "wallMs": 8366.25079999998,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 10,
-            "maxHeapUsedBytes": 380248096,
-            "maxRssBytes": 952262656,
-            "lastElapsedMs": 7898.547
+            "maxHeapUsedBytes": 367682208,
+            "maxRssBytes": 945242112,
+            "lastElapsedMs": 7591.409300000001
           }
         },
         "poolSizeAtStart": 0,
@@ -2956,11 +2980,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 1845.9672,
+        "searchOnlyMs": 1780.2281999999996,
         "materializeMs": 0,
-        "wallMs": 8649.24940000003,
-        "peakHeapBytes": 380248096,
-        "peakRssBytes": 988004352
+        "wallMs": 8366.25079999998,
+        "peakHeapBytes": 367682208,
+        "peakRssBytes": 981016576
       },
       {
         "unitId": "DSC-t10-L1",
@@ -2976,16 +3000,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-10T15:37:15.700Z",
-          "endedAt": "2026-10-10T15:37:22.697Z",
-          "wallMs": 6996.87969999999,
+          "startedAt": "2026-10-10T23:18:05.402Z",
+          "endedAt": "2026-10-10T23:18:12.006Z",
+          "wallMs": 6603.760499999975,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
             "samples": 3,
-            "maxHeapUsedBytes": 350766472,
-            "maxRssBytes": 953221120,
-            "lastElapsedMs": 6247.3562
+            "maxHeapUsedBytes": 317089080,
+            "maxRssBytes": 750067712,
+            "lastElapsedMs": 5844.7939
           }
         },
         "poolSizeAtStart": 0,
@@ -3025,11 +3049,11 @@
           "notChecked": null,
           "observedPrefixDiagnostic": null
         },
-        "searchOnlyMs": 103.78749999999945,
-        "materializeMs": 7.988800000000083,
-        "wallMs": 6996.87969999999,
-        "peakHeapBytes": 350766472,
-        "peakRssBytes": 957865984
+        "searchOnlyMs": 88.46790000000146,
+        "materializeMs": 6.2827999999990425,
+        "wallMs": 6603.760499999975,
+        "peakHeapBytes": 317089080,
+        "peakRssBytes": 750817280
       }
     ],
     "targets": [
@@ -4160,16 +4184,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:37:22.700Z",
-        "endedAt": "2026-10-10T15:37:29.903Z",
-        "wallMs": 7202.858500000031,
+        "startedAt": "2026-10-10T23:18:12.009Z",
+        "endedAt": "2026-10-10T23:18:18.982Z",
+        "wallMs": 6973.186099999992,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 296484184,
-          "maxRssBytes": 990543872,
-          "lastElapsedMs": 6461.0368
+          "maxHeapUsedBytes": 700376584,
+          "maxRssBytes": 1102147584,
+          "lastElapsedMs": 6185.5137
         }
       },
       "inputDigest": "fnv1a32:6f151dc3",
@@ -4675,10 +4699,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 7202.858500000031,
-      "childWallMs": 6459.226000000001,
-      "peakHeapBytes": 296484184,
-      "peakRssBytes": 1005887488
+      "wallMs": 6973.186099999992,
+      "childWallMs": 6182.6568,
+      "peakHeapBytes": 700376584,
+      "peakRssBytes": 1102147584
     },
     {
       "evaluationId": "ADM-t00-c1",
@@ -4710,16 +4734,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:37:29.907Z",
-        "endedAt": "2026-10-10T15:37:42.530Z",
-        "wallMs": 12623.386600000027,
+        "startedAt": "2026-10-10T23:18:18.985Z",
+        "endedAt": "2026-10-10T23:18:30.881Z",
+        "wallMs": 11896.111600000004,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 686636088,
-          "maxRssBytes": 1127563264,
-          "lastElapsedMs": 11860.9297
+          "maxHeapUsedBytes": 688548880,
+          "maxRssBytes": 1474498560,
+          "lastElapsedMs": 11092.3217
         }
       },
       "inputDigest": "fnv1a32:e3768888",
@@ -5303,10 +5327,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12623.386600000027,
-      "childWallMs": 11857.7028,
-      "peakHeapBytes": 686636088,
-      "peakRssBytes": 1127563264
+      "wallMs": 11896.111600000004,
+      "childWallMs": 11090.1792,
+      "peakHeapBytes": 688548880,
+      "peakRssBytes": 1474498560
     },
     {
       "evaluationId": "ADM-t00-c2",
@@ -5338,16 +5362,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:37:42.533Z",
-        "endedAt": "2026-10-10T15:37:54.944Z",
-        "wallMs": 12410.79640000005,
+        "startedAt": "2026-10-10T23:18:30.885Z",
+        "endedAt": "2026-10-10T23:18:42.775Z",
+        "wallMs": 11889.93729999999,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 758584840,
-          "maxRssBytes": 1466277888,
-          "lastElapsedMs": 11633.7984
+          "maxHeapUsedBytes": 759944032,
+          "maxRssBytes": 1470758912,
+          "lastElapsedMs": 11081.8948
         }
       },
       "inputDigest": "fnv1a32:dfe1bbbb",
@@ -5928,10 +5952,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12410.79640000005,
-      "childWallMs": 11631.878499999999,
-      "peakHeapBytes": 758584840,
-      "peakRssBytes": 1466277888
+      "wallMs": 11889.93729999999,
+      "childWallMs": 11079.8262,
+      "peakHeapBytes": 759944032,
+      "peakRssBytes": 1470758912
     },
     {
       "evaluationId": "ADM-t00-c3",
@@ -5963,16 +5987,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:37:54.947Z",
-        "endedAt": "2026-10-10T15:38:07.962Z",
-        "wallMs": 13015.156200000027,
+        "startedAt": "2026-10-10T23:18:42.778Z",
+        "endedAt": "2026-10-10T23:18:54.715Z",
+        "wallMs": 11937.131800000032,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 750956080,
-          "maxRssBytes": 1471438848,
-          "lastElapsedMs": 12222.2372
+          "maxHeapUsedBytes": 758348072,
+          "maxRssBytes": 1466310656,
+          "lastElapsedMs": 11120.9456
         }
       },
       "inputDigest": "fnv1a32:1d590e90",
@@ -6553,10 +6577,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13015.156200000027,
-      "childWallMs": 12220.1839,
-      "peakHeapBytes": 750956080,
-      "peakRssBytes": 1471438848
+      "wallMs": 11937.131800000032,
+      "childWallMs": 11118.8694,
+      "peakHeapBytes": 758348072,
+      "peakRssBytes": 1466310656
     },
     {
       "evaluationId": "ADM-t01-c1",
@@ -6588,16 +6612,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:38:07.965Z",
-        "endedAt": "2026-10-10T15:38:20.898Z",
-        "wallMs": 12932.585399999982,
+        "startedAt": "2026-10-10T23:18:54.718Z",
+        "endedAt": "2026-10-10T23:19:06.423Z",
+        "wallMs": 11705.68220000004,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 742365224,
-          "maxRssBytes": 1119690752,
-          "lastElapsedMs": 12167.6305
+          "maxHeapUsedBytes": 721662168,
+          "maxRssBytes": 1134780416,
+          "lastElapsedMs": 10920.544600000001
         }
       },
       "inputDigest": "fnv1a32:175b3614",
@@ -7184,10 +7208,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12932.585399999982,
-      "childWallMs": 12164.3036,
-      "peakHeapBytes": 742365224,
-      "peakRssBytes": 1119690752
+      "wallMs": 11705.68220000004,
+      "childWallMs": 10918.5907,
+      "peakHeapBytes": 721662168,
+      "peakRssBytes": 1134780416
     },
     {
       "evaluationId": "ADM-t01-c2",
@@ -7219,16 +7243,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:38:20.902Z",
-        "endedAt": "2026-10-10T15:38:32.935Z",
-        "wallMs": 12032.698499999999,
+        "startedAt": "2026-10-10T23:19:06.426Z",
+        "endedAt": "2026-10-10T23:19:18.221Z",
+        "wallMs": 11794.089100000041,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 745149128,
-          "maxRssBytes": 1471201280,
-          "lastElapsedMs": 11214.5304
+          "maxHeapUsedBytes": 711073096,
+          "maxRssBytes": 1443241984,
+          "lastElapsedMs": 10989.389299999999
         }
       },
       "inputDigest": "fnv1a32:8af7b544",
@@ -7818,10 +7842,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12032.698499999999,
-      "childWallMs": 11212.431400000001,
-      "peakHeapBytes": 745149128,
-      "peakRssBytes": 1471201280
+      "wallMs": 11794.089100000041,
+      "childWallMs": 10987.2345,
+      "peakHeapBytes": 711073096,
+      "peakRssBytes": 1443241984
     },
     {
       "evaluationId": "ADM-t01-c3",
@@ -7853,16 +7877,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:38:32.939Z",
-        "endedAt": "2026-10-10T15:38:44.956Z",
-        "wallMs": 12017.639199999976,
+        "startedAt": "2026-10-10T23:19:18.224Z",
+        "endedAt": "2026-10-10T23:19:30.087Z",
+        "wallMs": 11862.854099999997,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 682776264,
-          "maxRssBytes": 1147998208,
-          "lastElapsedMs": 11223.456900000001
+          "maxHeapUsedBytes": 723927960,
+          "maxRssBytes": 1121792000,
+          "lastElapsedMs": 11076.9857
         }
       },
       "inputDigest": "fnv1a32:e9875eab",
@@ -8468,10 +8492,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12017.639199999976,
-      "childWallMs": 11221.576099999998,
-      "peakHeapBytes": 682776264,
-      "peakRssBytes": 1147998208
+      "wallMs": 11862.854099999997,
+      "childWallMs": 11074.005299999999,
+      "peakHeapBytes": 723927960,
+      "peakRssBytes": 1121792000
     },
     {
       "evaluationId": "ADM-t02-c1",
@@ -8503,16 +8527,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:38:44.959Z",
-        "endedAt": "2026-10-10T15:38:57.142Z",
-        "wallMs": 12182.786000000022,
+        "startedAt": "2026-10-10T23:19:30.090Z",
+        "endedAt": "2026-10-10T23:19:40.991Z",
+        "wallMs": 10900.212800000038,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
-          "samples": 5,
-          "maxHeapUsedBytes": 321444384,
-          "maxRssBytes": 961277952,
-          "lastElapsedMs": 11395.1983
+          "samples": 4,
+          "maxHeapUsedBytes": 300618224,
+          "maxRssBytes": 966991872,
+          "lastElapsedMs": 10129.6002
         }
       },
       "inputDigest": "fnv1a32:7c9a7e80",
@@ -9109,10 +9133,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12182.786000000022,
-      "childWallMs": 11392.091,
-      "peakHeapBytes": 321444384,
-      "peakRssBytes": 965517312
+      "wallMs": 10900.212800000038,
+      "childWallMs": 10126.2201,
+      "peakHeapBytes": 300618224,
+      "peakRssBytes": 970641408
     },
     {
       "evaluationId": "ADM-t02-c2",
@@ -9144,16 +9168,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:38:57.145Z",
-        "endedAt": "2026-10-10T15:39:09.363Z",
-        "wallMs": 12217.308499999985,
+        "startedAt": "2026-10-10T23:19:40.994Z",
+        "endedAt": "2026-10-10T23:19:51.900Z",
+        "wallMs": 10906.589500000002,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
-          "samples": 5,
-          "maxHeapUsedBytes": 1055415432,
-          "maxRssBytes": 1253244928,
-          "lastElapsedMs": 11405.5397
+          "samples": 4,
+          "maxHeapUsedBytes": 324548184,
+          "maxRssBytes": 964272128,
+          "lastElapsedMs": 10134.866199999999
         }
       },
       "inputDigest": "fnv1a32:c5ae1aca",
@@ -9748,10 +9772,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12217.308499999985,
-      "childWallMs": 11402.8218,
-      "peakHeapBytes": 1055415432,
-      "peakRssBytes": 1253244928
+      "wallMs": 10906.589500000002,
+      "childWallMs": 10131.9468,
+      "peakHeapBytes": 324548184,
+      "peakRssBytes": 967675904
     },
     {
       "evaluationId": "ADM-t03-c1",
@@ -9783,16 +9807,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:39:09.366Z",
-        "endedAt": "2026-10-10T15:39:22.613Z",
-        "wallMs": 13247.055300000007,
+        "startedAt": "2026-10-10T23:19:51.903Z",
+        "endedAt": "2026-10-10T23:20:03.775Z",
+        "wallMs": 11871.684299999964,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 697968672,
-          "maxRssBytes": 1139687424,
-          "lastElapsedMs": 12448.0613
+          "maxHeapUsedBytes": 721836248,
+          "maxRssBytes": 1125007360,
+          "lastElapsedMs": 11085.9851
         }
       },
       "inputDigest": "fnv1a32:bf216ca1",
@@ -10402,10 +10426,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13247.055300000007,
-      "childWallMs": 12445.7835,
-      "peakHeapBytes": 697968672,
-      "peakRssBytes": 1139687424
+      "wallMs": 11871.684299999964,
+      "childWallMs": 11083.0185,
+      "peakHeapBytes": 721836248,
+      "peakRssBytes": 1125007360
     },
     {
       "evaluationId": "ADM-t03-c2",
@@ -10437,16 +10461,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:39:22.616Z",
-        "endedAt": "2026-10-10T15:39:35.399Z",
-        "wallMs": 12783.866700000013,
+        "startedAt": "2026-10-10T23:20:03.778Z",
+        "endedAt": "2026-10-10T23:20:15.780Z",
+        "wallMs": 12002.212300000014,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 1073496360,
-          "maxRssBytes": 1329565696,
-          "lastElapsedMs": 11979.0754
+          "maxHeapUsedBytes": 762001024,
+          "maxRssBytes": 1149898752,
+          "lastElapsedMs": 11206.3454
         }
       },
       "inputDigest": "fnv1a32:77e23035",
@@ -11038,10 +11062,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12783.866700000013,
-      "childWallMs": 11976.9085,
-      "peakHeapBytes": 1073496360,
-      "peakRssBytes": 1329565696
+      "wallMs": 12002.212300000014,
+      "childWallMs": 11204.2616,
+      "peakHeapBytes": 762001024,
+      "peakRssBytes": 1149898752
     },
     {
       "evaluationId": "ADM-t03-c3",
@@ -11073,16 +11097,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:39:35.402Z",
-        "endedAt": "2026-10-10T15:39:48.033Z",
-        "wallMs": 12631.32640000002,
+        "startedAt": "2026-10-10T23:20:15.784Z",
+        "endedAt": "2026-10-10T23:20:28.742Z",
+        "wallMs": 12957.77529999998,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 696312144,
-          "maxRssBytes": 930037760,
-          "lastElapsedMs": 11855.6539
+          "maxHeapUsedBytes": 716113248,
+          "maxRssBytes": 1126715392,
+          "lastElapsedMs": 12138.0751
         }
       },
       "inputDigest": "fnv1a32:f1e9873e",
@@ -11648,10 +11672,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12631.32640000002,
-      "childWallMs": 11853.682700000001,
-      "peakHeapBytes": 696312144,
-      "peakRssBytes": 930037760
+      "wallMs": 12957.77529999998,
+      "childWallMs": 12134.5983,
+      "peakHeapBytes": 716113248,
+      "peakRssBytes": 1126715392
     },
     {
       "evaluationId": "ADM-t04-c1",
@@ -11683,16 +11707,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:39:48.036Z",
-        "endedAt": "2026-10-10T15:39:59.551Z",
-        "wallMs": 11515.16559999995,
+        "startedAt": "2026-10-10T23:20:28.745Z",
+        "endedAt": "2026-10-10T23:20:40.746Z",
+        "wallMs": 12001.77529999998,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 522813344,
-          "maxRssBytes": 880947200,
-          "lastElapsedMs": 10738.9442
+          "maxHeapUsedBytes": 307149480,
+          "maxRssBytes": 956514304,
+          "lastElapsedMs": 11174.7585
         }
       },
       "inputDigest": "fnv1a32:99cdf89e",
@@ -12272,10 +12296,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11515.16559999995,
-      "childWallMs": 10736.939199999999,
-      "peakHeapBytes": 522813344,
-      "peakRssBytes": 887148544
+      "wallMs": 12001.77529999998,
+      "childWallMs": 11171.5341,
+      "peakHeapBytes": 307149480,
+      "peakRssBytes": 962199552
     },
     {
       "evaluationId": "ADM-t04-c2",
@@ -12307,16 +12331,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:39:59.553Z",
-        "endedAt": "2026-10-10T15:40:11.238Z",
-        "wallMs": 11685.349699999904,
+        "startedAt": "2026-10-10T23:20:40.749Z",
+        "endedAt": "2026-10-10T23:20:52.594Z",
+        "wallMs": 11845.491700000013,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 558095712,
-          "maxRssBytes": 884224000,
-          "lastElapsedMs": 10901.563
+          "maxHeapUsedBytes": 310309376,
+          "maxRssBytes": 961626112,
+          "lastElapsedMs": 11005.3294
         }
       },
       "inputDigest": "fnv1a32:e4b16a85",
@@ -12908,10 +12932,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11685.349699999904,
-      "childWallMs": 10899.114099999999,
-      "peakHeapBytes": 558095712,
-      "peakRssBytes": 889917440
+      "wallMs": 11845.491700000013,
+      "childWallMs": 11001.9581,
+      "peakHeapBytes": 310309376,
+      "peakRssBytes": 966873088
     },
     {
       "evaluationId": "ADM-t04-c3",
@@ -12943,16 +12967,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:40:11.241Z",
-        "endedAt": "2026-10-10T15:40:23.009Z",
-        "wallMs": 11768.86499999999,
+        "startedAt": "2026-10-10T23:20:52.597Z",
+        "endedAt": "2026-10-10T23:21:04.219Z",
+        "wallMs": 11621.6777,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 661768696,
-          "maxRssBytes": 1269137408,
-          "lastElapsedMs": 10947.670900000001
+          "maxHeapUsedBytes": 655915616,
+          "maxRssBytes": 1161801728,
+          "lastElapsedMs": 10822.4709
         }
       },
       "inputDigest": "fnv1a32:746c0a18",
@@ -13553,10 +13577,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11768.86499999999,
-      "childWallMs": 10945.748899999999,
-      "peakHeapBytes": 661768696,
-      "peakRssBytes": 1269137408
+      "wallMs": 11621.6777,
+      "childWallMs": 10820.3287,
+      "peakHeapBytes": 655915616,
+      "peakRssBytes": 1161801728
     },
     {
       "evaluationId": "ADM-t05-c1",
@@ -13588,16 +13612,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:40:23.012Z",
-        "endedAt": "2026-10-10T15:40:35.816Z",
-        "wallMs": 12804.517200000002,
+        "startedAt": "2026-10-10T23:21:04.221Z",
+        "endedAt": "2026-10-10T23:21:17.013Z",
+        "wallMs": 12792.242299999925,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 731592600,
-          "maxRssBytes": 1130278912,
-          "lastElapsedMs": 12011.504299999999
+          "maxHeapUsedBytes": 730536512,
+          "maxRssBytes": 1128566784,
+          "lastElapsedMs": 12002.3614
         }
       },
       "inputDigest": "fnv1a32:8f96a2e4",
@@ -14169,10 +14193,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12804.517200000002,
-      "childWallMs": 12007.735499999999,
-      "peakHeapBytes": 731592600,
-      "peakRssBytes": 1130278912
+      "wallMs": 12792.242299999925,
+      "childWallMs": 11999.0367,
+      "peakHeapBytes": 730536512,
+      "peakRssBytes": 1128566784
     },
     {
       "evaluationId": "ADM-t05-c2",
@@ -14204,16 +14228,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:40:35.820Z",
-        "endedAt": "2026-10-10T15:40:49.566Z",
-        "wallMs": 13745.91830000002,
+        "startedAt": "2026-10-10T23:21:17.017Z",
+        "endedAt": "2026-10-10T23:21:30.212Z",
+        "wallMs": 13195.704900000012,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 711375416,
-          "maxRssBytes": 1453875200,
-          "lastElapsedMs": 12827.9385
+          "maxHeapUsedBytes": 690813552,
+          "maxRssBytes": 1125474304,
+          "lastElapsedMs": 12396.0858
         }
       },
       "inputDigest": "fnv1a32:03358bf8",
@@ -14767,10 +14791,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13745.91830000002,
-      "childWallMs": 12825.677,
-      "peakHeapBytes": 711375416,
-      "peakRssBytes": 1453875200
+      "wallMs": 13195.704900000012,
+      "childWallMs": 12393.9987,
+      "peakHeapBytes": 690813552,
+      "peakRssBytes": 1125474304
     },
     {
       "evaluationId": "ADM-t05-c3",
@@ -14802,16 +14826,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:40:49.569Z",
-        "endedAt": "2026-10-10T15:41:02.682Z",
-        "wallMs": 13112.864100000006,
+        "startedAt": "2026-10-10T23:21:30.215Z",
+        "endedAt": "2026-10-10T23:21:43.724Z",
+        "wallMs": 13509.07329999993,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 729042432,
-          "maxRssBytes": 1115459584,
-          "lastElapsedMs": 12319.441700000001
+          "maxHeapUsedBytes": 727933976,
+          "maxRssBytes": 1113268224,
+          "lastElapsedMs": 12700.5474
         }
       },
       "inputDigest": "fnv1a32:b130ec8c",
@@ -15365,10 +15389,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13112.864100000006,
-      "childWallMs": 12317.1375,
-      "peakHeapBytes": 729042432,
-      "peakRssBytes": 1115459584
+      "wallMs": 13509.07329999993,
+      "childWallMs": 12696.533899999999,
+      "peakHeapBytes": 727933976,
+      "peakRssBytes": 1113268224
     },
     {
       "evaluationId": "ADM-t06-c1",
@@ -15400,16 +15424,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:41:02.686Z",
-        "endedAt": "2026-10-10T15:41:15.884Z",
-        "wallMs": 13198.689000000013,
+        "startedAt": "2026-10-10T23:21:43.729Z",
+        "endedAt": "2026-10-10T23:21:56.920Z",
+        "wallMs": 13191.309800000046,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 706205624,
-          "maxRssBytes": 929488896,
-          "lastElapsedMs": 12402.7648
+          "maxHeapUsedBytes": 736743096,
+          "maxRssBytes": 1433710592,
+          "lastElapsedMs": 12305.646799999999
         }
       },
       "inputDigest": "fnv1a32:c1301806",
@@ -15976,10 +16000,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13198.689000000013,
-      "childWallMs": 12400.589100000001,
-      "peakHeapBytes": 706205624,
-      "peakRssBytes": 929488896
+      "wallMs": 13191.309800000046,
+      "childWallMs": 12302.5428,
+      "peakHeapBytes": 736743096,
+      "peakRssBytes": 1433710592
     },
     {
       "evaluationId": "ADM-t06-c2",
@@ -16011,16 +16035,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:41:15.889Z",
-        "endedAt": "2026-10-10T15:41:29.202Z",
-        "wallMs": 13313.192199999932,
+        "startedAt": "2026-10-10T23:21:56.925Z",
+        "endedAt": "2026-10-10T23:22:10.120Z",
+        "wallMs": 13194.991299999994,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 702437408,
-          "maxRssBytes": 1135288320,
-          "lastElapsedMs": 12515.0951
+          "maxHeapUsedBytes": 738317984,
+          "maxRssBytes": 1474621440,
+          "lastElapsedMs": 12330.5057
         }
       },
       "inputDigest": "fnv1a32:7c9995ce",
@@ -16576,10 +16600,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13313.192199999932,
-      "childWallMs": 12512.6867,
-      "peakHeapBytes": 702437408,
-      "peakRssBytes": 1135288320
+      "wallMs": 13194.991299999994,
+      "childWallMs": 12327.7009,
+      "peakHeapBytes": 738317984,
+      "peakRssBytes": 1474621440
     },
     {
       "evaluationId": "ADM-t06-c3",
@@ -16611,16 +16635,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:41:29.205Z",
-        "endedAt": "2026-10-10T15:41:42.273Z",
-        "wallMs": 13067.4375,
+        "startedAt": "2026-10-10T23:22:10.123Z",
+        "endedAt": "2026-10-10T23:22:23.247Z",
+        "wallMs": 13124.18359999999,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 697162544,
-          "maxRssBytes": 929452032,
-          "lastElapsedMs": 12263.6053
+          "maxHeapUsedBytes": 705955840,
+          "maxRssBytes": 1099702272,
+          "lastElapsedMs": 12339.6094
         }
       },
       "inputDigest": "fnv1a32:38df9541",
@@ -17166,10 +17190,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13067.4375,
-      "childWallMs": 12261.3138,
-      "peakHeapBytes": 697162544,
-      "peakRssBytes": 929452032
+      "wallMs": 13124.18359999999,
+      "childWallMs": 12336.1504,
+      "peakHeapBytes": 705955840,
+      "peakRssBytes": 1099702272
     },
     {
       "evaluationId": "ADM-t07-c1",
@@ -17201,16 +17225,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:41:42.277Z",
-        "endedAt": "2026-10-10T15:41:55.622Z",
-        "wallMs": 13344.412399999914,
+        "startedAt": "2026-10-10T23:22:23.249Z",
+        "endedAt": "2026-10-10T23:22:36.451Z",
+        "wallMs": 13201.41769999999,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 741644888,
-          "maxRssBytes": 1100427264,
-          "lastElapsedMs": 12518.4816
+          "maxHeapUsedBytes": 1100888912,
+          "maxRssBytes": 1333760000,
+          "lastElapsedMs": 12384.0829
         }
       },
       "inputDigest": "fnv1a32:603a9acc",
@@ -17758,10 +17782,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13344.412399999914,
-      "childWallMs": 12514.582199999999,
-      "peakHeapBytes": 741644888,
-      "peakRssBytes": 1100427264
+      "wallMs": 13201.41769999999,
+      "childWallMs": 12382.1621,
+      "peakHeapBytes": 1100888912,
+      "peakRssBytes": 1333760000
     },
     {
       "evaluationId": "ADM-t07-c2",
@@ -17793,16 +17817,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:41:55.625Z",
-        "endedAt": "2026-10-10T15:42:09.063Z",
-        "wallMs": 13438.153399999952,
+        "startedAt": "2026-10-10T23:22:36.455Z",
+        "endedAt": "2026-10-10T23:22:48.945Z",
+        "wallMs": 12490.322199999937,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 751077152,
-          "maxRssBytes": 1464631296,
-          "lastElapsedMs": 12596.1757
+          "maxHeapUsedBytes": 918738680,
+          "maxRssBytes": 1137479680,
+          "lastElapsedMs": 11682.0557
         }
       },
       "inputDigest": "fnv1a32:22ab70f5",
@@ -18367,10 +18391,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13438.153399999952,
-      "childWallMs": 12593.8021,
-      "peakHeapBytes": 751077152,
-      "peakRssBytes": 1464631296
+      "wallMs": 12490.322199999937,
+      "childWallMs": 11680.0956,
+      "peakHeapBytes": 918738680,
+      "peakRssBytes": 1137479680
     },
     {
       "evaluationId": "ADM-t07-c3",
@@ -18402,16 +18426,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:42:09.066Z",
-        "endedAt": "2026-10-10T15:42:22.554Z",
-        "wallMs": 13488.6973,
+        "startedAt": "2026-10-10T23:22:48.948Z",
+        "endedAt": "2026-10-10T23:23:02.757Z",
+        "wallMs": 13809.483499999973,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 699854408,
-          "maxRssBytes": 1167462400,
-          "lastElapsedMs": 12643.0394
+          "maxHeapUsedBytes": 690222248,
+          "maxRssBytes": 1120931840,
+          "lastElapsedMs": 13016.916599999999
         }
       },
       "inputDigest": "fnv1a32:e96351eb",
@@ -18957,10 +18981,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13488.6973,
-      "childWallMs": 12641.0867,
-      "peakHeapBytes": 699854408,
-      "peakRssBytes": 1167462400
+      "wallMs": 13809.483499999973,
+      "childWallMs": 13013.2519,
+      "peakHeapBytes": 690222248,
+      "peakRssBytes": 1120931840
     },
     {
       "evaluationId": "ADM-t08-c1",
@@ -18992,16 +19016,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:42:22.558Z",
-        "endedAt": "2026-10-10T15:42:35.745Z",
-        "wallMs": 13187.086999999941,
+        "startedAt": "2026-10-10T23:23:02.760Z",
+        "endedAt": "2026-10-10T23:23:16.223Z",
+        "wallMs": 13463.158000000054,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 683483464,
-          "maxRssBytes": 1090113536,
-          "lastElapsedMs": 12390.093200000001
+          "maxHeapUsedBytes": 706529584,
+          "maxRssBytes": 1438556160,
+          "lastElapsedMs": 12642.021999999999
         }
       },
       "inputDigest": "fnv1a32:5483dad3",
@@ -19562,10 +19586,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13187.086999999941,
-      "childWallMs": 12387.9704,
-      "peakHeapBytes": 683483464,
-      "peakRssBytes": 1090113536
+      "wallMs": 13463.158000000054,
+      "childWallMs": 12639.9505,
+      "peakHeapBytes": 706529584,
+      "peakRssBytes": 1438556160
     },
     {
       "evaluationId": "ADM-t08-c2",
@@ -19597,16 +19621,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:42:35.747Z",
-        "endedAt": "2026-10-10T15:42:48.896Z",
-        "wallMs": 13149.729799999972,
+        "startedAt": "2026-10-10T23:23:16.226Z",
+        "endedAt": "2026-10-10T23:23:28.818Z",
+        "wallMs": 12591.651399999973,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 733411744,
-          "maxRssBytes": 1106444288,
-          "lastElapsedMs": 12362.3181
+          "maxHeapUsedBytes": 734389632,
+          "maxRssBytes": 1132777472,
+          "lastElapsedMs": 11774.412400000001
         }
       },
       "inputDigest": "fnv1a32:166e824f",
@@ -20165,10 +20189,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13149.729799999972,
-      "childWallMs": 12360.0973,
-      "peakHeapBytes": 733411744,
-      "peakRssBytes": 1106444288
+      "wallMs": 12591.651399999973,
+      "childWallMs": 11772.3527,
+      "peakHeapBytes": 734389632,
+      "peakRssBytes": 1132777472
     },
     {
       "evaluationId": "ADM-t08-c3",
@@ -20200,16 +20224,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:42:48.899Z",
-        "endedAt": "2026-10-10T15:43:01.953Z",
-        "wallMs": 13053.767300000065,
+        "startedAt": "2026-10-10T23:23:28.821Z",
+        "endedAt": "2026-10-10T23:23:41.535Z",
+        "wallMs": 12713.731099999975,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 706729088,
-          "maxRssBytes": 1440800768,
-          "lastElapsedMs": 12248.2805
+          "maxHeapUsedBytes": 706805040,
+          "maxRssBytes": 1440169984,
+          "lastElapsedMs": 11900.8606
         }
       },
       "inputDigest": "fnv1a32:32e0236a",
@@ -20768,10 +20792,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13053.767300000065,
-      "childWallMs": 12245.8495,
-      "peakHeapBytes": 706729088,
-      "peakRssBytes": 1440800768
+      "wallMs": 12713.731099999975,
+      "childWallMs": 11898.545699999999,
+      "peakHeapBytes": 706805040,
+      "peakRssBytes": 1440169984
     },
     {
       "evaluationId": "ADM-t09-c1",
@@ -20803,16 +20827,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:43:01.957Z",
-        "endedAt": "2026-10-10T15:43:15.150Z",
-        "wallMs": 13193.792000000016,
+        "startedAt": "2026-10-10T23:23:41.537Z",
+        "endedAt": "2026-10-10T23:23:54.261Z",
+        "wallMs": 12722.579800000065,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 725423768,
-          "maxRssBytes": 1126395904,
-          "lastElapsedMs": 12401.8615
+          "maxHeapUsedBytes": 728184936,
+          "maxRssBytes": 1131290624,
+          "lastElapsedMs": 11919.4498
         }
       },
       "inputDigest": "fnv1a32:941abf7b",
@@ -21371,10 +21395,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13193.792000000016,
-      "childWallMs": 12398.536399999999,
-      "peakHeapBytes": 725423768,
-      "peakRssBytes": 1126395904
+      "wallMs": 12722.579800000065,
+      "childWallMs": 11917.2868,
+      "peakHeapBytes": 728184936,
+      "peakRssBytes": 1131290624
     },
     {
       "evaluationId": "ADM-t09-c2",
@@ -21406,16 +21430,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:43:15.153Z",
-        "endedAt": "2026-10-10T15:43:28.401Z",
-        "wallMs": 13248.377800000017,
+        "startedAt": "2026-10-10T23:23:54.264Z",
+        "endedAt": "2026-10-10T23:24:07.104Z",
+        "wallMs": 12839.67539999995,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 736277112,
-          "maxRssBytes": 927277056,
-          "lastElapsedMs": 12452.4198
+          "maxHeapUsedBytes": 768801144,
+          "maxRssBytes": 1068519424,
+          "lastElapsedMs": 12020.053600000001
         }
       },
       "inputDigest": "fnv1a32:a3147cd7",
@@ -21974,10 +21998,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13248.377800000017,
-      "childWallMs": 12450.211500000001,
-      "peakHeapBytes": 736277112,
-      "peakRssBytes": 927277056
+      "wallMs": 12839.67539999995,
+      "childWallMs": 12016.792800000001,
+      "peakHeapBytes": 768801144,
+      "peakRssBytes": 1068519424
     },
     {
       "evaluationId": "ADM-t09-c3",
@@ -22009,16 +22033,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:43:28.404Z",
-        "endedAt": "2026-10-10T15:43:41.239Z",
-        "wallMs": 12834.614899999928,
+        "startedAt": "2026-10-10T23:24:07.107Z",
+        "endedAt": "2026-10-10T23:24:20.161Z",
+        "wallMs": 13054.06270000001,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 690817552,
-          "maxRssBytes": 932134912,
-          "lastElapsedMs": 12026.1685
+          "maxHeapUsedBytes": 735972440,
+          "maxRssBytes": 1128460288,
+          "lastElapsedMs": 12263.4165
         }
       },
       "inputDigest": "fnv1a32:95bab516",
@@ -22577,10 +22601,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12834.614899999928,
-      "childWallMs": 12024.0936,
-      "peakHeapBytes": 690817552,
-      "peakRssBytes": 932134912
+      "wallMs": 13054.06270000001,
+      "childWallMs": 12260.2349,
+      "peakHeapBytes": 735972440,
+      "peakRssBytes": 1128460288
     },
     {
       "evaluationId": "ADM-t10-c1",
@@ -22612,16 +22636,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:43:41.241Z",
-        "endedAt": "2026-10-10T15:43:52.764Z",
-        "wallMs": 11522.456000000006,
+        "startedAt": "2026-10-10T23:24:20.165Z",
+        "endedAt": "2026-10-10T23:24:32.079Z",
+        "wallMs": 11914.52370000002,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 552878208,
-          "maxRssBytes": 886624256,
-          "lastElapsedMs": 10763.9158
+          "maxHeapUsedBytes": 333806808,
+          "maxRssBytes": 962490368,
+          "lastElapsedMs": 11117.0833
         }
       },
       "inputDigest": "fnv1a32:e80f793c",
@@ -23223,10 +23247,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11522.456000000006,
-      "childWallMs": 10761.9215,
-      "peakHeapBytes": 552878208,
-      "peakRssBytes": 891654144
+      "wallMs": 11914.52370000002,
+      "childWallMs": 11113.9284,
+      "peakHeapBytes": 333806808,
+      "peakRssBytes": 966742016
     },
     {
       "evaluationId": "ADM-t10-c2",
@@ -23258,16 +23282,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:43:52.766Z",
-        "endedAt": "2026-10-10T15:44:04.268Z",
-        "wallMs": 11501.401100000017,
+        "startedAt": "2026-10-10T23:24:32.082Z",
+        "endedAt": "2026-10-10T23:24:43.383Z",
+        "wallMs": 11300.787500000093,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 621979160,
-          "maxRssBytes": 1204948992,
-          "lastElapsedMs": 10739.0508
+          "maxHeapUsedBytes": 289335904,
+          "maxRssBytes": 962240512,
+          "lastElapsedMs": 10488.704
         }
       },
       "inputDigest": "fnv1a32:c7249c01",
@@ -23867,10 +23891,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11501.401100000017,
-      "childWallMs": 10736.7502,
-      "peakHeapBytes": 621979160,
-      "peakRssBytes": 1204948992
+      "wallMs": 11300.787500000093,
+      "childWallMs": 10485.859199999999,
+      "peakHeapBytes": 289335904,
+      "peakRssBytes": 967233536
     },
     {
       "evaluationId": "ADM-t10-c3",
@@ -23902,16 +23926,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:44:04.279Z",
-        "endedAt": "2026-10-10T15:44:15.741Z",
-        "wallMs": 11461.895499999984,
+        "startedAt": "2026-10-10T23:24:43.393Z",
+        "endedAt": "2026-10-10T23:24:54.925Z",
+        "wallMs": 11531.28859999997,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 298488960,
-          "maxRssBytes": 960913408,
-          "lastElapsedMs": 10699.4987
+          "maxHeapUsedBytes": 648681688,
+          "maxRssBytes": 1227976704,
+          "lastElapsedMs": 10722.1753
         }
       },
       "inputDigest": "fnv1a32:203a262c",
@@ -24511,10 +24535,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11461.895499999984,
-      "childWallMs": 10696.6521,
-      "peakHeapBytes": 298488960,
-      "peakRssBytes": 965672960
+      "wallMs": 11531.28859999997,
+      "childWallMs": 10720.4354,
+      "peakHeapBytes": 648681688,
+      "peakRssBytes": 1227976704
     },
     {
       "evaluationId": "CMP-t00-c1",
@@ -24546,16 +24570,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:44:15.744Z",
-        "endedAt": "2026-10-10T15:44:28.301Z",
-        "wallMs": 12557.119400000083,
+        "startedAt": "2026-10-10T23:24:54.928Z",
+        "endedAt": "2026-10-10T23:25:08.132Z",
+        "wallMs": 13203.657200000016,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 680073568,
-          "maxRssBytes": 928387072,
-          "lastElapsedMs": 11794.5031
+          "maxHeapUsedBytes": 686736800,
+          "maxRssBytes": 1477632000,
+          "lastElapsedMs": 12404.3017
         }
       },
       "inputDigest": "fnv1a32:e3768888",
@@ -25126,10 +25150,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12557.119400000083,
-      "childWallMs": 11792.394199999999,
-      "peakHeapBytes": 680073568,
-      "peakRssBytes": 928387072
+      "wallMs": 13203.657200000016,
+      "childWallMs": 12402.0852,
+      "peakHeapBytes": 686736800,
+      "peakRssBytes": 1477632000
     },
     {
       "evaluationId": "CMP-t00-c2",
@@ -25161,16 +25185,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:44:28.304Z",
-        "endedAt": "2026-10-10T15:44:40.754Z",
-        "wallMs": 12450.065500000026,
+        "startedAt": "2026-10-10T23:25:08.135Z",
+        "endedAt": "2026-10-10T23:25:21.136Z",
+        "wallMs": 13001.009899999946,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 686018096,
-          "maxRssBytes": 1143377920,
-          "lastElapsedMs": 11684.6262
+          "maxHeapUsedBytes": 740740288,
+          "maxRssBytes": 1125617664,
+          "lastElapsedMs": 12224.3458
         }
       },
       "inputDigest": "fnv1a32:dfe1bbbb",
@@ -25738,10 +25762,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12450.065500000026,
-      "childWallMs": 11682.5153,
-      "peakHeapBytes": 686018096,
-      "peakRssBytes": 1143377920
+      "wallMs": 13001.009899999946,
+      "childWallMs": 12220.8209,
+      "peakHeapBytes": 740740288,
+      "peakRssBytes": 1125617664
     },
     {
       "evaluationId": "CMP-t00-c3",
@@ -25773,16 +25797,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:44:40.757Z",
-        "endedAt": "2026-10-10T15:44:53.453Z",
-        "wallMs": 12695.75529999996,
+        "startedAt": "2026-10-10T23:25:21.139Z",
+        "endedAt": "2026-10-10T23:25:34.068Z",
+        "wallMs": 12928.75,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 687179488,
-          "maxRssBytes": 1126289408,
-          "lastElapsedMs": 11924.674
+          "maxHeapUsedBytes": 746376184,
+          "maxRssBytes": 1466331136,
+          "lastElapsedMs": 12140.4331
         }
       },
       "inputDigest": "fnv1a32:1d590e90",
@@ -26350,10 +26374,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12695.75529999996,
-      "childWallMs": 11921.395400000001,
-      "peakHeapBytes": 687179488,
-      "peakRssBytes": 1126289408
+      "wallMs": 12928.75,
+      "childWallMs": 12137.826200000001,
+      "peakHeapBytes": 746376184,
+      "peakRssBytes": 1466331136
     },
     {
       "evaluationId": "CMP-t01-c1",
@@ -26385,16 +26409,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:44:53.457Z",
-        "endedAt": "2026-10-10T15:45:06.091Z",
-        "wallMs": 12634.581800000044,
+        "startedAt": "2026-10-10T23:25:34.072Z",
+        "endedAt": "2026-10-10T23:25:46.997Z",
+        "wallMs": 12924.650300000096,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 688402448,
-          "maxRssBytes": 1121325056,
-          "lastElapsedMs": 11861.8953
+          "maxHeapUsedBytes": 688568256,
+          "maxRssBytes": 1122635776,
+          "lastElapsedMs": 12151.8273
         }
       },
       "inputDigest": "fnv1a32:175b3614",
@@ -26979,10 +27003,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12634.581800000044,
-      "childWallMs": 11858.8454,
-      "peakHeapBytes": 688402448,
-      "peakRssBytes": 1121325056
+      "wallMs": 12924.650300000096,
+      "childWallMs": 12148.8163,
+      "peakHeapBytes": 688568256,
+      "peakRssBytes": 1122635776
     },
     {
       "evaluationId": "CMP-t01-c2",
@@ -27014,16 +27038,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:45:06.094Z",
-        "endedAt": "2026-10-10T15:45:18.865Z",
-        "wallMs": 12770.919899999979,
+        "startedAt": "2026-10-10T23:25:47.000Z",
+        "endedAt": "2026-10-10T23:25:59.791Z",
+        "wallMs": 12790.265400000033,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 761390304,
-          "maxRssBytes": 1469267968,
-          "lastElapsedMs": 11988.1843
+          "maxHeapUsedBytes": 722531472,
+          "maxRssBytes": 1094586368,
+          "lastElapsedMs": 12020.4132
         }
       },
       "inputDigest": "fnv1a32:8af7b544",
@@ -27601,10 +27625,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12770.919899999979,
-      "childWallMs": 11986.151,
-      "peakHeapBytes": 761390304,
-      "peakRssBytes": 1469267968
+      "wallMs": 12790.265400000033,
+      "childWallMs": 12017.858,
+      "peakHeapBytes": 722531472,
+      "peakRssBytes": 1094586368
     },
     {
       "evaluationId": "CMP-t01-c3",
@@ -27636,16 +27660,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:45:18.868Z",
-        "endedAt": "2026-10-10T15:45:31.532Z",
-        "wallMs": 12664.10679999995,
+        "startedAt": "2026-10-10T23:25:59.794Z",
+        "endedAt": "2026-10-10T23:26:12.634Z",
+        "wallMs": 12840.00020000001,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 688299760,
-          "maxRssBytes": 1442877440,
-          "lastElapsedMs": 11887.3794
+          "maxHeapUsedBytes": 742722792,
+          "maxRssBytes": 1465675776,
+          "lastElapsedMs": 12047.235700000001
         }
       },
       "inputDigest": "fnv1a32:e9875eab",
@@ -28238,10 +28262,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12664.10679999995,
-      "childWallMs": 11885.0905,
-      "peakHeapBytes": 688299760,
-      "peakRssBytes": 1442877440
+      "wallMs": 12840.00020000001,
+      "childWallMs": 12045.2958,
+      "peakHeapBytes": 742722792,
+      "peakRssBytes": 1465675776
     },
     {
       "evaluationId": "CMP-t02-c1",
@@ -28277,16 +28301,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:45:31.545Z",
-        "endedAt": "2026-10-10T15:45:43.246Z",
-        "wallMs": 11701.262699999963,
+        "startedAt": "2026-10-10T23:26:12.645Z",
+        "endedAt": "2026-10-10T23:26:24.469Z",
+        "wallMs": 11823.44319999998,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 316818936,
-          "maxRssBytes": 956645376,
-          "lastElapsedMs": 10937.4028
+          "maxHeapUsedBytes": 318203616,
+          "maxRssBytes": 966717440,
+          "lastElapsedMs": 11065.9488
         }
       },
       "inputDigest": "fnv1a32:88006f89",
@@ -28923,10 +28947,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11701.262699999963,
-      "childWallMs": 10934.231099999999,
-      "peakHeapBytes": 316818936,
-      "peakRssBytes": 961441792
+      "wallMs": 11823.44319999998,
+      "childWallMs": 11062.8683,
+      "peakHeapBytes": 318203616,
+      "peakRssBytes": 971415552
     },
     {
       "evaluationId": "CMP-t02-c2",
@@ -28962,16 +28986,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:45:43.249Z",
-        "endedAt": "2026-10-10T15:45:55.107Z",
-        "wallMs": 11857.768899999908,
+        "startedAt": "2026-10-10T23:26:24.472Z",
+        "endedAt": "2026-10-10T23:26:36.475Z",
+        "wallMs": 12003.639399999985,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 673379192,
-          "maxRssBytes": 1412509696,
-          "lastElapsedMs": 11081.6617
+          "maxHeapUsedBytes": 677321176,
+          "maxRssBytes": 1155829760,
+          "lastElapsedMs": 11236.4272
         }
       },
       "inputDigest": "fnv1a32:aca085e1",
@@ -29605,10 +29629,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11857.768899999908,
-      "childWallMs": 11079.2867,
-      "peakHeapBytes": 673379192,
-      "peakRssBytes": 1412509696
+      "wallMs": 12003.639399999985,
+      "childWallMs": 11234.4193,
+      "peakHeapBytes": 677321176,
+      "peakRssBytes": 1155829760
     },
     {
       "evaluationId": "CMP-t03-c1",
@@ -29644,16 +29668,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:45:55.110Z",
-        "endedAt": "2026-10-10T15:46:07.622Z",
-        "wallMs": 12511.720399999991,
+        "startedAt": "2026-10-10T23:26:36.479Z",
+        "endedAt": "2026-10-10T23:26:49.657Z",
+        "wallMs": 13178.64850000001,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 687524864,
-          "maxRssBytes": 991109120,
-          "lastElapsedMs": 11747.525
+          "maxHeapUsedBytes": 698794200,
+          "maxRssBytes": 1177694208,
+          "lastElapsedMs": 12409.5659
         }
       },
       "inputDigest": "fnv1a32:cfe0ac8e",
@@ -30301,10 +30325,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12511.720399999991,
-      "childWallMs": 11745.2347,
-      "peakHeapBytes": 687524864,
-      "peakRssBytes": 991109120
+      "wallMs": 13178.64850000001,
+      "childWallMs": 12407.623000000001,
+      "peakHeapBytes": 698794200,
+      "peakRssBytes": 1177694208
     },
     {
       "evaluationId": "CMP-t03-c2",
@@ -30340,16 +30364,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:46:07.625Z",
-        "endedAt": "2026-10-10T15:46:20.305Z",
-        "wallMs": 12680.034199999995,
+        "startedAt": "2026-10-10T23:26:49.660Z",
+        "endedAt": "2026-10-10T23:27:02.591Z",
+        "wallMs": 12931.88069999998,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 703070744,
-          "maxRssBytes": 1156255744,
-          "lastElapsedMs": 11920.391000000001
+          "maxHeapUsedBytes": 713382544,
+          "maxRssBytes": 965967872,
+          "lastElapsedMs": 12170.7292
         }
       },
       "inputDigest": "fnv1a32:ef54618c",
@@ -30979,10 +31003,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12680.034199999995,
-      "childWallMs": 11918.2999,
-      "peakHeapBytes": 703070744,
-      "peakRssBytes": 1156255744
+      "wallMs": 12931.88069999998,
+      "childWallMs": 12168.2422,
+      "peakHeapBytes": 713382544,
+      "peakRssBytes": 965967872
     },
     {
       "evaluationId": "CMP-t03-c3",
@@ -31018,16 +31042,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:46:20.308Z",
-        "endedAt": "2026-10-10T15:46:32.932Z",
-        "wallMs": 12624.19339999999,
+        "startedAt": "2026-10-10T23:27:02.596Z",
+        "endedAt": "2026-10-10T23:27:15.517Z",
+        "wallMs": 12921.801099999924,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 698490928,
-          "maxRssBytes": 1138081792,
-          "lastElapsedMs": 11865.897299999999
+          "maxHeapUsedBytes": 698549960,
+          "maxRssBytes": 1126010880,
+          "lastElapsedMs": 12160.9976
         }
       },
       "inputDigest": "fnv1a32:6bf63e9d",
@@ -31642,10 +31666,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12624.19339999999,
-      "childWallMs": 11863.7859,
-      "peakHeapBytes": 698490928,
-      "peakRssBytes": 1138081792
+      "wallMs": 12921.801099999924,
+      "childWallMs": 12158.9059,
+      "peakHeapBytes": 698549960,
+      "peakRssBytes": 1126010880
     },
     {
       "evaluationId": "CMP-t04-c1",
@@ -31681,16 +31705,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:46:32.936Z",
-        "endedAt": "2026-10-10T15:46:44.552Z",
-        "wallMs": 11615.624500000034,
+        "startedAt": "2026-10-10T23:27:15.521Z",
+        "endedAt": "2026-10-10T23:27:27.282Z",
+        "wallMs": 11761.327099999995,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 657149656,
-          "maxRssBytes": 1243783168,
-          "lastElapsedMs": 10848.459400000002
+          "maxHeapUsedBytes": 309258480,
+          "maxRssBytes": 960688128,
+          "lastElapsedMs": 11000.7413
         }
       },
       "inputDigest": "fnv1a32:5c847d21",
@@ -32318,10 +32342,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11615.624500000034,
-      "childWallMs": 10846.7016,
-      "peakHeapBytes": 657149656,
-      "peakRssBytes": 1243783168
+      "wallMs": 11761.327099999995,
+      "childWallMs": 10997.9408,
+      "peakHeapBytes": 309258480,
+      "peakRssBytes": 966930432
     },
     {
       "evaluationId": "CMP-t04-c2",
@@ -32357,16 +32381,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:46:44.554Z",
-        "endedAt": "2026-10-10T15:46:56.230Z",
-        "wallMs": 11676.002300000051,
+        "startedAt": "2026-10-10T23:27:27.285Z",
+        "endedAt": "2026-10-10T23:27:39.322Z",
+        "wallMs": 12037.013999999966,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 649697568,
-          "maxRssBytes": 1195642880,
-          "lastElapsedMs": 10908.5032
+          "maxHeapUsedBytes": 659242112,
+          "maxRssBytes": 1242804224,
+          "lastElapsedMs": 11264.4457
         }
       },
       "inputDigest": "fnv1a32:40fa52ca",
@@ -33005,10 +33029,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11676.002300000051,
-      "childWallMs": 10906.6391,
-      "peakHeapBytes": 649697568,
-      "peakRssBytes": 1195642880
+      "wallMs": 12037.013999999966,
+      "childWallMs": 11262.6666,
+      "peakHeapBytes": 659242112,
+      "peakRssBytes": 1242804224
     },
     {
       "evaluationId": "CMP-t04-c3",
@@ -33044,16 +33068,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:46:56.233Z",
-        "endedAt": "2026-10-10T15:47:07.864Z",
-        "wallMs": 11630.888299999991,
+        "startedAt": "2026-10-10T23:27:39.324Z",
+        "endedAt": "2026-10-10T23:27:51.059Z",
+        "wallMs": 11734.459099999978,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 313769592,
-          "maxRssBytes": 958312448,
-          "lastElapsedMs": 10874.392100000001
+          "maxHeapUsedBytes": 316514800,
+          "maxRssBytes": 959029248,
+          "lastElapsedMs": 10973.6785
         }
       },
       "inputDigest": "fnv1a32:24e503cd",
@@ -33691,10 +33715,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11630.888299999991,
-      "childWallMs": 10871.3035,
-      "peakHeapBytes": 313769592,
-      "peakRssBytes": 964763648
+      "wallMs": 11734.459099999978,
+      "childWallMs": 10970.833,
+      "peakHeapBytes": 316514800,
+      "peakRssBytes": 965623808
     },
     {
       "evaluationId": "CMP-t05-c1",
@@ -33730,16 +33754,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:47:07.866Z",
-        "endedAt": "2026-10-10T15:47:21.136Z",
-        "wallMs": 13269.20279999997,
+        "startedAt": "2026-10-10T23:27:51.061Z",
+        "endedAt": "2026-10-10T23:28:04.694Z",
+        "wallMs": 13632.292499999981,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 745203720,
-          "maxRssBytes": 1479327744,
-          "lastElapsedMs": 12486.3792
+          "maxHeapUsedBytes": 740859416,
+          "maxRssBytes": 1483894784,
+          "lastElapsedMs": 12839.5347
         }
       },
       "inputDigest": "fnv1a32:77cfeee7",
@@ -34360,10 +34384,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13269.20279999997,
-      "childWallMs": 12484.0242,
-      "peakHeapBytes": 745203720,
-      "peakRssBytes": 1479327744
+      "wallMs": 13632.292499999981,
+      "childWallMs": 12837.098000000002,
+      "peakHeapBytes": 740859416,
+      "peakRssBytes": 1483894784
     },
     {
       "evaluationId": "CMP-t05-c2",
@@ -34399,16 +34423,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:47:21.139Z",
-        "endedAt": "2026-10-10T15:47:33.924Z",
-        "wallMs": 12784.8321,
+        "startedAt": "2026-10-10T23:28:04.697Z",
+        "endedAt": "2026-10-10T23:28:17.886Z",
+        "wallMs": 13189.127600000007,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 782188384,
-          "maxRssBytes": 1119715328,
-          "lastElapsedMs": 12016.638
+          "maxHeapUsedBytes": 716946976,
+          "maxRssBytes": 1455837184,
+          "lastElapsedMs": 12406.7451
         }
       },
       "inputDigest": "fnv1a32:b2c22d8f",
@@ -35011,10 +35035,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12784.8321,
-      "childWallMs": 12013.3997,
-      "peakHeapBytes": 782188384,
-      "peakRssBytes": 1119715328
+      "wallMs": 13189.127600000007,
+      "childWallMs": 12404.6387,
+      "peakHeapBytes": 716946976,
+      "peakRssBytes": 1455837184
     },
     {
       "evaluationId": "CMP-t05-c3",
@@ -35050,16 +35074,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:47:33.927Z",
-        "endedAt": "2026-10-10T15:47:46.877Z",
-        "wallMs": 12949.844700000016,
+        "startedAt": "2026-10-10T23:28:17.889Z",
+        "endedAt": "2026-10-10T23:28:30.870Z",
+        "wallMs": 12980.9706,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 732361736,
-          "maxRssBytes": 1450807296,
-          "lastElapsedMs": 12158.3053
+          "maxHeapUsedBytes": 728987192,
+          "maxRssBytes": 1474994176,
+          "lastElapsedMs": 12196.406799999999
         }
       },
       "inputDigest": "fnv1a32:d6173473",
@@ -35662,10 +35686,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12949.844700000016,
-      "childWallMs": 12155.86,
-      "peakHeapBytes": 732361736,
-      "peakRssBytes": 1450807296
+      "wallMs": 12980.9706,
+      "childWallMs": 12193.658099999999,
+      "peakHeapBytes": 728987192,
+      "peakRssBytes": 1474994176
     },
     {
       "evaluationId": "CMP-t06-c1",
@@ -35701,16 +35725,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:47:46.879Z",
-        "endedAt": "2026-10-10T15:47:59.800Z",
-        "wallMs": 12920.597899999935,
+        "startedAt": "2026-10-10T23:28:30.874Z",
+        "endedAt": "2026-10-10T23:28:43.786Z",
+        "wallMs": 12911.83870000008,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 725293840,
-          "maxRssBytes": 1478860800,
-          "lastElapsedMs": 12120.3028
+          "maxHeapUsedBytes": 716312248,
+          "maxRssBytes": 1120206848,
+          "lastElapsedMs": 12146.342999999999
         }
       },
       "inputDigest": "fnv1a32:5d9e9643",
@@ -36329,10 +36353,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12920.597899999935,
-      "childWallMs": 12118.153600000001,
-      "peakHeapBytes": 725293840,
-      "peakRssBytes": 1478860800
+      "wallMs": 12911.83870000008,
+      "childWallMs": 12142.981,
+      "peakHeapBytes": 716312248,
+      "peakRssBytes": 1120206848
     },
     {
       "evaluationId": "CMP-t06-c2",
@@ -36368,16 +36392,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:47:59.804Z",
-        "endedAt": "2026-10-10T15:48:12.337Z",
-        "wallMs": 12533.244200000074,
+        "startedAt": "2026-10-10T23:28:43.789Z",
+        "endedAt": "2026-10-10T23:28:56.508Z",
+        "wallMs": 12719.387299999944,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 737818792,
-          "maxRssBytes": 1137614848,
-          "lastElapsedMs": 11769.5573
+          "maxHeapUsedBytes": 731570792,
+          "maxRssBytes": 1088389120,
+          "lastElapsedMs": 11952.3804
         }
       },
       "inputDigest": "fnv1a32:c892ead7",
@@ -36983,10 +37007,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12533.244200000074,
-      "childWallMs": 11767.0807,
-      "peakHeapBytes": 737818792,
-      "peakRssBytes": 1137614848
+      "wallMs": 12719.387299999944,
+      "childWallMs": 11949.1708,
+      "peakHeapBytes": 731570792,
+      "peakRssBytes": 1088389120
     },
     {
       "evaluationId": "CMP-t06-c3",
@@ -37022,16 +37046,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:48:12.340Z",
-        "endedAt": "2026-10-10T15:48:25.028Z",
-        "wallMs": 12687.82620000001,
+        "startedAt": "2026-10-10T23:28:56.511Z",
+        "endedAt": "2026-10-10T23:29:10.796Z",
+        "wallMs": 14285.25589999999,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 679627912,
-          "maxRssBytes": 1441185792,
-          "lastElapsedMs": 11901.233400000001
+          "maxHeapUsedBytes": 739140032,
+          "maxRssBytes": 1484754944,
+          "lastElapsedMs": 13489.9497
         }
       },
       "inputDigest": "fnv1a32:9b10aae0",
@@ -37625,10 +37649,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12687.82620000001,
-      "childWallMs": 11898.412100000001,
-      "peakHeapBytes": 679627912,
-      "peakRssBytes": 1441185792
+      "wallMs": 14285.25589999999,
+      "childWallMs": 13487.8408,
+      "peakHeapBytes": 739140032,
+      "peakRssBytes": 1484754944
     },
     {
       "evaluationId": "CMP-t07-c1",
@@ -37668,16 +37692,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:48:25.030Z",
-        "endedAt": "2026-10-10T15:48:37.877Z",
-        "wallMs": 12846.318600000115,
+        "startedAt": "2026-10-10T23:29:10.799Z",
+        "endedAt": "2026-10-10T23:29:25.602Z",
+        "wallMs": 14802.330800000113,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 1096893872,
-          "maxRssBytes": 1330323456,
-          "lastElapsedMs": 12056.089
+          "maxHeapUsedBytes": 740872272,
+          "maxRssBytes": 1078849536,
+          "lastElapsedMs": 14004.2861
         }
       },
       "inputDigest": "fnv1a32:6403ac6f",
@@ -38288,10 +38312,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12846.318600000115,
-      "childWallMs": 12054.1242,
-      "peakHeapBytes": 1096893872,
-      "peakRssBytes": 1330323456
+      "wallMs": 14802.330800000113,
+      "childWallMs": 14000.968499999999,
+      "peakHeapBytes": 740872272,
+      "peakRssBytes": 1078849536
     },
     {
       "evaluationId": "CMP-t07-c2",
@@ -38331,16 +38355,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:48:37.889Z",
-        "endedAt": "2026-10-10T15:48:50.748Z",
-        "wallMs": 12859.559399999911,
+        "startedAt": "2026-10-10T23:29:25.613Z",
+        "endedAt": "2026-10-10T23:29:38.974Z",
+        "wallMs": 13361.013499999885,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 712691712,
-          "maxRssBytes": 1122820096,
-          "lastElapsedMs": 12089.454
+          "maxHeapUsedBytes": 717771968,
+          "maxRssBytes": 1438547968,
+          "lastElapsedMs": 12516.3313
         }
       },
       "inputDigest": "fnv1a32:1d93fac2",
@@ -38969,10 +38993,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12859.559399999911,
-      "childWallMs": 12085.9146,
-      "peakHeapBytes": 712691712,
-      "peakRssBytes": 1122820096
+      "wallMs": 13361.013499999885,
+      "childWallMs": 12513.849,
+      "peakHeapBytes": 717771968,
+      "peakRssBytes": 1438547968
     },
     {
       "evaluationId": "CMP-t07-c3",
@@ -39012,16 +39036,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:48:50.751Z",
-        "endedAt": "2026-10-10T15:49:03.519Z",
-        "wallMs": 12768.633300000103,
+        "startedAt": "2026-10-10T23:29:38.979Z",
+        "endedAt": "2026-10-10T23:29:51.838Z",
+        "wallMs": 12858.9739000001,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 705720416,
-          "maxRssBytes": 1089056768,
-          "lastElapsedMs": 12009.167800000001
+          "maxHeapUsedBytes": 758537744,
+          "maxRssBytes": 1120260096,
+          "lastElapsedMs": 12085.1626
         }
       },
       "inputDigest": "fnv1a32:5c0fecc4",
@@ -39632,10 +39656,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12768.633300000103,
-      "childWallMs": 12005.670399999999,
-      "peakHeapBytes": 705720416,
-      "peakRssBytes": 1089056768
+      "wallMs": 12858.9739000001,
+      "childWallMs": 12082.0025,
+      "peakHeapBytes": 758537744,
+      "peakRssBytes": 1120260096
     },
     {
       "evaluationId": "CMP-t08-c1",
@@ -39679,16 +39703,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:49:03.522Z",
-        "endedAt": "2026-10-10T15:49:16.398Z",
-        "wallMs": 12875.356099999975,
+        "startedAt": "2026-10-10T23:29:51.841Z",
+        "endedAt": "2026-10-10T23:30:04.432Z",
+        "wallMs": 12591.075600000098,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 682661736,
-          "maxRssBytes": 1085841408,
-          "lastElapsedMs": 12114.2827
+          "maxHeapUsedBytes": 736918192,
+          "maxRssBytes": 1098932224,
+          "lastElapsedMs": 11809.5862
         }
       },
       "inputDigest": "fnv1a32:d4b0d4a7",
@@ -40326,10 +40350,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12875.356099999975,
-      "childWallMs": 12110.852700000001,
-      "peakHeapBytes": 682661736,
-      "peakRssBytes": 1085841408
+      "wallMs": 12591.075600000098,
+      "childWallMs": 11806.4954,
+      "peakHeapBytes": 736918192,
+      "peakRssBytes": 1098932224
     },
     {
       "evaluationId": "CMP-t08-c2",
@@ -40373,16 +40397,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:49:16.401Z",
-        "endedAt": "2026-10-10T15:49:29.278Z",
-        "wallMs": 12877.023499999894,
+        "startedAt": "2026-10-10T23:30:04.435Z",
+        "endedAt": "2026-10-10T23:30:16.983Z",
+        "wallMs": 12547.48900000006,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 741073792,
-          "maxRssBytes": 1082654720,
-          "lastElapsedMs": 12114.3023
+          "maxHeapUsedBytes": 735073712,
+          "maxRssBytes": 1079021568,
+          "lastElapsedMs": 11777.4374
         }
       },
       "inputDigest": "fnv1a32:251df0eb",
@@ -41020,10 +41044,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12877.023499999894,
-      "childWallMs": 12111.143699999999,
-      "peakHeapBytes": 741073792,
-      "peakRssBytes": 1082654720
+      "wallMs": 12547.48900000006,
+      "childWallMs": 11774.1001,
+      "peakHeapBytes": 735073712,
+      "peakRssBytes": 1079021568
     },
     {
       "evaluationId": "CMP-t08-c3",
@@ -41067,16 +41091,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:49:29.281Z",
-        "endedAt": "2026-10-10T15:49:42.212Z",
-        "wallMs": 12931.214799999958,
+        "startedAt": "2026-10-10T23:30:16.986Z",
+        "endedAt": "2026-10-10T23:30:29.708Z",
+        "wallMs": 12722.486899999902,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 685873936,
-          "maxRssBytes": 1466945536,
-          "lastElapsedMs": 12151.2125
+          "maxHeapUsedBytes": 742148888,
+          "maxRssBytes": 1446604800,
+          "lastElapsedMs": 11927.7056
         }
       },
       "inputDigest": "fnv1a32:dbd6a0e2",
@@ -41714,10 +41738,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12931.214799999958,
-      "childWallMs": 12149.1919,
-      "peakHeapBytes": 685873936,
-      "peakRssBytes": 1466945536
+      "wallMs": 12722.486899999902,
+      "childWallMs": 11925.6944,
+      "peakHeapBytes": 742148888,
+      "peakRssBytes": 1446604800
     },
     {
       "evaluationId": "CMP-t09-c1",
@@ -41765,16 +41789,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:49:42.215Z",
-        "endedAt": "2026-10-10T15:49:55.114Z",
-        "wallMs": 12898.44430000009,
+        "startedAt": "2026-10-10T23:30:29.711Z",
+        "endedAt": "2026-10-10T23:30:41.997Z",
+        "wallMs": 12285.707999999868,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 729696120,
-          "maxRssBytes": 1107746816,
-          "lastElapsedMs": 12137.3328
+          "maxHeapUsedBytes": 729913048,
+          "maxRssBytes": 1108353024,
+          "lastElapsedMs": 11492.9274
         }
       },
       "inputDigest": "fnv1a32:488e42f1",
@@ -42441,10 +42465,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12898.44430000009,
-      "childWallMs": 12134.131500000001,
-      "peakHeapBytes": 729696120,
-      "peakRssBytes": 1107746816
+      "wallMs": 12285.707999999868,
+      "childWallMs": 11489.371599999999,
+      "peakHeapBytes": 729913048,
+      "peakRssBytes": 1108353024
     },
     {
       "evaluationId": "CMP-t09-c2",
@@ -42492,16 +42516,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:49:55.117Z",
-        "endedAt": "2026-10-10T15:50:08.076Z",
-        "wallMs": 12958.251200000057,
+        "startedAt": "2026-10-10T23:30:42.000Z",
+        "endedAt": "2026-10-10T23:30:54.932Z",
+        "wallMs": 12931.643699999899,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 690280904,
-          "maxRssBytes": 1141514240,
-          "lastElapsedMs": 12196.508300000001
+          "maxHeapUsedBytes": 702382152,
+          "maxRssBytes": 942292992,
+          "lastElapsedMs": 12147.535899999999
         }
       },
       "inputDigest": "fnv1a32:1e1bd8a5",
@@ -43168,10 +43192,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12958.251200000057,
-      "childWallMs": 12194.6217,
-      "peakHeapBytes": 690280904,
-      "peakRssBytes": 1141514240
+      "wallMs": 12931.643699999899,
+      "childWallMs": 12144.8125,
+      "peakHeapBytes": 702382152,
+      "peakRssBytes": 942292992
     },
     {
       "evaluationId": "CMP-t09-c3",
@@ -43219,16 +43243,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:50:08.079Z",
-        "endedAt": "2026-10-10T15:50:21.068Z",
-        "wallMs": 12989.314199999906,
+        "startedAt": "2026-10-10T23:30:54.935Z",
+        "endedAt": "2026-10-10T23:31:08.490Z",
+        "wallMs": 13555.046500000171,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 721754448,
-          "maxRssBytes": 1108115456,
-          "lastElapsedMs": 12224.0081
+          "maxHeapUsedBytes": 718036304,
+          "maxRssBytes": 1138102272,
+          "lastElapsedMs": 12707.2623
         }
       },
       "inputDigest": "fnv1a32:7da02524",
@@ -43895,10 +43919,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12989.314199999906,
-      "childWallMs": 12222.081600000001,
-      "peakHeapBytes": 721754448,
-      "peakRssBytes": 1108115456
+      "wallMs": 13555.046500000171,
+      "childWallMs": 12705.206900000001,
+      "peakHeapBytes": 718036304,
+      "peakRssBytes": 1138102272
     },
     {
       "evaluationId": "CMP-t10-c1",
@@ -43950,16 +43974,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:50:21.071Z",
-        "endedAt": "2026-10-10T15:50:32.978Z",
-        "wallMs": 11906.580199999968,
+        "startedAt": "2026-10-10T23:31:08.493Z",
+        "endedAt": "2026-10-10T23:31:20.814Z",
+        "wallMs": 12319.872999999905,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 954674344,
-          "maxRssBytes": 1172852736,
-          "lastElapsedMs": 11128.3406
+          "maxHeapUsedBytes": 314842328,
+          "maxRssBytes": 969297920,
+          "lastElapsedMs": 11486.2519
         }
       },
       "inputDigest": "fnv1a32:5a82c22e",
@@ -44687,10 +44711,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11906.580199999968,
-      "childWallMs": 11126.554,
-      "peakHeapBytes": 954674344,
-      "peakRssBytes": 1172852736
+      "wallMs": 12319.872999999905,
+      "childWallMs": 11483.304,
+      "peakHeapBytes": 314842328,
+      "peakRssBytes": 974098432
     },
     {
       "evaluationId": "CMP-t10-c2",
@@ -44742,16 +44766,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:50:32.981Z",
-        "endedAt": "2026-10-10T15:50:44.978Z",
-        "wallMs": 11996.819900000002,
+        "startedAt": "2026-10-10T23:31:20.816Z",
+        "endedAt": "2026-10-10T23:31:33.175Z",
+        "wallMs": 12358.187200000044,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 655840336,
-          "maxRssBytes": 1175916544,
-          "lastElapsedMs": 11234.385900000001
+          "maxHeapUsedBytes": 654906096,
+          "maxRssBytes": 1183121408,
+          "lastElapsedMs": 11561.3668
         }
       },
       "inputDigest": "fnv1a32:01d4d327",
@@ -45479,10 +45503,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11996.819900000002,
-      "childWallMs": 11232.6946,
-      "peakHeapBytes": 655840336,
-      "peakRssBytes": 1175916544
+      "wallMs": 12358.187200000044,
+      "childWallMs": 11559.578099999999,
+      "peakHeapBytes": 654906096,
+      "peakRssBytes": 1183121408
     },
     {
       "evaluationId": "CMP-t10-c3",
@@ -45534,16 +45558,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:50:44.981Z",
-        "endedAt": "2026-10-10T15:50:57.008Z",
-        "wallMs": 12027.641399999848,
+        "startedAt": "2026-10-10T23:31:33.178Z",
+        "endedAt": "2026-10-10T23:31:45.811Z",
+        "wallMs": 12633.018500000006,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 678875592,
-          "maxRssBytes": 1256374272,
-          "lastElapsedMs": 11249.9802
+          "maxHeapUsedBytes": 539375064,
+          "maxRssBytes": 896073728,
+          "lastElapsedMs": 11850.5988
         }
       },
       "inputDigest": "fnv1a32:4d86be08",
@@ -46271,10 +46295,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12027.641399999848,
-      "childWallMs": 11248.2824,
-      "peakHeapBytes": 678875592,
-      "peakRssBytes": 1256374272
+      "wallMs": 12633.018500000006,
+      "childWallMs": 11848.8279,
+      "peakHeapBytes": 539375064,
+      "peakRssBytes": 900870144
     },
     {
       "evaluationId": "Z0",
@@ -46320,16 +46344,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:50:57.011Z",
-        "endedAt": "2026-10-10T15:51:09.551Z",
-        "wallMs": 12539.66969999997,
+        "startedAt": "2026-10-10T23:31:45.817Z",
+        "endedAt": "2026-10-10T23:31:59.468Z",
+        "wallMs": 13651.740100000054,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 721724432,
-          "maxRssBytes": 1093287936,
-          "lastElapsedMs": 11764.427899999999
+          "maxHeapUsedBytes": 699276200,
+          "maxRssBytes": 1083740160,
+          "lastElapsedMs": 12870.4731
         }
       },
       "inputDigest": "fnv1a32:e38da50a",
@@ -46984,10 +47008,10 @@
       "composition": null,
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12539.66969999997,
-      "childWallMs": 11760.966,
-      "peakHeapBytes": 721724432,
-      "peakRssBytes": 1093287936
+      "wallMs": 13651.740100000054,
+      "childWallMs": 12867.0855,
+      "peakHeapBytes": 699276200,
+      "peakRssBytes": 1083740160
     },
     {
       "evaluationId": "Z-t00-c1",
@@ -47037,16 +47061,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:51:09.554Z",
-        "endedAt": "2026-10-10T15:51:22.427Z",
-        "wallMs": 12872.996999999974,
+        "startedAt": "2026-10-10T23:31:59.471Z",
+        "endedAt": "2026-10-10T23:32:12.704Z",
+        "wallMs": 13232.948699999833,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 719436712,
-          "maxRssBytes": 1451954176,
-          "lastElapsedMs": 12092.806700000001
+          "maxHeapUsedBytes": 724310040,
+          "maxRssBytes": 1187909632,
+          "lastElapsedMs": 12427.7008
         }
       },
       "inputDigest": "fnv1a32:aa591589",
@@ -47767,10 +47791,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12872.996999999974,
-      "childWallMs": 12090.981,
-      "peakHeapBytes": 719436712,
-      "peakRssBytes": 1451954176
+      "wallMs": 13232.948699999833,
+      "childWallMs": 12425.3984,
+      "peakHeapBytes": 724310040,
+      "peakRssBytes": 1187909632
     },
     {
       "evaluationId": "Z-t00-c2",
@@ -47820,16 +47844,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:51:22.430Z",
-        "endedAt": "2026-10-10T15:51:35.219Z",
-        "wallMs": 12789.059399999911,
+        "startedAt": "2026-10-10T23:32:12.707Z",
+        "endedAt": "2026-10-10T23:32:25.466Z",
+        "wallMs": 12758.875899999868,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 703997880,
-          "maxRssBytes": 1036828672,
-          "lastElapsedMs": 12020.981600000001
+          "maxHeapUsedBytes": 722227632,
+          "maxRssBytes": 1090023424,
+          "lastElapsedMs": 11867.843900000002
         }
       },
       "inputDigest": "fnv1a32:aefd68c2",
@@ -48550,10 +48574,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12789.059399999911,
-      "childWallMs": 12017.673799999999,
-      "peakHeapBytes": 703997880,
-      "peakRssBytes": 1036828672
+      "wallMs": 12758.875899999868,
+      "childWallMs": 11864.5208,
+      "peakHeapBytes": 722227632,
+      "peakRssBytes": 1090023424
     },
     {
       "evaluationId": "Z-t00-c3",
@@ -48603,16 +48627,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:51:35.223Z",
-        "endedAt": "2026-10-10T15:51:47.891Z",
-        "wallMs": 12668.029899999965,
+        "startedAt": "2026-10-10T23:32:25.469Z",
+        "endedAt": "2026-10-10T23:32:38.200Z",
+        "wallMs": 12730.992899999954,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 703552560,
-          "maxRssBytes": 1103908864,
-          "lastElapsedMs": 11898.430999999999
+          "maxHeapUsedBytes": 726988784,
+          "maxRssBytes": 1123438592,
+          "lastElapsedMs": 11895.468599999998
         }
       },
       "inputDigest": "fnv1a32:7f5419a1",
@@ -49333,10 +49357,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12668.029899999965,
-      "childWallMs": 11895.3934,
-      "peakHeapBytes": 703552560,
-      "peakRssBytes": 1103908864
+      "wallMs": 12730.992899999954,
+      "childWallMs": 11893.3918,
+      "peakHeapBytes": 726988784,
+      "peakRssBytes": 1123438592
     },
     {
       "evaluationId": "Z-t02-c1",
@@ -49386,16 +49410,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:51:47.894Z",
-        "endedAt": "2026-10-10T15:51:59.785Z",
-        "wallMs": 11891.035299999872,
+        "startedAt": "2026-10-10T23:32:38.202Z",
+        "endedAt": "2026-10-10T23:32:50.128Z",
+        "wallMs": 11925.661300000036,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 688938192,
-          "maxRssBytes": 1156669440,
-          "lastElapsedMs": 11127.467700000001
+          "maxHeapUsedBytes": 637847600,
+          "maxRssBytes": 1074401280,
+          "lastElapsedMs": 11132.8228
         }
       },
       "inputDigest": "fnv1a32:c07f4ecf",
@@ -50128,10 +50152,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11891.035299999872,
-      "childWallMs": 11125.2248,
-      "peakHeapBytes": 688938192,
-      "peakRssBytes": 1156669440
+      "wallMs": 11925.661300000036,
+      "childWallMs": 11129.354899999998,
+      "peakHeapBytes": 637847600,
+      "peakRssBytes": 1074401280
     },
     {
       "evaluationId": "Z-t02-c2",
@@ -50181,16 +50205,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:51:59.787Z",
-        "endedAt": "2026-10-10T15:52:11.716Z",
-        "wallMs": 11929.406300000148,
+        "startedAt": "2026-10-10T23:32:50.132Z",
+        "endedAt": "2026-10-10T23:33:02.296Z",
+        "wallMs": 12163.597500000149,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 661626176,
-          "maxRssBytes": 1105707008,
-          "lastElapsedMs": 11153.735700000001
+          "maxHeapUsedBytes": 705072192,
+          "maxRssBytes": 1071190016,
+          "lastElapsedMs": 11356.6094
         }
       },
       "inputDigest": "fnv1a32:6a31a16b",
@@ -50923,10 +50947,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11929.406300000148,
-      "childWallMs": 11151.4306,
-      "peakHeapBytes": 661626176,
-      "peakRssBytes": 1105707008
+      "wallMs": 12163.597500000149,
+      "childWallMs": 11353.687899999999,
+      "peakHeapBytes": 705072192,
+      "peakRssBytes": 1071190016
     },
     {
       "evaluationId": "Z-t03-c1",
@@ -50976,16 +51000,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:52:11.721Z",
-        "endedAt": "2026-10-10T15:52:24.437Z",
-        "wallMs": 12715.897200000007,
+        "startedAt": "2026-10-10T23:33:02.298Z",
+        "endedAt": "2026-10-10T23:33:14.988Z",
+        "wallMs": 12689.827400000067,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 711439232,
-          "maxRssBytes": 1080508416,
-          "lastElapsedMs": 11948.5494
+          "maxHeapUsedBytes": 711531792,
+          "maxRssBytes": 1072230400,
+          "lastElapsedMs": 11880.6147
         }
       },
       "inputDigest": "fnv1a32:612e1d6c",
@@ -51729,10 +51753,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12715.897200000007,
-      "childWallMs": 11945.358999999999,
-      "peakHeapBytes": 711439232,
-      "peakRssBytes": 1080508416
+      "wallMs": 12689.827400000067,
+      "childWallMs": 11877.132,
+      "peakHeapBytes": 711531792,
+      "peakRssBytes": 1072230400
     },
     {
       "evaluationId": "Z-t03-c2",
@@ -51782,16 +51806,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:52:24.440Z",
-        "endedAt": "2026-10-10T15:52:37.004Z",
-        "wallMs": 12563.792099999962,
+        "startedAt": "2026-10-10T23:33:14.992Z",
+        "endedAt": "2026-10-10T23:33:27.905Z",
+        "wallMs": 12912.851599999936,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 737336520,
-          "maxRssBytes": 974254080,
-          "lastElapsedMs": 11802.461
+          "maxHeapUsedBytes": 710062144,
+          "maxRssBytes": 1140322304,
+          "lastElapsedMs": 12078.933299999999
         }
       },
       "inputDigest": "fnv1a32:dc44fdc6",
@@ -52520,10 +52544,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12563.792099999962,
-      "childWallMs": 11799.2111,
-      "peakHeapBytes": 737336520,
-      "peakRssBytes": 974254080
+      "wallMs": 12912.851599999936,
+      "childWallMs": 12076.844799999999,
+      "peakHeapBytes": 710062144,
+      "peakRssBytes": 1140322304
     },
     {
       "evaluationId": "Z-t03-c3",
@@ -52573,16 +52597,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:52:37.006Z",
-        "endedAt": "2026-10-10T15:52:49.889Z",
-        "wallMs": 12882.25139999995,
+        "startedAt": "2026-10-10T23:33:27.908Z",
+        "endedAt": "2026-10-10T23:33:40.384Z",
+        "wallMs": 12476.25820000004,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 712757552,
-          "maxRssBytes": 1458823168,
-          "lastElapsedMs": 12094.603500000001
+          "maxHeapUsedBytes": 728138744,
+          "maxRssBytes": 1093353472,
+          "lastElapsedMs": 11681.368900000001
         }
       },
       "inputDigest": "fnv1a32:7ecb1559",
@@ -53295,10 +53319,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12882.25139999995,
-      "childWallMs": 12092.3694,
-      "peakHeapBytes": 712757552,
-      "peakRssBytes": 1458823168
+      "wallMs": 12476.25820000004,
+      "childWallMs": 11678.0165,
+      "peakHeapBytes": 728138744,
+      "peakRssBytes": 1093353472
     },
     {
       "evaluationId": "Z-t04-c1",
@@ -53348,16 +53372,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:52:49.892Z",
-        "endedAt": "2026-10-10T15:53:01.664Z",
-        "wallMs": 11771.861799999839,
+        "startedAt": "2026-10-10T23:33:40.388Z",
+        "endedAt": "2026-10-10T23:33:51.592Z",
+        "wallMs": 11204.37630000012,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 310755800,
-          "maxRssBytes": 964734976,
-          "lastElapsedMs": 11013.3268
+          "maxHeapUsedBytes": 647721824,
+          "maxRssBytes": 1272709120,
+          "lastElapsedMs": 10410.9553
         }
       },
       "inputDigest": "fnv1a32:fa6e89cb",
@@ -54080,10 +54104,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11771.861799999839,
-      "childWallMs": 11010.1443,
-      "peakHeapBytes": 310755800,
-      "peakRssBytes": 969265152
+      "wallMs": 11204.37630000012,
+      "childWallMs": 10409.2366,
+      "peakHeapBytes": 647721824,
+      "peakRssBytes": 1272709120
     },
     {
       "evaluationId": "Z-t04-c2",
@@ -54133,16 +54157,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:53:01.666Z",
-        "endedAt": "2026-10-10T15:53:13.209Z",
-        "wallMs": 11542.65690000006,
+        "startedAt": "2026-10-10T23:33:51.595Z",
+        "endedAt": "2026-10-10T23:34:03.562Z",
+        "wallMs": 11967.859600000083,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 310515200,
-          "maxRssBytes": 958865408,
-          "lastElapsedMs": 10770.310899999999
+          "maxHeapUsedBytes": 655804920,
+          "maxRssBytes": 1273221120,
+          "lastElapsedMs": 11165.9324
         }
       },
       "inputDigest": "fnv1a32:4b472ac6",
@@ -54879,10 +54903,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11542.65690000006,
-      "childWallMs": 10767.422900000001,
-      "peakHeapBytes": 310515200,
-      "peakRssBytes": 964653056
+      "wallMs": 11967.859600000083,
+      "childWallMs": 11164.1999,
+      "peakHeapBytes": 655804920,
+      "peakRssBytes": 1273221120
     },
     {
       "evaluationId": "Z-t04-c3",
@@ -54932,16 +54956,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:53:13.212Z",
-        "endedAt": "2026-10-10T15:53:24.779Z",
-        "wallMs": 11567.02600000007,
+        "startedAt": "2026-10-10T23:34:03.565Z",
+        "endedAt": "2026-10-10T23:34:15.711Z",
+        "wallMs": 12145.813599999994,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
-          "samples": 4,
-          "maxHeapUsedBytes": 330288336,
-          "maxRssBytes": 958451712,
-          "lastElapsedMs": 10800.6379
+          "samples": 5,
+          "maxHeapUsedBytes": 687640144,
+          "maxRssBytes": 1245798400,
+          "lastElapsedMs": 11321.4606
         }
       },
       "inputDigest": "fnv1a32:1006272b",
@@ -55678,10 +55702,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11567.02600000007,
-      "childWallMs": 10797.6091,
-      "peakHeapBytes": 330288336,
-      "peakRssBytes": 963547136
+      "wallMs": 12145.813599999994,
+      "childWallMs": 11319.5196,
+      "peakHeapBytes": 687640144,
+      "peakRssBytes": 1245798400
     },
     {
       "evaluationId": "Z-t05-c1",
@@ -55731,16 +55755,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:53:24.781Z",
-        "endedAt": "2026-10-10T15:53:37.322Z",
-        "wallMs": 12540.485600000015,
+        "startedAt": "2026-10-10T23:34:15.714Z",
+        "endedAt": "2026-10-10T23:34:27.813Z",
+        "wallMs": 12099.118899999885,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 725838872,
-          "maxRssBytes": 932216832,
-          "lastElapsedMs": 11779.0093
+          "maxHeapUsedBytes": 708622272,
+          "maxRssBytes": 1457774592,
+          "lastElapsedMs": 11261.5808
         }
       },
       "inputDigest": "fnv1a32:319c3553",
@@ -56456,10 +56480,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12540.485600000015,
-      "childWallMs": 11776.497800000001,
-      "peakHeapBytes": 725838872,
-      "peakRssBytes": 932216832
+      "wallMs": 12099.118899999885,
+      "childWallMs": 11259.6244,
+      "peakHeapBytes": 708622272,
+      "peakRssBytes": 1457774592
     },
     {
       "evaluationId": "Z-t05-c2",
@@ -56509,16 +56533,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:53:37.325Z",
-        "endedAt": "2026-10-10T15:53:49.878Z",
-        "wallMs": 12553.296199999982,
+        "startedAt": "2026-10-10T23:34:27.816Z",
+        "endedAt": "2026-10-10T23:34:39.975Z",
+        "wallMs": 12159.378299999982,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 687093960,
-          "maxRssBytes": 1083252736,
-          "lastElapsedMs": 11783.2633
+          "maxHeapUsedBytes": 745693720,
+          "maxRssBytes": 1467400192,
+          "lastElapsedMs": 11356.8153
         }
       },
       "inputDigest": "fnv1a32:b654b6cb",
@@ -57219,10 +57243,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12553.296199999982,
-      "childWallMs": 11779.827099999999,
-      "peakHeapBytes": 687093960,
-      "peakRssBytes": 1083252736
+      "wallMs": 12159.378299999982,
+      "childWallMs": 11354.6755,
+      "peakHeapBytes": 745693720,
+      "peakRssBytes": 1467400192
     },
     {
       "evaluationId": "Z-t05-c3",
@@ -57272,16 +57296,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:53:49.881Z",
-        "endedAt": "2026-10-10T15:54:02.874Z",
-        "wallMs": 12992.49049999984,
+        "startedAt": "2026-10-10T23:34:39.979Z",
+        "endedAt": "2026-10-10T23:34:51.764Z",
+        "wallMs": 11785.191000000108,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 692348472,
-          "maxRssBytes": 1457012736,
-          "lastElapsedMs": 12218.231800000001
+          "maxHeapUsedBytes": 691539440,
+          "maxRssBytes": 1048645632,
+          "lastElapsedMs": 11005.066
         }
       },
       "inputDigest": "fnv1a32:0e1de5d3",
@@ -57982,10 +58006,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12992.49049999984,
-      "childWallMs": 12215.7739,
-      "peakHeapBytes": 692348472,
-      "peakRssBytes": 1457012736
+      "wallMs": 11785.191000000108,
+      "childWallMs": 11001.663600000002,
+      "peakHeapBytes": 691539440,
+      "peakRssBytes": 1048645632
     },
     {
       "evaluationId": "Z-t06-c1",
@@ -58035,16 +58059,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:54:02.877Z",
-        "endedAt": "2026-10-10T15:54:15.805Z",
-        "wallMs": 12928.246999999974,
+        "startedAt": "2026-10-10T23:34:51.767Z",
+        "endedAt": "2026-10-10T23:35:04.618Z",
+        "wallMs": 12851.025600000052,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 713545024,
-          "maxRssBytes": 1116803072,
-          "lastElapsedMs": 12169.0762
+          "maxHeapUsedBytes": 736734984,
+          "maxRssBytes": 1155883008,
+          "lastElapsedMs": 12070.717100000002
         }
       },
       "inputDigest": "fnv1a32:2e9ec8c7",
@@ -58758,10 +58782,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12928.246999999974,
-      "childWallMs": 12167.2051,
-      "peakHeapBytes": 713545024,
-      "peakRssBytes": 1116803072
+      "wallMs": 12851.025600000052,
+      "childWallMs": 12068.7387,
+      "peakHeapBytes": 736734984,
+      "peakRssBytes": 1155883008
     },
     {
       "evaluationId": "Z-t06-c2",
@@ -58811,16 +58835,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:54:15.809Z",
-        "endedAt": "2026-10-10T15:54:28.475Z",
-        "wallMs": 12665.743400000036,
+        "startedAt": "2026-10-10T23:35:04.621Z",
+        "endedAt": "2026-10-10T23:35:17.344Z",
+        "wallMs": 12722.710299999919,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 513106224,
-          "maxRssBytes": 1334489088,
-          "lastElapsedMs": 11886.481099999999
+          "maxHeapUsedBytes": 695316368,
+          "maxRssBytes": 960094208,
+          "lastElapsedMs": 11939.745
         }
       },
       "inputDigest": "fnv1a32:777e61a7",
@@ -59524,10 +59548,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12665.743400000036,
-      "childWallMs": 11884.2969,
-      "peakHeapBytes": 513106224,
-      "peakRssBytes": 1334489088
+      "wallMs": 12722.710299999919,
+      "childWallMs": 11936.5685,
+      "peakHeapBytes": 695316368,
+      "peakRssBytes": 964640768
     },
     {
       "evaluationId": "Z-t06-c3",
@@ -59577,16 +59601,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:54:28.477Z",
-        "endedAt": "2026-10-10T15:54:41.325Z",
-        "wallMs": 12848.293799999868,
+        "startedAt": "2026-10-10T23:35:17.347Z",
+        "endedAt": "2026-10-10T23:35:30.619Z",
+        "wallMs": 13272.139600000111,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 728104944,
-          "maxRssBytes": 1122451456,
-          "lastElapsedMs": 12079.5981
+          "maxHeapUsedBytes": 732784160,
+          "maxRssBytes": 1466671104,
+          "lastElapsedMs": 12465.929499999998
         }
       },
       "inputDigest": "fnv1a32:5aa33b32",
@@ -60278,10 +60302,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12848.293799999868,
-      "childWallMs": 12077.5831,
-      "peakHeapBytes": 728104944,
-      "peakRssBytes": 1122451456
+      "wallMs": 13272.139600000111,
+      "childWallMs": 12463.369999999999,
+      "peakHeapBytes": 732784160,
+      "peakRssBytes": 1466671104
     },
     {
       "evaluationId": "Z-t10-c1",
@@ -60335,16 +60359,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:54:41.329Z",
-        "endedAt": "2026-10-10T15:54:53.202Z",
-        "wallMs": 11872.455599999987,
+        "startedAt": "2026-10-10T23:35:30.622Z",
+        "endedAt": "2026-10-10T23:35:42.595Z",
+        "wallMs": 11973.160499999998,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 324708128,
-          "maxRssBytes": 967516160,
-          "lastElapsedMs": 11117.898599999999
+          "maxHeapUsedBytes": 693704744,
+          "maxRssBytes": 1335332864,
+          "lastElapsedMs": 11169.3423
         }
       },
       "inputDigest": "fnv1a32:75037e8b",
@@ -61098,10 +61122,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11872.455599999987,
-      "childWallMs": 11114.9676,
-      "peakHeapBytes": 324708128,
-      "peakRssBytes": 971534336
+      "wallMs": 11973.160499999998,
+      "childWallMs": 11167.4908,
+      "peakHeapBytes": 693704744,
+      "peakRssBytes": 1335332864
     },
     {
       "evaluationId": "Z-t10-c2",
@@ -61155,16 +61179,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:54:53.204Z",
-        "endedAt": "2026-10-10T15:55:04.822Z",
-        "wallMs": 11618.1679,
+        "startedAt": "2026-10-10T23:35:42.598Z",
+        "endedAt": "2026-10-10T23:35:54.162Z",
+        "wallMs": 11564.283900000155,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 331129752,
-          "maxRssBytes": 964128768,
-          "lastElapsedMs": 10861.4055
+          "maxHeapUsedBytes": 319013272,
+          "maxRssBytes": 965591040,
+          "lastElapsedMs": 10776.341999999999
         }
       },
       "inputDigest": "fnv1a32:7e469c2a",
@@ -61918,10 +61942,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11618.1679,
-      "childWallMs": 10858.538999999999,
-      "peakHeapBytes": 331129752,
-      "peakRssBytes": 968839168
+      "wallMs": 11564.283900000155,
+      "childWallMs": 10773.1953,
+      "peakHeapBytes": 319013272,
+      "peakRssBytes": 969854976
     },
     {
       "evaluationId": "Z-t10-c3",
@@ -61975,16 +61999,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-10T15:55:04.825Z",
-        "endedAt": "2026-10-10T15:55:16.746Z",
-        "wallMs": 11921.198300000047,
+        "startedAt": "2026-10-10T23:35:54.164Z",
+        "endedAt": "2026-10-10T23:36:05.868Z",
+        "wallMs": 11703.827700000023,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 4,
-          "maxHeapUsedBytes": 676890576,
-          "maxRssBytes": 1180434432,
-          "lastElapsedMs": 11151.6188
+          "maxHeapUsedBytes": 677229816,
+          "maxRssBytes": 1274830848,
+          "lastElapsedMs": 10892.5159
         }
       },
       "inputDigest": "fnv1a32:96f29fcd",
@@ -62738,10 +62762,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 11921.198300000047,
-      "childWallMs": 11149.9069,
-      "peakHeapBytes": 676890576,
-      "peakRssBytes": 1180434432
+      "wallMs": 11703.827700000023,
+      "childWallMs": 10890.6691,
+      "peakHeapBytes": 677229816,
+      "peakRssBytes": 1274830848
     }
   ],
   "parityChecks": [
@@ -65144,8 +65168,8 @@
       },
       "pooledCandidates": 32,
       "newCandidatesVsD1": 22,
-      "searchOnlyMs": 237668.8037,
-      "wallMs": 415181.7127000001
+      "searchOnlyMs": 233924.37189999994,
+      "wallMs": 405427.18189999997
     },
     "evaluations": {
       "executed": 86,
@@ -65597,14 +65621,14 @@
       "notChecked": []
     },
     "timing": {
-      "discoveryWallMs": 415181.7127000001,
-      "evaluationWallMs": 1073758.656299999,
-      "runWallMs": 1489337.4556,
+      "discoveryWallMs": 405427.18189999997,
+      "evaluationWallMs": 1073564.5021000004,
+      "runWallMs": 1479402.5285,
       "runEnvelopeReached": false
     },
     "memory": {
-      "peakHeapBytes": 1096893872,
-      "peakRssBytes": 1479327744
+      "peakHeapBytes": 1100888912,
+      "peakRssBytes": 1484754944
     }
   },
   "invalidReasons": [],

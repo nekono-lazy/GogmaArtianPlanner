@@ -1,6 +1,7 @@
 # Global Planner Research D2-B（K0先行候補探索と集合評価の実装・正式計測）
 
-Refs #154。Research-only。事前登録: [D2-A](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2_SPEC.md)（PR #225）。正式RESULT: `docs/PLANNER_GLOBAL_D2_RESULT.json`。
+Refs #154。Research-only。事前登録: [D2-A](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2_SPEC.md)（PR #225、初回formal run後に§17の改訂）。正式RESULT: `docs/PLANNER_GLOBAL_D2_RESULT.json`
+（改訂後のmeasurement HEAD `6f66c168` で再計測したevidenceから生成）。
 
 本書はD2-Bの結果の要約であり、判定規則・数値の権威はD2-A（事前登録）と正式RESULTである。Production source、Search / Planner / RNG semantics、
 Worker、UI、Persistence、schema / version、Production defaultは変更していない。Phase B / D1のformal RESULT・module・recordも変更していない。
@@ -19,26 +20,34 @@ Worker、UI、Persistence、schema / version、Production defaultは変更して
   `judgeD1R5Independently()`）を再利用し、D1-A §4.1と同じ部品・同じ順序で実行する。`runD1Evaluation()` はPlannerResultを返さないため、D2-A §6.1の追加記録
   （`rejectedBuildListEntries`、selected Target集合）を同じPlannerResultから読む `runD2Evaluation()` をD2 moduleに置いた。D1と同じfactを返すことをtestで固定し、
   正式計測でもD1との決定性19組・B0・Z0がすべて一致した
-- 実装上の注記（意味論の追加ではない）
-  - `O_t`、t09のsupport Entry・reservation digest、K0 reservation digestはD1-A §1.3の登録表（SHA-256照合済み）から読み、D2-Aの記載値とも照合した
-    （D2-A §2.3 / §5が当該表を登録値として名指しするため。D2-A §8.1の文書行は「hash照合だけ」と書くが、読む範囲はこの表に限定した）
-  - S5の後半（Phase B recordのreservation bodyとの一致）はPhase B recordがD2の入力（§8.1）に無いため、登録digest（D1-A §1.3 / D2-A §5）との一致で判定した
-  - Export SHA-256はD1と同じくsourceへ直書きせず、Phase B RESULT `sources.export` → D1 RESULT `sources.export` → manifest → D2-A本文の連鎖で検証した
+- Export SHA-256はD1と同じくsourceへ直書きせず、Phase B RESULT `sources.export` → D1 RESULT `sources.export` → manifest → D2-A本文の連鎖で検証した
+
+## 1.1 Required fix（PR #226レビュー）と再計測
+
+| 項目 | 内容 |
+| --- | --- |
+| 指摘 | 初回実装はZ軸のt09 support依存のS5を、登録reservation digestとの一致だけで判定していた。D1-A §4.5のS5は、これに加えて導出reservationがPhase B recordの `result.reservation` と `stableStringify()` で一致することを要求する。また、D2-A §8.1はD1-A文書を「hash照合だけ」としていた一方、実装はD1-A §1.3の登録表から `O_t`・support Entry・reservation digestを読んでいた |
+| D2-Aの改訂（§17、初回formal run後に追記） | D1-A §1.3から読むfield（found表の `t` / TargetWeapon ID / unit / support Entry / `reservationDigest` / `O_t` / `G_t`、record digest表のt09行）を限定して入力に明記。Phase B t09 unit recordを登録入力に追加。S5を (a) digest一致 ∧ (b) Phase B record `result.reservation` との本体一致とした。当初から登録していたのではない |
+| Phase B t09 record | `.local/c27b-formal.run/t09-r10-L1.record.json`、203,547 bytes、SHA-256 `4de5f215…7214`。Phase B RESULT `sources.unitRecords` とD1-A §1.3 record digest表の値の両方と一致。読むfieldは `result.reservation` だけ。runner（V、start attestation）とanalyzer（V再実行）が独立に検証 |
+| 実装 | 子の評価が (a)(b) を個別に計算して評価recordへ記録し（比較したbodyを含む）、どちらかが不成立ならguardrail違反（`D2A_INVALID`）。analyzerはrecordの比較bodyとdigestがVの読んだrecord・登録digestと同じであること、両条件が成立していることを独立に照合する。S1〜S4、K0探索、R1 / R5 / R6、gate、選択順、budget、envelopeは変更していない |
+| 初回formal run | measurement HEAD `810c5f090d532e67e40c7b0cbdc6d2b8deebec49`、start attestation `a976efd8…7c5e`。新仕様の正式evidenceとして採用しない（raw / record / G store / attestationは `.local/d2-formal.run` に監査用として保持） |
+| 再計測 | 改訂後のmeasurement HEADから新しいrun dir（`.local/d2-formal2.run`）で `V → DSC → B0 → ADM → CMP → Z` を最初から実行。旧runのrecordを流用・混在させていない |
 
 ## 2. provenance
 
 | 項目 | 値 |
 | --- | --- |
-| measurement HEAD | `810c5f090d532e67e40c7b0cbdc6d2b8deebec49`（Working Tree clean） |
-| start attestation | SHA-256 `a976efd8…7c5e`、verified |
-| D2-A文書 SHA-256（HEAD git object） | `e45a0333…15ae3` |
-| 登録policy SHA-256 | `2597ff75…d6aa` |
-| calculation code digest | `45744c82…0f3d` |
+| measurement HEAD | `6f66c168e9163dab02bb60b2f1dc5b1cfc531e71`（Working Tree clean） |
+| start attestation | SHA-256 `8c084316…d56b`、verified（Phase B t09 recordの観測digestを含む） |
+| D2-A文書 SHA-256（HEAD git object、§17改訂後） | `a250925a…1625` |
+| 登録policy SHA-256 | `5846f99d…7f55` |
+| calculation code digest | `40bad5bc…68de` |
+| Phase B t09 record | 203,547 bytes、`4de5f215…7214`（登録値・Phase B RESULT・D1-A表と一致） |
 | Production changed files | `[]`（measurement HEAD、analysis HEADとも） |
 | CalculationContext / Engine | `{ unknown-initial, 4, production-rng:c5-e7, 17 }` / `production-rng:c5-e7` |
 | `provenance.formal` | `true`、invalid 0 |
 
-正式計測は1回だけ実行し、計測開始後に計算コードを変更していない。smokeは別run dir（`.local/d2-smoke/`）で行い、formal evidenceにしていない。
+改訂後のmeasurement HEADで正式計測を1回実行し、計測開始後に計算コードを変更していない。smokeは別run dir（`.local/d2-smoke/`）で行い、formal evidenceにしていない。
 
 ## 3. 結果
 
@@ -64,7 +73,7 @@ Worker、UI、Persistence、schema / version、Production defaultは変更して
 | D1の `G_t` と異なる新規Candidate | 22件（t09の3件を含む） |
 | Phase B K0 prefix parity | 24 / 24 matched |
 | D1 G parity（t09以外の10 Targetのpool 1件目） | 10 / 10 matched |
-| 所要 | child wall合計 415 s、Search時間 238 s。L2 unitは約42〜45 s |
+| 所要 | child wall合計 405 s。L2 unitは約42〜45 s |
 
 - t06はL0で1件（D1の `G_t06`）だけdeliverしてextent boundとなり、L1で `duplicate_of_lower_rung` 1件と新規2件を得た（Phase BはL0で停止していた）
 - t09はL2（Phase B未実行）で3件のK0 Candidateを得た
@@ -77,11 +86,12 @@ Worker、UI、Persistence、schema / version、Production defaultは変更して
 | ADM | 32件すべて `evaluated`、R1成立 32 / 32（R3成立 10件、`target_regressed_R` t01 2・t02 2・t04 3・t10 3） |
 | CMP | 32件。受理 t01 / t06 / t07 / t08 / t09、不受理 t00 / t02 / t03 / t04 / t05 / t10（いずれも `not_replaced_no_eligible`） |
 | Z | Z0 1件（D1 A-bとinputDigest・resultDigest・R5がmatched）+ dropped 7の20件。受理 t06 c3 |
+| S5（t09 support） | t09 seedを含む21評価すべてで (a) digest `fnv1a32:240e4673` 一致、(b) 導出reservationがPhase B record `result.reservation` と一致。S1〜S5すべて成立 |
 | R5 | 判定53件、成立12件（主軸10、Z 2） |
 | 決定性 | D2内6組・D1との19組すべてmatched |
 | full Planner起動 | 86回（評価86件 × 1）、runtime-unsupported retry 0 |
-| 評価wall | 7.2〜13.7 s / 件、合計1,074 s |
-| run全体 | 1,489 s（約24.8分）、child heap最大1.10 GB、RSS最大1.48 GB |
+| 評価wall | 7.0〜14.8 s / 件、合計1,074 s |
+| run全体 | 1,479 s（約24.7分）、child heap最大1.10 GB、RSS最大1.48 GB |
 
 ### 3.4 dropped 7への寄与
 
@@ -96,6 +106,12 @@ Worker、UI、Persistence、schema / version、Production defaultは変更して
 | t10 | 3 / 2 | 不受理（gate不成立） | 不受理（集合内Conflictあり） | `e396d352` |
 
 勝者IDはすべて `build-list.fnv1a32-` の先頭8桁表記である。
+
+### 3.5 初回formal runとの差異
+
+再計測の結果は初回formal run（`810c5f09`）と同じだった。DSCの26 unitの状態、pool 32件の `candidateStableKey()` SHA-256とG store SHA-256、評価86件すべての
+`inputDigest` / status / `resultDigest`、両軸の受理集合とdecisionが一致した。異なるのはprovenance（measurement HEAD、D2-A文書・登録policy・calculation code
+のdigest、start attestation）、S5の判定条件と評価recordのS4 / S5記録、所要時間・memoryの実測値だけである。
 
 ## 4. 言えること・言えないこと
 
