@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
@@ -64,5 +65,49 @@ describe('DisclosureAccordion', () => {
 
     expect(screen.getByRole('button', { name: 'その他の到達点' })).toBeInTheDocument()
     expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+  })
+
+  it('keeps the title as the name of the toggle, the heading and the region while the summary describes it', async () => {
+    const user = userEvent.setup()
+    render(
+      <DisclosureAccordion
+        title="目標A"
+        headingLevel="h3"
+        titleVariant="h3"
+        summary={<span>大剣 / 火属性 要整理</span>}
+      >
+        <p>内容</p>
+      </DisclosureAccordion>,
+    )
+
+    const toggle = screen.getByRole('button', { name: '目標A' })
+    expect(toggle).toHaveAccessibleDescription('大剣 / 火属性 要整理')
+    expect(screen.getByRole('heading', { level: 3, name: '目標A' })).toContainElement(toggle)
+    await user.click(toggle)
+    expect(screen.getByRole('region', { name: '目標A' })).toHaveAttribute('id', toggle.getAttribute('aria-controls'))
+  })
+
+  it('follows the caller-owned open state when controlled', async () => {
+    const user = userEvent.setup()
+    function Controlled() {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>外から開く</button>
+          <DisclosureAccordion title="グループ" headingLevel="h3" expanded={open} onExpandedChange={setOpen} unmountOnExit>
+            <p>中身</p>
+          </DisclosureAccordion>
+        </>
+      )
+    }
+    render(<Controlled />)
+
+    const toggle = screen.getByRole('button', { name: 'グループ' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await user.click(screen.getByRole('button', { name: '外から開く' }))
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('中身')).toBeInTheDocument()
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
   })
 })

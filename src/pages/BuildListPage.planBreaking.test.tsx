@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -109,13 +109,23 @@ function renderPage(deps: BuildListPageDependencies) {
   return render(<RouterProvider router={router} />)
 }
 
+/**
+ * Renders the page and opens every Target group (Issue #124: the groups start
+ * closed), for tests that act on an Entry's Candidate card or delete button.
+ */
+async function renderExpanded(deps: BuildListPageDependencies) {
+  const view = renderPage(deps)
+  fireEvent.click(await screen.findByRole('button', { name: 'すべて展開' }))
+  return view
+}
+
 describe('BuildListPage breaking-change warning', () => {
   it('warns before a selected Entry change, keeps the Entry on cancel, and saves with the approval', async () => {
     const user = userEvent.setup()
     const { deps, candidate, entryId, endPlan } = harness()
     const inspection = planBreakingInspection({ reasons: ['build_list_changed'] })
     deps.inspectIntermediateStateSelectionUpdate.mockResolvedValue(inspection)
-    renderPage(deps)
+    await renderExpanded(deps)
     expect(await screen.findByRole('heading', { name: '現在地点からの再計画' })).toBeInTheDocument()
     const bonus = await screen.findByRole('checkbox', { name: BONUS_ONE })
     await user.click(bonus)
@@ -130,6 +140,8 @@ describe('BuildListPage breaking-change warning', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', WARNING)).toBeNull())
     expect(deps.updateIntermediateStateSelection).not.toHaveBeenCalled()
     expect(await screen.findByText('途中採用する状態の変更を保存しませんでした。生産計画は変更されていません。')).toBeInTheDocument()
+    // A closed group holds no Candidate card (Issue #124), so the checkbox
+    // still being there proves the warning and its cancel left the group open.
     expect(screen.getByRole('checkbox', { name: BONUS_ONE })).not.toBeChecked()
     expect(screen.getByText('途中採用状態は未選択')).toBeInTheDocument()
 
@@ -148,7 +160,9 @@ describe('BuildListPage breaking-change warning', () => {
     await waitFor(() => expect(deps.getRunningProductionPlan).toHaveBeenCalledTimes(2))
     expect(await screen.findByRole('button', { name: '生産計画を作成' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '現在地点からの再計画' })).toBeNull()
+    // The group stays open through the approval and the re-read it triggers.
     await waitFor(() => expect(screen.getByRole('checkbox', { name: BONUS_ONE })).toBeChecked())
+    expect(screen.getAllByRole('button', { expanded: true }).length).toBeGreaterThan(0)
   })
 
   it('keeps the user-edited maxPlanSteps through the Build List re-read an approved save triggers (Issue #130)', async () => {
@@ -157,7 +171,7 @@ describe('BuildListPage breaking-change warning', () => {
     const { deps, endPlan } = harness(1470)
     const inspection = planBreakingInspection({ reasons: ['build_list_changed'] })
     deps.inspectIntermediateStateSelectionUpdate.mockResolvedValue(inspection)
-    renderPage(deps)
+    await renderExpanded(deps)
     await user.click(await screen.findByRole('button', { name: '詳細設定' }))
     await waitFor(() => expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1500))
     await user.clear(screen.getByLabelText('最大計画ステップ数'))
@@ -179,7 +193,7 @@ describe('BuildListPage breaking-change warning', () => {
     const plan = runningPlan()
     const inspection = { ...planBreakingInspection({ reasons: ['build_list_changed'], savePoint: true }), savePointCurrentStepId: plan.steps[0].id }
     deps.inspectIntermediateStateSelectionUpdate.mockResolvedValue(inspection)
-    renderPage(deps)
+    await renderExpanded(deps)
     await user.click(await screen.findByRole('radio', { name: '復元ボーナスを優先' }))
     await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '生産計画を破棄して保存' }))
 
@@ -198,7 +212,7 @@ describe('BuildListPage breaking-change warning', () => {
     const { deps } = harness()
     deps.inspectIntermediateStateSelectionUpdate.mockResolvedValue(planBreakingInspection({ reasons: ['build_list_changed'] }))
     deps.updateIntermediateStateSelection.mockRejectedValue(new ExecutionRuntimeError('plan_breaking_change_state_changed', 'moved'))
-    renderPage(deps)
+    await renderExpanded(deps)
     await user.click(await screen.findByRole('checkbox', { name: BONUS_ONE }))
     await user.click(within(await screen.findByRole('dialog', WARNING)).getByRole('button', { name: '生産計画を破棄して保存' }))
 
@@ -212,7 +226,7 @@ describe('BuildListPage breaking-change warning', () => {
     const { deps, entryId, endPlan } = harness()
     const inspection = planBreakingInspection({ reasons: ['build_list_changed'] })
     deps.inspectEntryDelete.mockResolvedValue(inspection)
-    renderPage(deps)
+    await renderExpanded(deps)
     await user.click(await screen.findByRole('button', { name: 'ビルドリストから削除' }))
 
     const warning = within(await screen.findByRole('dialog', WARNING))
