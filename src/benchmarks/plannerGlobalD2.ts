@@ -119,6 +119,12 @@ export const D2_REGISTERED_INPUTS = Object.freeze({
   followupDocument: { file: 'docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27B_FOLLOWUP.md', bytes: null, sha256: '335a6710d49bcdc1a9ef05a822a9931f40610c714561ae665ac008e82b987083' },
   d1SpecDocument: { file: 'docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D1_SPEC.md', bytes: null, sha256: '39974cbbdb7ab81c88bd3edf006796ccf6184c2744e23d61b705fb16f35a359f' },
   d1bDocument: { file: 'docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D1B.md', bytes: null, sha256: '536f8cd4073a880e27aab84c8b0c7e3339b6b669ef65889e982813bcab72fb4f' },
+  /**
+   * §8.1 / §17 (added after the first formal run, PR #226): the Phase B unit record of the t09 support context (the D1-A §1.3 t09
+   * unit). Its identity is the Phase B RESULT `sources.unitRecords` entry and the D1-A §1.3 record digest; only `result.reservation`
+   * is read (S5 (b)).
+   */
+  phaseBT09Record: { file: '.local/c27b-formal.run/t09-r10-L1.record.json', bytes: 203_547, sha256: '4de5f215bcd2d752c336ce1c92968880be9512c0df30c857f75469edd3bc7214' },
 } satisfies Record<string, D2RegisteredFile>)
 export type D2RegisteredInputKey = keyof typeof D2_REGISTERED_INPUTS
 
@@ -203,6 +209,7 @@ export const D2_PROVENANCE_FLAGS = Object.freeze({
 /** §8.1: the only Phase B RESULT fields D2 reads. */
 export const D2_PHASE_B_RESULT_ALLOWLIST = Object.freeze([
   'sources.{export,targets}',
+  'sources.unitRecords[file = the t09 unit record].{file,bytes,sha256} (§17)',
   'provenance.{formal,measuredHead,runStatus,calculationCodeChangedSinceMeasuredHead}',
   'decision.case',
   'units[].contextRank (to select the K0 units)',
@@ -221,7 +228,10 @@ export const D2_D1_RESULT_ALLOWLIST = Object.freeze([
  * The D1-A document fields D2 reads: the §1.3 registered table, which D2-A §2.3 names as the registered `O_t` and §5 as the t09
  * support Entry / reservation digest (every value is also checked against the attested D2-A text where D2-A writes it).
  */
-export const D2_D1_SPEC_FIELDS_READ = Object.freeze(['§1.3 found table: t, TargetWeapon ID, support Entry, reservationDigest, O_t (current Entry)'])
+export const D2_D1_SPEC_FIELDS_READ = Object.freeze(['§1.3 found table: t, TargetWeapon ID, unit, support Entry, reservationDigest, O_t (current Entry), G_t (generated Entry)',
+  '§1.3 record digest table: the t09 row (record SHA-256)'])
+/** §8.1 / §17: the only Phase B t09 unit record field D2 reads. */
+export const D2_PHASE_B_T09_RECORD_FIELDS_READ = Object.freeze(['result.reservation'])
 
 /** §9: the decision orders, checked top to bottom. */
 export const D2_DECISION_RULE = Object.freeze([
@@ -282,12 +292,9 @@ export const D2_ORDER = Object.freeze(['V', 'DSC t00 -> t10 (L0 -> L1 -> L2 per 
 export const D2_NOT_RUN = Object.freeze(['k1_context_search', 'k2_context_search', 'e2_search', 'residual_3', 'population_expansion', 'oracle_comparison', 'phase_b_result_rewrite',
   'd1_result_rewrite', 'multiple_passes', 'composition_order_change', 'simultaneous_replacement_search', 'pool_cap_expansion', 'resolution_synthesis', 'repair_lineage', 'persistence',
   'retry', 'fallback', 'production_change', 'production_default_change', 'alternative_to_alternative_support'])
-/**
- * S5 as D2 can check it: the Phase B record reservation body (D1-A §4.5 S5, second half) is not a D2 input (§8.1), so S5 is the
- * registered digest of the D1-A §1.3 t09 row (named by D2-A §5) of the reservation the Export support Entry derives.
- */
+/** §5 / §17: S1..S5 exactly as D1-A §4.5 (S5 = the registered digest AND the Phase B t09 record `result.reservation` body). */
 export const D2_SUPPORT_CHECKS = Object.freeze([...D1_SUPPORT_CHECKS.slice(0, 4),
-  'S5 static (D2): hashStableValue(derivePlannerAlternativeReservation([support from the Export])) is the D1-A §1.3 / D2-A §5 registered reservationDigest (the Phase B record body is not a D2 input)'])
+  'S5 static: hashStableValue(derivePlannerAlternativeReservation([support from the Export])) is the D1-A §1.3 t09 reservationDigest AND the derived reservation equals the Phase B t09 unit record result.reservation (stableStringify); both, or D2A_INVALID'])
 
 // ---------------------------------------------------------------- labels, IDs and the registered order
 
@@ -508,8 +515,10 @@ export interface D2ReplacementTask {
   generatedEntryFile: string
   /** `requiresSupport(G_t)`: empty for a K0 Candidate; the t09 seed's support Entry. */
   requiresSupport: string[]
-  /** The registered reservation digest of the support context (S5), null for K0. */
+  /** The registered reservation digest of the support context (S5 (a)), null for K0. */
   supportReservationDigest: string | null
+  /** The Phase B t09 unit record `result.reservation` (S5 (b)), null for K0. */
+  supportReservation: unknown
 }
 
 export interface D2EvaluationTask {
@@ -528,6 +537,13 @@ export interface D2EvaluationFacts extends D1EvaluationFacts {
   resourceConflictRejections: number
   /** The Targets of `plan.selectedBuildListEntryIds` (ascending). */
   selectedTargetWeaponIds: string[]
+  /** Per support Entry: the static checks as computed (S4, and both S5 conditions with what was compared). */
+  supportStaticChecks: Record<string, D2SupportStaticCheck>
+}
+
+export interface D2SupportStaticCheck {
+  S4: boolean
+  S5: { digestExpected: string | null; digestObserved: string; digestMatched: boolean; bodyExpected: unknown; bodyObserved: unknown; bodyMatched: boolean; satisfied: boolean }
 }
 
 export type D2EvaluationChildResult =
@@ -585,18 +601,27 @@ async function evaluate(input: PlannerInput, exportBuildListEntries: readonly un
     replacements.push(resolved.replacement)
   })
   const support = [...new Set(task.replacements.flatMap(r => r.requiresSupport))].sort(compare)
-  // S4 / S5 (static): the support Entry is the Export's and still derives the registered reservation digest.
+  if (task.replacements.some(r => r.requiresSupport.length === 0 ? r.supportReservationDigest !== null || r.supportReservation !== null : r.supportReservationDigest === null || r.supportReservation === null)) {
+    throw new D1InvariantError('a support reservation digest / body without a support Entry, or the reverse')
+  }
+  // S4 / S5 (static, D1-A §4.5): the support Entry is the Export's, and the reservation it derives has the registered digest AND is
+  // the Phase B record `result.reservation`. Each condition is computed and recorded; any failure stops the evaluation as a guardrail.
+  const staticChecks: Record<string, D2SupportStaticCheck> = {}
   for (const supportId of support) {
     const inInput = input.buildListEntries.find(e => e.id === supportId)
     const inExport = exportBuildListEntries.find(e => isObject(e) && e.id === supportId)
     if (!inInput || inExport === undefined || stableStringify(inInput) !== stableStringify(inExport)) throw new D1InvariantError(`S4: the support Entry ${supportId} is not the Export body`)
+    const derived = derivePlannerAlternativeReservation([inInput], dependencies.rngEngine)
     for (const r of task.replacements.filter(x => x.requiresSupport.includes(supportId))) {
-      if (r.supportReservationDigest === null || hashStableValue(derivePlannerAlternativeReservation([inInput], dependencies.rngEngine)) !== r.supportReservationDigest) {
-        throw new D1InvariantError(`S5: the support Entry ${supportId} no longer derives the registered reservation`)
-      }
+      const digestObserved = hashStableValue(derived)
+      const digestMatched = r.supportReservationDigest !== null && digestObserved === r.supportReservationDigest
+      const bodyMatched = r.supportReservation !== null && stableStringify(derived) === stableStringify(r.supportReservation)
+      if (!digestMatched) throw new D1InvariantError(`S5: the support Entry ${supportId} does not derive the registered reservation digest`)
+      if (!bodyMatched) throw new D1InvariantError(`S5: the support Entry ${supportId} derives a reservation that is not the Phase B record result.reservation`)
+      staticChecks[supportId] = { S4: true, S5: { digestExpected: r.supportReservationDigest, digestObserved, digestMatched, bodyExpected: structuredClone(r.supportReservation),
+        bodyObserved: structuredClone(derived), bodyMatched, satisfied: digestMatched && bodyMatched } }
     }
   }
-  if (task.replacements.some(r => r.requiresSupport.length === 0 ? r.supportReservationDigest !== null : r.supportReservationDigest === null)) throw new D1InvariantError('a support reservation digest without a support Entry, or the reverse')
   const baselineContext = preparePlannerInitialContext(input, dependencies)
   if (baselineContext.status !== 'ready') throw new D1InvariantError('the baseline initial context is not ready')
   const contexts = createPlannerConflictContexts(baselineContext.context)
@@ -605,11 +630,11 @@ async function evaluate(input: PlannerInput, exportBuildListEntries: readonly un
   const preflight = preparePlannerReplacementConflictPreflight(augmented, replacements, [], contexts, dependencies)
   const runContext: PlannerRunBuildListContext = { kind: 'temporary_replacement', replacements }
   if (preflight.status !== 'ready') {
-    return finishD2Facts('preflight_refused', { status: preflight.status, refusal: JSON.stringify(preflight).slice(0, 2000) }, 0, 0, augmented, runContext, null, null, task.replacements, support, dependencies, null)
+    return finishD2Facts('preflight_refused', { status: preflight.status, refusal: JSON.stringify(preflight).slice(0, 2000) }, 0, 0, augmented, runContext, null, null, task.replacements, support, dependencies, null, staticChecks)
   }
   if (preflight.resolvedInput.conflictResolutions.length !== 0) throw new D1InvariantError('G1: the evaluation run received a conflict resolution')
   const run = await runner.run(preflight.resolvedInput, runContext)
-  if (run === 'rerun_budget_reached') return finishD2Facts('planner_rerun_bound_reached', { status: 'ready', refusal: null }, 0, budget.used, preflight.resolvedInput, runContext, null, null, task.replacements, support, dependencies, null)
+  if (run === 'rerun_budget_reached') return finishD2Facts('planner_rerun_bound_reached', { status: 'ready', refusal: null }, 0, budget.used, preflight.resolvedInput, runContext, null, null, task.replacements, support, dependencies, null, staticChecks)
   let verdict: D1EvaluationFacts['trialVerdict'] = null
   if (task.stage === 'ADM') {
     const only = task.replacements[0]!
@@ -618,7 +643,7 @@ async function evaluate(input: PlannerInput, exportBuildListEntries: readonly un
     verdict = v.status === 'found' ? { status: 'found_R', generatedSelected: v.generatedSelected } : { status: 'rejected', reason: v.reason }
   }
   return finishD2Facts('evaluated', { status: 'ready', refusal: null }, preflight.resolvedInput.conflictResolutions.length, budget.used, preflight.resolvedInput, runContext, run.result, run.routeCommitment,
-    task.replacements, support, dependencies, verdict)
+    task.replacements, support, dependencies, verdict, staticChecks)
 }
 
 const stepProjection = (result: PlannerResult): D1StepProjection[] => (result.plan?.steps ?? []).map(step => ({ order: step.order, operationType: step.operationType,
@@ -627,7 +652,8 @@ const stepProjection = (result: PlannerResult): D1StepProjection[] => (result.pl
 
 function finishD2Facts(status: 'evaluated' | 'preflight_refused' | 'planner_rerun_bound_reached', preflight: { status: string; refusal: string | null }, runConflictResolutions: number,
   fullRunsStarted: number, runInput: PlannerInput, runContext: PlannerRunBuildListContext, result: PlannerResult | null, commitment: PlannerRouteCommitmentEvidence | null,
-  replacements: readonly D2ReplacementTask[], support: readonly string[], dependencies: PlannerDependencies, trialVerdict: D1EvaluationFacts['trialVerdict']): D2EvaluationChildResult {
+  replacements: readonly D2ReplacementTask[], support: readonly string[], dependencies: PlannerDependencies, trialVerdict: D1EvaluationFacts['trialVerdict'],
+  staticChecks: Record<string, D2SupportStaticCheck> = {}): D2EvaluationChildResult {
   const runtimeUnsupportedRemoved = result === null ? [] : d1RuntimeUnsupportedRemoved(runInput, runContext, result, fullRunsStarted, dependencies)
   const removed = new Set(runtimeUnsupportedRemoved)
   const finalInput: PlannerInput = removed.size === 0 ? runInput : { ...runInput, buildListEntries: runInput.buildListEntries.filter(e => !removed.has(e.id)) }
@@ -649,8 +675,10 @@ function finishD2Facts(status: 'evaluated' | 'preflight_refused' | 'planner_reru
   const supportChecks: Record<string, D1SupportCheckFacts> = {}
   for (const id of support) {
     const entry = runInput.buildListEntries.find(e => e.id === id)
+    const fixed = staticChecks[id]
+    if (fixed === undefined) throw new D1InvariantError(`no static check of the support Entry ${id}`)
     supportChecks[id] = { S1: entry !== undefined && !T.has(entry.targetWeaponId), S2: finalInput.buildListEntries.some(e => e.id === id),
-      S3: finalInitial?.status === 'ready' && finalInitial.context.entriesById.has(id as BuildListEntryId), S4: true, S5: true }
+      S3: finalInitial?.status === 'ready' && finalInitial.context.entriesById.has(id as BuildListEntryId), S4: fixed.S4, S5: fixed.S5.satisfied }
   }
   const only = replacements.length === 1 ? replacements[0]! : null
   const targetOf = new Map(runInput.buildListEntries.map(e => [e.id as string, e.targetWeaponId as string]))
@@ -669,6 +697,7 @@ function finishD2Facts(status: 'evaluated' | 'preflight_refused' | 'planner_reru
     rejectedBuildListEntries: rejected,
     resourceConflictRejections: rejected.filter(r => r.reason === 'resource_conflict').length,
     selectedTargetWeaponIds: [...new Set((plan?.selectedBuildListEntryIds ?? []).map(id => targetOf.get(id) ?? `?${id}`))].sort(compare),
+    supportStaticChecks: structuredClone(staticChecks),
   }
   facts.resultDigest = d1ResultDigest(facts)
   return { status, ...facts }
@@ -816,7 +845,7 @@ export interface D2PhaseBK0Unit {
   deliveries: { i: number; keySha256: string; cost: number; action: string; respectsReservation: boolean }[]
 }
 export interface D2PhaseBResultProjection {
-  sources: { export: unknown; targets: unknown }
+  sources: { export: unknown; targets: unknown; t09UnitRecord: unknown }
   provenance: { formal: unknown; measuredHead: unknown; runStatus: unknown; calculationCodeChangedSinceMeasuredHead: unknown }
   decisionCase: unknown
   k0Units: D2PhaseBK0Unit[]
@@ -834,9 +863,17 @@ export function projectD2PhaseBResult(json: unknown): D2PhaseBResultProjection |
       deliveries: (Array.isArray(u.deliveries) ? u.deliveries as unknown[] : []).filter(isObject).map(d => ({ i: d.i as number, keySha256: d.keySha256 as string, cost: d.cost as number,
         action: d.action as string, respectsReservation: d.respectsReservation as boolean })) }
   })
-  return { sources: { export: structuredClone(s.export), targets: structuredClone(s.targets) },
+  const t09File = D2_REGISTERED_INPUTS.phaseBT09Record.file.split('/').pop()
+  const t09Source = Array.isArray(s.unitRecords) ? (s.unitRecords as unknown[]).find(r => isObject(r) && r.file === t09File) : undefined
+  return { sources: { export: structuredClone(s.export), targets: structuredClone(s.targets),
+    t09UnitRecord: isObject(t09Source) ? { file: t09Source.file, bytes: t09Source.bytes, sha256: t09Source.sha256 } : null },
     provenance: { formal: p.formal, measuredHead: p.measuredHead, runStatus: p.runStatus, calculationCodeChangedSinceMeasuredHead: structuredClone(p.calculationCodeChangedSinceMeasuredHead) },
     decisionCase: json.decision.case, k0Units }
+}
+
+/** §8.1 / §17: reads ONLY `result.reservation` of the Phase B t09 unit record (null when absent or not an object). */
+export function projectD2PhaseBRecordReservation(json: unknown): unknown {
+  return isObject(json) && isObject(json.result) && isObject(json.result.reservation) ? structuredClone(json.result.reservation) : null
 }
 
 export interface D2D1Evaluation {
@@ -897,6 +934,8 @@ export interface D2InputEvidence {
   phaseBResult: unknown
   phase2c2Result: unknown
   d1Result: unknown
+  /** The Phase B t09 unit record JSON (§17; only `result.reservation` is read). */
+  phaseBT09Record: unknown
   /** By D1 unit ID: the seed G store files and their JSON (null = missing). */
   seedFiles: Record<string, { file: D2ObservedFile; json: unknown } | null>
   /** The D2-A document text (the measurement HEAD git object). */
@@ -941,6 +980,8 @@ export interface D2Seed {
   generatedBuildListEntryId: string
   requiresSupport: string[]
   supportReservationDigest: string | null
+  /** The Phase B t09 unit record `result.reservation` (S5 (b)); null for a K0 seed. */
+  supportReservation: unknown
   isK1Candidate: boolean
 }
 
@@ -1012,6 +1053,9 @@ export function validateD2Inputs(evidence: D2InputEvidence): D2ValidatedInputs {
   if (pbExport === null || pbExport.bytes !== D2_REGISTERED_INPUTS.export.bytes) issues.push('the Phase B RESULT sources.export is not the registered Export')
   const pbTargets = isObject(phaseB.sources.targets) ? phaseB.sources.targets : null
   if (pbTargets === null || pbTargets.sha256 !== D2_REGISTERED_INPUTS.phaseBTargets.sha256) issues.push('the Phase B RESULT sources.targets is not the registered manifest')
+  if (!same(phaseB.sources.t09UnitRecord, { file: D2_REGISTERED_INPUTS.phaseBT09Record.file.split('/').pop(), bytes: D2_REGISTERED_INPUTS.phaseBT09Record.bytes, sha256: D2_REGISTERED_INPUTS.phaseBT09Record.sha256 })) {
+    issues.push('the Phase B RESULT sources.unitRecords does not name the registered t09 record')
+  }
 
   // The D2-A §1.2 table against the Phase B K0 units.
   const k0Table = parseD2SpecK0Table(spec)
@@ -1058,6 +1102,13 @@ export function validateD2Inputs(evidence: D2InputEvidence): D2ValidatedInputs {
   if (k1Rows.length !== 1 || k1Rows[0]!.t !== d2TargetLabel(9) || k1Rows[0]!.supportBuildListEntryIds.length !== 1) issues.push('the D1-A §1.3 K1 row is not exactly t09 with one support Entry')
   const k1 = k1Rows[0]
   if (k1 && (!spec.includes(k1.supportBuildListEntryIds[0]!) || !spec.includes(k1.reservationDigest))) issues.push('the t09 support Entry / reservation digest is not the one the D2-A document names')
+  // The Phase B t09 unit record (§17): the D1-A §1.3 t09 unit, the registered digest named by the Phase B RESULT and by the D1-A record table.
+  const t09Registered = D2_REGISTERED_INPUTS.phaseBT09Record
+  const t09File = t09Registered.file.split('/').pop()!
+  if (!k1 || `${k1.unitId}.record.json` !== t09File) issues.push('the registered Phase B t09 record is not the D1-A §1.3 t09 unit')
+  if (!evidence.d1SpecMarkdown.includes(t09Registered.sha256)) issues.push('the D1-A record digest table does not name the Phase B t09 record SHA-256')
+  const t09Reservation = projectD2PhaseBRecordReservation(evidence.phaseBT09Record)
+  if (t09Reservation === null) issues.push('the Phase B t09 record has no result.reservation')
 
   // The D1 RESULT (allowlist).
   const d1 = projectD2D1Result(evidence.d1Result)
@@ -1138,7 +1189,8 @@ export function validateD2Inputs(evidence: D2InputEvidence): D2ValidatedInputs {
     if (row && body.id !== row.generatedBuildListEntryId) issues.push(`${at}: the seed body is not the D1-A §1.3 G_t`)
     seed.push({ targetIndex: registered.targetIndex, label: d2TargetLabel(registered.targetIndex), targetWeaponId: targetWeaponId!, currentBuildListEntryId: row?.currentBuildListEntryId ?? '',
       unitId: at, file: d2SeedFileName(at), bytes: observed.file.bytes, sha256: observed.file.sha256, generatedBuildListEntryId: String(body.id),
-      requiresSupport: row ? [...row.supportBuildListEntryIds] : [], supportReservationDigest: isK1 && row ? row.reservationDigest : null, isK1Candidate: isK1 })
+      requiresSupport: row ? [...row.supportBuildListEntryIds] : [], supportReservationDigest: isK1 && row ? row.reservationDigest : null,
+      supportReservation: isK1 ? structuredClone(t09Reservation) : null, isK1Candidate: isK1 })
   })
   if (seed.filter(s => s.isK1Candidate).map(s => s.label).join() !== d2TargetLabel(9)) issues.push('the K1 Candidate of the seed is not exactly t09')
   const passed = issues.length === 0
@@ -1234,6 +1286,7 @@ export function d2RegisteredConditions() {
     phaseBResultFieldsRead: [...D2_PHASE_B_RESULT_ALLOWLIST],
     d1ResultFieldsRead: [...D2_D1_RESULT_ALLOWLIST],
     d1SpecFieldsRead: [...D2_D1_SPEC_FIELDS_READ],
+    phaseBT09RecordFieldsRead: [...D2_PHASE_B_T09_RECORD_FIELDS_READ],
     provenanceFlags: { ...D2_PROVENANCE_FLAGS },
     notRun: [...D2_NOT_RUN],
   }

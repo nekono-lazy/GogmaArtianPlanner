@@ -216,7 +216,7 @@ try {
 
   // 2. V (no child).
   const validation = d2.validateD2Inputs({ files: observedInputs, manifest: parse(buffers.phaseBTargets), phaseBResult: parse(buffers.phaseBResult), phase2c2Result: parse(buffers.phase2c2Result),
-    d1Result: parse(buffers.d1Result), seedFiles, specMarkdown: specRaw.toString('utf8'), d1SpecMarkdown: buffers.d1SpecDocument === null ? '' : buffers.d1SpecDocument.toString('utf8') })
+    d1Result: parse(buffers.d1Result), phaseBT09Record: parse(buffers.phaseBT09Record), seedFiles, specMarkdown: specRaw.toString('utf8'), d1SpecMarkdown: buffers.d1SpecDocument === null ? '' : buffers.d1SpecDocument.toString('utf8') })
   console.log(`V ${validation.passed ? 'passed' : `FAILED: ${validation.issues.join('; ')}`}`)
   if (!validation.passed) {
     await write(outputPath, { ...base, status: 'input_invalid', abortReason: null, runEnvelopeReached: false, inputValidation: { passed: false, issues: validation.issues },
@@ -362,7 +362,8 @@ try {
       row.inputDigest = d1.d1InputDigest(row.replacementTargets, row.generatedEntryIds, row.generatedEntrySha256s, exportSha256)
       const task = { evaluationId: spec.evaluationId, stage: spec.stage, evaluatedAgainst, researchMaxPlanSteps: d2.D2_RESEARCH_MAX_PLAN_STEPS, fullRunCap: d2.D2_EVALUATION_FULL_RUN_CAP,
         replacements: reps.map((r, i) => ({ targetIndex: r.targetIndex, targetWeaponId: ts[i].targetWeaponId, currentBuildListEntryId: ts[i].currentBuildListEntryId, generatedBuildListEntryId: r.generatedBuildListEntryId,
-          generatedEntrySha256: r.sha256, generatedEntryFile: r.file, requiresSupport: [...r.requiresSupport], supportReservationDigest: r.supportReservationDigest })) }
+          generatedEntrySha256: r.sha256, generatedEntryFile: r.file, requiresSupport: [...r.requiresSupport], supportReservationDigest: r.supportReservationDigest,
+          supportReservation: r.supportReservation })) }
       const run = await runChild(spec.evaluationId, 'evaluate', { task, generatedEntryPaths: reps.map(r => join(r.isSeed ? seedFileDir : resolve(runDir), r.file)) }, envelope.evaluationBudgetMs)
       row.process = processRow(run.entry)
       row.recordFile = run.recordFile
@@ -380,7 +381,7 @@ try {
       console.log(`${run.entry.endedAt} ${spec.evaluationId} ${row.status}${facts ? ` steps=${facts.plan.steps} completed=${facts.plan.termination?.completedTargetCount ?? '-'} conflicts=${facts.conflicts.length} runs=${facts.fullRunsStarted}` : ''} r5=${r5.satisfied} r6=${r6.satisfied} ${(run.entry.wallMs / 1000).toFixed(1)}s heap<=${((run.entry.lastIpcMemory?.maxHeapUsedBytes ?? 0) / 2 ** 20).toFixed(0)}MB`)
       return finish(facts, r5)
     }
-    const poolReplacement = (targetIndex, p) => ({ targetIndex, poolOrdinal: p.ordinal, generatedBuildListEntryId: p.generatedBuildListEntryId, sha256: p.sha256, file: p.file, requiresSupport: [], supportReservationDigest: null, isSeed: false })
+    const poolReplacement = (targetIndex, p) => ({ targetIndex, poolOrdinal: p.ordinal, generatedBuildListEntryId: p.generatedBuildListEntryId, sha256: p.sha256, file: p.file, requiresSupport: [], supportReservationDigest: null, supportReservation: null, isSeed: false })
 
     // B0
     const b0 = await evaluate({ evaluationId: 'B0', stage: 'B0', targetIndex: null, poolOrdinal: null, replacements: [] })
@@ -442,7 +443,7 @@ try {
     const main = await compose('main', targets.map(t => t.targetIndex), [], b0Facts, null)
 
     const seedReplacements = seed.map(s => ({ targetIndex: s.targetIndex, poolOrdinal: null, generatedBuildListEntryId: s.generatedBuildListEntryId, sha256: s.sha256, file: s.file,
-      requiresSupport: [...s.requiresSupport], supportReservationDigest: s.supportReservationDigest, isSeed: true }))
+      requiresSupport: [...s.requiresSupport], supportReservationDigest: s.supportReservationDigest, supportReservation: s.supportReservation, isSeed: true }))
     const z0 = await evaluate({ evaluationId: 'Z0', stage: 'Z0', targetIndex: null, poolOrdinal: null, replacements: seedReplacements })
     if (COMPARABLE.includes(z0.row.status) && (z0.row.status !== 'evaluated' || z0.row.inputDigest !== d1Reference.aB.inputDigest || z0.facts.resultDigest !== d1Reference.aB.resultDigest || z0.r5?.satisfied !== true)) {
       abort(`d1_parity Z0: ${z0.row.status} ${z0.facts?.resultDigest ?? ''} r5=${z0.r5?.satisfied}`)

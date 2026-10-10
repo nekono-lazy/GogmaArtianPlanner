@@ -132,7 +132,7 @@ try {
   if (raw !== null && raw.environment?.repositoryHead !== measuredHead) provenanceIssues.push('the raw environment HEAD is not the attested HEAD')
 
   const validation = d2.validateD2Inputs({ files: observed, manifest: parse(buffers.phaseBTargets), phaseBResult: parse(buffers.phaseBResult), phase2c2Result: parse(buffers.phase2c2Result),
-    d1Result: parse(buffers.d1Result), seedFiles, specMarkdown: specRaw.toString('utf8'), d1SpecMarkdown: buffers.d1SpecDocument === null ? '' : buffers.d1SpecDocument.toString('utf8') })
+    d1Result: parse(buffers.d1Result), phaseBT09Record: parse(buffers.phaseBT09Record), seedFiles, specMarkdown: specRaw.toString('utf8'), d1SpecMarkdown: buffers.d1SpecDocument === null ? '' : buffers.d1SpecDocument.toString('utf8') })
   if (raw !== null && raw.inputValidation && !same(raw.inputValidation.passed, validation.passed)) rawConsistency.push('the runner V result is not the analyzer V result')
 
   const result = analysis.analyzeD2Run({ validated: validation, exportSha256: observed.export.sha256, discoveryRows, discoveryRecords, poolFiles, evaluationRows, evaluationRecords,
@@ -151,7 +151,7 @@ try {
     analyzedAt: new Date().toISOString(),
     sources: {
       specDocument: { file: d2.D2_SPEC_FILE, sha256: specDocumentSha256 },
-      phaseB: { result: src('phaseBResult'), targetsManifest: src('phaseBTargets') },
+      phaseB: { result: src('phaseBResult'), targetsManifest: src('phaseBTargets'), t09Record: src('phaseBT09Record') },
       phase2c2Result: { file: d2.D2_REGISTERED_INPUTS.phase2c2Result.file, sha256: observed.phase2c2Result?.sha256 ?? null },
       d1: { result: src('d1Result'), generatedEntriesUsedBySeed: seedSources },
       export: { file: basename(paths.export), bytes: rawExport.length, sha256: observed.export.sha256, committed: false },
@@ -164,7 +164,7 @@ try {
       startAttestation: { sha256: attestationFile.source.sha256, verified: attestationCheck.verified, issues: attestationCheck.issues, body: attestation },
       phaseBMeasuredHead: conditions.phaseBProvenance.measuredHead, d1MeasuredHead: conditions.d1Provenance.measuredHead,
       ...d2.D2_PROVENANCE_FLAGS,
-      phaseBResultFieldsRead: [...d2.D2_PHASE_B_RESULT_ALLOWLIST], d1ResultFieldsRead: [...d2.D2_D1_RESULT_ALLOWLIST], d1SpecFieldsRead: [...d2.D2_D1_SPEC_FIELDS_READ],
+      phaseBResultFieldsRead: [...d2.D2_PHASE_B_RESULT_ALLOWLIST], d1ResultFieldsRead: [...d2.D2_D1_RESULT_ALLOWLIST], d1SpecFieldsRead: [...d2.D2_D1_SPEC_FIELDS_READ], phaseBT09RecordFieldsRead: [...d2.D2_PHASE_B_T09_RECORD_FIELDS_READ],
       phaseBResultModified: observed.phaseBResult?.sha256 !== d2.D2_REGISTERED_INPUTS.phaseBResult.sha256,
       d1ResultModified: observed.d1Result?.sha256 !== d2.D2_REGISTERED_INPUTS.d1Result.sha256,
     },

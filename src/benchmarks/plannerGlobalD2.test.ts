@@ -45,6 +45,7 @@ import {
   d2StartAttestationBody,
   judgeD2R6,
   projectD2D1Result,
+  projectD2PhaseBRecordReservation,
   projectD2PhaseBResult,
   runD2DiscoveryUnit,
   runD2Evaluation,
@@ -132,6 +133,9 @@ describe('D2 registered conditions', () => {
 
 // ---------------------------------------------------------------- V (§8.1)
 
+/** A stand-in for the Phase B t09 record `result.reservation` (the `.local` record is not in CI; its digest is the registered one). */
+const T09_RESERVATION = { normal: [], skill: { held: [1], blocked: [1] }, gogma: { held: [], blocked: [] }, exclusiveOwnedWeaponIds: [] }
+
 /** The real committed inputs plus a manifest / seed bodies rebuilt from them (the `.local` files are not in CI). */
 function realEvidence(): D2InputEvidence {
   const d1 = JSON.parse(d1ResultRaw)
@@ -145,6 +149,7 @@ function realEvidence(): D2InputEvidence {
     manifest: { phase: 'manifest', population: 'E1', b2c2b1ResultSha256: PHASE2C27B_POPULATION_AUTHORITY.b2c2b1ResultSha256, b2c1ResultSha256: PHASE2C27B_POPULATION_AUTHORITY.b2c1ResultSha256,
       exportSha256: exportSha, oracleGuidedTargetPopulation: true, targetWeaponIds: ids },
     phaseBResult: phaseB, phase2c2Result: JSON.parse(phase2c2ResultRaw), d1Result: d1,
+    phaseBT09Record: { role: 'unit', result: { status: 'executed', reservation: T09_RESERVATION, trials: [{ secret: 'never read' }] } },
     seedFiles: Object.fromEntries(D2_SEED_FILES.map((s, i) => [s.unitId, { file: { bytes: s.bytes, sha256: s.sha256 }, json: { id: aB.generatedEntryIds[i], targetWeaponId: aB.replacementTargets[i] } }])),
     specMarkdown: d2Document.replace(/\r\n/g, '\n'), d1SpecMarkdown: d1Document.replace(/\r\n/g, '\n'),
   }
@@ -160,6 +165,9 @@ describe('D2 V: inputs fail closed (§8.1)', () => {
     expect(Object.values(v.targets).reduce((n, t) => n + Object.keys(t.phaseBK0Units).length, 0)).toBe(24)
     expect(v.k0ReservationDigest).toMatch(/^fnv1a32:[0-9a-f]{8}$/)
     expect(v.seed.map(s => [s.label, s.isK1Candidate, s.requiresSupport.length])).toEqual([['t01', false, 0], ['t07', false, 0], ['t08', false, 0], ['t09', true, 1]])
+    // S5 (b): the t09 seed carries the Phase B record result.reservation (and nothing else of the record); K0 seeds carry none.
+    expect(v.seed.map(s => s.supportReservation)).toEqual([null, null, null, T09_RESERVATION])
+    expect(projectD2PhaseBRecordReservation({ result: { reservation: T09_RESERVATION, trials: [1] }, task: {} })).toEqual(T09_RESERVATION)
     expect(d2DroppedTargetIndexes(v.seed)).toEqual([0, 2, 3, 4, 5, 6, 10])
     expect(v.d1?.byInputDigest[v.d1.aB.inputDigest]?.map(x => x.evaluationId)).toEqual(['A-b', 'A-c-10'])
   })
@@ -180,6 +188,17 @@ describe('D2 V: inputs fail closed (§8.1)', () => {
     expect(failing(e => { (e.manifest as { exportSha256: string }).exportSha256 = '2'.repeat(64) })).toMatch(/the manifest Export is not the chained Export/)
     expect(failing(e => { e.seedFiles['t09-r10-L1'] = null })).toMatch(/t09-r10-L1: the D1 G store seed file is missing/)
     expect(failing(e => { (e.seedFiles['t07-r01-L1']!.json as { id: string }).id = 'other' })).toMatch(/t07-r01-L1: the seed body is not the D1 A-b G/)
+  })
+
+  it('fails closed on a missing, changed or broken Phase B t09 record, or one the Phase B RESULT / D1-A do not name (§17)', () => {
+    expect(failing(e => { e.files.phaseBT09Record = null })).toMatch(/phaseBT09Record: .* is missing/)
+    expect(failing(e => { e.files.phaseBT09Record = { bytes: 203_547, sha256: '3'.repeat(64) } })).toMatch(/phaseBT09Record: SHA-256/)
+    expect(failing(e => { e.files.phaseBT09Record = { bytes: 1, sha256: D2_REGISTERED_INPUTS.phaseBT09Record.sha256 } })).toMatch(/phaseBT09Record: 1 bytes/)
+    expect(failing(e => { e.phaseBT09Record = null })).toMatch(/the Phase B t09 record has no result.reservation/)
+    expect(failing(e => { e.phaseBT09Record = { result: {} } })).toMatch(/the Phase B t09 record has no result.reservation/)
+    expect(failing(e => { ((e.phaseBResult as { sources: { unitRecords: { file: string; sha256: string }[] } }).sources.unitRecords.find(r => r.file === 't09-r10-L1.record.json')!.sha256 = '4'.repeat(64)) }))
+      .toMatch(/sources.unitRecords does not name the registered t09 record/)
+    expect(failing(e => { e.d1SpecMarkdown = e.d1SpecMarkdown.replace(D2_REGISTERED_INPUTS.phaseBT09Record.sha256, '5'.repeat(64)) })).toMatch(/the D1-A record digest table does not name/)
   })
 
   it('fails closed when the Phase B K0 units, the D1 RESULT or the documents disagree', () => {
@@ -293,8 +312,9 @@ describe('D2 DSC: discovery (§2.3)', () => {
 
 // ---------------------------------------------------------------- evaluations (§3 / §6.1)
 
-const replacementOf = (entry: BuildListEntry, targetIndex: number, current: string, support: string[] = [], digest: string | null = null): D2ReplacementTask => ({ targetIndex,
-  targetWeaponId: entry.targetWeaponId, currentBuildListEntryId: current, generatedBuildListEntryId: entry.id, generatedEntrySha256: 'sha', generatedEntryFile: 'g.json', requiresSupport: support, supportReservationDigest: digest })
+const replacementOf = (entry: BuildListEntry, targetIndex: number, current: string, support: string[] = [], digest: string | null = null, body: unknown = null): D2ReplacementTask => ({ targetIndex,
+  targetWeaponId: entry.targetWeaponId, currentBuildListEntryId: current, generatedBuildListEntryId: entry.id, generatedEntrySha256: 'sha', generatedEntryFile: 'g.json', requiresSupport: support,
+  supportReservationDigest: digest, supportReservation: body })
 const evalTask = (stage: D2EvaluationTask['stage'], replacements: D2ReplacementTask[]): D2EvaluationTask => ({ evaluationId: stage, stage,
   evaluatedAgainst: stage === 'B0' ? 'baseline_reference' : stage === 'ADM' ? 'baseline' : 'replacement_set', replacements, researchMaxPlanSteps: 20_000, fullRunCap: 8 })
 
@@ -309,7 +329,8 @@ describe('D2 evaluations (§3 / §6.1)', () => {
       generatedBuildListEntryId: g.id, generatedEntrySha256: 'sha', requiresSupport: [], phaseBReservationDigest: '', phaseBReservation: null }], researchMaxPlanSteps: 20_000, fullRunCap: 8 }
     const d1 = await runD1Evaluation(research(built), built.input.buildListEntries, d1Task, [g], built.dependencies)
     if (d2.status !== 'evaluated' || d1.status !== 'evaluated') throw new Error('fixture')
-    const { rejectedBuildListEntries, resourceConflictRejections, selectedTargetWeaponIds, ...shared } = d2
+    const { rejectedBuildListEntries, resourceConflictRejections, selectedTargetWeaponIds, supportStaticChecks, ...shared } = d2
+    expect(supportStaticChecks).toEqual({})
     expect(shared).toEqual(d1)
     expect(d2.resultDigest).toBe(d1ResultDigest(d2))
     // The Phase B found_R judgement rides along as a diagnostic (here the first K0 Candidate is the one Phase B rejected).
@@ -330,17 +351,29 @@ describe('D2 evaluations (§3 / §6.1)', () => {
     expect(preflightSpy.calls).toEqual([])
   })
 
-  it('checks S4 / S5 of a support Entry statically and fails a changed support as a guardrail violation', async () => {
+  it('checks S4 and both S5 conditions (registered digest AND the Phase B record body) statically, failing either as a guardrail violation', async () => {
     const { built, unit } = await discover()
     if (unit.status !== 'discovery_cap_reached') throw new Error('fixture')
     const g = unit.pooled[0]!.generatedEntry!
-    const digest = hashStableValue(derivePlannerAlternativeReservation([built.input.buildListEntries.find(e => e.id === ENTRY_A)!], built.dependencies.rngEngine))
-    const ok = await runD2Evaluation(research(built), built.input.buildListEntries, evalTask('Z0', [replacementOf(g, 0, ENTRY_B, [ENTRY_A], digest)]), [g], built.dependencies)
-    expect(ok.status === 'evaluated' && ok.supportChecks[ENTRY_A]).toEqual({ S1: true, S2: true, S3: true, S4: true, S5: true })
-    const s5 = await runD2Evaluation(research(built), built.input.buildListEntries, evalTask('Z0', [replacementOf(g, 0, ENTRY_B, [ENTRY_A], 'fnv1a32:00000000')]), [g], built.dependencies)
-    expect(s5.status === 'guardrail_violation' && s5.issues.join()).toMatch(/^S5/)
+    const reservation = derivePlannerAlternativeReservation([built.input.buildListEntries.find(e => e.id === ENTRY_A)!], built.dependencies.rngEngine)
+    const digest = hashStableValue(reservation)
+    const body = JSON.parse(JSON.stringify(reservation))
+    const ok = await runD2Evaluation(research(built), built.input.buildListEntries, evalTask('Z0', [replacementOf(g, 0, ENTRY_B, [ENTRY_A], digest, body)]), [g], built.dependencies)
+    if (ok.status !== 'evaluated') throw new Error(JSON.stringify(ok))
+    expect(ok.supportChecks[ENTRY_A]).toEqual({ S1: true, S2: true, S3: true, S4: true, S5: true })
+    expect(ok.supportStaticChecks[ENTRY_A]).toMatchObject({ S4: true, S5: { digestExpected: digest, digestObserved: digest, digestMatched: true, bodyMatched: true, satisfied: true } })
+    expect(ok.supportStaticChecks[ENTRY_A]!.S5.bodyExpected).toEqual(body)
+    // (a) holds, (b) does not: the digest matches but the body is not the Phase B record result.reservation.
+    const otherBody = { ...body, exclusiveOwnedWeaponIds: ['owned.other'] }
+    const bodyOnly = await runD2Evaluation(research(built), built.input.buildListEntries, evalTask('Z0', [replacementOf(g, 0, ENTRY_B, [ENTRY_A], digest, otherBody)]), [g], built.dependencies)
+    expect(bodyOnly.status === 'guardrail_violation' && bodyOnly.issues.join()).toMatch(/^S5: .* not the Phase B record result.reservation/)
+    const digestOnly = await runD2Evaluation(research(built), built.input.buildListEntries, evalTask('Z0', [replacementOf(g, 0, ENTRY_B, [ENTRY_A], 'fnv1a32:00000000', body)]), [g], built.dependencies)
+    expect(digestOnly.status === 'guardrail_violation' && digestOnly.issues.join()).toMatch(/^S5: .* registered reservation digest/)
+    const noBody = await runD2Evaluation(research(built), built.input.buildListEntries, evalTask('Z0', [replacementOf(g, 0, ENTRY_B, [ENTRY_A], digest, null)]), [g], built.dependencies)
+    expect(noBody.status).toBe('guardrail_violation')
     const changed = built.input.buildListEntries.map(e => e.id === ENTRY_A ? { ...e, memo: 'changed' } : e)
-    expect((await runD2Evaluation(research(built), changed, evalTask('Z0', [replacementOf(g, 0, ENTRY_B, [ENTRY_A], digest)]), [g], built.dependencies)).status).toBe('guardrail_violation')
+    const s4 = await runD2Evaluation(research(built), changed, evalTask('Z0', [replacementOf(g, 0, ENTRY_B, [ENTRY_A], digest, body)]), [g], built.dependencies)
+    expect(s4.status === 'guardrail_violation' && s4.issues.join()).toMatch(/^S4/)
   })
 
   it('judges R1 from the discovery and the admission run only; R2..R4 are diagnostics derived from it', () => {
@@ -441,12 +474,15 @@ const CTX = { calculationContext: { ...D2_CALCULATION_CONTEXT }, rngEngineVersio
 const SUMMARY = { planningTargetCount: 43, completedTargetCount: 20, termination: 'exhausted', planSteps: 1, selectedTargets: [], conflicts: 21, conflictsByKind: {}, conflictSignatures: [] }
 const dummyConflicts = (n: number) => Array.from({ length: n }, (_, i) => ({ kind: 'same_gogma_counter', participants: [`x${i}a`, `x${i}b`] }))
 
+const RES = { normal: [], skill: { held: [3], blocked: [3] }, gogma: { held: [], blocked: [] }, exclusiveOwnedWeaponIds: [] }
+const staticOk = { S4: true, S5: { digestExpected: 'r', digestObserved: 'r', digestMatched: true, bodyExpected: RES, bodyObserved: RES, bodyMatched: true, satisfied: true } }
 function facts(o: { selected: string[]; completed: number; conflicts?: { kind: string; participants: string[] }[]; support?: Record<string, { S1: boolean; S2: boolean; S3: boolean; S4: boolean; S5: boolean }>; summary?: unknown }): D2EvaluationFacts {
   const f: D2EvaluationFacts = { preflight: { status: 'ready', refusal: null }, runConflictResolutions: 0, fullRunsStarted: 1, runtimeUnsupportedRemoved: [],
     plan: { present: true, termination: { status: 'exhausted', completedTargetCount: o.completed, totalTargetCount: 43, reachedLimits: [] }, steps: 10 + o.completed, selectedBuildListEntryIds: [...o.selected].sort(), warningKinds: [] },
     conflicts: (o.conflicts ?? dummyConflicts(21)).map((c, i) => ({ id: `c${i}:${c.participants.join()}`, kind: c.kind, participants: [...c.participants].sort(), selectedBuildListEntryId: null, recommendedBuildListEntryId: null, resourceIdentity: null, resourceIdentityMatched: false })),
     routeCommitment: [], supportChecks: o.support ?? {}, trialRunSummary: null, trialVerdict: null, baselineSummary: (o.summary ?? null) as never, steps: [], resultDigest: '',
-    rejectedBuildListEntries: [], resourceConflictRejections: 0, selectedTargetWeaponIds: [] }
+    rejectedBuildListEntries: [], resourceConflictRejections: 0, selectedTargetWeaponIds: [],
+    supportStaticChecks: Object.fromEntries(Object.keys(o.support ?? {}).map(id => [id, structuredClone(staticOk)])) }
   f.resultDigest = d1ResultDigest(f)
   return f
 }
@@ -480,7 +516,7 @@ function synthetic(): Synthetic {
   const validated: D2ValidatedInputs = { passed: true, issues: [], exportSha256: EXPORT, k0ReservationDigest: 'k0', phase2c2BaselineSummary: SUMMARY,
     targets: T.map((id, i) => ({ targetIndex: i, label: `t0${i}`, targetWeaponId: id, currentBuildListEntryId: O[i]!, phaseBK0Units: {}, firstK0DeliveryRung: null, d1Generated: null })),
     seed: [{ targetIndex: 1, label: 't01', targetWeaponId: T[1]!, currentBuildListEntryId: O[1]!, unitId: 'seed', file: 'seed.json', bytes: 1, sha256: ZSHA, generatedBuildListEntryId: Z1,
-      requiresSupport: [SUP], supportReservationDigest: 'r', isK1Candidate: true }],
+      requiresSupport: [SUP], supportReservationDigest: 'r', supportReservation: RES, isK1Candidate: true }],
     d1: { b0: { inputDigest: d1InputDigest([], [], [], EXPORT), resultDigest: f.B0!.resultDigest }, aB: { inputDigest: d1InputDigest([T[1]!], [Z1], [ZSHA], EXPORT), resultDigest: f.Z0!.resultDigest, evaluationId: 'A-b' },
       byInputDigest: {} } }
   validated.targets[0]!.phaseBK0Units = { L0: { phaseBUnitId: 't00-r01-L0', rung: 'L0', result: 'found_R', firstKeySha256: syncSha(keys[0]!), firstCost: 5 } }
@@ -645,6 +681,22 @@ describe('D2 run analysis (§4 / §5 / §7.3 / §8.5 / §9)', () => {
     expect(r.composition.seeded.steps[0]!.stepOutcome).toBe('not_replaced_no_eligible')
   })
 
+  it('re-checks S5 against V independently: a body other than the Phase B record is INVALID, a missing static record is evidence_integrity', () => {
+    const other = synthetic()
+    const rec = other.evaluationRecords.get('Z-t00-c1')!.result as D2EvaluationFacts
+    rec.supportStaticChecks[SUP]!.S5.bodyExpected = { ...RES, exclusiveOwnedWeaponIds: ['x'] }
+    rec.supportStaticChecks[SUP]!.S5.bodyObserved = { ...RES, exclusiveOwnedWeaponIds: ['x'] }
+    expect(analyze(other).invalidReasons.map(x => x.category)).toContain('guardrail')
+    const failed = synthetic()
+    const f2 = failed.evaluationRecords.get('Z0')!.result as D2EvaluationFacts
+    f2.supportStaticChecks[SUP]!.S5 = { ...f2.supportStaticChecks[SUP]!.S5, bodyMatched: false, satisfied: false }
+    expect(analyze(failed).decision.case).toBe('D2A_INVALID')
+    const missing = synthetic()
+    delete (missing.evaluationRecords.get('Z0')!.result as Record<string, unknown>).supportStaticChecks
+    expect(analyze(missing).invalidReasons.map(x => x.category)).toContain('evidence_integrity')
+    expect(analyze(synthetic()).invalidReasons).toEqual([])
+  })
+
   it('gives every parity its state and turns only a normally measured mismatch into INVALID', () => {
     const prefix = synthetic()
     prefix.validated.targets[0]!.phaseBK0Units.L0!.firstKeySha256 = 'other'
@@ -713,6 +765,14 @@ describe('D2 oracle isolation, sources and Production (§8.2 / §8.3 / G23 - G28
       '/src/benchmarks/plannerGlobalPhase2C26A.ts', '/src/benchmarks/plannerGlobalPhase2C26B2C1.ts', '/src/domain/rng/production/productionRngEngine.ts'])
     expect(loaded(analyzerSource)).toEqual(['/src/benchmarks/plannerGlobalD2.ts', '/src/benchmarks/plannerGlobalD2Analysis.ts'])
     for (const source of [runnerSource, analyzerSource]) expect(codeOnly(source)).not.toMatch(/Oracle1657|ORACLE_|oracleRoute|oracleKey|--oracle|_1657_/)
+  })
+
+  it('reads only result.reservation of the Phase B t09 record and only its digest entry of the Phase B RESULT sources', () => {
+    expect(codeOnly(mainSource)).toMatch(/isObject\(json\.result\.reservation\) \? structuredClone\(json\.result\.reservation\) : null/)
+    const projection = projectD2PhaseBResult(JSON.parse(phaseBResultRaw))!
+    expect(Object.keys(projection.sources).sort()).toEqual(['export', 't09UnitRecord', 'targets'])
+    expect(projection.sources.t09UnitRecord).toEqual({ file: 't09-r10-L1.record.json', bytes: D2_REGISTERED_INPUTS.phaseBT09Record.bytes, sha256: D2_REGISTERED_INPUTS.phaseBT09Record.sha256 })
+    expect(JSON.stringify(projection.sources)).not.toMatch(/oracle/i)
   })
 
   it('hard-codes no Target, Entry, reservation digest or stable key anywhere in the D2 code', () => {

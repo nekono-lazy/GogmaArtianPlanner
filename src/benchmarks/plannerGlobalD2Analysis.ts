@@ -221,7 +221,7 @@ const recordCalculationIssues = (record: Json): string[] => {
 }
 
 const MEASURED_FACT_FIELDS = ['preflight', 'runConflictResolutions', 'fullRunsStarted', 'runtimeUnsupportedRemoved', 'plan', 'conflicts', 'routeCommitment', 'supportChecks', 'steps',
-  'resultDigest', 'rejectedBuildListEntries', 'resourceConflictRejections', 'selectedTargetWeaponIds'] as const
+  'resultDigest', 'rejectedBuildListEntries', 'resourceConflictRejections', 'selectedTargetWeaponIds', 'supportStaticChecks'] as const
 
 export interface D2PoolCandidate {
   ordinal: number
@@ -476,6 +476,19 @@ export function analyzeD2Run(input: D2AnalysisInput) {
     if (facts !== null && facts.fullRunsStarted > D2_EVALUATION_FULL_RUN_CAP) add('guardrail', `${spec.evaluationId}: ${facts.fullRunsStarted} full runs, above 8`)
     const resultDigest = facts !== null ? d1ResultDigest(facts) : null
     if (facts !== null && facts.resultDigest !== resultDigest) add('raw_result_mismatch', `${spec.evaluationId}: resultDigest differs from the recomputed one`)
+    // S4 / S5 (§5 / §17), checked against V independently of the child: the child compared the Export support Entry's reservation
+    // with the registered digest AND the Phase B t09 record `result.reservation` V read, and recorded what it computed.
+    if (facts !== null) for (const id of support) {
+      const c = isObject(facts.supportStaticChecks) ? facts.supportStaticChecks[id] : undefined
+      const owner = v.seed.find(x => x.requiresSupport.includes(id)) ?? null
+      if (c === undefined || !isObject(c.S5)) { add('evidence_integrity', `${spec.evaluationId}: no static S4 / S5 record of the support Entry ${id}`); continue }
+      if (owner === null || c.S5.digestExpected !== owner.supportReservationDigest || !same(c.S5.bodyExpected, owner.supportReservation)) add('guardrail', `${spec.evaluationId}: S5 compared against a reservation that is not the registered digest / Phase B record body`)
+      if (c.S4 !== true || c.S5.digestMatched !== true || c.S5.bodyMatched !== true || c.S5.satisfied !== true || c.S5.digestObserved !== c.S5.digestExpected || !same(c.S5.bodyObserved, c.S5.bodyExpected)) {
+        add('guardrail', `${spec.evaluationId}: S4 / S5 of the support Entry ${id} does not hold`)
+      }
+      const dynamic = facts.supportChecks[id]
+      if (!dynamic || dynamic.S4 !== c.S4 || dynamic.S5 !== c.S5.satisfied) add('raw_result_mismatch', `${spec.evaluationId}: supportChecks S4 / S5 are not the static checks`)
+    }
     if (facts !== null) {
       const rejected = Array.isArray(facts.rejectedBuildListEntries) ? facts.rejectedBuildListEntries : []
       if (facts.resourceConflictRejections !== rejected.filter(r => r.reason === 'resource_conflict').length) add('raw_result_mismatch', `${spec.evaluationId}: resourceConflictRejections is not the recount`)
