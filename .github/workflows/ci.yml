@@ -12,9 +12,13 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Issue #142 Phase 2-B: the checks run as parallel jobs, and the Vitest suite is
+# split with Vitest's own `--shard` (every test file runs in exactly one shard,
+# on every PR). `verify` keeps the required check name `Lint / Test / Build` and
+# succeeds only when every other job succeeded.
 jobs:
-  verify:
-    name: Lint / Test / Build
+  static-checks:
+    name: Lint / NUL / Build
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -37,11 +41,55 @@ jobs:
       - name: Check for raw NUL bytes
         run: npm run check:nul
 
-      - name: Test
-        run: npm test
-
       - name: Build
         run: npm run build
 
       - name: Verify dependency license inventory
         run: test -f dist/licenses.md
+
+  test:
+    name: Test (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      # Let every shard finish, so one failure never hides another shard's result.
+      fail-fast: false
+      # `shard` is the only matrix dimension, so `strategy.job-total` is the
+      # shard count and always matches the matrix.
+      matrix:
+        shard: [1, 2, 3]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+
+  verify:
+    name: Lint / Test / Build
+    needs:
+      - static-checks
+      - test
+    # Always run, so a failed, cancelled or skipped dependency fails this
+    # required check instead of leaving it skipped.
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Require every job to succeed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'length > 0 and all(.[]; .result == "success")' > /dev/null
