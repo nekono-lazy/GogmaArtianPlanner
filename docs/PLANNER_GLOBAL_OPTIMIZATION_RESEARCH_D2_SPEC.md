@@ -278,7 +278,7 @@ final = accepted、finalResult = 最後に受理した評価の結果（受理�
 | 項目 | 値 |
 | --- | --- |
 | seed | D1の最終受理集合 `{t01, t07, t08, t09}`。各 `G_t` はD1 G store（`.local/d1-formal2.run/<unitId>.generated-entry.json`）のbodyで、SHA-256はD1 RESULT `sources.d1.generatedEntries` と一致すること。t09は **K1 Candidate**（`requiresSupport = ['build-list.fnv1a32-e396d352']`、reservation `fnv1a32:240e4673`）であることを `seededAxisIncludesK1Candidate = true` として記録する |
-| Z0 | seedを `replacement_set` として1 runで評価する。`inputDigest` はD1 `A-b` と同じ定義・同じ値（`fnv1a32:e38da50a`）になり、`resultDigest` はD1記録値 `fnv1a32:b61ef1dc` と一致しなければならない（§7.3）。R5成立も要求する（不成立はD1 parity不一致） |
+| Z0 | seedを `replacement_set` として1 runで評価する。`inputDigest` はD1 `A-b` と同じ定義・同じ値（`fnv1a32:e38da50a`）になり、`resultDigest` はD1記録値 `fnv1a32:b61ef1dc` と一致しなければならない（§7.3）。R5成立も要求する（正常に計測されて不成立ならD1 parity `mismatched`）。Z0が未計測ならparityは `not_checked` で、Z軸だけが `D2A_Z_INCOMPLETE` になる（§7.3.3） |
 | 対象Target | seed外のdropped 7（t00 / t02 / t03 / t04 / t05 / t06 / t10）を **Target ID昇順** |
 | 候補 | 各Targetの **D2 admitted K0 Candidate**（§3）。discovery ordinal昇順。seed内Target（t01 / t07 / t08 / t09）のD2 Candidateは使わない（seedを置き換えない） |
 | 手順 | §4.1と同じ（`accepted = seed`、`reference = Z0の結果` から開始）。評価IDは `Z-<t>-c<ordinal>` |
@@ -314,16 +314,19 @@ B0 / ADM / CMP / Zの評価runは、D1-A §4.1（入力構成）、§4.2（記�
 | 対象 | status / outcome | measured | 扱い |
 | --- | --- | --- | --- |
 | discovery unit | `discovery_cap_reached` / `stopped_by_search_extent_bound` / `discovery_exhausted` / `ladder_exhausted`（L2がextent bound） | yes | §2.3 |
-| discovery unit | `timeout` / `out_of_memory` / `process_failure` / `interrupted` / `discovery_calculation_error` | **no** | そのTargetのdiscoveryを終了。そのunitで受け取ったdeliveryは使わない（unitのrecordが無い、または不完全）。それより前のunitでpoolしたCandidateは使う。poolを `discoveryIncompleteAfterUnmeasured = true` とする |
+| discovery unit | `timeout` / `out_of_memory` / `process_failure` / `interrupted` / `discovery_calculation_error`（`discovery_calculation_error` はPhase Bに比較相手のunitが無い場合だけ。比較相手があるunitの型付きerrorは、Phase Bが同じ入力を正常に処理しているのでparity `mismatched`、§7.3.3） | **no** | そのTargetのdiscoveryを終了。そのunitで受け取ったdeliveryは使わない（unitのrecordが無い、または不完全）。それより前のunitでpoolしたCandidateは使う。poolを `discoveryIncompleteAfterUnmeasured = true` とする |
 | discovery unit | `not_executed`（`run_envelope_reached` / `aborted_after_invalid`） | **no** | 同上 |
 | ADM | `not_run_reused_existing` | yes | R1偽 |
-| B0 / ADM / CMP / Z | `calculation_error` | B0 / Z0: parity不一致（`D2A_INVALID`）。ADM / CMP / Z（Z0以外）: **no** | ADMで当該Candidateがadmittedか不明になる。CMP / Zではその段が `step_unmeasured` |
+| B0 / ADM / CMP / Z | `calculation_error` | B0 / Z0: childは正常に終了して型付きerrorを記録したので比較可能な結果であり、D1の記録（`evaluated`）と異なる = parity `mismatched`（`D2A_INVALID`、§7.3）。ADM / CMP / Z（Z0以外）: **no**（ただし同じ `inputDigest` の比較相手があれば§7.3.2で `mismatched`） | ADMで当該Candidateがadmittedか不明になる。CMP / Zではその段が `step_unmeasured` |
+| Z0 | `timeout` / `out_of_memory` / `process_failure` / `interrupted` / `not_executed` | **no** | Z0 parityは `not_checked`（§7.3.3）。Zの後続評価（`Z-*`）は起動せず `not_executed`（`notExecutedReason = z0_unmeasured`）とし、`seededAxis.case = D2A_Z_INCOMPLETE`。主軸の測定済み結果とdecisionには影響しない（§9.2） |
 | ADM | unmeasured | **no** | 当該Candidateはadmitted扱いにしない（`admission_unmeasured`）。CMP / Zの当該Targetの段は評価を起動せず `step_unmeasured`（admitted集合が確定しないため、§4.1） |
 | discovery unit（再掲） | unmeasured / `not_executed` | **no** | poolが確定しないので、CMP / Zの当該Targetの段は評価を起動せず `step_unmeasured`（§4.1）。ADMはpool済みCandidateについて実行し記録する（診断） |
 
 - `plan_bound_truncated`（`termination.status === 'incomplete'`）と `planner_rerun_bound_reached` は **bound-limited** として一覧に残し、通常の非共存と区別する
   （D1-A §6.2と同じ）
 - wall-clock timeout・OOMをnot-found・非共存・extent不足のいずれへも読み替えない（G6 / G7）
+- unmeasured（timeout / OOM / process failure / interrupted / not_executed）かどうかは、runner（親）が記録したprocess outcomeとnot_executed記録だけで決まる。
+  「completedと記録されたのにrecordが無い」等の証拠の欠損・破損は未計測に読み替えず、§8.5で `D2A_INVALID` とする
 
 ### 6.3 budget（それぞれ独立。Production boundへ流用・合算しない、G5）
 
@@ -383,22 +386,58 @@ Z     Z0 → dropped 7をTarget ID昇順（各段は前段の受理結果に依�
 
 wall-clock上限はexecution envelopeであり、意味論的なnot-found・非共存・extent不足の判定に使わない（G7）。
 
-### 7.3 決定性・parity（いずれか不一致なら `D2A_INVALID`）
+### 7.3 決定性・parity（`mismatched` なら `D2A_INVALID`、`not_checked` は該当する軸の `INCOMPLETE`）
 
 `inputDigest` / `resultDigest` はD1-A §9.4と **同じ定義・同じ関数** で計算する（`inputDigest = hashStableValue({ T（Target ID昇順）, G_TのEntry ID, G_TのG store
 SHA-256, Export SHA-256, researchMaxPlanSteps, conflictResolutions: [] })`）。
 
-| 検査 | 内容 | 失敗時のcategory |
-| --- | --- | --- |
-| D2内の決定性 | `inputDigest` が同じD2評価の組（ADMとCMPのsingleton段など）は、`evaluatedAgainst` が異なっても `resultDigest` が一致する | `determinism` |
-| D1との決定性 | D2評価の `inputDigest` がD1 RESULTの80評価のいずれかと一致する場合、`resultDigest` がD1の記録値と一致する（B0 `fnv1a32:880bbb52`、Z0とD1 `A-b`、pool 1件目のADMとD1 `S-<t>`、CMP / ZとD1 `P` / `A-c` の同一集合など） | `d1_parity` |
-| Phase B K0 prefix | Phase Bが実行した (Target, rung) のK0 unit 24件（§1.2）について、D2の同じunitが受け取ったdelivery列の先頭が、Phase B RESULTの `deliveries[].keySha256` と一致する。Phase Bで0件・`stoppedByExtent` だったunitは、D2でも0件・`stoppedByExtent` で終わる（そのunitではconsumerが停止しないため、Search全体が同一） | `phase_b_k0_parity` |
-| D1 G | t09以外の10 Targetについて、pool 1件目の `candidateStableKey()` のSHA-256がPhase Bの最初のK0 deliveryの `keySha256`、generated Entry IDがD1の `G_t`、G store bodyのSHA-256がD1 RESULT `sources.d1.generatedEntries` と一致する | `d1_parity` |
-| B0 | D1-A §5.1のPhase 2-C2 baseline summary parity | `baseline_parity_mismatch` |
-| Z0 | `resultDigest` がD1 `A-b` の `fnv1a32:b61ef1dc` と一致し、R5成立 | `d1_parity` |
+#### 7.3.1 parity状態
 
+各parity検査は、次のいずれか1つの状態を持つ。状態はanalyzerがrecordから独立に再計算し、runner / childの自己申告をそのまま使わない。
+
+| 状態 | 意味 | decisionへの影響 |
+| --- | --- | --- |
+| `matched` | 必要な比較対象がすべて **正常に計測され**（§7.3.2の「比較可能な結果」を持ち）、期待値と一致した | なし |
+| `mismatched` | 必要な比較対象が正常に計測され、実際に期待値と異なった、または正常完了した計測の中で期待された要素（delivery、Candidate、終了状態）が欠けていた | `D2A_INVALID`（formal validity違反、§9.2）。主軸・Z軸のどちらで起きても全体のdecisionを `D2A_INVALID` にする |
+| `not_checked` | 必要な比較対象の少なくとも1つが未計測（timeout / OOM / process failure / interrupted / `not_executed`（`run_envelope_reached` / `dependency_unmeasured` / `z0_unmeasured` 等））で、一致・不一致を判定できない | 不一致とは扱わない。原因の未計測unit / 評価が属する軸の `INCOMPLETE`（主軸 `D2A_INCOMPLETE`、Z軸 `D2A_Z_INCOMPLETE`）で扱う |
+| `not_applicable` | 比較対象が登録上存在しない（Phase Bに対応unitが無いrung、t09のD1 G、pool 2件目・3件目のD1 G、同じ `inputDigest` の評価が1件だけ） | なし |
+
+- `not_checked` の検査には、未確認の理由を必ず記録する: 依存するunit / 評価ID、それぞれのstatus、`unmeasuredReason`、`notExecutedReason`
+- 1件でも `mismatched` があれば、同じ検査や他の検査に `not_checked` があっても `D2A_INVALID` である（§9.2の判定順）
+- `not_checked` は「検査を省略した」ことではない。比較対象が後から得られることは無く（retry / 再実行なし）、parity未確認のまま下限evidenceとして扱う
+- 未計測のchildが途中まで出力した情報（進捗等）から観測できたprefixは、`observedPrefixDiagnostic` として一致・不一致とも記録してよいが、診断に限る。
+  検査の状態は `not_checked` のままで、`matched` にも `mismatched` にもしない
+
+#### 7.3.2 比較可能な結果
+
+ある評価・unitが「正常に計測された」（比較可能な結果を持つ）とは、runnerのprocess outcomeがcompleted（exit 0）で、SHA-256が一致する完全なrecordがあることをいう
+（§8.5）。statusでは次のとおり。
+
+| 対象 | 比較可能な結果（正常に計測された） | 比較不能（未計測 → `not_checked`） |
+| --- | --- | --- |
+| 評価（B0 / ADM / CMP / Z0 / Z） | `evaluated`、`preflight_refused`、`planner_rerun_bound_reached`、`calculation_error`（childが型付きerrorを記録して正常終了したもの） | `timeout`、`out_of_memory`、`process_failure`、`interrupted`、`not_executed` |
+| discovery unit | `discovery_cap_reached`、`stopped_by_search_extent_bound`、`discovery_exhausted`、`ladder_exhausted`、型付きcalculation error（childが記録して正常終了したもの） | `timeout`、`out_of_memory`、`process_failure`、`interrupted`、`not_executed` |
+
+比較可能な結果同士でstatusが異なれば（例: D1で `evaluated` の入力がD2で `calculation_error`、Phase Bで正常にdeliverしたunitがD2で型付きerror）、それは `mismatched` である。
+
+#### 7.3.3 検査ごとの規則
+
+| 検査 | 比較対象 | `matched` / `mismatched` | `not_checked` | 失敗時のcategory |
+| --- | --- | --- | --- | --- |
+| Phase B K0 prefix | Phase Bが実行した (Target, rung) のK0 unit 24件（§1.2）と、D2の同じunit | D2のunitが正常に計測された場合だけ判定する。Phase Bのfound unit（1件deliver後にconsumer停止）: D2のunitが受け取った1件目の `keySha256` が一致すれば `matched`、異なる・D2が1件もdeliverせず終わった（期待されたdeliveryの欠落）・型付きerrorなら `mismatched`。Phase Bで0件・`stoppedByExtent` だったunit: D2も0件・`stopped_by_search_extent_bound` なら `matched`、deliveryがあった・`discovery_exhausted` で終わった・型付きerrorなら `mismatched` | D2のunitが未計測、または上流unitの未計測で `not_executed` になった（Phase Bで0件・extent boundだったunitでも、D2が未計測なら終了状態の一致を要求しない） | `phase_b_k0_parity` |
+| D1 G | t09以外の10 Targetのpool 1件目と、D1の `G_t` | pool 1件目を生むべきunit（Phase Bの最初のK0 delivery rung）とそれより前のunitが正常に計測された場合だけ判定する。pool 1件目の `candidateStableKey()` のSHA-256がPhase Bの `keySha256`、generated Entry IDがD1の `G_t`、G store bodyのSHA-256がD1 RESULT `sources.d1.generatedEntries` とすべて一致すれば `matched`、いずれかが異なる、またはpool 1件目が存在しなければ `mismatched` | 該当unitが未計測・`not_executed` | `d1_parity` |
+| D1 G（2件目以降） | pool 2件目・3件目 | 比較しない（`not_applicable`）。D1の `G_t` と異なる新規Candidateであることを不一致にしない | — | — |
+| B0 | D1-A §5.1のPhase 2-C2 baseline summary、D1 B0の `resultDigest` `fnv1a32:880bbb52` | B0が比較可能な結果を持つ場合、summaryと `resultDigest` を厳密に比較する。B0の `calculation_error` は `mismatched` | B0が未計測 | `baseline_parity_mismatch` / `d1_parity` |
+| Z0 | D1 `A-b`（`resultDigest fnv1a32:b61ef1dc`、R5成立） | Z0が比較可能な結果を持つ場合、`resultDigest` とR5成立がともに一致すれば `matched`、いずれかが異なれば（`calculation_error`、`preflight_refused`、`planner_rerun_bound_reached` を含む）`mismatched` → `D2A_INVALID` | Z0が未計測 → `not_checked`。`seededAxis.case = D2A_Z_INCOMPLETE`、Z後続評価は `not_executed`（`z0_unmeasured`）。**主軸の測定済み結果を無効化せず、主軸のdecisionを自動的に `D2A_INCOMPLETE` にしない**（主軸は主軸の未計測・INVALIDだけで判定する、§9.2） | `d1_parity` |
+| D2内の決定性 | `inputDigest` が同じD2評価の組（ADMとCMPのsingleton段など、`evaluatedAgainst` が異なってもよい） | 組のうち比較可能な結果を持つ評価が2件以上あれば、それらのstatusと `resultDigest` がすべて一致すれば `matched`、1組でも異なれば `mismatched` | 比較可能な結果を持つ評価が1件以下で、残りが未計測（全員が計測済みなら `matched` / `mismatched`、そもそも1件しか無ければ `not_applicable`） | `determinism` |
+| D1との決定性 | D2評価の `inputDigest` がD1 RESULTの80評価のいずれかと一致するもの（pool 1件目のADMとD1 `S-<t>`、CMP / ZとD1 `P` / `A-c` の同一集合など） | D2評価が比較可能な結果を持てば、D1の記録（すべて `evaluated`）とstatus・`resultDigest` を比較する | D2評価が未計測 | `d1_parity` |
+
+- 比較可能な結果を持つ評価が1件でも不一致なら、同じ組の他の評価が未計測でも `mismatched` である（未計測のメンバーは比較から除くだけで、不一致を消さない）
+- 登録条件どおり、同じ `inputDigest` の評価も別のchildで実行する（§7.1）。D1の記録はparityの期待値としてだけ使い、D1の結果をD2のR5・受理・decisionへ流用しない
+- 主軸のparity検査が `not_checked` になるのは、原因の主軸unit / 評価が未計測の場合であり、それ自体で `D2A_INCOMPLETE` に含まれる。決定性の組の一方がZ軸の評価で、
+  Z軸側だけが未計測のために `not_checked` になった検査は、主軸のdecisionを変えない
 - これらは決定性・忠実性の検査であり、D1 / Phase Bの結果をD2のR5や受理判定へ流用することではない（R5はD2の各 `replacement_set` 評価で独立に判定する）
-- I-D2-1（§1.3）が破れた場合は、計測結果を解釈せず `D2A_INVALID` とする
+- I-D2-1（§1.3）が正常な計測で破れた場合（Phase B K0 prefixまたはD1 Gが `mismatched`）は、計測結果を解釈せず `D2A_INVALID` とする
 
 ### 7.4 見積もり（事前登録値ではない。成功条件にしない）
 
@@ -475,12 +514,32 @@ D1 RESULTの検証条件: `provenance.formal === true`、`measuredHead === 74886
   discovery unit数 + 実行した評価数
 - discovery / CMP / Zのreplay: analyzerは記録済みのunit結果・評価結果から§2.3のrung escalation・pool構成、§3のadmission、§4 / §5の合成（eligible、
   gate、選択順、受理）を再実行し、記録と一致することを確認する
+- parity: analyzerは§7.3の全検査をrecordから再計算し、各検査に `matched` / `mismatched` / `not_checked` / `not_applicable` のいずれか1つを与える。
+  未計測の比較対象を `matched` と数えない。`not_checked` には依存unit / 評価IDと未計測理由が揃っていること、その依存先が実際にrunnerの記録上
+  未計測であることを確認する（揃っていない、または依存先がcompletedと記録されている場合は§8.5の証拠不整合）
 - Phase B / D1のmoduleとformal RESULTを変更しない（D2-Bは新しいmoduleからimportして使う）
 
 ### 8.4 raw / RESULT整合
 
 - RESULTの各unit・評価が、raw・recordのSHA-256付きファイルから再計算した値と一致する（pool、R1〜R4、R5、R6、status、parity、reference差分、合成、decision）
 - unmeasured / not_executedを含め、登録・実行されたunit / 評価がRESULTに欠けなく現れる
+
+### 8.5 未計測と証拠の欠損・破損の区別
+
+未計測（`INCOMPLETE` / parity `not_checked`）と、証拠の欠損・破損・不整合（`D2A_INVALID`）を混同しない。
+
+| 状況 | 扱い |
+| --- | --- |
+| runnerのprocess outcomeがtimeout / OOM / process failure（exit code非0）/ interruptedで、そのためにchildのrecordが無い・不完全 | 正しく未計測として記録されていれば unmeasured。parityは `not_checked`、該当する軸の `INCOMPLETE` |
+| runnerが `not_executed`（`run_envelope_reached` / `dependency_unmeasured` / `z0_unmeasured` / `aborted_after_invalid`）と記録し、childを起動していない | 同上 |
+| process outcomeがcompleted（exit 0）と記録されているのに、必要なrecord（unit record、評価record、G store）が存在しない | **`D2A_INVALID`**（`evidence_integrity`）。未計測に読み替えない |
+| recordのSHA-256・bytesが、runnerの記録・raw・RESULTの `sources` と一致しない | **`D2A_INVALID`**（`evidence_integrity`） |
+| 正常完了したrecordの必須field（status、Search summary、delivery列、`inputDigest`、`resultDigest`、Plan / Conflictの記録等）が欠けている、型が違う | **`D2A_INVALID`**（`evidence_integrity`） |
+| runnerが起動した登録unit / 評価について、process outcomeの記録そのものが無い | **`D2A_INVALID`**（`evidence_integrity`） |
+| rawとRESULTの内容が一致しない（§8.4） | **`D2A_INVALID`**（`raw_result_mismatch`） |
+
+- 欠損・破損した証拠からparityを `not_checked` として救済しない。fail-closed規則（§8.1の入力検証と同じ趣旨）に従う
+- `aborted_after_invalid` による `not_executed` は、先行するINVALIDの帰結であり、decisionは `D2A_INVALID` である
 
 ## 9. 事前登録条件: decision（上から順に判定）
 
@@ -497,8 +556,8 @@ D1 RESULTの検証条件: `provenance.formal === true`、`measuredHead === 74886
 
 | decision | 条件 |
 | --- | --- |
-| `D2A_INVALID` | §7.3 / §8のformal validityに1件でも違反（reason category: `input_evidence` / `provenance` / `phase_b_k0_parity` / `d1_parity` / `baseline_parity_mismatch` / `guardrail` / `determinism` / `raw_result_mismatch`） |
-| `D2A_INCOMPLETE` | invalid 0、かつ主軸（DSC / B0 / ADM / CMP）の登録・policy-requiredなunit / 評価のいずれかがunmeasuredまたは `not_executed` |
+| `D2A_INVALID` | §7.3 / §8のformal validityに1件でも違反。parityは `mismatched` の検査が1件でもあれば違反（主軸・Z軸を問わない）。reason category: `input_evidence` / `provenance` / `phase_b_k0_parity` / `d1_parity` / `baseline_parity_mismatch` / `guardrail` / `determinism` / `evidence_integrity` / `raw_result_mismatch` |
+| `D2A_INCOMPLETE` | invalid 0、かつ主軸（DSC / B0 / ADM / CMP）の登録・policy-requiredなunit / 評価のいずれかがunmeasuredまたは `not_executed`。主軸のparity `not_checked` はこの未計測が原因なのでここに含まれる。**Z0 / Zの未計測、およびZ軸側の未計測だけが原因の `not_checked` は、主軸のdecisionを `D2A_INCOMPLETE` にしない** |
 | `D2A_GLOBAL_COMPLETE_R` | invalid 0、unmeasured 0、`finalResult` がR6を満たす（43 / 43、Conflict 0、`resource_conflict` 0、Trace Replay成功、R5） |
 | `D2A_EXCEEDS_D1_INCUMBENT` | 上記以外で、最終受理集合の大きさ ≥ 1、かつ `finalResult` が D1 incumbent（22 / 21）より良い |
 | `D2A_IMPROVED_OVER_BASELINE` | 上記以外で、`finalResult` がbaseline（20 / 21）より良い。D1 incumbentと同値（22 / 21）の場合もここに入り、`equalsD1IncumbentMetrics = true` を併記する |
@@ -509,13 +568,17 @@ D1 RESULTの検証条件: `provenance.formal === true`、`measuredHead === 74886
 - decisionには修飾field `boundLimitedEvaluations`（bound-limitedだった評価IDの一覧）と `newCandidateAccepted`（受理集合のうちD1の `G_t` と異なるCandidateの件数）を
   必ず付ける
 - 通常の非共存（`evaluated` でR5不成立、gate不成立、`preflight_refused`、bound-limited）はmeasuredであり、INVALIDにもINCOMPLETEにもしない
+- 判定順は変えない。正常に計測された結果の不一致（parity `mismatched`）は `D2A_INVALID`、測定できなかったための未確認（parity `not_checked`）は該当する軸の
+  `INCOMPLETE` であり、未確認を不一致にも一致にも読み替えない。主軸に別のINVALIDや未計測があれば、この表の順序をそのまま適用する
+- Z0が未計測でも主軸が他に未計測・INVALIDを持たなければ、主軸は `D2A_GLOBAL_COMPLETE_R` 〜 `D2A_NO_IMPROVEMENT` のいずれかで確定し、Z軸だけが
+  `D2A_Z_INCOMPLETE` になる
 
 ### 9.3 Z軸のdecision（`seededAxis.case`、主軸と独立）
 
 | decision | 条件 |
 | --- | --- |
-| （主軸が `D2A_INVALID`） | Zも解釈しない（`seededAxis.case = null`） |
-| `D2A_Z_INCOMPLETE` | Zの登録評価、またはZが依存するDSC / ADM（dropped 7）のいずれかがunmeasured / `not_executed` |
+| （全体が `D2A_INVALID`） | Zも解釈しない（`seededAxis.case = null`）。Z0 / Zのparity `mismatched` もここに入る（§7.3.1） |
+| `D2A_Z_INCOMPLETE` | Z0（parity `not_checked`）、Zの登録評価、またはZが依存するDSC / ADM（dropped 7）のいずれかがunmeasured / `not_executed` |
 | `D2A_Z_GLOBAL_COMPLETE_R` | Zの最終結果がR6を満たす |
 | `D2A_Z_EXTENDS_D1_INCUMBENT` | seedに加えて1件以上を受理した（gateによりcompleted ≥ 22）。追加Target、completed / Conflictの差を併記する |
 | `D2A_Z_NO_EXTENSION` | 上のいずれでもない |
@@ -557,13 +620,13 @@ discovery
   units[]                  { unitId, targetWeaponId, label, rung, extent, status（§6.2）, unmeasuredReason, notExecutedReason, process,
                              poolSizeAtStart, poolSizeAtEnd, deliveries[] { indexInUnit, keySha256, cost, action: pooled | duplicate_of_lower_rung },
                              search { deliveredCandidates, excludedCandidates, exhausted, stoppedByExtent, stoppedByConsumer, skippedExcludedRouteKeys },
-                             phaseBParity { compared: boolean, phaseBUnitId, matched, mismatches[] },
+                             phaseBParity { state: matched | mismatched | not_checked | not_applicable, phaseBUnitId, mismatches[], notChecked, observedPrefixDiagnostic },
                              searchOnlyMs, materializeMs, wallMs, peakHeapBytes, peakRssBytes }
   targets[11]              { targetWeaponId, label, currentBuildListEntryId（O_t）, oTSelectedInB0, discoveryStop: discovery_cap_reached | discovery_exhausted | ladder_exhausted | unmeasured | not_executed,
                              discoveryIncompleteAfterUnmeasured,
                              pool[] { ordinal, unitId, rung, indexInUnit, candidateStableKey, keySha256, cost, routeKind, routeOperationCount,
                                       reservationCheck { respects }, searchIdentity, generatedBuildListEntryId, reusedExisting, generatedEntry { file, sha256 },
-                                      replacement { status, replacedBuildListEntryId }, isD1Candidate, d1Parity { compared, matched } } }
+                                      replacement { status, replacedBuildListEntryId }, isD1Candidate, d1Parity { state, mismatches[], notChecked } } }
 evaluations[]              D1-A §8の `evaluations[]` の全fieldに加えて
                            { stage: B0 | ADM | CMP | Z0 | Z, axis: main | seeded | none, poolOrdinal,
                              rejectedBuildListEntries[] { buildListEntryId, reason }, resourceConflictRejections, selectedTargetWeaponIds[],
@@ -571,7 +634,11 @@ evaluations[]              D1-A §8の `evaluations[]` の全fieldに加えて
                              gate { judged, referenceCompleted, proposedCompleted, satisfied }, r5OnlyEligible, eligible,
                              r6 { judged, conditions { evaluatedPlanAndTraceReplay, allTargetsCompleted, noUnresolvedConflict, noResourceConflictRejection, r5 }, satisfied },
                              r1r4（ADMのみ）{ R1, R1FailureReason, R2, R3, R4, supportVacuous, targetRegressedR, foundRDiagnostic, winnerBuildListEntryId, conflictCoParticipants[] },
-                             d1Parity { matchedD1EvaluationIds[], resultDigestsEqual } }
+                             d1Parity { state, matchedD1EvaluationIds[], resultDigestsEqual, notChecked } }
+parityChecks[]             { checkId, kind: phase_b_k0_prefix | d1_generated_entry | baseline | z0 | determinism_d2 | determinism_d1, axis: main | seeded,
+                             state: matched | mismatched | not_checked | not_applicable, subjects[]（unit / 評価ID）, expected, observed, mismatches[],
+                             notChecked { dependsOn[] { id, status, unmeasuredReason, notExecutedReason } } | null（not_checked以外はnull）,
+                             observedPrefixDiagnostic | null（診断のみ。stateに使わない）, category（mismatched時のinvalid category） }
 composition
   main                     { steps[11] { label, acceptedBefore[], evaluatedCandidates[] (evaluationId, ordinal), eligible[], chosen | null,
                                          stepOutcome: accepted | not_replaced_no_admitted | not_replaced_no_eligible | step_unmeasured, acceptedAfter[], afterUnmeasuredStep },
@@ -592,13 +659,14 @@ aggregates
   r6                       { judged, satisfied, satisfiedEvaluationIds[] }
   boundLimitedEvaluations[]
   targetRegressedR          ADM評価ごと・Targetごとの件数
-  determinismCrossChecks[] { inputDigest, evaluationIds[], d1EvaluationIds[], resultDigestsEqual }
+  determinismCrossChecks[] { inputDigest, evaluationIds[], d1EvaluationIds[], comparableEvaluationIds[], state, resultDigestsEqual }
+  parity                   { byKindAndState, mismatched[], notChecked[]（checkIdと依存先） }
   timing                   { discoveryWallMs, evaluationWallMs, runWallMs, runEnvelopeReached }
   memory                   { peakHeapBytes, peakRssBytes }
 invalidReasons[]           { category, detail }
 decision                   { case, reasons[], lowerBound: boolean, boundLimitedEvaluations[], newCandidateAccepted,
                              equalsD1IncumbentMetrics, globalCompleteObservedUnderIncomplete, exceedsD1ObservedUnderIncomplete }
-seededAxis                 { case, reasons[], lowerBound: boolean, addedTargets[], finalMetrics }
+seededAxis                 { case, reasons[], lowerBound: boolean, z0ParityState, addedTargets[], finalMetrics }
 ```
 
 ## 11. 事前登録条件: 言えること・言えないこと
