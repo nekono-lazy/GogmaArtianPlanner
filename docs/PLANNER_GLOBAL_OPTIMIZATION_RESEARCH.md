@@ -267,3 +267,5 @@ Phase 2-C2.6-B2-C2B2K（`B2C2B2K_RECOVERED`）までで、E1 11 Targetはoracle-
 oracleなしでcontext / extent / budgetを選ぶResearch execution policy、Phase 2-C2.7-Bの事前登録acceptance、
 本Phase 0 prototypeとreservation探索の関係、Production復帰境界は
 [Phase 2-C2.7-A](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27A.md)（docs-only）で整理した。
+その事前登録のformal executionは [Phase 2-C2.7-B](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27B.md)（`B2C27B_INCOMPLETE`）、
+結果を受けたCandidate発見とGlobal採用の分離方針は [Phase 2-C2.7-B follow-up](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27B_FOLLOWUP.md)（docs-only）にある。
