@@ -1,0 +1,3219 @@
+{
+  "description": "Issue #154 P0R: Phase 0 reproduction on current main, missing-Target diagnosis, pre-registered V1 (normal-2x-fallback) and fresh ordinary Planner verification. Research only.",
+  "measuredCode": {
+    "base": "c22398a224e97c2bc2d728ad49826bbaf0a84e4a",
+    "preRegistrationCommit": "644450d4dc098742bf5dcc2c70868025676495c8",
+    "note": "Production code identical to base; Research files of this PR uncommitted at measurement time"
+  },
+  "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+  "phase0Reproduction": {
+    "existingRunner": {
+      "environment": {
+        "runtime": "Node (not Browser Worker)",
+        "node": "v24.19.0",
+        "platform": "win32",
+        "arch": "x64",
+        "heapSizeLimitBytes": 8791261184,
+        "execArgv": [
+          "--max-old-space-size=8192"
+        ],
+        "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "logicalCpuCount": 16,
+        "totalMemoryBytes": 33377591296,
+        "maxPlanSteps": 20000,
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+      },
+      "report": {
+        "status": "partial",
+        "algorithm": "phase0-sequential-v1",
+        "inputFingerprint": "fnv1a32:53b2ed88",
+        "baseline": {
+          "status": "exhausted",
+          "reachedLimits": [],
+          "limits": {
+            "maxPlanSteps": 20000
+          },
+          "expandedStates": 1485,
+          "completedTargetCount": 20,
+          "totalTargetCount": 43,
+          "selected": 20,
+          "conflicts": 21,
+          "conflictsByKind": {
+            "same_gogma_counter": 15,
+            "same_normal_counter": 1,
+            "same_owned_weapon_consumed": 2,
+            "same_skill_counter": 3
+          },
+          "rejected": 23,
+          "resourceConflictRejected": 23,
+          "steps": 1465,
+          "traceReplay": "passed",
+          "elapsedMs": 4833,
+          "fullRuns": 1,
+          "warningCount": 0
+        },
+        "retained": {
+          "status": "completed",
+          "reachedLimits": [],
+          "limits": {
+            "maxPlanSteps": 20000
+          },
+          "expandedStates": 1485,
+          "completedTargetCount": 20,
+          "totalTargetCount": 20,
+          "selected": 20,
+          "conflicts": 0,
+          "conflictsByKind": {},
+          "rejected": 0,
+          "resourceConflictRejected": 0,
+          "steps": 1465,
+          "traceReplay": "passed",
+          "elapsedMs": 3898,
+          "fullRuns": 1,
+          "warningCount": 0
+        },
+        "final": {
+          "status": "exhausted",
+          "reachedLimits": [],
+          "limits": {
+            "maxPlanSteps": 20000
+          },
+          "expandedStates": 7372,
+          "completedTargetCount": 42,
+          "totalTargetCount": 43,
+          "selected": 42,
+          "conflicts": 2,
+          "conflictsByKind": {
+            "same_normal_counter": 1,
+            "same_skill_counter": 1
+          },
+          "rejected": 1,
+          "resourceConflictRejected": 1,
+          "steps": 7330,
+          "traceReplay": "passed",
+          "elapsedMs": 25844,
+          "fullRuns": 1,
+          "warningCount": 0
+        },
+        "retainedOriginalEntryIds": [
+          "build-list.fnv1a32-2fdb4406",
+          "build-list.fnv1a32-32e817d9",
+          "build-list.fnv1a32-35613e34",
+          "build-list.fnv1a32-462a2dfa",
+          "build-list.fnv1a32-50009b78",
+          "build-list.fnv1a32-54dd2b4e",
+          "build-list.fnv1a32-58a4e590",
+          "build-list.fnv1a32-61066e62",
+          "build-list.fnv1a32-66c25e3d",
+          "build-list.fnv1a32-7df2bbec",
+          "build-list.fnv1a32-8561c387",
+          "build-list.fnv1a32-85dc00cc",
+          "build-list.fnv1a32-92d87b90",
+          "build-list.fnv1a32-a1d13672",
+          "build-list.fnv1a32-a3d6817e",
+          "build-list.fnv1a32-b82c6259",
+          "build-list.fnv1a32-c1fe111c",
+          "build-list.fnv1a32-ccd01768",
+          "build-list.fnv1a32-d8c8e4a6",
+          "build-list.fnv1a32-e396d352"
+        ],
+        "searches": [
+          {
+            "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 156,
+            "advances": {
+              "normal": null,
+              "gogma": 156,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 155,
+              "gogma": 156,
+              "skill": 155
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 6560,
+            "generatedEntryId": "build-list.constrained.fnv1a32-6078b0f6"
+          },
+          {
+            "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 343,
+            "advances": {
+              "normal": null,
+              "gogma": 343,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 342,
+              "gogma": 343,
+              "skill": 342
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 28380,
+            "generatedEntryId": "build-list.constrained.fnv1a32-e5d1efe3"
+          },
+          {
+            "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 216,
+            "advances": {
+              "normal": null,
+              "gogma": 216,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 215,
+              "gogma": 216,
+              "skill": 1
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 10691,
+            "generatedEntryId": "build-list.constrained.fnv1a32-a7044276"
+          },
+          {
+            "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 139,
+            "advances": {
+              "normal": null,
+              "gogma": 139,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 138,
+              "gogma": 139,
+              "skill": 139
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 11313,
+            "generatedEntryId": "build-list.constrained.fnv1a32-c3dd7f1e"
+          },
+          {
+            "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 71,
+            "advances": {
+              "normal": null,
+              "gogma": 57,
+              "skill": 14
+            },
+            "observedPredictionReach": {
+              "normal": 70,
+              "gogma": 71,
+              "skill": 71
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 2327,
+            "generatedEntryId": "build-list.constrained.fnv1a32-41001503"
+          },
+          {
+            "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 330,
+            "advances": {
+              "normal": null,
+              "gogma": 330,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 329,
+              "gogma": 330,
+              "skill": 330
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 56902,
+            "generatedEntryId": "build-list.constrained.fnv1a32-8678892d"
+          },
+          {
+            "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_keep_bonuses",
+            "estimatedOperationCount": 222,
+            "advances": {
+              "normal": null,
+              "gogma": 222,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 221,
+              "gogma": 222,
+              "skill": 222
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 21038,
+            "generatedEntryId": "build-list.constrained.fnv1a32-52fefe18"
+          },
+          {
+            "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 162,
+            "advances": {
+              "normal": null,
+              "gogma": 162,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 161,
+              "gogma": 162,
+              "skill": 162
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 11114,
+            "generatedEntryId": "build-list.constrained.fnv1a32-0cdd7e06"
+          },
+          {
+            "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 783,
+            "advances": {
+              "normal": null,
+              "gogma": 76,
+              "skill": 707
+            },
+            "observedPredictionReach": {
+              "normal": 350,
+              "gogma": 500,
+              "skill": 783
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 100509,
+            "generatedEntryId": "build-list.constrained.fnv1a32-06b41abd"
+          },
+          {
+            "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 279,
+            "advances": {
+              "normal": null,
+              "gogma": 278,
+              "skill": 1
+            },
+            "observedPredictionReach": {
+              "normal": 278,
+              "gogma": 279,
+              "skill": 279
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 21933,
+            "generatedEntryId": "build-list.constrained.fnv1a32-bb13dde2"
+          },
+          {
+            "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 98,
+            "advances": {
+              "normal": 12,
+              "gogma": 83,
+              "skill": 3
+            },
+            "observedPredictionReach": {
+              "normal": 97,
+              "gogma": 98,
+              "skill": 98
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 3020,
+            "generatedEntryId": "build-list.constrained.fnv1a32-f542a5de"
+          },
+          {
+            "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 234,
+            "advances": {
+              "normal": 121,
+              "gogma": 76,
+              "skill": 37
+            },
+            "observedPredictionReach": {
+              "normal": 233,
+              "gogma": 234,
+              "skill": 233
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 15347,
+            "generatedEntryId": "build-list.constrained.fnv1a32-59e57a99"
+          },
+          {
+            "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 363,
+            "advances": {
+              "normal": null,
+              "gogma": 82,
+              "skill": 281
+            },
+            "observedPredictionReach": {
+              "normal": 350,
+              "gogma": 363,
+              "skill": 363
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 37179,
+            "generatedEntryId": "build-list.constrained.fnv1a32-807c4067"
+          },
+          {
+            "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 57,
+            "advances": {
+              "normal": 10,
+              "gogma": 10,
+              "skill": 37
+            },
+            "observedPredictionReach": {
+              "normal": 56,
+              "gogma": 57,
+              "skill": 57
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 1169,
+            "generatedEntryId": "build-list.constrained.fnv1a32-efc372ef"
+          },
+          {
+            "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 156,
+            "advances": {
+              "normal": null,
+              "gogma": 156,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 155,
+              "gogma": 156,
+              "skill": 155
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 7382,
+            "generatedEntryId": "build-list.constrained.fnv1a32-36d8f0f0"
+          },
+          {
+            "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 593,
+            "advances": {
+              "normal": 69,
+              "gogma": 73,
+              "skill": 451
+            },
+            "observedPredictionReach": {
+              "normal": 350,
+              "gogma": 500,
+              "skill": 593
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 69821,
+            "generatedEntryId": "build-list.constrained.fnv1a32-98251e9e"
+          },
+          {
+            "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 138,
+            "advances": {
+              "normal": null,
+              "gogma": 138,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 137,
+              "gogma": 138,
+              "skill": 138
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 11323,
+            "generatedEntryId": "build-list.constrained.fnv1a32-ef066964"
+          },
+          {
+            "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 338,
+            "advances": {
+              "normal": 207,
+              "gogma": 4,
+              "skill": 127
+            },
+            "observedPredictionReach": {
+              "normal": 337,
+              "gogma": 336,
+              "skill": 337
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 18431,
+            "generatedEntryId": "build-list.constrained.fnv1a32-a32ec8c8"
+          },
+          {
+            "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 271,
+            "advances": {
+              "normal": 242,
+              "gogma": 2,
+              "skill": 27
+            },
+            "observedPredictionReach": {
+              "normal": 270,
+              "gogma": 269,
+              "skill": 270
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 11814,
+            "generatedEntryId": "build-list.constrained.fnv1a32-38c9ed7b"
+          },
+          {
+            "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 194,
+            "advances": {
+              "normal": null,
+              "gogma": 119,
+              "skill": 75
+            },
+            "observedPredictionReach": {
+              "normal": 193,
+              "gogma": 194,
+              "skill": 194
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 16281,
+            "generatedEntryId": "build-list.constrained.fnv1a32-b1c9f04f"
+          },
+          {
+            "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+            "status": "not_found_within_extent",
+            "targetOutcome": null,
+            "routeKind": null,
+            "estimatedOperationCount": null,
+            "advances": null,
+            "observedPredictionReach": {
+              "normal": 350,
+              "gogma": 500,
+              "skill": 1501
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": true,
+              "skillConversion": true
+            },
+            "elapsedMs": 37859,
+            "generatedEntryId": null
+          },
+          {
+            "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 141,
+            "advances": {
+              "normal": null,
+              "gogma": 1,
+              "skill": 140
+            },
+            "observedPredictionReach": {
+              "normal": 140,
+              "gogma": 141,
+              "skill": 141
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 6076,
+            "generatedEntryId": "build-list.constrained.fnv1a32-2803e414"
+          },
+          {
+            "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 581,
+            "advances": {
+              "normal": 98,
+              "gogma": 11,
+              "skill": 472
+            },
+            "observedPredictionReach": {
+              "normal": 350,
+              "gogma": 500,
+              "skill": 581
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 73037,
+            "generatedEntryId": "build-list.constrained.fnv1a32-881eca8e"
+          }
+        ],
+        "generatedReplacementCount": 22,
+        "plannerFullRunCount": 25,
+        "searchElapsedMs": 579506,
+        "plannerElapsedMs": 50161,
+        "totalElapsedMs": 637857,
+        "extentFallback": null
+      },
+      "memory": {
+        "maxRssKiB": 2525360,
+        "rss": 2579730432,
+        "heapTotal": 2437373952,
+        "heapUsed": 2302923040,
+        "external": 24044442,
+        "arrayBuffers": 212663,
+        "scope": "whole Node process, includes Vite loader and Export parsing"
+      }
+    },
+    "diagnosticRunner": {
+      "environment": {
+        "runtime": "Node (not Browser Worker)",
+        "node": "v24.19.0",
+        "platform": "win32",
+        "arch": "x64",
+        "heapSizeLimitBytes": 8791261184,
+        "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+        "logicalCpuCount": 16,
+        "totalMemoryBytes": 33377591296,
+        "rngEngineVersion": "production-rng:c5-e7",
+        "maxPlanSteps": 20000,
+        "extent": {
+          "maxNormalAdvance": 350,
+          "maxGogmaAdvance": 500,
+          "maxSkillAdvance": 1500
+        },
+        "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+      },
+      "report": {
+        "status": "partial",
+        "algorithm": "phase0-sequential-v1",
+        "inputFingerprint": "fnv1a32:53b2ed88",
+        "baseline": {
+          "status": "exhausted",
+          "reachedLimits": [],
+          "limits": {
+            "maxPlanSteps": 20000
+          },
+          "expandedStates": 1485,
+          "completedTargetCount": 20,
+          "totalTargetCount": 43,
+          "selected": 20,
+          "conflicts": 21,
+          "conflictsByKind": {
+            "same_gogma_counter": 15,
+            "same_normal_counter": 1,
+            "same_owned_weapon_consumed": 2,
+            "same_skill_counter": 3
+          },
+          "rejected": 23,
+          "resourceConflictRejected": 23,
+          "steps": 1465,
+          "traceReplay": "passed",
+          "elapsedMs": 5275,
+          "fullRuns": 1,
+          "warningCount": 0
+        },
+        "retained": {
+          "status": "completed",
+          "reachedLimits": [],
+          "limits": {
+            "maxPlanSteps": 20000
+          },
+          "expandedStates": 1485,
+          "completedTargetCount": 20,
+          "totalTargetCount": 20,
+          "selected": 20,
+          "conflicts": 0,
+          "conflictsByKind": {},
+          "rejected": 0,
+          "resourceConflictRejected": 0,
+          "steps": 1465,
+          "traceReplay": "passed",
+          "elapsedMs": 4608,
+          "fullRuns": 1,
+          "warningCount": 0
+        },
+        "final": {
+          "status": "exhausted",
+          "reachedLimits": [],
+          "limits": {
+            "maxPlanSteps": 20000
+          },
+          "expandedStates": 7372,
+          "completedTargetCount": 42,
+          "totalTargetCount": 43,
+          "selected": 42,
+          "conflicts": 2,
+          "conflictsByKind": {
+            "same_normal_counter": 1,
+            "same_skill_counter": 1
+          },
+          "rejected": 1,
+          "resourceConflictRejected": 1,
+          "steps": 7330,
+          "traceReplay": "passed",
+          "elapsedMs": 26676,
+          "fullRuns": 1,
+          "warningCount": 0
+        },
+        "retainedOriginalEntryIds": [
+          "build-list.fnv1a32-2fdb4406",
+          "build-list.fnv1a32-32e817d9",
+          "build-list.fnv1a32-35613e34",
+          "build-list.fnv1a32-462a2dfa",
+          "build-list.fnv1a32-50009b78",
+          "build-list.fnv1a32-54dd2b4e",
+          "build-list.fnv1a32-58a4e590",
+          "build-list.fnv1a32-61066e62",
+          "build-list.fnv1a32-66c25e3d",
+          "build-list.fnv1a32-7df2bbec",
+          "build-list.fnv1a32-8561c387",
+          "build-list.fnv1a32-85dc00cc",
+          "build-list.fnv1a32-92d87b90",
+          "build-list.fnv1a32-a1d13672",
+          "build-list.fnv1a32-a3d6817e",
+          "build-list.fnv1a32-b82c6259",
+          "build-list.fnv1a32-c1fe111c",
+          "build-list.fnv1a32-ccd01768",
+          "build-list.fnv1a32-d8c8e4a6",
+          "build-list.fnv1a32-e396d352"
+        ],
+        "searches": [
+          {
+            "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 156,
+            "advances": {
+              "normal": null,
+              "gogma": 156,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 155,
+              "gogma": 156,
+              "skill": 155
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 6592,
+            "generatedEntryId": "build-list.constrained.fnv1a32-6078b0f6"
+          },
+          {
+            "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 343,
+            "advances": {
+              "normal": null,
+              "gogma": 343,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 342,
+              "gogma": 343,
+              "skill": 342
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 28290,
+            "generatedEntryId": "build-list.constrained.fnv1a32-e5d1efe3"
+          },
+          {
+            "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 216,
+            "advances": {
+              "normal": null,
+              "gogma": 216,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 215,
+              "gogma": 216,
+              "skill": 1
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 10460,
+            "generatedEntryId": "build-list.constrained.fnv1a32-a7044276"
+          },
+          {
+            "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 139,
+            "advances": {
+              "normal": null,
+              "gogma": 139,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 138,
+              "gogma": 139,
+              "skill": 139
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 11422,
+            "generatedEntryId": "build-list.constrained.fnv1a32-c3dd7f1e"
+          },
+          {
+            "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 71,
+            "advances": {
+              "normal": null,
+              "gogma": 57,
+              "skill": 14
+            },
+            "observedPredictionReach": {
+              "normal": 70,
+              "gogma": 71,
+              "skill": 71
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 2322,
+            "generatedEntryId": "build-list.constrained.fnv1a32-41001503"
+          },
+          {
+            "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 330,
+            "advances": {
+              "normal": null,
+              "gogma": 330,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 329,
+              "gogma": 330,
+              "skill": 330
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 57360,
+            "generatedEntryId": "build-list.constrained.fnv1a32-8678892d"
+          },
+          {
+            "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_keep_bonuses",
+            "estimatedOperationCount": 222,
+            "advances": {
+              "normal": null,
+              "gogma": 222,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 221,
+              "gogma": 222,
+              "skill": 222
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 21290,
+            "generatedEntryId": "build-list.constrained.fnv1a32-52fefe18"
+          },
+          {
+            "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 162,
+            "advances": {
+              "normal": null,
+              "gogma": 162,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 161,
+              "gogma": 162,
+              "skill": 162
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 11274,
+            "generatedEntryId": "build-list.constrained.fnv1a32-0cdd7e06"
+          },
+          {
+            "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 783,
+            "advances": {
+              "normal": null,
+              "gogma": 76,
+              "skill": 707
+            },
+            "observedPredictionReach": {
+              "normal": 350,
+              "gogma": 500,
+              "skill": 783
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 101935,
+            "generatedEntryId": "build-list.constrained.fnv1a32-06b41abd"
+          },
+          {
+            "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 279,
+            "advances": {
+              "normal": null,
+              "gogma": 278,
+              "skill": 1
+            },
+            "observedPredictionReach": {
+              "normal": 278,
+              "gogma": 279,
+              "skill": 279
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 21954,
+            "generatedEntryId": "build-list.constrained.fnv1a32-bb13dde2"
+          },
+          {
+            "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 98,
+            "advances": {
+              "normal": 12,
+              "gogma": 83,
+              "skill": 3
+            },
+            "observedPredictionReach": {
+              "normal": 97,
+              "gogma": 98,
+              "skill": 98
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 3068,
+            "generatedEntryId": "build-list.constrained.fnv1a32-f542a5de"
+          },
+          {
+            "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 234,
+            "advances": {
+              "normal": 121,
+              "gogma": 76,
+              "skill": 37
+            },
+            "observedPredictionReach": {
+              "normal": 233,
+              "gogma": 234,
+              "skill": 233
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 15344,
+            "generatedEntryId": "build-list.constrained.fnv1a32-59e57a99"
+          },
+          {
+            "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 363,
+            "advances": {
+              "normal": null,
+              "gogma": 82,
+              "skill": 281
+            },
+            "observedPredictionReach": {
+              "normal": 350,
+              "gogma": 363,
+              "skill": 363
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 37709,
+            "generatedEntryId": "build-list.constrained.fnv1a32-807c4067"
+          },
+          {
+            "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 57,
+            "advances": {
+              "normal": 10,
+              "gogma": 10,
+              "skill": 37
+            },
+            "observedPredictionReach": {
+              "normal": 56,
+              "gogma": 57,
+              "skill": 57
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 1080,
+            "generatedEntryId": "build-list.constrained.fnv1a32-efc372ef"
+          },
+          {
+            "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 156,
+            "advances": {
+              "normal": null,
+              "gogma": 156,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 155,
+              "gogma": 156,
+              "skill": 155
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 6976,
+            "generatedEntryId": "build-list.constrained.fnv1a32-36d8f0f0"
+          },
+          {
+            "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 593,
+            "advances": {
+              "normal": 69,
+              "gogma": 73,
+              "skill": 451
+            },
+            "observedPredictionReach": {
+              "normal": 350,
+              "gogma": 500,
+              "skill": 593
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 70130,
+            "generatedEntryId": "build-list.constrained.fnv1a32-98251e9e"
+          },
+          {
+            "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 138,
+            "advances": {
+              "normal": null,
+              "gogma": 138,
+              "skill": 0
+            },
+            "observedPredictionReach": {
+              "normal": 137,
+              "gogma": 138,
+              "skill": 138
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 11482,
+            "generatedEntryId": "build-list.constrained.fnv1a32-ef066964"
+          },
+          {
+            "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 338,
+            "advances": {
+              "normal": 207,
+              "gogma": 4,
+              "skill": 127
+            },
+            "observedPredictionReach": {
+              "normal": 337,
+              "gogma": 336,
+              "skill": 337
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 18478,
+            "generatedEntryId": "build-list.constrained.fnv1a32-a32ec8c8"
+          },
+          {
+            "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 271,
+            "advances": {
+              "normal": 242,
+              "gogma": 2,
+              "skill": 27
+            },
+            "observedPredictionReach": {
+              "normal": 270,
+              "gogma": 269,
+              "skill": 270
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 11839,
+            "generatedEntryId": "build-list.constrained.fnv1a32-38c9ed7b"
+          },
+          {
+            "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 194,
+            "advances": {
+              "normal": null,
+              "gogma": 119,
+              "skill": 75
+            },
+            "observedPredictionReach": {
+              "normal": 193,
+              "gogma": 194,
+              "skill": 194
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 16157,
+            "generatedEntryId": "build-list.constrained.fnv1a32-b1c9f04f"
+          },
+          {
+            "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+            "status": "not_found_within_extent",
+            "targetOutcome": null,
+            "routeKind": null,
+            "estimatedOperationCount": null,
+            "advances": null,
+            "observedPredictionReach": {
+              "normal": 350,
+              "gogma": 500,
+              "skill": 1501
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": true,
+              "skillConversion": true
+            },
+            "elapsedMs": 38405,
+            "generatedEntryId": null
+          },
+          {
+            "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "existing_gogma_mixed",
+            "estimatedOperationCount": 141,
+            "advances": {
+              "normal": null,
+              "gogma": 1,
+              "skill": 140
+            },
+            "observedPredictionReach": {
+              "normal": 140,
+              "gogma": 141,
+              "skill": 141
+            },
+            "predictionBoundaryReached": {
+              "normal": false,
+              "gogma": false,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 6064,
+            "generatedEntryId": "build-list.constrained.fnv1a32-2803e414"
+          },
+          {
+            "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+            "status": "found",
+            "targetOutcome": null,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 581,
+            "advances": {
+              "normal": 98,
+              "gogma": 11,
+              "skill": 472
+            },
+            "observedPredictionReach": {
+              "normal": 350,
+              "gogma": 500,
+              "skill": 581
+            },
+            "predictionBoundaryReached": {
+              "normal": true,
+              "gogma": true,
+              "skillExisting": false,
+              "skillConversion": false
+            },
+            "elapsedMs": 73302,
+            "generatedEntryId": "build-list.constrained.fnv1a32-881eca8e"
+          }
+        ],
+        "generatedReplacementCount": 22,
+        "plannerFullRunCount": 25,
+        "searchElapsedMs": 582932,
+        "plannerElapsedMs": 53338,
+        "totalElapsedMs": 645491,
+        "extentFallback": null
+      },
+      "finalDetail": {
+        "termination": {
+          "status": "exhausted",
+          "reachedLimits": [],
+          "limits": {
+            "maxPlanSteps": 20000
+          },
+          "expandedStates": 7372,
+          "completedTargetCount": 42,
+          "totalTargetCount": 43
+        },
+        "warnings": [],
+        "conflicts": [
+          {
+            "id": "plan-conflict:fnv1a32:61cfd288",
+            "kind": "same_normal_counter",
+            "reason": "BuildListEntries require the same Normal Counter 'weapon.charge_blade:8' position 206.",
+            "entryIds": [
+              "build-list.constrained.fnv1a32-a32ec8c8",
+              "build-list.fnv1a32-bbf8125e"
+            ],
+            "targetIds": [
+              "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+              "813fb479-accd-454d-8fcd-fed51d4e891d"
+            ],
+            "selectedEntryId": null,
+            "recommendedEntryId": "build-list.constrained.fnv1a32-a32ec8c8"
+          },
+          {
+            "id": "plan-conflict:fnv1a32:96d4a203",
+            "kind": "same_skill_counter",
+            "reason": "BuildListEntries require incompatible physical operations at Skill Counter 341.",
+            "entryIds": [
+              "build-list.fnv1a32-bbf8125e",
+              "build-list.fnv1a32-e396d352"
+            ],
+            "targetIds": [
+              "813fb479-accd-454d-8fcd-fed51d4e891d",
+              "820831d0-edd9-4005-a4a2-c8025cdad2c2"
+            ],
+            "selectedEntryId": null,
+            "recommendedEntryId": "build-list.fnv1a32-e396d352"
+          }
+        ],
+        "rejected": [
+          {
+            "entryId": "build-list.fnv1a32-bbf8125e",
+            "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+            "reason": "resource_conflict"
+          }
+        ],
+        "selectedEntryIds": [
+          "build-list.constrained.fnv1a32-06b41abd",
+          "build-list.constrained.fnv1a32-0cdd7e06",
+          "build-list.constrained.fnv1a32-2803e414",
+          "build-list.constrained.fnv1a32-36d8f0f0",
+          "build-list.constrained.fnv1a32-38c9ed7b",
+          "build-list.constrained.fnv1a32-41001503",
+          "build-list.constrained.fnv1a32-52fefe18",
+          "build-list.constrained.fnv1a32-59e57a99",
+          "build-list.constrained.fnv1a32-6078b0f6",
+          "build-list.constrained.fnv1a32-807c4067",
+          "build-list.constrained.fnv1a32-8678892d",
+          "build-list.constrained.fnv1a32-881eca8e",
+          "build-list.constrained.fnv1a32-98251e9e",
+          "build-list.constrained.fnv1a32-a32ec8c8",
+          "build-list.constrained.fnv1a32-a7044276",
+          "build-list.constrained.fnv1a32-b1c9f04f",
+          "build-list.constrained.fnv1a32-bb13dde2",
+          "build-list.constrained.fnv1a32-c3dd7f1e",
+          "build-list.constrained.fnv1a32-e5d1efe3",
+          "build-list.constrained.fnv1a32-ef066964",
+          "build-list.constrained.fnv1a32-efc372ef",
+          "build-list.constrained.fnv1a32-f542a5de",
+          "build-list.fnv1a32-2fdb4406",
+          "build-list.fnv1a32-32e817d9",
+          "build-list.fnv1a32-35613e34",
+          "build-list.fnv1a32-462a2dfa",
+          "build-list.fnv1a32-50009b78",
+          "build-list.fnv1a32-54dd2b4e",
+          "build-list.fnv1a32-58a4e590",
+          "build-list.fnv1a32-61066e62",
+          "build-list.fnv1a32-66c25e3d",
+          "build-list.fnv1a32-7df2bbec",
+          "build-list.fnv1a32-8561c387",
+          "build-list.fnv1a32-85dc00cc",
+          "build-list.fnv1a32-92d87b90",
+          "build-list.fnv1a32-a1d13672",
+          "build-list.fnv1a32-a3d6817e",
+          "build-list.fnv1a32-b82c6259",
+          "build-list.fnv1a32-c1fe111c",
+          "build-list.fnv1a32-ccd01768",
+          "build-list.fnv1a32-d8c8e4a6",
+          "build-list.fnv1a32-e396d352"
+        ],
+        "planSha256": "5db231229d65d8e312b8b6f8dea1cfba8ec99a8a02a9501701bb2f5f77133bf6",
+        "finalResultSha256": "2d1a9d4037ecc1bcb759dd6149292a0df9e1ca2476294a21ddc54dcc58447b09"
+      },
+      "searchStates": [
+        {
+          "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 431,
+          "skill": 1424
+        },
+        {
+          "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 587,
+          "skill": 1424
+        },
+        {
+          "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 930,
+          "skill": 1424
+        },
+        {
+          "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 1146,
+          "skill": 1424
+        },
+        {
+          "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 1285,
+          "skill": 1424
+        },
+        {
+          "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 1342,
+          "skill": 1438
+        },
+        {
+          "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 1672,
+          "skill": 1438
+        },
+        {
+          "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 1894,
+          "skill": 1438
+        },
+        {
+          "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 2056,
+          "skill": 1438
+        },
+        {
+          "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 2132,
+          "skill": 2145
+        },
+        {
+          "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 13
+          },
+          "gogma": 2410,
+          "skill": 2146
+        },
+        {
+          "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 156,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 2493,
+          "skill": 2149
+        },
+        {
+          "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 2569,
+          "skill": 2186
+        },
+        {
+          "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 349,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 2651,
+          "skill": 2467
+        },
+        {
+          "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 359,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 2661,
+          "skill": 2504
+        },
+        {
+          "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 359,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 2817,
+          "skill": 2504
+        },
+        {
+          "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 428,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 2890,
+          "skill": 2955
+        },
+        {
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 0,
+            "weapon.dual_blades": 428,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 3028,
+          "skill": 2955
+        },
+        {
+          "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 207,
+            "weapon.dual_blades": 428,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 0,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 3032,
+          "skill": 3082
+        },
+        {
+          "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 207,
+            "weapon.dual_blades": 428,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 242,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 3034,
+          "skill": 3109
+        },
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 207,
+            "weapon.dual_blades": 428,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 242,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 3153,
+          "skill": 3184
+        },
+        {
+          "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 207,
+            "weapon.dual_blades": 428,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 242,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 3153,
+          "skill": 3184
+        },
+        {
+          "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "normal": {
+            "weapon.bow": 0,
+            "weapon.charge_blade": 207,
+            "weapon.dual_blades": 428,
+            "weapon.great_sword": 277,
+            "weapon.gunlance": 0,
+            "weapon.hammer": 24,
+            "weapon.heavy_bowgun": 4,
+            "weapon.hunting_horn": 0,
+            "weapon.insect_glaive": 0,
+            "weapon.lance": 0,
+            "weapon.light_bowgun": 0,
+            "weapon.long_sword": 0,
+            "weapon.switch_axe": 242,
+            "weapon.sword_and_shield": 25
+          },
+          "gogma": 3154,
+          "skill": 3324
+        }
+      ],
+      "memory": {
+        "maxRssKiB": 2632780,
+        "scope": "whole Node process, includes Vite loader and Export parsing"
+      }
+    }
+  },
+  "resourceMaps": [
+    {
+      "searchIndex": 20,
+      "elapsedMs": 2058,
+      "map": {
+        "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+        "projected": {
+          "normal": 207,
+          "gogma": 3153,
+          "skill": 3184
+        },
+        "idealFamilyMultiset": [
+          "bonus_type.element",
+          "bonus_type.element",
+          "bonus_type.element",
+          "bonus_type.element",
+          "bonus_type.gogma_sharpness_capacity"
+        ],
+        "normal": {
+          "from": 0,
+          "to": 1100,
+          "familyCompatiblePositions": [
+            206,
+            849,
+            886
+          ]
+        },
+        "gogmaReset": {
+          "from": 0,
+          "to": 4153,
+          "familyCompatiblePositions": [],
+          "idealPositions": []
+        },
+        "skill": {
+          "from": 0,
+          "to": 6184,
+          "idealPositions": [
+            478,
+            1025,
+            2245,
+            2576,
+            2797,
+            2874,
+            3016,
+            3435,
+            3447,
+            3933,
+            4278,
+            4347,
+            4665,
+            4715,
+            4921,
+            5181,
+            5200,
+            5466
+          ]
+        }
+      }
+    }
+  ],
+  "v1": {
+    "strategy": "normal-2x-fallback",
+    "attemptBudgetMs": 900000,
+    "fallbackBudgetMs": 180000,
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "heapSizeLimitBytes": 8791261184,
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "report": {
+      "status": "completed",
+      "algorithm": "phase1d-extent-fallback-v1:normal-2x-fallback",
+      "inputFingerprint": "fnv1a32:53b2ed88",
+      "baseline": {
+        "status": "exhausted",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 20000
+        },
+        "expandedStates": 1485,
+        "completedTargetCount": 20,
+        "totalTargetCount": 43,
+        "selected": 20,
+        "conflicts": 21,
+        "conflictsByKind": {
+          "same_gogma_counter": 15,
+          "same_normal_counter": 1,
+          "same_owned_weapon_consumed": 2,
+          "same_skill_counter": 3
+        },
+        "rejected": 23,
+        "resourceConflictRejected": 23,
+        "steps": 1465,
+        "traceReplay": "passed",
+        "elapsedMs": 5440,
+        "fullRuns": 1,
+        "warningCount": 0
+      },
+      "retained": {
+        "status": "completed",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 20000
+        },
+        "expandedStates": 1485,
+        "completedTargetCount": 20,
+        "totalTargetCount": 20,
+        "selected": 20,
+        "conflicts": 0,
+        "conflictsByKind": {},
+        "rejected": 0,
+        "resourceConflictRejected": 0,
+        "steps": 1465,
+        "traceReplay": "passed",
+        "elapsedMs": 4914,
+        "fullRuns": 1,
+        "warningCount": 0
+      },
+      "final": {
+        "status": "completed",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 20000
+        },
+        "expandedStates": 8577,
+        "completedTargetCount": 43,
+        "totalTargetCount": 43,
+        "selected": 43,
+        "conflicts": 0,
+        "conflictsByKind": {},
+        "rejected": 0,
+        "resourceConflictRejected": 0,
+        "steps": 8534,
+        "traceReplay": "passed",
+        "elapsedMs": 26307,
+        "fullRuns": 1,
+        "warningCount": 0
+      },
+      "retainedOriginalEntryIds": [
+        "build-list.fnv1a32-2fdb4406",
+        "build-list.fnv1a32-32e817d9",
+        "build-list.fnv1a32-35613e34",
+        "build-list.fnv1a32-462a2dfa",
+        "build-list.fnv1a32-50009b78",
+        "build-list.fnv1a32-54dd2b4e",
+        "build-list.fnv1a32-58a4e590",
+        "build-list.fnv1a32-61066e62",
+        "build-list.fnv1a32-66c25e3d",
+        "build-list.fnv1a32-7df2bbec",
+        "build-list.fnv1a32-8561c387",
+        "build-list.fnv1a32-85dc00cc",
+        "build-list.fnv1a32-92d87b90",
+        "build-list.fnv1a32-a1d13672",
+        "build-list.fnv1a32-a3d6817e",
+        "build-list.fnv1a32-b82c6259",
+        "build-list.fnv1a32-c1fe111c",
+        "build-list.fnv1a32-ccd01768",
+        "build-list.fnv1a32-d8c8e4a6",
+        "build-list.fnv1a32-e396d352"
+      ],
+      "searches": [
+        {
+          "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 156,
+          "advances": {
+            "normal": null,
+            "gogma": 156,
+            "skill": 0
+          },
+          "observedPredictionReach": {
+            "normal": 155,
+            "gogma": 156,
+            "skill": 155
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 6609,
+          "generatedEntryId": "build-list.constrained.fnv1a32-6078b0f6"
+        },
+        {
+          "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 343,
+          "advances": {
+            "normal": null,
+            "gogma": 343,
+            "skill": 0
+          },
+          "observedPredictionReach": {
+            "normal": 342,
+            "gogma": 343,
+            "skill": 342
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 27975,
+          "generatedEntryId": "build-list.constrained.fnv1a32-e5d1efe3"
+        },
+        {
+          "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 216,
+          "advances": {
+            "normal": null,
+            "gogma": 216,
+            "skill": 0
+          },
+          "observedPredictionReach": {
+            "normal": 215,
+            "gogma": 216,
+            "skill": 1
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 10675,
+          "generatedEntryId": "build-list.constrained.fnv1a32-a7044276"
+        },
+        {
+          "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 139,
+          "advances": {
+            "normal": null,
+            "gogma": 139,
+            "skill": 0
+          },
+          "observedPredictionReach": {
+            "normal": 138,
+            "gogma": 139,
+            "skill": 139
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 11465,
+          "generatedEntryId": "build-list.constrained.fnv1a32-c3dd7f1e"
+        },
+        {
+          "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 71,
+          "advances": {
+            "normal": null,
+            "gogma": 57,
+            "skill": 14
+          },
+          "observedPredictionReach": {
+            "normal": 70,
+            "gogma": 71,
+            "skill": 71
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 2420,
+          "generatedEntryId": "build-list.constrained.fnv1a32-41001503"
+        },
+        {
+          "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 330,
+          "advances": {
+            "normal": null,
+            "gogma": 330,
+            "skill": 0
+          },
+          "observedPredictionReach": {
+            "normal": 329,
+            "gogma": 330,
+            "skill": 330
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 57741,
+          "generatedEntryId": "build-list.constrained.fnv1a32-8678892d"
+        },
+        {
+          "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_keep_bonuses",
+          "estimatedOperationCount": 222,
+          "advances": {
+            "normal": null,
+            "gogma": 222,
+            "skill": 0
+          },
+          "observedPredictionReach": {
+            "normal": 221,
+            "gogma": 222,
+            "skill": 222
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 21183,
+          "generatedEntryId": "build-list.constrained.fnv1a32-52fefe18"
+        },
+        {
+          "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 162,
+          "advances": {
+            "normal": null,
+            "gogma": 162,
+            "skill": 0
+          },
+          "observedPredictionReach": {
+            "normal": 161,
+            "gogma": 162,
+            "skill": 162
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 11300,
+          "generatedEntryId": "build-list.constrained.fnv1a32-0cdd7e06"
+        },
+        {
+          "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 783,
+          "advances": {
+            "normal": null,
+            "gogma": 76,
+            "skill": 707
+          },
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 783
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 100823,
+          "generatedEntryId": "build-list.constrained.fnv1a32-06b41abd"
+        },
+        {
+          "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 279,
+          "advances": {
+            "normal": null,
+            "gogma": 278,
+            "skill": 1
+          },
+          "observedPredictionReach": {
+            "normal": 278,
+            "gogma": 279,
+            "skill": 279
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 22030,
+          "generatedEntryId": "build-list.constrained.fnv1a32-bb13dde2"
+        },
+        {
+          "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 98,
+          "advances": {
+            "normal": 12,
+            "gogma": 83,
+            "skill": 3
+          },
+          "observedPredictionReach": {
+            "normal": 97,
+            "gogma": 98,
+            "skill": 98
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 3034,
+          "generatedEntryId": "build-list.constrained.fnv1a32-f542a5de"
+        },
+        {
+          "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 234,
+          "advances": {
+            "normal": 121,
+            "gogma": 76,
+            "skill": 37
+          },
+          "observedPredictionReach": {
+            "normal": 233,
+            "gogma": 234,
+            "skill": 233
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 15594,
+          "generatedEntryId": "build-list.constrained.fnv1a32-59e57a99"
+        },
+        {
+          "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 363,
+          "advances": {
+            "normal": null,
+            "gogma": 82,
+            "skill": 281
+          },
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 363,
+            "skill": 363
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 38211,
+          "generatedEntryId": "build-list.constrained.fnv1a32-807c4067"
+        },
+        {
+          "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 57,
+          "advances": {
+            "normal": 10,
+            "gogma": 10,
+            "skill": 37
+          },
+          "observedPredictionReach": {
+            "normal": 56,
+            "gogma": 57,
+            "skill": 57
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 1046,
+          "generatedEntryId": "build-list.constrained.fnv1a32-efc372ef"
+        },
+        {
+          "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 156,
+          "advances": {
+            "normal": null,
+            "gogma": 156,
+            "skill": 0
+          },
+          "observedPredictionReach": {
+            "normal": 155,
+            "gogma": 156,
+            "skill": 155
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 7197,
+          "generatedEntryId": "build-list.constrained.fnv1a32-36d8f0f0"
+        },
+        {
+          "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 593,
+          "advances": {
+            "normal": 69,
+            "gogma": 73,
+            "skill": 451
+          },
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 593
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 70658,
+          "generatedEntryId": "build-list.constrained.fnv1a32-98251e9e"
+        },
+        {
+          "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 138,
+          "advances": {
+            "normal": null,
+            "gogma": 138,
+            "skill": 0
+          },
+          "observedPredictionReach": {
+            "normal": 137,
+            "gogma": 138,
+            "skill": 138
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 11217,
+          "generatedEntryId": "build-list.constrained.fnv1a32-ef066964"
+        },
+        {
+          "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 338,
+          "advances": {
+            "normal": 207,
+            "gogma": 4,
+            "skill": 127
+          },
+          "observedPredictionReach": {
+            "normal": 337,
+            "gogma": 336,
+            "skill": 337
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 18445,
+          "generatedEntryId": "build-list.constrained.fnv1a32-a32ec8c8"
+        },
+        {
+          "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 271,
+          "advances": {
+            "normal": 242,
+            "gogma": 2,
+            "skill": 27
+          },
+          "observedPredictionReach": {
+            "normal": 270,
+            "gogma": 269,
+            "skill": 270
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 11927,
+          "generatedEntryId": "build-list.constrained.fnv1a32-38c9ed7b"
+        },
+        {
+          "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 194,
+          "advances": {
+            "normal": null,
+            "gogma": 119,
+            "skill": 75
+          },
+          "observedPredictionReach": {
+            "normal": 193,
+            "gogma": 194,
+            "skill": 194
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 16148,
+          "generatedEntryId": "build-list.constrained.fnv1a32-b1c9f04f"
+        },
+        {
+          "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+          "status": "not_found_within_extent",
+          "targetOutcome": "resolved_by_extent_fallback",
+          "routeKind": null,
+          "estimatedOperationCount": null,
+          "advances": null,
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 1501
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": true,
+            "skillConversion": true
+          },
+          "elapsedMs": 39336,
+          "generatedEntryId": "build-list.constrained.fnv1a32-8dabd8f3",
+          "fallback": {
+            "axis": "normal",
+            "extent": {
+              "maxNormalAdvance": 700,
+              "maxGogmaAdvance": 500,
+              "maxSkillAdvance": 1500
+            },
+            "status": "found",
+            "elapsedMs": 38857,
+            "routeKind": "normal_artian_to_gogma",
+            "estimatedOperationCount": 896,
+            "advances": {
+              "normal": 643,
+              "gogma": 1,
+              "skill": 252
+            },
+            "observedPredictionReach": {
+              "normal": 700,
+              "gogma": 500,
+              "skill": 895
+            },
+            "generatedEntryId": "build-list.constrained.fnv1a32-8dabd8f3"
+          }
+        },
+        {
+          "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "existing_gogma_mixed",
+          "estimatedOperationCount": 912,
+          "advances": {
+            "normal": null,
+            "gogma": 1,
+            "skill": 911
+          },
+          "observedPredictionReach": {
+            "normal": 350,
+            "gogma": 500,
+            "skill": 912
+          },
+          "predictionBoundaryReached": {
+            "normal": true,
+            "gogma": true,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 73044,
+          "generatedEntryId": "build-list.constrained.fnv1a32-4e6e3aad"
+        },
+        {
+          "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+          "status": "found",
+          "targetOutcome": null,
+          "routeKind": "normal_artian_to_gogma",
+          "estimatedOperationCount": 118,
+          "advances": {
+            "normal": 98,
+            "gogma": 10,
+            "skill": 10
+          },
+          "observedPredictionReach": {
+            "normal": 117,
+            "gogma": 118,
+            "skill": 118
+          },
+          "predictionBoundaryReached": {
+            "normal": false,
+            "gogma": false,
+            "skillExisting": false,
+            "skillConversion": false
+          },
+          "elapsedMs": 4294,
+          "generatedEntryId": "build-list.constrained.fnv1a32-1410ae82"
+        }
+      ],
+      "generatedReplacementCount": 23,
+      "plannerFullRunCount": 26,
+      "searchElapsedMs": 621227,
+      "plannerElapsedMs": 56554,
+      "totalElapsedMs": 688524,
+      "extentFallback": {
+        "strategy": "normal-2x-fallback",
+        "searches": 1,
+        "searchElapsedMs": 38857.48210000002,
+        "maxEpisodes": 3
+      }
+    },
+    "finalDetail": {
+      "termination": {
+        "status": "completed",
+        "reachedLimits": [],
+        "limits": {
+          "maxPlanSteps": 20000
+        },
+        "expandedStates": 8577,
+        "completedTargetCount": 43,
+        "totalTargetCount": 43
+      },
+      "warnings": [],
+      "conflicts": [],
+      "rejected": [],
+      "selectedEntryIds": [
+        "build-list.constrained.fnv1a32-06b41abd",
+        "build-list.constrained.fnv1a32-0cdd7e06",
+        "build-list.constrained.fnv1a32-1410ae82",
+        "build-list.constrained.fnv1a32-36d8f0f0",
+        "build-list.constrained.fnv1a32-38c9ed7b",
+        "build-list.constrained.fnv1a32-41001503",
+        "build-list.constrained.fnv1a32-4e6e3aad",
+        "build-list.constrained.fnv1a32-52fefe18",
+        "build-list.constrained.fnv1a32-59e57a99",
+        "build-list.constrained.fnv1a32-6078b0f6",
+        "build-list.constrained.fnv1a32-807c4067",
+        "build-list.constrained.fnv1a32-8678892d",
+        "build-list.constrained.fnv1a32-8dabd8f3",
+        "build-list.constrained.fnv1a32-98251e9e",
+        "build-list.constrained.fnv1a32-a32ec8c8",
+        "build-list.constrained.fnv1a32-a7044276",
+        "build-list.constrained.fnv1a32-b1c9f04f",
+        "build-list.constrained.fnv1a32-bb13dde2",
+        "build-list.constrained.fnv1a32-c3dd7f1e",
+        "build-list.constrained.fnv1a32-e5d1efe3",
+        "build-list.constrained.fnv1a32-ef066964",
+        "build-list.constrained.fnv1a32-efc372ef",
+        "build-list.constrained.fnv1a32-f542a5de",
+        "build-list.fnv1a32-2fdb4406",
+        "build-list.fnv1a32-32e817d9",
+        "build-list.fnv1a32-35613e34",
+        "build-list.fnv1a32-462a2dfa",
+        "build-list.fnv1a32-50009b78",
+        "build-list.fnv1a32-54dd2b4e",
+        "build-list.fnv1a32-58a4e590",
+        "build-list.fnv1a32-61066e62",
+        "build-list.fnv1a32-66c25e3d",
+        "build-list.fnv1a32-7df2bbec",
+        "build-list.fnv1a32-8561c387",
+        "build-list.fnv1a32-85dc00cc",
+        "build-list.fnv1a32-92d87b90",
+        "build-list.fnv1a32-a1d13672",
+        "build-list.fnv1a32-a3d6817e",
+        "build-list.fnv1a32-b82c6259",
+        "build-list.fnv1a32-c1fe111c",
+        "build-list.fnv1a32-ccd01768",
+        "build-list.fnv1a32-d8c8e4a6",
+        "build-list.fnv1a32-e396d352"
+      ],
+      "planSha256": "6c380cb3584d925e82c908ae34fe41f1d4f4f907a91515778542154df641ef66",
+      "finalResultSha256": "c133660bf096d110ff3697bf68b948db44b051cd6b379d926dc0cd046a2c651f"
+    },
+    "generatedEntries": [
+      {
+        "id": "build-list.constrained.fnv1a32-6078b0f6",
+        "targetId": "be881717-f092-4be7-870c-c6bd19f2141f",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 156,
+        "advances": {
+          "normal": null,
+          "gogma": 532,
+          "skill": 0
+        },
+        "entrySha256": "1a798a46dc79367b146ed0e8a2d6d054d685049f00f1e13b1c5c05c1e80afee9"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-e5d1efe3",
+        "targetId": "e96249b4-cb24-4fff-a852-4055904161ad",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 343,
+        "advances": {
+          "normal": null,
+          "gogma": 875,
+          "skill": 0
+        },
+        "entrySha256": "49a8af90aeca8dbc6f1e0d7296895b0b8ee7cf781c1984c46b2f0f3464b3a0c1"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-a7044276",
+        "targetId": "9733b090-9901-49fa-aaab-983379f1edae",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 216,
+        "advances": {
+          "normal": null,
+          "gogma": 1091,
+          "skill": 0
+        },
+        "entrySha256": "ad562d18900020aeec6e6b888c01a7528f9096f2e67ca250a4fa8a73d630e0e0"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-c3dd7f1e",
+        "targetId": "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 139,
+        "advances": {
+          "normal": null,
+          "gogma": 1230,
+          "skill": 0
+        },
+        "entrySha256": "c62b1cb4b2eea4a1e11d116824e9a0ef48dd1541b2f47c0be328468a4bee9636"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-41001503",
+        "targetId": "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 71,
+        "advances": {
+          "normal": null,
+          "gogma": 1287,
+          "skill": 1097
+        },
+        "entrySha256": "1b21de510895059a129bf343b9f4be49e14a93eb8da999fa5e68ba50c5971893"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-8678892d",
+        "targetId": "c140578c-9aad-48d0-81db-95496636c459",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 330,
+        "advances": {
+          "normal": null,
+          "gogma": 1617,
+          "skill": 0
+        },
+        "entrySha256": "75182001910e187a576a889d5d3b8829170663b0f292301d8ddd02c79b1bd3c2"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-52fefe18",
+        "targetId": "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+        "routeKind": "existing_gogma_keep_bonuses",
+        "estimatedOperationCount": 222,
+        "advances": {
+          "normal": null,
+          "gogma": 1839,
+          "skill": 0
+        },
+        "entrySha256": "ef141c8a30f88d2609ccec29ad47800ef596bcd2a90c91e0447a6cad309b33fe"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-0cdd7e06",
+        "targetId": "27ac3237-543b-4887-85e6-28ccc7564294",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 162,
+        "advances": {
+          "normal": null,
+          "gogma": 2001,
+          "skill": 0
+        },
+        "entrySha256": "4194562bc71dd969bc11f78b850afd4e2810efd0776d635781ba2f8bec6b6f77"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-06b41abd",
+        "targetId": "a830a376-e596-495e-b458-fc1705204e2c",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 783,
+        "advances": {
+          "normal": null,
+          "gogma": 2077,
+          "skill": 1804
+        },
+        "entrySha256": "7429683cc8623a50fb3ccba51d1ec55f6fcbd967cb87bf79760e3c6fb4cc0b25"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-bb13dde2",
+        "targetId": "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 279,
+        "advances": {
+          "normal": null,
+          "gogma": 2355,
+          "skill": 1805
+        },
+        "entrySha256": "c900a197461d7559386ee2b46096d4eca2468bb4cc5a6e7bb2b89eeff3dbb7cf"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-f542a5de",
+        "targetId": "8d233d8b-f366-42cb-a559-62666f079b58",
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 98,
+        "advances": {
+          "normal": 18,
+          "gogma": 2438,
+          "skill": 1808
+        },
+        "entrySha256": "1ea8759dfcbb65468699a256ef4cb9fd1afd9359be02ad1cb1fa3edbc9650125"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-59e57a99",
+        "targetId": "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 234,
+        "advances": {
+          "normal": 121,
+          "gogma": 2514,
+          "skill": 1845
+        },
+        "entrySha256": "db218d28d16299e1b57a6fd8ecae0cb90ea960c6ac00ebea8f4f70723331304b"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-807c4067",
+        "targetId": "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 363,
+        "advances": {
+          "normal": null,
+          "gogma": 2596,
+          "skill": 2126
+        },
+        "entrySha256": "dfcf12996271a669ab6a13a44bf46439b7d83049d5e001626cdc938e17fc67e2"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-efc372ef",
+        "targetId": "b6780f04-da21-42b0-af8c-88f09a192e17",
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 57,
+        "advances": {
+          "normal": 10,
+          "gogma": 2606,
+          "skill": 2163
+        },
+        "entrySha256": "d09d983389ff35b46de8385c0e0c4ed93970c68fff2ff1f0a759c0504b935cbf"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-36d8f0f0",
+        "targetId": "fea60316-a05c-4252-bf1d-41c31b99b75a",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 156,
+        "advances": {
+          "normal": null,
+          "gogma": 2762,
+          "skill": 0
+        },
+        "entrySha256": "66e8c80ba78433f25997d560d9d5f662ed748e7dd7557b90107e14ded960b572"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-98251e9e",
+        "targetId": "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 593,
+        "advances": {
+          "normal": 79,
+          "gogma": 2835,
+          "skill": 2614
+        },
+        "entrySha256": "2a554b994f7c7a22f0b035b3c7c0cb8e5e0be20d527ba929cddadae419ea1d63"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-ef066964",
+        "targetId": "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 138,
+        "advances": {
+          "normal": null,
+          "gogma": 2973,
+          "skill": 0
+        },
+        "entrySha256": "0df78236526ce99a740d48768c6b86b8936b9c5b17247c8e0fec6a65a984cb32"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-a32ec8c8",
+        "targetId": "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 338,
+        "advances": {
+          "normal": 207,
+          "gogma": 2977,
+          "skill": 2741
+        },
+        "entrySha256": "14ddd20e27355c0512ef9005c1110dfe653d871032877503f73b8b7573ebc8a9"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-38c9ed7b",
+        "targetId": "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 271,
+        "advances": {
+          "normal": 242,
+          "gogma": 2979,
+          "skill": 2768
+        },
+        "entrySha256": "6f51ee6639ea0c599867e36e217f5285043f8495eefb220573aa270ee3efc387"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-b1c9f04f",
+        "targetId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 194,
+        "advances": {
+          "normal": null,
+          "gogma": 3098,
+          "skill": 2843
+        },
+        "entrySha256": "c85323665f329ca5b4bd7242be357484420f4028dbf2e578530d8ce959801a7d"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-8dabd8f3",
+        "targetId": "813fb479-accd-454d-8fcd-fed51d4e891d",
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 896,
+        "advances": {
+          "normal": 850,
+          "gogma": 3099,
+          "skill": 3095
+        },
+        "entrySha256": "3fa976447704384c41d1bce3176f7c1043447636f4540f1b2c7650951bbbf2bb"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-4e6e3aad",
+        "targetId": "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+        "routeKind": "existing_gogma_mixed",
+        "estimatedOperationCount": 912,
+        "advances": {
+          "normal": null,
+          "gogma": 3100,
+          "skill": 4006
+        },
+        "entrySha256": "2e094a784fb2eff71cadea9bc7263d1b4ab9679819c7bb4731995bf1ebe81d75"
+      },
+      {
+        "id": "build-list.constrained.fnv1a32-1410ae82",
+        "targetId": "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+        "routeKind": "normal_artian_to_gogma",
+        "estimatedOperationCount": 118,
+        "advances": {
+          "normal": 177,
+          "gogma": 3110,
+          "skill": 4016
+        },
+        "entrySha256": "4271371d7b20ade4dc2a4dfb4459821be18f9ed6aa4f92e031cb0f575b85966a"
+      }
+    ],
+    "memory": {
+      "maxRssKiB": 3011456,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    }
+  },
+  "freshOrdinaryVerification": {
+    "environment": {
+      "runtime": "Node (not Browser Worker)",
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "heapSizeLimitBytes": 8791261184,
+      "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
+      "logicalCpuCount": 16,
+      "totalMemoryBytes": 33377591296,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "maxPlanSteps": 20000,
+      "extent": {
+        "maxNormalAdvance": 350,
+        "maxGogmaAdvance": 500,
+        "maxSkillAdvance": 1500
+      },
+      "exportSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "generatedSource": {
+      "strategy": "normal-2x-fallback",
+      "entryCount": 23,
+      "entriesSha256": "e8d397b9899efa85309ea91b3b944fb35d90b1f0f9967bd04e88a56eb2c9c153"
+    },
+    "verification": {
+      "replacedTargetIds": [
+        "02876df4-cd56-4c95-add9-9e3e9cc90801",
+        "188571a7-b480-4085-a8f5-59666c0e4cc5",
+        "1efa01c6-1f1e-433f-b34e-9442e4df00df",
+        "2378d3e0-c376-470d-86c4-32f2ace71ab7",
+        "27ac3237-543b-4887-85e6-28ccc7564294",
+        "2e26c0b1-f554-4c5e-ab71-be9f521c96f0",
+        "45b13c06-f750-4d1e-83c2-8ea41f4fefea",
+        "46bf2c78-6e39-4982-8abc-b9cdaa4d96f0",
+        "57126a5e-90b2-46c6-9f9f-298bd15f6d92",
+        "6c65c924-5e8a-4f3e-8290-ec7c0f3d72f7",
+        "711f7d15-bb2b-4113-af0c-bd1832dcfd49",
+        "813fb479-accd-454d-8fcd-fed51d4e891d",
+        "86439c85-0efc-40ba-b490-e39ab38aa1e0",
+        "8d233d8b-f366-42cb-a559-62666f079b58",
+        "9733b090-9901-49fa-aaab-983379f1edae",
+        "a6c17e25-bd3a-42e1-b86a-c813b78acde0",
+        "a830a376-e596-495e-b458-fc1705204e2c",
+        "b27e57a7-4a80-41a8-8d8d-17bc44f868a7",
+        "b6780f04-da21-42b0-af8c-88f09a192e17",
+        "be881717-f092-4be7-870c-c6bd19f2141f",
+        "c140578c-9aad-48d0-81db-95496636c459",
+        "e96249b4-cb24-4fff-a852-4055904161ad",
+        "fea60316-a05c-4252-bf1d-41c31b99b75a"
+      ],
+      "keptOriginalTargetIds": [
+        "05e6b206-21d4-447d-86dd-f5a62ff8479e",
+        "070a1222-5e31-4c9f-a035-c557bfa7be73",
+        "0d98b225-e5d4-4cd4-b8e9-4c62ba695893",
+        "155a6831-7ff7-42d7-abf5-6e5a186edca6",
+        "15829bfe-0987-4d18-8389-8f3d0d7352bf",
+        "1d916ff0-82cc-41fb-a15e-bdf60891cd91",
+        "1f121742-1f04-46ae-84e5-86bcc4c2378c",
+        "2123eaa6-2df4-4003-8d20-8904e375aa85",
+        "820831d0-edd9-4005-a4a2-c8025cdad2c2",
+        "9d817a9b-4a79-4430-aa13-48ecab0055d6",
+        "a26f6bcf-aa95-4258-96ff-b8df0f48fbff",
+        "a367c177-a0c2-4986-995e-4efcf4131b5c",
+        "aa4e67d8-cc57-487c-b0f0-6a8b36f13dbb",
+        "b4f252cd-9530-46f2-b387-b99e3904a66e",
+        "cbdf9d8f-07d8-4b30-b5b3-5d8f1ab23b4a",
+        "d453ca34-a142-4241-9dce-8551c96cb887",
+        "d45a7d4e-fe7a-4ad0-b2fd-0fd738d669ed",
+        "e4147de7-587c-4106-a47d-b09f8796464d",
+        "e523209e-57e8-4316-a7f0-329f64fd0b00",
+        "f5d20af4-86b4-4e3f-b9ad-80862917007d"
+      ],
+      "targetDefinitionsUnchanged": true,
+      "inputValid": true,
+      "excludedEntries": 0,
+      "planningTargetCount": 43,
+      "completedTargetCount": 43,
+      "terminationStatus": "completed",
+      "reachedLimits": [],
+      "selected": 43,
+      "conflicts": [],
+      "rejected": [],
+      "steps": 8534,
+      "expandedStates": 8577,
+      "fullRuns": 1,
+      "plannerTraceReplay": "valid",
+      "traceReplayIssues": [],
+      "planFingerprint": "fnv1a32:6288478c",
+      "success": true
+    },
+    "elapsedMs": 28555,
+    "memory": {
+      "maxRssKiB": 3126892,
+      "scope": "whole Node process, includes Vite loader and Export parsing"
+    }
+  }
+}
