@@ -922,7 +922,8 @@ describe('D2-C oracle isolation, sources and Production (§10.2 / §10.3 / G29 -
       { query: '?raw', import: 'default', eager: true }) as Record<string, string>
     expect(Object.keys(production).length).toBeGreaterThan(50)
     expect(Object.entries(production).filter(([, source]) => /plannerGlobalD2C/.test(source)).map(([path]) => path)).toEqual([])
-    expect(Object.entries(benchmarkSources).filter(([path, source]) => !/D2C/.test(path) && /plannerGlobalD2C/.test(source)).map(([path]) => path)).toEqual([])
+    // D2-D (the registered successor, D2-D-A §13) imports the unchanged D2-C module; nothing else may.
+    expect(Object.entries(benchmarkSources).filter(([path, source]) => !/D2C|D2D/.test(path) && /plannerGlobalD2C/.test(source)).map(([path]) => path)).toEqual([])
     expect(d2cProductionChangedFiles(['src/benchmarks/plannerGlobalD2C.ts', 'scripts/run-planner-global-d2c.mjs', 'docs/x.md', 'src/domain/x.test.ts'])).toEqual([])
     expect(d2cProductionChangedFiles(['src/domain/planner/x.ts'])).toEqual(['src/domain/planner/x.ts'])
   })
