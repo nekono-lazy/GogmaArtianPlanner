@@ -922,18 +922,21 @@ describe('D2-C oracle isolation, sources and Production (§10.2 / §10.3 / G29 -
       { query: '?raw', import: 'default', eager: true }) as Record<string, string>
     expect(Object.keys(production).length).toBeGreaterThan(50)
     expect(Object.entries(production).filter(([, source]) => /plannerGlobalD2C/.test(source)).map(([path]) => path)).toEqual([])
-    // Only the D2-C files themselves and the registered successor D2-D (D2-D-A §13: it imports the unchanged D2-C module) may
-    // reference the D2-C modules, by exact path. Phase 2-C2.5-D2-D (`plannerGlobalPhase2C25D2D*`) is another Research item and is
-    // never allowed, although its path holds `D2D`.
-    const allowed = ['./plannerGlobalD2C.ts', './plannerGlobalD2CAnalysis.ts', './plannerGlobalD2C.test.ts', './plannerGlobalD2D.ts', './plannerGlobalD2DAnalysis.ts', './plannerGlobalD2D.test.ts']
+    // Only the D2-C files themselves and the registered successors D2-D (D2-D-A §13) and D2-E (D2-E-A §14: both import the unchanged
+    // D2-C module) may reference the D2-C modules, by exact path. Phase 2-C2.5-D2-D / D2-E (`plannerGlobalPhase2C25D2D*` /
+    // `plannerGlobalPhase2C25D2E*`) are other Research items and are never allowed, although their paths hold `D2D` / `D2E`.
+    const allowed = ['./plannerGlobalD2C.ts', './plannerGlobalD2CAnalysis.ts', './plannerGlobalD2C.test.ts', './plannerGlobalD2D.ts', './plannerGlobalD2DAnalysis.ts', './plannerGlobalD2D.test.ts',
+      './plannerGlobalD2E.ts', './plannerGlobalD2EAnalysis.ts', './plannerGlobalD2E.test.ts']
     const illegalD2CReferences = (sources: Record<string, string>) => Object.entries(sources).filter(([path, source]) => !allowed.includes(path) && /plannerGlobalD2C/.test(source)).map(([path]) => path)
     expect(illegalD2CReferences(benchmarkSources)).toEqual([])
-    expect(allowed.filter(path => /Phase2C25D2D/.test(path))).toEqual([])
+    expect(allowed.filter(path => /Phase2C25D2D|Phase2C25D2E/.test(path))).toEqual([])
     // Every allowed path is a real file (the glob never lists the importing test file itself).
     for (const path of allowed.filter(x => x !== './plannerGlobalD2C.test.ts')) expect(benchmarkSources[path], path).toBeDefined()
     const phase2c25d2d = Object.keys(benchmarkSources).filter(path => /^\.\/plannerGlobalPhase2C25D2D/.test(path))
     expect(phase2c25d2d.length).toBeGreaterThan(0)
-    for (const path of phase2c25d2d) {
+    const phase2c25d2e = Object.keys(benchmarkSources).filter(path => /^\.\/plannerGlobalPhase2C25D2E/.test(path))
+    expect(phase2c25d2e.length).toBeGreaterThan(0)
+    for (const path of [...phase2c25d2d, ...phase2c25d2e]) {
       expect(illegalD2CReferences({ ...benchmarkSources, [path]: `${benchmarkSources[path]}\nimport { runD2CEvaluation } from './plannerGlobalD2C'\n` })).toEqual([path])
     }
     expect(d2cProductionChangedFiles(['src/benchmarks/plannerGlobalD2C.ts', 'scripts/run-planner-global-d2c.mjs', 'docs/x.md', 'src/domain/x.test.ts'])).toEqual([])
