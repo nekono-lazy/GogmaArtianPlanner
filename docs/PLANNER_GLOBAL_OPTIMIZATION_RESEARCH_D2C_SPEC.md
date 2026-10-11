@@ -254,12 +254,22 @@ unit CTX-<k>:
     reservation = resolved.prepared.reservation           // = derivePlannerAlternativeReservation([s の初期context上のEntry], engine)
     記録: contextId, k, targetWeaponId, O_t（resolved.prepared.invalidated.id）, support Entry ID,
           supportBodySha256 = SHA-256(stableStringify(supportBody)),
-          reservationBody = stableStringify(reservation), reservationDigest = hashStableValue(reservation),
+          reservationBody = structuredClone(reservation),       // JSONオブジェクト（文字列にしない、下記）
+          reservationDigest = hashStableValue(reservation),
           originDigest, excludedRouteKeys（全文とSHA-256）, conflictContextsの件数
     C1〜C5（§7.1）を判定して記録
     record file: <run dir>/CTX-<k>.context.json（runnerがbytes・SHA-256をjournalへ記録）
 ```
 
+- **`reservationBody` の保存形式**: CTX recordの `reservationBody` は、導出した `PlannerAlternativeReservation` を `structuredClone()` した
+  **JSONオブジェクト**（`{ normal: [{ counterId, held, blocked }], skill: { held, blocked }, gogma: { held, blocked }, exclusiveOwnedWeaponIds }`）としてrecordへ書く。
+  `stableStringify()` 済みの **文字列として保存しない**。reservationの値は文字列・数値・配列・objectだけで構成されるので、JSONとして保存・再読込しても同じ構造と
+  意味を保つ（D2-BはPhase B t09 recordからJSON読込した `result.reservation` オブジェクトでS5(b)を成立させている）
+- `reservationDigest` は従来どおり `hashStableValue(reservation)`（導出したオブジェクトに対して）で計算する
+- `stableStringify()` は **比較の時だけ** 使い、比較の両辺はどちらもオブジェクト（再導出値、またはJSON読込したrecordの `reservationBody`）とする。文字列化済みの値を
+  さらに `stableStringify()` しない（二重シリアライズの禁止）。この規則はcontext drift（§4.2）、C5（§7.1）、S5（§7.2）、analyzer（§10.3）の比較すべてに適用する
+- runnerとanalyzerはCTX recordを読み込む時に、record全体のbytes・SHA-256をjournalの値と照合し、`reservationBody` がJSONオブジェクトである（文字列・null・配列でない）
+  ことを確認する。文字列などで保存されていた場合は証拠の不整合（`D2C_INVALID`、`evidence_integrity`）であり、文字列をparseして救済しない
 - origin、`excludedRouteKeys`（当該Targetの現在Route `O_t` のkeyだけ）、現在Entryの意味はPhase B / D2と同じで、D2-Cは変更しない
 - support Entryはexportの元Entryそのものを使い、user-fixed Route、resolution、scenario resolution、repair lineage、fixed constraint、`selectedBuildListEntryId` に変換しない（G1）
 - CTXはSearchを実行しない。full Planner runも起動しない
@@ -270,7 +280,9 @@ unit CTX-<k>:
 pool(k) = []                         // context k のunique Candidate（discovery順、最大 K1_POOL_CAP = 2）
 unit DSC-<k>-<rung>:
     resolved = phase2c27bResolveSupportContext(baseline, dependencies, t, [s])
-    reservation / originDigest / excludedRouteKeys / O_t がCTX-<k>のrecordと stableStringify() で一致しない -> guardrail違反（context_drift、D2C_INVALID）
+    stableStringify(resolved.prepared.reservation) !== stableStringify(CTX-<k> record.reservationBody)   // 両辺オブジェクト（§4.1）
+      または hashStableValue(resolved.prepared.reservation) !== CTX-<k> record.reservationDigest
+      または originDigest / excludedRouteKeys / O_t がCTX-<k>のrecordと一致しない      -> guardrail違反（context_drift、D2C_INVALID）
     searchInput = { origin, targetWeaponId: t, extent: rung, reservation, excludedRouteKeys }
     visitPlannerAlternativeCandidates(searchInput, engine, consumer)     // capture policy・instrumentationなし、既存orderingのまま
     consumer(candidate):
@@ -480,9 +492,9 @@ D1-A §4.4の5条件を、K1 Candidateを含む置換集合へそのまま適用
 | C2 | `phase2c27bResolveSupportContext(baseline, dependencies, t, [s])` が `ready`（support Entryがbaselineの初期contextでvalid、当該Targetの現在Entryがちょうど1件で `O_t` と一致） | guardrail違反 |
 | C3 | 導出reservationの `exclusiveOwnedWeaponIds` が `collectReferencedOwnedWeaponIds(supportBody.candidateSnapshot.route)` をすべて含む。support Routeの排他消費OwnedWeapon（`exclusiveConsumedOwnedWeaponId`）も導出に含まれることを、導出に使った同じunit planから記録する | guardrail違反 |
 | C4 | originのdigestがB2-C1 schedule snapshotのorigin digestと一致し、`excludedRouteKeys` が `[candidateStableKey(O_t.candidateSnapshot)]` である（Phase B / D2と同じ照合） | guardrail違反 |
-| C5 | 登録reservation digest（§3.2）があるcontextでは、`reservationDigest` が登録値と一致し、`reservationBody` がPhase B参照unit（§1.4）の全recordの `result.reservation` と `stableStringify()` で一致する。`e396d352` はD1-A §1.3の `fnv1a32:240e4673` とも一致する | parity `phase_b_k1_context` `mismatched`（`D2C_INVALID`）。t05は `not_applicable` |
+| C5 | 登録reservation digest（§3.2）があるcontextでは、`reservationDigest` が登録値と一致し、かつPhase B参照unit（§1.4）の全recordについて `stableStringify(CTX record.reservationBody) === stableStringify(Phase B record.result.reservation)`（両辺ともJSON読込したオブジェクト）が成立する。`e396d352` はD1-A §1.3の `fnv1a32:240e4673` とも一致する | parity `phase_b_k1_context` `mismatched`（`D2C_INVALID`）。t05は `not_applicable` |
 
-- context recordの `reservationBody` / `reservationDigest` / `supportBodySha256` が、以後のdiscovery（context drift検査）と全評価（S4 / S5）の比較対象になる
+- context recordの `reservationBody`（JSONオブジェクト、§4.1）/ `reservationDigest` / `supportBodySha256` が、以後のdiscovery（context drift検査）と全評価（S4 / S5）の比較対象になる
 - analyzerはC1 / C3 / C4をExportとCTX recordから独立に再計算する（C3の `collectReferencedOwnedWeaponIds()` はEngineを要しない純関数）。C5はrecordとPhase B evidenceで再照合する
 
 ### 7.2 評価時のcheck（ADM / CMP / I0。`S_sup` の各 `s` について）
@@ -493,12 +505,17 @@ D1-A §4.4の5条件を、K1 Candidateを含む置換集合へそのまま適用
 | S2 | 最終run入力（runtime-unsupported retry後）の `buildListEntries` に `s` が存在する | 動的 | R5(3)偽、`support_expired_R` |
 | S3 | 最終run入力の初期context（`preparePlannerInitialContext(最終入力).context.entriesById`）に `s` がvalid Entryとして存在する | 動的 | R5(3)偽、`support_expired_R` |
 | S4 | 評価入力内の `s` のbodyがExportのbodyと `stableStringify()` で一致し、そのSHA-256がCTX recordの `supportBodySha256` と一致する | 静的 | guardrail違反（`D2C_INVALID`） |
-| S5 | (a) `hashStableValue(derivePlannerAlternativeReservation([Exportの s のbody], engine))` がCTX recordの `reservationDigest` と一致し、かつ (b) 導出reservationが CTX recordの `reservationBody` と `stableStringify()` で一致する。両方成立した場合だけS5成立 | 静的 | guardrail違反（`D2C_INVALID`） |
+| S5 | (a) `hashStableValue(derivePlannerAlternativeReservation([Exportの s のbody], engine))` がCTX recordの `reservationDigest` と一致し、かつ (b) `stableStringify(導出reservation) === stableStringify(CTX record.reservationBody)`（両辺オブジェクト）。両方成立した場合だけS5成立 | 静的 | guardrail違反（`D2C_INVALID`） |
 
-- S5はD2-A §17のRequired fixと同じく **digestとbodyの両方** を要求する。評価childは(a)(b)を個別に計算し、比較したbody・digestを評価recordへ書く
+- S5はD2-A §17のRequired fixと同じく **digestとbodyの両方** を要求する。評価childは(a)(b)を個別に計算し、比較したbody（オブジェクト）・digestを評価recordへ書く
+- 評価childへの受け渡し: runnerはbytes・SHA-256をjournalと照合済みのCTX recordをJSONとして読み、その `reservationBody` オブジェクトをそのまま
+  `D2ReplacementTask.supportReservation` に、`reservationDigest` を `supportReservationDigest` に入れて `runD2Evaluation()` へ渡す（§14）。既存の `runD2Evaluation()` は
+  (a) `hashStableValue(derived) === supportReservationDigest`、(b) `stableStringify(derived) === stableStringify(supportReservation)` を計算するので、`supportReservation` に
+  文字列を渡さない（二重シリアライズで不一致になるため）。これはD2-BがPhase B t09 recordの `result.reservation` オブジェクトを渡した方法と同じであり、S5のAPIは変更しない
 - 加えて、当該CandidateのDSC record・pooled recordに記録されたSearch入力のreservation digestが、CTX recordの `reservationDigest` と一致しなければならない（analyzerが照合。
   不一致はguardrail違反）
-- analyzerは、評価recordの比較body・digestが、runnerがjournalに記録したSHA-256のCTX recordの値と同じであること、S4 / S5の両条件が成立していることを独立に照合する
+- analyzerは、評価recordの比較body・digestが、runnerがjournalに記録したSHA-256のCTX recordの値と同じであること（bodyは両辺オブジェクトの `stableStringify()` 一致、
+  digestは文字列一致）、S4 / S5の両条件が成立していることを独立に照合する
 - 新しく作るK1 contextについて、既存のPhase B reservation recordが存在するとは仮定しない。存在するcontext（§1.4）ではC5のparityとして追加照合するだけで、
   S5のauthorityはCTX recordである
 - S1は登録scopeでは構造上成立する（supportのTargetはE1外で、置換集合はE1 Targetだけ）が、規則として常に検査する
@@ -733,7 +750,8 @@ runnerはchildを1つも起動せずに終了し、analyzerは `D2C_INVALID`（r
 - 登録された順序（§8.1）・規則（§4、§5、§6）以外のunit / 評価が無い（retry、再実行、追加評価、順序違反、件数違反なし）。child process数 = 実行したCTX + DSC + 評価の数
 - discovery / CMPのreplay: analyzerは記録済みの結果から§4.4のrung escalation・pool構成・重複排除、§5のadmission、§6の合成（eligible、gate、選択順、受理）を
   再実行し、記録と一致することを確認する
-- S4 / S5・C1〜C5・context drift・R0の再照合（§7）
+- S4 / S5・C1〜C5・context drift・R0の再照合（§7）。analyzerもCTX recordの `reservationBody` をJSONオブジェクトとして読み、DSC / 評価record・Phase B recordの
+  reservationとの比較は両辺オブジェクトの `stableStringify()` 一致、digestとの比較は文字列一致で行う（§4.1）
 - Phase B / D1 / D2のmoduleとformal RESULT・record・G storeを変更しない（D2-C-Bは新しいmoduleからimportして使う）
 
 ### 10.4 run dir・file名
@@ -752,7 +770,8 @@ runnerはchildを1つも起動せずに終了し、analyzerは `D2C_INVALID`（r
 
 ### 10.5 証拠の欠損・破損
 
-D2-A §8.4（raw / RESULT整合）・§8.5（未計測と証拠の欠損・破損の区別）をそのまま適用する。CTX record、DSC record、評価record、G storeのいずれかが、
+D2-A §8.4（raw / RESULT整合）・§8.5（未計測と証拠の欠損・破損の区別）をそのまま適用する。CTX recordの `reservationBody` がJSONオブジェクトでない（文字列等で
+保存されている）場合も同じく `D2C_INVALID`（`evidence_integrity`）とする（§4.1）。CTX record、DSC record、評価record、G storeのいずれかが、
 process outcome completedなのに存在しない、SHA-256 / bytesがjournal・raw・RESULTの `sources` と一致しない、必須fieldが欠ける場合は `D2C_INVALID`（`evidence_integrity`）
 であり、未計測に読み替えない。
 
@@ -823,7 +842,7 @@ conditions                 scopeTargets, contexts（§3.2）, derivationRule（�
 inputValidation            { passed, issues[], derivedContexts[] { contextId, targetWeaponId, supportBuildListEntryId, observations, observedEvaluations, b0Selected } }
 contexts[7]                { contextId, k, label, targetWeaponId, currentBuildListEntryId, supportBuildListEntryId, supportTargetWeaponId, observations, observedEvaluations,
                              orderInTarget, status, unmeasuredReason, notExecutedReason, process,
-                             record { file, bytes, sha256 }, supportBodySha256, reservationDigest, reservationBody, originDigest, excludedRouteKeySha256s[],
+                             record { file, bytes, sha256 }, supportBodySha256, reservationDigest（文字列）, reservationBody（JSONオブジェクト。文字列化しない、§4.1）, originDigest, excludedRouteKeySha256s[],
                              checks { C1, C2, C3 { referencedOwnedWeaponIds[], exclusiveOwnedWeaponIds[], satisfied }, C4, C5 { state, expectedDigest, phaseBUnitIds[], bodyMatched[] } },
                              discoveryStop: discovery_cap_reached | discovery_exhausted | ladder_exhausted | unmeasured | not_executed,
                              discoveryIncompleteAfterUnmeasured }
@@ -844,7 +863,7 @@ evaluations[]              D1-A §8の `evaluations[]` の全fieldに加えて
                              referenceDiff { referenceEvaluationId, completedDelta, conflictDelta, stepsDelta, targetsGained[], targetsLost[] } | null,
                              gate { judged, referenceCompleted, proposedCompleted, satisfied }, r5OnlyEligible, eligible,
                              r5 { judged, conditions, satisfied, failureReasons[] },
-                             supportChecksByEntry { [s]: { S1, S2, S3, S4, S5 { digestExpected, digestObserved, digestMatched, bodyExpected, bodyObserved, bodyMatched, satisfied },
+                             supportChecksByEntry { [s]: { S1, S2, S3, S4, S5 { digestExpected, digestObserved, digestMatched, bodyExpected（CTX recordのreservationBodyオブジェクト）, bodyObserved（導出reservationオブジェクト）, bodyMatched, satisfied },
                                                           selected, supportExpiryCause | null } },
                              r6 { judged, conditions, satisfied },
                              r1r4（ADMのみ）{ R1, R1FailureReason, R2, R3, R4, supportVacuous: false, targetRegressedR, foundRDiagnostic, winnerBuildListEntryId, conflictCoParticipants[] },
@@ -921,7 +940,7 @@ decision                   { case, reasons[], lowerBound: boolean, k1Accepted[],
 | replacement / preflight | `resolveBuildListEntryReplacement()`、`preparePlannerInitialContext()`、`createPlannerConflictContexts()`、`preparePlannerReplacementConflictPreflight()` |
 | full run | `createPlannerAlternativeFullRunner()` + Research budget（limit 8、`createPhase2C27BLadderRerunBudget(8, 0)` と同じ形）。内部は `createProductionPlanWithObserver()` + Trace Replay |
 | 診断の `found_R` | `judgePlannerAlternativeTrial()`（explicit decision = fixed Route = support = `[s]`） |
-| 評価run・digest・R5（import only、変更しない） | D2の `runD2Evaluation()`（`D2ReplacementTask.requiresSupport` / `supportReservationDigest` / `supportReservation` にCTX recordの値を渡す）、`d2R1R4()`、D1の `d1InputDigest()` / `d1ResultDigest()` / `judgeD1R5()` / `d1B0Parity()` / `d1TrialRunSummary()` / `d1RuntimeUnsupportedRemoved()` / `isD1BoundLimited()` |
+| 評価run・digest・R5（import only、変更しない） | D2の `runD2Evaluation()`（`D2ReplacementTask.requiresSupport` / `supportReservationDigest` / `supportReservation` に、bytes・SHA-256を照合済みのCTX recordから読んだ `reservationDigest`（文字列）と `reservationBody`（JSONオブジェクト、文字列化しない）を渡す。S5の比較はこの既存APIの (a) digest一致 ∧ (b) `stableStringify()` 一致のまま）、`d2R1R4()`、D1の `d1InputDigest()` / `d1ResultDigest()` / `judgeD1R5()` / `d1B0Parity()` / `d1TrialRunSummary()` / `d1RuntimeUnsupportedRemoved()` / `isD1BoundLimited()` |
 | discovery outcome | D2の `d2DiscoveryUnitOutcome()` / `d2DiscoveryNext()`（cap値はD2-Cの2を渡すか、同じ規則をD2-C moduleで表す） |
 | hash | `hashStableValue()`、`stableStringify()` |
 
