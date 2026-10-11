@@ -278,3 +278,5 @@ D1を受けたD2（Candidate発見とGlobal採用を分離するK0先行policy�
 D2-Bで不受理だった6 Targetの阻害Entry（provisional winner）をsupportとする限定K1探索（D2-C）の実行条件は
 [D2-C事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2C_SPEC.md)（docs-only）で確定した。
 その実装と正式計測は [D2-C-B](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2CB.md)（`D2C_EXCEEDS_D2B_MAIN`、23 / 43・Conflict 20）にある。
+D2-C-Bでt05のK1 Candidateと衝突した受理済みt07を、D2-Bで発見済みの別のK0 Candidateへ差し替えてt05と同時に評価する局所2-Target再合成（D2-D）の実行条件は
+[D2-D事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2D_SPEC.md)（docs-only）で確定した。
