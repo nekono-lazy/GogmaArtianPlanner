@@ -72,7 +72,8 @@ skip可能unitが含まれる）。
 
 ### 1.3 目的
 
-1. 全planning Targetの共存Route集合を、oracleを実行入力に使わずに自動構成する能力を **維持** する（incumbent 8,534を下回らない結果を「改善」と呼ばない）
+1. 全planning Targetの共存Route集合を、oracleを実行入力に使わずに自動構成する能力を **維持** する（既存incumbent 8,534 stepsに対し、8,534未満だけを
+   操作数改善、同数を同等、超を劣ると呼ぶ。§13.2）
 2. 1,657の構成原理（**先にRNG位置と資源を割り当て、後からRouteを構成する**）を、任意のPlannerInputへ適用できる一般アルゴリズムとして設計する
 3. 物理操作数・時間・メモリを、C2 / D2系列のOOM / timeoutを繰り返さない構造で改善できる道筋を示す
 4. Production契約変更が必要な範囲を明確に分離する（§16）
@@ -126,7 +127,7 @@ performance。
 | 2-C1 | sequential projectionを外しPlanner-start originからcanonical 1件 / Targetで検索すると元Build Listへ戻り、Conflict 21（Gogma 15 / Skill 3 / owned 2 / Normal 1）が再出現。required位置の静的重複件数とConflict件数が一致 | canonical 1件は共有streamの早い位置へ集中する。共存にはTargetごとの複数optionと排他割当が要る |
 | 2-C2 | Conflict orientationごとにPlanner Alternative kernelでportfolioを作る方式は、54 orientation中43がheap 8 GBでOOM。探索できた範囲ではportfolio > 1が80% | full Routeを先に列挙するportfolio方式はSearch規模で破綻し得る |
 | D1 / D2-B〜F | 1 fixed winner reservation・K1 / K2 / K3 support contextでの局所探索。最良incumbent 24 / 43・Conflict 19。K3 L2はOOM | 局所的な共存評価の積み重ねでは43 / 43へ届かず、contextの形でSearch規模が爆発する |
-| D2-G-A | K3 L2 OOMの主因候補はSkill held-aware streamの全depth保持（conversion位置306 × depth × 約300 state、モデル6,081万state）。**Search規模（conversion位置数、Skill保持state、Gogma held幅）はreservationとextentだけからSearch前に計算できる** | materialization前にSearch規模を事前計算しgateにする（§9.6）。reservationを狭く（mold）する動機 |
+| D2-G-A | K3 L2 OOMの主因候補はSkill held-aware streamの全depth保持（conversion位置306 × depth × 約300 state、モデル6,081万state）。**Search規模（conversion位置数、Skill保持state、Gogma held幅）はreservationとextentだけからSearch前に計算できる** | materialization前にSearch規模を事前計算しgateにする（§9.7）。巨戟化位置候補の少ない方式を先に試す動機（§9.3） |
 | P0R | 813fb479未完成の原因は、同条件の火Targetが族構成一致Normal 206を先に消費し、龍の投影窓207〜556に次の一致位置849が無いこと。N849は43 / 43の一般的な必要条件ではない | 同じ資源を要求する複数Targetの割当は、順序ではなく排他制約として同時に決める |
 
 ### 2.4 Phase 2-C2.7-A（guardrail）
@@ -155,7 +156,7 @@ performance。
 | `src/domain/search/alternative/` | `visitPlannerAlternativeCandidates()`、`PlannerAlternativeReservation`（`normal[]` / `skill` / `gogma` の `held` / `blocked`、`exclusiveOwnedWeaponIds`）、`PlannerAlternativeSearchExtent`、`normalizePlannerAlternativeReservation()` | 非連続Route・chain Routeのmaterialization（§9.1） |
 | `src/domain/search/candidateSearch.ts` / `constrained/constrainedCandidateFactory.ts` | `searchCandidates()`、`createConstrainedCandidate(target, origin, prediction, 'origin_reach')` | 連続Routeのmaterialization（§9.2） |
 | `src/domain/planner/replacement/` | `createPlannerStartSearchOrigin()`、`normalizePlannerSearchOrigin()`、`createDeterministicMaterializer()` | 決定的なCandidate / Entry identity（§9.3） |
-| `src/domain/planner/productionPlanGeneration.ts` / `plannerTraceReplay.ts` / `plannerValidation.ts` | `createProductionPlanWithObserver()`、`replayPlannerSearchTrace()`、`validatePlannerInput()` | 最終authority（§9.4） |
+| `src/domain/planner/productionPlanGeneration.ts` / `plannerTraceReplay.ts` / `plannerValidation.ts` | `createProductionPlanWithObserver()`、`replayPlannerSearchTrace()`、`validatePlannerInput()` | 最終authority（§9.5） |
 | `src/domain/rng/gogmaBonusFamily.ts` | `keepFamilyLayout()` / `keepFamilyLayoutKey()`（順序付きlayout）/ `keepFamilyMultisetKey()`（順序なし） | Keep到達の必要条件（§5） |
 | `src/domain/target/` | `satisfiesIdealBonuses()`、`satisfiesIdealTarget()`、`evaluateSkillCondition()`、`evaluateTargetSkillMatch()` | Ideal判定の唯一のauthority |
 | `RngEngine` | `predictNormalArtian()` / `predictSkills()` / `predictGogmaBonus()` / `getPredictionSupport()` / `advance*Counter()` | 到達表の唯一の予測authority |
@@ -180,15 +181,24 @@ performance。
 
 ```text
 (A) 到達option生成     Production RNGから、各TargetがIdealへ届き得る source × required位置 の必要条件を列挙する
-(B) Global Assignment  全Targetへoptionを1件ずつ同時に割り当てる（source排他、required位置排他）。目的関数はΣ stream終端
-(C) Counter被覆        割当が決めたrequired位置の間を、どのTargetのskippable chainで埋めるかを決め、各Targetの操作位置集合を確定する
-(D) Materialization    操作位置集合をspeculative reservation / 射影起点としてProduction Searchへ渡し、正規のCandidate / Entryを得る
-(D') Planner検証        全Entryで通常Production Planner + Trace Replayを1回実行する。これが唯一の成立authority
-(E) 評価・改善         成立した集合の物理操作数（= Σ stream終端）を下限と比較し、budget内で改善を続ける
+(B) Global Assignment  全Targetへoptionを1件ずつ同時に割り当てる（source排他、required位置排他）。目的関数はΣ stream終端。
+                       得られるのは structural candidate（構造的候補）であり、Productionでの成立は未検証
+(C) Counter被覆        割当のrequired位置の間を埋められるか（被覆pre-check）を判定し、materializationの順序と、
+                       各Targetに期待するRoute形（source、required位置、予測されるchain区間）を確定する
+(D) Materialization    Targetを順に、正式なresource reservation（materialize済みEntryから導出）または射影起点で
+                       Production Searchへ渡し、返された正規のCandidateの形を照合してEntryにする
+(D') Planner検証        全Entryで通常Production Planner + Trace Replayを1回実行する。これが唯一の成立authority。
+                       成立した候補だけが verified（bestVerified）になる
+(E) 評価・改善         verifiedの物理操作数（= Σ stream終端）を下限と比較し、budget内で改善を続ける
 ```
 
 最初から完成済みRouteを大量に列挙しない。(A)〜(C)は軽量な位置集合だけを扱い、Route本体は(D)で必要なTarget・必要な形だけをdemand-drivenに
 materializeする。
+
+**structural candidateとverifiedの分離（レビューB1）。** (B)〜(C)を通過した完全割当は、source / required位置の排他とCounter被覆pre-checkを
+満たすだけの **structural candidate** であり、Production Searchでmaterializeされておらず、Production Plannerでも検証されていない。
+(D) / (D')で成立したものだけを **verified** と呼ぶ。未検証のstructural candidateのobjectiveを、他の候補を枝刈りする上界には使わない（§6.3 / §10.1）。
+(B)は候補を決定的な順序で1件ずつ生成するgeneratorとして動き、(D) / (D')が不成立のときは探索状態を保持したまま次の候補へ進む（§6.4）。
 
 ### 3.2 データフロー
 
@@ -199,21 +209,27 @@ PlannerInput（validated, Planner-start origin）+ ProductionRngEngine + Master
 [Phase A] ReachTable ── per Target: SkillReach / BonusReach / NormalReach（memo付き位置走査、window W）
         │                 per source: SourceCandidate（owned gogma / owned normal / new normal position）
         ▼
-[Phase B] Assignment solver（deterministic backtracking + MRV + branch-and-bound）
-        │   入力: ReachTable、排他制約、objective = Σ(終端 − origin)、root lower bound（applicableのとき）
-        │   出力: incumbent Assignment（Target → ChosenOption）+ 探索診断
+[Phase B] Assignment solver（deterministic backtracking + MRV、generator）
+        │   入力: ReachTable、排他制約、objective = Σ(終端 − origin)、root lower bound（applicableのとき）、
+        │         上界 UB = bestVerified の物理操作数（存在するときだけ。未検証候補のobjectiveは上界にしない）
+        │   出力: structural candidate を決定的な順序で1件ずつ（nextStructuralCandidate()）、bestStructural（診断）、探索診断
         ▼
-[Phase C] Coverage ── stream別のrequired位置列から gapを求め、covererを決め、
-        │             Target別の ownOperationPositions（required ∪ chain）と RouteShape を確定
+[Phase C] Coverage ── stream別のrequired位置列から gapを求め、被覆pre-check、covererの予測、
+        │             materialization順序（Skill被覆依存のtopological順）、Target別の ExpectedRouteShape を確定
         ▼
-[Phase D] Materialization ── Target別に speculative reservation（mold）と extent を作り
-        │   visitPlannerAlternativeCandidates() / searchCandidates() → createPlannerRouteUnitPlans() で形を照合
+[Phase D] Materialization ── Phase Cの順序でTargetを1件ずつ:
+        │   reservation = derivePlannerAlternativeReservation(materialize済みEntry)（正式な導出。形状制約には使わない）
+        │   visitPlannerAlternativeCandidates() / searchCandidates()（射影起点）→ 返されたCandidateの
+        │   createPlannerRouteUnitPlans() のrequired位置・source・最終武器を ExpectedRouteShape と照合
         │   → deterministic materializer → BuildListEntry（Planner-start origin）
+        │   不一致 / 未確認 / 未実行は typed MaterializationOutcome で区別（§9.6）
         ▼
 [Phase D'] createProductionPlanWithObserver()（全43 Entry、conflictResolutions = []、Research maxPlanSteps）
         │   + replayPlannerSearchTrace() + summarizePlanPhysical() + 別processのfresh ordinary Planner
+        │   成立 → bestVerified を更新し、UBとしてPhase Bへ返す。不成立 → 候補のoutcomeを記録してPhase Bの次候補へ
         ▼
-GlobalAssignmentResult（typed status、incumbent、下限、Phase別診断）── post-hoc analyzerだけがoracleと比較
+GlobalAssignmentResult（typed status、bestVerified / bestStructural、下限、候補別outcome、Phase別診断）
+        ── post-hoc analyzerだけがoracleと比較
 ```
 
 ### 3.3 再利用するProduction authority（新しい規則を作らない）
@@ -254,11 +270,15 @@ interface GlobalAssignmentInput {
   research: {
     windowLadder: readonly ReachWindow[]          // W0, W1, ... 各stream位置数。W0は非oracle起源の既存定数（§10.3）
     nodeBudget: number                            // solverの決定的な展開node数上限
+    verificationBudget: number                    // Phase D / D' へ渡す structural candidate の件数上限（1 run）
     materializationDeliveryCap: number            // 1 Targetのmaterializationで受け取るCandidate上限
+    searchScaleGate: SearchScaleGate              // §9.7。超えるSearchは実行しない（未実行として区別）
     researchMaxPlanSteps: number                  // Phase D' のPlannerInput.options（Research条件。Production defaultではない、G12）
   }
 }
 interface ReachWindow { normal: number; gogma: number; skill: number }
+/** §9.7。reservationとextentから実行前に計算する規模の上限。値はPhase D-0の事前登録で決める */
+interface SearchScaleGate { maxConversionPositions: number; maxGogmaLegalWidth: number; maxSkillLegalWidth: number; maxNormalForgeCount: number }
 ```
 
 `plannerInput.targetWeapons` のうち `isTargetWeaponPlanningEligible()` を満たすTargetだけを対象にする。`preferredOwnedWeaponId`、`priority`、
@@ -338,9 +358,31 @@ type BonusRequirement =
 interface Assignment {
   chosen: Map<TargetWeaponId, ReachOption>
   streamEnd: { skill: number; gogma: number; normal: Record<NormalArtianCounterId, number> }
-  objective: number   // Σ (streamEnd − origin)
+  objective: number   // Σ (streamEnd − origin)。verifiedになるまでは「成立すればこの物理操作数になる」という構造上の値
+}
+
+/** Phase B / Cを通過した完全割当。Productionでの成立は未検証（レビューB1） */
+interface StructuralCandidate {
+  kind: 'structural_candidate'
+  ordinal: number                      // generatorが生成した順（決定的）
+  assignment: Assignment
+  coverage: StreamCoverage[]           // §4.4。被覆pre-check済み
+  materializationOrder: TargetWeaponId[]
+  expectedShapes: ExpectedRouteShape[]
+}
+
+/** Production検証に成功した候補。唯一の「成立」 */
+interface VerifiedPlanRecord {
+  kind: 'verified'
+  candidate: StructuralCandidate
+  entries: BuildListEntry[]            // Planner-start originのEntry（全planning Target）
+  physicalOperations: number           // summarizePlanPhysical() の合計 = plan.steps.length = assignment.objective
+  planner: PlannerResultSummary        // completed / 43 / Conflict 0 / rejected 0 / Trace Replay valid / fresh再検証
 }
 ```
+
+`bestStructural` はgeneratorが生成したstructural candidateのうちobjective最小のもの（診断・候補順序・Phase Cへの引き渡し用）、
+`bestVerified` は `VerifiedPlanRecord` のうち `physicalOperations` 最小のものである。前者は実行可能解の証明ではなく、後者だけが成立である。
 
 `SkillRequirement.conversion` の `c = s*` は「巨戟化位置のSkillがそのままIdeal」を、`c < s*` は「巨戟化後に s* でReset Skills」を表す。
 巨戟化とReset Skillsは同じ位置で同じSkillを引く（RNG Rules、`docs/RNG_REFERENCE_AUDIT.md` 14.18）ので、s* の条件は両者で同一である。
@@ -358,12 +400,22 @@ interface StreamCoverage {
 }
 interface CoverageSegment { from: number; to: number; covererTargetWeaponId: TargetWeaponId }
 
-interface RouteShape {
+/**
+ * Global Assignmentが対象Targetに期待するRoute形。Research上の形状条件であり、
+ * 正式なresource reservation（held / blocked / 排他OwnedWeapon）とは別概念（レビューB2、§7 / §9）
+ */
+interface ExpectedRouteShape {
   targetWeaponId: TargetWeaponId
   option: ReachOption
-  /** stream別の自分の操作位置（required ∪ chain）。昇順・重複なし */
-  ownPositions: { skill: number[]; gogma: number[]; normal: number[] }
-  /** chain部分の操作種別はoptionから一意に決まる（§8.3） */
+  /** 照合に使う条件: source、stream別のrequired位置、required-only再生の最終武器（§5.3） */
+  match: {
+    sourceOwnedWeaponId: OwnedWeaponId | null
+    required: { skill: number[]; gogma: number[]; normal: number | null }
+    finalBonuses: RestorationBonusSet; restorationBonusScope: RestorationBonusScope
+    seriesSkillId: SeriesSkillId | null; groupSkillId: GroupSkillId | null
+  }
+  /** 予測に使う情報: Phase Cが被覆から導いたchain区間（照合には使わない。Search規模gateと診断用） */
+  predicted: { chainSegments: CoverageSegment[]; ownPositionCount: { skill: number; gogma: number; normal: number } }
 }
 ```
 
@@ -372,36 +424,76 @@ interface RouteShape {
 ```ts
 interface MaterializationRequest {
   targetWeaponId: TargetWeaponId
-  shape: RouteShape
-  method: 'planner_alternative_mold' | 'candidate_search_projected'   // §9.1 / §9.2
-  reservation: PlannerAlternativeReservation   // method = mold のとき。speculative、永続・記録しない
+  shape: ExpectedRouteShape
+  method: 'planner_alternative_reservation' | 'candidate_search_projected'   // §9.1 / §9.2
+  /**
+   * method = planner_alternative_reservation のとき。この時点までにmaterialize済みのEntry集合から
+   * derivePlannerAlternativeReservation() が導出した正式なreservation。形状を強制する目的でheld / blockedを
+   * 追加・改変しない。Research上の仮割当（speculative）であり、user-fixed Routeではない（G1）
+   */
+  reservation: PlannerAlternativeReservation | null
+  reservationSourceEntryIds: BuildListEntryId[]  // reservationの導出元（materialize済みEntry）。空なら empty reservation
   extent: PlannerAlternativeSearchExtent | CandidateSearchSettings
-  predictedSearchScale: { conversionPositions: number; gogmaFreeWidth: number; skillFreeWidth: number; normalFreeWidth: number }  // §9.6 gate
+  /** §9.7。reservationとextentから実行前に計算する。gateを超えるrequestは実行しない */
+  predictedSearchScale: { conversionPositions: number; gogmaLegalWidth: number; skillLegalWidth: number; normalForgeCount: number }
 }
 
-interface MaterializedTarget {
-  targetWeaponId: TargetWeaponId
-  entry: BuildListEntry                          // Planner-start originのEntry（deterministic materializer）
-  plannerRequired: { skill: number[]; gogma: number[]; normal: number | null }   // createPlannerRouteUnitPlans() から
-  deliveredBeforeMatch: number
-  verification: 'materialized'
-}
+type MaterializationOutcome =
+  | { kind: 'materialized'; entry: BuildListEntry; plannerRequired: { skill: number[]; gogma: number[]; normal: number | null }; deliveredBeforeMatch: number }
+  /** Searchを実行し、extent内のdeliveryを使い切ったが形が一致しなかった（実行済み・不一致） */
+  | { kind: 'shape_mismatch'; delivered: number; searchTermination: 'exhausted' | 'stopped_by_extent'; closestMismatch: string }
+  /** Searchを実行したが、形の一致を確認できる前に止まった（未確認。不一致ではない） */
+  | { kind: 'unconfirmed'; reason: 'delivery_cap_reached' | 'extent_reached_before_shape'; delivered: number }
+  /** Searchを実行しなかった（未実行。不一致でも未確認でもない） */
+  | { kind: 'not_executed'; reason: 'search_scale_gate'; predictedSearchScale: MaterializationRequest['predictedSearchScale'] }
+  /** timeout / OOM / process failure（未計測） */
+  | { kind: 'unmeasured'; reason: 'timeout' | 'out_of_memory' | 'process_failure' }
 ```
+
+`shape_mismatch` だけが「Searchを実行して形が得られなかった」事実であり、`unconfirmed` / `not_executed` / `unmeasured` は
+「該当Routeなし」の根拠にならない（レビューR3、§9.6）。
 
 ### 4.6 出力
 
 ```ts
+/** 1件のstructural candidateがPhase D / D'でどうなったか */
+type CandidateOutcome =
+  | { kind: 'verified'; record: VerifiedPlanRecord }
+  | { kind: 'materialization_failed'; target: TargetWeaponId; outcome: Extract<MaterializationOutcome, { kind: 'shape_mismatch' }> }   // 実行済み・不一致
+  | { kind: 'materialization_unconfirmed'; target: TargetWeaponId; outcome: Extract<MaterializationOutcome, { kind: 'unconfirmed' | 'not_executed' | 'unmeasured' }> }
+  | { kind: 'planner_rejected'; planner: PlannerResultSummary; reasons: PlannerSearchRejectionReason[] }   // Search成功、Planner検証で不成立
+  | { kind: 'objective_mismatch'; planner: PlannerResultSummary; physical: number; objective: number }
+  | { kind: 'not_attempted'; reason: 'verification_budget' }
+
+type SearchCompleteness =
+  | 'exhausted'              // node budget内で探索木を使い切った（この窓・この排他制約での完全な列挙）
+  | 'node_budget_reached'    // 未探索枝が残る
+  | 'verification_budget_reached'
+  | 'cancelled'
+
 type GlobalAssignmentResult =
-  | { status: 'verified'; plan: PlannerResultSummary; assignment: Assignment; lowerBound: LowerBoundReport; proof: 'proven_minimum' | 'best_found' }
-  | { status: 'assignment_found_unverified'; assignment: Assignment; reason: 'materialization_mismatch' | 'planner_rejected' | 'coverage_infeasible'; detail: PhaseDiagnostics }
-  | { status: 'assignment_incomplete'; incumbent: Assignment | null; reason: 'node_budget' | 'cancelled'; explored: number }
-  | { status: 'no_assignment_within_window'; window: ReachWindow; targetsWithoutOption: TargetWeaponId[] }
+  | { status: 'verified'; bestVerified: VerifiedPlanRecord; proof: 'proven_minimum' | 'best_found'; lowerBound: LowerBoundReport;
+      completeness: SearchCompleteness; candidates: CandidateOutcome[]; window: ReachWindow }
+  | { status: 'structural_only'; bestStructural: StructuralCandidate; completeness: SearchCompleteness;
+      candidates: CandidateOutcome[]; window: ReachWindow }                  // 構造的候補はあるが verified なし
+  | { status: 'no_structural_candidate'; completeness: 'exhausted'; window: ReachWindow;
+      reason: 'target_without_option' | 'resource_exclusivity' | 'coverage_infeasible'; detail: NoCandidateDiagnostics }
+  | { status: 'search_incomplete'; completeness: 'node_budget_reached' | 'cancelled'; window: ReachWindow;
+      bestStructural: StructuralCandidate | null; candidates: CandidateOutcome[] }   // 窓内に候補が無いとは結論しない
   | { status: 'unsupported_input'; reason: 'unconfirmed_counter' | 'checkpoint_selection' | 'prediction_unsupported' | 'blind_route_required'; detail: string }
   | { status: 'unmeasured'; reason: 'timeout' | 'out_of_memory' | 'process_failure' }
 ```
 
-- `verified` だけが「成立」である。`proven_minimum` は `provenLowerBoundTotal()` がPlanのphysical stepsと一致した場合に限る
-- `no_assignment_within_window` は「この窓では見つからなかった」であり「実行可能解が存在しない」ではない
+- `verified` だけが「成立」である。`proven_minimum` は、`bestVerified.physicalOperations` が、適用可能（cross satisfaction可能ペア0件）かつ
+  `found` で証明済みのroot下界 `provenLowerBoundTotal()` と一致した場合に限る。structural candidateのobjectiveがroot下界と一致しても、
+  Production検証前には何も主張しない（レビューB1）
+- `structural_only` と `search_incomplete` は `bestStructural` を持ち得るが、それは診断・次Phaseへの引き渡し用であり成立ではない
+- `no_structural_candidate` は、node budget内で探索木を使い切った（`completeness = 'exhausted'`）ときだけ返す。
+  `reason` は「Target単位でoptionが無い」「各Targetにoptionはあるが資源排他で完全割当が無い」「完全割当はあるが被覆が成立しない」を区別する
+  （レビューR2）。いずれも「この窓・この制約では見つからなかった」であり「実行可能解が存在しない」ではない
+- `search_incomplete`（node budget到達・cancel）では「窓内に完全割当が存在しない」と結論しない
+- `candidates[]` は試行した候補ごとに `materialization_failed`（実行済み・不一致）/ `materialization_unconfirmed`（未確認・未実行・未計測）/
+  `planner_rejected` / `objective_mismatch` を区別して残す（レビューR3）
 - `unmeasured` をどの成立 / 不成立statusにも読み替えない（G6）
 
 ## 5. RNG到達optionの生成（Phase A）
@@ -453,7 +545,7 @@ optionは「IdealへRNG上届き得る必要条件」であり、実行可能性
 | `necessary_only` | 位置集合が §5.2 の条件を満たす | 走査結果の参照だけ |
 | `rng_replayed` | required unitだけを順に適用した結果が `satisfiesIdealTarget()` でIdeal | sourceの状態（owned: Export値、new normal: `predictNormalArtian`）→ 巨戟化 / Reset Skills（Skill）→ Reset / Keep（Gogma）を予測し直して確認 |
 | `materialized`（Phase D） | Production Searchがその形のRouteを返し、`createPlannerRouteUnitPlans()` のrequired位置がoptionと一致 | §9 |
-| `planner_verified`（Phase D'） | 全Entryのfull Planner run + Trace Replayが成立 | §9.4 |
+| `planner_verified`（Phase D'） | 全Entryのfull Planner run + Trace Replayが成立（候補全体として `verified`） | §9.5 |
 
 `rng_replayed` は、Phase 2-A.5 Stage Aの「required-only再生」と同じ考え方（skippable unitを他Targetが消費しても結果が変わらない）を、
 oracle moduleをimportせずに実装する（§11）。Phase Aではsolverへ渡す前に全optionを `rng_replayed` にする必要はない（走査結果は既にIdeal判定済み）。
@@ -539,69 +631,103 @@ cross satisfaction（1つの武器状態で2 TargetのIdealを同時に満たす
 | --- | --- | --- | --- |
 | Constraint-based backtracking | 排他制約の自然な表現、部分割当からの早期棄却、決定性 | 探索空間は大きい。順序付けが要る | **採用（基盤）** |
 | MRVによる変数選択 | 選択肢の少ないTarget（同条件の2 Targetが1つの族構成一致Normalを争う等）を先に決め、無効な割当を早く棄却 | 動的なdomain計算が要る | **採用** |
-| Branch-and-bound | 部分割当の下界で目的関数的に無駄な枝を切る。incumbentを常に持つ | 下界の質に依存。cross satisfactionがある入力では距離の根拠が弱い | **採用**（安全な下界だけ、§10） |
+| Branch-and-bound | 部分割当の下界と **Production検証済み** の上界で目的関数的に無駄な枝を切る | 下界の質と、検証済み上界が得られるまでの時間に依存。未検証候補のobjectiveを上界にすると実行可能解を失う。cross satisfactionがある入力では距離の根拠が弱い | **採用**（安全な下界と検証済み上界だけ、§6.3 / §10） |
 | Lower-bound guided search（root緩和の閾値で値順序を決める） | 1,657再構成で有効だった。閾値内側から探す | 緩和解が実行可能とは限らない。閾値を硬い制約にすると解を失う | 値順序のheuristicとしてだけ採用。硬い制約にしない |
 | 段階的なCandidate portfolio拡張（C2 / D2方式） | 既存Planner Alternative kernelをそのまま使える | full Routeを先に列挙する。Search規模（OOM / timeout）と1 fixed winner contextの制限（C2 / D2） | 中心にしない。materializationのdemand-driven生成として位置づける |
 | 乱数restart（1,657 scratch） | 局所解からの脱出 | 非決定性。再現・事前登録・中断再開と相性が悪い | 採用しない。決定的なdiscrepancy探索（Phase E）で代替 |
 | 外部solver（ILP / SAT） | 最適性証明が得やすい | 依存追加、Browser Worker実行の見通し、決定性の保証、Research範囲を超える | 採用しない（§15） |
 
-### 6.3 採用方式: 決定的backtracking + MRV + branch-and-bound
+### 6.3 採用方式: 決定的backtracking + MRV + branch-and-bound（structural candidateのgenerator）
 
 最初のResearch実装（Phase B）は次とする。
 
-- 深さ優先のbacktracking。各nodeで未割当Targetから **MRV**（現在の部分割当のもとで実行可能なoption数が最少。同数ならpriority降順、Target ID昇順）を選ぶ
+- 深さ優先のbacktracking。各nodeで未割当Targetから **MRV**（現在の部分割当のもとで `resourceFeasibleOptions()`（§6.4）が最少。同数なら
+  priority降順、Target ID昇順）を選ぶ。MRVの候補数評価は資源条件だけで行い、下界による枝刈りと混ぜない
 - 値順序は **Σ stream終端の増分が小さいoption** から。同点はowned sourceを新規Normalより先、Skill / Gogmaのrequired位置が小さい方、stable key
-- **branch-and-bound**: 部分割当の下界 `LB(partial)`（§10.1）がincumbent以上なら枝を切る。incumbentは最良の **完全割当かつ被覆可能**（§8）な割当
-- 完全割当に到達したら §8 の被覆pre-checkを行う。Skill被覆不成立なら、最も低い未被覆Skill位置 x を記録して棄却し、値順序に
-  「conversion c = x を持つoption」（§4.3の `c < s*` 型）を優先的に試す（**coverage-driven value ordering**）。これは順序の変更であり制約の緩和ではない
-- node budget（§10.4）を消費し尽くしたら `assignment_incomplete` としてincumbentを返す。乱数restartはしない
-- root下界（`solveLowerBoundRelaxation()`、applicableのとき）とincumbentが一致した時点で探索を終了してよい（最小性の証明が得られたため）
+- solverは **structural candidateのgenerator** として動く。完全割当に到達し §8 の被覆pre-checkを通過するたびに、その候補を1件返して探索状態
+  （割当stack、各nodeの値順序の位置、node数）を保持し、呼び出し側（Phase D / D'）の結果を受け取ってから **同じnodeの次の値** から再開する
+  （「探索状態を維持した再開」。§6.4）。候補を見つけるたびに探索をやり直さず、過去に棄却した枝を再訪もしない
+- **branch-and-boundの上界は `bestVerified.physicalOperations` だけ**（§10.1）。未検証のstructural candidateのobjectiveは上界に使わない。
+  したがって `bestVerified` が無い間は目的関数による枝刈りを行わず、値順序だけで候補を並べる。`bestVerified` が得られた後は
+  `LB(child) >= UB` の枝を切る。切られた枝のどの完成も、成立したとしても物理操作数がUB以上になる（§6.1の恒等式）ので、より良いverifiedを失わない
+- 被覆pre-check不成立（Skill）なら、最も低い未被覆Skill位置 x を記録して棄却し、値順序に「conversion c = x を持つoption」（§4.3の `c < s*` 型）を
+  優先的に試す（**coverage-driven value ordering**）。順序の変更であり制約の緩和ではない
+- Phase D / D'で不成立になった候補は、候補単位のoutcome（§4.6）として記録するだけで、そのoption・部分割当を除外集合へ入れない
+  （materialization失敗は実行可能解不存在ではない。レビューB1 / R3）。generatorは各完全割当を高々1回しか生成しないので、同じ候補を繰り返さない
+- node budget・verification budget（§10.4）を使い尽くしたら、探索状態をcompletenessとして返す（`search_incomplete` / `structural_only`）。乱数restartはしない
+- 探索木を使い切っても候補が無ければ `no_structural_candidate`（reason別、§4.6）
+- `bestVerified.physicalOperations` が、適用可能で証明済みのroot下界と一致した時点で探索を終了してよい（それ以上良いverifiedは存在しない）。
+  structural candidateのobjectiveがroot下界と一致しただけでは終了せず、何も主張しない
 
 ### 6.4 疑似コード
 
 ```text
 solve(reach, bounds):
-  root = lowerBoundRoot(reach)                    // §10.2: applicable なら relaxation minimum、否なら null
-  incumbent = null
-  nodes = 0
-  assign = empty partial assignment (streamEnd = origins, usedSources = ∅, usedPositions = ∅ per stream)
+  root         = lowerBoundRoot(reach)               // §10.2: applicable なら relaxation minimum、否なら null
+  UB           = +∞                                  // bestVerified.physicalOperations。verified が無い間は枝刈りしない
+  bestVerified = null; bestStructural = null; outcomes = []
+  gen          = structuralCandidates(reach, bounds, () => UB)      // 決定的 generator（下記）
+  for candidate in gen:                                              // 生成順は決定的
+    if outcomes.length >= bounds.verificationBudget: outcomes.push(not_attempted(candidate)); gen.completeness = verification_budget_reached; break
+    bestStructural = minByObjective(bestStructural, candidate)       // 診断・引き渡し用。上界にはしない
+    outcome = materializeAndVerify(candidate)                        // §9。Phase C の順序で materialize → Planner 検証
+    outcomes.push(outcome)
+    if outcome.kind == 'verified':
+      bestVerified = minByPhysical(bestVerified, outcome.record)
+      UB = bestVerified.physicalOperations                           // 以後の枝刈りはこの値だけで行う
+      if root != null and UB == root: break                          // proven_minimum: verified と証明済み下界の一致
+    // materialization_failed / materialization_unconfirmed / planner_rejected / objective_mismatch は記録だけ。
+    // option や部分割当を除外しない。次の候補は generator の再開で決まる
+  return classify(bestVerified, bestStructural, outcomes, gen.completeness, root, window)   // §4.6
 
-  search(assign):
-    if nodes >= bounds.nodeBudget: raise NodeBudgetReached
+structuralCandidates(reach, bounds, readUB):   // generator。yield 後は同じ node の次の値から再開する
+  nodes = 0
+  search(partial):
+    if nodes >= bounds.nodeBudget: completeness = node_budget_reached; stop
     nodes += 1
     if all Targets assigned:
-      if not coverageFeasible(assign):            // §8.1, Skill のみ不成立になり得る
-        recordUncoveredSkillPosition(assign)      // 値順序へ反映（coverage-driven）
+      if not coverageFeasible(partial):          // §8.1。Skill だけが不成立になり得る
+        recordUncoveredSkillPosition(partial)    // coverage-driven value ordering へ反映
         return
-      if incumbent == null or assign.objective < incumbent.objective: incumbent = assign
+      yield withOrderAndShapes(partial)          // §8.2 / §8.3: materialization 順序と ExpectedRouteShape を付けた structural candidate
       return
-    t = argmin_{unassigned} |feasibleOptions(t, assign)|   // MRV; tie: priority desc, id asc
-    if |feasibleOptions(t, assign)| == 0: return   // dead end（この部分割当では t に option が無い）
-    for option in orderedOptions(t, assign):       // Σ終端増分 asc → owned first → 位置 asc → stable key; uncovered Skill position があれば c = x を先に
-      child = assign + (t, option)
-      if LB(child) >= (incumbent?.objective ?? +∞): continue        // branch-and-bound（admissible な下界だけ）
+    domains = { t ↦ countUpTo(resourceFeasibleOptions(t, partial), k) | t unassigned }   // MRV 用。上限 k の先読み。LB を呼ばない
+    t = argmin domains（tie: priority desc, Target ID asc）
+    if domains[t] == 0: recordDeadEnd(t, partial); return
+    for option in orderedOptions(resourceFeasibleOptions(t, partial), partial):
+                                                 // Σ終端増分 asc → owned first → 位置 asc → stable key。
+                                                 // 記録済みの未被覆 Skill 位置 x があれば conversion c = x を先に
+      child = partial + (t, option)
+      if readUB() < +∞ and LB(child) >= readUB(): continue     // branch-and-bound。UB は verified の物理操作数だけ
       search(child)
-      if incumbent != null and root != null and incumbent.objective == root: raise ProvenOptimal
+  search(emptyPartial(reach)); completeness = exhausted
 
-  try search(assign) catch ProvenOptimal / NodeBudgetReached
-  return { incumbent, nodes, proof: incumbent && root == incumbent.objective ? proven_minimum : best_found }
+resourceFeasibleOptions(t, partial):            // 資源条件・window・必要条件だけ。LB も UB も参照しない
+  { o ∈ enumerateOptions(t) | o.source ∉ partial.usedSources
+                             ∧ o.required positions ∩ partial.usedPositions(stream) = ∅  (per stream)
+                             ∧ o の全 required 位置が現在の window 内 }
 
-feasibleOptions(t, assign):
-  { o ∈ enumerateOptions(t) | o.source ∉ assign.usedSources
-                             ∧ o.required positions ∩ assign.usedPositions(stream) = ∅  (per stream)
-                             ∧ LB(assign + o) < incumbent.objective (if any) }
+LB(partial):                                    // §10.1。stream 別最小終端だけを読む。枝刈りを再帰的に呼ばない
+  Σ_streams ( max( partial.streamEnd_s, max_{t unassigned} minStreamEnd_s(t, partial) ) − origin_s )
+minStreamEnd_s(t, partial):                     // ReachTable の位置配列から、partial で未使用の最初の位置を読む（option 列挙を要しない）
+  min over resourceFeasibleOptions(t, partial) of option.streamEnd_s
 ```
 
-- `enumerateOptions` はlazy（§5.4）。`feasibleOptions` のサイズはMRVの判定に必要な分だけ数える（上限付きの先読みでよい。同数判定が崩れても
-  正しさには影響しない）
+- 依存関係は `resourceFeasibleOptions` → `LB` → pruning の一方向である。`resourceFeasibleOptions` は `LB` を読まず、`LB` は枝刈りを呼ばず、
+  MRVの候補数評価は `resourceFeasibleOptions` だけを読む（レビューR1。循環参照なし）
+- `enumerateOptions` はlazy（§5.4）。MRVの候補数は上限 k の先読みで数える（同数判定が崩れても正しさには影響しない）
+- `minStreamEnd_s(t, partial)` は、ReachTableのstream別位置配列（昇順）を先頭から走査して `partial.usedPositions` に無い最初のrequired候補位置を
+  取るだけで求まる（sourceの排他は、そのstreamの最小終端を下げないので無視してよい: 無視しても下界は小さくなるだけで安全側）
 - `usedPositions` にはrequired位置だけを入れる。chain位置は入れない（排他資源ではない）
-- dead end（option 0件）はwindow内での不在であり、記録して「この窓では解が無い」の根拠にする。「存在しない」とは書かない
+- dead end（候補0件）はwindow内・現在の部分割当での不在であり、`no_structural_candidate` のreason（`target_without_option` /
+  `resource_exclusivity`）の根拠として記録する。「存在しない」とは書かない
 
 ### 6.5 決定性
 
-solverは `Math.random`、`Date`、`crypto.randomUUID` を使わない。入力（PlannerInput、window、budget）が同じなら、同じnode列・同じincumbentを返す。
-ReachTableの配列はすべて昇順、Mapは挿入順を固定する（Target ID昇順、layout key昇順）。cancelは既存Research seam（`shouldCancel()` /
-`yieldControl()`）をnode単位で確認する。中断時はincumbentとnode数を返す。
+solverは `Math.random`、`Date`、`crypto.randomUUID` を使わない。入力（PlannerInput、window、budget）が同じなら、同じnode列・同じstructural candidate列を
+返す。generatorの再開は「yield したnodeの次の値」から行うので、Phase D / D'の結果（verified / 不成立）はUBの値を通じてだけ以後の探索に影響し、
+UBが同じなら同じ候補列になる。ReachTableの配列はすべて昇順、Mapは挿入順を固定する（Target ID昇順、layout key昇順）。cancelは既存Research seam
+（`shouldCancel()` / `yieldControl()`）をnode単位で確認する。中断時は探索状態・bestStructural・bestVerified・outcomesを返す。
 
 ## 7. held / blocked / silent fast-forwardの扱い
 
@@ -614,12 +740,14 @@ ReachTableの配列はすべて昇順、Mapは挿入順を固定する（Target 
 | physical action sharing | `physicalActionKey` / `shareable` / `arePlannerRouteUnitsShareable()`（PLANNER_SPEC 7.0） | 共有を仮定しない。v1ではrequired unit同士の共有は生じないので、C2（required位置互いに素）で十分 |
 | OwnedWeapon排他 | `collectReferencedOwnedWeaponIds()`、`exclusiveConsumedOwnedWeaponId` | C1（source排他） |
 | Normalのproduction target / 進行用forge | Issue #129（PLANNER_SPEC 7.0.2）: 最終unitはrequired、中間unitはskippable。production target同士だけが `same_normal_counter` | C2のNormal部分。被覆は「最も遠いproduction targetのTargetがoriginから全部forgeする」で自動的に成立（§8.1） |
-| held / blocked / 排他OwnedWeapon | PLANNER_SPEC 9.2.19.3、`derivePlannerAlternativeReservation()` | Phase Dでspeculative reservationを組む（§9.1）。意味は変えない: held = 他Targetの操作位置（required / chain）、blocked = 他Targetのrequired位置、排他OwnedWeapon = 他Targetのsource |
+| held / blocked / 排他OwnedWeapon | PLANNER_SPEC 9.2.19.3、`derivePlannerAlternativeReservation()` | Phase Dで、その時点までに **materialize済みのEntry集合** から正式に導出する（§9.1）。意味は変えない: held = materialize済みRouteのunitが位置を持つ位置（required / skippableとも）、blocked = その必須かつ共有不可unitの位置、排他OwnedWeapon = その参照・排他消費武器。**期待するRoute形を強制するためにheld / blockedを追加・改変しない**（レビューB2）。割当段階の仮の位置集合を、この正式なreservationと同一視しない |
+| 代替Routeの合法位置 | SEARCH_SPEC 5.6.8のcoverage条件（`nextOperationPositions()`: 合法位置 = `[from, 最初の非held位置] \ blocked`） | Searchはblocked位置へ自分の操作を置かず、最初の非held位置で必ず操作するか止まり、held位置では操作してもしなくてもよい（cost順の探索選択）。**特定のown操作位置集合を直接強制するAPIではない**。期待する形はSearch後に照合する（§9.1） |
 | held位置を跨ぐRoute | PLANNER_SPEC 9.2.19.4、DATA_MODEL 9.2（非連続な絶対位置、Normalのheld prefix canonical表現） | 非連続Routeはこの表現で保存される。永続fieldを追加しない |
 
-Phase A〜Cが使う「位置集合による判定」は、上記authorityの **結果を予測する必要条件** である。最終的にはPhase Dが実際のEntryから
+Phase A〜Cが使う「位置集合による判定」は、上記authorityの **結果を予測する必要条件** である。Phase Dは実際のEntryから
 `createPlannerRouteUnitPlans()` と `derivePlannerAlternativeReservation()` で再導出し、Phase D'のPlannerが判定する。
-Phase A〜Cの予測と再導出が食い違った場合はfail closedし（`materialization_mismatch`）、Phase A〜Cの規則を黙って緩めない。
+Phase A〜Cの予測（期待Route形）と、Searchが返したRouteの再導出が食い違った場合は、typed outcome（`shape_mismatch`、§9.6）として記録し、
+Phase A〜Cの規則を黙って緩めず、reservationを形状に合わせて改変もしない。
 
 ## 8. Counter被覆とRoute構成（Phase C）
 
@@ -666,12 +794,39 @@ coverageFeasible(assign):
 3. Skill gapでcoverers(gap)が空なら、§6.3のcoverage-driven value orderingへ戻る（巨戟化位置を `prev + 1` へ下げる `c < s*` 型option、または
    既存Gogma Targetの `reset_skills` をより後方のIdeal位置へ移すoptionを試す）。Plannerへ渡さない
 
-nearest-successorはchainを短くし、materializationのSearch規模（§9.6）とRoute operation数を抑える。1,657のように1本の長いchain
+nearest-successorはchainを短くし、materializationのSearch規模（§9.7）とRoute operation数を抑える。1,657のように1本の長いchain
 （Gogma 55〜289）で全区間を被覆する形も、連続するgapを同じTargetが被覆すれば自然に現れる。どちらでも物理操作数は変わらない（§6.1）。
 
-### 8.3 Route形の確定
+covererの選択は **予測** である。Phase Dでは、materialize済みEntryから正式に導出したreservationのもとでSearchが返すRouteのchainが実際の形になる
+（§9.1）。予測は被覆pre-check、materialization順序（下記）、Search規模gate（§9.7）、診断に使い、Searchへの形状制約には使わない。
 
-Targetごとに `ownPositions` を決める。chain部分の操作種別はoptionから一意に決まる。
+**materialization順序。** Phase Dは正式なreservationをmaterialize済みEntryから導出するため、あるTargetのSearchでheldとして使える位置は
+先に materializeしたRouteのunit位置だけである。巨戟化Target（`conversion`）は、SEARCH_SPEC 5.6.8のcoverage条件により、巨戟化位置 c より前の
+Skill位置がすべてheldでなければ c で巨戟化するRouteを返せない（巨戟化前の武器はSkill streamに存在しないので自分の操作を置けない）。
+したがって順序はSkill被覆の依存関係に従うtopological順とし、決定的に導出する。
+
+```text
+materializationOrder(assign, coverage):
+  order = []
+  for t in conversion Targets sorted by conversionPosition asc, Target ID asc:
+    for gap in Skill gaps below t.conversionPosition not yet covered by Targets in order:
+      append coverer(gap) if not in order          // §8.2 の規則。owned-gogma Target、または巨戟化位置がより低い conversion Target（既に order にある）
+    append t
+  append remaining Targets by ascending max(Skill advance, Gogma advance, Normal advance), Target ID asc
+```
+
+- Gogma streamには存在制約が無い（巨戟化TargetもGogma originからReset / Keepを置ける。巨戟化を待つのはPlanner側の待機）。Normalも同様
+  （covererを先にしても後にしても、held prefixのcanonical表現で両立する）。したがって順序を決める依存はSkill被覆だけである
+- 先に materializeしたRouteは、自分の最後のrequired位置までの非held位置をすべて自分のchainで埋める（coverage条件）。後の Targetはそれらをheldとして
+  跨ぐ。chainの実際の長さは順序で変わるが、物理操作数（Σ stream終端）は変わらない（§6.1）
+- §8.1の被覆pre-checkが成立していれば、この順序は必ず作れる（Skill位置 x を被覆できるのは、既存Gogma、または x より低い位置で巨戟化するTargetだけ
+  なので、依存は非循環）。作れない場合はpre-checkの実装不整合としてfail closedする
+
+### 8.3 期待Route形（予測）と照合条件
+
+Targetごとに `ExpectedRouteShape`（§4.4）を決める。**照合に使う** のはsource、stream別のrequired位置、required-only再生の最終武器であり、
+chain位置は照合しない（chainはskippable unitで、Searchとmaterialization順序が決める）。chain区間の操作種別はoptionから一意に決まるので、
+予測としては次のとおりになる（Search規模gateと診断用）。
 
 | option | chain区間の操作 |
 | --- | --- |
@@ -684,7 +839,8 @@ Targetごとに `ownPositions` を決める。chain部分の操作種別はoptio
 | new_normal p（非coverer） | held prefixのcanonical表現（PLANNER_SPEC 9.2.19.4）: `origin` から連続してheldな区間の直後からpまで |
 
 **不変条件**: chain unitを加えても、required unitだけを適用した結果と最終武器が一致する（Reset→Reset、Keep→Reset、Keep→Keep、Reset Skills→Reset Skillsの
-skip規則の根拠そのもの）。Phase Dは実際のCandidateの `finalBonuses` / Skillがoptionの再生結果と一致することを確認する。
+skip規則の根拠そのもの）。だからこそchain位置を照合せず、Phase Dは実際のCandidateの `finalBonuses` / scope / Skillと、
+`createPlannerRouteUnitPlans()` が導出するrequired位置・sourceがoptionと一致することだけを確認する。
 
 ### 8.4 pre-checkの限界
 
@@ -694,61 +850,108 @@ Plannerへ渡しても成立しないことは、stall規則から確実に言�
 
 ## 9. MaterializationとProduction Planner検証（Phase D / D'）
 
-### 9.1 Planner Alternative Searchによるmaterialization（主方式: mold）
+### 9.0 現行Search APIで強制できることと、できないこと（レビューB2）
 
-Target tの `RouteShape` から、Planner-start origin（`createPlannerStartSearchOrigin(plannerInput)`）に対するPlanner Alternative Searchの入力を組む。
+`visitPlannerAlternativeCandidates()` の入力は `origin` / `targetWeaponId` / `extent` / `reservation`（held / blocked / 排他OwnedWeapon）/
+`excludedRouteKeys` だけである（SEARCH_SPEC 5.6.8）。sourceで確認した合法位置規則（`nextOperationPositions()`: 合法位置 = `[from, 最初の非held位置] \ blocked`）
+から、現行APIで決まること・決まらないことは次のとおりである。
+
+| 制御 | 現行APIで | 根拠 |
+| --- | --- | --- |
+| blocked位置に自分の操作を置かない | **できる**（hard） | blocked ⊆ heldの定義。`blocked` は他Routeの必須かつ共有不可unitの位置という意味を持つ値であり、形状制約の道具ではない |
+| 最初の非held位置で必ず操作する（または止まる） | **できる**（coverage条件の帰結） | originから自分の最後の操作位置までの各位置は自分の操作かheld |
+| held（非blocked）位置で操作するか跨ぐか | **決められない**（Searchがcost順で選ぶ。6キー順序の1番目はown operation数なので、同じ結果ならskipが先に出る） | 「置くかどうかは探索の選択であり、costで比較する」 |
+| required位置（最終Reset / Keep、巨戟化、Reset Skillsの位置）を特定の値にする | **決められない**（extentとblockedで候補範囲を狭めるだけ。Ideal位置のうち最もcostの低いものから順に返る） | 6キー順序 |
+| 特定のown操作位置集合（chain区間を含む）を1つだけ返させる | **できない** | 上記2点 |
+| 排他OwnedWeaponをsourceにしない | **できる**（hard） | `isAvailableRouteSource()` |
+
+したがって本設計は、**正当なreservationだけでSearchし、返されたCandidateの形をSearch後に照合する**（レビューB2の選択肢1）を基本とし、
+reservationの導出元を **既にmaterialize済みの他Target Entry**（選択肢2）にする。初版の「自分が操作しない位置をすべてheld + blockedにするmold」は、
+blockedを形状制約に流用しており、正式なreservation semantics（PLANNER_SPEC 9.2.19.3）と整合しないので **廃止** する。
+Research専用の形状制約付き探索（選択肢3）は、§9.8の設計検証で正当なreservationだけでは期待する形を実用的なdelivery数・Search規模で得られないと
+判明した場合に、独立した将来APIとして別途設計する（本書では設計しない。現行APIに無い能力を「ある」とは書かない）。
+
+### 9.1 Planner Alternative Searchによるmaterialization（主方式: 正当なreservation + 形状照合）
+
+Target tをPhase Cの順序（§8.2）で1件ずつmaterializeする。Planner-start originは `createPlannerStartSearchOrigin(plannerInput)`。
 
 ```text
-reservation(t):
-  for each stream:
-    held    = { positions in [origin, t.lastPosition] } \ t.ownPositions      // 自分が操作しない位置はすべてheld（他Targetの操作で進む）
-    blocked = held                                                             // そこへ自分の操作を置かせない（mold）
-  normal  : counterIdごと。held = origin .. p−1 のうち自分がforgeしない位置、blocked = 他Targetのproduction target
-  exclusiveOwnedWeaponIds = 全owned weapon \ { t.source（ownedのとき） }
-extent(t):
+materializeTarget(t, materializedEntries, shape):
+  reservation = materializedEntries が空 ? emptyPlannerAlternativeReservation
+              : derivePlannerAlternativeReservation(materializedEntries, engine)   // 正式な導出。held / blocked / 排他OwnedWeapon を一切改変しない
+  extent      = extentFor(shape)                                                    // 下記。期待Route形の最後の required 位置までの window
+  predicted   = predictSearchScale(reservation, extent, shape)                      // §9.7。gate を超えれば not_executed(search_scale_gate) を返して実行しない
+  delivered   = 0
+  visitPlannerAlternativeCandidates({ origin, targetWeaponId: t, extent, reservation, excludedRouteKeys: [] }, engine, candidate => {
+    delivered += 1
+    entry = createDeterministicMaterializer(...).materializeBuildListEntry(candidate, plannerInput.buildListEntries).entry
+    if matchesExpectedShape(entry, shape): accept(entry); return 'stop'              // required 位置・source・最終武器の一致（§8.3）
+    if delivered >= deliveryCap: return 'stop'                                       // unconfirmed(delivery_cap_reached)
+    return 'continue'
+  })
+  // consumer stop せずに終わった（summary.exhausted || summary.stoppedByExtent）→ shape_mismatch（実行済み・不一致）
+
+extentFor(shape):
   maxNormalAdvance = p − origin_normal + 1（new_normal）、1（それ以外）
-  maxGogmaAdvance  = lastGogma − origin_gogma + 1（Bonus操作なしは1）
-  maxSkillAdvance  = lastSkill − origin_skill + (owned gogma ? 1 : 0)（SEARCH_SPEC 3.1 / 5.6.8のwindow定義。最小1）
-excludedRouteKeys = []
+  maxGogmaAdvance  = lastGogma − origin_gogma + 1（Bonus 操作なしは 1）
+  maxSkillAdvance  = lastSkill − origin_skill + (owned gogma ? 1 : 0)（SEARCH_SPEC 3.1 / 5.6.8 の window 定義。最小 1）
 ```
 
-- heldの意味（他Routeの操作で進む位置）は、割当と被覆がその位置を実際に他Targetへ割り当てたことで裏付けられる。blockedの意味（自分の必須操作を置かない）
-  はそのままである。「自分が操作しない位置をすべてheld + blockedにする」はreservationの意味を変えず、Search側のcoverage条件
-  （originから最後の操作位置までが自分の操作かheld）により、Searchは `ownPositions` にだけ操作を置くRouteを返す
-- このreservationは **speculative** である（§16、G1）。永続化せず、`PlannerConflictResolution` / lineageへ書かず、Worker protocolへ載せない
-- Searchが返したCandidateを順に受け取り、`createDeterministicMaterializer()`（Planner Alternative materializerと同じcore）でEntryにし、
-  `createPlannerRouteUnitPlans([entry], engine)` のrequired位置（`canSkipWhenCounterPassed = false` のunitの `counterBefore`）と
-  `BuildRoute.sourceOwnedWeaponId` がoptionと一致し、最終Bonus / scope / Skillが §5.3 の再生結果と一致した最初のCandidateを採用する。
-  一致しないCandidateは次へ（`materializationDeliveryCap` まで）。capに達すれば `materialization_mismatch`（「Routeが無い」ではない）
-- Normal: 非covererの `create_normal_artian` はSEARCH_SPEC 5.6.8 / PLANNER_SPEC 9.2.19.4のheld prefix canonical表現で返る。covererはheld無しで
-  `origin .. p` の連続forgeになる
+- reservationは「他Routeの資源利用情報」として正式に導出した値だけを渡す。Research上の仮割当が「後で他Targetが使う予定の位置」をheld / blockedへ
+  **先取りして書き込むことはしない**。まだmaterializeされていないTargetのrequired位置はblockedになっていないので、Searchがそこを使うCandidateを
+  返すことがあるが、形状照合（required位置の一致）が拒否する。正しさは照合とC2（required位置互いに素）で担保し、reservationは探索を狭める情報としてだけ働く
+- heldがmaterialize済みEntryのunit位置だけなので、t のRouteは「先行Routeが被覆していない位置」を自分のchainで埋める（coverage条件）。
+  これが§8.2の予測chainに対応する。実際にどの位置を跨ぎ、どの位置で操作するかはSearchのcost順が決め、照合しない
+- extentは期待Route形の最後のrequired位置までに限る（SEARCH_SPEC 3.1 / 5.6.8のwindow意味）。それより後方のIdeal位置は探索されない。
+  C2により他Targetのrequired位置は（materialize済みなら）blockedなので、照合に合うCandidateより前に返り得るのは「extent内で非blockedの、
+  より低costなIdeal位置を使うRoute」だけであり、solverの値順序（終端増分 asc、位置 asc）はそれを選びにくいが、保証はしない。delivery capで打ち切る
+- 採用判定 `matchesExpectedShape()`: `createPlannerRouteUnitPlans([entry], engine)` のrequired位置（`canSkipWhenCounterPassed = false` のunitの
+  `counterBefore`、stream別）と `BuildRoute.sourceOwnedWeaponId` が `shape.match` と一致し、Candidateの `finalBonuses` / `restorationBonusScope` /
+  Series / Group Skillが §5.3 の再生結果と一致すること。chain位置・Route operation数・RouteKindは照合しない
+- このreservationとSearchはResearch上の **speculative** な用途である（§16、G1）: 永続化せず、`PlannerConflictResolution` / lineageへ書かず、
+  Worker protocolへ載せず、user-fixed Routeとして扱わない
+- Normal: 先行Routeがforgeした位置がheldになるので、後続Targetの `create_normal_artian` はSEARCH_SPEC 5.6.8 / PLANNER_SPEC 9.2.19.4の
+  held prefix canonical表現で返る。先行Routeが無ければ `origin .. p` の連続forgeになる。どちらもNormal被覆を保つ（§8.1）
 
 ### 9.2 Candidate Searchによるmaterialization（補助方式: 射影起点）
 
-chain coverer（長い連続Route）は、通常Candidate Searchが射影起点から連続Routeとして返す形そのものである。Phase 2-A.5 Stage Bと同じく、
-sourceだけの在庫・当該Targetだけ・各streamの最初の操作位置を起点にしたrngState / normalCounters・最小extentで `searchCandidates()` を実行し、
-canonical Idealを既存adapter `materializeGlobalResearchCandidate()`（`createConstrainedCandidate(..., 'origin_reach')` + deterministic materializer。
-searchStateHashの書換えではない）でPlanner-start originのEntryにする。
+各streamで「最初のown操作位置から最後のrequired位置まで連続」する期待形（chain coverer、または短い連続Route）は、通常Candidate Searchが
+射影起点から連続Routeとして返す形そのものである。Phase 2-A.5 Stage Bと同じく、sourceだけの在庫・当該Targetだけ・各streamの最初の操作位置を
+起点にしたrngState / normalCounters・最小extentで `searchCandidates()` を実行し、canonical Idealを既存adapter `materializeGlobalResearchCandidate()`
+（`createConstrainedCandidate(..., 'origin_reach')` + deterministic materializer。searchStateHashの書換えではない）でPlanner-start originのEntryにし、
+§9.1と同じ `matchesExpectedShape()` で照合する。
 
-どちらを使うかは次で決める（決定的）。
+- canonical Idealは射影起点から最初のIdealなので、期待形のrequired位置が「射影起点からの最初のIdeal位置」であるときだけ一致する。一致しなければ
+  `shape_mismatch` としてそのTargetの方式を §9.1 へ切り替える（1回だけ）。Candidate Searchは1件しか返さないのでdelivery capの概念は無い
+- 非連続形（`reset_then_keep` で g1 と g* の間を跨ぐ、巨戟化Targetの c より前をheldで跨ぐ）はこの方式では表せない。§9.1だけが対象になる
+- 射影起点はPlanner-start originではないが、adapterがorigin reach・両hash・Route validation・Ideal判定を再構築するので、Entryの意味は
+  Planner-start originに対するものになる（Phase 0 / Phase 2-A.5で使用済みの経路）。巨戟化Targetでも、射影したSkill originで巨戟化が1位置に
+  固定されるため、§9.7のSearch規模が小さい
+
+### 9.3 方式の選択
+
+Targetごとに決定的に決める。
 
 | 条件 | 方式 |
 | --- | --- |
-| `ownPositions` が各streamで最初の操作位置から最後まで連続（chainが単一区間でrequired位置を跨がない） | どちらでもよい。予測Search規模（§9.6）が小さい方。同点なら射影起点Candidate Search |
-| 非連続（held位置を跨ぐ） | mold |
-| 射影起点Candidate Searchのcanonical Idealが形と一致しない | moldへfallback（1回だけ。それでも不一致なら `materialization_mismatch`） |
+| 期待形が各streamで連続（§9.2の条件）、かつ巨戟化Target | **射影起点Candidate Search** を先に試す（巨戟化位置が固定されSearch規模が小さい）。`shape_mismatch` なら §9.1 を1回 |
+| 期待形が各streamで連続、owned gogma | §9.7の予測規模が小さい方。同点なら射影起点Candidate Search。`shape_mismatch` なら他方を1回 |
+| 非連続（held位置を跨ぐ） | §9.1 のみ |
+| §9.1 / §9.2 とも `shape_mismatch` | 候補のoutcomeを `materialization_failed`（実行済み・不一致）として記録し、generatorの次の候補へ |
+| いずれかが `unconfirmed` / `not_executed` / `unmeasured` | 候補のoutcomeを `materialization_unconfirmed` として記録し、次の候補へ。該当Routeなしとは判定しない |
 
-### 9.3 identityと決定性
+### 9.4 identityと決定性
 
 - Candidate / Entry IDはdeterministic materializer（PLANNER_SPEC 9.2.13）が、search identity + Candidate semantic meaningから決める。
-  search identityには `normalizePlannerSearchOrigin(origin, target)`、正規化したreservation、extent、本設計のalgorithm token、CalculationContextを含め、
-  random UUID / Clock / request UUID / enumeration ordinalを含めない
-- 同じ入力からは同じEntry IDが出る。PlannerInputに既に存在するIDとの衝突（内容が異なる）はfail closed（既存materializerのcollision規則）
+  search identityには `normalizePlannerSearchOrigin(origin, target)`、正規化したreservation（§9.1の正式導出値）、extent、本設計のalgorithm token、
+  CalculationContextを含め、random UUID / Clock / request UUID / enumeration ordinalを含めない
+- 同じ入力・同じmaterialization順序からは同じEntry IDが出る。PlannerInputに既に存在するIDとの衝突（内容が異なる）はfail closed（既存materializerのcollision規則）
 - 観測trace（`bonusAmendmentTrace` / `skillAmendmentTrace` / `conversionSkillTrace`）はSearch出力のものを引き継ぎ、再抽選しない
 - intermediate groupsはmaterializerが抽出する（追加予測なし）。本設計は選択（pin）を一切置かない
 - `validateBuildCandidate()` / `validateBuildListEntry()` を通す。unsupported predictionを含むRouteは生成されない（Searchの契約）
+- Candidate / Entryは常に正規のProduction Search結果から作る。期待形をもとにRouteOperation列を手で組み立ててEntryにすることはしない
 
-### 9.4 Production Planner検証（Phase D'）
+### 9.5 Production Planner検証（Phase D'）
 
 ```text
 finalInput = plannerInput with buildListEntries = for each planning Target:
@@ -767,47 +970,83 @@ rejected 0（resource_conflict 0）、warnings 0、Trace Replay valid、`physica
 （恒等式が破れる = 本設計の前提が崩れている）。
 
 成功条件(b)（P0Rと同じ）: 別のNode processで元Exportから入力を再構築し、生成Entryを各Targetの元Entryと置換しただけのfresh ordinary Plannerを
-1回実行し（`verifyGlobalResearchFreshPlan()` と同じ経路）、同じ条件を満たすこと。
+1回実行し（`verifyGlobalResearchFreshPlan()` と同じ経路）、同じ条件を満たすこと。(a)(b)の両方を満たした候補だけが `VerifiedPlanRecord` になり、
+`bestVerified` の候補になる。
 
-### 9.5 失敗時の扱い
+### 9.6 outcomeの分類と候補の扱い（レビューR3）
 
-| 失敗 | status | 次の動作 |
-| --- | --- | --- |
-| あるTargetでSearchが形と一致するCandidateを返さない | `assignment_found_unverified` / `materialization_mismatch` | そのoptionをこのrunで除外（除外はrun内に閉じ、永続しない）し、Phase Bのincumbentの次候補へ戻る（node budget内）。推測で別のRouteを作らない |
-| Plannerが完成しない / Conflict / rejected / Replay invalid | `assignment_found_unverified` / `planner_rejected` | 落ちたEntry / Conflictのparticipantを記録し、関与Targetのoptionをrun内で除外して次候補へ。Conflictを `PlannerConflictResolution` で解決しようとしない |
-| `maxPlanSteps` 到達（incomplete） | `planner_rejected` | Research条件の見直し項目として記録。値を自動で増やさない |
-| timeout / OOM | `unmeasured` | 不成立に読み替えない |
+「実行しなかったこと」「実行して未確認だったこと」「実行して不成立だったこと」を同一視しない。
 
-### 9.6 Search規模のgate
+| 事象 | Target別 `MaterializationOutcome` | 候補別 `CandidateOutcome` | 恒久除外 | 次の動作 |
+| --- | --- | --- | --- | --- |
+| Searchを実行し、extent内のdeliveryを使い切って（`summary.exhausted` または `stoppedByExtent`、consumer stopなし）形が一致しない | `shape_mismatch` | `materialization_failed` | しない（候補単位の記録のみ。generatorは同じ候補を再生成しない） | 次の候補へ。推測で別のRouteを作らない |
+| delivery capでconsumer stop | `unconfirmed(delivery_cap_reached)` | `materialization_unconfirmed` | しない | 次の候補へ。この候補は未確認として残す（capを変えた再runは別の事前登録） |
+| Searchが `stoppedByExtent` で終わり、期待形のrequired位置がextent外にあった | `unconfirmed(extent_reached_before_shape)` | `materialization_unconfirmed` | しない | extentは期待形から導くので通常は起きない。起きたらextent導出の不整合として診断に記録する |
+| Search規模gate超過で実行しない | `not_executed(search_scale_gate)` | `materialization_unconfirmed` | しない | 次の候補へ。実行不能とは判定しない。gate値の見直しはPhase Dの事前登録で扱う |
+| timeout / OOM / process failure | `unmeasured` | `materialization_unconfirmed` | しない | 次の候補へ。不成立に読み替えない |
+| 全Targetがmaterializeされたが、Plannerが完成しない / Conflict / rejected / Replay invalid / `maxPlanSteps` 到達 | — | `planner_rejected`（rejection reason・Conflictを記録） | しない | 次の候補へ。Conflictを `PlannerConflictResolution` で解決しようとしない。`maxPlanSteps` は自動で増やさない |
+| Planner成立だが physical ≠ objective | — | `objective_mismatch` | しない | 成立と呼ばない。前提違反として報告 |
 
-D2-G-Aの知見どおり、Planner Alternative Searchの規模はreservationとextentからSearch前に計算できる。mold方式では
+- 候補別outcomeは、どのTargetで止まったか・そのTargetの `MaterializationOutcome`・それまでにmaterializeしたTarget数を含む
+- `materialization_unconfirmed` が1件以上ある結果は、「この候補は実行不能」ではなく「この条件（cap / gate / envelope）では確認できなかった」である。
+  `verified` が得られないrunの最終statusでは、`materialization_failed` / `planner_rejected` の件数と `materialization_unconfirmed` の件数を別に数える
+- run内でoption・部分割当・Targetを除外集合へ入れることはしない。同じ候補の再試行は、generatorが各完全割当を1回しか生成しないことで防ぐ
 
-- conversion Skill位置数 = 自分の操作位置のうち巨戟化候補になる位置数（moldでは1）
-- Gogmaの非held幅 = `ownPositions.gogma` の長さ、Skillの非held幅 = `ownPositions.skill` の長さ
-- Normalの非held幅 = 自分でforgeする位置数
+### 9.7 Search規模のgate
 
-を `predictedSearchScale` として記録し、事前登録した上限を超えるrequestは実行せず `materialization_mismatch`（reason `search_scale_gate`）にする。
-上限値は未計測なので本書では決めず、Phase Dの事前登録項目とする（§15）。chain covererのchainが長い（例: 235位置のReset連鎖）場合はSearch規模が
-大きくなるが、1,657 Stage Bでは同等のRouteをCandidate Searchが射影起点から返しているので、§9.2の方式へ回す判断もこのgateで行う。
+D2-G-Aの知見どおり、Planner Alternative Searchの規模はreservationとextentからSearch前に計算できる。§9.1の方式では
+
+- conversion Skill位置数 = Skill reservationのoriginから連続するheld区間（+ 直後の非held位置）のうちblockedでない位置の数（`nextOperationPositions()` の規則）
+- Gogmaの合法位置幅 = Gogma extent内の非blocked位置数、Skillの合法位置幅 = 同じくSkill
+- Normalのforge数 = held prefixの直後からproduction targetまでの位置数
+
+を `predictedSearchScale` として記録し、事前登録した上限を超えるrequestは実行せず `not_executed(search_scale_gate)` にする（§9.6）。
+上限値は未計測なので本書では決めず、Phase D-0（§9.8）の事前登録項目とする。D2-G-AのK3 L2のように、巨戟化位置の候補数がSkill streamの保持量を
+決めるので、巨戟化TargetはSearch規模が小さい §9.2 の射影起点方式を先に試す（§9.3）。
+
+### 9.8 Phase D実装前の設計検証（D-0）
+
+§9.0のとおり、現行APIは期待Route形を直接強制できない。したがって「正当なreservation + 形状照合」が、実Exportのstructural candidateに対して
+実用的なdelivery数・Search規模で期待形を返すかは **未検証** であり、Phase Dの実装前に次の設計検証タスク（**Phase D-0**、§14）で確認する。
+
+- 入力: Phase B / Cが実Exportで生成した最初のstructural candidate（oracle非依存）。Planner検証（D'）は行わない
+- 計測: Phase Cの順序でTargetごとに §9.1 / §9.2 を実行し、`deliveredBeforeMatch`、`MaterializationOutcome` の分布、predicted / 実測Search規模、時間、heap
+- 判定（事前登録）: 全Targetが `materialized` → Phase D-1へ。`shape_mismatch` / `delivery_cap_reached` / `search_scale_gate` が残る場合は、
+  その内訳から (a) delivery cap・gate・方式選択規則の調整（事前登録値の変更）、(b) materialization順序の変更、(c) Research専用の形状制約付き探索API
+  （§9.0の選択肢3）の設計、のどれが必要かを決める。(c)はdocs-onlyの設計を先行し、現行APIを改変して「できる」ことにしない
+- この検証はPhase A〜Cの設計に影響しない（Phase A〜Cの出力はrequired位置と順序であり、materialization方式に依存しない）
 
 ## 10. 目的関数・下界・探索budget
 
 ### 10.1 目的関数と部分割当の下界
 
-目的関数は `Σ_streams (streamEnd − origin)`。部分割当の下界 `LB(partial)` は次で定める（admissible。実際の最小を上回らない）。
+目的関数は `Σ_streams (streamEnd − origin)`。部分割当の下界 `LB(partial)` は次で定める（admissible。その部分割当のどの完成の構造的objectiveも、
+したがって成立した場合の物理操作数も、この値を下回らない）。
 
 ```text
 LB(partial) = Σ_streams ( max( currentEnd_stream,  floor_stream(unassigned) ) − origin_stream )
-floor_stream(unassigned) = max over unassigned Target t of  min over feasibleOptions(t) of option.streamEnd_stream
+floor_stream(unassigned) = max over unassigned Target t of  minStreamEnd_stream(t, partial)
+minStreamEnd_stream(t, partial) = min over resourceFeasibleOptions(t, partial) of option.streamEnd_stream
 ```
 
-各未割当Targetはいずれかの実行可能optionを取る必要があるので、そのstream終端はそのTargetの最小終端以上になる。これは `solveLowerBoundRelaxation()` の
-`skillFloor` / `gogmaFloor` と同じ考え方であり、位置排他・被覆を無視するので真の最小以下である。
+各未割当Targetはいずれかの資源実行可能optionを取る必要があるので、そのstream終端はそのTargetの最小終端以上になる。これは `solveLowerBoundRelaxation()` の
+`skillFloor` / `gogmaFloor` と同じ考え方であり、位置排他（他の未割当Target同士）・被覆を無視するので真の最小以下である。
+
+依存関係と使い方（レビューR1）:
+
+- `resourceFeasibleOptions` は資源条件（source排他、required位置排他、window、必要条件）だけで決まり、`LB` を読まない
+- `LB` は `resourceFeasibleOptions` のstream別最小終端だけを読み、枝刈りを再帰的に呼ばない
+- pruningは `LB(child) >= UB` の比較であり、**UBは `bestVerified.physicalOperations` だけ**（レビューB1）。`bestVerified` が無い間はpruningしない。
+  未検証のstructural candidateのobjectiveを上界に使うと、その候補が後段で不成立になったときに、より大きいobjectiveの実行可能解を既に切っている
+  可能性があるため
+- MRVの候補数評価は `resourceFeasibleOptions` の件数だけで行い、`LB` による枝刈りと分離する
 
 ### 10.2 root下界と最小性の主張
 
 - root下界は `collectLowerBoundProblem()` + `solveLowerBoundRelaxation()` で求める。入力のcross satisfaction監査（`auditCrossSatisfaction()`）が
-  可能ペア0件のときだけ `found` の値を下界として使い、`provenLowerBoundTotal()` がincumbentの物理操作数と一致すれば `proven_minimum` と呼ぶ
+  可能ペア0件のときだけ `found` の値を証明済み下界として使う
+- `proven_minimum` は、**Production検証済みの** `bestVerified.physicalOperations` が、適用可能で証明済みのroot下界 `provenLowerBoundTotal()` と
+  一致した場合だけ許可する。structural candidateのobjectiveが下界と一致しても、検証前には何も主張しない（レビューB1）
 - 可能ペアが1件以上あるPlannerInputでは下界は `not_applicable` であり、**最小性を主張しない**。solverはC1（distinct source）のまま実行可能解を探し、
   結果は常に `best_found`。branch-and-boundの `LB(partial)` も、そのTargetペアに関しては「1本の武器で2 Targetを完成させる割当」を見ていないので
   安全な下界ではない。したがって可能ペアがある入力では、`LB(partial)` を可能ペアに属するTargetについてはfloorへ含めない（残りのTargetだけで下界を取る）。
@@ -815,38 +1054,54 @@ floor_stream(unassigned) = max over unassigned Target t of  min over feasibleOpt
 - `singleStreamLowerBounds()` は説明用であり加算しない
 - 1,657をどのExportの下界・探索上限にも使わない。下界は常にそのPlannerInputから計算する
 
-### 10.3 走査window ladder
+### 10.3 走査window ladderと拡大条件（レビューR2）
 
 Phase Aの走査windowは事前登録したladderで広げる。
 
 - W0 = `recommendedCandidateSearchDefaults`（Normal 350 / Gogma 500 / Skill 1500、Issue #125、`src/domain/models/common.ts`）。これはCandidate Searchの
   推奨初期値として既に正式仕様（REQUIREMENTS 14.1）に根拠を持つ非oracle起源の定数であり、Phase 0 / 1-E / P0RのResearch extentでもある。
   Plannerが読むauthorityにはしない（Research入力として明示的に渡す）
-- 広げる条件は「あるTargetのoption数が0」または「incumbentのいずれかのstream終端がwindow末端に接している（`windowReached`）」だけ。
-  Normal 2倍（P0R V1）のような固定倍率をTarget個別に適用しない。rungの値と上限はPhase Aの事前登録で決める（§15）
+- Normal 2倍（P0R V1）のような固定倍率をTarget個別に適用しない。rungの値と上限はPhase Aの事前登録で決める（§15）
 - window外の位置を「存在しない」と記録しない。結果は常に `window` を併記する
+
+次rungへの移行は、**現windowでの探索結果の種類** で決める（oracle情報に依存しない汎用規則。「incumbentが末端に接していなければ拡大不要」とはしない）。
+
+| 現windowの結果 | 意味 | 次rung |
+| --- | --- | --- |
+| `no_structural_candidate` / `target_without_option` | Target単位でoptionが無い | **拡大する** |
+| `no_structural_candidate` / `resource_exclusivity` | 各Targetにoptionはあるが、資源排他で完全割当が無い（探索木を使い切った） | **拡大する**（次windowの新しい位置が排他を解き得る） |
+| `no_structural_candidate` / `coverage_infeasible` | 完全割当はあるがCounter被覆が成立しない（探索木を使い切った） | **拡大する**（例: より後方のReset Skills位置が既存Gogmaの被覆を伸ばす） |
+| `structural_only`、completeness = `exhausted`、候補の不成立がすべて `materialization_failed` / `planner_rejected` | 構造的候補はあったがどれも成立せず、未確認は無い | **拡大する**（別の位置・sourceの候補が成立し得る。事前登録した上限rungまで） |
+| `structural_only`、completeness = `exhausted`、`materialization_unconfirmed` が1件以上 | 成立しなかった原因に未確認（cap / gate / envelope）が含まれる | **拡大しない**。先にcap / gate / envelopeの事前登録値を見直す（windowの問題と断定しない） |
+| `search_incomplete`（node budget / verification budget / cancel） | 未探索枝が残る | **拡大しない**。「window内に完全割当が存在しない」と結論しない。node / verification budgetの見直しが先 |
+| `verified` | 成立 | Phase Bとしては拡大しない。Phase Eの最適化として、`bestVerified` のいずれかのstream終端がwindow末端に接しているときに別rungを試してよい（より広いwindowはstream間のtrade-offで別の組合せを許し得るが、保証はしない） |
+| `unmeasured` | 未計測 | 拡大しない。envelopeの見直しが先 |
+
+- 拡大は全Target共通のrungで行い、Target個別のwindowを持たない
+- 上限rungに達しても `no_structural_candidate` のままなら、結果は「事前登録したladderの範囲では構造的候補が無い」であり、実行可能解の不存在ではない
 
 ### 10.4 budgetの分離（G5）
 
 | 概念 | 単位 | 性格 |
 | --- | --- | --- |
-| 走査window | Counter位置数（stream別） | Phase Aの範囲。ladderで事前登録 |
-| node budget | solverの展開node数（決定的） | Phase Bの範囲。到達は `assignment_incomplete` |
-| materialization delivery cap | 1 Targetで受け取るCandidate数 | Phase Dの範囲。到達は `materialization_mismatch` |
-| Search規模gate | 事前計算した規模（§9.6） | Phase Dの範囲 |
+| 走査window | Counter位置数（stream別） | Phase Aの範囲。ladderで事前登録。移行規則は§10.3 |
+| node budget | solverの展開node数（決定的） | Phase Bの範囲。到達は `search_incomplete`（completeness `node_budget_reached`） |
+| verification budget | Phase D / D'へ渡すstructural candidateの件数（1 run） | Phase B〜D'の範囲。到達は completeness `verification_budget_reached`、未試行候補は `not_attempted` |
+| materialization delivery cap | 1 Targetで受け取るCandidate数 | Phase Dの範囲。到達は `unconfirmed(delivery_cap_reached)`（未確認） |
+| Search規模gate | 事前計算した規模（§9.7） | Phase Dの範囲。超過は `not_executed(search_scale_gate)`（未実行） |
 | full Planner run数 | `beforePlannerRun()` の回数 | Phase D'の観測値。Production `maxPlannerReruns` を流用しない |
 | `maxPlanSteps` | Research 20000（Domain default 1000 / Planner Alternative runtime導出とは別、G12） | Phase D' |
 | wall-clock / heap | measurement envelope | `unmeasured` の判定だけに使う。意味論的判定に使わない（G6 / G7） |
 
-具体値（node budget、delivery cap、Search規模gate、ladder rung）は根拠となる計測が無いので本書では決めない。各Phaseの事前登録で、
+具体値（node budget、verification budget、delivery cap、Search規模gate、ladder rung）は根拠となる計測が無いので本書では決めない。各Phaseの事前登録で、
 そのPhaseの非formal smokeを根拠に固定し、formal run後に変えない。
 
 ### 10.5 評価の優先順位
 
-第一（成立）: 全planning Target完成、Conflict 0、rejected / resource_conflict 0、termination completed、Trace Replay valid。
-第二（品質）: 物理操作数（= Σ stream終端）、実行時間、メモリ。
-部分解（完成数 < 全Target）は `assignment_found_unverified` / `assignment_incomplete` として完成数・Conflict数・未計測状態を併記し、全体最適解と混同しない。
-「最短性の証明」（`proven_minimum`）と「探索で発見した最良実行可能解」（`best_found`）を区別する。
+第一（成立）: 全planning Target完成、Conflict 0、rejected / resource_conflict 0、termination completed、Trace Replay valid（`verified`）。
+第二（品質）: 物理操作数（= Σ stream終端）、実行時間、メモリ。操作数と計算性能は別の指標として評価し、混同しない。
+部分解（`structural_only` / `search_incomplete`）は、構造的候補のobjective・候補別outcomeの内訳（failed / rejected / unconfirmed）・完成Target数を
+併記し、全体最適解と混同しない。「最短性の証明」（`proven_minimum`）と「探索で発見した最良実行可能解」（`best_found`）を区別する。
 
 ## 11. Oracle isolation
 
@@ -877,14 +1132,17 @@ node budget、delivery cap、Search規模gateを1,657の値や過去run観測か
 
 ## 12. Determinism / cancel / incomplete
 
-- **決定性**: 同じPlannerInput・同じResearch入力・同じEngine versionから、同じReachTable、同じnode列、同じincumbent、同じmaterialization request列、
-  同じEntry ID、同じPlanner結果（semantic）が出る。Clock・乱数・enumeration ordinalを意味に入れない（Entryの `createdAt` は固定Clock）
+- **決定性**: 同じPlannerInput・同じResearch入力・同じEngine versionから、同じReachTable、同じnode列、同じstructural candidate列、同じmaterialization順序と
+  request列、同じEntry ID、同じPlanner結果（semantic）が出る。Clock・乱数・enumeration ordinalを意味に入れない（Entryの `createdAt` は固定Clock）。
+  Phase D / D'の結果はUB（`bestVerified.physicalOperations`）を通じてだけ以後の探索に影響する（§6.5）
 - **cancel**: 既存Research seam（`shouldCancel()` / `yieldControl()`）を、Phase Aの位置走査（stream × 位置のloop）、Phase Bのnode、Phase Dの
   Search（Search内部の既存checkpoint）、Phase D'のscheduler（既存64 action毎のyield）で確認する。synchronousなTrace Replay / execution projection中の
   即時cancelは保証しない（Phase 2-Bの観測どおり）
-- **中断・再開**（Phase E）: solver stateはplain data（割当stack、incumbent、node数、run内除外集合）なので保存・再開できる。再開は同じ入力hashのときだけ許し、
-  再開後のnode列は中断しなかった場合と一致する
-- **incomplete**: node budget到達は `assignment_incomplete`、walls / heapは `unmeasured`、window不足は `no_assignment_within_window`。
+- **中断・再開**（Phase E）: generatorの探索状態はplain data（割当stack、各nodeの値順序の位置、node数、UB、bestStructural、bestVerified、候補別outcome）なので
+  保存・再開できる。再開は同じ入力hashのときだけ許し、再開後の候補列は中断しなかった場合と一致する
+- **incomplete / unknown / unmeasured / rejectedの区別**: node budget・verification budget・cancelは `search_incomplete`（未探索枝が残る。窓内に候補が無いとは
+  結論しない）、wall-clock / heapは `unmeasured`、探索木を使い切っての候補不在は `no_structural_candidate`（reason別）、構造的候補はあるが成立しないのは
+  `structural_only`（候補別に `materialization_failed` / `planner_rejected` = 実行済み不成立と、`materialization_unconfirmed` = 未確認 / 未実行を分ける）。
   いずれも「実行可能解が存在しない」とは書かない。per-Target診断（option数、dead endになった部分割当の最小位置、被覆不成立の位置）を併記する
 
 ## 13. Test / acceptance
@@ -897,36 +1155,50 @@ Production RNGを使わないFake Engine / 小規模fixtureで意味論を固定
 | 対象 | test |
 | --- | --- |
 | Phase A | 2〜3 Target・小window（例: Skill 6 / Gogma 6 / Normal 3）で、ReachTableの各位置集合が総当たり再生と一致。unsupported予測でoption不在。保護武器はIdeal現在性能だけ。関心layoutがIdeal multisetの順列に限られる。`collectLowerBoundProblem()` の閾値がReachTableから再導出できる |
-| Phase B | 総当たりで最小目的関数が分かる小入力に対し、solverが同じ目的関数のincumbentを返す。C1 / C2違反の割当を返さない。同じ資源を要求する2 Targetで一方へ `reset` option、他方へ `keep_from_source` が割り当たる（火 / 龍型）。node budget到達で `assignment_incomplete` とincumbent。決定性（2回実行で同一node列） |
-| Phase B（下界） | root下界 ≤ 総当たり最小。cross satisfactionペアを持つ入力で `not_applicable` と `best_found`。`LB(partial)` が総当たりの残り最小を上回らない |
-| Phase C | Skill被覆不成立の入力（全Targetが巨戟化Routeで、originのSkillを誰も使わない）を検出し、coverage-driven value orderingで `c = origin` 型optionを選ぶ。Gogma / Normal被覆が常に成立。chain付きRoute形の再生がrequired-only再生と同一の最終武器 |
-| Phase D | mold reservationで `visitPlannerAlternativeCandidates()` が `ownPositions` だけに操作を置くRouteを返し、`createPlannerRouteUnitPlans()` のrequired位置がoptionと一致。held prefix canonical表現。射影起点Candidate Searchとmoldが同じ形で同じ最終武器を返す。不一致Candidateはcapまで次へ |
-| Phase D' | fixtureで `createProductionPlanWithObserver()` がcompleted / Conflict 0 / Replay validを返し、`summarizePlanPhysical()` の合計がassignment objectiveと一致。被覆pre-checkが不成立の集合をPlannerへ渡すとstall dropになること（pre-checkの妥当性） |
+| Phase B | 総当たりで最小目的関数が分かる小入力に対し、generatorが生成するstructural candidate列に総当たり最小の割当が含まれ、UB無しでは枝刈りが起きない（全完全割当が生成順に出る）。UB（verifiedの物理操作数を模したstub）を与えると `LB >= UB` の枝だけが切られ、UB未満の割当は失われない。C1 / C2違反の割当を返さない。同じ資源を要求する2 Targetで一方へ `reset` option、他方へ `keep_from_source` が割り当たる（火 / 龍型）。node budget到達で `search_incomplete`。決定性（2回実行で同一node列・同一候補列、yield後の再開が同じnodeの次の値から始まる）。`resourceFeasibleOptions` → `LB` → pruningの一方向依存（`LB` 計算中にpruningもoption列挙も再入しない） |
+| Phase B（下界） | root下界 ≤ 総当たり最小。cross satisfactionペアを持つ入力で `not_applicable` と `best_found`。`LB(partial)` が総当たりの残り最小を上回らない。structural candidateのobjectiveがroot下界と一致しても `proven_minimum` を返さない |
+| Phase B（window） | §10.3の移行規則: `target_without_option` / `resource_exclusivity` / `coverage_infeasible` の各reasonが区別され、各Targetにoptionがあっても排他で完全割当が無い入力で次rungへ移る。node budget到達では移らない |
+| Phase C | Skill被覆不成立の入力（全Targetが巨戟化Routeで、originのSkillを誰も使わない）を検出し、coverage-driven value orderingで `c = origin` 型optionを選ぶ。Gogma / Normal被覆が常に成立。materialization順序が巨戟化位置の低い順にSkill covererを先行させるtopological順になる。chain付きRoute形の再生がrequired-only再生と同一の最終武器 |
+| Phase D | `derivePlannerAlternativeReservation()` でmaterialize済みEntryから導出したreservationだけを渡し、held / blockedを改変していない（入力を捕捉して比較）。空reservationの最初のTargetが連続Routeを返し、後続Targetがheld位置を跨ぐ非連続Routeを返す。`matchesExpectedShape()` がrequired位置・source・最終武器だけで判定し、chain位置が異なっても採用する。`shape_mismatch` / `unconfirmed(delivery_cap_reached)` / `not_executed(search_scale_gate)` / `unmeasured` が区別され、`not_executed` / `unconfirmed` が恒久除外にならない。射影起点Candidate Searchが連続形で同じ最終武器を返す。held prefix canonical表現 |
+| Phase D' | fixtureで `createProductionPlanWithObserver()` がcompleted / Conflict 0 / Replay validを返し、`summarizePlanPhysical()` の合計がassignment objectiveと一致して `verified` になる。Plannerが落とす集合は `planner_rejected` となり、同じ候補が再生成されず、他の候補が除外されない。被覆pre-checkが不成立の集合をPlannerへ渡すとstall dropになること（pre-checkの妥当性） |
 | isolation | §11.3 |
 
 ### 13.2 統合acceptance（実Export、formal measurement）
 
-Phase D'のformal runで次を事前登録する（値はPhase Dの事前登録で確定）。
+Phase D-1のformal runで次を事前登録する（値はPhase D-0 / D-1の事前登録で確定）。
 
 1. `verified`: 43 / 43、Conflict 0、rejected 0、completed、Trace Replay valid、別processのfresh ordinary Plannerでも同じ
-2. 物理操作数をincumbent 8,534（Phase 1-E / 2-A / P0R）とpost-hocに比較する。8,534以下で初めて「改善」と呼ぶ
-3. 1,657（Phase 2-A.5）との比較はpost-hoc analyzerだけが行う。一致しなくても失敗ではない（`best_found`）。下限と一致すれば `proven_minimum`
+2. 物理操作数をincumbent 8,534（Phase 1-E / 2-A / P0R）とpost-hocに比較し、次のとおり判定する（操作数の評価）。
+   計算時間・メモリの改善は別の指標として別途主張し、操作数の評価と混同しない
+
+   | `bestVerified.physicalOperations` | 判定 |
+   | --- | --- |
+   | 8,534未満 | 操作数改善 |
+   | 8,534 | 既存incumbentと同等 |
+   | 8,534超 | 操作数では既存incumbentに劣る |
+   | （`verified` が無い） | 完成数の観点で未達（43 / 43未達）。操作数は評価しない |
+
+3. 1,657（Phase 2-A.5）との比較はpost-hoc analyzerだけが行う。一致しなくても失敗ではない（`best_found`）。Production検証済みの物理操作数が
+   適用可能で証明済みの下限と一致すれば `proven_minimum`
 4. formal validity: measurement HEADがclean、Export SHA-256一致、Production changed files = `[]`、oracle未読（§11.3）、事前登録条件の不変
 
 ## 14. 実装Phase分割
 
-Phase A → B → C → D → Eの順に依存する。1 Phase = 1 PR（必要なら事前登録docs PRと実装 / 計測PRに分ける。D1〜D2系列と同じ運用）。
+Phase A → B → C → D-0 → D-1 → Eの順に依存する。1 Phase = 1 PR（必要なら事前登録docs PRと実装 / 計測PRに分ける。D1〜D2系列と同じ運用）。
+Phase Dは、materialization方式の設計検証（D-0）と統合acceptance（D-1）に分ける（§9.8）。Phase A〜Cの設計はmaterialization方式に依存しないので、
+D-0の結果でA〜Cをやり直す必要はない。
 
 | Phase | 変更範囲 | 入力 | 出力 | acceptance | テスト | 次Phaseへの依存 | Production影響 | formal measurement |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **A 到達option生成** | `src/benchmarks/globalAssignment/reachTable.ts`（提案）、test、走査helperの下限moduleとの共有（下限moduleの契約不変） | PlannerInput、Engine、window | `ReachTable`、`enumerateOptions()`、`replayOptionRequiredOnly()`、走査summary（予測回数、window到達） | synthetic一致、下限閾値の再導出、unsupported / 保護 / 未確定Counterのfail closed、oracle isolation | §13.1 Phase A | Bの入力 | なし | 不要（実Exportの走査時間・予測回数はPhase Bのrunで診断として記録） |
-| **B 資源割当** | `globalAssignment/assignmentSolver.ts`、`lowerBound` 接続、runner（assignment-only mode） | ReachTable、node budget | `Assignment`（incumbent）、root下界、node列診断、`no_assignment_within_window` / `assignment_incomplete` | synthetic最小一致、C1 / C2、決定性、budget到達、下界の安全性 | §13.1 Phase B | Cの入力 | なし | **要**（実Exportでassignment-only run: objective、root下界、node数、時間。43 / 43 PlanはまだB単独では主張しない） |
-| **C Counter被覆とRoute構成** | `globalAssignment/coverage.ts`、solverへのcoverage check接続 | Assignment | `StreamCoverage`、`RouteShape[]`、不成立位置 | synthetic被覆、coverage-driven ordering、chain再生一致 | §13.1 Phase C | Dの入力 | なし | 不要（Bのrunへ被覆診断を追加） |
-| **D Materialization / Planner検証** | `globalAssignment/materialize.ts`、`verify.ts`、runner（full mode）、analyzer（post-hoc oracle比較） | RouteShape[]、Engine、Planner-start origin | `MaterializedTarget[]`、`GlobalAssignmentResult`、RESULT JSON | 実Exportで `verified`（§13.2）。不成立なら理由別status | §13.1 Phase D / D'、isolation | Eの基準 | なし | **要**（事前登録: delivery cap、Search規模gate、Research maxPlanSteps、envelope） |
-| **E 最適化・性能** | incremental coverage pruning、decidedなdiscrepancy探索、中断再開、メモリ内訳、Browser Worker測定 | Dのincumbent | 改善したincumbent、性能記録 | 全Target完成を維持したまま物理操作数・時間・メモリを改善。退行は不受理 | 既存acceptanceの維持、Browser isolation | — | なし（Production化は§16の別PR） | **要** |
+| **B 資源割当（generator）** | `globalAssignment/assignmentSolver.ts`、`lowerBound` 接続、runner（assignment-only mode。Phase D / D'は呼ばず、UBは与えない） | ReachTable、node budget、window ladder | structural candidate列（先頭k件）、`bestStructural`、root下界、node列診断、`no_structural_candidate`（reason別）/ `search_incomplete`、§10.3の移行判定 | synthetic最小一致、C1 / C2、決定性と再開、UB無しで枝刈りしない、下界の安全性、R1の一方向依存、R2の移行規則 | §13.1 Phase B | Cの入力 | なし | **要**（実Exportでassignment-only run: 先頭候補のobjective、root下界、node数、時間、完成性。**43 / 43 Plan・verified・proven_minimumはB単独では報告しない**） |
+| **C Counter被覆とRoute構成** | `globalAssignment/coverage.ts`、solverへのcoverage check接続、materialization順序、`ExpectedRouteShape` | structural candidate | `StreamCoverage`、materialization順序、`ExpectedRouteShape[]`、不成立位置 | synthetic被覆、coverage-driven ordering、順序のtopological性、chain再生一致 | §13.1 Phase C | D-0の入力 | なし | 不要（Bのrunへ被覆・順序診断を追加） |
+| **D-0 materialization方式の設計検証** | `globalAssignment/materialize.ts`（§9.1 / §9.2 / §9.3）、Search規模予測、runner（materialize-only mode）、事前登録docs | 実ExportのPhase B / C出力（最初のstructural candidate）、Engine、Planner-start origin | Target別 `MaterializationOutcome`、`deliveredBeforeMatch`、predicted / 実測Search規模、時間、heap、§9.8の判定 | 全Targetが `materialized` ならD-1へ。残るoutcomeの内訳から (a) 事前登録値の調整 (b) 順序変更 (c) 形状制約付き探索APIのdocs-only設計 のどれが必要かを決める | §13.1 Phase D | D-1の前提 | なし | **要**（事前登録: delivery cap、Search規模gate、方式選択規則、envelope。Planner検証は行わない） |
+| **D-1 Planner検証（統合acceptance）** | `globalAssignment/verify.ts`、runner（full mode: B → C → D → D'のloop）、analyzer（post-hoc oracle比較） | D-0で確認した方式、verification budget | `VerifiedPlanRecord` / `GlobalAssignmentResult`、候補別outcome、RESULT JSON | 実Exportで `verified`（§13.2）。不成立なら理由別status（§4.6） | §13.1 Phase D'、isolation | Eの基準 | なし | **要**（事前登録: verification budget、Research maxPlanSteps、envelope） |
+| **E 最適化・性能** | incremental coverage pruning、決定的なdiscrepancy探索、中断再開、window拡大（verified時）、メモリ内訳、Browser Worker測定 | D-1の `bestVerified` | 改善した `bestVerified`、性能記録 | 全Target完成を維持したまま物理操作数を改善（8,534未満。§13.2）。時間・メモリは別指標。退行は不受理 | 既存acceptanceの維持、Browser isolation | — | なし（Production化は§16の別PR） | **要** |
 
 最初の実装Phase（A）は、小さなsynthetic fixtureだけで意味論を検証できる。実Exportの43 TargetはPhase B（assignment-only）で初めて使い、
-43 / 43 Planの統合acceptanceはPhase Dで行う。
+materialization方式の実用性はD-0で、43 / 43 Planの統合acceptanceはD-1で行う。
 
 ## 15. 未決事項・リスク・採用しなかった案
 
@@ -934,9 +1206,11 @@ Phase A → B → C → D → Eの順に依存する。1 Phase = 1 PR（必要�
 
 | 項目 | 内容 | 解決場所 |
 | --- | --- | --- |
-| window ladderのrungと上限 | W0 = 350 / 500 / 1500は定まるが、W1以降と上限、広げる条件の運用（Target個別か全体か。本書は全体） | Phase A事前登録 |
-| node budget | 根拠となる計測が無い。Phase Bの非formal smokeで決める | Phase B事前登録 |
-| delivery cap / Search規模gate | §9.6。D2-G-Aのモデル値をgateの根拠にするか | Phase D事前登録 |
+| window ladderのrungと上限 | W0 = 350 / 500 / 1500は定まるが、W1以降と上限。移行規則は§10.3で確定（全Target共通rung） | Phase A事前登録 |
+| node budget / verification budget | 根拠となる計測が無い。Phase Bの非formal smokeで決める | Phase B / D-1事前登録 |
+| delivery cap / Search規模gate / 方式選択規則の閾値 | §9.3 / §9.7。D2-G-Aのモデル値をgateの根拠にするか | Phase D-0事前登録 |
+| **materialization方式の実用性**（Phase D実装前） | §9.0のとおり現行APIは期待Route形を直接強制できない。「正当なreservation + 形状照合」が実Exportのstructural candidateに対して実用的なdelivery数・Search規模で期待形を返すかは未検証。返らない場合、Research専用の形状制約付き探索APIのdocs-only設計が先に要る（§9.8。現行APIを改変して「できる」ことにしない） | Phase D-0（設計検証） |
+| materialization順序とchain長 | Phase Cのtopological順（§8.2）はSkill被覆依存だけを拘束し、残りはmax advance昇順。先行Routeのchainが長くなる順序ではSearch規模が増え得る。順序の別案（Gogma終端昇順など）はD-0の結果で判断 | Phase D-0 |
 | checkpoint selectionを持つEntry | 本設計はpinを置かない。元Entryに選択があるTargetは `unsupported_input`（`checkpoint_selection`）でfail closedする（PLANNER_SPEC 9.5.2と同じ扱い）。対象Exportでは0件 | 本書で決定（上記） |
 | Normal Counter未確定 | blind variantをoptionにしない。`unconfirmed_counter` でfail closed | 本書で決定 |
 | cross satisfaction可能ペア | distinct sourceで実行可能解を探し、最小性を主張しない（§10.2）。1本の武器で2 Target完成を割当に含める拡張は行わない | 本書で決定 |
@@ -944,9 +1218,10 @@ Phase A → B → C → D → Eの順に依存する。1 Phase = 1 PR（必要�
 
 ### 15.2 後続実験で判断できるもの
 
-- covererの選択規則（nearest-successor vs 最大終端Targetの単一chain）の、Search規模・Route operation数への影響
-- mold方式と射影起点Candidate Search方式の時間差
+- covererの予測規則（nearest-successor vs 最大終端Targetの単一chain）と、Searchが実際に返すchainの一致度・Search規模への影響
+- §9.1（正当なreservation + 照合）と §9.2（射影起点Candidate Search）の時間差と `deliveredBeforeMatch` の分布
 - `LB(partial)` の強化（例: 残りTargetの二部マッチング可否をnodeごとに判定）の費用対効果
+- verified取得前の候補順序（値順序だけ）で最初の候補がどの程度良いか。verifiedが得られるまで枝刈りが無いことによるnode数の増加
 - incremental coverage pruning（完全割当を待たず、Skill origin側の被覆不成立を部分割当で検出）
 - 決定的なdiscrepancy探索（LDS）の採否
 - Phase D'の長いPlanにおけるTrace Replay / execution projectionのメモリ（Phase 2-Bの観測: projectionはStep数に比例）
@@ -956,10 +1231,12 @@ Phase A → B → C → D → Eの順に依存する。1 Phase = 1 PR（必要�
 
 | リスク | 影響 | 緩和 |
 | --- | --- | --- |
-| Phase AのwindowにIdeal位置が無いTarget | `no_assignment_within_window` | ladderで広げる。「存在しない」とは記録しない |
-| Phase Bの探索空間（1 Targetあたりoption数 × 43） | node budget到達 | MRV、branch-and-bound、lazy enumeration、coverage-driven ordering。incumbentは常に保持 |
-| mold Searchの規模（長いchain） | 時間 / OOM | §9.6 gate、§9.2の射影起点Candidate Searchへの振替 |
-| 被覆pre-checkが通ってもPlannerが落とす | `planner_rejected` | run内除外と再探索。原因をrejection reason別に記録し、新しい共有規則を作って回避しない |
+| Phase AのwindowにIdeal位置が無いTarget、または資源排他 / 被覆で完全割当が無い | `no_structural_candidate` | §10.3の規則でladderを広げる。「存在しない」とは記録しない |
+| Phase Bの探索空間（1 Targetあたりoption数 × 43）、特にverified取得前は枝刈りが無い | node budget到達（`search_incomplete`） | MRV、lazy enumeration、coverage-driven ordering、最初の候補を即座にPhase Dへ渡してUBを早く得る。bestStructural / bestVerifiedは常に保持 |
+| 正当なreservationだけでは期待形が低いdelivery indexで返らない | `unconfirmed(delivery_cap_reached)` が多発 | D-0で計測し、cap・順序・方式選択を調整。必要なら形状制約付き探索APIを別途設計（§9.8） |
+| 先行Routeのchainが長い / 巨戟化位置候補が多いSearchの規模 | 時間 / OOM（`not_executed` / `unmeasured`） | §9.7 gate、巨戟化Targetは§9.2を先に、順序の見直し（D-0） |
+| 被覆pre-checkが通ってもPlannerが落とす | `planner_rejected` | 候補単位で記録し、generatorの次候補へ。option / 部分割当を除外しない。原因をrejection reason別に記録し、新しい共有規則を作って回避しない |
+| 未検証候補のobjectiveを上界に使うことによる実行可能解の喪失 | より高いobjectiveのverifiedを切り落とす | UBは `bestVerified.physicalOperations` だけ（§6.3 / §10.1）。verifiedが無い間は枝刈りしない |
 | 恒等式（physical = Σ advance）の不一致 | `objective_mismatch` | 成立と呼ばない。前提違反として報告 |
 | 分母維持のため未成立Targetの元Entryを残すと、その元Entryが成立Entryと競合する | Conflict > 0 | Phase 0 / P0Rと同じ規則。未成立Targetがある時点で `verified` ではない |
 
@@ -987,8 +1264,9 @@ Phase A → B → C → D → Eの順に依存する。1 Phase = 1 PR（必要�
 | user-fixed Route | PLANNER_SPEC 9.2.19.3のfixed Route集合（明示選択、valid explicit resolution、有効なlineage） | 読まない・作らない |
 | explicit conflict resolution | `PlannerConflictResolution`（REQUIREMENTS 23） | Phase D'は常に `conflictResolutions = []`。合成しない |
 | valid repair lineage | `ProductionPlan.conflictRepairLineage`（9.2.19.11） | 読まない・書かない |
-| Research上の仮割当 | §6のAssignment | Research RESULTにだけ記録する。Build List / Plan / Export / Dexieへ書かない |
-| provisional / speculative reservation | §9.1のmold | Search入力として一時的に使うだけ。永続化・記録しない（G1） |
+| Research上の仮割当（structural candidate） | §6のAssignment | Research RESULTにだけ記録する。Build List / Plan / Export / Dexieへ書かない。成立（verified）とは区別する |
+| provisional / speculative reservation | §9.1のreservation（materialize済みのResearch生成Entryから `derivePlannerAlternativeReservation()` で導出） | Search入力として一時的に使うだけ。導出元はResearchが生成したEntryであり、ユーザーがfixedしたRouteではない。永続化・記録せず、explicit resolutionへ変換しない（G1） |
+| Research上の形状条件（`ExpectedRouteShape`） | §4.4 / §8.3 | Search後の照合にだけ使う。reservationのheld / blockedへ書き込まない（レビューB2） |
 | 実際に確定したBuildListEntry | Phase D'の最終入力（Research process内のPlannerInput） | ユーザーの明示決定として記録しない。Research runner外へは生成Entry（ID・snapshot）をRESULT / `.local` へ書くだけ |
 
 Production統合に必要な事項は本設計の範囲外であり、将来の別docs-only PRとプロジェクトオーナーの決定を要する:
@@ -1004,3 +1282,14 @@ Production統合に必要な事項は本設計の範囲外であり、将来の�
 - `git diff --check`、`npm run check:nul`、`npm run lint`、`npm test`、`npm run build` を実行した（結果はPR本文に記載）。docs-onlyのため挙動変化は無い
 - 長時間のformal Research run、Search実行、oracle再計算、RESULT JSON生成は行っていない
 - 既存のPhase 2-A.5 / 2-B / C2 / D2 / P0Rの正式結果・RESULT JSON・Research実装は変更していない
+
+## 18. レビュー対応（PR #237、初版 `bc7c4f4` に対する修正）
+
+| 区分 | 指摘 | 対応 |
+| --- | --- | --- |
+| Blocking B1 | 未検証のAssignmentをincumbentとして枝刈りの上界・探索終了条件に使っていた | structural candidate / bestStructural / bestVerifiedを分離（§3.1 / §4.3 / §4.6）。solverをgeneratorにし、UBは `bestVerified.physicalOperations` だけ、verifiedが無い間は枝刈りしない（§6.3 / §6.4 / §10.1）。`proven_minimum` はverifiedと証明済み下界の一致だけ（§10.2）。Phase D / D'不成立時は探索状態を保持して次候補へ進み、option・部分割当を除外しない（§6.3 / §9.6）。Phase Bはverified / proven_minimumを報告しない（§14） |
+| Blocking B2 | 「自分が操作しない位置をすべてheld + blocked」にするmoldが、reservationの正式意味論と整合しない | moldを廃止。sourceで確認した合法位置規則に基づき、現行APIで強制できること・できないことを明記（§9.0）。正当なreservation（materialize済みEntryからの `derivePlannerAlternativeReservation()`）だけでSearchし、形はSearch後に照合する方式へ変更（§9.1）。形状条件 `ExpectedRouteShape` をreservationから分離（§4.4 / §7 / §8.3）。materialization順序（Skill被覆依存のtopological順）と循環依存の扱いを記載（§8.2）。形状制約付き探索は将来APIとし、Phase D実装前の設計検証D-0を追加（§9.8 / §14） |
+| Required R1 | `feasibleOptions` → `LB` → `feasibleOptions` の循環 | `resourceFeasibleOptions`（資源条件のみ）→ `LB`（stream別最小終端のみ）→ pruning（UB比較）の一方向に分離。MRVは `resourceFeasibleOptions` の件数だけ（§6.4 / §10.1） |
+| Required R2 | window拡大条件がoption 0件と末端接触だけ | 現windowの結果種別（`target_without_option` / `resource_exclusivity` / `coverage_infeasible` / `structural_only`の内訳 / `search_incomplete` / `verified` / `unmeasured`）ごとの移行規則を定義。node budget到達では拡大せず、未確認が含まれる場合はcap / gate / envelopeの見直しを先行（§10.3 / §4.6） |
+| Required R3 | Search規模gate超過の未実行を `materialization_mismatch` に分類していた | `MaterializationOutcome` を `materialized` / `shape_mismatch`（実行済み・不一致）/ `unconfirmed`（delivery cap・extent）/ `not_executed`（gate）/ `unmeasured` に分け、候補別outcomeで `materialization_failed` と `materialization_unconfirmed` と `planner_rejected` を区別。未実行・未確認は恒久除外にしない（§4.5 / §4.6 / §9.6 / §10.4 / §12） |
+| Optional | 「8,534以下で改善」 | 8,534未満 = 操作数改善、8,534 = 同等、8,534超 = 劣る、verified無し = 完成数未達に統一し、時間・メモリは別指標とした（§13.2 / §10.5 / §14 Phase E） |
