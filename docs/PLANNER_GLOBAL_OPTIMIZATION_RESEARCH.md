@@ -284,3 +284,6 @@ D2-C-Bでt05のK1 Candidateと衝突した受理済みt07を、D2-Bで発見済�
 D2-C-Bで互いのsupportに負けたt03について、2 support（`e396d352` / `92d87b90`）を同時に置くK2 contextでSearchし、得たCandidateをD2-D最良incumbent（24 / 19）へ1件ずつ追加して評価する
 D2-Eの実行条件は [D2-E事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2E_SPEC.md)（docs-only）で確定した。
 その実装と正式計測は [D2-E-B](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2EB.md)（`D2E_SET_COEXISTENT_NOT_BETTER`、K2 Candidate 2件・R1 2 / 2、c2で置換集合R5成立・t03完成だが別Targetを喪失し24 / 43・Conflict 19のまま、改善なし、R6未達）にある。
+D2-E-Bでt03 K2 CandidateにSkill 648 / Gogma 125で負けてTargetを失った置換集合外Entry `54dd2b4e` をt03のsupportへ加えた3-support K3 contextでt03だけを再Searchし、
+得たCandidateをD2-D最良incumbent（24 / 19）へ1件ずつ追加して評価するD2-Fの実行条件は [D2-F事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2F_SPEC.md)（docs-only。
+非formal検算でK3 reservation `fnv1a32:6e2a0744`、Skill 648 / Gogma 125がblockedに入ることを確認）で確定した。実装と正式計測は未実施である。
