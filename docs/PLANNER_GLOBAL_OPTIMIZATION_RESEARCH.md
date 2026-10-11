@@ -288,3 +288,4 @@ D2-E-Bでt03 K2 CandidateにSkill 648 / Gogma 125で負けてTargetを失った�
 得たCandidateをD2-D最良incumbent（24 / 19）へ1件ずつ追加して評価するD2-Fの実行条件は [D2-F事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2F_SPEC.md)（docs-only。
 非formal検算でK3 reservation `fnv1a32:6e2a0744`、Skill 648 / Gogma 125がblockedに入ることを確認）で確定した。
 その実装と正式計測は [D2-F-B](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2FB.md)（`D2F_INCOMPLETE`、K3 context・reservationは登録値どおり、L0 / L1はextent boundで0件、L2は登録heap上限12 GBで`out_of_memory`のため未計測、K3 Candidate不存在は結論づけない、24 / 43・Conflict 19からの改善なし、R6未達）にある。
+D2-F-BのK3 L2 OOMの原因調査（非formal）は [D2-G-A](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2GA.md)（K2 / K3 × L0 / L1を既存instrumentation付きで再実行。L0 / L1のheap peakの大半は未回収garbage、時間はGogma held-aware streamの生成量、K3固有の保持はconversion位置ごとのSkill streamの全depth保持でL1 280万state・L2モデル6,081万state、L2はfull GC後約10 GB生存のGCスラッシング後OOM、次はSearch規模の事前計算をgateにした別の代替Route探索を推奨）にある。

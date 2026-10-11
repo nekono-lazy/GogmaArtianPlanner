@@ -10,6 +10,7 @@ import {
   createD2GASeries,
   d2gaConversionSkillPositions,
   d2gaFormalSegments,
+  d2gaHeldAwareSkillStreamCounts,
   d2gaReservationShape,
   d2gaRungExtent,
   D2GA_FORMAL_SOURCES,
@@ -94,6 +95,25 @@ describe('D2-G-A static helpers', () => {
     expect(await d2gaConversionSkillPositions({ skill: { held: [], blocked: [] } }, 10, 4)).toEqual({ positions: [10], beyondLimit: false })
   })
 
+  it('models the held-aware Skill stream size exactly as the real stream observer reports it', async () => {
+    for (const [heldLength, heldMode, M] of [[8, 'held', 11], [8, 'held_blocked', 11], [3, 'held', 6], [12, 'held', 9]] as const) {
+      const fixture = createLongHeldFixture('long_skill_held', { heldLength, heldMode }, { maxNormalAdvance: 1, maxGogmaAdvance: 1, maxSkillAdvance: M })
+      const run = await runSearch(fixture.input, null, true)
+      const final = run.observer!.final()
+      const origin = fixture.input.origin.rngState.skillCounter.value!
+      const { held, blocked } = fixture.input.reservation.skill
+      expect(final.skillStreams.length).toBeGreaterThan(0)
+      let transitions = 0
+      for (const stream of final.skillStreams) {
+        const model = d2gaHeldAwareSkillStreamCounts(held, blocked, stream.startSkillCounter, stream.startSkillCounter === origin ? origin + M : origin + M + 1)
+        expect({ depths: model.depths, states: model.states, maxStates: model.maxStates }, `${heldLength} ${heldMode} ${stream.startSkillCounter}`)
+          .toEqual({ depths: stream.depths, states: stream.retainedStates, maxStates: stream.maxStates })
+        transitions += model.transitions
+      }
+      expect(transitions).toBe(final.probe.skill.transitions)
+    }
+  }, SLOW)
+
   it('summarizes a reservation as counts and held runs', () => {
     const shape = d2gaReservationShape({ skill: { held: [3, 1, 2, 7], blocked: [1] }, gogma: { held: [5], blocked: [] }, normal: [{ counterId: 'w:8', held: [1, 2], blocked: [2] }] })
     expect(shape).toEqual([
@@ -113,7 +133,7 @@ describe('D2-G-A static helpers', () => {
 
   it('splits a formal cumulative-maximum series into segments with the yield rate and the heap growth per million yields', () => {
     const rows: D2GAFormalMemoryRow[] = [0, 10, 20, 30].map((s, i) => ({ receivedAtMs: s * 1000, yields: [0, 1_000_000, 2_000_000, 2_100_000][i]!,
-      maxima: { samples: i, maxHeapUsedBytes: [1, 3, 5, 5.5][i]! * 2 ** 30, maxRssBytes: 6 * 2 ** 30, lastElapsedMs: s * 1000 } }))
+      maxima: { samples: i, maxHeapUsedBytes: [1, 3, 5, 5.5][i]! * 1e9, maxRssBytes: 6e9, lastElapsedMs: s * 1000 } }))
     const segments = d2gaFormalSegments(rows, [0, 20])
     expect(segments).toHaveLength(2)
     expect(segments[0]).toMatchObject({ fromS: 0, toS: 20, heapMaxFromGb: 1, heapMaxToGb: 5, yieldsPerS: 100_000, heapGrowthGbPerMillionYields: 2 })

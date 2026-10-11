@@ -43,7 +43,11 @@ export const D2GA_PHASE = 'Issue #154 D2-G-A: K3 Search memory diagnosis (non-fo
 export const D2GA_DOC = 'docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2GA.md'
 /** The main the diagnosis branches from (PR #234 merged). */
 export const D2GA_BASE_MAIN = 'e292915b30833518fe72fc98378a609a27b87702'
-export const D2GA_EXPORT_SHA256 = 'cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b'
+/**
+ * The registered Export is identified by the SHA-256 the D2-F-B start attestation observed (`observedInputs.export.sha256`), read by the
+ * runner at launch; no Export hash literal is kept in source (the oracle isolation test pins that).
+ */
+export const D2GA_EXPORT_SHA256_SOURCE = Object.freeze({ file: '.local/d2f-k3-formal.run/start-attestation.json', field: 'observedInputs.export.sha256' })
 export const D2GA_RESEARCH_MAX_PLAN_STEPS = D2_RESEARCH_MAX_PLAN_STEPS
 
 export type D2GAContextId = 'K2' | 'K3'
@@ -429,6 +433,9 @@ export function createD2GASeries<T>(keepEvery: number, max: number) {
 /** One formal memory.jsonl line of the D2-E / D2-F runners (cumulative maxima, sent every 20th IPC message). */
 export interface D2GAFormalMemoryRow { receivedAtMs: number; maxima: { samples: number; maxHeapUsedBytes: number; maxRssBytes: number; lastElapsedMs: number }; yields: number }
 
+/** Decimal GB (1e9 bytes), the unit of the D2-E-B / D2-F-B documents. */
+export const D2GA_GB = 1e9
+
 export interface D2GAFormalSegment { fromS: number; toS: number; heapMaxFromGb: number; heapMaxToGb: number; rssMaxToGb: number; yieldsPerS: number; heapGrowthGbPerMillionYields: number | null }
 
 /**
@@ -450,9 +457,48 @@ export function d2gaFormalSegments(rows: readonly D2GAFormalMemoryRow[], boundar
     const a = at(points[i - 1]!), b = at(points[i]!)
     const dt = (b.receivedAtMs - a.receivedAtMs) / 1000
     const dy = b.yields - a.yields
-    const dh = (b.maxima.maxHeapUsedBytes - a.maxima.maxHeapUsedBytes) / 2 ** 30
-    segments.push({ fromS: a.receivedAtMs / 1000, toS: b.receivedAtMs / 1000, heapMaxFromGb: a.maxima.maxHeapUsedBytes / 2 ** 30, heapMaxToGb: b.maxima.maxHeapUsedBytes / 2 ** 30,
-      rssMaxToGb: b.maxima.maxRssBytes / 2 ** 30, yieldsPerS: dt > 0 ? dy / dt : 0, heapGrowthGbPerMillionYields: dy > 0 ? dh / (dy / 1e6) : null })
+    const dh = (b.maxima.maxHeapUsedBytes - a.maxima.maxHeapUsedBytes) / D2GA_GB
+    segments.push({ fromS: a.receivedAtMs / 1000, toS: b.receivedAtMs / 1000, heapMaxFromGb: a.maxima.maxHeapUsedBytes / D2GA_GB, heapMaxToGb: b.maxima.maxHeapUsedBytes / D2GA_GB,
+      rssMaxToGb: b.maxima.maxRssBytes / D2GA_GB, yieldsPerS: dt > 0 ? dy / dt : 0, heapGrowthGbPerMillionYields: dy > 0 ? dh / (dy / 1e6) : null })
   }
   return segments
+}
+
+// ---------------------------------------------------------------- held-aware Skill stream size model (for the L2 extrapolation)
+
+export interface D2GASkillStreamCounts { start: number; depths: number; states: number; transitions: number; maxStates: number }
+
+/**
+ * The state / transition counts of one held-aware Skill stream (`createTargetSkillStream().readReservedDepth()` read to exhaustion), by
+ * the same rule and without any prediction: a state is the absolute position of its last own Reset Skills, the next operation may stand
+ * at any position of `nextOperationPositions(reservation, position + 1, limit)`, and one depth keeps one state per position.
+ * `createTargetSkillStream()` keeps every depth's states (`set.depths`), so `states` is also the number of states the stream retains.
+ * `limit` is `origin + M` for the stream starting at the origin and `origin + M + 1` otherwise (`reservedSkillPositionLimit()`).
+ * Research model only: the test checks it against the real stream observer, and the analysis against the measured L1 counts.
+ */
+export function d2gaHeldAwareSkillStreamCounts(held: readonly number[], blocked: readonly number[], start: number, limit: number): D2GASkillStreamCounts {
+  const heldSet = new Set(held), blockedSet = new Set(blocked)
+  // The window of a state whose next operation may start at q: [q, end(q)] minus blocked, where end(q) is the first non-held position
+  // at or after q, cut below the limit.
+  const end = (q: number) => { let p = q; while (p < limit - 1 && heldSet.has(p)) p += 1; return Math.min(p, limit - 1) }
+  const legalIn = (from: number, to: number) => { let n = 0; for (let p = from; p <= to; p += 1) if (!blockedSet.has(p)) n += 1; return n }
+  let frontier = [start - 1]
+  const out = { start, depths: 0, states: 0, transitions: 0, maxStates: 0 }
+  for (;;) {
+    const generated: number[] = []
+    let reach = -Infinity
+    for (const p of frontier) {
+      const q = p + 1
+      if (q >= limit) continue
+      const e = end(q)
+      out.transitions += legalIn(q, e)
+      for (let x = Math.max(q, reach + 1); x <= e; x += 1) if (!blockedSet.has(x)) generated.push(x)
+      reach = Math.max(reach, e)
+    }
+    if (generated.length === 0) return out
+    out.depths += 1
+    out.states += generated.length
+    out.maxStates = Math.max(out.maxStates, generated.length)
+    frontier = generated
+  }
 }

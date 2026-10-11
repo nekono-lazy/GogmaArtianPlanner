@@ -29,6 +29,7 @@ const SCRIPT_PATH = 'scripts/run-planner-global-d2ga.mjs'
 const sha256 = value => createHash('sha256').update(value).digest('hex')
 const write = (path, value) => writeFile(path, JSON.stringify(value, null, 2) + '\n', { flag: 'wx' })
 const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim()
+const registeredExportSha256 = async d2ga => JSON.parse((await readFile(d2ga.D2GA_EXPORT_SHA256_SOURCE.file)).toString('utf8')).observedInputs.export.sha256
 const createLoader = () => createServer({ configFile: false, server: { middlewareMode: true, watch: null, hmr: false, ws: false }, appType: 'custom' })
 
 if (role === 'child') {
@@ -85,7 +86,7 @@ if (role === 'child') {
     sample()
     const rawExport = await readFile(exportPath)
     const exportSha256 = sha256(rawExport)
-    if (exportSha256 !== d2ga.D2GA_EXPORT_SHA256) throw new Error('Export SHA-256 differs from the registered Export.')
+    if (exportSha256 !== await registeredExportSha256(d2ga)) throw new Error('Export SHA-256 differs from the registered Export.')
     const input = research.globalResearchInputFromExport(JSON.parse(rawExport.toString('utf8')), d2ga.D2GA_RESEARCH_MAX_PLAN_STEPS)
     const engine = new ProductionRngEngine()
     const dependencies = research.globalResearchDependencies(engine)
@@ -123,7 +124,7 @@ const protocol = d2ga.D2GA_PROTOCOL
 const phaseStarted = performance.now()
 const rawExport = await readFile(exportPath)
 const exportSha256 = sha256(rawExport)
-if (exportSha256 !== d2ga.D2GA_EXPORT_SHA256) throw new Error(`Export SHA-256 ${exportSha256} is not the registered ${d2ga.D2GA_EXPORT_SHA256}.`)
+if (exportSha256 !== await registeredExportSha256(d2ga)) throw new Error(`Export SHA-256 ${exportSha256} is not the registered Export (D2-F-B start attestation).`)
 await mkdir(runDir, { recursive: true })
 const tasks = []
 for (const unit of protocol.units) {

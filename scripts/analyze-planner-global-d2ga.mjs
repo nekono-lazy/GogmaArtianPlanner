@@ -16,7 +16,7 @@ const d2ga = await server.ssrLoadModule('/src/benchmarks/plannerGlobalD2GA.ts')
 await server.close()
 const json = async path => JSON.parse((await readFile(path)).toString('utf8'))
 const jsonl = async path => (await readFile(path)).toString('utf8').trim().split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line))
-const GB = 2 ** 30
+const GB = 1e9 // decimal GB, the unit of the D2-E-B / D2-F-B documents
 const gb = bytes => bytes === null || bytes === undefined ? null : +(bytes / GB).toFixed(2)
 const ratio = (a, b) => a === null || b === null || b === 0 ? null : +(a / b).toFixed(2)
 
@@ -89,3 +89,28 @@ console.log(JSON.stringify(analysis.comparisons, null, 1))
 for (const id of ids) console.log(id, JSON.stringify(units[id]?.topExclusive ?? []))
 console.log('K3-L2 last GCs', JSON.stringify(lastGcs))
 for (const id of ['K2-L2', 'K3-L2']) console.log(id, JSON.stringify(formal[id].segments.map(s => ({ to: Math.round(s.toS), heap: +s.heapMaxToGb.toFixed(2), yps: Math.round(s.yieldsPerS), gbPerMy: s.heapGrowthGbPerMillionYields === null ? null : +s.heapGrowthGbPerMillionYields.toFixed(2) }))))
+
+// Held-aware Skill stream size model: checked against the measured L1 streams, then applied to L2 (no Search, no prediction).
+const skillModel = {}
+for (const context of ['K2', 'K3']) {
+  const l1 = units[`${context}-L1`]
+  const record = JSON.parse((await readFile(join(runDir, `${context}-L1.record.json`))).toString('utf8'))
+  const task = d2ga.readD2GAFormalTask(await json(join(d2ga.D2GA_FORMAL_SOURCES[context].runDir, d2ga.D2GA_FORMAL_SOURCES[context].task('L1')))).task
+  const { held, blocked } = task.context.reservationBody.skill
+  const origin = l1.structure.originSkillCounter
+  const limitFor = (start, M) => start === origin ? origin + M : origin + M + 1
+  const measured = record.result.observation.skillStreams
+  const mismatches = measured.filter(s => { const m = d2ga.d2gaHeldAwareSkillStreamCounts(held, blocked, s.startSkillCounter, limitFor(s.startSkillCounter, 256)); return m.states !== s.retainedStates || m.depths !== s.depths })
+  const l1Model = measured.map(s => d2ga.d2gaHeldAwareSkillStreamCounts(held, blocked, s.startSkillCounter, limitFor(s.startSkillCounter, 256)))
+  const hasOriginStream = measured.some(s => s.startSkillCounter === origin)
+  const conversions = await d2ga.d2gaConversionSkillPositions(task.context.reservationBody, origin, 1500)
+  const l2Starts = [...(hasOriginStream ? [origin] : []), ...conversions.positions.map(p => p + 1)]
+  const l2 = l2Starts.map(start => d2ga.d2gaHeldAwareSkillStreamCounts(held, blocked, start, limitFor(start, 1500)))
+  const sum = (rows, k) => rows.reduce((s, r) => s + r[k], 0)
+  skillModel[context] = { l1Check: { streams: measured.length, mismatches: mismatches.length, modelStates: sum(l1Model, 'states'), measuredStates: sum(measured, 'retainedStates'),
+    modelTransitions: sum(l1Model, 'transitions'), measuredTransitions: record.result.observation.probe.skill.transitions },
+    l2: { streams: l2.filter(r => r.states > 0).length, conversionPositions: conversions.positions.length, states: sum(l2, 'states'), transitions: sum(l2, 'transitions'),
+      maxDepths: Math.max(...l2.map(r => r.depths)), maxStatesPerDepth: Math.max(...l2.map(r => r.maxStates)) } }
+}
+console.log('skill model', JSON.stringify(skillModel, null, 1))
+await writeFile(outputPath.replace(/\.json\.local$/, '.skill-model.json.local'), JSON.stringify(skillModel, null, 2) + '\n', { flag: 'wx' })
