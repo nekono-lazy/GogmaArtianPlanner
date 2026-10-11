@@ -614,7 +614,24 @@ describe('D2-D oracle isolation, sources and Production (§9.2 / §9.3 / G37 - G
       { query: '?raw', import: 'default', eager: true }) as Record<string, string>
     expect(Object.keys(production).length).toBeGreaterThan(50)
     expect(Object.entries(production).filter(([, source]) => /plannerGlobalD2D/.test(source)).map(([path]) => path)).toEqual([])
-    expect(Object.entries(benchmarkSources).filter(([path, source]) => !/D2D/.test(path) && /plannerGlobalD2D\b|plannerGlobalD2D'/.test(source)).map(([path]) => path)).toEqual([])
+    // Only the D2-D files themselves may reference the D2-D modules, by exact path (never a `D2D` substring of the path: Phase
+    // 2-C2.5-D2-D, `plannerGlobalPhase2C25D2D*`, is another Research item, D2-D-A §9.4).
+    const allowed = ['./plannerGlobalD2D.ts', './plannerGlobalD2DAnalysis.ts', './plannerGlobalD2D.test.ts']
+    // An import of a D2-D module (static, dynamic or ?raw). Allowlists naming the D2-D paths as strings (the D2-C test) are not imports.
+    const D2D_IMPORT = /(?:from\s+|import\s*\(\s*)['"]\.\/plannerGlobalD2D(?:Analysis)?(?:\.ts)?(?:\?raw)?['"]/
+    const illegalD2DReferences = (sources: Record<string, string>) => Object.entries(sources).filter(([path, source]) => !allowed.includes(path) && D2D_IMPORT.test(source)).map(([path]) => path)
+    expect(illegalD2DReferences(benchmarkSources)).toEqual([])
+    expect(allowed.filter(path => /Phase2C25D2D/.test(path))).toEqual([])
+    // Every allowed path is a real file (the glob never lists the importing test file itself).
+    for (const path of allowed.filter(x => x !== './plannerGlobalD2D.test.ts')) expect(benchmarkSources[path], path).toBeDefined()
+    const phase2c25d2d = Object.keys(benchmarkSources).filter(path => /^\.\/plannerGlobalPhase2C25D2D/.test(path))
+    expect(phase2c25d2d.length).toBeGreaterThan(0)
+    for (const path of phase2c25d2d) {
+      expect(illegalD2DReferences({ ...benchmarkSources, [path]: `${benchmarkSources[path]}\nimport { runD2DEvaluation } from './plannerGlobalD2D'\n` })).toEqual([path])
+      expect(illegalD2DReferences({ ...benchmarkSources, [path]: `${benchmarkSources[path]}\nimport { analyzeD2DRun } from './plannerGlobalD2DAnalysis'\n` })).toEqual([path])
+    }
+    // The new D2-D modules themselves must not reach Phase 2-C2.5-D2-D either (D2-D-A §9.4).
+    for (const path of allowed.filter(x => x !== './plannerGlobalD2D.test.ts')) expect(benchmarkSources[path], path).not.toMatch(/from '\.\/plannerGlobalPhase2C25D2D/)
     expect(d2dProductionChangedFiles(['src/benchmarks/plannerGlobalD2D.ts', 'scripts/run-planner-global-d2d.mjs', 'docs/x.md', 'src/domain/x.test.ts'])).toEqual([])
     expect(d2dProductionChangedFiles(['src/domain/planner/x.ts'])).toEqual(['src/domain/planner/x.ts'])
   })
