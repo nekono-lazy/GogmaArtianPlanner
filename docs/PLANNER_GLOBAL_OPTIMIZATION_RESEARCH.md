@@ -281,3 +281,5 @@ D2-Bで不受理だった6 Targetの阻害Entry（provisional winner）をsuppor
 D2-C-Bでt05のK1 Candidateと衝突した受理済みt07を、D2-Bで発見済みの別のK0 Candidateへ差し替えてt05と同時に評価する局所2-Target再合成（D2-D）の実行条件は
 [D2-D事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2D_SPEC.md)（docs-only）で確定した。
 その実装と正式計測は [D2-D-B](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2DB.md)（`D2D_EXCEEDS_D2C_FINAL`、最良PAIR t05 c1 / t07 c3で24 / 43・Conflict 19、R6未達）にある。
+D2-C-Bで互いのsupportに負けたt03について、2 support（`e396d352` / `92d87b90`）を同時に置くK2 contextでSearchし、得たCandidateをD2-D最良incumbent（24 / 19）へ1件ずつ追加して評価する
+D2-Eの実行条件は [D2-E事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2E_SPEC.md)（docs-only）で確定した。
