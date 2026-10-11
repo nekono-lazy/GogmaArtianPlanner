@@ -125,6 +125,10 @@ Keepは各slotの族を保ち段位だけを引き直し、Resetは5 slotの族�
 この窓内でIdealへ届くのは **族構成の合うNormal（206 / 849 / 886）からのKeep-only経路だけ** である。
 これは必要条件であり、段位・Skillまで含めた十分条件ではない。
 
+この資源マップは **813fb479（チャアク・龍）のTarget条件・属性** で計算したものである。Gogma Reset予測（`predictGogmaBonus`）は属性を入力に取り、この表は龍の入力で計算した結果なので、
+同じIdealを持つ711f7d15（チャアク・火）のGogma Reset資源は表していない（火の条件では計算していない）。Phase 2-A.5でProduction検証済みの1,657-step oracleでは、
+火がG289 Reset（Normalの5枠を読まない）で完成しており、この表はその解を否定しない。
+
 - 位置206は元Build Listで813fb479・711f7d15の **両方** がproduction targetにしていた位置（元Entryはどちらも
   `create_normal_artian(count = 207)`）。火・龍はMelee Table Aで同じ5 slotを引くため、両Targetにとって同じ資源である。
   1つの鍛造Normalは1 Targetにしか変換できないので、206は排他的資源である（Issue #129後も残る production target同士の競合）。
@@ -151,10 +155,25 @@ rejectedは813fb479の元Entry（`resource_conflict`）の1件だけ。2件と�
 | 4. SearchのRoute選択・候補制限 | 該当しない | 所持武器0件で他Route種は利用不可。Normal Routeは窓内の全候補を走査して無かった（boundary到達、例外なし） |
 | 5. Materialization / Planner入力構築 | 該当しない | Candidateが無くmaterializationに到達していない。元Entryは分母維持の仕様どおり残った |
 
-結論: **同一条件の2 Target（チャアク火・龍）が、0〜1,100で3箇所しかない族構成一致Normalのうち最も近い206を奪い合い、
-逐次投影で後になった方がbase Normal窓（350）内に次の位置を持たない**ことが、42 / 43の直接原因である。
-43 / 43には、どちらか一方がNormal 849（または886）以降を使う必要があり、チャージアックスNormal Counterを850以上進めるRouteが不可避となる
-（調べたGogma窓内では）。
+結論: Phase 0の固定順序では、チャアク火（711f7d15）が先に検索され、Normal N206をproduction targetとして使う。
+その結果、後続のチャアク龍（813fb479）はNormal 207から探索することになり、base探索窓207〜556内に族構成一致Normalが存在しない。
+これが42 / 43の直接原因である。今回のV1では、同じ投影状態からNormal窓を700まで広げ、次の一致位置N849のCandidateで43 / 43に到達した（3節）。
+
+ただし、**N849の使用は43 / 43の一般的な必要条件ではない。** Routeのsource・Counter位置・操作順序を全体で割り当て直せば、
+Phase 2-A.5でProduction検証済みの1,657-step oracleのように、チャアク火をN0 → G289 Reset、チャアク龍をN206 → G230 Keepとし、
+チャアクNormal Counter終端207で43 / 43（Conflict 0、Trace Replay passed）を成立させられる
+（[PHASE2A5](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2A5.md)、[1657_ORACLE_RESULT](PLANNER_GLOBAL_1657_ORACLE_RESULT.json)）。
+
+本節の主張は次の3段階を区別する。
+
+1. **Phase 0固定順序・今回の探索方式での観測**: 火がN206を先に使うと、龍はbase窓207〜556で未発見となり、N700ではN849で発見された。
+2. **調べた窓内での必要条件（龍の条件に限る）**: Normal 0〜1,100・Gogma 0〜4,153・Skill 0〜6,184の範囲では、
+   龍のIdealはNormal 206 / 849 / 886からのKeep-only経路でしか届かない（2.2）。火の条件については計算していない。
+3. **任意のGlobal Route集合に対する必要条件**: 本PRでは主張しない。1,657-step oracleが示すとおり、火が龍とは別の資源（G289 Reset）を
+   使えば、N849なしで43 / 43は成立する。N849以外の経路が存在しない、全体の最短RouteがN849を使う、とは主張しない。
+
+1,657-step oracleはProduction Search / Planner / Trace Replayで検証済みの記録であり、本PRの非formalな観測とは別の証拠である。
+oracleのRoute・順序・Counter位置は本PRの探索入力・variantには使っていない（本節の解釈の比較だけに参照した）。
 
 ### 3. 改善実験V1（事前登録どおり1件）
 
@@ -198,23 +217,48 @@ final Plan SHA-256 `6c380cb3584d925e82c908ae34fe41f1d4f4f907a91515778542154df641
 - 本PRの新規性は「43 / 43に初めて到達した」ことではない。Phase 1-Eで既に到達しており、本PRは
   (i) 現行mainでのPhase 0完全再現、(ii) 原因を資源（族構成一致Normal位置）として直接確認、(iii) Phase 1-E V1の現行main再現と
   別processのfresh ordinary Planner検証、を加えた。
-- 8,534 stepsは既知oracle 2,982より5,552多く、Production default `maxPlanSteps = 1000` を超える。総時間約11.5分（Node、raw block cacheなし）、
+- 8,534 stepsは、Issue記載の既知oracle 2,982より5,552多く、Phase 2-A.5でProduction検証済みの最短1,657（このExport・現行Production semanticsでの値）より6,877多い（差の内訳はPhase 2-B）。Production default `maxPlanSteps = 1000` を超える。総時間約11.5分（Node、raw block cacheなし）、
   maxRSS約2.9 GiBで、通常操作として実用的とは言えない。Browser Worker・スマートフォンは今回未測定（Phase 2-AでBrowser Worker成立の記録あり）。
-- 資源マップはこのExport・この窓での必要条件の観測であり、Gogma 4,153超に族構成一致Resetが無いこと、849より短いRouteが無いことは主張しない。
+- 資源マップはこのExport・この窓・龍の条件での必要条件の観測であり、Gogma 4,153超に族構成一致Resetが無いこと、849より短いRouteが無いこと、
+  N849が43 / 43の必要条件であることは主張しない（2.4）。
 - Normal 2倍は観測に基づく一般規則であり、「次の該当位置まで広げる」最小extentを計算したものではない。別Exportでの一般性は未確認。
 - Production Search / Planner / RNG semantics、通常extent、Target条件、全versionは変更していない。REQUIREMENTS 19 / 23の
   「明示的選択なしに自動再検索しない」契約もそのまま。
 
 ### 5. 次の推奨方針
 
-1. **43 / 43の成立性は確立済みとして扱い、研究の主題を「実用化の条件」へ移す。** 42→43の阻害要因は同条件Targetの希少資源競合で、
-   generic Normal fallbackで解消し、現行mainでも再現した。D2系の局所探索を再開する必要は43 / 43到達のためには無い。
-2. 実用化の最大コストはSearch（総時間の約90%）である。Phase 1-B / 1-EのResearch per-search raw block cacheでは同じsemanticsでSearchが
-   大幅に短縮されている（Phase 1-E control: raw block cache per-search + immediate yieldでSearch 87.281秒、本PRのcacheなし・timer yieldでは約580秒）。次はraw block cache付きでV1を再計測し、Browser Worker（Phase 2-A）との差を
-   確認したうえで、Production化に必要なdocs-only判断（無選択自動再検索の契約変更、Global Plannerのstep bound policy）へ進むことを推奨する。
-3. 資源マップのような安価な必要条件計算（本件2.06秒）は、盲目的な2倍ではなく「次に族構成が合うNormal位置まで」の最小extentを
-   決める材料になり得る。導入する場合は事前登録したResearchとして、Searchのcanonical順序を変えないことを確認してから行う。
-4. 手数短縮（2,982級）は別目標として、本結果（8,534 steps、全43 Target共存）をincumbentに扱う。
+前提: 43 / 43の自動構成はPhase 1-E / 2-Aで実現済み（8,534 steps）であり、本PRは現行mainでもそれを再現した。
+「43 / 43自動達成が未実現」という扱いには戻さない。一方、1,657はこのExport・現行Production semanticsで検証済みの最短値だが、
+一般のExportで同じ操作数を保証するものではない。
+
+**次の主作業は、oracleに依存しないGlobal assignmentアルゴリズムのdocs-only設計（次PR）とする。** Phase 2-A.5の1,657-step oracle再構成手順と、
+Phase 2-B（[PHASE2B](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2B.md)）のPlan品質差分析（8,534と1,657の差6,877の主要因は逐次投影）を踏まえる。
+設計対象として次を整理する。本PRでは詳細仕様の確定・実装は行わない。
+
+- Production RNGから、全Targetについて到達可能な候補位置を導出する
+- OwnedWeapon / 新規Normalのsource割当
+- Targetごとに複数のRoute候補を保持する
+- required Normal / Skill / Gogma unitの排他割当
+- held位置を跨ぐ非連続Route
+- Target間で共有するCounter進行の被覆
+- stream終端の合計による物理操作数の評価
+- Production SearchによるRoute materialization
+- Production PlannerとTrace Replayによる最終検証
+
+優先順位:
+
+1. 全43 Targetの共存Routeを、oracle非依存で自動構築できる能力を維持・改善する
+2. 既知の1,657-step最短解の構成原理を一般化する
+3. 操作数・時間・メモリを実用範囲へ改善する
+4. Production契約変更と統合を正式仕様に沿って検討する
+
+将来課題として残すもの（次の主作業にはしない）: raw block cacheによるSearch性能改善と再計測
+（Phase 1-E control: raw block cache per-search + immediate yieldでSearch 87.281秒、本PRのcacheなし・timer yieldでは約580秒）、
+資源マップなどを用いたextentの調整（盲目的な2倍ではなく次の一致位置まで広げる案を含む）、Browser Worker / スマートフォン測定、
+Global Plannerのstep bound policy、無選択自動再検索の契約変更。
+
+D2-C〜D2-Gの成果は比較資料として維持するが、D2-Hとして局所探索を再開する方針にはしない。
+本PRの結果（8,534 steps、全43 Target共存）は、oracle非依存の自動構成のincumbentとして扱う。
 
 ## 検証
 
@@ -225,6 +269,8 @@ final Plan SHA-256 `6c380cb3584d925e82c908ae34fe41f1d4f4f907a91515778542154df641
 - `npm run build`（`tsc -b` + Vite）: pass。既存の500 kB超chunk warningのみ。buildしたJSに本PRのResearch識別子は含まれない。
 - 計測後の修正は型注釈だけ（`Set<string>` と、testのBuildListEntryId branding）で、計測した処理の動作は変えていない。
   実Export runは再実行していない。
+- レビュー修正（docs-only）: 2.2 / 2.4 / 4節の解釈（N849は43 / 43の一般的な必要条件ではないこと、資源マップが龍の条件に限ること）と
+  5節の次の推奨方針を更新した。計測値・RESULT JSON・Research実装は変更していない。
 
 ## 成果物
 
