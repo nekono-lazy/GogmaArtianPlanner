@@ -922,13 +922,14 @@ describe('D2-E oracle isolation, sources and Production (§10.2 / §10.3 / G44 -
       { query: '?raw', import: 'default', eager: true }) as Record<string, string>
     expect(Object.keys(production).length).toBeGreaterThan(50)
     expect(Object.entries(production).filter(([, source]) => /plannerGlobalD2E/.test(source)).map(([path]) => path)).toEqual([])
-    // Only the D2-E files themselves may import the D2-E modules, by exact path (never a `D2E` substring of the path: Phase
-    // 2-C2.5-D2-E, `plannerGlobalPhase2C25D2E*`, is another Research item, D2-E-A §10.4).
-    const allowed = ['./plannerGlobalD2E.ts', './plannerGlobalD2EAnalysis.ts', './plannerGlobalD2E.test.ts']
+    // Only the D2-E files themselves and the registered successor D2-F (D2-F-A §6 / §15: it imports the unchanged D2-E module) may
+    // import the D2-E modules, by exact path (never a `D2E` / `D2F` substring of the path: Phase 2-C2.5-D2-E / D2-F,
+    // `plannerGlobalPhase2C25D2E*` / `plannerGlobalPhase2C25D2F*`, are other Research items, D2-E-A §10.4 / D2-F-A §11.4).
+    const allowed = ['./plannerGlobalD2E.ts', './plannerGlobalD2EAnalysis.ts', './plannerGlobalD2E.test.ts', './plannerGlobalD2F.ts', './plannerGlobalD2FAnalysis.ts', './plannerGlobalD2F.test.ts']
     const D2E_IMPORT = /(?:from\s+|import\s*\(\s*)['"]\.\/plannerGlobalD2E(?:Analysis)?(?:\.ts)?(?:\?raw)?['"]/
     const illegal = (sources: Record<string, string>) => Object.entries(sources).filter(([path, source]) => !allowed.includes(path) && D2E_IMPORT.test(source)).map(([path]) => path)
     expect(illegal(benchmarkSources)).toEqual([])
-    expect(allowed.filter(path => /Phase2C25D2E/.test(path))).toEqual([])
+    expect(allowed.filter(path => /Phase2C25D2E|Phase2C25D2F/.test(path))).toEqual([])
     for (const path of allowed.filter(x => x !== './plannerGlobalD2E.test.ts')) expect(benchmarkSources[path], path).toBeDefined()
     const phase2c25d2e = Object.keys(benchmarkSources).filter(path => /^\.\/plannerGlobalPhase2C25D2E/.test(path))
     expect(phase2c25d2e.length).toBeGreaterThan(0)
