@@ -1,6 +1,6 @@
 {
   "phase": "Issue #154 D2-E: t03 two-support K2 context discovery and extension of the D2-D best incumbent (post-hoc analysis)",
-  "analyzedAt": "2026-10-11T07:56:08.570Z",
+  "analyzedAt": "2026-10-11T08:31:25.935Z",
   "sources": {
     "specDocument": {
       "file": "docs/PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2E_SPEC.md",
@@ -197,41 +197,41 @@
     },
     "d2e": {
       "raw": {
-        "file": "PLANNER_GLOBAL_D2E_K2_RAW.json.local",
-        "bytes": 31851,
-        "sha256": "b2f8c8a9970049fe763270c39459fd7e53c8315f260d1ed169cd2a9e4c25110b"
+        "file": "PLANNER_GLOBAL_D2E_K2_RAW2.json.local",
+        "bytes": 31753,
+        "sha256": "c092429263dd4300b2dcdf67d1c36bfbcb21024b96030844db908311ab3081ad"
       },
-      "runDir": "d2e-k2-formal.run",
+      "runDir": "d2e-k2-formal2.run",
       "attestation": {
         "file": "start-attestation.json",
-        "bytes": 32852,
-        "sha256": "ec8f838db1adeaf9ac77ec681a171759e13d8f33985c1de0bca0c587bf9f173d"
+        "bytes": 32853,
+        "sha256": "6d6c4629cb11cf4f7e26b2c3ed62b3054dd4b5ddcc036b115ffd7fb0cd21b811"
       },
       "rvRecord": {
         "file": "RV.record.json",
-        "bytes": 10099,
-        "sha256": "f1fb8bbd6d2990c3b0d859c1e09bfd9ffd5074c8ec1c470b7aa75052cdfd25c3"
+        "bytes": 10098,
+        "sha256": "1bd7b31f44d78eb20db48e3a0168edb06f497670008bb65ed2f5bb066514beca"
       },
       "contextRecord": {
         "file": "CTX-K2.context.json",
-        "bytes": 100571,
-        "sha256": "6e36da6e929c3f01e78733a8b0a3bc4ac915ce888dc0e607984d1787bb29a051"
+        "bytes": 100563,
+        "sha256": "3feb35a7e5746ae2970e8ce64e29bc3bf72aff5b63f54fb056634de7027ee9e4"
       },
       "discoveryRecords": [
         {
           "file": "DSC-K2-L0.record.json",
-          "bytes": 49305,
-          "sha256": "5e62fb2f455407adbab2f3bde55d1180131991945d2c2e3f2666b7c277dc1ba2"
+          "bytes": 49297,
+          "sha256": "14a385f7a9b519e0566a567c4f99c0a69062c09a4fd35e45a903f58e0c79c5fe"
         },
         {
           "file": "DSC-K2-L1.record.json",
-          "bytes": 49282,
-          "sha256": "494a1c5baebf6e2019f49784e4602376e60a7d9aee255930e5b3225dc34a60d6"
+          "bytes": 49288,
+          "sha256": "e23bcc989aa55869382e1a4b19877115d3c8ad4de6b67252b9cf179c33ae694f"
         },
         {
           "file": "DSC-K2-L2.record.json",
-          "bytes": 210015,
-          "sha256": "be69483876643c866b2d78e320553873501f74c45087342a6ac69ae485963753"
+          "bytes": 210021,
+          "sha256": "65bd9fed72688d774953e9af92e324d4069027ea89785f6d1608f615db480c59"
         }
       ],
       "generatedEntries": [
@@ -249,69 +249,69 @@
       "records": [
         {
           "file": "RV.record.json",
-          "bytes": 10099,
-          "sha256": "f1fb8bbd6d2990c3b0d859c1e09bfd9ffd5074c8ec1c470b7aa75052cdfd25c3"
+          "bytes": 10098,
+          "sha256": "1bd7b31f44d78eb20db48e3a0168edb06f497670008bb65ed2f5bb066514beca"
         },
         {
           "file": "CTX-K2.context.json",
-          "bytes": 100571,
-          "sha256": "6e36da6e929c3f01e78733a8b0a3bc4ac915ce888dc0e607984d1787bb29a051"
+          "bytes": 100563,
+          "sha256": "3feb35a7e5746ae2970e8ce64e29bc3bf72aff5b63f54fb056634de7027ee9e4"
         },
         {
           "file": "DSC-K2-L0.record.json",
-          "bytes": 49305,
-          "sha256": "5e62fb2f455407adbab2f3bde55d1180131991945d2c2e3f2666b7c277dc1ba2"
+          "bytes": 49297,
+          "sha256": "14a385f7a9b519e0566a567c4f99c0a69062c09a4fd35e45a903f58e0c79c5fe"
         },
         {
           "file": "DSC-K2-L1.record.json",
-          "bytes": 49282,
-          "sha256": "494a1c5baebf6e2019f49784e4602376e60a7d9aee255930e5b3225dc34a60d6"
+          "bytes": 49288,
+          "sha256": "e23bcc989aa55869382e1a4b19877115d3c8ad4de6b67252b9cf179c33ae694f"
         },
         {
           "file": "DSC-K2-L2.record.json",
-          "bytes": 210015,
-          "sha256": "be69483876643c866b2d78e320553873501f74c45087342a6ac69ae485963753"
+          "bytes": 210021,
+          "sha256": "65bd9fed72688d774953e9af92e324d4069027ea89785f6d1608f615db480c59"
         },
         {
           "file": "B0.record.json",
-          "bytes": 507978,
-          "sha256": "ef86e343c71ee38256fbd477f26ce0d375e15261ef5c6fdf952d87a5c28c190b"
+          "bytes": 507972,
+          "sha256": "4e26f4b60d0f13aa169f753e410825daa1e92e151769d16a76ba9526504badc7"
         },
         {
           "file": "I0.record.json",
-          "bytes": 522530,
-          "sha256": "3bc9d33a330b8f25ff7c04c952acae51ab35be22f642493bc31bf0f8b1d20d93"
+          "bytes": 522522,
+          "sha256": "18d166eb313d920510d0c2ba8ad7fcadc3cde8b83036803da313e6a5b267b9f7"
         },
         {
           "file": "ADM-K2-t03-c1.record.json",
           "bytes": 511107,
-          "sha256": "4f6b61aaa889d9ab7e4304e14d3580207e93da379948a162b20aa4b9ca21d2dd"
+          "sha256": "564ac3176d6c980b7de5c90f6b2ee3c8cf24eee3833ce26a337dc99541216be4"
         },
         {
           "file": "ADM-K2-t03-c2.record.json",
-          "bytes": 511105,
-          "sha256": "a8d832c24785431e48391c80b7ceb9c0d76804b0bda8592b011da6d29a210bfc"
+          "bytes": 511107,
+          "sha256": "a6cdb00d5a82f968432fa0a665d18ba693dff2834c238cedcde51e0bfd571b26"
         },
         {
           "file": "EXT-K2-t03-c1.record.json",
-          "bytes": 523507,
-          "sha256": "29445849fbc0664b4f3a2c3e667c9f7394e94bfcfc73a89beb214f5f2eadbf1b"
+          "bytes": 523499,
+          "sha256": "8a100a6cb722fb944f0a0ebeee67f24b4662e0e47a34f36118038ce026dd7e47"
         },
         {
           "file": "EXT-K2-t03-c2.record.json",
-          "bytes": 525963,
-          "sha256": "58b8599eb48eaf8a863af84b165e1801ca89f269bb3c8c03e4f58fc548490f6a"
+          "bytes": 525971,
+          "sha256": "280ee01dc286e663e565708ebdffe54237e1cf38868b733d70b6d40c067a2bff"
         }
       ]
     }
   },
   "provenance": {
     "formal": true,
-    "measuredHead": "c0248fcba41f3ec22867d966f83f7a7c40e794cc",
-    "analysisHead": "c0248fcba41f3ec22867d966f83f7a7c40e794cc",
+    "measuredHead": "d294efb005e4943627f3ed27873a33ed7ead8173",
+    "analysisHead": "d294efb005e4943627f3ed27873a33ed7ead8173",
     "measuredHeadIsAncestor": true,
     "runStatus": "completed",
-    "benchmarkCodeSha256": "199bad498d6e5a88347d25edd4e8ce77229c9e79f8e1e2004c5090968d2c7593",
+    "benchmarkCodeSha256": "2fa915045f8066b8aa6167f1623bcf3a04892e05991692e8b2b236a1c7628d05",
     "registeredPolicySha256": "8a123601cac3dd5e33381fabbbfbdff66c775fcd9cf1475c576cfd904c1f6292",
     "calculationCodeChangedSinceMeasuredHead": [],
     "analysisCodeUncommitted": false,
@@ -320,7 +320,7 @@
       "toAnalysisHead": []
     },
     "startAttestation": {
-      "sha256": "ec8f838db1adeaf9ac77ec681a171759e13d8f33985c1de0bca0c587bf9f173d",
+      "sha256": "6d6c4629cb11cf4f7e26b2c3ed62b3054dd4b5ddcc036b115ffd7fb0cd21b811",
       "verified": true,
       "issues": [],
       "body": {
@@ -879,12 +879,12 @@
           "production_change",
           "production_default_change"
         ],
-        "createdAt": "2026-10-11T07:42:36.335Z",
+        "createdAt": "2026-10-11T08:16:06.638Z",
         "runnerScript": "scripts/run-planner-global-d2e.mjs",
         "node": "v24.19.0",
-        "repositoryHead": "c0248fcba41f3ec22867d966f83f7a7c40e794cc",
+        "repositoryHead": "d294efb005e4943627f3ed27873a33ed7ead8173",
         "uncommittedBenchmarkCode": false,
-        "benchmarkCodeSha256": "199bad498d6e5a88347d25edd4e8ce77229c9e79f8e1e2004c5090968d2c7593",
+        "benchmarkCodeSha256": "2fa915045f8066b8aa6167f1623bcf3a04892e05991692e8b2b236a1c7628d05",
         "specDocumentSha256": "9bbb824169ac22364b451b6313730c7e2042b181db8557dbfeec359f8fa14797",
         "registeredPolicySha256": "8a123601cac3dd5e33381fabbbfbdff66c775fcd9cf1475c576cfd904c1f6292",
         "observedInputs": {
@@ -1042,10 +1042,10 @@
           "productionChangedSinceBaseMain": []
         },
         "machine": {
-          "freeMemoryBytes": 15876362240,
+          "freeMemoryBytes": 13999415296,
           "totalMemoryBytes": 33377591296,
           "otherNodeProcesses": 0,
-          "cpuBusyShare": 0.2004605426935524
+          "cpuBusyShare": 0.19636319257993654
         },
         "appliedExecutionEnvelope": {
           "rvBudgetMs": 600000,
@@ -1147,9 +1147,9 @@
     "cpu": "AMD Ryzen 7 9700X 8-Core Processor             ",
     "logicalCpuCount": 16,
     "totalMemoryBytes": 33377591296,
-    "repositoryHead": "c0248fcba41f3ec22867d966f83f7a7c40e794cc",
+    "repositoryHead": "d294efb005e4943627f3ed27873a33ed7ead8173",
     "uncommittedBenchmarkCode": false,
-    "benchmarkCodeSha256": "199bad498d6e5a88347d25edd4e8ce77229c9e79f8e1e2004c5090968d2c7593",
+    "benchmarkCodeSha256": "2fa915045f8066b8aa6167f1623bcf3a04892e05991692e8b2b236a1c7628d05",
     "specDocumentSha256": "9bbb824169ac22364b451b6313730c7e2042b181db8557dbfeec359f8fa14797",
     "registeredPolicySha256": "8a123601cac3dd5e33381fabbbfbdff66c775fcd9cf1475c576cfd904c1f6292",
     "exportFileName": "gogma-artian-planner-backup_20260927015837.json",
@@ -1180,10 +1180,10 @@
       "productionChangedSinceBaseMain": []
     },
     "machine": {
-      "freeMemoryBytes": 15876362240,
+      "freeMemoryBytes": 13999415296,
       "totalMemoryBytes": 33377591296,
       "otherNodeProcesses": 0,
-      "cpuBusyShare": 0.2004605426935524
+      "cpuBusyShare": 0.19636319257993654
     },
     "smoke": null
   },
@@ -1794,22 +1794,22 @@
       "signal": null,
       "timedOut": false,
       "budgetMs": 600000,
-      "startedAt": "2026-10-11T07:42:36.361Z",
-      "endedAt": "2026-10-11T07:42:50.426Z",
-      "wallMs": 14064.541799999999,
+      "startedAt": "2026-10-11T08:16:06.667Z",
+      "endedAt": "2026-10-11T08:16:22.608Z",
+      "wallMs": 15940.653400000001,
       "killedAtMs": null,
       "stderrTail": null,
       "lastIpcMemory": {
         "samples": 4,
-        "maxHeapUsedBytes": 1070431024,
-        "maxRssBytes": 1361895424,
-        "lastElapsedMs": 13127.5985
+        "maxHeapUsedBytes": 714370672,
+        "maxRssBytes": 1141592064,
+        "lastElapsedMs": 14691.0368
       }
     },
     "record": {
       "file": "RV.record.json",
-      "bytes": 10099,
-      "sha256": "f1fb8bbd6d2990c3b0d859c1e09bfd9ffd5074c8ec1c470b7aa75052cdfd25c3"
+      "bytes": 10098,
+      "sha256": "1bd7b31f44d78eb20db48e3a0168edb06f497670008bb65ed2f5bb066514beca"
     },
     "candidates": [
       {
@@ -2260,9 +2260,9 @@
       }
     ],
     "satisfied": true,
-    "wallMs": 14064.541799999999,
-    "peakHeapBytes": 1070431024,
-    "peakRssBytes": 1361895424
+    "wallMs": 15940.653400000001,
+    "peakHeapBytes": 714370672,
+    "peakRssBytes": 1179181056
   },
   "context": {
     "contextId": "K2-t03-92d87b90-e396d352",
@@ -2275,22 +2275,22 @@
       "signal": null,
       "timedOut": false,
       "budgetMs": 600000,
-      "startedAt": "2026-10-11T07:43:10.288Z",
-      "endedAt": "2026-10-11T07:43:18.709Z",
-      "wallMs": 8420.549699999996,
+      "startedAt": "2026-10-11T08:16:44.969Z",
+      "endedAt": "2026-10-11T08:16:54.691Z",
+      "wallMs": 9722.6449,
       "killedAtMs": null,
       "stderrTail": null,
       "lastIpcMemory": {
         "samples": 3,
-        "maxHeapUsedBytes": 309555616,
-        "maxRssBytes": 1137696768,
-        "lastElapsedMs": 7538.5389000000005
+        "maxHeapUsedBytes": 317529696,
+        "maxRssBytes": 1134551040,
+        "lastElapsedMs": 8694.7877
       }
     },
     "record": {
       "file": "CTX-K2.context.json",
-      "bytes": 100571,
-      "sha256": "6e36da6e929c3f01e78733a8b0a3bc4ac915ce888dc0e607984d1787bb29a051"
+      "bytes": 100563,
+      "sha256": "3feb35a7e5746ae2970e8ce64e29bc3bf72aff5b63f54fb056634de7027ee9e4"
     },
     "targetWeaponId": "188571a7-b480-4085-a8f5-59666c0e4cc5",
     "currentBuildListEntryId": "build-list.fnv1a32-dd79ecce",
@@ -2385,7 +2385,15 @@
         ],
         "exclusiveOwnedWeaponIds": [
           "60126fe6-ad44-492c-bb13-b0320f2cbd2a"
-        ]
+        ],
+        "routeUnitPlannedEntries": 2,
+        "routeUnitRejections": 0,
+        "recordMatched": {
+          "referenced": true,
+          "consumed": true,
+          "exclusive": true
+        },
+        "recomputedFrom": "Export support bodies: collectReferencedOwnedWeaponIds() + createPlannerRouteUnitPlans([2 bodies], the Production RNG Engine)"
       },
       "C4": true,
       "C5": {
@@ -2426,9 +2434,9 @@
         }
       }
     },
-    "wallMs": 8420.549699999996,
-    "peakHeapBytes": 309555616,
-    "peakRssBytes": 1175699456
+    "wallMs": 9722.6449,
+    "peakHeapBytes": 317529696,
+    "peakRssBytes": 1172475904
   },
   "discovery": {
     "units": [
@@ -2450,16 +2458,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-11T07:43:18.711Z",
-          "endedAt": "2026-10-11T07:43:55.106Z",
-          "wallMs": 36396.107099999994,
+          "startedAt": "2026-10-11T08:16:54.703Z",
+          "endedAt": "2026-10-11T08:17:37.242Z",
+          "wallMs": 42538.946800000005,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 132,
-            "maxHeapUsedBytes": 1730145072,
-            "maxRssBytes": 2025414656,
-            "lastElapsedMs": 35443.2117
+            "samples": 152,
+            "maxHeapUsedBytes": 1383447480,
+            "maxRssBytes": 1654771712,
+            "lastElapsedMs": 41449.8289
           }
         },
         "searchIdentity": "planner-alternative-search.fnv1a32-b25bc25e",
@@ -2474,11 +2482,11 @@
         },
         "deliveries": [],
         "poolSizeAtEnd": 0,
-        "searchOnlyMs": 33611.556899999996,
+        "searchOnlyMs": 39458.668900000004,
         "materializeMs": 0,
-        "wallMs": 36396.107099999994,
-        "peakHeapBytes": 1730145072,
-        "peakRssBytes": 2025418752
+        "wallMs": 42538.946800000005,
+        "peakHeapBytes": 1383447480,
+        "peakRssBytes": 1654775808
       },
       {
         "unitId": "DSC-K2-L1",
@@ -2498,16 +2506,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-11T07:43:55.110Z",
-          "endedAt": "2026-10-11T07:44:46.386Z",
-          "wallMs": 51275.668900000004,
+          "startedAt": "2026-10-11T08:17:37.253Z",
+          "endedAt": "2026-10-11T08:18:40.212Z",
+          "wallMs": 62958.7285,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 189,
-            "maxHeapUsedBytes": 2083462664,
-            "maxRssBytes": 2466078720,
-            "lastElapsedMs": 50320.6837
+            "samples": 231,
+            "maxHeapUsedBytes": 1954502576,
+            "maxRssBytes": 2346168320,
+            "lastElapsedMs": 61853.9564
           }
         },
         "searchIdentity": "planner-alternative-search.fnv1a32-18d99d01",
@@ -2522,11 +2530,11 @@
         },
         "deliveries": [],
         "poolSizeAtEnd": 0,
-        "searchOnlyMs": 48448.1051,
+        "searchOnlyMs": 59833.636,
         "materializeMs": 0,
-        "wallMs": 51275.668900000004,
-        "peakHeapBytes": 2083462664,
-        "peakRssBytes": 2466082816
+        "wallMs": 62958.7285,
+        "peakHeapBytes": 1954502576,
+        "peakRssBytes": 2346172416
       },
       {
         "unitId": "DSC-K2-L2",
@@ -2546,16 +2554,16 @@
           "signal": null,
           "timedOut": false,
           "budgetMs": 3600000,
-          "startedAt": "2026-10-11T07:44:46.396Z",
-          "endedAt": "2026-10-11T07:54:43.725Z",
-          "wallMs": 597328.193,
+          "startedAt": "2026-10-11T08:18:40.222Z",
+          "endedAt": "2026-10-11T08:29:51.437Z",
+          "wallMs": 671214.7141,
           "killedAtMs": null,
           "stderrTail": null,
           "lastIpcMemory": {
-            "samples": 2267,
-            "maxHeapUsedBytes": 5974790512,
-            "maxRssBytes": 6468063232,
-            "lastElapsedMs": 596135.5817
+            "samples": 2543,
+            "maxHeapUsedBytes": 5999511480,
+            "maxRssBytes": 6550667264,
+            "lastElapsedMs": 669795.8251
           }
         },
         "searchIdentity": "planner-alternative-search.fnv1a32-f376cb29",
@@ -2597,11 +2605,11 @@
           }
         ],
         "poolSizeAtEnd": 2,
-        "searchOnlyMs": 594224.4056,
-        "materializeMs": 15.789899999974295,
-        "wallMs": 597328.193,
-        "peakHeapBytes": 5974790512,
-        "peakRssBytes": 6468067328
+        "searchOnlyMs": 667740.2385,
+        "materializeMs": 15.911700000055134,
+        "wallMs": 671214.7141,
+        "peakHeapBytes": 5999511480,
+        "peakRssBytes": 6550671360
       }
     ],
     "pool": [
@@ -2623,7 +2631,7 @@
         },
         "searchIdentity": "planner-alternative-search.fnv1a32-f376cb29",
         "reservationDigest": "fnv1a32:fd85c864",
-        "contextRecordSha256": "6e36da6e929c3f01e78733a8b0a3bc4ac915ce888dc0e607984d1787bb29a051",
+        "contextRecordSha256": "3feb35a7e5746ae2970e8ce64e29bc3bf72aff5b63f54fb056634de7027ee9e4",
         "requiresSupport": [
           "build-list.fnv1a32-92d87b90",
           "build-list.fnv1a32-e396d352"
@@ -2658,7 +2666,7 @@
         },
         "searchIdentity": "planner-alternative-search.fnv1a32-f376cb29",
         "reservationDigest": "fnv1a32:fd85c864",
-        "contextRecordSha256": "6e36da6e929c3f01e78733a8b0a3bc4ac915ce888dc0e607984d1787bb29a051",
+        "contextRecordSha256": "3feb35a7e5746ae2970e8ce64e29bc3bf72aff5b63f54fb056634de7027ee9e4",
         "requiresSupport": [
           "build-list.fnv1a32-92d87b90",
           "build-list.fnv1a32-e396d352"
@@ -2700,16 +2708,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-11T07:42:50.428Z",
-        "endedAt": "2026-10-11T07:42:57.749Z",
-        "wallMs": 7321.060699999998,
+        "startedAt": "2026-10-11T08:16:22.611Z",
+        "endedAt": "2026-10-11T08:16:30.823Z",
+        "wallMs": 8212.6751,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 300440848,
-          "maxRssBytes": 1001123840,
-          "lastElapsedMs": 6375.071400000001
+          "maxHeapUsedBytes": 725483728,
+          "maxRssBytes": 1131413504,
+          "lastElapsedMs": 7148.968999999999
         }
       },
       "inputDigest": "fnv1a32:6f151dc3",
@@ -3184,10 +3192,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 7321.060699999998,
-      "childWallMs": 6373.129199999999,
-      "peakHeapBytes": 300440848,
-      "peakRssBytes": 1001123840
+      "wallMs": 8212.6751,
+      "childWallMs": 7146.4881,
+      "peakHeapBytes": 725483728,
+      "peakRssBytes": 1131413504
     },
     {
       "evaluationId": "I0",
@@ -3252,16 +3260,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-11T07:42:57.762Z",
-        "endedAt": "2026-10-11T07:43:10.284Z",
-        "wallMs": 12521.968400000002,
+        "startedAt": "2026-10-11T08:16:30.828Z",
+        "endedAt": "2026-10-11T08:16:44.964Z",
+        "wallMs": 14136.090799999998,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 866351888,
-          "maxRssBytes": 1131302912,
-          "lastElapsedMs": 11626.0824
+          "maxHeapUsedBytes": 866959408,
+          "maxRssBytes": 1130471424,
+          "lastElapsedMs": 13094.8079
         }
       },
       "inputDigest": "fnv1a32:6493291d",
@@ -4366,10 +4374,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 12521.968400000002,
-      "childWallMs": 11623.727299999999,
-      "peakHeapBytes": 866351888,
-      "peakRssBytes": 1135681536
+      "wallMs": 14136.090799999998,
+      "childWallMs": 13092.3452,
+      "peakHeapBytes": 866959408,
+      "peakRssBytes": 1134911488
     },
     {
       "evaluationId": "ADM-K2-t03-c1",
@@ -4401,16 +4409,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-11T07:54:43.730Z",
-        "endedAt": "2026-10-11T07:54:57.356Z",
-        "wallMs": 13626.037500000093,
+        "startedAt": "2026-10-11T08:29:51.441Z",
+        "endedAt": "2026-10-11T08:30:05.852Z",
+        "wallMs": 14411.51370000001,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 875359632,
-          "maxRssBytes": 1133334528,
-          "lastElapsedMs": 12623.3984
+          "maxHeapUsedBytes": 342589864,
+          "maxRssBytes": 1106804736,
+          "lastElapsedMs": 13327.4883
         }
       },
       "inputDigest": "fnv1a32:980bd7c4",
@@ -5198,10 +5206,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13626.037500000093,
-      "childWallMs": 12621.3082,
-      "peakHeapBytes": 875359632,
-      "peakRssBytes": 1137250304
+      "wallMs": 14411.51370000001,
+      "childWallMs": 13324.6266,
+      "peakHeapBytes": 342589864,
+      "peakRssBytes": 1106804736
     },
     {
       "evaluationId": "ADM-K2-t03-c2",
@@ -5233,16 +5241,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-11T07:54:57.360Z",
-        "endedAt": "2026-10-11T07:55:10.751Z",
-        "wallMs": 13391.84600000002,
+        "startedAt": "2026-10-11T08:30:05.865Z",
+        "endedAt": "2026-10-11T08:30:19.991Z",
+        "wallMs": 14126.742300000042,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 739301768,
-          "maxRssBytes": 969519104,
-          "lastElapsedMs": 12392.605099999999
+          "maxHeapUsedBytes": 874072120,
+          "maxRssBytes": 1130201088,
+          "lastElapsedMs": 13095.996299999999
         }
       },
       "inputDigest": "fnv1a32:79f1f649",
@@ -6030,10 +6038,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13391.84600000002,
-      "childWallMs": 12389.9611,
-      "peakHeapBytes": 739301768,
-      "peakRssBytes": 969519104
+      "wallMs": 14126.742300000042,
+      "childWallMs": 13092.8309,
+      "peakHeapBytes": 874072120,
+      "peakRssBytes": 1134911488
     },
     {
       "evaluationId": "EXT-K2-t03-c1",
@@ -6102,16 +6110,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-11T07:55:10.755Z",
-        "endedAt": "2026-10-11T07:55:24.024Z",
-        "wallMs": 13268.71259999997,
+        "startedAt": "2026-10-11T08:30:19.995Z",
+        "endedAt": "2026-10-11T08:30:34.516Z",
+        "wallMs": 14520.712899999926,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 346377000,
-          "maxRssBytes": 1044164608,
-          "lastElapsedMs": 12358.682200000001
+          "maxHeapUsedBytes": 869966672,
+          "maxRssBytes": 1141784576,
+          "lastElapsedMs": 13475.5411
         }
       },
       "inputDigest": "fnv1a32:2ef36ad4",
@@ -7611,10 +7619,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13268.71259999997,
-      "childWallMs": 12356.520999999999,
-      "peakHeapBytes": 346377000,
-      "peakRssBytes": 1047408640
+      "wallMs": 14520.712899999926,
+      "childWallMs": 13472.9463,
+      "peakHeapBytes": 869966672,
+      "peakRssBytes": 1146232832
     },
     {
       "evaluationId": "EXT-K2-t03-c2",
@@ -7683,16 +7691,16 @@
         "signal": null,
         "timedOut": false,
         "budgetMs": 1800000,
-        "startedAt": "2026-10-11T07:55:24.035Z",
-        "endedAt": "2026-10-11T07:55:37.213Z",
-        "wallMs": 13177.637400000007,
+        "startedAt": "2026-10-11T08:30:34.520Z",
+        "endedAt": "2026-10-11T08:30:49.043Z",
+        "wallMs": 14523.2803000001,
         "killedAtMs": null,
         "stderrTail": null,
         "lastIpcMemory": {
           "samples": 5,
-          "maxHeapUsedBytes": 344691032,
-          "maxRssBytes": 1044631552,
-          "lastElapsedMs": 12268.038900000001
+          "maxHeapUsedBytes": 863499144,
+          "maxRssBytes": 1140256768,
+          "lastElapsedMs": 13484.2281
         }
       },
       "inputDigest": "fnv1a32:2f7009bf",
@@ -9153,10 +9161,10 @@
       },
       "boundLimited": false,
       "errorDetail": null,
-      "wallMs": 13177.637400000007,
-      "childWallMs": 12265.7339,
-      "peakHeapBytes": 344691032,
-      "peakRssBytes": 1047891968
+      "wallMs": 14523.2803000001,
+      "childWallMs": 13481.588899999999,
+      "peakHeapBytes": 863499144,
+      "peakRssBytes": 1144610816
     }
   ],
   "parityChecks": [
@@ -9663,17 +9671,17 @@
       "notChecked": []
     },
     "timing": {
-      "rvWallMs": 14064.541799999999,
-      "contextWallMs": 8420.549699999996,
-      "discoveryWallMs": 684999.9689999999,
-      "evaluationWallMs": 73307.26260000009,
-      "runWallMs": 780876.5728,
+      "rvWallMs": 15940.653400000001,
+      "contextWallMs": 9722.6449,
+      "discoveryWallMs": 776712.3894,
+      "evaluationWallMs": 79931.01510000008,
+      "runWallMs": 882402.913,
       "discoveryEnvelopeReached": false,
       "runEnvelopeReached": false
     },
     "memory": {
-      "peakHeapBytes": 5974790512,
-      "peakRssBytes": 6468067328
+      "peakHeapBytes": 5999511480,
+      "peakRssBytes": 6550671360
     }
   },
   "invalidReasons": [],

@@ -11,10 +11,10 @@ CTX recordも変更していない。oracleは実行入力・診断入力・分�
 | 部品 | file |
 | --- | --- |
 | 登録条件、V（D2-D / D2-C / D2 RESULTのallowlist projection、§3.1のK2 context機械導出と§3.2表の照合、§6.1のI0集合導出と§1.2表の照合、G store 9件・CTX record 6件の照合）、CTX-K2（C1〜C7）、DSC unit（R0-K2 / R0-split、D-1〜D-5、`K2_POOL_CAP = 2`）、評価child（RV1′ / RV2′、S4 / S5 / S6）、§6.5の共通判定、start attestation | `src/benchmarks/plannerGlobalD2E.ts` |
-| analyzer（RV1〜RV6、C1 / C3 / C4 / C6の独立再計算とC5 / C7の再照合、rung進行・pool・重複排除の再生、R1、S1〜S6、R5独立再判定と `judgeD1R5()` の相互照合、EXT診断、gate、improved、`improvementKind`、選択順、R6、parity 4状態、決定性、証拠整合、decision） | `src/benchmarks/plannerGlobalD2EAnalysis.ts` |
+| analyzer（RV1〜RV6、C1 / C3 / C4 / C6の独立再計算（C3は2 supportのExport bodyから `collectReferencedOwnedWeaponIds()` と `createPlannerRouteUnitPlans()` で再導出、`recomputeD2EK2ContextC3()`）とC5 / C7の再照合、rung進行・pool・重複排除の再生、R1、S1〜S6、R5独立再判定と `judgeD1R5()` の相互照合、EXT診断、gate、improved、`improvementKind`、選択順、R6、parity 4状態、決定性、証拠整合、decision） | `src/benchmarks/plannerGlobalD2EAnalysis.ts` |
 | runner（親 + `rv` / `context` / `discover` / `evaluate` child、journal、abort、4時間discovery envelope、7時間run envelope） | `scripts/run-planner-global-d2e.mjs` |
-| analyzer script（RESULT生成。RV2のbaseline EntryとC4のPlanner-start origin digestをExportから独立に構築） | `scripts/analyze-planner-global-d2e.mjs` |
-| test（30件） | `src/benchmarks/plannerGlobalD2E.test.ts` |
+| analyzer script（RESULT生成。RV2のbaseline Entry、C4のPlanner-start origin digest、C3のroute unit plan（登録済みProduction RNG Engineをanalyzer自身でinstantiate）をExportから独立に構築） | `scripts/analyze-planner-global-d2e.mjs` |
+| test（32件） | `src/benchmarks/plannerGlobalD2E.test.ts` |
 
 - §14.1の既存部品を使った: `globalResearchInputFromExport()` / `globalResearchDependencies()`、K2 / K1 / K0 contextは `phase2c27bResolveSupportContext()`
   （= `derivePlannerAlternativeReservation()`）、C3は `collectReferencedOwnedWeaponIds()` / `createPlannerRouteUnitPlans()`、C4は `derivePhase2C26B2C1Schedule()`、
@@ -34,24 +34,33 @@ CTX recordも変更していない。oracleは実行入力・診断入力・分�
 | RV3（K1）の照合先 | D2-D RESULTの `conditions` にはpool reservation digestが無いため、K1 incumbentのSearch当時reservationは自身のCTX record（t00 CTX-1、t04 CTX-5、t05 CTX-6、t10 CTX-7）を基準とし、そのdigest / record SHA-256をD2-C RESULT `contexts[]` の行（allowlist内）と照合した |
 | S5 authority | 各supportの最小kのCTX record（`61066e62` → CTX-6、`92d87b90` → CTX-3、`e396d352` → CTX-1）。同じsupportの他のCTX recordとの一致はV・RV（RV5 / RV6、`k1_context` parity 6件）で確認した |
 | `equalMetrics` / `conflictIncreased` | eligibleなEXTについてだけ記録した（D2-Dと同じ） |
+| C3の独立再計算（PR #232レビュー対応） | 初回実装のanalyzerはC3の参照OwnedWeaponだけをExportから再導出し、排他消費OwnedWeapon集合はCTX child recordの値を検証材料に使っていた（§4.1の独立再計算要求を満たさない）。修正後は `recomputeD2EK2ContextC3()` が、登録K2 supportの2 Export bodyから `collectReferencedOwnedWeaponIds()` と1回の `createPlannerRouteUnitPlans([2 bodies], engine)`（登録済みProduction RNG Engine）で参照・排他消費集合を再導出し、rejection 0、reservation `exclusiveOwnedWeaponIds` への包含、recordの3集合との一致を検査する。recordは比較対象だけで、再計算値の代わりに使わない。不一致は `D2E_INVALID`（`guardrail`）。CTX child、reservation導出、判定の意味論は変更していない |
 | 既存testの許可対象 | `plannerGlobalD2C.test.ts` / `plannerGlobalD2D.test.ts` の「他ResearchからのD2-C / D2-D import禁止」検査に、登録上の後継D2-Eのexact path（D2-C: D2-E 3 file、D2-D: `plannerGlobalD2E.ts` だけ）を追加した。Phase 2-C2.5-D2-Eが許可対象に入らないこと、それがD2-C / D2-Dをimportすると検出されることのassertionも追加した。他moduleについての検査の厳しさは変えていない |
 
 ## 2. provenance
 
 | 項目 | 値 |
 | --- | --- |
-| measurement HEAD | `c0248fcba41f3ec22867d966f83f7a7c40e794cc`（Working Tree clean、analysis HEADも同じ） |
-| start attestation | SHA-256 `ec8f838db1adeaf9ac77ec681a171759e13d8f33985c1de0bca0c587bf9f173d`（32,852 bytes）、verified |
+| measurement HEAD | **`d294efb005e4943627f3ed27873a33ed7ead8173`**（Working Tree clean、analysis HEADも同じ。measurement HEADはanalysis HEADのancestor） |
+| start attestation | SHA-256 `6d6c4629cb11cf4f7e26b2c3ed62b3054dd4b5ddcc036b115ffd7fb0cd21b811`（32,853 bytes）、verified |
 | D2-E-A文書 SHA-256（HEAD git object） | `9bbb824169ac22364b451b6313730c7e2042b181db8557dbfeec359f8fa14797` |
 | 登録policy SHA-256 | `8a123601cac3dd5e33381fabbbfbdff66c775fcd9cf1475c576cfd904c1f6292` |
-| calculation code digest | `199bad498d6e5a88347d25edd4e8ce77229c9e79f8e1e2004c5090968d2c7593` |
-| raw | `.local/PLANNER_GLOBAL_D2E_K2_RAW.json.local`（31,851 bytes、`b2f8c8a9…110b`）、run dir `.local/d2e-k2-formal.run/`（commitしない） |
+| calculation code digest | `2fa915045f8066b8aa6167f1623bcf3a04892e05991692e8b2b236a1c7628d05` |
+| raw | `.local/PLANNER_GLOBAL_D2E_K2_RAW2.json.local`（31,753 bytes、`c0924292…81ad`）、run dir `.local/d2e-k2-formal2.run/`（record 11件、K2 G store 2件。commitしない） |
 | 入力evidence | Export、D2-D / D2-C / D2 / Phase 2-C2 RESULT、D2-D-A / D2-D-B文書、chained文書9件、D2-D / D2-C attestation / raw、G store 9件、CTX record 6件のbytes・SHA-256がすべて登録値と一致（V、analyzerで独立に再検証） |
 | Production changed files | `[]`（measurement HEAD、analysis HEADとも。基準main `414c63d`） |
 | CalculationContext / Engine | `{ unknown-initial, 4, production-rng:c5-e7, 17 }` / `production-rng:c5-e7` |
 | `provenance.formal` | `true`、`runStatus = completed`、invalid 0、`oracleGuidedTargetPopulation = true` |
 
-正式計測を1回実行し、計測開始後に計算コードを変更していない（`calculationCodeChangedSinceMeasuredHead = []`）。smoke（非formal）は別run dir
+本RESULTは新measurement HEAD `d294efb` での正式計測（2回目）である。計測開始後に計算コードを変更していない（`calculationCodeChangedSinceMeasuredHead = []`）。
+
+**再計測の経緯**: 旧measurement HEAD `c0248fcba41f3ec22867d966f83f7a7c40e794cc` の正式計測（start attestation `ec8f838d…f173d`、raw
+`.local/PLANNER_GLOBAL_D2E_K2_RAW.json.local`、run dir `.local/d2e-k2-formal.run/`）は、analyzerのC3独立再計算の不足（§1.1）を修正したため正式結果として採用せず、
+修正をcommitした新measurement HEADからV → RV → B0 → I0 → CTX-K2 → DSC → ADM → EXTを最初から再計測した。旧runのrecord・journal・G storeは新runへ継ぎ足しておらず、
+監査用に保持している（削除・上書きしていない）。新旧runで全6評価の `inputDigest` / `resultDigest`、DSC 3 unitのSearch identity・delivery key、pool 2件のkey・generated Entry ID・
+G store SHA-256、decisionはすべて一致し、異なるのはwall time / memoryだけだった。
+
+smoke（非formal）は別run dir
 （`.local/d2e-k2-smoke1`、`.local/d2e-k2-smoke2`）で `--allow-uncommitted` により実行し、runner / analyzerの全経路の動作だけを確認した。smokeの結果で
 条件を変更しておらず、formal evidenceにしていない。
 
@@ -76,19 +85,20 @@ CTX recordも変更していない。oracleは実行入力・診断入力・分�
 
 | 項目 | 結果 |
 | --- | --- |
-| RV | `verified`。incumbent 9件すべてRV1〜RV4成立（K0 5件は `fnv1a32:5ac88909`、K1 4件は自身のCTX record）。support 3件ともRV5 / RV6成立。wall 14.1 s |
+| RV | `verified`。incumbent 9件すべてRV1〜RV4成立（K0 5件は `fnv1a32:5ac88909`、K1 4件は自身のCTX record）。support 3件ともRV5 / RV6成立。wall 15.9 s |
 | B0 | `evaluated`、20 / 43、Conflict 21、steps 1465、`exhausted`、`inputDigest fnv1a32:6f151dc3`、`resultDigest fnv1a32:880bbb52`。Phase 2-C2 summary・D2 / D2-C / D2-D B0とmatched |
 | I0 | `evaluated`、24 / 43、Conflict 19、steps 1465、`exhausted`（`reachedLimits = []`）、`inputDigest fnv1a32:6493291d`、`resultDigest fnv1a32:57dbb4e5`、R5成立、`resource_conflict` 19、support 3件selected。D2-D `PAIR-t05c1-t07c3` とmatched（`d2d_best`、`registered_input`、`determinism_prior`） |
-| CTX-K2 | `context_ready`。C1〜C7すべて成立、C5 matched（`reservationDigest fnv1a32:fd85c864`、body一致）、origin `fnv1a32:ff018910`、`conflictContextCount = 21`、`equalsK1ComponentwiseUnion = true`（診断）。wall 8.4 s |
+| CTX-K2 | `context_ready`。C1〜C7すべて成立、C5 matched（`reservationDigest fnv1a32:fd85c864`、body一致）、origin `fnv1a32:ff018910`、`conflictContextCount = 21`、`equalsK1ComponentwiseUnion = true`（診断）。wall 9.7 s |
+| C3（analyzer独立再計算） | 成立。2 supportのExport bodyから再導出した参照OwnedWeapon = 排他消費OwnedWeapon = `60126fe6…`（`92d87b90` のReset Bonuses source）、route unit plan 2 Entry / rejection 0、reservation `exclusiveOwnedWeaponIds` に包含、child recordの3集合と一致（`recordMatched` すべてtrue） |
 | parity | `baseline` 1、`d2d_best` 1、`registered_input` 1、`k1_context` 6、`k2_context_registered` 1、`determinism_prior` 2がすべて `matched`。`mismatched` / `not_checked` 0。D2-E内で同じ `inputDigest` の評価は無かった |
 
 ### 3.3 discovery（K2 context `K2-t03-92d87b90-e396d352`）
 
 | unit | extent（Normal / Gogma / Skill） | outcome | delivered | wall / searchOnly | heap peak |
 | --- | --- | --- | ---: | --- | ---: |
-| `DSC-K2-L0` | 4 / 235 / 4 | `stopped_by_search_extent_bound` | 0 | 36.4 s / 33.6 s | 1.73 GB |
-| `DSC-K2-L1` | 8 / 235 / 256 | `stopped_by_search_extent_bound` | 0 | 51.3 s / 48.4 s | 2.08 GB |
-| `DSC-K2-L2` | 128 / 235 / 1500 | `discovery_cap_reached` | 2 | 597.3 s / 594.2 s | 5.97 GB |
+| `DSC-K2-L0` | 4 / 235 / 4 | `stopped_by_search_extent_bound` | 0 | 42.5 s / 39.5 s | 1.38 GB |
+| `DSC-K2-L1` | 8 / 235 / 256 | `stopped_by_search_extent_bound` | 0 | 63.0 s / 59.8 s | 1.95 GB |
+| `DSC-K2-L2` | 128 / 235 / 1500 | `discovery_cap_reached` | 2 | 671.2 s / 667.7 s | 6.00 GB |
 
 | ordinal | cost / Route kind / 操作数 | `candidateStableKey` SHA-256 | generated Entry ID | G store SHA-256 |
 | ---: | --- | --- | --- | --- |
@@ -128,10 +138,10 @@ CTX recordも変更していない。oracleは実行入力・診断入力・分�
 
 | 項目 | 値 |
 | --- | --- |
-| run wall | 780.9 s（RV 14.1 s、CTX-K2 8.4 s、DSC 3 unit合計 685.0 s、評価6件合計 73.3 s。評価1件 7.3〜13.6 s） |
+| run wall | 882.4 s（RV 15.9 s、CTX-K2 9.7 s、DSC 3 unit合計 776.7 s、評価6件合計 79.9 s。評価1件 8.2〜14.5 s） |
 | child process | 11 / 11（RV 1 + CTX 1 + DSC 3 + 評価 6） |
 | full Planner起動 | 6回（評価ごと1回、上限8に対し）、runtime-unsupported retry 0 |
-| memory | child heap最大5.97 GB（`DSC-K2-L2`）、RSS最大6.47 GB（上限12,288 MB）。評価childのheapは最大0.87 GB |
+| memory | child heap最大6.00 GB（`DSC-K2-L2`）、RSS最大6.55 GB（上限12,288 MB）。評価childのheapは最大0.87 GB |
 | 実行環境 | Node v24.19.0、AMD Ryzen 7 9700X、メモリ 33.4 GB |
 
 ## 4. 言えること・言えないこと
