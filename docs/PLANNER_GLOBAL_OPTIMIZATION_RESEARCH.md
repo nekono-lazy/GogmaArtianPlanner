@@ -274,3 +274,6 @@ follow-upが提案したD1（Phase B `found_R` 11 Candidateの共存診断、Pha
 その実装と正式計測は [D1-B](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D1B.md)（`D1_FOUND_R_SET_PARTIAL`）にある。
 D1を受けたD2（Candidate発見とGlobal採用を分離するK0先行policy）の最初の実行条件は
 [D2-A事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2_SPEC.md)（docs-only）で確定した。
+その実装と正式計測は [D2-B](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2B.md)（`D2A_EXCEEDS_D1_INCUMBENT`、主軸22 / 43・Conflict 20）にある。
+D2-Bで不受理だった6 Targetの阻害Entry（provisional winner）をsupportとする限定K1探索（D2-C）の実行条件は
+[D2-C事前登録](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_D2C_SPEC.md)（docs-only）で確定した。
