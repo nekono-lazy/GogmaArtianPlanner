@@ -83,7 +83,7 @@ import {
   type D2EReplacementTask,
   type D2EValidatedInputs,
 } from './plannerGlobalD2E'
-import { analyzeD2ERun, classifyD2EDecision, type D2EAnalysisInput, type D2EDecisionInput, type D2EDiscoveryRow, type D2EEvaluationRow } from './plannerGlobalD2EAnalysis'
+import { analyzeD2ERun, classifyD2EDecision, recomputeD2EK2ContextC3, type D2EAnalysisInput, type D2EDecisionInput, type D2EDiscoveryRow, type D2EEvaluationRow } from './plannerGlobalD2EAnalysis'
 
 const sha256 = async (text: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2, '0')).join('')
 const codeOnly = (source: string) => source.split(/\r?\n/).filter(line => !/^\s*(\/\/|\*|\/\*\*)/.test(line)).join('\n')
@@ -357,6 +357,40 @@ describe('D2-E CTX-K2 (§4.1): C1 .. C7 from Production parts, no Search, no ful
     expect(preflightSpy.calls).toEqual([])
   })
 
+  it('records the exclusively consumed OwnedWeapon of the support Routes, and the analyzer recomputes C3 independently of the record', () => {
+    const built = fixture()
+    const ctx = contextOf(built)
+    const exportEntries = research(built).buildListEntries
+    // Support A Resets Bonuses on SOURCE_A (consumed); support C Resets Skills on SOURCE_C (referenced, not consumed).
+    expect(ctx.checks.C3.exclusiveConsumedOwnedWeaponIds).toEqual([ORCHESTRATION_SOURCE_A])
+    expect(ctx.checks.C3.referencedOwnedWeaponIds).toEqual([ORCHESTRATION_SOURCE_A, SOURCE_C].sort())
+    const c3 = (over: { recordC3?: Json; exportBuildListEntries?: readonly unknown[]; reservationBody?: unknown; rngEngine?: null; recordSupportBuildListEntryIds?: string[] } = {}) => recomputeD2EK2ContextC3({
+      recordSupportBuildListEntryIds: over.recordSupportBuildListEntryIds ?? ctx.supportBuildListEntryIds, registeredSupportBuildListEntryIds: S, exportBuildListEntries: over.exportBuildListEntries ?? exportEntries,
+      reservationBody: over.reservationBody ?? ctx.reservationBody, recordC3: (over.recordC3 ?? ctx.checks.C3) as never, rngEngine: over.rngEngine === null ? null : built.dependencies.rngEngine })
+    const ok = c3()
+    expect(ok).toMatchObject({ satisfied: true, issues: [], exclusiveConsumedOwnedWeaponIds: [ORCHESTRATION_SOURCE_A], referencedOwnedWeaponIds: [ORCHESTRATION_SOURCE_A, SOURCE_C].sort(),
+      routeUnitPlannedEntries: 2, routeUnitRejections: 0, recordMatched: { referenced: true, consumed: true, exclusive: true } })
+    expect([...ok.referencedOwnedWeaponIds, ...ok.exclusiveConsumedOwnedWeaponIds].every(id => ok.exclusiveOwnedWeaponIds.includes(id))).toBe(true)
+    const record = (patch: Json) => ({ ...ctx.checks.C3, ...patch })
+    // A tampered record never passes: one consumed ID dropped, a non-existent ID added, the ID replaced.
+    expect(c3({ recordC3: record({ exclusiveConsumedOwnedWeaponIds: [] }) })).toMatchObject({ satisfied: false, recordMatched: { consumed: false } })
+    expect(c3({ recordC3: record({ exclusiveConsumedOwnedWeaponIds: [ORCHESTRATION_SOURCE_A, 'owned.not.existing'] }) })).toMatchObject({ satisfied: false, recordMatched: { consumed: false } })
+    expect(c3({ recordC3: record({ exclusiveConsumedOwnedWeaponIds: [ORCHESTRATION_SOURCE_B] }) })).toMatchObject({ satisfied: false, recordMatched: { consumed: false } })
+    expect(c3({ recordC3: record({ referencedOwnedWeaponIds: [ORCHESTRATION_SOURCE_A] }) })).toMatchObject({ satisfied: false, recordMatched: { referenced: false } })
+    // Route unit planning rejects a support Route whose saved Counter does not advance as the Engine does.
+    const rejected = exportEntries.map(e => e.id !== ENTRY_A ? e : { ...e, candidateSnapshot: { ...e.candidateSnapshot, route: { ...e.candidateSnapshot.route,
+      operations: e.candidateSnapshot.route.operations.map(op => ({ ...op, gogmaCounterAfter: 13 })) } } })
+    const r = c3({ exportBuildListEntries: rejected })
+    expect(r.satisfied).toBe(false)
+    expect(r.routeUnitRejections).toBe(1)
+    expect(r.issues.join(';')).toMatch(/route unit planning rejected 1 support Entry/)
+    // The reservation exclusive set lacking a required ID, a missing Engine, foreign supports, a missing body.
+    expect(c3({ reservationBody: { ...(ctx.reservationBody as Json), exclusiveOwnedWeaponIds: [SOURCE_C] } }).issues.join(';')).toMatch(new RegExp(`lacks ${ORCHESTRATION_SOURCE_A.replace(/\./g, '\\.')}`))
+    expect(c3({ rngEngine: null })).toMatchObject({ satisfied: false, issues: expect.arrayContaining(['no RNG Engine to recompute the route unit plans']) })
+    expect(c3({ recordSupportBuildListEntryIds: [ENTRY_A, ENTRY_B].sort() }).satisfied).toBe(false)
+    expect(c3({ exportBuildListEntries: exportEntries.filter(e => e.id !== ENTRY_C) }).issues.join(';')).toMatch(/0 Export Entries hold/)
+  })
+
   it('records C5 mismatched against another registered body and fails C1 / C6 closed', () => {
     const built = fixture()
     const registered = { digest: 'fnv1a32:00000000', body: { normal: [], skill: { held: [], blocked: [] }, gogma: { held: [], blocked: [] }, exclusiveOwnedWeaponIds: [] } }
@@ -564,11 +598,15 @@ function synthetic(options: SyntheticOptions = {}): Synthetic {
       calculationContext: { ...D2E_CALCULATION_CONTEXT }, isStale: false, candidateSnapshot: snapshot } })
   })
   // Export support bodies hashing to the CTX supportBodySha256; O_t03 whose stable key hashes to the CTX excluded key SHA-256.
+  // Each support body Resets Bonuses on its K1 exclusive OwnedWeapon (C3 then recomputes a non-empty exclusively consumed set).
   const exportEntries: Json[] = v.supports.map((s, i) => {
-    const body = { id: s.supportBuildListEntryId, targetWeaponId: `target.outside.${i}` }
+    const exclusive = (s.contexts[0]!.reservationBody.exclusiveOwnedWeaponIds as string[])
+    const route = exclusive.length === 1 ? resetRoute(exclusive[0]!, 10) : { kind: 'existing_gogma_reset_bonuses' as const, sourceOwnedWeaponId: null, operations: [] }
+    const body = { ...orchestrationEntry(s.supportBuildListEntryId, orchestrationTarget(`target.outside.${i}`), route) } as unknown as Json
     shaMap.set(stableStringify(body), s.contexts[0]!.supportBodySha256)
     return body
   })
+  const k2Exclusive = [...new Set(k2.supportBuildListEntryIds.flatMap(id => v.supports.find(x => x.supportBuildListEntryId === id)!.contexts[0]!.reservationBody.exclusiveOwnedWeaponIds as string[]))].sort()
   const oSnapshot = { ...structuredClone(template.candidateSnapshot), seriesSkillId: 'series_skill.o.t03' }
   const oKey = candidateStableKey(oSnapshot)
   shaMap.set(oKey, v.contexts.find(c => c.k === k2.k1Contexts[0]!.k)!.excludedRouteKeySha256s[0]!)
@@ -590,7 +628,7 @@ function synthetic(options: SyntheticOptions = {}): Synthetic {
     supportBodySha256s: Object.fromEntries(k2.supportBuildListEntryIds.map(s => [s, v.supports.find(x => x.supportBuildListEntryId === s)!.contexts[0]!.supportBodySha256])),
     reservationBody: structuredClone(body), reservationDigest: D2E_K2_RESERVATION_DIGEST, originDigest: D2E_ORIGIN_DIGEST, scheduleOriginDigest: D2E_ORIGIN_DIGEST, excludedRouteKeys: [oKey],
     excludedRouteKeySha256s: [k1Bodies[0]!.excludedRouteKeySha256s[0]], scheduleExcludedRouteKeys: [oKey], conflictContextCount: 21,
-    checks: { C1: { satisfied: true, issues: [] }, C2: { satisfied: true, issues: [] }, C3: { satisfied: true, referencedOwnedWeaponIds: [], exclusiveConsumedOwnedWeaponIds: [], exclusiveOwnedWeaponIds: [...(body.exclusiveOwnedWeaponIds as string[])].sort() },
+    checks: { C1: { satisfied: true, issues: [] }, C2: { satisfied: true, issues: [] }, C3: { satisfied: true, referencedOwnedWeaponIds: [...k2Exclusive], exclusiveConsumedOwnedWeaponIds: [...k2Exclusive], exclusiveOwnedWeaponIds: [...(body.exclusiveOwnedWeaponIds as string[])].sort() },
       C4: { satisfied: true, issues: [] }, C5: { state: 'matched', expectedDigest: D2E_K2_RESERVATION_DIGEST, observedDigest: D2E_K2_RESERVATION_DIGEST, digestMatched: true, bodyMatched: true },
       C6: { satisfied: true, perSupport: [] }, C7: { satisfied: true, reverseDigest: D2E_K2_RESERVATION_DIGEST } },
     diagnostics: { equalsK1ComponentwiseUnion: true, k1Reservations: {} }, issues: [] } }
@@ -691,7 +729,7 @@ function synthetic(options: SyntheticOptions = {}): Synthetic {
     [D2E_I0_EXPECTED.inputDigest]: [{ source: 'D2-D', evaluationId: 'PAIR-t05c1-t07c3', status: 'evaluated', inputDigest: D2E_I0_EXPECTED.inputDigest, resultDigest: i0f?.resultDigest ?? 'x' }] }
   const childProcessCount = 1 + 1 + discoveryRows.length + evaluationRows.filter(r => r.process !== null).length
   const input: Synthetic['input'] = { validated: v, exportSha256: EXPORT_SHA, exportBuildListEntries: exportEntries, baselineBuildListEntries: null, recomputedOriginDigest: D2E_ORIGIN_DIGEST,
-    d2cContexts: d2cContexts(), incumbentBodies, rvRow, rvRecord, contextRow, contextRecord, discoveryRows, discoveryRecords, poolFiles, evaluationRows, evaluationRecords, interrupted: false,
+    d2cContexts: d2cContexts(), rngEngine: fixture().dependencies.rngEngine, incumbentBodies, rvRow, rvRecord, contextRow, contextRecord, discoveryRows, discoveryRecords, poolFiles, evaluationRows, evaluationRecords, interrupted: false,
     discoveryEnvelopeReached: false, runEnvelopeReached: false, abortReason: null, provenanceIssues: [], evidenceIssues: [], rawConsistencyIssues: [], childProcessCount, sha256OfText: sha }
   return { input, v, k2Ids }
 }
@@ -711,7 +749,9 @@ describe('D2-E run analysis (§4 - §11)', () => {
     expect(states(r)).toMatchObject({ 'baseline:B0': 'matched', 'd2d_best:I0': 'matched', 'registered_input:I0': 'matched', 'k2_context_registered:CTX-K2': 'matched', 'k1_context:CTX-3': 'matched',
       'k1_context:CTX-4': 'matched' })
     expect(r.rv).toMatchObject({ status: 'verified', satisfied: true })
-    expect(r.context.checks).toMatchObject({ C1: true, C2: true, C3: { satisfied: true }, C4: true, C5: { state: 'matched' }, C6: { satisfied: true }, C7: true })
+    expect(r.context.checks).toMatchObject({ C1: true, C2: true, C3: { satisfied: true, routeUnitRejections: 0, recordMatched: { referenced: true, consumed: true, exclusive: true } }, C4: true,
+      C5: { state: 'matched' }, C6: { satisfied: true }, C7: true })
+    expect(((r.context.checks as Json).C3 as Json).exclusiveConsumedOwnedWeaponIds).toEqual(parseD2ESpecRegisteredReservation(SPEC)!.exclusiveOwnedWeaponIds)
     expect(r.discovery.units.map(u => u.status)).toEqual(['stopped_by_search_extent_bound', 'stopped_by_search_extent_bound', 'discovery_cap_reached'])
     expect(r.discovery.outcome).toBe('cap_reached')
     expect(r.discovery.pool.map(p => p.ordinal)).toEqual([1, 2])
@@ -793,6 +833,33 @@ describe('D2-E run analysis (§4 - §11)', () => {
     expect(categories(mutate(s => { ((s.input.rvRecord!.result as Json).candidates as Json[])[0]!.RV4 = { respects: false, blockedHits: { skill: [341] }, exclusiveHit: [] } }))).toContain('guardrail')
     expect(mutate(() => undefined, { abortReason: 'x' }).decision.case).toBe('D2E_INVALID')
   })
+
+  it('recomputes CTX-K2 C3 from the Export support bodies: a tampered exclusively consumed set or reservation is INVALID', () => {
+    const c3Of = (s: Synthetic) => ((s.input.contextRecord!.result as Json).checks as Json).C3 as Json
+    const c3Issues = (r: ReturnType<typeof analyze>) => r.invalidReasons.filter(x => x.category === 'guardrail' && x.detail.startsWith('CTX-K2: C3')).map(x => x.detail)
+    const run = (fn: (s: Synthetic) => void, over: Partial<D2EAnalysisInput> = {}) => { const s = synthetic(); fn(s); return analyze(s, over) }
+    expect(run(() => undefined).invalidReasons).toEqual([])
+    const dropped = run(s => { c3Of(s).exclusiveConsumedOwnedWeaponIds = [] })
+    expect(dropped.decision.case).toBe('D2E_INVALID')
+    expect(c3Issues(dropped).join(';')).toMatch(/exclusiveConsumedOwnedWeaponIds is not the recomputed set/)
+    expect(c3Issues(run(s => { c3Of(s).exclusiveConsumedOwnedWeaponIds = [...(c3Of(s).exclusiveConsumedOwnedWeaponIds as string[]), 'owned.not.existing'] })).join(';')).toMatch(/not the recomputed set/)
+    expect(c3Issues(run(s => { c3Of(s).exclusiveConsumedOwnedWeaponIds = ['owned.other'] })).join(';')).toMatch(/not the recomputed set/)
+    // A support Route the Engine rejects.
+    expect(c3Issues(run(s => {
+      const k2 = s.v.k2!
+      s.input.exportBuildListEntries = (s.input.exportBuildListEntries as Json[]).map(e => {
+        if (!k2.supportBuildListEntryIds.includes(e.id as string) || ((e.candidateSnapshot as Json).route as Json).sourceOwnedWeaponId === null) return e
+        const snap = e.candidateSnapshot as Json, route = snap.route as Json
+        return { ...e, candidateSnapshot: { ...snap, route: { ...route, operations: (route.operations as Json[]).map(op => ({ ...op, gogmaCounterAfter: 13 })) } } }
+      })
+    })).join(';')).toMatch(/route unit planning rejected/)
+    // The reservation exclusive set lacking the consumed ID (the C5 parity fails too).
+    const lacking = run(s => { const r = s.input.contextRecord!.result as Json; r.reservationBody = { ...(r.reservationBody as Json), exclusiveOwnedWeaponIds: [] }; r.reservationDigest = hashStableValue(r.reservationBody) })
+    expect(c3Issues(lacking).join(';')).toMatch(/lacks/)
+    expect(lacking.invalidReasons.map(x => x.category)).toContain('k2_context_parity')
+    // No Engine: C3 cannot be recomputed and fails closed.
+    expect(c3Issues(run(() => undefined, { rngEngine: null })).join(';')).toMatch(/no RNG Engine/)
+  })
 })
 
 // ---------------------------------------------------------------- isolation, sources and Production (§10.2 / §10.3 / G44 - G52)
@@ -823,7 +890,8 @@ describe('D2-E oracle isolation, sources and Production (§10.2 / §10.3 / G44 -
     expect(loaded(runnerSource)).toEqual(['/src/benchmarks/plannerGlobalD1.ts', '/src/benchmarks/plannerGlobalD2.ts', '/src/benchmarks/plannerGlobalD2D.ts', '/src/benchmarks/plannerGlobalD2E.ts',
       '/src/benchmarks/plannerGlobalOptimizationResearch.ts', '/src/benchmarks/plannerGlobalPhase2C26A.ts', '/src/benchmarks/plannerGlobalPhase2C26B2C1.ts', '/src/domain/rng/production/productionRngEngine.ts'])
     expect(loaded(analyzerSource)).toEqual(['/src/benchmarks/plannerGlobalD2E.ts', '/src/benchmarks/plannerGlobalD2EAnalysis.ts', '/src/benchmarks/plannerGlobalOptimizationResearch.ts',
-      '/src/domain/models/hashing.ts', '/src/domain/planner/replacement/plannerSearchOrigin.ts'])
+      '/src/domain/models/hashing.ts', '/src/domain/planner/replacement/plannerSearchOrigin.ts', '/src/domain/rng/production/productionRngEngine.ts'])
+    expect(codeOnly(analyzerSource)).toMatch(/rngEngine, incumbentBodies/)
     for (const source of [runnerSource, analyzerSource]) expect(codeOnly(source)).not.toMatch(/Oracle1657|ORACLE_|oracleRoute|oracleKey|--oracle|_1657_|PHASE2C25D2E|PHASE2C27B_FORMAL_TARGETS|phase2c25d2e/)
   })
 

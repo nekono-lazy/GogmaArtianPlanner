@@ -13,7 +13,9 @@
  */
 import { resolveBuildListEntryReplacement } from '../domain/buildList'
 import { collectReferencedOwnedWeaponIds, hashStableValue, stableStringify } from '../domain/models/hashing'
-import type { BuildListEntry } from '../domain/models/publicTypes'
+import type { BuildListEntry, BuildListEntryId } from '../domain/models/publicTypes'
+import { createPlannerRouteUnitPlans } from '../domain/planner/plannerRouteProgress'
+import type { RngEngine } from '../domain/rng/rngEngine'
 import { candidateStableKey } from '../domain/search'
 import { d1B0Parity, d1InputDigest, d1ResultDigest, isD1BoundLimited, judgeD1R5, D1_CALCULATION_CONTEXT, D1_RESEARCH_MAX_PLAN_STEPS, D1_RNG_ENGINE_VERSION, type D1EvaluationStatus } from './plannerGlobalD1'
 import { judgeD1R5Independently } from './plannerGlobalD1Analysis'
@@ -190,6 +192,8 @@ export interface D2EAnalysisInput {
   recomputedOriginDigest: string | null
   /** The D2-C RESULT context rows (RV3: the K1 Search-time context digest / record SHA-256). */
   d2cContexts: readonly D2ED2CContextRow[]
+  /** The registered Production RNG Engine the analyzer instantiates itself (C3: the support route unit plans), or null (C3 then fails closed). */
+  rngEngine: RngEngine | null
   /** By incumbent G store file name: the body read back (null = missing). */
   incumbentBodies: ReadonlyMap<string, { bytes: number; sha256: string; body: unknown } | null>
   rvRow: D2ERvRow | null
@@ -212,6 +216,73 @@ export interface D2EAnalysisInput {
   rawConsistencyIssues: readonly string[]
   childProcessCount: number | null
   sha256OfText: (text: string) => string
+}
+
+export interface D2EC3Recomputation {
+  satisfied: boolean
+  issues: string[]
+  /** Recomputed from the Export support bodies (ascending, distinct), never copied from the record. */
+  referencedOwnedWeaponIds: string[]
+  exclusiveConsumedOwnedWeaponIds: string[]
+  /** The K2 reservation `exclusiveOwnedWeaponIds` (ascending, distinct). */
+  exclusiveOwnedWeaponIds: string[]
+  routeUnitPlannedEntries: number
+  routeUnitRejections: number
+  recordMatched: { referenced: boolean; consumed: boolean; exclusive: boolean }
+}
+
+/**
+ * §4.1 C3, independently of the CTX-K2 child: the two support bodies are taken from the Export by the registered support IDs, their
+ * referenced OwnedWeapons come from `collectReferencedOwnedWeaponIds()` and their exclusively consumed OwnedWeapons from one
+ * `createPlannerRouteUnitPlans([2 bodies], engine)` (no rejection allowed), with the same distinct / ascending / non-null rule as the
+ * child. Both sets must be contained in the reservation `exclusiveOwnedWeaponIds`, and the record's three C3 sets must equal the
+ * recomputed ones; the record is only compared, never used as a substitute.
+ */
+export function recomputeD2EK2ContextC3(input: { recordSupportBuildListEntryIds: readonly string[]; registeredSupportBuildListEntryIds: readonly string[]; exportBuildListEntries: readonly unknown[];
+  reservationBody: unknown; recordC3: { referencedOwnedWeaponIds: readonly string[]; exclusiveConsumedOwnedWeaponIds: readonly string[]; exclusiveOwnedWeaponIds: readonly string[] } | null; rngEngine: RngEngine | null }): D2EC3Recomputation {
+  const issues: string[] = []
+  const S = [...input.registeredSupportBuildListEntryIds]
+  if (S.length !== 2 || new Set(S).size !== 2 || !same(S, sortedIds(S))) issues.push('the registered supports are not 2 distinct Entry IDs in ascending order')
+  if (!same([...input.recordSupportBuildListEntryIds], S)) issues.push('the record support Entry IDs are not the registered K2 supports')
+  const bodies: BuildListEntry[] = []
+  for (const sId of S) {
+    const found = input.exportBuildListEntries.filter(e => isObject(e) && e.id === sId) as Json[]
+    if (found.length !== 1) { issues.push(`${found.length} Export Entries hold ${sId}`); continue }
+    const body = found[0]!
+    if (!isObject(body.candidateSnapshot) || !isObject(body.candidateSnapshot.route) || !Array.isArray(body.candidateSnapshot.route.operations)) { issues.push(`the Export body of ${sId} has no candidateSnapshot.route`); continue }
+    bodies.push(body as unknown as BuildListEntry)
+  }
+  const referenced = sortedIds([...new Set(bodies.flatMap(b => collectReferencedOwnedWeaponIds(b.candidateSnapshot.route).map(String)))])
+  let consumed: string[] = []
+  let planned = 0, rejections = 0
+  if (input.rngEngine === null) issues.push('no RNG Engine to recompute the route unit plans')
+  else if (bodies.length === S.length) {
+    try {
+      const plans = createPlannerRouteUnitPlans(bodies, input.rngEngine)
+      rejections = plans.rejections.length
+      planned = S.filter(sId => plans.unitPlans.has(sId as BuildListEntryId)).length
+      if (rejections > 0) issues.push(`route unit planning rejected ${rejections} support Entr${rejections === 1 ? 'y' : 'ies'}: ${plans.rejections.map(x => `${x.buildListEntryId} ${x.reason}`).join('; ')}`)
+      if (planned !== S.length) issues.push(`${planned} of ${S.length} support Entries have a route unit plan`)
+      consumed = sortedIds([...new Set(S.flatMap(sId => [...(plans.unitPlans.get(sId as BuildListEntryId) ?? [])].map(u => u.exclusiveConsumedOwnedWeaponId)
+        .filter((x): x is NonNullable<typeof x> => x !== null).map(String)))])
+    } catch (error) {
+      issues.push(`route unit planning threw: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  const reservation = isObject(input.reservationBody) ? input.reservationBody : null
+  const exclusiveRaw = reservation !== null && Array.isArray(reservation.exclusiveOwnedWeaponIds) ? (reservation.exclusiveOwnedWeaponIds as unknown[]) : null
+  if (exclusiveRaw === null || exclusiveRaw.some(x => typeof x !== 'string')) issues.push('the reservation exclusiveOwnedWeaponIds is not a string array')
+  const exclusive = sortedIds([...new Set((exclusiveRaw ?? []).map(String))])
+  const missing = [...referenced, ...consumed].filter(id => !exclusive.includes(id))
+  if (missing.length > 0) issues.push(`the reservation exclusiveOwnedWeaponIds lacks ${sortedIds([...new Set(missing)]).join(', ')}`)
+  const rec = input.recordC3
+  const recordMatched = { referenced: rec !== null && same([...rec.referencedOwnedWeaponIds], referenced), consumed: rec !== null && same([...rec.exclusiveConsumedOwnedWeaponIds], consumed),
+    exclusive: rec !== null && same([...rec.exclusiveOwnedWeaponIds], exclusive) }
+  if (!recordMatched.referenced) issues.push('the record referencedOwnedWeaponIds is not the recomputed set')
+  if (!recordMatched.consumed) issues.push('the record exclusiveConsumedOwnedWeaponIds is not the recomputed set')
+  if (!recordMatched.exclusive) issues.push('the record exclusiveOwnedWeaponIds is not the reservation set')
+  return { satisfied: issues.length === 0, issues, referencedOwnedWeaponIds: referenced, exclusiveConsumedOwnedWeaponIds: consumed, exclusiveOwnedWeaponIds: exclusive,
+    routeUnitPlannedEntries: planned, routeUnitRejections: rejections, recordMatched }
 }
 
 function statusFromFiles(process: Json | null, record: Json | null, notExecutedReason: string | null, interrupted: boolean, missingRecord: (detail: string) => void): string | null {
@@ -705,11 +776,11 @@ export function analyzeD2ERun(input: D2EAnalysisInput) {
       const bodies = exportById.get(sId) ?? []
       if (bodies.length !== 1 || r.supportBodySha256s[sId] !== sha(stableStringify(bodies[0]))) add('guardrail', at(`supportBodySha256 of ${sId} is not SHA-256(stableStringify(Export body))`))
     }
-    // C3 (the two support Routes; the unit plan side from the record)
-    const exclusive = reservation !== null && Array.isArray(reservation.exclusiveOwnedWeaponIds) ? (reservation.exclusiveOwnedWeaponIds as unknown[]).map(String) : []
-    const referenced = sortedIds([...new Set(k2.supportBuildListEntryIds.flatMap(sId => { const b = (exportById.get(sId) ?? [])[0]; return b !== undefined && isObject(b.candidateSnapshot) && isObject(b.candidateSnapshot.route)
-      ? collectReferencedOwnedWeaponIds((b as unknown as BuildListEntry).candidateSnapshot.route).map(String) : [] }))])
-    const c3 = same(referenced, r.checks.C3.referencedOwnedWeaponIds) && [...referenced, ...r.checks.C3.exclusiveConsumedOwnedWeaponIds].every(id => exclusive.includes(id)) && same(sortedIds(exclusive), r.checks.C3.exclusiveOwnedWeaponIds)
+    // C3: recomputed from the two Export support bodies (references AND the route unit plans), never from the record's own sets.
+    const c3r = recomputeD2EK2ContextC3({ recordSupportBuildListEntryIds: r.supportBuildListEntryIds, registeredSupportBuildListEntryIds: k2.supportBuildListEntryIds,
+      exportBuildListEntries: input.exportBuildListEntries, reservationBody: r.reservationBody, recordC3: r.checks.C3, rngEngine: input.rngEngine })
+    for (const issue of c3r.issues) add('guardrail', at(`C3: ${issue}`))
+    const c3 = c3r.satisfied
     // C4 (origin, excluded current Route key, K1 CTX records)
     const oT = (exportById.get(k2.currentBuildListEntryId) ?? [])[0]
     const oTKey = oT !== undefined && isObject(oT.candidateSnapshot) ? candidateStableKey(oT.candidateSnapshot as unknown as BuildListEntry['candidateSnapshot']) : null
@@ -731,7 +802,9 @@ export function analyzeD2ERun(input: D2EAnalysisInput) {
     if (r.diagnostics.equalsK1ComponentwiseUnion !== equalsUnion) add('raw_result_mismatch', at('the recorded equalsK1ComponentwiseUnion is not the recomputed one'))
     for (const [name, ok] of [['C1', c1], ['C2', c2], ['C3', c3], ['C4', c4], ['C6', c6], ['C7', c7]] as const) if (!ok) add('guardrail', at(`${name} does not hold (recomputed)`))
     if (r.checks.C1.satisfied !== c1 || r.checks.C3.satisfied !== c3 || r.checks.C4.satisfied !== c4 || r.checks.C6.satisfied !== c6) add('raw_result_mismatch', at('the recorded C1 / C3 / C4 / C6 are not the recomputed ones'))
-    ctxChecks = { C1: c1, C2: c2, C3: { satisfied: c3, referencedOwnedWeaponIds: referenced, exclusiveConsumedOwnedWeaponIds: [...r.checks.C3.exclusiveConsumedOwnedWeaponIds], exclusiveOwnedWeaponIds: sortedIds(exclusive) },
+    ctxChecks = { C1: c1, C2: c2, C3: { satisfied: c3, referencedOwnedWeaponIds: c3r.referencedOwnedWeaponIds, exclusiveConsumedOwnedWeaponIds: c3r.exclusiveConsumedOwnedWeaponIds,
+      exclusiveOwnedWeaponIds: c3r.exclusiveOwnedWeaponIds, routeUnitPlannedEntries: c3r.routeUnitPlannedEntries, routeUnitRejections: c3r.routeUnitRejections, recordMatched: c3r.recordMatched,
+      recomputedFrom: 'Export support bodies: collectReferencedOwnedWeaponIds() + createPlannerRouteUnitPlans([2 bodies], the Production RNG Engine)' },
       C4: c4, C5: { state: c5State, expectedDigest: D2E_K2_RESERVATION_DIGEST, observedDigest: r.reservationDigest, bodyMatched: c5Body }, C6: { satisfied: c6, perSupport }, C7: c7 }
     ctxDiagnostics = { equalsK1ComponentwiseUnion: equalsUnion, k1Reservations: structuredClone(r.diagnostics.k1Reservations) }
     if (c5State === 'matched' && c1 && c2 && c3 && c4 && c6 && c7) { ctxRecordDigest = r.reservationDigest; ctxRecordBody = reservation; ctxContextId = r.contextId }

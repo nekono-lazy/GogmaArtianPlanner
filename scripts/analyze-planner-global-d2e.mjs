@@ -38,6 +38,7 @@ try {
   const research = await server.ssrLoadModule('/src/benchmarks/plannerGlobalOptimizationResearch.ts')
   const searchOrigin = await server.ssrLoadModule('/src/domain/planner/replacement/plannerSearchOrigin.ts')
   const hashing = await server.ssrLoadModule('/src/domain/models/hashing.ts')
+  const ProductionRngEngine = (await server.ssrLoadModule('/src/domain/rng/production/productionRngEngine.ts')).ProductionRngEngine
 
   // ---- the run dir journal (the authority for interrupted runs too)
   const runFile = runPath ? await loadRaw(runPath) : null
@@ -172,9 +173,12 @@ try {
   // RV2 / C4, recomputed: the baseline Entries and the Planner-start origin the analyzer builds from the Export independently of the children.
   const baselineInput = research.globalResearchInputFromExport(exportJson, d2e.D2E_RESEARCH_MAX_PLAN_STEPS)
   const recomputedOriginDigest = hashing.hashStableValue(searchOrigin.createPlannerStartSearchOrigin(baselineInput))
+  // C3, recomputed: the support route unit plans with the registered Production RNG Engine the analyzer instantiates itself.
+  const rngEngine = new ProductionRngEngine()
+  if (rngEngine.version !== d2e.D2E_RNG_ENGINE_VERSION) throw new Error('PRODUCTION_RNG_ENGINE_VERSION moved: the analyzer cannot recompute C3 with the registered Engine.')
 
   const result = analysis.analyzeD2ERun({ validated: validation, exportSha256: observed.export.sha256, exportBuildListEntries: exportJson.buildListEntries, baselineBuildListEntries: baselineInput.buildListEntries,
-    recomputedOriginDigest, d2cContexts: d2cProjection?.contexts ?? [], incumbentBodies, rvRow, rvRecord, contextRow, contextRecord, discoveryRows, discoveryRecords, poolFiles, evaluationRows, evaluationRecords,
+    recomputedOriginDigest, d2cContexts: d2cProjection?.contexts ?? [], rngEngine, incumbentBodies, rvRow, rvRecord, contextRow, contextRecord, discoveryRows, discoveryRecords, poolFiles, evaluationRows, evaluationRecords,
     interrupted: raw === null, discoveryEnvelopeReached: raw?.discoveryEnvelopeReached === true, runEnvelopeReached: raw?.runEnvelopeReached === true, abortReason: raw?.abortReason ?? null, provenanceIssues, evidenceIssues,
     rawConsistencyIssues: rawConsistency, childProcessCount: raw === null ? null : raw.processes.length, sha256OfText: text => sha(text) })
 
