@@ -27,7 +27,8 @@ B-2Bの出力は設計 §4.3 の **resource assignment**（planning Target 1件�
 | --- | --- | --- |
 | formal実行有効化commit = **measurement HEAD** | `6125a8db49a8f805e8af368f773a1846b431cc40` | `ASSIGNMENT_B2B_PREREGISTRATION.formalRun.enabled = true`（`enabledBy` の説明だけ更新）、登録値を固定するtest、formal gateのtest整合、runner scriptのコメント更新。登録値・計測ロジックは不変 |
 | formal run | measurement HEADで実行（2026-10-12 08:33:20Z〜08:38:38Z） | 登録条件どおり。CLI overrideなし |
-| 計測後commit（本書・RESULT追加） | 本PRの後続commit | `docs/` の追加と設計 §14 のリンクだけ。`src/` / `scripts/` / `package*.json` / TypeScript・Vite・Vitest設定に変更なし（§7） |
+| 計測後commit（本書・RESULT追加） | `3e36123` | `docs/` の追加と設計 §14 のリンクだけ。`src/` / `scripts/` / `package*.json` / TypeScript・Vite・Vitest設定に変更なし（§7） |
+| 公開RESULTのデータ最小化（レビュー対応） | 後続commit | docs-only。公開RESULTからTarget別詳細を除き集計へ置換（§8）。計測値・元recordは不変 |
 
 measurement HEADとPR最終headが異なるのは、RESULT・本書を計測後に追加したためである。計測は measurement HEAD で行っており、別HEADで行ったことにはしない。
 
@@ -114,7 +115,7 @@ process: assignment-1 / assignment-2 / root-bound の3 childはすべて `comple
 | deadEnds / pruned | 0 / 0（UB未供給 `upperBoundSupplied: false`） |
 | completeness | solverは `running`（limitで停止）、outcome `assignments_found / candidate_limit_reached` |
 | 窓内 `LB(empty)` | 1,255（設計 §10.1のwindow内緩和下界。§10.2のroot下界ではない） |
-| 先頭候補 | ordinal 0、node 43、objective **1,766** |
+| 先頭候補 | ordinal 0、objective **1,766**。node traceでは内部node 43個（depth 0〜42。各nodeのMRV計数は8で飽和）の下降後、44番目の展開node（depth 43の葉）が最初の候補 |
 | 最良候補 | ordinal 0、objective **1,766** |
 | distinct objective | **1**（1,000件すべて1,766） |
 | 最良のstream終端 | Skill 1,424（+1,083）、Gogma 503（+448）、Normal CB 207（+207）/ DB 371（+22）/ SnS 12（+5）/ SA 1（+1）/ GS・Hammer・HBG +0（Normal計 +235） |
@@ -166,24 +167,31 @@ gap 109 は主にGogma終端（割当 +448 vs 緩和 +235）とNormal DB（割�
 | LB stage / child wall / setup | 151.8 s / 154.3 s / 0.81 s |
 | peak RSS / heapUsed / maxRSS | 586 MB / 314 MB / 574,412 KiB |
 
-親の合計wall（3 child逐次）: **317.8 s**。どのchildも登録envelope（60 min / 20 min、4,096 MB）の数%以内で終了した。solverの先頭候補まで約41〜43 s（43 node、
+親の合計wall（3 child逐次）: **317.8 s**。どのchildも登録envelope（60 min / 20 min、4,096 MB）の数%以内で終了した。solverの先頭候補まで約41〜43 s（内部node 43個の下降、
 dead end 0）で、B-2A smoke同様、下降1 nodeあたり約1 sのMRV計数が支配的である。
 
 ## 7. measurement HEADから最終PR headまでの変更
 
-計測後に追加・変更したのは次だけである。
+計測後に追加・変更したのは次だけである（すべてdocs）。
 
-- `docs/PLANNER_GLOBAL_ASSIGNMENT_B2B_RESULT.json`（新規。§8の公開用派生成果物）
-- `docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2B.md`（本書）
-- `docs/PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md` §14（B-2B記録へのリンク1文）
+- `3e36123`: `docs/PLANNER_GLOBAL_ASSIGNMENT_B2B_RESULT.json`（新規、revision 1）、`docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2B.md`（本書）、
+  `docs/PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md` §14（B-2B記録へのリンク1文）
+- レビュー対応commit（データ最小化）: 公開RESULTをrevision 2（§8）に置き換え、本書 §1 / §4.3 / §6 / §7 / §8 を更新。§4.3 / §6 の「先頭候補 node 43」という記述は、
+  node traceの集計（§8.3）で「内部node 43個の下降後、44番目の展開node（depth 43の葉）」と分かったので文言を正した。計測値（node数・時間・objective等）は変えていない
 
 `git diff <measurement HEAD>..<PR head> -- src scripts package.json package-lock.json vite.config.ts vitest.config.ts tsconfig*.json` は空であり、計算関連コード・登録条件・
 登録文書（B-2A記録）は計測後に変わっていない。登録Export識別子のauthorityであるB-2A記録も変更していない。
 
-## 8. 公開RESULTの作り方
+## 8. 公開RESULTの作り方（revision 2: データ最小化）
 
-Repositoryは公開されているため、正式RESULT JSONは **formal出力からの機械的な派生成果物** とした。元のformal record（`start.json`、各child record、集約RESULT）は
-変更せず `.local/`（git-ignored）に保管し、RESULTの `derivation.sources` にfile名・bytes・SHA-256を記録した。
+Repositoryは公開されているため、正式RESULT JSONは **formal出力から機械的に導出した公開用の集計・監査RESULT** とした。ユーザーの登録内容や割当構成を
+Target単位で復元できる情報は含めない。元のformal record（`start.json`、各child record、集約RESULT）は変更せず `.local/`（git-ignored）に保管し、
+RESULTの `derivation.sources` にfile名・bytes・SHA-256を記録した。Target別の監査やPhase Cでの利用には、この元recordを使う。
+
+- 計測そのものと元recordは変えていない。データ最小化の前に、5 fileのSHA-256が下表（= 計測時の値）と一致することを再照合した
+- 公開RESULTの編集は formal validity を再判定したものではない。`formalValidity` は formal run が記録した値をそのまま写している
+- revision 1（`3e36123`）はUUIDをラベル（`T01`〜`T43` / `W01`〜`W38`）に置き換えただけで、Target別のoption・source・required位置・layout・武器種 / 属性を含んでいた。
+  revision 2はそれらを削除し、集計に置き換えた（§8.2 / §8.3）。revision番号は `derivation.revision` に記録した
 
 | 元file（`.local/`） | bytes | SHA-256 |
 | --- | --- | --- |
@@ -193,12 +201,98 @@ Repositoryは公開されているため、正式RESULT JSONは **formal出力�
 | `ga-b2b-formal.run/assignment-2.record.json` | 429,018 | `fda6ba52568255eb9a8f48ff68739d58ed47fac1f01e0dc725a9019497fc96a9` |
 | `ga-b2b-formal.run/root-bound.record.json` | 21,853 | `29aaf236ee40b323176dd259fce43c6798c926e9cff453a0d3e95d9fa71fd9f7` |
 
-- 派生の内容: provenance・条件・formal validity・再現性・走査 / solver / 候補 / replay / root下界の診断summary、Target別診断、node trace先頭256件、objective列（run-length）、
-  snapshot 5件のsummaryとsnapshot 0の43 option、stage時間・メモリ、process一覧
-- 匿名化: ユーザー固有のUUIDを機械的に置換した。planning Target ID → `T01`〜`T43`（走査のplanning Target順）、それ以外のUUID（OwnedWeapon ID、38件）→ `W01`〜（assignment-1 recordでの初出順）。
-  Master ID、Normal Counter ID、RNG Counter位置、objectiveは変えていない。置換後にUUID形式の文字列が残らないことを検査した
-- 含めないもの: Export本体、ReachTable本体、候補snapshotのfull 5件（summaryのみ。full recordは `.local/`）、process stderr
-- `formalValidity`、`integrityIssues`、比較結果などの監査情報は省略・変更していない
+### 8.1 公開RESULTに残す情報
+
+provenance（measurement HEAD、benchmark code SHA-256、B-2A記録SHA-256、Node / machine、起動時刻）、Export照合（登録識別子と実Exportのfile名・bytes・SHA-256。
+登録識別子はB-2A記録で既に公開済み）、Engine / CalculationContext、条件・ladder・envelope・根拠、登録状態、override、oracle flags、`formalValidity`（全check）、
+再現性（semantic SHA-256、node trace hash、run別のoutcome・時間・メモリ）、入力件数、走査件数（origin、走査範囲、prediction / memo hit、support query、unsupported、
+source件数）、solver集計（node数、depth、候補数、棄却件数、dead end、pruned、completeness、窓内 `LB(empty)`）、objective（列のrun-length、件数表、最良・先頭、distinct数）、
+最良stream終端、snapshot 5件のsummary（objective、stream終端、source種別・要件種別の件数、required位置の件数）、replay集計、outcome・window移行判定、
+root下界（status、値、budget、`minimum` の閾値・前進量、`nearMinimum`、対象集合とcross satisfactionの件数、時間・メモリ）、比較、stage別時間・メモリ、process一覧、
+`integrityIssues`、合計wall。
+
+Normal CounterのID（`weapon.<type>:8`）と武器種ID（下界の閾値key）は、Normal stream別のorigin・走査範囲・終端・閾値のkeyとしてだけ残る。これらはstream（武器種ごとに
+1本のCounter）単位の値であり、どのTargetの値かは対応づけていない。属性ID・Target順序・Target別の値は含まない。
+
+### 8.2 削除したTarget別詳細（revision 1にあったもの）
+
+| フィールド | revision 1 | revision 2 |
+| --- | --- | --- |
+| `assignment.candidates.firstSnapshotChosen` | snapshot 0の43 option（Target、source・OwnedWeapon・Normal Counter位置、ordered bonus layout、Skill / Gogma required位置、終端など） | 削除。別名へ移していない。snapshotはsummary（件数）のみ。`chosenOptionCount` を追加 |
+| `assignment.scan.perTarget` | 43 Targetの武器種・属性・priority・Normal Counter・source数・Ideal位置数・最初のIdeal位置・option数・MRV計数 | 削除。`assignment.scan.targetAggregates`（§8.3）へ集計 |
+| `assignment.scan.groups` | 武器種 × 属性ごとのTarget数・layout数（20 group） | 削除。`groupCount` / `targetCountSum` / group当たりTarget数のmin・max / `keepLayoutCountSum` へ集計 |
+| `assignment.scan.targetsWithoutOption` | Target IDの配列（空） | 件数 `targetsWithoutOptionCount` |
+| `assignment.solver.nodeTrace` | 先頭256 nodeのdepth・選択Target・MRV計数 | 削除。node数・hash・葉 / 内部nodeの件数・最初の葉・最大depth・内部nodeのMRV計数分布へ集計 |
+| `assignment.solver.diagnostics.deadEndsByTarget` | Target別dead end（空） | 件数 `targetsWithDeadEnds` |
+| `assignment.replay.violations` | violation配列（空） | 件数 `violationCount` |
+| `rootLowerBound.relaxation.targets` | 43 Targetの武器種・属性・option数・owned option数・最初のIdeal位置 | 削除。`relaxation.targetAggregates`（§8.3）へ集計 |
+| `rootLowerBound.relaxation.targetsWithoutOption` | Target IDの配列（空） | 件数 `targetsWithoutOptionCount` |
+| `rootLowerBound.targetSet.eligibleWithoutValidEntry` / `planningNotEligible` | Target IDの配列（空） | 件数 |
+| `rootLowerBound.crossSatisfaction.possiblePairs` | 可能ペアの配列（空） | 削除（`possiblePairCount = 0` を維持） |
+| `derivation.labelCounts` | ラベル数 | 削除（ラベル化をやめたため） |
+
+full snapshot 5件と上記の元データは `.local/ga-b2b-formal.run/assignment-1.record.json` 等（未変更、SHA-256は下表）にある。
+
+### 8.3 集計値の算出方法
+
+すべて元record（`assignment-1.record.json` の `semantic`、集約RESULTの `rootLowerBound`）から機械的に計算した。新しい計測・RNG予測・探索は行っていない。
+
+- `assignment.scan.targetAggregates`（元: `semantic.scan.perTarget` の43行）: `targetCount` = 行数。`optionsUpToCap` = 各Targetのoption数（上限1,000で飽和）のcount / min / max / sum、
+  上限到達Target数（`>= 1,000`）、上限未満Target数、0件Target数。`rootMrvCount` = min / max と lookahead（8）到達Target数。`support` = Normal / Skill / Gogma Reset支援がtrueのTarget数。
+  `targetsWithSourceKind` = 各source種別を1件以上持つTarget数。`sourcesSummed` = source件数の種別ごとの和（`scan.sourceCounts` と一致）。`excludedOwnedWeaponsSummed` = 除外理由別件数の和。
+  `skillIdealPositionCount` = Ideal Skill位置数のcount / min / max / sumと0件Target数。`bonus` = Reset-Ideal位置数の和とそれを持つTarget数、Keep関心layout数のcount / min / max / sum、
+  Keep-Ideal位置数の和、unsupported layout数の和
+- `assignment.scan.groups`（元: `semantic.scan.groups` の20行）: 行数、Target数の和・min・max、layout数の和
+- `assignment.solver.nodeTrace`（元: `semantic.solver.nodeTrace` の256行と `nodeTraceLength` / `nodeTraceHash`）: 記録行数、総node数、hash、選択Targetがnullでない行（内部node）の数、
+  nullの行（葉）の数、最初の葉の `nodes`、最大depth、内部nodeの `feasibleOptionsUpToLookahead` の値別件数
+- `rootLowerBound.relaxation.targetAggregates`（元: `rootLowerBound.relaxation.targets` の43行）: 行数、option数のcount / min / max / sum、option数がbudget（2,000）以上 / 未満のTarget数、
+  owned option数の和とそれを持つTarget数
+- snapshot summary: `requiredPositions` 各配列の長さ、`chosen` の長さ（`chosenOptionCount`）
+
+値（revision 2）: option数 min 525 / max 1,000（飽和42、未満1、0件0）、root MRV計数は全43 Targetで8、support 43 / 43 / 43、owned_gogma sourceを持つTarget 40・new_normal 43、
+Ideal Skill位置数 min 2 / max 1,501 / sum 3,650、Reset-Ideal位置を持つTarget 1（和1）、Keep関心layout sum 610（max 41）、Keep-Ideal位置 sum 1,729、group 20（Target数 1〜6、和43）、
+node trace 256行 = 内部43 + 葉213、最初の葉は44番目のnode、下界box内option数 min 4 / max 2,006（budget以上42、未満1）、owned option 148（40 Target）。
+
+### 8.4 公開RESULTの検査手順
+
+データ最小化後のRESULTに対して次を確認した（検査scriptはsession作業領域に置き、Repositoryには追加していない。同じ検査は下のコマンドで再現できる）。
+
+1. JSONとしてparseできる
+2. UUID形式の文字列が0件
+3. ローカル絶対パス（`X:\` / `X:/` / `/Users/` / `/home/`）が0件
+4. Target / OwnedWeaponのラベル（`"T01"` / `"W01"` 形式）、`targetWeaponId` / `ownedWeaponId` keyが0件
+5. Target別フィールドのkeyが0件: `firstSnapshotChosen`, `perTarget`, `chosen`, `usedSources`, `requiredPositions`, `assignmentOrder`, `layout`, `targets`, `selectedTarget`,
+   `weaponTypeId`, `elementId`, `normalCounterId`, `priority`, `normalRequired`, `skillRequired`, `bonusRequired`, `deadEndsByTarget`, `possiblePairs`, `eligibleWithoutValidEntry`,
+   `planningNotEligible`, `targetsWithoutOption`, `violations`, `sample`、およびobject値の `source`
+6. 配列は既知の集計・監査配列（`nodeTimeline`, `nearMinimum`, `objectivesRunLength`, `objectiveCounts`, `processes`, `snapshots`, `runs`, `sources` 等）だけで、planning Target数（43）と同じ長さの配列が無い
+7. 元recordとの一致: `mode`、`formalValidity`、`integrityIssues`、determinism、measurement HEAD、benchmark code SHA-256、clean tree、Export照合、Engine version、条件・ladder・envelope、
+   oracle flags、比較、root下界（status・値・budget・record整合・`minimum`・`nearMinimum`）、入力件数、solver集計、objective、outcome・window判定、replay、run別semantic SHA-256と時間、
+   stage時間、合計wall
+8. 集計の整合: Target集計の件数 = planning Target数、option数の和・飽和数・0件数、source件数の和 = `scan.sourceCounts`、group Target数の和 = 43、node trace件数とhash、
+   下界Target数 = 対象集合のplanning数、owned option数の和、snapshot件数
+
+結果: 全項目pass。比較のためrevision 1に同じ検査を当てると、4・5・6が不合格になる（ラベル、`perTarget` / `firstSnapshotChosen` / `relaxation.targets` の43件配列、
+`groups` の武器種・属性、`nodeTrace`）。
+
+key検査（5）の簡易再現（Repository rootで実行）:
+
+```bash
+node -e "const t=require('fs').readFileSync('docs/PLANNER_GLOBAL_ASSIGNMENT_B2B_RESULT.json','utf8');const bad=['firstSnapshotChosen','perTarget','chosen','usedSources','requiredPositions','assignmentOrder','layout','targets','selectedTarget','weaponTypeId','elementId','normalCounterId','targetWeaponId','ownedWeaponId','deadEndsByTarget','possiblePairs'].filter(k=>t.includes('\"'+k+'\"'));const uuid=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(t);console.log(bad.length===0&&!uuid?'ok':'NG '+bad.join(',')+(uuid?' uuid':''))"
+```
+
+### 8.5 Git履歴上の残存リスク
+
+revision 1（Target別詳細を含む）は commit `3e36123` としてPR #241のbranchへpush済みである。revision 2を追加commitしても、**過去commitの内容はGit履歴から消えない**。
+branchの履歴、GitHub上のcommit / diff表示、clone済みのcopy、GitHubや外部のcacheに残り得る。本対応で完了したのは「最新PR headの公開RESULTのデータ最小化」であり、
+「Git履歴からの情報削除」ではない。rebase / force-push / 履歴の書き換えは行っていない。
+
+履歴からの除去が必要な場合の選択肢と影響（実施はプロジェクトオーナーの判断）:
+
+- PR #241をmergeする際にsquash mergeする: `main` の履歴には最終状態だけが入る。ただしPR branchとPRのcommit / diff表示には `3e36123` が残る（branch削除後もPRページから参照され得る）
+- PR branchの履歴を書き換えてforce-pushする（`3e36123` からrevision 1を除く）: branch上からは消えるが、PRのtimelineに旧commitが残り得る。共同作業者のcloneとの不整合が起きる。force-pushには承認が要る
+- GitHub上の参照を完全に消す: 上記に加えてGitHub Supportへのcache・孤立commit削除依頼が必要になる場合がある。外部のclone・fork・cacheまでは保証できない
+
+`formalValidity`、`integrityIssues`、比較結果などの監査情報は省略・変更していない。含めないもの: Export本体、ReachTable本体、full candidate snapshot、process stderr、Target別詳細（§8.2）。
 
 ## 9. Oracle isolationとpost-hoc注記
 
