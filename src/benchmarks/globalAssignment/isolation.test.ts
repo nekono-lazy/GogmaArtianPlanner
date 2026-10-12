@@ -9,8 +9,9 @@ import { defaultPlannerAlternativeSearchExtent } from '../../domain/search/alter
 
 /*
  * Issue #154 Global Assignment (design 11 / 16): Research only. Nothing Production reaches these modules,
- * the runtime modules read no oracle manifest / result / lower-bound module, no Target or weapon ID, no
- * file, network or persistence, and no clock or random value.
+ * the runtime modules read no oracle manifest / result, no Target or weapon ID, no file, network or
+ * persistence, and no clock or random value. The lower-bound module is read only by the designated Phase
+ * B-2 root bound stage and its tests; the designated runner script is the only script that reaches this folder.
  */
 const production = {
   ...import.meta.glob('../../{app,components,db,domain,services,stores,workers,pages,presentation,data}/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }),
@@ -19,34 +20,39 @@ const production = {
 const research = import.meta.glob('./*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const runtime = Object.entries(research).filter(([path]) => !/\.test\.ts$|[tT]estFixture\.ts$/.test(path))
 const scripts = import.meta.glob('../../../scripts/*.mjs', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+const RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-b2a.mjs'
+/** The Phase B-2A modules around the Phase A / B-1 calculation: runner orchestration, root bound stage, window policy, protocol. */
+const PHASE_B2A_MODULES = ['./assignmentProtocol.ts', './assignmentRootBound.ts', './assignmentRunner.ts', './assignmentWindowPolicy.ts']
 
 describe('Global Assignment Research isolation', () => {
-  it('is imported by no Production module and by no script', () => {
+  it('is imported by no Production module and by no script other than the designated Phase B-2A runner', () => {
     const productionPaths = Object.keys(production).filter(path => !/\.test\.tsx?$/.test(path))
     expect(productionPaths.length).toBeGreaterThan(100)
-    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments/
+    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound/
     expect(productionPaths.filter(path => forbidden.test(production[path]!))).toEqual([])
-    expect(Object.keys(scripts).filter(path => forbidden.test(scripts[path]!))).toEqual([])
+    expect(Object.keys(scripts).filter(path => path !== RUNNER_SCRIPT && forbidden.test(scripts[path]!))).toEqual([])
+    expect(scripts[RUNNER_SCRIPT]).toBeDefined()
   })
 
   it('has the expected runtime modules, each reading only the PlannerInput, the Engine and the Production authorities', () => {
     expect(runtime.map(([path]) => path).sort()).toEqual([
-      './assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentSolver.ts', './assignmentTypes.ts',
-      './context.ts', './reachOptions.ts', './reachTable.ts', './requiredOnlyReplay.ts', './types.ts',
+      './assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentProtocol.ts', './assignmentRootBound.ts', './assignmentRunner.ts',
+      './assignmentSolver.ts', './assignmentTypes.ts', './assignmentWindowPolicy.ts', './context.ts', './reachOptions.ts', './reachTable.ts', './requiredOnlyReplay.ts', './types.ts',
     ])
     for (const [path, source] of runtime) {
-      // No oracle manifest / verifier / RESULT, no lower-bound module, no earlier Phase result.
-      expect(source, path).not.toMatch(/plannerGlobalOracle|ORACLE_1657|plannerGlobalLowerBound|PLANNER_GLOBAL_[A-Z0-9_]*RESULT|\.json['"]/)
+      // No oracle manifest / verifier / RESULT, no earlier Phase result; the lower-bound module only in the designated stage (checked below).
+      expect(source, path).not.toMatch(/plannerGlobalOracle|ORACLE_1657|PLANNER_GLOBAL_[A-Z0-9_]*RESULT|\.json['"]/)
       // No Target / OwnedWeapon ID, Export hash or UUID literal.
       expect(source, path).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
       expect(source, path).not.toMatch(/\b[0-9a-f]{64}\b/i)
       // No file, network or persistence read, no clock, no random value, no enumeration ordinal as identity.
       expect(source, path).not.toMatch(/readFile|fetch\(|indexedDB|Dexie|localStorage|sessionStorage|from ['"][^'"]*(?:\/db\/|repositories|importExportService)/)
       expect(source, path).not.toMatch(/Math\.random|Date\.now|new Date\(|randomUUID|performance\.now/)
-      // Only Production Domain authorities and this folder are imported: no Production Search / Planner module is re-implemented.
-      for (const match of source.matchAll(/from '([^']+)'/g)) expect(match[1], `${path} imports ${match[1]}`).toMatch(/^\.\/|^\.\.\/\.\.\/domain\//)
+      // Only Production Domain authorities and this folder are imported (the root bound stage adds the lower-bound module): no Production Search / Planner module is re-implemented.
+      const allowed = path === './assignmentRootBound.ts' ? /^\.\/|^\.\.\/\.\.\/domain\/|^\.\.\/plannerGlobalLowerBound$/ : /^\.\/|^\.\.\/\.\.\/domain\//
+      for (const match of source.matchAll(/from '([^']+)'/g)) expect(match[1], `${path} imports ${match[1]}`).toMatch(allowed)
     }
-    // The Phase A / B-1 runtime never reads the existing Entries' Route contents (design 4.1): only the context does, through the Production validation.
+    // The Phase A / B-1 / B-2A runtime never reads the existing Entries' Route contents (design 4.1): only the context does, through the Production validation.
     for (const [path, source] of runtime.filter(([path]) => path !== './context.ts' && path !== './types.ts')) {
       expect(source, path).not.toMatch(/candidateSnapshot|\.route\b|buildListEntries\b(?!\.length)/)
     }
@@ -57,9 +63,30 @@ describe('Global Assignment Research isolation', () => {
     }
   })
 
-  it('lets only the designated parity test read the lower-bound module', () => {
-    const readers = Object.keys(research).filter(path => /plannerGlobalLowerBound/.test(research[path]!))
-    expect(readers).toEqual(['./reachTable.test.ts'])
+  it('lets only the Phase B-2 root bound stage and its parity tests read the lower-bound module', () => {
+    const readers = Object.keys(research).filter(path => /plannerGlobalLowerBound/.test(research[path]!)).sort()
+    expect(readers).toEqual(['./assignmentRootBound.test.ts', './assignmentRootBound.ts', './reachTable.test.ts'])
+  })
+
+  it('keeps the Phase B-2A runner an assignment-only calculation: no Planner, Search or Trace Replay, and no upper bound to the solver', () => {
+    for (const path of PHASE_B2A_MODULES) {
+      expect(research[path], path).toBeDefined()
+      expect(research[path], path).not.toMatch(/productionPlanGeneration|plannerTraceReplay|plannerDeterministicSchedule|plannerBeamSearch|candidateSearch|search\/alternative|constrainedCandidate|createProductionPlan|replayPlannerSearchTrace|visitPlannerAlternativeCandidates|searchCandidates/)
+      expect(research[path], path).not.toMatch(/readVerifiedUpperBound|production_verified_plan|'verified'|'proven_minimum'/)
+    }
+    // The solver request built by the runner carries no VerifiedUpperBound and the literal flag says so.
+    expect(research['./assignmentRunner.ts']).toMatch(/upperBoundSupplied: false as const/)
+    // The root bound stage returns no field a VerifiedUpperBound has.
+    expect(research['./assignmentRootBound.ts']).not.toMatch(/physicalOperations\s*[:=]|provenance\s*[:=]/)
+  })
+
+  it('keeps the designated runner script free of the oracle, the lower-bound module, a post-hoc argument and hard-coded hashes', () => {
+    const runner = scripts[RUNNER_SCRIPT]!
+    expect(runner).not.toMatch(/plannerGlobalOracle|ORACLE_1657|plannerGlobalLowerBound|PLANNER_GLOBAL_[A-Z0-9_]*RESULT|--optimum/)
+    expect(runner).not.toMatch(/\b[0-9a-f]{64}\b/i)
+    expect(runner).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+    expect(runner).toMatch(/new ProductionRngEngine\(\)/)
+    expect(runner).not.toMatch(/FakeRngEngine/)
   })
 
   it('changes no Production default, schema or version', () => {
