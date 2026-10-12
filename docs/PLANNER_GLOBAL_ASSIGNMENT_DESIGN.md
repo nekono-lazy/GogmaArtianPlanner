@@ -312,7 +312,8 @@ interface GlobalAssignmentContext {
 - 導出は既存authority `derivePlannerPlanningTargets()`（`src/domain/planner/plannerPlanningTargets.ts`）をそのまま呼ぶ。
   raw `plannerInput.buildListEntries` やactive Target全体から再導出しない。stale / completed / disabled / unsupportedで除外されたEntryの
   Targetはplanning Targetにならず、valid Entryが0件ならplanning Targetも0件である（この場合 `no_structural_candidate` ではなく、Production と同じく
-  「計画対象なし」として `unsupported_input`（reason `no_planning_target`）で止める）
+  「計画対象なし」として `unsupported_input`（reason `no_planning_target`）で止める）。`validatePlannerInput()` がissueを返した入力は
+  validとして続行せず、`unsupported_input`（reason `invalid_planner_input`）で止める（Phase A実装の `createGlobalAssignmentContext()`）
 - **valid BuildListEntryの存在** はplanning Target集合を決めるためだけに参照する。**既存BuildListEntryのRoute内容**（source、Counter位置、
   RouteKind、Candidate）はPhase A〜Cのsource・required位置・option選択に一切使わない。この区別により、Productionと同じ分母と、
   oracle非依存の全体再割当を両立する
@@ -525,7 +526,8 @@ type GlobalAssignmentResult =
       reason: 'target_without_option' | 'resource_exclusivity' | 'coverage_infeasible'; detail: NoCandidateDiagnostics }
   | { status: 'search_incomplete'; completeness: 'node_budget_reached' | 'cancelled'; window: ReachWindow;
       bestStructural: StructuralCandidate | null; candidates: CandidateOutcome[] }   // 窓内に候補が無いとは結論しない
-  | { status: 'unsupported_input'; reason: 'unconfirmed_counter' | 'checkpoint_selection' | 'prediction_unsupported' | 'blind_route_required' | 'no_planning_target'; detail: string }
+  | { status: 'unsupported_input'; detail: string;
+      reason: 'invalid_planner_input' | 'no_planning_target' | 'unconfirmed_rng_state' | 'unconfirmed_counter' | 'blind_route_required' | 'checkpoint_selection' | 'prediction_unsupported' }
   | { status: 'unmeasured'; reason: 'timeout' | 'out_of_memory' | 'process_failure' }
 ```
 
@@ -543,6 +545,12 @@ type GlobalAssignmentResult =
   `materialization_unconfirmed`（`stopped_by_extent` / delivery cap / gate未実行 / 未計測）/ `planner_rejected` / `objective_mismatch` を区別して残す
   （レビューR3、再レビューR2）。`materialization_unconfirmed` の候補は実行不能ではなく、枝刈り・最短性証明の根拠にも恒久除外の対象にもしない
 - `unmeasured` をどの成立 / 不成立statusにも読み替えない（G6）
+- `unsupported_input` のreasonは、どれも「実行可能解が存在しない」ではなく「この入力ではPhase Aの前提が成立しない」を表す。Phase 0 / Aの実装
+  （`createGlobalAssignmentContext()` / `buildReachTable()`）が返すのは次のとおり: `invalid_planner_input`（`validatePlannerInput()` がissueを返した。
+  validとして続行しない）、`no_planning_target`（valid Entryが0件）、`unconfirmed_rng_state`（Base Seed / Skill Counter / Gogma Counterのいずれかが
+  確定値でなく、stream originが無い）、`unconfirmed_counter`（owned sourceが無く、確定レア8 Normal Counterも無い。blind variantはoptionにしない）、
+  `blind_route_required`（owned sourceが無く、Normal Artian予測がunsupportedで、blind Routeしか残らない）、`checkpoint_selection`（§15.1）。
+  `prediction_unsupported` は個別の予測についてはoption不在 + summary noticeで表し（§5.5）、入力全体の分類としては現在使っていない
 
 ## 5. RNG到達optionの生成（Phase A）
 
@@ -591,13 +599,17 @@ optionは「IdealへRNG上届き得る必要条件」であり、実行可能性
 | 状態 | 意味 | 判定 |
 | --- | --- | --- |
 | `necessary_only` | 位置集合が §5.2 の条件を満たす | 走査結果の参照だけ |
-| `rng_replayed` | required unitだけを順に適用した結果が `satisfiesIdealTarget()` でIdeal | sourceの状態（owned: Export値、new normal: `predictNormalArtian`）→ 巨戟化 / Reset Skills（Skill）→ Reset / Keep（Gogma）を予測し直して確認 |
+| `rng_replayed` | required unitだけを順に適用した結果が `satisfiesIdealTarget()` でIdeal、かつoptionの記述がPlannerInputと整合 | 予測前に、sourceがPlannerInputに存在し要求unitを受け付けること（保護中owned normalは変換元にしない、保護中owned gogmaは `none / none` 以外を認めない。REQUIREMENTS 21）、required位置がstream origin以上の安全な整数であること、`streamEnd` をrequired位置とoriginから **generatorとは独立に** 再導出して一致すること（Skill / Gogma終端、Normal終端のCounter IDと値、余分なキーなし）を確認する。その後、sourceの状態（owned: Export値、new normal: `predictNormalArtian`）→ 巨戟化 / Reset Skills（Skill）→ Reset / Keep（Gogma）を予測し直して確認 |
 | `materialized`（Phase D） | Production Searchがその形のRouteを返し、`createPlannerRouteUnitPlans()` のrequired位置がoptionと一致 | §9 |
 | `planner_verified`（Phase D'） | 全Entryのfull Planner run + Trace Replayが成立（候補全体として `verified`） | §9.5 |
 
 `rng_replayed` は、Phase 2-A.5 Stage Aの「required-only再生」と同じ考え方（skippable unitを他Targetが消費しても結果が変わらない）を、
 oracle moduleをimportせずに実装する（§11）。Phase Aではsolverへ渡す前に全optionを `rng_replayed` にする必要はない（走査結果は既にIdeal判定済み）。
 再生はPhase Bが選んだoptionに対してだけ行い、一致しなければinternal invariant errorとして止める（走査とIdeal判定が同じauthorityなので不一致は実装バグ）。
+RNG結果の不一致（`ideal_mismatch`）だけでなく、`streamEnd` の不一致・origin以前のrequired位置・source種別と要件の不整合（`requirement_inconsistent`）、
+保護中武器への操作要求や非互換source（`source_kind_mismatch`）、unsupportedになった予測（`prediction_unsupported`）もすべて同じfail closedであり、
+どれも `rng_replayed` にしない。Phase Bは `streamEnd` を目的関数・下界・枝刈りに読む（§6.1 / §10.1）ので、generator側の終端の誤りをreplayが
+承認してはならない。
 
 ### 5.4 疑似コード
 
@@ -639,6 +651,9 @@ enumerateOptions(t, reach):              // lazy iterator, deterministic order
 - optionの `streamEnd` は `max(required) + 1`（操作無しはorigin）。Routeの連鎖長・操作数を含めない
 - Keepのlayoutは `keepFamilyLayoutKey()`（順序付き）で識別し、多重集合に畳まない（Keepはslot位置ごとに族を保つ）。multisetは「関心layout」の絞り込みにだけ使う
 - 予測不能（unsupported）はoption不在であり、「Idealに届かない」ではない。summaryへunsupported noticeとして残す
+- Base Seed / Skill Counter / Gogma Counterのいずれかが確定値でなければstream originが定まらないので、走査せず `unsupported_input`（`unconfirmed_rng_state`）で止める
+- required-only replay（§5.3）は、optionの `streamEnd` をrequired位置とoriginから独立に検算し（§4.3の定義: 最後のrequired位置 + 1、操作無しはorigin、
+  Normalは対象Targetの確定Counterだけ）、保護中owned gogmaには `none / none` 以外の要件を認めない。いずれの不一致もinvariant errorであり `rng_replayed` にしない
 
 ### 5.6 規模の見積もり（未計測）
 
@@ -1236,7 +1251,7 @@ Production RNGを使わないFake Engine / 小規模fixtureで意味論を固定
 | 対象 | test |
 | --- | --- |
 | Phase 0（planning Target集合） | `derivePlannerPlanningTargets()` でProductionと同じ集合になること: (1) active Target + valid Entryあり → 含む、(2) active Target + Entryなし → 含まない、(3) active Target + stale / invalid Entryのみ → 含まない、(4) disabled / completed Target → 含まない、(5) valid Entry 0件 → planning Target 0件（`unsupported_input(no_planning_target)`、active Target全体にしない）、(6) Phase D / D'で生成したEntryで置換したfinalInputから再導出した集合が元と同じID集合（`planning_target_set_changed` の検出を含む）。`targetWeapons.length` / active Target数を分母に使うassertが無いこと |
-| Phase A | 2〜3 Target・小window（例: Skill 6 / Gogma 6 / Normal 3）で、ReachTableの各位置集合が総当たり再生と一致。ReachTableの `targets` がPhase 0の集合と同じ要素・順序で、既存EntryのRoute内容に依存しない（Entryのsource / 位置を変えてもReachTableが変わらない）。unsupported予測でoption不在。保護武器はIdeal現在性能だけ。関心layoutがIdeal multisetの順列に限られる。`collectLowerBoundProblem()` の閾値がReachTableから再導出できる |
+| Phase A | 2〜3 Target・小window（例: Skill 6 / Gogma 6 / Normal 3）で、ReachTableの各位置集合が総当たり再生と一致。ReachTableの `targets` がPhase 0の集合と同じ要素・順序で、既存EntryのRoute内容に依存しない（Entryのsource / 位置を変えてもReachTableが変わらない）。unsupported予測でoption不在。保護武器はIdeal現在性能だけ。関心layoutがIdeal multisetの順列に限られる。`collectLowerBoundProblem()` の閾値がReachTableから再導出できる。required-only replayは走査が導いた全optionを `rng_replayed` にし、`streamEnd` の不一致（Skill / Gogma / Normal終端、余分または別のCounter ID、origin以前のrequired位置）と保護中owned gogmaへの非0操作（Reset Skills / Reset / Keep / Reset→Keep）を予測前にfail closedする。Phase 0の `invalid_planner_input` と Phase Aの `unconfirmed_rng_state` / `unconfirmed_counter` / `blind_route_required` / `checkpoint_selection` が区別される |
 | Phase B | 総当たりで最小目的関数が分かる小入力に対し、generatorが生成するstructural candidate列に総当たり最小の割当が含まれ、UB無しでは枝刈りが起きない（全完全割当が生成順に出る）。UB（verifiedの物理操作数を模したstub）を与えると `LB >= UB` の枝だけが切られ、UB未満の割当は失われない。C1 / C2違反の割当を返さない。同じ資源を要求する2 Targetで一方へ `reset` option、他方へ `keep_from_source` が割り当たる（火 / 龍型）。node budget到達で `search_incomplete`。決定性（2回実行で同一node列・同一候補列、yield後の再開が同じnodeの次の値から始まる）。`resourceFeasibleOptions` → `LB` → pruningの一方向依存（`LB` 計算中にpruningもoption列挙も再入しない） |
 | Phase B（下界） | root下界 ≤ 総当たり最小。cross satisfactionペアを持つ入力で `not_applicable` と `best_found`。`LB(partial)` が総当たりの残り最小を上回らない。structural candidateのobjectiveがroot下界と一致しても `proven_minimum` を返さない |
 | Phase B（window） | §10.3の移行規則: `target_without_option` / `resource_exclusivity` / `coverage_infeasible` の各reasonが区別され、各Targetにoptionがあっても排他で完全割当が無い入力で次rungへ移る。node budget到達では移らない |
