@@ -17,7 +17,7 @@ import { createPlannerRouteUnitPlans } from '../../domain/planner/plannerRoutePr
 import type { RngEngine } from '../../domain/rng/rngEngine'
 import type { RequiredPositions } from './assignmentTypes'
 import type { ExpectedRouteShape } from './coverageTypes'
-import { GlobalAssignmentMaterializationError, type ShapeMatchResult, type ShapeMismatchReason } from './materializationTypes'
+import { GlobalAssignmentMaterializationError, type SearchPolicyShape, type ShapeMatchResult, type ShapeMismatchReason } from './materializationTypes'
 import type { InclusiveRange, ReachOption, ReachTable } from './types'
 
 export type ShapeStream = 'skill' | 'gogma' | 'normal'
@@ -112,6 +112,22 @@ export function shapeSearchExtent(shape: ExpectedRouteShape, origins: StreamOrig
     if (!Number.isSafeInteger(value) || value < 1) invalidShape(shape, `extent ${key} ${String(value)} is not a positive integer (origins ${JSON.stringify(origins)}).`)
   }
   return extent
+}
+
+/**
+ * Design 19.3 G1 (Phase D-0B): the Search-policy shape of one option, or null. A `conversion (c, s*)` with
+ * `c < s*` whose conversion position `c` is one of the Target's Ideal Skill positions in the ReachTable (the same
+ * `evaluateSkillCondition()` judgement the Search's lane-start check reads; conversion and Reset Skills draw the same
+ * Skills at one position) is never returned by the Production Search, whose Route base with an Ideal lane-start Skill
+ * opens no Reset Skills channel. Decided from the ReachTable alone: no prediction, no Search, no reservation.
+ */
+export function searchPolicyShapeOf(option: ReachOption, table: ReachTable): SearchPolicyShape | null {
+  const skill = option.skillRequired
+  if (skill.kind !== 'conversion' || skill.conversionPosition >= skill.finalPosition) return null
+  const row = table.targets.find(value => value.targetWeaponId === option.targetWeaponId)
+  if (!row) throw new GlobalAssignmentMaterializationError('invalid_shape', option.targetWeaponId, `Target ${option.targetWeaponId} has no ReachTable row.`)
+  if (!row.skill.idealPositions.includes(skill.conversionPosition)) return null
+  return { policy: 'lane_start_ideal_skill_continuation', stream: 'skill', conversionPosition: skill.conversionPosition, finalPosition: skill.finalPosition }
 }
 
 /** The Planner-start origins of a shape's streams (design 9.1). */

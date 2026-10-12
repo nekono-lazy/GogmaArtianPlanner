@@ -9,6 +9,9 @@
  * Nothing here is a Plan, a Planner verification or a persisted value. A materialized Entry is a
  * speculative Research Entry derived from a structural candidate (G1): it is never a user-fixed Route,
  * a `PlannerConflictResolution`, a repair lineage decision or a Build List write.
+ *
+ * Phase D-0B added the Search-policy shape (`SearchPolicyShape`, design 19.3 G1) with its own
+ * `not_executed(search_policy_shape)` outcome, and the execution-only `MaterializationObserver`.
  */
 import type {
   BuildListEntry, BuildListEntryId, OwnedWeaponId, RouteKind, TargetWeaponId,
@@ -151,6 +154,24 @@ export type ShapeMatchResult =
   | { matches: false; reasons: ShapeMismatchReason[]; plannerRequired: RequiredPositions | null }
 
 /**
+ * Design 19.3 G1 (Phase D-0B): an expected shape the Production Search policy never returns, decided from the
+ * ReachTable alone before any Search (`searchPolicyShapeOf()`). The one kind the current Phase A option set can
+ * hold is the lane-start Ideal Skill continuation: a `conversion (c, s*)` with `c < s*` whose conversion Skill at
+ * `c` is already Ideal for the Target. The Search attaches no Reset Skills channel to a Route base whose lane-start
+ * Skill is Ideal (SEARCH_SPEC 5.6.1 / 5.6.8, `TargetSearchScheduler.addBase()`), so neither design 9.1 nor 9.2 can
+ * deliver it. The Route is legal in the game and representable in the Domain: this is a Search policy, never a
+ * mismatch, an extent or delivery stop, a gate, a missing window or "no Route".
+ */
+export interface SearchPolicyShape {
+  policy: 'lane_start_ideal_skill_continuation'
+  stream: 'skill'
+  /** `c`: the conversion position, whose conversion Skill is already Ideal. */
+  conversionPosition: number
+  /** `s*`: the last Reset Skills position of the shape (`c < s*`). */
+  finalPosition: number
+}
+
+/**
  * Design 4.5 / 9.6. Only `shape_mismatch` is "a Search ran to its explicit end without the shape"; every
  * other non-`materialized` value is "not confirmed", "not executed" or "not measured" and never evidence
  * that no such Route exists.
@@ -175,6 +196,12 @@ export type MaterializationOutcome =
   | { kind: 'unconfirmed'; reason: 'stopped_by_extent' | 'delivery_cap_reached'; delivered: number; closestMismatch: ShapeMismatch | null }
   /** The Search scale gate refused the request; no Search API was called. */
   | { kind: 'not_executed'; reason: 'search_scale_gate'; predictedSearchScale: PredictedSearchScale; exceeded: (keyof PredictedSearchScale)[] }
+  /**
+   * Phase D-0B (design 19.3 G1 / 10.3): the shape is one the Production Search policy never returns, so no request
+   * was built and no Search API was called (only with `MaterializationInputs.searchPolicyPrecheck`). Not executed
+   * because of a Search policy: neither a window, a delivery cap, a gate nor an envelope question.
+   */
+  | { kind: 'not_executed'; reason: 'search_policy_shape'; policyShape: SearchPolicyShape }
   | { kind: 'unmeasured'; reason: 'timeout' | 'out_of_memory' | 'process_failure' | 'cancelled' }
 
 /**
@@ -259,7 +286,10 @@ export interface TargetMaterializationRecord {
   targetWeaponId: TargetWeaponId
   /** 0-based position in the structural candidate's materialization order. */
   orderIndex: number
-  /** Null when the run was cancelled before this Target's requests were built. */
+  /**
+   * Null when no request was built: the run was cancelled before this Target, or (Phase D-0B, with
+   * `searchPolicyPrecheck`) the shape was classified `not_executed(search_policy_shape)` before any Search.
+   */
   selection: MethodSelection | null
   attempts: MaterializationAttempt[]
   /** Design 9.2 / 9.3: decided by design 9.1, or `materialized` by the method that matched. */
@@ -307,6 +337,29 @@ export interface MaterializationSettings {
   /** Design 10.4: Candidates one Planner Alternative materialization receives at most (positive safe integer). */
   deliveryCap: number
   searchScaleGate: SearchScaleGate
+}
+
+/** One Candidate a Search returned to the materialization and its match verdict (Phase D-0B diagnostics). */
+export interface CandidateInspection {
+  targetWeaponId: TargetWeaponId
+  method: MaterializationMethod
+  /** 1-based delivery index of the Planner Alternative Search (always 1 for the projected canonical Ideal). */
+  deliveredIndex: number
+  match: ShapeMatchResult
+}
+
+/**
+ * Execution-only observers of one materialization (Phase D-0B runner progress and diagnostics). They receive
+ * copies, are called synchronously, and change no request, Search input, Candidate, match, outcome or order:
+ * a run with and without them returns the same result.
+ */
+export interface MaterializationObserver {
+  /** A Target's materialization begins (before its cancellation check and its requests). */
+  onTargetStarted?: (event: { targetWeaponId: TargetWeaponId; orderIndex: number }) => void
+  /** Every Candidate a Search delivered (design 9.1) or returned (design 9.2), after its match. */
+  onCandidateInspected?: (inspection: CandidateInspection) => void
+  /** A Target's record once its outcome is decided. */
+  onTargetSettled?: (record: TargetMaterializationRecord) => void
 }
 
 export type MaterializationFailClosedCode =
