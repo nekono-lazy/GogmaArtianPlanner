@@ -1052,7 +1052,8 @@ Phase C-2（`coverageSearch.ts` / `coverageSearchTypes.ts` / `structuralSearch.t
   （replay込み）、RSS約1.0 GB。この観測は「W0の先頭1,000件では被覆が制約になっていない」ことだけを示し、structural candidateの成立
   （Phase D / D'）については何も言わない
 - **D-0へ残すもの**: 実Exportでの被覆gate付き探索の正式な条件登録・計測、Search規模gate・delivery cap・方式選択（§9）、incremental coverage pruningや
-  LDS等の追加最適化（Phase E）。runnerへの組込みも行っていない
+  LDS等の追加最適化（Phase E）。runnerへの組込みも行っていない（D-0Aで方式選択・Search規模予測・gate・delivery capの機構を実装した。値の登録と
+  実Export計測はD-0B / D-0C。§9.9）
 
 ## 9. MaterializationとProduction Planner検証（Phase D / D'）
 
@@ -1241,6 +1242,74 @@ D2-G-Aの知見どおり、Planner Alternative Searchの規模はreservationとe
   （§9.0の選択肢3）の設計、のどれが必要かを決める。(c)はdocs-onlyの設計を先行し、現行APIを改変して「できる」ことにしない
 - この検証はPhase A〜Cの設計に影響しない（Phase A〜Cの出力はrequired位置と順序であり、materialization方式に依存しない）
 
+### 9.9 Phase D-0Aの実装上の確定事項
+
+Phase D-0（§9.8）は、materialization本体とsynthetic検証の **D-0A**、実Export用runner・非formal smoke・計測条件の事前登録の **D-0B**、
+事前登録条件でのformal measurementの **D-0C** に分ける（§14）。D-0Aは `materialize.ts` / `materializationShape.ts` / `materializationScale.ts` /
+`materializationTypes.ts`（`src/benchmarks/globalAssignment/`）とsynthetic testだけを追加した。実Export run、条件登録、RESULT出力、Production Planner実行、
+Trace Replay、Phase B / Cのsolver変更、Search Domainへの形状制約付きAPIの追加は行っていない。§9.0〜§9.8の意味は変えていない。
+
+- **入口と入力検査**: `materializeStructuralCandidate(candidate, inputs)`。Searchの前に、(1) settings（delivery capは正の整数、Search規模gateの各上限は
+  非負整数。どちらも呼び出し側が明示し、既定値を持たない）、(2) ReachTableがcontextのものであること（`checkTableBelongsToContext()`）、(3) candidateが
+  その割当からPhase Cが導出したものであること（`buildStructuralCandidate()` で再導出し、ordinal・coverage・materialization順序と依存・`expectedShapes`・
+  replay予測回数が一致）を確かめ、違えば `invalid_input` で止める。これにより順序や形状を書き換えた候補を受け付けない。以後Phase Cの順序で
+  `materializeTarget()` を呼び、最初の `materialized` でないTargetで止める。結果は、試行した各Targetの記録（方式選択・試行列・Target別outcome）、
+  materialize済みEntry（後続Targetのreservationの唯一の導出元）とその数、stage outcome（`all_materialized` / `materialization_failed`（`shape_mismatch`）/
+  `materialization_unconfirmed`（`unconfirmed` / `not_executed` / `unmeasured`））、未試行Targetを持つ。`all_materialized` はPlanner未検証であり
+  `verified` ではない（§3.1）
+- **§9.1（`planner_alternative_reservation`）**: Planner-start originは `createPlannerStartSearchOrigin()`。先行Entryが無ければ
+  `emptyPlannerAlternativeReservation`、あれば `derivePlannerAlternativeReservation(materialize済みEntry)` の値をそのまま渡す（未materialize Targetの位置を
+  先取りせず、held / blocked / 排他OwnedWeaponを編集しない。導出の拒否はfail closed）。`excludedRouteKeys = []`、extentは§9.1の `extentFor`。
+  配送されたCandidateごとに、deterministic materializer（search identity = Productionの `createPlannerAlternativeSearchIdentity()`（正規化origin・
+  CalculationContext・extent・正規化reservation・route policy）にalgorithm token `global-assignment-d0a-materialization-v1` を加えたもの、Candidate ID prefix
+  `candidate.research.global-assignment.`、固定Clock）で一時Entryを作って照合し、一致したCandidateだけを `materializeBuildListEntry(candidate, PlannerInputのEntry)`
+  （既存のID衝突・同一意味再利用規則）→ `validateBuildListEntry()` → 再照合を経て採用する。分類は、一致 → `materialized`（一致がdelivery cap到達と
+  同時でも一致を優先）、consumer stop → `unconfirmed(delivery_cap_reached)`、`summary.exhausted` → `shape_mismatch`、`summary.stoppedByExtent` →
+  `unconfirmed(stopped_by_extent)`（期待required位置がextent内でも）、`CandidateSearchError('cancelled')` → `unmeasured(cancelled)`。どれにも当たらない
+  完了報告はfail closedとする
+- **照合 `matchExpectedShape()`**: Target、`BuildRoute.sourceOwnedWeaponId`、`createPlannerRouteUnitPlans([entry])` が `canSkipWhenCounterPassed = false`
+  とするunitの `counterBefore`（stream別。NormalはCounter ID付きでproduction targetは1つ）、最終武器（`areRestorationBonusSetsEqual()` による多重集合、
+  scope、Series / Group Skill）だけを比べる。chain位置・Route operation数・RouteKind・最終5枠の並び・予測chainと実chainの一致は照合しない。unit planが
+  拒否されたRoute、Counter位置を持たないrequired unit（blind作成）は不一致とする
+- **§9.2（`candidate_search_projected`）**: 連続形（各streamで、shapeの自分の位置 = required位置 + 予測chainが1つの連続区間）だけが対象。射影は、各streamの
+  最初の自分の位置（操作の無いstreamはPlanner-start Counter）、在庫はsourceの武器だけ（新規Normalは無し）、`routeFilter` は所持巨戟 `existing_gogma` /
+  Normal source `normal_artian`、Targetは当該Targetだけで、`preferredOwnedWeaponId` はsourceを指すときだけ保持しそれ以外はnull（制限在庫の外を指す選好は
+  Production validationが拒否するため。新たに選好を設定しない）、extentは射影起点からの `extentFor`。`searchCandidates()` のcanonical Idealを照合し、
+  一致したときだけ `materializeGlobalResearchCandidate()`（`createConstrainedCandidate(..., 'origin_reach')` によるorigin再構築。searchStateHashを書き換えない）
+  でEntryにする。canonicalの不一致・候補なし・gate未実行はこの方式の限界であり、Target別outcomeを決めない
+- **§9.3の方式選択（決定的）**: 非連続 → §9.1のみ。連続の巨戟化Target → §9.2、一致しなければ §9.1を1回。連続の所持巨戟 → §9.1の予測規模が §9.2の
+  それをPareto支配する（全成分で以下かつ1成分で真に小さい）ときだけ §9.1先、同点・比較不能は §9.2先（成分は別のSearch次元なので、重み付けや
+  成分の優先順位を新たに作らない。設計の「同点なら射影起点」をそのまま比較不能へ延長した）。§9.2先で一致しなければ §9.1を1回、§9.1先では
+  `shape_mismatch` のときだけ §9.2を1回（`unconfirmed` / `not_executed` / `unmeasured` では切り替えない）。Target別outcomeは、§9.2が一致した場合を
+  除き常に §9.1の結果。cancelでは切り替えず `unmeasured(cancelled)`
+- **§9.7のSearch規模予測とgate**: Productionの `createCounterReservation()` / `nextOperationPositions()` / `heldPrefixNormalCreation()` をそのまま使う。
+  conversionPositions = `nextOperationPositions(Skill reservation, origin, origin + M + 1)` の位置数（`conversionSkillPositions()` と同じ歩き方。所持巨戟は0）、
+  skillLegalWidth = Skill窓（既存巨戟 `origin .. origin + M − 1`、巨戟化Route `origin .. origin + M`）の非blocked位置数、gogmaLegalWidth =
+  `origin .. origin + N − 1` の非blocked位置数、normalForgeCount = held prefix canonical作成の自分のforge数（所持sourceは0）。§9.2はempty reservationと
+  射影起点で同じ関数を使う。requestは予測値と内訳（窓、巨戟化位置列、`beyondLimit`、Normal作成）を持ち、試行は実行時の観測（配送数、`exhausted` /
+  `stoppedByExtent` / consumer stop、配送Candidateの巨戟化位置、Searchのexecution-only instrumentationの集計）を持つので、D-0Bは予測と観測を同じ記録で
+  比べられる。予測は独立に書いた位置走査との一致（random 400件）と、実Searchが使った位置との一致をsynthetic testで固定した。gateはどれか1成分でも
+  上限を超えるrequestについてSearch APIを呼ばず `not_executed(search_scale_gate)`（超過成分を記録）とする。上限値はD-0Aでは決めない（G8: 予測値は
+  Research診断でありformalなSearch work unitではない）
+- **決定性・identity・fail closed**: Clock・乱数・enumeration ordinalを意味に入れず、同じ入力から同じrequest・Entry ID・結果が出る。Entry IDは既存
+  materializerの `build-list.constrained.*`（Candidateの意味・各hash・CalculationContext）、Candidateの観測traceはSearch出力のまま引き継ぎ、中間状態Groupは
+  materializerの正式抽出結果、選択（pin）は置かない。照合とmaterializationはRNG予測を行わない。公開APIの `executeMaterializationRequest()` は渡された
+  requestを再導出と比較し、reservation・extent・射影・identity・予測規模・導出元Entryのいずれかが違えば `request_mismatch` でSearch前に止める。ほかに
+  shape不整合（`invalid_shape`）、reservation導出の拒否、Searchの入力拒否（`search_refused`）、完了報告の契約違反、materializer / 射影adapterの拒否
+  （非同一内容のID衝突を含む。`entry_materialization_refused`）、採用後の再照合不一致がfail closedであり、いずれも `GlobalAssignmentMaterializationError` として
+  投げ、outcomeにも「Routeなし」にも読み替えない。生成EntryとreservationはResearch上のspeculativeな値で、永続化せず、user-fixed Route・
+  `PlannerConflictResolution`・lineageとして扱わない（G1）
+- **process-level outcome**: D-0Aが観測できる `unmeasured` は `cancelled` だけである。timeout / out of memory / process failureは同期・非同期APIの内側から
+  観測できないので推測で分類せず、processを所有するD-0B runnerが判定する（型としては残す）
+- **現行Search APIで期待形が返らない形（報告）**: Phase Aは各 s* について巨戟化位置 c ∈ [origin, s*] をすべてoptionにする（§5.2）が、Production Searchは
+  巨戟化Skill（既存巨戟ならsourceの現在Skill）が既にIdealのRoute baseにReset Skills channelを接続しない（`targetSearchScheduler.ts`）。したがって巨戟化位置
+  cのSkillが既にIdealな `conversion (c < s*)` optionの形は §9.1 / §9.2のどちらでも返らず、`unconfirmed(stopped_by_extent)`（またはdelivery cap）として残る
+  （synthetic testで固定）。D-0Aは照合条件・option生成・Searchを変えず、この形を推測で `shape_mismatch` にもしない。§8.6の補題（被覆不成立は c を
+  下げると解消する）が作る c はこの形になり得る。structural candidateの先頭にこの形が現れるかはD-0Bの非formal smokeで確かめ、option生成側で除外する
+  設計変更（docs PR）とするか、未確認のまま扱うかは別に判断する
+- **D-0Bへ残すもの**: 実Export用runner（materialize-only mode、別process、envelope、RESULT）、非formal smoke、delivery cap・Search規模gate・envelopeの
+  事前登録、最初のstructural candidateに対する計測と §9.8の判定、上記の形の扱い。D-0Cはその登録条件でのformal measurementである
+
 ## 10. 目的関数・下界・探索budget
 
 ### 10.1 目的関数と部分割当の下界
@@ -1428,7 +1497,8 @@ synthetic test（**C-1**、§8.5）と、B-1 solverとの統合（solver内部�
 B-1はC3（被覆）・materializationを扱わず、C1 / C2を満たした `ResourceAssignmentCandidate`（§4.3）を出力する段階であり、後続Phaseの正式意味論は
 変えない。node budget、window ladderのW1以降、verification budgetはB-1では確定せず、B-2で非formal smokeを根拠にResearch条件として事前登録し、
 formal run前に固定する。Phase Dは、materialization方式の設計検証（D-0）と統合acceptance（D-1）に分ける（§9.8）。Phase A〜Cの設計は
-materialization方式に依存しないので、D-0の結果でA〜Cをやり直す必要はない。
+materialization方式に依存しないので、D-0の結果でA〜Cをやり直す必要はない。D-0はさらに、materialization本体・Search規模予測・synthetic test（**D-0A**、
+§9.9）、実Export用runner・非formal smoke・計測条件の事前登録（**D-0B**）、登録条件でのformal measurement（**D-0C**）に分ける（B-2A / B-2Bと同じ運用）。
 
 | Phase | 変更範囲 | 入力 | 出力 | acceptance | テスト | 次Phaseへの依存 | Production影響 | formal measurement |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -1437,6 +1507,9 @@ materialization方式に依存しないので、D-0の結果でA〜Cをやり直
 | **B-2 assignment-only runner・formal measurement** | runner（assignment-only mode。Phase D / D'は呼ばず、UBは与えない）、root下界接続（§10.2の適用条件判定）、§10.3の移行判定、node budget / MRV lookahead / window ladder W1以降の事前登録（非formal smokeを根拠に固定し、formal run後に変えない） | B-1 solver、実Export、window ladder | 先頭k件のobjective、root下界、node数、時間、完成性、§10.3の移行判定 | 事前登録条件の下での実Export run、R2の移行規則 | §13.1 Phase B（window） | Cの入力 | なし | **要**（実Exportでassignment-only run: 先頭候補のobjective、root下界、node数、時間、完成性。**43 / 43 Plan・verified・proven_minimumはB単独では報告しない**） |
 | **C Counter被覆とRoute構成** | `globalAssignment/coverage.ts`、solverへのcoverage check接続、materialization順序、`ExpectedRouteShape` | structural candidate | `StreamCoverage`、materialization順序、`ExpectedRouteShape[]`、不成立位置 | synthetic被覆、coverage-driven ordering、順序のtopological性、chain再生一致 | §13.1 Phase C | D-0の入力 | なし | 不要（Bのrunへ被覆・順序診断を追加） |
 | **D-0 materialization方式の設計検証** | `globalAssignment/materialize.ts`（§9.1 / §9.2 / §9.3）、Search規模予測、runner（materialize-only mode）、事前登録docs | 実ExportのPhase B / C出力（最初のstructural candidate）、Engine、Planner-start origin | Target別 `MaterializationOutcome`、`deliveredBeforeMatch`、predicted / 実測Search規模、時間、heap、§9.8の判定 | 全Targetが `materialized` ならD-1へ。残るoutcomeの内訳から (a) 事前登録値の調整 (b) 順序変更 (c) 形状制約付き探索APIのdocs-only設計 のどれが必要かを決める | §13.1 Phase D | D-1の前提 | なし | **要**（事前登録: delivery cap、Search規模gate、方式選択規則、envelope。Planner検証は行わない） |
+| └ **D-0A 本体・synthetic検証**（§9.9） | `globalAssignment/materialize.ts` / `materializationShape.ts` / `materializationScale.ts` / `materializationTypes.ts`、synthetic test、isolation test | structural candidate、Phase 0 context、ReachTable、Engine、caller指定のdelivery cap / Search規模gate | Target別request（予測規模・内訳）・試行・outcome、stage outcome、materialize済みEntry | §13.1 Phase Dのsynthetic条件（empty reservation、正式reservationの非改変、held跨ぎ、照合、`exhausted` / `stoppedByExtent` / cap / gate / cancelの区別、fallback、決定性、fail closed、trace保持、順序依存、isolation） | §13.1 Phase D | D-0Bの入力 | なし | 不要（実Export・条件登録・runnerは行わない） |
+| └ **D-0B runner・非formal smoke・条件登録** | runner（materialize-only mode、別process、envelope、RESULT）、事前登録docs | D-0Aの入口、実ExportのPhase B / C出力 | 非formal smoke記録、事前登録値（delivery cap、Search規模gate、envelope）、§9.9の形の扱い | 事前登録の完了（formal runは開始しない） | runner / protocol test | D-0Cの入力 | なし | 不要（smokeは非formal） |
+| └ **D-0C formal measurement** | 計測記録docs・RESULT | D-0Bの登録条件、clean HEAD | 上記D-0の出力 | 上記D-0のacceptance | — | D-1の前提 | なし | **要** |
 | **D-1 Planner検証（統合acceptance）** | `globalAssignment/verify.ts`、runner（full mode: B → C → D → D'のloop）、analyzer（post-hoc oracle比較） | D-0で確認した方式、verification budget | `VerifiedPlanRecord` / `GlobalAssignmentResult`、候補別outcome、RESULT JSON | 実Exportで `verified`（§13.2）。不成立なら理由別status（§4.6） | §13.1 Phase D'、isolation | Eの基準 | なし | **要**（事前登録: verification budget、Research maxPlanSteps、envelope） |
 | **E 最適化・性能** | incremental coverage pruning、決定的なdiscrepancy探索、中断再開、window拡大（verified時）、メモリ内訳、Browser Worker測定 | D-1の `bestVerified` | 改善した `bestVerified`、性能記録 | 全Target完成を維持したまま物理操作数を改善（8,534未満。§13.2）。時間・メモリは別指標。退行は不受理 | 既存acceptanceの維持、Browser isolation | — | なし（Production化は§16の別PR） | **要** |
 
