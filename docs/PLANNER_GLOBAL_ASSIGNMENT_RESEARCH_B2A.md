@@ -37,12 +37,21 @@ B-2Aのrunnerが返すのは、設計 §4.3 の **resource assignment**（planni
 | 設計 §10.2 のroot下界stage（既存下限moduleの接続と適用条件判定） | root下界を枝刈り上界に使うこと（`readVerifiedUpperBound` は渡さない） |
 | 設計 §10.3 のwindow移行判定（Research専用policy） | Phase C被覆（`coverage_infeasible` は返さない）、Phase D materialization、Production Planner検証 |
 | 実Exportでの非formal smokeと、Phase B-2B formal条件の事前登録 | formal run、正式RESULTの確定、Production変更、version / schema変更 |
+| formal計測の成立契約（§6.4: `mode` と `formalValidity` の区別、登録Export識別子との必須照合、再現性run全成功・一致、root下界stageの実施、invalid時の保存と非0 exit）と、child起動失敗の安全な処理（§3.6） | `formalRun.enabled` の有効化（B-2B PR） |
 
 ## 2. 入力
 
 | 入力 | 値 |
 | --- | --- |
-| Export | `gogma-artian-planner-backup_20260927015837.json`（19,424,064 bytes、SHA-256 `cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b`）。Issue #154 の既存Research（Phase 0 / 1-E / P0R / 2-A.5 / D系列）と同一。ローカルの `C:\Users\<user>\Downloads\` に置かれた元ファイルを `--export` で明示指定し、コピー・改変・Gitへの追加をしない。runnerはSHA-256とbytesを記録し、任意の `--expected-export-sha256` と照合する（コードにhashをhard-codeしない。設計 §11.3） |
+| Export | `gogma-artian-planner-backup_20260927015837.json`（19,424,064 bytes、SHA-256 `cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b`）。Issue #154 の既存Research（Phase 0 / 1-E / P0R / 2-A.5 / D系列）と同一。ローカルの `C:\Users\<user>\Downloads\` に置かれた元ファイルを `--export` で明示指定し、コピー・改変・Gitへの追加をしない。runnerはSHA-256とbytesを記録する。**登録Export識別子**は下のblockがauthorityで、runner（親・各child）は commit済みHEADの本書（`git show HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md`）からこれを読む（コード・scriptにhashをhard-codeしない。設計 §11.3）。formal runでは必須照合（§6.4）、smokeでは任意の `--expected-export-sha256` と実Exportの一致を確認し、登録値との一致を記録する |
+
+登録Export識別子（runnerが `parseRegisteredExportIdentity()` で読む。各keyはこのblockの1行だけ。値を変える場合は新しい事前登録として扱う）:
+
+```text
+registered-export-file: gogma-artian-planner-backup_20260927015837.json
+registered-export-bytes: 19424064
+registered-export-sha256: cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b
+```
 | PlannerInput | 既存 `globalResearchInputFromExport(json, 1000)`（`src/benchmarks/plannerGlobalOptimizationResearch.ts`）。Export validation（`prepareExportRootForImport()` + `validateExportRootForFullReplacement()`）を通過した値だけを使う。`options.maxPlanSteps = 1000` は `validatePlannerInput()` を通すためだけの値で、Plannerは走らない（G12。RESULTに `plannerInputMaxPlanStepsForValidationOnly` として記録） |
 | Production RNG | `ProductionRngEngine`（`production-rng:c5-e7`）。CalculationContext `{ unknown-initial, 4, production-rng:c5-e7, 17 }` |
 | planning Target | `createGlobalAssignmentContext()`（Phase 0: `validatePlannerInput().validBuildListEntries` → `derivePlannerPlanningTargets()`）。最新mainでの入力validation結果（valid / excluded Entry件数、issue件数）をRESULTへ記録する。43件と異なれば理由を調べ、強制補正しない |
@@ -108,12 +117,17 @@ Phase B-1の `ResourceAssignmentSearchResult` の分類をそのまま使い、s
 
 ### 3.5 Provenance / RESULT
 
-`start.json`（run開始時、読み取り専用）と集約RESULTに次を記録する: protocol version / phase、`mode`（smoke / formal）、`formal: false`（B-2A）、
+`start.json`（run開始時、読み取り専用）と集約RESULTに次を記録する: protocol version / phase、`mode`（`smoke` = 非formal / `formal` = formal条件での実行を試みた）、
 Repository HEAD SHA、基準main、Working Tree clean、計算関連コードの未commit有無（`src` / `scripts` / 設定file）、benchmark code SHA-256
-（`git ls-files` の内容hash）、本書のSHA-256、runner script、Node / V8、Exportのfile名・bytes・SHA-256・expected照合、Production RNG Engine version、
+（`git ls-files` の内容hash）、本書のSHA-256、runner script、Node / V8、`exportVerification`（実Exportのfile名・bytes・SHA-256、登録識別子の読取元
+`HEAD:<本書>` とその値、`--expected-export-sha256` の値、CLI値との一致、登録値との一致）、Production RNG Engine version、
 CalculationContext、条件（window / ladder / rung / node budget / MRV lookahead / candidate limit / snapshot limit）、envelope（wall / heap / repeat /
 concurrency 1 / retry none）、条件ごとの根拠（登録値 / command line / runner default / W0非oracle起源）、`oracleFreeExecution: true` と
-`oracleInformedDesign: true`（設計 §11.2）、登録状態（formal run有効化フラグ・未登録項目）、smoke override一覧、起動時刻、machine。
+`oracleInformedDesign: true`（設計 §11.2）、登録状態（formal run有効化フラグ・未登録項目・再現性run数）、smoke override一覧、起動時刻、machine。
+
+`formal: true / false` という属性は置かない。「formal条件で起動した」事実は `mode`、「正式計測として成立した」判定は集約RESULTの **`formalValidity`**
+（`status: not_applicable | valid | invalid`、`issues[]`、`checks`。§6.4）であり、両者を混同しない。child recordは親の検証済みtaskから `mode` を受け取り
+そのまま記録し、親は各recordの `mode` / protocol version / Export SHA-256・bytesが自分の値と一致することを確認する（不一致は `integrityIssues`）。
 
 assignment runごとに semantic SHA-256 を取り、`--repeat ≥ 2` のとき一致を `determinism.identical` として記録する（observedの時間・メモリは含めない）。
 候補の保存は `candidateLimit`（objective列）と `snapshotLimit`（full snapshot）で明示的に上限を設け、ReachTable本体はRESULTへ展開しない。
@@ -125,8 +139,15 @@ snapshotは `snapshotResourceAssignment()` でMapを配列化し、`findNonPlain
   `heap out of memory` 等は `unmeasured(out_of_memory)`）、concurrency 1、自動リトライなし、fallbackなし
 - 出力（`start.json` / task / record / RESULT）は `wx` で排他作成し、既存outputや既存run dirは開始前に拒否する。`--output` が Export と同じpathなら拒否
 - node budget到達は `search_incomplete`、timeout / OOM / process failure は `unmeasured`。どちらも `no_resource_assignment` に変換しない
-- 未commitコードでの実行は `--allow-uncommitted` を要し、非formal smokeとして記録される。`--mode formal` は、`assignmentProtocol.ts` の登録が完了し
-  `formalRun.enabled` がtrueで、Working Tree clean、command line overrideなしのときだけ受け付ける（B-2Aでは常に拒否される）
+- 未commitコードでの実行は `--allow-uncommitted` を要し、非formal smokeとして記録される。`--mode formal` の開始条件は §6.4（純関数 `formalStartIssues()`）。
+  B-2Aでは `formalRun.enabled = false` のため、登録gate（`formalRunGateIssues()`）がExportを読む前に拒否する
+- childは親の検証済みtask（`mode` / 条件 / ladder / envelope / 登録Export識別子 / 実Export識別子）だけを入力にし、formal taskでは自分でも同じgate
+  （`formalChildGateIssues()`: 登録gate、HEADから読んだ登録Export識別子とtask・実Exportの一致、登録条件との一致）を適用する。手書きのformal taskで
+  親の拒否を迂回することはできない。childは `formalValidity` を判定しない（集約RESULTを書くのは親だけ）
+- child processは共通module `scripts/planner-global-assignment-b2a-child-process.mjs` の `runChildProcess()` で起動する。promiseは `close`（exit code・signal）/
+  `error`（spawn ENOENT等のOSレベル起動失敗）/ `spawn` 自体のthrowのどれかで**必ず1回だけ**settleし、timerをすべての経路で解放する。起動失敗は
+  `failed` → `unmeasured(process_failure)` として記録され、親はそのまま集約RESULTを書く（親が落ちてRESULTを失うことはない）。timeout → SIGKILL → `timed_out`、
+  stderrのV8 OOM署名 → `out_of_memory`、exit 0かつrecordあり → `completed`。task fileの書込失敗・recordの読取不能も `unmeasured(process_failure)`
 - runnerは `--optimum` 等の post-hoc 比較引数を持たず（unknown optionとして拒否）、oracle manifest / verifier / RESULT JSON / 下限moduleをscriptから読まない
 - 観測されたpeak memory（`process.memoryUsage()` 250 ms sampling の最大値、`maxRSS`、heap size limit）を child record に記録する
 
@@ -297,9 +318,54 @@ node scripts/run-planner-global-assignment-b2a.mjs --mode formal --export "<Expo
 
 1. `main` / `origin/main` / HEADの一致、Working Tree clean、stash / worktreeなし、実行中のnode processなし
 2. `npm run lint` / `npm test` / `npm run build` が通ること（計測と並行させない）
-3. 本書 §6.1 とコードの `ASSIGNMENT_B2B_PREREGISTRATION` の一致（`assignmentProtocol.test.ts` と目視）
-4. `--mode formal` で起動し、`start.json` の `registration.unresolvedItems = []`、`smokeOverrides = []`、Export SHA-256一致を確認してから結果を待つ
-5. 結果が `unmeasured` ならenvelopeの見直しを先に行い、条件を変えて再実行する場合は新しい事前登録として記録する
+3. 本書 §6.1 / §2 の登録値とコードの `ASSIGNMENT_B2B_PREREGISTRATION` の一致（`assignmentProtocol.test.ts` と目視）。`formalRun.enabled` の有効化はB-2B PRで、
+   この確認の後にcommitする（有効化commit自体がmeasurement HEADに含まれる）
+4. `--mode formal --expected-export-sha256 <§2の登録値>` で起動し、`start.json` の `registration.unresolvedItems = []`、`smokeOverrides = []`、
+   `exportVerification.registeredMatched = true` / `cliMatched = true` を確認してから結果を待つ
+5. 集約RESULTの `formalValidity.status` が `valid` のときだけ正式計測として扱う。`invalid` なら `formalValidity.issues` を読み、envelope・条件の見直しが要る場合は
+   新しい事前登録として記録してから再実行する（結果を見て登録値を変えない。G9）
+
+### 6.4 formal計測の成立条件（`formalValidity`）
+
+formal条件で起動したこと（`mode = formal`）と、正式計測として成立したこと（`formalValidity.status = valid`）は別の判定である。判定は純関数
+`judgeFormalValidity()`（`assignmentProtocol.ts`）が集約時に行い、親だけが書く。`formal: true` のような属性は存在しない。
+
+| `formalValidity.status` | 意味 |
+| --- | --- |
+| `not_applicable` | `mode = smoke`。非formalであり、正式計測の主張をしない |
+| `valid` | `mode = formal` で、下の条件がすべて成立した。正式計測として扱える |
+| `invalid` | `mode = formal` で起動したが、条件のいずれかが成立しなかった。`issues[]` に理由を残し、取得済みの診断RESULTは保存するが、正式計測としては表示・報告しない。process exit codeは非0 |
+
+開始条件（`formalStartIssues()`。1つでも満たさなければ何も書かずに拒否する）:
+
+1. 登録gate: `formalRun.enabled = true` かつ `assignmentB2bRegistrationIssues() = []`（B-2Aでは `enabled = false` なので常に拒否される）
+2. Working Tree clean かつ計算関連コードがcommit済み、`--allow-uncommitted` なし
+3. 条件のcommand line override（`--window` / `--node-budget` / … / `--no-replay`）なし。条件・ladder・envelopeは `registeredFormalConditions()` から取る
+4. 登録Export識別子（§2のblock）がcommit済みHEADの本書から読める
+5. `--expected-export-sha256` が与えられ、その値が登録SHA-256と一致する（CLI値は登録値の独立した2回目の入力であり、任意の別Exportのhashを渡しても
+   登録Exportとの同一性には代わらない）
+6. 実Exportのfile名・bytes・SHA-256が登録識別子と一致する
+
+成立条件（`judgeFormalValidity()`。集約時に判定）:
+
+1. 開始条件1〜3・5〜6が成立している（`exportVerification.registeredMatched = true` かつ `cliMatched = true`）
+2. 規定数（`reproducibilityRuns = 2`）のassignment childがすべて実行され、すべて `completed` でrecordが読め（`measured`）、各recordの `mode` / protocol version /
+   Export SHA-256・bytesが親と一致する
+3. すべてのsemantic recordに `integrityIssues` がない
+4. すべてのsemantic SHA-256が一致し、`determinism.identical === true`（`null` = 未確認であり成立ではない）
+5. root下界stageが測定として実施された: `found`（relaxation minimumを下界として証明）または `none_below_budget`（「budget以上」を証明。exact minimumではない）。
+   `not_applicable`（適用条件不成立。本Exportでは事前登録上成立が見込まれるため期待外として理由を残しinvalid）/ `unmeasured`（timeout / OOM / process failure）/
+   `not_requested` は成立しない。`checks.rootLowerBoundStage` は「stageが実施されたか（`executed`）」と「何を証明したか（`provenBound`: `exact_minimum` /
+   `at_least_budget` / `none`）」を分けて記録する
+6. `compareObjectiveWithRootLowerBound()` が `inconsistent` でない（`not_comparable`、例えばwindow内に割当が無く候補objectiveが無い場合は、成立条件の違反ではない）
+
+次はすべて `invalid` である: 1回目成功・2回目timeout / OOM / process failure、2回成功だがsemantic SHA-256不一致、2回成功だがintegrity issueあり、
+recordの欠落・読取不能、`determinism.identical = null`、root下界 `unmeasured` / `not_requested` / `not_applicable`、`inconsistent`、未commitコード、override、
+Export照合の省略・不一致。`invalid` のRESULTも `.local/` に保存し、理由（`formalValidity.issues`）を残すが、B-2Bの正式RESULT（`docs/…_B2B_RESULT.json`）には
+採用しない。
+
+B-2Aでは `ASSIGNMENT_B2B_PREREGISTRATION.formalRun.enabled = false` を維持し、formal runを開始していない。本節の判定はsynthetic fixtureと純関数のtestで
+固定した（§7）。
 
 ## 7. テスト
 
@@ -315,8 +381,17 @@ synthetic fixture（Fake Engine、小window、oracle非依存）で次を固定�
   objective比較（gap、`inconsistent`、`not_comparable`）、`VerifiedUpperBound` へ代入不能（`@ts-expect-error`）
 - Window policy: §3.3 の全行、最上位rung、不正rung / ladderの拒否、`coverage_infeasible` が型に無いこと
 - Protocol: 条件・ladderの検証、snapshotのplain化、Map / Set / undefined / 非有限数の検出、登録recordの整合（`null` 項目だけが未登録、formal run無効）
-- Script: Usage、unknown option（`--optimum` を含む）、重複 / 値なしoption、既存output / run dir、Export上書き、formal mode拒否、hash形式、source scan
-  （oracle / 下限module / RESULT / 64桁hex / UUID なし、`new ProductionRngEngine()`、`wx`）
+- Script: Usage、unknown option（`--optimum` を含む）、重複 / 値なしoption、既存output / run dir、Export上書き、formal mode拒否（登録gateがExportを読む前に拒否）、
+  hash形式、source scan（oracle / 下限module / RESULT / 64桁hex / UUID なし、`new ProductionRngEngine()`、`wx`、`formal: true / false` 属性なし、登録gate → start gate →
+  child gate → `judgeFormalValidity()` の呼び出し、`git show HEAD:` による登録識別子の読取、child process helperの利用）、helper moduleのResearch識別子なし
+- formal契約（純関数、synthetic fixture）: 登録Export識別子のparse（各key 1行、欠落 / 重複 / 不正値の拒否、hashを含む散文は登録行ではない）、識別子比較（file名 / bytes / hash）、
+  登録gate（無効・未登録）、開始条件（clean / commit済み / override なし / CLI hash必須 / CLI値 = 登録値 / 実Export = 登録値 / 登録識別子の読取不能。B-2Aの実登録では常に
+  「not enabled」で拒否）、child gate（smoke taskの拒否、登録条件・ladder・envelopeとの一致、taskの登録識別子とHEADの一致、実Exportの一致、HEAD読取不能）、
+  `registeredFormalConditions()` と登録値の一致、`judgeFormalValidity()`（smokeは `not_applicable`、全条件成立で `valid`、run数不足・2回目のtimeout / OOM / process
+  failure・semantic SHA-256不一致・integrity issue・record不整合・`determinism.identical = null`・root下界 `unmeasured` / `not_requested` / `not_applicable`・
+  `inconsistent`・gate / tree / override / Export照合の不成立はすべて `invalid`、`none_below_budget` は `at_least_budget` として `valid`、`not_comparable` は違反ではない）
+- child process envelope（fake spawn、実childなし）: `completed` / 非0 exitの `failed` / timeout（SIGKILL、OOM署名より優先）/ OOM署名 / spawn `error`（ENOENT）→ `failed` と
+  後続 `close` の無視（二重settleなし）/ `close` 後の `error` の無視 / `spawn` throw（timer未設定）/ kill失敗、すべての経路でtimer解放
 - Isolation: Production module・他scriptからのimportなし、runtime moduleのimport制限（下限moduleは `assignmentRootBound.ts` だけ）、clock / random /
   file / `.json` literal / hash / UUID なし、B-2A moduleが Planner / Search / Trace Replay / `readVerifiedUpperBound` / `'verified'` / `'proven_minimum'` を持たないこと
 
@@ -334,6 +409,16 @@ synthetic fixture（Fake Engine、小window、oracle非依存）で次を固定�
 | `npx tsc --noEmit -p tsconfig.app.json` | pass |
 
 synthetic test: `src/benchmarks/globalAssignment/`（Phase A / B-1の既存test含む）14 files 142 tests + script test 5 tests（§7）。
+
+レビュー対応（formal成立契約・child起動失敗処理。§3.5 / §3.6 / §6.4）後の再検証、2026-10-12:
+
+| コマンド | 結果 |
+| --- | --- |
+| `git diff --check` / `npm run check:nul` / `npm run lint` / `npx tsc --noEmit -p tsconfig.app.json` | pass |
+| `npm test` | pass（384 files / 6,443 tests、3 skipped、約128 s。timeoutなし） |
+| `npm run build` | pass（既存chunk warningのみ。`dist/` にResearch識別子なし） |
+
+synthetic test: `src/benchmarks/globalAssignment/` 14 files 155 tests + script test 7 tests + child process envelope test 9 tests。新しいsmoke / formal runは行っていない。
 
 ## 9. 変更していないもの
 

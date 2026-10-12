@@ -270,3 +270,272 @@ export function assignmentB2bRegistrationIssues(): string[] {
   if (registration.windowLadder.value !== null) issues.push(...validateWindowLadder(registration.windowLadder.value).map(issue => `windowLadder: ${issue}`))
   return issues
 }
+
+/** The registered conditions and envelope as one plain object, or the names of the items still `null` (never a partial default). */
+export function registeredFormalConditions(): { conditions: AssignmentResearchConditions; windowLadder: ReachWindow[]; envelope: FormalEnvelope } | { issues: string[] } {
+  const registration = ASSIGNMENT_B2B_PREREGISTRATION
+  const issues = assignmentB2bRegistrationIssues()
+  if (issues.length > 0) return { issues }
+  const ladder = registration.windowLadder.value!.map(rung => ({ ...rung }))
+  return {
+    conditions: { window: { ...ladder[0]! }, nodeBudget: registration.nodeBudget.value!, mrvLookahead: registration.mrvLookahead.value!, candidateLimit: registration.candidateLimit.value!, snapshotLimit: registration.snapshotLimit.value! },
+    windowLadder: ladder,
+    envelope: {
+      assignmentWallMs: registration.assignmentChild.wallMs.value!, assignmentHeapMb: registration.assignmentChild.heapMb.value!,
+      rootBoundBudget: registration.rootLowerBound.budget.value!, rootBoundWallMs: registration.rootLowerBound.childWallMs.value!, rootBoundHeapMb: registration.rootLowerBound.childHeapMb.value!,
+      repeat: registration.reproducibilityRuns, replaySnapshots: true,
+    },
+  }
+}
+
+export interface FormalEnvelope {
+  assignmentWallMs: number
+  assignmentHeapMb: number
+  rootBoundBudget: number
+  rootBoundWallMs: number
+  rootBoundHeapMb: number
+  repeat: number
+  replaySnapshots: boolean
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Formal measurement contract (Phase B-2B). The registered Export identity lives in the Research document, which the
+// runner reads from the committed HEAD (`git show HEAD:<ASSIGNMENT_B2A_DOC>`); no Export hash is hard-coded in any
+// runtime module or script (design 11.3), and the oracle manifest / past RESULTs are never an input.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** The identity of one Export file: name, byte length and SHA-256 (lower-case hex). */
+export interface ExportIdentity {
+  fileName: string
+  bytes: number
+  sha256: string
+}
+
+const REGISTERED_EXPORT_KEYS = ['registered-export-file', 'registered-export-bytes', 'registered-export-sha256'] as const
+
+/**
+ * Reads the registered Export identity from the Research document text: exactly one line each of
+ * `registered-export-file: <name>`, `registered-export-bytes: <integer>` and `registered-export-sha256: <64 hex>`.
+ * Anything else (a missing, duplicated or malformed line) is an issue, never a guessed identity.
+ */
+export function parseRegisteredExportIdentity(markdown: string): { identity: ExportIdentity; issues: [] } | { identity: null; issues: string[] } {
+  const values = new Map<string, string[]>()
+  for (const line of markdown.split(/\r?\n/)) {
+    const match = /^(registered-export-(?:file|bytes|sha256)):\s*(\S+)\s*$/.exec(line.trim())
+    if (match) values.set(match[1]!, [...(values.get(match[1]!) ?? []), match[2]!])
+  }
+  const issues: string[] = []
+  for (const key of REGISTERED_EXPORT_KEYS) {
+    const count = values.get(key)?.length ?? 0
+    if (count !== 1) issues.push(`${key}: expected exactly one line, found ${count}.`)
+  }
+  if (issues.length > 0) return { identity: null, issues }
+  const fileName = values.get('registered-export-file')![0]!
+  const bytesText = values.get('registered-export-bytes')![0]!
+  const sha256 = values.get('registered-export-sha256')![0]!
+  if (!/^[1-9][0-9]*$/.test(bytesText)) issues.push(`registered-export-bytes: must be a positive integer (got ${bytesText}).`)
+  if (!/^[0-9a-f]{64}$/.test(sha256)) issues.push(`registered-export-sha256: must be 64 lower-case hex characters.`)
+  if (issues.length > 0) return { identity: null, issues }
+  return { identity: { fileName, bytes: Number(bytesText), sha256 }, issues: [] }
+}
+
+/** The differences between an actual Export and a registered identity (`[]` = the same file name, length and hash). */
+export function compareExportIdentity(actual: ExportIdentity, registered: ExportIdentity): string[] {
+  const issues: string[] = []
+  if (actual.sha256.toLowerCase() !== registered.sha256) issues.push(`Export SHA-256 ${actual.sha256} is not the registered ${registered.sha256}.`)
+  if (actual.bytes !== registered.bytes) issues.push(`Export length ${actual.bytes} is not the registered ${registered.bytes} bytes.`)
+  if (actual.fileName !== registered.fileName) issues.push(`Export file name ${actual.fileName} is not the registered ${registered.fileName}.`)
+  return issues
+}
+
+export interface FormalGateRegistration {
+  formalRunEnabled: boolean
+  unresolvedItems: readonly string[]
+}
+
+/** The registration gate both the parent and every child apply: the formal run must be enabled and every item registered. */
+export function formalRunGateIssues(registration: FormalGateRegistration): string[] {
+  const issues: string[] = []
+  if (!registration.formalRunEnabled) issues.push('A formal run is not enabled in this protocol version (ASSIGNMENT_B2B_PREREGISTRATION.formalRun.enabled is false).')
+  if (registration.unresolvedItems.length > 0) issues.push(`The Phase B-2B pre-registration is incomplete: ${registration.unresolvedItems.join(' ')}`)
+  return issues
+}
+
+export interface FormalStartInput {
+  registration: FormalGateRegistration
+  workingTreeClean: boolean
+  uncommittedBenchmarkCode: boolean
+  allowUncommitted: boolean
+  overrideOptions: readonly string[]
+  /** `--expected-export-sha256` as given (null = not given). A formal run requires it. */
+  cliExpectedSha256: string | null
+  /** The identity read from the committed Research document, or the reasons it could not be read. */
+  registeredExport: { identity: ExportIdentity | null; issues: readonly string[] }
+  actualExport: ExportIdentity
+}
+
+/**
+ * Why a formal run must not start (`[]` = it may). The Export verification cannot be skipped: the registered identity
+ * must be readable, the command line must name the registered hash (a second, independent entry of the same value),
+ * and the actual Export must be that file.
+ */
+export function formalStartIssues(input: FormalStartInput): string[] {
+  const issues = formalRunGateIssues(input.registration)
+  if (input.allowUncommitted || input.uncommittedBenchmarkCode || !input.workingTreeClean) issues.push('A formal run needs a clean, committed Working Tree (no --allow-uncommitted).')
+  if (input.overrideOptions.length > 0) issues.push(`A formal run takes its conditions from the registration only; remove ${input.overrideOptions.join(', ')}.`)
+  if (input.registeredExport.identity === null) issues.push(`The registered Export identity could not be read from the committed Research document: ${input.registeredExport.issues.join(' ')}`)
+  if (input.cliExpectedSha256 === null) issues.push('A formal run requires --expected-export-sha256 naming the registered Export SHA-256.')
+  if (input.registeredExport.identity !== null) {
+    if (input.cliExpectedSha256 !== null && input.cliExpectedSha256.toLowerCase() !== input.registeredExport.identity.sha256) {
+      issues.push(`--expected-export-sha256 ${input.cliExpectedSha256} is not the registered Export SHA-256 ${input.registeredExport.identity.sha256}.`)
+    }
+    issues.push(...compareExportIdentity(input.actualExport, input.registeredExport.identity))
+  }
+  return issues
+}
+
+export interface FormalChildGateInput {
+  registration: FormalGateRegistration
+  taskMode: string
+  /** The identity the parent wrote into the task. */
+  taskRegisteredExport: ExportIdentity | null
+  /** The identity the child itself read from the committed Research document. */
+  registeredExportFromHead: { identity: ExportIdentity | null; issues: readonly string[] }
+  actualExport: ExportIdentity
+  taskConditions: unknown
+  taskWindowLadder: unknown
+  taskEnvelope: unknown
+}
+
+/**
+ * Why a child must refuse a formal task (`[]` = it may run). A child never trusts the task alone: it re-applies the
+ * registration gate, re-reads the registered Export identity from HEAD, compares the parent's identity, the Export it
+ * reads and the registered conditions, so a hand-written formal task cannot bypass the parent's refusal.
+ */
+export function formalChildGateIssues(input: FormalChildGateInput): string[] {
+  if (input.taskMode !== 'formal') return [`A formal child gate was asked for a ${input.taskMode} task.`]
+  const issues = formalRunGateIssues(input.registration)
+  const registered = registeredFormalConditions()
+  if ('issues' in registered) issues.push(...registered.issues)
+  else {
+    if (JSON.stringify(input.taskConditions) !== JSON.stringify(registered.conditions)) issues.push('The task conditions are not the registered conditions.')
+    if (JSON.stringify(input.taskWindowLadder) !== JSON.stringify(registered.windowLadder)) issues.push('The task window ladder is not the registered ladder.')
+    if (JSON.stringify(input.taskEnvelope) !== JSON.stringify(registered.envelope)) issues.push('The task envelope is not the registered envelope.')
+  }
+  const fromHead = input.registeredExportFromHead
+  if (fromHead.identity === null) issues.push(`The child could not read the registered Export identity from HEAD: ${fromHead.issues.join(' ')}`)
+  else {
+    if (input.taskRegisteredExport === null || JSON.stringify(input.taskRegisteredExport) !== JSON.stringify(fromHead.identity)) issues.push('The task does not carry the registered Export identity read from HEAD.')
+    issues.push(...compareExportIdentity(input.actualExport, fromHead.identity))
+  }
+  return issues
+}
+
+export type FormalValidityStatus = 'not_applicable' | 'valid' | 'invalid'
+
+export interface FormalValidityRun {
+  id: string
+  /** `measured`: the child completed and its record was read. `unmeasured`: timeout / out of memory / process failure / unreadable record. */
+  status: 'measured' | 'unmeasured'
+  reason: string | null
+  semanticSha256: string | null
+  integrityIssues: readonly string[]
+  /** The record's mode / protocol / Export hash agree with the parent's (null when there is no record). */
+  recordConsistent: boolean | null
+}
+
+export interface FormalValidityInput {
+  mode: 'smoke' | 'formal'
+  registration: FormalGateRegistration & { reproducibilityRuns: number }
+  tree: { workingTreeClean: boolean; uncommittedBenchmarkCode: boolean; smokeOverrides: readonly string[] }
+  exportVerification: { registeredMatched: boolean | null; cliMatched: boolean | null }
+  assignmentRuns: readonly FormalValidityRun[]
+  determinism: { identical: boolean | null }
+  rootLowerBound: { status: 'found' | 'none_below_budget' | 'not_applicable' | 'unmeasured' | 'not_requested'; reason: string | null }
+  comparison: { consistency: 'consistent' | 'inconsistent' | 'not_comparable' }
+}
+
+export interface FormalValidity {
+  /** `not_applicable`: a smoke run (no formal claim). `valid`: every formal condition held. `invalid`: a formal run that does not count as a formal measurement. */
+  status: FormalValidityStatus
+  issues: string[]
+  checks: {
+    registrationGate: boolean | null
+    committedCleanTree: boolean | null
+    noOverrides: boolean | null
+    exportRegisteredMatched: boolean | null
+    reproducibility: {
+      requiredRuns: number
+      runs: number
+      measuredRuns: number
+      allMeasured: boolean
+      noIntegrityIssues: boolean
+      recordsConsistent: boolean
+      semanticHashesEqual: boolean | null
+      identical: boolean | null
+    } | null
+    /** The stage ran to a measurement (`found` / `none_below_budget`) versus what it proved; never read as a success when `executed` is false. */
+    rootLowerBoundStage: { requested: boolean; executed: boolean; status: string; provenBound: 'exact_minimum' | 'at_least_budget' | 'none'; reason: string | null }
+    comparisonConsistent: boolean | null
+  }
+}
+
+/**
+ * Whether a run counts as a formal measurement (Phase B-2B). A smoke run is `not_applicable`. A formal run is `valid`
+ * only when the registration gate, the committed clean tree, the registered Export match, the registered number of
+ * assignment children all measured with consistent records, no integrity issue and one semantic hash
+ * (`determinism.identical === true`; `null` is unconfirmed, never valid), an executed root lower bound stage
+ * (`found` or `none_below_budget`; `not_applicable` / `unmeasured` / `not_requested` are not), and a non-negative gap
+ * all hold. Having started in formal mode is never the same as being valid.
+ */
+export function judgeFormalValidity(input: FormalValidityInput): FormalValidity {
+  const rootStatus = input.rootLowerBound.status
+  const rootStage: FormalValidity['checks']['rootLowerBoundStage'] = {
+    requested: rootStatus !== 'not_requested', executed: rootStatus === 'found' || rootStatus === 'none_below_budget', status: rootStatus,
+    provenBound: rootStatus === 'found' ? 'exact_minimum' : rootStatus === 'none_below_budget' ? 'at_least_budget' : 'none', reason: input.rootLowerBound.reason,
+  }
+  if (input.mode !== 'formal') {
+    return {
+      status: 'not_applicable', issues: [],
+      checks: { registrationGate: null, committedCleanTree: null, noOverrides: null, exportRegisteredMatched: null, reproducibility: null, rootLowerBoundStage: rootStage, comparisonConsistent: null },
+    }
+  }
+  const issues: string[] = []
+  const gate = formalRunGateIssues(input.registration)
+  issues.push(...gate)
+  const committedCleanTree = input.tree.workingTreeClean && !input.tree.uncommittedBenchmarkCode
+  if (!committedCleanTree) issues.push('The Working Tree was not clean and committed.')
+  const noOverrides = input.tree.smokeOverrides.length === 0
+  if (!noOverrides) issues.push(`Command-line overrides were applied: ${input.tree.smokeOverrides.join(', ')}.`)
+  const exportRegisteredMatched = input.exportVerification.registeredMatched === true && input.exportVerification.cliMatched === true
+  if (!exportRegisteredMatched) issues.push('The Export was not verified against the registered identity and the command-line hash.')
+
+  const runs = input.assignmentRuns
+  const requiredRuns = input.registration.reproducibilityRuns
+  const measured = runs.filter(run => run.status === 'measured')
+  const allMeasured = runs.length === requiredRuns && measured.length === requiredRuns
+  if (runs.length !== requiredRuns) issues.push(`${runs.length} assignment run(s) were started; the registration requires ${requiredRuns}.`)
+  for (const run of runs.filter(run => run.status === 'unmeasured')) issues.push(`Assignment run ${run.id} is unmeasured (${run.reason ?? 'unknown'}).`)
+  const noIntegrityIssues = runs.every(run => run.integrityIssues.length === 0)
+  for (const run of runs.filter(run => run.integrityIssues.length > 0)) issues.push(`Assignment run ${run.id} has integrity issues: ${run.integrityIssues.join('; ')}`)
+  const recordsConsistent = measured.every(run => run.recordConsistent === true)
+  for (const run of measured.filter(run => run.recordConsistent !== true)) issues.push(`Assignment run ${run.id} record disagrees with the parent (mode / protocol / Export).`)
+  const hashes = measured.map(run => run.semanticSha256)
+  const semanticHashesEqual = measured.length >= 2 && hashes.every(hash => hash !== null) ? new Set(hashes).size === 1 : null
+  if (semanticHashesEqual === false) issues.push('The semantic records of the assignment runs differ.')
+  if (semanticHashesEqual === null) issues.push('Reproducibility is unconfirmed: fewer than two measured assignment runs with a semantic hash.')
+  if (input.determinism.identical !== true) issues.push(`determinism.identical is ${String(input.determinism.identical)}; a formal measurement requires true.`)
+
+  if (!rootStage.executed) issues.push(`The root lower bound stage did not execute to a measurement (${rootStatus}${input.rootLowerBound.reason ? `: ${input.rootLowerBound.reason}` : ''}).`)
+  const comparisonConsistent = input.comparison.consistency !== 'inconsistent'
+  if (!comparisonConsistent) issues.push('The best structural objective is below the root lower bound (inconsistent).')
+
+  return {
+    status: issues.length === 0 ? 'valid' : 'invalid', issues,
+    checks: {
+      registrationGate: gate.length === 0, committedCleanTree, noOverrides, exportRegisteredMatched,
+      reproducibility: { requiredRuns, runs: runs.length, measuredRuns: measured.length, allMeasured, noIntegrityIssues, recordsConsistent, semanticHashesEqual, identical: input.determinism.identical },
+      rootLowerBoundStage: rootStage, comparisonConsistent,
+    },
+  }
+}

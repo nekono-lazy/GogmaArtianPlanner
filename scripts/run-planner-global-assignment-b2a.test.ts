@@ -65,9 +65,11 @@ describe('Phase B-2A runner script', () => {
     expect(readdirSync(directory).sort()).toEqual(['existing-run', 'result.json'])
   }, SPAWN_TEST_TIMEOUT_MS)
 
-  it('refuses a formal run in this Phase and a malformed expected Export hash', () => {
+  it('refuses a formal run in this Phase (the registration gate, before any file is written) and a malformed expected Export hash', () => {
     const { output, runDir, input } = fixture()
-    expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--mode', 'formal'], /formal run is not enabled|pre-registration is incomplete/)
+    // Phase B-2A keeps formalRun.enabled = false: the registration gate refuses whatever else is passed, before the (here missing) Export is read.
+    expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--mode', 'formal', '--expected-export-sha256', 'a'.repeat(64)], /A formal run cannot start: A formal run is not enabled/)
+    expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--mode', 'formal'], /A formal run cannot start: A formal run is not enabled/)
     expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--expected-export-sha256', 'abc'], /64 hex characters/)
     expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--mode', 'later'], /--mode must be smoke or formal/)
     expect(existsSync(runDir)).toBe(false)
@@ -86,5 +88,32 @@ describe('Phase B-2A runner script', () => {
     // Every run records both provenance flags (design 11.2) and writes exclusively.
     expect(source).toMatch(/oracleFreeExecution: true, oracleInformedDesign: true/)
     expect(source).toMatch(/flag: 'wx'/)
+  })
+
+  it('keeps mode and formal validity apart: no formal boolean, the registration gate before the Export, the registered identity from HEAD, one validity judgement', () => {
+    // No `formal: true / false` attribute anywhere: the record carries `mode`, the RESULT carries `formalValidity`.
+    expect(source).not.toMatch(/\bformal:\s*(true|false)\b/)
+    expect(source).toMatch(/formalRunGateIssues\(gate\)/)
+    expect(source).toMatch(/formalStartIssues\(/)
+    expect(source).toMatch(/formalChildGateIssues\(/)
+    expect(source).toMatch(/judgeFormalValidity\(/)
+    expect(source).toMatch(/parseRegisteredExportIdentity\(/)
+    expect(source).toMatch(/registeredFormalConditions\(\)/)
+    expect(source).toMatch(/\['show', source\]/)
+    // The child carries the parent's mode through the task and re-reads the registered identity itself.
+    expect(source).toMatch(/mode: task\.mode/)
+    expect(source).toMatch(/readRegisteredExport\(protocol\)/)
+    // An invalid formal measurement exits non-zero while keeping its diagnostics.
+    expect(source).toMatch(/formalValidity\.status === 'invalid'\) process\.exitCode = 1/)
+    // Children run through the shared envelope module (error / close settle once, timer released).
+    expect(source).toMatch(/from '\.\/planner-global-assignment-b2a-child-process\.mjs'/)
+    expect(source).toMatch(/runChildProcess\(\{/)
+  })
+
+  it('keeps the child process envelope module free of Research identifiers and oracle references', () => {
+    const helper = readFileSync(resolve('scripts/planner-global-assignment-b2a-child-process.mjs'), 'utf8')
+    expect(helper).not.toMatch(/globalAssignment|GlobalAssignment|ReachTable|ResourceAssignment|plannerGlobalOracle|ORACLE_1657|plannerGlobalLowerBound|readFile|vite/)
+    expect(helper).not.toMatch(/\b[0-9a-f]{64}\b/i)
+    expect(helper).toMatch(/export function runChildProcess/)
   })
 })
