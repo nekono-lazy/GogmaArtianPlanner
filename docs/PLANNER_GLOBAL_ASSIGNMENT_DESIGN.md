@@ -598,6 +598,8 @@ stream separationと同じ）。
   `unsupported_input`（`unconfirmed_counter`）でfail closedする（Phase 0の逐次射影やblind Routeへ暗黙にfallbackしない）
 - `preferredOwnedWeaponId` はoption生成に使わない（Searchのtie-breakであり、割当のauthorityではない）
 - `reset_then_keep` の中間Keep（g1とg*の間）、Reset連鎖、Reset Skills連鎖は **optionに含めない**。それらはskippable unitであり、§8の被覆で決まる
+- 所持巨戟の現在Ideal laneに `none` だけを置く上表の規則は、ゲーム上の制限ではない（ゲームではIdeal到達後もReset Skills / Reset / Keepを続けられる）。
+  巨戟化の `conversion` (c, s*) はcのSkillがIdealでも列挙しており、扱いが非対称である。監査結果と後続の扱いは §19（D-0B準備監査）
 
 ### 5.3 必要条件と検証状態
 
@@ -1039,6 +1041,9 @@ Phase C-2（`coverageSearch.ts` / `coverageSearchTypes.ts` / `structuralSearch.t
   被覆可能な完全割当が存在し、探索木を使い切った `coverage_infeasible` は生じない**。§8.2の3と§10.3の `coverage_infeasible` 行の例（より後方の
   Reset Skills位置）は、この意味で現行option集合では到達しない場合の規定である。C-2は分類とwindow判定を設計どおり実装し（scripted searchで分類を
   固定）、到達しないことはseed付きrandom table 60件の総当たりで確認した。規則・設計の意味は変えていない（変更・削除するかは別判断）
+- **D-0B準備監査での強化**（§19.4、docs-only・証明のみでtest未追加）: c を下げた結果、巨戟化位置のSkillがIdealのまま c < s* になる形（lane開始Ideal継続、
+  Production Searchが返さない形）が生じても、(c, c) への置換と上記の引き下げを繰り返せば、同じsource・objective以下で継続optionを含まない
+  被覆可能な完全割当に至る（定理T）。所持巨戟の継続optionをoption集合へ加えても、この補題とその強化は成立する
 - **test**: solverと独立した総当たり（C1 / C2の直積 + §8.1を位置単位で書いた被覆述語）との被覆可能集合一致（ordering有無で同一、重複なし。手組み表と
   random表40件）、棄却割当の非配送と探索継続、c = x の優先と早い到達、`next(maxNodes)` のpause / resume一致、決定性、node budget / cancel / 候補上限で
   不成立を断定しないこと、分類とwindow判定、B-1経路の不変（provider無しとnullを返すproviderで同一event列・同一診断、診断keyの不変、ordering offの
@@ -1306,7 +1311,9 @@ Trace Replay、Phase B / Cのsolver変更、Search Domainへの形状制約付�
   cのSkillが既にIdealな `conversion (c < s*)` optionの形は §9.1 / §9.2のどちらでも返らず、`unconfirmed(stopped_by_extent)`（またはdelivery cap）として残る
   （synthetic testで固定）。D-0Aは照合条件・option生成・Searchを変えず、この形を推測で `shape_mismatch` にもしない。§8.6の補題（被覆不成立は c を
   下げると解消する）が作る c はこの形になり得る。structural candidateの先頭にこの形が現れるかはD-0Bの非formal smokeで確かめ、option生成側で除外する
-  設計変更（docs PR）とするか、未確認のまま扱うかは別に判断する
+  設計変更（docs PR）とするか、未確認のまま扱うかは別に判断する。→ D-0B準備監査（§19）で、option生成側では除外せず、D-0BでSearch前の
+  専用の未実行分類とし、D-0Cの前に形状制約付きmaterialization（案B）で扱う方針を提案した。所持巨戟側の同種の形（現在Ideal後の継続）は
+  現行Phase Aが列挙していないことも併せて記録した（§19.3 G2）
 - **D-0Bへ残すもの**: 実Export用runner（materialize-only mode、別process、envelope、RESULT）、非formal smoke、delivery cap・Search規模gate・envelopeの
   事前登録、最初のstructural candidateに対する計測と §9.8の判定、上記の形の扱い。D-0Cはその登録条件でのformal measurementである
 
@@ -1378,6 +1385,8 @@ Phase Aの走査windowは事前登録したladderで広げる。
 
 - 拡大は全Target共通のrungで行い、Target個別のwindowを持たない
 - 上限rungに達しても `no_structural_candidate` のままなら、結果は「事前登録したladderの範囲では構造的候補が無い」であり、実行可能解の不存在ではない
+- Production Searchのpolicyが返さない形（§19.3 G1: lane開始Ideal継続）による未実行は、上表のどの行の根拠にもしない（window拡大にも、
+  cap / gate / envelopeの見直しにも使わない）ことを提案する。分類の名前と規則はD-0Bで確定する（§19.6）
 
 ### 10.4 budgetの分離（G5）
 
@@ -1516,6 +1525,10 @@ materialization方式に依存しないので、D-0の結果でA〜Cをやり直
 最初の実装Phase（A、B-1）は、小さなsynthetic fixtureだけで意味論を検証できる。実Exportの43 TargetはPhase B-2（assignment-only）で初めて使い、
 materialization方式の実用性はD-0で、43 / 43 Planの統合acceptanceはD-1で行う。
 
+D-0B準備監査（§19.7）は、D-0以降を「D-0B（runner・非formal smoke・診断）→ D-0A-2設計（形状制約付きmaterialization、docs-only）→ D-0A-2実装 →
+A-2（Phase Aの所持巨戟継続option）→ D-0B-2（再smokeと事前登録）→ D-0C → D-1」とすることを提案した（D-0Bの事前登録をD-0B-2へ移す）。
+採否はオーナー判断であり、上表はまだ改訂していない。
+
 ## 15. 未決事項・リスク・採用しなかった案
 
 ### 15.1 実装前に解決が必要なもの（docs PRまたは各Phaseの事前登録）
@@ -1531,6 +1544,7 @@ materialization方式の実用性はD-0で、43 / 43 Planの統合acceptanceはD
 | Normal Counter未確定 | blind variantをoptionにしない。`unconfirmed_counter` でfail closed | 本書で決定 |
 | cross satisfaction可能ペア | distinct sourceで実行可能解を探し、最小性を主張しない（§10.2）。1本の武器で2 Target完成を割当に含める拡張は行わない | 本書で決定 |
 | 複数Target同一武器のゼロ操作option | 保護・未保護を問わずIdeal現在性能のowned gogmaは、cross satisfactionペアで2 Targetが同じ武器を要求し得る。C1でどちらか1つに割り当てる（他方は別option）。Planner側はcross satisfactionで両方完成させ得るので、objectiveは上界になる | 本書で決定（最小性不主張と整合） |
+| Ideal到達後の操作継続（lane開始Ideal） | ゲーム上はIdeal後もReset Skills / Reset / Keepを続けられるが、Production Searchはlane開始状態がIdealのlaneを開かない。Phase Aは巨戟化の継続形（S1）を列挙し所持巨戟の継続形（S2 / B1 / B2）を列挙しない。単一Targetでも、Planner開始時にIdealの所持巨戟を持つTargetは開始時点ではEntryがcommitされず、そのRouteが実行されるかはIdeal武器が他のRouteに操作されるか（in-flight化による充足の再評価と動的commit）に依存する（G4） | §19（D-0B準備監査）。D-0B / D-0A-2 / A-2で扱う |
 
 ### 15.2 後続実験で判断できるもの
 
@@ -1619,3 +1633,124 @@ Production統合に必要な事項は本設計の範囲外であり、将来の�
 | --- | --- | --- |
 | Required R1（再） | 対象Targetを `isTargetWeaponPlanningEligible()` だけで決めており、Productionのplanning Target（valid BuildListEntryを持つTarget）と一致しない | Phase 0として `validatePlannerInput()` → `derivePlannerPlanningTargets(targetWeapons, validBuildListEntries)` でProductionと同じ規則で集合を確定し、以後のPhaseで増減させない `GlobalAssignmentContext` を定義（§3.2 / §4.1）。valid Entryの存在は集合決定にだけ使い、既存EntryのRoute内容はPhase A〜Cに渡さない（§4.1 / §5.4 / §5.5）。分母は常にこの集合で、`targetWeapons.length` / active Target数を使わない（§4.6 / §9.5）。finalInputから再導出した集合が同じでなければ `planning_target_set_changed` でfail closed、非planning TargetのEntryは元のまま残す（§9.5）。下限moduleの対象集合との差を明記（§2.6 / §5.7 / §10.2）。Phase 0のテスト6ケースを追加（§13.1 / §14） |
 | Required R2（再） | `exhausted || stoppedByExtent` を一律 `shape_mismatch` にしていた | `shape_mismatch` は `summary.exhausted = true`（探索完了の明示的証拠）+ 一致なしだけ。`stoppedByExtent` + 一致なしは期待required位置がextent内でも常に `unconfirmed(stopped_by_extent)`（旧 `extent_reached_before_shape` を置換）。`exhausted` 以外で探索完了を判定する例外は設けない（§2.6 / §4.5 / §9.1 / §9.6）。射影起点Candidate Searchの不一致は方式限界としてTarget別outcomeを確定せず §9.1 へ切り替える（§9.2 / §9.3）。`unconfirmed` は枝刈り・最短性証明・恒久除外の根拠にせず、`no_structural_candidate` と混同しない（§4.6 / §9.6 / §12）。テスト7ケースを追加（§13.1） |
+
+## 19. Ideal到達後の操作継続とGlobal Assignmentの完全性（D-0B準備監査）
+
+Refs #154。docs-only監査（基準main: PR #244 merged `eb1c299`）。詳細（コード上の根拠、集合の定義、証明、ケース表、test計画）は
+[D-0B準備監査](PLANNER_GLOBAL_ASSIGNMENT_IDEAL_CONTINUATION_AUDIT.md)（以下「監査」）にあり、本節はその要約と、本書の各Phaseへの参照点である。
+Production・Research実装・test・計測コードは変更していない。
+
+### 19.1 直接観測と層の区別
+
+2026-10-12にプロジェクトオーナーが次を直接確認した（監査 §1.1）: ゲームにIdeal Skill / Ideal Bonusという概念は無く、それはユーザーが登録した
+目標条件である。巨戟化時点・Reset Skills後にSkillがIdealになってもReset Skillsを続けられ、後続のSkill位置で再びIdealになる場合がある。
+巨戟化済みなら、復元ボーナスがReset / KeepでIdealになった後もReset / Keepを続けられ、後続位置で再びIdealになる場合がある。
+保護武器・Keepのlayout / 予測support・RNG capability・normal scopeのBonus Ideal不成立・blind Normalの未知5枠など、既存の制約はそのまま維持する
+（監査 §1.2）。
+
+本書は次の4層を区別する（監査 §1.3）: L1ゲーム操作の可否（Ideal後も継続できる）、L2正式Domainでの表現（Route validation・Candidate factory・
+Planner unit semantics・Planner充足判定・SEARCH_SPEC 5.8.1のいずれもIdealを操作の終了条件にせず、表現・実行できる）、L3 Search policy
+（lane開始状態がIdealならそのlaneを開かない。SEARCH_SPEC 5.6.1 / 5.6.8の正式な契約）、L4 Global Assignmentのoption集合（本書のResearch設計）。
+**L1 / L2で合法なRouteを、L3のpolicyだけを理由にL4から排除しない。** L3をL4へ合わせて変えることも、正式仕様の変更を経ずには行わない。
+
+### 19.2 Production Searchの早期Ideal終了（Skill / Bonus両軸）
+
+`TargetSearchScheduler.addBase()` は、Route baseの操作0の解（lane開始状態）がIdealなら、そのlaneのstream channelを購読しない
+（`!skill.idealMatch` / `!bonus?.idealMatch`）。lane開始状態は、巨戟化Routeでは巨戟化時のSkill（Bonusは継承したnormal scope 5枠で常に非Ideal）、
+所持巨戟では現在のSkillと現在の5枠である。この規則は通常Candidate SearchとPlanner Alternative Searchの両方に効き（後者はSEARCH_SPEC 5.6.8で明示）、
+既存のProduction testで固定されている。streamそのものはIdealで止まらず、Planner Alternative Searchはlane **途中** でIdealに達した後も
+各absolute positionのIdeal解をすべて公開する。したがって列挙されないのは「lane開始状態がIdealで、そのlaneにさらに操作を置くRoute」だけである。
+これは単一Targetの品質を根拠とするSearch policyであり、ゲーム規則でもDomain制約でもない（監査 §2）。
+
+### 19.3 Phase Aのoption制限と列挙漏れ
+
+Phase Aは所持巨戟の現在SkillがIdealなら `skillRequired = none` だけ、現在Bonusが `gogma_artian` でIdealなら `bonusRequired = none` だけを生成し
+（`skillRequirementBlocks()` / `bonusRequirementIsNone()`）、C-1 `validateOption()` もそれを不変条件として検査する。一方、巨戟化の
+`conversion (c, s*)` はcのSkillがIdealかどうかを見ずに c ∈ [origin, s*] を列挙する。lane途中のIdeal後の後方位置（`reset_skills` / `conversion` の
+後方 s*、`reset` / `keep_from_source` / `reset_then_keep` の後方 g*）は、どのsourceでも列挙される（§5.2）。
+
+集合間の欠落（監査 §3.3）:
+
+| ID | 欠落 | 代表ケース |
+| --- | --- | --- |
+| G1 | Phase Aにあるが、Production Searchが返さない | S1: 巨戟化時にSkillがIdeal、その後Reset SkillsでIdeal（`conversion (c, s*)`、c < s*、cがIdeal位置）。D-0Aでは当該形と無関係な要因で `unconfirmed` か `shape_mismatch` に分類される（§9.9） |
+| G2 | ゲーム上合法・表現可能だが、Phase Aに無い | S2: 所持巨戟の現在SkillがIdeal、その後Reset Skills。B1 / B2: 所持巨戟の現在BonusがIdeal、その後Reset / Keep |
+| G3 | Phase Aにあるが、あるreservationではSearchが返さない（Ideal非依存、コード読取からの推定・未固定） | `keep_from_source` / `reset_then_keep` の操作範囲に、chainと同じlayoutのheldでないReset位置があると、Bonus streamのB2 frontier代表（最新のReset）が同じ最終武器を別のrequired位置集合のRouteへ畳む |
+| G4 | Phase Aにあるが、Production Plannerが割当どおりに実行するかが状態遷移に依存する | Planner開始時にIdeal武器を持つTargetは開始時点では `hasIdeal` でEntryがcommitされない（`deriveTargetSatisfaction()` / `entryIsRelevantForState()`）。ただし恒久的な完成ではなく、他のRouteがIdeal武器を操作するとin-flightになって充足が再評価され、Entryは実行可能かつcollisionなしなら再commitされる（ISSUE_103設計 6.8）。監査 §3.6でG4-i（Ideal武器が操作されない）/ G4-ii（他Targetの操作で充足が変化。実行順に依存しPhase D'でだけ判定）/ G4-iii（t自身の両軸Ideal sourceを操作）に分けた |
+
+S3（Reset Skills途中でIdeal → さらにIdeal）、B3〜B5（Reset / Keep途中でIdeal → さらにIdeal）、SB1〜SB3のlane途中部分は、Phase A・Planner Alternative
+Search・D-0Aのすべてで扱える（監査 §4）。G2のoptionにReachTableの追加情報・追加予測は要らない（監査 §3.4）。
+
+### 19.4 Phase B / Cの正当性への影響（定理T）
+
+lane開始Ideal継続option（S1型・S2型・B1 / B2型）について、整合したReachTableの構造モデル（C1 / C2 / 被覆 / Σ stream終端）では次が成り立つ
+（監査 §5）。
+
+- 補題L1: 所持巨戟の継続optionを、継続しているlaneの要件を `none` に替えたoptionへ置換すると、C1は同じ、C2はrequired位置の部分集合、
+  objectiveは増えず、被覆は §8.6の補題で同じobjectiveのまま回復できる
+- 補題L2: S1型 (c, s*) を (c, c) へ置換し、被覆を §8.6の手続きで回復することを繰り返すと（Φ = Σ s* が置換ごとに減るので停止する）、
+  同じsource・objective以下・被覆可能でS1型を含まない完全割当に至る
+- **定理T**: 継続optionを含む被覆可能な完全割当は、継続optionを含まない被覆可能な完全割当に弱支配される。したがって構造的最適objective、
+  root下界、`LB(partial)`（継続optionを加えても同じsourceの `none` が最小終端originで残るので不変・admissible）、`proven_minimum` の判定規則は
+  継続optionの有無で変わらない。§8.6の被覆補題は継続optionを加えた集合でも成立し、「同じ最小objectiveの被覆可能完全割当のうち、
+  継続optionを含まないものが常に存在する」へ強化される
+
+定理Tは構造モデルについての主張であり、Planner検証（D'）での成立、G3（支配する側が返らない逆向きの欠落）、構造モデルの将来拡張については
+何も言わない。本書は定理Tを **optionを削除する根拠にしない**（§5.3の必要条件原則）。D-0Bを現行option集合で先行してよい根拠、
+継続optionの値順序上の位置、優先度の判断にだけ使う。
+
+### 19.5 対応方式と推奨
+
+| 案 | 内容 | 判定 |
+| --- | --- | --- |
+| 案A | Planner Alternative Searchのpolicyを変え、lane開始Ideal後もchannelを開く | **採らない**。SEARCH_SPEC 5.6.1 / 5.6.8・`AGENTS.md` のSearch規則・固定済みProduction testの変更と、what-if / repairの出力変化による計算版数境界を伴い、Skill held-aware stream（D2-G-Aの主要メモリ要因）が増える。継続Routeは6キー順序で後に配送されるのでdelivery capの範囲で一致する保証も無く、G3も解かない |
+| 案B | Global Assignment専用の形状制約付きResearch Search。source・巨戟化位置・required位置を制約に、正式reservation（改変しない）のもとでProduction stream・Route search primitive・Candidate factory・materializerを使い、形に合う解を **選ぶ**（RouteOperationを期待形から組み立てない） | **D-0Cの前に方式を決めて導入する**。B-i（Research側consumer。Production file変更なし）を第一候補、B-ii（Search DomainのResearch専用seam。Production file変更のためオーナー判断）を代替とするが、**最終選択はD-0A-2のdocs-only設計PRで行い、本監査では採用を確定しない**。B-iはProduction Search APIの配送Candidateを採用する方式ではなく、§9.4の現行契約（§9.1 / §9.2の経路）の外にあるので、採用にはResearch専用materialization経路の契約を §9.4とは別に定義・承認すること、技術的実現性（Route baseの取り出し、`RouteSearchContext` の構成）の確認、継続Routeの正当性検証が前提になる（監査 §7.2.1） |
+| 案C | 現行Searchを維持し、Search policyが返さない形を未確認として扱う | **D-0Bで採る（暫定）**。定理Tにより最適objectiveは失われない。ただし単独では「合法Routeを検証から漏らさない」目標を満たさない |
+
+推奨は **段階的に案C → 案B（第一候補B-i、最終選択はD-0A-2）、Phase Aの対称化（A-2: 所持巨戟の継続option追加）を併せて行う** である
+（監査 §7.5）。リスクは、B-iの合成ロジック複製（PA Searchが返す形はparity testで固定できるが、PA Searchが返さない継続Routeの正当性は示さないので、
+全operationの独立予測・Counter / coverage検査・Candidate validation・unit plan・Planner / Trace Replayで別途検証する。`validateBuildRoute()` の通過だけで
+同等としない）、B-iの技術的実現性が未確認であること（成立しなければB-iiか案Cへ戻る）、A-2による候補列の変化と値順序latticeの単調性の再証明
+（継続 / 非継続の要件列を別streamに分けて併合する必要がある）、G3が案B（B-i）では解けないこと（D-0Bで頻度を測ってB-ii / 同値なrequired位置集合の
+受理 / materialization順序から選ぶ）、G4が推奨では解決しないこと（D-0Bで場合分けを集計して別途決める）である。
+
+§9.4は本監査では変更しない。B-iを採用する場合も §9.4の本文（既存D-0A経路 §9.1 / §9.2の契約）は書き換えず、Research専用経路の契約を別の節として
+新設し、§9.4にはその節への参照だけを足す（監査 §10）。
+
+### 19.6 Phase A〜Dへの変更範囲
+
+| Phase | 変更 |
+| --- | --- |
+| A（A-2） | 所持巨戟の現在Ideal laneについて、`none` に加えて継続option（Skill: `reset_skills` s*、Bonus: `reset` / `keep_from_source` / `reset_then_keep`）を同じsourceで列挙する。現在性能が両軸Idealのsourceについて、そのsource自身を操作する継続optionはPlannerで実行されない見込みだが（監査 §3.6のG4-iii）、根拠は前提P1〜P3（C1と最終入力の構成、所持巨戟を変えるのはsourceのRouteとreserveだけ、再commitは `hasIdeal` がfalseへ戻ったときだけ）に依存するので、**除外するかはA-2でtestとともに判断する**（確定しない）。S1型は削除しない。ReachTable・予測回数は変えない |
+| B | C1 / C2・objective・root下界・`LB(partial)` は不変（定理T）。値順序latticeは継続 / 非継続を別streamにして各optionちょうど1回・単調な配送を再証明する。MRVの計数とTarget選択順は変わり得る |
+| C | 被覆・coverer・materialization順序・`ExpectedRouteShape` の意味は不変。C-1 `validateOption()` の「所持巨戟: `none` ⇔ 現在Ideal」を「現在Idealなら `none` または継続option、非Idealなら `none` 不可」へ改める。§8.6に定理Tによる強化を記録する |
+| D | D-0B: S1型（ReachTableだけで判定できる）をSearch前に専用の未実行分類にし、`unconfirmed` / `shape_mismatch` と区別する。§10.3では、Search policy起因の未実行をwindow拡大の根拠にも、cap / gate / envelope見直しの根拠にもしない（名前と規則はD-0Bで確定）。G4（G4-i / G4-ii / G4-iii）は診断として場合分けを記録するだけで、開始時点のIdealだけを理由に候補を不成立・恒久除外に分類しない（成否はPhase D'で判定）。D-0A-2: B-i / B-iiを最終選択し、承認された方式を §9.3の方式選択へ加える（B-iなら §9.4とは別のResearch専用materialization契約を新設し、§9.4本文は変えない）。`matchesExpectedShape()` のrequired位置完全一致は維持する（同値なrequired位置集合の受理は未決） |
+
+### 19.7 D-0B / D-0Cとの依存関係と後続PR
+
+D-0Bの非formal smokeは、現行D-0A方式で先行してよい（定理T）。制限: S1型を含む候補はmaterializeできず未実行で止まる、G2の形は観測できない、
+G3では支配する側の形が一致しない、G4はPlanner検証で成立しない場合がある（D-0BはPlannerを実行しないので判定しない）、smokeの数値は現行option集合・
+方式でのもので案B / A-2の後に再測定が要る。いずれも「Routeが存在しない」とは書かない。D-0Bでは、S1型のSearch前判定と専用の未実行分類、G3の危険度と
+「最終武器は一致しrequired位置だけが異なる」不一致の別集計、G4の場合分け（G4-i / G4-ii / G4-iii）の集計、候補ごとの継続option数を診断として加える。
+G4の集計は候補を不成立・恒久除外に分類するためには使わない。
+
+delivery cap・Search規模gateの値は方式（案B）とoption集合（A-2）に依存するので、D-0Bは「runner・非formal smoke・診断」までとし、
+計測条件の事前登録は案B / A-2の後の **D-0B-2** へ移すことを提案する（オーナーが元の計画を維持する場合は、案B / A-2の後に登録し直す。
+formal run前なのでG9に反しない）。
+
+| 順 | PR | 内容 |
+| --- | --- | --- |
+| 1 | 本PR | docs-only監査 |
+| 2 | D-0B | 実Export用runner（materialize-only mode、別process、envelope、RESULT）、非formal smoke、上記の診断。事前登録はしない |
+| 3 | D-0A-2設計（docs-only） | 案Bの設計: B-i / B-iiの最終選択、B-iを選ぶ場合のResearch専用materialization契約（§9.4とは別の節）と技術的実現性の確認、継続Routeの正当性検証の手順、G3の扱い、§9.3への組込み、§10.3の未実行の扱い、Search規模予測・gate、test計画 |
+| 4 | D-0A-2実装 | 承認された方式での形状制約付きmaterialization、方式選択の拡張、synthetic test、parity test、継続Routeの正当性検証test |
+| 5 | A-2 | Phase Aの継続option、両軸Ideal sourceの扱いの判断（G4-iii）、値順序latticeの別stream化、C-1検査の改訂、総当たりtest、G4の状態遷移test（4と同時でもよい。A-2を4より先に入れると継続optionがmaterializeされない） |
+| 6 | D-0B-2 | 確定したoption集合・方式での再smokeと、delivery cap・Search規模gate・envelope・option集合version・方式選択規則の事前登録 |
+| 7 | D-0C | 登録条件でのformal measurement |
+| 8 | D-1 | Planner検証（統合acceptance） |
+
+D-0Cの正式計測前に必要な条件は、option集合の確定（A-2の採否と規則。両軸Ideal sourceの扱いを含む）、materialization方式の確定（案Bを含む。
+B-iならResearch専用materialization契約の承認と継続Routeの正当性検証の実装）、S1型の分類規則と §10.3での扱いの確定、その集合・方式での再smoke、
+それを根拠にした事前登録、clean HEADである。test計画（synthetic、G4の状態遷移、継続Routeの正当性検証、定理Tと拡張後の下界・被覆補題・lattice配送の
+総当たり、案BとPA Searchのparity、isolation）は監査 §9.3にある。正式仕様変更の候補（SEARCH_SPEC 5.6.1の層の注記など。いずれも
+本PRでは変更しない）は監査 §10にある。
