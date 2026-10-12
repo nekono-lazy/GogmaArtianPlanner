@@ -85,7 +85,7 @@ describe('Phase B-2B pre-registration record', () => {
     expect(ASSIGNMENT_B2A_BASE_MAIN).toMatch(/^[0-9a-f]{40}$/)
   })
 
-  it('names exactly the unregistered items, and never enables a formal run in Phase B-2A', () => {
+  it('names exactly the unregistered items, and in Phase B-2B is complete and enables the formal run', () => {
     const registration = ASSIGNMENT_B2B_PREREGISTRATION
     const items: [string, RegisteredCondition<unknown>][] = [
       ['windowLadder', registration.windowLadder], ['nodeBudget', registration.nodeBudget], ['mrvLookahead', registration.mrvLookahead],
@@ -104,16 +104,38 @@ describe('Phase B-2B pre-registration record', () => {
     expect(registration.concurrency).toBe(1)
     expect(registration.retry).toBe('none')
     expect(registration.reproducibilityRuns).toBeGreaterThanOrEqual(2)
-    expect(registration.formalRun.enabled).toBe(false)
-    if (registration.windowLadder.value !== null) expect(validateWindowLadder(registration.windowLadder.value)).toEqual([])
+    // Phase B-2B: every item is registered and the formal run is enabled (Phase B-2A kept it disabled).
+    expect(issues).toEqual([])
+    expect(registration.formalRun.enabled).toBe(true)
+    expect(registration.windowLadder.value).not.toBeNull()
+    expect(validateWindowLadder(registration.windowLadder.value!)).toEqual([])
   })
 
-  it('exposes the registered conditions as one object once every item is registered', () => {
-    const registered = registeredFormalConditions()
-    if ('issues' in registered) {
-      expect(registered.issues).toEqual(assignmentB2bRegistrationIssues())
-      return
+  it('keeps every registered value exactly as Phase B-2A registered it (docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md 6.1); enabling changed none', () => {
+    const registration = ASSIGNMENT_B2B_PREREGISTRATION
+    expect(registration.windowLadder.value).toEqual([{ normal: 350, gogma: 500, skill: 1500 }])
+    expect(registration.nodeBudget.value).toBe(2_000)
+    expect(registration.mrvLookahead.value).toBe(8)
+    expect(registration.candidateLimit.value).toBe(1_000)
+    expect(registration.snapshotLimit.value).toBe(5)
+    expect(registration.rootLowerBound.budget.value).toBe(2_000)
+    expect(registration.rootLowerBound.childWallMs.value).toBe(20 * 60_000)
+    expect(registration.rootLowerBound.childHeapMb.value).toBe(4_096)
+    expect(registration.assignmentChild.wallMs.value).toBe(60 * 60_000)
+    expect(registration.assignmentChild.heapMb.value).toBe(4_096)
+    expect(registration.reproducibilityRuns).toBe(2)
+    expect(registration.concurrency).toBe(1)
+    expect(registration.retry).toBe('none')
+    // No registered item was chosen from the oracle (design 11.2).
+    for (const condition of [registration.windowLadder, registration.nodeBudget, registration.mrvLookahead, registration.candidateLimit, registration.snapshotLimit,
+      registration.rootLowerBound.budget, registration.rootLowerBound.childWallMs, registration.rootLowerBound.childHeapMb, registration.assignmentChild.wallMs, registration.assignmentChild.heapMb]) {
+      expect(condition.oracleInformed).toBe(false)
     }
+  })
+
+  it('exposes the registered conditions as one object, every item being registered', () => {
+    const registered = registeredFormalConditions()
+    if ('issues' in registered) throw new Error(`The Phase B-2B registration must be complete: ${registered.issues.join(' ')}`)
     const registration = ASSIGNMENT_B2B_PREREGISTRATION
     expect(registered.conditions).toEqual({ window: registration.windowLadder.value![0], nodeBudget: registration.nodeBudget.value, mrvLookahead: registration.mrvLookahead.value,
       candidateLimit: registration.candidateLimit.value, snapshotLimit: registration.snapshotLimit.value })
@@ -135,7 +157,11 @@ const OTHER_SHA = 'b'.repeat(64)
 const REGISTERED: ExportIdentity = { fileName: 'export-fixture.json', bytes: 12_345, sha256: FIXTURE_SHA }
 const DOC = ['# Research', '', '```text', 'registered-export-file: export-fixture.json', 'registered-export-bytes: 12345', `registered-export-sha256: ${FIXTURE_SHA}`, '```', ''].join('\n')
 const ENABLED_GATE = { formalRunEnabled: true, unresolvedItems: [] as string[] }
-const B2A_GATE = { formalRunEnabled: ASSIGNMENT_B2B_PREREGISTRATION.formalRun.enabled, unresolvedItems: assignmentB2bRegistrationIssues() }
+/** The gate of the real registration (Phase B-2B: enabled and complete). */
+const REGISTERED_GATE = { formalRunEnabled: ASSIGNMENT_B2B_PREREGISTRATION.formalRun.enabled, unresolvedItems: assignmentB2bRegistrationIssues() }
+/** Synthetic registrations that must keep being refused: disabled, and incomplete. */
+const DISABLED_GATE = { formalRunEnabled: false, unresolvedItems: [] as string[] }
+const INCOMPLETE_GATE = { formalRunEnabled: true, unresolvedItems: ['nodeBudget is not registered.'] }
 
 const researchDocument = Object.values(import.meta.glob('../../../docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md', { query: '?raw', import: 'default', eager: true }))[0] as string
 
@@ -180,9 +206,16 @@ describe('formal run gate (parent start and child)', () => {
     expect(formalRunGateIssues({ formalRunEnabled: false, unresolvedItems: [] })).toEqual(['A formal run is not enabled in this protocol version (ASSIGNMENT_B2B_PREREGISTRATION.formalRun.enabled is false).'])
     expect(formalRunGateIssues({ formalRunEnabled: true, unresolvedItems: ['nodeBudget is not registered.'] })).toEqual(['The Phase B-2B pre-registration is incomplete: nodeBudget is not registered.'])
     expect(formalRunGateIssues(ENABLED_GATE)).toEqual([])
-    // Phase B-2A: the real registration never lets a formal run start.
-    expect(B2A_GATE.formalRunEnabled).toBe(false)
-    expect(start({ registration: B2A_GATE })[0]).toMatch(/not enabled/)
+    // Phase B-2B: the real registration passes the gate; a disabled or incomplete synthetic registration is still refused.
+    expect(REGISTERED_GATE).toEqual(ENABLED_GATE)
+    expect(formalRunGateIssues(REGISTERED_GATE)).toEqual([])
+    expect(start({ registration: REGISTERED_GATE })).toEqual([])
+    expect(start({ registration: DISABLED_GATE })).toEqual(['A formal run is not enabled in this protocol version (ASSIGNMENT_B2B_PREREGISTRATION.formalRun.enabled is false).'])
+    expect(start({ registration: INCOMPLETE_GATE })).toEqual(['The Phase B-2B pre-registration is incomplete: nodeBudget is not registered.'])
+    // The real registration never lifts the other start conditions.
+    expect(start({ registration: REGISTERED_GATE, workingTreeClean: false })).toEqual(['A formal run needs a clean, committed Working Tree (no --allow-uncommitted).'])
+    expect(start({ registration: REGISTERED_GATE, overrideOptions: ['--candidate-limit'] })).toHaveLength(1)
+    expect(start({ registration: REGISTERED_GATE, actualExport: { ...REGISTERED, sha256: OTHER_SHA } })).toHaveLength(1)
   })
 
   it('lets a formal run start only with a clean committed tree, no override, and the Export verified twice against the registered identity', () => {
@@ -222,7 +255,11 @@ describe('formal run gate (parent start and child)', () => {
     // A task that claims a clean tree does not matter: only the child's own observation enters the gate.
     expect(child({ repository: { ...cleanRepository, workingTreeClean: false, uncommittedBenchmarkCode: true } })).toHaveLength(2)
     expect(child({ taskMode: 'smoke' })).toEqual(['A formal child gate was asked for a smoke task.'])
-    expect(child({ registration: B2A_GATE })[0]).toMatch(/not enabled/)
+    expect(child({ registration: REGISTERED_GATE })).toEqual([])
+    expect(child({ registration: DISABLED_GATE })[0]).toMatch(/not enabled/)
+    expect(child({ registration: INCOMPLETE_GATE })[0]).toMatch(/pre-registration is incomplete/)
+    // With the real (enabled) registration a dirty tree still refuses the child.
+    expect(child({ registration: REGISTERED_GATE, repository: { ...cleanRepository, workingTreeClean: false } })).toEqual(['The child observed a Working Tree that is not clean.'])
     expect(child({ taskConditions: { ...registered.conditions, nodeBudget: registered.conditions.nodeBudget + 1 } })).toEqual(['The task conditions are not the registered conditions.'])
     expect(child({ taskWindowLadder: [...registered.windowLadder, registered.windowLadder[0]] })).toEqual(['The task window ladder is not the registered ladder.'])
     expect(child({ taskEnvelope: { ...registered.envelope, repeat: 1 } })).toEqual(['The task envelope is not the registered envelope.'])

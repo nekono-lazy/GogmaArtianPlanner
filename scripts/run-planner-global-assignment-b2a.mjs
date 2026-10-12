@@ -14,7 +14,7 @@
 // started in formal mode never means success: the aggregated RESULT carries `formalValidity` (`valid` only when every
 // registered assignment child measured with identical semantic records, no integrity issue, the root lower bound stage
 // executed and the objective / bound comparison is consistent; otherwise `invalid` with the reasons, the diagnostics
-// kept, and a non-zero exit code). Phase B-2A keeps `formalRun.enabled = false`, so a formal run is refused here.
+// kept, and a non-zero exit code). Phase B-2A kept `formalRun.enabled = false`; Phase B-2B enabled it without changing a registered value.
 //
 // Parent:
 //   node scripts/run-planner-global-assignment-b2a.mjs --export <Export .json> --run-dir <new dir> --output <new .json>
@@ -221,7 +221,7 @@ const rootBoundModule = await server.ssrLoadModule('/src/benchmarks/globalAssign
 await server.close()
 const registration = protocol.ASSIGNMENT_B2B_PREREGISTRATION
 const gate = registrationGate(protocol)
-// Phase B-2A never starts a formal run (formalRun.enabled is false): the registration gate refuses before the Export is even read.
+// The registration gate (formalRun.enabled and a complete registration; enabled in Phase B-2B) refuses before the Export is even read.
 if (mode === 'formal') {
   const gateIssues = protocol.formalRunGateIssues(gate)
   if (gateIssues.length > 0) throw new Error(`A formal run cannot start: ${gateIssues.join(' ')}`)
@@ -239,7 +239,7 @@ const exportVerification = {
 }
 
 if (mode === 'formal') {
-  // Phase B-2A never starts a formal run (formalRun.enabled is false). The whole gate is one pure decision shared with the children.
+  // The whole start gate is one pure decision shared with the children.
   const startIssues = protocol.formalStartIssues({ registration: gate, workingTreeClean, uncommittedBenchmarkCode, allowUncommitted, overrideOptions,
     cliExpectedSha256: expectedExportSha256 ?? null, registeredExport: { identity: registeredExport.identity, issues: registeredExport.issues }, actualExport })
   // The children re-check the Working Tree themselves, so a formal run may write only into git-ignored paths.

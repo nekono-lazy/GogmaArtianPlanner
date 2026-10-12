@@ -184,9 +184,9 @@ export interface RegisteredCondition<T> {
  * The Phase B-2B formal measurement conditions, pre-registered from the Phase B-2A non-formal smoke
  * (design 14 Phase B-2, `docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md` 6). A `null` value is an
  * unresolved registration item; `assignmentB2bRegistrationIssues()` names every one, and the runner
- * refuses a formal run while any remains or while `formalRun.enabled` is false. Phase B-2A never starts a
- * formal run: the Phase B-2B PR enables it after the registered conditions were reviewed, and changes no
- * registered value after the formal run started.
+ * refuses a formal run while any remains or while `formalRun.enabled` is false. Phase B-2A never started a
+ * formal run; the Phase B-2B PR enabled it after the registered conditions were reviewed, without changing
+ * any registered value, and changes no registered value after the formal run started.
  */
 const SMOKE_W0 ='Phase B-2A non-formal W0 smoke on the real Export (docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md 4.2, two identical runs)'
 
@@ -249,7 +249,7 @@ export const ASSIGNMENT_B2B_PREREGISTRATION = Object.freeze({
   retry: 'none',
   /** Two assignment children per formal run; their semantic records must hash equal (design 12 determinism). */
   reproducibilityRuns: 2,
-  formalRun: Object.freeze({ enabled: false, enabledBy: 'the Phase B-2B PR, after the registered conditions above were reviewed' }),
+  formalRun: Object.freeze({ enabled: true, enabledBy: 'the Phase B-2B PR, after the registered conditions above and the registered Export identity were audited unchanged from Phase B-2A; no registered value was changed when enabling' }),
 })
 
 /** Registration items still `null`, each named by its path. A formal run is refused while this is non-empty (or while `formalRun.enabled` is false). */
