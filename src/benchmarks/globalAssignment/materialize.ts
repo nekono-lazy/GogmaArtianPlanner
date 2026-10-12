@@ -43,6 +43,11 @@
  * Candidate the materializer refuses all throw `GlobalAssignmentMaterializationError`; none is read as an
  * outcome. Process-level ends (timeout, out of memory, process failure) are not observable here; the D-0B
  * runner that owns the process assigns them.
+ *
+ * Phase D-0B (design 19.3 G1 / 10.3) added two opt-ins that leave the D-0A behaviour unchanged when absent:
+ * `searchPolicyPrecheck` classifies a Target whose shape the Production Search policy never returns
+ * (`searchPolicyShapeOf()`) as `not_executed(search_policy_shape)` before any request or Search, and `observer`
+ * receives execution-only copies of the Target starts, the inspected Candidates and the settled Target records.
  */
 import { createBuildListEntry } from '../../domain/buildList'
 import { hashStableValue, stableStringify, validateBuildListEntry } from '../../domain/models/publicTypes'
@@ -62,10 +67,13 @@ import { CandidateSearchError, type CandidateSearchInput, type CandidateSearchRe
 import { GLOBAL_RESEARCH_TIME, materializeGlobalResearchCandidate } from '../plannerGlobalOptimizationResearch'
 import type { ExpectedRouteShape, StructuralCandidate } from './coverageTypes'
 import { exceededSearchScaleGate, isSmallerSearchScale, isValidSearchScaleGate, predictSearchScale } from './materializationScale'
-import { matchExpectedShape, plannerStartOrigins, shapeOwnPositions, shapeSearchExtent, type ShapeOwnPositions, type StreamOrigins } from './materializationShape'
+import {
+  matchExpectedShape, plannerStartOrigins, searchPolicyShapeOf, shapeOwnPositions, shapeSearchExtent, type ShapeOwnPositions, type StreamOrigins,
+} from './materializationShape'
 import {
   GlobalAssignmentMaterializationError,
-  type MaterializationAttempt, type MaterializationOutcome, type MaterializationSettings, type MaterializationStageOutcome, type MethodSelection,
+  type CandidateInspection, type MaterializationAttempt, type MaterializationObserver, type MaterializationOutcome, type MaterializationSettings,
+  type MaterializationStageOutcome, type MethodSelection,
   type ObservedPlannerAlternativeSearch, type PlannerAlternativeAttempt, type PlannerAlternativeMaterializationRequest, type PredictedSearchScale,
   type ProjectedAttempt, type ProjectedMaterializationRequest, type ProjectedSearchOrigin, type ShapeMismatch, type StructuralCandidateMaterialization,
   type StructuralCandidateMaterializationResult, type TargetMaterializationRecord,
@@ -100,6 +108,18 @@ export interface MaterializationInputs {
   /** The existing Research cancel / yield seam, forwarded to every Search. */
   shouldCancel?: () => boolean
   yieldControl?: () => Promise<void>
+  /**
+   * Phase D-0B (design 19.3 G1): `true` classifies a Target whose shape is a Search-policy shape
+   * (`searchPolicyShapeOf()`) as `not_executed(search_policy_shape)` before any request or Search. Absent or
+   * `false`: the D-0A behaviour (the Target is searched like any other).
+   */
+  searchPolicyPrecheck?: boolean
+  /** Phase D-0B execution-only observers (copies; no effect on any result). */
+  observer?: MaterializationObserver
+}
+
+function inspected(inputs: MaterializationInputs, inspection: CandidateInspection): void {
+  inputs.observer?.onCandidateInspected?.(structuredClone(inspection))
 }
 
 function isValidSettings(settings: MaterializationSettings): boolean {
@@ -344,6 +364,7 @@ async function runPlannerAlternative(request: PlannerAlternativeMaterializationR
         const delivered = state.delivered
         for (const operation of candidate.route.operations) if (operation.type === 'convert_normal_to_gogma') conversions.add(operation.skillCounterBefore)
         const match = matchExpectedShape(probeEntry(materializer, candidate, shape), shape, engine)
+        inspected(inputs, { targetWeaponId: request.targetWeaponId, method: 'planner_alternative_reservation', deliveredIndex: delivered, match })
         if (match.matches) {
           let entry: BuildListEntry
           try {
@@ -424,6 +445,7 @@ async function runProjected(request: ProjectedMaterializationRequest, inputs: Ma
   if (candidate === null) return { method: 'candidate_search_projected', request, result: { kind: 'no_candidate' }, observed }
   // The projected Candidate's Route already holds absolute positions: match it before rebuilding it at the origin.
   const match = matchExpectedShape(createBuildListEntry(candidate, searchInput.targetWeapons[0]!, { createdAt: GLOBAL_RESEARCH_TIME }), shape, engine)
+  inspected(inputs, { targetWeaponId: request.targetWeaponId, method: 'candidate_search_projected', deliveredIndex: 1, match })
   if (!match.matches) {
     return {
       method: 'candidate_search_projected', request, observed,
@@ -498,7 +520,9 @@ export function selectMaterializationMethods(
 
 /**
  * Materializes one Target after `materializedEntries` (design 9.1 - 9.3). The Target outcome is design
- * 9.1's, unless design 9.2 matched; a cancellation ends the Target as `unmeasured(cancelled)`.
+ * 9.1's, unless design 9.2 matched; a cancellation ends the Target as `unmeasured(cancelled)`. With
+ * `searchPolicyPrecheck`, a Search-policy shape (design 19.3 G1) ends as `not_executed(search_policy_shape)`
+ * before any request or Search.
  */
 export async function materializeTarget(
   shape: ExpectedRouteShape,
@@ -507,9 +531,27 @@ export async function materializeTarget(
   orderIndex = 0,
 ): Promise<TargetMaterializationRecord> {
   assertSettings(inputs.settings)
+  inputs.observer?.onTargetStarted?.({ targetWeaponId: shape.targetWeaponId, orderIndex })
+  const record = await materializeTargetRecord(shape, materializedEntries, inputs, orderIndex)
+  inputs.observer?.onTargetSettled?.(structuredClone(record))
+  return record
+}
+
+async function materializeTargetRecord(
+  shape: ExpectedRouteShape,
+  materializedEntries: readonly BuildListEntry[],
+  inputs: MaterializationInputs,
+  orderIndex: number,
+): Promise<TargetMaterializationRecord> {
   const attempts: MaterializationAttempt[] = []
   if (inputs.shouldCancel?.()) {
     return { targetWeaponId: shape.targetWeaponId, orderIndex, selection: null, attempts, outcome: { kind: 'unmeasured', reason: 'cancelled' } }
+  }
+  if (inputs.searchPolicyPrecheck === true) {
+    const policyShape = searchPolicyShapeOf(shape.option, inputs.table)
+    if (policyShape !== null) {
+      return { targetWeaponId: shape.targetWeaponId, orderIndex, selection: null, attempts, outcome: { kind: 'not_executed', reason: 'search_policy_shape', policyShape } }
+    }
   }
   const own = shapeOwnPositions(shape)
   const alternative = await buildPlannerAlternativeRequest(shape, materializedEntries, inputs)

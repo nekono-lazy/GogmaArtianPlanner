@@ -21,26 +21,32 @@ const research = import.meta.glob('./*.ts', { query: '?raw', import: 'default', 
 const runtime = Object.entries(research).filter(([path]) => !/\.test\.ts$|[tT]estFixture\.ts$/.test(path))
 const scripts = import.meta.glob('../../../scripts/*.mjs', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-b2a.mjs'
+/** The Phase D-0B materialization runner: the only other script that reaches this folder. */
+const D0B_RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-d0b.mjs'
 /** The Phase B-2A modules around the Phase A / B-1 calculation: runner orchestration, root bound stage, window policy, protocol. */
 const PHASE_B2A_MODULES = ['./assignmentProtocol.ts', './assignmentRootBound.ts', './assignmentRunner.ts', './assignmentWindowPolicy.ts']
 /** The Phase D-0A materialization modules: the only runtime modules that read a (generated) Entry's Route or run a Search. */
 const PHASE_D0A_MODULES = ['./materializationScale.ts', './materializationShape.ts', './materializationTypes.ts', './materialize.ts']
+/** The Phase D-0B runner modules: orchestration, diagnostics and protocol around the D-0A materialization. */
+const PHASE_D0B_MODULES = ['./materializationDiagnostics.ts', './materializationProtocol.ts', './materializationRunner.ts']
 
 describe('Global Assignment Research isolation', () => {
-  it('is imported by no Production module and by no script other than the designated Phase B-2A runner', () => {
+  it('is imported by no Production module and by no script other than the designated Phase B-2A and D-0B runners', () => {
     const productionPaths = Object.keys(production).filter(path => !/\.test\.tsx?$/.test(path))
     expect(productionPaths.length).toBeGreaterThan(100)
-    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale/
+    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf/
     expect(productionPaths.filter(path => forbidden.test(production[path]!))).toEqual([])
-    expect(Object.keys(scripts).filter(path => path !== RUNNER_SCRIPT && forbidden.test(scripts[path]!))).toEqual([])
+    expect(Object.keys(scripts).filter(path => path !== RUNNER_SCRIPT && path !== D0B_RUNNER_SCRIPT && forbidden.test(scripts[path]!))).toEqual([])
     expect(scripts[RUNNER_SCRIPT]).toBeDefined()
+    expect(scripts[D0B_RUNNER_SCRIPT]).toBeDefined()
   })
 
   it('has the expected runtime modules, each reading only the PlannerInput, the Engine and the Production authorities', () => {
     expect(runtime.map(([path]) => path).sort()).toEqual([
       './assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentProtocol.ts', './assignmentRootBound.ts', './assignmentRunner.ts',
       './assignmentSolver.ts', './assignmentTypes.ts', './assignmentWindowPolicy.ts', './context.ts', './coverage.ts', './coverageSearch.ts', './coverageSearchTypes.ts',
-      './coverageTypes.ts', './materializationScale.ts', './materializationShape.ts', './materializationTypes.ts', './materialize.ts', './reachOptions.ts', './reachTable.ts',
+      './coverageTypes.ts', './materializationDiagnostics.ts', './materializationProtocol.ts', './materializationRunner.ts', './materializationScale.ts',
+      './materializationShape.ts', './materializationTypes.ts', './materialize.ts', './reachOptions.ts', './reachTable.ts',
       './requiredOnlyReplay.ts', './structuralCandidate.ts', './structuralSearch.ts', './structuralWindowPolicy.ts', './types.ts',
     ])
     for (const [path, source] of runtime) {
@@ -88,13 +94,40 @@ describe('Global Assignment Research isolation', () => {
     expect(research['./assignmentRootBound.ts']).not.toMatch(/physicalOperations\s*[:=]|provenance\s*[:=]/)
   })
 
-  it('keeps the designated runner script free of the oracle, the lower-bound module, a post-hoc argument and hard-coded hashes', () => {
-    const runner = scripts[RUNNER_SCRIPT]!
-    expect(runner).not.toMatch(/plannerGlobalOracle|ORACLE_1657|plannerGlobalLowerBound|PLANNER_GLOBAL_[A-Z0-9_]*RESULT|--optimum/)
-    expect(runner).not.toMatch(/\b[0-9a-f]{64}\b/i)
-    expect(runner).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
-    expect(runner).toMatch(/new ProductionRngEngine\(\)/)
-    expect(runner).not.toMatch(/FakeRngEngine/)
+  it('keeps the designated runner scripts free of the oracle, the lower-bound module, a post-hoc argument and hard-coded hashes', () => {
+    for (const path of [RUNNER_SCRIPT, D0B_RUNNER_SCRIPT]) {
+      const runner = scripts[path]!
+      expect(runner, path).not.toMatch(/plannerGlobalOracle|ORACLE_1657|plannerGlobalLowerBound|PLANNER_GLOBAL_[A-Z0-9_]*RESULT|--optimum/)
+      expect(runner, path).not.toMatch(/\b[0-9a-f]{64}\b/i)
+      expect(runner, path).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+      expect(runner, path).toMatch(/new ProductionRngEngine\(\)/)
+      expect(runner, path).not.toMatch(/FakeRngEngine/)
+    }
+    // The D-0B runner reaches the Research modules through its own runner / protocol only, never the registered B-2A path.
+    expect(scripts[D0B_RUNNER_SCRIPT]).not.toMatch(/assignmentRunner|assignmentRootBound|assignmentProtocol|planner-global-assignment-b2a/)
+  })
+
+  it('keeps Phase D-0B a materialization runner: no Planner run, Trace Replay, upper bound, conflict resolution or persistence', () => {
+    const codeOf = (path: string) => research[path]!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    for (const path of PHASE_D0B_MODULES) {
+      expect(research[path], path).toBeDefined()
+      const source = codeOf(path)
+      expect(source, path).not.toMatch(/productionPlanGeneration|plannerTraceReplay|plannerDeterministicSchedule|plannerBeamSearch|createProductionPlan|replayPlannerSearchTrace|runGlobalPlannerResearch|verifyGlobalResearchFreshPlan|summarizePlanPhysical/)
+      expect(source, path).not.toMatch(/PlannerConflictResolution|conflictResolutions|conflictRepairLineage|savePlanner|Repository|from '[^']*\/services\//)
+      // No verified / best_found / proven claim, and no upper bound reaches the structural search.
+      expect(source, path).not.toMatch(/production_verified_plan|VerifiedUpperBound|readVerifiedUpperBound|'verified'|'best_found'|'proven_minimum'/)
+      expect(source, path).not.toMatch(/from '\.\/(?:assignmentRunner|assignmentRootBound|assignmentWindowPolicy|assignmentSolver|assignmentOrdering)'/)
+      expect(source, path).not.toMatch(/held:\s*\[|blocked:\s*\[|\.held\.push|\.blocked\.push/)
+      // No RNG prediction and no Search call of its own: the Searches run inside the D-0A materialization only.
+      expect(source, path).not.toMatch(/\.predict[A-Z]|visitPlannerAlternativeCandidates\(|searchCandidates\(/)
+    }
+    const runnerModule = codeOf('./materializationRunner.ts')
+    expect(runnerModule).toMatch(/materializeStructuralCandidate\(candidate, \{/)
+    expect(runnerModule).toMatch(/searchPolicyPrecheck: conditions\.searchPolicyPrecheck/)
+    expect(runnerModule).toMatch(/createStructuralCandidateSearch\(\{ table, context, engine \}, \{\n {4}nodeBudget: conditions\.nodeBudget, mrvLookahead: conditions\.mrvLookahead, coverageDrivenOrdering: conditions\.coverageDrivenOrdering,/)
+    expect(runnerModule).toMatch(/upperBoundSupplied: false/)
+    // G4 reads the Planner-start satisfaction through the one Production authority.
+    expect(codeOf('./materializationDiagnostics.ts')).toMatch(/deriveTargetSatisfaction\(context\.planningTargets, input\.ownedWeapons, input\.master\)/)
   })
 
   it('keeps Phase C-1 a post-processing of resource assignments: no Search, Planner, reservation or upper bound', () => {
