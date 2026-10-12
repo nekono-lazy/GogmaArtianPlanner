@@ -3,10 +3,12 @@ import { assignmentOf, conversion, keep, NONE, reset, resetSkills, resetThenKeep
 import type { StructuralCandidate } from './coverageTypes'
 import { buildPlannerAlternativeRequest, materializeStructuralCandidate } from './materialize'
 import {
-  bonusFrontierRequestRisk, countContinuationOptions, diagnoseBonusFrontierRisk, diagnosePlannerStartIdeal, diagnoseSearchPolicyShapes, summarizeInspections,
+  bonusFrontierRequestRisk, countContinuationOptions, diagnoseBonusFrontierRisk, diagnosePlannerStartIdeal, diagnoseSearchPolicyShapes, measureBonusFrontierCollapse, summarizeInspections,
 } from './materializationDiagnostics'
 import { ELEMENT_A, ELEMENT_B, materializationScenario, newNormalSource, ownedSource, REORDERED_GOGMA, TARGET } from './materializationTestFixture'
-import type { CandidateInspection, PlannerAlternativeAttempt, StructuralCandidateMaterialization, StructuralCandidateMaterializationResult } from './materializationTypes'
+import type {
+  CandidateInspection, PlannerAlternativeAttempt, ShapeMismatchReason, StructuralCandidateMaterialization, StructuralCandidateMaterializationResult,
+} from './materializationTypes'
 import { createReachOption } from './reachOptions'
 import { buildStructuralCandidate } from './structuralCandidate'
 import { IDEAL_BONUSES, keepToLowRanks, ownedGogma } from './testFixture'
@@ -102,6 +104,7 @@ describe('Phase D-0B G3 diagnostics (Bonus family-layout frontier)', () => {
     expect(summary.gogmaRequiredOnlySamples[0]!.plannerRequiredGogma).toEqual([12, 14])
     // The request reading: position 12 was free in every request, so the collapse condition held.
     const risk = diagnoseBonusFrontierRisk(candidate, scene.table).targets[0]!
+    expect(measureBonusFrontierCollapse(risk, inspections, 3)).toEqual({ sameFinalPositionMismatches: inspections.length, collapseSignatures: inspections.length, collapseSamples: inspections.slice(0, 3).map(() => [12, 14]) })
     for (const attempt of record.attempts) expect(bonusFrontierRequestRisk(risk, attempt, scene.table)).toMatchObject({ positions: [{ position: 12, reservation: 'free' }], collapseConditionHolds: true })
     // The control (no same-layout Reset): the Keep chain is delivered and materializes with required {14}.
     const control = await keepChainScenario('other_layout')
@@ -137,6 +140,20 @@ describe('Phase D-0B G3 diagnostics (Bonus family-layout frontier)', () => {
     const attempt = { method: 'planner_alternative_reservation', request, outcome: { kind: 'unmeasured', reason: 'cancelled' }, observed: null } as PlannerAlternativeAttempt
     expect(bonusFrontierRequestRisk(risk, attempt, scene.table)).toEqual({ method: 'planner_alternative_reservation', gogmaStart: 10, positions: [{ position: 12, reservation: 'blocked' }], collapseConditionHolds: false })
   }, 30_000)
+
+  it('tells the collapse signature apart from another Ideal Route of the same source that ends elsewhere', () => {
+    const risk = {
+      targetWeaponId: TARGET.a, orderIndex: 0, option: 'reset_then_keep' as const, requiredGogma: [208, 502], chainLayout: 'L', scanRange: { from: 209, to: 501 },
+      sameLayoutResetPositions: [216], otherTargetRequired: [],
+    }
+    const at = (gogma: number[], reasons: ShapeMismatchReason[] = ['gogma_required']): CandidateInspection => ({ targetWeaponId: TARGET.a, method: 'planner_alternative_reservation', deliveredIndex: 1, match: { matches: false, reasons, plannerRequired: { skill: [422], gogma, normal: null } } })
+    expect(measureBonusFrontierCollapse(risk, [
+      at([194, 202]), // a cheaper Ideal Route ending earlier: neither
+      at([300, 502]), // the same final position through another Reset (not a risk position)
+      at([216, 502]), // the collapse signature
+      at([216, 502], ['gogma_required', 'source']), // another source: not counted
+    ], 2)).toEqual({ sameFinalPositionMismatches: 2, collapseSignatures: 1, collapseSamples: [[216, 502]] })
+  })
 
   it('counts required-position-only and gogma-only mismatches apart from other reasons', () => {
     const at = (deliveredIndex: number, match: CandidateInspection['match']): CandidateInspection => ({ targetWeaponId: TARGET.a, method: 'planner_alternative_reservation', deliveredIndex, match })

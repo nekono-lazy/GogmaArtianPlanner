@@ -25,8 +25,8 @@ import type { StructuralSearchDiagnostics } from './coverageSearchTypes'
 import type { StructuralCandidate } from './coverageTypes'
 import { materializeStructuralCandidate, type MaterializationSearchPort } from './materialize'
 import {
-  bonusFrontierRequestRisk, countContinuationOptions, diagnoseBonusFrontierRisk, diagnosePlannerStartIdeal, diagnoseSearchPolicyShapes, summarizeInspections,
-  type BonusFrontierRequestRisk, type BonusFrontierRisk, type BonusFrontierRiskDiagnostics, type ContinuationOptionCounts, type InspectionSummary,
+  bonusFrontierRequestRisk, countContinuationOptions, diagnoseBonusFrontierRisk, diagnosePlannerStartIdeal, diagnoseSearchPolicyShapes, measureBonusFrontierCollapse, summarizeInspections,
+  type BonusFrontierMeasured, type BonusFrontierRequestRisk, type BonusFrontierRisk, type BonusFrontierRiskDiagnostics, type ContinuationOptionCounts, type InspectionSummary,
   type PlannerStartIdealDiagnostics, type SearchPolicyShapeDiagnostics,
 } from './materializationDiagnostics'
 import {
@@ -152,8 +152,11 @@ export interface TargetMaterializationSummary {
   outcome: OutcomeRecord
   /** Every Candidate the Searches of this Target returned, by match verdict (design 9.1 deliveries and the design 9.2 canonical Ideal). */
   inspections: InspectionSummary
-  /** Design 19.3 G3 for this Target: the static risk row (null when the option has no Keep chain) and its reading against each executed or gated request. */
-  bonusFrontier: { static: BonusFrontierRisk | null; requests: BonusFrontierRequestRisk[] }
+  /**
+   * Design 19.3 G3 for this Target: the static risk row (null when the option has no Keep chain), its reading against each executed
+   * or gated request, and the delivered Candidates that carry the collapse signature (null without a risk row).
+   */
+  bonusFrontier: { static: BonusFrontierRisk | null; requests: BonusFrontierRequestRisk[]; measured: BonusFrontierMeasured | null }
 }
 
 export interface CandidateDiagnosticsRecord {
@@ -333,7 +336,11 @@ function summarizeTarget(record: TargetMaterializationRecord, option: ReachOptio
     attempts,
     outcome: outcomeRecord(record.outcome),
     inspections: summarizeInspections(inspections, INSPECTION_SAMPLE_LIMIT),
-    bonusFrontier: { static: risk === null ? null : structuredClone(risk), requests: risk === null ? [] : record.attempts.map(attempt => bonusFrontierRequestRisk(risk, attempt, table)) },
+    bonusFrontier: {
+      static: risk === null ? null : structuredClone(risk),
+      requests: risk === null ? [] : record.attempts.map(attempt => bonusFrontierRequestRisk(risk, attempt, table)),
+      measured: risk === null ? null : measureBonusFrontierCollapse(risk, inspections, INSPECTION_SAMPLE_LIMIT),
+    },
   }
 }
 
@@ -355,6 +362,8 @@ export interface TargetRunSummaryRow {
   gogmaRequiredOnlyMismatches: number
   bonusFrontierStaticRisk: boolean
   bonusFrontierCollapseConditionInRequest: boolean
+  /** Deliveries with the G3 collapse signature (same final Gogma position, the other required position a same-layout Reset position). */
+  bonusFrontierCollapseSignatures: number
 }
 
 /** The compact summary of one run the parent script puts in its aggregated RESULT (the full semantic record stays in the run directory). */
@@ -376,7 +385,7 @@ export interface MaterializationRunSummary {
     firstUnresolved: { orderIndex: number; outcome: OutcomeRecord } | null
     searchPolicyShapes: number
     firstSearchPolicyShapeOrderIndex: number | null
-    bonusFrontier: { applicableOptions: number; withStaticRisk: number; attemptedWithCollapseCondition: number; gogmaRequiredOnlyMismatches: number }
+    bonusFrontier: { applicableOptions: number; withStaticRisk: number; attemptedWithCollapseCondition: number; gogmaRequiredOnlyMismatches: number; sameFinalPositionMismatches: number; collapseSignatures: number }
     plannerStartIdeal: PlannerStartIdealDiagnostics['counts'] & { targets: number }
     gateExceeded: Record<keyof PredictedSearchScale, number>
     targets: TargetRunSummaryRow[]
@@ -418,6 +427,8 @@ export function summarizeMaterializationRun(semantic: MaterializationSemanticRec
           applicableOptions: record.diagnostics.bonusFrontier.applicableOptions, withStaticRisk: record.diagnostics.bonusFrontier.withStaticRisk,
           attemptedWithCollapseCondition: record.targets.filter(target => target.bonusFrontier.requests.some(request => request.collapseConditionHolds)).length,
           gogmaRequiredOnlyMismatches: record.targets.reduce((sum, target) => sum + target.inspections.gogmaRequiredOnly, 0),
+          sameFinalPositionMismatches: record.targets.reduce((sum, target) => sum + (target.bonusFrontier.measured?.sameFinalPositionMismatches ?? 0), 0),
+          collapseSignatures: record.targets.reduce((sum, target) => sum + (target.bonusFrontier.measured?.collapseSignatures ?? 0), 0),
         },
         plannerStartIdeal: { ...record.diagnostics.plannerStartIdeal.counts, targets: record.diagnostics.plannerStartIdeal.plannerStartIdealTargets },
         gateExceeded: { ...record.gateExceeded },
@@ -435,6 +446,7 @@ export function summarizeMaterializationRun(semantic: MaterializationSemanticRec
           inspected: target.inspections.inspected, gogmaRequiredOnlyMismatches: target.inspections.gogmaRequiredOnly,
           bonusFrontierStaticRisk: target.bonusFrontier.static !== null && target.bonusFrontier.static.sameLayoutResetPositions.length > 0,
           bonusFrontierCollapseConditionInRequest: target.bonusFrontier.requests.some(request => request.collapseConditionHolds),
+          bonusFrontierCollapseSignatures: target.bonusFrontier.measured?.collapseSignatures ?? 0,
         })),
       }
     }),

@@ -201,6 +201,36 @@ export function bonusFrontierRequestRisk(risk: BonusFrontierRisk, attempt: Mater
   return { method: attempt.method, gogmaStart, positions: rows, collapseConditionHolds: rows.some(row => row.reservation === 'free') }
 }
 
+export interface BonusFrontierMeasured {
+  /**
+   * Mismatches whose only reason is `gogma_required` and whose last required Gogma position is still the shape's `g*`:
+   * the same final position reached through other earlier required positions. (A `gogma_required`-only mismatch ending
+   * elsewhere is simply another Ideal Route of the same source, for example a cheaper one ending earlier.)
+   */
+  sameFinalPositionMismatches: number
+  /** Those whose required Gogma positions are exactly `[q, g*]` with `q` a static risk position: the observed G3 collapse signature. */
+  collapseSignatures: number
+  /** The first few signature required-position sets. */
+  collapseSamples: number[][]
+}
+
+/** Design 19.3 G3, measured part: the deliveries of a risk Target that carry the collapse signature (never "no Route"). */
+export function measureBonusFrontierCollapse(risk: BonusFrontierRisk, inspections: readonly CandidateInspection[], sampleLimit: number): BonusFrontierMeasured {
+  const finalPosition = risk.requiredGogma[risk.requiredGogma.length - 1]!
+  const measured: BonusFrontierMeasured = { sameFinalPositionMismatches: 0, collapseSignatures: 0, collapseSamples: [] }
+  for (const { match } of inspections) {
+    if (match.matches || match.plannerRequired === null || match.reasons.length !== 1 || match.reasons[0] !== 'gogma_required') continue
+    const gogma = match.plannerRequired.gogma
+    if (gogma[gogma.length - 1] !== finalPosition) continue
+    measured.sameFinalPositionMismatches += 1
+    if (gogma.length === 2 && risk.sameLayoutResetPositions.includes(gogma[0]!)) {
+      measured.collapseSignatures += 1
+      if (measured.collapseSamples.length < sampleLimit) measured.collapseSamples.push([...gogma])
+    }
+  }
+  return measured
+}
+
 const REQUIRED_REASONS: ReadonlySet<ShapeMismatchReason> = new Set(['skill_required', 'gogma_required', 'normal_required'])
 
 export interface InspectionSummary {
