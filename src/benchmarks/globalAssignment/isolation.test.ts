@@ -28,7 +28,7 @@ describe('Global Assignment Research isolation', () => {
   it('is imported by no Production module and by no script other than the designated Phase B-2A runner', () => {
     const productionPaths = Object.keys(production).filter(path => !/\.test\.tsx?$/.test(path))
     expect(productionPaths.length).toBeGreaterThan(100)
-    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound/
+    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape/
     expect(productionPaths.filter(path => forbidden.test(production[path]!))).toEqual([])
     expect(Object.keys(scripts).filter(path => path !== RUNNER_SCRIPT && forbidden.test(scripts[path]!))).toEqual([])
     expect(scripts[RUNNER_SCRIPT]).toBeDefined()
@@ -37,7 +37,8 @@ describe('Global Assignment Research isolation', () => {
   it('has the expected runtime modules, each reading only the PlannerInput, the Engine and the Production authorities', () => {
     expect(runtime.map(([path]) => path).sort()).toEqual([
       './assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentProtocol.ts', './assignmentRootBound.ts', './assignmentRunner.ts',
-      './assignmentSolver.ts', './assignmentTypes.ts', './assignmentWindowPolicy.ts', './context.ts', './reachOptions.ts', './reachTable.ts', './requiredOnlyReplay.ts', './types.ts',
+      './assignmentSolver.ts', './assignmentTypes.ts', './assignmentWindowPolicy.ts', './context.ts', './coverage.ts', './coverageTypes.ts', './reachOptions.ts', './reachTable.ts',
+      './requiredOnlyReplay.ts', './structuralCandidate.ts', './types.ts',
     ])
     for (const [path, source] of runtime) {
       // No oracle manifest / verifier / RESULT, no earlier Phase result; the lower-bound module only in the designated stage (checked below).
@@ -87,6 +88,23 @@ describe('Global Assignment Research isolation', () => {
     expect(runner).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
     expect(runner).toMatch(/new ProductionRngEngine\(\)/)
     expect(runner).not.toMatch(/FakeRngEngine/)
+  })
+
+  it('keeps Phase C-1 a post-processing of resource assignments: no Search, Planner, reservation or upper bound', () => {
+    const phaseC1 = ['./coverage.ts', './coverageTypes.ts', './structuralCandidate.ts']
+    for (const path of phaseC1) {
+      expect(research[path], path).toBeDefined()
+      expect(research[path], path).not.toMatch(/productionPlanGeneration|plannerTraceReplay|plannerDeterministicSchedule|plannerBeamSearch|candidateSearch|search\/alternative|constrainedCandidate|createProductionPlan|replayPlannerSearchTrace|visitPlannerAlternativeCandidates|searchCandidates|plannerRouteProgress|plannerAlternativeReservation|derivePlannerAlternativeReservation/)
+      expect(research[path], path).not.toMatch(/readVerifiedUpperBound|production_verified_plan|VerifiedUpperBound/)
+      // No change to the Phase B-1 search: the solver, its value order and its lower bound are not imported.
+      expect(research[path], path).not.toMatch(/from '\.\/(?:assignmentSolver|assignmentOrdering|assignmentLowerBound|assignmentRunner|assignmentRootBound|reachTable)'/)
+    }
+    // The coverage pre-check is pure: no Engine, no PlannerInput, no prediction; only this folder and the ID types.
+    expect(research['./coverage.ts']).not.toMatch(/RngEngine|predict[A-Z]|plannerInput|\.master\b|ownedWeapons|normalCounters|rngState/)
+    for (const match of research['./coverage.ts']!.matchAll(/from '([^']+)'/g)) expect(match[1]).toMatch(/^\.\/|^\.\.\/\.\.\/domain\/models\/publicTypes$/)
+    // The structural candidate reads RNG only through the one required-only replay authority.
+    expect(research['./structuralCandidate.ts']).not.toMatch(/\.predict[A-Z]/)
+    expect(research['./structuralCandidate.ts']).toMatch(/replayReachOptionRequiredOnly\(/)
   })
 
   it('changes no Production default, schema or version', () => {
