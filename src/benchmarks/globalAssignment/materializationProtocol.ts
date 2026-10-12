@@ -142,7 +142,7 @@ export const MATERIALIZATION_D0B_SMOKE_DEFAULTS = Object.freeze({
   }) as SmokeCondition<number>,
   deliveryCap: Object.freeze({
     value: 500,
-    basis: 'Provisional: no real-Export delivery distribution exists yet (D-0A synthetic deliveredBeforeMatch <= 2). Each delivered Candidate is materialized and matched, so 500 bounds the per-Target Candidate work while leaving room for the cheaper Ideal Routes that sort before the expected shape inside its extent. A stop is unconfirmed(delivery_cap_reached).',
+    basis: 'Provisional: no real-Export delivery distribution exists yet (the D-0A synthetic cases match within the first five deliveries: 0 - 1 in whole-candidate runs, 4 for one Target searched alone under the empty reservation). Each delivered Candidate is materialized and matched, so 500 bounds the per-Target Candidate work while leaving room for the cheaper Ideal Routes that sort before the expected shape inside its extent. A stop is unconfirmed(delivery_cap_reached).',
     oracleInformed: false,
   }) as SmokeCondition<number>,
   searchScaleGate: Object.freeze({
