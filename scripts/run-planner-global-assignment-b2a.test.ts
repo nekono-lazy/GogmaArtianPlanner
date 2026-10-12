@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 /*
  * Issue #154 Global Assignment Phase B-2A: the assignment-only runner script refuses before it reads the Export or
- * creates anything, takes no post-hoc comparison argument, starts no formal run in this Phase, and reads no oracle.
+ * creates anything, takes no post-hoc comparison argument, starts a formal run (enabled in Phase B-2B) only through the
+ * start gate, and reads no oracle.
  */
 const runner = resolve('scripts/run-planner-global-assignment-b2a.mjs')
 const source = readFileSync(runner, 'utf8')
@@ -65,11 +66,26 @@ describe('Phase B-2A runner script', () => {
     expect(readdirSync(directory).sort()).toEqual(['existing-run', 'result.json'])
   }, SPAWN_TEST_TIMEOUT_MS)
 
-  it('refuses a formal run in this Phase (the registration gate, before any file is written) and a malformed expected Export hash', () => {
+  it('refuses a formal run whose Export, command-line hash, overrides or output paths do not meet the start gate, before any file is written', () => {
+    const { directory, output, runDir } = fixture()
+    // Phase B-2B enables the formal run, so the registration gate passes and the start gate decides: an Export that is not the
+    // registered one (name, length, hash), a command-line hash that is not the registered hash, a missing command-line hash, an
+    // override, --allow-uncommitted and a run dir / output outside the git-ignored paths are each refused before anything is created.
+    const notRegistered = join(directory, 'not-the-registered-export.json')
+    writeFileSync(notRegistered, '{}\n')
+    const formal = ['--export', notRegistered, '--run-dir', runDir, '--output', output, '--mode', 'formal']
+    expectRefusal([...formal, '--expected-export-sha256', 'a'.repeat(64)], /A formal run cannot start: .*--expected-export-sha256 a{64} is not the registered Export SHA-256 .*Export SHA-256 [0-9a-f]{64} is not the registered .*Export file name not-the-registered-export\.json is not the registered /)
+    expectRefusal(formal, /A formal run cannot start: .*A formal run requires --expected-export-sha256 naming the registered Export SHA-256\./)
+    expectRefusal([...formal, '--expected-export-sha256', 'a'.repeat(64), '--node-budget', '5'], /A formal run takes its conditions from the registration only; remove --node-budget\./)
+    expectRefusal([...formal, '--expected-export-sha256', 'a'.repeat(64), '--allow-uncommitted'], /A formal run needs a clean, committed Working Tree \(no --allow-uncommitted\)\./)
+    expectRefusal([...formal, '--expected-export-sha256', 'a'.repeat(64)], /--run-dir .* is not git-ignored/)
+    expect(existsSync(runDir)).toBe(false)
+    expect(existsSync(output)).toBe(false)
+    expect(readFileSync(notRegistered, 'utf8')).toBe('{}\n')
+  }, SPAWN_TEST_TIMEOUT_MS)
+
+  it('refuses a malformed expected Export hash and an unknown mode', () => {
     const { output, runDir, input } = fixture()
-    // Phase B-2A keeps formalRun.enabled = false: the registration gate refuses whatever else is passed, before the (here missing) Export is read.
-    expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--mode', 'formal', '--expected-export-sha256', 'a'.repeat(64)], /A formal run cannot start: A formal run is not enabled/)
-    expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--mode', 'formal'], /A formal run cannot start: A formal run is not enabled/)
     expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--expected-export-sha256', 'abc'], /64 hex characters/)
     expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--mode', 'later'], /--mode must be smoke or formal/)
     expect(existsSync(runDir)).toBe(false)

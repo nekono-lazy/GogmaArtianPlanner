@@ -1324,6 +1324,7 @@ Phase A → B-1 → B-2 → C → D-0 → D-1 → Eの順に依存する。1 Pha
 Phase Bは、資源割当solverの実装とsynthetic正当性検証（B-1）と、assignment-only runner・budget事前登録・実Export formal measurement（B-2）に分ける。
 B-2はさらに、runner・root下界接続・§10.3移行判定・実Exportの非formal smoke・formal条件の事前登録を行う **B-2A**
 （[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md)。formal runは開始しない）と、登録条件とclean HEADでformal measurementを行う **B-2B** に分ける。
+B-2Bの計測記録は [B-2B記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2B.md) と [`PLANNER_GLOBAL_ASSIGNMENT_B2B_RESULT.json`](PLANNER_GLOBAL_ASSIGNMENT_B2B_RESULT.json)。
 B-1はC3（被覆）・materializationを扱わず、C1 / C2を満たした `ResourceAssignmentCandidate`（§4.3）を出力する段階であり、後続Phaseの正式意味論は
 変えない。node budget、window ladderのW1以降、verification budgetはB-1では確定せず、B-2で非formal smokeを根拠にResearch条件として事前登録し、
 formal run前に固定する。Phase Dは、materialization方式の設計検証（D-0）と統合acceptance（D-1）に分ける（§9.8）。Phase A〜Cの設計は

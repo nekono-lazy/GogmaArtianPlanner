@@ -1,0 +1,2274 @@
+{
+  "description": "Issue #154 Global Planner Global Assignment Phase B-2B: formal assignment-only measurement under the Phase B-2A pre-registration (docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md 6). Resource assignments under C1 / C2 only: not a Production Plan, not verified, not proven_minimum, no completed-Target count. Phase C coverage, Phase D materialization, the Production Planner and Trace Replay were not run.",
+  "derivation": {
+    "nature": "Public summary / audit RESULT derived from the formal run outputs. It holds provenance, formal validity, reproducibility, counts, solver totals, objectives, stream ends, the root lower bound, timings and memory. It holds no per-Target option, source, required position, ordered layout, weapon type / element or per-Target diagnostic; those per-Target arrays are reduced to aggregates computed mechanically from the formal records (docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2B.md 8). The formal records and the aggregated RESULT are kept unchanged and uncommitted under the git-ignored .local/ directory (the full candidate snapshots included); the measurement itself and those records were not changed. Editing this public file did not re-judge formal validity: formalValidity below is the value the formal run recorded.",
+    "derivedAfterMeasurement": true,
+    "revision": 2,
+    "revisionNote": "Revision 2 (data minimization) removed the per-Target arrays of revision 1 (candidate options, scan per-Target diagnostics, lower bound per-Target diagnostics, scan groups, node trace) and replaced them with aggregates. Every measured value is unchanged.",
+    "sources": [
+      {
+        "file": "ga-b2b-formal.result.json",
+        "bytes": 30784,
+        "sha256": "59075bfd05ac4f5f3fe7ca39087d2359d48a82ebe1a7e64ec8c09f51089cd7c2"
+      },
+      {
+        "file": "start.json",
+        "bytes": 3211,
+        "sha256": "22226795ec7714b0a0a7835f0f8498cc3cf46450dc2dcfd7d21e7fb0d85d0a08"
+      },
+      {
+        "file": "assignment-1.record.json",
+        "bytes": 430543,
+        "sha256": "c122b8b491eaf4befa634d48d29b54033a93022af5e94007ff8c744b581cc986"
+      },
+      {
+        "file": "assignment-2.record.json",
+        "bytes": 429018,
+        "sha256": "fda6ba52568255eb9a8f48ff68739d58ed47fac1f01e0dc725a9019497fc96a9"
+      },
+      {
+        "file": "root-bound.record.json",
+        "bytes": 21853,
+        "sha256": "29aaf236ee40b323176dd259fce43c6798c926e9cff453a0d3e95d9fa71fd9f7"
+      }
+    ]
+  },
+  "phase": "Issue #154 Global Assignment Phase B-2A: assignment-only runner (resource assignments under C1 / C2; not a Production Plan, not verified)",
+  "protocolVersion": "global-assignment-b2a:1",
+  "mode": "formal",
+  "measurement": {
+    "measurementHeadSha": "6125a8db49a8f805e8af368f773a1846b431cc40",
+    "baseMain": "cfa0488ca776542cb2595227df460ffd35b3f068",
+    "workingTreeClean": true,
+    "uncommittedBenchmarkCode": false,
+    "benchmarkCodeSha256": "30404688038aa54d3da1fcbc666a339e1b91da91fce559c85ec3e19189e06047",
+    "researchDoc": {
+      "file": "docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md",
+      "sha256": "78218a4a0ee4dbb19678294d32d71ed82fcd5b81c93bb3af2d6380d75292c57d"
+    },
+    "runnerScript": "scripts/run-planner-global-assignment-b2a.mjs",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "machine": {
+      "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor",
+      "logicalCpuCount": 16,
+      "platform": "win32",
+      "arch": "x64",
+      "osRelease": "10.0.26200",
+      "totalMemoryBytes": 33377591296,
+      "freeMemoryBytes": 16169537536
+    },
+    "launchedAt": "2026-10-12T08:33:20.245Z",
+    "command": "node scripts/run-planner-global-assignment-b2a.mjs --mode formal --export \"<local path>/gogma-artian-planner-backup_20260927015837.json\" --expected-export-sha256 <registered SHA-256> --run-dir .local/ga-b2b-formal.run --output .local/ga-b2b-formal.result.json",
+    "concurrentLoad": "none (no test / build / other Node process during the run)"
+  },
+  "exportVerification": {
+    "mode": "formal",
+    "required": true,
+    "registeredSource": "HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md",
+    "registered": {
+      "fileName": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "registeredIssues": [],
+    "cliExpectedSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "actual": {
+      "fileName": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "cliMatched": true,
+    "registeredMatched": true
+  },
+  "rngEngineVersion": "production-rng:c5-e7",
+  "calculationContext": {
+    "gameVersion": "unknown-initial",
+    "masterDataVersion": 4,
+    "rngEngineVersion": "production-rng:c5-e7",
+    "appSchemaVersion": 17
+  },
+  "plannerInputMaxPlanStepsForValidationOnly": 1000,
+  "conditions": {
+    "window": {
+      "normal": 350,
+      "gogma": 500,
+      "skill": 1500
+    },
+    "nodeBudget": 2000,
+    "mrvLookahead": 8,
+    "candidateLimit": 1000,
+    "snapshotLimit": 5
+  },
+  "windowLadder": [
+    {
+      "normal": 350,
+      "gogma": 500,
+      "skill": 1500
+    }
+  ],
+  "rungIndex": 0,
+  "envelope": {
+    "assignmentWallMs": 3600000,
+    "assignmentHeapMb": 4096,
+    "rootBoundBudget": 2000,
+    "rootBoundWallMs": 1200000,
+    "rootBoundHeapMb": 4096,
+    "repeat": 2,
+    "replaySnapshots": true,
+    "concurrency": 1,
+    "retry": "none"
+  },
+  "conditionBasis": {
+    "window": "registered condition (ASSIGNMENT_B2B_PREREGISTRATION)",
+    "nodeBudget": "registered condition (ASSIGNMENT_B2B_PREREGISTRATION)",
+    "mrvLookahead": "registered condition (ASSIGNMENT_B2B_PREREGISTRATION)",
+    "candidateLimit": "registered condition (ASSIGNMENT_B2B_PREREGISTRATION)",
+    "snapshotLimit": "registered condition (ASSIGNMENT_B2B_PREREGISTRATION)",
+    "rootBoundBudget": "registered condition (ASSIGNMENT_B2B_PREREGISTRATION)",
+    "envelope": "registered condition (ASSIGNMENT_B2B_PREREGISTRATION)"
+  },
+  "registration": {
+    "formalRunEnabled": true,
+    "unresolvedItems": [],
+    "reproducibilityRuns": 2
+  },
+  "smokeOverrides": [],
+  "oracleFreeExecution": true,
+  "oracleInformedDesign": true,
+  "formalValidity": {
+    "status": "valid",
+    "issues": [],
+    "checks": {
+      "registrationGate": true,
+      "committedCleanTree": true,
+      "noOverrides": true,
+      "exportRegisteredMatched": true,
+      "reproducibility": {
+        "requiredRuns": 2,
+        "runs": 2,
+        "measuredRuns": 2,
+        "allMeasured": true,
+        "noIntegrityIssues": true,
+        "recordsConsistent": true,
+        "semanticHashesEqual": true,
+        "identical": true
+      },
+      "rootLowerBoundStage": {
+        "requested": true,
+        "executed": true,
+        "status": "found",
+        "provenBound": "exact_minimum",
+        "reason": null,
+        "recordConsistent": true
+      },
+      "comparisonConsistent": true,
+      "aggregateIntegrityIssueCount": 0,
+      "noAggregateIntegrityIssues": true
+    }
+  },
+  "reproducibility": {
+    "determinism": {
+      "runs": 2,
+      "measuredRuns": 2,
+      "identical": true,
+      "semanticSha256s": [
+        "28077de18264e0cf0dd00b13c23466aa4957d023154b0ec0d799fb819f09162d",
+        "28077de18264e0cf0dd00b13c23466aa4957d023154b0ec0d799fb819f09162d"
+      ]
+    },
+    "runs": [
+      {
+        "id": "assignment-1",
+        "status": "measured",
+        "reason": null,
+        "recordConsistent": true,
+        "recordMode": "formal",
+        "semanticSha256": "28077de18264e0cf0dd00b13c23466aa4957d023154b0ec0d799fb819f09162d",
+        "outcome": {
+          "kind": "assignments_found",
+          "completeness": "candidate_limit_reached"
+        },
+        "windowTransition": {
+          "action": "hold",
+          "conclusion": "assignments_found_remainder_unconfirmed",
+          "rungIndex": 0,
+          "nextRungIndex": null,
+          "ladderExhausted": false,
+          "concludesInfeasibility": false,
+          "note": "The candidate limit stopped the collection: complete assignments exist, the rest of the tree is unconfirmed, and nothing is said about a wider window."
+        },
+        "planningTargetCount": 43,
+        "generated": 1000,
+        "bestObjective": 1766,
+        "expandedNodes": 1043,
+        "integrityIssues": [],
+        "elapsedMs": {
+          "context": 1708.3221,
+          "reachTable": 11828.763200000001,
+          "solverConstruction": 2405.5091999999986,
+          "optionCount": 17201.370200000005,
+          "rootMrvCount": 5238.099699999977,
+          "windowLocalRootBound": 12.38969999999972,
+          "toFirstCandidate": 42941.7391,
+          "solver": 43029.11430000001,
+          "replay": 15.044300000008661,
+          "total": 81442.97570000001
+        },
+        "wallMs": 82974.7079,
+        "memoryMaxima": {
+          "heapUsed": 841839560,
+          "heapTotal": 931672064,
+          "rss": 1290956800,
+          "external": 82064513,
+          "samples": 97
+        },
+        "maxRssKiB": 1260708
+      },
+      {
+        "id": "assignment-2",
+        "status": "measured",
+        "reason": null,
+        "recordConsistent": true,
+        "recordMode": "formal",
+        "semanticSha256": "28077de18264e0cf0dd00b13c23466aa4957d023154b0ec0d799fb819f09162d",
+        "outcome": {
+          "kind": "assignments_found",
+          "completeness": "candidate_limit_reached"
+        },
+        "windowTransition": {
+          "action": "hold",
+          "conclusion": "assignments_found_remainder_unconfirmed",
+          "rungIndex": 0,
+          "nextRungIndex": null,
+          "ladderExhausted": false,
+          "concludesInfeasibility": false,
+          "note": "The candidate limit stopped the collection: complete assignments exist, the rest of the tree is unconfirmed, and nothing is said about a wider window."
+        },
+        "planningTargetCount": 43,
+        "generated": 1000,
+        "bestObjective": 1766,
+        "expandedNodes": 1043,
+        "integrityIssues": [],
+        "elapsedMs": {
+          "context": 1731.2001999999998,
+          "reachTable": 11878.807999999999,
+          "solverConstruction": 2323.848200000002,
+          "optionCount": 16824.385599999998,
+          "rootMrvCount": 5186.616099999985,
+          "windowLocalRootBound": 12.06260000000475,
+          "toFirstCandidate": 40935.1911,
+          "solver": 41017.384099999996,
+          "replay": 15.118700000006356,
+          "total": 78993.8188
+        },
+        "wallMs": 79883.197,
+        "memoryMaxima": {
+          "heapUsed": 558586112,
+          "heapTotal": 859648000,
+          "rss": 1060683776,
+          "external": 82010172,
+          "samples": 85
+        },
+        "maxRssKiB": 1038520
+      }
+    ],
+    "nodeTraceHashes": [
+      "fnv1a32:0fffabb4",
+      "fnv1a32:0fffabb4"
+    ]
+  },
+  "assignment": {
+    "candidateNature": "resource_assignment_only; not a Production Plan, not verified",
+    "input": {
+      "plannerInputValid": true,
+      "validationIssueCount": 0,
+      "planningTargetCount": 43,
+      "targetWeaponCount": 43,
+      "planningEligibleTargetCount": 43,
+      "buildListEntryCount": 43,
+      "validEntryCount": 43,
+      "excludedEntryCount": 0,
+      "excludedEntryReasons": {},
+      "ownedWeaponCount": 40,
+      "normalCounterCount": 14,
+      "confirmedNormalCounterCount": 14,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "calculationContext": {
+        "gameVersion": "unknown-initial",
+        "masterDataVersion": 4,
+        "rngEngineVersion": "production-rng:c5-e7",
+        "appSchemaVersion": 17
+      }
+    },
+    "context": {
+      "status": "context"
+    },
+    "reachTable": {
+      "status": "reach_table"
+    },
+    "scan": {
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": {
+          "weapon.sword_and_shield:8": 7,
+          "weapon.dual_blades:8": 349,
+          "weapon.heavy_bowgun:8": 4,
+          "weapon.great_sword:8": 156,
+          "weapon.switch_axe:8": 0,
+          "weapon.charge_blade:8": 0,
+          "weapon.hammer:8": 24
+        }
+      },
+      "scanned": {
+        "skill": {
+          "from": 341,
+          "to": 1841
+        },
+        "gogma": {
+          "from": 55,
+          "to": 554
+        },
+        "normal": {
+          "weapon.sword_and_shield:8": {
+            "from": 7,
+            "to": 356
+          },
+          "weapon.dual_blades:8": {
+            "from": 349,
+            "to": 698
+          },
+          "weapon.heavy_bowgun:8": {
+            "from": 4,
+            "to": 353
+          },
+          "weapon.great_sword:8": {
+            "from": 156,
+            "to": 505
+          },
+          "weapon.switch_axe:8": {
+            "from": 0,
+            "to": 349
+          },
+          "weapon.charge_blade:8": {
+            "from": 0,
+            "to": 349
+          },
+          "weapon.hammer:8": {
+            "from": 24,
+            "to": 373
+          }
+        }
+      },
+      "predictions": {
+        "skill": 30020,
+        "gogmaReset": 10000,
+        "gogmaKeep": 299500,
+        "normal": 7000
+      },
+      "memoHits": {
+        "skill": 34523,
+        "gogmaReset": 11500,
+        "gogmaKeep": 5500,
+        "normal": 8050
+      },
+      "supportQueries": 15842,
+      "unsupported": {
+        "total": 0,
+        "byPrediction": {}
+      },
+      "sourceCounts": {
+        "owned_gogma": 148,
+        "owned_normal": 0,
+        "new_normal": 15050,
+        "total": 15198
+      },
+      "excludedOwnedWeapons": {},
+      "targetsWithoutOptionCount": 0,
+      "optionCountCap": 1000,
+      "groups": {
+        "groupCount": 20,
+        "targetCountSum": 43,
+        "targetsPerGroup": {
+          "min": 1,
+          "max": 6
+        },
+        "keepLayoutCountSum": 599
+      },
+      "targetAggregates": {
+        "targetCount": 43,
+        "optionsUpToCap": {
+          "cap": 1000,
+          "count": 43,
+          "min": 525,
+          "max": 1000,
+          "sum": 42525,
+          "saturatedAtCap": 42,
+          "belowCap": 1,
+          "withoutOption": 0
+        },
+        "rootMrvCount": {
+          "lookahead": 8,
+          "min": 8,
+          "max": 8,
+          "reachedLookahead": 43
+        },
+        "support": {
+          "normal": 43,
+          "skill": 43,
+          "gogmaReset": 43
+        },
+        "targetsWithSourceKind": {
+          "owned_gogma": 40,
+          "owned_normal": 0,
+          "new_normal": 43
+        },
+        "sourcesSummed": {
+          "owned_gogma": 148,
+          "owned_normal": 0,
+          "new_normal": 15050
+        },
+        "excludedOwnedWeaponsSummed": {},
+        "skillIdealPositionCount": {
+          "count": 43,
+          "min": 2,
+          "max": 1501,
+          "sum": 3650,
+          "targetsWithNone": 0
+        },
+        "bonus": {
+          "resetIdealPositionCountSum": 1,
+          "targetsWithResetIdeal": 1,
+          "keepLayoutCount": {
+            "count": 43,
+            "min": 1,
+            "max": 41,
+            "sum": 610
+          },
+          "keepIdealPositionCountSum": 1729,
+          "keepUnsupportedLayoutCountSum": 0
+        }
+      }
+    },
+    "solver": {
+      "nodeBudget": 2000,
+      "mrvLookahead": 8,
+      "candidateLimit": 1000,
+      "upperBoundSupplied": false,
+      "diagnostics": {
+        "expandedNodes": 1043,
+        "maxDepth": 43,
+        "candidates": 1000,
+        "rejections": {
+          "source": 63,
+          "skill_position": 93155,
+          "gogma_position": 513665,
+          "normal_position": 0
+        },
+        "pruned": 0,
+        "deadEnds": 0,
+        "targetsWithDeadEnds": 0,
+        "bestAssignment": {
+          "ordinal": 0,
+          "objective": 1766
+        },
+        "completeness": "running"
+      },
+      "windowLocalRootBound": 1255,
+      "nodeTrace": {
+        "recordedNodes": 256,
+        "totalNodes": 1043,
+        "nodeTraceLimit": 256,
+        "nodeTraceHash": "fnv1a32:0fffabb4",
+        "internalNodesInRecordedTrace": 43,
+        "leafNodesInRecordedTrace": 213,
+        "firstLeafNode": 44,
+        "maxDepthInRecordedTrace": 43,
+        "feasibleOptionsUpToLookaheadAtInternalNodes": {
+          "8": 43
+        }
+      }
+    },
+    "candidates": {
+      "nature": "resource_assignment_only",
+      "generated": 1000,
+      "firstObjective": 1766,
+      "bestObjective": 1766,
+      "bestOrdinal": 0,
+      "distinctObjectiveCount": 1,
+      "objectiveCounts": [
+        {
+          "objective": 1766,
+          "count": 1000
+        }
+      ],
+      "objectivesRunLength": [
+        {
+          "objective": 1766,
+          "count": 1000
+        }
+      ],
+      "bestStreamEnd": {
+        "skill": 1424,
+        "gogma": 503,
+        "normal": {
+          "weapon.charge_blade:8": 207,
+          "weapon.dual_blades:8": 371,
+          "weapon.great_sword:8": 156,
+          "weapon.hammer:8": 24,
+          "weapon.heavy_bowgun:8": 4,
+          "weapon.switch_axe:8": 1,
+          "weapon.sword_and_shield:8": 12
+        }
+      },
+      "snapshotLimit": 5,
+      "snapshots": [
+        {
+          "ordinal": 0,
+          "objective": 1766,
+          "streamEnd": {
+            "skill": 1424,
+            "gogma": 503,
+            "normal": {
+              "weapon.charge_blade:8": 207,
+              "weapon.dual_blades:8": 371,
+              "weapon.great_sword:8": 156,
+              "weapon.hammer:8": 24,
+              "weapon.heavy_bowgun:8": 4,
+              "weapon.switch_axe:8": 1,
+              "weapon.sword_and_shield:8": 12
+            }
+          },
+          "sourceKinds": {
+            "owned_gogma": 38,
+            "owned_normal": 0,
+            "new_normal": 5
+          },
+          "skillRequirements": {
+            "none": 21,
+            "reset_skills": 17,
+            "conversion": 5
+          },
+          "bonusRequirements": {
+            "none": 0,
+            "reset": 1,
+            "keep_from_source": 19,
+            "reset_then_keep": 23
+          },
+          "requiredPositionCounts": {
+            "skill": 22,
+            "gogma": 66,
+            "normal": {
+              "weapon.charge_blade:8": 2,
+              "weapon.dual_blades:8": 1,
+              "weapon.great_sword:8": 0,
+              "weapon.hammer:8": 0,
+              "weapon.heavy_bowgun:8": 0,
+              "weapon.switch_axe:8": 1,
+              "weapon.sword_and_shield:8": 1
+            }
+          },
+          "chosenOptionCount": 43
+        },
+        {
+          "ordinal": 1,
+          "objective": 1766,
+          "streamEnd": {
+            "skill": 1424,
+            "gogma": 503,
+            "normal": {
+              "weapon.charge_blade:8": 207,
+              "weapon.dual_blades:8": 371,
+              "weapon.great_sword:8": 156,
+              "weapon.hammer:8": 24,
+              "weapon.heavy_bowgun:8": 4,
+              "weapon.switch_axe:8": 1,
+              "weapon.sword_and_shield:8": 12
+            }
+          },
+          "sourceKinds": {
+            "owned_gogma": 38,
+            "owned_normal": 0,
+            "new_normal": 5
+          },
+          "skillRequirements": {
+            "none": 21,
+            "reset_skills": 17,
+            "conversion": 5
+          },
+          "bonusRequirements": {
+            "none": 0,
+            "reset": 1,
+            "keep_from_source": 19,
+            "reset_then_keep": 23
+          },
+          "requiredPositionCounts": {
+            "skill": 22,
+            "gogma": 66,
+            "normal": {
+              "weapon.charge_blade:8": 2,
+              "weapon.dual_blades:8": 1,
+              "weapon.great_sword:8": 0,
+              "weapon.hammer:8": 0,
+              "weapon.heavy_bowgun:8": 0,
+              "weapon.switch_axe:8": 1,
+              "weapon.sword_and_shield:8": 1
+            }
+          },
+          "chosenOptionCount": 43
+        },
+        {
+          "ordinal": 2,
+          "objective": 1766,
+          "streamEnd": {
+            "skill": 1424,
+            "gogma": 503,
+            "normal": {
+              "weapon.charge_blade:8": 207,
+              "weapon.dual_blades:8": 371,
+              "weapon.great_sword:8": 156,
+              "weapon.hammer:8": 24,
+              "weapon.heavy_bowgun:8": 4,
+              "weapon.switch_axe:8": 1,
+              "weapon.sword_and_shield:8": 12
+            }
+          },
+          "sourceKinds": {
+            "owned_gogma": 38,
+            "owned_normal": 0,
+            "new_normal": 5
+          },
+          "skillRequirements": {
+            "none": 21,
+            "reset_skills": 17,
+            "conversion": 5
+          },
+          "bonusRequirements": {
+            "none": 0,
+            "reset": 1,
+            "keep_from_source": 19,
+            "reset_then_keep": 23
+          },
+          "requiredPositionCounts": {
+            "skill": 22,
+            "gogma": 66,
+            "normal": {
+              "weapon.charge_blade:8": 2,
+              "weapon.dual_blades:8": 1,
+              "weapon.great_sword:8": 0,
+              "weapon.hammer:8": 0,
+              "weapon.heavy_bowgun:8": 0,
+              "weapon.switch_axe:8": 1,
+              "weapon.sword_and_shield:8": 1
+            }
+          },
+          "chosenOptionCount": 43
+        },
+        {
+          "ordinal": 3,
+          "objective": 1766,
+          "streamEnd": {
+            "skill": 1424,
+            "gogma": 503,
+            "normal": {
+              "weapon.charge_blade:8": 207,
+              "weapon.dual_blades:8": 371,
+              "weapon.great_sword:8": 156,
+              "weapon.hammer:8": 24,
+              "weapon.heavy_bowgun:8": 4,
+              "weapon.switch_axe:8": 1,
+              "weapon.sword_and_shield:8": 12
+            }
+          },
+          "sourceKinds": {
+            "owned_gogma": 38,
+            "owned_normal": 0,
+            "new_normal": 5
+          },
+          "skillRequirements": {
+            "none": 21,
+            "reset_skills": 17,
+            "conversion": 5
+          },
+          "bonusRequirements": {
+            "none": 0,
+            "reset": 1,
+            "keep_from_source": 19,
+            "reset_then_keep": 23
+          },
+          "requiredPositionCounts": {
+            "skill": 22,
+            "gogma": 66,
+            "normal": {
+              "weapon.charge_blade:8": 2,
+              "weapon.dual_blades:8": 1,
+              "weapon.great_sword:8": 0,
+              "weapon.hammer:8": 0,
+              "weapon.heavy_bowgun:8": 0,
+              "weapon.switch_axe:8": 1,
+              "weapon.sword_and_shield:8": 1
+            }
+          },
+          "chosenOptionCount": 43
+        },
+        {
+          "ordinal": 4,
+          "objective": 1766,
+          "streamEnd": {
+            "skill": 1424,
+            "gogma": 503,
+            "normal": {
+              "weapon.charge_blade:8": 207,
+              "weapon.dual_blades:8": 371,
+              "weapon.great_sword:8": 156,
+              "weapon.hammer:8": 24,
+              "weapon.heavy_bowgun:8": 4,
+              "weapon.switch_axe:8": 1,
+              "weapon.sword_and_shield:8": 12
+            }
+          },
+          "sourceKinds": {
+            "owned_gogma": 37,
+            "owned_normal": 0,
+            "new_normal": 6
+          },
+          "skillRequirements": {
+            "none": 20,
+            "reset_skills": 17,
+            "conversion": 6
+          },
+          "bonusRequirements": {
+            "none": 0,
+            "reset": 1,
+            "keep_from_source": 19,
+            "reset_then_keep": 23
+          },
+          "requiredPositionCounts": {
+            "skill": 23,
+            "gogma": 66,
+            "normal": {
+              "weapon.charge_blade:8": 2,
+              "weapon.dual_blades:8": 2,
+              "weapon.great_sword:8": 0,
+              "weapon.hammer:8": 0,
+              "weapon.heavy_bowgun:8": 0,
+              "weapon.switch_axe:8": 1,
+              "weapon.sword_and_shield:8": 1
+            }
+          },
+          "chosenOptionCount": 43
+        }
+      ]
+    },
+    "replay": {
+      "status": "passed",
+      "candidatesReplayed": 5,
+      "optionsReplayed": 215,
+      "predictions": {
+        "skill": 111,
+        "gogmaReset": 120,
+        "gogmaKeep": 210,
+        "normal": 26
+      },
+      "violationCount": 0
+    },
+    "outcome": {
+      "kind": "assignments_found",
+      "completeness": "candidate_limit_reached"
+    },
+    "windowTransition": {
+      "action": "hold",
+      "conclusion": "assignments_found_remainder_unconfirmed",
+      "rungIndex": 0,
+      "nextRungIndex": null,
+      "ladderExhausted": false,
+      "concludesInfeasibility": false,
+      "note": "The candidate limit stopped the collection: complete assignments exist, the rest of the tree is unconfirmed, and nothing is said about a wider window."
+    },
+    "integrityIssues": [],
+    "observed": [
+      {
+        "file": "assignment-1.record.json",
+        "elapsedMs": {
+          "context": 1708.3221,
+          "reachTable": 11828.763200000001,
+          "solverConstruction": 2405.5091999999986,
+          "optionCount": 17201.370200000005,
+          "rootMrvCount": 5238.099699999977,
+          "windowLocalRootBound": 12.38969999999972,
+          "toFirstCandidate": 42941.7391,
+          "solver": 43029.11430000001,
+          "replay": 15.044300000008661,
+          "total": 81442.97570000001
+        },
+        "setupMs": 1489.6877,
+        "wallMs": 82974.7079,
+        "yields": 1042,
+        "eventLoopYields": 6542,
+        "nodeTimeline": [
+          {
+            "nodes": 1,
+            "atMs": 43574.7157
+          },
+          {
+            "nodes": 9,
+            "atMs": 62191.026399999995
+          },
+          {
+            "nodes": 17,
+            "atMs": 71611.16290000001
+          },
+          {
+            "nodes": 25,
+            "atMs": 75782.9571
+          },
+          {
+            "nodes": 33,
+            "atMs": 78038.1026
+          },
+          {
+            "nodes": 41,
+            "atMs": 81053.7017
+          },
+          {
+            "nodes": 49,
+            "atMs": 81405.61660000001
+          },
+          {
+            "nodes": 57,
+            "atMs": 81405.8926
+          },
+          {
+            "nodes": 65,
+            "atMs": 81406.05050000001
+          },
+          {
+            "nodes": 73,
+            "atMs": 81406.2152
+          },
+          {
+            "nodes": 81,
+            "atMs": 81406.5821
+          },
+          {
+            "nodes": 89,
+            "atMs": 81406.9681
+          },
+          {
+            "nodes": 97,
+            "atMs": 81407.10190000001
+          },
+          {
+            "nodes": 105,
+            "atMs": 81407.3166
+          },
+          {
+            "nodes": 113,
+            "atMs": 81407.5987
+          },
+          {
+            "nodes": 121,
+            "atMs": 81407.7866
+          },
+          {
+            "nodes": 129,
+            "atMs": 81407.9678
+          },
+          {
+            "nodes": 137,
+            "atMs": 81408.2218
+          },
+          {
+            "nodes": 145,
+            "atMs": 81408.3894
+          },
+          {
+            "nodes": 153,
+            "atMs": 81408.52170000001
+          },
+          {
+            "nodes": 161,
+            "atMs": 81408.6484
+          },
+          {
+            "nodes": 169,
+            "atMs": 81408.7892
+          },
+          {
+            "nodes": 177,
+            "atMs": 81408.91070000001
+          },
+          {
+            "nodes": 185,
+            "atMs": 81409.0371
+          },
+          {
+            "nodes": 193,
+            "atMs": 81409.1664
+          },
+          {
+            "nodes": 201,
+            "atMs": 81409.31550000001
+          },
+          {
+            "nodes": 209,
+            "atMs": 81409.4372
+          },
+          {
+            "nodes": 217,
+            "atMs": 81409.5605
+          },
+          {
+            "nodes": 225,
+            "atMs": 81409.6999
+          },
+          {
+            "nodes": 233,
+            "atMs": 81409.82900000001
+          },
+          {
+            "nodes": 241,
+            "atMs": 81409.9511
+          },
+          {
+            "nodes": 249,
+            "atMs": 81410.0806
+          },
+          {
+            "nodes": 257,
+            "atMs": 81410.2944
+          },
+          {
+            "nodes": 265,
+            "atMs": 81410.42700000001
+          },
+          {
+            "nodes": 273,
+            "atMs": 81410.549
+          },
+          {
+            "nodes": 281,
+            "atMs": 81410.6743
+          },
+          {
+            "nodes": 289,
+            "atMs": 81410.8426
+          },
+          {
+            "nodes": 297,
+            "atMs": 81410.9643
+          },
+          {
+            "nodes": 305,
+            "atMs": 81411.104
+          },
+          {
+            "nodes": 313,
+            "atMs": 81411.2249
+          },
+          {
+            "nodes": 321,
+            "atMs": 81411.3462
+          },
+          {
+            "nodes": 329,
+            "atMs": 81411.4703
+          },
+          {
+            "nodes": 337,
+            "atMs": 81411.60470000001
+          },
+          {
+            "nodes": 345,
+            "atMs": 81411.7271
+          },
+          {
+            "nodes": 353,
+            "atMs": 81411.84920000001
+          },
+          {
+            "nodes": 361,
+            "atMs": 81411.9743
+          },
+          {
+            "nodes": 369,
+            "atMs": 81412.1159
+          },
+          {
+            "nodes": 377,
+            "atMs": 81412.2332
+          },
+          {
+            "nodes": 385,
+            "atMs": 81412.36020000001
+          },
+          {
+            "nodes": 393,
+            "atMs": 81412.47750000001
+          },
+          {
+            "nodes": 401,
+            "atMs": 81412.6009
+          },
+          {
+            "nodes": 409,
+            "atMs": 81412.7219
+          },
+          {
+            "nodes": 417,
+            "atMs": 81412.8402
+          },
+          {
+            "nodes": 425,
+            "atMs": 81412.95920000001
+          },
+          {
+            "nodes": 433,
+            "atMs": 81413.0922
+          },
+          {
+            "nodes": 441,
+            "atMs": 81413.32010000001
+          },
+          {
+            "nodes": 449,
+            "atMs": 81413.4488
+          },
+          {
+            "nodes": 457,
+            "atMs": 81413.6106
+          },
+          {
+            "nodes": 465,
+            "atMs": 81413.7586
+          },
+          {
+            "nodes": 473,
+            "atMs": 81413.87730000001
+          },
+          {
+            "nodes": 481,
+            "atMs": 81414.02290000001
+          },
+          {
+            "nodes": 489,
+            "atMs": 81414.1664
+          },
+          {
+            "nodes": 497,
+            "atMs": 81414.2936
+          },
+          {
+            "nodes": 505,
+            "atMs": 81414.4318
+          },
+          {
+            "nodes": 513,
+            "atMs": 81414.5732
+          },
+          {
+            "nodes": 521,
+            "atMs": 81414.74290000001
+          },
+          {
+            "nodes": 529,
+            "atMs": 81414.9419
+          },
+          {
+            "nodes": 537,
+            "atMs": 81415.10040000001
+          },
+          {
+            "nodes": 545,
+            "atMs": 81415.221
+          },
+          {
+            "nodes": 553,
+            "atMs": 81415.33910000001
+          },
+          {
+            "nodes": 561,
+            "atMs": 81415.463
+          },
+          {
+            "nodes": 569,
+            "atMs": 81415.5904
+          },
+          {
+            "nodes": 577,
+            "atMs": 81415.7133
+          },
+          {
+            "nodes": 585,
+            "atMs": 81415.837
+          },
+          {
+            "nodes": 593,
+            "atMs": 81415.9532
+          },
+          {
+            "nodes": 601,
+            "atMs": 81416.066
+          },
+          {
+            "nodes": 609,
+            "atMs": 81416.1765
+          },
+          {
+            "nodes": 617,
+            "atMs": 81416.29000000001
+          },
+          {
+            "nodes": 625,
+            "atMs": 81416.3999
+          },
+          {
+            "nodes": 633,
+            "atMs": 81416.51430000001
+          },
+          {
+            "nodes": 641,
+            "atMs": 81416.63720000001
+          },
+          {
+            "nodes": 649,
+            "atMs": 81416.75170000001
+          },
+          {
+            "nodes": 657,
+            "atMs": 81416.86510000001
+          },
+          {
+            "nodes": 665,
+            "atMs": 81416.9784
+          },
+          {
+            "nodes": 673,
+            "atMs": 81417.0932
+          },
+          {
+            "nodes": 681,
+            "atMs": 81417.20520000001
+          },
+          {
+            "nodes": 689,
+            "atMs": 81417.3459
+          },
+          {
+            "nodes": 697,
+            "atMs": 81417.4597
+          },
+          {
+            "nodes": 705,
+            "atMs": 81417.5772
+          },
+          {
+            "nodes": 713,
+            "atMs": 81417.69050000001
+          },
+          {
+            "nodes": 721,
+            "atMs": 81417.8049
+          },
+          {
+            "nodes": 729,
+            "atMs": 81417.9354
+          },
+          {
+            "nodes": 737,
+            "atMs": 81418.06360000001
+          },
+          {
+            "nodes": 745,
+            "atMs": 81418.1793
+          },
+          {
+            "nodes": 753,
+            "atMs": 81418.2967
+          },
+          {
+            "nodes": 761,
+            "atMs": 81418.41170000001
+          },
+          {
+            "nodes": 769,
+            "atMs": 81418.52500000001
+          },
+          {
+            "nodes": 777,
+            "atMs": 81418.6377
+          },
+          {
+            "nodes": 785,
+            "atMs": 81418.7497
+          },
+          {
+            "nodes": 793,
+            "atMs": 81418.86080000001
+          },
+          {
+            "nodes": 801,
+            "atMs": 81418.975
+          },
+          {
+            "nodes": 809,
+            "atMs": 81419.0907
+          },
+          {
+            "nodes": 817,
+            "atMs": 81419.2011
+          },
+          {
+            "nodes": 825,
+            "atMs": 81419.3162
+          },
+          {
+            "nodes": 833,
+            "atMs": 81419.4283
+          },
+          {
+            "nodes": 841,
+            "atMs": 81422.1621
+          },
+          {
+            "nodes": 849,
+            "atMs": 81422.3107
+          },
+          {
+            "nodes": 857,
+            "atMs": 81422.4295
+          },
+          {
+            "nodes": 865,
+            "atMs": 81422.5461
+          },
+          {
+            "nodes": 873,
+            "atMs": 81422.6627
+          },
+          {
+            "nodes": 881,
+            "atMs": 81422.8255
+          },
+          {
+            "nodes": 889,
+            "atMs": 81422.94140000001
+          },
+          {
+            "nodes": 897,
+            "atMs": 81423.1465
+          },
+          {
+            "nodes": 905,
+            "atMs": 81423.2884
+          },
+          {
+            "nodes": 913,
+            "atMs": 81423.4155
+          },
+          {
+            "nodes": 921,
+            "atMs": 81423.543
+          },
+          {
+            "nodes": 929,
+            "atMs": 81423.66100000001
+          },
+          {
+            "nodes": 937,
+            "atMs": 81423.8488
+          },
+          {
+            "nodes": 945,
+            "atMs": 81424.001
+          },
+          {
+            "nodes": 953,
+            "atMs": 81424.1143
+          },
+          {
+            "nodes": 961,
+            "atMs": 81424.2292
+          },
+          {
+            "nodes": 969,
+            "atMs": 81424.34120000001
+          },
+          {
+            "nodes": 977,
+            "atMs": 81424.4584
+          },
+          {
+            "nodes": 985,
+            "atMs": 81424.5782
+          },
+          {
+            "nodes": 993,
+            "atMs": 81424.69450000001
+          },
+          {
+            "nodes": 1001,
+            "atMs": 81424.82190000001
+          },
+          {
+            "nodes": 1009,
+            "atMs": 81424.94720000001
+          },
+          {
+            "nodes": 1017,
+            "atMs": 81425.06700000001
+          },
+          {
+            "nodes": 1025,
+            "atMs": 81425.1814
+          },
+          {
+            "nodes": 1033,
+            "atMs": 81425.29250000001
+          },
+          {
+            "nodes": 1041,
+            "atMs": 81425.4064
+          }
+        ],
+        "candidateTimelineHead": [
+          {
+            "ordinal": 0,
+            "atMs": 81338.0736
+          },
+          {
+            "ordinal": 8,
+            "atMs": 81405.7008
+          },
+          {
+            "ordinal": 16,
+            "atMs": 81405.951
+          },
+          {
+            "ordinal": 24,
+            "atMs": 81406.09830000001
+          },
+          {
+            "ordinal": 32,
+            "atMs": 81406.35350000001
+          }
+        ],
+        "memory": {
+          "maxima": {
+            "heapUsed": 841839560,
+            "heapTotal": 931672064,
+            "rss": 1290956800,
+            "external": 82064513,
+            "samples": 97
+          },
+          "maxRssKiB": 1260708,
+          "heapSizeLimit": 4496293888
+        }
+      },
+      {
+        "file": "assignment-2.record.json",
+        "elapsedMs": {
+          "context": 1731.2001999999998,
+          "reachTable": 11878.807999999999,
+          "solverConstruction": 2323.848200000002,
+          "optionCount": 16824.385599999998,
+          "rootMrvCount": 5186.616099999985,
+          "windowLocalRootBound": 12.06260000000475,
+          "toFirstCandidate": 40935.1911,
+          "solver": 41017.384099999996,
+          "replay": 15.118700000006356,
+          "total": 78993.8188
+        },
+        "setupMs": 849.9519,
+        "wallMs": 79883.197,
+        "yields": 1042,
+        "eventLoopYields": 6542,
+        "nodeTimeline": [
+          {
+            "nodes": 1,
+            "atMs": 43101.04150000001
+          },
+          {
+            "nodes": 9,
+            "atMs": 61488.3236
+          },
+          {
+            "nodes": 17,
+            "atMs": 70511.5352
+          },
+          {
+            "nodes": 25,
+            "atMs": 74105.4911
+          },
+          {
+            "nodes": 33,
+            "atMs": 75944.0227
+          },
+          {
+            "nodes": 41,
+            "atMs": 78659.5717
+          },
+          {
+            "nodes": 49,
+            "atMs": 78957.7827
+          },
+          {
+            "nodes": 57,
+            "atMs": 78958.01879999999
+          },
+          {
+            "nodes": 65,
+            "atMs": 78958.17079999999
+          },
+          {
+            "nodes": 73,
+            "atMs": 78958.3005
+          },
+          {
+            "nodes": 81,
+            "atMs": 78958.4948
+          },
+          {
+            "nodes": 89,
+            "atMs": 78958.6606
+          },
+          {
+            "nodes": 97,
+            "atMs": 78958.8441
+          },
+          {
+            "nodes": 105,
+            "atMs": 78959.0687
+          },
+          {
+            "nodes": 113,
+            "atMs": 78959.2248
+          },
+          {
+            "nodes": 121,
+            "atMs": 78959.3847
+          },
+          {
+            "nodes": 129,
+            "atMs": 78959.5377
+          },
+          {
+            "nodes": 137,
+            "atMs": 78959.68359999999
+          },
+          {
+            "nodes": 145,
+            "atMs": 78959.8096
+          },
+          {
+            "nodes": 153,
+            "atMs": 78959.9396
+          },
+          {
+            "nodes": 161,
+            "atMs": 78960.06
+          },
+          {
+            "nodes": 169,
+            "atMs": 78960.1883
+          },
+          {
+            "nodes": 177,
+            "atMs": 78960.3084
+          },
+          {
+            "nodes": 185,
+            "atMs": 78960.4328
+          },
+          {
+            "nodes": 193,
+            "atMs": 78960.5572
+          },
+          {
+            "nodes": 201,
+            "atMs": 78960.69829999999
+          },
+          {
+            "nodes": 209,
+            "atMs": 78960.8177
+          },
+          {
+            "nodes": 217,
+            "atMs": 78960.9347
+          },
+          {
+            "nodes": 225,
+            "atMs": 78961.0524
+          },
+          {
+            "nodes": 233,
+            "atMs": 78961.17139999999
+          },
+          {
+            "nodes": 241,
+            "atMs": 78961.2957
+          },
+          {
+            "nodes": 249,
+            "atMs": 78961.4182
+          },
+          {
+            "nodes": 257,
+            "atMs": 78961.53719999999
+          },
+          {
+            "nodes": 265,
+            "atMs": 78961.6563
+          },
+          {
+            "nodes": 273,
+            "atMs": 78961.7742
+          },
+          {
+            "nodes": 281,
+            "atMs": 78961.9121
+          },
+          {
+            "nodes": 289,
+            "atMs": 78962.0389
+          },
+          {
+            "nodes": 297,
+            "atMs": 78962.1624
+          },
+          {
+            "nodes": 305,
+            "atMs": 78962.2953
+          },
+          {
+            "nodes": 313,
+            "atMs": 78962.41619999999
+          },
+          {
+            "nodes": 321,
+            "atMs": 78962.5346
+          },
+          {
+            "nodes": 329,
+            "atMs": 78962.65669999999
+          },
+          {
+            "nodes": 337,
+            "atMs": 78962.791
+          },
+          {
+            "nodes": 345,
+            "atMs": 78962.9123
+          },
+          {
+            "nodes": 353,
+            "atMs": 78963.03319999999
+          },
+          {
+            "nodes": 361,
+            "atMs": 78963.1517
+          },
+          {
+            "nodes": 369,
+            "atMs": 78963.27649999999
+          },
+          {
+            "nodes": 377,
+            "atMs": 78963.3958
+          },
+          {
+            "nodes": 385,
+            "atMs": 78963.521
+          },
+          {
+            "nodes": 393,
+            "atMs": 78963.6393
+          },
+          {
+            "nodes": 401,
+            "atMs": 78963.7665
+          },
+          {
+            "nodes": 409,
+            "atMs": 78963.8922
+          },
+          {
+            "nodes": 417,
+            "atMs": 78964.0147
+          },
+          {
+            "nodes": 425,
+            "atMs": 78964.1363
+          },
+          {
+            "nodes": 433,
+            "atMs": 78964.27709999999
+          },
+          {
+            "nodes": 441,
+            "atMs": 78964.4182
+          },
+          {
+            "nodes": 449,
+            "atMs": 78964.61
+          },
+          {
+            "nodes": 457,
+            "atMs": 78964.74429999999
+          },
+          {
+            "nodes": 465,
+            "atMs": 78964.877
+          },
+          {
+            "nodes": 473,
+            "atMs": 78965.00589999999
+          },
+          {
+            "nodes": 481,
+            "atMs": 78965.1219
+          },
+          {
+            "nodes": 489,
+            "atMs": 78965.2419
+          },
+          {
+            "nodes": 497,
+            "atMs": 78965.3591
+          },
+          {
+            "nodes": 505,
+            "atMs": 78965.4745
+          },
+          {
+            "nodes": 513,
+            "atMs": 78965.6394
+          },
+          {
+            "nodes": 521,
+            "atMs": 78965.75929999999
+          },
+          {
+            "nodes": 529,
+            "atMs": 78965.8928
+          },
+          {
+            "nodes": 537,
+            "atMs": 78966.011
+          },
+          {
+            "nodes": 545,
+            "atMs": 78966.13949999999
+          },
+          {
+            "nodes": 553,
+            "atMs": 78966.2565
+          },
+          {
+            "nodes": 561,
+            "atMs": 78966.3848
+          },
+          {
+            "nodes": 569,
+            "atMs": 78966.52919999999
+          },
+          {
+            "nodes": 577,
+            "atMs": 78966.6578
+          },
+          {
+            "nodes": 585,
+            "atMs": 78966.78469999999
+          },
+          {
+            "nodes": 593,
+            "atMs": 78966.8956
+          },
+          {
+            "nodes": 601,
+            "atMs": 78967.00929999999
+          },
+          {
+            "nodes": 609,
+            "atMs": 78967.12019999999
+          },
+          {
+            "nodes": 617,
+            "atMs": 78967.23879999999
+          },
+          {
+            "nodes": 625,
+            "atMs": 78967.3495
+          },
+          {
+            "nodes": 633,
+            "atMs": 78967.4641
+          },
+          {
+            "nodes": 641,
+            "atMs": 78967.5843
+          },
+          {
+            "nodes": 649,
+            "atMs": 78967.699
+          },
+          {
+            "nodes": 657,
+            "atMs": 78967.8097
+          },
+          {
+            "nodes": 665,
+            "atMs": 78967.9215
+          },
+          {
+            "nodes": 673,
+            "atMs": 78968.0339
+          },
+          {
+            "nodes": 681,
+            "atMs": 78968.1476
+          },
+          {
+            "nodes": 689,
+            "atMs": 78968.2713
+          },
+          {
+            "nodes": 697,
+            "atMs": 78968.3859
+          },
+          {
+            "nodes": 705,
+            "atMs": 78968.4976
+          },
+          {
+            "nodes": 713,
+            "atMs": 78968.6087
+          },
+          {
+            "nodes": 721,
+            "atMs": 78971.1177
+          },
+          {
+            "nodes": 729,
+            "atMs": 78971.2665
+          },
+          {
+            "nodes": 737,
+            "atMs": 78971.4063
+          },
+          {
+            "nodes": 745,
+            "atMs": 78971.5299
+          },
+          {
+            "nodes": 753,
+            "atMs": 78971.6463
+          },
+          {
+            "nodes": 761,
+            "atMs": 78971.7629
+          },
+          {
+            "nodes": 769,
+            "atMs": 78971.87879999999
+          },
+          {
+            "nodes": 777,
+            "atMs": 78971.99309999999
+          },
+          {
+            "nodes": 785,
+            "atMs": 78972.11009999999
+          },
+          {
+            "nodes": 793,
+            "atMs": 78972.2263
+          },
+          {
+            "nodes": 801,
+            "atMs": 78972.34939999999
+          },
+          {
+            "nodes": 809,
+            "atMs": 78972.49429999999
+          },
+          {
+            "nodes": 817,
+            "atMs": 78972.6105
+          },
+          {
+            "nodes": 825,
+            "atMs": 78972.73169999999
+          },
+          {
+            "nodes": 833,
+            "atMs": 78972.8452
+          },
+          {
+            "nodes": 841,
+            "atMs": 78972.961
+          },
+          {
+            "nodes": 849,
+            "atMs": 78973.0738
+          },
+          {
+            "nodes": 857,
+            "atMs": 78973.1875
+          },
+          {
+            "nodes": 865,
+            "atMs": 78973.3042
+          },
+          {
+            "nodes": 873,
+            "atMs": 78973.4205
+          },
+          {
+            "nodes": 881,
+            "atMs": 78973.535
+          },
+          {
+            "nodes": 889,
+            "atMs": 78973.6534
+          },
+          {
+            "nodes": 897,
+            "atMs": 78973.76849999999
+          },
+          {
+            "nodes": 905,
+            "atMs": 78973.8835
+          },
+          {
+            "nodes": 913,
+            "atMs": 78973.9999
+          },
+          {
+            "nodes": 921,
+            "atMs": 78974.1143
+          },
+          {
+            "nodes": 929,
+            "atMs": 78974.2291
+          },
+          {
+            "nodes": 937,
+            "atMs": 78974.3542
+          },
+          {
+            "nodes": 945,
+            "atMs": 78974.4686
+          },
+          {
+            "nodes": 953,
+            "atMs": 78974.6019
+          },
+          {
+            "nodes": 961,
+            "atMs": 78974.7377
+          },
+          {
+            "nodes": 969,
+            "atMs": 78974.856
+          },
+          {
+            "nodes": 977,
+            "atMs": 78974.969
+          },
+          {
+            "nodes": 985,
+            "atMs": 78975.0846
+          },
+          {
+            "nodes": 993,
+            "atMs": 78975.19829999999
+          },
+          {
+            "nodes": 1001,
+            "atMs": 78975.3143
+          },
+          {
+            "nodes": 1009,
+            "atMs": 78975.42629999999
+          },
+          {
+            "nodes": 1017,
+            "atMs": 78975.5511
+          },
+          {
+            "nodes": 1025,
+            "atMs": 78975.6756
+          },
+          {
+            "nodes": 1033,
+            "atMs": 78975.8804
+          },
+          {
+            "nodes": 1041,
+            "atMs": 78976.0554
+          }
+        ],
+        "candidateTimelineHead": [
+          {
+            "ordinal": 0,
+            "atMs": 78893.9111
+          },
+          {
+            "ordinal": 8,
+            "atMs": 78957.8692
+          },
+          {
+            "ordinal": 16,
+            "atMs": 78958.07299999999
+          },
+          {
+            "ordinal": 24,
+            "atMs": 78958.21979999999
+          },
+          {
+            "ordinal": 32,
+            "atMs": 78958.3618
+          }
+        ],
+        "memory": {
+          "maxima": {
+            "heapUsed": 558586112,
+            "heapTotal": 859648000,
+            "rss": 1060683776,
+            "external": 82010172,
+            "samples": 85
+          },
+          "maxRssKiB": 1038520,
+          "heapSizeLimit": 4496293888
+        }
+      }
+    ]
+  },
+  "rootLowerBound": {
+    "status": "found",
+    "provenLowerBound": 1657,
+    "provenAtLeast": null,
+    "budget": 2000,
+    "reason": null,
+    "recordConsistent": true,
+    "childOutcome": "completed",
+    "targetSet": {
+      "matches": true,
+      "planningTargetCount": 43,
+      "eligibleTargetCount": 43,
+      "eligibleWithoutValidEntryCount": 0,
+      "planningNotEligibleCount": 0
+    },
+    "crossSatisfaction": {
+      "planningTargetCount": 43,
+      "sameWeaponTypeAndElementPairCount": 54,
+      "skillStateCandidates": {
+        "series": 26,
+        "group": 18
+      },
+      "possiblePairCount": 0,
+      "distinctSourcePreconditionHolds": true
+    },
+    "masterSkillIds": {
+      "series": 25,
+      "group": 17
+    },
+    "relaxation": {
+      "status": "found",
+      "provenAtLeast": 1657,
+      "minimum": {
+        "total": 1657,
+        "thresholds": {
+          "skill": 1424,
+          "gogma": 290,
+          "normal": {
+            "weapon.sword_and_shield": 12,
+            "weapon.dual_blades": 475,
+            "weapon.heavy_bowgun": 4,
+            "weapon.great_sword": 156,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 24
+          }
+        },
+        "advances": {
+          "skill": 1083,
+          "gogma": 235,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 126,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        }
+      },
+      "targetsWithoutOptionCount": 0,
+      "nearMinimum": [
+        {
+          "total": 1657,
+          "skill": 1424,
+          "gogma": 290,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 126,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1669,
+          "skill": 1424,
+          "gogma": 302,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 126,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1672,
+          "skill": 1424,
+          "gogma": 431,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1674,
+          "skill": 1424,
+          "gogma": 433,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1676,
+          "skill": 1424,
+          "gogma": 435,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1682,
+          "skill": 1424,
+          "gogma": 441,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1697,
+          "skill": 1424,
+          "gogma": 456,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1701,
+          "skill": 1424,
+          "gogma": 460,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1722,
+          "skill": 1424,
+          "gogma": 355,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 126,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        },
+        {
+          "total": 1725,
+          "skill": 1424,
+          "gogma": 484,
+          "normal": {
+            "weapon.sword_and_shield": 5,
+            "weapon.dual_blades": 0,
+            "weapon.heavy_bowgun": 0,
+            "weapon.great_sword": 0,
+            "weapon.switch_axe": 1,
+            "weapon.charge_blade": 207,
+            "weapon.hammer": 0
+          }
+        }
+      ],
+      "origins": {
+        "skill": 341,
+        "gogma": 55,
+        "normal": {
+          "weapon.sword_and_shield": 7,
+          "weapon.dual_blades": 349,
+          "weapon.heavy_bowgun": 4,
+          "weapon.great_sword": 156,
+          "weapon.switch_axe": 0,
+          "weapon.charge_blade": 0,
+          "weapon.hammer": 24
+        }
+      },
+      "targetAggregates": {
+        "targetCount": 43,
+        "optionCount": {
+          "count": 43,
+          "min": 4,
+          "max": 2006,
+          "sum": 84152
+        },
+        "targetsWithOptionCountAtLeastBudget": 42,
+        "targetsBelowBudgetOptionCount": 1,
+        "ownedOptionCountSum": 148,
+        "targetsWithOwnedOption": 40
+      }
+    },
+    "elapsedMs": 151814.7155,
+    "wallMs": 154281.9294,
+    "setupMs": 810.2486,
+    "memory": {
+      "maxima": {
+        "heapUsed": 314279112,
+        "heapTotal": 430882816,
+        "rss": 585572352,
+        "external": 82048741,
+        "samples": 5
+      },
+      "maxRssKiB": 574412,
+      "heapSizeLimit": 4496293888
+    }
+  },
+  "comparison": {
+    "bestObjective": 1766,
+    "lowerBound": 1657,
+    "lowerBoundKind": "proven_minimum_of_relaxation",
+    "gap": 109,
+    "consistency": "consistent"
+  },
+  "windowTransition": {
+    "action": "hold",
+    "conclusion": "assignments_found_remainder_unconfirmed",
+    "rungIndex": 0,
+    "nextRungIndex": null,
+    "ladderExhausted": false,
+    "concludesInfeasibility": false,
+    "note": "The candidate limit stopped the collection: complete assignments exist, the rest of the tree is unconfirmed, and nothing is said about a wider window."
+  },
+  "processes": [
+    {
+      "id": "assignment-1",
+      "role": "assignment",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "settledBy": "close",
+      "wallMs": 3600000,
+      "heapMb": 4096,
+      "nodeFlags": [
+        "--max-old-space-size=4096"
+      ],
+      "startedAt": "2026-10-12T08:33:20.257Z",
+      "wallObservedMs": 83224.8749,
+      "freeMemoryAtStart": 16165994496,
+      "recordWritten": true,
+      "spawnError": null
+    },
+    {
+      "id": "assignment-2",
+      "role": "assignment",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "settledBy": "close",
+      "wallMs": 3600000,
+      "heapMb": 4096,
+      "nodeFlags": [
+        "--max-old-space-size=4096"
+      ],
+      "startedAt": "2026-10-12T08:34:43.485Z",
+      "wallObservedMs": 80087.9754,
+      "freeMemoryAtStart": 16098308096,
+      "recordWritten": true,
+      "spawnError": null
+    },
+    {
+      "id": "root-bound",
+      "role": "root-bound",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "settledBy": "close",
+      "wallMs": 1200000,
+      "heapMb": 4096,
+      "nodeFlags": [
+        "--max-old-space-size=4096"
+      ],
+      "startedAt": "2026-10-12T08:36:03.577Z",
+      "wallObservedMs": 154472.88899999997,
+      "freeMemoryAtStart": 16063045632,
+      "recordWritten": true,
+      "spawnError": null
+    }
+  ],
+  "integrityIssues": [],
+  "totalWallMs": 317803.3696,
+  "productionChanges": "none (Production RNG Engine / Search / Planner / UI / Worker / Persistence / schema / versions unchanged; see docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2B.md)",
+  "oracleIsolation": "The runner read no oracle manifest / verifier / RESULT JSON and took no post-hoc argument (oracleFreeExecution = true); the design is oracle-informed (oracleInformedDesign = true). Any comparison with the 1,657-step oracle is post-hoc, in the Markdown record only, and never fed back."
+}
