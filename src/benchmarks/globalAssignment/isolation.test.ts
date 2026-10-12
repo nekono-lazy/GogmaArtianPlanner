@@ -37,8 +37,8 @@ describe('Global Assignment Research isolation', () => {
   it('has the expected runtime modules, each reading only the PlannerInput, the Engine and the Production authorities', () => {
     expect(runtime.map(([path]) => path).sort()).toEqual([
       './assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentProtocol.ts', './assignmentRootBound.ts', './assignmentRunner.ts',
-      './assignmentSolver.ts', './assignmentTypes.ts', './assignmentWindowPolicy.ts', './context.ts', './coverage.ts', './coverageTypes.ts', './reachOptions.ts', './reachTable.ts',
-      './requiredOnlyReplay.ts', './structuralCandidate.ts', './types.ts',
+      './assignmentSolver.ts', './assignmentTypes.ts', './assignmentWindowPolicy.ts', './context.ts', './coverage.ts', './coverageSearch.ts', './coverageSearchTypes.ts',
+      './coverageTypes.ts', './reachOptions.ts', './reachTable.ts', './requiredOnlyReplay.ts', './structuralCandidate.ts', './structuralSearch.ts', './structuralWindowPolicy.ts', './types.ts',
     ])
     for (const [path, source] of runtime) {
       // No oracle manifest / verifier / RESULT, no earlier Phase result; the lower-bound module only in the designated stage (checked below).
@@ -105,6 +105,29 @@ describe('Global Assignment Research isolation', () => {
     // The structural candidate reads RNG only through the one required-only replay authority.
     expect(research['./structuralCandidate.ts']).not.toMatch(/\.predict[A-Z]/)
     expect(research['./structuralCandidate.ts']).toMatch(/replayReachOptionRequiredOnly\(/)
+  })
+
+  it('keeps Phase C-2 a coverage-gated assignment search: no Search, Planner, reservation or materialization, and no unverified upper bound', () => {
+    const phaseC2 = ['./coverageSearch.ts', './coverageSearchTypes.ts', './structuralSearch.ts', './structuralWindowPolicy.ts']
+    for (const path of phaseC2) {
+      expect(research[path], path).toBeDefined()
+      expect(research[path], path).not.toMatch(/productionPlanGeneration|plannerTraceReplay|plannerDeterministicSchedule|plannerBeamSearch|candidateSearch|search\/alternative|constrainedCandidate|createProductionPlan|replayPlannerSearchTrace|visitPlannerAlternativeCandidates|searchCandidates|plannerRouteProgress|plannerAlternativeReservation|derivePlannerAlternativeReservation/)
+      // No verified / proven claim, and no structural or coverage-feasible objective ever becomes a VerifiedUpperBound.
+      expect(research[path], path).not.toMatch(/production_verified_plan|'verified'|'proven_minimum'/)
+      // The registered Phase B-2A / B-2B runner path is neither imported nor changed by Phase C-2.
+      expect(research[path], path).not.toMatch(/from '\.\/(?:assignmentRunner|assignmentRootBound|assignmentWindowPolicy)'/)
+    }
+    // The coverage-gated search reads the ReachTable and the planning Targets only: no Engine, PlannerInput, Master or Entry.
+    for (const path of ['./coverageSearch.ts', './coverageSearchTypes.ts', './structuralWindowPolicy.ts']) {
+      expect(research[path], path).not.toMatch(/plannerInput|RngEngine|predict[A-Z]|\.master\b|ownedWeapons|normalCounters|rngState/)
+    }
+    // The upper bound is forwarded from the caller only; the coverage-gated search never builds one.
+    expect(research['./coverageSearch.ts']).not.toMatch(/physicalOperations\s*[:=]|provenance\s*[:=]/)
+    // The structural layer reads RNG only through the Phase C-1 builder (and so the one required-only replay authority).
+    expect(research['./structuralSearch.ts']).not.toMatch(/\.predict[A-Z]|replayReachOptionRequiredOnly/)
+    expect(research['./structuralSearch.ts']).toMatch(/buildStructuralCandidate\(/)
+    // The Phase B-2A runner keeps the Phase B-1 value order: it never opts into the coverage-driven ordering.
+    expect(research['./assignmentRunner.ts']).not.toMatch(/readPriorityConversionPosition|coverageDrivenOrdering|createCoverageSearch|createStructuralCandidateSearch/)
   })
 
   it('changes no Production default, schema or version', () => {

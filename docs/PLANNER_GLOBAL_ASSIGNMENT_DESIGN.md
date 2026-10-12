@@ -738,7 +738,7 @@ cross satisfaction（1つの武器状態で2 TargetのIdealを同時に満たす
   structural candidateのobjectiveがroot下界と一致しただけでは終了せず、何も主張しない
 
 Phase B-1の実装（`assignmentFeasibility.ts` / `assignmentLowerBound.ts` / `assignmentOrdering.ts` / `assignmentSolver.ts`）は、上記のうち
-被覆pre-check（Phase C）とcoverage-driven value orderingを除く部分を、明示的なframe stackのgeneratorとして実装した（`next()` は次の完全割当・
+被覆pre-check（Phase C）とcoverage-driven value orderingを除く部分を、明示的なframe stackのgeneratorとして実装した（両者はPhase C-2がopt-inの入口として追加した。§8.6。`next()` は次の完全割当・
 pause・終了のいずれかを返し、同じnodeの次の値から再開する）。実装上の確定事項:
 
 - 値順序は「Σ stream終端の増分（部分割当の現在終端に対する `max(0, ·)` の和）→ owned source先 → 最終Skill位置 → 最終Gogma位置 →
@@ -993,7 +993,66 @@ Phase C-1（`coverage.ts` / `coverageTypes.ts` / `structuralCandidate.ts`）は�
   stream別に自分へ帰属する位置数（全Targetの和は各streamの `end − origin`）。materialize後のRoute operation数（Normal forgeのheld prefix、
   実際のchain長）はmaterialization順序に依存するので予測しない。chainはmatch条件に入れず、reservationへも書かない
 - **C-2へ残すもの**: solver内部でのcoverage rejection、coverage-driven value ordering、被覆不成立後の探索継続の統合、`coverage_infeasible` を含む
-  window移行判定、実Export runner・計測
+  window移行判定、実Export runner・計測（前4つはC-2で実装した。§8.6）
+
+### 8.6 Phase C-2の実装上の確定事項
+
+Phase C-2（`coverageSearch.ts` / `coverageSearchTypes.ts` / `structuralSearch.ts` / `structuralWindowPolicy.ts` と、`assignmentOrdering.ts` /
+`assignmentSolver.ts` へのopt-in拡張）は、§6.3 / §6.4の `structuralCandidates` generatorのうちPhase D / D'を除く部分を、B-1 solverとC-1 moduleの
+統合として実装した。
+
+- **経路の分離**: 被覆判定付きの探索は新しい入口だけで動く。`createCoverageSearch()` / `collectCoverageFeasibleAssignments()`（ReachTableとplanning Target
+  だけを読む。Engine不要）と、その上に `buildStructuralCandidate()` を重ねる `createStructuralCandidateSearch()` / `collectStructuralCandidates()` である。
+  B-1の `createResourceAssignmentSearch()` / `collectResourceAssignments()`、B-2A / B-2B runner、`decideWindowTransition()`、B-2Bの事前登録値・正式RESULTは
+  変更しない。B-1 solverへの追加は任意field `readPriorityConversionPosition` だけで、無指定ならframe enumeratorは従来の `createOrderedOptionEnumerator()`
+  であり値順序・候補列・`diagnostics` はB-1と同一。順序付けの計数は `diagnostics` に加えず、別getter `priorityOrdering` に置く
+- **被覆gate**: solverが完全資源割当を返すたびに `checkStreamCoverage()` を実行する。`coverage_infeasible` はstructural candidateとして返さず、
+  最も低い未被覆Skill位置（`firstUncovered`）・初回棄却・位置別棄却件数を記録してsolverの `next()` を続ける（同じnodeの次の値から再開し、nodeも
+  完全割当も再訪しない）。`feasible` だけを `buildStructuralCandidate()` へ渡す。solverが生成した割当にpre-checkが `invalid_input` を返すこと、
+  gateが通した割当がbuilderで `structural_candidate` にならないこと、replay不整合は `GlobalAssignmentInvariantError` としてthrowし、
+  棄却や「候補なし」に読み替えない。`ResourceAssignmentCandidate` 自体は変更しない
+- **coverage-driven value ordering**（`coverageDrivenOrdering: true` で明示的に選ぶ。既定値なし）: 棄却のたびにその最低未被覆位置 x を
+  priority conversion positionとし、各nodeは値を1つ渡す前にそれを読む。x が変わると、そのnodeのTargetの未配送optionのうち巨戟化位置 c = x のもの
+  （c = s* と c < s* の両方）を、それ自身の値順序で先に渡す（`createPrioritizedOptionEnumerator()`）。B-1のbase frontier（compact index + min-heap）は
+  再keyせずそのまま使い、priorityはSkill軸を c = x に制限したもう1本のlattice併合（`createConversionPriorityEnumerator()` / `indexedConversionsAt()`、
+  s* 昇順の部分列なのでlatticeの単調性を保つ）で供給する。両者とも値順序keyが狭義単調増加なので、配送済み判定は区間で行える: phaseを開いた時点の
+  baseの最終keyを `cutoff`、そのphaseが最後に渡したkeyを `last` とすると、そのphaseが渡したのは c = x かつkeyが `(cutoff, last]`（枯渇後は
+  `(cutoff, +∞)`）のoptionちょうどである。phaseは `cutoff` 以下（baseが渡し済み）と過去phaseの区間内を飛ばし、baseはphase区間内を飛ばす。
+  したがって任意のpriority列に対して各optionをちょうど1回渡し（欠落・重複なし）、順序はpriority列の純関数であり、同一入力で決定的である。
+  priorityは配送のたびに読むので、棄却より前に作られた既存frameも次の値から反応する。x が変わると活性phaseは閉じ（区間だけ残る）、同じ x に戻れば
+  新しいphaseを開く。メモリはbase frontier + 活性phaseのfrontier + 閉じたphaseごとにO(1)で、source × Skill × Bonusの直積をmaterializeしない。
+  C1 / C2、MRV、branch-and-boundの意味は変えない（順序の変更であり、候補集合の削減や制約の緩和ではない）
+- **結果分類**（§4.6）: `candidates_found`（`exhausted` / `candidate_limit_reached`）、`no_structural_candidate`（探索木を使い切ったときだけ。reasonは
+  Target単位のoption不在なら `target_without_option`、UB枝刈りがあれば `upper_bound_pruning`、完全資源割当を1件以上検査していれば
+  `coverage_infeasible`、それ以外は `resource_exclusivity`）、`search_incomplete`（`node_budget_reached` / `cancelled`。それまでの検査がすべて棄却でも
+  被覆不成立と結論しない）、`invalid_input`。window移行は §10.3 に従う別判定 `decideStructuralWindowTransition()` で行い、3つのno-candidate reasonは拡大、
+  `upper_bound_pruning`・budget・cancel・候補上限・未計測・unsupported・invalidは保持する。structural candidateがある窓の拡大はPhase D / D'の
+  結果で決まる（§10.3の `structural_only` 行）ので、C-2では保持とする
+- **診断**: 完全資源割当の検査件数、被覆棄却件数、被覆成立件数（= structural candidate件数）、初回棄却とその未被覆gap、最低未被覆位置、
+  位置別棄却件数、最初の被覆成立までの割当数、orderingの適用状況（有効か、現在の優先位置、変更回数、phase開始数、priority配送数、skip数）、
+  B-1の展開node数・完全割当数・completeness、`bestStructural`（structural candidateの最小objective）とreplayの予測回数。`bestStructural` は
+  B-1の `resource.bestAssignment`（棄却されたものを含む全完全割当の最小）と別fieldで、どちらも `VerifiedUpperBound` ではなく枝刈りに使わない
+- **設計との差異（明示）**: 現行Phase Aは各 s* について巨戟化位置 c ∈ [origin, s*] をすべてoptionにする（§5.2）。完全資源割当の最も低い未被覆
+  Skill位置を p とすると、p より後ろのrequired位置を持つTargetは c > p の巨戟化Targetに限られる（既存Gogmaの `reset_skills` と c < p の巨戟化は
+  §8.1の表どおり p を被覆する）。その c を p へ下げた割当もC1 / C2を満たし（p はrequired位置でない）、p を被覆し、p 未満の被覆と全streamの終端
+  （objective）を変えない。これを繰り返すと被覆可能な割当に到達するので、**整合したReachTableでは、完全資源割当が1つでもあれば同じ最小objectiveの
+  被覆可能な完全割当が存在し、探索木を使い切った `coverage_infeasible` は生じない**。§8.2の3と§10.3の `coverage_infeasible` 行の例（より後方の
+  Reset Skills位置）は、この意味で現行option集合では到達しない場合の規定である。C-2は分類とwindow判定を設計どおり実装し（scripted searchで分類を
+  固定）、到達しないことはseed付きrandom table 60件の総当たりで確認した。規則・設計の意味は変えていない（変更・削除するかは別判断）
+- **test**: solverと独立した総当たり（C1 / C2の直積 + §8.1を位置単位で書いた被覆述語）との被覆可能集合一致（ordering有無で同一、重複なし。手組み表と
+  random表40件）、棄却割当の非配送と探索継続、c = x の優先と早い到達、`next(maxNodes)` のpause / resume一致、決定性、node budget / cancel / 候補上限で
+  不成立を断定しないこと、分類とwindow判定、B-1経路の不変（provider無しとnullを返すproviderで同一event列・同一診断、診断keyの不変、ordering offの
+  gateがB-1の候補列をそのまま検査）、chain位置を排他資源にしないこと、Invariant Errorの伝播（solverが受理しC-1検証が拒否する負のorigin、
+  Ideal不一致のreplay）、prioritized列挙の単体（任意のpriority列200通りで欠落・重複なし、c = x の残りがbaseの位置から値順序で先行、
+  2,000 Ideal Skill位置 × 1,500 sourceのhuge rowでfrontierがlattice根 + 数cell）
+- **非formal smoke（参考。formal measurementではない）**: 登録済みExportとB-2Bの登録条件（W0、node budget・MRV lookahead・候補上限1,000）で、
+  commitしない一時scriptから `collectStructuralCandidates()` をordering有無の両方で実行した。どちらも先頭1,000件の完全資源割当（1,043 node、
+  objective 1,766。B-2Bと同じ割当列）がすべて被覆pre-checkを通過し（棄却0件、orderingは一度も発動しない）、structural candidate 1,000件と
+  診断はordering有無で一致した。最初の候補は巨戟化TargetのSkill依存5件、予測chain segment 74件。ReachTable約14 s、探索約57〜68 s
+  （replay込み）、RSS約1.0 GB。この観測は「W0の先頭1,000件では被覆が制約になっていない」ことだけを示し、structural candidateの成立
+  （Phase D / D'）については何も言わない
+- **D-0へ残すもの**: 実Exportでの被覆gate付き探索の正式な条件登録・計測、Search規模gate・delivery cap・方式選択（§9）、incremental coverage pruningや
+  LDS等の追加最適化（Phase E）。runnerへの組込みも行っていない
 
 ## 9. MaterializationとProduction Planner検証（Phase D / D'）
 
@@ -1241,7 +1300,7 @@ Phase Aの走査windowは事前登録したladderで広げる。
 | --- | --- | --- |
 | `no_structural_candidate` / `target_without_option` | Target単位でoptionが無い | **拡大する** |
 | `no_structural_candidate` / `resource_exclusivity` | 各Targetにoptionはあるが、資源排他で完全割当が無い（探索木を使い切った） | **拡大する**（次windowの新しい位置が排他を解き得る） |
-| `no_structural_candidate` / `coverage_infeasible` | 完全割当はあるがCounter被覆が成立しない（探索木を使い切った） | **拡大する**（例: より後方のReset Skills位置が既存Gogmaの被覆を伸ばす） |
+| `no_structural_candidate` / `coverage_infeasible` | 完全割当はあるがCounter被覆が成立しない（探索木を使い切った） | **拡大する**（例: より後方のReset Skills位置が既存Gogmaの被覆を伸ばす）。現行option集合（c ∈ [origin, s*] を全列挙）では、探索木を使い切ってこの結果になることはない（§8.6） |
 | `structural_only`、completeness = `exhausted`、候補の不成立がすべて `materialization_failed` / `planner_rejected` | 構造的候補はあったがどれも成立せず、未確認は無い | **拡大する**（別の位置・sourceの候補が成立し得る。事前登録した上限rungまで） |
 | `structural_only`、completeness = `exhausted`、`materialization_unconfirmed` が1件以上 | 成立しなかった原因に未確認（cap / gate / envelope）が含まれる | **拡大しない**。先にcap / gate / envelopeの事前登録値を見直す（windowの問題と断定しない） |
 | `search_incomplete`（node budget / verification budget / cancel） | 未探索枝が残る | **拡大しない**。「window内に完全割当が存在しない」と結論しない。node / verification budgetの見直しが先 |

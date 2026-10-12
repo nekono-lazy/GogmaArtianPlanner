@@ -100,6 +100,23 @@ export interface ResourceAssignmentSearchRequest {
   shouldCancel?: () => boolean
   /** Diagnostics observer, called once per expanded node in expansion order. */
   onNodeExpanded?: (node: ExpandedNodeInfo) => void
+  /**
+   * Phase C-2 opt-in (design 6.3 coverage-driven value ordering). When present, every node reads it before
+   * each value it delivers, and a non-null conversion position `x` makes the not-yet-delivered options of
+   * that node's Target converting at `x` come first. It reorders values only: every option is still
+   * delivered exactly once, so the set of complete assignments of an exhausted tree is unchanged. Absent
+   * (the Phase B-1 / B-2 default), the value order is exactly the Phase B-1 one.
+   */
+  readPriorityConversionPosition?: () => number | null
+}
+
+/** The coverage-driven value ordering counters of one search (Phase C-2; all 0 when it is not enabled). */
+export interface PriorityOrderingDiagnostics {
+  enabled: boolean
+  phaseActivations: number
+  priorityDeliveries: number
+  prioritySkips: number
+  baseSkips: number
 }
 
 export type ResourceAssignmentSearchCompleteness = 'exhausted' | 'node_budget_reached' | 'cancelled'
@@ -142,6 +159,8 @@ export type ResourceAssignmentSearchEvent =
 export interface ResourceAssignmentSearch {
   next(maxNodes?: number): ResourceAssignmentSearchEvent
   readonly diagnostics: ResourceAssignmentSearchDiagnostics
+  /** Kept apart from `diagnostics` so the Phase B-1 / B-2 diagnostics record is unchanged. */
+  readonly priorityOrdering: PriorityOrderingDiagnostics
   /** Planning Targets with no reach option at all in the table's window (never "unreachable"). */
   readonly targetsWithoutOption: readonly TargetWeaponId[]
 }
