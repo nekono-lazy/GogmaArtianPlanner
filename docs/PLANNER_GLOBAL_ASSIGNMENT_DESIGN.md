@@ -957,6 +957,44 @@ skip規則の根拠そのもの）。だからこそchain位置を照合せず�
 runtime-unsupported、`maxPlanSteps`）で成立しないことはあり得る。成立の最終authorityはPhase D'である。満たさない場合に
 Plannerへ渡しても成立しないことは、stall規則から確実に言える（渡さない）。
 
+### 8.5 Phase C-1の実装上の確定事項
+
+Phase C-1（`coverage.ts` / `coverageTypes.ts` / `structuralCandidate.ts`）は、Phase B-1の `ResourceAssignmentCandidate` を入力とする
+独立した後処理として §8.1〜§8.3 を実装した。B-1 solverの探索順序・MRV・`next()`・node budget・C1 / C2は変えていない。
+
+- **入口と戻り値**: `buildStructuralCandidate(assignment, { table, context, engine })` は `structural_candidate` / `coverage_infeasible` /
+  `invalid_input` を返す。順序は (1) ReachTableがcontextのもの（planning Target集合・順序、確定origin）か、(2) assignmentの構造検証
+  （各optionがReachTable行のsourceを持つこと、source種別と要件種別、保護中owned Gogmaは `none / none` だけ、window、`streamEnd` の独立な再導出、
+  C1 / C2、`usedSources` / `requiredPositions` / `streamEnd` / `objective` の集約値）、(3) 被覆判定、(4) materialization順序、(5) 全optionの
+  `replayReachOptionRequiredOnly()`。`coverage_infeasible` ではreplay・予測を行わない（optionのRNG妥当性については何も言わない）。replayの不整合は
+  既存の `GlobalAssignmentInvariantError` としてthrowし、被覆不成立や「Routeなし」に読み替えない。純粋な被覆判定は `checkStreamCoverage()`、
+  順序は `deriveMaterializationOrder()` として単独でも呼べる（C-2用）
+- **区間の端点規則**: `CoverageSegment` の `from` / `to` は両端inclusive、`from <= to`。1 streamのsegmentは昇順で、先頭がorigin、各segmentは直前の
+  `to + 1` から始まり、末尾は `end - 1` で終わる（重複・欠落なし）。required位置は所有Targetの1位置segment（`kind: 'required'`）、gapは
+  covererのchain segment（`kind: 'chain'`）。chain segmentは他Targetのrequired位置を含まず、required操作を重複させない。操作のないstreamは
+  `end = origin`、segment 0件
+- **covererの候補**: §8.1の擬似コードどおり。Normalは各Counterの最遠production targetの所有Targetだけ（originから全forge）。Gogmaは
+  Bonus操作を持つTargetで最終Bonus位置 ≥ next（gapの直後のrequired所有Targetは常に該当するので、Gogmaは常に成立）。Skillは
+  `reset_skills` で最終位置 ≥ next、または `conversion` で c ≤ prev かつ最終位置 ≥ next。被覆不成立になり得るのはSkillだけで、Gogma / Normalで
+  coverer候補が空になった場合は内部不変条件違反（`coverage_invariant`）とする
+- **covererの選択**: §8.2の1〜2に加え、最終位置の同点はowned source先、Target ID昇順。C2を満たす入力では同一streamの最終位置は互いに異なるので、
+  この2キーは決定性のための防御的な全順序である
+- **`coverage_infeasible`**: 未被覆gapをstream順・位置順にすべて返し（`firstUncovered = uncovered[0]`）、各gapに前後のrequired位置、
+  reason `no_skill_holder_across_gap`、gap終端まで届くが巨戟化がgap開始より後のTarget（診断）を持たせる。このassignmentが静的必要条件を
+  満たさないという意味であり、「実行可能Planが存在しない」ではない
+- **materialization順序の依存**: §8.2の擬似コードは巨戟化位置 c より前のSkill gapのcovererを先行させるが、その根拠は「c より前のSkill位置が
+  すべてheld」であるため、c より前の **required位置の所有Target** も先行させる（該当し得るのは依存を持たない既存Gogmaの `reset_skills` Targetだけ。
+  隣接するrequired位置の直後にReset Skillsを持ち、自分ではgapを被覆しない場合）。意味（依存はSkill被覆だけ、非循環）は変えない。
+  導出後に「planning Targetの順列であること」「各巨戟化Targetの c より前の全Skill位置が先行Targetに帰属すること」を自己検査し、
+  違反は `coverage_invariant` でfail closedする。`materializationDependencies` に各巨戟化Targetの先行Targetを記録する
+- **`ExpectedRouteShape`**: `match` はsourceのOwnedWeapon ID（new_normalはnull）、`requiredPositionsOf()` のstream別required位置（Normalは
+  Counter IDつき）、required-only replayの最終武器。`predicted` は自分がcovererのchain segment（stream・区間・操作種別: Normalは
+  `create_normal_artian`、Skillは `reset_skills`、Gogmaは `reset` → Reset、`keep_from_source` → Keep、`reset_then_keep` → g1より前はReset・後はKeep）と、
+  stream別に自分へ帰属する位置数（全Targetの和は各streamの `end − origin`）。materialize後のRoute operation数（Normal forgeのheld prefix、
+  実際のchain長）はmaterialization順序に依存するので予測しない。chainはmatch条件に入れず、reservationへも書かない
+- **C-2へ残すもの**: solver内部でのcoverage rejection、coverage-driven value ordering、被覆不成立後の探索継続の統合、`coverage_infeasible` を含む
+  window移行判定、実Export runner・計測
+
 ## 9. MaterializationとProduction Planner検証（Phase D / D'）
 
 ### 9.0 現行Search APIで強制できることと、できないこと（レビューB2）
@@ -1325,6 +1363,9 @@ Phase Bは、資源割当solverの実装とsynthetic正当性検証（B-1）と�
 B-2はさらに、runner・root下界接続・§10.3移行判定・実Exportの非formal smoke・formal条件の事前登録を行う **B-2A**
 （[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md)。formal runは開始しない）と、登録条件とclean HEADでformal measurementを行う **B-2B** に分ける。
 B-2Bの計測記録は [B-2B記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2B.md) と [`PLANNER_GLOBAL_ASSIGNMENT_B2B_RESULT.json`](PLANNER_GLOBAL_ASSIGNMENT_B2B_RESULT.json)。
+Phase Cは、`ResourceAssignmentCandidate` を入力とする独立した被覆判定・coverer予測・materialization順序・`ExpectedRouteShape` 構築と
+synthetic test（**C-1**、§8.5）と、B-1 solverとの統合（solver内部の被覆rejection、coverage-driven value ordering、被覆不成立後の探索継続、
+結果分類、必要な非formal診断。**C-2**）に分ける。
 B-1はC3（被覆）・materializationを扱わず、C1 / C2を満たした `ResourceAssignmentCandidate`（§4.3）を出力する段階であり、後続Phaseの正式意味論は
 変えない。node budget、window ladderのW1以降、verification budgetはB-1では確定せず、B-2で非formal smokeを根拠にResearch条件として事前登録し、
 formal run前に固定する。Phase Dは、materialization方式の設計検証（D-0）と統合acceptance（D-1）に分ける（§9.8）。Phase A〜Cの設計は

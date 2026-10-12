@@ -223,6 +223,8 @@ export type GlobalAssignmentInvariantCode =
   | 'ideal_mismatch'
   | 'engine_contract_violation'
   | 'window_invalid'
+  /** Phase C-1: a coverage / materialization order derivation contradicted its own pre-check (design 8.2). */
+  | 'coverage_invariant'
 
 /** A Research-internal inconsistency (design 5.3): the scan and the Ideal judgement share one authority, so a mismatch is a bug, never a game fact. */
 export class GlobalAssignmentInvariantError extends Error {
