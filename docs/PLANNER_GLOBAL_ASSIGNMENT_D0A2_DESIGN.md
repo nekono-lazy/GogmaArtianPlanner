@@ -33,14 +33,14 @@ Production（Search / Planner / RNG / Worker / UI / Persistence / schema / versi
 
 | # | 事項 | 決定 |
 | --- | --- | --- |
-| 1 | 主方式 | **B-ii**（Search DomainのResearch専用seam）。Search Domainに、Production callerが一切使わない **形状制約付きRoute探索** を設け、Research側の新materialization方式 `shape_constrained` から呼ぶ。Production fileの変更を伴うので、**実装PR（2a）の開始前にオーナー承認が必要**（§13） |
+| 1 | 主方式 | **B-ii**（Search DomainのResearch専用seam）。Search Domainに、Production callerが一切使わない **形状制約付きRoute探索** を設け、Research側の新materialization方式 `shape_constrained` から呼ぶ。形状制約はRoute base生成の前に、primitiveの選択 → source / Counter / production target → 巨戟化位置の順で適用し、`addBase()` は最終admissionだけを行う（§3.9 / §5.3）。Production fileの変更を伴うので、**実装PR（2a）の開始前にオーナー承認が必要**（§13） |
 | 2 | B-i | **主方式にしない**。base取得・Skill lane・`keep_from_source` のBonus laneは公開APIだけで構成できる（§4.1）が、`reset` / `reset_then_keep` のBonus laneについて、held skip × family layoutによるstate数の増加（§3.6）とG3（frontier代表化、§3.7）を外側から抑える手段が無い。D-0Bの最初のstructural candidateでは43 Target中24 Target（`reset_then_keep` 23 + `reset` 1。D-0Bで未解決となった順序7のTargetを含む）がこれに当たる |
 | 3 | G1 / G2 | 新方式が唯一の方式。lane開始状態がIdealでも、形が要求するlaneだけを開く（§6）。新方式を含まない方式規則（`d0a-v1`、D-0Bの再現用）では、G1を引き続き `not_executed(search_policy_shape)` とする。両軸Ideal sourceを自分で操作するG4-iiiのoption生成はA-2で決め、本方式はそれに従う |
 | 4 | G3 | 新方式のBonus操作種別policy（Keep-only / Reset-only / g1のResetの後だけKeep）で、上側（D-0Bのsyntheticで確認済み）と下側（本書の推定、§3.7）の両方を代表化の対象外にする。同値なrequired位置集合の受理は採らない。G3専用の別PRは作らず、2a（policy）と2b（利用）で扱う（§7） |
 | 5 | materialization順序 | **変更しない**（Phase Cの `deriveMaterializationOrder()` を維持）。Gogmaだけを操作するTargetの先行配置は依存関係上は常に安全だが、新方式の成否は順序に依存しない（§5.5の補題）ので必要が無い。再検討の条件と、採用する場合の変更範囲・test計画を §8に残す |
 | 6 | 方式選択 | 規則 `d0a2-v2`（§11）: 継続形 → `shape_constrained` のみ、連続形 → 射影起点Candidate Search → `shape_constrained`、非連続形 → `shape_constrained`。設計 §9.1（Planner Alternative Search）は `d0a-v1`（D-0B再現）とparity testに残す |
 | 7 | identity | 新algorithm token `global-assignment-d0a2-shape-constrained-materialization-v1`、Candidate ID prefix `candidate.research.global-assignment.shape.`（提案）。D-0Aのtoken・prefix・Candidate IDは変えない。Entry IDは既存deterministic materializerの規則のままで、同じ意味のRouteなら方式に依らず同じEntry IDになる（§3.8 / §9.1） |
-| 8 | outcome | `materialized` / `unconfirmed(shape_search_budget_reached)` / `not_executed(search_scale_gate)` / `unmeasured`。新方式が探索を終えて一致を返さないことは補題（§5.5）の前提違反であり、`shape_mismatch` にせずfail closedする（§10） |
+| 8 | outcome | `materialized` / `unconfirmed(shape_search_budget_reached)` / `not_executed(search_scale_gate)` / `unsupported(required_prediction_unsupported)` / `unmeasured`。Bonus laneのsupportは、形が許す操作だけを、その操作を行うstage・stateでだけ評価し、形が禁止する操作のunsupportedは評価も報告もせず分類に使わない。形が必要とする予測のunsupportedは、Phase Aが同じ問いをsupportedと判定済みならfail closed（`prediction_support_inconsistent`）、判定が無ければ `unsupported`。base到達後に一致を返さず、必要な予測のunsupportedも無い終了は補題（§5.5）の前提違反としてfail closedし、`shape_mismatch` にしない（§10） |
 | 9 | 正当性 | 全operation（chainを含む）の独立再予測、Counter進行と連続性、Keep入力layout、正式reservationとcoverage、Candidate / Entry validation、unit planのrequired位置照合を新方式の採用条件にする。継続形では必須、その他でも既定で実行する（§9.3）。parity testはPlanner Alternative Searchが返す形にだけ使う（§9.2） |
 | 10 | PR分割 | 2a（Search Domain seam。Production file。要承認）→ 2b（Research方式・方式選択 `d0a2-v2`・独立検証器・parity）→ A-2 → D-0B-2 → D-0C → D-1（§12）。materialization順序の変更は計画しない |
 
@@ -121,6 +121,14 @@ Route baseはprimitiveの戻り値ではなく、`scheduler.addBase()` の呼出
 - `BonusStreamBase.amendmentPolicy: 'keep_only'`（131-145）はheld-aware読取りでもResetを止める（833、778）。ただしProductionでこの値を渡すのは
   初回Candidate Searchのordinary読取りだけで（`normalArtianRouteSearch.ts:469`）、held-aware読取りとの組合せを固定するtestは無い（`keep_only` を含む
   test fileは無い）
+- **support評価**: 各depthで、Resetのsupport（`predictionSupport.gogmaReset()`）を `keep_only` でも問い合わせ、unsupportedなら `reset_bonuses` の
+  unsupportedとして記録する（832-834）。Keepのsupportは、窓が空でないfrontier stateごとに `gogmaKeep(state.bonuses)` で問い合わせて記録する（835-841）。
+  extent到達の判定もReset / Keepのsupportを読む（777-782）。記録したunsupportedは `readReservedDepth()` の `unsupportedPredictions` として返り、schedulerの
+  Bonus channelがnoticeとしてRoute baseへ流す（`targetSearchScheduler.ts:425`）。したがって操作種別を制限するpolicyを足すだけでは、形が使わない操作の
+  unsupportedも報告される
+- **primitive側のBonus stream base生成条件**: 新規Normal・所持通常のprimitiveは、Gogma入力が確定しEngineがGogma予測をsupportしていても、Resetの
+  input supportが無いとBonus stream baseを作らない（`normalArtianRouteSearch.ts:388-401`、`ownedNormalArtianRouteSearch.ts:51-62`）。所持巨戟のprimitiveは
+  Resetのsupportを条件にしない（`existingGogmaRouteSearch.ts:102-105`）
 
 ### 3.6 費用の構造（推定、コード読取）
 
@@ -167,6 +175,45 @@ q はblockedでなく、q から次の非held位置 r（g1 < r < g*）の手前�
 
 したがって同じ意味のRouteは、D-0Aの方式でも新方式でも同じEntry IDになり、Candidate ID・`searchRunId`・`BuildListEntry.candidateId` だけが方式で異なる。
 
+### 3.9 `addBase()` より前に起きる処理と、制約を適用できる位置（確認済み）
+
+Planner Alternative Searchでは、`addBase()` に届く前に次の処理が起きる（無制約の現行経路）。`addBase()` でbaseを選ぶだけでは、Candidateの配送は
+減らせても、これらの処理は減らない。
+
+| 段階 | 所持巨戟（`searchExistingGogmaRoutes()`） | 所持通常（`searchOwnedNormalArtianRoutes()`） | 新規Normal（`searchNormalArtianRoutes()`） |
+| --- | --- | --- | --- |
+| primitiveの起動 | 3種類すべてを順に起動する（`plannerAlternativeSearch.ts:218-229`） | 同左 | 同左 |
+| support / capabilityの問合せ | Skill support（72-80） | Skill support（45-49）、Reset support（51-62） | Normal support（36-64）、Skill support（67-89）、Reset support（388-401） |
+| sourceの列挙 | 互換・非排他の全所持巨戟（24-27） | 互換・変換可能・非排他の全所持通常（24-27） | 確定した全レア8 Counter（387） |
+| 巨戟化位置の列挙 | — | `conversionSkillPositions()`（66）。originからheld区間を歩き、跨いだheld位置ごとにcheckpoint（`routeSearchShared.ts:188-201`、`counterReservation.ts:63-76`） | 同左（215） |
+| queue work | なし（同期登録） | sourceごとに1 work（68-78） | Counterごとのoffset cursor。offsetごとに1 work（412-479）。blind variantは1 work（310-353） |
+| 予測 | なし | 巨戟化位置ごとの `skillStream.predictAt()`（86） | offsetごとの `predictNormalArtian()`（431-435、memo）と、offsetごとに全巨戟化位置の `predictAt()`（430） |
+| base登録 | sourceごとに1 base（111-141） | source × 巨戟化位置 | offset × 巨戟化位置 |
+
+制約を適用できる位置は、早い順に次のとおりである（§5.3で契約にする）。
+
+1. **primitiveの選択**（runner）: 形のbase種類に対応するprimitiveだけを起動する
+2. **source / Counter / production targetの制限**（primitive内のsource・Counter・offsetの列挙）: 列挙に形の値の条件を加える。新規Normalではoffsetを
+   p − origin の1つだけにし、他のoffsetのNormal予測とqueue workを作らない
+3. **巨戟化位置の制限**（`conversionSkillPositions()`）: 正式な合法位置の判定（held区間の歩行）はそのまま行い、結果を c との共通部分に絞る。
+   巨戟化Skillの予測は c だけになる
+4. **最終admission**（`addBase()`）: 上記で残ったbaseが形と一致することを確かめ、laneを決める
+
+1〜3を行っても、primitive 1つの起動、必要なsupportの問合せ、巨戟化位置の合法判定の歩行（予測なし）、新規NormalのNormal予測1回、巨戟化Skillの予測1回、
+base登録のqueue work 1つ（所持巨戟は同期登録）は残る。D-0Bでは、base登録までの費用をSkill / Bonus streamの費用と分けて計測していない（instrumentationの
+`onWorkSettled` はbase登録のworkも数え、予測呼出し回数は種類別に記録していない）。
+
+### 3.10 Phase Aのsupport判定（確認済み）
+
+`src/benchmarks/globalAssignment/reachTable.ts`。Phase AはTargetの種別 × 属性ごとにSkill / Reset / Normalのsupportを問い合わせて記録し
+（`TargetReach.support`、unsupportedはsummaryへ）、Keepのsupportを **具体的な5枠の入力ごと** に問い合わせる（所持武器の5枠、新規Normalの予測5枠、
+関心layoutのReset結果。276-310）。Keep supportはlayoutごとに記録し、同じlayoutの2つの入力でsupportが食い違えば「family-only Keep契約」の違反として
+`engine_contract_violation` でfail closedする（240-256）。`keep_from_source` は `source.keepSupported`、`reset_then_keep` はsupportされたlayoutだけから
+生成される（`reachOptions.ts:79` / `:206`）。
+
+現行Production EngineのKeep supportは、weapon type / element、Master、各bonus typeのfamily読取り可能性だけで決まり、tierを読まない
+（`productionRngEngine.ts:130-146`）。family-only契約はこの性質をResearch側の前提として固定したものであり、ゲーム規則ではない。
+
 ## 4. B-i / B-iiの実現性と方式の決定
 
 ### 4.1 B-i（Research側consumer、Production file変更なし）
@@ -203,7 +250,8 @@ Research（B-i）
 - **実現できる**: base取得（1〜5）、Skill lane（lane開始Idealを含むどの形も。Skill streamはbaseのIdeal判定と無関係に読める）、Bonus laneが `none` または
   `keep_from_source` の形、composition（7、再実装）
 - **実現できない**: `reset` / `reset_then_keep` のBonus laneで、layout因子とheld窓による生成state数（3.6）を抑えること。G3の両変種（代表化はstream内部で
-  起き、consumerからは代表から落ちた履歴を取り出せない）
+  起き、consumerからは代表から落ちた履歴を取り出せない）。base登録前の費用（§3.9）を減らすこと（capture方式は3種類のprimitiveを起動し、全offsetの
+  Normal予測と全巨戟化位置のSkill予測を経たbaseを捕捉してから選ぶ）
 - D-0Bの最初の候補ではBonus要件が `keep_from_source` 19 / `reset_then_keep` 23 / `reset` 1で、D-0Bの未解決Target（順序7）は `reset_then_keep` である。
   監査 §7.2の見込み（Route baseを1つにすればD2-G-Aの爆発要因 = 巨戟化位置数 × depth × Skill stateを持たない）はSkill側については成り立つが、
   D-0Bで費用を支配したBonus held-aware streamの「layout数 × held窓」の項はRoute baseを固定しても残り、B-iはBonus laneの過半でそれを抑えられない
@@ -217,17 +265,21 @@ Production callerの既存の経路は変えず、Research callerだけが形状
 
 | file | 変更（2a、提案） | Production caller（無指定）の挙動 |
 | --- | --- | --- |
-| `src/domain/search/bonusStream.ts` | `BonusStreamBase` に任意field `shapePolicy`（§5.3）。held-aware読取り（`readReservedDepth()`）だけが解釈し、ordinaryの `readDepth()` / `solve()` は指定されたbaseを拒否する（throw）。`bonusStreamBaseKey()` は指定時だけ要素を足す | 未指定ならcode path、stream key文字列、prediction、state、順序、single-pass cursorは不変 |
-| `src/domain/search/targetSearchScheduler.ts` | constructorの任意の第4引数 `shapeFilter`（§5.3）。`addBase()` で、形に一致しないbaseを登録しない、形が要求するlaneだけを（lane開始Idealでも）開く、形の最終位置で終わる解だけをcrossへ渡す | 未指定なら現行どおり（`shapeFilter === undefined` の分岐だけ） |
-| `src/domain/search/alternative/plannerAlternativeSearch.ts` | setup・登録・delivery loopを内部関数（例: `runPlannerAlternativeFrontier()`）へ抽出し、`visitPlannerAlternativeCandidates()` はそれを `shapeFilter` 無しで呼ぶ（挙動不変のrefactor） | 入出力、配送順、summary、prediction回数、instrumentation / runtime observerの境界は不変 |
-| 新規 `src/domain/search/research/`（名前は提案） | `visitShapeConstrainedRouteCandidates()`、型、入力検証、route policy token。`src/domain/search/index.ts` から再exportしない | Productionから到達しない（isolation test） |
+| `src/domain/search/routeSearchShared.ts` | `RouteSearchContext` に任意field `routeBaseConstraint`（Research専用、§5.3）。`conversionSkillPositions()` は指定時、正式な合法位置の判定（歩行）を行ったうえで結果を c との共通部分に絞り、`beyondExtent` を立てない | 未指定ならcode path・合法位置・checkpoint・`beyondExtent` は不変 |
+| `src/domain/search/existingGogmaRouteSearch.ts` | 指定時、sourceの列挙に「形のOwnedWeapon IDであること」を加え、laneが `zero` の側のstream base（`startSkillCounter` / `bonusBase`）を作らない | 未指定なら不変 |
+| `src/domain/search/ownedNormalArtianRouteSearch.ts` | 指定時、sourceを形のOwnedWeapon IDに限る。巨戟化位置は上記の共通部分。Bonus stream baseの生成条件は形のBonus laneが使う操作のsupportだけにする（§5.3の8） | 未指定なら不変（Reset supportの条件を含む） |
+| `src/domain/search/normalArtianRouteSearch.ts` | 指定時、Counterを形のCounter IDに、offsetを p − origin の1つに限る（他のoffsetを予測もenqueueもしない）。blind variantを登録しない。巨戟化位置は共通部分。Bonus stream baseの生成条件は所持通常と同じ | 未指定なら不変（全offset、#104の規則、blind variant、Reset supportの条件を含む） |
+| `src/domain/search/bonusStream.ts` | `BonusStreamBase` に任意field `shapePolicy`（§5.3）。held-aware読取り（`readReservedDepth()`）だけが解釈し、形が許す操作だけを生成し、そのsupportだけを、その操作を行うstage・stateでだけ評価・記録する。ordinaryの `readDepth()` / `solve()` は指定されたbaseを拒否する（throw）。`bonusStreamBaseKey()` は指定時だけ要素を足す | 未指定ならcode path、support評価とunsupported記録、stream key文字列、prediction、state、frontier、順序、single-pass cursorは不変 |
+| `src/domain/search/targetSearchScheduler.ts` | constructorの任意の第4引数 `shapeFilter`（§5.3）。`addBase()` で最終admission（形に一致しないbaseを登録しない）、形が要求するlaneだけを（lane開始Idealでも）開く、形の最終位置で終わる解だけをcrossへ渡す、admitしたbaseのBonus noticeを `shapeFilter` へも渡す | 未指定なら現行どおり（`shapeFilter === undefined` の分岐だけ） |
+| `src/domain/search/alternative/plannerAlternativeSearch.ts` | setup・登録・delivery loopを内部関数（例: `runPlannerAlternativeFrontier()`）へ抽出する。内部関数は起動するprimitiveの列を引数に取り、`visitPlannerAlternativeCandidates()` は従来の3種類を `shapeFilter` / `routeBaseConstraint` 無しで渡す（挙動不変のrefactor） | 入出力、配送順、summary、prediction回数、instrumentation / runtime observerの境界は不変 |
+| 新規 `src/domain/search/research/`（名前は提案） | `visitShapeConstrainedRouteCandidates()`、型、入力検証、base到達の診断、route policy token。`src/domain/search/index.ts` から再exportしない | Productionから到達しない（isolation test） |
 
 既定時不変の根拠と確認方法:
 
 - 追加はすべて任意引数・任意fieldで、未指定時は既存の分岐をそのまま通る。抽出refactorは処理順を変えない
 - 2aでは、変更の **前に** 現行コードに対するgolden test（既存fixtureでのPlanner Alternative Searchの配送 `candidateStableKey` 列・summary・
-  prediction呼出し回数、通常Candidate Searchの結果、Bonus streamの `readDepth()` / `readReservedDepth()` の生成state列）を追加し、変更後も同じであることを
-  固定する。既存testは変更しない
+  種類別の予測呼出し回数、起動したprimitiveと登録したbase、通常Candidate Searchの結果、Bonus streamの `readDepth()` / `readReservedDepth()` の生成state列と
+  support問合せ・unsupported通知）を追加し、変更後も同じであることを固定する。既存testは変更しない
 - search identity（`createPlannerAlternativeSearchIdentity()`、`PLANNER_ALTERNATIVE_ROUTE_POLICY_VERSION`）、Candidate factory、Planner、永続形状は変えない。
   同じPlannerInputに対するProduction出力が変わらないので、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、`DATABASE_SCHEMA_VERSION` 10、
   `ExportRoot.schemaVersion` 13、`production-rng:c5-e7`、Master `dataVersion` 4はいずれも動かない（2aでisolation / version testに含める）
@@ -237,11 +289,14 @@ G1 / G2 / G3と費用:
 
 - G1 / G2: lane開始Idealでも、形が要求するlaneのchannelを開く（§6）
 - G3: Bonusの操作種別policyでKeepの入力履歴を1つに固定するので、両変種とも代表化が起きない（§7）
-- 費用: Keepの入力layoutが1つに固定されるので、frontierは位置数まで、1 depthの生成stateは「位置数 × 窓」までに抑えられ、layout数の因子が消える
-  （推定。実測は2b以降・D-0B-2）。baseは1つだけ登録され、読むSkill / Bonus streamは各1本である
+- 費用（base登録前）: 起動するprimitiveは1つ、sourceは1つ、新規NormalのoffsetはpだけでNormal予測は1回、巨戟化Skillの予測はcの1回、base登録の
+  queue workは1つになる。巨戟化位置の合法判定の歩行（予測なし）とsupportの問合せは残る（§3.9 / §10.3）
+- 費用（stream）: Keepの入力layoutが1つに固定されるので、frontierは位置数まで、1 depthの生成stateは「位置数 × 窓」までに抑えられ、layout数の因子が消える
+  （推定。実測は2b以降・D-0B-2）。読むSkill / Bonus streamは各1本である。D-0Bで費用を支配したのはこのstreamの側であり、base登録前の費用とは分けて扱う
 
-実装量の目安（実装前の概算であり確定値ではない）: 2aはProduction 3 file（各数十行）と新規module（約200〜300行）、test（数百行）。B-iはResearchだけで
-同程度の行数を要し、うち約75行がProductionの複製・再実装になる。B-iiは複製を持たない。
+実装量の目安（実装前の概算であり確定値ではない）: 2aはProduction 7 file（各数十行。primitive 3つへの制約分岐、`routeSearchShared.ts`、`bonusStream.ts`、
+`targetSearchScheduler.ts`、`plannerAlternativeSearch.ts` の抽出）と新規module（約200〜300行）、test（数百行）。B-iはResearchだけで同程度の行数を要し、
+うち約75行がProductionの複製・再実装になる。B-iiは複製を持たない。
 
 ### 4.3 比較
 
@@ -249,7 +304,7 @@ G1 / G2 / G3と費用:
 | --- | --- | --- |
 | Production file変更 | なし | あり（任意引数・任意fieldと抽出refactor、新規Research module）。**要オーナー承認** |
 | Production挙動・計算版数 | 変わらない | 変わらない（golden testで固定） |
-| base取得 | subclassで捕捉。primitiveの登録振る舞いと遅延登録の順序に依存 | Search Domain内のadmissionで選ぶ。内部手順への外部依存なし |
+| base取得 | subclassで捕捉。primitiveの登録振る舞いと遅延登録の順序に依存。base登録前の予測・queue workは減らない | primitive選択・source / Counter / offset・巨戟化位置をbase生成前に制限し、`addBase()` で最終admission。内部手順への外部依存なし |
 | context構成・composition | 複製・再実装（約75行） | 既存のものを共有 |
 | G1 / G2 | 可能 | 可能 |
 | `keep_from_source` | 可能（`keep_only` × held-aware読取りという未使用の組合せに依存） | 可能（policyとして明示し、2aでtest） |
@@ -262,9 +317,9 @@ G1 / G2 / G3と費用:
 ### 4.4 決定
 
 1. **主方式: B-ii。** 根拠は、B-iの不足（§4.1）がD-0Bの未解決Target（`reset_then_keep`、長いchain、別sourceの先行配送）とG3そのものであること、
-   B-iiがそれらをstream内部の操作種別policyとbase admissionで解き、composition・context・Candidate factoryを共有して複製を持たないこと、
-   未指定時の不変性を任意引数とgolden testで示せることである
-2. **必要な変更**: §4.2の表（Production 3 file + 新規Research module）と、Research側の新方式（§5.4、2b）
+   B-iiがそれらをbase生成前の早期制約、stream内部の操作種別policy、base admissionで解き、composition・context・Candidate factoryを共有して複製を
+   持たないこと、未指定時の不変性を任意引数とgolden testで示せることである
+2. **必要な変更**: §4.2の表（Production 7 file + 新規Research module）と、Research側の新方式（§5.4、2b）
 3. **不採用方式（B-i）の理由**: §4.1の「実現できない」2点と、内部手順への依存
 4. **主方式が成立しなかったときのfallback**（B-iiが承認されない、または2aで既定時不変を示せない場合）:
    - **F1（B-i限定）**: Research側consumerで、Bonus laneが `none` / `keep_from_source` の形（Skill laneは継続形を含む）だけを形状制約付きでmaterializeし、
@@ -334,14 +389,37 @@ export interface ShapeConstrainedSearchInput {
   shape: RouteShapeConstraint
 }
 
+/**
+ * Research専用。`RouteSearchContext` の任意field `routeBaseConstraint`（Production contextは持たない）。
+ * shape.base とlaneの必要操作から作り、Route search primitiveがbase生成前に読む。
+ */
+export type RouteBaseConstraint = { lanes: RouteBaseLaneNeeds } & (
+  | { kind: 'owned_gogma'; ownedWeaponId: OwnedWeaponId }
+  | { kind: 'owned_normal'; ownedWeaponId: OwnedWeaponId; conversionSkillPosition: number }
+  | { kind: 'new_normal'; counterId: NormalArtianCounterId; productionTargetPosition: number; conversionSkillPosition: number }
+)
+/** 形のlaneが使う操作。primitiveのstream base生成条件と、問い合わせるsupportを決める */
+export interface RouteBaseLaneNeeds { skillStream: boolean; bonusOperations: 'none' | 'reset' | 'keep' | 'reset_then_keep' }
+
+/** baseに到達できない理由。prediction support以外の前提違反と、support・capabilityの不足を分ける */
+export type ShapeBaseUnavailableReason =
+  | { kind: 'source_not_found' | 'source_incompatible' | 'source_exclusive' | 'source_protected' | 'source_not_convertible' }
+  | { kind: 'normal_counter_unavailable' }                                  // 形のCounterがTargetの種別・レア8・確定でない
+  | { kind: 'production_target_blocked' | 'production_target_outside_extent' }
+  | { kind: 'conversion_position_not_legal'; legalPositions: number[] }    // conversionSkillPositions() の結果に c が無い
+  | { kind: 'capability_unavailable'; capability: 'normal_artian' | 'skill' | 'gogma' | 'keep_bonuses' }
+  | { kind: 'prediction_unsupported'; prediction: 'normal_artian' | 'skill' | 'gogma_reset' | 'gogma_keep'; reason: RngPredictionUnsupportedReason }
+
 export interface ShapeConstrainedSearchExecution {
   targetWeaponId: TargetWeaponId
   summary: { deliveredCandidates: number; exhausted: boolean; stoppedByExtent: boolean }
   stoppedByConsumer: boolean
-  /** baseの到達状況（fail closedの理由づけ用の診断） */
-  base: { admitted: boolean; registeredBases: number; skipped: { route: RouteKind; reason: SkippedRouteReason }[] }
-  /** admitしたbaseのBonus streamが報告したunsupported予測 */
-  unsupportedPredictions: UnsupportedAmendmentPrediction[]
+  /** base到達の結果。admitted = false のとき、下記3の診断で最初に該当した理由 */
+  base: { admitted: boolean; unavailable: ShapeBaseUnavailableReason | null }
+  /** 形が必要とするBonus操作について、admitしたbaseのBonus streamが報告したunsupported */
+  requiredUnsupportedPredictions: UnsupportedAmendmentPrediction[]
+  /** 形が禁止する操作のunsupported notice数。禁止操作のsupportは評価しないので契約上は常に0（2aのtestで固定）。分類には使わない */
+  forbiddenOperationNotices: number
 }
 
 export function visitShapeConstrainedRouteCandidates(
@@ -350,35 +428,101 @@ export function visitShapeConstrainedRouteCandidates(
 ): Promise<ShapeConstrainedSearchExecution>
 ```
 
+**処理順**（既存のqueue構造に合わせた具体形。§3.9の制約位置1〜4に対応する）:
+
+```text
+visitShapeConstrainedRouteCandidates(input, engine, onCandidate, options)
+  a. 入力・reservation・shapeの検証（予測なし）                              違反 → invalid_input / invalid_shape（throw）
+  b. context = 共有のcontext構成（§3.1の2）+ routeBaseConstraint            予測なし
+  c. base到達の診断（下記3）: primitiveと同じhelperを同じ順で評価する          不可 → primitiveを起動せず base.unavailable を返して終了
+  d. RouteKind選択（下記2）: shape.base.kind のprimitiveだけを起動する
+  e. 制約付きprimitive（下記4〜6）: 形のbaseだけを生成する
+       所持巨戟:   形のsourceだけを同期に addBase（queue workなし、予測なし）
+       所持通常:   conversionSkillPositions()（正式な歩行・checkpoint）→ [c]
+                   → 1 work（lowerBound 1）→ settle: predictAt(c) → addBase
+       新規Normal: conversionSkillPositions() → [c] → offset p − origin の1 work（lowerBound forgeCount + 1）
+                   → settle: predictNormalArtian(p)（memo）→ predictAt(c) → addBase
+  f. addBase(base): shapeFilter.admit(base) による最終admission → lane → channel購読と解の制限（下記7）
+  g. scheduler.step(): Skill / Bonus streamのdepth読取り（下記8 / 9）、Lazy Ideal Cross、composition（下記11）
+  h. 共有のdelivery loop（cost層単位のbuffer、6キー順）→ consumer（下記12）
+```
+
+base登録のworkとstreamのworkは同じ `SearchWorkQueue` に入る。streamのworkは `addBase()` で初めてenqueueされるので、base登録のworkが先に確定する。
+cancel / budget（Research側の `shouldCancel`、§10.4）は、巨戟化位置の歩行で跨ぐheld位置ごとのcheckpoint、`scheduler.step()` ごとのcheckpoint、
+primitive内のloopのcheckpointで、base登録前の処理にも作用する。所持巨戟の同期登録にはcheckpointが無いが、予測もqueue workも伴わない。
+
 意味:
 
 1. **入力検証**: Planner Alternative Searchと同じorigin / extent / reservationの検証に加え、shapeの構造（位置が非負整数、`resetPosition < finalPosition`、
    baseの種類とlaneの組合せ: 巨戟化baseはBonus lane `zero` を持たない、巨戟化baseのSkill lane `reset_skills` は `finalPosition > conversionSkillPosition`、
    各位置がextentの窓内）を検査し、違反は `invalid_input` / `invalid_shape` でthrowする
-2. **base admission**: setup・Route search primitive・登録順・queue駆動はPlanner Alternative Searchと同じ（§3.1 / §3.2、共有の内部関数）。schedulerは
-   `shapeFilter.admit(base)` が受け入れたbaseだけを登録する。受理条件は、`sourceOwnedWeaponId` の一致、巨戟化baseでは `convert_normal_to_gogma` の
-   `skillCounterBefore = c`、新規Normalでは `create_normal_artian` の `normalCounterAfter − 1 = p` かつblind作成でないこと、そして形が要求するlaneの
-   stream baseがprimitive側で非null（保護武器・support不足でないこと）である。受理したbase数と、primitiveのskip理由を `base` に記録する
-3. **lane**: `zero` のlaneは操作0の解だけをcrossへ入れ、channelを購読しない。streamのlane（`reset_skills` / `reset` / `keep` / `reset_then_keep`）は、
-   **操作0の解をcrossへ入れず**、lane開始状態のIdeal判定に関係なくchannelを購読する（G1 / G2）
-4. **Skill lane**: baseの開始Counter（所持巨戟はorigin、巨戟化は c + 1）から、既存のheld-aware Skill streamをそのまま読む。crossへ渡すのは、最後のown operationの
-   位置（最後のstepの `skillCounterBefore`）が `finalPosition` の解だけである
-5. **Bonus lane**: primitiveのstream base（開始Gogma位置、5枠、scope）に `shapePolicy` を付けたbaseでheld-aware Bonus streamを読む。`shapePolicy` の生成規則:
-   - 共通: `finalPosition` より後に自分の操作を置かない（窓をそこで切り、extent到達を記録しない）。予測memo、support判定、held窓の規則、
-     frontierの代表規則、single-pass cursorは既存のまま。`shapePolicy` は既存の `amendmentPolicy`（`keep_only`）と併用しない（併用はthrow）
-   - `reset`: Resetだけを生成する（Keepを生成しない）
-   - `keep`: Keepだけを生成する（Resetを生成しない。Keepの入力は常にbaseのlayout）
-   - `reset_then_keep`: Resetは `resetPosition` 以下の位置だけ、Keepは `resetPosition` より後の位置だけで、かつ最後のResetが `resetPosition` にあるstateからだけ生成する
+2. **RouteKind選択**: `owned_gogma` → `searchExistingGogmaRoutes()`、`owned_normal` → `searchOwnedNormalArtianRoutes()`、`new_normal` →
+   `searchNormalArtianRoutes()`（predicted variantだけ）だけを起動する。形と無関係なprimitiveは起動しない。共有の内部関数は起動するprimitiveの列を
+   引数に取り、Planner Alternative Searchは従来どおり3種類を渡す
+3. **base到達の診断**: 下記4〜6と同じhelper（`selectCompatibleOwnedGogmaWeapons()` / `selectConvertibleOwnedNormalArtianWeapons()`、
+   `isAvailableRouteSource()`、`selectSearchableNormalCounters()`、reservationの `isBlocked()`、`conversionSkillPositions()`、Engine capability、
+   `predictionSupport.*`）を、source → Counter / production target → 巨戟化位置 → capability → laneが使う操作のsupport の順に評価し、最初に該当した
+   理由を `ShapeBaseUnavailableReason` で返す。supportはNormal / Skill / Resetをweapon type × elementで、Keepは `keep` laneのときだけbaseの5枠で問い合わせる
+   （`reset_then_keep` のKeep入力はg1のReset結果であり、予測前には無いので、streamの中でだけ評価する）。形が使わない操作のsupportは問い合わせない。
+   予測は行わない（supportの問合せと位置計算だけ）。診断はadmissionを決めない（決めるのは4〜7）。
+   診断が通ったのにbaseが登録されない場合はseamの契約違反である
+4. **sourceの制限**: 3種類の制限を区別し、互いに代用しない
+   - 正式reservationの排他source: 既存の `isAvailableRouteSource()`（変えない）
+   - 保護武器の操作禁止: 既存の規則（保護中の所持巨戟はstream baseがnull、保護中の所持通常は変換元でない。変えない）
+   - Research専用の期待source: `routeBaseConstraint.ownedWeaponId` との一致を、primitiveのsource列挙に加える。**reservationを編集して実現しない**
+5. **Counter / production targetの制限**（新規Normal）: Counterは `routeBaseConstraint.counterId` のもの（`selectSearchableNormalCounters()` を通ること）だけ。
+   offsetは p − origin の1つだけをenqueueし、それ以外のoffsetのNormal予測・queue workを作らない。p < origin、p − origin ≥ `maxNormalAdvance`、
+   blockedのpは登録しない（診断で `production_target_*` になる）。作成は既存の `heldPrefixNormalCreation(reservation, origin, p)` のまま、
+   lowerBoundは `forgeCount + 1`、Normal予測は既存memo経由のp 1回である。blind variantは登録しない（Global Assignmentはblindをoptionにしない）
+6. **巨戟化位置の制限**: `conversionSkillPositions()` は、正式な合法位置の判定（originから `[from, 最初の非held位置] \ blocked` を
+   `conversionSkillPositionLimit` まで歩く。§3.9）をそのまま行い、指定時は結果を `[c] ∩ 合法位置` に絞って、`beyondExtent` を立てない（c以外の位置は
+   形の外であり、未読のworkではない）。巨戟化Skillの予測（`predictAt()`）はcの1回だけになる。cが合法位置に無ければbaseは生成されない
+   （診断で `conversion_position_not_legal`）
+7. **stream baseの生成条件・最終admission・lane**: 指定時、primitiveはlaneが使う操作のsupportだけを条件にstream baseを作る
+   - Skill: laneが `reset_skills`、または巨戟化base（巨戟化自体がSkill予測）なら、既存と同じSkill capability / supportを要求する。所持巨戟でlaneが `zero` なら
+     `startSkillCounter` を作らない
+   - Bonus: laneが `zero` なら `bonusBase` を作らない。streamのlaneなら、Gogma入力の確定とGogma予測capabilityに加え、laneがResetを使う
+     （`reset` / `reset_then_keep`）ときだけReset supportを、Keepを使う（`keep` / `reset_then_keep`）ときだけKeep capabilityを要求する。新規Normal・所持通常の
+     既存の「Reset supportが無ければBonus stream baseを作らない」条件は、無指定時だけに残る。Keepの入力ごとのsupportはstreamが評価する（下記8）
+
+   `addBase()` は `shapeFilter.admit(base)` で、`sourceOwnedWeaponId`、巨戟化の `skillCounterBefore = c`、新規Normalの `normalCounterAfter − 1 = p` と
+   blind作成でないこと、形が要求するlaneのstream baseが非nullであることを確かめる（4〜6の後なので通常は一致する。不一致はseamの契約違反）。
+   `zero` のlaneは操作0の解だけをcrossへ入れ、channelを購読しない。streamのlaneは **操作0の解をcrossへ入れず**、lane開始状態のIdeal判定に関係なく
+   channelを購読する（G1 / G2）
+8. **Bonus lane（`shapePolicy`）の生成規則とsupport契約**: primitiveのstream base（開始Gogma位置、5枠、scope）に `shapePolicy` を付けたbaseでheld-aware
+   Bonus streamを読む。各stateは最後のResetの位置を内部fieldとして持つ（Reset stateは自分の位置、Keep stateは親から継承）。形が許す操作だけを生成し、
+   その操作のsupportだけを、その操作を置けるstage・stateでだけ問い合わせる。形が禁止する操作のsupportは問い合わせず、unsupportedも記録しない
+
+   | policy | 生成する操作 | 問い合わせるsupport | 問い合わせないsupport |
+   | --- | --- | --- | --- |
+   | `reset` | 窓の各位置でReset（`finalPosition` 以下） | `gogmaReset()`（そのdepthにResetを置ける位置が1つ以上あるとき） | Keep（`gogmaKeep()` を呼ばない） |
+   | `keep` | 各frontier stateから、窓の各位置でKeep（入力は常にbaseのlayout） | `gogmaKeep(state.bonuses)`（窓にKeepを置ける位置があるstateだけ） | Reset（`gogmaReset()` を呼ばない） |
+   | `reset_then_keep` | Reset段階: `resetPosition` 以下の位置でReset。Keep段階: 最後のResetが `resetPosition` にあるstateから、`resetPosition` より後の位置でKeep | Reset段階の位置があるdepthだけ `gogmaReset()`。Keep段階のstateだけ `gogmaKeep(state.bonuses)` | Reset段階のstateのKeep support、Keep段階のReset support |
+
+   - 共通: `finalPosition` より後に自分の操作を置かず、窓をそこで切ってextent到達を記録しない（`reservedWindow()` のsupport読取りによるextent判定も
+     行わない）。Reset chainの親の不変条件（`bonusStream.ts:849-861`）はResetを置ける位置だけに適用する。予測memo、held窓の規則、frontierの代表規則
+     （(位置, layout) ごと、`lastResetDepth` 最大 → 5枠のstable key）、single-pass cursorは既存のまま
+   - `reset_then_keep` のKeep段階は、g1のReset結果のlayoutを親のlayoutとして引き継ぎ（Keepはfamilyを保つ）、Resetを生成しない
+   - `shapePolicy` は既存の `amendmentPolicy`（`keep_only`）と併用しない（併用はthrow）
    - crossへ渡すのは、最後のown operationの位置が `finalPosition` の解だけである
-6. **composition / Candidate**: Lazy Ideal Cross、`composeScheduledRoute()`、`createPlannerAlternativeCandidate()`（最終状態のIdeal判定、`validateBuildRoute()`、
-   origin基準の到達量、両hash、観測trace）をそのまま使う。Search DomainはCandidate ID・timestamp・identityを作らない
-7. **配送と終了**: Planner Alternative Searchと同じcost層単位のbufferと6キー順。`excludedRouteKeys` は持たない（常に空）。終了はconsumer stop、
-   `exhausted` / `stoppedByExtent`、cancel（`CandidateSearchError('cancelled')`）。shapePolicyのBonus streamは `finalPosition` で窓を切りextent到達を
-   記録しないが、Skill streamには自然な終わりが無いので `stoppedByExtent` が立ち得る。summaryは両者を区別しないので、Research側は未配送の終了を
-   `exhausted` / `stoppedByExtent` で分けず、どちらも前提違反として扱う（§10.1）
+9. **Skill lane**: baseの開始Counter（所持巨戟はorigin、巨戟化は c + 1）から、既存のheld-aware Skill streamをそのまま読む。crossへ渡すのは、最後のown operationの
+   位置（最後のstepの `skillCounterBefore`）が `finalPosition` の解だけである
+10. **unsupportedの通知**: admitしたbaseのBonus streamが報告したunsupportedは、8の契約により形が必要とする操作のものだけであり、`requiredUnsupportedPredictions`
+    に入れる。形が禁止する操作の種類のnoticeが現れた場合は `forbiddenOperationNotices` に数えるだけで、`requiredUnsupportedPredictions` に入れない。
+    primitiveが自分の `RouteSearchResult` に積むwarning / skipped（Planner Alternative Searchと同じく捨てる）は分類に使わない
+11. **composition / Candidate**: Lazy Ideal Cross、`composeScheduledRoute()`、`createPlannerAlternativeCandidate()`（最終状態のIdeal判定、`validateBuildRoute()`、
+    origin基準の到達量、両hash、観測trace）をそのまま使う。Search DomainはCandidate ID・timestamp・identityを作らない
+12. **配送と終了**: Planner Alternative Searchと同じcost層単位のbufferと6キー順。`excludedRouteKeys` は持たない（常に空）。終了はconsumer stop、
+    `exhausted` / `stoppedByExtent`、cancel（`CandidateSearchError('cancelled')`）。shapePolicyのBonus streamは `finalPosition` で窓を切りextent到達を
+    記録しないが、Skill streamには自然な終わりが無いので `stoppedByExtent` が立ち得る。summaryは両者を区別しないので、Research側は未配送の終了を
+    `exhausted` / `stoppedByExtent` で分けない（§10.1）
+
+**無指定時の不変性**: `routeBaseConstraint` / `shapeFilter` / `shapePolicy` のどれも渡さない経路（Production callerのすべて）では、起動するprimitive（3種類）、
+source / Counter / offset / 巨戟化位置の列挙、support・capabilityの問合せとunsupportedの記録・notice、stream base生成条件、Bonus streamの生成state・frontier・
+memo・single-pass、予測回数、Candidateの内容と順序、summaryを変えない（§15のgolden test）。
 
 Seamが行わないこと: reservationの追加・改変、新しいprediction・RNG規則、新しいrequired / skippable・共有規則、Candidateの手組み、Planner判断（Counter
-precondition、physical action identity、inventory）。
+precondition、physical action identity、inventory）、形が禁止する操作のsupport評価。
 
 ### 5.4 Research側の手順（2b）
 
@@ -389,10 +533,11 @@ materializeShapeConstrained(shape, materializedEntries, inputs):
   3. routeShape  = toRouteShapeConstraint(shape.option)                       // §5.2の対応。option以外を読まない
   4. predicted   = predictShapeSearchScale(reservation, extent, routeShape)   // §10.3。予測しない・Searchしない
      premise     = checkMinimalRoutePremises(reservation, extent, routeShape) // §5.5の証明が使う位置条件（c が合法、p と required 位置が
-                                                                              // blockedでない、sourceが排他でない、required 位置がextent内）を位置計算だけで検査
+                                                                              // blockedでない、sourceが排他・保護でない、required 位置がextent内）を位置計算だけで検査
      premise 違反 → fail closed（shape_base_unavailable）。gate 超過 → not_executed(search_scale_gate)
   5. identity    = shapeConstrainedSearchIdentity(...)                       // §9.1
-  6. execution   = visitShapeConstrainedRouteCandidates({ origin, targetWeaponId, extent, reservation, shape: routeShape }, engine,
+  6. counted     = countingEngine(engine)                                     // §10.4。Production Engineへそのまま転送し、予測呼出しを種類別に数えるだけ
+     execution   = visitShapeConstrainedRouteCandidates({ origin, targetWeaponId, extent, reservation, shape: routeShape }, counted,
                      candidate => {
                        entry = deterministic materializer（identity、prefix）.materializeBuildListEntry(candidate, PlannerInputのEntry).entry
                        validateBuildListEntry(entry)、matchExpectedShape(entry, shape)            // 不一致 → fail closed（match_inconsistent）
@@ -401,10 +546,13 @@ materializeShapeConstrained(shape, materializedEntries, inputs):
                      },
                      { shouldCancel: () => userCancel() || budgetExceeded(), yieldControl, instrumentation: budget counters })
   7. 分類（§10.1）: accept → materialized。budget による停止 → unconfirmed(shape_search_budget_reached)。cancel → unmeasured(cancelled)。
-     exhausted / stoppedByExtent かつ未配送 → fail closed（shape_constrained_unreachable）。unsupported 予測の報告 → fail closed（prediction_support_inconsistent）
+     base未到達 → 理由により shape_base_unavailable（source・Counter・位置）/ prediction_support_inconsistent または unsupported（support・capability）。
+     必要な操作のunsupportedがあり未配送 → prediction_support_inconsistent（Phase A判定あり）または unsupported(required_prediction_unsupported)（判定なし）。
+     base到達・必要な操作のunsupportedなし・未配送 → fail closed（shape_constrained_unreachable）。forbiddenOperationNotices は分類に使わない
 ```
 
-- sourceはbase admission（Search前の登録段階）で拘束し、巨戟化位置もadmissionで固定する
+- RouteKind・source・Counter・production target・巨戟化位置は、Search Domain側でbase生成前に制限される（§5.3の2〜6）。Research側は形から
+  `RouteShapeConstraint` を作るだけで、reservationを編集しない
 - Reset→Keepの切替位置は `shapePolicy.reset_then_keep.resetPosition` = g1 で固定し、Keepはg1のResetの後だけになる
 - `matchExpectedShape()` の完全一致は、stream段階の形の制限（4 / 5）によって構成上成り立ち、照合は独立した確認として残す（一致しなければfail closed）
 
@@ -417,8 +565,12 @@ materializeShapeConstrained(shape, materializedEntries, inputs):
 - P3: reservationはそれらのEntryから `derivePlannerAlternativeReservation()` で導出した正式な値である（held = 先行Routeの全unit位置、blocked = その必須かつ
   共有不可unitの位置、排他武器 = その参照武器）
 - P4: extentは `extentFor(shape)` である
-- P5: EngineとそのsupportはPhase Aと同じである
-- P6: seamは §5.3の規則どおりに実装されている
+- P5: EngineはPhase Aと同じであり、R_minが必要とする各予測のsupportは、Phase Aがsupportedと判定した問いと同じ答えになる。Normal / Skill / Resetは
+  weapon type × elementの問い（`TargetReach.support`）、Keepはfamily layoutの問いである。Keepについては、Phase Aが課すfamily-only Keep support契約
+  （同じlayoutの入力はsupportが一致する。`reachTable.ts:240-256`、§3.10）を前提にする。現行Production EngineのKeep supportはtierを読まないので
+  （`productionRngEngine.ts:130-146`）、chainの途中のKeep入力（Keep結果。sourceやg1のReset結果と同じlayout）もこの契約の範囲にある。Engine capability
+  （`supportsGogmaPrediction` 等）はPhase Aが読まないので、P5にはcapabilityが真であることを含める
+- P6: seamは §5.3の規則（早期制約、stream base生成条件、`shapePolicy` の生成規則とsupport契約、admission）どおりに実装されている
 
 **主張**: このとき、対象Target t について、source・巨戟化位置・production target・stream別required位置・最終武器が形と一致するRoute R_min が
 形状制約付き探索の空間にあり、最初に配送される。
@@ -428,26 +580,41 @@ materializeShapeConstrained(shape, materializedEntries, inputs):
 - base: 所持武器はC1により先行Targetのsource（排他武器）でない。新規Normalのp はC2により先行Targetのproduction target（blocked）でない。
   巨戟化位置 c は、Phase Cの順序の自己検査（`deriveMaterializationOrder()`、`coverage.ts:397-449`）により c より前のSkill位置がすべて先行Targetに帰属し、
   先行Routeはそれぞれ自分の開始位置から最後の操作までを自分の操作かheldで埋める（coverage条件）ので、origin〜c − 1 はすべてheldであり、c はC2によりblockedでない。
-  よって `conversionSkillPositions()` は c を返し、baseが登録される
+  よって `conversionSkillPositions()` の合法位置は c を含み、`[c] ∩ 合法位置` = [c] である
+- 早期制約はR_minのbaseを除かない: 起動するprimitiveは形のbase種類のもの、source / Counter / offsetの制限は形の値そのもの、巨戟化位置の制限は
+  正式な合法位置との共通部分であり、作成（`heldPrefixNormalCreation()`）・予測（memo）・baseの内容は無制約時に同じ値で登録されるbaseと同じである。
+  stream baseの生成条件はlaneが使う操作のsupport / capabilityだけで、P5によりR_minの操作はそれを満たす。よって形のbaseが登録・admitされる
 - R_min: 各streamで、自分の操作を「窓内の非held位置 ∪ 自分のrequired位置」に置き、それ以外のheld位置は跨ぐ。非held位置はblockedでなく
   （blocked ⊆ held）、required位置はC2によりblockedでないので、すべて合法であり、coverage条件を満たす。操作種別は形のとおり（Skill: Reset Skills、
   Bonus: `reset` はReset、`keep` はKeep、`reset_then_keep` はg1以下でReset・g1より後でKeep）で、shapePolicyが許す
 - 予測: 必要な予測（Normal p、巨戟化 c、各Reset Skills、各Reset / Keep）はP5によりsupportされる（`keep_from_source` のsource layoutと `reset_then_keep` の
-  layout(Reset g1) はPhase AでKeep supportを確認済み）
+  layout(Reset g1) はPhase AでKeep supportを確認済みで、chainのKeep入力はすべてそのlayoutを持つ）。形が禁止する操作のsupportは `shapePolicy` が問い合わせ
+  ないので、R_minの生成を妨げない
 - 最終武器: Reset Skills / Resetは位置だけ、Keepは (位置, layout) だけで結果が決まるので、R_minの最終武器はrequired-only再生の結果と同じで、P1によりIdeal
 - required位置: `createPlannerRouteUnitPlans()` のskip規則（`plannerRouteProgress.ts:279-314`）で、巨戟化は常にrequired、Reset Skills連鎖・Reset / Keep連鎖は
   laneの最後だけrequired、`reset_then_keep` ではKeepが続くg1のResetがrequired、Normalはproduction targetだけがrequiredなので、形のrequired位置と一致する
 - 配送順: 形に一致するRouteは「非held位置 ∪ required位置」を必ず含むので、R_minのown operation数が最小で、その集合は一意である。6キー順の第1キーで
   最初に配送され、決定的である
 
-**帰結**: 前提が成り立つ限り、形状制約付き探索が一致を配送せずに終わることは無い。したがって未配送のままの終了（`exhausted` / `stoppedByExtent`）と、
-Searchが報告するunsupported予測は、いずれも前提（Phase A / C、先行materialization、seam実装）の破れを示す。これらを「形が存在しない」へ読み替えず、
-fail closedする（§10.1）。補題は2bのproperty test（§15）で固定するまで未検証であり、実Exportでの成立はD-0B-2の再smokeで確かめる。
+**帰結**: 前提が成り立つ限り、形状制約付き探索が一致を配送せずに終わることは無い。前提のどれが破れたかで分類を分け（§10.1）、どれも「形が存在しない」へ
+読み替えない。
+
+- source・Counter・位置の前提（P1〜P4）の破れは、base到達の診断で `shape_base_unavailable` になる
+- support・capabilityの前提（P5）の破れは、Phase Aが同じ問いをsupportedと判定していれば `prediction_support_inconsistent`（fail closed）、判定していない
+  問い（capability等）なら `unsupported` になる。いずれも「必要な予測が得られない」という事実で、形の不在ではない
+- baseに到達し、必要な操作のunsupportedも無いのに未配送で終わった場合（`exhausted` / `stoppedByExtent`）だけを、補題の破れ（`shape_constrained_unreachable`）とする
+
+補題は2bのproperty test（§15）で固定するまで未検証であり、実Exportでの成立はD-0B-2の再smokeで確かめる。P5のうちfamily-only Keep契約はPhase Aが
+自分の入力について検査している（§3.10）が、chain途中のKeep入力についてはEngine実装の性質（tierを読まない）に依存するので、2aでsupportが非対称な
+mock Engineを使い、契約が破れた入力で上記の分類になることを固定する。
 
 ### 5.6 不変条件
 
-- 正式reservationのheld / blocked / 排他武器を形状制約に流用しない・追加しない・改変しない。形状制約は別の入力（`RouteShapeConstraint`）である
+- 正式reservationのheld / blocked / 排他武器を形状制約に流用しない・追加しない・改変しない。形状制約は別の入力（`RouteShapeConstraint` と、
+  それから作る `routeBaseConstraint`）である。期待sourceの制限・巨戟化位置の制限・offsetの制限はいずれもreservationの外で行う
 - 未materialize Targetの位置をreservationへ先取りしない
+- 巨戟化位置の合法判定は `conversionSkillPositions()` の正式な歩行を省かない。形の c はその結果との共通部分としてだけ使う
+- 形が禁止する操作のsupportを評価しない。そのunsupportedを、形の不在・Searchの不成立・不変条件違反の根拠にしない
 - coverage条件、silent fast-forward、required / skippable、physical action sharingの既存semanticsを変えない（Search側で判定しない）
 - 予測はProduction RNG Engineの公開APIだけで行い、ゲーム挙動を推測しない。Ideal判定は `satisfiesIdealBonuses()` / `evaluateSkillCondition()`
 - 保護武器を破壊的操作に使わない。保護武器のbaseはprimitiveがstream baseをnullにするので、形が操作を要求すればadmissionされない（前提違反としてfail closed）
@@ -459,8 +626,8 @@ fail closedする（§10.1）。補題は2bのproperty test（§15）で固定�
 
 ### 6.1 G1（`conversion (c, s*)`、c < s*、cがIdeal Skill位置）
 
-- 方式: `shape_constrained` だけ（§11）。base admissionが巨戟化位置 c のbaseを受け入れ、Skill laneを `reset_skills(s*)` として、巨戟化Skillが
-  Idealでも c + 1 からのSkill channelを開く。Bonus laneは形どおり（巨戟化baseのBonusは常にstream）
+- 方式: `shape_constrained` だけ（§11）。制約付きprimitiveが巨戟化位置 c のbaseだけを生成し（§5.3の6。c は正式な合法位置との共通部分）、admission後、
+  Skill laneを `reset_skills(s*)` として、巨戟化SkillがIdealでも c + 1 からのSkill channelを開く。Bonus laneは形どおり（巨戟化baseのBonusは常にstream）
 - 分類: Target記録には常に `policyShape`（`searchPolicyShapeOf()`、§10.2）を残し、「Search policyでは返らない形を新方式で扱った」ことを数えられるようにする。
   そのうえで新方式の段階（admission、stream読取り、配送、検証）とoutcome（§10.1）を記録する
 - 新方式を含まない方式規則 `d0a-v1` では、D-0Bで確定した `not_executed(search_policy_shape)`（候補分類 `not_executed_search_policy`、§10.3の役割
@@ -472,7 +639,7 @@ fail closedする（§10.1）。補題は2bのproperty test（§15）で固定�
   - S2（現在SkillがIdeal → Reset Skills s*）: Skill lane `reset_skills(s*)`。primitiveは未保護の所持巨戟に `startSkillCounter = origin` を与えるので、
     admissionはlaneを開ける
   - B1 / B2（現在Bonusが `gogma_artian` でIdeal → Reset / Keep / Reset→Keep）: Bonus lane `reset` / `keep` / `reset_then_keep`。primitiveは未保護の所持巨戟に
-    `bonusBase` を与える
+    `bonusBase` を与える（所持巨戟のprimitiveはReset supportを条件にしない。laneが使う操作のsupportだけをstreamが評価する。§5.3の7 / 8）
 - 保護武器（Executionで理想品として確定した武器を含む）は、primitiveがstream baseをnullにするので操作できない。Phase Aは保護武器に `none / none` だけを
   与え、C-1がそれを検査する。性能上Idealでも未保護の武器は操作の対象になり得る。この区別は `isProtected` だけで決まり、`status` は読まない（AGENTS.md）
 - A-2で、継続形の判定 `continuationShapeOf()`（G1と、所持巨戟の現在Ideal laneに操作を置くoption）と、`d0a-v1` 用の `SearchPolicyShape` の拡張
@@ -624,26 +791,50 @@ type ShapeConstrainedMaterializationOutcome =
   | { kind: 'unconfirmed'; reason: 'shape_search_budget_reached'; observed: ShapeSearchObserved }
   /** 実行前の規模予測（§10.3）がgateを超えた。Search APIを呼ばない */
   | { kind: 'not_executed'; reason: 'search_scale_gate'; method: 'shape_constrained'; predicted: ShapeSearchScale; exceeded: string[] }
+  /**
+   * 形が必要とする予測・capabilityが得られない。Phase Aが同じ問いを判定していない場合だけ（判定していれば fail closed）。
+   * 形の不在でも未確認でもなく、「このEngineでは必要な予測ができない」という事実
+   */
+  | { kind: 'unsupported'; reason: 'required_prediction_unsupported' | 'capability_unavailable';
+      detail: ShapeBaseUnavailableReason | UnsupportedAmendmentPrediction }
   | { kind: 'unmeasured'; reason: 'cancelled' | 'timeout' | 'out_of_memory' | 'process_failure' }
 ```
 
+supportの問いを次の5つに分け、混同しない。
+
+| 区分 | 例 | 扱い |
+| --- | --- | --- |
+| 1. 形が必要とする操作の予測がunsupported | Reset-only形のReset、Keep-only形のKeep、Reset→Keep形のReset段階のResetとKeep段階のKeep、新規NormalのNormal、巨戟化 / Reset SkillsのSkill | Phase Aの判定の有無で、4または `unsupported` へ振り分ける（下記） |
+| 2. 形が禁止する操作の予測がunsupported | Keep-only形のReset、Reset-only形のKeep、Reset→Keep形のKeep段階のReset / Reset段階のKeep | **評価しない**（§5.3の7 / 8）。noticeが現れても `forbiddenOperationNotices` に数えるだけで、分類・形の存否・不変条件の判断に使わない |
+| 3. 入力全体のcapability不足 | RNG未確定、確定Counterなし、blind Routeしか無い | Phase 0 / Aの `unsupported_input`。materializationへ進まない（従来どおり） |
+| 4. Phase Aのsupport判定との矛盾 | Phase Aがsupportedと記録した問い（Normal / Skill / Resetはweapon type × element、Keepはfamily layout。§3.10）に、Searchがunsupportedと答えた | fail closed `prediction_support_inconsistent`。矛盾した問い・Phase Aの記録・Searchの理由を残す |
+| 5. prediction support以外の前提違反 | 期待sourceが無い・非互換・排他・保護・変換不可、Counter未確定、production targetがblocked / extent外、c が合法位置に無い | fail closed `shape_base_unavailable` |
+
+1は、Phase Aが同じ問いをsupportedと判定していれば4、判定していなければ（Engine capabilityなど、Phase Aが読まない問い）`unsupported` である。
+現行Phase Aの形では、形が必要とするsupportの問いはすべてPhase Aが判定済みなので（§3.10、§5.5のP5）、`unsupported(required_prediction_unsupported)` は
+生じない見込みであり、定義上の受け皿として置く。
+
 | 事象 | 分類 | 意味 |
 | --- | --- | --- |
-| 最初の配送Candidateが照合と独立検証を通る | `materialized` | 形に一致するEntry（Planner未検証） |
-| budget到達（Research側の `shouldCancel` がbudget理由で真） | `unconfirmed(shape_search_budget_reached)` | 「指定された形に到達できなかった」。形の不在ではない |
+| 最初の配送Candidateが照合と独立検証を通る | `materialized` | 形に一致するEntry（Planner未検証）。禁止操作のnoticeや配送前のunsupportedがあっても、配送されたRouteが検証を通れば `materialized` で、それらは診断に残すだけ |
+| budget到達（Research側の `shouldCancel` がbudget理由で真） | `unconfirmed(shape_search_budget_reached)` | 「指定された形に到達できなかった」。形の不在でもsupport不足でもない（同時に記録されたunsupportedは診断に残すだけ） |
 | gate超過 | `not_executed(search_scale_gate)` | 未実行 |
 | ユーザー / runnerのcancel、timeout、OOM、process failure | `unmeasured` | 未計測。timeout / OOM / process failureは従来どおりrunnerが判定する |
-| `exhausted` または `stoppedByExtent` で終わり、未配送 | fail closed `shape_constrained_unreachable` | 補題（§5.5）の前提違反。「形が存在しない」と読まない。summaryはSkill / Bonusのどちらのextent到達かを区別しないので、両者を同じに扱う |
-| 実行前の前提検査（`checkMinimalRoutePremises()`）の違反、またはbaseがadmissionされない | fail closed `shape_base_unavailable` | Phase C / C1 / C2 / 先行materializationの前提違反 |
-| Searchがadmitしたbaseについてunsupported予測を報告 | fail closed `prediction_support_inconsistent` | Phase AとSearchのsupport判定の不一致 |
-| 形の最終位置で終わらない解の配送、またはconsumer stopもcancelも無いのに `exhausted` / `stoppedByExtent` のどちらも立たない終了 | fail closed `shape_search_contract_violation` | seamの契約違反（Bonus側の `stoppedByExtent` が立たないことは2aのseam testで固定する） |
+| 実行前の前提検査（`checkMinimalRoutePremises()`）の違反、またはbase到達の診断が区分5の理由 | fail closed `shape_base_unavailable` | Phase C / C1 / C2 / 先行materializationの前提違反 |
+| base到達の診断、または未配送で終わったときの `requiredUnsupportedPredictions` が区分1で、Phase Aが同じ問いをsupportedと判定済み | fail closed `prediction_support_inconsistent` | Phase AとSearchのsupport判定の矛盾（区分4） |
+| 同じく区分1で、Phase Aがその問いを判定していない（capabilityを含む） | `unsupported(required_prediction_unsupported / capability_unavailable)` | 必要な予測が得られない。形の不在ではない |
+| baseに到達し、`requiredUnsupportedPredictions` が空で、未配送のまま `exhausted` / `stoppedByExtent` で終わる | fail closed `shape_constrained_unreachable` | 補題（§5.5）の破れ。「形が存在しない」と読まない。summaryはSkill / Bonusのどちらのextent到達かを区別しないので、両者を同じに扱う |
+| 形の最終位置で終わらない解の配送、診断を通ったのにbaseが登録されない、consumer stopもcancelも無いのに `exhausted` / `stoppedByExtent` のどちらも立たない終了 | fail closed `shape_search_contract_violation` | seamの契約違反（Bonus側の `stoppedByExtent` が立たないこと、禁止操作のsupportを評価しないことは2aのseam testで固定する） |
 | 照合不一致、独立検証の失敗 | fail closed `match_inconsistent` / `route_verification_failed` | 生成と検証の不一致 |
+
+判定の優先順位: cancel / budget（途中で止めた事実）→ base到達の診断 → 配送の有無 → 未配送時の `requiredUnsupportedPredictions` → `shape_constrained_unreachable`。
 
 - **`shape_mismatch` と断定できる条件**: 新方式には無い。形の不在を新方式だけから断定する契約を置かない（補題により、前提が成り立てば形は存在する）。
   設計 §9.1（PA）の `shape_mismatch`（`summary.exhausted` + 一致なし）は従来どおりで、`d0a-v1` でだけ現れる
-- **input全体のunsupported**（確定していないRNG、確定Counterが無い、blind Routeしか無い等）は、従来どおりPhase 0 / Aの `unsupported_input` で扱い、
-  materializationへ進まない。materialization時点のcapability不足は、Phase Aのsupport判定と矛盾するので上表のfail closedにする
-- 未確認（budget）・未実行（gate）・未計測と、前提違反（fail closed）を混同しない。いずれも「Routeが存在しない」「実行不能」とは書かない
+- 必要な操作のunsupportedを、根拠なく `shape_constrained_unreachable` にしない（unsupportedがあれば区分4か `unsupported`）。禁止された操作のunsupportedは、
+  どの分類の根拠にもしない
+- 未確認（budget）・未実行（gate）・未計測・support不足（`unsupported`）と、前提違反（fail closed）を混同しない。いずれも「Routeが存在しない」
+  「実行不能」とは書かない
 
 ### 10.2 候補分類と設計 §10.3での扱い
 
@@ -653,18 +844,29 @@ D-0Bの候補分類（D-0B記録 §3.3の表）に次を加える。
 | --- | --- | --- | --- |
 | `unconfirmed_shape_search_budget` | `settings_review` | しない | する（budget） |
 | `not_executed_search_scale_gate`（既存。新方式の予測規模を含む） | `settings_review` | しない | する（gate） |
+| `unsupported_shape_prediction`（新規。`unsupported(required_prediction_unsupported / capability_unavailable)`） | `support_review`（新規） | しない | しない（Engineのsupport / capabilityの問題であり、設定の問題ではない） |
 | `fail_closed`（既存。新方式のcodeを含む） | `run_error` | しない | しない |
 
 G1 / G2を新方式で扱った場合も、Target記録の `policyShape`（§6.1）で「Search policyが返さない形」を数え、`not_executed_search_policy`（`d0a-v1` だけで生じる）とは
-別に集計する。設計 §10.3の移行表では、新方式の `unconfirmed` / `not_executed` は「拡大しない」行に、fail closedは移行判定の対象外（run error）に入る。
+別に集計する。設計 §10.3の移行表では、新方式の `unconfirmed` / `not_executed` / `unsupported` は「拡大しない」行に、fail closedは移行判定の対象外
+（run error）に入る。`forbiddenOperationNotices` はどの候補分類にも影響しない（診断の件数として残す）。
 
 ### 10.3 規模予測とgate（実行前、位置計算だけ）
 
-新方式では、sourceが1つ、巨戟化位置が1つ（または無し）、Route baseが1つに拘束される。費用を決めるのは、読むdepthとheld窓とfrontierの大きさである（§3.6）。
-D-0Bで確かめたとおりGogma幅だけでは費用を見積もれないので、次の成分を予測する（提案）。
+新方式では、起動するprimitive、source、巨戟化位置、production target、Route baseがそれぞれ1つに拘束される（§5.3）。費用はbase登録前とstreamの2つに分け、
+混同しない。D-0Bで費用を支配したのはstream（Bonus held-aware stream）の側である（§3.6）。base登録前の費用はD-0Bで分けて計測していない（§3.9）。
+Gogma幅だけでは費用を見積もれないので、次の成分を予測する（提案）。いずれも実行前の位置計算だけで求める値で、計測値ではない。
 
 ```ts
 interface ShapeSearchScale {
+  /** base登録前（§3.9）。早期制約の後に残る処理 */
+  preBase: {
+    primitive: ShapeConstrainedRouteBase['kind']   // 起動するprimitive（1つ）
+    conversionWalkPositions: number                // conversionSkillPositions() の歩行で調べる位置数（巨戟化baseだけ。予測なし、跨ぐheld位置ごとにcheckpoint）
+    requiredPredictions: { normalArtian: 0 | 1; skill: 0 | 1 }   // 新規NormalのNormal予測、巨戟化Skillの予測
+    baseWorkItems: 0 | 1                           // base登録のqueue work（所持巨戟は同期登録で0）
+    supportQueries: ('normal_artian' | 'skill' | 'gogma_reset' | 'gogma_keep')[]   // laneが使う操作のsupport問合せだけ
+  }
   normalForgeCount: number                  // held prefixのcanonical作成のforge数（所持sourceは0）
   conversionLegal: boolean                  // c が nextOperationPositions() の結果に含まれる（偽なら前提違反）
   skill: { window: InclusiveRange | null; minOwnOperations: number; maxOwnOperations: number; maxHeldRun: number }
@@ -679,13 +881,21 @@ interface ShapeSearchScale {
 - Bonusの `frontierUpperBound` = 窓内の非blocked位置数（policyによりlayoutが1つ）、`generatedStateUpperBound` = `depthUpperBound` × 窓内の非blocked位置数 ×
   （`maxHeldRun` + 2）（Resetが位置ごとに1つ、Keepがfrontier stateごとに窓の長さまで）
 - Skillは位置keyなので、1 depthのstate数は窓内の位置数で抑えられる
-- gateの成分（提案）: `maxDepthUpperBound`、`maxGogmaGeneratedStateUpperBound`、`maxNormalForgeCount`。値は決めない（D-0B-2で、再smokeの予測値と実測値の
-  比較を根拠に登録する）。上界はいずれも安全側の見積もりであり、formal Search work unitではない（G8）
+- base登録前の予測は、新規Normalで高々2回（Normal p、巨戟化Skill c）、所持通常で1回（巨戟化Skill c）、所持巨戟で0回である。無制約時は、offset数 ×
+  巨戟化位置数のbaseと、offsetごとのNormal予測、巨戟化位置ごとのSkill予測（memo）が生じる（§3.9）。削減量は入力に依存し、本書では見積もらない
+- gateの成分（提案）: `maxDepthUpperBound`、`maxGogmaGeneratedStateUpperBound`、`maxNormalForgeCount`、`maxConversionWalkPositions`。値は決めない
+  （D-0B-2で、再smokeの予測値と実測値の比較を根拠に登録する）。上界はいずれも安全側の見積もりであり、formal Search work unitではない（G8）
 
 ### 10.4 実行時budgetとenvelope
 
-- budgetの成分（提案）: Bonus生成state数、Skill state数、確定したwork数。Search Domainのexecution-only instrumentation（`onGogmaReservedDepth` /
-  `onSkillReservedDepth` / `onWorkSettled`）で数え、Research側の `shouldCancel` が上限で真を返す。Search Domainはbudgetを知らない
+- budgetの成分（提案）: Bonus生成state数、Skill state数、確定したwork数（base登録のworkを含む）、予測呼出し回数（種類別）。前3つはSearch Domainの
+  execution-only instrumentation（`onGogmaReservedDepth` / `onSkillReservedDepth` / `onWorkSettled`）で、予測呼出し回数はResearch側のcounting Engine
+  （Production Engineへすべての呼出しをそのまま転送し、`predictNormalArtian()` / `predictSkills()` / `predictGogmaBonus()` の回数を数えるだけのwrapper。
+  versionとcapabilityも転送する）で数え、Research側の `shouldCancel` が上限で真を返す。Search Domainはbudgetを知らない。counting Engineは
+  testでの予測回数の観測（§15）にも使う
+- base登録前の処理への作用: `shouldCancel` は `execution.checkpoint()` で読まれ、checkpointは巨戟化位置の歩行で跨ぐheld位置ごと、`scheduler.step()` ごと
+  （base登録のworkを含む）、primitive内のloopにある（§5.3の処理順）。したがってcancelとbudgetはbase登録前の処理にも作用する。所持巨戟の同期登録には
+  checkpointが無いが、予測もqueue workも伴わない
 - budgetによる停止とユーザー / runnerのcancelは、Research側が自分の閉包で区別して記録する（`CandidateSearchError('cancelled')` を受けた時点で、どちらで真に
   なったかを記録済みの値から読む）
 - 配送を伴わない探索の終了条件: 前提が成り立てば最初の一致配送で止まる（§5.5）。止まらない場合の上限は、budget（Research）、`exhausted`（fail closed）、
@@ -717,8 +927,8 @@ Targetごとに、Search前に、ReachTable・shape・reservationだけから決
 
 | PR | 目的 | 変更範囲 | 入出力契約 | 不変条件 | test | 完了基準 | 前提 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **D-0A-2a** Search Domain seam | 形状制約付きRoute探索をSearch Domainに用意する | §4.2の表（`bonusStream.ts`、`targetSearchScheduler.ts`、`plannerAlternativeSearch.ts` の抽出refactor、新規Research module）、SEARCH_SPEC注記（承認時） | §5.3 | 無指定時のProduction挙動・配送順・summary・prediction回数・search identity・計算版数が不変。Research moduleはProductionから到達しない | 変更前に追加するgolden（PA配送列・summary・prediction回数、通常Search、Bonus streamの生成state列）、`shapePolicy` 3種のstream test（生成規則、`finalPosition` 後の非生成、single-pass cursorの分離、ordinary読取りの拒否）、admission（source / c / p、blind除外、保護武器）、G1 / G2（lane開始Idealでもlaneを開く、操作0の解を入れない）、G3両変種（PAは代表化で返さず、seamは返す）、`exhausted` / cancel、isolation / version | 既存test無変更で全通過、golden一致、新test通過、`npm run lint` / `npm test` / `npm run build` | **オーナー承認**（§13） |
-| **D-0A-2b** Research方式 | `shape_constrained` をmaterializationへ組み込む | `src/benchmarks/globalAssignment/`: request構築（reservation・extent・shape変換・identity・規模予測・前提検査）、実行と分類（§10）、独立検証器（§9.3）、方式選択 `d0a2-v2`（§11、`d0a-v1` は不変）、D-0B runner / protocolの規則選択（既定は `d0a-v1` のまま）と候補分類の追加、G3静的risk診断への下側の変種（§3.7）の追加（`d0a-v1` の診断用。既存の数え方は別fieldで残す）、設計書の結果記録 | §5.2 / §5.4 / §10 / §11 | D-0Aの挙動・identity・既存testは不変。reservationを改変しない。materializedを `verified` と呼ばない | 補題のproperty test（seed付きrandom fixtureで、Phase C structural candidateの全Targetが新方式でmaterializeされる）、G1のend-to-end synthetic、G3両変種（設計 §9.1では未確認、新方式でmaterialized）、PAとのparity（§9.2）、独立検証器の正例と変異（trace・Counter・layout・coverage・blocked・source）、分類（budget / gate / cancel / fail closed各code）、決定性、`request_mismatch`、isolation | 同上。実Export smokeはD-0B-2で行う | 2a |
+| **D-0A-2a** Search Domain seam | 形状制約付きRoute探索をSearch Domainに用意する | §4.2の表（`routeSearchShared.ts`、primitive 3つ（`existingGogmaRouteSearch.ts` / `ownedNormalArtianRouteSearch.ts` / `normalArtianRouteSearch.ts`）の制約分岐、`bonusStream.ts`、`targetSearchScheduler.ts`、`plannerAlternativeSearch.ts` の抽出refactor、新規Research module）、SEARCH_SPEC注記（承認時） | §5.3（処理順、早期制約、base到達の診断、stream base生成条件、`shapePolicy` のsupport契約、notice、admission） | 無指定時のProduction挙動（起動するprimitive、列挙、support問合せとunsupported通知、予測回数、Candidate列、summary、search identity、計算版数）が不変。Research moduleはProductionから到達しない。正式reservationを形状制約に使わない | §15の「Production不変」「早期制約」「Bonus support契約」「seam単体」「G1 / G2 / G3」の各行（変更前に追加するgoldenを含む） | 既存test無変更で全通過、golden一致、新test通過、`npm run lint` / `npm test` / `npm run build` | **オーナー承認**（§13） |
+| **D-0A-2b** Research方式 | `shape_constrained` をmaterializationへ組み込む | `src/benchmarks/globalAssignment/`: request構築（reservation・extent・shape変換・identity・base登録前を含む規模予測・前提検査）、counting Engine（§10.4）、実行と分類（§10。support区分1〜5を含む）、独立検証器（§9.3）、方式選択 `d0a2-v2`（§11、`d0a-v1` は不変）、D-0B runner / protocolの規則選択（既定は `d0a-v1` のまま）と候補分類の追加、G3静的risk診断への下側の変種（§3.7）の追加（`d0a-v1` の診断用。既存の数え方は別fieldで残す）、設計書の結果記録 | §5.2 / §5.4 / §10 / §11 | D-0Aの挙動・identity・既存testは不変。reservationを改変しない。materializedを `verified` と呼ばない | 補題のproperty test（seed付きrandom fixtureで、Phase C structural candidateの全Targetが新方式でmaterializeされる）、G1のend-to-end synthetic、G3両変種（設計 §9.1では未確認、新方式でmaterialized）、PAとのparity（§9.2）、独立検証器の正例と変異（trace・Counter・layout・coverage・blocked・source）、分類（budget / gate / cancel / `unsupported` / fail closed各code、support区分1〜5）、決定性、`request_mismatch`、isolation | 同上。実Export smokeはD-0B-2で行う | 2a |
 | **A-2** | 所持巨戟の継続option（G2） | 監査 §9.2 / 設計 §19.6のA-2に加え、`continuationShapeOf()`、`d0a-v1` 用 `SearchPolicyShape` の拡張 | 設計 §19.6 | 定理T、下界のadmissibility、被覆補題、値順序latticeの各option1回・単調配送 | 監査 §9.3（総当たり、G4の状態遷移）、G2の新方式end-to-end | 継続optionが新方式でmaterializeされ、G4-iiiの扱いが決まる | 2b |
 | （計画しない）順序v2 | §8.3 | Phase C | §8.3 | 自己検査不変 | §8.3 | — | D-0B-2で必要と判明した場合のみ、別PR |
 | **D-0B-2** | 再smokeと事前登録 | 確定したoption集合と `d0a2-v2` での非formal再smoke、事前登録（gate・budget・envelope・option集合version・方式選択規則・G1 / G2の分類規則・独立検証の既定・順序規則（現行）） | D-0B記録 §10 + 本書 §10.3 / §10.4 | formal runを開始しない | protocol test | 登録の完了 | A-2 |
@@ -729,7 +939,7 @@ Targetごとに、Search前に、ReachTable・shape・reservationだけから決
 
 | # | 事項 | 選択肢 | 本書の推奨 |
 | --- | --- | --- | --- |
-| 1 | B-ii（Search DomainのProduction fileへのResearch専用seam）の採用 | (a) 承認して2aへ進む (b) 承認しない → F1（B-i限定 + D-0A方式。長い `reset_then_keep` とG3は未確認のまま）(c) 承認しない → F2（案C） | (a) |
+| 1 | B-ii（Search DomainのProduction fileへのResearch専用seam）の採用。対象はProduction 7 file（Route search primitive 3つと `routeSearchShared.ts` へのbase生成前の制約分岐、`bonusStream.ts` の `shapePolicy`、`targetSearchScheduler.ts` の `shapeFilter`、`plannerAlternativeSearch.ts` の抽出refactor）と新規Research module。いずれも任意引数・任意fieldで、無指定時のProduction挙動は不変 | (a) 承認して2aへ進む (b) 承認しない → F1（B-i限定 + D-0A方式。長い `reset_then_keep` とG3は未確認のまま）(c) 承認しない → F2（案C） | (a) |
 | 2 | 正式仕様への記載 | (a) SEARCH_SPECにResearch専用seamの注記（Production非使用、Production契約・計算版数への影響なし、§14の案）を2aと同時に入れる (b) 2aの前にdocs-only PRで入れる (c) 入れず、Research文書とコードcommentだけにする | (a) |
 | 3 | 新方式で未配送のまま `exhausted` になった場合の扱い | (a) fail closed（補題の前提違反） (b) 型付きoutcome（例: `shape_unreachable`）として記録し、run errorにしない | (a)。前提が崩れた状態で候補の判定を続けない |
 | 4 | G3の対応 | (a) B-iiの操作種別policyで解く（同値なrequired位置集合の受理は採らない） (b) 受理の緩和を設計し直す | (a) |
@@ -745,7 +955,7 @@ G4-iiiの扱い（両軸Ideal sourceの継続optionの生成）は本書の判�
 
 | 文書 | 箇所 | 変更案 | 必要性 |
 | --- | --- | --- | --- |
-| `docs/SEARCH_SPEC.md` | 5.6.8の後に新設（例: 5.6.9） | 「Research専用: 形状制約付きRoute探索。Global Assignment Research（Issue #154）だけが使い、Production caller（Planner、Worker、UI、Service）は呼ばない。Planner Alternative Searchと同じprimitive・stream・scheduler・Candidate factoryを使い、base admission・laneの開放・Bonus操作種別policy・最終位置の制限だけが異なる。予測・held / blocked / coverage・Ideal判定・Counter進行は変えない。無指定時のProduction挙動・search identity・計算版数に影響しない」 | 推奨（オーナー判断 #2）。Search DomainにProduction非使用のAPIが入るため、その位置づけを正式に残す |
+| `docs/SEARCH_SPEC.md` | 5.6.8の後に新設（例: 5.6.9） | 「Research専用: 形状制約付きRoute探索。Global Assignment Research（Issue #154）だけが使い、Production caller（Planner、Worker、UI、Service）は呼ばない。Planner Alternative Searchと同じprimitive・stream・scheduler・Candidate factoryを使い、primitiveの選択とsource / Counter / production target / 巨戟化位置のbase生成前の制限（巨戟化位置は正式な合法位置との共通部分）、base admission、laneの開放、Bonus操作種別policy（許す操作のsupportだけを評価する）、最終位置の制限だけが異なる。予測・held / blocked / coverage・Ideal判定・Counter進行は変えない。無指定時のProduction挙動（unsupported通知を含む）・search identity・計算版数に影響しない」 | 推奨（オーナー判断 #2）。Search DomainにProduction非使用のAPIが入るため、その位置づけを正式に残す |
 | `docs/SEARCH_SPEC.md` | 5.6.8「探索の継続」 | 変更しない。必要なら新設節への参照を1文足す | 任意 |
 | `AGENTS.md` | Candidate Search Stream Separation / Search Route Rules | 変更しない（Production Searchの規則は変わらない）。必要ならResearch専用seamの存在を1文で参照 | 任意 |
 | `docs/PLANNER_SPEC.md` / `docs/REQUIREMENTS.md` | — | 変更しない（Plannerと要求は変わらない） | 不要 |
@@ -760,13 +970,15 @@ G4-iiiの扱い（両軸Ideal sourceの継続optionの生成）は本書の判�
 
 | 区分 | 内容 | PR |
 | --- | --- | --- |
-| Production不変 | 変更前に追加するgolden（PA配送 `candidateStableKey` 列・summary・prediction回数、通常Candidate Searchの結果、Bonus streamの生成state列、runtime observer境界）、既存test無変更、search identity・version不変、isolation | 2a |
-| seam単体 | `shapePolicy` 3種の生成規則と `finalPosition` 後の非生成、ordinary読取りの拒否、stream keyの分離とsingle-pass、admission（source / c / p / blind / 保護）、lane開放（lane開始Idealでも）、操作0の解を入れないこと、最終位置の制限、cancel | 2a |
+| Production不変 | 変更前に追加するgolden（PA配送 `candidateStableKey` 列・summary・種類別の予測呼出し回数（counting Engine）、通常Candidate Searchの結果、Bonus streamの生成state列・frontier・unsupported通知、runtime observer境界）、既存test無変更、search identity・version不変、isolation。制約未指定のPlanner Alternative Searchが3種類のprimitiveを起動し、全source・全offset・全巨戟化位置を列挙すること、`shapePolicy` 未指定のBonus streamでReset / Keepのsupport評価とunsupported通知・生成state・frontier代表化・memo・single-passが変わらないこと | 2a |
+| 早期制約（Required fix 1） | (1) `owned_gogma` でNormal / 所持通常のprimitiveを起動しない（起動をspyで観測） (2) `owned_normal` で別のOwnedWeaponのbaseを作らず、その巨戟化Skillを予測しない (3) `new_normal` で指定外のCounter・production targetのNormal予測をしない（counting Engineで `predictNormalArtian()` がp 1回だけ） (4) 指定外の巨戟化位置のbaseを生成せず、その `predictAt()` を呼ばない (5) 合法でない c（originからc − 1 までにheldでない位置がある、c がblocked、窓外）を受理せず、`conversion_position_not_legal` を返す (6) 保護source・排他source・非互換sourceを操作対象にしない（それぞれ `source_protected` / `source_exclusive` / `source_incompatible`。reservationは入力のまま） (7) 制約未指定では従来どおり全RouteKindを探索する (8) 予測回数・Candidate列・summaryがgoldenと一致する (9) cancelとbudget（`shouldCancel`）が巨戟化位置の歩行とbase登録のworkで作用し、base登録前に止まる | 2a |
+| Bonus support契約（Required fix 2） | supportが非対称なmock Engine（Reset / Keepのsupportを入力ごとに切り替えるsynthetic fixture。ゲーム挙動は推測しない）で: (1) Reset supported / Keep unsupportedでReset-only形が成立する (2) Keep supported / Reset unsupportedでKeep-only形が成立する（新規Normal・所持通常でもstream baseが作られる） (3) Reset unsupportedのReset-only形はbase到達の診断で区分1になり、Phase Aの判定に応じて `prediction_support_inconsistent` / `unsupported` に分類される (4) Keep unsupportedのKeep-only形も同様に分類される (5) Reset→Keep形はResetとKeepの両方のsupportを必要とし、どちらが欠けても成立しない (6) Reset段階のstateについて `gogmaKeep()` を問い合わせない（呼出しをspyで観測） (7) Keep段階でResetを生成せず、`gogmaReset()` を問い合わせない (8) 禁止操作のunsupportedが `requiredUnsupportedPredictions` と分類に現れず、`forbiddenOperationNotices` が0 (9) `shapePolicy` 未指定のunsupported通知がgoldenと一致する (10) `shapePolicy` 指定時もsingle-pass cursor（逆行・重複・飛越しのthrow）、(位置, layout) のfrontier代表化、`finalPosition` での終了（extent到達を記録しない）が成り立つ | 2a |
+| seam単体 | `shapePolicy` 3種の生成規則と `finalPosition` 後の非生成、ordinary読取りの拒否、stream keyの分離とsingle-pass、base到達の診断の各理由、admission（source / c / p / blind / 保護）、lane開放（lane開始Idealでも）、操作0の解を入れないこと、最終位置の制限、cancel、診断を通ったのにbaseが登録されない場合の契約違反 | 2a |
 | G1 / G2 / G3 | G1: 巨戟化SkillがIdealでも c < s* の形が返る。G2: 所持巨戟の現在Ideal laneに操作を置く形が返る（未保護）、保護武器では返らない。G3上側・下側: PAは返さず、seamは返す（下側の変種の推定を固定する） | 2a / 2b |
 | 補題 | seed付きrandom fixtureのPhase C structural candidateで、順序どおりに全Targetが新方式でmaterializeされる。前提を壊した入力（順序の入替え、reservationの欠落）で `shape_base_unavailable` / `shape_constrained_unreachable` がfail closedとして出る | 2b |
 | parity | §9.2の比較項目。semantic parityとidentityの差（Candidate IDは異なり、Entry IDは一致）を分けて固定 | 2b |
 | 独立検証器 | 正例と、trace・Counter・Keep入力layout・coverage・blocked・排他source・required位置の各変異で失敗すること。`validateBuildRoute()` を通る変異でも検証器が失敗すること | 2b |
-| 分類 | budget（ユーザーcancelとの区別）、gate、cancel、各fail closed code、`d0a-v1` でのG1の `not_executed(search_policy_shape)` 不変 | 2b |
+| 分類 | budget（ユーザーcancelとの区別）、gate、cancel、各fail closed code、support区分1〜5の振り分け（§10.1。Phase Aの判定の有無で `prediction_support_inconsistent` と `unsupported` を分ける）、必要な操作のunsupportedを `shape_constrained_unreachable` にしないこと、budget到達とsupport不足を混同しないこと、禁止操作のnoticeが分類に影響しないこと、`d0a-v1` でのG1の `not_executed(search_policy_shape)` 不変 | 2b |
 | 決定性 | 同じ入力で同じrequest・identity・Entry ID・outcome。Clock / UUID / ordinalを含まない | 2b |
 | runner / 診断 | 規則選択、候補分類の追加、D-0B smoke既定値の不変、G3静的riskの下側の変種（既存の上側の数え方は不変） | 2b |
 | G4 / A-2 | 監査 §9.3 | A-2 |
@@ -779,3 +991,12 @@ G4-iiiの扱い（両軸Ideal sourceの継続optionの生成）は本書の判�
 - `git diff --check`、Markdownのリンクと文書参照の確認、設計 §8 / §9 / §10 / §14 / §19との整合、PR #245 / #246で確定したG1 / G3 / G4の意味との整合、
   正式仕様authorityとの整合を確認し、`npm run check:nul` / `npm run lint` / `npm test` / `npm run build` を実行した（結果はPR本文に記載）
 - Search実行、実Export run、formal measurement、RESULT生成は行っていない
+
+## 17. レビュー対応（PR #247、`14fb623` に対する修正）
+
+| 区分 | 指摘 | 対応 |
+| --- | --- | --- |
+| Required fix 1 | source・巨戟化位置・production targetを主に `addBase()` で拘束しており、primitiveの起動、Normal Counter / offsetの列挙とNormal予測、`conversionSkillPositions()` による巨戟化位置の展開とSkill予測、遅延queue workが `addBase()` の前に残る | `addBase()` より前の処理と制約を適用できる位置を確認して §3.9に記録した。形状制約をbase生成前に、primitiveの選択 → source / Counter / production target → 巨戟化位置（正式な合法位置との共通部分）の順で適用し、`addBase()` は最終admissionだけにした（§5.3の処理順と意味2〜7）。期待source・排他source・保護の3つの制限を区別し、reservationを編集しないことを明記した。Research専用の任意field `routeBaseConstraint` をprimitive 3つと `routeSearchShared.ts` が読む（§4.2）。base到達の診断と理由の型を加えた（§5.3）。残る費用（primitive 1つの起動、support問合せ、巨戟化位置の歩行、新規NormalのNormal予測1回、巨戟化Skillの予測1回、base登録のwork 1つ）をstreamの費用と分けて規模予測とbudgetへ反映した（§10.3 / §10.4）。補題に早期制約がR_minのbaseを除かないことを加えた（§5.5）。testを追加した（§15「早期制約」） |
+| Required fix 2 | `generateReservedDepth()` はResetとKeepの両方のsupportを評価・記録するので、操作種別を制限したpolicyでも禁止した操作のunsupportedが報告され、それを `prediction_support_inconsistent` へ変換すると合法なRouteをfail closedし得る | 現行のsupport評価（Resetは `keep_only` でも問い合わせる）とprimitive側のstream base生成条件（新規Normal・所持通常はReset supportが無いとBonus stream baseを作らない）を確認した（§3.5）。`shapePolicy` は許す操作だけを生成し、そのsupportだけを、その操作を置けるstage・stateでだけ問い合わせる契約にし、Reset→Keepの段階ごとの問合せを定めた（§5.3の8）。primitiveのstream base生成条件をlaneが使う操作のsupportだけにした（§5.3の7）。Phase Aのsupport判定（family-only Keep契約を含む）を確認し（§3.10）、unsupportedを5つの区分に分け、`prediction_support_inconsistent` をPhase Aが同じ問いを判定済みの場合に限り、判定の無い問いは `unsupported` とした。禁止操作のunsupportedはどの分類の根拠にもしない（§10.1 / §10.2）。補題のP5を具体化した（§5.5）。testを追加した（§15「Bonus support契約」） |
+
+B-iiを主方式とする判断、2aの前にオーナー承認が要ること、G1 / G2 / G3の方針、materialization順序を変えない判断、identity、方式選択規則は変えていない。
