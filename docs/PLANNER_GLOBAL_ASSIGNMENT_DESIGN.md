@@ -1176,7 +1176,8 @@ minStreamEnd_stream(t, partial) = min over resourceFeasibleOptions(t, partial) o
 - 下限moduleの対象集合（`isTargetWeaponPlanningEligible()` なTarget全体）がplanning Target集合（§4.1）と一致しない入力では、root下界をそのまま
   planning Targetの下界として使わない（eligibleだがvalid Entryの無いTargetの分だけ下界が大きくなり得るため）。Phase Bの事前登録で、
   (a) 下限を主張しない、(b) `targetWeapons` をplanning Targetだけに絞ったPlannerInput copyをResearch adapterから下限moduleへ渡す（下限module自体は変更しない）、
-  のどちらかを選ぶ。対象Export（43 eligible / 43 valid Entry）では両集合が一致する
+  のどちらかを選ぶ。対象Export（43 eligible / 43 valid Entry）では両集合が一致する。Phase B-2A（`assignmentRootBound.ts`）は (a) を選び、
+  不一致なら `not_applicable`（reason `planning_target_set_mismatch`）として下界を主張しない（[B-2A記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md) §3.4）
 - `proven_minimum` は、**Production検証済みの** `bestVerified.physicalOperations` が、適用可能で証明済みのroot下界 `provenLowerBoundTotal()` と
   一致した場合だけ許可する。structural candidateのobjectiveが下界と一致しても、検証前には何も主張しない（レビューB1）
 - 可能ペアが1件以上あるPlannerInputでは下界は `not_applicable` であり、**最小性を主張しない**。solverはC1（distinct source）のまま実行可能解を探し、
@@ -1321,6 +1322,8 @@ Phase D-1のformal runで次を事前登録する（値はPhase D-0 / D-1の事�
 
 Phase A → B-1 → B-2 → C → D-0 → D-1 → Eの順に依存する。1 Phase = 1 PR（必要なら事前登録docs PRと実装 / 計測PRに分ける。D1〜D2系列と同じ運用）。
 Phase Bは、資源割当solverの実装とsynthetic正当性検証（B-1）と、assignment-only runner・budget事前登録・実Export formal measurement（B-2）に分ける。
+B-2はさらに、runner・root下界接続・§10.3移行判定・実Exportの非formal smoke・formal条件の事前登録を行う **B-2A**
+（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md)。formal runは開始しない）と、登録条件とclean HEADでformal measurementを行う **B-2B** に分ける。
 B-1はC3（被覆）・materializationを扱わず、C1 / C2を満たした `ResourceAssignmentCandidate`（§4.3）を出力する段階であり、後続Phaseの正式意味論は
 変えない。node budget、window ladderのW1以降、verification budgetはB-1では確定せず、B-2で非formal smokeを根拠にResearch条件として事前登録し、
 formal run前に固定する。Phase Dは、materialization方式の設計検証（D-0）と統合acceptance（D-1）に分ける（§9.8）。Phase A〜Cの設計は
