@@ -15,13 +15,17 @@
  * a smaller objective. `+Infinity` means an unassigned Target has no resource-feasible option on that
  * stream at all - then no completion exists and any bound is admissible.
  *
+ * The `reset_then_keep` finals come from the compact `ResetThenKeepIndex` (the Keep positions at least
+ * one earlier eligible Reset reaches), so the Reset / Keep position arrays and the layouts are read and
+ * no `(g1, g*)` pair is ever built.
+ *
  * The option product is never materialized here. This module reads the partial assignment's resources
  * only; it never enumerates options, never calls the feasibility filter and never cuts a branch itself
  * (review R1: `resourceFeasibleOptions -> LB -> pruning`, one direction). It is not the root lower bound
  * of the Phase 2-A.5 relaxation module (design 10.2), which Phase B-1 does not integrate.
  */
 import type { PartialResourceAssignment } from './assignmentTypes'
-import { bonusRequirementIsNone, enumerateResetThenKeepRequirements, keepFromSourcePositions, skillRequirementBlocks, sourceResourceKey } from './reachOptions'
+import { bonusRequirementIsNone, createResetThenKeepIndex, keepFromSourcePositions, skillRequirementBlocks, sourceResourceKey, type ResetThenKeepIndex } from './reachOptions'
 import type { NormalArtianCounterId, ReachTable, SourceCandidate, TargetReach } from './types'
 
 export interface TargetStreamMenuSource {
@@ -45,7 +49,8 @@ export interface TargetStreamMenu {
   resetThenKeepFinals: readonly number[]
 }
 
-export function createTargetStreamMenu(target: TargetReach, table: ReachTable): TargetStreamMenu {
+/** `resetThenKeep` defaults to the Target's own compact index; the solver passes the one it shares with the value-order lattice. */
+export function createTargetStreamMenu(target: TargetReach, table: ReachTable, resetThenKeep: ResetThenKeepIndex = createResetThenKeepIndex(target)): TargetStreamMenu {
   // The conversion finals are the same array for every Normal source, so `firstUnused` memoizes across them.
   let conversionFinals: readonly number[] | null = null
   const sources = target.sources.map((source): TargetStreamMenuSource => {
@@ -56,14 +61,14 @@ export function createTargetStreamMenu(target: TargetReach, table: ReachTable): 
     else skillFinals = conversionFinals ??= blocks.finalPositions
     return { source, key: sourceResourceKey(source), skillFinals, keepFinals: keepFromSourcePositions(target, source), bonusNone: bonusRequirementIsNone(source) }
   })
-  // The finals that at least one earlier Reset really reaches (the generator's own set, ascending), not every Keep-Ideal position of a Reset layout.
-  const resetThenKeepFinals = [...new Set([...enumerateResetThenKeepRequirements(target)].map(requirement => requirement.finalPosition))]
-  return { target, sources, resetFinals: target.bonus.resetIdealPositions, resetThenKeepFinals }
+  // The finals that at least one earlier eligible Reset really reaches, ascending: the compact index derives them from the
+  // per-layout Reset positions and the Keep-Ideal positions alone, never by enumerating the (g1, g*) pairs.
+  return { target, sources, resetFinals: target.bonus.resetIdealPositions, resetThenKeepFinals: resetThenKeep.finalPositions }
 }
 
-/** Menus in the table's Target order. */
-export function createTargetStreamMenus(table: ReachTable): Map<TargetReach['targetWeaponId'], TargetStreamMenu> {
-  return new Map(table.targets.map(target => [target.targetWeaponId, createTargetStreamMenu(target, table)]))
+/** Menus in the table's Target order; `resetThenKeepByTarget` lets the caller share each Target's compact index. */
+export function createTargetStreamMenus(table: ReachTable, resetThenKeepByTarget?: ReadonlyMap<TargetReach['targetWeaponId'], ResetThenKeepIndex>): Map<TargetReach['targetWeaponId'], TargetStreamMenu> {
+  return new Map(table.targets.map(target => [target.targetWeaponId, createTargetStreamMenu(target, table, resetThenKeepByTarget?.get(target.targetWeaponId))]))
 }
 
 export interface MinimalStreamEnds {

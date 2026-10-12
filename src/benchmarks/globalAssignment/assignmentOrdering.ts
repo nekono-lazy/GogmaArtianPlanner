@@ -29,7 +29,7 @@
 import { findResourceViolation, streamEndDelta } from './assignmentFeasibility'
 import type { PartialResourceAssignment, ResourceViolationKind } from './assignmentTypes'
 import {
-  bonusRequirementIsNone, createReachOption, enumerateReachOptionsOfSource, enumerateResetThenKeepRequirements, keepFromSourcePositions, reachOptionKey,
+  bonusRequirementIsNone, createReachOption, createResetThenKeepIndex, enumerateReachOptionsOfSource, keepFromSourcePositions, reachOptionKey,
   skillRequirementBlocks, sourceResourceKey,
 } from './reachOptions'
 import type { BonusRequirement, ReachOption, ReachTable, SkillRequirement, SourceCandidate, TargetReach } from './types'
@@ -78,24 +78,21 @@ export function indexedSkillRequirements(target: TargetReach, source: SourceCand
   }
 }
 
-function arraySequence<T>(values: readonly T[]): IndexedSequence<T> {
-  return { length: values.length, at: index => values[index]! }
-}
-
 /**
  * The Bonus requirement streams of one source, each ascending in its final position (Phase A's
  * `enumerateBonusRequirements()` split by kind): `reset`, `keep_from_source` (only while supported for the
  * source's layout) and `reset_then_keep`; a single `none` for an owned Gogma already Ideal. Empty streams
- * are omitted. `resetThenKeep` is the Target's materialized `reset_then_keep` list, shared by its sources.
+ * are omitted. `resetThenKeep` is the Target's compact `reset_then_keep` index (`createResetThenKeepIndex()`,
+ * no pair materialized), shared by its sources.
  */
-export function indexedBonusStreams(target: TargetReach, source: SourceCandidate, resetThenKeep: readonly BonusRequirement[]): IndexedSequence<BonusRequirement>[] {
+export function indexedBonusStreams(target: TargetReach, source: SourceCandidate, resetThenKeep: IndexedSequence<BonusRequirement>): IndexedSequence<BonusRequirement>[] {
   if (bonusRequirementIsNone(source)) return [{ length: 1, at: () => ({ kind: 'none' }) }]
   const streams: IndexedSequence<BonusRequirement>[] = []
   const resets = target.bonus.resetIdealPositions
   if (resets.length > 0) streams.push({ length: resets.length, at: index => ({ kind: 'reset', finalPosition: resets[index]! }) })
   const keeps = keepFromSourcePositions(target, source)
   if (keeps.length > 0) streams.push({ length: keeps.length, at: index => ({ kind: 'keep_from_source', finalPosition: keeps[index]! }) })
-  if (resetThenKeep.length > 0) streams.push(arraySequence(resetThenKeep))
+  if (resetThenKeep.length > 0) streams.push(resetThenKeep)
   return streams
 }
 
@@ -112,8 +109,8 @@ export interface TargetOptionLattice {
   sources: readonly TargetOptionLatticeSource[]
 }
 
-export function createTargetOptionLattice(target: TargetReach, table: ReachTable): TargetOptionLattice {
-  const resetThenKeep: BonusRequirement[] = [...enumerateResetThenKeepRequirements(target)]
+/** `resetThenKeep` defaults to the Target's own compact index; a caller holding one already (the solver) passes it so one Target has one index. */
+export function createTargetOptionLattice(target: TargetReach, table: ReachTable, resetThenKeep: IndexedSequence<BonusRequirement> = createResetThenKeepIndex(target)): TargetOptionLattice {
   return {
     target,
     sources: target.sources.map(source => ({
@@ -276,14 +273,18 @@ export interface FeasibleOptionCount {
 /**
  * `countUpTo(k)` of design 6.4: the resource-feasible options of `target` under `partial`, counted in
  * Phase A's order until `limit` is reached. A used source is skipped whole; no lower bound is read.
+ * `onOptionWalked` is called once per option examined (feasible or not), so a long walk can poll the
+ * Research cancel seam; it never changes the count.
  */
-export function countFeasibleOptionsUpTo(target: TargetReach, table: ReachTable, partial: PartialResourceAssignment, limit: number): FeasibleOptionCount {
+export function countFeasibleOptionsUpTo(target: TargetReach, table: ReachTable, partial: PartialResourceAssignment, limit: number,
+  onOptionWalked?: () => void): FeasibleOptionCount {
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError(`countFeasibleOptionsUpTo limit must be a positive integer (got ${String(limit)}).`)
   const rejections: Record<ResourceViolationKind, number> = { source: 0, skill_position: 0, gogma_position: 0, normal_position: 0 }
   let count = 0
   for (const source of target.sources) {
     if (partial.usedSources.has(sourceResourceKey(source))) { rejections.source += 1; continue }
     for (const option of enumerateReachOptionsOfSource(target, table, source)) {
+      onOptionWalked?.()
       const violation = findResourceViolation(option, partial)
       if (violation !== null) { rejections[violation] += 1; continue }
       count += 1

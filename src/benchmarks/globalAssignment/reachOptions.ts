@@ -107,6 +107,100 @@ export function* enumerateResetThenKeepRequirements(target: TargetReach): Genera
   }
 }
 
+export type ResetThenKeepRequirement = Extract<BonusRequirement, { kind: 'reset_then_keep' }>
+
+/**
+ * The `reset_then_keep` requirements of one Target as a compact random-access index in the generator's
+ * order (`finalPosition` ascending, `resetPosition` ascending within one final), holding no `(g1, g*)`
+ * pair. It holds only the eligible Reset positions (per layout and merged, ascending), the eligible
+ * layouts, and one group per final Keep position that at least one earlier eligible Reset reaches
+ * (its layouts and its count, with a running start index). `at(index)` locates the group by binary
+ * search over the starts and the `rank`-th smallest valid Reset position either directly (one layout)
+ * or by a rank search over the merged Reset positions (several layouts), so the memory is
+ * O(Reset positions + Keep positions x layouts) and one lookup is O(layouts x log^2 Reset positions),
+ * never O(pairs). Phase B-1 reads it as a Bonus stream of the value-order lattice and for the lower
+ * bound's final positions; `enumerateResetThenKeepRequirements()` stays the readable reference and the
+ * two are kept equal pair by pair by test.
+ */
+export interface ResetThenKeepIndex {
+  /** Σ over the finals of their valid earlier Resets: the exact number of requirements. */
+  readonly length: number
+  /** Final Keep positions that at least one valid earlier Reset reaches, ascending. */
+  readonly finalPositions: readonly number[]
+  at(index: number): ResetThenKeepRequirement
+  /** Sizes of the arrays held (eligible Reset positions, eligible layouts, final groups and their layout references), so a test can assert compactness. */
+  readonly footprint: { resetPositions: number; layouts: number; finalGroups: number; layoutReferences: number }
+}
+
+/** Elements of an ascending array strictly below `value`. */
+function countBelow(sorted: readonly number[], value: number): number {
+  let low = 0, high = sorted.length
+  while (low < high) {
+    const middle = (low + high) >> 1
+    if (sorted[middle]! < value) low = middle + 1
+    else high = middle
+  }
+  return low
+}
+
+export function createResetThenKeepIndex(target: TargetReach): ResetThenKeepIndex {
+  const plan = resetThenKeepPlan(target)
+  const layouts = [...plan.resetPositionsByLayout.keys()]
+  const resetsByLayout = layouts.map(layout => [...plan.resetPositionsByLayout.get(layout)!].sort((left, right) => left - right))
+  const keepIdealByLayout = layouts.map(layout => new Set(target.bonus.keepIdealPositionsByLayout.get(layout) ?? []))
+  // Every Reset position has exactly one layout, so the merged positions are distinct.
+  const allResets = resetsByLayout.flat().sort((left, right) => left - right)
+  const groups: { finalPosition: number; layoutIndexes: number[]; start: number }[] = []
+  let length = 0
+  let layoutReferences = 0
+  for (const finalPosition of plan.finalPositions) {
+    const layoutIndexes: number[] = []
+    let count = 0
+    layouts.forEach((_layout, layoutIndex) => {
+      if (!keepIdealByLayout[layoutIndex]!.has(finalPosition)) return
+      const before = countBelow(resetsByLayout[layoutIndex]!, finalPosition)
+      if (before === 0) return
+      layoutIndexes.push(layoutIndex)
+      count += before
+    })
+    if (count === 0) continue
+    groups.push({ finalPosition, layoutIndexes, start: length })
+    length += count
+    layoutReferences += layoutIndexes.length
+  }
+  const at = (index: number): ResetThenKeepRequirement => {
+    if (!Number.isSafeInteger(index) || index < 0 || index >= length) throw new RangeError(`reset_then_keep index ${String(index)} is out of range (${length}).`)
+    let low = 0, high = groups.length - 1
+    while (low < high) {
+      const middle = (low + high + 1) >> 1
+      if (groups[middle]!.start <= index) low = middle
+      else high = middle - 1
+    }
+    const group = groups[low]!
+    const rank = index - group.start
+    if (group.layoutIndexes.length === 1) {
+      // The valid Resets of one layout are the ascending prefix of its positions below the final.
+      return { kind: 'reset_then_keep', resetPosition: resetsByLayout[group.layoutIndexes[0]!]![rank]!, finalPosition: group.finalPosition }
+    }
+    // Several layouts: the rank-th smallest position among their Resets below the final is the smallest merged
+    // position v with Σ_layout |{ p in layout : p <= v }| > rank (the count grows only at those layouts' positions).
+    const countThrough = (value: number) => group.layoutIndexes.reduce((sum, layoutIndex) => sum + countBelow(resetsByLayout[layoutIndex]!, value + 1), 0)
+    let first = 0, last = allResets.length - 1
+    while (first < last) {
+      const middle = (first + last) >> 1
+      if (countThrough(allResets[middle]!) > rank) last = middle
+      else first = middle + 1
+    }
+    return { kind: 'reset_then_keep', resetPosition: allResets[first]!, finalPosition: group.finalPosition }
+  }
+  return {
+    length,
+    finalPositions: groups.map(group => group.finalPosition),
+    at,
+    footprint: { resetPositions: allResets.length, layouts: layouts.length, finalGroups: groups.length, layoutReferences },
+  }
+}
+
 /** The `keep_from_source` final positions of one source: its layout's Keep-Ideal positions, only while its Keep input is supported. */
 export function keepFromSourcePositions(target: TargetReach, source: SourceCandidate): readonly number[] {
   if (!source.keepSupported) return []

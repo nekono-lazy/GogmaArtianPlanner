@@ -35,7 +35,7 @@ import type {
   ResourceAssignmentSearchCompleteness, ResourceAssignmentSearchDiagnostics, ResourceAssignmentSearchEvent, ResourceAssignmentSearchRequest,
   ResourceAssignmentSearchResult,
 } from './assignmentTypes'
-import { enumerateReachOptions } from './reachOptions'
+import { createResetThenKeepIndex, enumerateReachOptions } from './reachOptions'
 import type { ReachOption, ReachTable, TargetReach } from './types'
 
 type TargetId = TargetReach['targetWeaponId']
@@ -45,6 +45,20 @@ interface Frame {
   partial: PartialResourceAssignment
   selectedTarget: TargetReach
   enumerator: OrderedOptionEnumerator
+}
+
+/**
+ * Options examined between two `shouldCancel()` polls inside one node (the MRV count walk and the
+ * value-order walk over position-infeasible options), besides the unconditional poll per node. Polling
+ * changes no count, no order and no node budget; a cancel ends the search as `cancelled` wherever it is.
+ */
+const CANCEL_POLL_INTERVAL = 256
+
+class CancelledSignal extends Error {
+  constructor() {
+    super('Resource assignment search cancelled.')
+    this.name = 'CancelledSignal'
+  }
 }
 
 function compareIds(left: string, right: string): number {
@@ -92,6 +106,13 @@ class Search implements ResourceAssignmentSearch {
   private readonly frames: Frame[] = []
   private started = false
   private finished: ResourceAssignmentSearchCompleteness | null = null
+  private sinceCancelPoll = 0
+  private readonly pollCancel = () => {
+    this.sinceCancelPoll += 1
+    if (this.sinceCancelPoll < CANCEL_POLL_INTERVAL) return
+    this.sinceCancelPoll = 0
+    if (this.request.shouldCancel?.()) throw new CancelledSignal()
+  }
   private readonly state: ResourceAssignmentSearchDiagnostics = {
     expandedNodes: 0, maxDepth: 0, candidates: 0,
     rejections: { source: 0, skill_position: 0, gogma_position: 0, normal_position: 0 },
@@ -105,8 +126,10 @@ class Search implements ResourceAssignmentSearch {
     this.table = table
     this.request = request
     this.priorityById = new Map(planningTargets.map(target => [target.id, target.priority]))
-    this.lattices = new Map(table.targets.map(target => [target.targetWeaponId, createTargetOptionLattice(target, table)]))
-    this.menus = createTargetStreamMenus(table)
+    // One compact reset_then_keep index per Target, shared by its value-order lattice and its lower-bound menu.
+    const resetThenKeepByTarget = new Map(table.targets.map(target => [target.targetWeaponId, createResetThenKeepIndex(target)]))
+    this.lattices = new Map(table.targets.map(target => [target.targetWeaponId, createTargetOptionLattice(target, table, resetThenKeepByTarget.get(target.targetWeaponId)!)]))
+    this.menus = createTargetStreamMenus(table, resetThenKeepByTarget)
     this.targetsWithoutOption = table.targets.filter(target => enumerateReachOptions(target, table).next().done === true).map(target => target.targetWeaponId)
   }
 
@@ -123,6 +146,16 @@ class Search implements ResourceAssignmentSearch {
   next(maxNodes?: number): ResourceAssignmentSearchEvent {
     if (maxNodes !== undefined && (!Number.isSafeInteger(maxNodes) || maxNodes < 1)) throw new RangeError(`maxNodes must be a positive integer (got ${String(maxNodes)}).`)
     if (this.finished !== null) return { kind: 'finished', completeness: this.finished }
+    try {
+      return this.advance(maxNodes)
+    } catch (error) {
+      // A poll inside a node's option walk cancelled the search: nothing of that node is reported as a result.
+      if (error instanceof CancelledSignal) return this.finish('cancelled')
+      throw error
+    }
+  }
+
+  private advance(maxNodes: number | undefined): ResourceAssignmentSearchEvent {
     let nodesThisCall = 0
     if (!this.started) {
       this.started = true
@@ -188,7 +221,7 @@ class Search implements ResourceAssignmentSearch {
     let best: ({ target: TargetReach; priority: number } & FeasibleOptionCount) | null = null
     for (const target of this.table.targets) {
       if (partial.chosen.has(target.targetWeaponId)) continue
-      const counted = countFeasibleOptionsUpTo(target, this.table, partial, this.request.mrvLookahead)
+      const counted = countFeasibleOptionsUpTo(target, this.table, partial, this.request.mrvLookahead, this.pollCancel)
       const priority = this.priorityById.get(target.targetWeaponId) ?? 0
       if (best === null || counted.count < best.count || (counted.count === best.count && (priority > best.priority
         || (priority === best.priority && compareIds(target.targetWeaponId, best.target.targetWeaponId) < 0)))) {
@@ -207,6 +240,7 @@ class Search implements ResourceAssignmentSearch {
       const violation = findResourceViolation(option, frame.partial)
       if (violation === null) return option
       this.state.rejections[violation] += 1
+      this.pollCancel()
     }
   }
 

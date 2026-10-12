@@ -3,9 +3,10 @@ import { applyReachOption, createEmptyPartialAssignment, findResourceViolation }
 import {
   compareValueOrder, countFeasibleOptionsUpTo, createOrderedOptionEnumerator, createTargetOptionLattice, indexedBonusStreams, indexedSkillRequirements, valueOrderKey,
 } from './assignmentOrdering'
-import { COUNTER_A, gogmaSource, handBuiltReachTable, newNormalSource, noBonus, normalSource } from './assignmentTestFixture'
+import { COUNTER_A, denseResetThenKeepBonus, gogmaSource, handBuiltReachTable, newNormalSource, noBonus, normalSource } from './assignmentTestFixture'
 import {
-  enumerateBonusRequirements, enumerateReachOptions, enumerateReachOptionsOfSource, enumerateResetThenKeepRequirements, enumerateSkillRequirements, reachOptionKey,
+  createResetThenKeepIndex, enumerateBonusRequirements, enumerateReachOptions, enumerateReachOptionsOfSource, enumerateResetThenKeepRequirements,
+  enumerateSkillRequirements, reachOptionKey,
 } from './reachOptions'
 import type { PartialResourceAssignment } from './assignmentTypes'
 import type { ReachOption, ReachTable, SourceCandidate, TargetReach } from './types'
@@ -60,8 +61,9 @@ describe('Phase B-1 indexed requirement sequences', () => {
   })
 
   it('split the Bonus requirements into ascending streams whose concatenation is Phase A order', () => {
-    const resetThenKeep = [...enumerateResetThenKeepRequirements(target)]
-    expect(resetThenKeep.map(requirement => `${requirement.resetPosition}:${requirement.finalPosition}`)).toEqual(['11:13', '12:13', '11:15', '14:15'])
+    const resetThenKeep = createResetThenKeepIndex(target)
+    expect([...enumerateResetThenKeepRequirements(target)].map(requirement => `${requirement.resetPosition}:${requirement.finalPosition}`)).toEqual(['11:13', '12:13', '11:15', '14:15'])
+    expect(Array.from({ length: resetThenKeep.length }, (_, index) => resetThenKeep.at(index))).toEqual([...enumerateResetThenKeepRequirements(target)])
     for (const source of [...target.sources, gogmaSource('ideal', { currentBonusIdeal: true }), gogmaSource('nokeep', { layout: 'I', keepSupported: false })]) {
       const streams = indexedBonusStreams(target, source, resetThenKeep)
       const concatenated = streams.flatMap(stream => Array.from({ length: stream.length }, (_, index) => stream.at(index)))
@@ -130,6 +132,25 @@ describe('Phase B-1 ordered option enumeration', () => {
     ])
     // The frontier holds the 1,500 lattice roots plus the few cells opened so far - never the 1,500 x 2,001,000 x 2,000 product.
     expect(enumerator.frontierSize).toBeLessThan(1500 + 10)
+    expect(enumerator.delivered).toBe(3)
+  })
+
+  it('walks a dense Reset -> Keep stream of 125,250 requirements from its compact index, first options first', () => {
+    const { table: dense } = handBuiltReachTable({ window: { skill: 4, gogma: 1000, normal: 3 }, targets: [{
+      id: 'target.dense', sources: [gogmaSource('g')], skill: { idealPositions: [8] },
+      bonus: { ...denseResetThenKeepBonus(), resetIdealPositions: [] },
+    }] })
+    const denseTarget = dense.targets[0]!
+    const index = createResetThenKeepIndex(denseTarget)
+    const lattice = createTargetOptionLattice(denseTarget, dense, index)
+    // The lattice holds the index itself (one Bonus stream of 125,250 entries), not a pair array.
+    expect(lattice.sources[0]!.bonusStreams).toHaveLength(1)
+    expect(lattice.sources[0]!.bonusStreams[0]!.length).toBe(125_250)
+    expect(index.footprint).toEqual({ resetPositions: 500, layouts: 1, finalGroups: 500, layoutReferences: 500 })
+    const enumerator = createOrderedOptionEnumerator(lattice, dense, createEmptyPartialAssignment(dense))
+    const first = Array.from({ length: 3 }, () => enumerator.next()!)
+    expect(keys(first)).toEqual(['target.dense|owned:g|reset_skills:8|reset_then_keep:10:11', 'target.dense|owned:g|reset_skills:8|reset_then_keep:10:13', 'target.dense|owned:g|reset_skills:8|reset_then_keep:12:13'])
+    expect(enumerator.frontierSize).toBeLessThanOrEqual(3)
     expect(enumerator.delivered).toBe(3)
   })
 

@@ -4,7 +4,7 @@ import { globalResearchDependencies } from '../plannerGlobalOptimizationResearch
 import { applyReachOption, createEmptyPartialAssignment } from './assignmentFeasibility'
 import { collectResourceAssignments, createResourceAssignmentSearch } from './assignmentSolver'
 import {
-  assignmentKeyOf, bruteForceAssignments, COUNTER_A, COUNTER_B, gogmaSource, handBuiltReachTable, newNormalSource, noBonus, normalSource, targetId,
+  assignmentKeyOf, bruteForceAssignments, COUNTER_A, COUNTER_B, denseResetThenKeepBonus, gogmaSource, handBuiltReachTable, newNormalSource, noBonus, normalSource, targetId,
 } from './assignmentTestFixture'
 import type {
   ExpandedNodeInfo, PlanningTargetPriority, ResourceAssignmentCandidate, ResourceAssignmentSearch, ResourceAssignmentSearchRequest, VerifiedUpperBound,
@@ -348,7 +348,7 @@ describe('Phase B-1 budget, cancel and result classification', () => {
     if (full.status === 'assignments_found') expect(full.completeness).toBe('exhausted')
   })
 
-  it('reports a cancel as cancelled, apart from exhaustion and from the budget', () => {
+  it('reports a cancel as cancelled, apart from exhaustion and from the budget, and keeps the candidates confirmed before it in order', () => {
     const built = sharedStreams()
     let polls = 0
     const result = collectResourceAssignments(built.table, built.planningTargets, { ...REQUEST, shouldCancel: () => ++polls > 25 }, 1000)
@@ -356,7 +356,33 @@ describe('Phase B-1 budget, cancel and result classification', () => {
     if (result.status === 'search_incomplete') {
       expect(result.completeness).toBe('cancelled')
       expect(result.diagnostics.completeness).toBe('cancelled')
+      const uninterrupted = drain(searchOf(built))
+      expect(keysOf(result.candidates)).toEqual(keysOf(uninterrupted.candidates).slice(0, result.candidates.length))
     }
+  })
+
+  it('polls the cancel seam inside a long option walk of one node and reports nothing of that node', () => {
+    // Target a (one option, Skill 8) is assigned first; Target b's 125,250 options all need Skill 8, so its MRV count walks every one.
+    const built = handBuiltReachTable({ window: { skill: 4, gogma: 1000, normal: 3 }, targets: [
+      { id: 'target.a', priority: 5, sources: [gogmaSource('g1')], skill: { idealPositions: [8] }, bonus: { ...noBonus(), resetIdealPositions: [12] } },
+      { id: 'target.b', priority: 3, sources: [gogmaSource('g2')], skill: { idealPositions: [8] }, bonus: denseResetThenKeepBonus() },
+    ] })
+    let polls = 0
+    const cancelled = drain(searchOf(built, { shouldCancel: () => ++polls >= 3 }))
+    expect(cancelled.completeness).toBe('cancelled')
+    expect(cancelled.candidates).toEqual([])
+    expect(polls).toBe(3)
+    // The walk was cut inside the second node: the dead end and its exact rejection count were never reached.
+    expect(cancelled.diagnostics.expandedNodes).toBe(2)
+    expect(cancelled.diagnostics.deadEnds).toBe(0)
+    expect(cancelled.diagnostics.rejections.skill_position).toBe(0)
+    const uninterrupted = drain(searchOf(built))
+    expect(uninterrupted.completeness).toBe('exhausted')
+    expect(uninterrupted.candidates).toEqual([])
+    expect(uninterrupted.diagnostics.deadEnds).toBe(1)
+    expect(uninterrupted.diagnostics.rejections.skill_position).toBe(125_250)
+    const result = collectResourceAssignments(built.table, built.planningTargets, REQUEST, 10)
+    expect(result).toMatchObject({ status: 'no_resource_assignment', reason: 'resource_exclusivity' })
   })
 
   it('distinguishes a Target without any option from an exclusivity dead end', () => {

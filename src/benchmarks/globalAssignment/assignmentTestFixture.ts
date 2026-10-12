@@ -50,6 +50,41 @@ export function noBonus(): TargetReach['bonus'] {
   return { resetIdealPositions: [], resetLayoutByPosition: new Map(), keepIdealPositionsByLayout: new Map(), keepUnsupportedLayouts: [] }
 }
 
+/** Gogma positions `from .. to` (inclusive) of the given parity. */
+export function positionsOfParity(from: number, to: number, parity: 0 | 1): number[] {
+  const positions: number[] = []
+  for (let position = from; position <= to; position++) if (position % 2 === parity) positions.push(position)
+  return positions
+}
+
+/**
+ * A dense Reset -> Keep row over Gogma 10..1009: 500 Resets at the even positions, all of layout `I`, and
+ * 500 Keep-Ideal positions at the odd ones, so every Keep position `11 + 2i` has `i + 1` earlier Resets
+ * and the row holds 1 + 2 + ... + 500 = 125,250 `reset_then_keep` requirements (no Ideal Reset by default).
+ */
+export function denseResetThenKeepBonus(): TargetReach['bonus'] {
+  return {
+    resetIdealPositions: [],
+    resetLayoutByPosition: new Map(positionsOfParity(10, 1008, 0).map(position => [position, 'I'])),
+    keepIdealPositionsByLayout: new Map([['I', positionsOfParity(11, 1009, 1)]]),
+    keepUnsupportedLayouts: [],
+  }
+}
+
+/**
+ * A dense two-layout row over Gogma 10..1009: Resets at the even positions alternate layouts `I`
+ * (10, 14, 18, ...) and `L` (12, 16, ...); Keep from `I` is Ideal at every odd position, Keep from `L` only
+ * at the odd positions from 511 on, so the finals from 511 merge Resets of both layouts by rank.
+ */
+export function denseTwoLayoutResetThenKeepBonus(): TargetReach['bonus'] {
+  return {
+    resetIdealPositions: [],
+    resetLayoutByPosition: new Map(positionsOfParity(10, 1008, 0).map(position => [position, position % 4 === 2 ? 'I' : 'L'])),
+    keepIdealPositionsByLayout: new Map([['I', positionsOfParity(11, 1009, 1)], ['L', positionsOfParity(511, 1009, 1)]]),
+    keepUnsupportedLayouts: [],
+  }
+}
+
 export interface HandBuiltTargetSpec {
   id: string
   weaponTypeId?: string
