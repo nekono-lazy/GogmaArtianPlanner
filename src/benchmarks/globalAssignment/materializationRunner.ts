@@ -113,6 +113,13 @@ export interface StructuralCandidateSummary {
   sourceKinds: { owned_gogma: number; owned_normal: number; new_normal: number }
   skillRequirements: { none: number; reset_skills: number; conversion: number }
   bonusRequirements: { none: number; reset: number; keep_from_source: number; reset_then_keep: number }
+  /**
+   * One row per planning Target in materialization order: the chosen option and the positions Phase C attributes to it per stream
+   * (its required positions plus its predicted chain; design 8.3 `ownPositionCount`, a prediction, never a match condition).
+   */
+  targets: { orderIndex: number; sourceKind: string; skill: string; bonus: string; normal: string | null; ownPositionCount: { skill: number; gogma: number; normal: number }; predictedChainSegments: number }[]
+  /** Design 8.2 Skill dependencies by materialization order index: each conversion Target and the Targets placed before it for its Skill coverage. */
+  skillDependencies: { orderIndex: number; conversionPosition: number; prerequisiteOrderIndexes: number[] }[]
 }
 
 export interface ReservationSummary {
@@ -270,6 +277,19 @@ function summarizeCandidate(candidate: StructuralCandidate, candidateIndex: numb
     sourceKinds: countBy(['owned_gogma', 'owned_normal', 'new_normal'] as const, options.map(option => option.source.kind)),
     skillRequirements: countBy(['none', 'reset_skills', 'conversion'] as const, options.map(option => option.skillRequired.kind)),
     bonusRequirements: countBy(['none', 'reset', 'keep_from_source', 'reset_then_keep'] as const, options.map(option => option.bonusRequired.kind)),
+    targets: candidate.materializationOrder.map((targetWeaponId, orderIndex) => {
+      const option = candidate.assignment.chosen.get(targetWeaponId)!
+      const shape = candidate.expectedShapes.find(value => value.targetWeaponId === targetWeaponId)!
+      return {
+        orderIndex, sourceKind: option.source.kind, skill: requirementLabel(option.skillRequired), bonus: requirementLabel(option.bonusRequired),
+        normal: option.normalRequired === null ? null : `${option.normalRequired.counterId}@${option.normalRequired.position}`,
+        ownPositionCount: { ...shape.predicted.ownPositionCount }, predictedChainSegments: shape.predicted.chainSegments.length,
+      }
+    }),
+    skillDependencies: candidate.materializationDependencies.map(dependency => ({
+      orderIndex: candidate.materializationOrder.indexOf(dependency.targetWeaponId), conversionPosition: dependency.conversionPosition,
+      prerequisiteOrderIndexes: dependency.prerequisiteTargetWeaponIds.map(id => candidate.materializationOrder.indexOf(id)),
+    })),
   }
 }
 

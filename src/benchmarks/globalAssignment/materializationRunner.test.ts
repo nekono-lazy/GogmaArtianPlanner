@@ -132,6 +132,9 @@ describe('Phase D-0B runner outcomes', () => {
     })
     expect(first!.targets[0]).toMatchObject({ selection: null, attempts: [], inspections: { inspected: 0 } })
     expect(first!.diagnostics.continuationOptions.laneStartIdealSkillContinuation).toBe(1)
+    // The candidate summary lists every Target's option by order index, and every Skill prerequisite precedes its conversion Target.
+    expect(first!.candidate.targets.map(target => [target.orderIndex, target.skill])).toEqual([[0, 'conversion(7,9)'], [1, expect.stringMatching(/^conversion\(\d+,10\)$/)]])
+    for (const dependency of first!.candidate.skillDependencies) for (const index of dependency.prerequisiteOrderIndexes) expect(index).toBeLessThan(dependency.orderIndex)
     // The later candidates are materialized from scratch: the policy shape excluded nothing.
     expect([second!.classification, third!.classification]).toEqual(['all_materialized', 'all_materialized'])
     // The first candidate's b reached no Search: every Search call belongs to the later candidates (two Targets each).
