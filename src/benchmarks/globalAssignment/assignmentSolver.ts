@@ -24,14 +24,21 @@
  * cancel and exhaustion are three different ends: reaching the node budget or a cancel leaves unexplored
  * branches and concludes nothing about the window; only an exhausted tree says this window and these
  * constraints held no (further) assignment.
+ *
+ * Phase C-2 adds one opt-in request field, `readPriorityConversionPosition` (design 6.3 coverage-driven
+ * value ordering, driven by `coverageSearch.ts`): when present, each node walks the prioritized
+ * enumerator instead, which reorders - never filters - its values. Without it every node walks exactly
+ * the Phase B-1 enumerator, and `diagnostics` is unchanged; the ordering counters live apart in
+ * `priorityOrdering`.
  */
 import { applyReachOption, createEmptyPartialAssignment, findResourceViolation, streamEndObjective } from './assignmentFeasibility'
 import { createTargetStreamMenus, partialAssignmentLowerBound, type TargetStreamMenu } from './assignmentLowerBound'
 import {
-  countFeasibleOptionsUpTo, createOrderedOptionEnumerator, createTargetOptionLattice, type FeasibleOptionCount, type OrderedOptionEnumerator, type TargetOptionLattice,
+  countFeasibleOptionsUpTo, createOrderedOptionEnumerator, createPrioritizedOptionEnumerator, createPriorityOrderingCounters, createTargetOptionLattice,
+  type FeasibleOptionCount, type PriorityOrderingCounters, type TargetOptionLattice,
 } from './assignmentOrdering'
 import type {
-  CreateResourceAssignmentSearchResult, PartialResourceAssignment, PlanningTargetPriority, ResourceAssignmentCandidate, ResourceAssignmentSearch,
+  CreateResourceAssignmentSearchResult, PartialResourceAssignment, PlanningTargetPriority, PriorityOrderingDiagnostics, ResourceAssignmentCandidate, ResourceAssignmentSearch,
   ResourceAssignmentSearchCompleteness, ResourceAssignmentSearchDiagnostics, ResourceAssignmentSearchEvent, ResourceAssignmentSearchRequest,
   ResourceAssignmentSearchResult,
 } from './assignmentTypes'
@@ -40,11 +47,17 @@ import type { ReachOption, ReachTable, TargetReach } from './types'
 
 type TargetId = TargetReach['targetWeaponId']
 
+/** The value source of one node: the Phase B-1 value order, or (Phase C-2 opt-in) its coverage-driven reordering. */
+interface FrameEnumerator {
+  next(): ReachOption | undefined
+  readonly excludedUsedSources: number
+}
+
 interface Frame {
   depth: number
   partial: PartialResourceAssignment
   selectedTarget: TargetReach
-  enumerator: OrderedOptionEnumerator
+  enumerator: FrameEnumerator
 }
 
 /**
@@ -104,6 +117,7 @@ class Search implements ResourceAssignmentSearch {
   private readonly lattices: Map<TargetId, TargetOptionLattice>
   private readonly menus: Map<TargetId, TargetStreamMenu>
   private readonly frames: Frame[] = []
+  private readonly priorityCounters: PriorityOrderingCounters = createPriorityOrderingCounters()
   private started = false
   private finished: ResourceAssignmentSearchCompleteness | null = null
   private sinceCancelPoll = 0
@@ -141,6 +155,10 @@ class Search implements ResourceAssignmentSearch {
       deadEndsByTarget: { ...state.deadEndsByTarget },
       bestAssignment: state.bestAssignment === null ? null : { ...state.bestAssignment },
     }
+  }
+
+  get priorityOrdering(): PriorityOrderingDiagnostics {
+    return { enabled: this.request.readPriorityConversionPosition !== undefined, ...this.priorityCounters }
   }
 
   next(maxNodes?: number): ResourceAssignmentSearchEvent {
@@ -210,7 +228,12 @@ class Search implements ResourceAssignmentSearch {
       for (const kind of ['source', 'skill_position', 'gogma_position', 'normal_position'] as const) this.state.rejections[kind] += selection.rejections[kind]
       return null
     }
-    const enumerator = createOrderedOptionEnumerator(this.lattices.get(selection.target.targetWeaponId)!, this.table, partial)
+    const lattice = this.lattices.get(selection.target.targetWeaponId)!
+    const readPriority = this.request.readPriorityConversionPosition
+    // Without the Phase C-2 opt-in the node walks exactly the Phase B-1 enumerator.
+    const enumerator: FrameEnumerator = readPriority === undefined
+      ? createOrderedOptionEnumerator(lattice, this.table, partial)
+      : createPrioritizedOptionEnumerator(lattice, this.table, partial, readPriority, this.priorityCounters, this.pollCancel)
     this.state.rejections.source += enumerator.excludedUsedSources
     this.frames.push({ depth, partial, selectedTarget: selection.target, enumerator })
     return null

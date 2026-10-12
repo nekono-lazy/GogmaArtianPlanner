@@ -42,7 +42,7 @@ function invariant(message: string): never {
 }
 
 /** The table must be the context's: the same planning Targets in the same order, the same confirmed origins. */
-function checkTableBelongsToContext(table: ReachTable, context: GlobalAssignmentContext): CoverageInvalidInput | null {
+export function checkTableBelongsToContext(table: ReachTable, context: GlobalAssignmentContext): CoverageInvalidInput | null {
   const planning = context.planningTargets.map(target => target.id)
   const rows = table.targets.map(row => row.targetWeaponId)
   if (planning.length !== rows.length || planning.some((id, index) => id !== rows[index])) {
