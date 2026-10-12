@@ -1331,7 +1331,9 @@ D-0B（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B.md)）は、実Export用r
   §10.3では拡大の根拠にもcap / gate / envelope見直しの根拠にもせず、方式（§19.5 案B）の課題として数える
 - **G3 / G4**: G3は静的risk・request上の条件（正式reservationでのheld / blocked）・実測（同じ最終位置で、他方のrequired位置がrisk位置の配送 =
   collapse署名）を分けて記録し、Search前に分類しない。合成入力では監査 §3.3の推定どおりの代表化をPlanner Alternative Searchで確認した。
-  G4は `deriveTargetSatisfaction()` による開始時Idealの場合分け（zero-operation / G4-i / G4-ii / G4-iii）を記録するだけで、候補を不成立にしない
+  G4は `deriveTargetSatisfaction()` による開始時Idealの場合分け（zero-operation / G4-i / G4-ii / G4-iii）を記録するだけで、候補を不成立にしない。
+  G4-iiは、他TargetのRouteがそのTargetのIdeal武器を **すべて実際に操作する**（in-flightにし得る）場合だけで、ゼロ操作Routeのsourceとして参照されるだけの武器や
+  操作されない武器が1つでも残る場合はG4-iとする（PR #246レビューで修正。監査 §3.6）
 - **非formal smoke（W0、最初のstructural candidate、objective 1,766）**: materialization順序の先頭7 Targetがmaterializeされ（いずれも最初の配送で一致）、
   8番目（`reset_skills(422)` + `reset_then_keep(208, 502)` の所持巨戟）が `unconfirmed(delivery_cap_reached)`。delivery cap 5,000でも期待形は配送されず、
   配送の大半は別sourceと早い位置で終わるIdeal Routeだった。そのTargetは巨戟化位置399のTargetのSkill被覆の前提として、Gogmaだけを操作する21 Targetより先に
@@ -1708,7 +1710,7 @@ Phase Aは所持巨戟の現在SkillがIdealなら `skillRequired = none` だけ
 | G1 | Phase Aにあるが、Production Searchが返さない | S1: 巨戟化時にSkillがIdeal、その後Reset SkillsでIdeal（`conversion (c, s*)`、c < s*、cがIdeal位置）。D-0Aでは当該形と無関係な要因で `unconfirmed` か `shape_mismatch` に分類される（§9.9） |
 | G2 | ゲーム上合法・表現可能だが、Phase Aに無い | S2: 所持巨戟の現在SkillがIdeal、その後Reset Skills。B1 / B2: 所持巨戟の現在BonusがIdeal、その後Reset / Keep |
 | G3 | Phase Aにあるが、あるreservationではSearchが返さない（Ideal非依存、コード読取からの推定・未固定） | `keep_from_source` / `reset_then_keep` の操作範囲に、chainと同じlayoutのheldでないReset位置があると、Bonus streamのB2 frontier代表（最新のReset）が同じ最終武器を別のrequired位置集合のRouteへ畳む |
-| G4 | Phase Aにあるが、Production Plannerが割当どおりに実行するかが状態遷移に依存する | Planner開始時にIdeal武器を持つTargetは開始時点では `hasIdeal` でEntryがcommitされない（`deriveTargetSatisfaction()` / `entryIsRelevantForState()`）。ただし恒久的な完成ではなく、他のRouteがIdeal武器を操作するとin-flightになって充足が再評価され、Entryは実行可能かつcollisionなしなら再commitされる（ISSUE_103設計 6.8）。監査 §3.6でG4-i（Ideal武器が操作されない）/ G4-ii（他Targetの操作で充足が変化。実行順に依存しPhase D'でだけ判定）/ G4-iii（t自身の両軸Ideal sourceを操作）に分けた |
+| G4 | Phase Aにあるが、Production Plannerが割当どおりに実行するかが状態遷移に依存する | Planner開始時にIdeal武器を持つTargetは開始時点では `hasIdeal` でEntryがcommitされない（`deriveTargetSatisfaction()` / `entryIsRelevantForState()`）。ただし恒久的な完成ではなく、他のRouteがIdeal武器を操作するとin-flightになって充足が再評価され、Entryは実行可能かつcollisionなしなら再commitされる（ISSUE_103設計 6.8）。監査 §3.6でG4-i（Ideal武器のうち、どのRouteにも操作されないものが残る。ゼロ操作Routeのsourceとして参照されるだけの武器を含む）/ G4-ii（Ideal武器のすべてが他TargetのRouteに操作され、充足が変化し得る。実行順に依存しPhase D'でだけ判定）/ G4-iii（t自身の両軸Ideal sourceを操作）に分けた。sourceとしての参照は操作ではない（ゼロ操作Routeは武器をin-flightにしない） |
 
 S3（Reset Skills途中でIdeal → さらにIdeal）、B3〜B5（Reset / Keep途中でIdeal → さらにIdeal）、SB1〜SB3のlane途中部分は、Phase A・Planner Alternative
 Search・D-0Aのすべてで扱える（監査 §4）。G2のoptionにReachTableの追加情報・追加予測は要らない（監査 §3.4）。

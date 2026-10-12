@@ -18,8 +18,9 @@
  *   reservation of an executed request; the measured part counts delivered Candidates whose only mismatch was the
  *   required Gogma positions. None of them says the Route does not exist.
  * - G4 (Planner-start Ideal): the planning Targets that already hold an Ideal owned Gogma at Planner start
- *   (`deriveTargetSatisfaction()`), split into the audit's G4-i / G4-ii / G4-iii. Whether the Planner commits such a
- *   Target's Entry depends on its state transitions (in-flight re-evaluation, dynamic commitment), which only Phase D'
+ *   (`deriveTargetSatisfaction()`), split into the audit's G4-i / G4-ii / G4-iii by which of those weapons another option
+ *   actually operates (a mere source reference of a zero-operation option is not an operation). Whether the Planner commits
+ *   such a Target's Entry depends on its state transitions (in-flight re-evaluation, dynamic commitment), which only Phase D'
  *   decides; the categories are diagnostics, never a rejection.
  */
 import type { OwnedWeaponId, TargetWeaponId } from '../../domain/models/publicTypes'
@@ -267,11 +268,25 @@ export function summarizeInspections(inspections: readonly CandidateInspection[]
 // ------------------------------------------------------------------------------------------------ G4
 
 /**
- * The audit 3.6 cases of a planning Target that holds an Ideal owned Gogma at Planner start:
- * - `zero_operation_ideal`: its own option is `none / none` on one of those weapons (the ordinary zero-operation case, not G4)
- * - `g4_iii`: its own option operates one of those weapons (a both-axis Ideal source; the current Phase A never generates it)
- * - `g4_ii`: one of those weapons is the source of another planning Target's option (the Planner's re-evaluation depends on the execution order)
- * - `g4_i`: none of those weapons is the source of any option of the candidate (the Target's own Route may never be committed)
+ * The audit 3.6 cases of a planning Target t that holds Ideal owned Gogma `W_t` at Planner start.
+ *
+ * Referencing a weapon as an option's source is not operating it. The Planner marks an existing Gogma in flight - and
+ * re-derives every Target's satisfaction without it - only after an operation that mutates it (`sourceMutatedByOperation()`:
+ * Reset Skills with a source, Reset and Keep Bonuses), and a reserve rewrites a source only with its own Route's result.
+ * A zero-operation option (`none / none`) mutates nothing, and its Target, Ideal from the start, never commits it anyway; so
+ * a weapon that is only a zero-operation source stays a non-in-flight Ideal weapon of t for the whole run. "Operates" here is
+ * `operatesSource()`: a Skill or Bonus requirement other than `none` on that weapon.
+ *
+ * - `zero_operation_ideal`: t's own option is `none / none` on a weapon of `W_t` (the ordinary zero-operation case, not G4)
+ * - `g4_iii`: t's own option operates a weapon of `W_t` (a both-axis Ideal source; the current Phase A never generates it)
+ * - `g4_i`: otherwise, at least one weapon of `W_t` is operated by no option of the candidate (unreferenced, or only another
+ *   Target's zero-operation source). Under the audit's premises P2 / P3 that weapon never leaves t's inventory nor goes in flight,
+ *   so t keeps `hasIdeal` for the whole run and its own Entry may never be committed
+ * - `g4_ii`: otherwise, every weapon of `W_t` is operated by another planning Target's option. t's `hasIdeal` may become false
+ *   once they are in flight (or rewritten by their reserves), depending on the execution order; it may also stay true. Only
+ *   Phase D' decides
+ *
+ * Every category is a static possibility read from the structural candidate, never a completion or a rejection.
  */
 export type PlannerStartIdealCategory = 'zero_operation_ideal' | 'g4_i' | 'g4_ii' | 'g4_iii'
 
@@ -281,6 +296,10 @@ export interface PlannerStartIdealTarget {
   category: PlannerStartIdealCategory
   /** `W_t`: the owned Gogma satisfying the Target's Ideal at Planner start (`deriveTargetSatisfaction()`, protected ones included). */
   idealOwnedWeaponIds: OwnedWeaponId[]
+  /** The weapons of `W_t` another Target's option operates (sorted). */
+  operatedIdealWeaponIds: OwnedWeaponId[]
+  /** The weapons of `W_t` no option of another Target operates: unreferenced, or only a zero-operation source (sorted). */
+  unoperatedIdealWeaponIds: OwnedWeaponId[]
   ownOption: { sourceKind: SourceCandidate['kind']; sourceOwnedWeaponId: OwnedWeaponId | null; operatesSource: boolean }
   /** For each weapon of `W_t`: the options of the candidate whose source it is, and whether they operate it. */
   weapons: { ownedWeaponId: OwnedWeaponId; sourceOf: { targetWeaponId: TargetWeaponId; operates: boolean }[] }[]
@@ -315,13 +334,17 @@ export function diagnosePlannerStartIdeal(candidate: StructuralCandidate, contex
     const own = sourceOwnedWeaponId(option.source)
     const operates = operatesSource(option)
     const weapons = ideal.map(ownedWeaponId => ({ ownedWeaponId, sourceOf: (sourceOf.get(ownedWeaponId) ?? []).map(value => ({ ...value })) }))
+    // A reference alone never moves t's satisfaction: only another Target's operation on the weapon does (see the type's comment).
+    const operatedByOther = (weapon: (typeof weapons)[number]) => weapon.sourceOf.some(value => value.targetWeaponId !== row.targetWeaponId && value.operates)
+    const operatedIdealWeaponIds = weapons.filter(operatedByOther).map(weapon => weapon.ownedWeaponId).sort()
+    const unoperatedIdealWeaponIds = weapons.filter(weapon => !operatedByOther(weapon)).map(weapon => weapon.ownedWeaponId).sort()
     let category: PlannerStartIdealCategory
     if (own !== null && ideal.includes(own)) category = operates ? 'g4_iii' : 'zero_operation_ideal'
-    else if (weapons.some(weapon => weapon.sourceOf.some(value => value.targetWeaponId !== row.targetWeaponId))) category = 'g4_ii'
-    else category = 'g4_i'
+    else category = unoperatedIdealWeaponIds.length > 0 ? 'g4_i' : 'g4_ii'
     counts[category] += 1
     targets.push({
       targetWeaponId: row.targetWeaponId, orderIndex: orderIndex.get(row.targetWeaponId) ?? -1, category, idealOwnedWeaponIds: ideal,
+      operatedIdealWeaponIds, unoperatedIdealWeaponIds,
       ownOption: { sourceKind: option.source.kind, sourceOwnedWeaponId: own, operatesSource: operates }, weapons,
     })
   }

@@ -229,7 +229,7 @@ Phase B-1の値順序lattice（`indexedSkillRequirements()` / `indexedBonusStrea
 | **G1** | **A** にあるが π(**S**) に無い | `conversion` (c, s*)、c < s*、c ∈ `skill.idealPositions`（S1） | L3（巨戟化SkillがIdealのRoute baseにReset Skills channelを購読させない） | Phase B / Cは生成し得る（設計 §8.6の補題が下げる c がIdeal位置に当たる場合を含む）。D-0Aは設計 §9.2 → §9.1 と試し、実際には `unconfirmed(stopped_by_extent)` になる（D-0A synthetic testで固定、`materialize.test.ts:339`）。ただしこの分類は当該形と無関係な要因で決まる: Bonus streamがextent外へ届けば `stopped_by_extent`、cap到達なら `delivery_cap_reached`、Searchが `exhausted` で終われば `shape_mismatch`（= `materialization_failed`）。いずれも「Search policyが返さない形」を正しく表さない |
 | **G2** | π(**G**) にあるが **A** に無い | 所持巨戟の現在SkillがIdealで `reset_skills` s*（S2）、現在Bonusが `gogma_artian` Idealで `reset` / `keep_from_source` / `reset_then_keep`（B1 / B2） | L4（Phase Aの規則。L3にも無い） | 生成されない。C-1 `validateOption()` が拒否するので、外から与えても通らない |
 | **G3** | **A** にあるが、ある ρ では π(**S**(ρ)) に無い（Ideal非依存） | `keep_from_source` g*、`reset_then_keep` (g1, g*) のうち、自分の操作範囲（最初の操作位置〜g*）にheldでないReset位置 q（`reset_then_keep` では g1 < q）があり、layout(Reset(q))がchainのlayoutと一致するもの（B2 / B4 / B5の一部） | L3（Bonus streamのB2 family-layout frontierが同じ（depth、位置、layout）のstateを1つにまとめ、`lastResetDepth` 最大＝最新のResetを代表に選ぶ。`bonusStream.ts:336-344` / `:711-716` / `:800-811`） | Searchは同じ最終武器を、required位置 {q, g*} のRoute（Reset q → Keep連鎖）として返す。D-0Aはrequired位置の完全一致で照合するので不一致になる。`AGENTS.md` が「Bonus reachabilityについてだけlossless。route-historyの多様性を1つの代表へ畳む既知のPlanner limitation」と明記する性質の帰結である。**コード読取からの推定で、testで固定していない** |
-| **G4** | **A** にあるが、Production Plannerが割当どおりに実行するかが **Plannerの状態遷移に依存する** | planning Target t が、現在性能でtのIdealを満たす所持巨戟（以下「Ideal武器」）をPlanner開始時に持つ場合の、tのoptionのうち「Ideal武器の `none / none`」以外のもの | Planner semantics。開始時にtは `hasIdeal` でEntryはcommitされないが、他のRouteがIdeal武器を操作してin-flightにすると充足が再評価され、tのEntryは再commitされ得る（ISSUE_103設計 6.8、§3.6） | 結果は §3.6の場合分けに従う。Ideal武器が最終入力のどのRouteにも操作されない場合（G4-i）と、tのoptionがt自身の両軸Ideal sourceを操作する場合（G4-iii）は、コード上tのEntryがcommitされない。Ideal武器が他Targetのsourceになる場合（G4-ii）は、そのRouteの実行時点とtのRouteの位置に依存し、Phase D'でしか決まらない。設計 §15.1の「複数Target同一武器のゼロ操作option」はcross satisfactionの場合だけを扱っており、この帰結は未記載 |
+| **G4** | **A** にあるが、Production Plannerが割当どおりに実行するかが **Plannerの状態遷移に依存する** | planning Target t が、現在性能でtのIdealを満たす所持巨戟（以下「Ideal武器」）をPlanner開始時に持つ場合の、tのoptionのうち「Ideal武器の `none / none`」以外のもの | Planner semantics。開始時にtは `hasIdeal` でEntryはcommitされないが、他のRouteがIdeal武器を操作してin-flightにすると充足が再評価され、tのEntryは再commitされ得る（ISSUE_103設計 6.8、§3.6） | 結果は §3.6の場合分けに従う。Ideal武器のうち最終入力のどのRouteにも操作されない（ゼロ操作Routeのsourceとして参照されるだけの場合を含む）ものが残る場合（G4-i）と、tのoptionがt自身の両軸Ideal sourceを操作する場合（G4-iii）は、コード上tのEntryがcommitされない。Ideal武器のすべてが他TargetのRouteに操作される場合（G4-ii）は、そのRouteの実行時点とtのRouteの位置に依存し、Phase D'でしか決まらない。設計 §15.1の「複数Target同一武器のゼロ操作option」はcross satisfactionの場合だけを扱っており、この帰結は未記載 |
 
 G1 / G2 / G3はmaterializationの欠落、G4はPlanner検証時の状態遷移に依存する欠落（成立しない場合がある）である。G3 / G4はIdeal到達後の操作継続とは
 独立の既存性質だが、集合間の欠落として本監査で初めて明示したので併記する。
@@ -272,10 +272,17 @@ G3の条件に当たらない限り **A**、π(**S**)、**M** のすべてにあ
 
 planning Target t のIdeal武器（現在性能でtのIdealを満たす所持巨戟）の集合を W_t とすると、G4は次の3つに分かれる。
 
+**source参照と操作の区別**（PR #246レビューで明確化）。武器wがあるoptionのsourceとして **参照される** ことと、そのRouteがwを **操作する** ことは別である。
+Plannerがwをin-flightにして充足を再評価するのは、wを変更する操作（source付き `reset_skills`、`reset_bonuses`、`keep_bonuses`。
+`sourceMutatedByOperation()`）の直後だけであり、reserveはそのRoute自身の結果でwを書き換えるだけである。ゼロ操作option（`none / none`、
+`existing_gogma_current`）はwを変更せず、そのTarget自身も開始時からIdealなのでそのEntryはcommitされない（commitされてもreserveはwの性能を変えない）。
+したがって、ゼロ操作optionのsourceとして参照されるだけの武器は、run全体を通じてin-flightでないIdeal武器のままであり、G4-iiの「他Targetの操作で充足が
+変化する」には当たらない。以下で「操作する」は、所持巨戟sourceのoptionがSkill側またはBonus側に `none` 以外の要件を持つこと（D-0B診断の `operatesSource()`）をいう。
+
 | 場合 | 条件 | 現行Plannerで起こること | Global Assignmentでの扱い |
 | --- | --- | --- | --- |
-| **G4-i** | W_t のどの武器も、structural candidateの最終入力のどのRouteのsourceでもない（構造的候補から静的に判定できる） | 下記の前提P2 / P3のもとでは、W_t は変更されずin-flightにもならないので、tは最後まで `hasIdeal`。tのEntryはcommitされず実行されない | tのEntryがselectedにならず、設計 §9.5の成立条件（selected = 全Entry）を満たさない見込み。tのchainに被覆を依存するRouteがあればstall、tのrequired位置がstream終端を決めていれば物理操作数 < objectiveになる見込み。**予測であり、D-0Bでは不成立に分類しない**（判定はPhase D'） |
-| **G4-ii** | W_t のある武器 w が、別のplanning Target t′ のRouteのsourceである（C1によりsourceにできるのは1 Targetだけ。t′はtと同じ武器種・属性） | t′がwを最初に操作した時点でwがin-flightになり、tに他のin-flightでないIdeal武器が無ければ `hasIdeal = false` に戻る。その時点でtのEntryが実行可能かつcollisionなしならcommitされ、実行される。tのRouteのholding unitの位置がその時点で既に通過されていればcommitされない。t′のreserveでwの新しい状態がtのIdealも満たせば、tのcommitted Entryは解放される | 実行順に依存し、構造的候補からは決まらない。**Phase D'でだけ判定する** |
+| **G4-i** | tのoptionのsourceはW_tの外にあり、W_t のうち、structural candidateの最終入力のどのRouteにも **操作されない** 武器が1つ以上ある（どのRouteのsourceでもない武器と、他Targetのゼロ操作optionのsourceとして参照されるだけの武器を含む。構造的候補から静的に判定できる） | 下記の前提P2 / P3のもとでは、その武器は変更されずin-flightにもならないので、tは最後まで `hasIdeal`（W_t の他の武器が操作されても変わらない）。tのEntryはcommitされず実行されない | tのEntryがselectedにならず、設計 §9.5の成立条件（selected = 全Entry）を満たさない見込み。tのchainに被覆を依存するRouteがあればstall、tのrequired位置がstream終端を決めていれば物理操作数 < objectiveになる見込み。**予測であり、D-0Bでは不成立に分類しない**（判定はPhase D'） |
+| **G4-ii** | tのoptionのsourceはW_tの外にあり、W_t の **すべての** 武器が、別のplanning TargetのRouteに **操作される**（sourceとして参照されるだけでは該当しない。C1により1つの武器をsourceにできるのは1 Targetだけ。操作するTarget t′ はtと同じ武器種・属性で、その武器を両軸Idealとしない） | t′がwを最初に操作した時点でwがin-flightになり、tに他のin-flightでないIdeal武器が無ければ `hasIdeal = false` に戻る（必ず戻るとは限らない。他のIdeal武器がまだ操作前ならIdealのまま）。その時点でtのEntryが実行可能かつcollisionなしならcommitされ、実行される。tのRouteのholding unitの位置がその時点で既に通過されていればcommitされない。t′のreserveでwの新しい状態がtのIdealも満たせば、tのcommitted Entryは解放される | 実行順に依存し、構造的候補からは決まらない。**Phase D'でだけ判定する** |
 | **G4-iii** | tのoptionが、t自身の両軸Ideal source w を操作する（Skill側・Bonus側のどちらか、または両方の継続option。現行Phase Aは生成しない） | 下記の前提P1〜P3のもとでは、wを操作し得るRouteはtのRouteだけで、tは開始時に `hasIdeal` なのでそのEntryはcommitされない。wはin-flightにならずtは `hasIdeal` のままなので、最後までcommitされない | tの継続Routeは実行されない見込み（コード読取からの結論。testで未固定） |
 
 G4-iiiの結論が依存する前提（G4-iはこのうちP2 / P3に依存する）:
@@ -283,7 +290,7 @@ G4-iiiの結論が依存する前提（G4-iはこのうちP2 / P3に依存する
 - **P1**: 最終入力のvalidなEntryのうち、wをsourceにするのはtのEntryだけである（Global AssignmentのC1と、planning Target 1件につき生成Entry 1件という
   設計 §9.5の最終入力の構成。materializeできなかったTargetが残る候補はPhase D'へ進まない）
 - **P2**: 所持巨戟の状態とin-flightを変えるのは、その武器をsourceとするRouteの操作と、そのRouteのreserveだけである（現行の状態遷移実装を読んだ範囲。
-  他に所持巨戟を変えるPlanner操作は見当たらない）
+  他に所持巨戟を変えるPlanner操作は見当たらない）。ゼロ操作Routeは操作を持たず、そのreserveも武器の性能（充足判定が読むBonus・Skill）を変えない
 - **P3**: 未commitのEntryがcommitされるのは、開始時のRoute commitmentと、`hasIdeal` がfalseへ戻ったときの動的commitだけである（ISSUE_103設計 6.8）
 
 P1はGlobal Assignmentの最終入力の構成から、P2 / P3は現行Production Plannerの実装と設計から読み取ったものであり、test・証明で固定したものではない。
@@ -296,6 +303,9 @@ P1はGlobal Assignmentの最終入力の構成から、P2 / P3は現行Productio
 - **そのTarget自身がIdeal sourceへ追加操作する**: sourceが両軸IdealならG4-iii。sourceが片軸だけIdeal（S2型だけ、またはB1 / B2型だけ）なら、
   そのsourceはtのIdeal武器ではないので、そのsourceによってtが開始時に `hasIdeal` になることはなく、tのEntryは通常どおりcommitの対象になる。
   tが別に両軸Idealの武器も持つ場合は、G4-i / G4-iiに帰着する
+- **複数のIdeal武器**: W_t の一部だけが他Targetに操作される場合、操作されない武器が残るのでtは `hasIdeal` のまま（G4-i）。G4-iiは「操作によって
+  `hasIdeal` がfalseへ戻り得る」可能性の分類であり、実際に戻るか（その操作の時点で他のIdeal武器がin-flightでないか、reserve後の新しい状態がtのIdealを
+  満たすか）は実行順に依存し、Phase D'でしか決まらない
 
 A-2への含意: G4-iiiは「両軸Ideal sourceの継続optionを追加しない」根拠になり得るが、P1〜P3に依存するので、本監査では除外を確定事項にせず、
 A-2でtest（§9.3）とともに判断する。D-0Bへの含意: D-0BはPlannerを実行しないので、G4-i / G4-ii / G4-iiiは場合分けを診断として記録するだけで、
@@ -664,7 +674,7 @@ streamのconsumer契約）の確認を前提とする。それらが成立しな
 | --- | --- | --- |
 | 1 | D-0Bの非formal smokeを現行D-0A方式で先行してよいか | **よい**。定理Tにより構造的最適objectiveは失われない。smokeは「最初のstructural candidateが現行方式でどこまでmaterializeできるか」「分布・Search規模」を測るのに十分である |
 | 2 | 先行する場合の診断上の制限 | (a) G1の形を含む候補はmaterializeできず、未確認（未実行）で止まる。(b) G2の形は列挙されないので観測できない。(c) G3があれば支配する側の形が一致せず、未確認または `shape_mismatch` になり得る。(d) G4の候補はPlanner検証で成立しない場合がある（§3.6。D-0BはPlanner検証をしないので、開始時点のIdealだけを理由に不成立とは分類しない）。(e) smokeの数値（delivered-before-match、Search規模、時間、heap）は現行option集合・現行方式でのもので、案B / A-2の後に再測定が要る。いずれも「Routeが存在しない」「実行不能」とは書かない |
-| 3 | Skill / Bonusの列挙漏れを検知できる診断の要否 | **要**。D-0Bで次を追加する: (i) Search前のG1判定（c ∈ `skill.idealPositions` かつ c < s*。ReachTableの参照だけで予測なし）と専用の未実行分類、(ii) G3の危険度（`keep_from_source` / `reset_then_keep` の操作範囲に、chain layoutと同じlayoutのReset位置があり、それがrequestのreservationでheldでないか。`resetLayoutByPosition` と正式reservationの参照だけ）と、照合不一致のうち「最終武器は一致しrequired位置だけが異なる」ものの別集計、(iii) G4の場合分け（`deriveTargetSatisfaction()` でPlanner開始時に `hasIdeal` のTarget、そのIdeal武器が候補内の他TargetのRouteのsourceか（G4-i / G4-ii）、そのTarget自身が両軸Ideal sourceを操作するか（G4-iii）、option種別）の集計。**いずれも候補を不成立・恒久除外に分類せず、materializationは通常どおり行う**（成否はPhase D'で判定）、(iv) 候補ごとの継続option数 |
+| 3 | Skill / Bonusの列挙漏れを検知できる診断の要否 | **要**。D-0Bで次を追加する: (i) Search前のG1判定（c ∈ `skill.idealPositions` かつ c < s*。ReachTableの参照だけで予測なし）と専用の未実行分類、(ii) G3の危険度（`keep_from_source` / `reset_then_keep` の操作範囲に、chain layoutと同じlayoutのReset位置があり、それがrequestのreservationでheldでないか。`resetLayoutByPosition` と正式reservationの参照だけ）と、照合不一致のうち「最終武器は一致しrequired位置だけが異なる」ものの別集計、(iii) G4の場合分け（`deriveTargetSatisfaction()` でPlanner開始時に `hasIdeal` のTarget、そのIdeal武器が候補内の他TargetのRouteに操作されるか（ゼロ操作optionのsourceとして参照されるだけの場合は操作に含めない。G4-i / G4-ii）、そのTarget自身が両軸Ideal sourceを操作するか（G4-iii）、option種別）の集計。**いずれも候補を不成立・恒久除外に分類せず、materializationは通常どおり行う**（成否はPhase D'で判定）、(iv) 候補ごとの継続option数 |
 | 4 | Phase Aの変更を先行する必要があるか | **ない**（定理T）。ただしA-2はD-0Cの事前登録より前に入れる。A-2単独で入れると継続optionがmaterializeされない（現行Searchは返さない）ので、案Bと同時か案Bの後に入れる |
 | 5 | 形状制約付きSearch等の実装をどの順番に配置するか | D-0B（runner・smoke・診断・G1の分類）→ D-0A-2設計PR（docs-only。B-i / B-iiの最終選択、B-iを選ぶ場合のResearch専用materialization契約、継続Routeの正当性検証の手順、G3の扱いを含む）→ D-0A-2実装 → A-2 → D-0B-2（再smokeと事前登録）→ D-0C。D-0A-2設計はD-0Bの診断（G1 / G3の頻度）を入力にする |
 | 6 | D-0Cの正式計測前に必要な条件 | option集合の確定（A-2の採否と規則。両軸Ideal sourceの扱いを含む）、materialization方式の確定（案Bを含む設計 §9.3。B-iならResearch専用materialization契約の承認と継続Routeの正当性検証の実装）、G1の分類規則とその §10.3での扱いの確定、確定した集合・方式での非formal再smoke、それを根拠にしたdelivery cap・Search規模gate・envelopeの事前登録、clean HEAD |
@@ -710,11 +720,11 @@ G4の扱いはD-0Bの集計を見て、A-2に含めるか別のPRにするかを
 - Planner（Phase D'相当の小fixture）: 継続optionのRouteを含むEntry集合で `createProductionPlanWithObserver()` がcompleted / Conflict 0 / Trace Replay validを
   返し、Route途中のIdeal状態でTargetが早期完成しないこと、物理操作数がobjectiveと一致すること
 - G4（Planner小fixture。現行の状態遷移の固定であり、扱いを決めた後はその規則のtestを加える）:
-  - G4-i: tのIdeal武器を最終入力のどのRouteも操作しない場合、tのEntryが最後までcommitされず実行されないこと
+  - G4-i: tのIdeal武器を最終入力のどのRouteも操作しない場合（ゼロ操作Routeのsourceとして参照されるだけの場合を含む）、tのEntryが最後までcommitされず実行されないこと
   - G4-ii（開始時のIdeal充足が別Targetの操作で変化するケース）: tのIdeal武器 w を別Target t′ のRouteがsourceとして操作すると、t′の最初の操作で
     wがin-flightになってtの `hasIdeal` がfalseへ戻り、(a) その時点でtのRouteが実行可能かつcollisionなしならtのEntryがcommitされて完成すること、
     (b) tのRouteのholding unitの位置が既に通過されていればcommitされないこと、(c) t′のreserveでwの新しい状態がtのIdealも満たすとtのcommitted Entryが
-    解放されること、(d) tが別にin-flightでないIdeal武器を持てば `hasIdeal` のままであること
+    解放されること、(d) tが別にin-flightでないIdeal武器を持てば `hasIdeal` のままであること（操作されない武器が残る場合の静的分類はG4-i）
   - G4-iii: t自身の両軸Ideal sourceを操作するRouteを持つEntryが最後までcommitされないこと（A-2の除外判断の根拠。前提P1〜P3の固定）
   - いずれも、D-0B相当の診断が候補を不成立・恒久除外に分類しないこと
 

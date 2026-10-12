@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignmentOf, conversion, keep, NONE, reset, resetSkills, resetThenKeep } from './coverageTestFixture'
+import { assignmentOf, conversion, keep, NONE, option as optionOf, reset, resetSkills, resetThenKeep } from './coverageTestFixture'
 import type { StructuralCandidate } from './coverageTypes'
 import { buildPlannerAlternativeRequest, materializeStructuralCandidate } from './materialize'
 import {
@@ -10,8 +10,11 @@ import type {
   CandidateInspection, PlannerAlternativeAttempt, ShapeMismatchReason, StructuralCandidateMaterialization, StructuralCandidateMaterializationResult,
 } from './materializationTypes'
 import { createReachOption } from './reachOptions'
+import { buildReachTable } from './reachTable'
 import { buildStructuralCandidate } from './structuralCandidate'
 import { IDEAL_BONUSES, keepToLowRanks, ownedGogma } from './testFixture'
+import type { BonusRequirement, GlobalAssignmentContext, ReachOption, SkillRequirement, SourceCandidate } from './types'
+import type { OwnedWeapon, TargetWeaponId } from '../../domain/models/publicTypes'
 
 /*
  * Issue #154 Global Assignment Phase D-0B (design 19, audit 3.3 / 3.6 / 9.1): the G1 / G3 / G4 diagnostics. G3 is checked
@@ -26,6 +29,7 @@ function materialized(result: StructuralCandidateMaterializationResult): Structu
 
 const WINDOW = { skill: 3, gogma: 5, normal: 2 }
 const SERIES_IDEAL = 'series_skill.fixture.a'
+const OTHER_SERIES = 'series_skill.fixture.other'
 
 /**
  * a = owned Gogma (Ideal Skills) whose current slots carry the Ideal families in another order (layout L) at low tiers;
@@ -188,30 +192,103 @@ describe('Phase D-0B G4 diagnostics (Planner-start Ideal)', () => {
     })
   }
 
-  it('separates the zero-operation Ideal option, G4-i and G4-ii without classifying any candidate as failed', async () => {
+  /**
+   * a and c on one weapon type and element, but c registers another Ideal Skill: a weapon Ideal for a (Ideal Skill and Ideal
+   * Bonuses) is then only Bonus-Ideal for c, so the current Phase A lets c Reset its Skills - an option that operates a's Ideal
+   * weapon. Phase A - C read no existing Entry, so the context's Target is swapped before the ReachTable and the structural
+   * candidate are built through the ordinary Phase A / C-1 path.
+   */
+  async function otherIdealScene(owned: OwnedWeapon[]) {
+    const scene = await materializationScenario({ targets: ['a', 'c'], owned, reset: { [ELEMENT_A]: { 12: IDEAL_BONUSES } }, window: WINDOW })
+    const targetWeapons = scene.input.targetWeapons.map(target => (target.id === TARGET.c ? { ...target, idealSkillCondition: { ...target.idealSkillCondition, seriesSkillId: OTHER_SERIES } } : target))
+    const context: GlobalAssignmentContext = {
+      ...scene.context, plannerInput: { ...scene.input, targetWeapons }, planningTargets: scene.context.planningTargets.map(target => targetWeapons.find(value => value.id === target.id)!),
+    }
+    const reach = await buildReachTable(context, scene.engine, WINDOW)
+    if (reach.kind !== 'reach_table') throw new Error(reach.kind)
+    const table = reach.table
+    const pick = (target: TargetWeaponId, source: (value: SourceCandidate) => boolean, skill: SkillRequirement, bonus: BonusRequirement) =>
+      optionOf(table, target, table.targets.find(row => row.targetWeaponId === target)!.sources.find(source)!, skill, bonus)
+    const candidate = (options: ReachOption[]) => {
+      const built = buildStructuralCandidate(assignmentOf(table, options), { table, context, engine: scene.engine })
+      if (built.kind !== 'structural_candidate') throw new Error(JSON.stringify(built))
+      return built.candidate
+    }
+    return { context, table, pick, candidate }
+  }
+
+  it('reads an Ideal weapon that another Target only references as a zero-operation source as not operated (G4-i, never G4-ii)', async () => {
     const scene = await idealScene()
+    // Case 1: a references W with a zero-operation option; c holds W as its Ideal weapon and has another Route.
     const zeroAndOther = scene.candidate([
       scene.option(TARGET.a, ownedSource('owned.ideal'), NONE, NONE),
       scene.option(TARGET.c, ownedSource('owned.g2'), NONE, reset(12)),
     ])
     const first = diagnosePlannerStartIdeal(zeroAndOther, scene.context)
     expect(first.plannerStartIdealTargets).toBe(2)
-    expect(first.counts).toEqual({ zero_operation_ideal: 1, g4_i: 0, g4_ii: 1, g4_iii: 0 })
+    expect(first.counts).toEqual({ zero_operation_ideal: 1, g4_i: 1, g4_ii: 0, g4_iii: 0 })
     expect(first.g4iiiObservability).toBe('not_generated_by_current_phase_a')
     expect(first.targets.find(row => row.targetWeaponId === TARGET.a)).toMatchObject({ category: 'zero_operation_ideal', idealOwnedWeaponIds: ['owned.ideal'], ownOption: { sourceOwnedWeaponId: 'owned.ideal', operatesSource: false } })
-    // c's Ideal weapon is a's (zero-operation) source: G4-ii, whose outcome only the Planner's state transitions decide.
-    expect(first.targets.find(row => row.targetWeaponId === TARGET.c)).toMatchObject({
-      category: 'g4_ii', weapons: [{ ownedWeaponId: 'owned.ideal', sourceOf: [{ targetWeaponId: TARGET.a, operates: false }] }], ownOption: { sourceOwnedWeaponId: 'owned.g2', operatesSource: true },
+    // W is referenced by a, but nothing operates it: it never goes in flight, so c keeps an Ideal weapon (G4-i, not G4-ii).
+    expect(first.targets.find(row => row.targetWeaponId === TARGET.c)).toEqual({
+      targetWeaponId: TARGET.c, orderIndex: zeroAndOther.materializationOrder.indexOf(TARGET.c), category: 'g4_i', idealOwnedWeaponIds: ['owned.ideal'],
+      operatedIdealWeaponIds: [], unoperatedIdealWeaponIds: ['owned.ideal'],
+      ownOption: { sourceKind: 'owned_gogma', sourceOwnedWeaponId: 'owned.g2', operatesSource: true },
+      weapons: [{ ownedWeaponId: 'owned.ideal', sourceOf: [{ targetWeaponId: TARGET.a, operates: false }] }],
     })
+    // Case 3: W is no option's source at all: G4-i for both Targets.
     const neither = scene.candidate([
       scene.option(TARGET.a, ownedSource('owned.g2'), NONE, reset(12)),
       scene.option(TARGET.c, ownedSource('owned.g3'), NONE, reset(13)),
     ])
     const second = diagnosePlannerStartIdeal(neither, scene.context)
     expect(second.counts).toEqual({ zero_operation_ideal: 0, g4_i: 2, g4_ii: 0, g4_iii: 0 })
-    expect(second.targets.map(row => row.weapons[0]!.sourceOf)).toEqual([[], []])
+    expect(second.targets.map(row => [row.weapons[0]!.sourceOf, row.unoperatedIdealWeaponIds])).toEqual([[[], ['owned.ideal']], [[], ['owned.ideal']]])
     // Diagnostics classify nothing: both candidates still materialize as usual.
+    expect(materialized(await materializeStructuralCandidate(zeroAndOther, scene.inputs())).outcome).toEqual({ kind: 'all_materialized' })
     expect(materialized(await materializeStructuralCandidate(neither, scene.inputs())).outcome).toEqual({ kind: 'all_materialized' })
+  }, 30_000)
+
+  it('reads G4-ii only when another Target\'s option actually operates every Ideal weapon of the Target', async () => {
+    // Case 2: c Resets the Skills of a's only Ideal weapon W (an operation that marks W in flight); a has another Route.
+    const single = await otherIdealScene([
+      ownedGogma('owned.ideal', { seriesSkillId: SERIES_IDEAL, restorationBonuses: structuredClone(IDEAL_BONUSES) }),
+      ownedGogma('owned.g2', { seriesSkillId: SERIES_IDEAL }),
+    ])
+    // The current Phase A generates c's operating option on W itself (W is only Bonus-Ideal for c).
+    const cRow = single.table.targets.find(row => row.targetWeaponId === TARGET.c)!
+    expect(cRow.sources.find(ownedSource('owned.ideal'))).toMatchObject({ currentSkillIdeal: false, currentBonusIdeal: true })
+    const operated = single.candidate([
+      single.pick(TARGET.a, ownedSource('owned.g2'), NONE, reset(12)),
+      single.pick(TARGET.c, ownedSource('owned.ideal'), resetSkills(8), NONE),
+    ])
+    const diagnostics = diagnosePlannerStartIdeal(operated, single.context)
+    // Only a holds an Ideal weapon at Planner start (W is not Skill-Ideal for c).
+    expect(diagnostics.counts).toEqual({ zero_operation_ideal: 0, g4_i: 0, g4_ii: 1, g4_iii: 0 })
+    expect(diagnostics.targets).toEqual([expect.objectContaining({
+      targetWeaponId: TARGET.a, category: 'g4_ii', idealOwnedWeaponIds: ['owned.ideal'], operatedIdealWeaponIds: ['owned.ideal'], unoperatedIdealWeaponIds: [],
+      weapons: [{ ownedWeaponId: 'owned.ideal', sourceOf: [{ targetWeaponId: TARGET.c, operates: true }] }],
+    })])
+    // Case 5: a holds two Ideal weapons and c operates only W1. W2 is never operated, so a keeps hasIdeal through W2 (G4-i): the
+    // operation on W1 is recorded, but it is not read as a loss of a's satisfaction.
+    const double = await otherIdealScene([
+      ownedGogma('owned.ideal1', { seriesSkillId: SERIES_IDEAL, restorationBonuses: structuredClone(IDEAL_BONUSES) }),
+      ownedGogma('owned.ideal2', { seriesSkillId: SERIES_IDEAL, restorationBonuses: structuredClone(IDEAL_BONUSES) }),
+      ownedGogma('owned.g2', { seriesSkillId: SERIES_IDEAL }),
+    ])
+    const partly = double.candidate([
+      double.pick(TARGET.a, ownedSource('owned.g2'), NONE, reset(12)),
+      double.pick(TARGET.c, ownedSource('owned.ideal1'), resetSkills(8), NONE),
+    ])
+    expect(diagnosePlannerStartIdeal(partly, double.context).targets).toEqual([expect.objectContaining({
+      targetWeaponId: TARGET.a, category: 'g4_i', idealOwnedWeaponIds: ['owned.ideal1', 'owned.ideal2'],
+      operatedIdealWeaponIds: ['owned.ideal1'], unoperatedIdealWeaponIds: ['owned.ideal2'],
+      weapons: [
+        { ownedWeaponId: 'owned.ideal1', sourceOf: [{ targetWeaponId: TARGET.c, operates: true }] },
+        { ownedWeaponId: 'owned.ideal2', sourceOf: [] },
+      ],
+    })])
+    // G4-ii would need every Ideal weapon of a operated by some other Target's option; one weapon left unoperated keeps it G4-i.
   }, 30_000)
 
   it('marks an option operating the Target\'s own both-axis Ideal source as G4-iii, which the current Phase A / C never accepts', async () => {

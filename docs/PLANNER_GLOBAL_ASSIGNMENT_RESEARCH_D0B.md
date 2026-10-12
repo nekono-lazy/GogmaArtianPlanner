@@ -117,8 +117,20 @@ Routeがその位置で操作しなければならない（held / blockedでな�
 同じsourceのIdeal Routeの最終武器は一致する）。したがってG3の実測は「同じ最終位置 g*」と「q がrisk位置」の両方で絞った `collapseSignatures` で数える。
 
 **G4（Planner開始時のIdeal）**。`deriveTargetSatisfaction()`（保護中を含む在庫、Planner開始時点）でIdeal武器を持つplanning Target t について、監査 §3.6の場合分けを
-静的に記録する: tのoptionがIdeal武器の `none / none`（`zero_operation_ideal`。G4ではない）、tのoptionがt自身の両軸Ideal sourceを操作（`g4_iii`。
-現行Phase A / Cは生成・受理しない）、tのIdeal武器が別Targetのoptionのsource（`g4_ii`。実行順に依存）、どのoptionのsourceでもない（`g4_i`）。
+静的に記録する。
+
+| 分類 | 条件（tのIdeal武器の集合を W_t とする） | 意味 |
+| --- | --- | --- |
+| `zero_operation_ideal` | tのoptionが W_t の武器の `none / none` | 通常のゼロ操作。G4ではない |
+| `g4_iii` | tのoptionが W_t の武器（t自身の両軸Ideal source）を操作する | 現行Phase A / Cは生成・受理しない |
+| `g4_i` | それ以外で、W_t のうち他TargetのoptionにSkill / Bonusの操作をされない武器が1つ以上ある（どのoptionのsourceでもない武器と、ゼロ操作optionのsourceとして参照されるだけの武器を含む） | その武器はin-flightにならないので、監査の前提P2 / P3のもとでtは最後まで `hasIdeal`（tのEntryはcommitされない見込み） |
+| `g4_ii` | それ以外で、W_t のすべての武器が他TargetのoptionにSkill / Bonusの操作をされる | 操作でin-flightになると `hasIdeal` がfalseへ戻り得る（戻るとは限らない）。実行順に依存し、Phase D'でだけ決まる |
+
+**sourceとして参照されることと、操作されることは区別する**。Plannerは武器を変更する操作（source付き `reset_skills`、`reset_bonuses`、`keep_bonuses`。
+`sourceMutatedByOperation()`）の直後にだけその武器をin-flightにして充足を再評価する。ゼロ操作optionは武器を変更せず、そのTargetも開始時からIdealなので
+Entryはcommitされない。したがってゼロ操作optionのsourceとして参照されるだけの武器は、G4-iiの条件（他Targetの操作による充足の変化）に当たらない。
+複数のIdeal武器を持つTargetは、一部だけが操作されても操作されない武器でIdealのままなので `g4_i` とし、どの武器が操作されるかを
+`operatedIdealWeaponIds` / `unoperatedIdealWeaponIds` と武器ごとの `sourceOf`（参照するoptionと、それが操作するか）に残す。
 D-0BはPlannerを実行しないので、開始時点の `hasIdeal` を恒久的完成とみなさず、どの場合も候補を不成立・恒久除外に分類しない（判定はPhase D'）。
 
 ### 3.5 Process isolation・envelope・progress journal
@@ -260,7 +272,7 @@ Gogma生成state数は予測規模（Gogma幅）と比例しない（順序1: �
 | G3 静的risk | 適用option 42（`keep_from_source` 19 + `reset_then_keep` 23）のうち **3件**（順序7: q = 216、順序24: q = 79 / 203、順序29: q = 101）。順序7のq = 216は順序24のTargetの、順序29のq = 101は順序32のTargetのrequired位置 | リスク条件であり発生ではない |
 | G3 request上の条件 | 試行したのは順序7だけで、q = 216はそのrequestでfree（`collapseConditionHolds`） | 順序24 / 29は未試行 |
 | G3 実測 | 順序7: `sameFinalPositionMismatches` 0、`collapseSignatures` 0（500配送。cap5000でも0） | 配送が期待最終位置502まで届いていないので、**実Exportでは発生も不発生も確認できていない**。synthetic test（§7）では、PA Searchが代表化によって同じ最終武器をrequired {q, g*} で返し、期待形を返さないこと（`unconfirmed(stopped_by_extent)`）を確認した |
-| G4 | Planner開始時にIdeal武器を持つplanning Target **0件**（`deriveTargetSatisfaction()`。現在Bonusが `gogma_artian` でIdealの所持巨戟が無い） | このExportではG4-i / ii / iiiの対象が無い。G4-iiiは現行Phase A / Cが生成・受理しない（synthetic testでC-1が `invalid_option` で拒否することを確認）。G4の成否はPhase D'でしか決まらない |
+| G4 | Planner開始時にIdeal武器を持つplanning Target **0件**（`deriveTargetSatisfaction()`。現在Bonusが `gogma_artian` でIdealの所持巨戟が無い） | このExportではG4-i / ii / iiiの対象が無い（§14のG4-ii判定修正の前のheadでの観測。対象Targetが0件なので、修正後の定義でも0件である）。G4-iiiは現行Phase A / Cが生成・受理しない（synthetic testでC-1が `invalid_option` で拒否することを確認）。G4の成否はPhase D'でしか決まらない |
 
 ### 6.1 G3は仮説として正しかったか
 
@@ -284,7 +296,7 @@ reserve後の再充足でcommitted Entryが解放される）、G4-iiiのP1〜P3
 | file | 内容 |
 | --- | --- |
 | `materializationSearchPolicy.test.ts` | G1判定（c < s*でcがIdealのときだけ、c = s* / cが非Ideal / 所持巨戟は対象外）、opt-in時にSearch前で `not_executed(search_policy_shape)`・先行Targetの実績保持・後続未試行・Search API非呼出、opt-in無しでD-0Aの挙動と同一（`false` と無指定が同一、G1無しの候補はopt-in有無で同一）、observerが結果を変えず開始・照合・確定を順に通知しコピーを渡すこと |
-| `materializationDiagnostics.test.ts` | G1一覧と継続option数、G3静的risk（`keep_from_source` / `reset_then_keep` の範囲）、**G3仮説の実Search確認**と対照、blocked位置で条件不成立、collapse署名と「別の安いIdeal Route」の区別、照合理由の集計、G4のzero-operation / G4-i / G4-ii、G4-iiiがC-1で拒否され分類器はG4-iiiと読むこと、Ideal武器が無い入力 |
+| `materializationDiagnostics.test.ts` | G1一覧と継続option数、G3静的risk（`keep_from_source` / `reset_then_keep` の範囲）、**G3仮説の実Search確認**と対照、blocked位置で条件不成立、collapse署名と「別の安いIdeal Route」の区別、照合理由の集計、G4（ゼロ操作sourceとして参照されるだけのIdeal武器はG4-iでありG4-iiでないこと、どのoptionのsourceでもないIdeal武器はG4-i、他Targetが唯一のIdeal武器を実際に操作するとG4-ii（現行Phase Aがその操作optionを生成することも確認）、複数のIdeal武器の一部だけが操作される場合はG4-iで操作 / 非操作の武器を区別して記録、G4-iiiがC-1で拒否され分類器はG4-iiiと読むこと、Ideal武器が無い入力、診断の後も候補がmaterializeされること） |
 | `materializationProtocol.test.ts` | smoke既定値の妥当性と根拠、条件・envelopeの不正値ごとの拒否（既定値で埋めない）、formal runの拒否、stage分類と §10.3上の役割（G1は `method_extension`）、journal（途中終了で実行中Targetに結果を付けない、切れた最終行、CRLF、非journal行） |
 | `materializationRunner.test.ts` | Phase 0 → A → C-2 → D-0Aの接続（直接呼出しと同じ候補・同じEntry ID）、progress event順、summaryがTarget IDを含まないこと、2回実行でsemantic一致、structural candidate無し（`target_without_option`）、node budget到達（`structural_search_incomplete`）、G1でSearch前未実行と後続候補の独立、gate未実行と超過成分、cancel時の確定済みTarget保持、fail closedをoutcomeにしないこと、Phase 0停止、不正条件の拒否 |
 | `scripts/planner-global-assignment-d0b-child-process.test.ts` | fake spawn（完了、timeout後のOOM署名でもtimeout、V8署名のOOM、他のFATAL ERRORはprocess failure、cancel（開始前・実行中）、起動失敗、spawn throw、1回だけsettle）と実子process（無限loopのtimeout、exit 3、模擬V8署名、record無しexit 0、AbortSignalのcancel）。**実際のOOMは起こさない** |
@@ -355,3 +367,19 @@ D-0B関連testの個別実行、実Export非formal smoke（§5）。
 - 設計 §10.4 に、D-0Bのsmoke値が非formalの暫定条件であることを追記した
 - 設計 §14 の表のD-0B行を改訂し、D-0A-2 / A-2 / D-0B-2の行を加えた（監査 §9.2の計画の採用）。§15.1の該当行を更新した
 - 設計 §19.6 / §19.7 に、G1の分類名の確定とD-0Bの実施を追記した
+
+## 14. レビュー対応（PR #246、`d9f6244` に対する修正）
+
+| 区分 | 指摘 | 対応 |
+| --- | --- | --- |
+| Required fix | `diagnosePlannerStartIdeal()` が、別TargetがIdeal武器をsourceとして **参照するだけ**（ゼロ操作option）でもG4-iiに分類していた。G4-iiは別Targetがその武器を実際に操作し、in-flight化で充足が変わり得る場合である | Production Plannerの状態遷移を確認した（in-flight化は `sourceMutatedByOperation()` が返す変更操作の直後だけ、充足の再評価はin-flightでない在庫からの `deriveTargetSatisfaction()`、開始時に `hasIdeal` のTargetのEntryは `entryIsRelevantForState()` によりcommitされない、reserveはそのRoute自身の結果だけを書く）。G4-iiの必要条件を「他Targetのoptionが **操作する**（`operatesSource()`）」に改め、G4-iを「W_t のうち他Targetに操作されない武器が1つ以上残る」に整理した（§3.4の表）。ゼロ操作sourceの参照だけのケースはG4-iになる。複数のIdeal武器は、一部だけ操作される場合をG4-iとし、操作 / 非操作の武器を `operatedIdealWeaponIds` / `unoperatedIdealWeaponIds` に記録する。監査 §3.6 / §3.3 / §9.1 / §9.3と設計 §9.10 / §19.3を同じ定義へ揃えた |
+
+影響の範囲:
+
+- 変更したのは `materializationDiagnostics.ts` のG4分類とTarget行の2 field（`operatedIdealWeaponIds` / `unoperatedIdealWeaponIds`）、その test、文書だけである。
+  分類名（`zero_operation_ideal` / `g4_i` / `g4_ii` / `g4_iii`）と件数のkey、`materializationRunner.ts` の集計・`summarizeMaterializationRun()`、
+  `materializationProtocol.ts` は変わらない。semantic recordのG4 Target行には上記2 fieldが加わる
+- G1 / G3診断、materializationの方式選択・照合・outcome、child process処理、delivery cap / gate、Production（changed files = `[]`）は変更していない
+- §5 / §6の実Export smokeは修正前のhead（`4f1c148` / `01b740e` / `b7b7b00`）での観測であり、再測定していない。そのsmokeではPlanner開始時にIdeal武器を持つ
+  planning Targetが0件だったので、G4の件数は修正前後のどちらの定義でも0件である（新しい2 fieldは当時のrecordには無い）。7 / 43 materialized・objective 1,766・
+  G1 / G3の値はG4分類と独立である
