@@ -83,6 +83,15 @@ const readRegisteredExport = protocol => {
   return { source, identity: parsed.identity, issues: parsed.issues }
 }
 const registrationGate = protocol => ({ formalRunEnabled: protocol.ASSIGNMENT_B2B_PREREGISTRATION.formalRun.enabled, unresolvedItems: protocol.assignmentB2bRegistrationIssues() })
+/** The Repository facts a run records and a formal child re-checks on its own (never the parent's self-reported values). */
+const CODE_PATHS = ['src', 'scripts', 'package.json', 'package-lock.json', 'vite.config.ts', 'vitest.config.ts', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json']
+const repositoryState = () => ({
+  repositoryHeadSha: git('rev-parse', 'HEAD'),
+  workingTreeClean: git('status', '--porcelain').length === 0,
+  uncommittedBenchmarkCode: Boolean(git('diff', 'HEAD', '--', ...CODE_PATHS) || git('ls-files', '--others', '--exclude-standard', '--', ...CODE_PATHS)),
+})
+/** Whether `path` is ignored by git (a formal run writes only into ignored paths, so the children still see a clean tree). */
+const isGitIgnored = path => { try { execFileSync('git', ['check-ignore', '-q', path], { stdio: 'ignore' }); return true } catch { return false } }
 
 // ------------------------------------------------------------------ memory sampler (child)
 function startMemorySampler() {
@@ -137,9 +146,12 @@ if (role !== undefined) {
     const registeredFromHead = readRegisteredExport(protocol)
     const registeredMatched = registeredFromHead.identity === null ? null : protocol.compareExportIdentity(actualExport, registeredFromHead.identity).length === 0
     if (task.mode === 'formal') {
-      // The child re-applies the whole formal gate: a task file alone never makes a formal child run.
+      // The child re-applies the whole formal gate from its own observations (registration, registered Export identity from HEAD,
+      // registered conditions, and the Repository: clean, committed, on the task's measurement HEAD): a task file alone never makes a formal child run.
+      const repository = repositoryState()
       const gate = protocol.formalChildGateIssues({ registration: registrationGate(protocol), taskMode: task.mode, taskRegisteredExport: task.registeredExport ?? null, registeredExportFromHead: registeredFromHead,
-        actualExport, taskConditions: task.conditions, taskWindowLadder: task.windowLadder, taskEnvelope: task.envelope })
+        actualExport, taskConditions: task.conditions, taskWindowLadder: task.windowLadder, taskEnvelope: task.envelope,
+        repository: { taskHeadSha: task.repositoryHeadSha ?? null, currentHeadSha: repository.repositoryHeadSha, workingTreeClean: repository.workingTreeClean, uncommittedBenchmarkCode: repository.uncommittedBenchmarkCode } })
       if (gate.length > 0) throw new Error(`The formal child gate refused the task: ${gate.join(' ')}`)
     }
     const input = research.globalResearchInputFromExport(JSON.parse(raw.toString('utf8')), task.plannerInputMaxPlanStepsForValidationOnly)
@@ -196,12 +208,9 @@ const overrideOptions = ['--window', '--node-budget', '--mrv-lookahead', '--cand
 const expectedExportSha256 = option('--expected-export-sha256')
 if (expectedExportSha256 !== undefined && !/^[0-9a-f]{64}$/i.test(expectedExportSha256)) throw new Error('--expected-export-sha256 must be 64 hex characters.')
 
-const codePaths = ['src', 'scripts', 'package.json', 'package-lock.json', 'vite.config.ts', 'vitest.config.ts', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json']
-const repositoryHeadSha = git('rev-parse', 'HEAD')
-const workingTreeClean = git('status', '--porcelain').length === 0
-const uncommittedBenchmarkCode = Boolean(git('diff', 'HEAD', '--', ...codePaths) || git('ls-files', '--others', '--exclude-standard', '--', ...codePaths))
+const { repositoryHeadSha, workingTreeClean, uncommittedBenchmarkCode } = repositoryState()
 const codeHash = createHash('sha256')
-for (const file of git('ls-files', '--', ...codePaths).split(/\r?\n/).filter(Boolean)) { codeHash.update(file + '\0'); codeHash.update(await readFile(file)); codeHash.update('\0') }
+for (const file of git('ls-files', '--', ...CODE_PATHS).split(/\r?\n/).filter(Boolean)) { codeHash.update(file + '\0'); codeHash.update(await readFile(file)); codeHash.update('\0') }
 const benchmarkCodeSha256 = codeHash.digest('hex')
 
 const server = await createLoader()
@@ -233,6 +242,8 @@ if (mode === 'formal') {
   // Phase B-2A never starts a formal run (formalRun.enabled is false). The whole gate is one pure decision shared with the children.
   const startIssues = protocol.formalStartIssues({ registration: gate, workingTreeClean, uncommittedBenchmarkCode, allowUncommitted, overrideOptions,
     cliExpectedSha256: expectedExportSha256 ?? null, registeredExport: { identity: registeredExport.identity, issues: registeredExport.issues }, actualExport })
+  // The children re-check the Working Tree themselves, so a formal run may write only into git-ignored paths.
+  for (const [name, path] of [['--run-dir', runDir], ['--output', outputPath]]) if (!isGitIgnored(path)) startIssues.push(`${name} ${path} is not git-ignored; a formal run writes only into ignored paths (for example under .local/).`)
   if (startIssues.length > 0) throw new Error(`A formal run cannot start: ${startIssues.join(' ')}`)
 } else {
   if (uncommittedBenchmarkCode && !allowUncommitted) throw new Error('Commit the benchmark code before a run, or pass --allow-uncommitted for a non-formal smoke.')
@@ -328,7 +339,7 @@ const phaseStarted = performance.now()
 const processes = []
 const assignmentRuns = []
 const integrityIssues = []
-const baseTask = { protocolVersion: protocol.ASSIGNMENT_B2A_PROTOCOL_VERSION, mode, actualExport, exportSha256: actualExport.sha256, registeredExport: registeredExport.identity,
+const baseTask = { protocolVersion: protocol.ASSIGNMENT_B2A_PROTOCOL_VERSION, mode, repositoryHeadSha, actualExport, exportSha256: actualExport.sha256, registeredExport: registeredExport.identity,
   conditions, windowLadder, rungIndex, envelope, plannerInputMaxPlanStepsForValidationOnly: PLANNER_INPUT_MAX_PLAN_STEPS_FOR_VALIDATION_ONLY }
 for (let run = 1; run <= envelope.repeat; run += 1) {
   const entry = await runChild(`assignment-${run}`, 'assignment', baseTask, envelope.assignmentWallMs, envelope.assignmentHeapMb)
@@ -355,11 +366,13 @@ if (envelope.rootBoundBudget !== null) {
   processes.push(entry)
   const { record, error } = await readRecord(entry)
   if (entry.outcome === 'completed' && record) {
-    if (!recordConsistent(record)) integrityIssues.push('root-bound: the child record disagrees with the parent (mode / protocol / Export)')
-    rootLowerBound = { ...record.report, recordMode: record.mode, masterSkillIds: record.masterSkillIds, wallMs: record.observed.wallMs, memoryMaxima: record.memory.maxima, maxRssKiB: record.memory.maxRssKiB }
+    const consistent = recordConsistent(record)
+    if (!consistent) integrityIssues.push('root-bound: the child record disagrees with the parent (mode / protocol / Export)')
+    rootLowerBound = { ...record.report, recordMode: record.mode, recordConsistent: consistent, childOutcome: entry.outcome, masterSkillIds: record.masterSkillIds,
+      wallMs: record.observed.wallMs, memoryMaxima: record.memory.maxima, maxRssKiB: record.memory.maxRssKiB }
   } else {
     const reason = entry.outcome === 'completed' ? 'process_failure' : unmeasuredReasonOf(entry.outcome)
-    rootLowerBound = { status: 'unmeasured', reason, detail: error ?? entry.spawnError ?? `root-bound child ${entry.outcome}` }
+    rootLowerBound = { status: 'unmeasured', reason, detail: error ?? entry.spawnError ?? `root-bound child ${entry.outcome}`, recordConsistent: null, childOutcome: entry.outcome }
   }
 }
 
@@ -378,7 +391,11 @@ const formalValidity = protocol.judgeFormalValidity({
   tree: { workingTreeClean, uncommittedBenchmarkCode, smokeOverrides: overrideOptions },
   exportVerification: { registeredMatched: exportVerification.registeredMatched, cliMatched: exportVerification.cliMatched },
   assignmentRuns: assignmentRuns.map(run => ({ id: run.id, status: run.status, reason: run.reason, semanticSha256: run.semanticSha256, integrityIssues: run.integrityIssues, recordConsistent: run.recordConsistent })),
-  determinism: { identical: determinism.identical }, rootLowerBound: { status: rootLowerBound.status, reason: rootLowerBound.reason ?? null }, comparison: { consistency: comparison.consistency },
+  determinism: { identical: determinism.identical },
+  rootLowerBound: { status: rootLowerBound.status, reason: rootLowerBound.reason ?? null, recordConsistent: rootLowerBound.recordConsistent ?? null },
+  comparison: { consistency: comparison.consistency },
+  // The aggregated issues as finally recorded: a formal run with any of them is invalid (valid => integrityIssues is empty).
+  integrityIssues,
 })
 const output = {
   ...provenance, runDir: resolve(runDir), status: mode, formalValidity,

@@ -100,9 +100,17 @@ describe('Phase B-2A runner script', () => {
     expect(source).toMatch(/parseRegisteredExportIdentity\(/)
     expect(source).toMatch(/registeredFormalConditions\(\)/)
     expect(source).toMatch(/\['show', source\]/)
-    // The child carries the parent's mode through the task and re-reads the registered identity itself.
+    // The child carries the parent's mode through the task, re-reads the registered identity itself, and observes the Repository itself
+    // (clean / committed / on the task's measurement HEAD); the parent only writes into git-ignored paths for a formal run.
     expect(source).toMatch(/mode: task\.mode/)
     expect(source).toMatch(/readRegisteredExport\(protocol\)/)
+    expect(source).toMatch(/const repository = repositoryState\(\)/)
+    expect(source).toMatch(/taskHeadSha: task\.repositoryHeadSha \?\? null, currentHeadSha: repository\.repositoryHeadSha, workingTreeClean: repository\.workingTreeClean, uncommittedBenchmarkCode: repository\.uncommittedBenchmarkCode/)
+    expect(source).toMatch(/\['check-ignore', '-q', path\]/)
+    expect(source).toMatch(/repositoryHeadSha, actualExport/)
+    // The root-bound record consistency and the aggregated integrity issues reach the validity judgement.
+    expect(source).toMatch(/recordConsistent: rootLowerBound\.recordConsistent \?\? null/)
+    expect(source).toMatch(/\n {2}integrityIssues,\n\}\)/)
     // An invalid formal measurement exits non-zero while keeping its diagnostics.
     expect(source).toMatch(/formalValidity\.status === 'invalid'\) process\.exitCode = 1/)
     // Children run through the shared envelope module (error / close settle once, timer released).

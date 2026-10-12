@@ -394,6 +394,15 @@ export function formalStartIssues(input: FormalStartInput): string[] {
   return issues
 }
 
+/** The Repository facts a formal child observes itself (never the parent's self-reported values) and the HEAD the task names. */
+export interface FormalChildRepositoryState {
+  /** The measurement HEAD the parent wrote into the task (null when the task carries none). */
+  taskHeadSha: string | null
+  currentHeadSha: string
+  workingTreeClean: boolean
+  uncommittedBenchmarkCode: boolean
+}
+
 export interface FormalChildGateInput {
   registration: FormalGateRegistration
   taskMode: string
@@ -405,16 +414,23 @@ export interface FormalChildGateInput {
   taskConditions: unknown
   taskWindowLadder: unknown
   taskEnvelope: unknown
+  repository: FormalChildRepositoryState
 }
 
 /**
  * Why a child must refuse a formal task (`[]` = it may run). A child never trusts the task alone: it re-applies the
  * registration gate, re-reads the registered Export identity from HEAD, compares the parent's identity, the Export it
- * reads and the registered conditions, so a hand-written formal task cannot bypass the parent's refusal.
+ * reads and the registered conditions, and checks the Repository it runs in (clean, committed, on the task's measurement
+ * HEAD) from its own observation, so a hand-written formal task cannot bypass the parent's refusal.
  */
 export function formalChildGateIssues(input: FormalChildGateInput): string[] {
   if (input.taskMode !== 'formal') return [`A formal child gate was asked for a ${input.taskMode} task.`]
   const issues = formalRunGateIssues(input.registration)
+  const repository = input.repository
+  if (repository.taskHeadSha === null || !/^[0-9a-f]{40}$/.test(repository.taskHeadSha)) issues.push('The task names no measurement HEAD.')
+  else if (repository.taskHeadSha !== repository.currentHeadSha) issues.push(`The child runs at HEAD ${repository.currentHeadSha}, not the task's measurement HEAD ${repository.taskHeadSha}.`)
+  if (!repository.workingTreeClean) issues.push('The child observed a Working Tree that is not clean.')
+  if (repository.uncommittedBenchmarkCode) issues.push('The child observed uncommitted benchmark code.')
   const registered = registeredFormalConditions()
   if ('issues' in registered) issues.push(...registered.issues)
   else {
@@ -451,8 +467,15 @@ export interface FormalValidityInput {
   exportVerification: { registeredMatched: boolean | null; cliMatched: boolean | null }
   assignmentRuns: readonly FormalValidityRun[]
   determinism: { identical: boolean | null }
-  rootLowerBound: { status: 'found' | 'none_below_budget' | 'not_applicable' | 'unmeasured' | 'not_requested'; reason: string | null }
+  rootLowerBound: {
+    status: 'found' | 'none_below_budget' | 'not_applicable' | 'unmeasured' | 'not_requested'
+    reason: string | null
+    /** The root-bound child's record agrees with the parent (mode / protocol / Export); null when there is no record (unmeasured, not requested). */
+    recordConsistent: boolean | null
+  }
   comparison: { consistency: 'consistent' | 'inconsistent' | 'not_comparable' }
+  /** The aggregated RESULT's `integrityIssues` as finally recorded (record disagreements, replay violations, differing runs, an inconsistent bound). */
+  integrityIssues: readonly string[]
 }
 
 export interface FormalValidity {
@@ -474,9 +497,15 @@ export interface FormalValidity {
       semanticHashesEqual: boolean | null
       identical: boolean | null
     } | null
-    /** The stage ran to a measurement (`found` / `none_below_budget`) versus what it proved; never read as a success when `executed` is false. */
-    rootLowerBoundStage: { requested: boolean; executed: boolean; status: string; provenBound: 'exact_minimum' | 'at_least_budget' | 'none'; reason: string | null }
+    /**
+     * The stage ran to a measurement (`found` / `none_below_budget`) versus what it proved, plus whether its record agrees with
+     * the parent; never read as a success when `executed` or `recordConsistent` is not true.
+     */
+    rootLowerBoundStage: { requested: boolean; executed: boolean; status: string; provenBound: 'exact_minimum' | 'at_least_budget' | 'none'; reason: string | null; recordConsistent: boolean | null }
     comparisonConsistent: boolean | null
+    /** The aggregated `integrityIssues` count; a valid formal measurement has none. */
+    aggregateIntegrityIssueCount: number
+    noAggregateIntegrityIssues: boolean | null
   }
 }
 
@@ -493,11 +522,14 @@ export function judgeFormalValidity(input: FormalValidityInput): FormalValidity 
   const rootStage: FormalValidity['checks']['rootLowerBoundStage'] = {
     requested: rootStatus !== 'not_requested', executed: rootStatus === 'found' || rootStatus === 'none_below_budget', status: rootStatus,
     provenBound: rootStatus === 'found' ? 'exact_minimum' : rootStatus === 'none_below_budget' ? 'at_least_budget' : 'none', reason: input.rootLowerBound.reason,
+    recordConsistent: input.rootLowerBound.recordConsistent,
   }
+  const aggregateIntegrityIssueCount = input.integrityIssues.length
   if (input.mode !== 'formal') {
     return {
       status: 'not_applicable', issues: [],
-      checks: { registrationGate: null, committedCleanTree: null, noOverrides: null, exportRegisteredMatched: null, reproducibility: null, rootLowerBoundStage: rootStage, comparisonConsistent: null },
+      checks: { registrationGate: null, committedCleanTree: null, noOverrides: null, exportRegisteredMatched: null, reproducibility: null, rootLowerBoundStage: rootStage, comparisonConsistent: null,
+        aggregateIntegrityIssueCount, noAggregateIntegrityIssues: null },
     }
   }
   const issues: string[] = []
@@ -527,15 +559,20 @@ export function judgeFormalValidity(input: FormalValidityInput): FormalValidity 
   if (input.determinism.identical !== true) issues.push(`determinism.identical is ${String(input.determinism.identical)}; a formal measurement requires true.`)
 
   if (!rootStage.executed) issues.push(`The root lower bound stage did not execute to a measurement (${rootStatus}${input.rootLowerBound.reason ? `: ${input.rootLowerBound.reason}` : ''}).`)
+  // A measured bound counts only when its record is the parent's run (mode / protocol / Export): a `found` from a disagreeing record is no bound of this measurement.
+  else if (rootStage.recordConsistent !== true) issues.push(`The root-bound child record disagrees with the parent (mode / protocol / Export); its ${rootStatus} is not a bound of this measurement.`)
   const comparisonConsistent = input.comparison.consistency !== 'inconsistent'
   if (!comparisonConsistent) issues.push('The best structural objective is below the root lower bound (inconsistent).')
+  // The invariant `valid => integrityIssues = []`: whatever the aggregation flagged (a disagreeing record, a replay violation, differing runs, an inconsistent bound) keeps the run invalid.
+  const noAggregateIntegrityIssues = aggregateIntegrityIssueCount === 0
+  if (!noAggregateIntegrityIssues) issues.push(`The aggregated RESULT carries ${aggregateIntegrityIssueCount} integrity issue(s): ${input.integrityIssues.join(' | ')}`)
 
   return {
     status: issues.length === 0 ? 'valid' : 'invalid', issues,
     checks: {
       registrationGate: gate.length === 0, committedCleanTree, noOverrides, exportRegisteredMatched,
       reproducibility: { requiredRuns, runs: runs.length, measuredRuns: measured.length, allMeasured, noIntegrityIssues, recordsConsistent, semanticHashesEqual, identical: input.determinism.identical },
-      rootLowerBoundStage: rootStage, comparisonConsistent,
+      rootLowerBoundStage: rootStage, comparisonConsistent, aggregateIntegrityIssueCount, noAggregateIntegrityIssues,
     },
   }
 }

@@ -141,9 +141,13 @@ snapshotは `snapshotResourceAssignment()` でMapを配列化し、`findNonPlain
 - node budget到達は `search_incomplete`、timeout / OOM / process failure は `unmeasured`。どちらも `no_resource_assignment` に変換しない
 - 未commitコードでの実行は `--allow-uncommitted` を要し、非formal smokeとして記録される。`--mode formal` の開始条件は §6.4（純関数 `formalStartIssues()`）。
   B-2Aでは `formalRun.enabled = false` のため、登録gate（`formalRunGateIssues()`）がExportを読む前に拒否する
-- childは親の検証済みtask（`mode` / 条件 / ladder / envelope / 登録Export識別子 / 実Export識別子）だけを入力にし、formal taskでは自分でも同じgate
-  （`formalChildGateIssues()`: 登録gate、HEADから読んだ登録Export識別子とtask・実Exportの一致、登録条件との一致）を適用する。手書きのformal taskで
-  親の拒否を迂回することはできない。childは `formalValidity` を判定しない（集約RESULTを書くのは親だけ）
+- childは親の検証済みtask（`mode` / 測定HEAD / 条件 / ladder / envelope / 登録Export識別子 / 実Export識別子）だけを入力にし、formal taskでは自分でも同じgate
+  （`formalChildGateIssues()`: 登録gate、HEADから読んだ登録Export識別子とtask・実Exportの一致、登録条件との一致、そして **child自身が観測した**
+  Repository状態 = Working Tree clean・計算関連コードに未commit変更なし・現在HEADがtaskの測定HEADと一致）を計算開始前に適用する。親の自己申告値
+  （`workingTreeClean: true` 等）は信用せず、`git status` / `git diff` / `git rev-parse` を自分で実行する。手書きのformal taskで親の拒否を迂回することはできない。
+  childの拒否は `unmeasured(process_failure)` として親が記録し、formal validityは `invalid` になる。childは `formalValidity` を判定しない（集約RESULTを書くのは親だけ）
+- childがclean判定を行うため、formal runの `--run-dir` / `--output` はgit-ignoredなpath（例: `.local/` 配下。登録出力先 §6.1 はそう置いている）でなければならず、
+  親は `git check-ignore` で確認して違えば開始前に拒否する。smoke childにはこれらの制約を加えない
 - child processは共通module `scripts/planner-global-assignment-b2a-child-process.mjs` の `runChildProcess()` で起動する。promiseは `close`（exit code・signal）/
   `error`（spawn ENOENT等のOSレベル起動失敗）/ `spawn` 自体のthrowのどれかで**必ず1回だけ**settleし、timerをすべての経路で解放する。起動失敗は
   `failed` → `unmeasured(process_failure)` として記録され、親はそのまま集約RESULTを書く（親が落ちてRESULTを失うことはない）。timeout → SIGKILL → `timed_out`、
@@ -345,6 +349,13 @@ formal条件で起動したこと（`mode = formal`）と、正式計測とし�
 5. `--expected-export-sha256` が与えられ、その値が登録SHA-256と一致する（CLI値は登録値の独立した2回目の入力であり、任意の別Exportのhashを渡しても
    登録Exportとの同一性には代わらない）
 6. 実Exportのfile名・bytes・SHA-256が登録識別子と一致する
+7. `--run-dir` / `--output` がgit-ignored（childのclean判定を自壊させないため。§3.6）
+
+child側gate（`formalChildGateIssues()`。formal taskを受けた各childが計算開始前に自分で適用し、失敗すればfail closed）:
+
+- 登録gate（開始条件1と同じ）、HEADから自分で読んだ登録Export識別子とtaskの識別子・実Exportの一致、taskの条件 / ladder / envelopeと登録値の一致
+- child自身が観測したRepository状態: Working Tree clean、計算関連コードに未commit変更なし、現在HEAD = taskの測定HEAD（`repositoryHeadSha`）。親の自己申告値は読まない
+- 拒否されたchildは親から `unmeasured(process_failure)` として記録され、formal validityは `invalid` になる
 
 成立条件（`judgeFormalValidity()`。集約時に判定）:
 
@@ -353,16 +364,22 @@ formal条件で起動したこと（`mode = formal`）と、正式計測とし�
    Export SHA-256・bytesが親と一致する
 3. すべてのsemantic recordに `integrityIssues` がない
 4. すべてのsemantic SHA-256が一致し、`determinism.identical === true`（`null` = 未確認であり成立ではない）
-5. root下界stageが測定として実施された: `found`（relaxation minimumを下界として証明）または `none_below_budget`（「budget以上」を証明。exact minimumではない）。
-   `not_applicable`（適用条件不成立。本Exportでは事前登録上成立が見込まれるため期待外として理由を残しinvalid）/ `unmeasured`（timeout / OOM / process failure）/
-   `not_requested` は成立しない。`checks.rootLowerBoundStage` は「stageが実施されたか（`executed`）」と「何を証明したか（`provenBound`: `exact_minimum` /
-   `at_least_budget` / `none`）」を分けて記録する
+5. root下界stageが測定として実施された: root-bound childが `completed` でrecordが読め、recordの `mode` / protocol version / Export SHA-256・bytesが親と一致し
+   （`checks.rootLowerBoundStage.recordConsistent = true`）、`report.status` が `found`（relaxation minimumを下界として証明）または `none_below_budget`
+   （「budget以上」を証明。exact minimumではない）である。**recordが親と不整合なら `found` であっても成立しない**（その下界はこの計測のものではない）。
+   `not_applicable`（適用条件不成立。本Exportでは事前登録上成立が見込まれるため期待外として理由を残しinvalid）/ `unmeasured`（timeout / OOM / process failure /
+   record欠落・読取不能）/ `not_requested` は成立しない。`checks.rootLowerBoundStage` は「stageが実施されたか（`executed`）」「何を証明したか（`provenBound`:
+   `exact_minimum` / `at_least_budget` / `none`）」「recordが整合しているか（`recordConsistent`）」を分けて記録する
 6. `compareObjectiveWithRootLowerBound()` が `inconsistent` でない（`not_comparable`、例えばwindow内に割当が無く候補objectiveが無い場合は、成立条件の違反ではない）
+7. 集約RESULTの `integrityIssues` が空である（record不整合、replayのinvariant違反、run間の不一致、`inconsistent` な下界など、集約が記録した異常はすべて
+   `judgeFormalValidity()` に渡され、1件でも残れば `invalid`。`checks.aggregateIntegrityIssueCount` / `noAggregateIntegrityIssues` に残る）。
+   したがって **`formalValidity.status = valid` のとき集約 `integrityIssues` は必ず空** であり、process exit codeが非0なのに `valid` という状態は存在しない。
+   異常情報を除外・隠蔽して `valid` にすることはない
 
 次はすべて `invalid` である: 1回目成功・2回目timeout / OOM / process failure、2回成功だがsemantic SHA-256不一致、2回成功だがintegrity issueあり、
-recordの欠落・読取不能、`determinism.identical = null`、root下界 `unmeasured` / `not_requested` / `not_applicable`、`inconsistent`、未commitコード、override、
-Export照合の省略・不一致。`invalid` のRESULTも `.local/` に保存し、理由（`formalValidity.issues`）を残すが、B-2Bの正式RESULT（`docs/…_B2B_RESULT.json`）には
-採用しない。
+recordの欠落・読取不能、`determinism.identical = null`、root下界 `unmeasured` / `not_requested` / `not_applicable`、root-bound recordの親との不整合
+（`found` / `none_below_budget` でも）、`inconsistent`、集約 `integrityIssues` の残存、未commitコード、override、Export照合の省略・不一致、childのRepository検証失敗。
+`invalid` のRESULTも `.local/` に保存し、理由（`formalValidity.issues`）を残すが、B-2Bの正式RESULT（`docs/…_B2B_RESULT.json`）には採用しない。
 
 B-2Aでは `ASSIGNMENT_B2B_PREREGISTRATION.formalRun.enabled = false` を維持し、formal runを開始していない。本節の判定はsynthetic fixtureと純関数のtestで
 固定した（§7）。
@@ -387,9 +404,12 @@ synthetic fixture（Fake Engine、小window、oracle非依存）で次を固定�
 - formal契約（純関数、synthetic fixture）: 登録Export識別子のparse（各key 1行、欠落 / 重複 / 不正値の拒否、hashを含む散文は登録行ではない）、識別子比較（file名 / bytes / hash）、
   登録gate（無効・未登録）、開始条件（clean / commit済み / override なし / CLI hash必須 / CLI値 = 登録値 / 実Export = 登録値 / 登録識別子の読取不能。B-2Aの実登録では常に
   「not enabled」で拒否）、child gate（smoke taskの拒否、登録条件・ladder・envelopeとの一致、taskの登録識別子とHEADの一致、実Exportの一致、HEAD読取不能）、
+  child gateのRepository検証（clean HEADで一致するtask → 許可、Working Tree dirty / 未commit code / 測定HEADなし・不正 / 現在HEAD不一致 → 拒否、親の自己申告値は読まない）、
   `registeredFormalConditions()` と登録値の一致、`judgeFormalValidity()`（smokeは `not_applicable`、全条件成立で `valid`、run数不足・2回目のtimeout / OOM / process
   failure・semantic SHA-256不一致・integrity issue・record不整合・`determinism.identical = null`・root下界 `unmeasured` / `not_requested` / `not_applicable`・
-  `inconsistent`・gate / tree / override / Export照合の不成立はすべて `invalid`、`none_below_budget` は `at_least_budget` として `valid`、`not_comparable` は違反ではない）
+  root-bound recordの親との不整合（`found` / `none_below_budget` でも、`recordConsistent` が `false` / `null` なら）・`inconsistent`・集約 `integrityIssues` の残存
+  （1件でも `invalid`、`valid` なら必ず0件、smokeは件数を記録するだけ）・gate / tree / override / Export照合の不成立はすべて `invalid`、`none_below_budget` は
+  `at_least_budget` として `valid`、`not_comparable` は違反ではない）
 - child process envelope（fake spawn、実childなし）: `completed` / 非0 exitの `failed` / timeout（SIGKILL、OOM署名より優先）/ OOM署名 / spawn `error`（ENOENT）→ `failed` と
   後続 `close` の無視（二重settleなし）/ `close` 後の `error` の無視 / `spawn` throw（timer未設定）/ kill失敗、すべての経路でtimer解放
 - Isolation: Production module・他scriptからのimportなし、runtime moduleのimport制限（下限moduleは `assignmentRootBound.ts` だけ）、clock / random /
@@ -419,6 +439,16 @@ synthetic test: `src/benchmarks/globalAssignment/`（Phase A / B-1の既存test�
 | `npm run build` | pass（既存chunk warningのみ。`dist/` にResearch識別子なし） |
 
 synthetic test: `src/benchmarks/globalAssignment/` 14 files 155 tests + script test 7 tests + child process envelope test 9 tests。新しいsmoke / formal runは行っていない。
+
+再レビュー対応（root-bound record整合性と集約 `integrityIssues` のformal validity反映、formal childのclean HEAD自己検証。§3.6 / §6.4）後の再検証、2026-10-12:
+
+| コマンド | 結果 |
+| --- | --- |
+| `git diff --check` / `npm run check:nul` / `npm run lint` / `npx tsc --noEmit -p tsconfig.app.json` | pass |
+| `npm test` | pass（384 files / 6,445 tests、3 skipped、約130 s。timeoutなし） |
+| `npm run build` | pass（既存chunk warningのみ。`dist/` にResearch識別子なし） |
+
+synthetic test: `src/benchmarks/globalAssignment/` 14 files 157 tests + script test 7 tests + child process envelope test 9 tests。新しいsmoke / formal runは行っていない。
 
 ## 9. 変更していないもの
 

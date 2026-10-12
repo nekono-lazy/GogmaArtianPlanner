@@ -203,14 +203,24 @@ describe('formal run gate (parent start and child)', () => {
     expect(start({ cliExpectedSha256: OTHER_SHA, actualExport: { ...REGISTERED, sha256: OTHER_SHA } })).toHaveLength(2)
   })
 
-  it('makes a child re-apply the gate, the registered identity from HEAD and the registered conditions, so a task alone cannot bypass the parent', () => {
+  it('makes a child re-apply the gate, the registered identity from HEAD, the registered conditions and its own Repository state, so a task alone cannot bypass the parent', () => {
     const registered = registeredFormalConditions()
     if ('issues' in registered) throw new Error('This test needs a complete registration.')
+    const HEAD = 'c'.repeat(40)
+    const cleanRepository = { taskHeadSha: HEAD, currentHeadSha: HEAD, workingTreeClean: true, uncommittedBenchmarkCode: false }
     const child = (overrides: Partial<Parameters<typeof formalChildGateIssues>[0]> = {}) => formalChildGateIssues({
       registration: ENABLED_GATE, taskMode: 'formal', taskRegisteredExport: REGISTERED, registeredExportFromHead: { identity: REGISTERED, issues: [] }, actualExport: REGISTERED,
-      taskConditions: registered.conditions, taskWindowLadder: registered.windowLadder, taskEnvelope: registered.envelope, ...overrides,
+      taskConditions: registered.conditions, taskWindowLadder: registered.windowLadder, taskEnvelope: registered.envelope, repository: cleanRepository, ...overrides,
     })
     expect(child()).toEqual([])
+    // The child observes the Repository itself: a dirty tree, uncommitted code, a missing or different measurement HEAD each refuse before any calculation.
+    expect(child({ repository: { ...cleanRepository, workingTreeClean: false } })).toEqual(['The child observed a Working Tree that is not clean.'])
+    expect(child({ repository: { ...cleanRepository, uncommittedBenchmarkCode: true } })).toEqual(['The child observed uncommitted benchmark code.'])
+    expect(child({ repository: { ...cleanRepository, taskHeadSha: null } })).toEqual(['The task names no measurement HEAD.'])
+    expect(child({ repository: { ...cleanRepository, taskHeadSha: 'not-a-sha' } })).toEqual(['The task names no measurement HEAD.'])
+    expect(child({ repository: { ...cleanRepository, currentHeadSha: 'd'.repeat(40) } })).toEqual([`The child runs at HEAD ${'d'.repeat(40)}, not the task's measurement HEAD ${HEAD}.`])
+    // A task that claims a clean tree does not matter: only the child's own observation enters the gate.
+    expect(child({ repository: { ...cleanRepository, workingTreeClean: false, uncommittedBenchmarkCode: true } })).toHaveLength(2)
     expect(child({ taskMode: 'smoke' })).toEqual(['A formal child gate was asked for a smoke task.'])
     expect(child({ registration: B2A_GATE })[0]).toMatch(/not enabled/)
     expect(child({ taskConditions: { ...registered.conditions, nodeBudget: registered.conditions.nodeBudget + 1 } })).toEqual(['The task conditions are not the registered conditions.'])
@@ -229,14 +239,14 @@ describe('judgeFormalValidity', () => {
   const valid = (): FormalValidityInput => ({
     mode: 'formal', registration: { ...ENABLED_GATE, reproducibilityRuns: 2 }, tree: { workingTreeClean: true, uncommittedBenchmarkCode: false, smokeOverrides: [] },
     exportVerification: { registeredMatched: true, cliMatched: true }, assignmentRuns: [run('assignment-1'), run('assignment-2')], determinism: { identical: true },
-    rootLowerBound: { status: 'found', reason: null }, comparison: { consistency: 'consistent' },
+    rootLowerBound: { status: 'found', reason: null, recordConsistent: true }, comparison: { consistency: 'consistent' }, integrityIssues: [],
   })
   const judge = (mutate: (input: FormalValidityInput) => void) => { const input = valid(); mutate(input); return judgeFormalValidity(input) }
 
   it('is not_applicable for a smoke run whatever its content', () => {
     const result = judge(input => { input.mode = 'smoke'; input.assignmentRuns = [run('assignment-1', { status: 'unmeasured', reason: 'timeout' })]; input.determinism.identical = null })
     expect(result).toMatchObject({ status: 'not_applicable', issues: [], checks: { reproducibility: null, registrationGate: null } })
-    expect(result.checks.rootLowerBoundStage).toEqual({ requested: true, executed: true, status: 'found', provenBound: 'exact_minimum', reason: null })
+    expect(result.checks.rootLowerBoundStage).toEqual({ requested: true, executed: true, status: 'found', provenBound: 'exact_minimum', reason: null, recordConsistent: true })
   })
 
   it('is valid only when every formal condition holds', () => {
@@ -246,9 +256,43 @@ describe('judgeFormalValidity', () => {
     expect(result.checks).toMatchObject({ registrationGate: true, committedCleanTree: true, noOverrides: true, exportRegisteredMatched: true, comparisonConsistent: true,
       reproducibility: { requiredRuns: 2, runs: 2, measuredRuns: 2, allMeasured: true, noIntegrityIssues: true, recordsConsistent: true, semanticHashesEqual: true, identical: true } })
     // none_below_budget is an executed stage whose bound is "at least the budget", not an exact minimum; still valid.
-    const atLeast = judge(input => { input.rootLowerBound = { status: 'none_below_budget', reason: null } })
+    const atLeast = judge(input => { input.rootLowerBound = { status: 'none_below_budget', reason: null, recordConsistent: true } })
     expect(atLeast.status).toBe('valid')
-    expect(atLeast.checks.rootLowerBoundStage).toMatchObject({ executed: true, provenBound: 'at_least_budget' })
+    expect(atLeast.checks.rootLowerBoundStage).toMatchObject({ executed: true, provenBound: 'at_least_budget', recordConsistent: true })
+    // The invariant valid => no aggregated integrity issue is visible in the checks.
+    expect(result.checks).toMatchObject({ aggregateIntegrityIssueCount: 0, noAggregateIntegrityIssues: true })
+  })
+
+  it('is invalid when the root-bound child record disagrees with the parent, even though its report says found or none_below_budget', () => {
+    for (const status of ['found', 'none_below_budget'] as const) {
+      const result = judge(input => { input.rootLowerBound = { status, reason: null, recordConsistent: false } })
+      expect(result.status).toBe('invalid')
+      expect(result.issues).toEqual([`The root-bound child record disagrees with the parent (mode / protocol / Export); its ${status} is not a bound of this measurement.`])
+      expect(result.checks.rootLowerBoundStage).toMatchObject({ executed: true, status, recordConsistent: false })
+      // A measured report without a consistent record (null) is not a bound of this measurement either.
+      expect(judge(input => { input.rootLowerBound = { status, reason: null, recordConsistent: null } }).status).toBe('invalid')
+    }
+    // The parent also records the disagreement as an aggregate integrity issue; both reasons are named, and the run stays invalid.
+    const both = judge(input => {
+      input.rootLowerBound = { status: 'found', reason: null, recordConsistent: false }
+      input.integrityIssues = ['root-bound: the child record disagrees with the parent (mode / protocol / Export)']
+    })
+    expect(both.status).toBe('invalid')
+    expect(both.issues).toHaveLength(2)
+    expect(both.checks).toMatchObject({ aggregateIntegrityIssueCount: 1, noAggregateIntegrityIssues: false })
+  })
+
+  it('is invalid whenever the aggregated RESULT keeps an integrity issue, so valid implies an empty integrityIssues', () => {
+    const result = judge(input => { input.integrityIssues = ['assignment-1: non-plain value at semantic.x'] })
+    expect(result.status).toBe('invalid')
+    expect(result.issues).toEqual(['The aggregated RESULT carries 1 integrity issue(s): assignment-1: non-plain value at semantic.x'])
+    expect(result.checks).toMatchObject({ aggregateIntegrityIssueCount: 1, noAggregateIntegrityIssues: false })
+    expect(judge(input => { input.integrityIssues = ['a', 'b'] }).issues[0]).toBe('The aggregated RESULT carries 2 integrity issue(s): a | b')
+    // Every other check may pass: the aggregate issue alone keeps the run invalid, and a valid run always has zero.
+    expect(judgeFormalValidity(valid()).checks.aggregateIntegrityIssueCount).toBe(0)
+    // A smoke run records the count but judges nothing.
+    const smoke = judge(input => { input.mode = 'smoke'; input.integrityIssues = ['x'] })
+    expect(smoke).toMatchObject({ status: 'not_applicable', issues: [], checks: { aggregateIntegrityIssueCount: 1, noAggregateIntegrityIssues: null } })
   })
 
   it('is invalid when the registered number of assignment runs is not reached or one is unmeasured', () => {
@@ -275,7 +319,7 @@ describe('judgeFormalValidity', () => {
 
   it('is invalid when the root lower bound stage did not execute, or the comparison is inconsistent', () => {
     for (const status of ['unmeasured', 'not_requested', 'not_applicable'] as const) {
-      const result = judge(input => { input.rootLowerBound = { status, reason: status === 'unmeasured' ? 'timeout' : status === 'not_applicable' ? 'cross_satisfaction_possible' : null } })
+      const result = judge(input => { input.rootLowerBound = { status, reason: status === 'unmeasured' ? 'timeout' : status === 'not_applicable' ? 'cross_satisfaction_possible' : null, recordConsistent: null } })
       expect(result.status).toBe('invalid')
       expect(result.checks.rootLowerBoundStage).toMatchObject({ executed: false, provenBound: 'none', status })
       expect(result.issues.some(issue => issue.startsWith('The root lower bound stage did not execute'))).toBe(true)
