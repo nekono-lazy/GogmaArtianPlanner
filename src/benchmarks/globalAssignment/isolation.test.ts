@@ -17,20 +17,23 @@ const production = {
   ...import.meta.glob('../../*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }),
 } as Record<string, string>
 const research = import.meta.glob('./*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
-const runtime = Object.entries(research).filter(([path]) => !/\.test\.ts$|testFixture\.ts$/.test(path))
+const runtime = Object.entries(research).filter(([path]) => !/\.test\.ts$|[tT]estFixture\.ts$/.test(path))
 const scripts = import.meta.glob('../../../scripts/*.mjs', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
 describe('Global Assignment Research isolation', () => {
   it('is imported by no Production module and by no script', () => {
     const productionPaths = Object.keys(production).filter(path => !/\.test\.tsx?$/.test(path))
     expect(productionPaths.length).toBeGreaterThan(100)
-    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable/
+    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments/
     expect(productionPaths.filter(path => forbidden.test(production[path]!))).toEqual([])
     expect(Object.keys(scripts).filter(path => forbidden.test(scripts[path]!))).toEqual([])
   })
 
   it('has the expected runtime modules, each reading only the PlannerInput, the Engine and the Production authorities', () => {
-    expect(runtime.map(([path]) => path).sort()).toEqual(['./context.ts', './reachOptions.ts', './reachTable.ts', './requiredOnlyReplay.ts', './types.ts'])
+    expect(runtime.map(([path]) => path).sort()).toEqual([
+      './assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentSolver.ts', './assignmentTypes.ts',
+      './context.ts', './reachOptions.ts', './reachTable.ts', './requiredOnlyReplay.ts', './types.ts',
+    ])
     for (const [path, source] of runtime) {
       // No oracle manifest / verifier / RESULT, no lower-bound module, no earlier Phase result.
       expect(source, path).not.toMatch(/plannerGlobalOracle|ORACLE_1657|plannerGlobalLowerBound|PLANNER_GLOBAL_[A-Z0-9_]*RESULT|\.json['"]/)
@@ -43,9 +46,14 @@ describe('Global Assignment Research isolation', () => {
       // Only Production Domain authorities and this folder are imported: no Production Search / Planner module is re-implemented.
       for (const match of source.matchAll(/from '([^']+)'/g)) expect(match[1], `${path} imports ${match[1]}`).toMatch(/^\.\/|^\.\.\/\.\.\/domain\//)
     }
-    // The Phase A runtime never reads the existing Entries' Route contents (design 4.1): only the context does, through the Production validation.
+    // The Phase A / B-1 runtime never reads the existing Entries' Route contents (design 4.1): only the context does, through the Production validation.
     for (const [path, source] of runtime.filter(([path]) => path !== './context.ts' && path !== './types.ts')) {
       expect(source, path).not.toMatch(/candidateSnapshot|\.route\b|buildListEntries\b(?!\.length)/)
+    }
+    // The Phase B-1 solver reads the ReachTable and the planning Targets' id / priority only: no PlannerInput, Engine, Master or Entry (design 6 / 11).
+    for (const path of ['./assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentSolver.ts']) {
+      expect(research[path], path).not.toMatch(/plannerInput|RngEngine|predict[A-Z]|\.master\b|ownedWeapons|normalCounters|rngState/)
+      for (const match of research[path]!.matchAll(/from '([^']+)'/g)) expect(match[1], `${path} imports ${match[1]}`).toMatch(/^\.\//)
     }
   })
 
