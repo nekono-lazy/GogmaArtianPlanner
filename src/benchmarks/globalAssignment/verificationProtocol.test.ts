@@ -12,9 +12,10 @@ import { V1_GOLDEN_RUNNER_SPECS, v1GoldenConditions } from './materializationV1G
 import { shapeCapturingPort } from './shapeMaterializationTestFixture'
 import { IDEAL_BONUSES, ownedGogma } from './testFixture'
 import {
-  compareD0cMaterializationIdentity, createD1aEntrySet, D1A_ENTRY_SET_KIND, D1A_INCUMBENT_PHYSICAL_OPERATIONS, D1A_NONFORMAL_CONDITIONS, d1aEnvelopeIssues, d1aEntrySetIssues,
-  d1aOperationCountReading, differingSemanticFields, handoffFromEntrySet, judgeD1aRun, materializedEntriesFingerprintOfHandoffs, materializedEntriesFingerprintOfSemantic, parseD1aJournal,
-  type D1aFirstProcessView, type D1aFreshProcessView, type D1aVerificationView,
+  compareD0cMaterializationIdentity, concludeD1aRun, createD1aEntrySet, D1A_ENTRY_SET_KIND, D1A_INCUMBENT_PHYSICAL_OPERATIONS, D1A_NONFORMAL_CONDITIONS, d1aChildIntegrityIssues, d1aEnvelopeIssues,
+  d1aEntrySetIssues, d1aOperationCountReading, d1aCheckoutIntegrityIssues, differingSemanticFields, handoffFromEntrySet, judgeD1aRun, materializedEntriesFingerprintOfHandoffs,
+  materializedEntriesFingerprintOfSemantic, parseD1aJournal,
+  type D1aChildReading, type D1aChildRecord, type D1aFirstProcessView, type D1aFreshProcessView, type D1aVerificationView,
 } from './verificationProtocol'
 import { verifyPlannerCandidate, type PlannerVerificationSemantic } from './verify'
 import { execution, TEST_CONDITIONS } from './verificationTestFixture'
@@ -165,7 +166,7 @@ describe('Phase D-1A: a whole run without child processes', () => {
     if (context.kind !== 'context') throw new Error(context.detail)
     const freshPhase0 = context.context.planningTargets.map(target => target.id)
     const fresh = await verifyPlannerCandidate(freshScene.input, handoffFromEntrySet(set, freshPhase0), globalResearchDependencies(freshScene.engine), TEST_CONDITIONS, execution())
-    const judgement = judgeD1aRun(
+    const judgement = judgeIntact(
       { process: 'completed', identity, verification: view(first.semantic) },
       { process: 'completed', phase0PlanningTargetIds: [...freshPhase0].sort(), verification: view(fresh.semantic) },
     )
@@ -180,6 +181,11 @@ describe('Phase D-1A: a whole run without child processes', () => {
 
 function view(semantic: PlannerVerificationSemantic): D1aVerificationView {
   return { semantic, semanticSha256: textHash(semantic) }
+}
+
+/** The judgement of a run whose records and Repository the parent found intact (no integrity issue). */
+function judgeIntact(first: D1aFirstProcessView, fresh: D1aFreshProcessView) {
+  return judgeD1aRun(first, fresh, [])
 }
 
 describe('Phase D-1A: the judgement of one run (design 9.5 condition 13, 9.6)', () => {
@@ -197,21 +203,21 @@ describe('Phase D-1A: the judgement of one run (design 9.5 condition 13, 9.6)', 
     const { identity, met, truncated, otherBound, phase0 } = await semantics()
     const first: D1aFirstProcessView = { process: 'completed', identity, verification: view(met) }
     const fresh: D1aFreshProcessView = { process: 'completed', phase0PlanningTargetIds: phase0, verification: view(met) }
-    expect(judgeD1aRun(first, fresh).verdict.kind).toBe('verified')
+    expect(judgeIntact(first, fresh).verdict.kind).toBe('verified')
     // The first process rejected: its outcome stands even though the fresh process met everything.
-    const rejected = judgeD1aRun({ ...first, verification: view(truncated) }, fresh)
+    const rejected = judgeIntact({ ...first, verification: view(truncated) }, fresh)
     expect(rejected.verdict).toMatchObject({ kind: 'planner_rejected', run: 'first' })
     expect(rejected.recordClassification).toBe('nonformal_planner_rejected')
     expect(rejected.crossProcess.identical).toBe(false)
     // The fresh process rejected.
-    expect(judgeD1aRun(first, { ...fresh, verification: view(truncated) }).verdict).toMatchObject({ kind: 'planner_rejected', run: 'fresh' })
+    expect(judgeIntact(first, { ...fresh, verification: view(truncated) }).verdict).toMatchObject({ kind: 'planner_rejected', run: 'fresh' })
     // Both met, but the fresh process's semantic record differs: condition 13 fails.
-    const mismatch = judgeD1aRun(first, { ...fresh, verification: view(otherBound) })
+    const mismatch = judgeIntact(first, { ...fresh, verification: view(otherBound) })
     expect(mismatch.verdict).toEqual({ kind: 'planner_rejected', run: 'cross_process', reasons: [{ code: 'fresh_planner_mismatch', differingFields: differingSemanticFields(met, otherBound) }] })
     expect(differingSemanticFields(met, otherBound)).toEqual(expect.arrayContaining(['conditions', 'finalInput', 'planner']))
     // The fresh process's own Phase 0 must be the first one's.
-    expect(judgeD1aRun(first, { ...fresh, phase0PlanningTargetIds: [TARGET.a] }).verdict).toEqual({ kind: 'planning_target_set_changed', run: 'fresh', reasons: [{ code: 'planning_target_removed', targetWeaponIds: [TARGET.b] }] })
-    expect(judgeD1aRun(first, { ...fresh, phase0PlanningTargetIds: [...phase0, 'target.fixture.z'] }).verdict).toEqual({ kind: 'planning_target_set_changed', run: 'fresh', reasons: [{ code: 'planning_target_added', targetWeaponIds: ['target.fixture.z'] }] })
+    expect(judgeIntact(first, { ...fresh, phase0PlanningTargetIds: [TARGET.a] }).verdict).toEqual({ kind: 'planning_target_set_changed', run: 'fresh', reasons: [{ code: 'planning_target_removed', targetWeaponIds: [TARGET.b] }] })
+    expect(judgeIntact(first, { ...fresh, phase0PlanningTargetIds: [...phase0, 'target.fixture.z'] }).verdict).toEqual({ kind: 'planning_target_set_changed', run: 'fresh', reasons: [{ code: 'planning_target_added', targetWeaponIds: ['target.fixture.z'] }] })
   }, 60_000)
 
   it('reads a stopped process as unmeasured and an identity mismatch as a stop before Phase D\', never as a Planner result', async () => {
@@ -219,17 +225,17 @@ describe('Phase D-1A: the judgement of one run (design 9.5 condition 13, 9.6)', 
     const first: D1aFirstProcessView = { process: 'completed', identity, verification: view(met) }
     const fresh: D1aFreshProcessView = { process: 'completed', phase0PlanningTargetIds: phase0, verification: view(met) }
     for (const reason of ['timeout', 'out_of_memory', 'process_failure', 'cancelled'] as const) {
-      expect(judgeD1aRun({ process: reason, identity: null, verification: null }, { process: 'not_run', phase0PlanningTargetIds: null, verification: null }).verdict).toEqual({ kind: 'unmeasured', run: 'first', reason })
-      expect(judgeD1aRun(first, { process: reason, phase0PlanningTargetIds: null, verification: null }).verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason })
+      expect(judgeIntact({ process: reason, identity: null, verification: null }, { process: 'not_run', phase0PlanningTargetIds: null, verification: null }).verdict).toEqual({ kind: 'unmeasured', run: 'first', reason })
+      expect(judgeIntact(first, { process: reason, phase0PlanningTargetIds: null, verification: null }).verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason })
     }
-    expect(judgeD1aRun(first, { process: 'not_run', phase0PlanningTargetIds: null, verification: null }).verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled' })
-    expect(judgeD1aRun({ ...first, identity: null }, fresh).verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'process_failure' })
-    expect(judgeD1aRun({ ...first, verification: null }, fresh).verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'process_failure' })
-    expect(judgeD1aRun(first, { ...fresh, verification: null }).verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'process_failure' })
-    const stopped = judgeD1aRun({ process: 'completed', identity: { ...identity, matched: false, issues: ['x'] }, verification: null }, { process: 'not_run', phase0PlanningTargetIds: null, verification: null })
+    expect(judgeIntact(first, { process: 'not_run', phase0PlanningTargetIds: null, verification: null }).verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled' })
+    expect(judgeIntact({ ...first, identity: null }, fresh).verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'process_failure' })
+    expect(judgeIntact({ ...first, verification: null }, fresh).verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'process_failure' })
+    expect(judgeIntact(first, { ...fresh, verification: null }).verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'process_failure' })
+    const stopped = judgeIntact({ process: 'completed', identity: { ...identity, matched: false, issues: ['x'] }, verification: null }, { process: 'not_run', phase0PlanningTargetIds: null, verification: null })
     expect(stopped).toMatchObject({ verdict: { kind: 'stopped_d0c_identity_mismatch', issues: ['x'] }, recordClassification: 'nonformal_stopped_d0c_identity_mismatch', crossProcess: { compared: false, identical: null } })
     // No operation count is evaluated without verified (43 / 43 not reached), and no minimality is ever claimed.
-    for (const verdict of [stopped.verdict, judgeD1aRun(first, { ...fresh, process: 'timeout' }).verdict]) {
+    for (const verdict of [stopped.verdict, judgeIntact(first, { ...fresh, process: 'timeout' }).verdict]) {
       expect(d1aOperationCountReading(verdict)).toEqual({ evaluated: false, physicalOperations: null, incumbent: D1A_INCUMBENT_PHYSICAL_OPERATIONS, judgement: 'not_evaluated', proof: 'not_claimed' })
     }
   }, 60_000)
@@ -239,12 +245,131 @@ describe('Phase D-1A: the judgement of one run (design 9.5 condition 13, 9.6)', 
     const withOutcome = (outcome: PlannerVerificationSemantic['outcome']) => view({ ...met, outcome })
     const first = (outcome: PlannerVerificationSemantic['outcome']): D1aFirstProcessView => ({ process: 'completed', identity, verification: withOutcome(outcome) })
     const fresh: D1aFreshProcessView = { process: 'completed', phase0PlanningTargetIds: phase0, verification: view(met) }
-    expect(judgeD1aRun(first({ kind: 'materialization_unconfirmed', targetWeaponId: TARGET.b, outcomeKind: 'unconfirmed', outcomeReason: 'x' }), fresh).verdict).toEqual({ kind: 'materialization_unconfirmed', run: 'first', targetWeaponId: TARGET.b, outcomeKind: 'unconfirmed', outcomeReason: 'x' })
-    expect(judgeD1aRun(first({ kind: 'planning_target_set_changed', reasons: [{ code: 'planning_target_added', targetWeaponIds: ['t'] }] }), fresh).verdict).toMatchObject({ kind: 'planning_target_set_changed', run: 'first' })
-    expect(judgeD1aRun(first({ kind: 'objective_mismatch', physicalOperations: 5, objective: 6, reasons: [] }), fresh).verdict).toEqual({ kind: 'objective_mismatch', run: 'first', physicalOperations: 5, objective: 6, reasons: [] })
-    expect(judgeD1aRun(first({ kind: 'unmeasured', reason: 'cancelled' }), fresh).verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'cancelled' })
+    expect(judgeIntact(first({ kind: 'materialization_unconfirmed', targetWeaponId: TARGET.b, outcomeKind: 'unconfirmed', outcomeReason: 'x' }), fresh).verdict).toEqual({ kind: 'materialization_unconfirmed', run: 'first', targetWeaponId: TARGET.b, outcomeKind: 'unconfirmed', outcomeReason: 'x' })
+    expect(judgeIntact(first({ kind: 'planning_target_set_changed', reasons: [{ code: 'planning_target_added', targetWeaponIds: ['t'] }] }), fresh).verdict).toMatchObject({ kind: 'planning_target_set_changed', run: 'first' })
+    expect(judgeIntact(first({ kind: 'objective_mismatch', physicalOperations: 5, objective: 6, reasons: [] }), fresh).verdict).toEqual({ kind: 'objective_mismatch', run: 'first', physicalOperations: 5, objective: 6, reasons: [] })
+    expect(judgeIntact(first({ kind: 'unmeasured', reason: 'cancelled' }), fresh).verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'cancelled' })
     const freshObjective: D1aFreshProcessView = { ...fresh, verification: withOutcome({ kind: 'objective_mismatch', physicalOperations: 5, objective: 6, reasons: [] }) }
-    expect(judgeD1aRun({ process: 'completed', identity, verification: view(met) }, freshObjective).verdict).toMatchObject({ kind: 'objective_mismatch', run: 'fresh' })
+    expect(judgeIntact({ process: 'completed', identity, verification: view(met) }, freshObjective).verdict).toMatchObject({ kind: 'objective_mismatch', run: 'fresh' })
+  }, 60_000)
+})
+
+describe('Phase D-1A: the run integrity and the one conclusion (PR #253 Required fix)', () => {
+  const HEAD = 'a'.repeat(40)
+  const EXPORT = { fileName: 'fixture.json', bytes: 10, sha256: 'e'.repeat(64) }
+  const expected = { repositoryHeadSha: HEAD, actualExport: EXPORT }
+  const REPOSITORY = { repositoryHeadSha: HEAD, workingTreeClean: true, uncommittedBenchmarkCode: false }
+
+  /** Records shaped as the children write them, read and re-hashed as the runner's readChild() does (textHash stands in for SHA-256). */
+  async function intactRun() {
+    const { scene, result, handoffs } = await materializationRun(SHAPE_SPEC, SHAPE_CONDITIONS)
+    const semanticSha256 = textHash(result.semantic)
+    const identity = compareD0cMaterializationIdentity({ semantic: result.semantic, semanticSha256, handoffs, expected: { semanticSha256, entryFingerprint: materializedEntriesFingerprintOfSemantic(result.semantic)! } })
+    const verify = (conditions = TEST_CONDITIONS) => verifyPlannerCandidate(scene.input, handoffs[0]!, globalResearchDependencies(scene.engine), conditions, execution()).then(record => record.semantic)
+    const [met, truncated, otherBound] = [await verify(), await verify({ researchMaxPlanSteps: 1 }), await verify({ researchMaxPlanSteps: TEST_CONDITIONS.researchMaxPlanSteps + 1 })]
+    const phase0 = [...handoffs[0]!.planningTargetIds].sort()
+    const firstRecord = (verification: PlannerVerificationSemantic | null, overrides: Record<string, unknown> = {}): D1aChildRecord => JSON.parse(JSON.stringify({
+      role: 'first', repositoryHeadSha: HEAD, exportVerification: { actual: EXPORT, taskMatched: true },
+      materialization: { semanticSha256, semantic: result.semantic }, identity, phase0PlanningTargetIds: phase0,
+      verification: verification === null ? null : { semantic: verification, semanticSha256: textHash(verification) }, ...overrides,
+    }))
+    const freshRecord = (verification: PlannerVerificationSemantic, overrides: Record<string, unknown> = {}): D1aChildRecord => JSON.parse(JSON.stringify({
+      role: 'fresh', repositoryHeadSha: HEAD, exportVerification: { actual: EXPORT, taskMatched: true }, phase0PlanningTargetIds: phase0,
+      verification: { semantic: verification, semanticSha256: textHash(verification) }, ...overrides,
+    }))
+    return { met, truncated, otherBound, phase0, firstRecord, freshRecord }
+  }
+  const reading = (record: D1aChildRecord | null, process: D1aChildReading['process'] = 'completed'): D1aChildReading => ({
+    process, record, readError: null,
+    recomputed: {
+      materializationSha256: (record?.materialization as { semantic?: unknown } | null | undefined)?.semantic === undefined ? null : textHash((record!.materialization as { semantic: unknown }).semantic),
+      verificationSha256: record?.verification?.semantic === undefined ? null : textHash(record.verification.semantic),
+    },
+  })
+  /** The runner's order: both children's issues, then the Repository's, then the one conclusion. */
+  const conclude = (first: D1aChildReading, fresh: D1aChildReading | null, after = REPOSITORY) => {
+    const integrityIssues = [
+      ...d1aChildIntegrityIssues('first', first, expected), ...(fresh === null ? [] : d1aChildIntegrityIssues('fresh', fresh, expected)), ...d1aCheckoutIntegrityIssues(REPOSITORY, after),
+    ]
+    return concludeD1aRun({ first, fresh, integrityIssues })
+  }
+  const expectInvalid = (conclusion: ReturnType<typeof concludeD1aRun>, cause: RegExp) => {
+    expect(conclusion.verdict.kind).toBe('invalid_run_integrity')
+    expect(conclusion.recordClassification).toBe('nonformal_invalid_run_integrity')
+    expect(conclusion.integrityIssues.join('\n')).toMatch(cause)
+    expect(conclusion.verdict).toEqual({ kind: 'invalid_run_integrity', issues: conclusion.integrityIssues })
+    expect(conclusion.postHoc.operationCount).toEqual({ evaluated: false, physicalOperations: null, incumbent: D1A_INCUMBENT_PHYSICAL_OPERATIONS, judgement: 'not_evaluated', proof: 'not_claimed' })
+    expect(conclusion.exitCode).toBe(1)
+    // No success left anywhere in the conclusion: neither the verdict nor the classification.
+    const text = JSON.stringify(conclusion)
+    expect(text).not.toContain('nonformal_planner_verified')
+    expect(text).not.toContain('"kind":"verified"')
+  }
+
+  it('keeps an intact run verified: no integrity issue, verdict / classification / post hoc / exit code agree', async () => {
+    const { met, firstRecord, freshRecord } = await intactRun()
+    const first = reading(firstRecord(met)), fresh = reading(freshRecord(met))
+    expect(d1aChildIntegrityIssues('first', first, expected)).toEqual([])
+    expect(d1aChildIntegrityIssues('fresh', fresh, expected)).toEqual([])
+    expect(d1aCheckoutIntegrityIssues(REPOSITORY, { ...REPOSITORY })).toEqual([])
+    const conclusion = conclude(first, fresh)
+    expect(conclusion).toMatchObject({ verdict: { kind: 'verified' }, recordClassification: 'nonformal_planner_verified', integrityIssues: [], exitCode: 0, crossProcess: { identical: true } })
+    expect(conclusion.postHoc.operationCount).toMatchObject({ evaluated: true, judgement: 'improvement', proof: 'not_claimed' })
+  }, 60_000)
+
+  it('never verifies a run whose records or Repository are broken, whatever both Planners met', async () => {
+    const { met, firstRecord, freshRecord } = await intactRun()
+    // 1. The first verification semantic SHA-256 is not the hash of its record.
+    const firstHash = firstRecord(met)
+    firstHash.verification!.semanticSha256 = 'f'.repeat(64)
+    expectInvalid(conclude(reading(firstHash), reading(freshRecord(met))), /^first: the recorded verification semantic SHA-256 "f{64}" is not the hash of its record/m)
+    // 2. The fresh verification record was altered after it was hashed.
+    const freshAltered = freshRecord(met)
+    freshAltered.verification!.semantic.candidate.objective += 1
+    expectInvalid(conclude(reading(firstRecord(met)), reading(freshAltered)), /^fresh: the recorded verification semantic SHA-256 .* is not the hash of its record/m)
+    // 3. The materialization semantic SHA-256 is not the hash of its record.
+    expectInvalid(conclude(reading(firstRecord(met, { materialization: { semanticSha256: 'f'.repeat(64), semantic: { altered: true } } })), reading(freshRecord(met))), /^first: the recorded materialization semantic SHA-256/m)
+    // 4. A child ran at another HEAD.
+    expectInvalid(conclude(reading(firstRecord(met)), reading(freshRecord(met, { repositoryHeadSha: 'b'.repeat(40) }))), /^fresh: the child record's HEAD "b{40}" is not the run's HEAD a{40}\./m)
+    // 5. A child record of another role.
+    expectInvalid(conclude(reading(firstRecord(met, { role: 'fresh' })), reading(freshRecord(met))), /^first: the child record's role "fresh" is not first\./m)
+    // 6. The Repository changed during the run (HEAD, and the tree).
+    expectInvalid(conclude(reading(firstRecord(met)), reading(freshRecord(met)), { ...REPOSITORY, repositoryHeadSha: 'c'.repeat(40) }), /^the Git checkout changed during the run \(HEAD a{40} -> c{40}/m)
+    expectInvalid(conclude(reading(firstRecord(met)), reading(freshRecord(met)), { ...REPOSITORY, workingTreeClean: false }), /clean true -> false/)
+    // Others the runner checks: another Export, an unreadable record, a completed process without one, a verification despite an identity mismatch.
+    expectInvalid(conclude(reading(firstRecord(met, { exportVerification: { actual: { ...EXPORT, bytes: 11 } } })), reading(freshRecord(met))), /^first: the child record's Export is not the one the parent hashed\./m)
+    expectInvalid(conclude({ ...reading(null), readError: 'record unreadable: Unexpected end of JSON input' }, null), /^first: the child record could not be read \(record unreadable/m)
+    expectInvalid(conclude(reading(null), null), /^first: the process completed without a record\./m)
+    const mismatched = firstRecord(met)
+    mismatched.identity = { ...mismatched.identity!, matched: false }
+    expectInvalid(conclude(reading(mismatched), null), /^first: the record carries a Phase D' verification although the D-0C identity did not match\./m)
+    // An integrity failure outranks every other verdict (here a fresh timeout): the record is not trusted, so nothing else is claimed.
+    expectInvalid(conclude(reading(firstRecord(met)), reading(null, 'timeout'), { ...REPOSITORY, workingTreeClean: false }), /the Git checkout changed/)
+  }, 60_000)
+
+  it('keeps every Planner, materialization, identity and envelope outcome as it was: none is an integrity failure', async () => {
+    const { met, truncated, otherBound, phase0, firstRecord, freshRecord } = await intactRun()
+    const intact = (first: D1aChildReading, fresh: D1aChildReading | null) => {
+      const conclusion = conclude(first, fresh)
+      expect(conclusion.integrityIssues).toEqual([])
+      expect(conclusion.verdict.kind).not.toBe('invalid_run_integrity')
+      return conclusion
+    }
+    expect(intact(reading(firstRecord(truncated)), null)).toMatchObject({ verdict: { kind: 'planner_rejected', run: 'first' }, recordClassification: 'nonformal_planner_rejected', exitCode: 0 })
+    expect(intact(reading(firstRecord(met)), reading(freshRecord(truncated)))).toMatchObject({ verdict: { kind: 'planner_rejected', run: 'fresh' }, exitCode: 0 })
+    expect(intact(reading(firstRecord(met)), reading(freshRecord(otherBound)))).toMatchObject({ verdict: { kind: 'planner_rejected', run: 'cross_process', reasons: [{ code: 'fresh_planner_mismatch' }] }, exitCode: 0 })
+    expect(intact(reading(firstRecord({ ...met, outcome: { kind: 'objective_mismatch', physicalOperations: 5, objective: 6, reasons: [] } })), null)).toMatchObject({ verdict: { kind: 'objective_mismatch', run: 'first' }, exitCode: 0 })
+    expect(intact(reading(firstRecord({ ...met, outcome: { kind: 'materialization_failed', targetWeaponId: TARGET.b, outcomeKind: 'shape_mismatch', outcomeReason: null } })), null)).toMatchObject({ verdict: { kind: 'materialization_failed', run: 'first' }, exitCode: 0 })
+    expect(intact(reading(firstRecord(met)), reading(freshRecord(met, { phase0PlanningTargetIds: [TARGET.a] })))).toMatchObject({ verdict: { kind: 'planning_target_set_changed', run: 'fresh' }, exitCode: 0 })
+    const stopped = firstRecord(null)
+    stopped.identity = { ...stopped.identity!, matched: false, issues: ['x'] }
+    expect(intact(reading(stopped), null)).toMatchObject({ verdict: { kind: 'stopped_d0c_identity_mismatch', issues: ['x'] }, recordClassification: 'nonformal_stopped_d0c_identity_mismatch', exitCode: 1 })
+    for (const process of ['timeout', 'out_of_memory', 'cancelled', 'process_failure'] as const) {
+      expect(intact(reading(null, process), null)).toMatchObject({ verdict: { kind: 'unmeasured', run: 'first', reason: process }, recordClassification: 'nonformal_unmeasured', exitCode: 2 })
+      expect(intact(reading(firstRecord(met)), reading(null, process))).toMatchObject({ verdict: { kind: 'unmeasured', run: 'fresh', reason: process }, exitCode: 2 })
+    }
+    expect(intact(reading(firstRecord(met)), null)).toMatchObject({ verdict: { kind: 'unmeasured', run: 'fresh', reason: 'cancelled' }, exitCode: 2 })
+    expect(phase0).toEqual([TARGET.a, TARGET.b])
   }, 60_000)
 })
 

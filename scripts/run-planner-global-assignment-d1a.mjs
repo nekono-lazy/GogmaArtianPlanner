@@ -10,9 +10,12 @@
 //    physical summary (verify.ts);
 // 2. a fresh child process rebuilds the PlannerInput from the Export, derives its own Phase 0, reads the Entry set (refused unless its
 //    HEAD, Export, CalculationContext, Engine and Entry fingerprint are the ones this run produced), and runs Phase D' again;
-// 3. the parent judges the run from both records (verificationProtocol.ts judgeD1aRun(): `verified` only when both processes meet every
-//    condition and their semantic records are identical), recorded as `nonformal_planner_verified` - never a formal measurement, never
-//    a registered VerifiedPlanRecord, never proven_minimum.
+// 3. the parent checks the integrity of both records and of the Repository (verificationProtocol.ts d1aChildIntegrityIssues() /
+//    d1aCheckoutIntegrityIssues(): role, HEAD, Export, re-hashed semantic records, an unchanged Repository) and concludes the run once
+//    (concludeD1aRun(): any integrity issue is `invalid_run_integrity`; otherwise `verified` only when both processes meet every
+//    condition and their semantic records are identical, recorded as `nonformal_planner_verified` - never a formal measurement, never a
+//    registered VerifiedPlanRecord, never proven_minimum). The verdict, classification, post hoc reading and exit code come from that one
+//    conclusion.
 //
 // Concurrency 1, no retry, one wall-clock and heap envelope per child (a timeout, an OOM, a cancellation or a process failure is
 // unmeasured, never a Planner result). It never imports into the app, never opens IndexedDB, reads no oracle manifest / verifier /
@@ -321,13 +324,20 @@ const runChild = async (id, task, wallMs) => {
   console.log(`${new Date().toISOString()} END ${id} ${result.outcome} ${(result.wallObservedMs / 1000).toFixed(1)}s${result.spawnError ? ` (${result.spawnError})` : ''}`)
   return { ...base, ...result, recordFile: result.recordWritten ? basename(recordPath) : null }
 }
-const readRecord = async entry => {
-  if (entry.outcome !== 'completed' || !entry.recordFile) return { record: null, error: null }
+/** The parent's reading of one child (verificationProtocol.ts D1aChildReading): its outcome, its record and the parent's own re-hashes. */
+const readChild = async entry => {
+  const reading = { process: entry.outcome, record: null, readError: null, recomputed: { materializationSha256: null, verificationSha256: null } }
+  if (entry.outcome !== 'completed' || !entry.recordFile) return reading
   try {
-    return { record: JSON.parse(await readFile(join(runDir, entry.recordFile), 'utf8')), error: null }
+    reading.record = JSON.parse(await readFile(join(runDir, entry.recordFile), 'utf8'))
   } catch (error) {
-    return { record: null, error: `record unreadable: ${error?.message ?? String(error)}` }
+    reading.readError = `record unreadable: ${error?.message ?? String(error)}`
+    return reading
   }
+  const record = reading.record
+  if (record?.materialization?.semantic !== undefined) reading.recomputed.materializationSha256 = sha256(JSON.stringify(record.materialization.semantic))
+  if (record?.verification?.semantic !== undefined) reading.recomputed.verificationSha256 = sha256(JSON.stringify(record.verification.semantic))
+  return reading
 }
 const readJournal = async entry => {
   try {
@@ -338,38 +348,27 @@ const readJournal = async entry => {
 }
 
 const phaseStarted = performance.now()
-const integrityIssues = []
+const expectedIdentity = { repositoryHeadSha, actualExport }
 const taskBase = { protocolVersion: vp.D1A_PROTOCOL_VERSION, repositoryHeadSha, allowUncommitted: has('--allow-uncommitted'), actualExport, calculationContext, runDir: resolve(runDir), researchMaxPlanSteps: conditions.researchMaxPlanSteps.value }
 const firstProcess = await runChild('first', { ...taskBase, role: 'first', materializationConditions, expectedD0c: { semanticSha256: expectedSemanticSha256, entryFingerprint: expectedEntryFingerprint } }, envelope.firstChildWallMs)
-const first = await readRecord(firstProcess)
+const firstReading = await readChild(firstProcess)
 const firstJournal = await readJournal(firstProcess)
-if (first.error) integrityIssues.push(`first: ${first.error}`)
-const firstConsistent = first.record === null || (first.record.role === 'first' && first.record.repositoryHeadSha === repositoryHeadSha && JSON.stringify(first.record.exportVerification?.actual) === JSON.stringify(actualExport))
-if (!firstConsistent) integrityIssues.push('first: the child record disagrees with the parent (role / HEAD / Export)')
-if (first.record?.verification && first.record.verification.semanticSha256 !== sha256(JSON.stringify(first.record.verification.semantic))) integrityIssues.push('first: the recorded verification SHA-256 is not the hash of its record')
-if (first.record?.materialization && first.record.materialization.semanticSha256 !== sha256(JSON.stringify(first.record.materialization.semantic))) integrityIssues.push('first: the recorded materialization SHA-256 is not the hash of its record')
+const firstIssues = vp.d1aChildIntegrityIssues('first', firstReading, expectedIdentity)
+const first = firstReading.record
 
-// The fresh process runs only after a first process that reached Phase D' (identity matched).
-let freshProcess = null, fresh = { record: null, error: null }, freshJournal = null
-if (!abort.signal.aborted && firstConsistent && first.record?.identity?.matched === true && first.record.verification !== null && first.record.entrySet !== null) {
-  freshProcess = await runChild('fresh', { ...taskBase, role: 'fresh', entrySet: { sha256: first.record.entrySet.sha256, entryFingerprint: first.record.entrySet.entryFingerprint } }, envelope.freshChildWallMs)
-  fresh = await readRecord(freshProcess)
+// The fresh process runs only after a first process whose record is intact and that reached Phase D' (identity matched).
+let freshProcess = null, freshReading = null, freshJournal = null, freshIssues = []
+if (!abort.signal.aborted && firstIssues.length === 0 && first?.identity?.matched === true && first.verification !== null && first.entrySet !== null) {
+  freshProcess = await runChild('fresh', { ...taskBase, role: 'fresh', entrySet: { sha256: first.entrySet.sha256, entryFingerprint: first.entrySet.entryFingerprint } }, envelope.freshChildWallMs)
+  freshReading = await readChild(freshProcess)
   freshJournal = await readJournal(freshProcess)
-  if (fresh.error) integrityIssues.push(`fresh: ${fresh.error}`)
-  if (fresh.record !== null && (fresh.record.role !== 'fresh' || fresh.record.repositoryHeadSha !== repositoryHeadSha)) integrityIssues.push('fresh: the child record disagrees with the parent (role / HEAD)')
-  if (fresh.record?.verification && fresh.record.verification.semanticSha256 !== sha256(JSON.stringify(fresh.record.verification.semantic))) integrityIssues.push('fresh: the recorded verification SHA-256 is not the hash of its record')
+  freshIssues = vp.d1aChildIntegrityIssues('fresh', freshReading, expectedIdentity)
 }
-const after = repositoryState()
-if (after.repositoryHeadSha !== repositoryHeadSha || after.workingTreeClean !== workingTreeClean) integrityIssues.push(`the Repository changed during the run (HEAD ${after.repositoryHeadSha}, clean ${after.workingTreeClean})`)
-
-const processOutcome = (entry, record) => (entry.outcome === 'completed' && record === null ? 'process_failure' : entry.outcome)
-const verificationView = record => (record?.verification ? { semantic: record.verification.semantic, semanticSha256: record.verification.semanticSha256 } : null)
-const judgement = vp.judgeD1aRun(
-  { process: processOutcome(firstProcess, first.record), identity: first.record?.identity ?? null, verification: verificationView(first.record) },
-  freshProcess === null
-    ? { process: 'not_run', phase0PlanningTargetIds: null, verification: null }
-    : { process: processOutcome(freshProcess, fresh.record), phase0PlanningTargetIds: fresh.record?.phase0PlanningTargetIds ?? null, verification: verificationView(fresh.record) },
-)
+const repositoryIssues = vp.d1aCheckoutIntegrityIssues({ repositoryHeadSha, workingTreeClean, uncommittedBenchmarkCode }, repositoryState())
+const integrityIssues = [...firstIssues, ...freshIssues, ...repositoryIssues]
+// The one conclusion: verdict, classification, post hoc reading and exit code from the same judgement (an integrity issue is never verified).
+const conclusion = vp.concludeD1aRun({ first: firstReading, fresh: freshReading, integrityIssues })
+const fresh = freshReading?.record ?? null
 const runSummary = (entry, record, journalProgress) => ({
   id: entry.id, process: { outcome: entry.outcome, exitCode: entry.exitCode, signal: entry.signal, timedOut: entry.timedOut, cancelled: entry.cancelled, settledBy: entry.settledBy, wallObservedMs: entry.wallObservedMs, wallMs: entry.wallMs, heapMb: entry.heapMb, startedAt: entry.startedAt, recordWritten: entry.recordWritten, stderrTail: entry.stderrTail ?? null },
   recordFile: entry.recordFile,
@@ -383,16 +382,15 @@ const runSummary = (entry, record, journalProgress) => ({
 })
 const output = {
   ...provenance, runDir: resolve(runDir), status: 'nonformal',
-  verdict: judgement.verdict, recordClassification: judgement.recordClassification, crossProcess: judgement.crossProcess,
-  // Post hoc only, and only for a verified verdict (design 13.2): never a minimality claim.
-  postHoc: { operationCount: vp.d1aOperationCountReading(judgement.verdict) },
-  runs: [runSummary(firstProcess, first.record, firstJournal), ...(freshProcess === null ? [] : [runSummary(freshProcess, fresh.record, freshJournal)])],
-  integrityIssues, totalWallMs: performance.now() - phaseStarted,
-  claims: 'none formal: a verified verdict here is nonformal_planner_verified (D-1A conditions, not registered), never bestVerified, a formal VerifiedPlanRecord or proven_minimum',
+  verdict: conclusion.verdict, recordClassification: conclusion.recordClassification, crossProcess: conclusion.crossProcess,
+  // Post hoc only, and only for a verified verdict (design 13.2): never a minimality claim, never for a run whose integrity failed.
+  postHoc: conclusion.postHoc,
+  runs: [runSummary(firstProcess, first, firstJournal), ...(freshProcess === null ? [] : [runSummary(freshProcess, fresh, freshJournal)])],
+  integrityIssues: conclusion.integrityIssues, exitCode: conclusion.exitCode, totalWallMs: performance.now() - phaseStarted,
+  claims: 'none formal: D-1A verdicts are non-formal (conditions not registered); no verdict here is bestVerified, a formal VerifiedPlanRecord or proven_minimum',
 }
 await write(outputPath, output)
-console.log(JSON.stringify({ output: resolve(outputPath), verdict: judgement.verdict.kind, classification: judgement.recordClassification, crossProcess: judgement.crossProcess,
-  identity: first.record?.identity?.matched ?? null, runs: output.runs.map(run => `${run.id}:${run.process.outcome}:${run.verification?.semantic.outcome.kind ?? 'none'}`), integrityIssues }))
-// An integrity issue or a D-0C identity mismatch exits 1 (the records are kept); an unmeasured run exits 2.
-if (integrityIssues.length > 0 || judgement.verdict.kind === 'stopped_d0c_identity_mismatch') process.exitCode = 1
-else if (judgement.verdict.kind === 'unmeasured') process.exitCode = 2
+console.log(JSON.stringify({ output: resolve(outputPath), verdict: conclusion.verdict.kind, classification: conclusion.recordClassification, crossProcess: conclusion.crossProcess,
+  identity: first?.identity?.matched ?? null, runs: output.runs.map(run => `${run.id}:${run.process.outcome}:${run.verification?.semantic.outcome.kind ?? 'none'}`), integrityIssues: conclusion.integrityIssues, exitCode: conclusion.exitCode }))
+// The conclusion's exit code: 1 for an integrity failure or a D-0C identity mismatch (the records are kept), 2 for an unmeasured run.
+process.exitCode = conclusion.exitCode

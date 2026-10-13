@@ -47,7 +47,7 @@ describe('Global Assignment Research isolation', () => {
   it('is imported by no Production module and by no script other than the designated Phase B-2A / D-0B / D-1A runners and the D-0C RESULT derivation', () => {
     const productionPaths = Object.keys(production).filter(path => !/\.test\.tsx?$/.test(path))
     expect(productionPaths.length).toBeGreaterThan(100)
-    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity|verifyPlannerCandidate|judgeD1aRun|MaterializedEntriesHandoff|onMaterializedEntries/
+    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity|verifyPlannerCandidate|judgeD1aRun|concludeD1aRun|d1aChildIntegrityIssues|MaterializedEntriesHandoff|onMaterializedEntries/
     expect(productionPaths.filter(path => forbidden.test(production[path]!))).toEqual([])
     expect(Object.keys(scripts).filter(path => ![RUNNER_SCRIPT, D0B_RUNNER_SCRIPT, D0C_DERIVE_SCRIPT, D1A_RUNNER_SCRIPT].includes(path) && forbidden.test(scripts[path]!))).toEqual([])
     expect(scripts[RUNNER_SCRIPT]).toBeDefined()
@@ -337,7 +337,9 @@ describe('Global Assignment Research isolation', () => {
     expect(runner).toMatch(/runner\.runMaterializationSmoke\(input, research\.globalResearchDependencies\(engine\), \{ conditions \}/)
     expect(runner).toMatch(/verify\.verifyPlannerCandidate\(/)
     expect(runner).toMatch(/vp\.compareD0cMaterializationIdentity\(/)
-    expect(runner).toMatch(/vp\.judgeD1aRun\(/)
+    // One conclusion (verdict, classification, post hoc reading, exit code) with the integrity issues the parent found (PR #253 Required fix).
+    expect(runner).toMatch(/vp\.concludeD1aRun\(\{ first: firstReading, fresh: freshReading, integrityIssues \}\)/)
+    expect(runner).not.toMatch(/vp\.judgeD1aRun\(/)
     expect(runner).toMatch(/\['check-ignore', '-q', path\]/)
     expect(runner).toMatch(/flag: 'wx'/)
     expect(runner).toMatch(/appendFileSync\(journalPath/)

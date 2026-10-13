@@ -4,8 +4,9 @@
  * The protocol around Phase D' (`docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1A.md`, `docs/PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md` 9.5 /
  * 9.6 / 10.4 / 13.2): the D-1A **non-formal** conditions (nothing here is registered; D-1B registers the formal values), the check
  * that a re-run materialization is the D-0C one (semantic SHA-256 and Entry fingerprint, compared only after the recomputation
- * settled), the Entry set handed to the fresh process, its journal reading, and the judgement of one D-1A run from its first
- * process (materialization + Phase D') and its fresh process (a fresh ordinary Planner over the same Entries).
+ * settled), the Entry set handed to the fresh process, its journal reading, the integrity of the run's records and provenance, and the
+ * one conclusion of a D-1A run from its first process (materialization + Phase D') and its fresh process (a fresh ordinary Planner over
+ * the same Entries): verdict, classification, post hoc reading and exit code, derived together so they never disagree.
  *
  * `verified` here is the design status of one structural candidate under these non-formal conditions, recorded as
  * `nonformal_planner_verified`: it carries the evidence a `VerifiedPlanRecord` (design 4.3) holds - the Entries, the physical
@@ -259,6 +260,13 @@ export type D1aVerdict =
   | D1aCandidateOutcome
   /** The re-run materialization is not the D-0C one: Phase D' never ran (no candidate outcome is claimed). */
   | { kind: 'stopped_d0c_identity_mismatch'; issues: string[] }
+  /**
+   * D-1A run-level (never a design 4.6 candidate outcome): the parent found the run's records or provenance broken - a child record that
+   * cannot be read or disagrees with the parent (role / HEAD / Export), a recorded semantic SHA-256 that is not the hash of its record, a
+   * Repository that changed during the run. Nothing the records say is trusted, so no candidate outcome is claimed: never `verified`, and
+   * never a Planner failure (`planner_rejected` / `objective_mismatch`) either.
+   */
+  | { kind: 'invalid_run_integrity'; issues: string[] }
 
 export interface D1aJudgement {
   verdict: D1aVerdict
@@ -294,16 +302,20 @@ function classification(verdict: D1aVerdict): string {
 }
 
 /**
- * One D-1A run's verdict (design 9.5 / 9.6). Both processes must complete and meet every in-process condition, the fresh process's
- * Phase 0 must be the first one's, and their semantic records must be identical; one side alone is never `verified`. A process
- * the envelope stopped is `unmeasured`, never a Planner result (G6); a first-side outcome stands whatever the fresh side shows.
+ * One D-1A run's verdict (design 9.5 / 9.6). The run's integrity comes first: with any issue the parent found (`integrityIssues`, from
+ * `d1aChildIntegrityIssues()` / `d1aCheckoutIntegrityIssues()`) the verdict is `invalid_run_integrity` whatever the records say.
+ * Otherwise both processes must complete and meet every in-process condition, the fresh process's Phase 0 must be the first one's, and
+ * their semantic records must be identical; one side alone is never `verified`. A process the envelope stopped is `unmeasured`, never
+ * a Planner result (G6); a first-side outcome stands whatever the fresh side shows. `integrityIssues` is required: a caller cannot
+ * judge a run without saying what it found.
  */
-export function judgeD1aRun(first: D1aFirstProcessView, fresh: D1aFreshProcessView): D1aJudgement {
+export function judgeD1aRun(first: D1aFirstProcessView, fresh: D1aFreshProcessView, integrityIssues: readonly string[]): D1aJudgement {
   const compared = first.verification !== null && fresh.verification !== null
   const differingFields = compared ? differingSemanticFields(first.verification!.semantic, fresh.verification!.semantic) : []
   const crossProcess = { compared, identical: compared ? first.verification!.semanticSha256 === fresh.verification!.semanticSha256 && differingFields.length === 0 : null, differingFields }
   const judged = (verdict: D1aVerdict): D1aJudgement => ({ verdict, recordClassification: classification(verdict), crossProcess })
 
+  if (integrityIssues.length > 0) return judged({ kind: 'invalid_run_integrity', issues: [...integrityIssues] })
   if (first.process !== 'completed') return judged({ kind: 'unmeasured', run: 'first', reason: first.process })
   if (first.identity === null) return judged({ kind: 'unmeasured', run: 'first', reason: 'process_failure' })
   if (!first.identity.matched) return judged({ kind: 'stopped_d0c_identity_mismatch', issues: [...first.identity.issues] })
@@ -345,6 +357,110 @@ export function d1aOperationCountReading(verdict: D1aVerdict): { evaluated: bool
   const value = verdict.physicalOperations
   const judgement = value < D1A_INCUMBENT_PHYSICAL_OPERATIONS ? 'improvement' : value === D1A_INCUMBENT_PHYSICAL_OPERATIONS ? 'equal' : 'worse'
   return { evaluated: true, physicalOperations: value, incumbent: D1A_INCUMBENT_PHYSICAL_OPERATIONS, judgement, proof: 'not_claimed' }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The run's integrity and its one conclusion (verdict, classification, post hoc reading, exit code)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** The fields of a child record (`scripts/run-planner-global-assignment-d1a.mjs`) the parent reads: untrusted file contents. */
+export interface D1aChildRecord {
+  role?: unknown
+  repositoryHeadSha?: unknown
+  exportVerification?: { actual?: unknown } | null
+  identity?: D0cIdentityComparison | null
+  materialization?: { semanticSha256?: unknown } | null
+  verification?: { semantic: PlannerVerificationSemantic; semanticSha256: string } | null
+  phase0PlanningTargetIds?: string[] | null
+}
+
+/** What the parent observed of one child: the envelope's outcome, the parsed record or why it could not be read, and its own re-hashes. */
+export interface D1aChildReading {
+  process: D1aProcessOutcome
+  record: D1aChildRecord | null
+  /** Why a written record could not be read (an integrity issue, never "no record"). */
+  readError: string | null
+  /** SHA-256 the parent recomputed from `JSON.stringify()` of the record's own semantic records (null where the record has none). */
+  recomputed: { materializationSha256: string | null; verificationSha256: string | null }
+}
+
+/** The Repository state the parent records before its children and observes again after them. */
+export interface D1aCheckoutState {
+  repositoryHeadSha: string
+  workingTreeClean: boolean
+  uncommittedBenchmarkCode: boolean
+}
+
+/**
+ * The integrity issues of one child's record (`[]` = none): a record that cannot be read, a completed process without one, a role, HEAD
+ * or Export other than the run's, a recorded materialization / verification semantic SHA-256 that is not the hash of its own record,
+ * and (first process) a Phase D' verification recorded although the D-0C identity did not match. A child the envelope stopped without
+ * writing a record has no integrity issue: it is `unmeasured`.
+ */
+export function d1aChildIntegrityIssues(role: D1aRunSide, reading: D1aChildReading, expected: { repositoryHeadSha: string; actualExport: ExportIdentity }): string[] {
+  const issues: string[] = []
+  if (reading.readError !== null) issues.push(`${role}: the child record could not be read (${reading.readError}).`)
+  const record = reading.record
+  if (record === null) {
+    if (reading.process === 'completed' && reading.readError === null) issues.push(`${role}: the process completed without a record.`)
+    return issues
+  }
+  if (record.role !== role) issues.push(`${role}: the child record's role ${JSON.stringify(record.role)} is not ${role}.`)
+  if (record.repositoryHeadSha !== expected.repositoryHeadSha) issues.push(`${role}: the child record's HEAD ${JSON.stringify(record.repositoryHeadSha)} is not the run's HEAD ${expected.repositoryHeadSha}.`)
+  if (JSON.stringify(record.exportVerification?.actual ?? null) !== JSON.stringify(expected.actualExport)) issues.push(`${role}: the child record's Export is not the one the parent hashed.`)
+  const materialization = record.materialization ?? null
+  if (materialization !== null && materialization.semanticSha256 !== reading.recomputed.materializationSha256) {
+    issues.push(`${role}: the recorded materialization semantic SHA-256 ${JSON.stringify(materialization.semanticSha256)} is not the hash of its record (${String(reading.recomputed.materializationSha256)}).`)
+  }
+  const verification = record.verification ?? null
+  if (verification !== null && verification.semanticSha256 !== reading.recomputed.verificationSha256) {
+    issues.push(`${role}: the recorded verification semantic SHA-256 ${JSON.stringify(verification.semanticSha256)} is not the hash of its record (${String(reading.recomputed.verificationSha256)}).`)
+  }
+  if (role === 'first' && verification !== null && record.identity?.matched !== true) issues.push("first: the record carries a Phase D' verification although the D-0C identity did not match.")
+  return issues
+}
+
+/** The integrity issue of a Repository that changed while the children ran (`[]` = unchanged). */
+export function d1aCheckoutIntegrityIssues(before: D1aCheckoutState, after: D1aCheckoutState): string[] {
+  const same = before.repositoryHeadSha === after.repositoryHeadSha && before.workingTreeClean === after.workingTreeClean && before.uncommittedBenchmarkCode === after.uncommittedBenchmarkCode
+  return same ? [] : [
+    `the Git checkout changed during the run (HEAD ${before.repositoryHeadSha} -> ${after.repositoryHeadSha}, clean ${before.workingTreeClean} -> ${after.workingTreeClean}, uncommitted code ${before.uncommittedBenchmarkCode} -> ${after.uncommittedBenchmarkCode}).`,
+  ]
+}
+
+export interface D1aRunConclusion extends D1aJudgement {
+  /** Design 13.2, post hoc: evaluated for `verified` only, so never for a run whose integrity failed. */
+  postHoc: { operationCount: ReturnType<typeof d1aOperationCountReading> }
+  integrityIssues: string[]
+  /** 0 = a measured verdict; 1 = integrity failure or D-0C identity mismatch (the records are kept); 2 = unmeasured. */
+  exitCode: 0 | 1 | 2
+}
+
+function viewOf(reading: D1aChildReading): { process: D1aProcessOutcome; verification: D1aVerificationView | null } {
+  const record = reading.record
+  return {
+    // A completed process whose record is missing or unreadable produced no measurement (the read error is an integrity issue).
+    process: reading.process === 'completed' && record === null ? 'process_failure' : reading.process,
+    verification: record?.verification ? { semantic: record.verification.semantic, semanticSha256: record.verification.semanticSha256 } : null,
+  }
+}
+
+/**
+ * The one conclusion of a D-1A run the runner records: the verdict and its classification (`judgeD1aRun()` with the integrity issues),
+ * the post hoc reading of that same verdict and the exit code of that same verdict, so the four can never disagree (an integrity issue is
+ * `invalid_run_integrity`, `nonformal_invalid_run_integrity`, `not_evaluated` and exit 1 together). `fresh` is null when it never ran.
+ */
+export function concludeD1aRun(input: { first: D1aChildReading; fresh: D1aChildReading | null; integrityIssues: readonly string[] }): D1aRunConclusion {
+  const first = viewOf(input.first)
+  const fresh = input.fresh === null ? null : viewOf(input.fresh)
+  const judgement = judgeD1aRun(
+    { process: first.process, identity: input.first.record?.identity ?? null, verification: first.verification },
+    fresh === null ? { process: 'not_run', phase0PlanningTargetIds: null, verification: null } : { process: fresh.process, phase0PlanningTargetIds: input.fresh!.record?.phase0PlanningTargetIds ?? null, verification: fresh.verification },
+    input.integrityIssues,
+  )
+  const kind = judgement.verdict.kind
+  const exitCode = kind === 'invalid_run_integrity' || kind === 'stopped_d0c_identity_mismatch' ? 1 : kind === 'unmeasured' ? 2 : 0
+  return { ...judgement, postHoc: { operationCount: d1aOperationCountReading(judgement.verdict) }, integrityIssues: [...input.integrityIssues], exitCode }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
