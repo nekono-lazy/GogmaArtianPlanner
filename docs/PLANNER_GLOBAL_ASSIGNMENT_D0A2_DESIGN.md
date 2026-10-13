@@ -1079,4 +1079,132 @@ SEARCH_SPECへの注記は2aと同時に入れた（§13の#2 (a)、`docs/SEARCH
 
 §12のD-0A-2bの行のとおり（Research側の `materializeShapeConstrained()`、request構築・規模予測・前提検査、counting Engine、分類、
 `verifyShapeConstrainedRoute()`、方式選択 `d0a2-v2`、D-0B runner / protocolの規則選択と候補分類、G3静的risk診断への下側の変種の追加、
-補題（§5.5）のproperty test、PAとのparity）。§5.5の補題は2aでは未検証のままである。
+補題（§5.5）のproperty test、PAとのparity）。§5.5の補題は2aでは未検証のままである。2bの実装記録は §19。
+
+## 19. D-0A-2b 実装記録（Research方式 `shape_constrained`・方式選択 `d0a2-v2`・独立検証器）
+
+Refs #154。基準main `4be6ec6`（PR #248 merged）。§12のD-0A-2bの行を実装した。Production（Search / Planner / RNG / Worker / UI /
+Persistence / schema / version）、2aのSearch seam、Phase Aのoption集合、Phase Cのassignment・materialization順序、既存D-0BのRESULTは変更していない
+（Production changed files = `[]`）。実Exportでのsmoke、formal measurement、Production Planner・Trace Replayによる検証は行っていない。
+
+### 19.1 実装した範囲
+
+| 箇所（`src/benchmarks/globalAssignment/`） | 実装 |
+| --- | --- |
+| `shapeMaterializationTypes.ts`（新規） | 規則 `MaterializationRule`（`d0a-v1` / `d0a2-v2`）、algorithm token `global-assignment-d0a2-shape-constrained-materialization-v1`、Candidate ID prefix `candidate.research.global-assignment.shape.`、request・規模（`ShapeSearchScale`）・gate・budget・outcome・観測・独立検証の報告・方式選択の型 |
+| `shapeMaterializationRequest.ts`（新規） | `toRouteShapeConstraint()`（`shape.option` だけからの変換。Phase Aが作らない組合せは `invalid_shape`）、`shapeConstrainedSearchIdentity()`（§9.1の構成要素だけ）、`checkMinimalRoutePremises()`（§5.5の位置前提）、`assembleShapeConstrainedRequest()`、継続形の判定 `continuationShapeOf()` と拡張境界 `CONTINUATION_SHAPE_DETECTORS`、方式選択 `selectShapeMaterializationMethods()` |
+| `shapeMaterializationScale.ts`（新規） | `predictShapeSearchScale()`（位置計算だけ。巨戟化位置の歩行と正準作成はSearchと同じ `nextOperationPositions()` / `heldPrefixNormalCreation()`）、gate / budgetの検証と超過成分 |
+| `countingRngEngine.ts`（新規） | `createPredictionCountingEngine()`。Production Engineの全呼出し（version、capability、引数、返却値、例外）をそのまま転送し、予測（種類別）とsupport問合せの回数だけを数える。名前は既存のbenchmark用 `createCountingRngEngine`（Production側のWorker benchmark）と衝突しないようにした |
+| `shapeRouteVerification.ts`（新規） | 独立検証器 `verifyShapeConstrainedRoute()`（§9.3の1〜6） |
+| `shapeMaterializationRun.ts`（新規） | 前提検査 → gate → 2aのseam（計数Engine、instrumentation、budget付き `shouldCancel`）→ 最初の配送のdeterministic materialization → `matchExpectedShape()` → 独立検証 → §10.1の分類 |
+| `materialize.ts` | 規則の入口。`ShapeMaterializationInputs`（`rule: 'd0a2-v2'`）を渡したときだけ新規則を使い、無指定は `d0a-v1`。正式reservationの導出を `formalReservation()` に1つにまとめ両規則で共有、`buildShapeConstrainedRequest()` / `executeShapeConstrainedRequest()`（再導出して `request_mismatch`）、Target単位の方式順 |
+| `materializationTypes.ts` | 方式 `shape_constrained`、新outcome（budget・shape gate・unsupported）、`materialization_unsupported` stage、fail closed code（`shape_base_unavailable` / `prediction_support_inconsistent` / `shape_constrained_unreachable` / `shape_search_contract_violation` / `route_verification_failed`）、`GlobalAssignmentMaterializationError.detail`（任意。D-0Aの停止は持たない） |
+| `materializationProtocol.ts` / `materializationRunner.ts` | `ShapeMaterializationResearchConditions`（独自の型）、protocol version `global-assignment-d0a2b:1`、候補分類 `unconfirmed_shape_search_budget` / `unsupported_shape_prediction`（followUp `support_review`）、runner記録への新field（`d0a2-v2` のrunだけ） |
+| `materializationDiagnostics.ts` | G3下側の変種（§3.7）を上側とは別の関数・別fieldで追加（`diagnoseBonusFrontierLowerRisk()` / `bonusFrontierLowerRequestRisk()` / `measureBonusFrontierLowerCollapse()`）。上側の関数と値は不変 |
+| `scripts/run-planner-global-assignment-d0b.mjs` | `--rule d0a-v1` または `--rule d0a2-v2`（既定 `d0a-v1`）、`--shape-gate D,G,N,W`、`--shape-budget G,S,W,PN,PS,PR,PK`。`d0a2-v2` ではgateとbudgetの指定が必須（既定値なし）、`--delivery-cap` は拒否、`--gate` は射影起点Candidate Searchのgate |
+
+### 19.2 実装上の判断（設計の提案との差異を含む）
+
+1. **規則の分離**: 新規則の入力は `ShapeMaterializationInputs`、設定は `ShapeMaterializationSettings`（射影起点Search用のD-0A gate、shape gate、shape budget）、
+   runner条件は `ShapeMaterializationResearchConditions` で、いずれも `d0a-v1` の型にfieldを足したものではない。`d0a-v1` の条件は `rule` fieldを持たず
+   （明示の `rule: 'd0a-v1'` も拒否）、`d0a2-v2` の条件は `deliveryCap` / `searchScaleGate` / `searchPolicyPrecheck` を持てない
+2. **request**: §5.2の入力をすべて持ち、実行前に同じ入力から再導出して比較する（Target、shape、変換後の形、reservation、reservation元のEntry、origin、extent、
+   identity、予測規模、前提違反）。処理順は前提検査 → gate → seamである（ユーザー指示の順序4〜6）
+3. **規模予測**: §10.3の型をそのまま実装した。`conversionWalkPositions` は正式な歩行が調べる位置数（`nextOperationPositions()` のskip数 + 1）。gateの成分は
+   `maxDepthUpperBound` / `maxGogmaGeneratedStateUpperBound` / `maxNormalForgeCount` / `maxConversionWalkPositions`。値は呼出し側が明示し、本PRは既定値も正式値も
+   定めない（testは十分大きなtest値だけを使う）
+4. **budget**: 成分はGogma生成state数・Skill state数・確定work数・予測呼出し回数（Normal / Skill / Reset / Keep）。超過は `使用量 > 上限`。Searchの予測回数は
+   Searchに渡す計数Engineだけが数え、独立検証は別の計数Engineで数える（Search budgetに入らない）。停止理由は `shouldCancel` が最初に真になった時点で記録し、
+   cancelとbudgetが同時なら cancel（`unmeasured(cancelled)`）とし、超過していたbudget成分を併記する。consumer stop（受理）時の記録は終了時点の使用量で、
+   最後のcheckpointの後にbudgetを超えて配送された場合も受理は有効とし、超過は隠さず記録する
+5. **分類**（§10.1）: seamの `ShapeBaseUnavailableReason` のうちsource / Counter / production target / 巨戟化位置と、`capability_unavailable` の
+   `cause: 'rng_input_unconfirmed'`（区分3。Phase 0 / Aが確定値を要求したので前提違反）は `shape_base_unavailable`。Engine capability flag
+   （`engine_capability_unavailable`。Phase Aは読まない）は `unsupported(capability_unavailable)`。`prediction_unsupported` とstreamの
+   `requiredUnsupportedPredictions` は、Phase Aの同じ問い（Normal / Skill / Resetは種別 × 属性の `TargetReach.support`、Keepはfamily layout）で判定し、
+   Phase Aがsupportedと判定済みなら `prediction_support_inconsistent`、それ以外は `unsupported(required_prediction_unsupported)`。Keepの問いのlayoutは、
+   `keep` laneではsourceの、`reset_then_keep` laneではg1のResetのlayout（形の操作種別policyによりlaneのKeep入力は常にこのlayoutで、family-only Keep契約
+   （P5）の範囲）。禁止操作のnoticeは分類に使わない。配送が無く必要な予測のunsupportedも無い `exhausted` / `stoppedByExtent` は `shape_constrained_unreachable`、
+   どちらも立たない終了やconsumer stopで受理が無い終了は `shape_search_contract_violation`
+6. **候補の受理**: 最初の配送だけを扱い、materializerの拒否は `entry_materialization_refused`、照合不一致は `match_inconsistent`、独立検証の失敗
+   （`validateBuildCandidate()` / `validateBuildListEntry()` を含む）は `route_verification_failed` で、次のCandidateを試さない
+7. **既存テストとの互換のための綴り**: `ShapeMethodSelection.predictedSearchScale`、shape attempt要約の `predictedSearchScale`、`ShapeSearchObserved.deliveredCandidates`、
+   budget停止outcomeの `delivered: 0` / `closestMismatch: null` は、既存testが和型のfieldとして読む名前に揃えた（意味は §10.1 / §10.3 のまま）
+8. **G3下側の記録**: `d0a-v1` の記録（runnerのsemantic recordとsummary）はD-0Bと完全に同じserializationに保つ（ユーザー指示 §4）ため、下側の変種は
+   `d0a2-v2` のrunの記録にだけ別field（`diagnostics.bonusFrontierLower`、Targetごとの `bonusFrontierLower`、summaryの `shapeConstrained.bonusFrontierLower`）として
+   入れた。§12の「`d0a-v1` の診断用」については、診断関数（静的・request・measured）は `d0a-v1` のPlanner Alternative attemptにもそのまま使え（test済み）、
+   `d0a-v1` のrun記録へ出すかはD-0B-2の判断に残す（オーナー判断事項）
+9. **継続形の境界**: `CONTINUATION_SHAPE_DETECTORS`（現在は `searchPolicyShapeOf` だけ）と `ContinuationShape`（現在は `SearchPolicyShape`）。A-2はG2の検出器と型を
+   ここに足す。Phase AのG2 optionは追加していない
+10. **2aとの契約不整合**: 見つからなかった。2aのSearch seamは変更していない
+
+### 19.3 `d0a-v1` 不変の根拠
+
+- 変更の **前に**、main `4be6ec6` で `d0a-v1` のgolden（`src/test/fixtures/globalAssignmentMaterializationV1GoldenPreD0A2B.json`、29ケース: D-0Aの4 scenario
+  （precheck有無）、gate、delivery cap、request単体、G1、G3上側、各candidateの診断、D-0B runnerの4 run（semantic recordとsummary））を1回だけ記録し、
+  変更後の実装が `JSON.stringify`（key順を含む。runnerの `semanticSha256` と同じ）で完全一致することを固定した（`materializationV1Golden.test.ts`）
+- 既存のResearch testは変更していない。isolation testは新moduleの一覧追加と、2b moduleの検査（Planner非実行、手組みreservationなし、予測は計数Engineと
+  独立検証器だけ、seamは `research` の公開moduleからだけ、検証器はSearch内部を読まない）の追加だけである
+- D-0B smoke defaults、`MATERIALIZATION_D0B_PROTOCOL_VERSION`（`global-assignment-d0b:1`）、`MATERIALIZATION_D0B2_REGISTRATION_ITEMS`、formal runの拒否は不変
+
+### 19.4 補題（§5.5）のproperty test
+
+`shapeMaterializationLemma.test.ts`。seed付きの決定的な合成fixture（`randomShapeScenarioSpec()`。Target 2〜3、所持巨戟・所持通常、Ideal Skill / Reset /
+Keep / 予測Normalの位置をseedから生成。table Engineはゲーム規則を推測しない）を、実際のPhase A ReachTableとPhase C-2のstructural candidate searchに通し、
+Phase Cの正式なassignment・expectedShapes・materializationOrder・dependencies・coverageをそのまま使う（期待形を手で編集しない）。各candidateを順序どおりに
+形状制約付き方式だけでmaterializeし、正式reservation（先行Entryからの導出）、前提違反なし、最初の配送の受理、独立検証の通過、required位置と形の一致、
+決定性、規則 `d0a2-v2` 全体での `all_materialized` を確認した。
+
+| seed範囲 | 結果 |
+| --- | --- |
+| 1〜300（commitしたtest） | 144 seedでstructural candidateあり（155は無し、1はnode budget停止で0件）。432 candidate（うちTarget 3つが90）、954 Target、反例0。base: 所持巨戟269 / 所持通常127 / 新規Normal558。Skill lane: zero 577 / Reset Skills 377。Bonus lane: Reset 439 / Keep 335 / Reset→Keep 98 / zero 82。非連続形130、held有り516、G1継続36 |
+| 301〜2000（一回限りの確認。commitしていない） | 2,570 candidate（うちTarget 3つが660）、5,800 Target、反例0 |
+
+負例: 順序の入替え（先行Entryの欠落）→ `conversion_position_not_legal`、同じTargetの再materialize → 排他source・blockedのproduction target / required位置、
+extent不足（前提検査そのもの）、Phase Aと異なる予測を返すEngine（P1 / P5の破れ）→ base admitted・必要なunsupportedなし・未配送で
+`shape_constrained_unreachable`。いずれもfail closedで、「Routeが存在しない」とは扱わない。
+
+**未確認として残る範囲**: 補題はこの合成fixture（小さな窓、table Engine）で反例が無いことを示しただけで、一般には証明されていない。P5のfamily-only Keep契約は
+Engineの性質（tierを読まない）に依存する。実Export（Production RNG）での成立はD-0B-2の再smokeで確かめる。
+
+### 19.5 parity（§9.2）と、設計の見込みとの差異
+
+`shapeMaterializationParity.test.ts`。同じ正式reservation・extentで、Planner Alternative Search（`d0a-v1` の方式、delivery cap 5,000）の最初の一致と、
+形状制約付き方式の最初の配送を比較した。
+
+| 入力 | parity | 操作種別の別解 | G1 | G3 risk |
+| --- | --- | --- | --- | --- |
+| D-0Aの4 scenario | 8 | 0 | 0 | 0 |
+| 合成fixture seed 1〜300 | 744 | 64 | 36 | 110 |
+
+- parityの対象では、Route（RouteKind・source・RouteOperation列）、最終5枠・scope・Skill、advance、`candidateStableKey`、3種のtrace、required位置、Entryの意味
+  （meaning fingerprint、両hash、Target定義hash、CalculationContext、中間状態Group）、Entry IDが一致し、Candidate ID・`searchRunId`・`BuildListEntry.candidateId`
+  は異なる（PlannerInputに同じ現行内容のEntryがあれば、両方式とも既存Entryを再利用する）
+- G1はPlanner Alternative Searchが配送しない（全件 `materialized` 以外）。G3 riskの入力は改善として別扱いし、新方式のown operation数がPAの一致以下であることだけを確認した
+- **見込みとの差異（新たに見つかった区分）**: §9.2は「RouteOperation列が一致する見込み」としていたが、`reset(g*)` の形で、Keep chainの終端 `Keep(g*)` も同じ最終
+  多重集合に到達する入力では、Planner Alternative Searchの最初の一致がKeep chain（同じ位置・同じown operation数・同じsource・同じrequired位置 `{g*}`・同じ最終多重集合）
+  になる場合がある（64件、すべて `reset` の形）。`matchExpectedShape()` は操作種別を比べないので両方とも一致し、Entry IDは異なる。§5.5の一意性は形状制約付き
+  探索の空間（操作種別がlaneのpolicyで固定）での主張で、Planner Alternative Searchの一致集合（操作種別を問わない）では最小が一意でない。補題の存在・最初の配送の
+  主張には影響しない。この区分はparityの対象から外し、その特徴（上記の各一致と、PAのBonus操作がすべてKeep）をtestで固定した。D-0B-2で `d0a-v1` と `d0a2-v2` の
+  Entry IDを比べるときは、この区分を差として数える
+
+### 19.6 G1 / G3 / G4（end to end、合成）
+
+- G1: `conversion(7, 9)`（巨戟化SkillがIdeal）を `d0a-v1` は `not_executed(search_policy_shape)` とし、`d0a2-v2` は `n1@4,c7,R10,R11,S8,S9` をmaterializeする
+  （方式選択 `continuation_shape_constrained_only`、記録に `policyShape` を残す）
+- G3上側: `keep_from_source(14)` で12に同layoutのReset。`d0a-v1` は `unconfirmed(stopped_by_extent)`、`d0a2-v2` は射影起点の不一致の後に `K10..K14`（required `{14}`）
+- G3下側: aが10〜12を被覆した後のcの `reset_then_keep(11, 14)`。Planner Alternative Searchの最初の一致は1操作多い `R10,R11,K13,K14`（その前に `R10,K13,K14` を配送）、
+  `d0a2-v2` は最小の `R11,K13,K14`。下側の静的risk `[10]`、request上の条件成立、measuredの署名 `[10, 14]` を確認した
+- G4: 保護されたIdeal sourceは `zero / zero` の形でmaterializeされ（操作0）、操作を伴う形は前提検査で `shape_base_unavailable`（`source_protected`）になる
+
+### 19.7 検証
+
+`git diff --check`、`npm run check:nul`、`npm run lint`、`npm test`、`npm run build` を実行した（結果はPR本文に記載）。2aのProduction golden 63件、D-0A / D-0Bの
+既存test、`d0a-v1` golden、新規testがすべて通過した。
+
+### 19.8 A-2 / D-0B-2へ引き継ぐ事項
+
+- A-2: G2の継続optionをPhase Aに足し、`CONTINUATION_SHAPE_DETECTORS` / `ContinuationShape` に検出器を足す。G4-iiiの扱いはA-2で決める
+- D-0B-2: 実Exportでの `--rule d0a2-v2` 再smoke、shape gate・shape budget・envelope・方式選択規則・独立検証の既定（`every_shape_constrained_materialization`）の
+  事前登録（`MATERIALIZATION_D0A2B_REGISTRATION_ITEMS`）。予測規模（上界）と実測（生成state数・work数・予測回数）の比較から値を決める
+- D-0B-2: G3下側の変種を `d0a-v1` のrun記録にも出すか（19.2の8）、操作種別の別解（19.5）を `d0a-v1` / `d0a2-v2` の比較でどう数えるか
+- D-1: materializedはPlanner未検証であり、Production PlannerとTrace Replay、fresh processのordinary Plannerによる確認が残る（§9.3の7）

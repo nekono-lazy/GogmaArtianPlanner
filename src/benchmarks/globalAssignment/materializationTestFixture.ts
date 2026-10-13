@@ -16,7 +16,7 @@ import { productionMaterializationSearchPort, type MaterializationInputs, type M
 import type { MaterializationSettings, SearchScaleGate } from './materializationTypes'
 import { buildReachTable } from './reachTable'
 import { buildStructuralCandidate } from './structuralCandidate'
-import { createGlobalAssignmentFixture, createTableEngine, IDEAL_BONUSES, keepToIdealRanks, keepToLowRanks, OTHER_FAMILIES, ownedGogma, type TableEngine } from './testFixture'
+import { createGlobalAssignmentFixture, createTableEngine, IDEAL_BONUSES, keepToIdealRanks, keepToLowRanks, OTHER_FAMILIES, ownedGogma, type TableEngine, type TableEngineSpec } from './testFixture'
 import type { BonusRequirement, GlobalAssignmentContext, ReachOption, ReachTable, ReachWindow, SkillRequirement, SourceCandidate } from './types'
 
 export const SERIES_IDEAL = 'series_skill.fixture.a'
@@ -43,6 +43,11 @@ export interface MaterializationScenarioSpec {
   /** Gogma positions whose Keep rerolls every tier to the Ideal rank (Ideal iff the layout is an Ideal permutation). */
   keepIdeal?: number[]
   window: ReachWindow
+  /** Normal Artian results per element and Normal position (default: a non-Ideal family multiset). D-0A-2b. */
+  normal?: Record<string, Record<number, RestorationBonusSet>>
+  /** A support answer override (`null` keeps the capability answer); it may read mutable test state. D-0A-2b. */
+  support?: TableEngineSpec['support']
+  capabilities?: TableEngineSpec['capabilities']
 }
 
 export interface MaterializationScenario {
@@ -212,6 +217,9 @@ export async function materializationScenario(spec: MaterializationScenarioSpec)
     skill: (position, _weaponTypeId, elementId) => ({ seriesSkillId: (spec.skillIdeal?.[elementId] ?? []).includes(position) ? SERIES_IDEAL : 'series_skill.fixture.other', groupSkillId: null }),
     reset: (position, _weaponTypeId, elementId) => structuredClone(spec.reset?.[elementId]?.[position] ?? OTHER_FAMILIES),
     keep: (position, current) => ((spec.keepIdeal ?? []).includes(position) ? keepToIdealRanks(current) : keepToLowRanks(current)),
+    ...(spec.normal ? { normal: (position: number, _weaponTypeId: string, elementId: string) => structuredClone(spec.normal?.[elementId]?.[position] ?? OTHER_FAMILIES) } : {}),
+    ...(spec.support ? { support: spec.support } : {}),
+    ...(spec.capabilities ? { capabilities: spec.capabilities } : {}),
   })
   const fixture = await createGlobalAssignmentFixture({ sameElementTarget: true })
   const kept = new Set(spec.targets.map(key => TARGET[key] as string))

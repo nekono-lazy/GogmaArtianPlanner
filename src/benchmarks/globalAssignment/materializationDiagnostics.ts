@@ -190,9 +190,14 @@ function reservationStatus(reservation: PlannerAlternativeReservation | null, po
   return reservation.gogma.held.includes(position) ? 'held' : 'free'
 }
 
+/** The Gogma start a request counts its extent from (D-0A: its scale detail; D-0A-2b: its Planner-start origins). */
+function requestGogmaStart(attempt: MaterializationAttempt): number {
+  return attempt.method === 'shape_constrained' ? attempt.request.origins.gogma : attempt.request.scaleDetail.origins.gogma
+}
+
 /** Design 19.3 G3, request part: the static risk positions of one executed or gated request, read against its own reservation. */
 export function bonusFrontierRequestRisk(risk: BonusFrontierRisk, attempt: MaterializationAttempt, table: ReachTable): BonusFrontierRequestRisk {
-  const gogmaStart = attempt.request.scaleDetail.origins.gogma
+  const gogmaStart = requestGogmaStart(attempt)
   const option = attempt.request.shape.option
   const chain = chainOf(option, table)
   if (chain === null) throw new RangeError(`Target ${risk.targetWeaponId}: the request's option has no Keep chain.`)
@@ -230,6 +235,107 @@ export function measureBonusFrontierCollapse(risk: BonusFrontierRisk, inspection
     }
   }
   return measured
+}
+
+// ------------------------------------------------------------------------------------------------ G3 (lower variant)
+
+/**
+ * Design D0A2 3.7 / 18.4 (Phase D-0A-2b): the lower variant of the Bonus frontier collapse, kept apart from the upper one above
+ * (separate rows and counts; the upper rows and their D-0B values are unchanged). For a `reset_then_keep (g1, g*)` option, a
+ * Reset position `q < g1` whose Reset result has the layout of the Reset at `g1`: when `q .. g1` is held in a request's
+ * reservation, the Keep states that follow both Resets share position and layout, the earlier-generated `q` history is kept,
+ * and the minimal-cost Route through `g1` is not delivered at its cost (D-0A-2a observed a Route with the same required
+ * positions one own operation later). A risk condition only: never "no Route", never a rejection, never a Search outcome.
+ */
+export interface BonusFrontierLowerRisk {
+  targetWeaponId: TargetWeaponId
+  orderIndex: number
+  /** `[g1, g*]`. */
+  requiredGogma: [number, number]
+  /** The ordered family layout of the Reset at `g1`. */
+  resetLayout: LayoutKey
+  /** `originGogma .. g1 - 1`, or null when empty. */
+  scanRange: InclusiveRange | null
+  /** Positions of `scanRange` whose ReachTable Reset result has `resetLayout`, ascending. */
+  sameLayoutResetPositions: number[]
+  /** Those positions that are another Target's required Gogma position in this candidate. */
+  otherTargetRequired: { position: number; targetWeaponId: TargetWeaponId }[]
+}
+
+export interface BonusFrontierLowerRiskDiagnostics {
+  /** The `reset_then_keep` options of the candidate. */
+  applicableOptions: number
+  withStaticRisk: number
+  targets: BonusFrontierLowerRisk[]
+}
+
+/** The lower-variant static part: no reservation, no Search, the ReachTable alone. */
+export function diagnoseBonusFrontierLowerRisk(candidate: StructuralCandidate, table: ReachTable): BonusFrontierLowerRiskDiagnostics {
+  const requiredOwner = new Map<number, TargetWeaponId>()
+  for (const option of candidate.assignment.chosen.values()) {
+    const bonus = option.bonusRequired
+    if (bonus.kind === 'reset' || bonus.kind === 'keep_from_source') requiredOwner.set(bonus.finalPosition, option.targetWeaponId)
+    if (bonus.kind === 'reset_then_keep') { requiredOwner.set(bonus.resetPosition, option.targetWeaponId); requiredOwner.set(bonus.finalPosition, option.targetWeaponId) }
+  }
+  const targets: BonusFrontierLowerRisk[] = []
+  for (const { option, orderIndex } of optionsInOrder(candidate)) {
+    const bonus = option.bonusRequired
+    if (bonus.kind !== 'reset_then_keep') continue
+    const row = table.targets.find(value => value.targetWeaponId === option.targetWeaponId)
+    const layout = row?.bonus.resetLayoutByPosition.get(bonus.resetPosition)
+    if (layout === undefined) throw new RangeError(`Target ${option.targetWeaponId}: the ReachTable holds no Reset layout at ${bonus.resetPosition}.`)
+    const scanRange = table.originGogma <= bonus.resetPosition - 1 ? { from: table.originGogma, to: bonus.resetPosition - 1 } : null
+    const positions = scanRange === null ? [] : sameLayoutResetPositions(option, table, layout, scanRange.from, scanRange.to)
+    targets.push({
+      targetWeaponId: option.targetWeaponId, orderIndex, requiredGogma: [bonus.resetPosition, bonus.finalPosition], resetLayout: layout, scanRange,
+      sameLayoutResetPositions: positions,
+      otherTargetRequired: positions.flatMap(position => {
+        const owner = requiredOwner.get(position)
+        return owner !== undefined && owner !== option.targetWeaponId ? [{ position, targetWeaponId: owner }] : []
+      }),
+    })
+  }
+  return { applicableOptions: targets.length, withStaticRisk: targets.filter(row => row.sameLayoutResetPositions.length > 0).length, targets }
+}
+
+export interface BonusFrontierLowerRequestRisk {
+  method: MaterializationMethod
+  gogmaStart: number
+  /** The first position after `g1` that the request's reservation does not hold, or null when every position up to `g*` is held. */
+  nextNonHeldAfterReset: number | null
+  /** Each static risk position with its status in the request's reservation and whether `q .. g1` is held throughout. */
+  positions: { position: number; reservation: ReservationStatus; heldThroughResetPosition: boolean }[]
+  /**
+   * Some `q` is not blocked, `q .. r - 1` is held (`q` and `g1` included) and `r < g*` (design 3.7): the condition under which a
+   * Planner Alternative Search of this request delivers the minimal Route through `g1` late. A condition, never an occurrence.
+   */
+  collapseConditionHolds: boolean
+}
+
+/** The lower-variant request part, read against one attempt's own reservation (a projected request holds nothing). */
+export function bonusFrontierLowerRequestRisk(risk: BonusFrontierLowerRisk, attempt: MaterializationAttempt): BonusFrontierLowerRequestRisk {
+  const [resetPosition, finalPosition] = risk.requiredGogma
+  const reservation = attempt.request.reservation
+  const held = (position: number) => reservation !== null && reservation.gogma.held.includes(position)
+  let next: number | null = null
+  for (let position = resetPosition + 1; position <= finalPosition; position++) {
+    if (!held(position)) { next = position; break }
+  }
+  const gogmaStart = requestGogmaStart(attempt)
+  const positions = risk.sameLayoutResetPositions.filter(position => position >= gogmaStart).map(position => {
+    let through = true
+    for (let value = position; value <= resetPosition; value++) if (!held(value)) { through = false; break }
+    return { position, reservation: reservationStatus(reservation, position), heldThroughResetPosition: through }
+  })
+  return {
+    method: attempt.method, gogmaStart, nextNonHeldAfterReset: next, positions,
+    collapseConditionHolds: next !== null && next < finalPosition && positions.some(row => row.reservation !== 'blocked' && row.heldThroughResetPosition),
+  }
+}
+
+/** The lower-variant measured part: deliveries ending at `g*` whose required Gogma positions are `[q, g*]` with `q` a lower risk position. */
+export function measureBonusFrontierLowerCollapse(risk: BonusFrontierLowerRisk, inspections: readonly CandidateInspection[], sampleLimit: number): BonusFrontierMeasured {
+  return measureBonusFrontierCollapse({ ...risk, option: 'reset_then_keep', chainLayout: risk.resetLayout, requiredGogma: [...risk.requiredGogma] }, inspections, sampleLimit)
 }
 
 const REQUIRED_REASONS: ReadonlySet<ShapeMismatchReason> = new Set(['skill_required', 'gogma_required', 'normal_required'])

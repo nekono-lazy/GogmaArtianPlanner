@@ -29,12 +29,17 @@ const PHASE_B2A_MODULES = ['./assignmentProtocol.ts', './assignmentRootBound.ts'
 const PHASE_D0A_MODULES = ['./materializationScale.ts', './materializationShape.ts', './materializationTypes.ts', './materialize.ts']
 /** The Phase D-0B runner modules: orchestration, diagnostics and protocol around the D-0A materialization. */
 const PHASE_D0B_MODULES = ['./materializationDiagnostics.ts', './materializationProtocol.ts', './materializationRunner.ts']
+/** The Phase D-0A-2b shape-constrained materialization modules (rule `d0a2-v2`), apart from the D-0A orchestration in `materialize.ts`. */
+const PHASE_D0A2B_MODULES = [
+  './countingRngEngine.ts', './shapeMaterializationRequest.ts', './shapeMaterializationRun.ts', './shapeMaterializationScale.ts', './shapeMaterializationTypes.ts',
+  './shapeRouteVerification.ts',
+]
 
 describe('Global Assignment Research isolation', () => {
   it('is imported by no Production module and by no script other than the designated Phase B-2A and D-0B runners', () => {
     const productionPaths = Object.keys(production).filter(path => !/\.test\.tsx?$/.test(path))
     expect(productionPaths.length).toBeGreaterThan(100)
-    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf/
+    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf/
     expect(productionPaths.filter(path => forbidden.test(production[path]!))).toEqual([])
     expect(Object.keys(scripts).filter(path => path !== RUNNER_SCRIPT && path !== D0B_RUNNER_SCRIPT && forbidden.test(scripts[path]!))).toEqual([])
     expect(scripts[RUNNER_SCRIPT]).toBeDefined()
@@ -44,10 +49,11 @@ describe('Global Assignment Research isolation', () => {
   it('has the expected runtime modules, each reading only the PlannerInput, the Engine and the Production authorities', () => {
     expect(runtime.map(([path]) => path).sort()).toEqual([
       './assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentProtocol.ts', './assignmentRootBound.ts', './assignmentRunner.ts',
-      './assignmentSolver.ts', './assignmentTypes.ts', './assignmentWindowPolicy.ts', './context.ts', './coverage.ts', './coverageSearch.ts', './coverageSearchTypes.ts',
+      './assignmentSolver.ts', './assignmentTypes.ts', './assignmentWindowPolicy.ts', './context.ts', './countingRngEngine.ts', './coverage.ts', './coverageSearch.ts', './coverageSearchTypes.ts',
       './coverageTypes.ts', './materializationDiagnostics.ts', './materializationProtocol.ts', './materializationRunner.ts', './materializationScale.ts',
       './materializationShape.ts', './materializationTypes.ts', './materialize.ts', './reachOptions.ts', './reachTable.ts',
-      './requiredOnlyReplay.ts', './structuralCandidate.ts', './structuralSearch.ts', './structuralWindowPolicy.ts', './types.ts',
+      './requiredOnlyReplay.ts', './shapeMaterializationRequest.ts', './shapeMaterializationRun.ts', './shapeMaterializationScale.ts', './shapeMaterializationTypes.ts',
+      './shapeRouteVerification.ts', './structuralCandidate.ts', './structuralSearch.ts', './structuralWindowPolicy.ts', './types.ts',
     ])
     for (const [path, source] of runtime) {
       // No oracle manifest / verifier / RESULT, no earlier Phase result; the lower-bound module only in the designated stage (checked below).
@@ -66,8 +72,8 @@ describe('Global Assignment Research isolation', () => {
       for (const match of source.matchAll(/from '([^']+)'/g)) expect(match[1], `${path} imports ${match[1]}`).toMatch(allowed)
     }
     // The Phase A - C runtime never reads the existing Entries' Route contents (design 4.1): only the context does, through the Production
-    // validation. Phase D-0A reads the Route of the Entries it generates (checked below).
-    for (const [path, source] of runtime.filter(([path]) => path !== './context.ts' && path !== './types.ts' && !PHASE_D0A_MODULES.includes(path))) {
+    // validation. Phase D-0A / D-0A-2b read the Route of the Entries they generate (checked below).
+    for (const [path, source] of runtime.filter(([path]) => path !== './context.ts' && path !== './types.ts' && !PHASE_D0A_MODULES.includes(path) && path !== './shapeRouteVerification.ts')) {
       expect(source, path).not.toMatch(/candidateSnapshot|\.route\b|buildListEntries\b(?!\.length)/)
     }
     // The Phase B-1 solver reads the ReachTable and the planning Targets' id / priority only: no PlannerInput, Engine, Master or Entry (design 6 / 11).
@@ -210,6 +216,47 @@ describe('Global Assignment Research isolation', () => {
     expect(research['./materializationScale.ts']).toMatch(/heldPrefixNormalCreation\(/)
     // Required positions come from the Planner's unit plans only.
     expect(research['./materializationShape.ts']).toMatch(/createPlannerRouteUnitPlans\(\[entry\], engine\)/)
+  })
+
+  it('keeps Phase D-0A-2b a Research materialization: the seam alone, the formal reservation, predictions only in the counting wrapper and the Route checks', () => {
+    const codeOf = (path: string) => research[path]!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    for (const path of PHASE_D0A2B_MODULES) {
+      expect(research[path], path).toBeDefined()
+      const source = codeOf(path)
+      // No Planner run, scheduler, Trace Replay or fresh Planner verification (Phase D' / D-1 is the authority).
+      expect(source, path).not.toMatch(/productionPlanGeneration|plannerTraceReplay|plannerDeterministicSchedule|plannerBeamSearch|createProductionPlan|replayPlannerSearchTrace|runGlobalPlannerResearch|verifyGlobalResearchFreshPlan/)
+      // No explicit resolution, repair lineage, persistence or user-fixed Route.
+      expect(source, path).not.toMatch(/PlannerConflictResolution|conflictResolutions|conflictRepairLineage|savePlanner|Repository|from '[^']*\/services\//)
+      // No verified / best_found / proven claim.
+      expect(source, path).not.toMatch(/production_verified_plan|VerifiedUpperBound|'verified'|'best_found'|'proven_minimum'/)
+      // No reservation assembled by hand: held / blocked come only from the formal derivation.
+      expect(source, path).not.toMatch(/held:\s*\[|blocked:\s*\[|\.held\.push|\.blocked\.push/)
+      // The rule d0a2-v2 never runs Planner Alternative Search (design 9.1 stays in d0a-v1 and the parity tests).
+      expect(source, path).not.toMatch(/visitPlannerAlternativeCandidates|searchCandidates\(/)
+      // The registered B-2A / B-2B runner path and the B-1 / C-2 search are neither imported nor changed.
+      expect(source, path).not.toMatch(/from '\.\/(?:assignmentRunner|assignmentRootBound|assignmentWindowPolicy|assignmentSolver|assignmentOrdering|coverageSearch|structuralSearch|materialize)'/)
+    }
+    // RNG predictions: the counting wrapper forwards them and the independent Route checks re-predict; nothing else predicts.
+    const predicting = PHASE_D0A2B_MODULES.filter(path => /\.predict[A-Z]/.test(codeOf(path))).sort()
+    expect(predicting).toEqual(['./countingRngEngine.ts', './shapeRouteVerification.ts'])
+    // The Search Domain is reached only through the Research seam's public module, by the run module.
+    for (const path of PHASE_D0A2B_MODULES) {
+      for (const match of research[path]!.matchAll(/from '(\.\.\/\.\.\/domain\/search\/[^']+)'/g)) {
+        expect(match[1], `${path} imports ${match[1]}`).toMatch(/^\.\.\/\.\.\/domain\/search\/(?:research|alternative|bonusStream|counterReservation|candidateFactory|searchTypes)$/)
+      }
+    }
+    expect(codeOf('./shapeMaterializationRun.ts')).toMatch(/\(deps\.visit \?\? visitShapeConstrainedRouteCandidates\)\(/)
+    // The independent checks never read the Search's streams or scheduler, and derive the formal reservation again themselves.
+    const checks = codeOf('./shapeRouteVerification.ts')
+    expect(checks).not.toMatch(/domain\/search\/research|bonusStream|skillStream|targetSearchScheduler|lazyIdealCross|visitShapeConstrainedRouteCandidates/)
+    expect(checks).toMatch(/derivePlannerAlternativeReservation\(entries, engine\)/)
+    expect(checks).toMatch(/createPlannerRouteUnitPlans\(\[entry\], engine\)/)
+    // The Search's counting Engine is never the checks' Engine: their re-predictions never reach the Search budget.
+    const run = codeOf('./shapeMaterializationRun.ts')
+    expect(run).toMatch(/verifyShapeConstrainedRoute\(\{ entry, request, context, table: deps\.table, materializedEntries: deps\.materializedEntries, engine: deps\.engine \}\)/)
+    expect(run).toMatch(/counting\.engine,\n/)
+    // The formal reservation of both rules is derived in one place (materialize.ts) and handed to the request assembly unchanged.
+    expect(research['./materialize.ts']).toMatch(/const reservation = formalReservation\(shape, materializedEntries, inputs\)\n {2}return assembleShapeConstrainedRequest\(/)
   })
 
   it('changes no Production default, schema or version', () => {

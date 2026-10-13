@@ -10,11 +10,18 @@
 // registers no formal condition (design 19.7): `--mode formal` is refused before the Export is read, and the formal
 // conditions are pre-registered in D-0B-2 and measured in D-0C.
 //
+// Phase D-0A-2b (docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md 11 / 12): `--rule` names the materialization rule. Without it
+// the rule is d0a-v1 and the run, its conditions and its records are exactly the D-0B ones. `--rule d0a2-v2` runs the
+// shape-constrained method: its gate (`--shape-gate D,G,N,W`: depth upper bound, Gogma generated-state upper bound, Normal
+// forges, conversion walk positions) and budget (`--shape-budget G,S,W,PN,PS,PR,PK`: Gogma generated states, Skill states,
+// settled work, Normal / Skill / Reset / Keep predictions) have no default and must be named; `--gate` is then the projected
+// Candidate Search's gate, and `--delivery-cap` (a d0a-v1 condition) is refused. No d0a2-v2 value is registered here.
+//
 // Parent:
 //   node scripts/run-planner-global-assignment-d0b.mjs --export <Export .json> --run-dir <new dir> --output <new .json>
-//     [--mode smoke] [--window N,G,S] [--node-budget N] [--mrv-lookahead N] [--coverage-driven-ordering true|false]
-//     [--structural-candidate-limit N] [--delivery-cap N] [--gate C,G,S,N] [--wall-ms N] [--heap-mb N] [--repeat N]
-//     [--expected-export-sha256 <hex>] [--allow-uncommitted]
+//     [--mode smoke] [--rule d0a-v1|d0a2-v2] [--window N,G,S] [--node-budget N] [--mrv-lookahead N] [--coverage-driven-ordering true|false]
+//     [--structural-candidate-limit N] [--delivery-cap N] [--gate C,G,S,N] [--shape-gate D,G,N,W] [--shape-budget G,S,W,PN,PS,PR,PK]
+//     [--wall-ms N] [--heap-mb N] [--repeat N] [--expected-export-sha256 <hex>] [--allow-uncommitted]
 // Child (`--role materialize`): spawned by the parent with --task, --record and --journal; never run by hand. It appends
 // its progress to the journal synchronously, so a run its envelope stops keeps its confirmed progress; the Target in
 // progress at that moment is reported without an outcome.
@@ -29,11 +36,12 @@ import { createServer } from 'vite'
 import { runChildProcess } from './planner-global-assignment-d0b-child-process.mjs'
 
 const SCRIPT_PATH = 'scripts/run-planner-global-assignment-d0b.mjs'
-const USAGE = `Usage: node ${SCRIPT_PATH} --export <Export .json> --run-dir <new dir> --output <new .json> [--mode smoke] [--window N,G,S] [--node-budget N] [--mrv-lookahead N] [--coverage-driven-ordering true|false] [--structural-candidate-limit N] [--delivery-cap N] [--gate C,G,S,N] [--wall-ms N] [--heap-mb N] [--repeat N] [--expected-export-sha256 <hex>] [--allow-uncommitted]`
-const KNOWN_OPTIONS = new Set(['--export', '--run-dir', '--output', '--mode', '--window', '--node-budget', '--mrv-lookahead', '--coverage-driven-ordering', '--structural-candidate-limit',
-  '--delivery-cap', '--gate', '--wall-ms', '--heap-mb', '--repeat', '--expected-export-sha256', '--allow-uncommitted', '--role', '--task', '--record', '--journal'])
+const USAGE = `Usage: node ${SCRIPT_PATH} --export <Export .json> --run-dir <new dir> --output <new .json> [--mode smoke] [--rule d0a-v1|d0a2-v2] [--window N,G,S] [--node-budget N] [--mrv-lookahead N] [--coverage-driven-ordering true|false] [--structural-candidate-limit N] [--delivery-cap N] [--gate C,G,S,N] [--shape-gate D,G,N,W] [--shape-budget G,S,W,PN,PS,PR,PK] [--wall-ms N] [--heap-mb N] [--repeat N] [--expected-export-sha256 <hex>] [--allow-uncommitted]`
+const KNOWN_OPTIONS = new Set(['--export', '--run-dir', '--output', '--mode', '--rule', '--window', '--node-budget', '--mrv-lookahead', '--coverage-driven-ordering', '--structural-candidate-limit',
+  '--delivery-cap', '--gate', '--shape-gate', '--shape-budget', '--wall-ms', '--heap-mb', '--repeat', '--expected-export-sha256', '--allow-uncommitted', '--role', '--task', '--record', '--journal'])
 const VALUE_OPTIONS = new Set([...KNOWN_OPTIONS].filter(name => name !== '--allow-uncommitted'))
-const OVERRIDE_OPTIONS = ['--window', '--node-budget', '--mrv-lookahead', '--coverage-driven-ordering', '--structural-candidate-limit', '--delivery-cap', '--gate', '--wall-ms', '--heap-mb', '--repeat']
+const OVERRIDE_OPTIONS = ['--window', '--node-budget', '--mrv-lookahead', '--coverage-driven-ordering', '--structural-candidate-limit', '--delivery-cap', '--gate', '--shape-gate', '--shape-budget', '--wall-ms', '--heap-mb', '--repeat']
+const RULES = ['d0a-v1', 'd0a2-v2']
 /** PlannerInput.options.maxPlanSteps is validated by validatePlannerInput() but no Planner runs here (G12: not a Research maxPlanSteps). */
 const PLANNER_INPUT_MAX_PLAN_STEPS_FOR_VALIDATION_ONLY = 1_000
 const MEMORY_SAMPLE_INTERVAL_MS = 250
@@ -85,9 +93,10 @@ if (role !== undefined) {
     const task = JSON.parse(await readFile(taskPath, 'utf8'))
     if (task.mode !== 'smoke') throw new Error(`Phase D-0B runs smoke tasks only (got ${String(task.mode)}).`)
     const protocol = await server.ssrLoadModule('/src/benchmarks/globalAssignment/materializationProtocol.ts')
-    if (task.protocolVersion !== protocol.MATERIALIZATION_D0B_PROTOCOL_VERSION) throw new Error(`Task protocol ${String(task.protocolVersion)} is not ${protocol.MATERIALIZATION_D0B_PROTOCOL_VERSION}.`)
-    const conditionIssues = protocol.validateMaterializationResearchConditions(task.conditions)
+    const conditionIssues = protocol.validateMaterializationRunConditions(task.conditions)
     if (conditionIssues.length > 0) throw new Error(`Invalid task conditions: ${conditionIssues.join(' ')}`)
+    const expectedProtocol = protocol.materializationProtocolVersion(task.conditions)
+    if (task.protocolVersion !== expectedProtocol) throw new Error(`Task protocol ${String(task.protocolVersion)} is not ${expectedProtocol}.`)
     const research = await server.ssrLoadModule('/src/benchmarks/plannerGlobalOptimizationResearch.ts')
     const { ProductionRngEngine } = await server.ssrLoadModule('/src/domain/rng/production/productionRngEngine.ts')
     const runner = await server.ssrLoadModule('/src/benchmarks/globalAssignment/materializationRunner.ts')
@@ -153,37 +162,75 @@ const integerList = (name, count, fallback) => {
   return parts.map(Number)
 }
 const defaults = protocol.smokeDefaults()
+const rule = option('--rule') ?? 'd0a-v1'
+if (!RULES.includes(rule)) throw new Error(`--rule must be ${RULES.join(' or ')} (got ${rule}).`)
+const shapeRule = rule === 'd0a2-v2'
+// Each rule's own conditions; a condition of the other rule is refused, never ignored or converted.
+if (shapeRule && has('--delivery-cap')) throw new Error('--delivery-cap is a d0a-v1 condition; the rule d0a2-v2 runs no Planner Alternative Search.')
+if (!shapeRule && (has('--shape-gate') || has('--shape-budget'))) throw new Error('--shape-gate and --shape-budget are d0a2-v2 conditions; pass --rule d0a2-v2.')
+if (shapeRule && (!has('--shape-gate') || !has('--shape-budget'))) throw new Error('--rule d0a2-v2 needs --shape-gate D,G,N,W and --shape-budget G,S,W,PN,PS,PR,PK: the shape-constrained method has no default gate or budget.')
 const windowValues = integerList('--window', 3, null)
 const gateValues = integerList('--gate', 4, null)
+const shapeGateValues = integerList('--shape-gate', 4, null)
+const shapeBudgetValues = integerList('--shape-budget', 7, null)
 const orderingRaw = option('--coverage-driven-ordering')
 if (orderingRaw !== undefined && !['true', 'false'].includes(orderingRaw)) throw new Error(`--coverage-driven-ordering must be true or false (got ${orderingRaw}).`)
-const conditions = {
+const searchScaleGate = gateValues === null ? defaults.conditions.searchScaleGate
+  : { maxConversionPositions: gateValues[0], maxGogmaLegalWidth: gateValues[1], maxSkillLegalWidth: gateValues[2], maxNormalForgeCount: gateValues[3] }
+const shared = {
   window: windowValues === null ? defaults.conditions.window : { normal: windowValues[0], gogma: windowValues[1], skill: windowValues[2] },
   nodeBudget: positiveIntegerOption('--node-budget', defaults.conditions.nodeBudget),
   mrvLookahead: positiveIntegerOption('--mrv-lookahead', defaults.conditions.mrvLookahead),
   coverageDrivenOrdering: orderingRaw === undefined ? defaults.conditions.coverageDrivenOrdering : orderingRaw === 'true',
   structuralCandidateLimit: positiveIntegerOption('--structural-candidate-limit', defaults.conditions.structuralCandidateLimit),
-  deliveryCap: positiveIntegerOption('--delivery-cap', defaults.conditions.deliveryCap),
-  searchScaleGate: gateValues === null ? defaults.conditions.searchScaleGate
-    : { maxConversionPositions: gateValues[0], maxGogmaLegalWidth: gateValues[1], maxSkillLegalWidth: gateValues[2], maxNormalForgeCount: gateValues[3] },
-  searchPolicyPrecheck: true,
 }
+const conditions = shapeRule
+  ? {
+    rule, ...shared,
+    projectedSearchScaleGate: searchScaleGate,
+    shapeSearchScaleGate: { maxDepthUpperBound: shapeGateValues[0], maxGogmaGeneratedStateUpperBound: shapeGateValues[1], maxNormalForgeCount: shapeGateValues[2], maxConversionWalkPositions: shapeGateValues[3] },
+    shapeSearchBudget: {
+      maxGogmaGeneratedStates: shapeBudgetValues[0], maxSkillStates: shapeBudgetValues[1], maxSettledWork: shapeBudgetValues[2],
+      maxPredictions: { normalArtian: shapeBudgetValues[3], skill: shapeBudgetValues[4], gogmaReset: shapeBudgetValues[5], gogmaKeep: shapeBudgetValues[6] },
+    },
+    routeVerification: 'every_shape_constrained_materialization',
+  }
+  : {
+    ...shared,
+    deliveryCap: positiveIntegerOption('--delivery-cap', defaults.conditions.deliveryCap),
+    searchScaleGate,
+    searchPolicyPrecheck: true,
+  }
 const envelope = {
   childWallMs: positiveIntegerOption('--wall-ms', defaults.envelope.childWallMs),
   childHeapMb: positiveIntegerOption('--heap-mb', defaults.envelope.childHeapMb),
   repeat: positiveIntegerOption('--repeat', defaults.envelope.repeat),
 }
-const conditionIssues = [...protocol.validateMaterializationResearchConditions(conditions), ...protocol.validateMaterializationEnvelope(envelope)]
+const conditionIssues = [...protocol.validateMaterializationRunConditions(conditions), ...protocol.validateMaterializationEnvelope(envelope)]
 if (conditionIssues.length > 0) throw new Error(`Invalid conditions: ${conditionIssues.join(' ')}`)
 const smokeOverrides = OVERRIDE_OPTIONS.filter(has)
 const basisOf = (name, key) => has(name) ? `non-formal smoke value from ${name}` : `non-formal smoke runner default: ${protocol.MATERIALIZATION_D0B_SMOKE_DEFAULTS[key].basis}`
-const conditionBasis = {
+const sharedBasis = {
   window: basisOf('--window', 'window'), nodeBudget: basisOf('--node-budget', 'nodeBudget'), mrvLookahead: basisOf('--mrv-lookahead', 'mrvLookahead'),
   coverageDrivenOrdering: basisOf('--coverage-driven-ordering', 'coverageDrivenOrdering'), structuralCandidateLimit: basisOf('--structural-candidate-limit', 'structuralCandidateLimit'),
-  deliveryCap: basisOf('--delivery-cap', 'deliveryCap'), searchScaleGate: basisOf('--gate', 'searchScaleGate'),
-  searchPolicyPrecheck: 'Phase D-0B fixed rule (design 19.3 G1): a Search-policy shape is classified not_executed(search_policy_shape) before any Search.',
-  childWallMs: basisOf('--wall-ms', 'childWallMs'), childHeapMb: basisOf('--heap-mb', 'childHeapMb'), repeat: basisOf('--repeat', 'repeat'),
 }
+const envelopeBasis = { childWallMs: basisOf('--wall-ms', 'childWallMs'), childHeapMb: basisOf('--heap-mb', 'childHeapMb'), repeat: basisOf('--repeat', 'repeat') }
+const conditionBasis = shapeRule
+  ? {
+    rule: 'Phase D-0A-2b rule d0a2-v2 named by --rule (design D0A2 11): continuation and non-continuous shapes by the shape-constrained method, continuous shapes projected first; no Planner Alternative Search.',
+    ...sharedBasis,
+    projectedSearchScaleGate: has('--gate') ? 'non-formal smoke value from --gate (the projected Candidate Search gate)' : `non-formal smoke runner default of the projected Candidate Search gate (the D-0B gate value): ${protocol.MATERIALIZATION_D0B_SMOKE_DEFAULTS.searchScaleGate.basis}`,
+    shapeSearchScaleGate: 'non-formal smoke value from --shape-gate (no default exists; D-0B-2 registers the formal value)',
+    shapeSearchBudget: 'non-formal smoke value from --shape-budget (no default exists; D-0B-2 registers the formal value)',
+    routeVerification: 'Phase D-0A-2b fixed rule (design D0A2 9.3 / 13 #7): the independent Route checks run on every shape-constrained materialization.',
+    ...envelopeBasis,
+  }
+  : {
+    ...sharedBasis,
+    deliveryCap: basisOf('--delivery-cap', 'deliveryCap'), searchScaleGate: basisOf('--gate', 'searchScaleGate'),
+    searchPolicyPrecheck: 'Phase D-0B fixed rule (design 19.3 G1): a Search-policy shape is classified not_executed(search_policy_shape) before any Search.',
+    ...envelopeBasis,
+  }
 
 const CODE_PATHS = ['src', 'scripts', 'package.json', 'package-lock.json', 'vite.config.ts', 'vitest.config.ts', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json']
 const repositoryHeadSha = git('rev-parse', 'HEAD')
@@ -202,8 +249,9 @@ if (cliMatched === false) throw new Error(`Export SHA-256 ${actualExport.sha256}
 const docPath = protocol.MATERIALIZATION_D0B_DOC
 const machine = { cpuModel: cpus()[0]?.model?.trim() ?? null, logicalCpuCount: cpus().length, platform: platform(), arch: arch(), osRelease: release(), totalMemoryBytes: totalmem(), freeMemoryBytes: freemem() }
 const launchedAt = new Date().toISOString()
+const protocolVersion = protocol.materializationProtocolVersion(conditions)
 const provenance = {
-  protocolVersion: protocol.MATERIALIZATION_D0B_PROTOCOL_VERSION, phase: protocol.MATERIALIZATION_D0B_PHASE, mode, formal: false,
+  protocolVersion, phase: protocol.MATERIALIZATION_D0B_PHASE, mode, formal: false,
   nature: 'Research: non-formal D-0B smoke; not a Production Plan, not Planner-verified, no Trace Replay',
   oracleFreeExecution: true, oracleInformedDesign: true,
   repositoryHeadSha, baseMain: protocol.MATERIALIZATION_D0B_BASE_MAIN, workingTreeClean, uncommittedBenchmarkCode, benchmarkCodeSha256,
@@ -212,7 +260,7 @@ const provenance = {
   exportVerification: { actual: actualExport, cliExpectedSha256: expectedExportSha256?.toLowerCase() ?? null, cliMatched },
   plannerInputMaxPlanStepsForValidationOnly: PLANNER_INPUT_MAX_PLAN_STEPS_FOR_VALIDATION_ONLY,
   conditions, envelope: { ...envelope, concurrency: 1, retry: 'none' }, conditionBasis, smokeOverrides,
-  formalRegistration: { formalRunEnabled: false, deferredItems: [...protocol.MATERIALIZATION_D0B2_REGISTRATION_ITEMS], deferredTo: 'D-0B-2 (pre-registration), D-0C (formal measurement)' },
+  formalRegistration: { formalRunEnabled: false, deferredItems: [...(shapeRule ? protocol.MATERIALIZATION_D0A2B_REGISTRATION_ITEMS : protocol.MATERIALIZATION_D0B2_REGISTRATION_ITEMS)], deferredTo: 'D-0B-2 (pre-registration), D-0C (formal measurement)' },
   launchedAt, machine,
 }
 
@@ -220,7 +268,7 @@ await mkdir(runDir, { recursive: true })
 const startPath = join(runDir, 'start.json')
 await write(startPath, provenance)
 await chmod(startPath, 0o444).catch(() => {})
-console.log(`${launchedAt} START mode=${mode} head=${repositoryHeadSha.slice(0, 12)} clean=${workingTreeClean} uncommittedCode=${uncommittedBenchmarkCode} export=${actualExport.sha256.slice(0, 8)} window=${conditions.window.normal}/${conditions.window.gogma}/${conditions.window.skill} nodeBudget=${conditions.nodeBudget} candidates=${conditions.structuralCandidateLimit} deliveryCap=${conditions.deliveryCap} gate=${Object.values(conditions.searchScaleGate).join(',')}`)
+console.log(`${launchedAt} START mode=${mode} head=${repositoryHeadSha.slice(0, 12)} clean=${workingTreeClean} uncommittedCode=${uncommittedBenchmarkCode} export=${actualExport.sha256.slice(0, 8)} window=${conditions.window.normal}/${conditions.window.gogma}/${conditions.window.skill} nodeBudget=${conditions.nodeBudget} candidates=${conditions.structuralCandidateLimit} rule=${rule} ${shapeRule ? `projectedGate=${Object.values(conditions.projectedSearchScaleGate).join(",")} shapeGate=${Object.values(conditions.shapeSearchScaleGate).join(",")}` : `deliveryCap=${conditions.deliveryCap} gate=${Object.values(conditions.searchScaleGate).join(",")}`}`)
 
 // A parent interrupt kills the running child and records it as cancelled (never as a materialization outcome).
 const abort = new AbortController()
@@ -231,7 +279,7 @@ const runChild = async id => {
   const startedAt = new Date().toISOString(), freeMemoryAtStart = freemem()
   const nodeFlags = [`--max-old-space-size=${envelope.childHeapMb}`]
   const base = { id, wallMs: envelope.childWallMs, heapMb: envelope.childHeapMb, startedAt, nodeFlags, freeMemoryAtStart, taskFile: basename(taskPath), journalFile: basename(journalPath) }
-  const task = { protocolVersion: protocol.MATERIALIZATION_D0B_PROTOCOL_VERSION, mode, repositoryHeadSha, actualExport, conditions, envelope, plannerInputMaxPlanStepsForValidationOnly: PLANNER_INPUT_MAX_PLAN_STEPS_FOR_VALIDATION_ONLY }
+  const task = { protocolVersion, mode, repositoryHeadSha, actualExport, conditions, envelope, plannerInputMaxPlanStepsForValidationOnly: PLANNER_INPUT_MAX_PLAN_STEPS_FOR_VALIDATION_ONLY }
   try {
     await writeFile(taskPath, JSON.stringify(task, null, 2) + '\n', { flag: 'wx' })
   } catch (error) {
@@ -270,7 +318,7 @@ for (let run = 1; run <= envelope.repeat && !abort.signal.aborted; run += 1) {
   }
   const journal = await readJournal(entry)
   if (entry.outcome === 'completed' && record) {
-    const consistent = record.mode === mode && record.protocolVersion === protocol.MATERIALIZATION_D0B_PROTOCOL_VERSION && record.exportVerification?.actual?.sha256 === actualExport.sha256
+    const consistent = record.mode === mode && record.protocolVersion === protocolVersion && record.exportVerification?.actual?.sha256 === actualExport.sha256
     if (!consistent) integrityIssues.push(`${entry.id}: the child record disagrees with the parent (mode / protocol / Export)`)
     for (const issue of record.semantic.integrityIssues) integrityIssues.push(`${entry.id}: ${issue}`)
     runs.push({ id: entry.id, status: 'measured', reason: null, recordFile: entry.recordFile, recordConsistent: consistent, semanticSha256: sha256(JSON.stringify(record.semantic)),

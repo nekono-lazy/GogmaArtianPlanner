@@ -13,6 +13,12 @@
  * It never runs the Production Planner or Trace Replay, passes no upper bound to the structural search, reads no oracle
  * and writes nothing: the materialized Entries are speculative Research data (G1), summarized by ID and semantic hash. No
  * result here is `verified`, `best_found` or `proven_minimum`, and `all_materialized` is not a Plan.
+ *
+ * Phase D-0A-2b (`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 11 / 12 / 19): conditions with `rule: 'd0a2-v2'` run the
+ * shape-constrained method and add their own fields (the shape attempts with their identity, reservation counts, predicted
+ * scale, premises, Search usage and Route checks; the shape gate refusals; the G3 lower variant apart from the upper one; the
+ * summary's `shapeConstrained` row) under their own protocol version. Conditions without a rule are `d0a-v1`: the run and
+ * its record are exactly the D-0B ones (frozen by the `d0a-v1` golden).
  */
 import { hashStableValue } from '../../domain/models/publicTypes'
 import type { BuildListEntry, OwnedWeaponId, TargetWeaponId } from '../../domain/models/publicTypes'
@@ -23,21 +29,27 @@ import { createGlobalAssignmentContext } from './context'
 import { noCandidateReason } from './coverageSearch'
 import type { StructuralSearchDiagnostics } from './coverageSearchTypes'
 import type { StructuralCandidate } from './coverageTypes'
-import { materializeStructuralCandidate, type MaterializationSearchPort } from './materialize'
+import { materializeStructuralCandidate, type MaterializationSearchPort, type ShapeMaterializationSearchPort } from './materialize'
 import {
-  bonusFrontierRequestRisk, countContinuationOptions, diagnoseBonusFrontierRisk, diagnosePlannerStartIdeal, diagnoseSearchPolicyShapes, measureBonusFrontierCollapse, summarizeInspections,
-  type BonusFrontierMeasured, type BonusFrontierRequestRisk, type BonusFrontierRisk, type BonusFrontierRiskDiagnostics, type ContinuationOptionCounts, type InspectionSummary,
-  type PlannerStartIdealDiagnostics, type SearchPolicyShapeDiagnostics,
+  bonusFrontierLowerRequestRisk, bonusFrontierRequestRisk, countContinuationOptions, diagnoseBonusFrontierLowerRisk, diagnoseBonusFrontierRisk, diagnosePlannerStartIdeal,
+  diagnoseSearchPolicyShapes, measureBonusFrontierCollapse, measureBonusFrontierLowerCollapse, summarizeInspections,
+  type BonusFrontierLowerRequestRisk, type BonusFrontierLowerRisk, type BonusFrontierLowerRiskDiagnostics, type BonusFrontierMeasured, type BonusFrontierRequestRisk,
+  type BonusFrontierRisk, type BonusFrontierRiskDiagnostics, type ContinuationOptionCounts, type InspectionSummary, type PlannerStartIdealDiagnostics,
+  type SearchPolicyShapeDiagnostics,
 } from './materializationDiagnostics'
 import {
-  classifyMaterializationStage, materializationFollowUp, MATERIALIZATION_D0B_PROTOCOL_VERSION, validateMaterializationResearchConditions,
-  type CandidateMaterializationClass, type MaterializationFollowUp, type MaterializationProgressEvent, type MaterializationResearchConditions, type TargetOutcomeBrief,
+  classifyMaterializationStage, isShapeMaterializationConditions, materializationFollowUp, materializationProtocolVersion, validateMaterializationRunConditions,
+  type CandidateMaterializationClass, type MaterializationFollowUp, type MaterializationProgressEvent, type MaterializationRunConditions, type TargetOutcomeBrief,
 } from './materializationProtocol'
 import {
   GlobalAssignmentMaterializationError,
-  type CandidateInspection, type MaterializationAttempt, type MaterializationMethod, type MaterializationOutcome, type MaterializationStageOutcome, type MethodSelection,
+  type CandidateInspection, type MaterializationAttempt, type MaterializationMethod, type MaterializationObserver, type MaterializationOutcome, type MaterializationStageOutcome, type MethodSelection,
   type ObservedPlannerAlternativeSearch, type PredictedSearchScale, type ProjectedAttemptResult, type SearchScaleDetail, type TargetMaterializationRecord,
 } from './materializationTypes'
+import type {
+  MinimalRoutePremiseViolation, RouteCheckReport, ShapeConstrainedAttempt, ShapeMethodSelection, ShapeSearchObserved, ShapeSearchScale, ShapeSearchScaleComponent,
+} from './shapeMaterializationTypes'
+import type { RouteShapeConstraint } from '../../domain/search/research'
 import { buildReachTable } from './reachTable'
 import { createStructuralCandidateSearch } from './structuralSearch'
 import { decideStructuralWindowTransition, type StructuralStageOutcome, type StructuralWindowDecision } from './structuralWindowPolicy'
@@ -47,7 +59,8 @@ import { GlobalAssignmentInvariantError, type ReachOption, type ReachTable, type
 export const INSPECTION_SAMPLE_LIMIT = 3
 
 export interface MaterializationRunRequest {
-  conditions: MaterializationResearchConditions
+  /** `d0a-v1` conditions (no `rule` field, the D-0B default) or `d0a2-v2` conditions (`rule: 'd0a2-v2'`). */
+  conditions: MaterializationRunConditions
 }
 
 export interface MaterializationRunExecution {
@@ -60,6 +73,8 @@ export interface MaterializationRunExecution {
   onProgress?: (event: MaterializationProgressEvent) => void
   /** The Production Search entry points by default; a test may observe them. */
   search?: MaterializationSearchPort
+  /** D-0A-2b: the rule `d0a2-v2`'s Search entry points (the shape-constrained seam and the projected Search); a test may observe them. */
+  shapeSearch?: ShapeMaterializationSearchPort
 }
 
 export interface MaterializationInputSummary {
@@ -130,8 +145,27 @@ export interface ReservationSummary {
   exclusiveOwnedWeapons: number
 }
 
+/**
+ * Phase D-0A-2b: one shape-constrained attempt (design D0A2 12 records): the shape, the identity, the formal reservation's
+ * counts, the extent, the predicted scale, the premises, the outcome, what the Search used and the independent Route checks.
+ */
+export interface ShapeAttemptSummary {
+  method: 'shape_constrained'
+  materializationRule: 'd0a2-v2'
+  routeShape: RouteShapeConstraint
+  searchIdentity: string
+  origins: ShapeConstrainedAttempt['request']['origins']
+  reservation: ReservationSummary
+  extent: { maxNormalAdvance: number; maxGogmaAdvance: number; maxSkillAdvance: number }
+  predictedSearchScale: ShapeSearchScale
+  premiseViolations: MinimalRoutePremiseViolation[]
+  result: OutcomeRecord
+  observed: ShapeSearchObserved | null
+  routeChecks: RouteCheckReport | null
+}
+
 export interface AttemptSummary {
-  method: MaterializationMethod
+  method: Exclude<MaterializationMethod, 'shape_constrained'>
   predictedSearchScale: PredictedSearchScale
   scale: Omit<SearchScaleDetail, 'conversionSkillPositions'> & { conversionSkillPositionCount: number }
   /** Counts of the formal reservation the request carried (null for the projected Search, which has none). */
@@ -154,8 +188,8 @@ export interface TargetMaterializationSummary {
   orderIndex: number
   targetWeaponId: TargetWeaponId
   option: { sourceKind: ReachOption['source']['kind']; sourceOwnedWeaponId: OwnedWeaponId | null; skillRequired: ReachOption['skillRequired']; bonusRequired: ReachOption['bonusRequired']; normalRequired: ReachOption['normalRequired'] }
-  selection: MethodSelection | null
-  attempts: AttemptSummary[]
+  selection: MethodSelection | ShapeMethodSelection | null
+  attempts: (AttemptSummary | ShapeAttemptSummary)[]
   outcome: OutcomeRecord
   /** Every Candidate the Searches of this Target returned, by match verdict (design 9.1 deliveries and the design 9.2 canonical Ideal). */
   inspections: InspectionSummary
@@ -164,6 +198,11 @@ export interface TargetMaterializationSummary {
    * or gated request, and the delivered Candidates that carry the collapse signature (null without a risk row).
    */
   bonusFrontier: { static: BonusFrontierRisk | null; requests: BonusFrontierRequestRisk[]; measured: BonusFrontierMeasured | null }
+  /**
+   * D-0A-2b, `d0a2-v2` records only (a `d0a-v1` record keeps the D-0B shape): the G3 lower variant for this Target, apart from
+   * `bonusFrontier` (null rows without a `reset_then_keep` option).
+   */
+  bonusFrontierLower?: { static: BonusFrontierLowerRisk | null; requests: BonusFrontierLowerRequestRisk[]; measured: BonusFrontierMeasured | null }
 }
 
 export interface CandidateDiagnosticsRecord {
@@ -171,6 +210,8 @@ export interface CandidateDiagnosticsRecord {
   continuationOptions: ContinuationOptionCounts
   bonusFrontier: BonusFrontierRiskDiagnostics
   plannerStartIdeal: PlannerStartIdealDiagnostics
+  /** D-0A-2b, `d0a2-v2` records only: the G3 lower variant (design D0A2 3.7), apart from the upper `bonusFrontier`. */
+  bonusFrontierLower?: BonusFrontierLowerRiskDiagnostics
 }
 
 export interface CandidateMaterializationRecord {
@@ -180,7 +221,7 @@ export interface CandidateMaterializationRecord {
   classification: CandidateMaterializationClass
   followUp: MaterializationFollowUp
   /** The D-0A stage outcome (the Entry replaced by its identity); null when the run failed closed. */
-  stage: (Exclude<MaterializationStageOutcome, { kind: 'materialization_failed' | 'materialization_unconfirmed' }> | { kind: 'materialization_failed' | 'materialization_unconfirmed'; targetWeaponId: TargetWeaponId; outcome: OutcomeRecord }) | null
+  stage: (Exclude<MaterializationStageOutcome, { kind: 'materialization_failed' | 'materialization_unconfirmed' | 'materialization_unsupported' }> | { kind: 'materialization_failed' | 'materialization_unconfirmed' | 'materialization_unsupported'; targetWeaponId: TargetWeaponId; outcome: OutcomeRecord }) | null
   /** The Target the run stopped at (materialization order), null when every Target materialized. */
   firstUnresolved: { orderIndex: number; targetWeaponId: TargetWeaponId } | null
   attemptedTargetCount: number
@@ -190,7 +231,10 @@ export interface CandidateMaterializationRecord {
   targets: TargetMaterializationSummary[]
   /** Search scale gate refusals over every attempt, per component (design 9.7). */
   gateExceeded: Record<keyof PredictedSearchScale, number>
-  failClosed: { code: string; targetWeaponId: string | null; message: string } | null
+  /** D-0A-2b, `d0a2-v2` records only: the shape-constrained gate refusals per component (design D0A2 10.3). */
+  shapeGateExceeded?: Record<ShapeSearchScaleComponent, number>
+  /** `detail`: the plain data a D-0A-2b stop carries (absent for a D-0A stop). */
+  failClosed: { code: string; targetWeaponId: string | null; message: string; detail?: unknown } | null
 }
 
 export type MaterializationRunOutcome =
@@ -208,7 +252,7 @@ export type MaterializationRunOutcome =
 export interface MaterializationSemanticRecord {
   protocolVersion: string
   nature: 'materialization_only: not a Production Plan, not Planner-verified'
-  conditions: MaterializationResearchConditions
+  conditions: MaterializationRunConditions
   window: ReachWindow
   input: MaterializationInputSummary
   context: { status: 'context' } | { status: 'unsupported_input'; reason: string; detail: string }
@@ -309,11 +353,13 @@ export function targetOutcomeBrief(outcome: MaterializationOutcome | OutcomeReco
     case 'shape_mismatch':
       return { kind: outcome.kind, reason: null, method: 'planner_alternative_reservation', delivered: outcome.delivered, deliveredBeforeMatch: null }
     case 'unconfirmed':
-      return { kind: outcome.kind, reason: outcome.reason, method: 'planner_alternative_reservation', delivered: outcome.delivered, deliveredBeforeMatch: null }
+      return { kind: outcome.kind, reason: outcome.reason, method: outcome.reason === 'shape_search_budget_reached' ? 'shape_constrained' : 'planner_alternative_reservation', delivered: outcome.delivered, deliveredBeforeMatch: null }
     case 'not_executed':
-      return { kind: outcome.kind, reason: outcome.reason, method: null, delivered: null, deliveredBeforeMatch: null }
+      return { kind: outcome.kind, reason: outcome.reason, method: 'method' in outcome ? outcome.method : null, delivered: null, deliveredBeforeMatch: null }
     case 'unmeasured':
       return { kind: outcome.kind, reason: outcome.reason, method: null, delivered: null, deliveredBeforeMatch: null }
+    case 'unsupported':
+      return { kind: outcome.kind, reason: outcome.reason, method: 'shape_constrained', delivered: null, deliveredBeforeMatch: null }
   }
 }
 
@@ -327,7 +373,26 @@ function summarizeReservation(reservation: PlannerAlternativeReservation, source
   }
 }
 
-function summarizeAttempt(attempt: MaterializationAttempt): AttemptSummary {
+function summarizeShapeAttempt(attempt: ShapeConstrainedAttempt): ShapeAttemptSummary {
+  const { request } = attempt
+  return {
+    method: 'shape_constrained',
+    materializationRule: request.rule,
+    routeShape: structuredClone(request.routeShape),
+    searchIdentity: request.searchIdentity,
+    origins: structuredClone(request.origins),
+    reservation: summarizeReservation(request.reservation, request.reservationSourceEntryIds.length),
+    extent: { maxNormalAdvance: request.extent.maxNormalAdvance, maxGogmaAdvance: request.extent.maxGogmaAdvance, maxSkillAdvance: request.extent.maxSkillAdvance },
+    predictedSearchScale: structuredClone(request.predictedScale),
+    premiseViolations: structuredClone(request.premiseViolations),
+    result: outcomeRecord(attempt.outcome),
+    observed: attempt.observed === null ? null : structuredClone(attempt.observed),
+    routeChecks: attempt.routeChecks === null ? null : structuredClone(attempt.routeChecks),
+  }
+}
+
+function summarizeAttempt(attempt: MaterializationAttempt): AttemptSummary | ShapeAttemptSummary {
+  if (attempt.method === 'shape_constrained') return summarizeShapeAttempt(attempt)
   const { request } = attempt
   const { conversionSkillPositions, ...scale } = request.scaleDetail
   return {
@@ -343,9 +408,12 @@ function summarizeAttempt(attempt: MaterializationAttempt): AttemptSummary {
   }
 }
 
-function summarizeTarget(record: TargetMaterializationRecord, option: ReachOption, inspections: readonly CandidateInspection[], risk: BonusFrontierRisk | null, table: ReachTable): TargetMaterializationSummary {
+function summarizeTarget(
+  record: TargetMaterializationRecord, option: ReachOption, inspections: readonly CandidateInspection[], risk: BonusFrontierRisk | null, table: ReachTable,
+  lower: { risk: BonusFrontierLowerRisk | null } | null,
+): TargetMaterializationSummary {
   const attempts = record.attempts.map(summarizeAttempt)
-  return {
+  const summary: TargetMaterializationSummary = {
     orderIndex: record.orderIndex,
     targetWeaponId: record.targetWeaponId,
     option: {
@@ -362,6 +430,16 @@ function summarizeTarget(record: TargetMaterializationRecord, option: ReachOptio
       measured: risk === null ? null : measureBonusFrontierCollapse(risk, inspections, INSPECTION_SAMPLE_LIMIT),
     },
   }
+  // `d0a2-v2` records only: a `d0a-v1` record keeps exactly the D-0B fields.
+  if (lower !== null) {
+    const lowerRisk = lower.risk
+    summary.bonusFrontierLower = {
+      static: lowerRisk === null ? null : structuredClone(lowerRisk),
+      requests: lowerRisk === null ? [] : record.attempts.map(attempt => bonusFrontierLowerRequestRisk(lowerRisk, attempt)),
+      measured: lowerRisk === null ? null : measureBonusFrontierLowerCollapse(lowerRisk, inspections, INSPECTION_SAMPLE_LIMIT),
+    }
+  }
+  return summary
 }
 
 function stageRecord(stage: MaterializationStageOutcome): NonNullable<CandidateMaterializationRecord['stage']> {
@@ -376,8 +454,11 @@ export interface TargetRunSummaryRow {
   skill: string
   bonus: string
   outcome: TargetOutcomeBrief
-  /** The design 9.1 / 9.2 attempts: method, predicted scale and (when the Search ran) the observed delivery / work counts. */
-  attempts: { method: MaterializationMethod; predicted: PredictedSearchScale; executed: boolean; delivered: number | null; workSettled: number | null; skillStates: number | null; gogmaGeneratedStates: number | null }[]
+  /**
+   * The design 9.1 / 9.2 attempts (D-0A-2b: and the shape-constrained ones): method, predicted scale and (when the Search ran) the
+   * observed delivery / work counts.
+   */
+  attempts: { method: MaterializationMethod; predicted: PredictedSearchScale | ShapeSearchScale; executed: boolean; delivered: number | null; workSettled: number | null; skillStates: number | null; gogmaGeneratedStates: number | null }[]
   inspected: number
   gogmaRequiredOnlyMismatches: number
   bonusFrontierStaticRisk: boolean
@@ -409,6 +490,16 @@ export interface MaterializationRunSummary {
     plannerStartIdeal: PlannerStartIdealDiagnostics['counts'] & { targets: number }
     gateExceeded: Record<keyof PredictedSearchScale, number>
     targets: TargetRunSummaryRow[]
+    /**
+     * D-0A-2b, `d0a2-v2` runs only: the shape-constrained gate refusals, the G3 lower variant counts (apart from `bonusFrontier`),
+     * how many Targets each method materialized, and the Search-policy shapes the shape-constrained method took on (design D0A2 6.1).
+     */
+    shapeConstrained?: {
+      shapeGateExceeded: Record<ShapeSearchScaleComponent, number>
+      bonusFrontierLower: { applicableOptions: number; withStaticRisk: number; attemptedWithCollapseCondition: number; collapseSignatures: number }
+      materializedBy: Record<'candidate_search_projected' | 'shape_constrained', number>
+      policyShapesTakenOn: number
+    }
   }[]
   integrityIssues: string[]
 }
@@ -437,7 +528,7 @@ export function summarizeMaterializationRun(semantic: MaterializationSemanticRec
     },
     candidates: semantic.candidates.map(record => {
       const unresolved = record.firstUnresolved === null ? null : record.targets.find(target => target.orderIndex === record.firstUnresolved!.orderIndex) ?? null
-      return {
+      const row = {
         candidateIndex: record.candidate.candidateIndex, ordinal: record.candidate.ordinal, objective: record.candidate.objective, targetCount: record.candidate.materializationOrder.length,
         classification: record.classification, followUp: record.followUp.followUp, materializedTargetCount: record.materializedTargetCount, attemptedTargetCount: record.attemptedTargetCount,
         notAttemptedTargetCount: record.notAttemptedTargetWeaponIds.length,
@@ -458,7 +549,7 @@ export function summarizeMaterializationRun(semantic: MaterializationSemanticRec
           attempts: target.attempts.map(attempt => {
             const observed = attempt.observed !== null && 'instrumentation' in attempt.observed ? attempt.observed : null
             return {
-              method: attempt.method, predicted: { ...attempt.predictedSearchScale }, executed: attempt.observed !== null,
+              method: attempt.method, predicted: structuredClone(attempt.predictedSearchScale), executed: attempt.observed !== null,
               delivered: observed?.deliveredCandidates ?? null, workSettled: observed?.instrumentation.workSettled ?? null,
               skillStates: observed?.instrumentation.skillStates ?? null, gogmaGeneratedStates: observed?.instrumentation.gogmaGeneratedStates ?? null,
             }
@@ -469,13 +560,32 @@ export function summarizeMaterializationRun(semantic: MaterializationSemanticRec
           bonusFrontierCollapseSignatures: target.bonusFrontier.measured?.collapseSignatures ?? 0,
         })),
       }
+      if (record.shapeGateExceeded === undefined) return row
+      const lowerTargets = record.targets.filter(target => target.bonusFrontierLower !== undefined)
+      const materializedBy = { candidate_search_projected: 0, shape_constrained: 0 }
+      for (const target of record.targets) {
+        if (target.outcome.kind === 'materialized' && (target.outcome.method === 'candidate_search_projected' || target.outcome.method === 'shape_constrained')) materializedBy[target.outcome.method] += 1
+      }
+      return {
+        ...row,
+        shapeConstrained: {
+          shapeGateExceeded: { ...record.shapeGateExceeded },
+          bonusFrontierLower: {
+            applicableOptions: record.diagnostics.bonusFrontierLower?.applicableOptions ?? 0, withStaticRisk: record.diagnostics.bonusFrontierLower?.withStaticRisk ?? 0,
+            attemptedWithCollapseCondition: lowerTargets.filter(target => target.bonusFrontierLower!.requests.some(request => request.collapseConditionHolds)).length,
+            collapseSignatures: lowerTargets.reduce((sum, target) => sum + (target.bonusFrontierLower!.measured?.collapseSignatures ?? 0), 0),
+          },
+          materializedBy,
+          policyShapesTakenOn: record.targets.filter(target => target.selection !== null && 'materializationRule' in target.selection && target.selection.policyShape !== null).length,
+        },
+      }
     }),
     integrityIssues: [...semantic.integrityIssues],
   }
 }
 
 function assertRequest(request: MaterializationRunRequest): void {
-  const issues = validateMaterializationResearchConditions(request.conditions)
+  const issues = validateMaterializationRunConditions(request.conditions)
   if (issues.length > 0) throw new RangeError(`Invalid materialization run request: ${issues.join(' ')}`)
 }
 
@@ -496,7 +606,7 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
   const progress = (event: MaterializationProgressEvent) => execution.onProgress?.(structuredClone(event))
   const elapsed: MaterializationObservedRecord['elapsedMs'] = { context: 0, reachTable: null, structuralSearch: null, toFirstStructuralCandidate: null, candidates: [], total: 0 }
   const base = {
-    protocolVersion: MATERIALIZATION_D0B_PROTOCOL_VERSION, nature: 'materialization_only: not a Production Plan, not Planner-verified' as const,
+    protocolVersion: materializationProtocolVersion(conditions), nature: 'materialization_only: not a Production Plan, not Planner-verified' as const,
     conditions: structuredClone(conditions), window: { ...conditions.window }, oracleFreeExecution: true as const,
   }
   const finish = (semantic: Omit<MaterializationSemanticRecord, 'integrityIssues' | keyof typeof base>, issues: string[] = []): MaterializationRunResult => {
@@ -593,6 +703,8 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
   // Diagnostics and the D-0A materialization of each collected candidate, one after another.
   const records: CandidateMaterializationRecord[] = []
   const issues: string[] = []
+  // D-0A-2b: a `d0a2-v2` run adds its own fields; a `d0a-v1` run writes exactly the D-0B record.
+  const shapeRule = isShapeMaterializationConditions(conditions)
   for (const [candidateIndex, candidate] of candidates.entries()) {
     progress({ kind: 'candidate_started', candidateIndex, ordinal: candidate.ordinal, objective: candidate.assignment.objective, targetCount: candidate.materializationOrder.length })
     const diagnosticsStarted = now()
@@ -602,6 +714,7 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
       bonusFrontier: diagnoseBonusFrontierRisk(candidate, table),
       plannerStartIdeal: diagnosePlannerStartIdeal(candidate, context),
     }
+    if (shapeRule) candidateDiagnostics.bonusFrontierLower = diagnoseBonusFrontierLowerRisk(candidate, table)
     const diagnosticsMs = now() - diagnosticsStarted
     const materializationStarted = now()
     const settled: TargetMaterializationRecord[] = []
@@ -611,40 +724,56 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
     let failClosed: CandidateMaterializationRecord['failClosed'] = null
     let stage: MaterializationStageOutcome | null = null
     let notAttemptedFromRun: TargetWeaponId[] | null = null
+    const observer: MaterializationObserver = {
+      onTargetStarted: event => {
+        targetStartedAt = now()
+        progress({ kind: 'target_started', candidateIndex, orderIndex: event.orderIndex, targetWeaponId: event.targetWeaponId })
+      },
+      onCandidateInspected: inspection => { inspections.set(inspection.targetWeaponId, [...(inspections.get(inspection.targetWeaponId) ?? []), inspection]) },
+      onTargetSettled: record => {
+        settled.push(record)
+        targetTimes.push({ orderIndex: record.orderIndex, targetWeaponId: record.targetWeaponId, ms: now() - targetStartedAt })
+        progress({ kind: 'target_settled', candidateIndex, orderIndex: record.orderIndex, targetWeaponId: record.targetWeaponId, outcome: targetOutcomeBrief(record.outcome) })
+      },
+    }
     try {
-      const result = await materializeStructuralCandidate(candidate, {
-        context, table, engine,
-        settings: { deliveryCap: conditions.deliveryCap, searchScaleGate: { ...conditions.searchScaleGate } },
-        searchPolicyPrecheck: conditions.searchPolicyPrecheck,
-        ...(execution.search ? { search: execution.search } : {}),
-        ...(execution.shouldCancel ? { shouldCancel: execution.shouldCancel } : {}),
-        ...(execution.yieldControl ? { yieldControl } : {}),
-        observer: {
-          onTargetStarted: event => {
-            targetStartedAt = now()
-            progress({ kind: 'target_started', candidateIndex, orderIndex: event.orderIndex, targetWeaponId: event.targetWeaponId })
+      const result = isShapeMaterializationConditions(conditions)
+        ? await materializeStructuralCandidate(candidate, {
+          rule: 'd0a2-v2', context, table, engine,
+          settings: {
+            projectedSearchScaleGate: { ...conditions.projectedSearchScaleGate }, shapeSearchScaleGate: { ...conditions.shapeSearchScaleGate },
+            shapeSearchBudget: structuredClone(conditions.shapeSearchBudget),
           },
-          onCandidateInspected: inspection => { inspections.set(inspection.targetWeaponId, [...(inspections.get(inspection.targetWeaponId) ?? []), inspection]) },
-          onTargetSettled: record => {
-            settled.push(record)
-            targetTimes.push({ orderIndex: record.orderIndex, targetWeaponId: record.targetWeaponId, ms: now() - targetStartedAt })
-            progress({ kind: 'target_settled', candidateIndex, orderIndex: record.orderIndex, targetWeaponId: record.targetWeaponId, outcome: targetOutcomeBrief(record.outcome) })
-          },
-        },
-      })
+          ...(execution.shapeSearch ? { search: execution.shapeSearch } : {}),
+          ...(execution.shouldCancel ? { shouldCancel: execution.shouldCancel } : {}),
+          ...(execution.yieldControl ? { yieldControl } : {}),
+          observer,
+        })
+        : await materializeStructuralCandidate(candidate, {
+          context, table, engine,
+          settings: { deliveryCap: conditions.deliveryCap, searchScaleGate: { ...conditions.searchScaleGate } },
+          searchPolicyPrecheck: conditions.searchPolicyPrecheck,
+          ...(execution.search ? { search: execution.search } : {}),
+          ...(execution.shouldCancel ? { shouldCancel: execution.shouldCancel } : {}),
+          ...(execution.yieldControl ? { yieldControl } : {}),
+          observer,
+        })
       if (result.kind === 'invalid_input') failClosed = { code: `invalid_input:${result.reason}`, targetWeaponId: null, message: result.detail }
       else {
         stage = result.outcome
         notAttemptedFromRun = [...result.notAttemptedTargetWeaponIds]
       }
     } catch (error) {
-      if (error instanceof GlobalAssignmentMaterializationError) failClosed = { code: error.code, targetWeaponId: error.targetWeaponId, message: error.message }
-      else if (error instanceof GlobalAssignmentInvariantError) failClosed = { code: `invariant:${error.code}`, targetWeaponId: null, message: error.message }
+      if (error instanceof GlobalAssignmentMaterializationError) {
+        failClosed = { code: error.code, targetWeaponId: error.targetWeaponId, message: error.message, ...(error.detail === undefined ? {} : { detail: structuredClone(error.detail) }) }
+      } else if (error instanceof GlobalAssignmentInvariantError) failClosed = { code: `invariant:${error.code}`, targetWeaponId: null, message: error.message }
       else throw error
     }
     const materializationMs = now() - materializationStarted
     const riskByTarget = new Map(candidateDiagnostics.bonusFrontier.targets.map(row => [row.targetWeaponId, row]))
-    const targets = settled.map(record => summarizeTarget(record, candidate.assignment.chosen.get(record.targetWeaponId)!, inspections.get(record.targetWeaponId) ?? [], riskByTarget.get(record.targetWeaponId) ?? null, table))
+    const lowerByTarget = new Map((candidateDiagnostics.bonusFrontierLower?.targets ?? []).map(row => [row.targetWeaponId, row]))
+    const targets = settled.map(record => summarizeTarget(record, candidate.assignment.chosen.get(record.targetWeaponId)!, inspections.get(record.targetWeaponId) ?? [], riskByTarget.get(record.targetWeaponId) ?? null, table,
+      shapeRule ? { risk: lowerByTarget.get(record.targetWeaponId) ?? null } : null))
     const materializedTargetCount = settled.filter(record => record.outcome.kind === 'materialized').length
     const unresolved = settled.find(record => record.outcome.kind !== 'materialized') ?? null
     const attemptedIds = new Set(settled.map(record => record.targetWeaponId))
@@ -652,9 +781,14 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
     const notAttempted = notAttemptedFromRun ?? candidate.materializationOrder.filter(id => !attemptedIds.has(id))
     const classification: CandidateMaterializationClass = stage === null ? 'fail_closed' : classifyMaterializationStage(stage)
     const gateExceeded: Record<keyof PredictedSearchScale, number> = { conversionPositions: 0, gogmaLegalWidth: 0, skillLegalWidth: 0, normalForgeCount: 0 }
+    const shapeGateExceeded: Record<ShapeSearchScaleComponent, number> = { depthUpperBound: 0, gogmaGeneratedStateUpperBound: 0, normalForgeCount: 0, conversionWalkPositions: 0 }
     for (const record of settled) for (const attempt of record.attempts) {
+      if (attempt.method === 'shape_constrained') {
+        if (attempt.outcome.kind === 'not_executed') for (const key of attempt.outcome.exceeded) shapeGateExceeded[key] += 1
+        continue
+      }
       const gated = attempt.method === 'planner_alternative_reservation' ? attempt.outcome : attempt.result
-      if (gated.kind === 'not_executed' && gated.reason === 'search_scale_gate') for (const key of gated.exceeded) gateExceeded[key] += 1
+      if (gated.kind === 'not_executed' && gated.reason === 'search_scale_gate' && !('method' in gated)) for (const key of gated.exceeded) gateExceeded[key] += 1
     }
     if (failClosed !== null) issues.push(`candidate ${candidateIndex}: the materialization failed closed (${failClosed.code}${failClosed.targetWeaponId ? `, ${failClosed.targetWeaponId}` : ''})`)
     records.push({
@@ -669,6 +803,7 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
       notAttemptedTargetWeaponIds: notAttempted,
       targets,
       gateExceeded,
+      ...(shapeRule ? { shapeGateExceeded } : {}),
       failClosed,
     })
     elapsed.candidates.push({ candidateIndex, diagnostics: diagnosticsMs, materialization: materializationMs, targets: targetTimes })

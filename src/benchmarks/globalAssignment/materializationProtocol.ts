@@ -13,14 +13,26 @@
  * D-0B-2 and measured formally in D-0C. Every value here is a provisional non-formal smoke condition. A D-0B run
  * is never a Planner verification: no status here says `verified`, `best_found`, `proven_minimum` or "every
  * Target completed".
+ *
+ * Phase D-0A-2b adds the rule `d0a2-v2` (`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 10.2 / 11 / 12): its conditions are
+ * a type of their own with no default gate or budget, its runs write their own protocol version, and its candidate classes
+ * (`unconfirmed_shape_search_budget`, `unsupported_shape_prediction`) have their own design 10.3 roles. The `d0a-v1`
+ * conditions, smoke defaults, registration items and classes are unchanged, and a formal run is still refused.
  */
 import { validateWindowLadder } from './assignmentProtocol'
 import { isValidSearchScaleGate } from './materializationScale'
 import type { MaterializationStageOutcome, SearchScaleGate } from './materializationTypes'
 import { reachWindowW0 } from './reachTable'
+import { isValidShapeSearchBudget, isValidShapeSearchScaleGate } from './shapeMaterializationScale'
+import type { ShapeSearchBudget, ShapeSearchScaleGate } from './shapeMaterializationTypes'
 import type { ReachWindow } from './types'
 
 export const MATERIALIZATION_D0B_PROTOCOL_VERSION = 'global-assignment-d0b:1'
+/**
+ * Phase D-0A-2b: the protocol of a run under the rule `d0a2-v2` (design D0A2 11 / 12). A `d0a-v1` run keeps
+ * `MATERIALIZATION_D0B_PROTOCOL_VERSION` and its records exactly as D-0B wrote them.
+ */
+export const MATERIALIZATION_D0A2B_PROTOCOL_VERSION = 'global-assignment-d0a2b:1'
 export const MATERIALIZATION_D0B_PHASE = 'Issue #154 Global Assignment Phase D-0B: materialization runner, non-formal smoke and diagnostics (D-0A materialization of Phase C structural candidates; not a Production Plan, not Planner-verified)'
 /** The Research record of this Phase (Markdown; its SHA-256 is recorded by the runner). */
 export const MATERIALIZATION_D0B_DOC = 'docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B.md'
@@ -53,6 +65,82 @@ export interface MaterializationResearchConditions {
   searchScaleGate: SearchScaleGate
   /** Design 19.3 G1: Search-policy shapes are classified before any Search. Always true in D-0B. */
   searchPolicyPrecheck: true
+}
+
+/**
+ * Phase D-0A-2b: the calculation conditions of one run under the rule `d0a2-v2` (design D0A2 10.3 / 10.4 / 11). A type of
+ * its own, never a `MaterializationResearchConditions` with extra fields: it carries no delivery cap (no Planner Alternative
+ * Search runs) and no Search-policy precheck (a G1 shape is a continuation shape, materialized by the shape-constrained
+ * method). Every gate and budget value is the caller's explicit contract; none is a default, and none is registered here
+ * (D-0B-2 registers them after a real-Export re-smoke).
+ */
+export interface ShapeMaterializationResearchConditions {
+  rule: 'd0a2-v2'
+  window: ReachWindow
+  nodeBudget: number
+  mrvLookahead: number
+  coverageDrivenOrdering: boolean
+  structuralCandidateLimit: number
+  /** Design 9.2: the gate of the projected Candidate Search a continuous shape tries first (the D-0A gate type and meaning). */
+  projectedSearchScaleGate: SearchScaleGate
+  /** Design D0A2 10.3: the gate on the shape-constrained Search's predicted scale. */
+  shapeSearchScaleGate: ShapeSearchScaleGate
+  /** Design D0A2 10.4: the runtime budget of one shape-constrained Search. */
+  shapeSearchBudget: ShapeSearchBudget
+  /** Design D0A2 13 #7: the independent Route checks run on every shape-constrained materialization. */
+  routeVerification: 'every_shape_constrained_materialization'
+}
+
+/** The conditions of either rule: `rule: 'd0a2-v2'` names the new rule, a `d0a-v1` condition carries no rule field at all. */
+export type MaterializationRunConditions = MaterializationResearchConditions | ShapeMaterializationResearchConditions
+
+export function isShapeMaterializationConditions(conditions: MaterializationRunConditions): conditions is ShapeMaterializationResearchConditions {
+  return (conditions as { rule?: unknown }).rule === 'd0a2-v2'
+}
+
+/** The protocol version a run of these conditions writes (`d0a-v1`: the D-0B version, unchanged). */
+export function materializationProtocolVersion(conditions: MaterializationRunConditions): string {
+  return isShapeMaterializationConditions(conditions) ? MATERIALIZATION_D0A2B_PROTOCOL_VERSION : MATERIALIZATION_D0B_PROTOCOL_VERSION
+}
+
+/** Issues of a `d0a2-v2` conditions object; `[]` means valid. */
+export function validateShapeMaterializationResearchConditions(value: unknown): string[] {
+  if (typeof value !== 'object' || value === null) return ['conditions must be an object.']
+  const conditions = value as Record<string, unknown>
+  const issues: string[] = []
+  if (conditions.rule !== 'd0a2-v2') issues.push(`rule must be d0a2-v2 (got ${String(conditions.rule)}).`)
+  const window = conditions.window as Record<string, unknown> | undefined
+  if (typeof window !== 'object' || window === null) issues.push('window must be an object with normal / gogma / skill.')
+  else issues.push(...validateWindowLadder([window]).map(issue => issue.replace('windowLadder[0]', 'window')))
+  for (const field of ['nodeBudget', 'mrvLookahead'] as const) {
+    if (!isIntegerIn(conditions[field], 1, Number.MAX_SAFE_INTEGER)) issues.push(`${field} must be a positive integer (got ${String(conditions[field])}).`)
+  }
+  if (typeof conditions.coverageDrivenOrdering !== 'boolean') issues.push(`coverageDrivenOrdering must be an explicit boolean (got ${String(conditions.coverageDrivenOrdering)}).`)
+  if (!isIntegerIn(conditions.structuralCandidateLimit, 1, MATERIALIZATION_SMOKE_MAX_STRUCTURAL_CANDIDATES)) {
+    issues.push(`structuralCandidateLimit must be an integer in 1..${MATERIALIZATION_SMOKE_MAX_STRUCTURAL_CANDIDATES} (got ${String(conditions.structuralCandidateLimit)}).`)
+  }
+  if (!isValidSearchScaleGate(conditions.projectedSearchScaleGate as SearchScaleGate)) {
+    issues.push(`projectedSearchScaleGate must name maxConversionPositions / maxGogmaLegalWidth / maxSkillLegalWidth / maxNormalForgeCount as non-negative integers (got ${JSON.stringify(conditions.projectedSearchScaleGate)}).`)
+  }
+  if (!isValidShapeSearchScaleGate(conditions.shapeSearchScaleGate as ShapeSearchScaleGate)) {
+    issues.push(`shapeSearchScaleGate must name maxDepthUpperBound / maxGogmaGeneratedStateUpperBound / maxNormalForgeCount / maxConversionWalkPositions as non-negative integers (got ${JSON.stringify(conditions.shapeSearchScaleGate)}).`)
+  }
+  if (!isValidShapeSearchBudget(conditions.shapeSearchBudget as ShapeSearchBudget)) {
+    issues.push(`shapeSearchBudget must name maxGogmaGeneratedStates / maxSkillStates / maxSettledWork / maxPredictions.{normalArtian, skill, gogmaReset, gogmaKeep} as non-negative integers (got ${JSON.stringify(conditions.shapeSearchBudget)}).`)
+  }
+  if (conditions.routeVerification !== 'every_shape_constrained_materialization') issues.push(`routeVerification must be every_shape_constrained_materialization (got ${String(conditions.routeVerification)}).`)
+  for (const field of ['deliveryCap', 'searchScaleGate', 'searchPolicyPrecheck'] as const) {
+    if (field in conditions) issues.push(`${field} belongs to the rule d0a-v1 and is not a d0a2-v2 condition.`)
+  }
+  return issues
+}
+
+/** Issues of either rule's conditions: `rule: 'd0a2-v2'` selects the new rule, no `rule` field the D-0B rule `d0a-v1`. */
+export function validateMaterializationRunConditions(value: unknown): string[] {
+  if (typeof value !== 'object' || value === null) return ['conditions must be an object.']
+  if (!('rule' in value)) return validateMaterializationResearchConditions(value)
+  const rule = (value as { rule: unknown }).rule
+  return rule === 'd0a2-v2' ? validateShapeMaterializationResearchConditions(value) : [`rule must be d0a2-v2, or absent for the rule d0a-v1 (got ${String(rule)}).`]
 }
 
 /** The process envelope of one child (the parent applies it; reaching it is unmeasured, never a materialization outcome). */
@@ -185,6 +273,15 @@ export const MATERIALIZATION_D0B2_REGISTRATION_ITEMS = Object.freeze([
 ] as const)
 
 /**
+ * Phase D-0A-2b: the items a `d0a2-v2` run leaves to D-0B-2 (design D0A2 12): none is registered here, and no default exists
+ * for the shape method's gate or budget (a `d0a2-v2` run names every value explicitly).
+ */
+export const MATERIALIZATION_D0A2B_REGISTRATION_ITEMS = Object.freeze([
+  'projectedSearchScaleGate', 'shapeSearchScaleGate', 'shapeSearchBudget', 'routeVerification', 'childWallMs', 'childHeapMb', 'nodeBudget', 'structuralCandidateLimit',
+  'optionSetVersion', 'methodSelectionRule', 'continuationShapeRule', 'materializationOrderRule',
+] as const)
+
+/**
  * Why a formal run must not start: D-0B never starts one (design 19.7). The formal conditions are pre-registered in
  * D-0B-2 after the D-0A-2 method and the A-2 option set, and measured in D-0C.
  */
@@ -208,13 +305,19 @@ export type CandidateMaterializationClass =
   | 'unmeasured_cancelled'
   /** A fail-closed stop of the run (`GlobalAssignmentMaterializationError` / `GlobalAssignmentInvariantError`): an error of the run, never an outcome. */
   | 'fail_closed'
+  /** D-0A-2b (design D0A2 10.2): the shape-constrained Search stopped at its Research budget. */
+  | 'unconfirmed_shape_search_budget'
+  /** D-0A-2b (design D0A2 10.2): a needed prediction or capability the Engine does not offer (Phase A did not judge it supported). */
+  | 'unsupported_shape_prediction'
 
 export function classifyMaterializationStage(stage: MaterializationStageOutcome): CandidateMaterializationClass {
   if (stage.kind === 'all_materialized') return 'all_materialized'
   if (stage.kind === 'materialization_failed') return 'executed_shape_mismatch'
+  if (stage.kind === 'materialization_unsupported') return 'unsupported_shape_prediction'
   const outcome = stage.outcome
   switch (outcome.kind) {
     case 'unconfirmed':
+      if (outcome.reason === 'shape_search_budget_reached') return 'unconfirmed_shape_search_budget'
       return outcome.reason === 'stopped_by_extent' ? 'unconfirmed_stopped_by_extent' : 'unconfirmed_delivery_cap'
     case 'not_executed':
       return outcome.reason === 'search_policy_shape' ? 'not_executed_search_policy' : 'not_executed_search_scale_gate'
@@ -229,8 +332,8 @@ export function classifyMaterializationStage(stage: MaterializationStageOutcome)
  * window, a setting or the method is reviewed. No role says a Route or a feasible Plan does not exist.
  */
 export interface MaterializationFollowUp {
-  /** `planner_verification_pending`: only Phase D' decides. `executed_mismatch`: counts with `materialization_failed`. `settings_review`: an unconfirmed / not executed / unmeasured cause (extent, cap, gate, envelope). `method_extension`: the Search policy, so the method (design 19.5 案B) and not a window, cap, gate or envelope. `run_error`: fail closed. */
-  followUp: 'planner_verification_pending' | 'executed_mismatch' | 'settings_review' | 'method_extension' | 'run_error'
+  /** `planner_verification_pending`: only Phase D' decides. `executed_mismatch`: counts with `materialization_failed`. `settings_review`: an unconfirmed / not executed / unmeasured cause (extent, cap, gate, budget, envelope). `method_extension`: the Search policy, so the method (design 19.5 案B) and not a window, cap, gate or envelope. `support_review` (D-0A-2b): the Engine's support / capability, never a setting or a window. `run_error`: fail closed. */
+  followUp: 'planner_verification_pending' | 'executed_mismatch' | 'settings_review' | 'method_extension' | 'support_review' | 'run_error'
   /** Whether design 10.3 may count it toward a window expansion (only an executed mismatch, and only when every candidate of an exhausted window ends so). */
   windowExpansionBasis: boolean
   /** Whether it asks for the cap / gate / envelope / extent review of design 10.3 before any expansion. */
@@ -252,6 +355,10 @@ export function materializationFollowUp(kind: CandidateMaterializationClass): Ma
       return { followUp: 'method_extension', windowExpansionBasis: false, settingsReviewBasis: false }
     case 'fail_closed':
       return { followUp: 'run_error', windowExpansionBasis: false, settingsReviewBasis: false }
+    case 'unconfirmed_shape_search_budget':
+      return { followUp: 'settings_review', windowExpansionBasis: false, settingsReviewBasis: true }
+    case 'unsupported_shape_prediction':
+      return { followUp: 'support_review', windowExpansionBasis: false, settingsReviewBasis: false }
   }
 }
 
@@ -263,7 +370,7 @@ export function materializationFollowUp(kind: CandidateMaterializationClass): Ma
 
 /** A short, plain outcome of a settled Target (journal and RESULT). */
 export interface TargetOutcomeBrief {
-  kind: 'materialized' | 'shape_mismatch' | 'unconfirmed' | 'not_executed' | 'unmeasured'
+  kind: 'materialized' | 'shape_mismatch' | 'unconfirmed' | 'not_executed' | 'unmeasured' | 'unsupported'
   reason: string | null
   method: string | null
   delivered: number | null

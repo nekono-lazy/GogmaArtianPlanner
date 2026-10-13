@@ -12,6 +12,10 @@
  *
  * Phase D-0B added the Search-policy shape (`SearchPolicyShape`, design 19.3 G1) with its own
  * `not_executed(search_policy_shape)` outcome, and the execution-only `MaterializationObserver`.
+ *
+ * Phase D-0A-2b (`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 10 / 11) added the method `shape_constrained` of the
+ * rule `d0a2-v2` (`shapeMaterializationTypes.ts`): its outcomes, attempt, method selection, stage end and fail-closed
+ * codes join the unions below. The rule `d0a-v1` never produces any of them, so its values are unchanged.
  */
 import type {
   BuildListEntry, BuildListEntryId, OwnedWeaponId, RouteKind, TargetWeaponId,
@@ -20,10 +24,11 @@ import type { PlannerAlternativeReservation, PlannerAlternativeSearchExtent } fr
 import type { CandidateRouteFilter, CandidateSearchSettings } from '../../domain/search/searchTypes'
 import type { RequiredPositions } from './assignmentTypes'
 import type { ExpectedRouteShape } from './coverageTypes'
+import type { ShapeConstrainedAttempt, ShapeConstrainedOutcome, ShapeMethodSelection } from './shapeMaterializationTypes'
 import type { InclusiveRange, NormalArtianCounterId } from './types'
 
-/** Design 4.5 / 9.1 / 9.2. */
-export type MaterializationMethod = 'planner_alternative_reservation' | 'candidate_search_projected'
+/** Design 4.5 / 9.1 / 9.2, and the D-0A-2b shape-constrained method (design D0A2 5). */
+export type MaterializationMethod = 'planner_alternative_reservation' | 'candidate_search_projected' | 'shape_constrained'
 
 /**
  * Design 9.7: the Search scale computed from the reservation and the extent before any Search runs.
@@ -203,6 +208,11 @@ export type MaterializationOutcome =
    */
   | { kind: 'not_executed'; reason: 'search_policy_shape'; policyShape: SearchPolicyShape }
   | { kind: 'unmeasured'; reason: 'timeout' | 'out_of_memory' | 'process_failure' | 'cancelled' }
+  /**
+   * D-0A-2b (rule `d0a2-v2`): the shape-constrained method's own ends - its budget stop, its gate (told apart from the
+   * D-0A gate by `method`), and a needed prediction or capability the Engine does not offer (design D0A2 10.1).
+   */
+  | Exclude<ShapeConstrainedOutcome, { kind: 'materialized' | 'unmeasured' }>
 
 /**
  * What one executed Planner Alternative Search reported (D-0B compares it with the prediction). The
@@ -259,7 +269,7 @@ export interface ProjectedAttempt {
   observed: { searchedRoutes: RouteKind[]; skippedRoutes: { route: RouteKind; reason: string }[]; candidateFound: boolean } | null
 }
 
-export type MaterializationAttempt = PlannerAlternativeAttempt | ProjectedAttempt
+export type MaterializationAttempt = PlannerAlternativeAttempt | ProjectedAttempt | ShapeConstrainedAttempt
 
 /** Design 9.3: the deterministic rule that ordered the methods of one Target. */
 export type MethodSelectionRule =
@@ -289,8 +299,9 @@ export interface TargetMaterializationRecord {
   /**
    * Null when no request was built: the run was cancelled before this Target, or (Phase D-0B, with
    * `searchPolicyPrecheck`) the shape was classified `not_executed(search_policy_shape)` before any Search.
+   * The rule `d0a2-v2` records its own `ShapeMethodSelection`.
    */
-  selection: MethodSelection | null
+  selection: MethodSelection | ShapeMethodSelection | null
   attempts: MaterializationAttempt[]
   /** Design 9.2 / 9.3: decided by design 9.1, or `materialized` by the method that matched. */
   outcome: MaterializationOutcome
@@ -304,6 +315,8 @@ export type MaterializationStageOutcome =
   | { kind: 'materialization_failed'; targetWeaponId: TargetWeaponId; outcome: Extract<MaterializationOutcome, { kind: 'shape_mismatch' }> }
   /** The first unresolved Target was not confirmed, not executed or not measured: never "no Route". */
   | { kind: 'materialization_unconfirmed'; targetWeaponId: TargetWeaponId; outcome: Extract<MaterializationOutcome, { kind: 'unconfirmed' | 'not_executed' | 'unmeasured' }> }
+  /** D-0A-2b: the first unresolved Target needs a prediction or capability the Engine does not offer (never "no Route"). */
+  | { kind: 'materialization_unsupported'; targetWeaponId: TargetWeaponId; outcome: Extract<MaterializationOutcome, { kind: 'unsupported' }> }
 
 export interface StructuralCandidateMaterialization {
   kind: 'materialization'
@@ -377,21 +390,37 @@ export type MaterializationFailClosedCode =
   | 'search_contract_violation'
   /** The deterministic materializer or the projected adapter refused (ID collision, invalid Candidate, projection). */
   | 'entry_materialization_refused'
-  /** The generated Entry no longer matched after its probe matched. */
+  /** The generated Entry no longer matched after its probe matched (D-0A-2b: the delivered Entry did not match its shape). */
   | 'match_inconsistent'
+  /**
+   * D-0A-2b (design D0A2 10.1 区分 5): a position / source / Counter premise of the minimal Route lemma is broken - the
+   * pre-Search premise check or the seam's base diagnosis (an unconfirmed RNG input included: Phase 0 / A required it).
+   */
+  | 'shape_base_unavailable'
+  /** D-0A-2b (区分 4): Phase A judged the same support question supported, the Search answers unsupported. */
+  | 'prediction_support_inconsistent'
+  /** D-0A-2b: the base was admitted, no needed prediction was unsupported, and the Search ended without delivering: the lemma's premises broke. */
+  | 'shape_constrained_unreachable'
+  /** D-0A-2b: the D-0A-2a seam broke its own contract (or ended without exhausted / stoppedByExtent / a consumer stop). */
+  | 'shape_search_contract_violation'
+  /** D-0A-2b (design D0A2 9.3): the independent Route checks of the delivered Entry failed. */
+  | 'route_verification_failed'
 
 /**
  * A fail-closed stop of the materialization (design 9.4): never classified as a `MaterializationOutcome`,
- * never read as "no Route". The D-0B runner records it as an error of the run.
+ * never read as "no Route". The D-0B runner records it as an error of the run. `detail` is optional plain data a D-0A-2b
+ * stop carries (the broken premise, the contradicting support question, the failed Route checks); D-0A stops carry none.
  */
 export class GlobalAssignmentMaterializationError extends Error {
   readonly code: MaterializationFailClosedCode
   readonly targetWeaponId: TargetWeaponId | null
+  readonly detail: unknown
 
-  constructor(code: MaterializationFailClosedCode, targetWeaponId: TargetWeaponId | null, message: string) {
+  constructor(code: MaterializationFailClosedCode, targetWeaponId: TargetWeaponId | null, message: string, detail?: unknown) {
     super(message)
     this.name = 'GlobalAssignmentMaterializationError'
     this.code = code
     this.targetWeaponId = targetWeaponId
+    this.detail = detail
   }
 }
