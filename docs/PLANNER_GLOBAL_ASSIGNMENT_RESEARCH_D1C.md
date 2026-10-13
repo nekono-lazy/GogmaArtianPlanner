@@ -6,9 +6,65 @@ Refs #154。Research-only・**formal measurement**。基準main: PR #254 merged 
 | 項目 | 値 |
 | --- | --- |
 | **登録HEAD** | `d15ea9b0277b417b2681305486b6fb03dda57054`（PR #254 = D-1Bのmerge commit。D-1Bの登録 `PLANNER_VERIFICATION_D1C_PREREGISTRATION` とfingerprint blockを含むことをローカルGitで確認） |
-| **measurement HEAD** | `636616d6764f6bb4ac4a206aa39afec789b1b5c6`（D-1Cのformal基盤をcommitしたclean HEAD。以降のcommitはdocs-only） |
-| 公開RESULT | [`PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json`](PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json)（54,964 bytes、SHA-256 `68cb07122694d8f84d1a8dff1c2206f4f900da714d981ac697dd19cc5bb8e4bd`） |
-| 結果 | **`formalValidity = valid`、候補outcome `verified`、正式acceptance `accepted`**。物理操作数1,766（incumbent 8,534より少ない = 操作数改善）。最小性は `best_found`（`proven_minimum` ではない） |
+| **現行のmeasurement HEAD** | `68a1ac8696560ba8eab61e3bfc887cb3f13f5898`（正式計測2。PR #255 Required fixのtest修正をcommitしたclean HEAD。以降のcommitはdocs-only） |
+| 置き換えた正式計測1のmeasurement HEAD | `636616d6764f6bb4ac4a206aa39afec789b1b5c6`（§0。結果は正式計測2と同一） |
+| 公開RESULT | [`PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json`](PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json)（正式計測2、54,965 bytes、SHA-256 `9e9e33d77e99c45b24fbb52ac27248fc1fbaa8fc210bba72af164daa4431fb46`）、[`PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT_RUN1.json`](PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT_RUN1.json)（正式計測1、置き換え済み・内容不変、54,964 bytes、SHA-256 `68cb07122694d8f84d1a8dff1c2206f4f900da714d981ac697dd19cc5bb8e4bd`） |
+| 結果 | **`formalValidity = valid`、候補outcome `verified`、正式acceptance `accepted`**（正式計測1・2とも）。物理操作数1,766（incumbent 8,534より少ない = 操作数改善）。最小性は `best_found`（`proven_minimum` ではない） |
+
+以下の §3〜§14 の値は、断りがない限り現行の正式計測2のものである。semantic recordの値（hash、Planner・Trace Replay・物理操作数、validity、outcome）は正式計測1と同一で、
+異なるのは時刻・時間・memory・HEADを含むfileのhashだけである（§0.2）。
+
+## 0. 正式計測の置き換え（PR #255 Required fix）
+
+| 区分 | commit | 内容 |
+| --- | --- | --- |
+| 正式計測1のmeasurement HEAD | `636616d6764f6bb4ac4a206aa39afec789b1b5c6` | formal基盤の実装・`formalRun` 有効化。正式計測1（2026-10-13 13:29:14Z〜13:30:45Z）は valid / verified / accepted |
+| 正式計測1の記録 | `139b92557cbbd4cc8ba698b2e0fde5755306222d` | docs-only（本書の初版と公開RESULT。公開RESULTは現在 `…_D1C_RESULT_RUN1.json` に改名して内容は不変） |
+| testの修正 = **現行のmeasurement HEAD** | `68a1ac8696560ba8eab61e3bfc887cb3f13f5898` | `scripts/run-planner-global-assignment-d1c.test.ts` だけを変更（§0.1） |
+| 正式計測2 | 現行のmeasurement HEADで実行（2026-10-13 14:02:51Z〜14:04:25Z） | 登録条件は1つも変えずに再実行。valid / verified / accepted、semantic recordは正式計測1と同一 |
+| 正式計測2の記録 | 後続（docs-only） | 本書の更新、公開RESULTの再導出、RUN1の改名、設計 §9.16 / §14、PR本文 |
+
+**置き換えの理由**: `139b925` のGitHub Actions（run 38406526620、Test shard 1/3）で、formal child gateの拒否test
+（`a child refuses a hand-written task from its own observations before it computes anything, and writes no record`、`scripts/run-planner-global-assignment-d1c.test.ts:160`）が失敗した。
+修正は計算に関係しないtest fileの変更だが、正式計測1のmeasurement HEAD以降を「docs-only」とした記録はそのままでは成り立たなくなるので、修正をcommitしたclean HEADを
+新しいmeasurement HEADとして、登録条件のまま正式計測をやり直した（D-0C §0と同じ扱い）。正式計測1は削除も上書きもしていない（raw recordは `.local/ga-d1c-formal-r1.*` に
+不変で残り、SHA-256は計測直後の値と一致する（§14.2）。公開RESULTも内容不変のまま改名し、`--check` を通る）。正式計測1は当時のHEADでの有効な正式計測であり、
+置き換えはPR headとmeasurement HEADの対応を保つためである。
+
+### 0.1 CI失敗の原因と修正
+
+- **直接原因**: CIのcheckoutはshallow（depth 1）で、登録HEAD `d15ea9b` が履歴に無い。formal child gateは登録HEADのD-1B記録を読めず、
+  `The registered fingerprint block at the registration HEAD could not be read …`、`The calculation code audit could not run: git diff failed …`、
+  `The registration HEAD … is not an ancestor of the measured HEAD.`、`The child could not read the registered D-0C identity: …` で拒否した。これはformal runを
+  fail closedさせる正しい挙動である。一方testは、D-0C identityを改変したtaskについて、登録identityとの値比較の拒否理由
+  `The task D-0C identity is not the registered one read from HEAD.` を環境によらず要求していた。登録identityを読めなければ値比較は行えないので、shallow checkoutでは
+  この理由は出ない。formal guardの不良ではなく、testがgit履歴の有無による拒否理由の違いを扱っていなかった
+- **修正（test only）**: formal guardが使うgit操作を、guardと同じコマンドで1つずつ調べるtest専用helper（`registrationHistory()`: 登録commitの存在、登録HEADと現HEADの
+  D-1B記録の読取り、祖先関係、登録HEADからの差分）を追加した。commitの存在確認（`git cat-file -e`）だけでは、文書の読取り・祖先関係・差分監査の成功を保証しないためである。
+  履歴に依存する拒否理由（監査不能、祖先でない、登録fingerprint blockの読取り不能）は、そのgit操作が答えられない環境では必ず含まれ、答えられる環境では含まれないことを確認する。
+  D-0C identity改変の検査は、登録identityを読める環境では値比較の拒否を、読めない環境では「登録D-0C identityを読めない」ことによるfail closedを確認する（値比較の理由が出ないことも確認）。
+  全環境で、非0 exit、formal child gateの拒否、record・Entry集合を作らないこと、journalにmaterialization・D-0C identity・Phase D'（Planner）の段階が無いことを確認する。
+  start gateの拒否testも同じhelperで確認するよう変え、probeがrunnerのgitコマンドそのものであることをrunner sourceから確認するtestを1件追加した
+- **変えていないもの**: formal guard・runner・登録条件・formal validity規則（git履歴が読めない場合は引き続きformal runを拒否する）。skip・assertion削除・mock置換・
+  CIの `fetch-depth` 変更は行っていない
+- **確認**: `git clone --depth 1` のshallow clone（登録commitなし、node_modulesはjunction）で、修正前のtestが同じ箇所（160行）で失敗し、修正後のtestがD-1C / D-1B / D-1A / D-0C
+  関連の8 file・76 testとともに通ることを確認した。完全な履歴のcheckoutでも全testが通る
+
+### 0.2 正式計測1と2の比較
+
+| 値 | 正式計測1（`636616d`） | 正式計測2（`68a1ac8`） |
+| --- | --- | --- |
+| formalValidity / 候補outcome / acceptance | valid / verified / accepted | 同じ |
+| verification semantic SHA-256（4 process） | `0a56da0f…33dd4` | 同じ |
+| materialization semantic SHA-256 / Entry fingerprint | `6f790d33…cb18f` / `fnv1a32:ed959cc4` | 同じ |
+| Plan hash / Step semantic hash / 実行位置hash | `903e4274` / `8d28811e` / `3cf477e7` | 同じ |
+| 物理操作数 / Plan steps / objective | 1,766 / 1,766 / 1,766 | 同じ |
+| 計算コード監査 | 許可12件、許可外0、Production 0 | 同じ（同じ12件。2つのHEADの差はtest file 1件とdocsだけ） |
+| benchmark code SHA-256 | `f8e89554…a3cd` | `7dfc5701…cbe2`（test fileの変更による） |
+| Entry集合fileのSHA-256 | `358182a3…229993` | `dfb99aa5…3ca8a1`（fileに書込み時のHEADを含むため。Entry fingerprintは同じ） |
+| 親の合計wall | 91.4 s | 93.8 s |
+
+公開RESULTで比較した `formalValidity`・`candidateOutcome`・`acceptance`・`determinism`・`plannerIntegration`・`postHoc`・`integrityIssues` はすべて同一だった。
 
 本書は [Global Assignment設計](PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md)（以下「設計」）§14 の **D-1C** を記録する。D-1B（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md) §8〜§16）で
 事前登録した条件を変えずに、formal guard・RESULT導出を実装し、登録HEADからの計算コード差分監査の下で、Production Planner統合acceptanceを正式計測した。
@@ -80,7 +136,7 @@ measurement HEADの同じblockと一致することを確認する。
 | `scripts/run-planner-global-assignment-d1c.mjs`（新規） | formal専用runner（親と `--role first|fresh` の子）。D-1A runnerの実行処理（materialization、D-0C同一性照合、Entry集合、`verifyPlannerCandidate()`）を同じmoduleで再利用し、D-1A runnerは変更していない |
 | `scripts/derive-planner-global-assignment-d1c-result.mjs`（新規） | 公開RESULTの導出（`--public`、排他作成）と照合（`--check`） |
 | `src/benchmarks/globalAssignment/verificationRegistration.ts` | `formalRun` の有効化だけ |
-| test | `verificationFormal.test.ts`（24 test）、`verificationFormalResult.test.ts`（5 test）、`verificationFormalTestFixture.ts`、`scripts/run-planner-global-assignment-d1c.test.ts`（5 test）、`scripts/derive-planner-global-assignment-d1c-result.test.ts`（3 test）、`isolation.test.ts`（D-1C module・scriptの隔離）、`verificationRegistration.test.ts`（formalRun有効化） |
+| test | `verificationFormal.test.ts`（24 test）、`verificationFormalResult.test.ts`（5 test）、`verificationFormalTestFixture.ts`、`scripts/run-planner-global-assignment-d1c.test.ts`（6 test。PR #255 Required fixでgit履歴の状態に応じた検証へ変更、§0.1）、`scripts/derive-planner-global-assignment-d1c-result.test.ts`（3 test）、`isolation.test.ts`（D-1C module・scriptの隔離）、`verificationRegistration.test.ts`（formalRun有効化） |
 
 変更fileはD-1Bの許可14 fileのうち12件（D-1A runnerとそのtestは変更しなかった）。
 
@@ -105,7 +161,7 @@ Entry集合を名指しすること、oracle input。入力を読んだ後、計
 
 ## 5. 計算コード差分監査
 
-`git diff --name-only d15ea9b0..636616d6 -- <D-1A runnerのCODE_PATHS>`（`src`、`scripts`、`package.json`、`package-lock.json`、`vite.config.ts`、`vitest.config.ts`、
+`git diff --name-only d15ea9b0..68a1ac86 -- <D-1A runnerのCODE_PATHS>`（正式計測1の `d15ea9b0..636616d6` も同じ12件）（`src`、`scripts`、`package.json`、`package-lock.json`、`vite.config.ts`、`vitest.config.ts`、
 `tsconfig.json`、`tsconfig.app.json`、`tsconfig.node.json`）の結果は次の12件で、すべて登録済み許可fileだった（`outsideAllowed` 0件、`productionChanged` 0件、
 祖先関係true、gitは回答した。親と4子processが同じ監査を独立に行った）。
 
@@ -132,25 +188,29 @@ src/benchmarks/globalAssignment/verificationRegistration.ts
 
 | 項目 | 値 |
 | --- | --- |
-| 実行 | 2026-10-13 13:29:14Z〜13:30:45Z（親の合計wall 91.4 s） |
-| machine / Node | AMD Ryzen 7 9700X（16 logical CPU）、物理memory 31.1 GiB（起動時free 11.7 GiB）、Windows 10.0.26200 x64、Node v24.19.0 / V8 13.6.233.17-node.51 |
-| benchmark code SHA-256 | `f8e8955486a21cdcd49b97e952bf2d7adce3630d7fd9e64676418a01f264a3cd`（measurement HEADのCODE_PATHSのtracked file） |
+| 実行 | 正式計測2: 2026-10-13 14:02:51Z〜14:04:25Z（親の合計wall 93.8 s）。正式計測1: 13:29:14Z〜13:30:45Z（91.4 s） |
+| machine / Node | AMD Ryzen 7 9700X（16 logical CPU）、物理memory 31.1 GiB（起動時free 11.3 GiB。正式計測1は11.7 GiB）、Windows 10.0.26200 x64、Node v24.19.0 / V8 13.6.233.17-node.51 |
+| benchmark code SHA-256 | `7dfc57011bd094de15bc5abf8bb8733ee8e2c4ffdd5ae7e5c03c3a1fd06ecbe2`（現行measurement HEADのCODE_PATHSのtracked file。正式計測1は `f8e8955486a21cdcd49b97e952bf2d7adce3630d7fd9e64676418a01f264a3cd`） |
 | Export | `gogma-artian-planner-backup_20260927015837.json`、19,424,064 bytes、SHA-256 `cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b`。commit済みD-0B-2記録の `registered-export-*` block（`HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md`）と名前・bytes・SHA-256が一致。Export本体はRepositoryに追加していない |
 | CalculationContext | `unknown-initial` / Master 4 / `production-rng:c5-e7` / 計算版数 17（登録値と一致。親の現行authorityと4子processの入力で一致） |
 
+正式計測2（現行measurement HEAD、出力先は正式計測1とは別名）:
+
 ```bash
-node scripts/run-planner-global-assignment-d1c.mjs --mode formal --export "<local path>/gogma-artian-planner-backup_20260927015837.json" --run-dir .local/ga-d1c-formal-r1.run --output .local/ga-d1c-formal-r1.result.json
+node scripts/run-planner-global-assignment-d1c.mjs --mode formal --export "<local path>/gogma-artian-planner-backup_20260927015837.json" --run-dir .local/ga-d1c-formal-r2.run --output .local/ga-d1c-formal-r2.result.json
 ```
 
 ```bash
-node scripts/derive-planner-global-assignment-d1c-result.mjs --result .local/ga-d1c-formal-r1.result.json --run-dir .local/ga-d1c-formal-r1.run --public docs/PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json
+node scripts/derive-planner-global-assignment-d1c-result.mjs --result .local/ga-d1c-formal-r2.result.json --run-dir .local/ga-d1c-formal-r2.run --public docs/PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json
 ```
 
 ```bash
-node scripts/derive-planner-global-assignment-d1c-result.mjs --result .local/ga-d1c-formal-r1.result.json --run-dir .local/ga-d1c-formal-r1.run --check docs/PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json
+node scripts/derive-planner-global-assignment-d1c-result.mjs --result .local/ga-d1c-formal-r2.result.json --run-dir .local/ga-d1c-formal-r2.run --check docs/PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json
 ```
 
-正式計測は1回だけ実行した（exit 0）。失敗・中断・再実行はない。
+正式計測1（`636616d`）は同じコマンドで `.local/ga-d1c-formal-r1.*` へ出力し、その公開RESULTは `PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT_RUN1.json` に改名した
+（`--result .local/ga-d1c-formal-r1.result.json --run-dir .local/ga-d1c-formal-r1.run --check docs/PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT_RUN1.json` はissue 0）。
+正式計測は各measurement HEADで1回ずつ実行した（どちらもexit 0）。失敗・中断はなく、結果を見て条件を変えた再実行はない（正式計測2はtest修正によるHEADの置き換え、§0）。
 
 ### 6.1 正式計測前の機構確認（非formal、証拠ではない）
 
@@ -159,7 +219,7 @@ runnerのコピーを git-ignored な `.local/d1c-dev/run-d1c-dev-precheck.mjs` 
 Working Tree（HEAD `d15ea9b`）上で実行した（2026-10-13 13:23:51Z〜13:25:23Z、条件・Exportは登録どおり）。結論は同じ（valid / verified / accepted、1,766）だったが、
 改変したrunner・未commitのコードでの実行であり、**formal measurementではなく、本書のどの判定の根拠にもしていない**。そのrecordはclean = trueと記録しているが、それは改変による
 ものである。raw recordは `.local/d1c-dev/precheck.*` に残してある（公開しない）。この確認の後にコード・条件・Exportを変えて計測をやり直したことはない
-（確認の後のcommitは §4のコードそのもので、正式計測は §6の1回だけ）。
+（確認の後のcommitは §4のコードそのもので、正式計測1はその1回だけ。正式計測2はRequired fixのtest修正によるもので、§0のとおり）。
 
 ## 7. formal validity
 
@@ -174,7 +234,7 @@ Working Tree（HEAD `d15ea9b`）上で実行した（2026-10-13 13:23:51Z〜13:2
 | `registration_fingerprint_equals_registered_block` | 親と4子processで computed = measurement HEADのblock = 登録HEADのblock = `fnv1a32:2393847e` |
 | `run_conditions_equal_registration` | 各runのmaterialization semantic recordの条件 = D-0C登録条件、first / fresh両方のResearch maxPlanSteps 20,000、first / fresh wall 1,800,000 ms、heap 8,192 MB（親のprocess entry・子の `execArgv` の両方）、同時実行1（process区間が重ならない）、子processのretry none、verification budget 1（first recordの適用値）・検証候補数1 |
 | `no_command_line_override` | 親のflagは `--mode` / `--export` / `--run-dir` / `--output` だけ、mode formal |
-| `clean_committed_head` | 親: HEAD `636616d…`・clean・未commitなし・benchmark code SHA-256記録。4子processが同じHEADのcleanを観測。各runの前後でcheckout不変 |
+| `clean_committed_head` | 親: HEAD `68a1ac8…`（正式計測1は `636616d…`）・clean・未commitなし・benchmark code SHA-256記録。4子processが同じHEADのcleanを観測。各runの前後でcheckout不変 |
 | `registration_head_is_ancestor` | 親と4子processの監査で祖先関係true |
 | `calculation_code_audit_passed` | 親と4子processの監査で許可file以外の変更0件（§5） |
 | `production_calculation_unchanged` | 親と4子processの監査でProduction変更0件 |
@@ -207,12 +267,12 @@ Working Tree（HEAD `d15ea9b`）上で実行した（2026-10-13 13:23:51Z〜13:2
 
 ## 8. 2 complete runの結果
 
-| run | process | outcome | 親の観測wall | 主な結果 |
+| run | process | outcome | 親の観測wall（正式計測2 / 1） | 主な結果 |
 | --- | --- | --- | ---: | --- |
-| 1 | first | completed | 38.2 s | D-0C同一性一致、43 Entry、Phase D' `conditions_met` |
-| 1 | fresh | completed | 7.7 s | 自身のPhase 0（planning Target 43）、Entry集合の出所・fingerprint一致、Phase D' `conditions_met` |
-| 2 | first | completed | 37.5 s | run 1と同じ（Run 1のEntry集合を使わず、materializationから再計算） |
-| 2 | fresh | completed | 7.7 s | run 1と同じ（run 2のEntry集合だけを読んだ） |
+| 1 | first | completed | 38.9 s / 38.2 s | D-0C同一性一致、43 Entry、Phase D' `conditions_met` |
+| 1 | fresh | completed | 7.8 s / 7.7 s | 自身のPhase 0（planning Target 43）、Entry集合の出所・fingerprint一致、Phase D' `conditions_met` |
+| 2 | first | completed | 38.7 s / 37.5 s | run 1と同じ（Run 1のEntry集合を使わず、materializationから再計算） |
+| 2 | fresh | completed | 7.9 s / 7.7 s | run 1と同じ（run 2のEntry集合だけを読んだ） |
 
 timeout / OOM / cancel / process failureは0件。各runの判定（D-1Aの `concludeD1aRun()`）は両runとも `verified`（physicalOperations 1,766、planSteps 1,766、objective 1,766、
 planning Target 43、full Planner run first 1 / fresh 1）、cross process identical、integrity issue 0、exit 0。
@@ -228,7 +288,7 @@ planning Target 43、full Planner run first 1 / fresh 1）、cross process ident
 | 実行位置hash（`executedHash`） | `fnv1a32:3cf477e7` | 同じ | 同じ | 同じ |
 
 verification semantic SHA-256はD-1Bの非formal再確認（`120be4c`、D-1A runner）と同じ値、Plan hash・Step semantic hashはD-1A / D-1Bと同じ値だった。
-Entry集合file（`first.entry-set.json`）は両runで同一bytes（768,648 bytes、SHA-256 `358182a3…229993`）。
+Entry集合file（`first.entry-set.json`）は両runで同一bytes（768,648 bytes、SHA-256 `dfb99aa5…3ca8a1`。正式計測1は `358182a3…229993`。fileが書込み時のHEADを含むため異なり、Entry fingerprintは同じ）。
 
 ### 8.2 materialization同一性
 
@@ -292,14 +352,17 @@ outcomeを決めた場合（handoff / planning Target集合の段階で止まり
 
 | 値 | run 1 first | run 1 fresh | run 2 first | run 2 fresh |
 | --- | ---: | ---: | ---: | ---: |
-| 親の観測wall / child wall（record） | 38.2 s / 37.9 s | 7.7 s / 7.5 s | 37.5 s / 37.3 s | 7.7 s / 7.5 s |
-| setup | 0.87 s | 0.88 s | 0.87 s | 0.90 s |
-| materialization（context / ReachTable / structural search / 合計） | 1.69 / 11.11 / 17.38 / 32.00 s | — | 1.63 / 11.11 / 16.85 / 31.39 s | — |
-| Phase D'（final input / Planner / Trace Replay / 物理 / 合計） | 0.29 / 4.14 / 0.40 / 0.004 / 4.89 s | 0.30 / 4.16 / 0.38 / 0.003 / 4.90 s | 0.30 / 4.13 / 0.40 / 0.003 / 4.90 s | 0.31 / 4.12 / 0.38 / 0.003 / 4.88 s |
-| heapUsed最大（250 ms標本） | 1.42 GB | 0.65 GB | 1.41 GB | 0.69 GB |
-| maxRSS | 1,614,792 KiB | 871,944 KiB | 1,599,088 KiB | 907,184 KiB |
+| 親の観測wall / child wall（record） | 38.9 s / 38.7 s | 7.8 s / 7.6 s | 38.7 s / 38.5 s | 7.9 s / 7.7 s |
+| setup | 0.92 s | 0.90 s | 0.90 s | 0.91 s |
+| materialization（context / ReachTable / structural search / 合計） | 1.73 / 11.33 / 17.72 / 32.64 s | — | 1.69 / 11.22 / 17.63 / 32.39 s | — |
+| Phase D'（final input / Planner / Trace Replay / 物理 / 合計） | 0.30 / 4.22 / 0.40 / 0.003 / 4.98 s | 0.31 / 4.22 / 0.40 / 0.003 / 5.00 s | 0.31 / 4.29 / 0.40 / 0.003 / 5.06 s | 0.31 / 4.24 / 0.44 / 0.003 / 5.07 s |
+| heapUsed最大（250 ms標本） | 1.37 GB | 0.65 GB | 1.42 GB | 0.65 GB |
+| maxRSS | 1,559,768 KiB | 874,068 KiB | 1,614,232 KiB | 871,212 KiB |
 
-親の合計wall 91.4 s。各子processは登録envelope（30分 / 8,192 MB、heap上限 8.79 GB）の数%以内で終わった。時間・memoryは観測値であり、操作数の評価とは別の指標である
+（正式計測2の値。正式計測1: 親の観測wall 38.2 / 7.7 / 37.5 / 7.7 s、materialization 32.00 / 31.39 s、Phase D' 4.89 / 4.90 / 4.90 / 4.88 s、heapUsed最大 1.42 / 0.65 / 1.41 / 0.69 GB、
+maxRSS 1,614,792 / 871,944 / 1,599,088 / 907,184 KiB、親の合計91.4 s。詳細は `PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT_RUN1.json`）
+
+親の合計wall 93.8 s。各子processは登録envelope（30分 / 8,192 MB、heap上限 8.79 GB）の数%以内で終わった。時間・memoryは観測値であり、操作数の評価とは別の指標である
 （設計 §13.2）。観測値から30分・8,192 MBまでの区間は実行していない。
 
 ## 13. incumbent比較と最小性（post-hoc）
@@ -320,7 +383,34 @@ planning Target 43 = 下限moduleの対象集合で適用可能）である。�
 
 ## 14. raw recordのhash
 
-raw record（`.local/`、git-ignored。Target ID・Entry本体・Plan全Stepを含むので公開しない。排他作成で、既存のD-0C / D-1A / D-1Bのraw recordは上書きしていない）:
+raw record（`.local/`、git-ignored。Target ID・Entry本体・Plan全Stepを含むので公開しない。排他作成で、既存のD-0C / D-1A / D-1Bのraw record、
+および正式計測1のraw recordは上書きしていない）。
+
+### 14.1 正式計測2（現行、`68a1ac8`）
+
+| file | bytes | SHA-256 |
+| --- | ---: | --- |
+| `ga-d1c-formal-r2.result.json`（親のraw RESULT） | 19,117 | `366b26db4b99a00c320605b4e09ed9f75a2c14ac548692e9528df724e5864744` |
+| `ga-d1c-formal-r2.run/start.json` | 7,294 | `53633e327212bf0bd52b6da58141e8bab3575fb48c0ce5dfddc7616d925981de` |
+| `ga-d1c-formal-r2.run/run-1/first.task.json` | 2,689 | `1519f5f0524626fe8cfe6b3bfd902fd7434ada7c3e7374d4d7c5b914d6dd7361` |
+| `ga-d1c-formal-r2.run/run-1/first.record.json` | 650,529 | `f3e888d6eb227a6ab317a311423d0e6fd5d91ccefb49a34b1ca19b7cf9313332` |
+| `ga-d1c-formal-r2.run/run-1/first.journal.jsonl` | 22,526 | `ace169da2cc56b1d50ec71c9d0a71d58f0c52bd703eb27f1153fe186f22f5d48` |
+| `ga-d1c-formal-r2.run/run-1/first.entry-set.json` | 768,648 | `dfb99aa577298e04dfddab03a1a0abde5b777b7650fb084ff0e02c26743ca8a1` |
+| `ga-d1c-formal-r2.run/run-1/fresh.task.json` | 2,895 | `e42302e5da1ef3a5a06ceaefd404e1c69d0da4ed59d40724a888d3289236ebb7` |
+| `ga-d1c-formal-r2.run/run-1/fresh.record.json` | 35,555 | `99c2fbf55bd417418f26e4d1c76d60d3bc70916a803b3c078bbdfc727a2b6e52` |
+| `ga-d1c-formal-r2.run/run-1/fresh.journal.jsonl` | 1,228 | `d29253eab99ada4025dcafdbbef6979407278a4b0923040517a243c12f4f08f7` |
+| `ga-d1c-formal-r2.run/run-2/first.task.json` | 2,689 | `7525eb29fb45d47c2f2e9896e16973d6917211126745d8ac52af61d1b51f5dc0` |
+| `ga-d1c-formal-r2.run/run-2/first.record.json` | 650,549 | `a38f7a8b5869225a60edfa782d457f6b0b1be1c8542bad9fc4805e3176dc76cd` |
+| `ga-d1c-formal-r2.run/run-2/first.journal.jsonl` | 22,361 | `a935425076e84043f609efd5900d26beecbd95f359da2095f61182572fd7fe5c` |
+| `ga-d1c-formal-r2.run/run-2/first.entry-set.json` | 768,648 | `dfb99aa577298e04dfddab03a1a0abde5b777b7650fb084ff0e02c26743ca8a1` |
+| `ga-d1c-formal-r2.run/run-2/fresh.task.json` | 2,895 | `158a4da4c2231f293861ba9ff2c3434d39a134c16af6dddcbebced8ac3323afb` |
+| `ga-d1c-formal-r2.run/run-2/fresh.record.json` | 35,565 | `30903aa22e5cf5b0bbfc2fe2b1e18b25df78dc13c9d28e6d80d09a941350cf1c` |
+| `ga-d1c-formal-r2.run/run-2/fresh.journal.jsonl` | 1,228 | `530f1264d5bb0ff2d1a964f4984c42da3cdfdf00438c9080afac10e2aa079813` |
+| `ga-d1c-formal-r2.stdout.log`（親のstdout） | 984 | `e785a534f1a6e281cdbaba52d1f0e5436a05b8abbd9c9c3bfd057de908b6fa9d` |
+
+親のstderrは空（0 bytes）。公開RESULT（`PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json`）の `derivation.sources` は親のstdoutを除く上の16 fileを同じbytes・SHA-256で列挙する（導出scriptが照合する）。
+
+### 14.2 正式計測1（置き換え済み、`636616d`。正式計測2の後に再確認したSHA-256も同じ）
 
 | file | bytes | SHA-256 |
 | --- | ---: | --- |
@@ -342,7 +432,7 @@ raw record（`.local/`、git-ignored。Target ID・Entry本体・Plan全Stepを�
 | `ga-d1c-formal-r1.run/run-2/fresh.journal.jsonl` | 1,218 | `e491543fda46f2fb2176871f6d58d74ecbff714b21ed02e073d0e7753d6d7962` |
 | `ga-d1c-formal-r1.stdout.log`（親のstdout） | 984 | `aee4cddede5a9e25659955b52ffe0b733a5600831ef089856674e5f1b5790a19` |
 
-親のstderrは空（0 bytes）。公開RESULTの `derivation.sources` は親のstdoutを除く上の16 fileを同じbytes・SHA-256で列挙する（導出scriptが照合する）。
+親のstderrは空（0 bytes）。公開RESULT `PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT_RUN1.json`（内容は初版から不変）の `derivation.sources` は親のstdoutを除く上の16 fileを列挙する。
 
 ## 15. 未確認事項
 
@@ -352,7 +442,9 @@ raw record（`.local/`、git-ignored。Target ID・Entry本体・Plan全Stepを�
 - **非物理Step・Production runtime-unsupported retryを含む実Exportの候補**: この候補は非物理Step 0、retryなし。改訂規則のその部分はsyntheticでのみ確認
 - **envelopeの観測値より上の区間**: 30分・8,192 MBまでは実行していない
 - **`proven_minimum`**: 成立しない（§13.2）。下界1,657と1,766の差109を埋めるPlanの存在・非存在はどちらも示していない
-- **CIでのformal gate**: GitHub Actionsのshallow checkoutには登録HEADが無いので、formal gateは常にfail closedになる（意図どおり。testは両方の場合を扱う）
+- **CIでのformal gate**: GitHub Actionsのshallow checkoutには登録HEADが無いので、formal gateは常にfail closedになる（意図どおり）。testはguardと同じgitコマンドで
+  履歴の状態を個別に調べ、完全な履歴とshallow checkoutの両方で拒否理由を確認する（§0.1）。登録commitはあるが文書だけ読めない、祖先関係だけ確認できない、といった
+  中間の状態は、testの分岐としては扱っているが、実際の環境では作っていない
 
 ## 16. Phase Eへの引き継ぎ
 

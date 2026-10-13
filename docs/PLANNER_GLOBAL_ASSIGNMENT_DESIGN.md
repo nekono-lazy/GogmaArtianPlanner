@@ -1462,7 +1462,9 @@ D-1C（formal run）に分けた（§14）。
 [D-1C記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1C.md)・[公開RESULT](PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json)（**formal measurement**）。D-1Bの登録条件を変えずに
 formal基盤（`verificationFormal.ts` / `verificationFormalResult.ts`、formal専用runner `scripts/run-planner-global-assignment-d1c.mjs`、導出script）を実装し、登録の
 `formalRun` だけを有効化した（registration fingerprint `fnv1a32:2393847e` は不変）。登録HEAD `d15ea9b`（PR #254のmerge commit）からの計算コード差分監査は許可fileだけ
-（12件、Production変更0件）で、measurement HEAD `636616d` で2 complete run（各run = first + fresh、4子process）を正式計測した。
+（12件、Production変更0件）で、2 complete run（各run = first + fresh、4子process）を正式計測した。現行のmeasurement HEADは `68a1ac8`（正式計測2）で、
+`636616d` での正式計測1は、PR #255のCI（shallow checkout）で失敗したformal child gateのtest assertionを履歴の状態に合わせたcommitの後に、登録条件のまま
+再計測して置き換えた（記録 §0。semantic recordと結果は同一）。
 
 - **`formalValidity = valid`**: 登録のprovenance 15規則・reproducibility 9規則をそれぞれrecordから判定し、すべて成立（親のstart gateと各子processの独立gate、
   登録Export・CalculationContext・Engine・Master、oracle未使用、4 processのverification semantic一致、両runのmaterialization semantic SHA-256 / Entry fingerprintが

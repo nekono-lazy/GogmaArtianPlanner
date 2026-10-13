@@ -6,84 +6,84 @@
     "function": "deriveD1cPublicResult() (src/benchmarks/globalAssignment/verificationFormalResult.ts)",
     "sources": [
       {
-        "file": "ga-d1c-formal-r1.result.json",
-        "bytes": 19101,
-        "sha256": "481769286646ef68fc330f0f917473c93d1d218587b7d174a307bd0755b48682"
+        "file": "ga-d1c-formal-r2.result.json",
+        "bytes": 19117,
+        "sha256": "366b26db4b99a00c320605b4e09ed9f75a2c14ac548692e9528df724e5864744"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-1/first.entry-set.json",
+        "file": "ga-d1c-formal-r2.run/run-1/first.entry-set.json",
         "bytes": 768648,
-        "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993"
+        "sha256": "dfb99aa577298e04dfddab03a1a0abde5b777b7650fb084ff0e02c26743ca8a1"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-1/first.journal.jsonl",
-        "bytes": 22483,
-        "sha256": "212d4511542f9660e01ace8171d5aa931a40e1b65ae4022f29e47918f8381768"
+        "file": "ga-d1c-formal-r2.run/run-1/first.journal.jsonl",
+        "bytes": 22526,
+        "sha256": "ace169da2cc56b1d50ec71c9d0a71d58f0c52bd703eb27f1153fe186f22f5d48"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-1/first.record.json",
-        "bytes": 650570,
-        "sha256": "f814690927d71d35d4083b91273b61d795d684310688c101d3c1cdec59a5638d"
+        "file": "ga-d1c-formal-r2.run/run-1/first.record.json",
+        "bytes": 650529,
+        "sha256": "f3e888d6eb227a6ab317a311423d0e6fd5d91ccefb49a34b1ca19b7cf9313332"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-1/first.task.json",
+        "file": "ga-d1c-formal-r2.run/run-1/first.task.json",
         "bytes": 2689,
-        "sha256": "2f2095df97454a65f1c85b29010b1d9fa1a6c32589b1cf813fa6e6137b5e3d00"
+        "sha256": "1519f5f0524626fe8cfe6b3bfd902fd7434ada7c3e7374d4d7c5b914d6dd7361"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-1/fresh.journal.jsonl",
-        "bytes": 1237,
-        "sha256": "314f1ba923b83f3cb19b28964efb74b52edc26375a06a25de57018df3e3b31f6"
+        "file": "ga-d1c-formal-r2.run/run-1/fresh.journal.jsonl",
+        "bytes": 1228,
+        "sha256": "d29253eab99ada4025dcafdbbef6979407278a4b0923040517a243c12f4f08f7"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-1/fresh.record.json",
-        "bytes": 35599,
-        "sha256": "c411d2b3ca739d08497972f30cb763afa84b8d025a9157d85fc98ad178424d87"
+        "file": "ga-d1c-formal-r2.run/run-1/fresh.record.json",
+        "bytes": 35555,
+        "sha256": "99c2fbf55bd417418f26e4d1c76d60d3bc70916a803b3c078bbdfc727a2b6e52"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-1/fresh.task.json",
+        "file": "ga-d1c-formal-r2.run/run-1/fresh.task.json",
         "bytes": 2895,
-        "sha256": "07adc4a3efa04bc564708915db45c14657dc2d661f1b7005f543f5fb3e3a5c75"
+        "sha256": "e42302e5da1ef3a5a06ceaefd404e1c69d0da4ed59d40724a888d3289236ebb7"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-2/first.entry-set.json",
+        "file": "ga-d1c-formal-r2.run/run-2/first.entry-set.json",
         "bytes": 768648,
-        "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993"
+        "sha256": "dfb99aa577298e04dfddab03a1a0abde5b777b7650fb084ff0e02c26743ca8a1"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-2/first.journal.jsonl",
-        "bytes": 22320,
-        "sha256": "7f823fb3110e4d71e949d218a44cbb13ec905c0978aa86313a74b522f57c4c8c"
+        "file": "ga-d1c-formal-r2.run/run-2/first.journal.jsonl",
+        "bytes": 22361,
+        "sha256": "a935425076e84043f609efd5900d26beecbd95f359da2095f61182572fd7fe5c"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-2/first.record.json",
-        "bytes": 650559,
-        "sha256": "49ef09562ef41f05cca734f392aa6d61ae601d21362ec2538e0456819d591907"
+        "file": "ga-d1c-formal-r2.run/run-2/first.record.json",
+        "bytes": 650549,
+        "sha256": "a38f7a8b5869225a60edfa782d457f6b0b1be1c8542bad9fc4805e3176dc76cd"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-2/first.task.json",
+        "file": "ga-d1c-formal-r2.run/run-2/first.task.json",
         "bytes": 2689,
-        "sha256": "5c14e252491877b15a90665a78361b50dd44f310452620fd7ead3252a809a5a6"
+        "sha256": "7525eb29fb45d47c2f2e9896e16973d6917211126745d8ac52af61d1b51f5dc0"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-2/fresh.journal.jsonl",
-        "bytes": 1218,
-        "sha256": "e491543fda46f2fb2176871f6d58d74ecbff714b21ed02e073d0e7753d6d7962"
+        "file": "ga-d1c-formal-r2.run/run-2/fresh.journal.jsonl",
+        "bytes": 1228,
+        "sha256": "530f1264d5bb0ff2d1a964f4984c42da3cdfdf00438c9080afac10e2aa079813"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-2/fresh.record.json",
-        "bytes": 35562,
-        "sha256": "34706a80888985ff2335ebf616f9320c8d703289c126212906b4580dddb3cf8c"
+        "file": "ga-d1c-formal-r2.run/run-2/fresh.record.json",
+        "bytes": 35565,
+        "sha256": "30903aa22e5cf5b0bbfc2fe2b1e18b25df78dc13c9d28e6d80d09a941350cf1c"
       },
       {
-        "file": "ga-d1c-formal-r1.run/run-2/fresh.task.json",
+        "file": "ga-d1c-formal-r2.run/run-2/fresh.task.json",
         "bytes": 2895,
-        "sha256": "e3275a12523f98f3b868525230b3e9afec315bd4565593673c03f402db60558c"
+        "sha256": "158a4da4c2231f293861ba9ff2c3434d39a134c16af6dddcbebced8ac3323afb"
       },
       {
-        "file": "ga-d1c-formal-r1.run/start.json",
-        "bytes": 7295,
-        "sha256": "3512b6a80b74b562e88d5e30883ef3dc906aa56c1350eaa5ef3000413f2e8e2f"
+        "file": "ga-d1c-formal-r2.run/start.json",
+        "bytes": 7294,
+        "sha256": "53633e327212bf0bd52b6da58141e8bab3575fb48c0ce5dfddc7616d925981de"
       }
     ],
     "consistency": {
@@ -372,9 +372,9 @@
     "allowedChangedFileCount": 14
   },
   "provenance": {
-    "measurementHeadSha": "636616d6764f6bb4ac4a206aa39afec789b1b5c6",
+    "measurementHeadSha": "68a1ac8696560ba8eab61e3bfc887cb3f13f5898",
     "registrationHead": "d15ea9b0277b417b2681305486b6fb03dda57054",
-    "benchmarkCodeSha256": "f8e8955486a21cdcd49b97e952bf2d7adce3630d7fd9e64676418a01f264a3cd",
+    "benchmarkCodeSha256": "7dfc57011bd094de15bc5abf8bb8733ee8e2c4ffdd5ae7e5c03c3a1fd06ecbe2",
     "workingTreeClean": true,
     "uncommittedBenchmarkCode": false,
     "flags": [
@@ -472,7 +472,7 @@
     "runnerScript": "scripts/run-planner-global-assignment-d1c.mjs",
     "node": "v24.19.0",
     "v8": "13.6.233.17-node.51",
-    "launchedAt": "2026-10-13T13:29:14.300Z",
+    "launchedAt": "2026-10-13T14:02:51.686Z",
     "machine": {
       "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor",
       "logicalCpuCount": 16,
@@ -480,7 +480,7 @@
       "arch": "x64",
       "osRelease": "10.0.26200",
       "totalMemoryBytes": 33377591296,
-      "freeMemoryBytes": 12607160320
+      "freeMemoryBytes": 12173922304
     },
     "plannerInputMaxPlanStepsForValidationOnly": 1000
   },
@@ -523,7 +523,7 @@
           "timedOut": false,
           "cancelled": false,
           "settledBy": "close",
-          "wallObservedMs": 38150.423,
+          "wallObservedMs": 38914.206,
           "wallMs": 1800000,
           "heapMb": 8192,
           "nodeFlags": [
@@ -580,13 +580,13 @@
               "failClosed": 0
             }
           },
-          "wallMs": 32002.511,
+          "wallMs": 32635.729,
           "stagesMs": {
-            "context": 1687.163,
-            "reachTable": 11112.371,
-            "structuralSearch": 17384.433,
-            "toFirstStructuralCandidate": 17384.101,
-            "total": 32001.831
+            "context": 1725.11,
+            "reachTable": 11331.912,
+            "structuralSearch": 17720.052,
+            "toFirstStructuralCandidate": 17719.547,
+            "total": 32635.042
           }
         },
         "identity": {
@@ -602,7 +602,7 @@
         },
         "entrySet": {
           "bytes": 768648,
-          "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993",
+          "sha256": "dfb99aa577298e04dfddab03a1a0abde5b777b7650fb084ff0e02c26743ca8a1",
           "entryFingerprint": "fnv1a32:ed959cc4",
           "entryCount": 43,
           "issueCount": null
@@ -742,28 +742,28 @@
             "executedHash": "fnv1a32:3cf477e7"
           },
           "elapsedMs": {
-            "handoff": 0.705,
-            "final_input": 294.601,
-            "planner": 4136.713,
-            "trace_replay": 397.614,
-            "physical": 4.039,
-            "total": 4892.626
+            "handoff": 0.703,
+            "final_input": 298.748,
+            "planner": 4216.133,
+            "trace_replay": 399.235,
+            "physical": 3.433,
+            "total": 4976.329
           }
         },
         "timing": {
-          "setupMs": 869.021,
-          "wallMs": 37907.57,
+          "setupMs": 923.757,
+          "wallMs": 38675.034,
           "eventLoopYields": 22575
         },
         "memory": {
-          "heapUsedMax": 1421287128,
-          "heapTotalMax": 1506533376,
-          "rssMax": 1652781056,
-          "externalMax": 82122627,
-          "sampleCount": 81,
-          "maxRssKiB": 1614792,
+          "heapUsedMax": 1365304848,
+          "heapTotalMax": 1452531712,
+          "rssMax": 1596379136,
+          "externalMax": 82114310,
+          "sampleCount": 83,
+          "maxRssKiB": 1559768,
           "heapSizeLimit": 8791261184,
-          "stageHeapUsedMax": 1421197880
+          "stageHeapUsedMax": 1365214088
         },
         "confirmedProgress": null
       },
@@ -776,7 +776,7 @@
           "timedOut": false,
           "cancelled": false,
           "settledBy": "close",
-          "wallObservedMs": 7663.93,
+          "wallObservedMs": 7814.131,
           "wallMs": 1800000,
           "heapMb": 8192,
           "nodeFlags": [
@@ -814,7 +814,7 @@
         "identity": null,
         "entrySet": {
           "bytes": null,
-          "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993",
+          "sha256": "dfb99aa577298e04dfddab03a1a0abde5b777b7650fb084ff0e02c26743ca8a1",
           "entryFingerprint": "fnv1a32:ed959cc4",
           "entryCount": 43,
           "issueCount": 0
@@ -954,28 +954,28 @@
             "executedHash": "fnv1a32:3cf477e7"
           },
           "elapsedMs": {
-            "handoff": 0.817,
-            "final_input": 297.783,
-            "planner": 4157.666,
-            "trace_replay": 384.197,
-            "physical": 3.253,
-            "total": 4904.451
+            "handoff": 0.85,
+            "final_input": 313.19,
+            "planner": 4218.343,
+            "trace_replay": 397.28,
+            "physical": 3.257,
+            "total": 4999.498
           }
         },
         "timing": {
-          "setupMs": 884.743,
-          "wallMs": 7473.408,
+          "setupMs": 900.538,
+          "wallMs": 7623.466,
           "eventLoopYields": 27
         },
         "memory": {
-          "heapUsedMax": 649677288,
-          "heapTotalMax": 756764672,
-          "rssMax": 880836608,
+          "heapUsedMax": 645618448,
+          "heapTotalMax": 757026816,
+          "rssMax": 881565696,
           "externalMax": 82122627,
-          "sampleCount": 9,
-          "maxRssKiB": 871944,
+          "sampleCount": 10,
+          "maxRssKiB": 874068,
           "heapSizeLimit": 8791261184,
-          "stageHeapUsedMax": 649605936
+          "stageHeapUsedMax": 645529504
         },
         "confirmedProgress": null
       },
@@ -1015,7 +1015,7 @@
           "timedOut": false,
           "cancelled": false,
           "settledBy": "close",
-          "wallObservedMs": 37539.574,
+          "wallObservedMs": 38725.892,
           "wallMs": 1800000,
           "heapMb": 8192,
           "nodeFlags": [
@@ -1072,13 +1072,13 @@
               "failClosed": 0
             }
           },
-          "wallMs": 31390.318,
+          "wallMs": 32391.71,
           "stagesMs": {
-            "context": 1631.709,
-            "reachTable": 11106.992,
-            "structuralSearch": 16851.815,
-            "toFirstStructuralCandidate": 16851.378,
-            "total": 31389.598
+            "context": 1685.084,
+            "reachTable": 11222.528,
+            "structuralSearch": 17627.631,
+            "toFirstStructuralCandidate": 17627.12,
+            "total": 32390.991
           }
         },
         "identity": {
@@ -1094,7 +1094,7 @@
         },
         "entrySet": {
           "bytes": 768648,
-          "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993",
+          "sha256": "dfb99aa577298e04dfddab03a1a0abde5b777b7650fb084ff0e02c26743ca8a1",
           "entryFingerprint": "fnv1a32:ed959cc4",
           "entryCount": 43,
           "issueCount": null
@@ -1234,28 +1234,28 @@
             "executedHash": "fnv1a32:3cf477e7"
           },
           "elapsedMs": {
-            "handoff": 0.681,
-            "final_input": 302.723,
-            "planner": 4131.429,
-            "trace_replay": 401.38,
-            "physical": 3.231,
-            "total": 4897.959
+            "handoff": 0.818,
+            "final_input": 307.31,
+            "planner": 4285.113,
+            "trace_replay": 403.217,
+            "physical": 3.367,
+            "total": 5058.802
           }
         },
         "timing": {
-          "setupMs": 874.641,
-          "wallMs": 37301.675,
+          "setupMs": 899.778,
+          "wallMs": 38494.872,
           "eventLoopYields": 22575
         },
         "memory": {
-          "heapUsedMax": 1405242600,
-          "heapTotalMax": 1490804736,
-          "rssMax": 1636704256,
+          "heapUsedMax": 1423399696,
+          "heapTotalMax": 1507057664,
+          "rssMax": 1652187136,
           "externalMax": 82122627,
-          "sampleCount": 81,
-          "maxRssKiB": 1599088,
+          "sampleCount": 82,
+          "maxRssKiB": 1614232,
           "heapSizeLimit": 8791261184,
-          "stageHeapUsedMax": 1405154088
+          "stageHeapUsedMax": 1423308936
         },
         "confirmedProgress": null
       },
@@ -1268,7 +1268,7 @@
           "timedOut": false,
           "cancelled": false,
           "settledBy": "close",
-          "wallObservedMs": 7685.9,
+          "wallObservedMs": 7892.673,
           "wallMs": 1800000,
           "heapMb": 8192,
           "nodeFlags": [
@@ -1306,7 +1306,7 @@
         "identity": null,
         "entrySet": {
           "bytes": null,
-          "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993",
+          "sha256": "dfb99aa577298e04dfddab03a1a0abde5b777b7650fb084ff0e02c26743ca8a1",
           "entryFingerprint": "fnv1a32:ed959cc4",
           "entryCount": 43,
           "issueCount": 0
@@ -1446,28 +1446,28 @@
             "executedHash": "fnv1a32:3cf477e7"
           },
           "elapsedMs": {
-            "handoff": 0.914,
-            "final_input": 307.526,
-            "planner": 4119.422,
-            "trace_replay": 382.686,
-            "physical": 3.337,
-            "total": 4879.584
+            "handoff": 0.81,
+            "final_input": 311.898,
+            "planner": 4243.994,
+            "trace_replay": 441.352,
+            "physical": 3.143,
+            "total": 5068.565
           }
         },
         "timing": {
-          "setupMs": 904.847,
-          "wallMs": 7497.126,
+          "setupMs": 911.302,
+          "wallMs": 7705.15,
           "eventLoopYields": 27
         },
         "memory": {
-          "heapUsedMax": 686775360,
-          "heapTotalMax": 775639040,
-          "rssMax": 900861952,
-          "externalMax": 82114310,
-          "sampleCount": 9,
-          "maxRssKiB": 907184,
+          "heapUsedMax": 649624696,
+          "heapTotalMax": 756764672,
+          "rssMax": 881168384,
+          "externalMax": 82122627,
+          "sampleCount": 10,
+          "maxRssKiB": 871212,
           "heapSizeLimit": 8791261184,
-          "stageHeapUsedMax": 686817080
+          "stageHeapUsedMax": 649553296
         },
         "confirmedProgress": null
       },
@@ -1591,7 +1591,7 @@
       "signal": null,
       "timedOut": false,
       "cancelled": false,
-      "wallObservedMs": 38150.423,
+      "wallObservedMs": 38914.206,
       "wallMs": 1800000,
       "heapMb": 8192
     },
@@ -1604,7 +1604,7 @@
       "signal": null,
       "timedOut": false,
       "cancelled": false,
-      "wallObservedMs": 7663.93,
+      "wallObservedMs": 7814.131,
       "wallMs": 1800000,
       "heapMb": 8192
     },
@@ -1617,7 +1617,7 @@
       "signal": null,
       "timedOut": false,
       "cancelled": false,
-      "wallObservedMs": 37539.574,
+      "wallObservedMs": 38725.892,
       "wallMs": 1800000,
       "heapMb": 8192
     },
@@ -1630,14 +1630,14 @@
       "signal": null,
       "timedOut": false,
       "cancelled": false,
-      "wallObservedMs": 7685.9,
+      "wallObservedMs": 7892.673,
       "wallMs": 1800000,
       "heapMb": 8192
     }
   ],
   "cancelled": false,
   "exitCode": 0,
-  "totalWallMs": 91442.566,
+  "totalWallMs": 93751.554,
   "claims": "acceptance only when formalValidity is valid and the candidate outcome is verified; verified is the first structural candidate of a verification budget of one (never a claim about later candidates); no proven_minimum is claimed by the runner",
   "unconfirmed": [
     "structural candidates after the first one (verification budget 1: not_attempted, never absent) and whether one has fewer physical operations",
