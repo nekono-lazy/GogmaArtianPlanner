@@ -1,0 +1,1650 @@
+{
+  "resultKind": "global-assignment-d1c-public-result",
+  "derivation": {
+    "revision": 1,
+    "script": "scripts/derive-planner-global-assignment-d1c-result.mjs",
+    "function": "deriveD1cPublicResult() (src/benchmarks/globalAssignment/verificationFormalResult.ts)",
+    "sources": [
+      {
+        "file": "ga-d1c-formal-r1.result.json",
+        "bytes": 19101,
+        "sha256": "481769286646ef68fc330f0f917473c93d1d218587b7d174a307bd0755b48682"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-1/first.entry-set.json",
+        "bytes": 768648,
+        "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-1/first.journal.jsonl",
+        "bytes": 22483,
+        "sha256": "212d4511542f9660e01ace8171d5aa931a40e1b65ae4022f29e47918f8381768"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-1/first.record.json",
+        "bytes": 650570,
+        "sha256": "f814690927d71d35d4083b91273b61d795d684310688c101d3c1cdec59a5638d"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-1/first.task.json",
+        "bytes": 2689,
+        "sha256": "2f2095df97454a65f1c85b29010b1d9fa1a6c32589b1cf813fa6e6137b5e3d00"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-1/fresh.journal.jsonl",
+        "bytes": 1237,
+        "sha256": "314f1ba923b83f3cb19b28964efb74b52edc26375a06a25de57018df3e3b31f6"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-1/fresh.record.json",
+        "bytes": 35599,
+        "sha256": "c411d2b3ca739d08497972f30cb763afa84b8d025a9157d85fc98ad178424d87"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-1/fresh.task.json",
+        "bytes": 2895,
+        "sha256": "07adc4a3efa04bc564708915db45c14657dc2d661f1b7005f543f5fb3e3a5c75"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-2/first.entry-set.json",
+        "bytes": 768648,
+        "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-2/first.journal.jsonl",
+        "bytes": 22320,
+        "sha256": "7f823fb3110e4d71e949d218a44cbb13ec905c0978aa86313a74b522f57c4c8c"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-2/first.record.json",
+        "bytes": 650559,
+        "sha256": "49ef09562ef41f05cca734f392aa6d61ae601d21362ec2538e0456819d591907"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-2/first.task.json",
+        "bytes": 2689,
+        "sha256": "5c14e252491877b15a90665a78361b50dd44f310452620fd7ead3252a809a5a6"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-2/fresh.journal.jsonl",
+        "bytes": 1218,
+        "sha256": "e491543fda46f2fb2176871f6d58d74ecbff714b21ed02e073d0e7753d6d7962"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-2/fresh.record.json",
+        "bytes": 35562,
+        "sha256": "34706a80888985ff2335ebf616f9320c8d703289c126212906b4580dddb3cf8c"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/run-2/fresh.task.json",
+        "bytes": 2895,
+        "sha256": "e3275a12523f98f3b868525230b3e9afec315bd4565593673c03f402db60558c"
+      },
+      {
+        "file": "ga-d1c-formal-r1.run/start.json",
+        "bytes": 7295,
+        "sha256": "3512b6a80b74b562e88d5e30883ef3dc906aa56c1350eaa5ef3000413f2e8e2f"
+      }
+    ],
+    "consistency": {
+      "startRecordMatchesRaw": true,
+      "readingsMatchRaw": true,
+      "semanticSha256MatchesRecords": true,
+      "conclusionMatchesRecords": true
+    },
+    "withheld": [
+      "Target / OwnedWeapon / BuildListEntry / Candidate / Conflict identifiers and per-Target hashes",
+      "Entry bodies, Candidate snapshots and Routes",
+      "Plan Steps, Counter positions and stream ends",
+      "the materialization order and per-Target outcomes",
+      "the Export itself, absolute paths, process ids and stderr"
+    ],
+    "note": "A mechanical aggregate of the formal raw outputs kept git-ignored in .local; no new measurement, no RNG prediction, no Search, no Planner. The conclusion is re-derived from the raw records and must equal the runner's."
+  },
+  "phase": "Issue #154 Global Assignment Phase D-1C: formal integration acceptance of the D-1B registered conditions (re-materialization of the first structural candidate, Production Planner, independent Trace Replay, fresh ordinary Planner in a separate process; two complete runs)",
+  "formalProtocolVersion": "global-assignment-d1c-formal:1",
+  "mode": "formal",
+  "status": "formal",
+  "nature": "Research: formal D-1C integration acceptance of the D-1B registered conditions (formalValidity decides whether it counts; the candidate outcome is judged apart)",
+  "formalValidity": {
+    "status": "valid",
+    "issues": [],
+    "checks": {
+      "provenance": {
+        "registration_complete": {
+          "passed": true,
+          "detail": null
+        },
+        "formal_run_enabled": {
+          "passed": true,
+          "detail": null
+        },
+        "registration_fingerprint_equals_registered_block": {
+          "passed": true,
+          "detail": null
+        },
+        "run_conditions_equal_registration": {
+          "passed": true,
+          "detail": null
+        },
+        "no_command_line_override": {
+          "passed": true,
+          "detail": null
+        },
+        "clean_committed_head": {
+          "passed": true,
+          "detail": null
+        },
+        "registration_head_is_ancestor": {
+          "passed": true,
+          "detail": null
+        },
+        "calculation_code_audit_passed": {
+          "passed": true,
+          "detail": null
+        },
+        "production_calculation_unchanged": {
+          "passed": true,
+          "detail": null
+        },
+        "export_identity_matched": {
+          "passed": true,
+          "detail": null
+        },
+        "calculation_context_matched": {
+          "passed": true,
+          "detail": null
+        },
+        "rng_engine_version_matched": {
+          "passed": true,
+          "detail": null
+        },
+        "master_data_version_matched": {
+          "passed": true,
+          "detail": null
+        },
+        "oracle_not_read": {
+          "passed": true,
+          "detail": null
+        },
+        "child_gates_passed": {
+          "passed": true,
+          "detail": null
+        }
+      },
+      "reproducibility": {
+        "two_complete_runs": {
+          "passed": true,
+          "detail": null
+        },
+        "first_and_fresh_separate_processes": {
+          "passed": true,
+          "detail": null
+        },
+        "planner_conditions_evaluated_in_both_processes": {
+          "passed": true,
+          "detail": null
+        },
+        "first_fresh_verification_semantic_equal": {
+          "passed": true,
+          "detail": null
+        },
+        "runs_verification_semantic_equal": {
+          "passed": true,
+          "detail": null
+        },
+        "materialization_semantic_equals_registered_d0c": {
+          "passed": true,
+          "detail": null
+        },
+        "entry_fingerprint_equals_registered_d0c": {
+          "passed": true,
+          "detail": null
+        },
+        "run_integrity_issues_zero": {
+          "passed": true,
+          "detail": null
+        },
+        "result_integrity_issues_zero": {
+          "passed": true,
+          "detail": null
+        }
+      }
+    }
+  },
+  "candidateOutcome": {
+    "kind": "verified",
+    "consistentAcrossRuns": true,
+    "runVerdictKinds": [
+      "verified",
+      "verified"
+    ],
+    "requiredRuns": 2,
+    "concludedRuns": 2,
+    "verdict": {
+      "kind": "verified",
+      "run": null,
+      "reasonCodes": [],
+      "physicalOperations": 1766,
+      "planSteps": 1766,
+      "objective": 1766,
+      "planningTargetCount": 43,
+      "fullPlannerRuns": {
+        "first": 1,
+        "fresh": 1
+      }
+    }
+  },
+  "acceptance": {
+    "status": "accepted",
+    "formalValidity": "valid",
+    "candidateOutcome": "verified",
+    "reasonTexts": []
+  },
+  "registration": {
+    "registeredIn": "Phase D-1B",
+    "formalRun": {
+      "enabled": true,
+      "enabledBy": "Phase D-1C"
+    },
+    "fingerprint": {
+      "computed": "fnv1a32:2393847e",
+      "atMeasuredHead": "fnv1a32:2393847e",
+      "atRegistrationHead": "fnv1a32:2393847e",
+      "matched": true,
+      "issues": []
+    },
+    "registrationIssues": [],
+    "registeredItemKeys": [
+      "materialization",
+      "reachWindow",
+      "optionSetVersion",
+      "methodSelectionRule",
+      "structuralCandidateLimit",
+      "verificationBudget",
+      "researchMaxPlanSteps",
+      "firstChildWallMs",
+      "freshChildWallMs",
+      "childHeapMb",
+      "concurrency",
+      "childProcessRetry",
+      "repeat",
+      "planner",
+      "traceReplay",
+      "freshValidation",
+      "runIntegrity",
+      "oracleFreeExecution",
+      "exportIdentity",
+      "d0cIdentity",
+      "calculationContext",
+      "verificationProtocolVersion",
+      "materializationProtocolVersion",
+      "registrationHead",
+      "calculationCodeAudit",
+      "formalValidity",
+      "acceptanceInterpretation"
+    ],
+    "registrationHead": "d15ea9b0277b417b2681305486b6fb03dda57054",
+    "registeredConditions": {
+      "materialization": {
+        "rule": "d0a2-v2",
+        "window": {
+          "normal": 350,
+          "gogma": 500,
+          "skill": 1500
+        },
+        "nodeBudget": 2000,
+        "mrvLookahead": 8,
+        "coverageDrivenOrdering": true,
+        "structuralCandidateLimit": 1,
+        "projectedSearchScaleGate": {
+          "maxConversionPositions": 32,
+          "maxGogmaLegalWidth": 500,
+          "maxSkillLegalWidth": 1501,
+          "maxNormalForgeCount": 350
+        },
+        "shapeSearchScaleGate": {
+          "maxDepthUpperBound": 2000,
+          "maxGogmaGeneratedStateUpperBound": 502000000,
+          "maxNormalForgeCount": 350,
+          "maxConversionWalkPositions": 1501
+        },
+        "shapeSearchBudget": {
+          "maxGogmaGeneratedStates": 50000000,
+          "maxSkillStates": 2250000,
+          "maxSettledWork": 100000,
+          "maxPredictions": {
+            "normalArtian": 350,
+            "skill": 1501,
+            "gogmaReset": 500,
+            "gogmaKeep": 500
+          }
+        },
+        "routeVerification": "every_shape_constrained_materialization",
+        "reachOptionSet": "global-assignment-reach-options:a2"
+      },
+      "verification": {
+        "researchMaxPlanSteps": 20000,
+        "verificationBudget": 1
+      },
+      "envelope": {
+        "firstChildWallMs": 1800000,
+        "freshChildWallMs": 1800000,
+        "childHeapMb": 8192,
+        "concurrency": 1,
+        "childProcessRetry": "none",
+        "repeat": 2
+      }
+    },
+    "verificationProtocolVersion": "global-assignment-d1b:1",
+    "materializationProtocolVersion": "global-assignment-d0a2b:1",
+    "formalProtocolVersion": "global-assignment-d1c-formal:1",
+    "formalValidityRules": {
+      "provenance": [
+        "registration_complete",
+        "formal_run_enabled",
+        "registration_fingerprint_equals_registered_block",
+        "run_conditions_equal_registration",
+        "no_command_line_override",
+        "clean_committed_head",
+        "registration_head_is_ancestor",
+        "calculation_code_audit_passed",
+        "production_calculation_unchanged",
+        "export_identity_matched",
+        "calculation_context_matched",
+        "rng_engine_version_matched",
+        "master_data_version_matched",
+        "oracle_not_read",
+        "child_gates_passed"
+      ],
+      "reproducibility": [
+        "two_complete_runs",
+        "first_and_fresh_separate_processes",
+        "planner_conditions_evaluated_in_both_processes",
+        "first_fresh_verification_semantic_equal",
+        "runs_verification_semantic_equal",
+        "materialization_semantic_equals_registered_d0c",
+        "entry_fingerprint_equals_registered_d0c",
+        "run_integrity_issues_zero",
+        "result_integrity_issues_zero"
+      ]
+    },
+    "allowedChangedFileCount": 14
+  },
+  "provenance": {
+    "measurementHeadSha": "636616d6764f6bb4ac4a206aa39afec789b1b5c6",
+    "registrationHead": "d15ea9b0277b417b2681305486b6fb03dda57054",
+    "benchmarkCodeSha256": "f8e8955486a21cdcd49b97e952bf2d7adce3630d7fd9e64676418a01f264a3cd",
+    "workingTreeClean": true,
+    "uncommittedBenchmarkCode": false,
+    "flags": [
+      "--mode",
+      "--export",
+      "--run-dir",
+      "--output"
+    ],
+    "calculationAudit": {
+      "changedFiles": [
+        "scripts/derive-planner-global-assignment-d1c-result.mjs",
+        "scripts/derive-planner-global-assignment-d1c-result.test.ts",
+        "scripts/run-planner-global-assignment-d1c.mjs",
+        "scripts/run-planner-global-assignment-d1c.test.ts",
+        "src/benchmarks/globalAssignment/isolation.test.ts",
+        "src/benchmarks/globalAssignment/verificationFormal.test.ts",
+        "src/benchmarks/globalAssignment/verificationFormal.ts",
+        "src/benchmarks/globalAssignment/verificationFormalResult.test.ts",
+        "src/benchmarks/globalAssignment/verificationFormalResult.ts",
+        "src/benchmarks/globalAssignment/verificationFormalTestFixture.ts",
+        "src/benchmarks/globalAssignment/verificationRegistration.test.ts",
+        "src/benchmarks/globalAssignment/verificationRegistration.ts"
+      ],
+      "allowedChanged": [
+        "scripts/derive-planner-global-assignment-d1c-result.mjs",
+        "scripts/derive-planner-global-assignment-d1c-result.test.ts",
+        "scripts/run-planner-global-assignment-d1c.mjs",
+        "scripts/run-planner-global-assignment-d1c.test.ts",
+        "src/benchmarks/globalAssignment/isolation.test.ts",
+        "src/benchmarks/globalAssignment/verificationFormal.test.ts",
+        "src/benchmarks/globalAssignment/verificationFormal.ts",
+        "src/benchmarks/globalAssignment/verificationFormalResult.test.ts",
+        "src/benchmarks/globalAssignment/verificationFormalResult.ts",
+        "src/benchmarks/globalAssignment/verificationFormalTestFixture.ts",
+        "src/benchmarks/globalAssignment/verificationRegistration.test.ts",
+        "src/benchmarks/globalAssignment/verificationRegistration.ts"
+      ],
+      "outsideAllowed": [],
+      "productionChanged": [],
+      "registrationHeadIsAncestor": true,
+      "answered": true,
+      "passed": true,
+      "productionUnchanged": true
+    },
+    "documents": [
+      {
+        "source": "HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+        "sha256": "0ed38ef4bcbc4b6c2f952db5770d43b139c3173d920c33a40e1aa3afebd6382a",
+        "readable": true
+      },
+      {
+        "source": "d15ea9b0277b417b2681305486b6fb03dda57054:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+        "sha256": "0ed38ef4bcbc4b6c2f952db5770d43b139c3173d920c33a40e1aa3afebd6382a",
+        "readable": true
+      },
+      {
+        "source": "HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md",
+        "sha256": "e196ad7e7a5e537c6e0d79075861dfba9d8a63275c0325fb1c8cc4073cca8d39",
+        "readable": true
+      }
+    ],
+    "startGate": {
+      "passed": true,
+      "rules": {
+        "registration_complete": true,
+        "formal_run_enabled": true,
+        "registration_fingerprint_equals_registered_block": true,
+        "run_conditions_equal_registration": true,
+        "no_command_line_override": true,
+        "clean_committed_head": true,
+        "registration_head_is_ancestor": true,
+        "calculation_code_audit_passed": true,
+        "production_calculation_unchanged": true,
+        "export_identity_matched": true,
+        "calculation_context_matched": true,
+        "rng_engine_version_matched": true,
+        "master_data_version_matched": true,
+        "oracle_not_read": true
+      },
+      "prerequisites": {
+        "registeredD0cReadable": true,
+        "outputsNewAndIgnored": true,
+        "exportPathRead": true
+      },
+      "issues": []
+    },
+    "inputsRead": [
+      "export:gogma-artian-planner-backup_20260927015837.json",
+      "git:HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+      "git:d15ea9b0277b417b2681305486b6fb03dda57054:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+      "git:HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md"
+    ],
+    "oracleFreeExecution": true,
+    "oracleInformedDesign": true,
+    "runnerScript": "scripts/run-planner-global-assignment-d1c.mjs",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "launchedAt": "2026-10-13T13:29:14.300Z",
+    "machine": {
+      "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor",
+      "logicalCpuCount": 16,
+      "platform": "win32",
+      "arch": "x64",
+      "osRelease": "10.0.26200",
+      "totalMemoryBytes": 33377591296,
+      "freeMemoryBytes": 12607160320
+    },
+    "plannerInputMaxPlanStepsForValidationOnly": 1000
+  },
+  "exportVerification": {
+    "actual": {
+      "fileName": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "registered": {
+      "fileName": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "registeredSource": "HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md",
+    "matched": true
+  },
+  "calculationContext": {
+    "gameVersion": "unknown-initial",
+    "masterDataVersion": 4,
+    "rngEngineVersion": "production-rng:c5-e7",
+    "appSchemaVersion": 17
+  },
+  "rngEngineVersion": "production-rng:c5-e7",
+  "authorities": {
+    "calculationContextMatched": true,
+    "rngEngineVersionMatched": true,
+    "masterDataVersionMatched": true
+  },
+  "runs": [
+    {
+      "runIndex": 1,
+      "checkoutUnchanged": true,
+      "first": {
+        "role": "first",
+        "process": {
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "cancelled": false,
+          "settledBy": "close",
+          "wallObservedMs": 38150.423,
+          "wallMs": 1800000,
+          "heapMb": 8192,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "recordWritten": true
+        },
+        "recordRead": true,
+        "recordReadError": null,
+        "formal": {
+          "gatePassed": true,
+          "calculationGatePassed": true,
+          "entrySetSourcePassed": null,
+          "pidMatchesProcess": true,
+          "verificationBudget": 1,
+          "verifiedCandidates": 1,
+          "inputsRead": [
+            "task:first.task.json",
+            "export:gogma-artian-planner-backup_20260927015837.json",
+            "git:HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+            "git:d15ea9b0277b417b2681305486b6fb03dda57054:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+            "git:HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md"
+          ]
+        },
+        "calculationContext": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "rngEngineVersion": "production-rng:c5-e7",
+        "materialization": {
+          "semanticSha256": "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f",
+          "protocolVersion": "global-assignment-d0a2b:1",
+          "verdict": "all_materialized",
+          "runOutcome": "structural_candidates_materialized",
+          "planningTargetCount": 43,
+          "candidate": {
+            "ordinal": 0,
+            "objective": 1766,
+            "targetCount": 43,
+            "classification": "all_materialized",
+            "materialized": 43,
+            "notAttempted": 0,
+            "materializedBy": {
+              "candidate_search_projected": 21,
+              "shape_constrained": 22,
+              "planner_alternative_reservation": 0
+            },
+            "independentStops": {
+              "searchScaleGate": 0,
+              "shapeSearchBudget": 0,
+              "unsupported": 0,
+              "failClosed": 0
+            }
+          },
+          "wallMs": 32002.511,
+          "stagesMs": {
+            "context": 1687.163,
+            "reachTable": 11112.371,
+            "structuralSearch": 17384.433,
+            "toFirstStructuralCandidate": 17384.101,
+            "total": 32001.831
+          }
+        },
+        "identity": {
+          "matched": true,
+          "semanticSha256Matched": true,
+          "entryFingerprintMatched": true,
+          "handoffMatchesRecord": true,
+          "entryFingerprint": "fnv1a32:ed959cc4",
+          "candidates": 1,
+          "handoffs": 1,
+          "semanticIntegrityIssues": 0,
+          "issueCount": 0
+        },
+        "entrySet": {
+          "bytes": 768648,
+          "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993",
+          "entryFingerprint": "fnv1a32:ed959cc4",
+          "entryCount": 43,
+          "issueCount": null
+        },
+        "phase0PlanningTargetCount": 43,
+        "verification": {
+          "semanticSha256": "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4",
+          "protocolVersion": "global-assignment-d1b:1",
+          "researchMaxPlanSteps": 20000,
+          "outcome": {
+            "kind": "conditions_met",
+            "reasonCodes": []
+          },
+          "checks": {
+            "planPresent": true,
+            "terminationCompleted": true,
+            "completedEqualsPlanningTargets": true,
+            "totalEqualsPlanningTargets": true,
+            "allPlanningEntriesSelected": true,
+            "noConflicts": true,
+            "noRejectedEntries": true,
+            "noResourceConflicts": true,
+            "noWarnings": true,
+            "traceReplayValid": true,
+            "physicalStepCountIdentity": true,
+            "physicalStreamAdvanceIdentity": true,
+            "physicalObjectiveIdentity": true
+          },
+          "conditionsEvaluated": true,
+          "candidate": {
+            "ordinal": 0,
+            "objective": 1766,
+            "planningTargetCount": 43,
+            "materializedEntryCount": 43,
+            "stage": "all_materialized",
+            "entryFingerprint": "fnv1a32:ed959cc4"
+          },
+          "finalInput": {
+            "replacementCount": 43,
+            "originalEntryCount": 43,
+            "finalEntryCount": 43,
+            "keptOriginalEntryCount": 0,
+            "sourceDataUnchanged": {
+              "targetWeapons": true,
+              "ownedWeapons": true,
+              "rngState": true,
+              "normalCounters": true,
+              "calculationContext": true,
+              "master": true
+            },
+            "conflictResolutionCount": 0,
+            "maxPlanSteps": 20000,
+            "validation": {
+              "isValid": true,
+              "issueCount": 0,
+              "warningKinds": {},
+              "excludedEntryCount": 0,
+              "excludedGeneratedEntryCount": 0
+            },
+            "phase0PlanningTargetCount": 43,
+            "finalPlanningTargetCount": 43,
+            "planningTargetSetEqual": true
+          },
+          "planner": {
+            "fullPlannerRuns": 1,
+            "errorName": null,
+            "termination": {
+              "status": "completed",
+              "reachedLimits": [],
+              "limits": {
+                "maxPlanSteps": 20000
+              },
+              "expandedStates": 1809,
+              "completedTargetCount": 43,
+              "totalTargetCount": 43
+            },
+            "planPresent": true,
+            "planSteps": 1766,
+            "planHash": "fnv1a32:903e4274",
+            "stepSemanticsHash": "fnv1a32:8d28811e",
+            "selectedEntryCount": 43,
+            "expectedSelectedEntryCount": 43,
+            "selectedEqualsExpected": true,
+            "conflictCount": 0,
+            "conflictKinds": {},
+            "rejectedCount": 0,
+            "rejectedReasons": {},
+            "resourceConflictCount": 0,
+            "warningCount": 0,
+            "warningKinds": {}
+          },
+          "traceReplay": {
+            "ran": true,
+            "isValid": true,
+            "issueCodes": {},
+            "unsupportedInput": false,
+            "drafts": {
+              "total": 1809,
+              "physical": 1766,
+              "reserve": 43
+            },
+            "correspondence": {
+              "planPhysicalSteps": 1766,
+              "replayPhysicalDrafts": 1766,
+              "mismatchCount": 0,
+              "counterPositionMismatchCount": 0
+            },
+            "finalCountersMatchPlan": true
+          },
+          "physical": {
+            "error": null,
+            "planSteps": 1766,
+            "physicalOperations": 1766,
+            "nonPhysicalStepCount": 0,
+            "nonPhysicalSteps": {},
+            "unexpectedNonPhysicalSteps": {},
+            "operationCounts": {
+              "create_normal_artian": 235,
+              "convert_normal_to_gogma": 5,
+              "reset_skills": 1078,
+              "reset_bonuses": 77,
+              "keep_bonuses": 371
+            },
+            "streamAdvanceSum": 1766,
+            "identities": {
+              "stepCount": true,
+              "streamAdvance": true,
+              "objective": true
+            },
+            "sharedPhysicalSteps": 0,
+            "streamCount": 6,
+            "structuralStreamComparison": {
+              "streamCount": 9,
+              "equalStreamCount": 9
+            },
+            "objective": 1766,
+            "executedHash": "fnv1a32:3cf477e7"
+          },
+          "elapsedMs": {
+            "handoff": 0.705,
+            "final_input": 294.601,
+            "planner": 4136.713,
+            "trace_replay": 397.614,
+            "physical": 4.039,
+            "total": 4892.626
+          }
+        },
+        "timing": {
+          "setupMs": 869.021,
+          "wallMs": 37907.57,
+          "eventLoopYields": 22575
+        },
+        "memory": {
+          "heapUsedMax": 1421287128,
+          "heapTotalMax": 1506533376,
+          "rssMax": 1652781056,
+          "externalMax": 82122627,
+          "sampleCount": 81,
+          "maxRssKiB": 1614792,
+          "heapSizeLimit": 8791261184,
+          "stageHeapUsedMax": 1421197880
+        },
+        "confirmedProgress": null
+      },
+      "fresh": {
+        "role": "fresh",
+        "process": {
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "cancelled": false,
+          "settledBy": "close",
+          "wallObservedMs": 7663.93,
+          "wallMs": 1800000,
+          "heapMb": 8192,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "recordWritten": true
+        },
+        "recordRead": true,
+        "recordReadError": null,
+        "formal": {
+          "gatePassed": true,
+          "calculationGatePassed": true,
+          "entrySetSourcePassed": true,
+          "pidMatchesProcess": true,
+          "verificationBudget": null,
+          "verifiedCandidates": null,
+          "inputsRead": [
+            "task:fresh.task.json",
+            "export:gogma-artian-planner-backup_20260927015837.json",
+            "git:HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+            "git:d15ea9b0277b417b2681305486b6fb03dda57054:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+            "git:HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md",
+            "entry-set:run-1/first.entry-set.json",
+            "first-record:run-1/first.record.json"
+          ]
+        },
+        "calculationContext": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "rngEngineVersion": "production-rng:c5-e7",
+        "materialization": null,
+        "identity": null,
+        "entrySet": {
+          "bytes": null,
+          "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993",
+          "entryFingerprint": "fnv1a32:ed959cc4",
+          "entryCount": 43,
+          "issueCount": 0
+        },
+        "phase0PlanningTargetCount": 43,
+        "verification": {
+          "semanticSha256": "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4",
+          "protocolVersion": "global-assignment-d1b:1",
+          "researchMaxPlanSteps": 20000,
+          "outcome": {
+            "kind": "conditions_met",
+            "reasonCodes": []
+          },
+          "checks": {
+            "planPresent": true,
+            "terminationCompleted": true,
+            "completedEqualsPlanningTargets": true,
+            "totalEqualsPlanningTargets": true,
+            "allPlanningEntriesSelected": true,
+            "noConflicts": true,
+            "noRejectedEntries": true,
+            "noResourceConflicts": true,
+            "noWarnings": true,
+            "traceReplayValid": true,
+            "physicalStepCountIdentity": true,
+            "physicalStreamAdvanceIdentity": true,
+            "physicalObjectiveIdentity": true
+          },
+          "conditionsEvaluated": true,
+          "candidate": {
+            "ordinal": 0,
+            "objective": 1766,
+            "planningTargetCount": 43,
+            "materializedEntryCount": 43,
+            "stage": "all_materialized",
+            "entryFingerprint": "fnv1a32:ed959cc4"
+          },
+          "finalInput": {
+            "replacementCount": 43,
+            "originalEntryCount": 43,
+            "finalEntryCount": 43,
+            "keptOriginalEntryCount": 0,
+            "sourceDataUnchanged": {
+              "targetWeapons": true,
+              "ownedWeapons": true,
+              "rngState": true,
+              "normalCounters": true,
+              "calculationContext": true,
+              "master": true
+            },
+            "conflictResolutionCount": 0,
+            "maxPlanSteps": 20000,
+            "validation": {
+              "isValid": true,
+              "issueCount": 0,
+              "warningKinds": {},
+              "excludedEntryCount": 0,
+              "excludedGeneratedEntryCount": 0
+            },
+            "phase0PlanningTargetCount": 43,
+            "finalPlanningTargetCount": 43,
+            "planningTargetSetEqual": true
+          },
+          "planner": {
+            "fullPlannerRuns": 1,
+            "errorName": null,
+            "termination": {
+              "status": "completed",
+              "reachedLimits": [],
+              "limits": {
+                "maxPlanSteps": 20000
+              },
+              "expandedStates": 1809,
+              "completedTargetCount": 43,
+              "totalTargetCount": 43
+            },
+            "planPresent": true,
+            "planSteps": 1766,
+            "planHash": "fnv1a32:903e4274",
+            "stepSemanticsHash": "fnv1a32:8d28811e",
+            "selectedEntryCount": 43,
+            "expectedSelectedEntryCount": 43,
+            "selectedEqualsExpected": true,
+            "conflictCount": 0,
+            "conflictKinds": {},
+            "rejectedCount": 0,
+            "rejectedReasons": {},
+            "resourceConflictCount": 0,
+            "warningCount": 0,
+            "warningKinds": {}
+          },
+          "traceReplay": {
+            "ran": true,
+            "isValid": true,
+            "issueCodes": {},
+            "unsupportedInput": false,
+            "drafts": {
+              "total": 1809,
+              "physical": 1766,
+              "reserve": 43
+            },
+            "correspondence": {
+              "planPhysicalSteps": 1766,
+              "replayPhysicalDrafts": 1766,
+              "mismatchCount": 0,
+              "counterPositionMismatchCount": 0
+            },
+            "finalCountersMatchPlan": true
+          },
+          "physical": {
+            "error": null,
+            "planSteps": 1766,
+            "physicalOperations": 1766,
+            "nonPhysicalStepCount": 0,
+            "nonPhysicalSteps": {},
+            "unexpectedNonPhysicalSteps": {},
+            "operationCounts": {
+              "create_normal_artian": 235,
+              "convert_normal_to_gogma": 5,
+              "reset_skills": 1078,
+              "reset_bonuses": 77,
+              "keep_bonuses": 371
+            },
+            "streamAdvanceSum": 1766,
+            "identities": {
+              "stepCount": true,
+              "streamAdvance": true,
+              "objective": true
+            },
+            "sharedPhysicalSteps": 0,
+            "streamCount": 6,
+            "structuralStreamComparison": {
+              "streamCount": 9,
+              "equalStreamCount": 9
+            },
+            "objective": 1766,
+            "executedHash": "fnv1a32:3cf477e7"
+          },
+          "elapsedMs": {
+            "handoff": 0.817,
+            "final_input": 297.783,
+            "planner": 4157.666,
+            "trace_replay": 384.197,
+            "physical": 3.253,
+            "total": 4904.451
+          }
+        },
+        "timing": {
+          "setupMs": 884.743,
+          "wallMs": 7473.408,
+          "eventLoopYields": 27
+        },
+        "memory": {
+          "heapUsedMax": 649677288,
+          "heapTotalMax": 756764672,
+          "rssMax": 880836608,
+          "externalMax": 82122627,
+          "sampleCount": 9,
+          "maxRssKiB": 871944,
+          "heapSizeLimit": 8791261184,
+          "stageHeapUsedMax": 649605936
+        },
+        "confirmedProgress": null
+      },
+      "conclusion": {
+        "verdict": {
+          "kind": "verified",
+          "run": null,
+          "reasonCodes": [],
+          "physicalOperations": 1766,
+          "planSteps": 1766,
+          "objective": 1766,
+          "planningTargetCount": 43,
+          "fullPlannerRuns": {
+            "first": 1,
+            "fresh": 1
+          }
+        },
+        "recordClassification": "nonformal_planner_verified",
+        "crossProcess": {
+          "compared": true,
+          "identical": true,
+          "differingFieldCount": 0
+        },
+        "integrityIssueCount": 0,
+        "exitCode": 0
+      }
+    },
+    {
+      "runIndex": 2,
+      "checkoutUnchanged": true,
+      "first": {
+        "role": "first",
+        "process": {
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "cancelled": false,
+          "settledBy": "close",
+          "wallObservedMs": 37539.574,
+          "wallMs": 1800000,
+          "heapMb": 8192,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "recordWritten": true
+        },
+        "recordRead": true,
+        "recordReadError": null,
+        "formal": {
+          "gatePassed": true,
+          "calculationGatePassed": true,
+          "entrySetSourcePassed": null,
+          "pidMatchesProcess": true,
+          "verificationBudget": 1,
+          "verifiedCandidates": 1,
+          "inputsRead": [
+            "task:first.task.json",
+            "export:gogma-artian-planner-backup_20260927015837.json",
+            "git:HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+            "git:d15ea9b0277b417b2681305486b6fb03dda57054:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+            "git:HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md"
+          ]
+        },
+        "calculationContext": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "rngEngineVersion": "production-rng:c5-e7",
+        "materialization": {
+          "semanticSha256": "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f",
+          "protocolVersion": "global-assignment-d0a2b:1",
+          "verdict": "all_materialized",
+          "runOutcome": "structural_candidates_materialized",
+          "planningTargetCount": 43,
+          "candidate": {
+            "ordinal": 0,
+            "objective": 1766,
+            "targetCount": 43,
+            "classification": "all_materialized",
+            "materialized": 43,
+            "notAttempted": 0,
+            "materializedBy": {
+              "candidate_search_projected": 21,
+              "shape_constrained": 22,
+              "planner_alternative_reservation": 0
+            },
+            "independentStops": {
+              "searchScaleGate": 0,
+              "shapeSearchBudget": 0,
+              "unsupported": 0,
+              "failClosed": 0
+            }
+          },
+          "wallMs": 31390.318,
+          "stagesMs": {
+            "context": 1631.709,
+            "reachTable": 11106.992,
+            "structuralSearch": 16851.815,
+            "toFirstStructuralCandidate": 16851.378,
+            "total": 31389.598
+          }
+        },
+        "identity": {
+          "matched": true,
+          "semanticSha256Matched": true,
+          "entryFingerprintMatched": true,
+          "handoffMatchesRecord": true,
+          "entryFingerprint": "fnv1a32:ed959cc4",
+          "candidates": 1,
+          "handoffs": 1,
+          "semanticIntegrityIssues": 0,
+          "issueCount": 0
+        },
+        "entrySet": {
+          "bytes": 768648,
+          "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993",
+          "entryFingerprint": "fnv1a32:ed959cc4",
+          "entryCount": 43,
+          "issueCount": null
+        },
+        "phase0PlanningTargetCount": 43,
+        "verification": {
+          "semanticSha256": "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4",
+          "protocolVersion": "global-assignment-d1b:1",
+          "researchMaxPlanSteps": 20000,
+          "outcome": {
+            "kind": "conditions_met",
+            "reasonCodes": []
+          },
+          "checks": {
+            "planPresent": true,
+            "terminationCompleted": true,
+            "completedEqualsPlanningTargets": true,
+            "totalEqualsPlanningTargets": true,
+            "allPlanningEntriesSelected": true,
+            "noConflicts": true,
+            "noRejectedEntries": true,
+            "noResourceConflicts": true,
+            "noWarnings": true,
+            "traceReplayValid": true,
+            "physicalStepCountIdentity": true,
+            "physicalStreamAdvanceIdentity": true,
+            "physicalObjectiveIdentity": true
+          },
+          "conditionsEvaluated": true,
+          "candidate": {
+            "ordinal": 0,
+            "objective": 1766,
+            "planningTargetCount": 43,
+            "materializedEntryCount": 43,
+            "stage": "all_materialized",
+            "entryFingerprint": "fnv1a32:ed959cc4"
+          },
+          "finalInput": {
+            "replacementCount": 43,
+            "originalEntryCount": 43,
+            "finalEntryCount": 43,
+            "keptOriginalEntryCount": 0,
+            "sourceDataUnchanged": {
+              "targetWeapons": true,
+              "ownedWeapons": true,
+              "rngState": true,
+              "normalCounters": true,
+              "calculationContext": true,
+              "master": true
+            },
+            "conflictResolutionCount": 0,
+            "maxPlanSteps": 20000,
+            "validation": {
+              "isValid": true,
+              "issueCount": 0,
+              "warningKinds": {},
+              "excludedEntryCount": 0,
+              "excludedGeneratedEntryCount": 0
+            },
+            "phase0PlanningTargetCount": 43,
+            "finalPlanningTargetCount": 43,
+            "planningTargetSetEqual": true
+          },
+          "planner": {
+            "fullPlannerRuns": 1,
+            "errorName": null,
+            "termination": {
+              "status": "completed",
+              "reachedLimits": [],
+              "limits": {
+                "maxPlanSteps": 20000
+              },
+              "expandedStates": 1809,
+              "completedTargetCount": 43,
+              "totalTargetCount": 43
+            },
+            "planPresent": true,
+            "planSteps": 1766,
+            "planHash": "fnv1a32:903e4274",
+            "stepSemanticsHash": "fnv1a32:8d28811e",
+            "selectedEntryCount": 43,
+            "expectedSelectedEntryCount": 43,
+            "selectedEqualsExpected": true,
+            "conflictCount": 0,
+            "conflictKinds": {},
+            "rejectedCount": 0,
+            "rejectedReasons": {},
+            "resourceConflictCount": 0,
+            "warningCount": 0,
+            "warningKinds": {}
+          },
+          "traceReplay": {
+            "ran": true,
+            "isValid": true,
+            "issueCodes": {},
+            "unsupportedInput": false,
+            "drafts": {
+              "total": 1809,
+              "physical": 1766,
+              "reserve": 43
+            },
+            "correspondence": {
+              "planPhysicalSteps": 1766,
+              "replayPhysicalDrafts": 1766,
+              "mismatchCount": 0,
+              "counterPositionMismatchCount": 0
+            },
+            "finalCountersMatchPlan": true
+          },
+          "physical": {
+            "error": null,
+            "planSteps": 1766,
+            "physicalOperations": 1766,
+            "nonPhysicalStepCount": 0,
+            "nonPhysicalSteps": {},
+            "unexpectedNonPhysicalSteps": {},
+            "operationCounts": {
+              "create_normal_artian": 235,
+              "convert_normal_to_gogma": 5,
+              "reset_skills": 1078,
+              "reset_bonuses": 77,
+              "keep_bonuses": 371
+            },
+            "streamAdvanceSum": 1766,
+            "identities": {
+              "stepCount": true,
+              "streamAdvance": true,
+              "objective": true
+            },
+            "sharedPhysicalSteps": 0,
+            "streamCount": 6,
+            "structuralStreamComparison": {
+              "streamCount": 9,
+              "equalStreamCount": 9
+            },
+            "objective": 1766,
+            "executedHash": "fnv1a32:3cf477e7"
+          },
+          "elapsedMs": {
+            "handoff": 0.681,
+            "final_input": 302.723,
+            "planner": 4131.429,
+            "trace_replay": 401.38,
+            "physical": 3.231,
+            "total": 4897.959
+          }
+        },
+        "timing": {
+          "setupMs": 874.641,
+          "wallMs": 37301.675,
+          "eventLoopYields": 22575
+        },
+        "memory": {
+          "heapUsedMax": 1405242600,
+          "heapTotalMax": 1490804736,
+          "rssMax": 1636704256,
+          "externalMax": 82122627,
+          "sampleCount": 81,
+          "maxRssKiB": 1599088,
+          "heapSizeLimit": 8791261184,
+          "stageHeapUsedMax": 1405154088
+        },
+        "confirmedProgress": null
+      },
+      "fresh": {
+        "role": "fresh",
+        "process": {
+          "outcome": "completed",
+          "exitCode": 0,
+          "signal": null,
+          "timedOut": false,
+          "cancelled": false,
+          "settledBy": "close",
+          "wallObservedMs": 7685.9,
+          "wallMs": 1800000,
+          "heapMb": 8192,
+          "nodeFlags": [
+            "--max-old-space-size=8192"
+          ],
+          "recordWritten": true
+        },
+        "recordRead": true,
+        "recordReadError": null,
+        "formal": {
+          "gatePassed": true,
+          "calculationGatePassed": true,
+          "entrySetSourcePassed": true,
+          "pidMatchesProcess": true,
+          "verificationBudget": null,
+          "verifiedCandidates": null,
+          "inputsRead": [
+            "task:fresh.task.json",
+            "export:gogma-artian-planner-backup_20260927015837.json",
+            "git:HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+            "git:d15ea9b0277b417b2681305486b6fb03dda57054:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md",
+            "git:HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md",
+            "entry-set:run-2/first.entry-set.json",
+            "first-record:run-2/first.record.json"
+          ]
+        },
+        "calculationContext": {
+          "gameVersion": "unknown-initial",
+          "masterDataVersion": 4,
+          "rngEngineVersion": "production-rng:c5-e7",
+          "appSchemaVersion": 17
+        },
+        "rngEngineVersion": "production-rng:c5-e7",
+        "materialization": null,
+        "identity": null,
+        "entrySet": {
+          "bytes": null,
+          "sha256": "358182a3da0491bb295487fe7ac308f7da36ee57dbe4dc3342ea48a596229993",
+          "entryFingerprint": "fnv1a32:ed959cc4",
+          "entryCount": 43,
+          "issueCount": 0
+        },
+        "phase0PlanningTargetCount": 43,
+        "verification": {
+          "semanticSha256": "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4",
+          "protocolVersion": "global-assignment-d1b:1",
+          "researchMaxPlanSteps": 20000,
+          "outcome": {
+            "kind": "conditions_met",
+            "reasonCodes": []
+          },
+          "checks": {
+            "planPresent": true,
+            "terminationCompleted": true,
+            "completedEqualsPlanningTargets": true,
+            "totalEqualsPlanningTargets": true,
+            "allPlanningEntriesSelected": true,
+            "noConflicts": true,
+            "noRejectedEntries": true,
+            "noResourceConflicts": true,
+            "noWarnings": true,
+            "traceReplayValid": true,
+            "physicalStepCountIdentity": true,
+            "physicalStreamAdvanceIdentity": true,
+            "physicalObjectiveIdentity": true
+          },
+          "conditionsEvaluated": true,
+          "candidate": {
+            "ordinal": 0,
+            "objective": 1766,
+            "planningTargetCount": 43,
+            "materializedEntryCount": 43,
+            "stage": "all_materialized",
+            "entryFingerprint": "fnv1a32:ed959cc4"
+          },
+          "finalInput": {
+            "replacementCount": 43,
+            "originalEntryCount": 43,
+            "finalEntryCount": 43,
+            "keptOriginalEntryCount": 0,
+            "sourceDataUnchanged": {
+              "targetWeapons": true,
+              "ownedWeapons": true,
+              "rngState": true,
+              "normalCounters": true,
+              "calculationContext": true,
+              "master": true
+            },
+            "conflictResolutionCount": 0,
+            "maxPlanSteps": 20000,
+            "validation": {
+              "isValid": true,
+              "issueCount": 0,
+              "warningKinds": {},
+              "excludedEntryCount": 0,
+              "excludedGeneratedEntryCount": 0
+            },
+            "phase0PlanningTargetCount": 43,
+            "finalPlanningTargetCount": 43,
+            "planningTargetSetEqual": true
+          },
+          "planner": {
+            "fullPlannerRuns": 1,
+            "errorName": null,
+            "termination": {
+              "status": "completed",
+              "reachedLimits": [],
+              "limits": {
+                "maxPlanSteps": 20000
+              },
+              "expandedStates": 1809,
+              "completedTargetCount": 43,
+              "totalTargetCount": 43
+            },
+            "planPresent": true,
+            "planSteps": 1766,
+            "planHash": "fnv1a32:903e4274",
+            "stepSemanticsHash": "fnv1a32:8d28811e",
+            "selectedEntryCount": 43,
+            "expectedSelectedEntryCount": 43,
+            "selectedEqualsExpected": true,
+            "conflictCount": 0,
+            "conflictKinds": {},
+            "rejectedCount": 0,
+            "rejectedReasons": {},
+            "resourceConflictCount": 0,
+            "warningCount": 0,
+            "warningKinds": {}
+          },
+          "traceReplay": {
+            "ran": true,
+            "isValid": true,
+            "issueCodes": {},
+            "unsupportedInput": false,
+            "drafts": {
+              "total": 1809,
+              "physical": 1766,
+              "reserve": 43
+            },
+            "correspondence": {
+              "planPhysicalSteps": 1766,
+              "replayPhysicalDrafts": 1766,
+              "mismatchCount": 0,
+              "counterPositionMismatchCount": 0
+            },
+            "finalCountersMatchPlan": true
+          },
+          "physical": {
+            "error": null,
+            "planSteps": 1766,
+            "physicalOperations": 1766,
+            "nonPhysicalStepCount": 0,
+            "nonPhysicalSteps": {},
+            "unexpectedNonPhysicalSteps": {},
+            "operationCounts": {
+              "create_normal_artian": 235,
+              "convert_normal_to_gogma": 5,
+              "reset_skills": 1078,
+              "reset_bonuses": 77,
+              "keep_bonuses": 371
+            },
+            "streamAdvanceSum": 1766,
+            "identities": {
+              "stepCount": true,
+              "streamAdvance": true,
+              "objective": true
+            },
+            "sharedPhysicalSteps": 0,
+            "streamCount": 6,
+            "structuralStreamComparison": {
+              "streamCount": 9,
+              "equalStreamCount": 9
+            },
+            "objective": 1766,
+            "executedHash": "fnv1a32:3cf477e7"
+          },
+          "elapsedMs": {
+            "handoff": 0.914,
+            "final_input": 307.526,
+            "planner": 4119.422,
+            "trace_replay": 382.686,
+            "physical": 3.337,
+            "total": 4879.584
+          }
+        },
+        "timing": {
+          "setupMs": 904.847,
+          "wallMs": 7497.126,
+          "eventLoopYields": 27
+        },
+        "memory": {
+          "heapUsedMax": 686775360,
+          "heapTotalMax": 775639040,
+          "rssMax": 900861952,
+          "externalMax": 82114310,
+          "sampleCount": 9,
+          "maxRssKiB": 907184,
+          "heapSizeLimit": 8791261184,
+          "stageHeapUsedMax": 686817080
+        },
+        "confirmedProgress": null
+      },
+      "conclusion": {
+        "verdict": {
+          "kind": "verified",
+          "run": null,
+          "reasonCodes": [],
+          "physicalOperations": 1766,
+          "planSteps": 1766,
+          "objective": 1766,
+          "planningTargetCount": 43,
+          "fullPlannerRuns": {
+            "first": 1,
+            "fresh": 1
+          }
+        },
+        "recordClassification": "nonformal_planner_verified",
+        "crossProcess": {
+          "compared": true,
+          "identical": true,
+          "differingFieldCount": 0
+        },
+        "integrityIssueCount": 0,
+        "exitCode": 0
+      }
+    }
+  ],
+  "determinism": {
+    "materializationSemanticSha256s": [
+      "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f",
+      "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f"
+    ],
+    "materializationIdentical": true,
+    "verificationSemanticSha256s": [
+      "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4",
+      "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4",
+      "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4",
+      "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4"
+    ],
+    "verificationIdentical": true,
+    "entryFingerprints": [
+      "fnv1a32:ed959cc4",
+      "fnv1a32:ed959cc4",
+      "fnv1a32:ed959cc4",
+      "fnv1a32:ed959cc4"
+    ],
+    "entryFingerprintIdentical": true,
+    "registeredD0c": {
+      "semanticSha256": "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f",
+      "entryFingerprint": "fnv1a32:ed959cc4"
+    }
+  },
+  "plannerIntegration": {
+    "reference": "run 1 first process (determinism.verificationIdentical says whether all four processes recorded the same verification)",
+    "planningTargetCount": 43,
+    "materializedEntryCount": 43,
+    "termination": {
+      "status": "completed",
+      "reachedLimits": [],
+      "limits": {
+        "maxPlanSteps": 20000
+      },
+      "expandedStates": 1809,
+      "completedTargetCount": 43,
+      "totalTargetCount": 43
+    },
+    "selectedEntryCount": 43,
+    "conflictCount": 0,
+    "rejectedCount": 0,
+    "resourceConflictCount": 0,
+    "warningCount": 0,
+    "traceReplayValid": true,
+    "planSteps": 1766,
+    "physicalOperations": 1766,
+    "nonPhysicalStepCount": 0,
+    "streamAdvanceSum": 1766,
+    "objective": 1766,
+    "identities": {
+      "stepCount": true,
+      "streamAdvance": true,
+      "objective": true
+    },
+    "fullPlannerRuns": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "postHoc": {
+    "operationCount": {
+      "evaluated": true,
+      "physicalOperations": 1766,
+      "incumbent": 8534,
+      "judgement": "improvement",
+      "proof": "not_claimed"
+    },
+    "minimality": {
+      "status": "best_found",
+      "provenMinimum": false,
+      "verificationBudget": 1,
+      "basis": "The one verified structural candidate of a verification budget of 1: no later candidate was examined and no root lower bound was compared, so no minimality is claimed."
+    }
+  },
+  "integrityIssues": {
+    "resultCount": 0,
+    "runCounts": [
+      0,
+      0
+    ],
+    "messages": []
+  },
+  "processes": [
+    {
+      "id": "run-1-first",
+      "role": "first",
+      "runIndex": 1,
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "cancelled": false,
+      "wallObservedMs": 38150.423,
+      "wallMs": 1800000,
+      "heapMb": 8192
+    },
+    {
+      "id": "run-1-fresh",
+      "role": "fresh",
+      "runIndex": 1,
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "cancelled": false,
+      "wallObservedMs": 7663.93,
+      "wallMs": 1800000,
+      "heapMb": 8192
+    },
+    {
+      "id": "run-2-first",
+      "role": "first",
+      "runIndex": 2,
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "cancelled": false,
+      "wallObservedMs": 37539.574,
+      "wallMs": 1800000,
+      "heapMb": 8192
+    },
+    {
+      "id": "run-2-fresh",
+      "role": "fresh",
+      "runIndex": 2,
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "cancelled": false,
+      "wallObservedMs": 7685.9,
+      "wallMs": 1800000,
+      "heapMb": 8192
+    }
+  ],
+  "cancelled": false,
+  "exitCode": 0,
+  "totalWallMs": 91442.566,
+  "claims": "acceptance only when formalValidity is valid and the candidate outcome is verified; verified is the first structural candidate of a verification budget of one (never a claim about later candidates); no proven_minimum is claimed by the runner",
+  "unconfirmed": [
+    "structural candidates after the first one (verification budget 1: not_attempted, never absent) and whether one has fewer physical operations",
+    "windows other than W0, other option sets, rules or Exports",
+    "determinism on another machine or Node version",
+    "non-physical Steps and a Production runtime-unsupported retry on the real Export unless counted above (synthetic only)",
+    "proven_minimum: the runner and this derivation compare no root lower bound (post hoc only, in the D-1C record)",
+    "the envelope range above the observed time and memory"
+  ]
+}

@@ -1457,6 +1457,21 @@ D-1C（formal run）に分けた（§14）。
 - **非formal再確認**（修正済みclean HEAD `120be4c`、D-1Aのrunner）: D-0C同一性が一致し、first / freshとも改訂後の全条件を満たした（43 / 43、Plan steps = 物理操作数 = Σ前進 =
   objective = 1,766、非物理Step 0、full run 1）。記録用分類 `nonformal_planner_verified`、integrity issue 0。D-1Cのformal resultではない
 
+### 9.16 Phase D-1Cの結果（要約）
+
+[D-1C記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1C.md)・[公開RESULT](PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json)（**formal measurement**）。D-1Bの登録条件を変えずに
+formal基盤（`verificationFormal.ts` / `verificationFormalResult.ts`、formal専用runner `scripts/run-planner-global-assignment-d1c.mjs`、導出script）を実装し、登録の
+`formalRun` だけを有効化した（registration fingerprint `fnv1a32:2393847e` は不変）。登録HEAD `d15ea9b`（PR #254のmerge commit）からの計算コード差分監査は許可fileだけ
+（12件、Production変更0件）で、measurement HEAD `636616d` で2 complete run（各run = first + fresh、4子process）を正式計測した。
+
+- **`formalValidity = valid`**: 登録のprovenance 15規則・reproducibility 9規則をそれぞれrecordから判定し、すべて成立（親のstart gateと各子processの独立gate、
+  登録Export・CalculationContext・Engine・Master、oracle未使用、4 processのverification semantic一致、両runのmaterialization semantic SHA-256 / Entry fingerprintが
+  登録D-0C同一性と一致、run / RESULT integrity issue 0）
+- **候補outcome `verified`**（両runで同一）、**正式acceptance `accepted`**（§13.2 1）: 43 / 43 completed、selected 43、Conflict / rejected / resource_conflict / warning 0、
+  独立Trace Replay valid、Plan steps = 物理操作数 = Σ前進 = objective = **1,766**（非物理Step 0）、full Planner run 1、fresh一致
+- **post-hoc**（§13.2 2 / 3）: 1,766 < incumbent 8,534 → 操作数改善。最小性は `best_found`（verification budget 1）。B-2Bのroot下界1,657（`found`、適用可能）と一致しないので
+  `proven_minimum` ではない（差109）
+
 ## 10. 目的関数・下界・探索budget
 
 ### 10.1 目的関数と部分割当の下界
@@ -1627,6 +1642,7 @@ Production RNGを使わないFake Engine / 小規模fixtureで意味論を固定
 ### 13.2 統合acceptance（実Export、formal measurement）
 
 Phase D-1のformal runで次を事前登録する（値はPhase D-0 / D-1の事前登録で確定。D-1Cの条件はD-1Bで登録した: [D-1B記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md) §8〜§13）。
+D-1Cで正式計測した結果は §9.16（formal valid、`verified`、`accepted`、物理操作数1,766 = 操作数改善、`best_found`）。
 
 1. `verified`: 43 / 43、Conflict 0、rejected 0、completed、Trace Replay valid、別processのfresh ordinary Plannerでも同じ
 2. 物理操作数をincumbent 8,534（Phase 1-E / 2-A / P0R）とpost-hocに比較し、次のとおり判定する（操作数の評価）。
@@ -1677,7 +1693,7 @@ materialization方式に依存しないので、D-0の結果でA〜Cをやり直
 | **D-1 Planner検証（統合acceptance）** | `globalAssignment/verify.ts`、runner（full mode: B → C → D → D'のloop）、analyzer（post-hoc oracle比較） | D-0で確認した方式、verification budget | `VerifiedPlanRecord` / `GlobalAssignmentResult`、候補別outcome、RESULT JSON | 実Exportで `verified`（§13.2）。不成立なら理由別status（§4.6） | §13.1 Phase D'、isolation | Eの基準 | なし | **要**（事前登録: verification budget、Research maxPlanSteps、envelope） |
 | └ **D-1A Phase D'の統合・非formal確認**（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1A.md)、§9.14） | `globalAssignment/verify.ts`（Phase D'の1 process分）、`verificationProtocol.ts`（非formal条件・D-0C同一性照合・fresh用Entry集合・2 processの判定）、materialization runnerのexecution-only引渡しseam、Research runner（first / fresh子process）、synthetic test | D-0Cの登録条件で再実行したmaterialization（最初のstructural candidate） | 候補1件の型付きoutcome（`verified` は `nonformal_planner_verified` として記録）、非formal実Export記録 | 実装とsynthetic test、実Exportの非formal確認（正式acceptanceではない） | §13.1 Phase D'、isolation | D-1Bの入力 | なし | 不要（非formal） |
 | └ **D-1B 成立判定の整理・正式条件の事前登録**（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md)、§9.15） | `verify.ts`（非物理Stepを含む物理操作数の恒等式、full run数を観測値に）、`verificationRegistration.ts`（D-1Cの事前登録: verification budget・Research maxPlanSteps・envelope・repeat・同一性・計算コード監査・formal validity規則）、synthetic test | D-1A | 改訂した判定規則、D-1Cの登録条件（formal runは無効のまま） | 登録の網羅性・D-0C条件の継承・不変性、非formal再確認 | §13.1 Phase D'、isolation | D-1Cの入力 | なし | 不要（非formal） |
-| └ **D-1C formal run** | 登録条件でformal guard・RESULT導出を実装し、登録HEAD（D-1Bのmerge commit）からの差分監査の下でformal runを行う | D-1Bの登録条件、clean HEAD | 統合acceptanceの正式記録 | §13.2 | — | Eの基準 | なし | **要** |
+| └ **D-1C formal run**（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1C.md)、§9.16） | 登録条件でformal guard・RESULT導出を実装し、登録HEAD（D-1Bのmerge commit `d15ea9b`）からの差分監査の下でformal runを行う | D-1Bの登録条件、clean HEAD | 統合acceptanceの正式記録（formal valid、`verified`、`accepted`、物理操作数1,766、`best_found`） | §13.2 | formal契約・公開RESULT・runner / 導出script・isolation | Eの基準 | なし | **要**（実施済み） |
 | **E 最適化・性能** | incremental coverage pruning、決定的なdiscrepancy探索、中断再開、window拡大（verified時）、メモリ内訳、Browser Worker測定 | D-1の `bestVerified` | 改善した `bestVerified`、性能記録 | 全Target完成を維持したまま物理操作数を改善（8,534未満。§13.2）。時間・メモリは別指標。退行は不受理 | 既存acceptanceの維持、Browser isolation | — | なし（Production化は§16の別PR） | **要** |
 
 最初の実装Phase（A、B-1）は、小さなsynthetic fixtureだけで意味論を検証できる。実Exportの43 TargetはPhase B-2（assignment-only）で初めて使い、
