@@ -19,6 +19,9 @@
  * scale, premises, Search usage and Route checks; the shape gate refusals; the G3 lower variant apart from the upper one; the
  * summary's `shapeConstrained` row) under their own protocol version. Conditions without a rule are `d0a-v1`: the run and
  * its record are exactly the D-0B ones (frozen by the `d0a-v1` golden).
+ *
+ * Phase D-0B-2: a `d0a2-v2` run's observed record adds each Target's `shapeTimeline` (execution-only inspection times that split
+ * a shape-constrained materialization into its Search and its independent Route checks); the semantic record is unchanged.
  */
 import { hashStableValue } from '../../domain/models/publicTypes'
 import type { BuildListEntry, OwnedWeaponId, TargetWeaponId } from '../../domain/models/publicTypes'
@@ -265,13 +268,25 @@ export interface MaterializationSemanticRecord {
   oracleFreeExecution: true
 }
 
+/**
+ * D-0B-2, `d0a2-v2` runs only (execution-only, never semantic): when, after the Target started, the projected Candidate Search's
+ * canonical Ideal and the shape-constrained first delivery were inspected (each after its Entry materialization and match). For a
+ * shape-constrained materialization, `ms − shapeInspectedMs` is the independent Route checks plus the attempt's tail, and
+ * `shapeInspectedMs − (projectedInspectedMs ?? 0)` covers its request derivation, premise check, gate and Search. Null when the
+ * method did not inspect a Candidate.
+ */
+export interface ShapeTargetTimeline {
+  projectedInspectedMs: number | null
+  shapeInspectedMs: number | null
+}
+
 export interface MaterializationObservedRecord {
   elapsedMs: {
     context: number
     reachTable: number | null
     structuralSearch: number | null
     toFirstStructuralCandidate: number | null
-    candidates: { candidateIndex: number; diagnostics: number; materialization: number; targets: { orderIndex: number; targetWeaponId: string; ms: number }[] }[]
+    candidates: { candidateIndex: number; diagnostics: number; materialization: number; targets: { orderIndex: number; targetWeaponId: string; ms: number; shapeTimeline?: ShapeTargetTimeline }[] }[]
     total: number
   }
   yields: number
@@ -719,20 +734,27 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
     const materializationStarted = now()
     const settled: TargetMaterializationRecord[] = []
     const inspections = new Map<TargetWeaponId, CandidateInspection[]>()
-    const targetTimes: { orderIndex: number; targetWeaponId: string; ms: number }[] = []
+    const targetTimes: MaterializationObservedRecord['elapsedMs']['candidates'][number]['targets'] = []
     let targetStartedAt = 0
+    // D-0B-2 (d0a2-v2 runs only): execution-only inspection times of the Target in progress.
+    let timeline: ShapeTargetTimeline = { projectedInspectedMs: null, shapeInspectedMs: null }
     let failClosed: CandidateMaterializationRecord['failClosed'] = null
     let stage: MaterializationStageOutcome | null = null
     let notAttemptedFromRun: TargetWeaponId[] | null = null
     const observer: MaterializationObserver = {
       onTargetStarted: event => {
         targetStartedAt = now()
+        timeline = { projectedInspectedMs: null, shapeInspectedMs: null }
         progress({ kind: 'target_started', candidateIndex, orderIndex: event.orderIndex, targetWeaponId: event.targetWeaponId })
       },
-      onCandidateInspected: inspection => { inspections.set(inspection.targetWeaponId, [...(inspections.get(inspection.targetWeaponId) ?? []), inspection]) },
+      onCandidateInspected: inspection => {
+        inspections.set(inspection.targetWeaponId, [...(inspections.get(inspection.targetWeaponId) ?? []), inspection])
+        if (shapeRule && inspection.method === 'candidate_search_projected') timeline.projectedInspectedMs = now() - targetStartedAt
+        if (shapeRule && inspection.method === 'shape_constrained') timeline.shapeInspectedMs = now() - targetStartedAt
+      },
       onTargetSettled: record => {
         settled.push(record)
-        targetTimes.push({ orderIndex: record.orderIndex, targetWeaponId: record.targetWeaponId, ms: now() - targetStartedAt })
+        targetTimes.push({ orderIndex: record.orderIndex, targetWeaponId: record.targetWeaponId, ms: now() - targetStartedAt, ...(shapeRule ? { shapeTimeline: { ...timeline } } : {}) })
         progress({ kind: 'target_settled', candidateIndex, orderIndex: record.orderIndex, targetWeaponId: record.targetWeaponId, outcome: targetOutcomeBrief(record.outcome) })
       },
     }
