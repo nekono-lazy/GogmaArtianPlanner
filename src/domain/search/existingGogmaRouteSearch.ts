@@ -6,6 +6,7 @@ import type {
 } from '../models/publicTypes'
 import { selectCompatibleOwnedGogmaWeapons } from './routeEligibility'
 import {
+  constrainedBonusLaneAvailable,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
   isAvailableRouteSource,
@@ -20,10 +21,18 @@ const bonusAmendmentKinds = ['existing_gogma_reset_bonuses', 'existing_gogma_kee
  * A weapon a Planner reservation holds for a fixed Route is neither a Route
  * source nor an amendment subject here, its zero-operation current Route
  * included (SEARCH_SPEC 5.6.8); the ordinary Search has no reservation.
+ * A Research shape constraint (5.6.9) further keeps only the shape's own
+ * OwnedWeapon, before any base is generated; it is no reservation edit.
  */
 function compatibleSources(context: RouteSearchContext): OwnedGogmaArtianWeapon[] {
-  return selectCompatibleOwnedGogmaWeapons(context.target, context.input.ownedWeapons)
+  const sources = selectCompatibleOwnedGogmaWeapons(context.target, context.input.ownedWeapons)
     .filter((weapon) => isAvailableRouteSource(context, weapon.id))
+  const constraint = context.routeBaseConstraint
+  if (constraint === undefined) return sources
+  if (constraint.kind !== 'owned_gogma') {
+    throw new Error(`A '${constraint.kind}' Route base constraint never runs the existing Gogma Route search.`)
+  }
+  return sources.filter((weapon) => weapon.id === constraint.ownedWeaponId)
 }
 
 function pushAll(result: RouteSearchResult, routes: readonly BuildRoute['kind'][], reason: Parameters<RouteSearchResult['skippedRoutes']['push']>[0]['reason'], detail: string) {
@@ -65,6 +74,9 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
   result.searchedRoutes.push('existing_gogma_current')
 
   const mutableSources = all.filter((weapon) => !weapon.isProtected)
+  // A Research shape constraint (5.6.9) opens only the lanes its shape operates
+  // on, and never queries the support of a lane it leaves at zero operations.
+  const lanes = context.routeBaseConstraint?.lanes
 
   const hasSkillInputs = hasConfirmedSkillInputs(input)
   let skillInputUnsupportedReason: string | null = null
@@ -72,7 +84,8 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
   if (
     mutableSources.length > 0 &&
     hasSkillInputs &&
-    engine.capabilities.supportsSkillPrediction
+    engine.capabilities.supportsSkillPrediction &&
+    (lanes === undefined || lanes.skillStream)
   ) {
     const skillSupport = context.predictionSupport.skill()
     canSkill = skillSupport.supported
@@ -103,6 +116,7 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
   const canAmend = mutableSources.length > 0
     && gogmaInputsConfirmed
     && engine.capabilities.supportsGogmaPrediction
+    && (lanes === undefined || constrainedBonusLaneAvailable(context, lanes.bonusOperations))
   const canKeep = engine.capabilities.supportsKeepBonusesPrediction
   const searchedAmendmentRoutes = new Set<BuildRoute['kind']>()
   const keepUnsupportedSources = new Set<OwnedWeaponId>()

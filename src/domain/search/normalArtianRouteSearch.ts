@@ -8,6 +8,7 @@ import {
   heldPrefixNormalCreation,
 } from './counterReservation'
 import {
+  constrainedBonusLaneAvailable,
   conversionSkillPositions,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
@@ -191,6 +192,10 @@ export async function searchNormalArtianRoutes(
     warnings: [],
   }
 
+  const constraint = context.routeBaseConstraint
+  if (constraint !== undefined && constraint.kind !== 'new_normal') {
+    throw new Error(`A '${constraint.kind}' Route base constraint never runs the Normal Artian Route search.`)
+  }
   const normalSkip = predictedNormalSkip(context)
   const conversionUnavailable = conversionSkip(context)
   if (conversionUnavailable) {
@@ -201,6 +206,12 @@ export async function searchNormalArtianRoutes(
       route: 'normal_artian_to_gogma',
       ...(normalSkip ?? conversionUnavailable),
     })
+    return result
+  }
+  if (constraint !== undefined && normalSkip !== null) {
+    // A Research shape names a predicted production target (5.6.9): the blind
+    // variant is never its stand-in and is never registered.
+    result.skippedRoutes.push({ route: 'normal_artian_to_gogma', ...normalSkip })
     return result
   }
 
@@ -384,10 +395,17 @@ function searchPredictedNormalRoutes(
 ): void {
   const { engine, input, target } = context
   const baseSeed = input.rngState.baseSeed.value as string
+  // A Research shape constraint (5.6.9) keeps only the shape's Counter and its
+  // one production target offset, before any Normal is predicted or queued.
+  const constraint = context.routeBaseConstraint?.kind === 'new_normal' ? context.routeBaseConstraint : undefined
   const counters = selectSearchableNormalCounters(target, input.normalCounters)
+    .filter((counter) => constraint === undefined || counter.id === constraint.counterId)
   let canSearchAmendments =
     hasConfirmedGogmaInputs(input) && engine.capabilities.supportsGogmaPrediction
-  if (canSearchAmendments) {
+  if (constraint !== undefined) {
+    // The shape's Bonus lane requires the support of its own operations only (5.6.9).
+    canSearchAmendments = constrainedBonusLaneAvailable(context, constraint.lanes.bonusOperations)
+  } else if (canSearchAmendments) {
     const resetSupport = context.predictionSupport.gogmaReset()
     if (!resetSupport.supported) {
       addWarning(
@@ -409,7 +427,10 @@ function searchPredictedNormalRoutes(
     const start = counter.counter
     const normalReservation = context.reservation?.normal(counter.id) ?? EMPTY_COUNTER_RESERVATION
     const keepLayouts = new Set<string>()
+    // The shape's own offset: no other offset is predicted, queued or read as an extent stop.
+    const shapeOffset = constraint === undefined ? undefined : constraint.productionTargetPosition - start
     const scheduleOffset = (offset: number): void => {
+      if (shapeOffset !== undefined && (offset !== shapeOffset || offset < 0 || offset >= input.maxNormalAdvance)) return
       if (offset >= input.maxNormalAdvance) {
         // The next forge count is reachable work the extent leaves unread.
         scheduler.noteExtentReached()
@@ -466,7 +487,10 @@ function searchPredictedNormalRoutes(
               zeroBonus: { gogmaAdvance: 0, lastResetDepth: 0, finalBonuses: bonuses, restorationBonusScope: 'normal_artian', operations: [], amendmentResults: [] },
               zeroSkill: conversion.zeroSkill,
               startSkillCounter: conversion.skillCounterAfter,
-              bonusBase: canSearchAmendments ? { startGogmaCounter: input.rngState.gogmaCounter.value as number, bonuses, restorationBonusScope: 'normal_artian', amendmentPolicy: !initialSearch || offset === 0 ? 'all' : 'keep_only' } : null,
+              bonusBase: !canSearchAmendments ? null
+                // A shape-constrained base carries no amendmentPolicy; the shape filter adds its shapePolicy (5.6.9).
+                : constraint !== undefined ? { startGogmaCounter: input.rngState.gogmaCounter.value as number, bonuses, restorationBonusScope: 'normal_artian' }
+                  : { startGogmaCounter: input.rngState.gogmaCounter.value as number, bonuses, restorationBonusScope: 'normal_artian', amendmentPolicy: !initialSearch || offset === 0 ? 'all' : 'keep_only' },
               onCandidate: (candidate) => result.candidates.push(candidate),
               onBonusNotice,
             })
@@ -476,6 +500,6 @@ function searchPredictedNormalRoutes(
         },
       })
     }
-    scheduleOffset(0)
+    scheduleOffset(shapeOffset ?? 0)
   }
 }

@@ -1000,3 +1000,83 @@ G4-iiiの扱い（両軸Ideal sourceの継続optionの生成）は本書の判�
 | Required fix 2 | `generateReservedDepth()` はResetとKeepの両方のsupportを評価・記録するので、操作種別を制限したpolicyでも禁止した操作のunsupportedが報告され、それを `prediction_support_inconsistent` へ変換すると合法なRouteをfail closedし得る | 現行のsupport評価（Resetは `keep_only` でも問い合わせる）とprimitive側のstream base生成条件（新規Normal・所持通常はReset supportが無いとBonus stream baseを作らない）を確認した（§3.5）。`shapePolicy` は許す操作だけを生成し、そのsupportだけを、その操作を置けるstage・stateでだけ問い合わせる契約にし、Reset→Keepの段階ごとの問合せを定めた（§5.3の8）。primitiveのstream base生成条件をlaneが使う操作のsupportだけにした（§5.3の7）。Phase Aのsupport判定（family-only Keep契約を含む）を確認し（§3.10）、unsupportedを5つの区分に分け、`prediction_support_inconsistent` をPhase Aが同じ問いを判定済みの場合に限り、判定の無い問いは `unsupported` とした。禁止操作のunsupportedはどの分類の根拠にもしない（§10.1 / §10.2）。補題のP5を具体化した（§5.5）。testを追加した（§15「Bonus support契約」） |
 
 B-iiを主方式とする判断、2aの前にオーナー承認が要ること、G1 / G2 / G3の方針、materialization順序を変えない判断、identity、方式選択規則は変えていない。
+
+## 18. D-0A-2a 実装記録（Search Domain seam）
+
+Refs #154。B-iiの採用とSearch DomainのProduction fileへのResearch専用opt-in seamの追加は、本タスクでオーナー承認事項として扱った（§13の#1 (a)）。
+SEARCH_SPECへの注記は2aと同時に入れた（§13の#2 (a)、`docs/SEARCH_SPEC.md` 5.6.9）。2b以降（§12）は実装していない。
+
+### 18.1 実装した範囲
+
+| 箇所 | 実装 | 無指定時（Production） |
+| --- | --- | --- |
+| `routeSearchShared.ts` | 任意field `RouteSearchContext.routeBaseConstraint`（`RouteBaseConstraint` / `RouteBaseLaneNeeds`）。`conversionSkillPositions()` は指定時に正式な歩行（`legalConversionSkillPositions()` として分離）の結果を形の c との共通部分に絞り、`beyondExtent` を立てない。Bonus laneのcapability / supportの共有helper（`constrainedBonusLaneCapabilityBlocker()` / `constrainedBonusLaneSupportBlocker()` / `constrainedBonusLaneAvailable()`）を、制約付きprimitiveとbase到達の診断が共用する | 歩行・checkpoint・`beyondExtent` は不変 |
+| primitive 3つ | 指定時、形のsource / Counter / production targetのoffset 1つだけを列挙し、Bonus stream baseの生成条件をlaneが使う操作だけにし、`amendmentPolicy` を付けない。新規Normalはblind variantを登録しない。所持巨戟は操作0のlaneのstream base（`startSkillCounter` / `bonusBase`）を作らず、そのsupportを問い合わせない | 列挙・support問合せ・warning・stream base生成条件は不変 |
+| `bonusStream.ts` | 任意field `BonusStreamBase.shapePolicy`（`BonusShapePolicy`）。held-aware読取りだけが解釈する（`generateShapeReservedDepth()`、§5.3の8）。ordinaryの `readDepth()` / `solve()` / `reachesBeyondExtent()` は拒否し、`amendmentPolicy` との併用（`'all'` を含む）も拒否する。stream keyは指定時だけ要素を足す | `generateReservedDepth()` を含む既存の関数本文は変えていない（dispatchとordinary APIの拒否1行だけを追加） |
+| `targetSearchScheduler.ts` | contextの任意field `RouteSearchContext.routeShapeFilter`（`ScheduledRouteShapeFilter`）を読む。Planner Alternative policyでだけ受け付ける。`addBase()` は `admit()` による最終admissionの後、lane付きで登録し（`registerBase()`）、stream laneはlane開始Idealでもchannelを開き、各軸は `shapeLaneAxes()` で操作0 / 最終位置の解だけを受け取る。admitしたbaseのBonus noticeを `routeShapeFilter.onBonusNotice()` へも渡す | lane開始Ideal規則・channel購読・noticeは不変。constructorの引数も不変 |
+| `plannerAlternativeSearch.ts` | setup・Route登録・delivery loopを `createPlannerAlternativeFrontier()`（`run()` は登録するprimitiveの列を引数に取る。`closeWithoutRun()`）と `PLANNER_ALTERNATIVE_ROUTE_REGISTRATIONS` に抽出し、root / setupのruntime sectionを開く `openPlannerAlternativeSearchSections()` を加えた | `visitPlannerAlternativeCandidates()` は従来の3種類を `routeBaseConstraint` / `shapeFilter` 無しで渡す。処理順・runtime section列・summaryは不変 |
+| 新規 `src/domain/search/research/` | `visitShapeConstrainedRouteCandidates()`、型（`shapeConstrainedTypes.ts`）、入力検証、base到達の診断、`SHAPE_CONSTRAINED_ROUTE_POLICY_VERSION`（`research-shape-constrained-route-policy:v1`） | Production・`src/domain/search/index.ts` から到達しない（isolation test） |
+
+### 18.2 設計（§4.2 / §5.3）との差異
+
+いずれも意味と不変条件は §5.3に従い、綴り・配置だけを変えた（§0の「提案」）。
+
+1. **抽出先**: 共有のfrontierは新規fileではなく `plannerAlternativeSearch.ts` の中に置いた。`alternative/` のfile一覧は既存のsource audit
+   （`plannerAlternativeIdealPublication.test.ts`）が固定しているためである。Productionの公開exportに内部関数を出さないよう、`alternative/index.ts` の
+   `export * from './plannerAlternativeSearch'` を、既存の公開名3つ（`visitPlannerAlternativeCandidates` と型2つ）の名前付きexportに変えた（公開名は不変）
+2. **Bonus shapeの生成関数**: `generateReservedDepth()` に分岐を入れず、別関数 `generateShapeReservedDepth()` にした。`bonusStream.ts` の
+   frontier block・call site・frontier key・Reset / Keep memoはIssue #154の複数のsource-shape test（A8 / A9 / B2I / B2J、
+   `reservedBonusStreamRepresentative.test.ts`、`reservedKeepFamilyLayoutKeyReuse.test.ts`）が固定している。生成state constructorとfrontier比較関数は
+   参照で共有し（呼出しを再度綴らない）、frontier keyの組立て（(位置, layout)）だけを同じ規則で別に書いた。Reset→Keepの段階は状態に新fieldを足さず、
+   「`resetPosition` より前ならReset段階、以後（`resetPosition` のReset、またはその後のKeep）ならKeep段階」と位置から決める（Reset段階のResetは
+   `resetPosition` 以下にしか置かれないので同値）
+3. **schedulerのlane**: Production側のchannel購読行（`cross.addSkill` / `cross.addBonus` / `base.onBonusNotice`）はsource audit
+   （`plannerAlternativeIdealPublication.test.ts`）が固定しているので、新しい購読を足さず、形のlaneは同じ購読行を通る軸の制限
+   （`shapeLaneAxes()`）とnoticeを転送するbaseの写しで実現した。`shapePolicy` 付きstream baseはResearch側のfilterがprimitiveのbaseから作る
+4. **`capability_unavailable` の `cause`**: RNG入力の未確定（区分3に当たる）とEngine capability flagを区別するため `cause` を加えた
+5. **位置の窓外**: laneの最終位置（s*、g*、g1）が窓外なら `invalid_shape`（throw）、巨戟化位置とproduction targetの窓外は診断
+   （`conversion_position_not_legal` / `production_target_outside_extent`）にした（§15の「早期制約」(5)に合わせた）
+6. **契約違反**: 診断を通ったのにbaseが登録されない、形と異なるbase・2つ目のbaseのadmission、形の最終位置で終わらないRouteの配送は
+   `ShapeConstrainedSearchError('shape_search_contract_violation')` でrejectする（2bの分類で `shape_search_contract_violation` へ対応させる）
+7. **観測**: shape付きBonus streamのdepthは `onGogmaReservedDepth` を報告するが、runtime phase section（`onGogmaReservedRuntime` のphase）は
+   報告しない（phase markerもsource-shape testの固定対象である）。§10.4のbudgetが使うのはdepth observation・Skill depth observation・work数である
+8. **`shapeFilter` の渡し方**: §4.2の「constructorの任意の第4引数」ではなく、contextの任意field `RouteSearchContext.routeShapeFilter` にした。
+   Planner Alternative Searchのscheduler構築が1箇所で `}, runtime)` であること、Search runtime observerを読むProduction moduleが
+   `plannerAlternativeSearch.ts` だけであることを、既存のisolation test（`plannerAlternativeBenchmarkIsolation.test.ts`）が固定しているためである。
+   同じ理由で、Research seamのroot / setup section開閉は `plannerAlternativeSearch.ts` のhelper（`openPlannerAlternativeSearchSections()`、
+   `closeWithoutRun()`）を通す
+
+### 18.3 Production不変の根拠（確認済み、test）
+
+- 変更前のmain `e6da7bd` で1回だけ記録したgolden（`src/test/fixtures/shapeConstrainedSeamProductionGoldenPreD0A2A.json`、63件）を、変更後の
+  実装が再現する: Planner Alternative Search 25 scenario（配送 `candidateStableKey` 列、summary、予測呼出し列と回数、support問合せ列、登録された
+  Route base、base別のBonus notice、runtime observerのsection列、instrumentation、cancel / yieldのcheckpoint数。observerあり・なしの両方）、
+  通常Candidate Search 19 scenario（canonical Ideal全体、searched / skipped、notice、#104のNormal削減を含む登録base）、Bonus stream
+  （held-aware 11 case、ordinary 7 case、stream key）
+- 既存testは変更していない。Issue #154のsource-shape test（bonusStream / scheduler / Planner Alternativeのsource audit）を含めて全件通過
+- isolation test: Production（`src/domain/search/research/` 以外）はResearch moduleをimportせず、Research専用field
+  （`routeBaseConstraint` / `routeShapeFilter` / `shapePolicy`）を持つのは §18.1の7 fileだけで、`visitPlannerAlternativeCandidates()` はどれも渡さない。
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、`DATABASE_SCHEMA_VERSION` 10、`ExportRoot.schemaVersion` 13、`production-rng:c5-e7` は不変
+
+### 18.4 G1 / G2 / G3（synthetic、test）
+
+- G1: 巨戟化 c のSkillがIdealでも、`reset_skills(s*)` の形で c + 1 からのReset Skillsが配送される。Planner Alternative Searchは同じ入力でReset Skillsを
+  持たないRouteだけを返す
+- G2: 未保護の所持巨戟の現在SkillがIdeal（Reset Skills継続）、現在BonusがIdeal（Keep継続）でも形どおり配送される。保護武器は
+  `source_protected` で、primitiveを起動しない
+- G3上側: Keep chainの範囲に同じlayoutのReset位置があるとき、Planner Alternative SearchはReset側の履歴（`R10,R11,R12,K13`）だけを返し、
+  `keep` の形は `K10,K11,K12,K13` を最初に返す（D-0Bのsynthetic確認と同じ機構）
+- G3下側（§3.7の推定の固定）: q = 10・g1 = 11がheld、Reset(10)とReset(11)が同じlayout、r = 12、g* = 13のsyntheticで、最小depth（own operation 3）では
+  g1経由の履歴（`R11,K12,K13`）がq経由（`R10,K12,K13`）へ畳まれ、Planner Alternative Searchは `R11,K12,K13` を配送しないことを確認した。
+  `reset_then_keep(11, 13)` の形は `R11,K12,K13` を最初に返す。**設計の推定との差異（観測）**: 同じsyntheticで、1段深いdepthでは
+  q のResetを前置した `R10,R11,K12,K13`（required位置は {11, 13}、own operationが1つ多い）がPlanner Alternative Searchから配送された。
+  R(q) → R(g1) のReset chainは `lastResetDepth` が大きく代表として残るためと読めるが、これは推定（コード読取）であり一般には固定していない。
+  したがって下側の変種は、この条件では「g1経由の履歴が失われる」のではなく「最小costのg1経由のRouteが失われ、同じrequired位置集合の
+  Routeが1操作多いcostで後から配送される」形で現れる。§3.7の「以後の継続はrequired {q, g*} の履歴だけになる」はそのdepthについての記述として
+  読む。新方式の扱い（Keep段階を `resetPosition` のResetの後に限る）とD-0B記録の観測値は変わらない
+
+### 18.5 2bに残す範囲
+
+§12のD-0A-2bの行のとおり（Research側の `materializeShapeConstrained()`、request構築・規模予測・前提検査、counting Engine、分類、
+`verifyShapeConstrainedRoute()`、方式選択 `d0a2-v2`、D-0B runner / protocolの規則選択と候補分類、G3静的risk診断への下側の変種の追加、
+補題（§5.5）のproperty test、PAとのparity）。§5.5の補題は2aでは未検証のままである。

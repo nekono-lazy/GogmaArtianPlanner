@@ -1,24 +1,27 @@
-import type { RestorationBonusSet } from '../../models/publicTypes'
+import type { RestorationBonusSet, TargetWeapon } from '../../models/publicTypes'
 import type { RngEngine } from '../../rng/rngEngine'
 import { createTargetBonusStream, type ReservedGogmaDepthObserver, type ReservedGogmaRuntimeObserver } from '../bonusStream'
 import { createCounterReservation, EMPTY_COUNTER_RESERVATION } from '../counterReservation'
 import { candidateStableKey } from '../candidateProcessing'
 import { compareConstrainedCandidates } from '../constrained/constrainedCandidateFactory'
+import type { ConstrainedSearchOrigin } from '../constrained/constrainedTypes'
 import { searchExistingGogmaRoutes } from '../existingGogmaRouteSearch'
 import { searchNormalArtianRoutes } from '../normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from '../ownedNormalArtianRouteSearch'
-import type { RouteSearchContext } from '../routeSearchShared'
+import type { RouteBaseConstraint, RouteSearchContext, RouteSearchResult } from '../routeSearchShared'
 import { createSearchExecutionContext } from '../searchExecution'
 import { createSearchPredictionSupport } from '../searchPredictionSupport'
 import type { SearchRuntimeObserver, SearchRuntimeSection } from '../searchRuntime'
 import { createTargetSkillStream, type ReservedSkillDepthObserver } from '../skillStream'
-import { TargetSearchScheduler } from '../targetSearchScheduler'
+import { TargetSearchScheduler, type ScheduledRouteShapeFilter } from '../targetSearchScheduler'
 import { createPlannerAlternativeCandidate } from './plannerAlternativeCandidateFactory'
 import {
   PlannerAlternativeSearchError,
   type PlannerAlternativeCandidate,
   type PlannerAlternativeCandidateVisitor,
+  type PlannerAlternativeReservation,
   type PlannerAlternativeSearchExecution,
+  type PlannerAlternativeSearchExtent,
   type PlannerAlternativeSearchInput,
 } from './plannerAlternativeTypes'
 import { assertPlannerAlternativeSearchInput } from './plannerAlternativeValidation'
@@ -134,7 +137,78 @@ export async function visitPlannerAlternativeCandidates(
       'The RNG Engine version does not match the origin CalculationContext.',
     )
   }
+  return createPlannerAlternativeFrontier({ target, reservation, origin, extent, engine, options }).run({
+    onCandidate,
+    registrations: PLANNER_ALTERNATIVE_ROUTE_REGISTRATIONS,
+    excludedRouteKeys: input.excludedRouteKeys,
+  })
+}
 
+/** One Route search primitive as the Planner Alternative frontier registers it. */
+export type PlannerAlternativeRoutePrimitive = (
+  context: RouteSearchContext,
+  scheduler: TargetSearchScheduler,
+) => Promise<RouteSearchResult>
+
+/**
+ * The same registration order as the ordinary Search, with no route filter:
+ * the scope is every currently legal Search Route. The searchers' own searched
+ * / skipped reports and notices are ordinary Search presentation and are not
+ * part of this API.
+ */
+export const PLANNER_ALTERNATIVE_ROUTE_REGISTRATIONS: ReadonlyArray<readonly [SearchRuntimeSection, PlannerAlternativeRoutePrimitive]> = [
+  ['normal_route_registration', searchNormalArtianRoutes],
+  ['owned_normal_route_registration', searchOwnedNormalArtianRoutes],
+  ['existing_gogma_route_registration', searchExistingGogmaRoutes],
+]
+
+/**
+ * A validated Planner Alternative frontier input: the searched Target, the
+ * normalized reservation, the Planner-start origin, the extent, the Engine
+ * and the execution options. `routeBaseConstraint` and `shapeFilter` are the
+ * Research shape-constrained Route search's (`docs/SEARCH_SPEC.md` 5.6.9);
+ * Planner Alternative Search never passes them.
+ */
+export interface PlannerAlternativeFrontierSetup {
+  target: TargetWeapon
+  reservation: PlannerAlternativeReservation
+  origin: ConstrainedSearchOrigin
+  extent: PlannerAlternativeSearchExtent
+  engine: RngEngine
+  options: PlannerAlternativeSearchExecutionOptions
+  routeBaseConstraint?: RouteBaseConstraint
+  shapeFilter?: ScheduledRouteShapeFilter
+}
+
+/**
+ * One Planner Alternative frontier after its setup (the open `search_setup`
+ * runtime section included). `run()` closes the setup section, registers the
+ * given Route search primitives in order, drives the delivery loop and closes
+ * the Search root section.
+ */
+export interface PlannerAlternativeFrontier {
+  readonly context: RouteSearchContext
+  run(request: {
+    onCandidate: PlannerAlternativeCandidateVisitor
+    registrations: ReadonlyArray<readonly [SearchRuntimeSection, PlannerAlternativeRoutePrimitive]>
+    excludedRouteKeys: readonly string[]
+  }): Promise<PlannerAlternativeSearchExecution>
+  /** Closes the setup and Search root sections of a frontier that will not run (Research base diagnosis, 5.6.9). */
+  closeWithoutRun(): void
+}
+
+/**
+ * The setup, Route registration and delivery loop of
+ * `visitPlannerAlternativeCandidates()`, shared with the Research
+ * shape-constrained Route search (`docs/SEARCH_SPEC.md` 5.6.9) so neither
+ * duplicates the context, the scheduler, the cost-layer buffer, the six-key
+ * delivery or the termination. Not part of the Search Domain's public exports
+ * (`alternative/index.ts` names its exports). The caller validates the input
+ * and opens the `search_runtime` and `search_setup` runtime sections first.
+ */
+export function createPlannerAlternativeFrontier(setup: PlannerAlternativeFrontierSetup): PlannerAlternativeFrontier {
+  const { target, reservation, origin, extent, engine, options } = setup
+  const runtime = options.instrumentation?.onSearchRuntime
   const execution = createSearchExecutionContext({
     shouldCancel: options.shouldCancel,
     yieldControl: options.yieldControl,
@@ -195,6 +269,9 @@ export async function visitPlannerAlternativeCandidates(
       instrumentation?.onGogmaReservedDepth,
       instrumentation?.onGogmaReservedRuntime,
     ),
+    // Research only (5.6.9); a Planner Alternative context never carries either.
+    ...(setup.routeBaseConstraint === undefined ? {} : { routeBaseConstraint: setup.routeBaseConstraint }),
+    ...(setup.shapeFilter === undefined ? {} : { routeShapeFilter: setup.shapeFilter }),
   }
 
   let buffered: PlannerAlternativeCandidate[] = []
@@ -210,91 +287,102 @@ export async function visitPlannerAlternativeCandidates(
     buffered.push(candidate)
     bufferedCost = composition.cost
   }, runtime)
-  runtime?.({ type: 'section_completed', section: 'search_setup' })
-  // The same registration order as the ordinary Search, with no route filter:
-  // the scope is every currently legal Search Route. The searchers' own
-  // searched / skipped reports and notices are ordinary Search presentation
-  // and are not part of this API.
-  const registrations: ReadonlyArray<readonly [SearchRuntimeSection, typeof searchNormalArtianRoutes]> = [
-    ['normal_route_registration', searchNormalArtianRoutes],
-    ['owned_normal_route_registration', searchOwnedNormalArtianRoutes],
-    ['existing_gogma_route_registration', searchExistingGogmaRoutes],
-  ]
-  runtime?.({ type: 'section_started', section: 'route_registration' })
-  for (const [section, search] of registrations) {
-    runtime?.({ type: 'section_started', section })
-    await search(context, scheduler)
-    runtime?.({ type: 'section_completed', section })
-  }
-  runtime?.({ type: 'section_completed', section: 'route_registration' })
 
-  const excluded = new Set(input.excludedRouteKeys)
-  const seen = new Set<string>()
-  let deliveredCandidates = 0
-  let excludedCandidates = 0
-  const skippedExcludedRouteKeys: string[] = []
-  let stoppedByConsumer = false
-
-  delivery: for (;;) {
-    const next = scheduler.queue.nextLowerBound
-    if (bufferedCost !== null && (next === null || next > bufferedCost)) {
-      runtime?.({ type: 'section_started', section: 'delivery_flush' })
-      runtime?.({ type: 'section_started', section: 'delivery_sort' })
-      const ready = buffered.sort((left, right) =>
-        compareConstrainedCandidates(left, right, target.preferredOwnedWeaponId))
-      runtime?.({ type: 'section_completed', section: 'delivery_sort' })
-      buffered = []
-      bufferedCost = null
-      for (const candidate of ready) {
-        // A long equal-cost flush stays cancellable and yields like any work.
-        runtime?.({ type: 'section_started', section: 'delivery_checkpoint' })
-        await execution.checkpoint()
-        runtime?.({ type: 'section_completed', section: 'delivery_checkpoint' })
-        runtime?.({ type: 'section_started', section: 'delivery_key_dedup' })
-        const key = candidateStableKey(candidate)
-        // Only exact semantic duplicates collapse; this is not retention.
-        if (seen.has(key)) {
-          runtime?.({ type: 'section_completed', section: 'delivery_key_dedup' })
-          continue
-        }
-        seen.add(key)
-        if (excluded.has(key)) {
-          excludedCandidates += 1
-          skippedExcludedRouteKeys.push(key)
-          runtime?.({ type: 'section_completed', section: 'delivery_key_dedup' })
-          continue
-        }
-        deliveredCandidates += 1
-        runtime?.({ type: 'section_completed', section: 'delivery_key_dedup' })
-        runtime?.({ type: 'section_started', section: 'delivery_consumer' })
-        const verdict = await onCandidate(candidate)
-        runtime?.({ type: 'section_completed', section: 'delivery_consumer' })
-        if (verdict === 'stop') {
-          stoppedByConsumer = true
-          runtime?.({ type: 'section_completed', section: 'delivery_flush' })
-          break delivery
-        }
-      }
-      runtime?.({ type: 'section_completed', section: 'delivery_flush' })
-      continue
+  const run: PlannerAlternativeFrontier['run'] = async ({ onCandidate, registrations, excludedRouteKeys }) => {
+    runtime?.({ type: 'section_completed', section: 'search_setup' })
+    runtime?.({ type: 'section_started', section: 'route_registration' })
+    for (const [section, search] of registrations) {
+      runtime?.({ type: 'section_started', section })
+      await search(context, scheduler)
+      runtime?.({ type: 'section_completed', section })
     }
-    if (!(await scheduler.step())) break
-    instrumentation?.onWorkSettled?.()
-  }
+    runtime?.({ type: 'section_completed', section: 'route_registration' })
 
-  // The frontier ran out unless the consumer stopped first. Whether it ran out
-  // naturally or an extent value cut reachable work is the scheduler's record.
-  const stoppedByExtent = !stoppedByConsumer && scheduler.stoppedByExtent
-  runtime?.({ type: 'section_completed', section: 'search_runtime' })
-  return {
-    targetWeaponId: target.id,
-    summary: {
-      deliveredCandidates,
-      excludedCandidates,
-      exhausted: !stoppedByConsumer && !stoppedByExtent,
-      stoppedByExtent,
-    },
-    stoppedByConsumer,
-    skippedExcludedRouteKeys,
+    const excluded = new Set(excludedRouteKeys)
+    const seen = new Set<string>()
+    let deliveredCandidates = 0
+    let excludedCandidates = 0
+    const skippedExcludedRouteKeys: string[] = []
+    let stoppedByConsumer = false
+
+    delivery: for (;;) {
+      const next = scheduler.queue.nextLowerBound
+      if (bufferedCost !== null && (next === null || next > bufferedCost)) {
+        runtime?.({ type: 'section_started', section: 'delivery_flush' })
+        runtime?.({ type: 'section_started', section: 'delivery_sort' })
+        const ready = buffered.sort((left, right) =>
+          compareConstrainedCandidates(left, right, target.preferredOwnedWeaponId))
+        runtime?.({ type: 'section_completed', section: 'delivery_sort' })
+        buffered = []
+        bufferedCost = null
+        for (const candidate of ready) {
+          // A long equal-cost flush stays cancellable and yields like any work.
+          runtime?.({ type: 'section_started', section: 'delivery_checkpoint' })
+          await execution.checkpoint()
+          runtime?.({ type: 'section_completed', section: 'delivery_checkpoint' })
+          runtime?.({ type: 'section_started', section: 'delivery_key_dedup' })
+          const key = candidateStableKey(candidate)
+          // Only exact semantic duplicates collapse; this is not retention.
+          if (seen.has(key)) {
+            runtime?.({ type: 'section_completed', section: 'delivery_key_dedup' })
+            continue
+          }
+          seen.add(key)
+          if (excluded.has(key)) {
+            excludedCandidates += 1
+            skippedExcludedRouteKeys.push(key)
+            runtime?.({ type: 'section_completed', section: 'delivery_key_dedup' })
+            continue
+          }
+          deliveredCandidates += 1
+          runtime?.({ type: 'section_completed', section: 'delivery_key_dedup' })
+          runtime?.({ type: 'section_started', section: 'delivery_consumer' })
+          const verdict = await onCandidate(candidate)
+          runtime?.({ type: 'section_completed', section: 'delivery_consumer' })
+          if (verdict === 'stop') {
+            stoppedByConsumer = true
+            runtime?.({ type: 'section_completed', section: 'delivery_flush' })
+            break delivery
+          }
+        }
+        runtime?.({ type: 'section_completed', section: 'delivery_flush' })
+        continue
+      }
+      if (!(await scheduler.step())) break
+      instrumentation?.onWorkSettled?.()
+    }
+
+    // The frontier ran out unless the consumer stopped first. Whether it ran out
+    // naturally or an extent value cut reachable work is the scheduler's record.
+    const stoppedByExtent = !stoppedByConsumer && scheduler.stoppedByExtent
+    runtime?.({ type: 'section_completed', section: 'search_runtime' })
+    return {
+      targetWeaponId: target.id,
+      summary: {
+        deliveredCandidates,
+        excludedCandidates,
+        exhausted: !stoppedByConsumer && !stoppedByExtent,
+        stoppedByExtent,
+      },
+      stoppedByConsumer,
+      skippedExcludedRouteKeys,
+    }
   }
+  const closeWithoutRun = () => {
+    runtime?.({ type: 'section_completed', section: 'search_setup' })
+    runtime?.({ type: 'section_completed', section: 'search_runtime' })
+  }
+  return { context, run, closeWithoutRun }
+}
+
+/**
+ * Opens the Search root and setup runtime sections of one frontier, before the
+ * caller validates its input, exactly as `visitPlannerAlternativeCandidates()`
+ * does: for the Research shape-constrained Route search (5.6.9), which shares
+ * the frontier and so its runtime section hierarchy.
+ */
+export function openPlannerAlternativeSearchSections(options: PlannerAlternativeSearchExecutionOptions): void {
+  const runtime = options.instrumentation?.onSearchRuntime
+  runtime?.({ type: 'section_started', section: 'search_runtime' })
+  runtime?.({ type: 'section_started', section: 'search_setup' })
 }

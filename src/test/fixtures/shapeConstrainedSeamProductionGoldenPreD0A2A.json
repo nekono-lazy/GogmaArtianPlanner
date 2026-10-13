@@ -1,0 +1,3948 @@
+{
+  "provenance": "Recorded once (Issue #154 Global Assignment Phase D-0A-2a) by recordSeamProductionGolden() on main e6da7bde07eec45cf29ce0e8b50114f3e728a897 (PR #247 merged), before any D-0A-2a Search Domain change. Not produced by the changed implementation. Never regenerate.",
+  "plannerAlternative": [
+    {
+      "name": "existing:practical:bonus[11]:skill[9]",
+      "candidateCount": 2,
+      "projection": [
+        "existing_gogma_mixed|owned.fixture.0|R10,R11,S7,S8,S9",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,S8,S9"
+      ],
+      "stableKeysSha256": "19fa098c1770326211f9913471637d0243e5a4f7308c81001215a93d50509a0c",
+      "summary": {
+        "deliveredCandidates": 2,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 5,
+        "reset": 4,
+        "keep": 6
+      },
+      "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 52,
+        "yieldControl": 1
+      },
+      "instrumentation": {
+        "workSettled": 20,
+        "skillDepths": 8,
+        "skillDepthsSha256": "e1f69e9b84f49694ee0af22ae49cc9b956b8dc2bf22fb1aeb19d6c3141d64200",
+        "gogmaDepths": 8,
+        "gogmaDepthsSha256": "cf8df0928bb5355e6518a2e6423d779c86bb424b6cc2ea97a4ac393d4e1d09e6",
+        "gogmaRuntimeEvents": 112,
+        "gogmaRuntimeSha256": "7ab965b7770708cde64b051a9c75e9e3050ce84cd93b64c4a07e45bdd2e471b5",
+        "searchRuntimeEvents": 464,
+        "searchRuntimeSha256": "d95858a4d93d8bb15271e4bb28d3c1421636260d2cb211459186810a1f3a3336"
+      },
+      "plain": {
+        "stableKeysSha256": "19fa098c1770326211f9913471637d0243e5a4f7308c81001215a93d50509a0c",
+        "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 52,
+          "yieldControl": 1
+        }
+      }
+    },
+    {
+      "name": "existing:x2:one-protected",
+      "candidateCount": 4,
+      "projection": [
+        "existing_gogma_mixed|owned.fixture.0|R10,S7,S8",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,S8",
+        "existing_gogma_mixed|owned.fixture.0|R10,R11,R12,S7,S8",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,R12,S8"
+      ],
+      "stableKeysSha256": "1f85844619025ebabd862b3bc31031707e71e8f38d52a4c08aa7c7cb7d392f22",
+      "summary": {
+        "deliveredCandidates": 4,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 5,
+        "reset": 4,
+        "keep": 7
+      },
+      "predictionCallsSha256": "b204a26674cc8e2514aa3eb97b90aac9ca0f5f558709ae53beaeba52e8c4ac90",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "existing_gogma|owned.fixture.1||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:-|bb:-",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 59,
+        "yieldControl": 1
+      },
+      "instrumentation": {
+        "workSettled": 22,
+        "skillDepths": 8,
+        "skillDepthsSha256": "e1f69e9b84f49694ee0af22ae49cc9b956b8dc2bf22fb1aeb19d6c3141d64200",
+        "gogmaDepths": 8,
+        "gogmaDepthsSha256": "203e52fc913a2df89cc1af9fb1ac5893c10cec33a9076f94f40ea7f5fe248679",
+        "gogmaRuntimeEvents": 112,
+        "gogmaRuntimeSha256": "5c52e25791f2cb6273e4627993e96eb6f67e94b019344361f0d8209a7b3011ee",
+        "searchRuntimeEvents": 524,
+        "searchRuntimeSha256": "84e4f7aa5e63c85d2e821a2cb4612f6f7b2e7c16b27c12230836a6c2914100a3"
+      },
+      "plain": {
+        "stableKeysSha256": "1f85844619025ebabd862b3bc31031707e71e8f38d52a4c08aa7c7cb7d392f22",
+        "predictionCallsSha256": "b204a26674cc8e2514aa3eb97b90aac9ca0f5f558709ae53beaeba52e8c4ac90",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 59,
+          "yieldControl": 1
+        }
+      }
+    },
+    {
+      "name": "existing:ideal-skill:keep-chain",
+      "candidateCount": 1,
+      "projection": [
+        "existing_gogma_keep_bonuses|owned.fixture.0|K10,K11,K12,K13"
+      ],
+      "stableKeysSha256": "e1f11bdcb9410dc438ce9a80d7ad277a76e9a4a5d97dca83d67366e35819428e",
+      "summary": {
+        "deliveredCandidates": 1,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 5,
+        "reset": 4,
+        "keep": 7
+      },
+      "predictionCallsSha256": "ed33ee92fe571addf09b6fbbba0e2f5ebf9e1da2ce57987ed9095d41e28513b4",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series_skill.fixture.a|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 38,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 14,
+        "skillDepths": 4,
+        "skillDepthsSha256": "8c75801fdf4e16e79370e0abf9b029103a038d462f20dba47adb4f5d719635c8",
+        "gogmaDepths": 8,
+        "gogmaDepthsSha256": "906771896b6f2e3facb1d76bfdae2ba783fa7bfeb54a7169112ee89e3d8ddfe3",
+        "gogmaRuntimeEvents": 112,
+        "gogmaRuntimeSha256": "1468d556a1aeeb11a7a5cb4ac1fff26d7feb1e6bcadaeb7da0b65978a5a9b8e6",
+        "searchRuntimeEvents": 330,
+        "searchRuntimeSha256": "c352c58dfa6ddc00e69fe30a29c3cb89e5c6acde135dd168a0eeaf9ea2ba3b1b"
+      },
+      "plain": {
+        "stableKeysSha256": "e1f11bdcb9410dc438ce9a80d7ad277a76e9a4a5d97dca83d67366e35819428e",
+        "predictionCallsSha256": "ed33ee92fe571addf09b6fbbba0e2f5ebf9e1da2ce57987ed9095d41e28513b4",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+        ],
+        "checkpoints": {
+          "shouldCancel": 38,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "existing:ideal-bonus-and-skill",
+      "candidateCount": 2,
+      "projection": [
+        "existing_gogma_current|owned.fixture.0|",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,S8"
+      ],
+      "stableKeysSha256": "32c7adc95aedaca64ae1b90e9a352e6321b2c110907031287d854b716aa1e671",
+      "summary": {
+        "deliveredCandidates": 2,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 4,
+        "reset": 3,
+        "keep": 3
+      },
+      "predictionCallsSha256": "346ff768d219a8e012a1274889737f18e6addcf889214224a59e846f58411471",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,sharpness:high|zs:series_skill.fixture.a|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 23,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 10,
+        "skillDepths": 3,
+        "skillDepthsSha256": "8f5666a964e80ab4a201d9dd4e9b83478a021f5dd73341a45684b5600b243f80",
+        "gogmaDepths": 3,
+        "gogmaDepthsSha256": "b93b4aaf3ce98fc7a1b606dd37e9fcc4749db9beeda5407b8840ae8c3598ac51",
+        "gogmaRuntimeEvents": 42,
+        "gogmaRuntimeSha256": "4b5e560c7f3054ab7f70208ed520d63d9ff85a370e44038a6a2c5587d33efed4",
+        "searchRuntimeEvents": 230,
+        "searchRuntimeSha256": "8d92e4d78291d6d1ed37366d076a142e4c0fec1256c6fe4ee216e1bfa98bf533"
+      },
+      "plain": {
+        "stableKeysSha256": "32c7adc95aedaca64ae1b90e9a352e6321b2c110907031287d854b716aa1e671",
+        "predictionCallsSha256": "346ff768d219a8e012a1274889737f18e6addcf889214224a59e846f58411471",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 23,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "existing:protected-ideal",
+      "candidateCount": 2,
+      "projection": [
+        "existing_gogma_current|owned.fixture.0|",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,S8"
+      ],
+      "stableKeysSha256": "32c7adc95aedaca64ae1b90e9a352e6321b2c110907031287d854b716aa1e671",
+      "summary": {
+        "deliveredCandidates": 2,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 4,
+        "reset": 3,
+        "keep": 3
+      },
+      "predictionCallsSha256": "346ff768d219a8e012a1274889737f18e6addcf889214224a59e846f58411471",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,sharpness:high|zs:series_skill.fixture.a|ss:-|bb:-",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 23,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 10,
+        "skillDepths": 3,
+        "skillDepthsSha256": "8f5666a964e80ab4a201d9dd4e9b83478a021f5dd73341a45684b5600b243f80",
+        "gogmaDepths": 3,
+        "gogmaDepthsSha256": "b93b4aaf3ce98fc7a1b606dd37e9fcc4749db9beeda5407b8840ae8c3598ac51",
+        "gogmaRuntimeEvents": 42,
+        "gogmaRuntimeSha256": "4b5e560c7f3054ab7f70208ed520d63d9ff85a370e44038a6a2c5587d33efed4",
+        "searchRuntimeEvents": 230,
+        "searchRuntimeSha256": "8d92e4d78291d6d1ed37366d076a142e4c0fec1256c6fe4ee216e1bfa98bf533"
+      },
+      "plain": {
+        "stableKeysSha256": "32c7adc95aedaca64ae1b90e9a352e6321b2c110907031287d854b716aa1e671",
+        "predictionCallsSha256": "346ff768d219a8e012a1274889737f18e6addcf889214224a59e846f58411471",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 23,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "existing:exclusive",
+      "candidateCount": 2,
+      "projection": [
+        "existing_gogma_mixed|owned.fixture.1|R10,R11,S7,S8",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,S8"
+      ],
+      "stableKeysSha256": "de36ad7ce359f4a267e9df26ac9b781f28340f112f242cc24782a14bb25ec06e",
+      "summary": {
+        "deliveredCandidates": 2,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 5,
+        "reset": 4,
+        "keep": 6
+      },
+      "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.1||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 51,
+        "yieldControl": 1
+      },
+      "instrumentation": {
+        "workSettled": 19,
+        "skillDepths": 8,
+        "skillDepthsSha256": "e1f69e9b84f49694ee0af22ae49cc9b956b8dc2bf22fb1aeb19d6c3141d64200",
+        "gogmaDepths": 8,
+        "gogmaDepthsSha256": "cf8df0928bb5355e6518a2e6423d779c86bb424b6cc2ea97a4ac393d4e1d09e6",
+        "gogmaRuntimeEvents": 112,
+        "gogmaRuntimeSha256": "7ab965b7770708cde64b051a9c75e9e3050ce84cd93b64c4a07e45bdd2e471b5",
+        "searchRuntimeEvents": 452,
+        "searchRuntimeSha256": "5f18264bb82859f0c232bfc81a7ddd0f7f0d03b1e31dc911bcc2403c9df29a98"
+      },
+      "plain": {
+        "stableKeysSha256": "de36ad7ce359f4a267e9df26ac9b781f28340f112f242cc24782a14bb25ec06e",
+        "predictionCallsSha256": "d48db6ea38bebcc0b49f81e7365ccb667adf071eb03927789c1701d47b4d49d8",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 51,
+          "yieldControl": 1
+        }
+      }
+    },
+    {
+      "name": "owned-normal:conversion",
+      "candidateCount": 2,
+      "projection": [
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R11,S8",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,S8"
+      ],
+      "stableKeysSha256": "64880e92ca73600c700014675ad2e885ed12ae32eb6cfe1ffef4e4b039e1e1a0",
+      "summary": {
+        "deliveredCandidates": 2,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 5,
+        "reset": 4,
+        "keep": 6
+      },
+      "predictionCallsSha256": "b83c2898e2261c39085f2121a1956c75af42b7d1f886587d3e9307b0ace92014",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 43,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 16,
+        "skillDepths": 4,
+        "skillDepthsSha256": "8c75801fdf4e16e79370e0abf9b029103a038d462f20dba47adb4f5d719635c8",
+        "gogmaDepths": 8,
+        "gogmaDepthsSha256": "b3003f9e1c267429ea6725fdb02d7889f0fda2fc599ced713af16b903e1514d0",
+        "gogmaRuntimeEvents": 112,
+        "gogmaRuntimeSha256": "a89c296ac255876fe0fdb80b35331eee427f12be53770817a248522caf878bff",
+        "searchRuntimeEvents": 370,
+        "searchRuntimeSha256": "5d55b4216573598801291e03fc1e29cf9c231500fc412f6cf7e33859f7d80123"
+      },
+      "plain": {
+        "stableKeysSha256": "64880e92ca73600c700014675ad2e885ed12ae32eb6cfe1ffef4e4b039e1e1a0",
+        "predictionCallsSha256": "b83c2898e2261c39085f2121a1956c75af42b7d1f886587d3e9307b0ace92014",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 43,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "owned-normal:keep-compatible",
+      "candidateCount": 1,
+      "projection": [
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,K10,K11"
+      ],
+      "stableKeysSha256": "27cbc2d22f6559f304f4111869c4673ebe8952b8e06f8031807b46d775b55d4a",
+      "summary": {
+        "deliveredCandidates": 1,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 1,
+        "reset": 4,
+        "keep": 7
+      },
+      "predictionCallsSha256": "54eb348b212b09c71a58666d5fcc5e4e9dcc2f79471707944b5158b450390e07",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series_skill.fixture.a|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series_skill.fixture.a|zb:-|zs:series_skill.fixture.a|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 31,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 11,
+        "skillDepths": 0,
+        "skillDepthsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "gogmaDepths": 8,
+        "gogmaDepthsSha256": "a0c846cfa1112409ddfdf3b12582c48d9d164341db64303bbbf774872758c895",
+        "gogmaRuntimeEvents": 112,
+        "gogmaRuntimeSha256": "a4a81f3e04283af6a974582b0dc2357ba7d0a851b3f37d5aab289d7a027758fe",
+        "searchRuntimeEvents": 250,
+        "searchRuntimeSha256": "b844fee991eac092e19bba7db9d426fc1f9c2a972243226600561127f00f3476"
+      },
+      "plain": {
+        "stableKeysSha256": "27cbc2d22f6559f304f4111869c4673ebe8952b8e06f8031807b46d775b55d4a",
+        "predictionCallsSha256": "54eb348b212b09c71a58666d5fcc5e4e9dcc2f79471707944b5158b450390e07",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+        ],
+        "checkpoints": {
+          "shouldCancel": 31,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "owned-normal:protected-exclusive",
+      "candidateCount": 2,
+      "projection": [
+        "owned_normal_artian_to_gogma|owned.normal.1|c7,R10,R11,R12,S8,S9",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,R12,S8,S9"
+      ],
+      "stableKeysSha256": "562e7d3707c79869d360bb51de63d5d8701611a5777720e365ad325a66c5fbfd",
+      "summary": {
+        "deliveredCandidates": 2,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 5,
+        "reset": 4,
+        "keep": 5
+      },
+      "predictionCallsSha256": "710ca347a42a78244c30102395428f88a5aaf7bfbcd4b3838363b54a97c17cce",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "owned_normal_artian_to_gogma|owned.normal.1|c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 41,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 16,
+        "skillDepths": 4,
+        "skillDepthsSha256": "8c75801fdf4e16e79370e0abf9b029103a038d462f20dba47adb4f5d719635c8",
+        "gogmaDepths": 8,
+        "gogmaDepthsSha256": "1b17e3222c2a011237f0efff84ef55d31b54078b20d58664b268b011124e681a",
+        "gogmaRuntimeEvents": 112,
+        "gogmaRuntimeSha256": "3bdf1818b79a146fad3e801dcde2c414ace1b0a4108eeaece336e36cd54f245f",
+        "searchRuntimeEvents": 372,
+        "searchRuntimeSha256": "32e36fed569685c1c8d0f39bb8f45d9e1c8d87b2622d31b43a861ede8c31d6e6"
+      },
+      "plain": {
+        "stableKeysSha256": "562e7d3707c79869d360bb51de63d5d8701611a5777720e365ad325a66c5fbfd",
+        "predictionCallsSha256": "710ca347a42a78244c30102395428f88a5aaf7bfbcd4b3838363b54a97c17cce",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 41,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "owned-normal:skill-held",
+      "candidateCount": 14,
+      "projection": [
+        "owned_normal_artian_to_gogma|owned.normal.0|c9,R10,R11,R12",
+        "normal_artian_to_gogma|-|n1@null-null,c9,R10,R11,R12",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R11,R12,S9",
+        "owned_normal_artian_to_gogma|owned.normal.0|c8,R10,R11,R12,S9",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,R12,S9",
+        "normal_artian_to_gogma|-|n1@null-null,c8,R10,R11,R12,S9",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R11,R12,S8,S9",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R11,R12,S9,S10",
+        "owned_normal_artian_to_gogma|owned.normal.0|c8,R10,R11,R12,S9,S10",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,R12,S8,S9",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,R12,S9,S10",
+        "normal_artian_to_gogma|-|n1@null-null,c8,R10,R11,R12,S9,S10",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R11,R12,S8,S9,S10",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,R12,S8,S9,S10"
+      ],
+      "stableKeysSha256": "9b714302f3c89c3527dc2fd00803532c0938667e2fdfc1ebb187ce4afe38a08f",
+      "summary": {
+        "deliveredCandidates": 14,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 5,
+        "reset": 4,
+        "keep": 5
+      },
+      "predictionCallsSha256": "19e18c13d5ff960876744275f94fdcc44691e3171d88fb0c5a4c128ad8503409",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "owned_normal_artian_to_gogma|owned.normal.0|c8|conv:series.other.8|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.8|ss:9|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "owned_normal_artian_to_gogma|owned.normal.0|c9|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:10|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null",
+        "normal_artian_to_gogma|-|n1@null-null,c8|conv:series.other.8|zb:-|zs:series.other.8|ss:9|bb:10/normal_artian/./null",
+        "normal_artian_to_gogma|-|n1@null-null,c9|conv:series_skill.fixture.a|zb:-|zs:series_skill.fixture.a|ss:10|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 96,
+        "yieldControl": 1
+      },
+      "instrumentation": {
+        "workSettled": 31,
+        "skillDepths": 7,
+        "skillDepthsSha256": "e286df7731ad049ed364a73121b9db9f70228d9bdafbddcff45196b44026d60e",
+        "gogmaDepths": 8,
+        "gogmaDepthsSha256": "1b17e3222c2a011237f0efff84ef55d31b54078b20d58664b268b011124e681a",
+        "gogmaRuntimeEvents": 112,
+        "gogmaRuntimeSha256": "3bdf1818b79a146fad3e801dcde2c414ace1b0a4108eeaece336e36cd54f245f",
+        "searchRuntimeEvents": 762,
+        "searchRuntimeSha256": "95eda6705aecba03ee0aa20e55f5e690556a1d28315aa0e90f48de5003b97b55"
+      },
+      "plain": {
+        "stableKeysSha256": "9b714302f3c89c3527dc2fd00803532c0938667e2fdfc1ebb187ce4afe38a08f",
+        "predictionCallsSha256": "19e18c13d5ff960876744275f94fdcc44691e3171d88fb0c5a4c128ad8503409",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 96,
+          "yieldControl": 1
+        }
+      }
+    },
+    {
+      "name": "new-normal:offsets",
+      "candidateCount": 8,
+      "projection": [
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,S8",
+        "normal_artian_to_gogma|-|n2@4-6,c7,R10,S8",
+        "normal_artian_to_gogma|-|n3@4-7,c7,R10,S8",
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,R11,R12,S8",
+        "normal_artian_to_gogma|-|n4@4-8,c7,R10,S8",
+        "normal_artian_to_gogma|-|n2@4-6,c7,R10,R11,R12,S8",
+        "normal_artian_to_gogma|-|n3@4-7,c7,R10,R11,R12,S8",
+        "normal_artian_to_gogma|-|n4@4-8,c7,R10,R11,R12,S8"
+      ],
+      "stableKeysSha256": "52139b50f51eb41c1c1d304a61017748532674ecea47e90bc800e12f8e7456e7",
+      "summary": {
+        "deliveredCandidates": 8,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 4,
+        "skill": 5,
+        "reset": 4,
+        "keep": 7
+      },
+      "predictionCallsSha256": "6429f60ce45e6d72276053e4ed3f4de0205c8de0bac28322c32486c0ead9a507",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n2@4-6,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n3@4-7,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n4@4-8,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 52,
+        "yieldControl": 1
+      },
+      "instrumentation": {
+        "workSettled": 20,
+        "skillDepths": 4,
+        "skillDepthsSha256": "8c75801fdf4e16e79370e0abf9b029103a038d462f20dba47adb4f5d719635c8",
+        "gogmaDepths": 4,
+        "gogmaDepthsSha256": "3314a03abd562c70680e14bcaa8b2e1e98c691ab1b6870d668e4eaa36c56fd25",
+        "gogmaRuntimeEvents": 56,
+        "gogmaRuntimeSha256": "271a8dd26ba78ae337f10eb8ffd1a2d848c23211cd83daa7e6c15816c69b9b44",
+        "searchRuntimeEvents": 454,
+        "searchRuntimeSha256": "5bef26b7f03293169c0dc10eac21cd7aa6ea045790df7de7848272d8545e175d"
+      },
+      "plain": {
+        "stableKeysSha256": "52139b50f51eb41c1c1d304a61017748532674ecea47e90bc800e12f8e7456e7",
+        "predictionCallsSha256": "6429f60ce45e6d72276053e4ed3f4de0205c8de0bac28322c32486c0ead9a507",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 52,
+          "yieldControl": 1
+        }
+      }
+    },
+    {
+      "name": "new-normal:held-prefix-blocked",
+      "candidateCount": 6,
+      "projection": [
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,R11,S8",
+        "normal_artian_to_gogma|-|n1@6-7,c7,R10,R11,S8",
+        "normal_artian_to_gogma|-|n2@6-8,c7,R10,R11,S8",
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,R11,S8,S9",
+        "normal_artian_to_gogma|-|n1@6-7,c7,R10,R11,S8,S9",
+        "normal_artian_to_gogma|-|n2@6-8,c7,R10,R11,S8,S9"
+      ],
+      "stableKeysSha256": "9a228034dd0e483262af11d898d26a88b90fe8b4a5eec73d44494cc86affde60",
+      "summary": {
+        "deliveredCandidates": 6,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 3,
+        "skill": 5,
+        "reset": 4,
+        "keep": 6
+      },
+      "predictionCallsSha256": "8ab4d56186fc36ca243d1833ba66e028697674335af0660ff2d0da6ff07b2799",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@6-7,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n2@6-8,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 44,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 18,
+        "skillDepths": 4,
+        "skillDepthsSha256": "8c75801fdf4e16e79370e0abf9b029103a038d462f20dba47adb4f5d719635c8",
+        "gogmaDepths": 4,
+        "gogmaDepthsSha256": "9c4810efcbfcea3fbbebe9c1069bd007c69946219f081497da367a9d492bfdbb",
+        "gogmaRuntimeEvents": 56,
+        "gogmaRuntimeSha256": "d8fc0e821c655f4e016b90062d24efd1ef6c1ad6456a0e00d42c4b0e60eefdc3",
+        "searchRuntimeEvents": 400,
+        "searchRuntimeSha256": "6525c2125a62f0014e159644b22ca527cbb4109a5fd8b21df57e76ee0165c236"
+      },
+      "plain": {
+        "stableKeysSha256": "9a228034dd0e483262af11d898d26a88b90fe8b4a5eec73d44494cc86affde60",
+        "predictionCallsSha256": "8ab4d56186fc36ca243d1833ba66e028697674335af0660ff2d0da6ff07b2799",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 44,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "new-normal:keep-compatible-later",
+      "candidateCount": 4,
+      "projection": [
+        "normal_artian_to_gogma|-|n3@4-7,c7,K10,K11,K12,S8",
+        "normal_artian_to_gogma|-|n4@4-8,c7,K10,K11,K12,S8",
+        "normal_artian_to_gogma|-|n5@4-9,c7,K10,K11,K12,S8",
+        "normal_artian_to_gogma|-|n6@4-10,c7,K10,K11,K12,S8"
+      ],
+      "stableKeysSha256": "e24795f64c4f529dc341c8d1111bcc286cbd919164efaccf17e467412015901d",
+      "summary": {
+        "deliveredCandidates": 4,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 6,
+        "skill": 5,
+        "reset": 4,
+        "keep": 8
+      },
+      "predictionCallsSha256": "6552828e5ab35c9e52a1cf663284a71e6af55bdba75d71bf965c2b3f2ab6c4ee",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n2@4-6,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n3@4-7,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n4@4-8,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n5@4-9,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n6@4-10,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 54,
+        "yieldControl": 1
+      },
+      "instrumentation": {
+        "workSettled": 22,
+        "skillDepths": 4,
+        "skillDepthsSha256": "8c75801fdf4e16e79370e0abf9b029103a038d462f20dba47adb4f5d719635c8",
+        "gogmaDepths": 8,
+        "gogmaDepthsSha256": "d0836f60e0e9231812d4fa039e1a91a78e12d62776fa51ce441c93c1a3de442d",
+        "gogmaRuntimeEvents": 112,
+        "gogmaRuntimeSha256": "3c04fff4baa2d126f403f28a2ddbb7ca976b4ef29abd972e45c32c17be031646",
+        "searchRuntimeEvents": 460,
+        "searchRuntimeSha256": "4a3c5012e77778f80d7530875b70d40c85982f52d0de8ad20ff6d87a1a5e79ff"
+      },
+      "plain": {
+        "stableKeysSha256": "e24795f64c4f529dc341c8d1111bcc286cbd919164efaccf17e467412015901d",
+        "predictionCallsSha256": "6552828e5ab35c9e52a1cf663284a71e6af55bdba75d71bf965c2b3f2ab6c4ee",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+        ],
+        "checkpoints": {
+          "shouldCancel": 54,
+          "yieldControl": 1
+        }
+      }
+    },
+    {
+      "name": "new-normal:skill-and-gogma-held",
+      "candidateCount": 12,
+      "projection": [
+        "normal_artian_to_gogma|-|n1@4-5,c8,R12,S9",
+        "normal_artian_to_gogma|-|n1@4-5,c8,R10,R12,S9",
+        "normal_artian_to_gogma|-|n2@4-6,c8,R12,S9",
+        "normal_artian_to_gogma|-|n1@4-5,c8,R12,R13,S9",
+        "normal_artian_to_gogma|-|n2@4-6,c8,R10,R12,S9",
+        "normal_artian_to_gogma|-|n3@4-7,c8,R12,S9",
+        "normal_artian_to_gogma|-|n1@4-5,c8,R10,R12,R13,S9",
+        "normal_artian_to_gogma|-|n2@4-6,c8,R12,R13,S9",
+        "normal_artian_to_gogma|-|n3@4-7,c8,R10,R12,S9",
+        "normal_artian_to_gogma|-|n2@4-6,c8,R10,R12,R13,S9",
+        "normal_artian_to_gogma|-|n3@4-7,c8,R12,R13,S9",
+        "normal_artian_to_gogma|-|n3@4-7,c8,R10,R12,R13,S9"
+      ],
+      "stableKeysSha256": "67d0438f9c0ca0aaeb6e5838278bb282e0289e28a96def10061313d59b1bf9d5",
+      "summary": {
+        "deliveredCandidates": 12,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 3,
+        "skill": 4,
+        "reset": 3,
+        "keep": 4
+      },
+      "predictionCallsSha256": "e9d27c534a795f8bd78563098fad3b5cfd16bc6c4ef952719f476ce6196aeb85",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@4-5,c8|conv:series.other.8|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.8|ss:9|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n2@4-6,c8|conv:series.other.8|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.8|ss:9|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n3@4-7,c8|conv:series.other.8|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.8|ss:9|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 65,
+        "yieldControl": 1
+      },
+      "instrumentation": {
+        "workSettled": 21,
+        "skillDepths": 3,
+        "skillDepthsSha256": "a6335349c9c7086e13df83d90423b4ebf4be43c2071aa1e924111193b9dd4f03",
+        "gogmaDepths": 3,
+        "gogmaDepthsSha256": "eca7e3d8d08d88ac869503869de91cb0f7009f1d1e34bda8ffc51108069e33a7",
+        "gogmaRuntimeEvents": 42,
+        "gogmaRuntimeSha256": "7b1e732a9928938e028f529999e54a40efcf52cbfad23c0bd12d502793d90663",
+        "searchRuntimeEvents": 500,
+        "searchRuntimeSha256": "9061feec62a7cee85aa47d7a4b66056302ea55eb11ad3c5dc073d3a3f56be99d"
+      },
+      "plain": {
+        "stableKeysSha256": "67d0438f9c0ca0aaeb6e5838278bb282e0289e28a96def10061313d59b1bf9d5",
+        "predictionCallsSha256": "e9d27c534a795f8bd78563098fad3b5cfd16bc6c4ef952719f476ce6196aeb85",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+        ],
+        "checkpoints": {
+          "shouldCancel": 65,
+          "yieldControl": 1
+        }
+      }
+    },
+    {
+      "name": "blind:reset-first",
+      "candidateCount": 4,
+      "projection": [
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,S8",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,S8,S9",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,R12,R13,S8",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,R12,R13,S8,S9"
+      ],
+      "stableKeysSha256": "18cc9cc98e8c79046ed85cc2ec7770b81fae43226c706dddd2efa33bfa889af1",
+      "summary": {
+        "deliveredCandidates": 4,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 5,
+        "reset": 4,
+        "keep": 5
+      },
+      "predictionCallsSha256": "7b5910d9749ab51abe69de2ebe230e357fd44552c39b02d0f785d371c1de350d",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 34,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 13,
+        "skillDepths": 4,
+        "skillDepthsSha256": "8c75801fdf4e16e79370e0abf9b029103a038d462f20dba47adb4f5d719635c8",
+        "gogmaDepths": 4,
+        "gogmaDepthsSha256": "deefb1cca457865be2ef977e97e9686868c21779e38d97b27c95a43ef6b50921",
+        "gogmaRuntimeEvents": 56,
+        "gogmaRuntimeSha256": "b26e37a426353a1f521bbdfce873d150cefaa599a81bfafd67c35cc9c3ad8ce8",
+        "searchRuntimeEvents": 324,
+        "searchRuntimeSha256": "bc91fb4acefacf46ae810cc7751af7c4f9401ffc7a460fd1d855965d49dbbdb3"
+      },
+      "plain": {
+        "stableKeysSha256": "18cc9cc98e8c79046ed85cc2ec7770b81fae43226c706dddd2efa33bfa889af1",
+        "predictionCallsSha256": "7b5910d9749ab51abe69de2ebe230e357fd44552c39b02d0f785d371c1de350d",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 34,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "reset-unsupported",
+      "candidateCount": 1,
+      "projection": [
+        "existing_gogma_mixed|owned.fixture.0|K10,K11,K12,S7,S8"
+      ],
+      "stableKeysSha256": "4d4c745e0b54190e404d19fd2fb043e7dcfe1f2b7972c63f9af73ad6522c61b0",
+      "summary": {
+        "deliveredCandidates": 1,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 4,
+        "skill": 5,
+        "reset": 0,
+        "keep": 4
+      },
+      "predictionCallsSha256": "d7107cb1be423ef6df4d17766af4c3751706be497ba9cc5f9af5ca20a7199d90",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:-",
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:-",
+        "normal_artian_to_gogma|-|n2@4-6,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:-",
+        "normal_artian_to_gogma|-|n3@4-7,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:-",
+        "normal_artian_to_gogma|-|n4@4-8,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:-"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"prediction\":{\"reason\":\"engine_capability_unavailable\",\"type\":\"reset_bonuses\"},\"type\":\"unsupported\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 32,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 18,
+        "skillDepths": 8,
+        "skillDepthsSha256": "e5a820a221407b4f5d3a1e77af11d67830900b4f606d6c5f87e6a778c7f5857f",
+        "gogmaDepths": 4,
+        "gogmaDepthsSha256": "e6be0f4b4883fce7d7b86a5a193a13fe713543e586b4154a4259ea3202a7e264",
+        "gogmaRuntimeEvents": 56,
+        "gogmaRuntimeSha256": "9fd48c300e21bd75bca3c206a9b410cd41ebd0547ab840dd815d0239dd780e1f",
+        "searchRuntimeEvents": 360,
+        "searchRuntimeSha256": "ced48477089b8567229af355b101d01933baaee8834401b2d503d97d0376288f"
+      },
+      "plain": {
+        "stableKeysSha256": "4d4c745e0b54190e404d19fd2fb043e7dcfe1f2b7972c63f9af73ad6522c61b0",
+        "predictionCallsSha256": "d7107cb1be423ef6df4d17766af4c3751706be497ba9cc5f9af5ca20a7199d90",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+        ],
+        "checkpoints": {
+          "shouldCancel": 32,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "keep-unsupported",
+      "candidateCount": 4,
+      "projection": [
+        "existing_gogma_mixed|owned.fixture.0|R10,R11,S7",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R11",
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11",
+        "existing_gogma_mixed|owned.fixture.0|R10,R11,S7,S8,S9"
+      ],
+      "stableKeysSha256": "222d77fa5981cd557f604794f59c55e051f3bdfda2caac3c1889ffca3f247985",
+      "summary": {
+        "deliveredCandidates": 4,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 4,
+        "reset": 4,
+        "keep": 0
+      },
+      "predictionCallsSha256": "1695edd63ad22f1d506f4ab39600c3d7f6e9b90e5c76b60c390fd99503eb8209",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series_skill.fixture.a|zb:-|zs:series_skill.fixture.a|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"prediction\":{\"reason\":\"engine_capability_unavailable\",\"type\":\"keep_bonuses\"},\"type\":\"unsupported\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"prediction\":{\"reason\":\"engine_capability_unavailable\",\"type\":\"keep_bonuses\"},\"type\":\"unsupported\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"prediction\":{\"reason\":\"engine_capability_unavailable\",\"type\":\"keep_bonuses\"},\"type\":\"unsupported\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 46,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 22,
+        "skillDepths": 4,
+        "skillDepthsSha256": "14aab626f3faa14429232361ec72d09110203d361d0d4987274e7da1f47f38b3",
+        "gogmaDepths": 12,
+        "gogmaDepthsSha256": "370f354227a554179f10fc22ab0fafa3500a6832a1cd8e1eca44c4e8f4a98df6",
+        "gogmaRuntimeEvents": 168,
+        "gogmaRuntimeSha256": "5819399458dc8a8a5f6aee05b8d3bbf7f32aec3453b54bca0f654e8832dcd27e",
+        "searchRuntimeEvents": 522,
+        "searchRuntimeSha256": "bd36d395547ae44524d8f219c1d80e4cc234174766b6d4dfd109be008da3947b"
+      },
+      "plain": {
+        "stableKeysSha256": "222d77fa5981cd557f604794f59c55e051f3bdfda2caac3c1889ffca3f247985",
+        "predictionCallsSha256": "1695edd63ad22f1d506f4ab39600c3d7f6e9b90e5c76b60c390fd99503eb8209",
+        "supportQueries": [
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+        ],
+        "checkpoints": {
+          "shouldCancel": 46,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "keep-capability-false",
+      "candidateCount": 5,
+      "projection": [
+        "existing_gogma_mixed|owned.fixture.0|R10,R11,S7,S8",
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,R11,S8",
+        "normal_artian_to_gogma|-|n2@4-6,c7,R10,R11,S8",
+        "normal_artian_to_gogma|-|n3@4-7,c7,R10,R11,S8",
+        "normal_artian_to_gogma|-|n4@4-8,c7,R10,R11,S8"
+      ],
+      "stableKeysSha256": "efdb7a03136b5cb97229389ff64e340d9c28f5d638b4c7b76ce08c3a17bf434b",
+      "summary": {
+        "deliveredCandidates": 5,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 4,
+        "skill": 5,
+        "reset": 4,
+        "keep": 0
+      },
+      "predictionCallsSha256": "f836fef7ba674c793887049c4b7a90c45be4ee6e6b514dc648d6da2856f55ede",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n2@4-6,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n3@4-7,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n4@4-8,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 44,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 22,
+        "skillDepths": 8,
+        "skillDepthsSha256": "d03285b7b644949464c23f9e65eacb4404bdb6f08cedb02d291be8547ab65337",
+        "gogmaDepths": 4,
+        "gogmaDepthsSha256": "e6be0f4b4883fce7d7b86a5a193a13fe713543e586b4154a4259ea3202a7e264",
+        "gogmaRuntimeEvents": 56,
+        "gogmaRuntimeSha256": "9fd48c300e21bd75bca3c206a9b410cd41ebd0547ab840dd815d0239dd780e1f",
+        "searchRuntimeEvents": 476,
+        "searchRuntimeSha256": "72138c2950d385e9ec7bcef42dbae9f3aab2a2c61a62f19925dadfe600a42108"
+      },
+      "plain": {
+        "stableKeysSha256": "efdb7a03136b5cb97229389ff64e340d9c28f5d638b4c7b76ce08c3a17bf434b",
+        "predictionCallsSha256": "f836fef7ba674c793887049c4b7a90c45be4ee6e6b514dc648d6da2856f55ede",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset"
+        ],
+        "checkpoints": {
+          "shouldCancel": 44,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "skill-unsupported",
+      "candidateCount": 1,
+      "projection": [
+        "existing_gogma_reset_bonuses|owned.fixture.0|R10"
+      ],
+      "stableKeysSha256": "94c4ee2cf3d0d545885bf0db958add05851e46ea48c9dc0e9f3cbde011d6a405",
+      "summary": {
+        "deliveredCandidates": 1,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 0,
+        "reset": 4,
+        "keep": 7
+      },
+      "predictionCallsSha256": "5130bc28a14b1192ab7667b9fd485d685c88dc20a97d3875fee791487c7d0e31",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:-|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 18,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 5,
+        "skillDepths": 0,
+        "skillDepthsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "gogmaDepths": 4,
+        "gogmaDepthsSha256": "3314a03abd562c70680e14bcaa8b2e1e98c691ab1b6870d668e4eaa36c56fd25",
+        "gogmaRuntimeEvents": 56,
+        "gogmaRuntimeSha256": "271a8dd26ba78ae337f10eb8ffd1a2d848c23211cd83daa7e6c15816c69b9b44",
+        "searchRuntimeEvents": 138,
+        "searchRuntimeSha256": "8e231c4c987801ec236407f8295635fa0f3319a18547cb498d4860ff2a573ea7"
+      },
+      "plain": {
+        "stableKeysSha256": "94c4ee2cf3d0d545885bf0db958add05851e46ea48c9dc0e9f3cbde011d6a405",
+        "predictionCallsSha256": "5130bc28a14b1192ab7667b9fd485d685c88dc20a97d3875fee791487c7d0e31",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 18,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "normal-unsupported:blind",
+      "candidateCount": 1,
+      "projection": [
+        "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,S8"
+      ],
+      "stableKeysSha256": "77b07a4d2fbc532199d7ff9d7d07a2d4fad8b3984f047c74155b9af4b9d9af0f",
+      "summary": {
+        "deliveredCandidates": 1,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 5,
+        "reset": 4,
+        "keep": 5
+      },
+      "predictionCallsSha256": "7b5910d9749ab51abe69de2ebe230e357fd44552c39b02d0f785d371c1de350d",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 25,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 10,
+        "skillDepths": 4,
+        "skillDepthsSha256": "8c75801fdf4e16e79370e0abf9b029103a038d462f20dba47adb4f5d719635c8",
+        "gogmaDepths": 4,
+        "gogmaDepthsSha256": "deefb1cca457865be2ef977e97e9686868c21779e38d97b27c95a43ef6b50921",
+        "gogmaRuntimeEvents": 56,
+        "gogmaRuntimeSha256": "b26e37a426353a1f521bbdfce873d150cefaa599a81bfafd67c35cc9c3ad8ce8",
+        "searchRuntimeEvents": 236,
+        "searchRuntimeSha256": "ee415d6c10e7bb4c2441d960d6b27cda8ae8fbb07174093839ec55506079f698"
+      },
+      "plain": {
+        "stableKeysSha256": "77b07a4d2fbc532199d7ff9d7d07a2d4fad8b3984f047c74155b9af4b9d9af0f",
+        "predictionCallsSha256": "7b5910d9749ab51abe69de2ebe230e357fd44552c39b02d0f785d371c1de350d",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 25,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "all-sources:gogma-held",
+      "candidateCount": 57,
+      "projection": [
+        "existing_gogma_mixed|owned.fixture.0|R10,S8",
+        "owned_normal_artian_to_gogma|owned.normal.0|c8,R10",
+        "normal_artian_to_gogma|-|n1@4-5,c8,R10",
+        "existing_gogma_mixed|owned.fixture.0|R10,S7,S8",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,S8",
+        "existing_gogma_mixed|owned.fixture.0|R10,S8,S9",
+        "existing_gogma_mixed|owned.fixture.0|R10,R13,S8",
+        "owned_normal_artian_to_gogma|owned.normal.0|c8,R10,R13",
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,S8",
+        "normal_artian_to_gogma|-|n2@4-6,c8,R10",
+        "existing_gogma_mixed|owned.fixture.0|R10,S7,S8,S9",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,S8,S9",
+        "normal_artian_to_gogma|-|n1@4-5,c8,R10,R13",
+        "existing_gogma_mixed|owned.fixture.0|R10,R11,R13,S8",
+        "existing_gogma_mixed|owned.fixture.0|R10,R13,S7,S8",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R13,S8",
+        "owned_normal_artian_to_gogma|owned.normal.0|c8,R10,R11,R13",
+        "existing_gogma_mixed|owned.fixture.0|R10,R13,S8,S9",
+        "normal_artian_to_gogma|-|n2@4-6,c7,R10,S8",
+        "normal_artian_to_gogma|-|n3@4-7,c8,R10",
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,S8,S9",
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,R13,S8",
+        "normal_artian_to_gogma|-|n1@4-5,c8,R10,R11,R13",
+        "normal_artian_to_gogma|-|n2@4-6,c8,R10,R13",
+        "existing_gogma_mixed|owned.fixture.0|R10,R11,R13,S7,S8",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R11,R13,S8",
+        "existing_gogma_mixed|owned.fixture.0|R10,R11,R13,S8,S9",
+        "existing_gogma_mixed|owned.fixture.0|R10,R13,S7,S8,S9",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R13,S8,S9",
+        "normal_artian_to_gogma|-|n3@4-7,c7,R10,S8",
+        "normal_artian_to_gogma|-|n4@4-8,c8,R10",
+        "normal_artian_to_gogma|-|n2@4-6,c7,R10,S8,S9",
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,R11,R13,S8",
+        "normal_artian_to_gogma|-|n2@4-6,c7,R10,R13,S8",
+        "normal_artian_to_gogma|-|n2@4-6,c8,R10,R11,R13",
+        "normal_artian_to_gogma|-|n3@4-7,c8,R10,R13",
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,R13,S8,S9",
+        "existing_gogma_mixed|owned.fixture.0|R10,R11,R13,S7,S8,S9",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R11,R13,S8,S9",
+        "normal_artian_to_gogma|-|n4@4-8,c7,R10,S8",
+        "normal_artian_to_gogma|-|n3@4-7,c7,R10,S8,S9",
+        "normal_artian_to_gogma|-|n2@4-6,c7,R10,R11,R13,S8",
+        "normal_artian_to_gogma|-|n3@4-7,c7,R10,R13,S8",
+        "normal_artian_to_gogma|-|n3@4-7,c8,R10,R11,R13",
+        "normal_artian_to_gogma|-|n4@4-8,c8,R10,R13",
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,R11,R13,S8,S9",
+        "normal_artian_to_gogma|-|n2@4-6,c7,R10,R13,S8,S9",
+        "normal_artian_to_gogma|-|n4@4-8,c7,R10,S8,S9",
+        "normal_artian_to_gogma|-|n3@4-7,c7,R10,R11,R13,S8",
+        "normal_artian_to_gogma|-|n4@4-8,c7,R10,R13,S8",
+        "normal_artian_to_gogma|-|n4@4-8,c8,R10,R11,R13",
+        "normal_artian_to_gogma|-|n2@4-6,c7,R10,R11,R13,S8,S9",
+        "normal_artian_to_gogma|-|n3@4-7,c7,R10,R13,S8,S9",
+        "normal_artian_to_gogma|-|n4@4-8,c7,R10,R11,R13,S8",
+        "normal_artian_to_gogma|-|n3@4-7,c7,R10,R11,R13,S8,S9",
+        "normal_artian_to_gogma|-|n4@4-8,c7,R10,R13,S8,S9",
+        "normal_artian_to_gogma|-|n4@4-8,c7,R10,R11,R13,S8,S9"
+      ],
+      "stableKeysSha256": "7c0334fabf48d69a202b2fe5cf4309759c0370ca85742c192798bb46633b0e67",
+      "summary": {
+        "deliveredCandidates": 57,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 4,
+        "skill": 5,
+        "reset": 3,
+        "keep": 5
+      },
+      "predictionCallsSha256": "0b75cf68920f02b68fc87811b7d9de3a6a99ed624d91e8471e3f02a2e50c8a76",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "owned_normal_artian_to_gogma|owned.normal.0|c8|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:9|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@4-5,c8|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:9|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n2@4-6,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n2@4-6,c8|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:9|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n3@4-7,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n3@4-7,c8|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:9|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n4@4-8,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n4@4-8,c8|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:9|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "6:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "6:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "6:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "7:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "7:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "7:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "8:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "8:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "8:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "9:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "9:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "9:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "10:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "10:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "10:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 226,
+        "yieldControl": 4
+      },
+      "instrumentation": {
+        "workSettled": 75,
+        "skillDepths": 8,
+        "skillDepthsSha256": "4c934559bbb965364ec229267e384101bbcadf0eb14ce11c7bc1c7fb56b970c2",
+        "gogmaDepths": 3,
+        "gogmaDepthsSha256": "5a649c15e1a9e1ba092bc5319c98f6e8400cf9bd60910786d48d2601b8aa573b",
+        "gogmaRuntimeEvents": 42,
+        "gogmaRuntimeSha256": "46eef49f59133704a524ff8abcbdb00ed7f6cb9d6d511d4230334f0d70ec468d",
+        "searchRuntimeEvents": 1776,
+        "searchRuntimeSha256": "20ac834a3cb2afe37a0b53b78b5b452550fb29cd34d6f0223bca204fc8cc4d48"
+      },
+      "plain": {
+        "stableKeysSha256": "7c0334fabf48d69a202b2fe5cf4309759c0370ca85742c192798bb46633b0e67",
+        "predictionCallsSha256": "0b75cf68920f02b68fc87811b7d9de3a6a99ed624d91e8471e3f02a2e50c8a76",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 226,
+          "yieldControl": 4
+        }
+      }
+    },
+    {
+      "name": "all-sources:consumer-stop",
+      "candidateCount": 2,
+      "projection": [
+        "existing_gogma_mixed|owned.fixture.0|R10,S8",
+        "owned_normal_artian_to_gogma|owned.normal.0|c8,R10"
+      ],
+      "stableKeysSha256": "5ea79975b511c3f59eefb15a8481edf2ae11b7cfe213ad9aecf4a52d8440718a",
+      "summary": {
+        "deliveredCandidates": 2,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": false
+      },
+      "stoppedByConsumer": true,
+      "predictionCounts": {
+        "normal": 1,
+        "skill": 3,
+        "reset": 3,
+        "keep": 5
+      },
+      "predictionCallsSha256": "33807de029b5a3ca0ee7304b960461bf2a7b164e2c86988810048fe449202ca8",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "owned_normal_artian_to_gogma|owned.normal.0|c8|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:9|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@4-5,c8|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:9|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 34,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 9,
+        "skillDepths": 3,
+        "skillDepthsSha256": "9c89459dd2061ae865bc6f7d5a946545c10f1d7af1acef808627dda9e0cb1655",
+        "gogmaDepths": 2,
+        "gogmaDepthsSha256": "8190b4456e059e4d9c6489e9c266ade4548751b68295f04c1c59be4ef748aacf",
+        "gogmaRuntimeEvents": 28,
+        "gogmaRuntimeSha256": "694586a0fbc803be9acefafe61ea5c5e51048858e82cb12a57112edaa77b7f5a",
+        "searchRuntimeEvents": 220,
+        "searchRuntimeSha256": "a0c7b09af1bdae2c9fffaaf809551c08607b71f73193dc1f40bad3d964880b36"
+      },
+      "plain": {
+        "stableKeysSha256": "5ea79975b511c3f59eefb15a8481edf2ae11b7cfe213ad9aecf4a52d8440718a",
+        "predictionCallsSha256": "33807de029b5a3ca0ee7304b960461bf2a7b164e2c86988810048fe449202ca8",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+        ],
+        "checkpoints": {
+          "shouldCancel": 34,
+          "yieldControl": 0
+        }
+      }
+    },
+    {
+      "name": "n104:later-compatible-layouts",
+      "candidateCount": 6,
+      "projection": [
+        "normal_artian_to_gogma|-|n3@4-7,c7,K10,K11,K12,S8",
+        "normal_artian_to_gogma|-|n4@4-8,c7,K10,K11,K12,S8",
+        "normal_artian_to_gogma|-|n5@4-9,c7,K10,K11,K12,S8",
+        "normal_artian_to_gogma|-|n6@4-10,c7,K10,K11,K12,S8",
+        "normal_artian_to_gogma|-|n7@4-11,c7,K10,K11,K12,S8",
+        "normal_artian_to_gogma|-|n8@4-12,c7,K10,K11,K12,S8"
+      ],
+      "stableKeysSha256": "01d56c314a782e04d4f6db0b93b12f670fc7e692cb908a8c42b3cb8536d8ef54",
+      "summary": {
+        "deliveredCandidates": 6,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 8,
+        "skill": 5,
+        "reset": 4,
+        "keep": 8
+      },
+      "predictionCallsSha256": "4ae36c16717377fda282d58076f63af8f0bcc7a584e9f8b2c584f670412860f0",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n2@4-6,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n3@4-7,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n4@4-8,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n5@4-9,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n6@4-10,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n7@4-11,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n8@4-12,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "3:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "4:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "5:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "6:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "6:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "6:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "7:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "7:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "7:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 62,
+        "yieldControl": 1
+      },
+      "instrumentation": {
+        "workSettled": 26,
+        "skillDepths": 4,
+        "skillDepthsSha256": "8c75801fdf4e16e79370e0abf9b029103a038d462f20dba47adb4f5d719635c8",
+        "gogmaDepths": 8,
+        "gogmaDepthsSha256": "d0836f60e0e9231812d4fa039e1a91a78e12d62776fa51ce441c93c1a3de442d",
+        "gogmaRuntimeEvents": 112,
+        "gogmaRuntimeSha256": "3c04fff4baa2d126f403f28a2ddbb7ca976b4ef29abd972e45c32c17be031646",
+        "searchRuntimeEvents": 532,
+        "searchRuntimeSha256": "91ecc49158a10744a4eaaf0895f51e820089cc2b08f39d50f2646c7e60eccc68"
+      },
+      "plain": {
+        "stableKeysSha256": "01d56c314a782e04d4f6db0b93b12f670fc7e692cb908a8c42b3cb8536d8ef54",
+        "predictionCallsSha256": "4ae36c16717377fda282d58076f63af8f0bcc7a584e9f8b2c584f670412860f0",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+        ],
+        "checkpoints": {
+          "shouldCancel": 62,
+          "yieldControl": 1
+        }
+      }
+    },
+    {
+      "name": "normal-extent-1",
+      "candidateCount": 1,
+      "projection": [
+        "normal_artian_to_gogma|-|n1@4-5,c7,R10,R11,R12,S8"
+      ],
+      "stableKeysSha256": "36218466fe7e93069ff54807ec3321ff655e8eb76765352276e177d5f444c148",
+      "summary": {
+        "deliveredCandidates": 1,
+        "excludedCandidates": 0,
+        "exhausted": false,
+        "stoppedByExtent": true
+      },
+      "stoppedByConsumer": false,
+      "predictionCounts": {
+        "normal": 1,
+        "skill": 5,
+        "reset": 4,
+        "keep": 5
+      },
+      "predictionCallsSha256": "f3a23f6d329648ca9c1acd83b56b747cebdb028ee2bd0b7a4840e4a88da3d650",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "checkpoints": {
+        "shouldCancel": 25,
+        "yieldControl": 0
+      },
+      "instrumentation": {
+        "workSettled": 10,
+        "skillDepths": 4,
+        "skillDepthsSha256": "8c75801fdf4e16e79370e0abf9b029103a038d462f20dba47adb4f5d719635c8",
+        "gogmaDepths": 4,
+        "gogmaDepthsSha256": "43227400335e49cd5c2601067e61234a9b6dc27dbedac250243776e25d575fcb",
+        "gogmaRuntimeEvents": 56,
+        "gogmaRuntimeSha256": "97f534c670bab25d91c8c6ccf1703dbfd3850c42d66b6db345c3aec183b3e278",
+        "searchRuntimeEvents": 236,
+        "searchRuntimeSha256": "f1d36867980223f09f9db3abbc4caf6e9567f39827362fcd9c5ee7388c2eb508"
+      },
+      "plain": {
+        "stableKeysSha256": "36218466fe7e93069ff54807ec3321ff655e8eb76765352276e177d5f444c148",
+        "predictionCallsSha256": "f3a23f6d329648ca9c1acd83b56b747cebdb028ee2bd0b7a4840e4a88da3d650",
+        "supportQueries": [
+          "normal_artian",
+          "skill",
+          "gogma_reset",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+          "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+        ],
+        "checkpoints": {
+          "shouldCancel": 25,
+          "yieldControl": 0
+        }
+      }
+    }
+  ],
+  "candidateSearch": [
+    {
+      "name": "existing:practical:bonus[11]:skill[9]",
+      "candidate": "existing_gogma_mixed|owned.fixture.0|R10,R11,S7,S8,S9",
+      "stableKeySha256": "54dbafa150407cc3275b8406719a1913dffdef934805c6d471f0ceb18f69321b",
+      "candidateSha256": "61c1496255e3cac6217005da434b46d7e7806209215b1483028d77b36d16f3a8",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "existing_gogma_current",
+        "existing_gogma_reset_bonuses",
+        "existing_gogma_keep_bonuses",
+        "existing_gogma_reset_skills",
+        "existing_gogma_mixed"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"通常アーティアの初期ボーナスを使わないルートで検索しました。\\n通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。\\n通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。\",\"severity\":\"info\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 4,
+        "reset": 4,
+        "keep": 6
+      },
+      "predictionCallsSha256": "64f3f6b4b68aa98a8b0cca94ee793185e7a6a18ee2ce7d0d8a264c03a7ca8f7b",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "98fac7f14ffe20685530dc94fa387254ec9630ce9239fb2fde976d68c5e95b4e"
+    },
+    {
+      "name": "existing:x2:one-protected",
+      "candidate": "existing_gogma_mixed|owned.fixture.0|R10,S7,S8",
+      "stableKeySha256": "6ed60eb8ceccf67c630bd4cb97833359131056b024597e3040f97fff287a064b",
+      "candidateSha256": "23923a1f4276392ca8a9315a8e10a2140597404f5c7528b5825e10a813446378",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "existing_gogma_current",
+        "existing_gogma_reset_bonuses",
+        "existing_gogma_keep_bonuses",
+        "existing_gogma_reset_skills",
+        "existing_gogma_mixed"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"通常アーティアの初期ボーナスを使わないルートで検索しました。\\n通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。\\n通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。\",\"severity\":\"info\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 3,
+        "reset": 3,
+        "keep": 5
+      },
+      "predictionCallsSha256": "0acc18eddb3ea560d7daaa5196eba5bbe78a172a5450bdce11ffbe57afc64a0b",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "existing_gogma|owned.fixture.1||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:-|bb:-",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "742184c13f9b3e6e11670c7bdc2b37db8b1bb52d0989c59866ce45917fa2a644"
+    },
+    {
+      "name": "existing:ideal-skill:keep-chain",
+      "candidate": "existing_gogma_keep_bonuses|owned.fixture.0|K10,K11,K12,K13",
+      "stableKeySha256": "e1f11bdcb9410dc438ce9a80d7ad277a76e9a4a5d97dca83d67366e35819428e",
+      "candidateSha256": "76491c602aee4c1432e4eb83ef0ae444f6fa2c35e75c34fa50da576230df7580",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "existing_gogma_current",
+        "existing_gogma_reset_bonuses",
+        "existing_gogma_keep_bonuses",
+        "existing_gogma_reset_skills",
+        "existing_gogma_mixed"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"通常アーティアの初期ボーナスを使わないルートで検索しました。\\n通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。\\n通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。\",\"severity\":\"info\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 3,
+        "reset": 4,
+        "keep": 7
+      },
+      "predictionCallsSha256": "5f20cbc741de36f49e71a2b0b426009b70d3a1db912dc50c01a295d87bf502c5",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series_skill.fixture.a|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "742184c13f9b3e6e11670c7bdc2b37db8b1bb52d0989c59866ce45917fa2a644"
+    },
+    {
+      "name": "existing:ideal-bonus-and-skill",
+      "candidate": "existing_gogma_current|owned.fixture.0|",
+      "stableKeySha256": "cca531bbbdd9c7b5f961ac0d6e625c1fd4ee3676aa677b58a02f63bb0fb4b597",
+      "candidateSha256": "5c194f766a389e208c85d0d41be45dd10d72d2047374bd89aab5cf2f973a88a1",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "existing_gogma_current",
+        "existing_gogma_reset_skills"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}",
+        "{\"detail\":\"No Reset Bonuses branch was searchable for the available sources.\",\"reason\":\"gogma_prediction_unsupported\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"Keep Bonuses input is unsupported for 1 available source(s).\",\"reason\":\"keep_prediction_unsupported\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"No supported mixed operation combination was searchable.\",\"reason\":\"gogma_prediction_unsupported\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"通常アーティアの初期ボーナスを使わないルートで検索しました。\\n通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。\\n通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。\",\"severity\":\"info\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 0,
+        "reset": 0,
+        "keep": 0
+      },
+      "predictionCallsSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "supportQueries": [
+        "skill",
+        "gogma_reset"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,sharpness:high|zs:series_skill.fixture.a|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "notices": [],
+      "progressSha256": "885e1a54bf364c6a23ea7f006ae628e9f49eca2ae5d13fd4cb3ecdce84ec4a87"
+    },
+    {
+      "name": "existing:protected-ideal",
+      "candidate": "existing_gogma_current|owned.fixture.0|",
+      "stableKeySha256": "cca531bbbdd9c7b5f961ac0d6e625c1fd4ee3676aa677b58a02f63bb0fb4b597",
+      "candidateSha256": "1a97db606436793bb4ba06a63eb07bc3a8aa220520fc526e77d425280753fbe9",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "existing_gogma_current"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}",
+        "{\"detail\":\"Only protected sources are available for Reset Skills routes.\",\"reason\":\"no_unprotected_source_weapon\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"Only protected sources are available for performance-amendment routes.\",\"reason\":\"no_unprotected_source_weapon\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"Only protected sources are available for performance-amendment routes.\",\"reason\":\"no_unprotected_source_weapon\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"Only protected sources are available for performance-amendment routes.\",\"reason\":\"no_unprotected_source_weapon\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"通常アーティアの初期ボーナスを使わないルートで検索しました。\\n通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。\\n通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。\",\"severity\":\"info\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 0,
+        "reset": 0,
+        "keep": 0
+      },
+      "predictionCallsSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "supportQueries": [
+        "skill",
+        "gogma_reset"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,sharpness:high|zs:series_skill.fixture.a|ss:-|bb:-"
+      ],
+      "notices": [],
+      "progressSha256": "885e1a54bf364c6a23ea7f006ae628e9f49eca2ae5d13fd4cb3ecdce84ec4a87"
+    },
+    {
+      "name": "owned-normal:conversion",
+      "candidate": "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,R11,S8",
+      "stableKeySha256": "91319f10cb1ea6fd5ba15e4b5b4fca13fdcc7f6d6038a6632c1525b4056da991",
+      "candidateSha256": "9516aac5619ed685a09a3e8c0c3f4458690356da3bf57062dd30422d54be7b12",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "owned_normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_current\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"通常アーティアの初期ボーナスを使わないルートで検索しました。\\n通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。\\n通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。\",\"severity\":\"info\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 4,
+        "reset": 3,
+        "keep": 4
+      },
+      "predictionCallsSha256": "36e4e99961851efca6ae23bd89f8f96bd9141fad1c4f881183bfe69fadc9c1c5",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "753dda3d735203967f1e00ae20263ed65e4499fa2bd875724be74c32e4abae25"
+    },
+    {
+      "name": "owned-normal:keep-compatible",
+      "candidate": "owned_normal_artian_to_gogma|owned.normal.0|c7,K10,K11",
+      "stableKeySha256": "27cbc2d22f6559f304f4111869c4673ebe8952b8e06f8031807b46d775b55d4a",
+      "candidateSha256": "874b806c08711fc2507dbe4de6e7ff76fc7f31f7d4086e948de52a1e46a68260",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "owned_normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_current\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"通常アーティアの初期ボーナスを使わないルートで検索しました。\\n通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。\\n通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。\",\"severity\":\"info\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 1,
+        "reset": 2,
+        "keep": 3
+      },
+      "predictionCallsSha256": "d7d9a91579d4f57e00a0e916e15b77748cd061eeb0fb65e1f17854024f537058",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "bases": [
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series_skill.fixture.a|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series_skill.fixture.a|zb:-|zs:series_skill.fixture.a|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "b441d7d37c660ae85efee0c3ec12cf26aaeeefca9a5ba4e52757d0a874400b6b"
+    },
+    {
+      "name": "new-normal:offsets",
+      "candidate": "normal_artian_to_gogma|-|n1@4-5,c7,R10,S8",
+      "stableKeySha256": "05d4d119b30069e200c062e9c59f25598e7f0987a747c4f2af20c6b60bf0b393",
+      "candidateSha256": "6cde12099bdf7831ed33299b2be889e0e906e38f9909daa132353bf4e1419c07",
+      "searchedRoutes": [
+        "normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_current\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [],
+      "predictionCounts": {
+        "normal": 3,
+        "skill": 3,
+        "reset": 2,
+        "keep": 3
+      },
+      "predictionCallsSha256": "b3a920e5df15b466bfdce53bf3387ee3cddd176983631f83f74364294dff7188",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "d1d2e814d6596d10637d33f03024f6e8da68326fc69fe4c7931c8a0148b25053"
+    },
+    {
+      "name": "new-normal:keep-compatible-later",
+      "candidate": "normal_artian_to_gogma|-|n3@4-7,c7,K10,K11,K12,S8",
+      "stableKeySha256": "1632aaa3d6a575bba9a4005130b39071668b5eabf317bdfc11f0a1d44986b46d",
+      "candidateSha256": "4751b6dec67b3a521bf6d63a218dfd22202d94a64912e5722fc0e019be45de45",
+      "searchedRoutes": [
+        "normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_current\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [],
+      "predictionCounts": {
+        "normal": 6,
+        "skill": 5,
+        "reset": 4,
+        "keep": 8
+      },
+      "predictionCallsSha256": "6552828e5ab35c9e52a1cf663284a71e6af55bdba75d71bf965c2b3f2ab6c4ee",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n3@4-7,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/keep_only/attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "18af7af066c553e60cf8ce3cb2dadb5477da86440f7777f4a670aa987771cef4"
+    },
+    {
+      "name": "blind:reset-first",
+      "candidate": "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,S8",
+      "stableKeySha256": "77b07a4d2fbc532199d7ff9d7d07a2d4fad8b3984f047c74155b9af4b9d9af0f",
+      "candidateSha256": "62123a427ee4a807d78b5a5a358de89cc8aa31dadf734e894a2d3035cfa80e96",
+      "searchedRoutes": [
+        "normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_current\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"通常アーティアの初期ボーナスを使わないルートで検索しました。\\n通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。\\n通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。\",\"severity\":\"info\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 4,
+        "reset": 3,
+        "keep": 3
+      },
+      "predictionCallsSha256": "346ff768d219a8e012a1274889737f18e6addcf889214224a59e846f58411471",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "d1d2e814d6596d10637d33f03024f6e8da68326fc69fe4c7931c8a0148b25053"
+    },
+    {
+      "name": "reset-unsupported",
+      "candidate": "existing_gogma_mixed|owned.fixture.0|K10,K11,K12,S7,S8",
+      "stableKeySha256": "4d4c745e0b54190e404d19fd2fb043e7dcfe1f2b7972c63f9af73ad6522c61b0",
+      "candidateSha256": "a27484dbd0a27217a842e56308b0ccaa79f060c9a3fc0fe91a245cce38ff2e76",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "owned_normal_artian_to_gogma",
+        "existing_gogma_current",
+        "existing_gogma_keep_bonuses",
+        "existing_gogma_reset_skills",
+        "existing_gogma_mixed"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"Reset Bonuses input is unsupported (engine_capability_unavailable).\",\"reason\":\"gogma_prediction_unsupported\",\"route\":\"existing_gogma_reset_bonuses\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"Reset Bonuses was excluded from the Normal Artian route by input support (engine_capability_unavailable).\",\"severity\":\"warning\",\"targetWeaponId\":\"target.fixture.a\"}",
+        "{\"message\":\"Reset Bonuses was excluded from owned Normal Artian routes by input support (engine_capability_unavailable).\",\"severity\":\"warning\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 4,
+        "skill": 5,
+        "reset": 0,
+        "keep": 4
+      },
+      "predictionCallsSha256": "d7107cb1be423ef6df4d17766af4c3751706be497ba9cc5f9af5ca20a7199d90",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:-",
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:-"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"prediction\":{\"reason\":\"engine_capability_unavailable\",\"type\":\"reset_bonuses\"},\"type\":\"unsupported\"}"
+      ],
+      "progressSha256": "6c4ba783673f2aa69dc98730a509caf5c5858ecc02c10c8af278de9e11666dbc"
+    },
+    {
+      "name": "keep-unsupported",
+      "candidate": "existing_gogma_mixed|owned.fixture.0|R10,R11,S7",
+      "stableKeySha256": "7ef9e1a361802c10a9ccf80bebac0da342ddaa8650e6deff14b8478154537a9a",
+      "candidateSha256": "bbfd57e06e8e37438ad8c78297e9e0da593686a825680f9e4cd10789a941ee38",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "owned_normal_artian_to_gogma",
+        "existing_gogma_current",
+        "existing_gogma_reset_bonuses",
+        "existing_gogma_reset_skills",
+        "existing_gogma_mixed"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"Keep Bonuses input is unsupported for 1 available source(s).\",\"reason\":\"keep_prediction_unsupported\",\"route\":\"existing_gogma_keep_bonuses\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"通常アーティアの初期ボーナスを使わないルートで検索しました。\\n通常アーティアのカウンターが未確定のため、作成直後の復元ボーナスは予測していません。\\n通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。\",\"severity\":\"info\",\"targetWeaponId\":\"target.fixture.a\"}",
+        "{\"message\":\"keep_bonuses was excluded after converting OwnedWeapon 'owned.normal.0' by input support (engine_capability_unavailable).\",\"severity\":\"warning\",\"targetWeaponId\":\"target.fixture.a\"}",
+        "{\"message\":\"Keep Bonuses branches from OwnedWeapon 'owned.fixture.0' were excluded by input support (engine_capability_unavailable).\",\"severity\":\"warning\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 3,
+        "reset": 3,
+        "keep": 0
+      },
+      "predictionCallsSha256": "52d463cd711e394d87fbb3548541188700a659dba527cc0ec92122e74961fd1f",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series_skill.fixture.a|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series_skill.fixture.a|zb:-|zs:series_skill.fixture.a|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"prediction\":{\"reason\":\"engine_capability_unavailable\",\"type\":\"keep_bonuses\"},\"type\":\"unsupported\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"prediction\":{\"reason\":\"engine_capability_unavailable\",\"type\":\"keep_bonuses\"},\"type\":\"unsupported\"}",
+        "2:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "f2771b36c758c3db30044b66f4a2231248e79fb764b9e69c14ede99ae352d00f"
+    },
+    {
+      "name": "keep-capability-false",
+      "candidate": "existing_gogma_mixed|owned.fixture.0|R10,R11,S7,S8",
+      "stableKeySha256": "fbd42f0c336f8e6eca89e36218ae9d7cbeb4427c8716188ecd5e05607f73ad82",
+      "candidateSha256": "ef353944f146dedb93ad3dcc839abbfc8aff1aeab0b36b9e9cb4d3f225aa3aea",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "existing_gogma_current",
+        "existing_gogma_reset_bonuses",
+        "existing_gogma_reset_skills",
+        "existing_gogma_mixed"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}",
+        "{\"detail\":\"The active RNG Engine does not support Keep Bonuses prediction.\",\"reason\":\"keep_prediction_unsupported\",\"route\":\"existing_gogma_keep_bonuses\"}"
+      ],
+      "warnings": [],
+      "predictionCounts": {
+        "normal": 3,
+        "skill": 4,
+        "reset": 4,
+        "keep": 0
+      },
+      "predictionCallsSha256": "cd79f787da36eef34ea62607b06d3195e33309d0499ba38e5f713852f4a48967",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "2caafc6d49672124b6332ea6f5b3ddfc53e63b59d665b3ee0df7fb05ab09d4d8"
+    },
+    {
+      "name": "skill-unsupported",
+      "candidate": "existing_gogma_reset_bonuses|owned.fixture.0|R10",
+      "stableKeySha256": "94c4ee2cf3d0d545885bf0db958add05851e46ea48c9dc0e9f3cbde011d6a405",
+      "candidateSha256": "e0d85b37cc993a8f05c0b4fbd2eb1caf3acef3e4ca077913d2eddce7a3d853a4",
+      "searchedRoutes": [
+        "existing_gogma_current",
+        "existing_gogma_reset_bonuses",
+        "existing_gogma_keep_bonuses"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"The active RNG Engine does not support this Skill input (engine_capability_unavailable).\",\"reason\":\"skill_prediction_unsupported\",\"route\":\"normal_artian_to_gogma\"}",
+        "{\"detail\":\"The active RNG Engine does not support this Skill input (engine_capability_unavailable).\",\"reason\":\"skill_prediction_unsupported\",\"route\":\"owned_normal_artian_to_gogma\"}",
+        "{\"detail\":\"The active RNG Engine does not support this Skill input (engine_capability_unavailable).\",\"reason\":\"skill_prediction_unsupported\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"No supported mixed operation combination was searchable.\",\"reason\":\"skill_prediction_unsupported\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 0,
+        "reset": 1,
+        "keep": 1
+      },
+      "predictionCallsSha256": "3d2614fef0d6f2361dc05118931ec910858b56fe6a1f2cffa8eec70477373db9",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series_skill.fixture.a|ss:-|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "560f42afdb376fc14da79d3e041f6afce85098d11cf5966634c4074ec733a9fb"
+    },
+    {
+      "name": "normal-unsupported:blind",
+      "candidate": "normal_artian_to_gogma|-|n1@null-null,c7,R10,R11,S8",
+      "stableKeySha256": "77b07a4d2fbc532199d7ff9d7d07a2d4fad8b3984f047c74155b9af4b9d9af0f",
+      "candidateSha256": "62123a427ee4a807d78b5a5a358de89cc8aa31dadf734e894a2d3035cfa80e96",
+      "searchedRoutes": [
+        "normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_current\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [
+        "{\"message\":\"通常アーティアの初期ボーナスを使わないルートで検索しました。\\n通常アーティアの初期復元ボーナス予測を利用できないため、作成直後の復元ボーナスは予測していません。\\n通常アーティアを1本作成して巨戟化したあと、復元ボーナスを再抽選して5枠を確定するルートを検索しています。\",\"severity\":\"info\",\"targetWeaponId\":\"target.fixture.a\"}"
+      ],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 4,
+        "reset": 3,
+        "keep": 3
+      },
+      "predictionCallsSha256": "346ff768d219a8e012a1274889737f18e6addcf889214224a59e846f58411471",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@null-null,c7|conv:series.other.7|zb:-|zs:series.other.7|ss:8|bb:10/normal_artian/./null"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "d1d2e814d6596d10637d33f03024f6e8da68326fc69fe4c7931c8a0148b25053"
+    },
+    {
+      "name": "all-sources:existing-filter",
+      "candidate": "existing_gogma_mixed|owned.fixture.0|R10,S7,S8",
+      "stableKeySha256": "6ed60eb8ceccf67c630bd4cb97833359131056b024597e3040f97fff287a064b",
+      "candidateSha256": "23923a1f4276392ca8a9315a8e10a2140597404f5c7528b5825e10a813446378",
+      "searchedRoutes": [
+        "existing_gogma_current",
+        "existing_gogma_reset_bonuses",
+        "existing_gogma_keep_bonuses",
+        "existing_gogma_reset_skills",
+        "existing_gogma_mixed"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"Normal Artian routes are disabled by routeFilter.\",\"reason\":\"disabled_by_filter\",\"route\":\"normal_artian_to_gogma\"}",
+        "{\"detail\":\"Normal Artian routes are disabled by routeFilter.\",\"reason\":\"disabled_by_filter\",\"route\":\"owned_normal_artian_to_gogma\"}"
+      ],
+      "warnings": [],
+      "predictionCounts": {
+        "normal": 0,
+        "skill": 3,
+        "reset": 3,
+        "keep": 5
+      },
+      "predictionCallsSha256": "0acc18eddb3ea560d7daaa5196eba5bbe78a172a5450bdce11ffbe57afc64a0b",
+      "supportQueries": [
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "bases": [
+        "existing_gogma|owned.fixture.0||conv:-|zb:gogma_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other|ss:7|bb:10/gogma_artian/./attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "88d16cfbf9c275fd44fb65b3bd38b36906260227dec3549ceb5040bd1f11f5fb"
+    },
+    {
+      "name": "all-sources:normal-filter",
+      "candidate": "owned_normal_artian_to_gogma|owned.normal.0|c7,R10,S8",
+      "stableKeySha256": "79644f53c8d0fe26ed0c663094a2f6a5da6429c8b8176b872bdfb25c39db250b",
+      "candidateSha256": "643a3b5dcb56975b46f01d481e3f41fa1f9c5efe1169c90118c908ccfefb51b3",
+      "searchedRoutes": [
+        "normal_artian_to_gogma",
+        "owned_normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"Existing Gogma routes are disabled by routeFilter.\",\"reason\":\"disabled_by_filter\",\"route\":\"existing_gogma_current\"}",
+        "{\"detail\":\"Existing Gogma routes are disabled by routeFilter.\",\"reason\":\"disabled_by_filter\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"Existing Gogma routes are disabled by routeFilter.\",\"reason\":\"disabled_by_filter\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"Existing Gogma routes are disabled by routeFilter.\",\"reason\":\"disabled_by_filter\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"Existing Gogma routes are disabled by routeFilter.\",\"reason\":\"disabled_by_filter\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [],
+      "predictionCounts": {
+        "normal": 2,
+        "skill": 3,
+        "reset": 2,
+        "keep": 3
+      },
+      "predictionCallsSha256": "8b5df87e3a1ba136d855d81c996cf7244660d61bf2d595d0fc96b813b0c4b615",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "owned_normal_artian_to_gogma|owned.normal.0|c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/./attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "d1d2e814d6596d10637d33f03024f6e8da68326fc69fe4c7931c8a0148b25053"
+    },
+    {
+      "name": "n104:later-compatible-layouts",
+      "candidate": "normal_artian_to_gogma|-|n3@4-7,c7,K10,K11,K12,S8",
+      "stableKeySha256": "1632aaa3d6a575bba9a4005130b39071668b5eabf317bdfc11f0a1d44986b46d",
+      "candidateSha256": "4751b6dec67b3a521bf6d63a218dfd22202d94a64912e5722fc0e019be45de45",
+      "searchedRoutes": [
+        "normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_current\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [],
+      "predictionCounts": {
+        "normal": 7,
+        "skill": 5,
+        "reset": 4,
+        "keep": 8
+      },
+      "predictionCallsSha256": "1d11696f9131e8dd1fbfa651758db43c9d86ec9de637d373a482b4bbc4bc2ee4",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low",
+        "normal_artian_to_gogma|-|n3@4-7,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,sharpness:low|zs:series.other.7|ss:8|bb:10/normal_artian/keep_only/attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}",
+        "1:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "14c37f54bf40216d7056f89da0d781bbca0c6e69e717d98cf1b29a31bd41fd02"
+    },
+    {
+      "name": "normal-extent-1",
+      "candidate": "normal_artian_to_gogma|-|n1@4-5,c7,R10,R11,R12,S8",
+      "stableKeySha256": "36218466fe7e93069ff54807ec3321ff655e8eb76765352276e177d5f444c148",
+      "candidateSha256": "7d0aa8810647b6db49b520e185d1b647f77adf1ebfd58e0d6bc2ecf4b8f701eb",
+      "searchedRoutes": [
+        "normal_artian_to_gogma"
+      ],
+      "skippedRoutes": [
+        "{\"detail\":\"No compatible owned Normal Artian weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"owned_normal_artian_to_gogma\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_current\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_keep_bonuses\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_reset_skills\"}",
+        "{\"detail\":\"No compatible owned Gogma weapon is available.\",\"reason\":\"no_owned_weapon_available\",\"route\":\"existing_gogma_mixed\"}"
+      ],
+      "warnings": [],
+      "predictionCounts": {
+        "normal": 1,
+        "skill": 5,
+        "reset": 4,
+        "keep": 5
+      },
+      "predictionCallsSha256": "f3a23f6d329648ca9c1acd83b56b747cebdb028ee2bd0b7a4840e4a88da3d650",
+      "supportQueries": [
+        "normal_artian",
+        "skill",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "bases": [
+        "normal_artian_to_gogma|-|n1@4-5,c7|conv:series.other.7|zb:normal_artian/attack:high,attack:high,element:middle,utility:low,utility:low|zs:series.other.7|ss:8|bb:10/normal_artian/all/attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "notices": [
+        "0:{\"kind\":\"existing_gogma_reset_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_keep_bonuses\",\"type\":\"route_kind\"}",
+        "0:{\"kind\":\"existing_gogma_mixed\",\"type\":\"route_kind\"}"
+      ],
+      "progressSha256": "742184c13f9b3e6e11670c7bdc2b37db8b1bb52d0989c59866ce45917fa2a644"
+    }
+  ],
+  "reservedStreams": [
+    {
+      "name": "contiguous gogma base, extent cut",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 2,
+          "solutionsSha256": "5f34d2f842170a473f7c2bc21eee813ed7582a3b3b35c809efb9b47d34a7aa4f",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 3,
+          "solutionsSha256": "37849dc6532065e1d34618832c5152dee1f4c7d1e51b0b8bb14e921df639163c",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 3,
+          "solutionsSha256": "abe2c405204febb8e5e41f6dfab0cd3eb5994aa7c53e957ca9bf9cae9e9b77e9",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 4,
+          "solutions": 3,
+          "solutionsSha256": "dad7c246c79855aac40586eed21b4bfbfbd7346c6a81764a7af1daa1d6a435b0",
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "calls": [
+        "reset:10",
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:11",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:12",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:13",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "depthObservations": [
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 1,
+          "generatedStates": 2,
+          "frontierStates": 2,
+          "absolutePositions": 1,
+          "familyLayouts": 2
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 2,
+          "generatedStates": 3,
+          "frontierStates": 2,
+          "absolutePositions": 1,
+          "familyLayouts": 2
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 3,
+          "generatedStates": 3,
+          "frontierStates": 2,
+          "absolutePositions": 1,
+          "familyLayouts": 2
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 4,
+          "generatedStates": 3,
+          "frontierStates": 2,
+          "absolutePositions": 1,
+          "familyLayouts": 2
+        }
+      ],
+      "runtimeEvents": 56,
+      "runtimeSha256": "271a8dd26ba78ae337f10eb8ffd1a2d848c23211cd83daa7e6c15816c69b9b44"
+    },
+    {
+      "name": "held and blocked positions",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 2,
+          "solutionsSha256": "e022c7e53cb5af982bb249d5661b388241f9b51faa2bae8136e033416eaeeab6",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 6,
+          "solutionsSha256": "030d31616ed70622d2710c868d539c4c637504ce5e6b77033eaea41c8bbf4f6c",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 7,
+          "solutionsSha256": "e211694670f4bebba3850b9816b3c61d4164ff1c0c7761a1dc05096d04c408f7",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 4,
+          "solutions": 3,
+          "solutionsSha256": "b70d23658f27c003bdd37b241eddb3df5a4750bf9e588f26632edeef7ce8b324",
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "calls": [
+        "reset:10",
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:11",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:13",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:14",
+        "keep:14:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "keep:14:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:low,attack:low,element:low,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low"
+      ],
+      "depthObservations": [
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 1,
+          "generatedStates": 2,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 2,
+          "generatedStates": 6,
+          "frontierStates": 5,
+          "absolutePositions": 3,
+          "familyLayouts": 2
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 3,
+          "generatedStates": 7,
+          "frontierStates": 4,
+          "absolutePositions": 2,
+          "familyLayouts": 2
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 4,
+          "generatedStates": 3,
+          "frontierStates": 2,
+          "absolutePositions": 1,
+          "familyLayouts": 2
+        }
+      ],
+      "runtimeEvents": 56,
+      "runtimeSha256": "9c0cb38048cac992f0f4bfbe559bbfc3ca4b3ea3e6d7a27ed33e0aeb1f4661df"
+    },
+    {
+      "name": "blind base over held positions",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 3,
+          "solutionsSha256": "1bbf1df64589c64f41a963f85fec9c0022fc33a5f5a7a4c91715c1fe54249a35",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 7,
+          "solutionsSha256": "e33dcf4fd15a099ab96872ba43b41c0c29ec9e07bb56a14295e978de0aad5002",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 5,
+          "solutionsSha256": "a7764b99b4767e65bc3d220d098bdb47fb7c0cdb570876b5487d1c5a19ead7af",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 4,
+          "solutions": 3,
+          "solutionsSha256": "bac37a3536179d224a01dd9082ca9476a017fec2d8224abbf445e67a8a1adb8a",
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "calls": [
+        "reset:10",
+        "reset:11",
+        "reset:12",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:13",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:low,attack:low,element:low,utility:low,utility:low"
+      ],
+      "depthObservations": [
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 1,
+          "generatedStates": 3,
+          "frontierStates": 3,
+          "absolutePositions": 3,
+          "familyLayouts": 2
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 2,
+          "generatedStates": 7,
+          "frontierStates": 5,
+          "absolutePositions": 3,
+          "familyLayouts": 2
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 3,
+          "generatedStates": 5,
+          "frontierStates": 4,
+          "absolutePositions": 2,
+          "familyLayouts": 2
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 4,
+          "generatedStates": 3,
+          "frontierStates": 2,
+          "absolutePositions": 1,
+          "familyLayouts": 2
+        }
+      ],
+      "runtimeEvents": 56,
+      "runtimeSha256": "2b4598b190eb279a77e8244780ca81878e26504d5db91eeaf34c6d1ce9ea3b16"
+    },
+    {
+      "name": "known normal base, keep only, held",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 1,
+          "solutionsSha256": "3b92629b3f8bd68afd74ba769c01a764d221ce8e2ca0db93a68060cad5b1c183",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 2,
+          "solutionsSha256": "fe5304e7403d19266609d2b53a4bb7852981dccd7468a7d32d6da43640fbce54",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 2,
+          "solutionsSha256": "919460b8ac82a626418801bae5bfabda1014e72f79b1116f9ff6d3afb62029ed",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 4,
+          "solutions": 1,
+          "solutionsSha256": "5d1d5cae389e1433368744e34acda2c001e60fa9a064666112848dca97db4f4f",
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "calls": [
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:low,attack:low,element:low,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "depthObservations": [
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 1,
+          "generatedStates": 1,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 2,
+          "generatedStates": 2,
+          "frontierStates": 2,
+          "absolutePositions": 2,
+          "familyLayouts": 1
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 3,
+          "generatedStates": 2,
+          "frontierStates": 2,
+          "absolutePositions": 2,
+          "familyLayouts": 1
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 4,
+          "generatedStates": 1,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        }
+      ],
+      "runtimeEvents": 56,
+      "runtimeSha256": "6a96b804dffd909951145c303266be00bc3e8fbe98486452154d1dc3d0be1e3c"
+    },
+    {
+      "name": "known normal base, full policy",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 2,
+          "solutionsSha256": "e022c7e53cb5af982bb249d5661b388241f9b51faa2bae8136e033416eaeeab6",
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 2,
+          "solutionsSha256": "d5572394c20036b908b927b56682ac7e65b28871310971c602f54012227244a1",
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "calls": [
+        "reset:10",
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:11",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "depthObservations": [
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 1,
+          "generatedStates": 2,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 2,
+          "generatedStates": 2,
+          "frontierStates": 2,
+          "absolutePositions": 1,
+          "familyLayouts": 2
+        }
+      ],
+      "runtimeEvents": 28,
+      "runtimeSha256": "a25b40cd9cd5dff1da4f4aa6a7b224c3fe32bb20377be4afc1107852975b3e69"
+    },
+    {
+      "name": "reset unsupported",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 1,
+          "solutionsSha256": "3b92629b3f8bd68afd74ba769c01a764d221ce8e2ca0db93a68060cad5b1c183",
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 1,
+          "solutionsSha256": "0ec936b2f16a52d70948dcf26849c521dd3b0eccb12a7a737eda1ef7a01342f0",
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 1,
+          "solutionsSha256": "009afecd6ef36edf86bd371d07f7a2c080c809ff903522c44ee70c36b859d8cd",
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 4,
+          "solutions": 1,
+          "solutionsSha256": "5d1d5cae389e1433368744e34acda2c001e60fa9a064666112848dca97db4f4f",
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "calls": [
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:low,attack:low,element:low,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "depthObservations": [
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 1,
+          "generatedStates": 1,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 2,
+          "generatedStates": 1,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 3,
+          "generatedStates": 1,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 4,
+          "generatedStates": 1,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        }
+      ],
+      "runtimeEvents": 56,
+      "runtimeSha256": "9fd48c300e21bd75bca3c206a9b410cd41ebd0547ab840dd815d0239dd780e1f"
+    },
+    {
+      "name": "keep unsupported",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 1,
+          "solutionsSha256": "92ec6d0e006d7ab3771959de0379ef26e30f88405d23e30de27e4ca9c21e8d34",
+          "unsupportedPredictions": [
+            {
+              "type": "keep_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 2,
+          "solutionsSha256": "6453e5c826e56040526894f6fa3d2ce83a7fbfa664ce7df0f272d0d09c39b4bf",
+          "unsupportedPredictions": [
+            {
+              "type": "keep_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 1,
+          "solutionsSha256": "0c9396ec6bce0c636a985aab63370b4af738f22160d197907dc7a4d80a18874b",
+          "unsupportedPredictions": [
+            {
+              "type": "keep_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "calls": [
+        "reset:10",
+        "reset:11",
+        "reset:12"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "depthObservations": [
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 1,
+          "generatedStates": 1,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 2,
+          "generatedStates": 2,
+          "frontierStates": 2,
+          "absolutePositions": 2,
+          "familyLayouts": 2
+        },
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 3,
+          "generatedStates": 1,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        }
+      ],
+      "runtimeEvents": 42,
+      "runtimeSha256": "37927d2b5bda07d93e82f50c6a9cb0109a246fd15d2b9696d570279d17bf6fa0"
+    },
+    {
+      "name": "natural end: blind base, reset unsupported",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 0,
+          "solutionsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": false,
+      "calls": [],
+      "supportQueries": [
+        "gogma_reset"
+      ],
+      "depthObservations": [],
+      "runtimeEvents": 8,
+      "runtimeSha256": "c887a6b134c01283e09a88e1be711040faf8e49a91e0941e784a5016a0dc5b38"
+    },
+    {
+      "name": "every window position blocked",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 0,
+          "solutionsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "calls": [],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low"
+      ],
+      "depthObservations": [],
+      "runtimeEvents": 8,
+      "runtimeSha256": "007eb9ff1e055f05a3e351dc5efac82e8d42a9bfb62e17cc8593cca34668edfb"
+    },
+    {
+      "name": "empty terminal depth after a non-empty one",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 1,
+          "solutionsSha256": "9ee3970a7f3139cbfdfc602ee4a445a68267edffe32ccd670957b6acb9c37e03",
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 0,
+          "solutionsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            },
+            {
+              "type": "keep_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": false,
+      "calls": [
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ],
+      "depthObservations": [
+        {
+          "streamIndex": 0,
+          "startGogmaCounter": 10,
+          "depth": 1,
+          "generatedStates": 1,
+          "frontierStates": 1,
+          "absolutePositions": 1,
+          "familyLayouts": 1
+        }
+      ],
+      "runtimeEvents": 22,
+      "runtimeSha256": "d230d2fa6461a69196df9654569a5aa7ac2cdbcd371ff7327f74cdc4019b51f8"
+    },
+    {
+      "name": "no Base Seed",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 0,
+          "solutionsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": false,
+      "calls": [],
+      "supportQueries": [],
+      "depthObservations": [],
+      "runtimeEvents": 2,
+      "runtimeSha256": "bf73e0a86cbd064aae59150ea1113a285ac4567571e5b7ebb80ee33514810ad5"
+    }
+  ],
+  "ordinaryStreams": [
+    {
+      "name": "ordinary gogma base",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 2,
+          "solutionsSha256": "c92240f8ab8c2aea7019245bac635cb856d5de75c04066c0d443ab8ccbe3dc23",
+          "steps": 1,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 3,
+          "solutionsSha256": "f633bc69e2d013868f7209ae1d0e1b010afd241550616884359ecf5232c1c604",
+          "steps": 2,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 3,
+          "solutionsSha256": "6f9efcec35490236e1352b05726bafcf9bf6a3b071ce0a999917acf2fd6b0779",
+          "steps": 3,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 4,
+          "solutions": 3,
+          "solutionsSha256": "8c5d0e087ec882ad76d695ac6774364491249371548be0afa8823a577b9ee128",
+          "steps": 4,
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "solveSha256": "d81ed16223d4a973fb04c794581782a5322c98872d7122a8b9d168548bd0a203",
+      "calls": [
+        "reset:10",
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:11",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:12",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:13",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "--solve--",
+        "reset:10",
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:11",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:12",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:13",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "--solve--",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ]
+    },
+    {
+      "name": "ordinary known normal base, keep only",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 1,
+          "solutionsSha256": "ca13c75013db30907bc39daa7d7758f81f52b1dbafd91ba4da94783194fa6b85",
+          "steps": 1,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 1,
+          "solutionsSha256": "636d232f8edb1b2003c1c5232f3ac0582d427326f0864fbef4a055b42357063f",
+          "steps": 2,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 1,
+          "solutionsSha256": "13016e079da1f00dbc4de49d10086a63f87e94ed238921935154cd570d70e39a",
+          "steps": 3,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 4,
+          "solutions": 1,
+          "solutionsSha256": "7a4efbef60d31c2a7bb5bc54a820b69a64b200a2fee3f019a5fede8eca9e2dbe",
+          "steps": 4,
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "solveSha256": "9361c26145ef54ab88dcd0b7e7a10cfabe537c8f641f2a65a1231a83c742b439",
+      "calls": [
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "--solve--",
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:low,attack:low,element:low,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "--solve--",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:low,attack:low,element:low,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ]
+    },
+    {
+      "name": "ordinary known normal base, full",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 2,
+          "solutionsSha256": "b5e2ea23efd71a3a6d48a051f7a1cf78a32601c3d991974b39be5baf4cd7db59",
+          "steps": 1,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 2,
+          "solutionsSha256": "dc208129689e224ad5e989d2ce77a4e04db305f14d198e9c3785c18b45cb3eb6",
+          "steps": 2,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 3,
+          "solutionsSha256": "2710447cbe6ca3f6f66f9e5f00db357aaca7e6edd5a295528bc33963da95caa4",
+          "steps": 3,
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "solveSha256": "61a6e3967e22a68314e7420e49801423508dd5134dc3108ba132cb7d0844b650",
+      "calls": [
+        "reset:10",
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:11",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:12",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "--solve--",
+        "reset:10",
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:11",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "reset:12",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "--solve--",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low"
+      ]
+    },
+    {
+      "name": "ordinary blind base",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 1,
+          "solutionsSha256": "65156032712c948d39c4ab82a8e418529ee84dd16d854c2c03993e86a91ca172",
+          "steps": 1,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 2,
+          "solutionsSha256": "18bed9f83a426154560414cf74a3e6c67748c886396456c352e719b1bf88fbee",
+          "steps": 2,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 2,
+          "solutionsSha256": "1fd6a8f494017ac5aaa7c25eb0aa11796ff727a3655e7cf0fa0872ce6528f896",
+          "steps": 3,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 4,
+          "solutions": 3,
+          "solutionsSha256": "75fcd699d3d9e923e70f2780514537ebb6041af5633778afb689a1589e559afd",
+          "steps": 4,
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "solveSha256": "8b09a31a8b791ddb77d4247f184ab89622c364d49ef3f2aeafc989b0e9c5eada",
+      "calls": [
+        "reset:10",
+        "reset:11",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:12",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:13",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "--solve--",
+        "reset:10",
+        "reset:11",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:12",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility",
+        "reset:13",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.utility"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:low,attack:low,element:low,utility:low,utility:low",
+        "--solve--",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "gogma_keep:attack:low,attack:low,element:low,utility:low,utility:low"
+      ]
+    },
+    {
+      "name": "ordinary reset unsupported",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 1,
+          "solutionsSha256": "ca13c75013db30907bc39daa7d7758f81f52b1dbafd91ba4da94783194fa6b85",
+          "steps": 1,
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 1,
+          "solutionsSha256": "636d232f8edb1b2003c1c5232f3ac0582d427326f0864fbef4a055b42357063f",
+          "steps": 2,
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 1,
+          "solutionsSha256": "13016e079da1f00dbc4de49d10086a63f87e94ed238921935154cd570d70e39a",
+          "steps": 3,
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 4,
+          "solutions": 1,
+          "solutionsSha256": "7a4efbef60d31c2a7bb5bc54a820b69a64b200a2fee3f019a5fede8eca9e2dbe",
+          "steps": 4,
+          "unsupportedPredictions": [
+            {
+              "type": "reset_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "solveSha256": "b8abb4a71b7380226fedfaa4e29b26260145610f686ca346f32ecccb43ae3a99",
+      "calls": [
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "--solve--",
+        "keep:10:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:11:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:12:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness",
+        "keep:13:bonus_type.fixture.attack\u0000bonus_type.fixture.attack\u0000bonus_type.fixture.element\u0000bonus_type.fixture.utility\u0000bonus_type.fixture.sharpness"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:low,attack:low,element:low,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high",
+        "--solve--",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:low,attack:low,element:low,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:high"
+      ]
+    },
+    {
+      "name": "ordinary keep unsupported",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 1,
+          "solutionsSha256": "65156032712c948d39c4ab82a8e418529ee84dd16d854c2c03993e86a91ca172",
+          "steps": 1,
+          "unsupportedPredictions": [
+            {
+              "type": "keep_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 1,
+          "solutionsSha256": "eb163d9bfec73fd51e4a68030695ff1299f590d950681e17b64728258e21b244",
+          "steps": 2,
+          "unsupportedPredictions": [
+            {
+              "type": "keep_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 1,
+          "solutionsSha256": "8495319710c22b21110bc0c4fa6b76134c9f91257945f023287a4634840f516b",
+          "steps": 3,
+          "unsupportedPredictions": [
+            {
+              "type": "keep_bonuses",
+              "reason": "engine_capability_unavailable"
+            }
+          ],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "solveSha256": "9e29b5b832b4a73005a8c0eab2f4c973fd2f6c427f5c19103d19963195176277",
+      "calls": [
+        "reset:10",
+        "reset:11",
+        "reset:12",
+        "--solve--",
+        "reset:10",
+        "reset:11",
+        "reset:12"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low",
+        "--solve--",
+        "gogma_reset",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,sharpness:low",
+        "gogma_keep:attack:high,attack:high,element:middle,utility:low,utility:low"
+      ]
+    },
+    {
+      "name": "ordinary keep capability false",
+      "reads": [
+        {
+          "depth": 1,
+          "solutions": 1,
+          "solutionsSha256": "65156032712c948d39c4ab82a8e418529ee84dd16d854c2c03993e86a91ca172",
+          "steps": 1,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 2,
+          "solutions": 1,
+          "solutionsSha256": "a668aa7fe36ce849a9f4b963ef68074953531474ddb9a6224accb1dbb6da5cc4",
+          "steps": 2,
+          "unsupportedPredictions": [],
+          "exhausted": false
+        },
+        {
+          "depth": 3,
+          "solutions": 1,
+          "solutionsSha256": "56e01c7d59ae9b27f33824fdc6295a269a56f4fb9f36ed084b46df8008f326f8",
+          "steps": 3,
+          "unsupportedPredictions": [],
+          "exhausted": true
+        }
+      ],
+      "reachesBeyondExtent": true,
+      "solveSha256": "696f06f210a3f1cc9747782afaad92affb1b05c265d6b12879e187b9370f7983",
+      "calls": [
+        "reset:10",
+        "reset:11",
+        "reset:12",
+        "--solve--",
+        "reset:10",
+        "reset:11",
+        "reset:12"
+      ],
+      "supportQueries": [
+        "gogma_reset",
+        "--solve--",
+        "gogma_reset"
+      ]
+    }
+  ],
+  "streamKeys": [
+    {
+      "base": "gogma_practical",
+      "key": "[10,\"all\",\"bonus_type.fixture.attack\\u0000bonus_type.fixture.attack\\u0000bonus_type.fixture.element\\u0000bonus_type.fixture.utility\\u0000bonus_type.fixture.sharpness\"]"
+    },
+    {
+      "base": "blind",
+      "key": "[10,\"all\",null]"
+    },
+    {
+      "base": "normal_known",
+      "key": "[10,\"all\",\"bonus_type.fixture.attack\\u0000bonus_type.fixture.attack\\u0000bonus_type.fixture.element\\u0000bonus_type.fixture.utility\\u0000bonus_type.fixture.sharpness\"]"
+    },
+    {
+      "base": "normal_known_keep_only",
+      "key": "[10,\"keep_only\",\"bonus_type.fixture.attack\\u0000bonus_type.fixture.attack\\u0000bonus_type.fixture.element\\u0000bonus_type.fixture.utility\\u0000bonus_type.fixture.sharpness\"]"
+    },
+    {
+      "base": "normal_known_all",
+      "key": "[10,\"all\",\"bonus_type.fixture.attack\\u0000bonus_type.fixture.attack\\u0000bonus_type.fixture.element\\u0000bonus_type.fixture.utility\\u0000bonus_type.fixture.sharpness\"]"
+    },
+    {
+      "base": "gogma_practical_at_14",
+      "key": "[14,\"all\",\"bonus_type.fixture.attack\\u0000bonus_type.fixture.attack\\u0000bonus_type.fixture.element\\u0000bonus_type.fixture.utility\\u0000bonus_type.fixture.sharpness\"]"
+    }
+  ]
+}
