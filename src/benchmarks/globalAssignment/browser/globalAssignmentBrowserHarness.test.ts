@@ -168,12 +168,19 @@ describe('P-1 harness: lifecycle, timings and fresh Worker policy', () => {
     }
   })
 
-  it('answers pings, and checks the environment before a run', async () => {
+  it('answers pings, loses a pending ping at the settlement (the Worker is terminated), and checks the environment before a run', async () => {
     const { worker, harness } = setup()
     const ping = harness.ping(1_000)
     const posted = worker.postedOfType('gab_ping')[0]!
     worker.emit({ type: 'gab_pong', protocolVersion: V, pingId: posted.pingId as number })
     expect(await ping).toEqual(expect.any(Number))
+    const running = harness.run(options())
+    const unanswered = harness.ping(60_000)
+    worker.emit(result('gab.run-1.first'))
+    await running
+    // Resolved at once as lost (null), never left waiting for its 60 s timeout; a later ping is refused at once.
+    expect(await unanswered).toBeNull()
+    expect(await harness.ping(60_000)).toBeNull()
     expect(gabEnvironmentIssues({ ...READY_ENVIRONMENT, capabilities: { ...READY_ENVIRONMENT.capabilities } }, SYNTHETIC_EXECUTION, { isSecureContext: true, cryptoSubtle: true })).toEqual([])
     expect(gabEnvironmentIssues({ ...READY_ENVIRONMENT, isSecureContext: false, capabilities: { ...READY_ENVIRONMENT.capabilities, cryptoSubtle: false, messageChannel: false } },
       { ...SYNTHETIC_EXECUTION, yieldMode: 'message-channel' }, { isSecureContext: false, cryptoSubtle: true })).toEqual([

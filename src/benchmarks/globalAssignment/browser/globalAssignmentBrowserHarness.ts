@@ -213,6 +213,8 @@ export function createGlobalAssignmentBrowserHarness(dependencies: GlobalAssignm
     const adopted = outcome === 'completed' && extra.result !== undefined ? extra.result : null
     if (adopted !== null) request.audit.adoptedResults += 1
     terminate()
+    // A terminated Worker answers no ping: the pending ones are lost now, not at their timeout.
+    for (const [pingId, resolve] of [...pongs]) { pongs.delete(pingId); resolve(null) }
     const cancel = request.cancel
     request.resolve({
       requestId: request.requestId, role: request.role, outcome, settledBy,

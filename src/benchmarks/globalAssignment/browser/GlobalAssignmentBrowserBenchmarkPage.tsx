@@ -311,15 +311,15 @@ export function GlobalAssignmentBrowserBenchmarkPage({ runnerDependencies }: Glo
             <Button variant="outlined" color="inherit" disabled={disabled || state.records.length === 0} sx={{ minHeight: 44 }} onClick={() => runner.clear()}>記録をクリア</Button>
           </Stack>
           <Alert severity="info" variant="outlined">JSON保存のファイルはEntry本体・Target ID・Planを含み得ます。git-ignoredな <code>.local/</code> にだけ置き、Repositoryへcommitしないでください。</Alert>
-          {message && <Alert severity="error">エラー: {message}</Alert>}
-          {notice && <Alert severity="info">{notice}</Alert>}
+          {message && <Alert severity="error" sx={{ overflowWrap: 'anywhere' }}>エラー: {message}</Alert>}
+          {notice && <Alert severity="info" sx={{ overflowWrap: 'anywhere' }}>{notice}</Alert>}
         </Stack>
       </Paper>
 
       <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }} component="section" aria-labelledby="gab-status-heading">
         <Stack spacing={1.5}>
           <Typography id="gab-status-heading" component="h2" variant="h6">状態</Typography>
-          <Typography role="status" aria-live="polite" sx={{ fontWeight: 600 }}>
+          <Typography role="status" aria-live="polite" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
             {state.running ? `実行中: ${current === null ? 'Worker間' : `${current.role} Worker`}` : lastRecord === null ? '待機中（実行記録なし）' : `待機中（直前のrun ${lastRecord.id}: ${lastRecord.judgement.recordClassification}）`}
           </Typography>
           {state.running && <LinearProgress aria-label="実行中（完了率は推定しません）" />}
@@ -353,7 +353,7 @@ export function GlobalAssignmentBrowserBenchmarkPage({ runnerDependencies }: Glo
               <Paper key={record.id} variant="outlined" sx={{ p: 2 }} component="article" aria-label={`logical run ${record.id}`}>
                 <Stack spacing={1}>
                   <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{record.id}: {record.judgement.recordClassification}</Typography>
-                  <Typography variant="body2">{verdictText(record)}</Typography>
+                  <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{verdictText(record)}</Typography>
                   <Facts label={`run ${record.id}`} rows={[
                     ['slot / 目的', `${record.slot.slotId} / ${record.slot.purpose}（${record.slot.planned ? '計画' : '計画外'}）`],
                     ['first Worker', `${record.first.settle}（ready ${seconds(record.first.createToReadyMs)}、round trip ${seconds(record.first.settlement?.timing.roundTripMs)}、${record.first.exportTransport ?? '—'}）`],
