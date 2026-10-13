@@ -23,6 +23,11 @@
  * D-0B and D-0A-2b record was produced with the a1 option set and carries no such field, so a condition without it means a1
  * (`conditionReachOptionSet()`) and its record stays byte for byte what it was; a run of another option set names it, and its
  * record carries it. The protocol versions are unchanged: the option set is a recorded condition, never inferred.
+ *
+ * Phase D-0C enables the formal mode of the D-0B-2 registration (`MATERIALIZATION_D0C_PREREGISTRATION.formalRun.enabled`) without
+ * changing a registered value; the registration gate (`d0cRegistrationGate()` / `d0cRegistrationGateIssues()`) reads any registration
+ * object so that a disabled or incomplete one stays refused. The formal start / child gates and the validity judgement live in
+ * `materializationFormal.ts`.
  */
 import { compareExportIdentity, parseRegisteredExportIdentity, validateWindowLadder, type ExportIdentity } from './assignmentProtocol'
 import { isValidSearchScaleGate } from './materializationScale'
@@ -311,8 +316,8 @@ export const MATERIALIZATION_D0A2B_REGISTRATION_ITEMS = Object.freeze([
 // from the D-0B-2 non-formal re-smokes of the rule `d0a2-v2` with the a2 option set on the real Export. Every item carries
 // its value, unit, basis, the non-formal runs it rests on (their RESULT SHA-256 is recorded in the D-0B-2 document, never in
 // code: design 11.3), whether it is oracle-informed, and what the evidence did and did not observe. The registered Export
-// identity lives in the document's `registered-export-*` block. Nothing here enables a formal run: the formal mode stays
-// refused, and D-0C (a separate task) enables it after auditing that these values and the measurement code are unchanged.
+// identity lives in the document's `registered-export-*` block. Phase D-0B-2 enabled no formal run; Phase D-0C enabled it
+// (`formalRun`) after auditing that these values and the measurement code are unchanged, and changed no registered value.
 // ---------------------------------------------------------------------------------------------------------------------
 
 export const MATERIALIZATION_D0B2_PHASE = 'Issue #154 Global Assignment Phase D-0B-2: non-formal real-Export re-smoke of the rule d0a2-v2 with the a2 option set, and the pre-registration of the D-0C formal conditions (no formal run)'
@@ -348,8 +353,9 @@ const REG = 'd0b2-reg'
 const CMP_A1 = 'd0b2-cmp-a1'
 
 /**
- * The D-0C formal conditions of the rule `d0a2-v2` (Phase D-0B-2). `formalRun.enabled` is false: Phase D-0B-2 starts no formal
- * run, and D-0C enables it only after auditing these values and the calculation-related code against the registration HEAD.
+ * The D-0C formal conditions of the rule `d0a2-v2` (Phase D-0B-2). Phase D-0B-2 registered them with `formalRun.enabled` false;
+ * Phase D-0C enabled the formal run after auditing these values and the calculation-related code against the registration HEAD,
+ * changing no other field.
  */
 export const MATERIALIZATION_D0C_PREREGISTRATION = Object.freeze({
   registeredIn: 'Phase D-0B-2',
@@ -545,7 +551,11 @@ export const MATERIALIZATION_D0C_PREREGISTRATION = Object.freeze({
   }) as D0cRegisteredItem<'clean_head_no_uncommitted_code_calculation_diff_audited'>,
   concurrency: 1,
   retry: 'none',
-  formalRun: Object.freeze({ enabled: false, enabledBy: null, startsIn: 'D-0C (a separate task)' }),
+  formalRun: Object.freeze({
+    enabled: true,
+    enabledBy: 'Phase D-0C: the formal mode of the D-0B-2 registration, enabled without changing a registered value (docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0C.md)',
+    startsIn: 'D-0C',
+  }),
 })
 
 /** Items D-0B-2 registers beyond MATERIALIZATION_D0A2B_REGISTRATION_ITEMS (the user's D-0B-2 list). */
@@ -554,28 +564,31 @@ export const MATERIALIZATION_D0C_EXTRA_REGISTRATION_ITEMS = Object.freeze([
 ] as const)
 
 type D0cItemKey = Exclude<keyof typeof MATERIALIZATION_D0C_PREREGISTRATION, 'registeredIn' | 'concurrency' | 'retry' | 'formalRun'>
+/** A registration object of the D-0C shape (the real one by default; D-0C tests pass disabled or incomplete ones). */
+export type D0cRegistration = typeof MATERIALIZATION_D0C_PREREGISTRATION
 
 /** Missing or invalid registered items, by name; `[]` means the D-0C registration is complete. Never a filled-in default. */
-export function materializationD0cRegistrationIssues(): string[] {
-  const registration = MATERIALIZATION_D0C_PREREGISTRATION as unknown as Record<string, Partial<D0cRegisteredItem<unknown>> | undefined>
+export function materializationD0cRegistrationIssues(registration: D0cRegistration = MATERIALIZATION_D0C_PREREGISTRATION): string[] {
+  const items = registration as unknown as Record<string, Partial<D0cRegisteredItem<unknown>> | undefined>
   const issues: string[] = []
   for (const key of [...MATERIALIZATION_D0A2B_REGISTRATION_ITEMS, ...MATERIALIZATION_D0C_EXTRA_REGISTRATION_ITEMS]) {
-    const item = registration[key]
-    if (item === undefined || item.value === undefined || item.value === null) { issues.push(`${key} is not registered.`); continue }
+    const item = items[key]
+    if (item === undefined || item === null || item.value === undefined || item.value === null) { issues.push(`${key} is not registered.`); continue }
     for (const field of ['unit', 'basis'] as const) if (typeof item[field] !== 'string' || item[field]!.length < 3) issues.push(`${key}.${field} is missing.`)
     if (!Array.isArray(item.evidence) || item.evidence.length === 0) issues.push(`${key}.evidence is missing.`)
     if (typeof item.oracleInformed !== 'boolean') issues.push(`${key}.oracleInformed is missing.`)
     for (const field of ['observedRange', 'unconfirmedRange'] as const) if (typeof item[field] !== 'string' || item[field]!.length === 0) issues.push(`${key}.${field} is missing.`)
   }
-  const { conditions, envelope } = registeredD0cConditions()
+  // The conditions are assembled only from a registration whose items are all present (never with a filled-in value).
+  if (issues.length > 0) return issues
+  const { conditions, envelope } = registeredD0cConditions(registration)
   issues.push(...validateShapeMaterializationResearchConditions(conditions).map(issue => `registered conditions: ${issue}`))
   issues.push(...validateMaterializationEnvelope(envelope).map(issue => `registered envelope: ${issue}`))
   return issues
 }
 
 /** The registered D-0C conditions and envelope as plain objects (the runner's d0a2-v2 condition shape). */
-export function registeredD0cConditions(): { conditions: ShapeMaterializationResearchConditions; envelope: MaterializationEnvelope } {
-  const registration = MATERIALIZATION_D0C_PREREGISTRATION
+export function registeredD0cConditions(registration: D0cRegistration = MATERIALIZATION_D0C_PREREGISTRATION): { conditions: ShapeMaterializationResearchConditions; envelope: MaterializationEnvelope } {
   return {
     conditions: {
       rule: registration.methodSelectionRule.value,
@@ -637,14 +650,33 @@ export function d0cRegisteredItemKeys(): D0cItemKey[] {
   return Object.keys(MATERIALIZATION_D0C_PREREGISTRATION).filter((key): key is D0cItemKey => !['registeredIn', 'concurrency', 'retry', 'formalRun'].includes(key))
 }
 
+/** The registration gate a formal parent and every formal child apply (Phase D-0C): the formal run enabled, every item registered. */
+export interface D0cRegistrationGate {
+  formalRunEnabled: boolean
+  /** `materializationD0cRegistrationIssues()` of the registration (`[]` = complete). */
+  registrationIssues: readonly string[]
+}
+
+export function d0cRegistrationGate(registration: D0cRegistration = MATERIALIZATION_D0C_PREREGISTRATION): D0cRegistrationGate {
+  return { formalRunEnabled: (registration.formalRun as { enabled?: unknown } | undefined)?.enabled === true, registrationIssues: materializationD0cRegistrationIssues(registration) }
+}
+
+export function d0cRegistrationGateIssues(gate: D0cRegistrationGate): string[] {
+  const issues: string[] = []
+  if (!gate.formalRunEnabled) {
+    issues.push('A formal run is not enabled (MATERIALIZATION_D0C_PREREGISTRATION.formalRun.enabled is false). The formal mode exists for the D-0B-2 registration of the rule d0a2-v2 only; use --mode smoke.')
+  }
+  if (gate.registrationIssues.length > 0) issues.push(`The D-0C pre-registration is incomplete: ${gate.registrationIssues.join(' ')}`)
+  return issues
+}
+
 /**
- * Why a formal run must not start: D-0B never starts one (design 19.7), and Phase D-0B-2 registers the D-0C conditions without
- * enabling the formal mode (`MATERIALIZATION_D0C_PREREGISTRATION.formalRun.enabled` is false). D-0C measures them formally.
+ * Why a formal run must not start by its registration alone (`[]` = the registration lets it start; the formal start gate of
+ * `materializationFormal.ts` decides the rest). D-0B registered no formal condition (design 19.7), D-0B-2 registered the D-0C
+ * conditions with the formal mode disabled, and D-0C enabled it. A disabled or incomplete registration is refused.
  */
-export function materializationFormalRunIssues(): string[] {
-  return [
-    `Phase D-0B registers no formal condition: the d0a2-v2 conditions (${MATERIALIZATION_D0A2B_REGISTRATION_ITEMS.join(', ')} and ${MATERIALIZATION_D0C_EXTRA_REGISTRATION_ITEMS.join(', ')}) are pre-registered in D-0B-2 (MATERIALIZATION_D0C_PREREGISTRATION, formalRun.enabled false) and measured formally in D-0C, a separate task that enables the formal mode. Use --mode smoke.`,
-  ]
+export function materializationFormalRunIssues(registration: D0cRegistration = MATERIALIZATION_D0C_PREREGISTRATION): string[] {
+  return d0cRegistrationGateIssues(d0cRegistrationGate(registration))
 }
 
 /** How one structural candidate's materialization stage ended (design 4.6 / 9.6), with the D-0B Search-policy distinction. */
