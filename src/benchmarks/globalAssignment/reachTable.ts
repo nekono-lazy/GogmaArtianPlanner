@@ -28,9 +28,9 @@ import type { NormalizedSeed, RngEngine, RngPredictionSupportInput } from '../..
 import { evaluateSkillCondition } from '../../domain/target/skillConditionEvaluator'
 import { satisfiesIdealBonuses } from '../../domain/target/targetEvaluator'
 import {
-  GlobalAssignmentInvariantError,
+  GlobalAssignmentInvariantError, isReachOptionSetVersion, REACH_OPTION_SET_A1, REACH_OPTION_SET_A2,
   type ExcludedOwnedWeaponReason, type GlobalAssignmentContext, type InclusiveRange, type LayoutKey, type NormalArtianCounterId,
-  type ReachScanSummary, type ReachTable, type ReachTableResult, type ReachWindow, type SourceCandidate, type TargetReach,
+  type ReachOptionSetVersion, type ReachScanSummary, type ReachTable, type ReachTableResult, type ReachWindow, type SourceCandidate, type TargetReach,
 } from './types'
 
 /**
@@ -124,10 +124,15 @@ function classifyOwnedSource(target: TargetWeapon, weapon: OwnedWeapon, master: 
 /**
  * Scans every planning Target of the context inside `window`. Async only for the Research cancel /
  * yield seam; the result is deterministic for the same context, Engine and window.
+ *
+ * `optionSet` (A-2) names the option rule every later Phase applies to the table and is stored on it; the scan itself
+ * (predictions, positions, sources, summary) does not depend on it - the a2 continuations need no extra prediction
+ * (audit 3.4). It has no default: the caller names the option set it runs (the pre-A-2 protocols name `a1`).
  */
-export async function buildReachTable(context: GlobalAssignmentContext, engine: RngEngine, window: ReachWindow,
+export async function buildReachTable(context: GlobalAssignmentContext, engine: RngEngine, window: ReachWindow, optionSet: ReachOptionSetVersion,
   execution: ReachTableExecution = {}): Promise<ReachTableResult> {
   assertReachWindow(window)
+  if (!isReachOptionSetVersion(optionSet)) throw new RangeError(`optionSet must be ${REACH_OPTION_SET_A1} or ${REACH_OPTION_SET_A2} (got ${String(optionSet)}).`)
   const input = context.plannerInput
   const master = input.master
   const { baseSeed, skillCounter, gogmaCounter } = input.rngState
@@ -357,6 +362,7 @@ export async function buildReachTable(context: GlobalAssignmentContext, engine: 
   }
 
   const table: ReachTable = {
+    optionSet,
     originSkill, originGogma, originNormal,
     window: { ...window },
     scanned: { skill: skillRange, gogma: gogmaRange, normal: scannedNormal },

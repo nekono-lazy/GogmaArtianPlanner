@@ -14,7 +14,7 @@ import { decideStructuralWindowTransition, structuralStageOutcomeOf } from './st
 import {
   createGlobalAssignmentFixture, createTableEngine, IDEAL_BONUSES, IDEAL_FAMILIES_REORDERED_NORMAL, keepToIdealRanks, keepToLowRanks, OTHER_FAMILIES, ownedGogma, ownedNormal,
 } from './testFixture'
-import { GlobalAssignmentInvariantError, type ReachTable } from './types'
+import { GlobalAssignmentInvariantError, REACH_OPTION_SET_A1, type ReachTable } from './types'
 
 /*
  * Issue #154 Global Assignment Phase C-2 (design 6.3 / 6.4 / 8 / 13.1 Phase C): the structural candidate
@@ -50,7 +50,7 @@ async function scenario() {
   const input: PlannerInput = { ...fixture.input, ownedWeapons: owned }
   const created = createGlobalAssignmentContext(input, globalResearchDependencies(table.engine))
   if (created.kind !== 'context') throw new Error(created.detail)
-  const reach = await buildReachTable(created.context, table.engine, WINDOW)
+  const reach = await buildReachTable(created.context, table.engine, WINDOW, REACH_OPTION_SET_A1)
   if (reach.kind !== 'reach_table') throw new Error(JSON.stringify(reach))
   return { engine: table.engine, calls: table.calls, reach: reach.table, context: created.context, inputs: { table: reach.table, context: created.context, engine: table.engine } }
 }

@@ -6,7 +6,11 @@ import { globalResearchDependencies } from '../plannerGlobalOptimizationResearch
 import { compareLowerBoundTargetSet, compareObjectiveWithRootLowerBound, measureRootLowerBound, type RootLowerBoundReport } from './assignmentRootBound'
 import type { VerifiedUpperBound } from './assignmentTypes'
 import { createGlobalAssignmentContext } from './context'
-import { createGlobalAssignmentFixture, createTableEngine, IDEAL_BONUSES, IDEAL_FAMILIES_REORDERED_NORMAL, keepToIdealRanks, keepToLowRanks, OTHER_FAMILIES, type GlobalAssignmentFixtureOptions } from './testFixture'
+import { createGlobalAssignmentFixture, createTableEngine, IDEAL_BONUSES, IDEAL_FAMILIES_REORDERED_NORMAL, keepToIdealRanks, keepToLowRanks, OTHER_FAMILIES, ownedGogma, type GlobalAssignmentFixtureOptions } from './testFixture'
+import { enumerateReachOptions } from './reachOptions'
+import { buildReachTable } from './reachTable'
+import { collectStructuralCandidates } from './structuralSearch'
+import { REACH_OPTION_SET_A1, REACH_OPTION_SET_A2, type ReachOptionSetVersion } from './types'
 
 /*
  * Issue #154 Global Assignment Phase B-2A (design 10.2): the root lower bound stage over a GlobalAssignmentContext.
@@ -119,6 +123,34 @@ describe('Phase B-2A root lower bound stage', () => {
     expect(compareObjectiveWithRootLowerBound(10, { status: 'unmeasured', reason: 'timeout', detail: '' }).consistency).toBe('not_comparable')
     expect(compareObjectiveWithRootLowerBound(10, { status: 'not_applicable' } as unknown as RootLowerBoundReport).consistency).toBe('not_comparable')
   })
+
+  it('A-2: reads no option set - the a1 and a2 tables of one context compare their (equal) structural optimum with the same bound', async () => {
+    const { context, table, input } = await prepared()
+    // An owned Gogma of element a whose current Skills are Ideal: a2 adds its Reset Skills continuations.
+    const owned = ownedGogma('owned.skill.ideal', { seriesSkillId: SERIES_A })
+    const withOwned = { ...input, ownedWeapons: [owned] }
+    const created = createGlobalAssignmentContext(withOwned, globalResearchDependencies(table.engine))
+    if (created.kind !== 'context') throw new Error(created.detail)
+    const window = { normal: 2, gogma: 5, skill: 4 }
+    const optimumOf = async (optionSet: ReachOptionSetVersion) => {
+      const built = await buildReachTable(created.context, table.engine, window, optionSet)
+      if (built.kind !== 'reach_table') throw new Error(built.kind)
+      const options = built.table.targets.reduce((count, row) => count + [...enumerateReachOptions(row, built.table)].length, 0)
+      const found = collectStructuralCandidates({ table: built.table, context: created.context, engine: table.engine }, { nodeBudget: 1_000_000, mrvLookahead: 8, coverageDrivenOrdering: true }, 1_000_000)
+      if (found.status !== 'candidates_found' || found.completeness !== 'exhausted') throw new Error(`${optionSet}: ${found.status}`)
+      return { options, best: Math.min(...found.candidates.map(candidate => candidate.assignment.objective)), candidates: found.candidates.length }
+    }
+    const a1 = await optimumOf(REACH_OPTION_SET_A1)
+    const a2 = await optimumOf(REACH_OPTION_SET_A2)
+    expect(a2.options).toBeGreaterThan(a1.options)
+    expect(a2.candidates).toBeGreaterThan(a1.candidates)
+    expect(a2.best).toBe(a1.best)
+    // The bound itself is a function of the context and the Engine only (no table, no option set), so both compare alike.
+    const report = measureRootLowerBound(created.context, table.engine, 20, fixtureSkills, { now: clock() })
+    expect(compareObjectiveWithRootLowerBound(a2.best, report)).toEqual(compareObjectiveWithRootLowerBound(a1.best, report))
+    expect(compareObjectiveWithRootLowerBound(a2.best, report).consistency).not.toBe('inconsistent')
+    expect(context.planningTargets).toHaveLength(2)
+  }, 60_000)
 
   it('cannot be passed where the solver expects a VerifiedUpperBound', async () => {
     const { context, table } = await prepared()

@@ -9,7 +9,8 @@
  * candidate as failed, infeasible or excluded:
  *
  * - G1 (Search-policy shape): the lane-start Ideal Skill continuations of the candidate (`searchPolicyShapeOf()`,
- *   the same authority the materialization's pre-Search check uses), decided from the ReachTable alone.
+ *   the same authority the materialization's pre-Search check uses), decided from the ReachTable alone. Under the a2
+ *   option set (A-2) the same check also names the owned-Gogma current-Ideal lane continuations (G2).
  * - G3 (Bonus frontier collapse risk): for a `keep_from_source` / `reset_then_keep` option, the Reset positions
  *   inside the Keep chain whose Reset result has the chain's ordered family layout. The held-aware Bonus stream merges
  *   states of one depth that share their position and layout and keeps the latest Reset as the representative, so
@@ -27,9 +28,9 @@ import type { OwnedWeaponId, TargetWeaponId } from '../../domain/models/publicTy
 import { deriveTargetSatisfaction } from '../../domain/planner/targetSatisfaction'
 import type { PlannerAlternativeReservation } from '../../domain/search/alternative'
 import type { StructuralCandidate } from './coverageTypes'
-import { searchPolicyShapeOf } from './materializationShape'
-import type { CandidateInspection, MaterializationAttempt, MaterializationMethod, SearchPolicyShape, ShapeMismatchReason } from './materializationTypes'
-import type { GlobalAssignmentContext, InclusiveRange, LayoutKey, ReachOption, ReachTable, SourceCandidate } from './types'
+import { conversionSkillContinuationShapeOf, ownedGogmaContinuationShapeOf, searchPolicyShapeOf } from './materializationShape'
+import type { CandidateInspection, MaterializationAttempt, MaterializationMethod, OwnedGogmaContinuationShape, SearchPolicyShape, ShapeMismatchReason } from './materializationTypes'
+import { REACH_OPTION_SET_A1, type GlobalAssignmentContext, type InclusiveRange, type LayoutKey, type ReachOption, type ReachTable, type SourceCandidate } from './types'
 
 const ascending = (values: Iterable<number>) => [...values].sort((left, right) => left - right)
 
@@ -76,16 +77,36 @@ export function diagnoseSearchPolicyShapes(candidate: StructuralCandidate, table
   return { shapes, firstOrderIndex: shapes[0]?.orderIndex ?? null }
 }
 
+/** A-2: the owned-Gogma current-Ideal lane continuations of an a2 candidate (G2), per continued lane. */
+export interface OwnedGogmaContinuationCounts {
+  /** Options with at least one continued lane. */
+  options: number
+  /** S2: options whose current Ideal Skills are reset. */
+  skill: number
+  /** B1 / B2: options whose current Ideal Bonuses are amended. */
+  bonus: number
+}
+
 /** The lane-start Ideal continuation options of a candidate (audit 9.1 (iv)). */
 export interface ContinuationOptionCounts {
-  /** S1 (design 19.3 G1): conversion continuations, the only kind the current Phase A option set lists. */
+  /** S1 (design 19.3 G1): conversion continuations (the one kind the a1 option set lists). */
   laneStartIdealSkillContinuation: number
-  /** S2 / B1 / B2 (design 19.3 G2): the current Phase A never generates an owned-Gogma continuation, so none can be observed here. */
-  ownedGogmaContinuation: 'not_generated_by_current_phase_a'
+  /**
+   * S2 / B1 / B2 (design 19.3 G2): for an a1 table the literal D-0B value - the a1 option set never generates an owned-Gogma
+   * continuation, so none can be observed - and for an a2 table the counts.
+   */
+  ownedGogmaContinuation: 'not_generated_by_current_phase_a' | OwnedGogmaContinuationCounts
 }
 
 export function countContinuationOptions(candidate: StructuralCandidate, table: ReachTable): ContinuationOptionCounts {
-  return { laneStartIdealSkillContinuation: diagnoseSearchPolicyShapes(candidate, table).shapes.length, ownedGogmaContinuation: 'not_generated_by_current_phase_a' }
+  const options = [...candidate.assignment.chosen.values()]
+  const laneStartIdealSkillContinuation = options.filter(option => conversionSkillContinuationShapeOf(option, table) !== null).length
+  if (table.optionSet === REACH_OPTION_SET_A1) return { laneStartIdealSkillContinuation, ownedGogmaContinuation: 'not_generated_by_current_phase_a' }
+  const owned = options.map(option => ownedGogmaContinuationShapeOf(option, table)).filter((shape): shape is OwnedGogmaContinuationShape => shape !== null)
+  return {
+    laneStartIdealSkillContinuation,
+    ownedGogmaContinuation: { options: owned.length, skill: owned.filter(shape => shape.skill !== null).length, bonus: owned.filter(shape => shape.bonus !== null).length },
+  }
 }
 
 // ------------------------------------------------------------------------------------------------ G3
@@ -384,7 +405,8 @@ export function summarizeInspections(inspections: readonly CandidateInspection[]
  * `operatesSource()`: a Skill or Bonus requirement other than `none` on that weapon.
  *
  * - `zero_operation_ideal`: t's own option is `none / none` on a weapon of `W_t` (the ordinary zero-operation case, not G4)
- * - `g4_iii`: t's own option operates a weapon of `W_t` (a both-axis Ideal source; the current Phase A never generates it)
+ * - `g4_iii`: t's own option operates a weapon of `W_t` (a both-axis Ideal source; neither the a1 nor the a2 option set
+ *   generates it - a2 keeps `none / none` on such a source, A-2's G4-iii rule)
  * - `g4_i`: otherwise, at least one weapon of `W_t` is operated by no option of the candidate (unreferenced, or only another
  *   Target's zero-operation source). Under the audit's premises P2 / P3 that weapon never leaves t's inventory nor goes in flight,
  *   so t keeps `hasIdeal` for the whole run and its own Entry may never be committed
@@ -415,7 +437,11 @@ export interface PlannerStartIdealDiagnostics {
   /** Planning Targets with `hasIdeal` at Planner start (a start state, never a permanent completion). */
   plannerStartIdealTargets: number
   counts: Record<PlannerStartIdealCategory, number>
-  /** G4-iii needs a continuation option on a both-axis Ideal source, which the current Phase A never generates (design 19.3 G2). */
+  /**
+   * G4-iii needs a continuation option on a both-axis Ideal source, which Phase A never generates (design 19.3 G2): a1 lists no
+   * owned-Gogma continuation at all, and a2 excludes exactly this one (A-2 G4-iii, `sourceLaneAdmission()`). The D-0B literal
+   * stays true under both option sets.
+   */
   g4iiiObservability: 'not_generated_by_current_phase_a'
   targets: PlannerStartIdealTarget[]
 }

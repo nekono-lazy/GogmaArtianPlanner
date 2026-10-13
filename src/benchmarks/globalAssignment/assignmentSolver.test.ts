@@ -13,7 +13,7 @@ import { createGlobalAssignmentContext } from './context'
 import { reachOptionKey } from './reachOptions'
 import { buildReachTable } from './reachTable'
 import { createGlobalAssignmentFixture, createTableEngine, IDEAL_BONUSES, IDEAL_FAMILIES_REORDERED_NORMAL, keepToIdealRanks, keepToLowRanks, layoutKeyOf, OTHER_FAMILIES, ownedGogma } from './testFixture'
-import type { ReachTable, ReachWindow } from './types'
+import { REACH_OPTION_SET_A1, type ReachTable, type ReachWindow } from './types'
 
 /*
  * Issue #154 Global Assignment Phase B-1 (design 6.3 / 6.4 / 6.5 / 10.1 / 12 / 13.1 Phase B): the
@@ -484,7 +484,7 @@ describe('Phase B-1 on a Phase A ReachTable', () => {
     const input = { ...fixture.input, ownedWeapons: [...fixture.input.ownedWeapons, ...owned] }
     const contextResult = createGlobalAssignmentContext(input, globalResearchDependencies(engine.engine))
     if (contextResult.kind !== 'context') throw new Error(contextResult.detail)
-    const tableResult = await buildReachTable(contextResult.context, engine.engine, WINDOW)
+    const tableResult = await buildReachTable(contextResult.context, engine.engine, WINDOW, REACH_OPTION_SET_A1)
     if (tableResult.kind !== 'reach_table') throw new Error(JSON.stringify(tableResult))
     const table = tableResult.table
     const planningTargets: readonly PlanningTargetPriority[] = contextResult.context.planningTargets

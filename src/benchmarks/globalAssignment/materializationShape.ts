@@ -17,7 +17,10 @@ import { createPlannerRouteUnitPlans } from '../../domain/planner/plannerRoutePr
 import type { RngEngine } from '../../domain/rng/rngEngine'
 import type { RequiredPositions } from './assignmentTypes'
 import type { ExpectedRouteShape } from './coverageTypes'
-import { GlobalAssignmentMaterializationError, type SearchPolicyShape, type ShapeMatchResult, type ShapeMismatchReason } from './materializationTypes'
+import {
+  GlobalAssignmentMaterializationError,
+  type ConversionSkillContinuationShape, type OwnedGogmaContinuationShape, type SearchPolicyShape, type ShapeMatchResult, type ShapeMismatchReason,
+} from './materializationTypes'
 import type { InclusiveRange, ReachOption, ReachTable } from './types'
 
 export type ShapeStream = 'skill' | 'gogma' | 'normal'
@@ -114,20 +117,55 @@ export function shapeSearchExtent(shape: ExpectedRouteShape, origins: StreamOrig
   return extent
 }
 
+function rowOf(option: ReachOption, table: ReachTable) {
+  const row = table.targets.find(value => value.targetWeaponId === option.targetWeaponId)
+  if (!row) throw new GlobalAssignmentMaterializationError('invalid_shape', option.targetWeaponId, `Target ${option.targetWeaponId} has no ReachTable row.`)
+  return row
+}
+
 /**
- * Design 19.3 G1 (Phase D-0B): the Search-policy shape of one option, or null. A `conversion (c, s*)` with
+ * Design 19.3 G1 (Phase D-0B): the conversion continuation of one option, or null. A `conversion (c, s*)` with
  * `c < s*` whose conversion position `c` is one of the Target's Ideal Skill positions in the ReachTable (the same
  * `evaluateSkillCondition()` judgement the Search's lane-start check reads; conversion and Reset Skills draw the same
  * Skills at one position) is never returned by the Production Search, whose Route base with an Ideal lane-start Skill
  * opens no Reset Skills channel. Decided from the ReachTable alone: no prediction, no Search, no reservation.
  */
-export function searchPolicyShapeOf(option: ReachOption, table: ReachTable): SearchPolicyShape | null {
+export function conversionSkillContinuationShapeOf(option: ReachOption, table: ReachTable): ConversionSkillContinuationShape | null {
   const skill = option.skillRequired
   if (skill.kind !== 'conversion' || skill.conversionPosition >= skill.finalPosition) return null
-  const row = table.targets.find(value => value.targetWeaponId === option.targetWeaponId)
-  if (!row) throw new GlobalAssignmentMaterializationError('invalid_shape', option.targetWeaponId, `Target ${option.targetWeaponId} has no ReachTable row.`)
-  if (!row.skill.idealPositions.includes(skill.conversionPosition)) return null
+  if (!rowOf(option, table).skill.idealPositions.includes(skill.conversionPosition)) return null
   return { policy: 'lane_start_ideal_skill_continuation', stream: 'skill', conversionPosition: skill.conversionPosition, finalPosition: skill.finalPosition }
+}
+
+/**
+ * A-2 G2: the owned-Gogma current-Ideal lane continuation of one option, or null. The source's current Skills / Bonuses (its
+ * Route base's lane start) are Ideal for the Target - the ReachTable's `currentSkillIdeal` / `currentBonusIdeal`, judged by the
+ * same `evaluateSkillCondition()` / `satisfiesIdealBonuses()` the Search's lane-start check reads - and the option still
+ * operates that lane (S2: `reset_skills`; B1 / B2: `reset`, `keep_from_source` or `reset_then_keep`). The Production Search
+ * opens no channel on such a lane, so neither design 9.1 nor 9.2 delivers it. Decided from the option and its row alone.
+ */
+export function ownedGogmaContinuationShapeOf(option: ReachOption, table: ReachTable): OwnedGogmaContinuationShape | null {
+  const source = option.source
+  if (source.kind !== 'owned_gogma') return null
+  rowOf(option, table)
+  const skillRequired = option.skillRequired
+  const bonusRequired = option.bonusRequired
+  const skill = source.currentSkillIdeal && skillRequired.kind === 'reset_skills' ? { finalPosition: skillRequired.finalPosition } : null
+  const bonus = source.currentBonusIdeal && bonusRequired.kind !== 'none'
+    ? { requirement: bonusRequired.kind, resetPosition: bonusRequired.kind === 'reset_then_keep' ? bonusRequired.resetPosition : null, finalPosition: bonusRequired.finalPosition }
+    : null
+  if (skill === null && bonus === null) return null
+  return { policy: 'lane_start_ideal_owned_gogma_continuation', ownedWeaponId: source.ownedWeaponId, skill, bonus }
+}
+
+/**
+ * The Search-policy shape of one option (design 19.3 G1, A-2 G2), or null: the conversion continuation first, then the
+ * owned-Gogma continuation (an option is at most one of them: G1 needs a Normal source, G2 an owned Gogma). The rule
+ * `d0a-v1` classifies it `not_executed(search_policy_shape)` before any Search; the G1 value and its serialization are the
+ * D-0B ones. A G2 shape exists only in an a2 table's options.
+ */
+export function searchPolicyShapeOf(option: ReachOption, table: ReachTable): SearchPolicyShape | null {
+  return conversionSkillContinuationShapeOf(option, table) ?? ownedGogmaContinuationShapeOf(option, table)
 }
 
 /** The Planner-start origins of a shape's streams (design 9.1). */

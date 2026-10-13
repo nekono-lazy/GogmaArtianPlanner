@@ -19,23 +19,32 @@
  * one earlier eligible Reset reaches), so the Reset / Keep position arrays and the layouts are read and
  * no `(g1, g*)` pair is ever built.
  *
+ * A lane that admits `none` (`sourceLaneAdmission()`: an owned Gogma's current-Ideal lane, under a1 alone and
+ * under a2 before its continuations) ends at the stream origin, the smallest end any option can have, so its
+ * operations' finals are never read: the a2 continuations add options but never lower a minimal end, and the
+ * bound is the same function of the partial assignment for an a1 and an a2 table (audit 5.4 corollary 2).
+ *
  * The option product is never materialized here. This module reads the partial assignment's resources
  * only; it never enumerates options, never calls the feasibility filter and never cuts a branch itself
  * (review R1: `resourceFeasibleOptions -> LB -> pruning`, one direction). It is not the root lower bound
  * of the Phase 2-A.5 relaxation module (design 10.2), which Phase B-1 does not integrate.
  */
 import type { PartialResourceAssignment } from './assignmentTypes'
-import { bonusRequirementIsNone, createResetThenKeepIndex, keepFromSourcePositions, skillRequirementBlocks, sourceResourceKey, type ResetThenKeepIndex } from './reachOptions'
+import {
+  createResetThenKeepIndex, keepFromSourcePositions, laneAdmitsNone, skillRequirementBlocks, sourceLaneAdmission, sourceResourceKey, type ResetThenKeepIndex,
+} from './reachOptions'
 import type { NormalArtianCounterId, ReachTable, SourceCandidate, TargetReach } from './types'
 
 export interface TargetStreamMenuSource {
   source: SourceCandidate
   key: string
-  /** Ascending final Skill positions this source can end at; `null` when its only Skill requirement is `none`. */
-  skillFinals: readonly number[] | null
+  /** Whether `none` is one of its Skill requirements (then its minimal Skill end is the origin and `skillFinals` is not read). */
+  skillNone: boolean
+  /** Ascending final Skill positions of its Skill operations (empty when its Skill lane admits `none` only). */
+  skillFinals: readonly number[]
   /** Ascending `keep_from_source` final positions (empty when Keep is unsupported for its layout). */
   keepFinals: readonly number[]
-  /** Whether its only Bonus requirement is `none`. */
+  /** Whether `none` is one of its Bonus requirements (then its minimal Gogma end is the origin and no Bonus final is read). */
   bonusNone: boolean
 }
 
@@ -54,12 +63,14 @@ export function createTargetStreamMenu(target: TargetReach, table: ReachTable, r
   // The conversion finals are the same array for every Normal source, so `firstUnused` memoizes across them.
   let conversionFinals: readonly number[] | null = null
   const sources = target.sources.map((source): TargetStreamMenuSource => {
-    const blocks = skillRequirementBlocks(target, source, table.originSkill)
-    let skillFinals: readonly number[] | null
-    if (blocks.kind === 'none') skillFinals = null
-    else if (blocks.kind === 'reset_skills') skillFinals = blocks.finalPositions
-    else skillFinals = conversionFinals ??= blocks.finalPositions
-    return { source, key: sourceResourceKey(source), skillFinals, keepFinals: keepFromSourcePositions(target, source), bonusNone: bonusRequirementIsNone(source) }
+    const blocks = skillRequirementBlocks(target, source, table)
+    let skillNone: boolean
+    let skillFinals: readonly number[]
+    if (blocks.kind === 'none') { skillNone = true; skillFinals = [] }
+    else if (blocks.kind === 'reset_skills') { skillNone = blocks.leadingNone; skillFinals = blocks.finalPositions }
+    else { skillNone = false; skillFinals = conversionFinals ??= blocks.finalPositions }
+    const bonusNone = laneAdmitsNone(sourceLaneAdmission(source, table.optionSet).bonus)
+    return { source, key: sourceResourceKey(source), skillNone, skillFinals, keepFinals: keepFromSourcePositions(target, source), bonusNone }
   })
   // The finals that at least one earlier eligible Reset really reaches, ascending: the compact index derives them from the
   // per-layout Reset positions and the Keep-Ideal positions alone, never by enumerating the (g1, g*) pairs.
@@ -101,7 +112,7 @@ export function minimalStreamEnds(menu: TargetStreamMenu, partial: PartialResour
   const usedNormal = counterId === null ? null : partial.usedNormalPositions.get(counterId) ?? null
   for (const entry of menu.sources) {
     if (partial.usedSources.has(entry.key)) continue
-    if (entry.skillFinals === null) skill = Math.min(skill, table.originSkill)
+    if (entry.skillNone) skill = Math.min(skill, table.originSkill)
     else {
       const position = first(entry.skillFinals, partial.usedSkillPositions)
       if (position !== null) skill = Math.min(skill, position + 1)

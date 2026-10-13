@@ -1203,8 +1203,73 @@ Engineの性質（tierを読まない）に依存する。実Export（Production
 
 ### 19.8 A-2 / D-0B-2へ引き継ぐ事項
 
-- A-2: G2の継続optionをPhase Aに足し、`CONTINUATION_SHAPE_DETECTORS` / `ContinuationShape` に検出器を足す。G4-iiiの扱いはA-2で決める
+- A-2: G2の継続optionをPhase Aに足し、`CONTINUATION_SHAPE_DETECTORS` / `ContinuationShape` に検出器を足す。G4-iiiの扱いはA-2で決める（実施。§20）
 - D-0B-2: 実Exportでの `--rule d0a2-v2` 再smoke、shape gate・shape budget・envelope・方式選択規則・独立検証の既定（`every_shape_constrained_materialization`）の
   事前登録（`MATERIALIZATION_D0A2B_REGISTRATION_ITEMS`）。予測規模（上界）と実測（生成state数・work数・予測回数）の比較から値を決める
 - D-0B-2: G3下側の変種を `d0a-v1` のrun記録にも出すか（19.2の8）、操作種別の別解（19.5）を `d0a-v1` / `d0a2-v2` の比較でどう数えるか
 - D-1: materializedはPlanner未検証であり、Production PlannerとTrace Replay、fresh processのordinary Plannerによる確認が残る（§9.3の7）
+
+## 20. A-2 実装記録（G2の継続形と、その形状制約付きmaterialization）
+
+Refs #154。基準main `d7f6f9a`（PR #249 merged）。option集合 `a2`（所持巨戟の現在Ideal laneの継続option、G2）の追加と、それに伴うPhase Dの継続形判定を実装した。
+option規則・G4-iiiの判断・Phase B / Cの変更と総当たりの結果は [設計](PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md) §19.8、監査側の整理は監査 §14にある。
+2aのSearch seam、方式 `d0a2-v2` の契約（§5 / §10 / §11）、独立検証器、G3の扱い、materialization順序、D-0Bの実測RESULTは変更していない
+（Production changed files = `[]`）。実Exportの再smoke、formal run、D-1のPlanner検証は行っていない。
+
+### 20.1 継続形の判定（§6.2 / §11）
+
+| 判定 | 関数 | 条件 | 値 |
+| --- | --- | --- | --- |
+| G1 | `conversionSkillContinuationShapeOf()`（旧 `searchPolicyShapeOf()` の本体） | `conversion (c, s*)`、c < s*、cがIdeal Skill位置 | `{ policy: 'lane_start_ideal_skill_continuation', stream: 'skill', conversionPosition, finalPosition }`（D-0Bと同じ値・serialization） |
+| G2 | `ownedGogmaContinuationShapeOf()`（新規） | 所持巨戟で、`currentSkillIdeal` かつ `skillRequired = reset_skills`（S2）、または `currentBonusIdeal` かつ `bonusRequired ≠ none`（B1 / B2） | `{ policy: 'lane_start_ideal_owned_gogma_continuation', ownedWeaponId, skill: { finalPosition } \| null, bonus: { requirement, resetPosition, finalPosition } \| null }`（継続したlaneを別々に記録） |
+
+- `CONTINUATION_SHAPE_DETECTORS = [conversionSkillContinuationShapeOf, ownedGogmaContinuationShapeOf]`、`ContinuationShape = SearchPolicyShape`（両者の和型）。
+  1つのoptionは高々一方に当たる（G1はNormal source、G2は所持巨戟）
+- `d0a2-v2`: G2も継続形として `continuation_shape_constrained_only`（`shape_constrained` だけ）。射影起点Candidate Searchへ先に回さない。Target記録の
+  `continuation` / `policyShape` にG2の値が残る
+- `d0a-v1`: `searchPolicyShapeOf()` が同じ2つを問うので、precheckありのrunでG2は `not_executed(search_policy_shape)`（候補分類 `not_executed_search_policy`、
+  §10.3の役割 `method_extension`）。G1の分類・identity・serializationは変わらない。a1 tableにはG2のoptionが無いので、A-2以前の入力の `d0a-v1` 記録は不変
+  （golden一致）。a2の入力では候補列がa1と異なり得るので、旧D-0Bと同じ候補列になるとは限らない（旧D-0Bの実測記録は書き換えない）
+
+### 20.2 G2 end-to-end（`g2ContinuationMaterialization.test.ts`、合成fixture・table Engine）
+
+各ケースで、a2のPhase Aがoptionを列挙し（a1は列挙しない）、Phase C（C-1検査とrequired-only replay）が `ExpectedRouteShape` を作り（a1では `invalid_option`）、
+`d0a2-v2` が `shape_constrained` だけで最初の配送をmaterializeし、`matchExpectedShape()` が一致し、`verifyShapeConstrainedRoute()` が全operation（chainを含む）を
+再予測して通り、required位置が形と一致し、正式reservationがseamへ改変なく渡り、2回の実行が同じ結果になり、`d0a-v1` が `not_executed(search_policy_shape)` に
+分類することを確認した。
+
+| ケース | option | materializeしたRoute | required |
+| --- | --- | --- | --- |
+| S2（Skill Ideal → Reset Skills継続） | `reset_skills(9)` + `reset(12)` | `R10,R11,R12,S7,S8,S9` | Skill {9}、Gogma {12} |
+| B1（Bonus Ideal → Reset継続） | `reset_skills(8)` + `reset(12)` | `R10,R11,R12,S7,S8` | {8}、{12} |
+| B2（Bonus Ideal → Keep継続） | `reset_skills(8)` + `keep_from_source(13)` | `K10,K11,K12,K13,S7,S8` | {8}、{13} |
+| B2（Bonus Ideal → Reset→Keep継続） | `reset_skills(8)` + `reset_then_keep(11, 14)` | `R10,R11,K12,K13,K14,S7,S8` | {8}、{11, 14} |
+| 複合（Skill Ideal、Bonus非Ideal） | `reset_skills(9)` + `keep_from_source(13)` | `K10,K11,K12,K13,S7,S8,S9` | {9}、{13} |
+| 複合（Bonus Ideal、Skill非Ideal） | `reset_skills(9)` + `reset_then_keep(10, 12)` | `R10,K11,K12,S7,S8,S9` | {9}、{10, 12} |
+| held位置を跨ぐ継続Route | 先行Target aの `reset(12)` の後、別属性Target bの `reset_skills(8)` + `reset_then_keep(11, 14)`（Bonus Ideal） | bはaのrequired位置12を操作せずに跨ぐ（非連続形） | {8}、{11, 14} |
+| 保護済み両軸Ideal source | Phase Aは `none / none` だけ。継続optionはC-1が拒否（保護） | 操作0（`operations = []`）。操作する形は前提検査で `source_protected` | — |
+| 未保護の両軸Ideal source | Phase Aは `none / none` だけ（G4-iii）。継続optionはC-1が拒否 | 操作0 | — |
+| 必要なsupportが無い | Keep supportが無いlayoutからはKeep継続optionを列挙しない。Phase A後にEngineのSkill capabilityを落とすと、S2の形は `unsupported(capability_unavailable)` | — | — |
+
+S2・B1・held跨ぎの3ケースは、materializeしたEntryだけをBuild ListにしてProduction scheduler（`runPlannerDeterministicSchedule()`）、Trace Replay、
+`createProductionPlanWithObserver()` を小規模fixtureで実行し、completed・Conflict 0・Trace Replay validであること、継続Routeの全operationがStepになる
+（Route途中でIdeal状態を通過してもTargetを早期完成させない）ことを確認した。**これはこのfixtureでの観測であり、D-1のPlanner検証済みではない。**
+
+なお held跨ぎケースは、初めに同じIdeal条件のTarget a / c で組んだところ、一方のreserveで両方が充足するcross satisfaction（設計 §15.1）により片方のEntryだけが
+選ばれた。G2とは無関係なので、別属性のTarget bへ替えた（Skill / Gogma Counterは全武器で共有なので、held跨ぎの条件は同じ）。
+
+### 20.3 補題（§5.5）のa2 property test（`shapeMaterializationLemma.test.ts`）
+
+`randomShapeScenarioSpec()` の300 seedをa2で走査し、Phase C-2のstructural candidate（各seed最大60件）のうちG2 optionを含むものを最大3件と、そのseedの先頭候補を、
+形状制約付き方式だけで順にmaterializeした。G2を含む候補97件（G2のTarget 97件）を含むすべてで、正式reservation、前提違反なし、最初の配送の受理、独立検証の通過、
+required位置の一致、決定性、規則 `d0a2-v2` 全体での `all_materialized` を確認し、G2のTargetはすべて `continuation_shape_constrained_only` だった。a1での
+既存のproperty test（§19.4）は変更せずに通る。補題は依然として合成fixtureで反例が無いことの確認であり、一般の証明ではない。
+
+### 20.4 D-0B-2へ引き継ぐ事項
+
+- option集合version: `global-assignment-reach-options:a2` を `optionSetVersion` に登録する（runnerは `--option-set a2`。条件 `reachOptionSet` として記録され、
+  無い記録はa1）。a1との比較は条件差として扱う
+- a2での実Export再smokeでは、G2を含む候補の頻度、`countContinuationOptions()` の `{ options, skill, bonus }`、形状制約付き方式の予測規模と実測を記録し、
+  gate / budgetの登録根拠にする（本PRは値を決めない）
+- G4-i / G4-iiはD-0Bと同じく診断だけで、成否はPhase D'（D-1）で判定する。G4-iiiはa2でも生成されない（`g4iiiObservability` はそのまま事実）
+- 本PRのPlanner実行は小規模fixtureの観測であり、G2を含む実候補のPlanner成立はD-1で確認する

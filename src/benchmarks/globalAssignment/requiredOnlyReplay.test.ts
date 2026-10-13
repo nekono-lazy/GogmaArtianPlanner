@@ -11,7 +11,7 @@ import {
   createGlobalAssignmentFixture, createTableEngine, FIXTURE_GOGMA_ORIGIN, FIXTURE_NORMAL_COUNTER_ID, FIXTURE_NORMAL_ORIGIN, FIXTURE_SKILL_ORIGIN,
   IDEAL_BONUSES, IDEAL_FAMILIES_REORDERED_NORMAL, keepToIdealRanks, keepToLowRanks, layoutKeyOf, OTHER_FAMILIES, ownedGogma, ownedNormal,
 } from './testFixture'
-import { GlobalAssignmentInvariantError, type BonusRequirement, type ReachOption, type SkillRequirement, type StreamEnd } from './types'
+import { GlobalAssignmentInvariantError, REACH_OPTION_SET_A1, type BonusRequirement, type ReachOption, type SkillRequirement, type StreamEnd } from './types'
 
 /*
  * Issue #154 Global Assignment Phase A (design 5.3): the required-only replay re-predicts the required
@@ -54,7 +54,7 @@ async function prepared(table = engine()) {
   const input: PlannerInput = { ...fixture.input, ownedWeapons: owned }
   const result = createGlobalAssignmentContext(input, globalResearchDependencies(table.engine))
   if (result.kind !== 'context') throw new Error(result.detail)
-  const reach = await buildReachTable(result.context, table.engine, WINDOW)
+  const reach = await buildReachTable(result.context, table.engine, WINDOW, REACH_OPTION_SET_A1)
   if (reach.kind !== 'reach_table') throw new Error(JSON.stringify(reach))
   const a = reach.table.targets[0]!
   const options = [...enumerateReachOptions(a, reach.table)]

@@ -17,7 +17,7 @@ import type { MaterializationSettings, SearchScaleGate } from './materialization
 import { buildReachTable } from './reachTable'
 import { buildStructuralCandidate } from './structuralCandidate'
 import { createGlobalAssignmentFixture, createTableEngine, IDEAL_BONUSES, keepToIdealRanks, keepToLowRanks, OTHER_FAMILIES, ownedGogma, type TableEngine, type TableEngineSpec } from './testFixture'
-import type { BonusRequirement, GlobalAssignmentContext, ReachOption, ReachTable, ReachWindow, SkillRequirement, SourceCandidate } from './types'
+import { REACH_OPTION_SET_A1, type BonusRequirement, type GlobalAssignmentContext, type ReachOption, type ReachOptionSetVersion, type ReachTable, type ReachWindow, type SkillRequirement, type SourceCandidate } from './types'
 
 export const SERIES_IDEAL = 'series_skill.fixture.a'
 export const ELEMENT_A = 'element.fixture.a'
@@ -48,6 +48,8 @@ export interface MaterializationScenarioSpec {
   /** A support answer override (`null` keeps the capability answer); it may read mutable test state. D-0A-2b. */
   support?: TableEngineSpec['support']
   capabilities?: TableEngineSpec['capabilities']
+  /** The ReachTable's option set (A-2); a1 by default, the option set every pre-A-2 scenario (and the d0a-v1 golden) used. */
+  optionSet?: ReachOptionSetVersion
 }
 
 export interface MaterializationScenario {
@@ -231,7 +233,7 @@ export async function materializationScenario(spec: MaterializationScenarioSpec)
   }
   const created = createGlobalAssignmentContext(input, globalResearchDependencies(table.engine))
   if (created.kind !== 'context') throw new Error(created.detail)
-  const reach = await buildReachTable(created.context, table.engine, spec.window)
+  const reach = await buildReachTable(created.context, table.engine, spec.window, spec.optionSet ?? REACH_OPTION_SET_A1)
   if (reach.kind !== 'reach_table') throw new Error(JSON.stringify(reach))
   const context = created.context
   const reachTable = reach.table

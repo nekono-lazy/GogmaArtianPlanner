@@ -4,8 +4,10 @@ import { derivePlannerAlternativeReservation } from '../../domain/planner/altern
 import { emptyPlannerAlternativeReservation } from '../../domain/search/alternative'
 import { buildShapeConstrainedRequest, executeShapeConstrainedRequest, materializeStructuralCandidate } from './materialize'
 import { materializationScenario, scenarioConversionFallback, scenarioHeldCrossing, scenarioSkillDependency, TARGET } from './materializationTestFixture'
-import { searchPolicyShapeOf, shapeOwnPositions } from './materializationShape'
+import { ownedGogmaContinuationShapeOf, searchPolicyShapeOf, shapeOwnPositions } from './materializationShape'
 import { GlobalAssignmentMaterializationError } from './materializationTypes'
+import type { ShapeMethodSelection } from './shapeMaterializationTypes'
+import { REACH_OPTION_SET_A2 } from './types'
 import { checkMinimalRoutePremises } from './shapeMaterializationRequest'
 import { randomShapeScenarioSpec, shapeInputs } from './shapeMaterializationTestFixture'
 import { collectStructuralCandidates } from './structuralSearch'
@@ -102,6 +104,48 @@ describe('Phase D-0A-2b minimal Route lemma (design 5.5): property test over see
     expect(seen.with_held ?? 0).toBeGreaterThanOrEqual(300)
     expect(seen.g1_continuation ?? 0).toBeGreaterThanOrEqual(10)
     expect(seen.three_targets ?? 0).toBeGreaterThanOrEqual(50)
+  }, 300_000)
+})
+
+describe('A-2: the minimal Route lemma over the a2 option set (G2 continuation candidates)', () => {
+  it('materializes every Target of the structural candidates holding an owned-Gogma continuation, by the first delivery, deterministically', async () => {
+    const seen: Record<string, number> = {}
+    let g2Candidates = 0
+    let g2Targets = 0
+    for (const seed of SEEDS) {
+      const scene = await materializationScenario({ ...randomShapeScenarioSpec(seed), optionSet: REACH_OPTION_SET_A2 })
+      const collected = collectStructuralCandidates({ table: scene.table, context: scene.context, engine: scene.engine }, { ...STRUCTURAL, nodeBudget: 20_000 }, 60)
+      if (collected.status === 'no_structural_candidate') continue
+      if (collected.status !== 'candidates_found' && collected.status !== 'search_incomplete') throw new Error(`seed ${seed}: ${collected.status}`)
+      const continuationOptions = (candidate: StructuralCandidate) => [...candidate.assignment.chosen.values()].filter(option => ownedGogmaContinuationShapeOf(option, scene.table) !== null)
+      const withG2 = collected.candidates.filter(candidate => continuationOptions(candidate).length > 0).slice(0, 3)
+      if (withG2.length === 0) continue
+      // The seed's first candidate too (the a2 value order and MRV differ from a1 on these tables).
+      for (const candidate of [collected.candidates[0]!, ...withG2.filter(value => value !== collected.candidates[0])]) {
+        const g2 = continuationOptions(candidate)
+        if (g2.length > 0) {
+          g2Candidates += 1
+          g2Targets += g2.length
+          // Phase C replayed every continuation option (required-only RNG replay): its shape is the replayed final weapon.
+          for (const option of g2) expect(candidate.expectedShapes.find(shape => shape.targetWeaponId === option.targetWeaponId)!.option.verification).toBe('rng_replayed')
+        }
+        const first = await materializeByShapeAlone(scene, candidate, seen)
+        const again = await materializeByShapeAlone(scene, structuredClone(candidate), {})
+        expect(JSON.stringify(again), `seed ${seed}`).toBe(JSON.stringify(first))
+        const run = await materializeStructuralCandidate(candidate, shapeInputs(scene))
+        expect(run.kind === 'materialization' ? run.outcome : run, `seed ${seed}`).toEqual({ kind: 'all_materialized' })
+        if (run.kind !== 'materialization') continue
+        // Each G2 Target took the continuation rule; d0a-v1 classifies the same candidate's first G2 shape as a Search-policy shape.
+        for (const option of g2) {
+          const record = run.targets.find(target => target.targetWeaponId === option.targetWeaponId)!
+          expect((record.selection as ShapeMethodSelection).rule, `seed ${seed}`).toBe('continuation_shape_constrained_only')
+          expect(record.attempts.map(attempt => attempt.method)).toEqual(['shape_constrained'])
+        }
+      }
+    }
+    expect(g2Candidates).toBeGreaterThanOrEqual(40)
+    expect(g2Targets).toBeGreaterThanOrEqual(40)
+    for (const key of ['skill:reset_skills', 'bonus:reset', 'bonus:keep', 'base:owned_gogma']) expect(seen[key] ?? 0, key).toBeGreaterThanOrEqual(10)
   }, 300_000)
 })
 

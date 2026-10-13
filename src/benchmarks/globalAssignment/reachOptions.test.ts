@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { enumerateReachOptions, reachOptionKey, reachOptionObjective, sourceResourceKey, takeReachOptions } from './reachOptions'
-import type { ReachOption, ReachTable, SourceCandidate, TargetReach } from './types'
+import { REACH_OPTION_SET_A1, type ReachOption, type ReachTable, type SourceCandidate, type TargetReach } from './types'
 
 /*
  * Issue #154 Global Assignment Phase A (design 4.3 / 5.2 / 5.4): lazy, deterministic option
- * enumeration over a hand-built ReachTable row. No Engine is involved here: the table is the input.
+ * enumeration over a hand-built ReachTable row, under the a1 option set (the A-2 a2 rules are
+ * `reachOptionsA2.test.ts`). No Engine is involved here: the table is the input.
  */
 const COUNTER = 'w:8'
 const table: ReachTable = {
+  optionSet: REACH_OPTION_SET_A1,
   originSkill: 7, originGogma: 10, originNormal: { [COUNTER]: 4 },
   window: { skill: 4, gogma: 6, normal: 3 },
   scanned: { skill: { from: 7, to: 11 }, gogma: { from: 10, to: 15 }, normal: { [COUNTER]: { from: 4, to: 6 } } },

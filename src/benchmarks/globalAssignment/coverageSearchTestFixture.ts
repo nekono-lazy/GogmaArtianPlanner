@@ -6,7 +6,7 @@
  */
 import { bruteForceAssignments, COUNTER_A, gogmaSource, handBuiltReachTable, newNormalSource, normalSource, type BruteAssignment, type HandBuiltTargetSpec } from './assignmentTestFixture'
 import type { PlanningTargetPriority } from './assignmentTypes'
-import type { ReachOption, ReachTable, SourceCandidate } from './types'
+import type { ReachOption, ReachOptionSetVersion, ReachTable, SourceCandidate } from './types'
 
 /**
  * Design 8.1, position by position: every Counter position from the origin to the stream end - 1 that is
@@ -119,4 +119,51 @@ export function randomCoverageTable(seed: number): { table: ReachTable; planning
     })
   }
   return handBuiltReachTable({ originSkill: RANDOM_SKILL_ORIGIN, originGogma: RANDOM_GOGMA_ORIGIN, originNormal: { [COUNTER_A]: 0 }, window: RANDOM_WINDOW, targets })
+}
+
+/**
+ * A-2: a random 2- or 3-Target table over the same small windows whose owned Gogma sources take every current-Ideal
+ * combination - neither lane, the Skill lane, the Bonus lane, or both (then sometimes protected) - with a Keep-Ideal or other
+ * layout, Keep support or not, plus owned Normals and new Normal forges, one owned Gogma shared between Targets with flags of
+ * its own per Target (C1 matters), and a few Ideal Skill / Reset / Keep positions. `optionSet` decides which options Phase A
+ * derives from it; the rows themselves do not depend on it, so the same seed gives the a1 and the a2 table of one input.
+ */
+export function randomContinuationTable(seed: number, optionSet: ReachOptionSetVersion): { table: ReachTable; planningTargets: PlanningTargetPriority[] } {
+  const random = seededRandom(Math.imul(seed, 2_654_435_761) >>> 0)
+  for (let index = 0; index < 4; index++) random()
+  const chance = (probability: number) => random() < probability
+  const skillPositions = [10, 11, 12, 13, 14]
+  const gogmaPositions = [50, 51, 52, 53]
+  const gogma = (id: string): SourceCandidate => {
+    const currentSkillIdeal = chance(0.5)
+    const currentBonusIdeal = chance(0.5)
+    return gogmaSource(id, {
+      currentSkillIdeal, currentBonusIdeal, isProtected: currentSkillIdeal && currentBonusIdeal && chance(0.4),
+      layout: (['I', 'L', 'X'] as const)[Math.floor(random() * 3)]!, keepSupported: chance(0.85),
+    })
+  }
+  const targetCount = chance(0.5) ? 2 : 3
+  const targets: HandBuiltTargetSpec[] = []
+  for (let index = 0; index < targetCount; index++) {
+    const sources: SourceCandidate[] = []
+    if (chance(0.7)) sources.push(gogma(`owned.g.${index}`))
+    if (chance(0.3)) sources.push(normalSource(`owned.n.${index}`, chance(0.5) ? 'I' : 'L'))
+    if (chance(0.3)) sources.push(newNormalSource(Math.floor(random() * 3), chance(0.5) ? 'I' : 'X', COUNTER_A))
+    if (chance(0.4)) sources.push(gogma('owned.g.shared'))
+    if (sources.length === 0) sources.push(gogma(`owned.g.${index}`))
+    const resetLayouts = new Map<number, string>(pick(random, gogmaPositions, 2).map(position => [position, chance(0.5) ? 'I' : 'L']))
+    targets.push({
+      id: `target.${String.fromCharCode(97 + index)}`,
+      sources: sources.sort((left, right) => (left.kind === 'new_normal' ? 1 : 0) - (right.kind === 'new_normal' ? 1 : 0)),
+      priority: (1 + Math.floor(random() * 5)) as 1 | 2 | 3 | 4 | 5,
+      skill: { idealPositions: pick(random, skillPositions, 1 + Math.floor(random() * 2)), resetSkillsLimit: 13, conversionLimit: 14 },
+      bonus: {
+        resetIdealPositions: pick(random, gogmaPositions, 1 + Math.floor(random() * 2)),
+        resetLayoutByPosition: resetLayouts,
+        keepIdealPositionsByLayout: new Map([['I', pick(random, gogmaPositions, Math.floor(random() * 3))], ['L', pick(random, gogmaPositions, Math.floor(random() * 2))]]),
+        keepUnsupportedLayouts: [],
+      },
+    })
+  }
+  return handBuiltReachTable({ optionSet, originSkill: RANDOM_SKILL_ORIGIN, originGogma: RANDOM_GOGMA_ORIGIN, originNormal: { [COUNTER_A]: 0 }, window: RANDOM_WINDOW, targets })
 }

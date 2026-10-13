@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { conversion, keep, NONE, reset, resetSkills, resetThenKeep } from './coverageTestFixture'
 import type { ExpectedRouteShape } from './coverageTypes'
 import { buildProjectedRequest, buildShapeConstrainedRequest, materializeStructuralCandidate } from './materialize'
-import { searchPolicyShapeOf, shapeOwnPositions } from './materializationShape'
+import { conversionSkillContinuationShapeOf, ownedGogmaContinuationShapeOf, searchPolicyShapeOf, shapeOwnPositions } from './materializationShape'
 import { ELEMENT_A, ELEMENT_B, materializationScenario, newNormalSource, ownedSource, REORDERED_GOGMA, scenarioHeldCrossing, scenarioSkillDependency, SERIES_IDEAL, TARGET } from './materializationTestFixture'
 import { GlobalAssignmentMaterializationError } from './materializationTypes'
 import {
@@ -161,12 +161,15 @@ describe('Phase D-0A-2b premise check (design 5.4 step 4 / 5.5)', () => {
 })
 
 describe('Phase D-0A-2b method rule d0a2-v2 (design 11)', () => {
-  it('detects continuation shapes through one extensible detector list (G1 until A-2)', async () => {
-    expect(CONTINUATION_SHAPE_DETECTORS).toEqual([searchPolicyShapeOf])
+  it('detects continuation shapes through one extensible detector list (G1, and the G2 detector A-2 added)', async () => {
+    expect(CONTINUATION_SHAPE_DETECTORS).toEqual([conversionSkillContinuationShapeOf, ownedGogmaContinuationShapeOf])
     expect(Object.isFrozen(CONTINUATION_SHAPE_DETECTORS)).toBe(true)
     const { scene, candidate } = await scenarioG1Continuation()
     const option = candidate.expectedShapes[0]!.option
     expect(continuationShapeOf(option, scene.table)).toEqual({ policy: 'lane_start_ideal_skill_continuation', stream: 'skill', conversionPosition: 7, finalPosition: 9 })
+    // The d0a-v1 Search-policy classification asks the same detectors: the G1 value is the D-0B one.
+    expect(searchPolicyShapeOf(option, scene.table)).toEqual(continuationShapeOf(option, scene.table))
+    expect(ownedGogmaContinuationShapeOf(option, scene.table)).toBeNull()
     const held = await scenarioHeldCrossing()
     for (const shape of held.candidate.expectedShapes) expect(continuationShapeOf(shape.option, held.scene.table)).toBeNull()
   }, 30_000)

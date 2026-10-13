@@ -15,9 +15,13 @@
  *
  * The order is produced without materializing the `source x Skill x Bonus` product. Per source, the
  * Skill requirements are an indexable sequence whose stream end is monotone along the index (Phase A's
- * order), and each of the three Bonus streams (`reset`, `keep_from_source`, `reset_then_keep`) is an
- * ascending position array, so every (source, Bonus stream) pair is a 2-D lattice whose key is monotone
- * along both axes. A min-heap frontier merges every lattice: the roots are pushed first and a popped
+ * order; an a2 continuation lane is `none` followed by `reset_skills` ascending, and `none` keys below every
+ * operation: Skill end at the origin, final Skill component -1), and each Bonus stream (`none` - a stream of
+ * its own, of length 1 - then `reset`, `keep_from_source`, `reset_then_keep`) is an ascending position array,
+ * so every (source, Bonus stream) pair is a 2-D lattice whose key is monotone along both axes. No component is
+ * added for continuations: an a2 continuation option never precedes the option of the same source that replaces
+ * its continued lane by `none` (audit 5.2 L1, the option dominating it), because that option's key is smaller in
+ * the stream-end increment or, on a tie, in the final position of that lane. A min-heap frontier merges every lattice: the roots are pushed first and a popped
  * cell pushes its right neighbour `(i, j + 1)` and, when `j = 0`, its lower neighbour `(i + 1, 0)`, so
  * each cell is reached exactly once and the memory held is the frontier - the roots plus the cells
  * popped so far - never the product. A source the partial assignment already uses is left out whole
@@ -34,8 +38,8 @@
 import { findResourceViolation, streamEndDelta } from './assignmentFeasibility'
 import type { PartialResourceAssignment, ResourceViolationKind } from './assignmentTypes'
 import {
-  bonusRequirementIsNone, createReachOption, createResetThenKeepIndex, enumerateReachOptionsOfSource, keepFromSourcePositions, reachOptionKey,
-  skillRequirementBlocks, sourceResourceKey,
+  createReachOption, createResetThenKeepIndex, enumerateReachOptionsOfSource, keepFromSourcePositions, laneAdmitsNone, laneAdmitsOperations, reachOptionKey,
+  skillRequirementBlocks, sourceLaneAdmission, sourceResourceKey,
 } from './reachOptions'
 import type { BonusRequirement, ReachOption, ReachTable, SkillRequirement, SourceCandidate, TargetReach } from './types'
 
@@ -47,17 +51,26 @@ export interface IndexedSequence<T> {
 
 /**
  * The Skill requirements of one source as an indexable sequence in Phase A's order
- * (`enumerateSkillRequirements()`): `none`; `reset_skills` by final position; for a Normal source the
- * conversion blocks `(s*, c = s*), (s*, s* - 1), ..., (s*, origin)` per ascending `s*`, addressed through
- * block prefix sums so no `(c, s*)` pair is stored.
+ * (`enumerateSkillRequirements()`): `none`; `reset_skills` by final position, after one leading `none` for an a2
+ * continuation lane; for a Normal source the conversion blocks `(s*, c = s*), (s*, s* - 1), ..., (s*, origin)` per
+ * ascending `s*`, addressed through block prefix sums so no `(c, s*)` pair is stored.
  */
 export function indexedSkillRequirements(target: TargetReach, source: SourceCandidate, table: ReachTable): IndexedSequence<SkillRequirement> {
-  const blocks = skillRequirementBlocks(target, source, table.originSkill)
+  const blocks = skillRequirementBlocks(target, source, table)
   switch (blocks.kind) {
     case 'none':
       return { length: 1, at: () => ({ kind: 'none' }) }
-    case 'reset_skills':
-      return { length: blocks.finalPositions.length, at: index => ({ kind: 'reset_skills', finalPosition: blocks.finalPositions[index]! }) }
+    case 'reset_skills': {
+      const lead = blocks.leadingNone ? 1 : 0
+      const length = lead + blocks.finalPositions.length
+      return {
+        length,
+        at: index => {
+          if (!Number.isSafeInteger(index) || index < 0 || index >= length) throw new RangeError(`Skill requirement index ${String(index)} is out of range (${length}).`)
+          return index < lead ? { kind: 'none' } : { kind: 'reset_skills', finalPosition: blocks.finalPositions[index - lead]! }
+        },
+      }
+    }
     case 'conversion': {
       const starts: number[] = []
       let length = 0
@@ -85,14 +98,17 @@ export function indexedSkillRequirements(target: TargetReach, source: SourceCand
 
 /**
  * The Bonus requirement streams of one source, each ascending in its final position (Phase A's
- * `enumerateBonusRequirements()` split by kind): `reset`, `keep_from_source` (only while supported for the
- * source's layout) and `reset_then_keep`; a single `none` for an owned Gogma already Ideal. Empty streams
- * are omitted. `resetThenKeep` is the Target's compact `reset_then_keep` index (`createResetThenKeepIndex()`,
- * no pair materialized), shared by its sources.
+ * `enumerateBonusRequirements()` split by kind): a single `none` when the source's Bonus lane admits it (an
+ * owned Gogma already Ideal; under a2 followed by the operations), then `reset`, `keep_from_source` (only while
+ * supported for the source's layout) and `reset_then_keep` when the lane admits operations. Empty streams are
+ * omitted. `resetThenKeep` is the Target's compact `reset_then_keep` index (`createResetThenKeepIndex()`, no pair
+ * materialized), shared by its sources.
  */
-export function indexedBonusStreams(target: TargetReach, source: SourceCandidate, resetThenKeep: IndexedSequence<BonusRequirement>): IndexedSequence<BonusRequirement>[] {
-  if (bonusRequirementIsNone(source)) return [{ length: 1, at: () => ({ kind: 'none' }) }]
+export function indexedBonusStreams(target: TargetReach, source: SourceCandidate, table: Pick<ReachTable, 'optionSet'>, resetThenKeep: IndexedSequence<BonusRequirement>): IndexedSequence<BonusRequirement>[] {
+  const admission = sourceLaneAdmission(source, table.optionSet).bonus
   const streams: IndexedSequence<BonusRequirement>[] = []
+  if (laneAdmitsNone(admission)) streams.push({ length: 1, at: () => ({ kind: 'none' }) })
+  if (!laneAdmitsOperations(admission)) return streams
   const resets = target.bonus.resetIdealPositions
   if (resets.length > 0) streams.push({ length: resets.length, at: index => ({ kind: 'reset', finalPosition: resets[index]! }) })
   const keeps = keepFromSourcePositions(target, source)
@@ -119,7 +135,7 @@ export function createTargetOptionLattice(target: TargetReach, table: ReachTable
   return {
     target,
     sources: target.sources.map(source => ({
-      source, key: sourceResourceKey(source), skills: indexedSkillRequirements(target, source, table), bonusStreams: indexedBonusStreams(target, source, resetThenKeep),
+      source, key: sourceResourceKey(source), skills: indexedSkillRequirements(target, source, table), bonusStreams: indexedBonusStreams(target, source, table, resetThenKeep),
     })),
   }
 }
@@ -314,7 +330,7 @@ export function createOrderedOptionEnumerator(lattice: TargetOptionLattice, tabl
  * owned Gogma (it never converts) and for a position outside the source's conversion range.
  */
 export function indexedConversionsAt(target: TargetReach, source: SourceCandidate, table: ReachTable, conversionPosition: number): IndexedSequence<SkillRequirement> {
-  const blocks = skillRequirementBlocks(target, source, table.originSkill)
+  const blocks = skillRequirementBlocks(target, source, table)
   if (blocks.kind !== 'conversion' || !Number.isSafeInteger(conversionPosition) || conversionPosition < blocks.originSkill) return { length: 0, at: index => { throw new RangeError(`No conversion at ${conversionPosition} (index ${String(index)}).`) } }
   // finalPositions are ascending: the first one at or after the conversion position starts the subsequence.
   let low = 0, high = blocks.finalPositions.length

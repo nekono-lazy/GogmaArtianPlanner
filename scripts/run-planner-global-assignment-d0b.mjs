@@ -17,9 +17,14 @@
 // settled work, Normal / Skill / Reset / Keep predictions) have no default and must be named; `--gate` is then the projected
 // Candidate Search's gate, and `--delivery-cap` (a d0a-v1 condition) is refused. No d0a2-v2 value is registered here.
 //
+// Phase A-2 (docs/PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md 19.8): `--option-set a1|a2` names the Phase A option set of either rule.
+// Without it the conditions carry no option set and the run is the a1 one every D-0B / D-0A-2b record was produced with;
+// `--option-set a2` adds the owned-Gogma current-Ideal lane continuations (G2) and is recorded in the conditions. It is a
+// non-formal smoke condition here; D-0B-2 registers the option set it measures.
+//
 // Parent:
 //   node scripts/run-planner-global-assignment-d0b.mjs --export <Export .json> --run-dir <new dir> --output <new .json>
-//     [--mode smoke] [--rule d0a-v1|d0a2-v2] [--window N,G,S] [--node-budget N] [--mrv-lookahead N] [--coverage-driven-ordering true|false]
+//     [--mode smoke] [--rule d0a-v1|d0a2-v2] [--option-set a1|a2] [--window N,G,S] [--node-budget N] [--mrv-lookahead N] [--coverage-driven-ordering true|false]
 //     [--structural-candidate-limit N] [--delivery-cap N] [--gate C,G,S,N] [--shape-gate D,G,N,W] [--shape-budget G,S,W,PN,PS,PR,PK]
 //     [--wall-ms N] [--heap-mb N] [--repeat N] [--expected-export-sha256 <hex>] [--allow-uncommitted]
 // Child (`--role materialize`): spawned by the parent with --task, --record and --journal; never run by hand. It appends
@@ -36,11 +41,11 @@ import { createServer } from 'vite'
 import { runChildProcess } from './planner-global-assignment-d0b-child-process.mjs'
 
 const SCRIPT_PATH = 'scripts/run-planner-global-assignment-d0b.mjs'
-const USAGE = `Usage: node ${SCRIPT_PATH} --export <Export .json> --run-dir <new dir> --output <new .json> [--mode smoke] [--rule d0a-v1|d0a2-v2] [--window N,G,S] [--node-budget N] [--mrv-lookahead N] [--coverage-driven-ordering true|false] [--structural-candidate-limit N] [--delivery-cap N] [--gate C,G,S,N] [--shape-gate D,G,N,W] [--shape-budget G,S,W,PN,PS,PR,PK] [--wall-ms N] [--heap-mb N] [--repeat N] [--expected-export-sha256 <hex>] [--allow-uncommitted]`
-const KNOWN_OPTIONS = new Set(['--export', '--run-dir', '--output', '--mode', '--rule', '--window', '--node-budget', '--mrv-lookahead', '--coverage-driven-ordering', '--structural-candidate-limit',
+const USAGE = `Usage: node ${SCRIPT_PATH} --export <Export .json> --run-dir <new dir> --output <new .json> [--mode smoke] [--rule d0a-v1|d0a2-v2] [--option-set a1|a2] [--window N,G,S] [--node-budget N] [--mrv-lookahead N] [--coverage-driven-ordering true|false] [--structural-candidate-limit N] [--delivery-cap N] [--gate C,G,S,N] [--shape-gate D,G,N,W] [--shape-budget G,S,W,PN,PS,PR,PK] [--wall-ms N] [--heap-mb N] [--repeat N] [--expected-export-sha256 <hex>] [--allow-uncommitted]`
+const KNOWN_OPTIONS = new Set(['--export', '--run-dir', '--output', '--mode', '--rule', '--option-set', '--window', '--node-budget', '--mrv-lookahead', '--coverage-driven-ordering', '--structural-candidate-limit',
   '--delivery-cap', '--gate', '--shape-gate', '--shape-budget', '--wall-ms', '--heap-mb', '--repeat', '--expected-export-sha256', '--allow-uncommitted', '--role', '--task', '--record', '--journal'])
 const VALUE_OPTIONS = new Set([...KNOWN_OPTIONS].filter(name => name !== '--allow-uncommitted'))
-const OVERRIDE_OPTIONS = ['--window', '--node-budget', '--mrv-lookahead', '--coverage-driven-ordering', '--structural-candidate-limit', '--delivery-cap', '--gate', '--shape-gate', '--shape-budget', '--wall-ms', '--heap-mb', '--repeat']
+const OVERRIDE_OPTIONS = ['--option-set', '--window', '--node-budget', '--mrv-lookahead', '--coverage-driven-ordering', '--structural-candidate-limit', '--delivery-cap', '--gate', '--shape-gate', '--shape-budget', '--wall-ms', '--heap-mb', '--repeat']
 const RULES = ['d0a-v1', 'd0a2-v2']
 /** PlannerInput.options.maxPlanSteps is validated by validatePlannerInput() but no Planner runs here (G12: not a Research maxPlanSteps). */
 const PLANNER_INPUT_MAX_PLAN_STEPS_FOR_VALIDATION_ONLY = 1_000
@@ -169,6 +174,10 @@ const shapeRule = rule === 'd0a2-v2'
 if (shapeRule && has('--delivery-cap')) throw new Error('--delivery-cap is a d0a-v1 condition; the rule d0a2-v2 runs no Planner Alternative Search.')
 if (!shapeRule && (has('--shape-gate') || has('--shape-budget'))) throw new Error('--shape-gate and --shape-budget are d0a2-v2 conditions; pass --rule d0a2-v2.')
 if (shapeRule && (!has('--shape-gate') || !has('--shape-budget'))) throw new Error('--rule d0a2-v2 needs --shape-gate D,G,N,W and --shape-budget G,S,W,PN,PS,PR,PK: the shape-constrained method has no default gate or budget.')
+const optionSetRaw = option('--option-set')
+if (optionSetRaw !== undefined && !Object.hasOwn(protocol.MATERIALIZATION_REACH_OPTION_SETS, optionSetRaw)) throw new Error(`--option-set must be ${Object.keys(protocol.MATERIALIZATION_REACH_OPTION_SETS).join(' or ')} (got ${optionSetRaw}).`)
+// Absent: no field, the a1 option set of every D-0B / D-0A-2b record. Named: the full version string, recorded in the conditions.
+const optionSetCondition = optionSetRaw === undefined ? {} : { reachOptionSet: protocol.MATERIALIZATION_REACH_OPTION_SETS[optionSetRaw] }
 const windowValues = integerList('--window', 3, null)
 const gateValues = integerList('--gate', 4, null)
 const shapeGateValues = integerList('--shape-gate', 4, null)
@@ -194,12 +203,14 @@ const conditions = shapeRule
       maxPredictions: { normalArtian: shapeBudgetValues[3], skill: shapeBudgetValues[4], gogmaReset: shapeBudgetValues[5], gogmaKeep: shapeBudgetValues[6] },
     },
     routeVerification: 'every_shape_constrained_materialization',
+    ...optionSetCondition,
   }
   : {
     ...shared,
     deliveryCap: positiveIntegerOption('--delivery-cap', defaults.conditions.deliveryCap),
     searchScaleGate,
     searchPolicyPrecheck: true,
+    ...optionSetCondition,
   }
 const envelope = {
   childWallMs: positiveIntegerOption('--wall-ms', defaults.envelope.childWallMs),
@@ -213,6 +224,7 @@ const basisOf = (name, key) => has(name) ? `non-formal smoke value from ${name}`
 const sharedBasis = {
   window: basisOf('--window', 'window'), nodeBudget: basisOf('--node-budget', 'nodeBudget'), mrvLookahead: basisOf('--mrv-lookahead', 'mrvLookahead'),
   coverageDrivenOrdering: basisOf('--coverage-driven-ordering', 'coverageDrivenOrdering'), structuralCandidateLimit: basisOf('--structural-candidate-limit', 'structuralCandidateLimit'),
+  ...(optionSetRaw === undefined ? {} : { reachOptionSet: `non-formal smoke value from --option-set ${optionSetRaw} (the Phase A-2 option set; D-0B-2 registers the formal one)` }),
 }
 const envelopeBasis = { childWallMs: basisOf('--wall-ms', 'childWallMs'), childHeapMb: basisOf('--heap-mb', 'childHeapMb'), repeat: basisOf('--repeat', 'repeat') }
 const conditionBasis = shapeRule
@@ -268,7 +280,7 @@ await mkdir(runDir, { recursive: true })
 const startPath = join(runDir, 'start.json')
 await write(startPath, provenance)
 await chmod(startPath, 0o444).catch(() => {})
-console.log(`${launchedAt} START mode=${mode} head=${repositoryHeadSha.slice(0, 12)} clean=${workingTreeClean} uncommittedCode=${uncommittedBenchmarkCode} export=${actualExport.sha256.slice(0, 8)} window=${conditions.window.normal}/${conditions.window.gogma}/${conditions.window.skill} nodeBudget=${conditions.nodeBudget} candidates=${conditions.structuralCandidateLimit} rule=${rule} ${shapeRule ? `projectedGate=${Object.values(conditions.projectedSearchScaleGate).join(",")} shapeGate=${Object.values(conditions.shapeSearchScaleGate).join(",")}` : `deliveryCap=${conditions.deliveryCap} gate=${Object.values(conditions.searchScaleGate).join(",")}`}`)
+console.log(`${launchedAt} START mode=${mode} head=${repositoryHeadSha.slice(0, 12)} clean=${workingTreeClean} uncommittedCode=${uncommittedBenchmarkCode} export=${actualExport.sha256.slice(0, 8)} window=${conditions.window.normal}/${conditions.window.gogma}/${conditions.window.skill} nodeBudget=${conditions.nodeBudget} candidates=${conditions.structuralCandidateLimit} rule=${rule} optionSet=${optionSetRaw ?? "a1(default)"} ${shapeRule ? `projectedGate=${Object.values(conditions.projectedSearchScaleGate).join(",")} shapeGate=${Object.values(conditions.shapeSearchScaleGate).join(",")}` : `deliveryCap=${conditions.deliveryCap} gate=${Object.values(conditions.searchScaleGate).join(",")}`}`)
 
 // A parent interrupt kills the running child and records it as cancelled (never as a materialization outcome).
 const abort = new AbortController()

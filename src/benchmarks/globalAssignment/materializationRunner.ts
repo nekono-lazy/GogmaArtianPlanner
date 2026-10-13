@@ -38,7 +38,7 @@ import {
   type SearchPolicyShapeDiagnostics,
 } from './materializationDiagnostics'
 import {
-  classifyMaterializationStage, isShapeMaterializationConditions, materializationFollowUp, materializationProtocolVersion, validateMaterializationRunConditions,
+  classifyMaterializationStage, conditionReachOptionSet, isShapeMaterializationConditions, materializationFollowUp, materializationProtocolVersion, validateMaterializationRunConditions,
   type CandidateMaterializationClass, type MaterializationFollowUp, type MaterializationProgressEvent, type MaterializationRunConditions, type TargetOutcomeBrief,
 } from './materializationProtocol'
 import {
@@ -632,7 +632,7 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
 
   // Phase A: the ReachTable inside the window.
   const scanStarted = now()
-  const tableResult = await buildReachTable(context, engine, conditions.window, { shouldCancel: execution.shouldCancel, yieldControl: execution.yieldControl })
+  const tableResult = await buildReachTable(context, engine, conditions.window, conditionReachOptionSet(conditions), { shouldCancel: execution.shouldCancel, yieldControl: execution.yieldControl })
   elapsed.reachTable = now() - scanStarted
   if (tableResult.kind === 'unsupported_input') {
     progress({ kind: 'reach_table', status: 'unsupported_input', predictions: null })
