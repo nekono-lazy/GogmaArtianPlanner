@@ -1,6 +1,7 @@
 import type { TargetSearchScheduler } from './targetSearchScheduler'
 import type { RouteOperation } from '../models/publicTypes'
 import {
+  constrainedBonusLaneAvailable,
   conversionSkillPositions,
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
@@ -19,12 +20,19 @@ export async function searchOwnedNormalArtianRoutes(
 ): Promise<RouteSearchResult> {
   const { engine, input, target } = context
   const result: RouteSearchResult = { candidates: [], searchedRoutes: [], skippedRoutes: [], warnings: [] }
+  // A Research shape constraint (5.6.9) keeps only the shape's own OwnedWeapon,
+  // before any base is generated; it is no reservation edit.
+  const constraint = context.routeBaseConstraint
+  if (constraint !== undefined && constraint.kind !== 'owned_normal') {
+    throw new Error(`A '${constraint.kind}' Route base constraint never runs the owned Normal Artian Route search.`)
+  }
+  const shapeSource = (weapon: { id: string }) => constraint === undefined || weapon.id === constraint.ownedWeaponId
   // A weapon a Planner reservation holds for a fixed Route is no source at all
   // (SEARCH_SPEC 5.6.8); the ordinary Search has no reservation.
   const compatible = selectCompatibleOwnedNormalArtianWeapons(target, input.ownedWeapons)
-    .filter((weapon) => isAvailableRouteSource(context, weapon.id))
+    .filter((weapon) => isAvailableRouteSource(context, weapon.id) && shapeSource(weapon))
   const sources = selectConvertibleOwnedNormalArtianWeapons(target, input.ownedWeapons)
-    .filter((weapon) => isAvailableRouteSource(context, weapon.id))
+    .filter((weapon) => isAvailableRouteSource(context, weapon.id) && shapeSource(weapon))
 
   if (sources.length === 0) {
     result.skippedRoutes.push({
@@ -49,7 +57,10 @@ export async function searchOwnedNormalArtianRoutes(
   }
   const skillCounter = input.rngState.skillCounter.value!
   let canSearchAmendments = hasConfirmedGogmaInputs(input) && engine.capabilities.supportsGogmaPrediction
-  if (canSearchAmendments) {
+  if (constraint !== undefined) {
+    // The shape's Bonus lane requires the support of its own operations only (5.6.9).
+    canSearchAmendments = constrainedBonusLaneAvailable(context, constraint.lanes.bonusOperations)
+  } else if (canSearchAmendments) {
     const resetSupport = context.predictionSupport.gogmaReset()
     if (!resetSupport.supported) {
       result.warnings.push({

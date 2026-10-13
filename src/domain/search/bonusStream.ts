@@ -131,6 +131,14 @@ export interface BonusStreamSolutionSet {
 export type BonusStreamBase = {
   /** Initial Search only: later Normal representatives need no Reset branches. */
   amendmentPolicy?: 'all' | 'keep_only'
+  /**
+   * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the Bonus operation kinds the
+   * shape-constrained Route search allows on this lane. Only the held-aware
+   * `readReservedDepth()` reads it; the ordinary `readDepth()` / `solve()` /
+   * `reachesBeyondExtent()` refuse a base that carries it, and it never
+   * combines with `amendmentPolicy`. Absent in every Production base.
+   */
+  shapePolicy?: BonusShapePolicy
 } & (
   | {
       startGogmaCounter: number
@@ -143,6 +151,40 @@ export type BonusStreamBase = {
       restorationBonusScope: 'normal_artian'
     }
 )
+
+/**
+ * The Bonus operation kinds of one Research shape-constrained Bonus lane
+ * (`docs/SEARCH_SPEC.md` 5.6.9), each ending with its last own operation at
+ * `finalPosition`:
+ *
+ * - `reset`: Reset Bonuses only
+ * - `keep`: Keep Bonuses only, so every Keep reads the base's family layout
+ * - `reset_then_keep`: Reset Bonuses at or before `resetPosition`, then Keep
+ *   Bonuses only after the Reset at `resetPosition`
+ *
+ * A stream base carrying it generates only those operations, queries the
+ * prediction support of those operations only where they can stand, places no
+ * own operation after `finalPosition` and records no extent stop there.
+ * Prediction, the held window, the frontier rule and the single-pass cursor are
+ * the ordinary held-aware ones.
+ */
+export type BonusShapePolicy =
+  | { kind: 'reset'; finalPosition: number }
+  | { kind: 'keep'; finalPosition: number }
+  | { kind: 'reset_then_keep'; resetPosition: number; finalPosition: number }
+
+/**
+ * Which operation a state of a shape-constrained lane may place next: Reset
+ * before `resetPosition` (and on a `reset` lane), Keep from the Reset at
+ * `resetPosition` on (and on a `keep` lane). A `reset_then_keep` lane places
+ * Reset at or before `resetPosition` only, so a state at or after it is that
+ * Reset or a Keep after it.
+ */
+function bonusShapeStage(shape: BonusShapePolicy, position: number): 'reset' | 'keep' {
+  if (shape.kind === 'reset') return 'reset'
+  if (shape.kind === 'keep') return 'keep'
+  return position < shape.resetPosition ? 'reset' : 'keep'
+}
 
 /**
  * The Bonus stream of one TargetWeapon.
@@ -916,6 +958,187 @@ export function createTargetBonusStream(
     return solutions
   }
 
+  /**
+   * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the shape-constrained lane's
+   * next own Bonus positions after one state, by operation. The held window is
+   * the ordinary `nextOperationPositions()` walk, cut right after
+   * `finalPosition`: that cut is the shape's own end, never an extent stop, so
+   * it is not recorded as one and reads no prediction support.
+   */
+  async function shapeOperationPositions(
+    set: ReservedSet,
+    shape: BonusShapePolicy,
+    state: ReservedBonusState,
+  ): Promise<{ reset: number[]; keep: number[] }> {
+    let window = set.windows.get(state.nextFrom)
+    if (!window) {
+      window = await nextOperationPositions(reservation, state.nextFrom, shape.finalPosition + 1, execution.checkpoint)
+      set.windows.set(state.nextFrom, window)
+    }
+    if (bonusShapeStage(shape, state.position) === 'keep') {
+      return { reset: [], keep: state.bonuses === null ? [] : window.positions }
+    }
+    const resetLimit = shape.kind === 'reset_then_keep' ? shape.resetPosition : shape.finalPosition
+    return { reset: window.positions.filter((position) => position <= resetLimit), keep: [] }
+  }
+
+  /**
+   * Research only (`docs/SEARCH_SPEC.md` 5.6.9): one depth of a
+   * shape-constrained held-aware Bonus stream base (`BonusStreamBase.shapePolicy`).
+   *
+   * It is the held-aware depth of `generateReservedDepth()` restricted to the
+   * shape's operations: the same windows (cut at `finalPosition`), the same
+   * Reset / Keep prediction memos and generated-state constructor, the same
+   * generation order (per position, the Reset first, then each frontier
+   * state's Keep in frontier order) and the same frontier rule - one
+   * representative per (absolute position, Keep family layout) by
+   * `compareReservedRepresentative()`, the frontier in `compareReservedFrontier()`
+   * order. It differs only in what the shape forbids:
+   *
+   * - a Reset stands only where the shape's Reset stage allows it, and the
+   *   Reset chain invariant is applied only there
+   * - a Keep is generated only from a Keep-stage state (every state of a `keep`
+   *   lane; on a `reset_then_keep` lane only the Reset at `resetPosition` and
+   *   the Keeps after it), so a Keep never reads another history's layout and
+   *   the frontier never folds the shape's history into another one
+   * - Reset Bonuses support is queried only for a depth with a Reset position,
+   *   and Keep Bonuses support only for a Keep-stage state with a Keep
+   *   position, so an operation the shape forbids is never evaluated and never
+   *   reported as unsupported
+   *
+   * It reports the held-aware depth observation but no runtime phase sections.
+   */
+  async function generateShapeReservedDepth(
+    set: ReservedSet,
+    shape: BonusShapePolicy,
+    base: BonusStreamBase,
+    depth: number,
+  ): Promise<ReservedBonusStreamSolution[]> {
+    if (set.done) return []
+    const resetPositions: Array<ReadonlySet<number>> = []
+    const keepPositions: Array<ReadonlySet<number>> = []
+    const positions = new Set<number>()
+    for (const state of set.frontier) {
+      const next = await shapeOperationPositions(set, shape, state)
+      resetPositions.push(new Set(next.reset))
+      keepPositions.push(new Set(next.keep))
+      for (const position of [...next.reset, ...next.keep]) positions.add(position)
+    }
+    let resetAllowed = false
+    if (resetPositions.some((window) => window.size > 0)) {
+      const support = predictionSupport.gogmaReset()
+      resetAllowed = support.supported
+      if (!support.supported) recordReservedUnsupported(set, 'reset_bonuses', support.reason)
+    }
+    const keepAllowed = set.frontier.map((state, index) => {
+      if (keepPositions[index].size === 0 || state.bonuses === null || !engine.capabilities.supportsKeepBonusesPrediction) return false
+      const support = predictionSupport.gogmaKeep(state.bonuses)
+      if (!support.supported) recordReservedUnsupported(set, 'keep_bonuses', support.reason)
+      return support.supported
+    })
+
+    // The Production generated-state constructor and frontier comparator, taken by reference rather than
+    // re-spelled: the Issue #154 source-shape tests pin their Production call sites (B2J / A8 / A9).
+    const generatedState = reservedGeneratedState
+    const produced: ReservedBonusState[] = []
+    for (const position of [...positions].sort((left, right) => left - right)) {
+      if (resetAllowed && resetPositions.some((window) => window.has(position))) {
+        const chain = depth === 1
+          ? null
+          : set.frontier.find((state, index) =>
+            state.lastResetDepth === depth - 1 && state.depth === depth - 1 && resetPositions[index].has(position))
+        if (chain === undefined) {
+          throw new Error(`Shape-constrained Bonus stream has no Reset chain reaching Gogma ${position} at depth ${depth}.`)
+        }
+        await execution.checkpoint()
+        const result = predictReset(position)
+        produced.push(generatedState(depth, depth, result, keepFamilyLayoutKey(result, input.master),
+          chain?.results ?? null, position, engine.advanceGogmaCounter(position, { type: 'reset_bonuses' })))
+      }
+      for (const [index, state] of set.frontier.entries()) {
+        if (!keepAllowed[index] || !keepPositions[index].has(position) || state.bonuses === null || state.familyLayoutKey === null) continue
+        await execution.checkpoint()
+        const result = predictKeep(position, state.familyLayoutKey, state.bonuses)
+        // Keep preserves the family of every slot (RNG_SPEC 6.1): the parent's layout key is reused.
+        produced.push(generatedState(depth, state.lastResetDepth, result, state.familyLayoutKey,
+          state.results, position, engine.advanceGogmaCounter(position, { type: 'keep_bonuses' })))
+      }
+    }
+    if (produced.length === 0) {
+      set.done = true
+      return []
+    }
+    // Handed to the caller only, before the frontier reduction, exactly as the Production depth does.
+    const solutions: ReservedBonusStreamSolution[] = produced.map((state) => ({
+      depth: state.depth,
+      lastResetDepth: state.lastResetDepth,
+      bonuses: state.bonuses as RestorationBonusSet,
+      restorationBonusScope: 'gogma_artian',
+      results: state.results as ReservedBonusResultNode,
+      steps: reservedBonusSteps(state.results),
+    }))
+    // The Production frontier rule itself, by reference (see `generatedState` above).
+    const representativeOrder = compareReservedRepresentative
+    const representatives = new Map<string, ReservedBonusState>()
+    for (const state of produced) {
+      const slot = `${state.position}\u0000${state.familyLayoutKey}`
+      const kept = representatives.get(slot)
+      if (kept === undefined || representativeOrder(state, kept) < 0) representatives.set(slot, state)
+    }
+    set.frontier = [...representatives.values()].sort(compareReservedFrontier)
+    if (observeReservedDepth !== undefined) {
+      observeReservedDepth({
+        streamIndex: set.index,
+        startGogmaCounter: base.startGogmaCounter,
+        depth,
+        generatedStates: produced.length,
+        frontierStates: set.frontier.length,
+        absolutePositions: new Set(produced.map((state) => state.position)).size,
+        familyLayouts: new Set(produced.map((state) => state.familyLayoutKey)).size,
+      })
+    }
+    return solutions
+  }
+
+  /** Research only (5.6.9): whether any frontier state of a shape-constrained stream can place a further own operation. */
+  async function shapeStreamContinues(set: ReservedSet, shape: BonusShapePolicy): Promise<boolean> {
+    let continues = false
+    for (const state of set.frontier) {
+      const next = await shapeOperationPositions(set, shape, state)
+      if (next.reset.length > 0 || next.keep.length > 0) continues = true
+    }
+    return continues
+  }
+
+  /**
+   * Fails closed on a `shapePolicy` the held-aware stream cannot read
+   * (`docs/SEARCH_SPEC.md` 5.6.9): combined with `amendmentPolicy`, a position
+   * outside the Gogma window `start .. start + maxGogmaAdvance - 1`, a Reset
+   * position not before the final position, or a Keep-only lane from unknown
+   * five slots.
+   */
+  function assertBonusShapePolicy(base: BonusStreamBase, shape: BonusShapePolicy): void {
+    const fail = (message: string): never => {
+      throw new Error(`Invalid Bonus shapePolicy for ${bonusStreamBaseKey(base, input.master)}: ${message}`)
+    }
+    if (base.amendmentPolicy !== undefined) fail('it never combines with amendmentPolicy.')
+    if (shape.kind !== 'reset' && shape.kind !== 'keep' && shape.kind !== 'reset_then_keep') fail('unknown kind.')
+    const limit = base.startGogmaCounter + input.maxGogmaAdvance
+    const positions = shape.kind === 'reset_then_keep' ? [shape.resetPosition, shape.finalPosition] : [shape.finalPosition]
+    if (positions.some((position) => !Number.isInteger(position) || position < base.startGogmaCounter || position >= limit)) {
+      fail(`its positions must lie in the Gogma window ${base.startGogmaCounter} .. ${limit - 1}.`)
+    }
+    if (shape.kind === 'reset_then_keep' && shape.resetPosition >= shape.finalPosition) fail('resetPosition must precede finalPosition.')
+    if (shape.kind === 'keep' && base.bonuses === null) fail('a Keep-only lane needs known current five slots.')
+  }
+
+  /** The ordinary stream reads no shape-constrained base (5.6.9): it is held-aware only. */
+  function refuseShapePolicy(base: BonusStreamBase, api: string): void {
+    if (base.shapePolicy !== undefined) {
+      throw new Error(`The ordinary Bonus stream ${api}() never reads a shape-constrained base (shapePolicy is read by readReservedDepth() only).`)
+    }
+  }
+
   /** The boundary reporter of one observed depth read (Issue #154 Phase 2-C2.6-A3). */
   interface ReservedRuntimeBoundaries {
     readonly counts: ReservedGogmaRuntimeCounts
@@ -1029,6 +1252,8 @@ export function createTargetBonusStream(
 
   return {
     readReservedDepth: async (base, depth) => {
+      const shape = base.shapePolicy
+      if (shape !== undefined) assertBonusShapePolicy(base, shape)
       const set = reservedSet(base)
       claimReservedDepth(set, base, depth)
       try {
@@ -1036,12 +1261,17 @@ export function createTargetBonusStream(
           ? undefined
           : reservedRuntimeBoundaries(observeReservedRuntime, set, base, depth)
         runtime?.depth('depth_started')
-        const solutions = await generateReservedDepth(set, base, depth, runtime)
+        const solutions = shape === undefined
+          ? await generateReservedDepth(set, base, depth, runtime)
+          : await generateShapeReservedDepth(set, shape, base, depth)
         // An empty depth is terminal. Otherwise the stream goes on while one
         // reduced frontier state still has a legal next position; every state's
         // window is visited, so the extent-cut record and the memo are as before.
+        // A shape-constrained stream asks the same of the operations its shape allows.
         let exhausted = true
-        if (solutions.length > 0) {
+        if (solutions.length > 0 && shape !== undefined) {
+          exhausted = !(await shapeStreamContinues(set, shape))
+        } else if (solutions.length > 0) {
           runtime?.phase('phase_started', 'exhaustion_scan')
           for (const state of set.frontier) {
             if ((await reservedWindow(set, base, state)).positions.length > 0) exhausted = false
@@ -1061,6 +1291,7 @@ export function createTargetBonusStream(
     reservedReachesBeyondExtent: (base) =>
       reservedSets.get(bonusStreamBaseKey(base, input.master))?.cutByExtent ?? false,
     readDepth: async (base, depth) => {
+      refuseShapePolicy(base, 'readDepth')
       const cached = await ensure(base, depth)
       return {
         ...cached.value,
@@ -1069,6 +1300,7 @@ export function createTargetBonusStream(
       }
     },
     reachesBeyondExtent: (base) => {
+      refuseShapePolicy(base, 'reachesBeyondExtent')
       const cached = sets.get(bonusStreamBaseKey(base, input.master))
       if (!cached || cached.done || cached.depths.length < input.maxGogmaAdvance) return false
       // The same generation conditions the next depth would apply.
@@ -1077,6 +1309,7 @@ export function createTargetBonusStream(
         state.bonuses !== null && predictionSupport.gogmaKeep(state.bonuses).supported)
     },
     solve: async (base, through = input.maxGogmaAdvance) => {
+      refuseShapePolicy(base, 'solve')
       const cached = await ensure(base, through)
       const limit = Math.min(input.maxGogmaAdvance, Math.max(0, through))
       return {
@@ -1098,14 +1331,22 @@ export function createTargetBonusStream(
  * layout and shares the single unknown stream, whose axis starts at the first
  * Reset. The initial-Search Keep-only policy has a distinct key so it never
  * aliases a full stream used by an owned source or constrained enumeration.
+ * A Research shape-constrained base (`shapePolicy`, 5.6.9) adds its shape as a
+ * further element, so it never aliases a Production stream or another shape;
+ * a base without one keeps the Production key unchanged.
  */
 export function bonusStreamBaseKey(
   base: BonusStreamBase,
   master: KeepFamilyMasterSubset,
 ): string {
-  return stableStringify([
+  const key: unknown[] = [
     base.startGogmaCounter,
     base.amendmentPolicy ?? 'all',
     base.bonuses === null ? null : keepFamilyLayoutKey(base.bonuses, master),
-  ])
+  ]
+  const shape = base.shapePolicy
+  if (shape !== undefined) {
+    key.push(['shape', shape.kind, shape.kind === 'reset_then_keep' ? shape.resetPosition : null, shape.finalPosition])
+  }
+  return stableStringify(key)
 }

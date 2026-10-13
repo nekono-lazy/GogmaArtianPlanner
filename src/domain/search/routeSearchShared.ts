@@ -14,8 +14,9 @@ import type {
   SkillAmendmentResult,
   TargetWeapon,
 } from '../models/publicTypes'
-import type { RngEngine } from '../rng/rngEngine'
+import type { RngEngine, RngPredictionUnsupportedReason } from '../rng/rngEngine'
 import { evaluateSkillCondition, satisfiesIdealBonuses } from '../target'
+import { hasConfirmedGogmaInputs } from './searchRngInputs'
 import {
   nextOperationPositions,
   type RouteSearchReservation,
@@ -30,6 +31,7 @@ import { createCandidateFromPrediction } from './candidateFactory'
 import { crossStreamSolutions } from './crossComposition'
 import type { SearchExecutionContext } from './searchExecution'
 import type { SearchPredictionSupport } from './searchPredictionSupport'
+import type { ScheduledRouteShapeFilter } from './targetSearchScheduler'
 import {
   CandidateSearchError,
   type CandidateSearchInput,
@@ -106,6 +108,40 @@ export interface RouteSearchInput {
  */
 export type SearchFrontierPolicy = 'initial_candidate_search' | 'planner_alternative'
 
+/**
+ * Which operations the lanes of one Research shape-constrained Route base use
+ * (`docs/SEARCH_SPEC.md` 5.6.9). They decide which stream bases a constrained
+ * Route search primitive builds and which prediction support it requires; an
+ * operation the shape forbids is never a requirement and its support is never
+ * queried.
+ */
+export interface RouteBaseLaneNeeds {
+  /** The Skill lane reads the Reset Skills stream (lane `reset_skills`). */
+  skillStream: boolean
+  /** The Bonus lane's own operations (`none` for the zero-operation lane). */
+  bonusOperations: 'none' | 'reset' | 'keep' | 'reset_then_keep'
+}
+
+/**
+ * The Research-only Route base restriction of the shape-constrained Route
+ * search (`docs/SEARCH_SPEC.md` 5.6.9, Issue #154 Global Assignment Research).
+ * No Production caller sets it.
+ *
+ * A Route search primitive reads it before it generates any Route base: only
+ * the primitive of the shape's base kind runs, and it enumerates only the
+ * shape's OwnedWeapon, or the shape's Normal Counter and production target
+ * position, and converts only at the shape's conversion Skill position (the
+ * intersection with the formal legal positions of `conversionSkillPositions()`).
+ * It is a separate input from the formal reservation, which it never edits:
+ * the exclusive-source rule and the protected-weapon rule still apply on their
+ * own.
+ */
+export type RouteBaseConstraint = { lanes: RouteBaseLaneNeeds } & (
+  | { kind: 'owned_gogma'; ownedWeaponId: OwnedWeaponId }
+  | { kind: 'owned_normal'; ownedWeaponId: OwnedWeaponId; conversionSkillPosition: number }
+  | { kind: 'new_normal'; counterId: NormalArtianCounter['id']; productionTargetPosition: number; conversionSkillPosition: number }
+)
+
 export interface RouteSearchContext {
   /** Absent means the ordinary `initial_candidate_search` policy. */
   frontierPolicy?: SearchFrontierPolicy
@@ -115,6 +151,19 @@ export interface RouteSearchContext {
    * which every ordinary Candidate Search context is.
    */
   reservation?: RouteSearchReservation
+  /**
+   * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the shape-constrained Route
+   * search's Route base restriction. Absent in every Production context, where
+   * every primitive enumerates exactly as before.
+   */
+  routeBaseConstraint?: RouteBaseConstraint
+  /**
+   * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the final base admission and
+   * lane decision the `TargetSearchScheduler` of this context applies. Absent in
+   * every Production context, where the scheduler registers every base by the
+   * lane-start Ideal rule exactly as before.
+   */
+  routeShapeFilter?: ScheduledRouteShapeFilter
   /** Normal predictions shared across counter records. */
   normalPredictions?: Map<number, RestorationBonusSet>
   target: TargetWeapon
@@ -189,6 +238,30 @@ export async function conversionSkillPositions(
   context: RouteSearchContext,
   origin: number,
 ): Promise<{ positions: number[]; beyondExtent: boolean }> {
+  const legal = await legalConversionSkillPositions(context, origin)
+  const constraint = context.routeBaseConstraint
+  if (constraint === undefined) return legal
+  // Research shape constraint (5.6.9): the formal legal positions are always
+  // walked; only the shape's own position survives, and a position outside the
+  // shape is no unread work, so no extent stop is reported for it.
+  if (constraint.kind === 'owned_gogma') {
+    throw new Error('An owned-Gogma Route base constraint has no conversion Skill position.')
+  }
+  return {
+    positions: legal.positions.filter((position) => position === constraint.conversionSkillPosition),
+    beyondExtent: false,
+  }
+}
+
+/**
+ * The formal legal conversion Skill positions of `conversionSkillPositions()`
+ * before any Research shape restriction: the same walk, with the same
+ * checkpoints, whether or not a `routeBaseConstraint` is set.
+ */
+export async function legalConversionSkillPositions(
+  context: RouteSearchContext,
+  origin: number,
+): Promise<{ positions: number[]; beyondExtent: boolean }> {
   const reservation = context.reservation
   if (reservation === undefined) return { positions: [origin], beyondExtent: false }
   const { positions, beyondLimit } = await nextOperationPositions(
@@ -198,6 +271,61 @@ export async function conversionSkillPositions(
     context.execution.checkpoint,
   )
   return { positions, beyondExtent: beyondLimit }
+}
+
+/**
+ * Why the Bonus lane of a Research shape-constrained Route base cannot have a
+ * Bonus stream base (`docs/SEARCH_SPEC.md` 5.6.9), or `null` when it can.
+ *
+ * Only the operations the shape's Bonus lane uses are required: confirmed
+ * Gogma inputs and Gogma prediction for any stream lane, Reset Bonuses support
+ * only when the lane resets, Keep Bonuses capability only when it keeps. The
+ * Keep support of one concrete input is the stream's to evaluate, at the stage
+ * and state that Keeps. The constrained Route search primitives and the
+ * Research base diagnosis share this one authority, so they never disagree.
+ */
+export type RouteBaseLaneBlocker =
+  | {
+      kind: 'capability_unavailable'
+      capability: 'gogma' | 'keep_bonuses'
+      cause: 'rng_input_unconfirmed' | 'engine_capability_unavailable'
+    }
+  | { kind: 'prediction_unsupported'; prediction: 'gogma_reset'; reason: RngPredictionUnsupportedReason }
+
+export function constrainedBonusLaneCapabilityBlocker(
+  context: RouteSearchContext,
+  operations: RouteBaseLaneNeeds['bonusOperations'],
+): RouteBaseLaneBlocker | null {
+  if (operations === 'none') return null
+  if (!hasConfirmedGogmaInputs(context.input)) {
+    return { kind: 'capability_unavailable', capability: 'gogma', cause: 'rng_input_unconfirmed' }
+  }
+  if (!context.engine.capabilities.supportsGogmaPrediction) {
+    return { kind: 'capability_unavailable', capability: 'gogma', cause: 'engine_capability_unavailable' }
+  }
+  if ((operations === 'keep' || operations === 'reset_then_keep') && !context.engine.capabilities.supportsKeepBonusesPrediction) {
+    return { kind: 'capability_unavailable', capability: 'keep_bonuses', cause: 'engine_capability_unavailable' }
+  }
+  return null
+}
+
+export function constrainedBonusLaneSupportBlocker(
+  context: RouteSearchContext,
+  operations: RouteBaseLaneNeeds['bonusOperations'],
+): RouteBaseLaneBlocker | null {
+  if (operations !== 'reset' && operations !== 'reset_then_keep') return null
+  const support = context.predictionSupport.gogmaReset()
+  return support.supported ? null : { kind: 'prediction_unsupported', prediction: 'gogma_reset', reason: support.reason }
+}
+
+/** Whether a constrained Bonus lane gets a Bonus stream base: neither blocker applies. */
+export function constrainedBonusLaneAvailable(
+  context: RouteSearchContext,
+  operations: RouteBaseLaneNeeds['bonusOperations'],
+): boolean {
+  return operations !== 'none'
+    && constrainedBonusLaneCapabilityBlocker(context, operations) === null
+    && constrainedBonusLaneSupportBlocker(context, operations) === null
 }
 
 /**

@@ -1779,6 +1779,62 @@ instrumentation consumerはSearch semanticsを変更する用途に使わない�
 `BuildCandidate` ID生成規則、Production RNG prediction semantics、`PRODUCTION_RNG_ENGINE_VERSION` を変更しない。
 held位置を跨ぐRouteはPlanner Alternative Searchだけが生成する。
 
+### 5.6.9 Research専用: 形状制約付きRoute探索（Global Assignment Research）
+
+Issue #154のGlobal Assignment Research（`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` §5.3、Phase D-0A-2a）だけが使う、
+Search DomainのResearch専用API `visitShapeConstrainedRouteCandidates()`（`src/domain/search/research/`）を定める。
+Production caller（Planner、Planner Worker、UI、Service）は呼ばず、`src/domain/search/index.ts` から再exportしない。
+本節はProduction契約ではなく、5.6.8までのProduction Searchの意味を変更しない。5.6.8の「held位置を跨ぐRouteは
+Planner Alternative Searchだけが生成する」はProduction Searchについての規定であり、本APIはPlanner Alternative Searchの
+frontierをそのまま使うので、同じcoverage条件でheld位置を跨ぐ。
+
+- **共有するもの**: Planner Alternative Search（5.6.8）と同じfrontierを使う。origin / Target / extent / reservationの検証と正規化、
+  `RouteSearchContext`、held-aware Skill / Bonus stream、予測memo、`TargetSearchScheduler`、Lazy Ideal Cross、Candidate factory
+  （`createPlannerAlternativeCandidate()`）、cost層単位のbufferと6キー順の配送、重複除去、consumer stop、cancel / yield、
+  終了判定（`exhausted` / `stoppedByExtent`）は同じものである。新しいprediction・RNG規則、required / skippable・共有規則、
+  Candidateの手組み、Planner判断（Counter precondition、physical action identity、inventory）は持たない
+- **入力**: Planner Alternative Searchと同じorigin / Target / extent / 正式reservationに、形 `RouteShapeConstraint`
+  （Route base: 所持巨戟 / 所持通常と巨戟化位置 / 新規NormalのCounterとproduction targetと巨戟化位置、Skill lane: 操作0 /
+  最後のReset Skills位置、Bonus lane: 操作0 / Reset-only / Keep-only / Reset→Keepとその位置）を加える。正式reservationは
+  そのまま使い、形状制約をreservationへ流用・追加・改変しない。期待sourceの制限・巨戟化位置の制限・offsetの制限は
+  reservationの外で行い、排他sourceの規則と保護武器の操作禁止は既存のまま別に適用される
+- **base生成前の早期制約**: 形のbase種類のRoute search primitiveだけを起動する。primitiveは形のOwnedWeapon、または形の
+  NormalArtianCounterとproduction targetのoffset 1つだけを列挙し（他のoffsetのNormal予測・queue workを作らず、blind variantを
+  登録しない。作成は `heldPrefixNormalCreation()` のまま）、巨戟化位置は `conversionSkillPositions()` の正式な合法位置の判定
+  （held区間の歩行）を省かずに行った結果と形の位置との共通部分だけにする（それ以外の位置のSkill予測をしない）。
+  `TargetSearchScheduler.addBase()` は生成されたbaseが形と一致することの最終admissionだけを行い、ここで初めてsourceを
+  絞ることはしない
+- **base到達の診断**: primitiveを起動する前に、primitiveと同じhelperで source → Counter / production target → 巨戟化位置 →
+  capability → laneが使う操作のsupport の順に評価し、到達できなければ理由（source未発見 / 非互換 / 排他 / 保護 / 変換不可、
+  Counter利用不可、production targetのblocked / extent外、巨戟化位置が合法でない、capability不足、必要なpredictionの
+  unsupported）を返して終了する。予測は行わない。診断を通ったのにbaseが登録されない、形と異なるbaseや2つ目のbaseが
+  admissionへ来る、形の最終位置で終わらないRouteが配送される、のいずれもseamの契約違反としてfail closedする
+- **lane開始Idealでも継続する**: Production Searchのlane開始Ideal規則（5.6.1。lane開始状態がIdealならそのlaneを探索しない）は
+  変更しない。本APIでだけ、形がstream laneを要求すれば、lane開始状態のIdeal判定に関係なくそのchannelを開き、そのlaneの
+  操作0の解をcompositionへ渡さない。操作0のlaneは操作0の解だけを渡し、channelを開かない。compositionへ渡すのは、
+  最後のown operationの位置が形の最終位置である解だけである
+- **Bonus操作種別policy**: held-aware Bonus streamのbaseに任意field `shapePolicy`（`reset` / `keep` / `reset_then_keep`）を付ける。
+  policyが許す操作だけを生成し（`reset_then_keep` は `resetPosition` 以下でResetし、`resetPosition` のResetの後だけKeepする）、
+  `finalPosition` より後に自分の操作を置かず、そこで窓を切ってもextent到達として記録しない。予測memo、held窓、frontierの
+  代表規則（(位置, family layout) ごと、`lastResetDepth` 最大 → 5枠のstable key）、single-pass cursorは既存のままである。
+  `shapePolicy` 付きのbaseはordinaryの `readDepth()` / `solve()` / `reachesBeyondExtent()` が拒否し、`amendmentPolicy` と
+  併用しない。stream keyは `shapePolicy` 指定時だけ要素が増え、指定の無いbaseのkeyは変わらない
+- **形が禁止する操作のsupportを評価しない**: Reset Bonusesのsupportは形がResetを置けるdepthでだけ、Keep Bonusesのsupportは
+  形がKeepを置けるstateでだけ問い合わせる。形が禁止する操作のunsupportedは記録も報告もせず、形の不在・Searchの不成立の
+  根拠にしない。primitiveのBonus stream base生成条件も、形のBonus laneが使う操作のsupport / capabilityだけになる
+  （無指定時の「Reset supportが無ければBonus stream baseを作らない」条件は変わらない）
+- **観測**: shape付きBonus streamのdepthは既存のdepth observation（`onGogmaReservedDepth`）を報告するが、runtime phase section
+  （`onGogmaReservedRuntime` のphase）は報告しない（depth境界は報告する）
+- **無指定時の不変性**: `RouteSearchContext.routeBaseConstraint` / `RouteSearchContext.routeShapeFilter` /
+  `BonusStreamBase.shapePolicy` はいずれも任意fieldであり、Production
+  callerは渡さない。渡さない経路では、起動するprimitive、source / Counter / offset / 巨戟化位置の列挙、support・capabilityの
+  問合せとunsupportedの記録・通知、stream base生成条件、Bonus streamの生成state・frontier・memo・single-pass、予測内容と
+  回数、Candidateの内容と順序、summary、instrumentationの通知境界、search identityを変更しない
+- 本APIはRNG semantics、Candidate Search・Planner Alternative Search・Plannerの結果、永続形状、Worker protocolを変更せず、
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`ExportRoot.schemaVersion`、`PRODUCTION_RNG_ENGINE_VERSION`、
+  Master `dataVersion` に影響しない。本APIの結果はResearch上のspeculativeな値であり、Production Searchの結果として扱わず、
+  Plannerによる検証（Phase D'）を経るまで `verified` と呼ばない
+
 ## 5.7 Candidate出力はcanonical Idealだけである
 
 1 Target 1 requestの出力は、canonical Ideal Candidate 1件または `null` である。

@@ -88,6 +88,69 @@ export interface ScheduledComposition {
 export type ScheduledCompositionHandler = (composition: ScheduledComposition) => void
 
 /**
+ * Which lanes of one admitted Route base the Research shape-constrained Route
+ * search opens (`docs/SEARCH_SPEC.md` 5.6.9).
+ *
+ * - `zero`: the lane's zero-operation solution alone, and no stream channel
+ * - `stream`: the lane's stream channel, whatever the lane start state is (an
+ *   Ideal lane start included), and never the zero-operation solution; only a
+ *   solution whose last own operation stands at `finalPosition` reaches the
+ *   composition. The Bonus lane names the stream base to read, which carries
+ *   the shape's `shapePolicy`.
+ */
+export interface ScheduledRouteLaneAdmission {
+  skill: { kind: 'zero' } | { kind: 'stream'; finalPosition: number }
+  bonus: { kind: 'zero' } | { kind: 'stream'; streamBase: BonusStreamBase; finalPosition: number }
+}
+
+/**
+ * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the final admission of the
+ * shape-constrained Route search, read from `RouteSearchContext.routeShapeFilter`.
+ * No Production context carries one.
+ *
+ * The Route search primitives have already restricted the source, Counter,
+ * production target and conversion position before generating a base
+ * (`RouteSearchContext.routeBaseConstraint`), so `admit()` only confirms the
+ * base and decides its lanes: `null` leaves the base unregistered. The
+ * admitted base's Bonus notices are handed to `onBonusNotice` as well as to the
+ * base's own handler.
+ */
+export interface ScheduledRouteShapeFilter {
+  admit(base: ScheduledRouteBase): ScheduledRouteLaneAdmission | null
+  onBonusNotice(notice: BonusStreamNotice): void
+}
+
+/** The absolute position of the last own operation of one stream solution; `null` for a zero-operation one. */
+function lastOwnPosition(operations: readonly RouteOperation[]): number | null {
+  const last = operations[operations.length - 1]
+  if (last === undefined) return null
+  return last.type === 'reset_skills' ? last.skillCounterBefore
+    : last.type === 'reset_bonuses' || last.type === 'keep_bonuses' ? last.gogmaCounterBefore : null
+}
+
+interface CrossAxes {
+  addBonus(value: EvaluatedBonusSolution): void
+  addSkill(value: EvaluatedSkillSolution): void
+}
+
+/**
+ * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the Cross axes of one admitted
+ * shape-constrained Route base. A `zero` lane takes its zero-operation solution
+ * only; a `stream` lane takes only the solutions whose last own operation stands
+ * at its `finalPosition`, so its zero-operation solution never enters the
+ * composition even when the lane start state is Ideal. Nothing else changes:
+ * the solutions, their order and the Cross itself are the ordinary ones.
+ */
+function shapeLaneAxes(axes: CrossAxes, lanes: ScheduledRouteLaneAdmission): CrossAxes {
+  const takes = (lane: ScheduledRouteLaneAdmission['skill'] | ScheduledRouteLaneAdmission['bonus'], operations: readonly RouteOperation[]) =>
+    lane.kind === 'zero' ? operations.length === 0 : lastOwnPosition(operations) === lane.finalPosition
+  return {
+    addBonus: (value) => { if (takes(lanes.bonus, value.solution.operations)) axes.addBonus(value) },
+    addSkill: (value) => { if (takes(lanes.skill, value.solution.operations)) axes.addSkill(value) },
+  }
+}
+
+/**
  * The concrete Route of one composed pair (SEARCH_SPEC 5.5.4). Pure: the
  * amendment operations of a conversion base run on the transient converted
  * weapon (`sourceOwnedWeaponId = null`), those of an existing-Gogma base on the
@@ -165,12 +228,19 @@ export class TargetSearchScheduler {
    * undefined, in which case no boundary argument is even evaluated.
    */
   private readonly runtime: SearchRuntimeObserver | undefined
+  /**
+   * Research only (5.6.9): `RouteSearchContext.routeShapeFilter`, undefined in
+   * every Production scheduler.
+   */
+  private readonly shapeFilter: ScheduledRouteShapeFilter | undefined
 
   /**
    * The ordinary Candidate Search materialization needs the ordinary request
    * (`searchRunId`, `CalculationContext`), so only a
    * `CandidateSearchRouteContext` may omit the handler. Any other consumer
    * supplies its own handler and never fabricates a `CandidateSearchInput`.
+   * A context carrying the Research shape filter (`docs/SEARCH_SPEC.md` 5.6.9)
+   * runs only under the Planner Alternative policy.
    */
   constructor(context: CandidateSearchRouteContext)
   constructor(context: RouteSearchContext, onComposition: ScheduledCompositionHandler, runtime?: SearchRuntimeObserver)
@@ -181,6 +251,10 @@ export class TargetSearchScheduler {
   ) {
     this.context = context
     this.runtime = runtime
+    this.shapeFilter = context.routeShapeFilter
+    if (this.shapeFilter !== undefined && (context.frontierPolicy ?? 'initial_candidate_search') !== 'planner_alternative') {
+      throw new Error('A shape filter runs only under the Planner Alternative frontier policy.')
+    }
     if (onComposition) {
       this.onComposition = onComposition
     } else if ('searchInput' in context) {
@@ -211,6 +285,31 @@ export class TargetSearchScheduler {
   }
 
   addBase(base: ScheduledRouteBase): void {
+    if (this.shapeFilter === undefined) {
+      this.registerBase(base, undefined)
+      return
+    }
+    // Research shape filter (5.6.9): the final admission, before anything is
+    // queued. The admitted base hands its Bonus notices to the filter as well.
+    const filter = this.shapeFilter
+    const lanes = filter.admit(base)
+    if (lanes === null) return
+    const own = base.onBonusNotice
+    this.registerBase({
+      ...base,
+      onBonusNotice(notice) {
+        filter.onBonusNotice(notice)
+        own?.call(base, notice)
+      },
+    }, lanes)
+  }
+
+  /**
+   * Registers one Route base. `lanes` is the Research shape admission
+   * (5.6.9) and is undefined for every Production base, which opens its lanes
+   * by the lane-start Ideal rule exactly as before.
+   */
+  private registerBase(base: ScheduledRouteBase, lanes: ScheduledRouteLaneAdmission | undefined): void {
     const { target, input } = this.context
     const baseCost = countRouteOperations({
       kind: base.kindResolution.type === 'fixed' ? base.kindResolution.kind : 'existing_gogma_mixed',
@@ -245,7 +344,7 @@ export class TargetSearchScheduler {
     }
     // The initial Search composes the Cross axes only (SEARCH_SPEC 5.5.4); the
     // Planner Alternative policy composes every Ideal pair, lazily (5.6.8).
-    const cross = this.policy === 'planner_alternative'
+    const axes = this.policy === 'planner_alternative'
       ? createLazyIdealCross({
         open: (bonus, skill, onSettled) => {
           const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
@@ -268,6 +367,10 @@ export class TargetSearchScheduler {
         const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
         this.queue.enqueue({ lowerBound: cost, settle: settleComposition(bonus, skill, cost) })
       })
+    // A Research shape admission (5.6.9) lets each axis take only its lane's
+    // solutions: the zero-operation one of a `zero` lane, the ones ending at
+    // `finalPosition` of a `stream` lane.
+    const cross = lanes === undefined ? axes : shapeLaneAxes(axes, lanes)
 
     const bonus = base.zeroBonus === null
       ? null
@@ -275,18 +378,24 @@ export class TargetSearchScheduler {
     const skill = buildSkillSolutionSet(target, [base.zeroSkill])[0]
     if (bonus) cross.addBonus(bonus)
     cross.addSkill(skill)
-    if (!skill.idealMatch && base.startSkillCounter !== null) {
+    // A Production lane opens only when its start state is not Ideal; a shape's
+    // `stream` lane opens whatever its start state is (5.6.9).
+    const skillLaneOpens = lanes === undefined ? !skill.idealMatch : lanes.skill.kind === 'stream'
+    if (skillLaneOpens && base.startSkillCounter !== null) {
       const channel = this.skillChannel(base.startSkillCounter, baseCost)
       for (const value of channel.retained) cross.addSkill(value)
       channel.subscribers.push(cross.addSkill)
     }
-    if (bonus === null && base.bonusBase === null) {
+    const bonusBase = lanes === undefined ? base.bonusBase
+      : lanes.bonus.kind === 'stream' ? lanes.bonus.streamBase : null
+    if (bonus === null && bonusBase === null) {
       throw new Error(
         'A Route base without a zero-amendment Bonus solution requires a Bonus stream base.',
       )
     }
-    if (!bonus?.idealMatch && base.bonusBase !== null) {
-      const channel = this.bonusChannel(base.bonusBase, baseCost)
+    const bonusLaneOpens = lanes === undefined ? !bonus?.idealMatch : lanes.bonus.kind === 'stream'
+    if (bonusLaneOpens && bonusBase !== null) {
+      const channel = this.bonusChannel(bonusBase, baseCost)
       for (const value of channel.retained) cross.addBonus(value)
       channel.subscribers.push(cross.addBonus)
       if (base.onBonusNotice) {
