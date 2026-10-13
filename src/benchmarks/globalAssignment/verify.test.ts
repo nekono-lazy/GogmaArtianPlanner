@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { hashStableValue } from '../../domain/models/publicTypes'
+import { hashStableValue, type ProductionPlan } from '../../domain/models/publicTypes'
 import { TARGET, scenarioAlternativeFirst, scenarioConversionFallback, scenarioSkillDependency } from './materializationTestFixture'
-import { materializedEntriesFingerprint, productionPlannerVerificationPort, verifyPlannerCandidate, type PlannerVerificationPort } from './verify'
 import {
-  conflictingHandoff, editedResultPort, execution, heldCrossingHandoff, materializedHandoff, plannerDependencies, TEST_CONDITIONS,
+  materializedEntriesFingerprint, physicalIdentityReasons, productionPlannerVerificationPort, summarizeVerificationPhysical, verifyPlannerCandidate, type PlannerVerificationPort,
+} from './verify'
+import {
+  conflictingHandoff, editedResultPort, execution, heldCrossingHandoff, materializedHandoff, plannerDependencies, runtimeUnsupportedRetryHandoff, TEST_CONDITIONS, zeroOperationHandoff,
 } from './verificationTestFixture'
 
 /*
@@ -32,8 +34,10 @@ describe("Phase D-1A Phase D': the in-process conditions", () => {
       expect(semantic.planner).toMatchObject({ fullPlannerRuns: 1, error: null, planPresent: true, conflicts: [], rejected: [], warnings: [], termination: { status: 'completed', reachedLimits: [], completedTargetCount: 2, totalTargetCount: 2, limits: { maxPlanSteps: TEST_CONDITIONS.researchMaxPlanSteps } } })
       expect(semantic.planner!.selectedBuildListEntryIds).toEqual(semantic.planner!.expectedSelectedBuildListEntryIds)
       expect(semantic.traceReplay).toMatchObject({ ran: true, isValid: true, issueCodes: [], unsupportedInput: false, finalCountersMatchPlan: true, correspondence: { mismatches: 0, counterPositionMismatches: 0 } })
-      expect(semantic.physical).toMatchObject({ error: null, identityHolds: true, nonPhysicalStepCount: 0 })
+      // No zero-operation Target: no non-physical Step, so physical = Plan steps exactly as under the D-1A rule.
+      expect(semantic.physical).toMatchObject({ error: null, nonPhysicalSteps: {}, nonPhysicalStepCount: 0, unexpectedNonPhysicalSteps: {}, identities: { stepCount: true, streamAdvance: true, objective: true } })
       expect(semantic.physical!.physicalOperations).toBe(semantic.physical!.planSteps)
+      expect(semantic.physical!.physicalOperations).toBe(semantic.physical!.streamAdvanceSum)
       expect(semantic.physical!.physicalOperations).toBe(handoff.objective)
       expect(semantic.physical!.streamComparison.every(row => row.equal)).toBe(true)
       expect(semantic.candidate).toMatchObject({ objective: handoff.objective, planningTargetCount: 2, materializedEntryCount: 2, stage: 'all_materialized', entryFingerprint: materializedEntriesFingerprint(handoff.materializedEntries) })
@@ -176,7 +180,7 @@ describe("Phase D-1A Phase D': every failure keeps its typed reason and never me
     await expect(verifyPlannerCandidate(scene.input, handoff, plannerDependencies(scene), { researchMaxPlanSteps: 0 }, execution())).rejects.toThrow(/positive safe integer/)
   }, 60_000)
 
-  it('rejects a null Plan, warnings, a runtime-unsupported retry and a Plan generation error', async () => {
+  it('rejects a null Plan, warnings and a Plan generation error', async () => {
     const { scene, handoff } = await successCase()
     const run = (planner: PlannerVerificationPort) => verifyPlannerCandidate(scene.input, handoff, plannerDependencies(scene), TEST_CONDITIONS, execution({ planner }))
     const nullPlan = await run(editedResultPort(result => { result.plan = null }))
@@ -185,9 +189,7 @@ describe("Phase D-1A Phase D': every failure keeps its typed reason and never me
     const warned = await run(editedResultPort(result => { result.warnings.push({ kind: 'rng_prediction_unsupported', message: 'fixture' }) }))
     expect(warned.semantic.outcome).toEqual({ kind: 'planner_rejected', reasons: [{ code: 'warnings', count: 1, kinds: { rng_prediction_unsupported: 1 } }] })
     expect(warned.semantic.checks.noWarnings).toBe(false)
-    const retried = await run({ ...productionPlannerVerificationPort, createProductionPlanWithObserver: (input, deps, options, observer) => { observer?.beforePlannerRun(); return productionPlannerVerificationPort.createProductionPlanWithObserver(input, deps, options, observer) } })
-    expect(retried.semantic.planner!.fullPlannerRuns).toBe(2)
-    expect(retried.semantic.outcome).toEqual({ kind: 'planner_rejected', reasons: [{ code: 'runtime_unsupported_retry', fullPlannerRuns: 2 }] })
+    // D-1B: the number of full Planner runs is no reason of its own (the block below covers the retry rule).
     const thrown = await run({ ...productionPlannerVerificationPort, createProductionPlanWithObserver: async () => { throw new Error('Planner trace replay failed: fixture') } })
     expect(thrown.semantic.planner).toMatchObject({ error: { name: 'Error', message: 'Planner trace replay failed: fixture' }, planPresent: false, termination: null })
     expect(thrown.semantic.outcome).toMatchObject({ kind: 'planner_rejected', reasons: expect.arrayContaining([{ code: 'plan_generation_error', errorName: 'Error', message: 'Planner trace replay failed: fixture' }, { code: 'trace_replay_not_run' }]) })
@@ -214,12 +216,12 @@ describe("Phase D-1A Phase D': every failure keeps its typed reason and never me
     off.objective += 1
     const record = await verifyPlannerCandidate(scene.input, off, plannerDependencies(scene), TEST_CONDITIONS, execution())
     expect(record.semantic.outcome).toEqual({ kind: 'objective_mismatch', physicalOperations: handoff.objective, objective: handoff.objective + 1, reasons: [{ code: 'physical_objective_mismatch', physicalOperations: handoff.objective, objective: handoff.objective + 1 }] })
-    expect(record.semantic.checks).toMatchObject({ physicalEqualsPlanSteps: true, physicalEqualsObjective: false })
+    expect(record.semantic.checks).toMatchObject({ physicalStepCountIdentity: true, physicalStreamAdvanceIdentity: true, physicalObjectiveIdentity: false })
     // A Plan whose Step breaks the one-Counter identity fails the physical summary itself.
     const broken = await verifyPlannerCandidate(scene.input, handoff, plannerDependencies(scene), TEST_CONDITIONS, execution({ planner: editedResultPort(result => { result.plan!.steps[0]!.rngAdvance = { ...result.plan!.steps[0]!.rngAdvance, skillCounterDelta: 2 } }) }))
     expect(broken.semantic.physical!.error).toMatch(/does not advance exactly one Counter by one/)
     expect(broken.semantic.outcome.kind).toBe('planner_rejected')
-    expect(broken.semantic.checks.physicalEqualsPlanSteps).toBe(false)
+    expect(broken.semantic.checks).toMatchObject({ physicalStepCountIdentity: false, physicalStreamAdvanceIdentity: false, physicalObjectiveIdentity: false })
   }, 60_000)
 
   it('reports a cancellation as unmeasured(cancelled), never as a Planner result', async () => {
@@ -228,6 +230,169 @@ describe("Phase D-1A Phase D': every failure keeps its typed reason and never me
     expect(record.semantic.outcome).toEqual({ kind: 'unmeasured', reason: 'cancelled' })
     expect(record.semantic.planner!.termination!.status).toBe('cancelled')
     expect(record.semantic.traceReplay).toBeNull()
+  }, 60_000)
+})
+
+/*
+ * Issue #154 Global Assignment Phase D-1B (docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md 3 / 4): condition 11 is three exact identities
+ * (physical = Plan steps − non-physical steps = Σ stream advances; 12: = structural objective), a `confirm_owned_ideal` Step is the one
+ * non-physical Step, and the number of full Planner runs is recorded but never a reason of its own. The Plans below are real Production
+ * Plans of real materializations; where a test edits a Plan or a record after the real run, the comment names the edit.
+ */
+describe('Phase D-1B: non-physical Steps and the physical identities', () => {
+  /** The Production result of one verification, captured unedited (`editedResultPort` with a no-op edit that keeps a copy). */
+  async function capturedRun(make: () => ReturnType<typeof zeroOperationHandoff>) {
+    const { scenario, handoff } = await make()
+    let plan: ProductionPlan | null = null
+    const record = await verifyPlannerCandidate(scenario.scene.input, handoff, plannerDependencies(scenario.scene), TEST_CONDITIONS, execution({ planner: editedResultPort(result => { plan = structuredClone(result.plan) }) }))
+    return { scenario, handoff, record, plan: plan as ProductionPlan | null }
+  }
+
+  it('meets every condition with one confirm_owned_ideal Step: physical = Plan steps − 1 = Σ advances = objective (the D-1A rule would refuse it)', async () => {
+    const { handoff, record } = await capturedRun(() => zeroOperationHandoff(['a']))
+    const { semantic } = record
+    expect(semantic.outcome).toEqual({ kind: 'conditions_met' })
+    expect(Object.values(semantic.checks).every(value => value === true)).toBe(true)
+    expect(semantic.physical).toMatchObject({ planSteps: 6, physicalOperations: 5, nonPhysicalSteps: { confirm_owned_ideal: 1 }, nonPhysicalStepCount: 1, unexpectedNonPhysicalSteps: {}, streamAdvanceSum: 5, objective: 5, identities: { stepCount: true, streamAdvance: true, objective: true } })
+    expect(handoff.objective).toBe(5)
+    // Before D-1B condition 11 was `physical === plan.steps.length`: 5 !== 6 would have been objective_mismatch(physical_steps_mismatch).
+    expect(semantic.physical!.physicalOperations).not.toBe(semantic.physical!.planSteps)
+    // The Planner selected both Entries and completed both Targets; the zero-operation Target's completion is its confirm_owned_ideal.
+    expect(semantic.planner).toMatchObject({ fullPlannerRuns: 1, conflicts: [], rejected: [], warnings: [], termination: { status: 'completed', completedTargetCount: 2, totalTargetCount: 2 } })
+    // Trace Replay still faces the 5 physical Steps one to one; the confirm_owned_ideal is one of the reserve drafts.
+    expect(semantic.traceReplay).toMatchObject({ isValid: true, drafts: { total: 7, physical: 5, reserve: 2 }, correspondence: { planPhysicalSteps: 5, replayPhysicalDrafts: 5, mismatches: 0, counterPositionMismatches: 0 }, finalCountersMatchPlan: true })
+  }, 60_000)
+
+  it('meets every condition with several confirm_owned_ideal Steps, and non-physical Steps never raise the objective', async () => {
+    const one = await capturedRun(() => zeroOperationHandoff(['a']))
+    const two = await capturedRun(() => zeroOperationHandoff(['a', 'c']))
+    expect(two.record.semantic.outcome).toEqual({ kind: 'conditions_met' })
+    expect(two.record.semantic.physical).toMatchObject({ planSteps: 7, physicalOperations: 5, nonPhysicalSteps: { confirm_owned_ideal: 2 }, nonPhysicalStepCount: 2, identities: { stepCount: true, streamAdvance: true, objective: true } })
+    expect(two.plan!.steps.filter(step => step.operationType === 'confirm_owned_ideal').every(step => step.rngAdvance.skillCounterDelta === 0 && step.rngAdvance.gogmaCounterDelta === 0 && (step.rngAdvance.normalCounterDelta ?? 0) === 0)).toBe(true)
+    // One more zero-operation Target adds one Plan Step and nothing to the objective or the physical operations.
+    expect(two.handoff.objective).toBe(one.handoff.objective)
+    expect(two.record.semantic.physical!.physicalOperations).toBe(one.record.semantic.physical!.physicalOperations)
+    expect(two.record.semantic.physical!.planSteps).toBe(one.record.semantic.physical!.planSteps! + 1)
+    expect(two.record.semantic.planner!.termination).toMatchObject({ status: 'completed', completedTargetCount: 3, totalTargetCount: 3 })
+  }, 60_000)
+
+  it('separates verified-capable from objective_mismatch over the same Plan with non-physical Steps (no tolerance)', async () => {
+    const { scenario, handoff } = await zeroOperationHandoff(['a'])
+    const off = structuredClone(handoff)
+    off.objective += 1
+    const record = await verifyPlannerCandidate(scenario.scene.input, off, plannerDependencies(scenario.scene), TEST_CONDITIONS, execution())
+    expect(record.semantic.outcome).toEqual({ kind: 'objective_mismatch', physicalOperations: 5, objective: 6, reasons: [{ code: 'physical_objective_mismatch', physicalOperations: 5, objective: 6 }] })
+    expect(record.semantic.checks).toMatchObject({ physicalStepCountIdentity: true, physicalStreamAdvanceIdentity: true, physicalObjectiveIdentity: false })
+    // The objective of the same handoff minus one: still a mismatch, never absorbed by the non-physical Step.
+    const below = structuredClone(handoff)
+    below.objective -= 1
+    expect((await verifyPlannerCandidate(scenario.scene.input, below, plannerDependencies(scenario.scene), TEST_CONDITIONS, execution())).semantic.outcome).toMatchObject({ kind: 'objective_mismatch', physicalOperations: 5, objective: 4 })
+  }, 60_000)
+
+  it('fails closed when a non-physical Step advances a Counter, or a physical Step advances the wrong Counter', async () => {
+    const { scenario, handoff } = await zeroOperationHandoff(['a'])
+    const run = (edit: (plan: ProductionPlan) => void) => verifyPlannerCandidate(scenario.scene.input, handoff, plannerDependencies(scenario.scene), TEST_CONDITIONS, execution({ planner: editedResultPort(result => edit(result.plan!)) }))
+    // Edit: the real Plan's confirm_owned_ideal Step is given one Gogma Counter advance.
+    const advancing = await run(plan => { const step = plan.steps.find(value => value.operationType === 'confirm_owned_ideal')!; step.rngAdvance = { ...step.rngAdvance, gogmaCounterDelta: 1 } })
+    expect(advancing.semantic.physical!.error).toMatch(/Unknown physical operation confirm_owned_ideal/)
+    expect(advancing.semantic.outcome).toEqual({ kind: 'objective_mismatch', physicalOperations: null, objective: 5, reasons: [{ code: 'physical_summary_error', message: expect.stringMatching(/confirm_owned_ideal/) }] })
+    expect(advancing.semantic.checks).toMatchObject({ physicalStepCountIdentity: false, physicalStreamAdvanceIdentity: false, physicalObjectiveIdentity: false })
+    // Edit: the real Plan's first reset_bonuses Step advances the Skill Counter instead of the Gogma Counter.
+    const wrongStream = await run(plan => { const step = plan.steps.find(value => value.operationType === 'reset_bonuses')!; step.rngAdvance = { ...step.rngAdvance, gogmaCounterDelta: 0, skillCounterDelta: 1 } })
+    expect(wrongStream.semantic.physical!.error).toMatch(/Operation reset_bonuses advanced skill/)
+    expect(wrongStream.semantic.outcome.kind).not.toBe('conditions_met')
+    expect(wrongStream.semantic.checks.physicalStepCountIdentity).toBe(false)
+    // Edit: the real Plan's confirm_owned_ideal Step is relabelled as the legacy reserve_weapon (zero advance): no non-physical Step of a
+    // current Plan, so it breaks the step-count identity (and the replay correspondence, which takes it for a physical Step).
+    const legacy = await run(plan => { plan.steps.find(value => value.operationType === 'confirm_owned_ideal')!.operationType = 'reserve_weapon' })
+    expect(legacy.semantic.physical).toMatchObject({ error: null, nonPhysicalSteps: { reserve_weapon: 1 }, nonPhysicalStepCount: 0, unexpectedNonPhysicalSteps: { reserve_weapon: 1 }, identities: { stepCount: false, streamAdvance: true, objective: true } })
+    expect(physicalIdentityReasons(legacy.semantic.physical!)).toEqual([{ code: 'physical_steps_mismatch', physicalOperations: 5, planSteps: 6, nonPhysicalSteps: 0, unexpectedNonPhysicalSteps: { reserve_weapon: 1 } }])
+    expect(legacy.semantic.outcome.kind).toBe('planner_rejected')
+    expect(legacy.semantic.checks.physicalStepCountIdentity).toBe(false)
+  }, 60_000)
+
+  it('counts a shared physical Step once and breaks the stream-advance identity on any difference (pure summary)', async () => {
+    const { scenario, handoff, plan } = await capturedRun(() => zeroOperationHandoff(['a']))
+    const input = scenario.scene.input
+    // Edit: one physical Step of the real Plan is recorded as progressing both Targets (a shared physical Step).
+    const shared = structuredClone(plan!)
+    const step = shared.steps.find(value => value.operationType === 'reset_bonuses')!
+    step.progressedTargetWeaponIds = [TARGET.a, TARGET.b]
+    const summary = summarizeVerificationPhysical(shared, input, handoff).record
+    expect(summary).toMatchObject({ planSteps: 6, physicalOperations: 5, sharedPhysicalSteps: 1, streamAdvanceSum: 5, identities: { stepCount: true, streamAdvance: true, objective: true } })
+    expect(physicalIdentityReasons(summary)).toEqual([])
+    // Edit: the summary record says Σ advances 4 for 5 physical operations (summarizePlanPhysical() itself never produces this).
+    const broken = { ...summary, streamAdvanceSum: 4, identities: { ...summary.identities, streamAdvance: false } }
+    expect(physicalIdentityReasons(broken)).toEqual([{ code: 'physical_identity_broken', physicalOperations: 5, streamAdvanceSum: 4 }])
+    // Every identity is exact: each one alone is a reason.
+    expect(physicalIdentityReasons({ ...summary, identities: { stepCount: false, streamAdvance: true, objective: true } }).map(reason => reason.code)).toEqual(['physical_steps_mismatch'])
+    expect(physicalIdentityReasons({ ...summary, identities: { stepCount: true, streamAdvance: true, objective: false } }).map(reason => reason.code)).toEqual(['physical_objective_mismatch'])
+    expect(summarizeVerificationPhysical(null, input, handoff).record.identities).toEqual({ stepCount: null, streamAdvance: null, objective: null })
+  }, 60_000)
+
+  it('keeps the Trace Replay correspondence check with non-physical Steps: a dropped physical draft still fails', async () => {
+    const { scenario, handoff } = await zeroOperationHandoff(['a'])
+    const shifted = await verifyPlannerCandidate(scenario.scene.input, handoff, plannerDependencies(scenario.scene), TEST_CONDITIONS, execution({
+      planner: { ...productionPlannerVerificationPort, replayPlannerSearchTrace: (...args) => { const replay = productionPlannerVerificationPort.replayPlannerSearchTrace(...args); return { ...replay, drafts: replay.drafts.filter(draft => draft.actionKind !== 'route_operation').concat(replay.drafts.filter(draft => draft.actionKind === 'route_operation').slice(1)) } } },
+    }))
+    expect(shifted.semantic.outcome).toMatchObject({ kind: 'planner_rejected', reasons: [{ code: 'trace_replay_correspondence_mismatch' }] })
+    expect(shifted.semantic.traceReplay!.correspondence).toMatchObject({ planPhysicalSteps: 5, replayPhysicalDrafts: 4 })
+    expect(shifted.semantic.checks.traceReplayValid).toBe(false)
+  }, 60_000)
+})
+
+describe('Phase D-1B: full Planner runs are recorded, never a reason of their own', () => {
+  /** A Production port that announces one extra full run (a modelled retry) before the real run; nothing else of the result changes. */
+  const modelledRetryPort = (edit: (result: Awaited<ReturnType<PlannerVerificationPort['createProductionPlanWithObserver']>>) => void = () => {}): PlannerVerificationPort => ({
+    ...productionPlannerVerificationPort,
+    createProductionPlanWithObserver: async (input, deps, options, observer) => {
+      observer?.beforePlannerRun()
+      const result = await productionPlannerVerificationPort.createProductionPlanWithObserver(input, deps, options, observer)
+      edit(result)
+      return result
+    },
+  })
+
+  it('records one full run for a run without retry', async () => {
+    const { scene, handoff } = await successCase()
+    const record = await verifyPlannerCandidate(scene.input, handoff, plannerDependencies(scene), TEST_CONDITIONS, execution())
+    expect(record.semantic.planner!.fullPlannerRuns).toBe(1)
+    expect(record.semantic.outcome).toEqual({ kind: 'conditions_met' })
+  }, 60_000)
+
+  it('rejects a real Production runtime-unsupported retry through the conditions it breaks (warning, excluded Entry, completion), not its count', async () => {
+    const { scenario, handoff, port, switch: flag } = await runtimeUnsupportedRetryHandoff()
+    const record = await verifyPlannerCandidate(scenario.scene.input, handoff, plannerDependencies(scenario.scene), TEST_CONDITIONS, execution({ planner: port }))
+    expect(flag.on).toBe(true)
+    const { semantic } = record
+    // The Production retry ran: two full runs, b's Entry excluded with the rng_prediction_unsupported warning, the final run incomplete.
+    expect(semantic.planner!.fullPlannerRuns).toBe(2)
+    expect(semantic.planner!.warnings).toEqual([{ kind: 'rng_prediction_unsupported', message: expect.stringContaining('requires unsupported RNG input (skill: reference_adapter_unsupported)') }])
+    expect(semantic.outcome.kind).toBe('planner_rejected')
+    const reasons = semantic.outcome.kind === 'planner_rejected' ? semantic.outcome.reasons : []
+    expect(reasons.map(reason => reason.code)).toEqual(expect.arrayContaining(['termination_not_completed', 'completed_target_count_mismatch', 'total_target_count_mismatch', 'warnings']))
+    expect(reasons).toContainEqual({ code: 'warnings', count: 1, kinds: { rng_prediction_unsupported: 1 } })
+    // No reason names the run count: the record keeps it as an observation.
+    expect(JSON.stringify(reasons)).not.toMatch(/retry|fullPlannerRuns/)
+    expect(semantic.checks).toMatchObject({ noWarnings: false, terminationCompleted: false, completedEqualsPlanningTargets: false })
+  }, 60_000)
+
+  it('meets every condition for a modelled retry whose other conditions all hold, and rejects it on a warning alone', async () => {
+    const { scene, handoff } = await successCase()
+    const run = (port: PlannerVerificationPort) => verifyPlannerCandidate(scene.input, handoff, plannerDependencies(scene), TEST_CONDITIONS, execution({ planner: port }))
+    // Modelled (not a Production retry): the count is 2, the Production result is the ordinary one.
+    const counted = await run(modelledRetryPort())
+    expect(counted.semantic.planner!.fullPlannerRuns).toBe(2)
+    expect(counted.semantic.outcome).toEqual({ kind: 'conditions_met' })
+    expect(Object.values(counted.semantic.checks).every(value => value === true)).toBe(true)
+    // The same modelled retry with a warning: rejected by condition 9 only, whatever the count.
+    const warned = await run(modelledRetryPort(result => { result.warnings.push({ kind: 'rng_prediction_unsupported', message: 'fixture' }) }))
+    expect(warned.semantic.planner!.fullPlannerRuns).toBe(2)
+    expect(warned.semantic.outcome).toEqual({ kind: 'planner_rejected', reasons: [{ code: 'warnings', count: 1, kinds: { rng_prediction_unsupported: 1 } }] })
+    // A warning with one full run is rejected the same way: the warning decides, never the count.
+    const single = await run(editedResultPort(result => { result.warnings.push({ kind: 'rng_prediction_unsupported', message: 'fixture' }) }))
+    expect(single.semantic.planner!.fullPlannerRuns).toBe(1)
+    expect(single.semantic.outcome).toEqual(warned.semantic.outcome)
   }, 60_000)
 })
 

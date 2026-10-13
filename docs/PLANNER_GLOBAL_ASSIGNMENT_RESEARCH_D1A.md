@@ -12,6 +12,14 @@ Plan steps = 物理操作数 = structural objective = **1,766**）を満たし�
 issueが無かった。これは **D-1Aの非formal条件での確認** であり、正式に登録・計測した統合acceptance（D-1C）でも、正式な `VerifiedPlanRecord` / `bestVerified` でも、
 `proven_minimum` でもない。
 
+> **D-1Bでの整理（追記。本書の実測値・判定は書き換えていない）**: 本書はD-1A当時の成立条件で測定した**非formal記録**である。
+> [D-1B](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md) は (1) 条件11を「物理操作数 = Plan steps」から「物理操作数 = Plan steps − 非物理Step（`confirm_owned_ideal`）数 =
+> Σ stream前進」に改め（条件12 = objectiveは不変）、(2) full Planner run数を観測値として記録しつつ `runtime_unsupported_retry` を独立の不成立理由から外した
+> （retryは、それが破るwarning・除外Entry・完成数の条件で判定する）。本書の43 Target・1,766 stepの実測には非物理Stepも（0件）runtime-unsupported retryも（full run 1回）
+> 無かったので、D-1Bの規則でも同じ条件がすべて成立する（D-1B記録 §7）。ただしverification protocol versionが `global-assignment-d1a:1` から
+> `global-assignment-d1b:1` に変わりsemantic recordの形も変わったので、本書のverification semantic SHA-256（`86b1b254…`）はD-1A protocolのrecordの値である。
+> 統合acceptanceは、D-1Bで登録した正式条件でD-1Cが再確認する。
+
 ## 0. 非formal確認の置き換え（PR #253 Required fix）
 
 | 区分 | commit | 内容 |
@@ -85,14 +93,14 @@ issueが無かった。これは **D-1Aの非formal条件での確認** であ�
    減少（`planning_target_removed`）、生成Entryの除外（`generated_entry_excluded`、除外理由はProduction validationのもの）、入力のissue（`final_input_invalid`）、
    final inputでの重複（`duplicate_target_entries`）を区別する。固定値（43）は判定に使わない
 4. **Planner**: `createProductionPlanWithObserver()`（Productionの決定的scheduler）。`beforePlannerRun()` でfull run数を数え、runtime-unsupported retryがあれば
-   その回数を記録して不成立理由 `runtime_unsupported_retry` にする。Beam Search oracleや独自schedulerは使わない
+   その回数を記録して不成立理由 `runtime_unsupported_retry` にする。Beam Search oracleや独自schedulerは使わない（D-1Bで改訂: 回数は記録するが不成立理由にしない。D-1B §4）
 5. **独立Trace Replay**: 最後のfull runの `bestState` を `replayPlannerSearchTrace()` で再生し、validity・issue code・unsupported input、Plan stepとの対応
    （physical draftとPlan stepの件数、各stepの操作種別・Entry・進行Target・RNG advance・Counter位置）、再生後のCounterとPlanのstream終端の一致を見る
 6. **物理操作数**: `summarizePlanPhysical()` のPlan step数・物理操作数・非物理step・Σ stream前進・共有物理step、stream別のstructural前進との対照（診断）
 7. **成立条件**（すべて必須）: (1) plan有り (2) termination completed (3) completed = planning Target数 (4) total = planning Target数 (5) planning Targetの全Entryがselected
    (6) Conflict 0 (7) rejected 0 (8) resource_conflict 0 (9) warning 0 (10) Trace Replay valid（対応・最終Counterを含む）(11) 物理操作数 = Plan steps（恒等式を含む）
    (12) 物理操作数 = structural objective。1〜10のどれかが不成立なら `planner_rejected`（理由を全て列挙）、11 / 12だけが不成立なら `objective_mismatch`。
-   許容誤差は無い。Planner自身のcancelは `unmeasured(cancelled)`
+   許容誤差は無い。Planner自身のcancelは `unmeasured(cancelled)`（D-1Bで改訂: (11) は「物理操作数 = Plan steps − 非物理Step数」と「物理操作数 = Σ stream前進」の2つの完全一致。D-1B §3）
 8. 条件 (13) fresh ordinary Plannerは `judgeD1aRun()` が2 processのrecordから判定する（§2.2）
 
 ### 2.2 2 processの判定（`judgeD1aRun()` / `concludeD1aRun()`）
@@ -363,6 +371,8 @@ Target ID・OwnedWeapon ID・Entry ID / 本体・Target別Counter位置・Plan�
 
 ## 11. D-1Bで登録すべき条件（提案。D-1Aでは決めない）
 
+（追記）以下の論点はD-1Bで決定・登録した。各行の結論は [D-1B記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md) §3 / §4 / §8〜§13 を参照（本表は当時の提案のまま残す）。
+
 | 項目 | D-1Aの観測 | 登録時の論点 |
 | --- | --- | --- |
 | Research `maxPlanSteps` | 20,000で1,766 step・`completed`（上限の8.8%） | 設計 §10.4の20,000をそのまま登録するか。1,657 / 1,766 / 8,534を根拠に値を決めない（G12） |
@@ -382,6 +392,7 @@ Target ID・OwnedWeapon ID・Entry ID / 本体・Target別Counter位置・Plan�
 - **非物理stepと条件11**: 設計 §9.5の `physical.total === plan.steps.length` は、`confirm_owned_ideal`（Counterを進めない）Stepを含むPlanでは成り立たない。
   このExportの候補はゼロ操作Targetを含まない（非物理step 0）ので影響しないが、zero-operation optionを含む候補では設計の条件をそのまま適用すると不成立になる。
   D-1Aは設計どおりに判定し（`physical_steps_mismatch` を区別して記録）、緩和していない。D-1Bの前に設計で扱いを決める必要がある
+  （→ D-1Bで決定。非物理Stepを差し引いた完全一致の恒等式にした。設計 §9.5、D-1B §3）
 - **warning 0の厳格さ**: 非planning Targetのstale Entryを元のまま残すとProductionのvalidation warning（`build_list_entry_stale`）が出て条件9で不成立になる
   （synthetic testで確認）。このExportにはそのようなEntryは無い。設計どおり緩和していない
 - **他のmachine・Node version・Browser Worker**: 未確認（Node測定はProduction runtimeの根拠にしない）

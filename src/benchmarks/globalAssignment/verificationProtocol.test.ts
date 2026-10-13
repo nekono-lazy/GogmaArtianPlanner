@@ -17,8 +17,8 @@ import {
   materializedEntriesFingerprintOfSemantic, parseD1aJournal,
   type D1aChildReading, type D1aChildRecord, type D1aFirstProcessView, type D1aFreshProcessView, type D1aVerificationView,
 } from './verificationProtocol'
-import { verifyPlannerCandidate, type PlannerVerificationSemantic } from './verify'
-import { execution, TEST_CONDITIONS } from './verificationTestFixture'
+import { productionPlannerVerificationPort, verifyPlannerCandidate, type PlannerVerificationPort, type PlannerVerificationSemantic } from './verify'
+import { execution, TEST_CONDITIONS, zeroOperationHandoff } from './verificationTestFixture'
 
 /*
  * Issue #154 Global Assignment Phase D-1A: the materialization runner hands its Entry bodies over without changing either record
@@ -128,7 +128,8 @@ describe('Phase D-1A: the Entry set of the fresh process', () => {
     const { scene, handoffs } = await materializationRun(SHAPE_SPEC, SHAPE_CONDITIONS)
     const provenance = { repositoryHeadSha: 'a'.repeat(40), export: { fileName: 'fixture.json', bytes: 10, sha256: 'e'.repeat(64) }, calculationContext: scene.input.calculationContext, rngEngineVersion: scene.engine.version }
     const set = createD1aEntrySet(handoffs[0]!, provenance)
-    expect(set).toMatchObject({ kind: D1A_ENTRY_SET_KIND, protocolVersion: 'global-assignment-d1a:1', entryFingerprint: materializedEntriesFingerprintOfHandoffs(handoffs) })
+    // The D-1A runner writes the verifier's current protocol (D-1B revised it from global-assignment-d1a:1).
+    expect(set).toMatchObject({ kind: D1A_ENTRY_SET_KIND, protocolVersion: 'global-assignment-d1b:1', entryFingerprint: materializedEntriesFingerprintOfHandoffs(handoffs) })
     const read = JSON.parse(JSON.stringify(set))
     const expected = { ...provenance, entryFingerprint: set.entryFingerprint }
     expect(d1aEntrySetIssues(read, expected)).toEqual([])
@@ -176,6 +177,43 @@ describe('Phase D-1A: a whole run without child processes', () => {
       kind: 'verified', physicalOperations: handoffs[0]!.objective, planSteps: handoffs[0]!.objective, objective: handoffs[0]!.objective, planningTargetCount: 2, fullPlannerRuns: { first: 1, fresh: 1 },
     })
     expect(d1aOperationCountReading(judgement.verdict)).toEqual({ evaluated: true, physicalOperations: handoffs[0]!.objective, incumbent: D1A_INCUMBENT_PHYSICAL_OPERATIONS, judgement: 'improvement', proof: 'not_claimed' })
+  }, 60_000)
+})
+
+describe('Phase D-1B: the judgement of a run with non-physical Steps and with full-run counts', () => {
+  async function zeroOperationRun() {
+    // Two independent builds of the same scenario: the fresh side never reuses the first side's scene, Engine or dependencies.
+    const first = await zeroOperationHandoff(['a'])
+    const fresh = await zeroOperationHandoff(['a'])
+    const verify = (built: typeof first, port?: PlannerVerificationPort) => verifyPlannerCandidate(built.scenario.scene.input, built.handoff, globalResearchDependencies(built.scenario.scene.engine), TEST_CONDITIONS, execution(port ? { planner: port } : {})).then(record => record.semantic)
+    const semanticSha256 = 'f'.repeat(64)
+    const identity = { matched: true, issues: [], semanticSha256: { recomputed: semanticSha256, expected: semanticSha256, matched: true }, entryFingerprint: { fromSemanticRecord: 'x', fromHandoff: 'x', expected: 'x', matched: true, handoffMatchesRecord: true }, candidates: 1, handoffs: 1, semanticIntegrityIssues: 0 }
+    return { first, fresh, verify, identity, phase0: [...first.handoff.planningTargetIds].sort() }
+  }
+  /** Announces one extra full run (a modelled retry) before the real Production run; the result is the ordinary one. */
+  const modelledRetry: PlannerVerificationPort = {
+    ...productionPlannerVerificationPort,
+    createProductionPlanWithObserver: (input, deps, options, observer) => { observer?.beforePlannerRun(); return productionPlannerVerificationPort.createProductionPlanWithObserver(input, deps, options, observer) },
+  }
+
+  it('verifies a Plan with a confirm_owned_ideal Step: the verdict keeps Plan steps and physical operations apart', async () => {
+    const { first, fresh, verify, identity, phase0 } = await zeroOperationRun()
+    const [met, freshMet] = [await verify(first), await verify(fresh)]
+    const judgement = judgeIntact({ process: 'completed', identity, verification: view(met) }, { process: 'completed', phase0PlanningTargetIds: phase0, verification: view(freshMet) })
+    expect(judgement.crossProcess).toEqual({ compared: true, identical: true, differingFields: [] })
+    expect(judgement.verdict).toEqual({ kind: 'verified', physicalOperations: 5, planSteps: 6, objective: 5, planningTargetCount: 2, fullPlannerRuns: { first: 1, fresh: 1 } })
+    // The post hoc reading compares the physical operations, never the Plan steps.
+    expect(d1aOperationCountReading(judgement.verdict)).toMatchObject({ evaluated: true, physicalOperations: 5 })
+  }, 60_000)
+
+  it('keeps the full-run count in the record: equal counts that meet every condition verify, a differing count fails condition 13', async () => {
+    const { first, fresh, verify, identity, phase0 } = await zeroOperationRun()
+    const [retriedFirst, retriedFresh, plainFresh] = [await verify(first, modelledRetry), await verify(fresh, modelledRetry), await verify(fresh)]
+    const both = judgeIntact({ process: 'completed', identity, verification: view(retriedFirst) }, { process: 'completed', phase0PlanningTargetIds: phase0, verification: view(retriedFresh) })
+    expect(both.verdict).toMatchObject({ kind: 'verified', fullPlannerRuns: { first: 2, fresh: 2 } })
+    // Only the first side announced two runs: the records differ in the Planner summary, so the processes do not agree.
+    const one = judgeIntact({ process: 'completed', identity, verification: view(retriedFirst) }, { process: 'completed', phase0PlanningTargetIds: phase0, verification: view(plainFresh) })
+    expect(one.verdict).toEqual({ kind: 'planner_rejected', run: 'cross_process', reasons: [{ code: 'fresh_planner_mismatch', differingFields: ['planner'] }] })
   }, 60_000)
 })
 

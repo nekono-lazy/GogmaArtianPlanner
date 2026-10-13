@@ -413,7 +413,7 @@ interface VerifiedPlanRecord {
   kind: 'verified'
   candidate: StructuralCandidate
   entries: BuildListEntry[]            // Planner-start originのEntry（全planning Target）
-  physicalOperations: number           // summarizePlanPhysical() の合計 = plan.steps.length = assignment.objective
+  physicalOperations: number           // summarizePlanPhysical() の合計 = plan.steps.length − 非物理Step数 = Σ stream前進 = assignment.objective（§9.5、D-1B）
   planner: PlannerResultSummary        // completed / 43 / Conflict 0 / rejected 0 / Trace Replay valid / fresh再検証
 }
 ```
@@ -1200,14 +1200,35 @@ finalValidation = validatePlannerInput(finalInput, deps)
   → 生成 Entry は 1 件も除外されていないこと
 result = createProductionPlanWithObserver(finalInput, deps, options, observer)   // beforePlannerRun でfull run数を数える
 replay = replayPlannerSearchTrace(finalInput, bestState, engine)                   // 独立に実行してplain evidenceへ記録
-physical = summarizePlanPhysical(plan, finalInput)                                 // Σ stream advance = steps を確認
+physical = summarizePlanPhysical(plan, finalInput)                                 // 物理操作数・非物理Step・Σ stream advanceを確認
 ```
 
 成立条件（すべて必須）: `termination.status === 'completed'`、`completedTargetCount === planningTargets.length`（Phase 0で固定した集合。
 `targetWeapons.length` やactive Target数ではない）、`totalTargetCount === planningTargets.length`、selected = planning Targetの全Entry、Conflict 0、
-rejected 0（resource_conflict 0）、warnings 0、Trace Replay valid、`physical.total === plan.steps.length`。
+rejected 0（resource_conflict 0）、warnings 0、Trace Replay valid、物理操作数の恒等式（下記）。
 さらに `physical.total` がassignmentの `objective` と一致することを確認する。不一致は `objective_mismatch` として診断に残し、成立とは呼ばない
 （恒等式が破れる = 本設計の前提が崩れている）。
+
+物理操作数の恒等式（Phase D-1Bで確定。[D-1B記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md) §3）。Planの全Stepが物理操作とは限らない。
+Counterを進めない `confirm_owned_ideal` Step（操作0のEntryの完成、PLANNER_SPEC 16.3）は物理操作ではなく、REQUIREMENTS 22.1もゲーム内消費を伴わないStepを
+操作数へ加算しない。したがって、以前の `physical.total === plan.steps.length` ではなく、次の3つをそれぞれ完全一致で要求する（許容誤差なし）。
+
+```text
+physical.total = plan.steps.length − nonPhysicalStepCount     // nonPhysicalStepCount = confirm_owned_ideal Stepの数
+physical.total = Σ stream advance                               // 物理Stepはちょうど1つのCounterをちょうど1進める
+physical.total = assignment.objective                           // 非物理Stepはobjectiveを増やさない
+```
+
+- 物理操作数・非物理Step・Σ stream advanceは `summarizePlanPhysical()` の値で、Research側で数え直さない。共有物理Stepは1 Stepなので1回だけ加算される
+- 物理Stepが正しいCounter以外を進める、2つのCounterを進める、2以上進める、Counterを進めない場合、非物理StepがCounterを進める場合は
+  `summarizePlanPhysical()` が拒否し、fail closedする（`objective_mismatch` の `physical_summary_error`、またはTrace Replay対応の不一致による `planner_rejected`）
+- `confirm_owned_ideal` 以外のCounterを進めないStep（現行Planには生成されないlegacyの `reserve_weapon` / `confirm_result`）は非物理Stepに数えず、
+  1つ目の恒等式を破る（fail closed）
+
+full Planner run数（Phase D-1Bで確定、同 §4）。`beforePlannerRun()` で数えるfull run数は観測値として必ず記録するが、それ自体を不成立条件にしない（§10.4）。
+Production Plannerのruntime-unsupported retry（Plan生成内のTrace ReplayがunsupportedなEntryを除外して再実行する）は、その結果が破る条件
+（`rng_prediction_unsupported` warning、除外されたEntryの未選択、完成数）で不成立になる。retry回数が多いから不成立なのではなく、上の成立条件が
+満たされない場合に不成立である。Research runnerの子processの再試行とは別の概念で、後者は行わない（自動retryなし、G6 / G7）。
 
 成功条件(b)（P0Rと同じ）: 別のNode processで元Exportから入力を再構築し、生成Entryを各planning Targetの元Entryと置換しただけのfresh ordinary Plannerを
 1回実行し（`verifyGlobalResearchFreshPlan()` と同じ経路。その `planningTargetCount` もPhase 0の集合と一致すること）、同じ条件を満たすこと。
@@ -1419,7 +1440,20 @@ D-1C（formal run）に分けた（§14）。
   `bestVerified` ではなく、`proven_minimum` も主張しない）
 - **注意**: §9.5の `physical.total === plan.steps.length` は、Counterを進めない `confirm_owned_ideal` Stepを含むPlanでは成り立たない（このExportの候補では非物理step 0）。
   D-1Bの前に扱いを決める（D-1A記録 §12）。runtime-unsupported retry（full run 2回以上）を独立の不成立理由にしている `verify.ts` の規則も、D-1Bの前に仕様として整理する
-  （同 §11。D-1Aでは変更していない）
+  （同 §11。D-1Aでは変更していない）。→ どちらもD-1Bで確定した（§9.5、§9.15）
+
+### 9.15 Phase D-1Bの確定事項（要約）
+
+[D-1B記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md)（非formal、formal runなし）。
+
+- **成立判定の整理**: §9.5の物理操作数の条件を3つの完全一致（物理 = Plan steps − 非物理Step数 = Σ stream前進 = objective）にし、full Planner run数を観測値として
+  記録しつつ独立の不成立理由から外した（§9.5）。`verify.ts` の判定はこの規則に合わせ、verification protocol versionを `global-assignment-d1a:1` から
+  `global-assignment-d1b:1` に上げた（D-1Aの記録とはsemantic recordの形が異なる）。materialization protocol・semantic record・D-0Cの登録条件とRESULTは変えていない
+- **D-1Cの事前登録**: `PLANNER_VERIFICATION_D1C_PREREGISTRATION`（`verificationRegistration.ts`）。D-0Cのmaterialization条件をそのまま継承し（W0、`a2`、`d0a2-v2`、
+  structural candidate 1件）、verification budget 1、Research maxPlanSteps 20,000、first / fresh子process 30分・8,192 MB、concurrency 1、子processの自動retryなし、
+  2 complete run（各run = first + fresh）、Production Planner・独立Trace Replay・別processのfresh検証、run integrity issue 0、oracle-free executionを登録した。
+  D-0Cとの同一性の照合値とregistration fingerprintはD-1B記録のblockに置き、登録HEAD（D-1Bのmerge commit）はD-1Cが記録する。formal runは有効にしていない
+- verification budget 1は検証する候補数の上限であり、探索全体の最小性の証明ではない。最初の候補が不成立でも後続候補が存在しないとは結論しない
 
 ## 10. 目的関数・下界・探索budget
 
@@ -1510,7 +1544,7 @@ Phase Aの走査windowは事前登録したladderで広げる。
 | verification budget | Phase D / D'へ渡すstructural candidateの件数（1 run） | Phase B〜D'の範囲。到達は completeness `verification_budget_reached`、未試行候補は `not_attempted` |
 | materialization delivery cap | 1 Targetで受け取るCandidate数 | Phase Dの範囲。到達は `unconfirmed(delivery_cap_reached)`（未確認） |
 | Search規模gate | 事前計算した規模（§9.7） | Phase Dの範囲。超過は `not_executed(search_scale_gate)`（未実行） |
-| full Planner run数 | `beforePlannerRun()` の回数 | Phase D'の観測値。Production `maxPlannerReruns` を流用しない |
+| full Planner run数 | `beforePlannerRun()` の回数 | Phase D'の観測値。Production `maxPlannerReruns` を流用しない。回数だけで不成立にしない（runtime-unsupported retryは、その結果が破る §9.5の条件で判定する。D-1B） |
 | `maxPlanSteps` | Research 20000（Domain default 1000 / Planner Alternative runtime導出とは別、G12） | Phase D' |
 | wall-clock / heap | measurement envelope | `unmeasured` の判定だけに使う。意味論的判定に使わない（G6 / G7） |
 
@@ -1590,7 +1624,7 @@ Production RNGを使わないFake Engine / 小規模fixtureで意味論を固定
 
 ### 13.2 統合acceptance（実Export、formal measurement）
 
-Phase D-1のformal runで次を事前登録する（値はPhase D-0 / D-1の事前登録で確定）。
+Phase D-1のformal runで次を事前登録する（値はPhase D-0 / D-1の事前登録で確定。D-1Cの条件はD-1Bで登録した: [D-1B記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md) §8〜§13）。
 
 1. `verified`: 43 / 43、Conflict 0、rejected 0、completed、Trace Replay valid、別processのfresh ordinary Plannerでも同じ
 2. 物理操作数をincumbent 8,534（Phase 1-E / 2-A / P0R）とpost-hocに比較し、次のとおり判定する（操作数の評価）。
@@ -1640,7 +1674,8 @@ materialization方式に依存しないので、D-0の結果でA〜Cをやり直
 | └ **D-0C formal measurement**（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0C.md)、§9.13） | 計測記録docs・RESULT | D-0B-2の登録条件、clean HEAD | 上記D-0の出力 | 上記D-0のacceptance | — | D-1の前提 | なし | **要** |
 | **D-1 Planner検証（統合acceptance）** | `globalAssignment/verify.ts`、runner（full mode: B → C → D → D'のloop）、analyzer（post-hoc oracle比較） | D-0で確認した方式、verification budget | `VerifiedPlanRecord` / `GlobalAssignmentResult`、候補別outcome、RESULT JSON | 実Exportで `verified`（§13.2）。不成立なら理由別status（§4.6） | §13.1 Phase D'、isolation | Eの基準 | なし | **要**（事前登録: verification budget、Research maxPlanSteps、envelope） |
 | └ **D-1A Phase D'の統合・非formal確認**（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1A.md)、§9.14） | `globalAssignment/verify.ts`（Phase D'の1 process分）、`verificationProtocol.ts`（非formal条件・D-0C同一性照合・fresh用Entry集合・2 processの判定）、materialization runnerのexecution-only引渡しseam、Research runner（first / fresh子process）、synthetic test | D-0Cの登録条件で再実行したmaterialization（最初のstructural candidate） | 候補1件の型付きoutcome（`verified` は `nonformal_planner_verified` として記録）、非formal実Export記録 | 実装とsynthetic test、実Exportの非formal確認（正式acceptanceではない） | §13.1 Phase D'、isolation | D-1Bの入力 | なし | 不要（非formal） |
-| └ **D-1B 正式条件の事前登録** / **D-1C formal run** | D-1Aの実測を根拠にverification budget・Research maxPlanSteps・envelopeを登録（D-1B）し、登録条件でformal runを行う（D-1C） | D-1A | — | §13.2 | — | — | なし | D-1Cで **要** |
+| └ **D-1B 成立判定の整理・正式条件の事前登録**（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md)、§9.15） | `verify.ts`（非物理Stepを含む物理操作数の恒等式、full run数を観測値に）、`verificationRegistration.ts`（D-1Cの事前登録: verification budget・Research maxPlanSteps・envelope・repeat・同一性・計算コード監査・formal validity規則）、synthetic test | D-1A | 改訂した判定規則、D-1Cの登録条件（formal runは無効のまま） | 登録の網羅性・D-0C条件の継承・不変性、非formal再確認 | §13.1 Phase D'、isolation | D-1Cの入力 | なし | 不要（非formal） |
+| └ **D-1C formal run** | 登録条件でformal guard・RESULT導出を実装し、登録HEAD（D-1Bのmerge commit）からの差分監査の下でformal runを行う | D-1Bの登録条件、clean HEAD | 統合acceptanceの正式記録 | §13.2 | — | Eの基準 | なし | **要** |
 | **E 最適化・性能** | incremental coverage pruning、決定的なdiscrepancy探索、中断再開、window拡大（verified時）、メモリ内訳、Browser Worker測定 | D-1の `bestVerified` | 改善した `bestVerified`、性能記録 | 全Target完成を維持したまま物理操作数を改善（8,534未満。§13.2）。時間・メモリは別指標。退行は不受理 | 既存acceptanceの維持、Browser isolation | — | なし（Production化は§16の別PR） | **要** |
 
 最初の実装Phase（A、B-1）は、小さなsynthetic fixtureだけで意味論を検証できる。実Exportの43 TargetはPhase B-2（assignment-only）で初めて使い、

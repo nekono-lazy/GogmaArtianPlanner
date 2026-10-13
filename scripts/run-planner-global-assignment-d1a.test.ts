@@ -104,7 +104,7 @@ describe('Phase D-1A runner script refusals', () => {
     const raw = readFileSync(input)
     const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim()
     const task = {
-      protocolVersion: 'global-assignment-d1a:1', role: 'first', repositoryHeadSha: head, allowUncommitted: true, researchMaxPlanSteps: 20_000, runDir: resolve(directory),
+      protocolVersion: 'global-assignment-d1b:1', role: 'first', repositoryHeadSha: head, allowUncommitted: true, researchMaxPlanSteps: 20_000, runDir: resolve(directory),
       actualExport: { fileName: 'export.json', bytes: raw.length, sha256: createHash('sha256').update(raw).digest('hex') }, calculationContext: {},
     }
     let index = 0
@@ -121,7 +121,7 @@ describe('Phase D-1A runner script refusals', () => {
       expect(readFileSync(journalPath, 'utf8').trim().split('\n').map(line => JSON.parse(line).kind).filter(kind => kind !== 'memory')).toEqual(['started'])
     }
     runChild('first', { role: 'fresh' }, 'The task is for the fresh process, not first.')
-    runChild('fresh', { role: 'fresh', protocolVersion: 'global-assignment-d0a2b:1' }, 'Task protocol global-assignment-d0a2b:1 is not global-assignment-d1a:1.')
+    runChild('fresh', { role: 'fresh', protocolVersion: 'global-assignment-d0a2b:1' }, 'Task protocol global-assignment-d0a2b:1 is not global-assignment-d1b:1.')
     runChild('first', { researchMaxPlanSteps: 1_000 }, "The task's Research maxPlanSteps 1000 is not the D-1A condition.")
     runChild('first', { repositoryHeadSha: 'f'.repeat(40) }, `The child runs at HEAD ${head}, not the task's ${'f'.repeat(40)}.`)
     runChild('fresh', { role: 'fresh', actualExport: { ...task.actualExport, bytes: 1 } }, 'The Export differs from the one the parent hashed.')
@@ -164,7 +164,7 @@ describe('Phase D-1A runner RESULT: integrity failures are never verified', () =
     const set = JSON.parse(JSON.stringify(createD1aEntrySet(handoffs[0]!, { repositoryHeadSha: HEAD, export: EXPORT, calculationContext: scene.input.calculationContext, rngEngineVersion: scene.engine.version })))
     const freshScene = await materializationScenario(SPEC)
     const fresh = await verifyPlannerCandidate(freshScene.input, handoffFromEntrySet(set, handoffs[0]!.planningTargetIds), globalResearchDependencies(freshScene.engine), conditions, { now: () => (tick += 1) })
-    const base = { protocolVersion: 'global-assignment-d1a:1', repositoryHeadSha: HEAD, exportVerification: { actual: EXPORT, taskMatched: true } }
+    const base = { protocolVersion: 'global-assignment-d1b:1', repositoryHeadSha: HEAD, exportVerification: { actual: EXPORT, taskMatched: true } }
     const phase0PlanningTargetIds = [...handoffs[0]!.planningTargetIds].sort()
     const directory = mkdtempSync(join(tmpdir(), 'planner-global-assignment-d1a-result-'))
     directories.push(directory)
