@@ -1454,6 +1454,8 @@ D-1C（formal run）に分けた（§14）。
   2 complete run（各run = first + fresh）、Production Planner・独立Trace Replay・別processのfresh検証、run integrity issue 0、oracle-free executionを登録した。
   D-0Cとの同一性の照合値とregistration fingerprintはD-1B記録のblockに置き、登録HEAD（D-1Bのmerge commit）はD-1Cが記録する。formal runは有効にしていない
 - verification budget 1は検証する候補数の上限であり、探索全体の最小性の証明ではない。最初の候補が不成立でも後続候補が存在しないとは結論しない
+- **非formal再確認**（修正済みclean HEAD `120be4c`、D-1Aのrunner）: D-0C同一性が一致し、first / freshとも改訂後の全条件を満たした（43 / 43、Plan steps = 物理操作数 = Σ前進 =
+  objective = 1,766、非物理Step 0、full run 1）。記録用分類 `nonformal_planner_verified`、integrity issue 0。D-1Cのformal resultではない
 
 ## 10. 目的関数・下界・探索budget
 

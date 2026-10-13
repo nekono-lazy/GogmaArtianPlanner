@@ -2,6 +2,8 @@
 
 Refs #154。Research-only・**非formal**（formal runなし）。基準main: PR #253 merged `982b29bd84f7e57827172aa6fa061fb1ef1b9705`
 （作業開始時に `main` / `origin/main` / HEADの一致、Working Tree clean、stash / 追加worktreeなしを確認）。branch: `research/global-assignment-phase-d1b`。
+**非formal再確認のmeasurement HEAD**: `120be4cdb719521ab007c6079799075e9185424e`（実装・test・登録のcommit。§7.2）。以降のcommitはdocs-only。
+**D-1Cの登録HEAD**: D-1Bがmainへマージされた後のcommit（未確定。D-1Cが記録する。§13）。
 
 本書は [Global Assignment設計](PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md)（以下「設計」）§14 の **D-1B** を記録する。Phase D'の成立判定に残っていた2つの不整合
 （非物理Stepを含むPlanの物理操作数、runtime-unsupported retryの採否）を正式仕様に合わせて整理し、既存のD-1A検証器を最小限修正し、
@@ -132,6 +134,18 @@ D-1Aの記録（`global-assignment-d1a:1`）を新しい版数のrecordとして
 既存test（D-1Aの正常系・失敗系、D-0C semantic golden（formal / RESULT）、`d0a-v1` golden、PR #248 Production Search golden、a1 / a2、G1〜G4、property / parity、
 独立Route検証、Planner scheduler・Trace Replay、timeout / OOM / integrity failureの分類）は削除・skip・緩和していない。
 
+### 6.1 検証（measurement HEAD `120be4c` の内容で実行）
+
+| コマンド | 結果 |
+| --- | --- |
+| `npx vitest run src/benchmarks/globalAssignment/ scripts/run-planner-global-assignment-d1a.test.ts` | pass（44 files / 456 tests） |
+| `git diff --check` / `npm run check:nul`（1,499 files） | pass |
+| `npm run lint` | pass |
+| `npm test` | pass（421 files / 6,901 tests、1 file・3 tests skipped（既存）、約146 s） |
+| `npm run build` | pass（既存の500 kB chunk warningのみ。`dist` にD-1Bの識別子なし） |
+
+最終PR headでの再検証とGitHub ActionsはPR本文に記録する。
+
 ## 7. D-1A実測との関係
 
 ### 7.1 D-1Aの記録
@@ -143,7 +157,63 @@ D-1Aのverification semantic SHA-256（`86b1b254…`）は `global-assignment-d1
 
 ### 7.2 非formal再確認（D-1Bの規則、修正済みclean HEAD）
 
-（計測後に記入する）
+**結果: `nonformal_planner_verified`、integrity issue 0件、exit 0。** これはD-1Bの非formal確認であり、D-1Cのformal resultではない（登録条件の正式計測・formal validityの判定は行っていない）。
+
+| 項目 | 値 |
+| --- | --- |
+| measurement HEAD | `120be4cdb719521ab007c6079799075e9185424e`（D-1Bの実装・test・登録をcommitしたclean HEAD。未commitの計算関連コードなし。benchmark code SHA-256 `44f32494131979332ec20d17fc76f6371493e1a28da1530ffeb5e10b31f51587`） |
+| 実行 | 2026-10-13 12:16:44Z〜12:17:38Z。D-1Aのnon-formal runner（`scripts/run-planner-global-assignment-d1a.mjs`、変更なし）。条件は §8の登録値と同一（`D1A_NONFORMAL_CONDITIONS` との差分0を登録testで固定。1 complete run = first + fresh） |
+| machine / Node | AMD Ryzen 7 9700X（16 logical CPU）、物理memory 31.1 GiB（起動時free 11.4 GiB）、Windows 10.0.26200 x64、Node v24.19.0 / V8 13.6.233.17-node.51 |
+| Export | `gogma-artian-planner-backup_20260927015837.json`、19,424,064 bytes、SHA-256が登録identity（D-0B-2 §2）・CLI値と一致（`registeredMatched` / `cliMatched` true） |
+| CalculationContext | `unknown-initial` / Master 4 / `production-rng:c5-e7` / 計算版数 17（登録値と同一） |
+
+```bash
+node scripts/run-planner-global-assignment-d1a.mjs --export "<local path>/gogma-artian-planner-backup_20260927015837.json" --expected-export-sha256 cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b --expected-d0c-semantic-sha256 6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f --expected-d0c-entry-fingerprint fnv1a32:ed959cc4 --run-dir .local/ga-d1b-nonformal.run --output .local/ga-d1b-nonformal.result.json
+```
+
+（D-1Aの非formal runnerはD-0Cの照合値をCLIで受け取る。渡した値は §11.2の登録blockと同じである。D-1Cではcommit済みの本書から読む）
+
+| 手順 | 結果 |
+| --- | --- |
+| 1〜4. 修正・synthetic test・lint / test / build・日本語commit | §6 / §6.1（commit `120be4c`） |
+| 5. clean HEAD確認 | `START d1a head=120be4cdb719 clean=true uncommittedCode=false` |
+| 6. 実Export SHA-256照合 | 一致（`cc35fb5b…`） |
+| 7〜9. D-0C登録条件での再materialization、semantic SHA-256・Entry fingerprintの一致 | `6f790d33…`（D-0Cと一致）、`fnv1a32:ed959cc4`（semantic recordから・受け取ったEntry本体からの両方が一致）、handoff 1 / 候補1、semantic integrity issue 0。43 / 43 `materialized` |
+| 10. first / fresh Production Planner | 両processとも `completed`、43 / 43 / 43、selected 43 / 43、Conflict / rejected / resource_conflict / warning 0、full Planner run 1 / 1、expandedStates 1,809 |
+| 11. Trace Replay | 両processともvalid、issue 0、draft 1,809（physical 1,766、reserve 43）、Physical Step 1,766と1対1で不一致0、Counter位置不一致0、最終Counterが一致 |
+| 12. 物理操作数・objective照合 | Plan steps 1,766、物理操作数 1,766、非物理Step 0、予期しない非物理Step 0、Σ stream前進 1,766、共有物理Step 0、structural objective 1,766。(11a) 1,766 = 1,766 − 0、(11b) 1,766 = 1,766、(12) 1,766 = 1,766（stream別のstructural前進との差0 / 9 stream） |
+| 13. run integrity | issue 0件（role・HEAD・Export一致、materialization / verification semantic SHA-256は再hashと一致、実行前後のcheckout不変） |
+| 2 processの判定 | `verified`（physicalOperations 1,766、planSteps 1,766、objective 1,766、planning Target 43、full run 1 / 1）、cross process identical、記録用分類 `nonformal_planner_verified` |
+
+**43 / 43・1,766物理操作の維持**: 修正後のverifierは、この実Exportについて依然として43 / 43・物理操作数1,766と判定した。Plan全体のhash `fnv1a32:903e4274`・Step semantic hash
+`fnv1a32:8d28811e` はD-1Aと同一（PlannerのPlan内容は変わっていない）。verification semantic SHA-256は first / freshとも `0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4`
+で、D-1Aの `86b1b254…` とは異なる。これはprotocol版数とrecordの形（条件11のchecks、`PhysicalRecord` の項目）を変えたためで、予想どおりである（§5）。
+
+| 時間・memory | first | fresh |
+| --- | ---: | ---: |
+| 親の観測wall / child wall（record） | 44.8 s / 44.5 s | 9.1 s / 8.9 s |
+| materialization（Phase 0〜D） | 37.3 s | — |
+| Phase D'（handoff / final input / Planner / 物理 / Trace Replay） | 6.32 s（1 ms / 387 ms / 5.37 s / 5 ms / 489 ms） | 6.30 s（1 ms / 347 ms / 5.38 s / 5 ms / 488 ms） |
+| heapUsed最大（250 ms標本） / maxRSS | 1.33 GB / 1,530,584 KiB | 0.39 GB / 834,112 KiB |
+
+両processとも登録envelope（30分 / 8,192 MB）の数%以内で終わった。親の合計54.0 s。
+
+raw record（`.local/`、git-ignored、Target ID・Entry本体・Plan全Stepを含むので公開しない。排他作成で、既存のD-1A raw recordは上書きしていない。D-1Aの
+`ga-d1a-nonformal-r2.result.json` / `first.record.json`・`ga-d1a-nonformal.result.json` のSHA-256はD-1A記録 §9の値のまま）:
+
+| file | bytes | SHA-256 |
+| --- | ---: | --- |
+| `ga-d1b-nonformal.result.json`（親の集約RESULT） | 182,902 | `945c4f7d17d77e32b8e0a7909d2d1fddbce0d17346e98ea0ff503c1dc81d199d` |
+| `ga-d1b-nonformal.run/start.json` | 4,833 | `499c2256225afc36145a2f7b9ff91980e1c33474cbca5d13675bf257e71c2239` |
+| `ga-d1b-nonformal.run/first.task.json` | 1,838 | `526ae2dc0932ee11d1fbf208e2fe0b0c4f282a1f5f3a4611aaeecb072d1a0724` |
+| `ga-d1b-nonformal.run/first.record.json` | 647,083 | `47e7f08cbebab7872bc9c63a05593903c4094eae72b8479de08895ed220b75c9` |
+| `ga-d1b-nonformal.run/first.journal.jsonl` | 22,576 | `43b50907ce66974d0b61df72fc7d585321ef6eb2053933459289d409c1006d16` |
+| `ga-d1b-nonformal.run/first.entry-set.json` | 768,648 | `0ecdc03069e8813856928a65454910e941327bc3c33b9614671fdf56726b3101` |
+| `ga-d1b-nonformal.run/fresh.task.json` | 781 | `c501d61488400898ebc99450fb8f6cd1b0e2989374c905adc6ed5fb040a6381d` |
+| `ga-d1b-nonformal.run/fresh.record.json` | 31,965 | `deed08f601dd2ece62e74cb48a268e1337b363dc292f05f186ea8afbbe84ecd7` |
+| `ga-d1b-nonformal.run/fresh.journal.jsonl` | 1,226 | `e5f6743e219affae99b563187b31a0ccc98f424c5c49f09fff8faa139b88e0e5` |
+
+Entry集合fileは書込み時のHEADを含むので、D-1Aのfile（`1dc5f994…`）とはSHA-256が異なる。Entry fingerprintは同一（`fnv1a32:ed959cc4`）。
 
 ## 8. 事前登録条件一覧
 
@@ -198,7 +268,7 @@ registered-d1c-registration-fingerprint: fnv1a32:2393847e
 | --- | --- | --- |
 | `d1a-nonformal-1` | D-1A非formal確認1（置き換え済み、内容不変） | `933546e7a278f2bed12a840db2ac48ce46a18a97` |
 | `d1a-nonformal-2` | D-1A非formal確認2（現行） | `3fd5c144fa71ea00ffc01ef0b78905c448f97783` |
-| `d1b-nonformal` | D-1Bの非formal再確認（§7.2） | §7.2に記入 |
+| `d1b-nonformal` | D-1Bの非formal再確認（§7.2。first 44.8 s / heapUsed 1.33 GB、fresh 9.1 s / 0.39 GB） | `120be4cdb719521ab007c6079799075e9185424e` |
 | `d0c-formal-2` | D-0C正式計測2 | `8ff0e18968e6749e4e6b5e29dfc6232bdc35376c` |
 | `design 10.4` | 設計 §10.4（Research maxPlanSteps 20,000） | — |
 | `B-2B registration` | B-2Bの正式記録（root下界 `found` 1,657） | — |
@@ -227,13 +297,13 @@ D-1Aでは1,766 step（上限の8.8%）で `completed` だった。
 
 ### 9.4 envelope（wall-clock / heap）
 
-| 項目 | 登録値 | D-1A非formal確認1 | D-1A非formal確認2 | 余裕 |
-| --- | ---: | ---: | ---: | --- |
-| first wall | 30分 | 39.7 s | 45.1 s | 約40倍 |
-| fresh wall | 30分 | 7.9 s | 9.0 s | 約200倍 |
-| first heapUsed最大 | 8,192 MB | 1.43 GB | 1.03 GB | 約5.7倍 |
-| fresh heapUsed最大 | 8,192 MB | 0.41 GB | 0.39 GB | 約20倍 |
-| first maxRSS | — | 1.54 GiB | 1.19 GiB | — |
+| 項目 | 登録値 | D-1A非formal確認1 | D-1A非formal確認2 | D-1B再確認（§7.2） | 余裕 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| first wall | 30分 | 39.7 s | 45.1 s | 44.8 s | 約40倍 |
+| fresh wall | 30分 | 7.9 s | 9.0 s | 9.1 s | 約200倍 |
+| first heapUsed最大 | 8,192 MB | 1.43 GB | 1.03 GB | 1.33 GB | 約5.7倍 |
+| fresh heapUsed最大 | 8,192 MB | 0.41 GB | 0.39 GB | 0.39 GB | 約20倍 |
+| first maxRSS | — | 1.54 GiB | 1.19 GiB | 1.46 GiB | — |
 
 30分 / 8,192 MBは観測値に対して余裕があるが、その上限付近までの処理が検証済みという意味ではない（§10）。8,192 MBはD-0Cの子process heap（4,096 MB）の2倍で、
 Phase D'をmaterializationの上限付近で測らないための値であり、P0Rのfresh Planner（8,534 step）のmaxRSS 2.98 GiBも下回る。timeout / OOMは `unmeasured` で、
@@ -258,10 +328,10 @@ oracle-free execution（設計 §11。`oracleInformedDesign` はtrueのまま）
 | --- | --- | --- |
 | materialization | 最初のstructural candidate（objective 1,766）が全runで43 / 43 materialized | 他のwindow・option集合・規則・候補、他のmachine / Node version |
 | verification budget | 候補ordinal 0（非formal確認で `nonformal_planner_verified`） | 2件目以降の候補（materialize・検証とも未実施）、より少ない物理操作数の候補の有無 |
-| Research maxPlanSteps | 1,766 Plan stepで `completed`（8.8%） | 20,000 stepを超えるPlan、上限付近のPlanner時間・memory |
-| first / fresh wall | 39.7〜45.1 s / 7.9〜9.0 s | 観測値から30分までの区間（何も実行していない。安全envelopeであり計測された費用ではない） |
+| Research maxPlanSteps | 1,766 Plan stepで `completed`（8.8%。D-1A 2回、D-1B 1回） | 20,000 stepを超えるPlan、上限付近のPlanner時間・memory |
+| first / fresh wall | 39.7〜45.1 s / 7.9〜9.1 s | 観測値から30分までの区間（何も実行していない。安全envelopeであり計測された費用ではない） |
 | heap | first 1.43 GB、fresh 0.41 GBまで | 観測peakを超えるheap、より長いPlanのmemory |
-| repeat / 決定性 | 同一machine・同一Nodeで2回一致 | 他のmachine / Node version |
+| repeat / 決定性 | 同一machine・同一Nodeで、D-1Aの2回（`global-assignment-d1a:1`）のverification semantic一致、D-1BでPlan hash・Step semantic hash・materialization semanticがD-1Aと一致 | 他のmachine / Node version、D-1Bの版数での2 complete runの一致（D-1Cで確認する） |
 | 非物理Step | synthetic（`confirm_owned_ideal` 1 / 2件） | 実Exportの非物理Stepを含む候補（このExportの最初の候補は0件） |
 | runtime-unsupported retry | synthetic（実Productionのretryと模擬） | 実Exportでのretry（観測されていない） |
 
@@ -364,7 +434,8 @@ B-2Bのroot下界1,657とは差があるので、1,766の最小性を主張し�
 ## 15. 未確認事項
 
 - **D-1Cの正式計測**: 未実施。D-1Bの登録だけでは統合acceptance（§13.2）の合格とは言わない
-- **実Exportでの非物理Step・retry**: 最初の候補は非物理Step 0件・retryなしなので、改訂した規則のうち実Exportで効いたのは「非物理Stepが0件のときの同値性」だけ。非物理Stepを含む候補・retryはsyntheticでのみ確認
+- **実Exportでの非物理Step・retry**: 最初の候補は非物理Step 0件・retryなしなので、改訂した規則のうち実Exportで効いたのは「非物理Stepが0件のときの同値性」だけ（§7.2で確認）。非物理Stepを含む候補・retryはsyntheticでのみ確認
+- **D-1Bの版数での決定性**: D-1Bの再確認は1 complete run（first + fresh、両者一致）。D-1Bのverification semantic SHA-256（`0a56da0f…`）の2 run間の一致はD-1Cで確認する
 - **2件目以降のstructural candidate、W0以外のwindow、別Export、他のmachine / Node version / Browser Worker**: 未確認
 - **envelopeの観測値より上の区間**: 30分・8,192 MBまでの区間は実行していない
 - **共有物理Step**: Global AssignmentはC1（distinct source）とEntry-localな新規Normalにより共有物理Stepを生じない（実Exportで0件）。1回加算はPlanを改変した純関数testで確認
