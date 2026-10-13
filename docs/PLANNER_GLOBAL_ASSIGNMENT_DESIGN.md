@@ -1410,11 +1410,16 @@ D-1C（formal run）に分けた（§14）。
   `verify.ts`（§9.5の1 process分: handoff検査、Productionのreplacement authorityによるfinal input、planning Target集合の一致、`createProductionPlanWithObserver()`、
   独立Trace Replayとその対応、`summarizePlanPhysical()`、条件1〜12と型付きoutcome）、`verificationProtocol.ts`（非formal条件、D-0C同一性照合、fresh用Entry集合、
   2 processの判定 = 条件13）、Research runner（first / fresh子process）
-- **実Export（非formal、HEAD `933546e`）**: D-0Cの登録条件で再実行したmaterializationのsemantic SHA-256とEntry fingerprintがD-0Cと一致。最初のstructural candidateの43 Entryで、
-  first / freshの両processが §9.5の全条件を満たし（43 / 43 completed、Conflict / rejected / warning 0、Trace Replay valid、Plan steps = 物理操作数 = objective = 1,766）、
-  verification semantic recordが一致した。記録用分類 `nonformal_planner_verified`（正式な `VerifiedPlanRecord` / `bestVerified` ではなく、`proven_minimum` も主張しない）
+- **run integrity（PR #253 Required fix）**: 親が検出した子process record・checkoutの不整合（role / HEAD / Export、semantic SHA-256の再hash不一致、読取り不能、実行中のcheckout変化）は
+  判定に渡し、1件でもあればD-1A専用のrun-level verdict `invalid_run_integrity` とする（§4.6の `CandidateOutcome` は拡張せず、Planner不成立とも区別する）。
+  verdict・分類・post-hoc・exit codeは1つの結論から導く
+- **実Export（非formal、現行HEAD `3fd5c14`。`933546e` での確認1をRequired fix後に置き換え、結果は同一）**: D-0Cの登録条件で再実行したmaterializationのsemantic SHA-256とEntry fingerprintが
+  D-0Cと一致。最初のstructural candidateの43 Entryで、first / freshの両processが §9.5の全条件を満たし（43 / 43 completed、Conflict / rejected / warning 0、Trace Replay valid、
+  Plan steps = 物理操作数 = objective = 1,766）、verification semantic recordが一致し、integrity issueは0件だった。記録用分類 `nonformal_planner_verified`（正式な `VerifiedPlanRecord` /
+  `bestVerified` ではなく、`proven_minimum` も主張しない）
 - **注意**: §9.5の `physical.total === plan.steps.length` は、Counterを進めない `confirm_owned_ideal` Stepを含むPlanでは成り立たない（このExportの候補では非物理step 0）。
-  D-1Bの前に扱いを決める（D-1A記録 §12）
+  D-1Bの前に扱いを決める（D-1A記録 §12）。runtime-unsupported retry（full run 2回以上）を独立の不成立理由にしている `verify.ts` の規則も、D-1Bの前に仕様として整理する
+  （同 §11。D-1Aでは変更していない）
 
 ## 10. 目的関数・下界・探索budget
 
