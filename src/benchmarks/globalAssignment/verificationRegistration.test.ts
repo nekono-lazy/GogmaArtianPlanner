@@ -15,7 +15,8 @@ import { PLANNER_VERIFICATION_PROTOCOL_VERSION } from './verify'
  * Issue #154 Global Assignment Phase D-1B (docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md 8 - 13): the pre-registration of the D-1C
  * formal integration measurement. Every item is registered with its basis, the materialization items are the D-0C registration itself,
  * the values are frozen and fingerprinted in the committed D-1B document, the D-0C identity block equals the D-0C public RESULT, the
- * calculation code audit allows the D-1C formal infrastructure only, and no formal run is enabled.
+ * calculation code audit allows the D-1C formal infrastructure only, and the formal run is enabled by D-1C alone (the one allowed change,
+ * which leaves the fingerprint unchanged).
  */
 const d1bDocument = Object.values(import.meta.glob('../../../docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md', { query: '?raw', import: 'default', eager: true }))[0] as string
 const d0b2Document = Object.values(import.meta.glob('../../../docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md', { query: '?raw', import: 'default', eager: true }))[0] as string
@@ -210,12 +211,14 @@ describe('Phase D-1B: the D-1C pre-registration', () => {
     expect(JSON.stringify(REGISTRATION)).not.toMatch(/"expected[A-Z]/)
   })
 
-  it('enables no formal run, and refuses an incomplete or inconsistent registration by name', () => {
-    expect(REGISTRATION.formalRun).toEqual({ enabled: false, startsIn: 'D-1C', enabledBy: null })
-    expect(d1cFormalRunIssues()).toEqual([expect.stringMatching(/A D-1C formal run is not enabled .* Phase D-1B registers the conditions only/)])
-    const enabled = copy()
-    enabled.formalRun.enabled = true
-    expect(d1cFormalRunIssues(enabled)).toEqual([])
+  it('D-1C enabled the formal run (its one allowed change), and an incomplete or inconsistent registration is still refused by name', () => {
+    // Phase D-1C: formalRun is enabled and nothing else changed (the fingerprint test above still matches the committed D-1B block).
+    expect(REGISTRATION.formalRun).toEqual({ enabled: true, startsIn: 'D-1C', enabledBy: 'Phase D-1C' })
+    expect(d1cFormalRunIssues()).toEqual([])
+    const disabled = copy()
+    disabled.formalRun = { enabled: false, startsIn: 'D-1C', enabledBy: null }
+    expect(d1cFormalRunIssues(disabled)).toEqual([expect.stringMatching(/A D-1C formal run is not enabled .* Phase D-1B registers the conditions only/)])
+    expect(d1cRegistrationFingerprint(disabled)).toBe(d1cRegistrationFingerprint())
     const issuesOf = (edit: (registration: D1cRegistration) => void) => { const value = copy(); edit(value); return plannerVerificationD1cRegistrationIssues(value).join(' ') }
     expect(issuesOf(value => { delete (value as Partial<D1cRegistration>).verificationBudget })).toBe('verificationBudget is not registered.')
     expect(issuesOf(value => { value.childHeapMb.basis = '' })).toBe('childHeapMb.basis is missing.')
@@ -231,6 +234,7 @@ describe('Phase D-1B: the D-1C pre-registration', () => {
     expect(issuesOf(value => { (value.formalValidity.value.provenance as string[]).push('registration_complete') })).toMatch(/formalValidity\.provenance lists a rule twice/)
     // A disabled and incomplete registration is refused for both reasons.
     const broken = copy()
+    broken.formalRun = { enabled: false, startsIn: 'D-1C', enabledBy: null }
     broken.repeat.value = 1
     expect(d1cFormalRunIssues(broken)).toEqual([expect.stringMatching(/not enabled/), expect.stringMatching(/pre-registration is incomplete: repeat must be/)])
     expect(hashStableValue(REGISTRATION)).toBe(hashStableValue(PLANNER_VERIFICATION_D1C_PREREGISTRATION))

@@ -27,10 +27,16 @@ const D0B_RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-d0b.mj
 const D0C_DERIVE_SCRIPT = '../../../scripts/derive-planner-global-assignment-d0c-result.mjs'
 /** The Phase D-1A non-formal Phase D' runner (materialization re-run, Production Planner, independent Trace Replay, fresh Planner). */
 const D1A_RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-d1a.mjs'
+/** The Phase D-1C formal integration acceptance runner (formal mode only: the D-1B registration, two complete runs of a first and a fresh child). */
+const D1C_RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-d1c.mjs'
+/** The Phase D-1C public RESULT derivation: reads the runner's raw outputs only and re-derives their conclusion (no Export, no calculation). */
+const D1C_DERIVE_SCRIPT = '../../../scripts/derive-planner-global-assignment-d1c-result.mjs'
 /** The Phase D-1A modules: Phase D' in one process (verify.ts, the only module that runs the Production Planner) and its protocol. */
 const PHASE_D1A_MODULES = ['./verificationProtocol.ts', './verify.ts']
 /** The Phase D-1B module: the pre-registration of the D-1C formal measurement (plain data and pure checks; it runs nothing). */
 const PHASE_D1B_MODULES = ['./verificationRegistration.ts']
+/** The Phase D-1C modules: the formal contract (gates, validity, outcome, acceptance) and the public RESULT derivation (plain data and pure checks). */
+const PHASE_D1C_MODULES = ['./verificationFormal.ts', './verificationFormalResult.ts']
 /** The Phase D-0C formal contract and public RESULT derivation modules. */
 const PHASE_D0C_MODULES = ['./materializationFormal.ts', './materializationFormalResult.ts']
 /** The Phase B-2A modules around the Phase A / B-1 calculation: runner orchestration, root bound stage, window policy, protocol. */
@@ -46,16 +52,18 @@ const PHASE_D0A2B_MODULES = [
 ]
 
 describe('Global Assignment Research isolation', () => {
-  it('is imported by no Production module and by no script other than the designated Phase B-2A / D-0B / D-1A runners and the D-0C RESULT derivation', () => {
+  it('is imported by no Production module and by no script other than the designated Phase B-2A / D-0B / D-1A / D-1C runners and the D-0C / D-1C RESULT derivations', () => {
     const productionPaths = Object.keys(production).filter(path => !/\.test\.tsx?$/.test(path))
     expect(productionPaths.length).toBeGreaterThan(100)
-    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity|verifyPlannerCandidate|judgeD1aRun|concludeD1aRun|d1aChildIntegrityIssues|MaterializedEntriesHandoff|onMaterializedEntries|PLANNER_VERIFICATION_D1C_PREREGISTRATION|d1cRegistrationFingerprint|summarizeVerificationPhysical/
+    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity|verifyPlannerCandidate|judgeD1aRun|concludeD1aRun|d1aChildIntegrityIssues|MaterializedEntriesHandoff|onMaterializedEntries|PLANNER_VERIFICATION_D1C_PREREGISTRATION|d1cRegistrationFingerprint|summarizeVerificationPhysical|concludeD1cMeasurement|judgeD1cFormalValidity|d1cFormalStartGate|deriveD1cPublicResult/
     expect(productionPaths.filter(path => forbidden.test(production[path]!))).toEqual([])
-    expect(Object.keys(scripts).filter(path => ![RUNNER_SCRIPT, D0B_RUNNER_SCRIPT, D0C_DERIVE_SCRIPT, D1A_RUNNER_SCRIPT].includes(path) && forbidden.test(scripts[path]!))).toEqual([])
+    expect(Object.keys(scripts).filter(path => ![RUNNER_SCRIPT, D0B_RUNNER_SCRIPT, D0C_DERIVE_SCRIPT, D1A_RUNNER_SCRIPT, D1C_RUNNER_SCRIPT, D1C_DERIVE_SCRIPT].includes(path) && forbidden.test(scripts[path]!))).toEqual([])
     expect(scripts[RUNNER_SCRIPT]).toBeDefined()
     expect(scripts[D0B_RUNNER_SCRIPT]).toBeDefined()
     expect(scripts[D0C_DERIVE_SCRIPT]).toBeDefined()
     expect(scripts[D1A_RUNNER_SCRIPT]).toBeDefined()
+    expect(scripts[D1C_RUNNER_SCRIPT]).toBeDefined()
+    expect(scripts[D1C_DERIVE_SCRIPT]).toBeDefined()
   })
 
   it('has the expected runtime modules, each reading only the PlannerInput, the Engine and the Production authorities', () => {
@@ -65,8 +73,8 @@ describe('Global Assignment Research isolation', () => {
       './coverageTypes.ts', './materializationDiagnostics.ts', './materializationFormal.ts', './materializationFormalResult.ts', './materializationProtocol.ts', './materializationRunner.ts',
       './materializationScale.ts', './materializationShape.ts', './materializationTypes.ts', './materialize.ts', './reachOptions.ts', './reachTable.ts',
       './requiredOnlyReplay.ts', './shapeMaterializationRequest.ts', './shapeMaterializationRun.ts', './shapeMaterializationScale.ts', './shapeMaterializationTypes.ts',
-      './shapeRouteVerification.ts', './structuralCandidate.ts', './structuralSearch.ts', './structuralWindowPolicy.ts', './types.ts', './verificationProtocol.ts',
-      './verificationRegistration.ts', './verify.ts',
+      './shapeRouteVerification.ts', './structuralCandidate.ts', './structuralSearch.ts', './structuralWindowPolicy.ts', './types.ts', './verificationFormal.ts',
+      './verificationFormalResult.ts', './verificationProtocol.ts', './verificationRegistration.ts', './verify.ts',
     ])
     for (const [path, source] of runtime) {
       // No oracle manifest / verifier / RESULT, no earlier Phase result; the lower-bound module only in the designated stage (checked below).
@@ -89,11 +97,13 @@ describe('Global Assignment Research isolation', () => {
     // The Phase A - C runtime never reads the existing Entries' Route contents (design 4.1): only the context does, through the Production
     // validation. Phase D-0A / D-0A-2b read the Route of the Entries they generate, and Phase D' (verify.ts) builds the final input from
     // the Build List through the Production replacement authority (checked below).
-    for (const [path, source] of runtime.filter(([path]) => path !== './context.ts' && path !== './types.ts' && !PHASE_D0A_MODULES.includes(path) && path !== './shapeRouteVerification.ts' && !PHASE_D0C_MODULES.includes(path) && path !== './verify.ts')) {
+    for (const [path, source] of runtime.filter(([path]) => path !== './context.ts' && path !== './types.ts' && !PHASE_D0A_MODULES.includes(path) && path !== './shapeRouteVerification.ts' && !PHASE_D0C_MODULES.includes(path) && path !== './verificationFormalResult.ts' && path !== './verify.ts')) {
       expect(source, path).not.toMatch(/candidateSnapshot|\.route\b|buildListEntries\b(?!\.length)/)
     }
     // Phase D-0C names those keys only as strings its public RESULT must not carry; it reads no Entry, snapshot or Route either.
     for (const path of PHASE_D0C_MODULES) expect(research[path], path).not.toMatch(/\.candidateSnapshot|\.route\b|\.buildListEntries\b/)
+    // Phase D-1C likewise names them only as keys its public RESULT must not carry.
+    expect(research['./verificationFormalResult.ts']).not.toMatch(/\.candidateSnapshot|\.route\b|\.buildListEntries\b/)
     // The Phase B-1 solver reads the ReachTable and the planning Targets' id / priority only: no PlannerInput, Engine, Master or Entry (design 6 / 11).
     for (const path of ['./assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentSolver.ts']) {
       expect(research[path], path).not.toMatch(/plannerInput|RngEngine|predict[A-Z]|\.master\b|ownedWeapons|normalCounters|rngState/)
@@ -365,12 +375,67 @@ describe('Global Assignment Research isolation', () => {
     }
     // The registration enables no formal run, names no registration HEAD SHA, and keeps the hashes in the D-1B document only.
     const registration = codeOf('./verificationRegistration.ts')
-    expect(registration).toMatch(/enabled: false as boolean,/)
+    // Phase D-1C enabled the formal run (its one allowed registration change; the fingerprint test proves nothing else changed).
+    expect(registration).toMatch(/enabled: true as boolean,/)
     expect(registration).not.toMatch(/REGISTRATION_HEAD = '[0-9a-f]{40}'/)
     expect(registration).not.toMatch(/fnv1a32:[0-9a-f]{8}/)
     expect(registration).toMatch(/registeredD0cConditions\(\)/)
-    // No runner reads the registration yet: D-1C connects it with its formal mode.
+    // Only the D-1C formal runner reads the registration; the D-1A and D-0B runners never do.
     for (const path of [D1A_RUNNER_SCRIPT, D0B_RUNNER_SCRIPT]) expect(scripts[path], path).not.toMatch(/verificationRegistration|PLANNER_VERIFICATION_D1C_PREREGISTRATION/)
+    expect(scripts[D1C_RUNNER_SCRIPT]).toMatch(/verificationRegistration\.ts/)
+  })
+
+  it('keeps Phase D-1C a formal contract and a RESULT derivation: no Planner, Search, Trace Replay, materialization, prediction or persistence in the modules', () => {
+    const codeOf = (path: string) => research[path]!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    for (const path of PHASE_D1C_MODULES) {
+      expect(research[path], path).toBeDefined()
+      const source = codeOf(path)
+      // It runs nothing: the runner's children run the materialization and Phase D'; these modules judge their records.
+      expect(source, path).not.toMatch(/createProductionPlan[A-Za-z]*\(|replayPlannerSearchTrace\(|verifyPlannerCandidate\(|validatePlannerInput\(|summarizePlanPhysical\(|visitPlannerAlternativeCandidates|searchCandidates\(|visitShapeConstrainedRouteCandidates|materializeStructuralCandidate|runMaterializationSmoke|buildReachTable|\.predict[A-Z]|new ProductionRngEngine/)
+      expect(source, path).not.toMatch(/PlannerConflictResolution|conflictRepairLineage|savePlanner|Repository|from '[^']*\/services\//)
+      // Never a proven minimum, never an upper bound; no lower bound or oracle is read.
+      expect(source, path).not.toMatch(/'proven_minimum'|VerifiedUpperBound|readVerifiedUpperBound|production_verified_plan|plannerGlobalLowerBound|provenLowerBoundTotal/)
+      for (const match of source.matchAll(/from '([^']+)'/g)) {
+        expect(match[1], `${path} imports ${match[1]}`).toMatch(/^\.\/(?:assignmentProtocol|materializationFormal|materializationFormalResult|materializationProtocol|materializationRunner|verificationFormal|verificationProtocol|verificationRegistration|verify)$|^\.\.\/\.\.\/domain\/models\/publicTypes$/)
+      }
+    }
+    // The registration HEAD is the D-1B merge commit, fixed as a 40-hex constant; every condition comes from the registration.
+    const formal = codeOf('./verificationFormal.ts')
+    expect(research['./verificationFormal.ts']).toMatch(/PLANNER_VERIFICATION_D1C_REGISTRATION_HEAD = 'd15ea9b0277b417b2681305486b6fb03dda57054'/)
+    expect(formal).toMatch(/conditions: registeredD1cConditions\(registration\)/)
+    // The verdict of each run is the D-1A one (no second judgement of the Planner conditions).
+    expect(formal).toMatch(/concludeD1aRun\(\{ first: run\.first\.reading, fresh: run\.fresh\?\.reading \?\? null, integrityIssues: runIssues\[index\]! \}\)/)
+    expect(formal).not.toMatch(/judgeD1aRun\(/)
+
+    // The runner: formal only, the registration's conditions, the Production Engine and Phase D' module, one conclusion; no oracle,
+    // no hash, no post-hoc argument, no Planner port, no resolution, exclusive writes, git-ignored outputs, the shared child envelope.
+    const runner = scripts[D1C_RUNNER_SCRIPT]!
+    expect(runner).not.toMatch(/plannerGlobalOracle|ORACLE_1657|plannerGlobalLowerBound|PLANNER_GLOBAL_[A-Z0-9_]*RESULT|--optimum|FakeRngEngine|conflictResolutions|PlannerConflictResolution|\bplanner\s*:/)
+    expect(runner).not.toMatch(/\b[0-9a-f]{64}\b/i)
+    expect(runner).not.toMatch(/\b[0-9a-f]{40}\b/i)
+    expect(runner).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+    expect(runner).toMatch(/new ProductionRngEngine\(\)/)
+    expect(runner).toMatch(/formal\.registeredD1cExpectation\(\)\.conditions/)
+    expect(runner).toMatch(/runner\.runMaterializationSmoke\(input, research\.globalResearchDependencies\(engine\), \{ conditions: materializationConditions \}/)
+    expect(runner).toMatch(/verify\.verifyPlannerCandidate\(/)
+    expect(runner).toMatch(/vp\.compareD0cMaterializationIdentity\(/)
+    expect(runner).toMatch(/formal\.d1cFormalStartGate\(/)
+    expect(runner).toMatch(/formal\.d1cFormalChildGateIssues\(/)
+    expect(runner).toMatch(/formal\.d1cFormalChildCalculationIssues\(/)
+    expect(runner).toMatch(/formal\.d1cFreshEntrySetSourceIssues\(/)
+    expect(runner.match(/formal\.concludeD1cMeasurement\(/g)).toHaveLength(1)
+    expect(runner).not.toMatch(/vp\.judgeD1aRun\(|vp\.concludeD1aRun\(|process\.exitCode = [012]/)
+    expect(runner).toMatch(/\['check-ignore', '-q', path\]/)
+    expect(runner).toMatch(/flag: 'wx'/)
+    expect(runner).toMatch(/appendFileSync\(journalPath/)
+    expect(runner).toMatch(/from '\.\/planner-global-assignment-d0b-child-process\.mjs'/)
+    // The derivation reads the raw outputs and writes exclusively: no Export, no Engine, no oracle, no hard-coded hash.
+    const derive = scripts[D1C_DERIVE_SCRIPT]!
+    expect(derive).not.toMatch(/plannerGlobalOracle|ORACLE_1657|plannerGlobalLowerBound|PLANNER_GLOBAL_[A-Z0-9_]*RESULT|--optimum|--export|ProductionRngEngine|FakeRngEngine|runMaterializationSmoke|createProductionPlan|verifyPlannerCandidate/)
+    expect(derive).not.toMatch(/\b[0-9a-f]{64}\b/i)
+    expect(derive).toMatch(/flag: 'wx'/)
+    expect(derive).toMatch(/derive\.deriveD1cPublicResult\(sources\)/)
+    expect(derive).toMatch(/derive\.d1cPublicResultIssues\(/)
   })
 
   it('changes no Production default, schema or version', () => {
