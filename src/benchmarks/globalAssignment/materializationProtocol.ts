@@ -24,7 +24,7 @@
  * (`conditionReachOptionSet()`) and its record stays byte for byte what it was; a run of another option set names it, and its
  * record carries it. The protocol versions are unchanged: the option set is a recorded condition, never inferred.
  */
-import { validateWindowLadder } from './assignmentProtocol'
+import { compareExportIdentity, parseRegisteredExportIdentity, validateWindowLadder, type ExportIdentity } from './assignmentProtocol'
 import { isValidSearchScaleGate } from './materializationScale'
 import type { MaterializationStageOutcome, SearchScaleGate } from './materializationTypes'
 import { reachWindowW0 } from './reachTable'
@@ -306,13 +306,344 @@ export const MATERIALIZATION_D0A2B_REGISTRATION_ITEMS = Object.freeze([
   'optionSetVersion', 'methodSelectionRule', 'continuationShapeRule', 'materializationOrderRule',
 ] as const)
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Phase D-0B-2 (`docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md`): the D-0C formal measurement conditions, pre-registered
+// from the D-0B-2 non-formal re-smokes of the rule `d0a2-v2` with the a2 option set on the real Export. Every item carries
+// its value, unit, basis, the non-formal runs it rests on (their RESULT SHA-256 is recorded in the D-0B-2 document, never in
+// code: design 11.3), whether it is oracle-informed, and what the evidence did and did not observe. The registered Export
+// identity lives in the document's `registered-export-*` block. Nothing here enables a formal run: the formal mode stays
+// refused, and D-0C (a separate task) enables it after auditing that these values and the measurement code are unchanged.
+// ---------------------------------------------------------------------------------------------------------------------
+
+export const MATERIALIZATION_D0B2_PHASE = 'Issue #154 Global Assignment Phase D-0B-2: non-formal real-Export re-smoke of the rule d0a2-v2 with the a2 option set, and the pre-registration of the D-0C formal conditions (no formal run)'
+/** The Research record of Phase D-0B-2; it holds the registered Export identity block and the evidence RESULT hashes. */
+export const MATERIALIZATION_D0B2_DOC = 'docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md'
+/** The main Phase D-0B-2 started from (PR #250 merged). */
+export const MATERIALIZATION_D0B2_BASE_MAIN = '0c6758ad9e8fe28f61bc367c613dcc7d3b498c93'
+
+/** A D-0C condition registered in D-0B-2 (design 10.4 / 11.2). Never a default of any runner path. */
+export interface D0cRegisteredItem<T> {
+  value: T
+  /** What the value counts, and in which unit. */
+  unit: string
+  /** Why this value: the observations and the bounds it was chosen from. */
+  basis: string
+  /** The D-0B-2 runs (and earlier registered phases) the value rests on, by the run ids of MATERIALIZATION_D0B2_DOC. */
+  evidence: readonly string[]
+  /** Design 11.2: whether the value was derived from the 1,657 oracle or a past RESULT's Target positions. */
+  oracleInformed: boolean
+  /** What the evidence observed inside this value. */
+  observedRange: string
+  /** What the evidence did not observe (never read as "safe", "absent" or "infeasible"). */
+  unconfirmedRange: string
+}
+
+const W0_REGISTERED = reachWindowW0()
+/** Design D0A2 10.3 over W0: the longest own-operation lane windows (Skill: an owned Gogma's origin .. resetSkillsLimit or a conversion's c + 1 .. conversionLimit; Gogma: origin .. origin + window − 1). */
+const W0_MAX_SKILL_LANE = W0_REGISTERED.skill
+const W0_MAX_GOGMA_LANE = W0_REGISTERED.gogma
+const W0_MAX_DEPTH = W0_MAX_SKILL_LANE + W0_MAX_GOGMA_LANE
+const R1 = 'd0b2-r1'
+const REG = 'd0b2-reg'
+const CMP_A1 = 'd0b2-cmp-a1'
+
 /**
- * Why a formal run must not start: D-0B never starts one (design 19.7). The formal conditions are pre-registered in
- * D-0B-2 after the D-0A-2 method and the A-2 option set, and measured in D-0C.
+ * The D-0C formal conditions of the rule `d0a2-v2` (Phase D-0B-2). `formalRun.enabled` is false: Phase D-0B-2 starts no formal
+ * run, and D-0C enables it only after auditing these values and the calculation-related code against the registration HEAD.
+ */
+export const MATERIALIZATION_D0C_PREREGISTRATION = Object.freeze({
+  registeredIn: 'Phase D-0B-2',
+  window: Object.freeze({
+    value: Object.freeze({ ...W0_REGISTERED }) as ReachWindow,
+    unit: 'Counter positions per stream (Normal forges / Gogma positions / Skill positions)',
+    basis: 'W0 = recommendedCandidateSearchDefaults (Issue #125, REQUIREMENTS 14.1), a Production constant of non-oracle origin, the B-2B registered window and the D-0B window. At W0 the first structural candidate materialized every planning Target (all_materialized), so design 10.3 asks for no window expansion.',
+    evidence: Object.freeze([R1, REG, CMP_A1, 'B-2B registration']),
+    oracleInformed: false,
+    observedRange: 'W0 only.',
+    unconfirmedRange: 'No other rung was run (W1+ stay unregistered as in B-2B); a materialization outcome at another window is unmeasured.',
+  }) as D0cRegisteredItem<ReachWindow>,
+  nodeBudget: Object.freeze({
+    value: 2_000,
+    unit: 'expanded nodes of the coverage-gated structural search (Phase C-2)',
+    basis: 'The B-2B registered node budget. The first structural candidate came at node 44 (depth 43) under both option sets a1 and a2; one candidate needs far fewer nodes than 2,000. A stop is search_incomplete, never no candidate.',
+    evidence: Object.freeze([R1, REG, CMP_A1, 'B-2B registration']),
+    oracleInformed: false,
+    observedRange: '44 nodes to the first structural candidate (a1 and a2).',
+    unconfirmedRange: 'Nodes beyond the first candidate (the structural candidate limit is 1).',
+  }) as D0cRegisteredItem<number>,
+  mrvLookahead: Object.freeze({
+    value: 8,
+    unit: 'design 6.4 lookahead k (options counted per Target for the MRV order; every option stays enumerable)',
+    basis: 'The B-2B registered MRV lookahead; the D-0B-2 smokes used it under both option sets and reached the same first candidate.',
+    evidence: Object.freeze([R1, REG, CMP_A1, 'B-2B registration']),
+    oracleInformed: false,
+    observedRange: 'k = 8 only.',
+    unconfirmedRange: 'Whether another k reaches another first candidate.',
+  }) as D0cRegisteredItem<number>,
+  coverageDrivenOrdering: Object.freeze({
+    value: true,
+    unit: 'boolean (design 6.3 coverage-driven value ordering)',
+    basis: 'Design 6.3 adopts it; the C-2 smoke found the first 1,000 candidates identical with and without it at W0, and the D-0B-2 smokes rejected no complete assignment for coverage (the ordering never fired).',
+    evidence: Object.freeze([R1, REG, CMP_A1]),
+    oracleInformed: false,
+    observedRange: '0 coverage rejections before the first candidate.',
+    unconfirmedRange: 'Inputs where the ordering fires.',
+  }) as D0cRegisteredItem<boolean>,
+  structuralCandidateLimit: Object.freeze({
+    value: 1,
+    unit: 'structural candidates collected and materialized per run',
+    basis: 'Design 9.8: D-0 measures the materialization of the first structural candidate. That candidate was all_materialized; more candidates are a separately justified step (the D-1 verification budget).',
+    evidence: Object.freeze([R1, REG, CMP_A1]),
+    oracleInformed: false,
+    observedRange: 'Structural candidate ordinal 0.',
+    unconfirmedRange: 'Later structural candidates are not materialized; their materialization outcome is unmeasured.',
+  }) as D0cRegisteredItem<number>,
+  optionSetVersion: Object.freeze({
+    value: REACH_OPTION_SET_A2,
+    unit: 'Phase A option set version (ReachOptionSetVersion)',
+    basis: 'Phase A-2 (design 19.8): a2 adds the owned-Gogma current-Ideal lane continuations (G2) and leaves the a1 options unchanged. Under a2 the first structural candidate of the real Export equals the a1 one (objective, stream ends, materialization order and every option equal; only 6 more Gogma-position rejections while counting).',
+    evidence: Object.freeze([R1, REG, CMP_A1]),
+    oracleInformed: false,
+    observedRange: 'The first candidate chooses no G1 / G2 continuation option.',
+    unconfirmedRange: 'The materialization of a G1 / G2 continuation shape on the real Export (synthetic only, design D0A2 19.6 / 20.2).',
+  }) as D0cRegisteredItem<typeof REACH_OPTION_SET_A2>,
+  methodSelectionRule: Object.freeze({
+    value: 'd0a2-v2' as const,
+    unit: 'materialization rule (design D0A2 11)',
+    basis: 'Continuation shapes (G1, G2) by shape_constrained only, continuous shapes by the projected Candidate Search first and shape_constrained once when it does not match, non-continuous shapes by shape_constrained only; no Planner Alternative Search.',
+    evidence: Object.freeze([R1, REG, CMP_A1]),
+    oracleInformed: false,
+    observedRange: '21 continuous shapes materialized by the projected Candidate Search, 22 non-continuous shapes by shape_constrained.',
+    unconfirmedRange: 'The continuous → shape_constrained fallback and the continuation path on the real Export (neither occurred).',
+  }) as D0cRegisteredItem<'d0a2-v2'>,
+  continuationShapeRule: Object.freeze({
+    value: Object.freeze(['lane_start_ideal_skill_continuation', 'lane_start_ideal_owned_gogma_continuation'] as const),
+    unit: 'continuation shape policies of CONTINUATION_SHAPE_DETECTORS (G1, G2)',
+    basis: 'Design D0A2 6.1 / 6.2 / 20.1: the G1 conversion continuation and the A-2 G2 owned-Gogma continuation are continuation shapes, materialized by shape_constrained only; their d0a-v1 classification not_executed(search_policy_shape) never occurs under d0a2-v2.',
+    evidence: Object.freeze([R1, REG]),
+    oracleInformed: false,
+    observedRange: '0 continuation shapes in the first candidate.',
+    unconfirmedRange: 'A continuation shape on the real Export.',
+  }) as D0cRegisteredItem<readonly ('lane_start_ideal_skill_continuation' | 'lane_start_ideal_owned_gogma_continuation')[]>,
+  projectedSearchScaleGate: Object.freeze({
+    value: Object.freeze({ maxConversionPositions: 32, maxGogmaLegalWidth: W0_REGISTERED.gogma, maxSkillLegalWidth: W0_REGISTERED.skill + 1, maxNormalForgeCount: W0_REGISTERED.normal }) as SearchScaleGate,
+    unit: 'design 9.7 predicted scale of the projected Candidate Search (conversion positions / Gogma legal width / Skill legal width / Normal forges)',
+    basis: 'The D-0B gate: conversion positions bounded by the D2-G-A Skill held-aware measurement (a projected start has one conversion position), widths and forges at W0 (never binding inside W0). The 21 projected Searches predicted at most 1 / 66 / 531 / 206 and none was refused.',
+    evidence: Object.freeze([R1, REG, 'D-0B smoke defaults']),
+    oracleInformed: false,
+    observedRange: 'Predicted at most 1 conversion position, Gogma width 66, Skill width 531, 206 forges.',
+    unconfirmedRange: 'A projected Search near the W0 widths.',
+  }) as D0cRegisteredItem<SearchScaleGate>,
+  shapeSearchScaleGate: Object.freeze({
+    value: Object.freeze({
+      maxDepthUpperBound: W0_MAX_DEPTH,
+      maxGogmaGeneratedStateUpperBound: W0_MAX_DEPTH * W0_MAX_GOGMA_LANE * (W0_MAX_GOGMA_LANE + 2),
+      maxNormalForgeCount: W0_REGISTERED.normal,
+      maxConversionWalkPositions: W0_REGISTERED.skill + 1,
+    }) as ShapeSearchScaleGate,
+    unit: 'design D0A2 10.3 predicted upper bounds (own-operation depth / Gogma generated states / Normal forges / conversion walk positions)',
+    basis: 'Each component at its W0 maximum (depth ≤ Skill lane 1,500 + Gogma lane 500; generated states ≤ depth × 500 non-blocked positions × (held run 500 + 2); forges ≤ 350; walk ≤ 1,501 Skill positions), so the gate refuses no W0 Search. The predicted upper bound is no cost estimate: over the 22 executed shape-constrained Searches it exceeded the generated states by 4.5x to 470x (largest bound 21,462,381 for 45,690 states, 0.44 s), so no value below the W0 maximum has a measured cost basis. The runtime cost is bounded by shapeSearchBudget instead.',
+    evidence: Object.freeze([R1, REG]),
+    oracleInformed: false,
+    observedRange: 'Predicted at most depth 321, 21,462,381 generated states, 1 forge, 70 walk positions; 0 refusals.',
+    unconfirmedRange: 'A Search with an upper bound near the W0 maximum (its actual cost is bounded by the budget, not by the gate).',
+  }) as D0cRegisteredItem<ShapeSearchScaleGate>,
+  shapeSearchBudget: Object.freeze({
+    value: Object.freeze({
+      maxGogmaGeneratedStates: 50_000_000,
+      maxSkillStates: W0_MAX_SKILL_LANE * W0_MAX_SKILL_LANE,
+      maxSettledWork: 100_000,
+      maxPredictions: Object.freeze({ normalArtian: W0_REGISTERED.normal, skill: W0_REGISTERED.skill + 1, gogmaReset: W0_REGISTERED.gogma, gogmaKeep: W0_REGISTERED.gogma }),
+    }) as ShapeSearchBudget,
+    unit: 'design D0A2 10.4 runtime usage of one shape-constrained Search (Gogma generated states / Skill states / settled work items / Production prediction calls per kind)',
+    basis: 'Gogma generated states 50,000,000: the observed maximum was 121,959 (about 1.9 µs per state); the largest held-aware Gogma Search D-0B completed generated 73.08 M states in 133 s at heapUsed 2.53 GB under a 4 GB heap, so 50 M stays inside that observed-completed region. Skill states 2,250,000 = the W0 bound (depth ≤ 1,500 × one state per position of a ≤ 1,500-position window; D2-G-A completed 2.8 M Skill states). Settled work 100,000: work tracked depth (work / depth ≤ 2.3), so about 4,600 at the W0 depth bound; 100,000 stops only a runaway scheduler. Predictions: the memo keys (Skill: Skill Counter, shared with the conversion Skill; Reset: Gogma Counter; Keep: Gogma Counter × family layout, one layout under the shape policy; Normal: the production target alone) bound them by the W0 positions 350 / 1,501 / 500 / 500.',
+    evidence: Object.freeze([R1, REG, 'D-0B smoke (73.08 M states)', 'D2-G-A']),
+    oracleInformed: false,
+    observedRange: 'At most 121,959 Gogma generated states, 27,539 Skill states, 397 settled work items, 1 / 532 / 171 / 293 Normal / Skill / Reset / Keep predictions; 0 budget stops.',
+    unconfirmedRange: 'A shape-constrained Search above 121,959 Gogma generated states (time and memory between that and 50 M are extrapolated, not measured for this method).',
+  }) as D0cRegisteredItem<ShapeSearchBudget>,
+  routeVerification: Object.freeze({
+    value: 'every_shape_constrained_materialization' as const,
+    unit: 'when the design D0A2 9.3 independent Route checks run',
+    basis: 'Design D0A2 13 #7: every shape-constrained Entry is re-predicted operation by operation before it is accepted; a failure fails closed (route_verification_failed).',
+    evidence: Object.freeze([R1, REG]),
+    oracleInformed: false,
+    observedRange: 'Every shape-constrained materialization passed its Route checks.',
+    unconfirmedRange: 'Production Planner and Trace Replay verification (D-1): passed Route checks are not "verified".',
+  }) as D0cRegisteredItem<'every_shape_constrained_materialization'>,
+  materializationOrderRule: Object.freeze({
+    value: 'phase-c-design-8.2' as const,
+    unit: 'rule identifier of deriveMaterializationOrder() (Phase C-1)',
+    basis: 'Design D0A2 8: the Phase C order is kept (conversion Targets by conversion position, each after the coverers of its Skill positions below it; then the others by largest stream advance, Target ID tie-break). Under it every planning Target materialized.',
+    evidence: Object.freeze([R1, REG]),
+    oracleInformed: false,
+    observedRange: 'The order of the first structural candidate (5 Skill dependencies).',
+    unconfirmedRange: 'Another order (the order v2 of design D0A2 8.3 is not planned).',
+  }) as D0cRegisteredItem<'phase-c-design-8.2'>,
+  childWallMs: Object.freeze({
+    value: 30 * 60_000,
+    unit: 'milliseconds of one child process (wall-clock)',
+    basis: 'The child took 34.3 s (ReachTable 11.6 s, structural search 18.3 s, materialization 1.8 s); 30 minutes is about 50x that and also covers the D-0B d0a-v1 child (235 s). Reaching it is unmeasured(timeout) with the confirmed progress kept.',
+    evidence: Object.freeze([R1, REG]),
+    oracleInformed: false,
+    observedRange: 'About 34 s per child.',
+    unconfirmedRange: 'A child near the budget-bounded worst case (each Search up to the registered budget).',
+  }) as D0cRegisteredItem<number>,
+  childHeapMb: Object.freeze({
+    value: 4_096,
+    unit: 'MB passed as --max-old-space-size to one child',
+    basis: 'heapUsed peaked at 0.96 GB (RSS 1.19 GB) in the exploratory run under an 8 GB limit, dominated by the ReachTable and structural search; 4,096 MB is the B-2B / D-0B child heap and about 4x that. Out of memory is recorded only from the V8 heap-limit signature.',
+    evidence: Object.freeze([R1, REG, 'B-2B registration']),
+    oracleInformed: false,
+    observedRange: 'heapUsed at most about 1 GB.',
+    unconfirmedRange: 'Memory of a shape-constrained Search near the registered budget.',
+  }) as D0cRegisteredItem<number>,
+  repeat: Object.freeze({
+    value: 2,
+    unit: 'children per run, one after another; their semantic records must hash equal',
+    basis: 'Design 12 determinism: two isolated children with the same task; the run is valid only when both semantic SHA-256 are identical (times and memory excluded).',
+    evidence: Object.freeze([REG]),
+    oracleInformed: false,
+    observedRange: 'Two children with one semantic SHA-256.',
+    unconfirmedRange: 'Determinism on another machine or Node version.',
+  }) as D0cRegisteredItem<number>,
+  exportIdentity: Object.freeze({
+    value: 'registered-export-block' as const,
+    unit: `the registered-export-file / -bytes / -sha256 block of ${MATERIALIZATION_D0B2_DOC} (the B-2B registered Export)`,
+    basis: 'The Export of B-2B and D-0B, verified by name, byte length and SHA-256 before every D-0B-2 run. The hash lives in the document only (design 11.3).',
+    evidence: Object.freeze([R1, REG, CMP_A1]),
+    oracleInformed: false,
+    observedRange: 'That one Export.',
+    unconfirmedRange: 'Any other Export.',
+  }) as D0cRegisteredItem<'registered-export-block'>,
+  calculationContext: Object.freeze({
+    value: Object.freeze({ gameVersion: 'unknown-initial', masterDataVersion: 4, rngEngineVersion: 'production-rng:c5-e7', appSchemaVersion: 17 }),
+    unit: 'CalculationContext of the restored PlannerInput, with the Production RNG Engine version',
+    basis: 'The CalculationContext and Engine version every D-0B-2 child recorded. D-0C refuses a run whose child records another value (a version change asks for a new registration).',
+    evidence: Object.freeze([R1, REG, CMP_A1]),
+    oracleInformed: false,
+    observedRange: 'This CalculationContext only.',
+    unconfirmedRange: 'Any other Master data, Engine or calculation version.',
+  }) as D0cRegisteredItem<{ gameVersion: string; masterDataVersion: number; rngEngineVersion: string; appSchemaVersion: number }>,
+  researchProtocolVersion: Object.freeze({
+    value: MATERIALIZATION_D0A2B_PROTOCOL_VERSION,
+    unit: 'runner protocol version of a d0a2-v2 run',
+    basis: 'The protocol every d0a2-v2 record of D-0B-2 carries; the registration adds no record field to the protocol.',
+    evidence: Object.freeze([R1, REG, CMP_A1]),
+    oracleInformed: false,
+    observedRange: 'This protocol only.',
+    unconfirmedRange: '—',
+  }) as D0cRegisteredItem<typeof MATERIALIZATION_D0A2B_PROTOCOL_VERSION>,
+  repositoryRule: Object.freeze({
+    value: 'clean_head_no_uncommitted_code_calculation_diff_audited' as const,
+    unit: 'start rule of a formal run',
+    basis: 'A formal child starts only from a clean working tree without uncommitted benchmark code, records HEAD and the benchmark code SHA-256 (git ls-files contents of src / scripts / build config), and D-0C reports the calculation-related code diff between the registration HEAD and its own HEAD: any change there asks for these values to be re-checked against the measurement code before a formal run.',
+    evidence: Object.freeze([REG]),
+    oracleInformed: false,
+    observedRange: 'Every D-0B-2 evidence run started clean at its recorded HEAD.',
+    unconfirmedRange: '—',
+  }) as D0cRegisteredItem<'clean_head_no_uncommitted_code_calculation_diff_audited'>,
+  concurrency: 1,
+  retry: 'none',
+  formalRun: Object.freeze({ enabled: false, enabledBy: null, startsIn: 'D-0C (a separate task)' }),
+})
+
+/** Items D-0B-2 registers beyond MATERIALIZATION_D0A2B_REGISTRATION_ITEMS (the user's D-0B-2 list). */
+export const MATERIALIZATION_D0C_EXTRA_REGISTRATION_ITEMS = Object.freeze([
+  'window', 'mrvLookahead', 'coverageDrivenOrdering', 'repeat', 'exportIdentity', 'calculationContext', 'researchProtocolVersion', 'repositoryRule',
+] as const)
+
+type D0cItemKey = Exclude<keyof typeof MATERIALIZATION_D0C_PREREGISTRATION, 'registeredIn' | 'concurrency' | 'retry' | 'formalRun'>
+
+/** Missing or invalid registered items, by name; `[]` means the D-0C registration is complete. Never a filled-in default. */
+export function materializationD0cRegistrationIssues(): string[] {
+  const registration = MATERIALIZATION_D0C_PREREGISTRATION as unknown as Record<string, Partial<D0cRegisteredItem<unknown>> | undefined>
+  const issues: string[] = []
+  for (const key of [...MATERIALIZATION_D0A2B_REGISTRATION_ITEMS, ...MATERIALIZATION_D0C_EXTRA_REGISTRATION_ITEMS]) {
+    const item = registration[key]
+    if (item === undefined || item.value === undefined || item.value === null) { issues.push(`${key} is not registered.`); continue }
+    for (const field of ['unit', 'basis'] as const) if (typeof item[field] !== 'string' || item[field]!.length < 3) issues.push(`${key}.${field} is missing.`)
+    if (!Array.isArray(item.evidence) || item.evidence.length === 0) issues.push(`${key}.evidence is missing.`)
+    if (typeof item.oracleInformed !== 'boolean') issues.push(`${key}.oracleInformed is missing.`)
+    for (const field of ['observedRange', 'unconfirmedRange'] as const) if (typeof item[field] !== 'string' || item[field]!.length === 0) issues.push(`${key}.${field} is missing.`)
+  }
+  const { conditions, envelope } = registeredD0cConditions()
+  issues.push(...validateShapeMaterializationResearchConditions(conditions).map(issue => `registered conditions: ${issue}`))
+  issues.push(...validateMaterializationEnvelope(envelope).map(issue => `registered envelope: ${issue}`))
+  return issues
+}
+
+/** The registered D-0C conditions and envelope as plain objects (the runner's d0a2-v2 condition shape). */
+export function registeredD0cConditions(): { conditions: ShapeMaterializationResearchConditions; envelope: MaterializationEnvelope } {
+  const registration = MATERIALIZATION_D0C_PREREGISTRATION
+  return {
+    conditions: {
+      rule: registration.methodSelectionRule.value,
+      window: { ...registration.window.value },
+      nodeBudget: registration.nodeBudget.value,
+      mrvLookahead: registration.mrvLookahead.value,
+      coverageDrivenOrdering: registration.coverageDrivenOrdering.value,
+      structuralCandidateLimit: registration.structuralCandidateLimit.value,
+      projectedSearchScaleGate: { ...registration.projectedSearchScaleGate.value },
+      shapeSearchScaleGate: { ...registration.shapeSearchScaleGate.value },
+      shapeSearchBudget: { ...registration.shapeSearchBudget.value, maxPredictions: { ...registration.shapeSearchBudget.value.maxPredictions } },
+      routeVerification: registration.routeVerification.value,
+      reachOptionSet: registration.optionSetVersion.value,
+    },
+    envelope: { childWallMs: registration.childWallMs.value, childHeapMb: registration.childHeapMb.value, repeat: registration.repeat.value },
+  }
+}
+
+const D0C_COMPARED_CONDITIONS: readonly (keyof ShapeMaterializationResearchConditions)[] = [
+  'rule', 'window', 'nodeBudget', 'mrvLookahead', 'coverageDrivenOrdering', 'structuralCandidateLimit', 'projectedSearchScaleGate', 'shapeSearchScaleGate',
+  'shapeSearchBudget', 'routeVerification', 'reachOptionSet',
+]
+
+/**
+ * How a run's conditions and envelope differ from the D-0C registration, one line per differing field (`[]`: the run used exactly the
+ * registered values). A smoke records it; it never changes a run, and an absent option set is a1, never the registered a2.
+ */
+export function differencesFromD0cRegistration(conditions: MaterializationRunConditions, envelope: MaterializationEnvelope): string[] {
+  const registered = registeredD0cConditions()
+  const actual: Record<string, unknown> = {
+    ...(conditions as unknown as Record<string, unknown>), rule: isShapeMaterializationConditions(conditions) ? conditions.rule : 'd0a-v1', reachOptionSet: conditionReachOptionSet(conditions),
+  }
+  const differences: string[] = []
+  for (const key of D0C_COMPARED_CONDITIONS) {
+    const want = (registered.conditions as unknown as Record<string, unknown>)[key]
+    if (JSON.stringify(actual[key]) !== JSON.stringify(want)) differences.push(`${key}: ${JSON.stringify(actual[key] ?? null)} (registered ${JSON.stringify(want)})`)
+  }
+  for (const key of ['childWallMs', 'childHeapMb', 'repeat'] as const) {
+    if (envelope[key] !== registered.envelope[key]) differences.push(`${key}: ${envelope[key]} (registered ${registered.envelope[key]})`)
+  }
+  return differences
+}
+
+/**
+ * The registered D-0C Export identity, read from the text of MATERIALIZATION_D0B2_DOC with the B-2B parser (exactly one
+ * `registered-export-file` / `-bytes` / `-sha256` line each; anything else is an issue, never a guessed identity).
+ */
+export function readD0cRegisteredExportIdentity(markdown: string): { identity: ExportIdentity; issues: [] } | { identity: null; issues: string[] } {
+  return parseRegisteredExportIdentity(markdown)
+}
+
+/** Field-by-field differences between an Export and the registered identity (`[]`: the same Export). */
+export function d0cExportIdentityDifferences(actual: ExportIdentity, registered: ExportIdentity): string[] {
+  return compareExportIdentity(actual, registered)
+}
+
+/** The D-0C item keys with a value (for the RESULT and the tests). */
+export function d0cRegisteredItemKeys(): D0cItemKey[] {
+  return Object.keys(MATERIALIZATION_D0C_PREREGISTRATION).filter((key): key is D0cItemKey => !['registeredIn', 'concurrency', 'retry', 'formalRun'].includes(key))
+}
+
+/**
+ * Why a formal run must not start: D-0B never starts one (design 19.7), and Phase D-0B-2 registers the D-0C conditions without
+ * enabling the formal mode (`MATERIALIZATION_D0C_PREREGISTRATION.formalRun.enabled` is false). D-0C measures them formally.
  */
 export function materializationFormalRunIssues(): string[] {
   return [
-    `Phase D-0B registers no formal condition: ${MATERIALIZATION_D0B2_REGISTRATION_ITEMS.join(', ')} are pre-registered in D-0B-2 (after D-0A-2 and A-2) and measured formally in D-0C. Use --mode smoke.`,
+    `Phase D-0B registers no formal condition: the d0a2-v2 conditions (${MATERIALIZATION_D0A2B_REGISTRATION_ITEMS.join(', ')} and ${MATERIALIZATION_D0C_EXTRA_REGISTRATION_ITEMS.join(', ')}) are pre-registered in D-0B-2 (MATERIALIZATION_D0C_PREREGISTRATION, formalRun.enabled false) and measured formally in D-0C, a separate task that enables the formal mode. Use --mode smoke.`,
   ]
 }
 

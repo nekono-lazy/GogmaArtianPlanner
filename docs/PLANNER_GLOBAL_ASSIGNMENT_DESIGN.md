@@ -1381,6 +1381,16 @@ D-0A-2の詳細設計は [D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md
   2bのparityで、`reset(g*)` の形に対しPlanner Alternative Searchが同じ位置・同じ最終多重集合のKeep chainを最初の一致として返す「操作種別の別解」が見つかった
   （同 §19.5。D-0A-2設計 §9.2の見込みとの差異。補題には影響しない）
 
+### 9.12 Phase D-0B-2の結果（要約）
+
+[D-0B-2記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md)（非formal、formal runなし）。option集合 `a2`・規則 `d0a2-v2` で実Exportを再smokeし、D-0Cの正式計測条件を
+`MATERIALIZATION_D0C_PREREGISTRATION`（`materializationProtocol.ts`）に事前登録した（`formalRun.enabled` は false、`--mode formal` の拒否は維持）。
+
+- 最初のstructural candidateはa2でもa1と同一（objective 1,766）。`d0a2-v2` で43 / 43 Targetが `materialized`（射影起点21、形状制約22、独立Route検証はすべて通過）。
+  `all_materialized` はPlanではなく、Planner検証はD-1で行う
+- 形状制約Searchの予測上界は実測の4.5〜470倍で費用の予測値にならないので、shape gateはW0内で拒否しない値とし、費用は実行時budgetで抑える形で登録した
+- `d0a-v1` は計測HEADで再実行して旧D-0Bとsemantic SHA-256が一致した（記録は不変）
+
 ## 10. 目的関数・下界・探索budget
 
 ### 10.1 目的関数と部分割当の下界
@@ -1596,7 +1606,7 @@ materialization方式に依存しないので、D-0の結果でA〜Cをやり直
 | └ **D-0A-2a Search Domain seam** | Route search primitive 3つと `routeSearchShared.ts` へのbase生成前の制約分岐、`bonusStream.ts` / `targetSearchScheduler.ts` の任意引数、`plannerAlternativeSearch.ts` の挙動不変な抽出refactor、新規のResearch専用module（D-0A-2設計 §4.2 / §5.3） | D-0A-2設計 | 形状制約付きRoute探索（Search Domain API） | 無指定時のProduction挙動・search identity・計算版数の不変（golden test）、seam test | D-0A-2設計 §12 / §15 | 2bの前提 | **あり**（任意引数とProduction非使用のResearch module。Production挙動は不変。オーナー承認が前提） | 不要 |
 | └ **D-0A-2b Research方式** | 方式 `shape_constrained`、独立検証器、方式選択 `d0a2-v2`、runnerの規則選択（D-0A-2設計 §5.4 / §9 / §10 / §11） | 2a | Target outcome・候補分類 | 補題のproperty test、PAとのparity、継続Route検証 | D-0A-2設計 §12 / §15 | A-2・D-0B-2の前提 | なし | 不要 |
 | └ **A-2** | Phase Aの所持巨戟継続option（§19.6） | D-0A-2b | option集合の確定 | §19.7 | 総当たり・G4状態遷移test | D-0B-2の前提 | なし | 不要 |
-| └ **D-0B-2 再smoke・事前登録** | 確定したoption集合・方式での非formal再smoke、delivery cap・Search規模gate・形状制約付き経路のbudget・envelope・option集合version・方式選択規則の事前登録 | D-0A-2b、A-2 | 事前登録値 | 事前登録の完了（formal runは開始しない） | protocol test | D-0Cの入力 | なし | 不要（smokeは非formal） |
+| └ **D-0B-2 再smoke・事前登録**（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md)、§9.12） | 確定したoption集合・方式での非formal再smoke、delivery cap・Search規模gate・形状制約付き経路のbudget・envelope・option集合version・方式選択規則の事前登録 | D-0A-2b、A-2 | 事前登録値 | 事前登録の完了（formal runは開始しない） | protocol test | D-0Cの入力 | なし | 不要（smokeは非formal） |
 | └ **D-0C formal measurement** | 計測記録docs・RESULT | D-0B-2の登録条件、clean HEAD | 上記D-0の出力 | 上記D-0のacceptance | — | D-1の前提 | なし | **要** |
 | **D-1 Planner検証（統合acceptance）** | `globalAssignment/verify.ts`、runner（full mode: B → C → D → D'のloop）、analyzer（post-hoc oracle比較） | D-0で確認した方式、verification budget | `VerifiedPlanRecord` / `GlobalAssignmentResult`、候補別outcome、RESULT JSON | 実Exportで `verified`（§13.2）。不成立なら理由別status（§4.6） | §13.1 Phase D'、isolation | Eの基準 | なし | **要**（事前登録: verification budget、Research maxPlanSteps、envelope） |
 | **E 最適化・性能** | incremental coverage pruning、決定的なdiscrepancy探索、中断再開、window拡大（verified時）、メモリ内訳、Browser Worker測定 | D-1の `bestVerified` | 改善した `bestVerified`、性能記録 | 全Target完成を維持したまま物理操作数を改善（8,534未満。§13.2）。時間・メモリは別指標。退行は不受理 | 既存acceptanceの維持、Browser isolation | — | なし（Production化は§16の別PR） | **要** |
@@ -1831,7 +1841,7 @@ formal run前なのでG9に反しない）。
 | 3 | D-0A-2設計（docs-only） | 案Bの設計: B-i / B-iiの最終選択、B-iを選ぶ場合のResearch専用materialization契約（§9.4とは別の節）と技術的実現性の確認、継続Routeの正当性検証の手順、G3の扱い、§9.3への組込み、§10.3の未実行の扱い、Search規模予測・gate、test計画（実施。[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md)。B-iiを選定し、実装を2a / 2bに分割。§9.11） |
 | 4 | D-0A-2実装 | 承認された方式での形状制約付きmaterialization、方式選択の拡張、synthetic test、parity test、継続Routeの正当性検証test（2a: Search DomainのResearch専用seam。オーナー承認が前提。2b: Research方式） |
 | 5 | A-2 | Phase Aの継続option、両軸Ideal sourceの扱いの判断（G4-iii）、値順序latticeの別stream化、C-1検査の改訂、総当たりtest、G4の状態遷移test（4と同時でもよい。A-2を4より先に入れると継続optionがmaterializeされない）（実施。§19.8） |
-| 6 | D-0B-2 | 確定したoption集合・方式での再smokeと、delivery cap・Search規模gate・envelope・option集合version・方式選択規則の事前登録 |
+| 6 | D-0B-2 | 確定したoption集合・方式での再smokeと、delivery cap・Search規模gate・envelope・option集合version・方式選択規則の事前登録（実施。§9.12、[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md)。規則 `d0a2-v2` のgate・budgetを登録し、`d0a-v1` のdelivery capは登録しない） |
 | 7 | D-0C | 登録条件でのformal measurement |
 | 8 | D-1 | Planner検証（統合acceptance） |
 

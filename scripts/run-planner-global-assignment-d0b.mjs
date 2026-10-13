@@ -22,6 +22,11 @@
 // `--option-set a2` adds the owned-Gogma current-Ideal lane continuations (G2) and is recorded in the conditions. It is a
 // non-formal smoke condition here; D-0B-2 registers the option set it measures.
 //
+// Phase D-0B-2 (docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md): the D-0C conditions of the rule d0a2-v2 are pre-registered in
+// MATERIALIZATION_D0C_PREREGISTRATION. A d0a2-v2 smoke records how its conditions differ from that registration and whether its
+// Export is the registered one (the identity block of the D-0B-2 document), and its child records the memory at each Target's
+// start and settle. The formal mode stays refused (D-0C enables it); a d0a-v1 run and its records are unchanged.
+//
 // Parent:
 //   node scripts/run-planner-global-assignment-d0b.mjs --export <Export .json> --run-dir <new dir> --output <new .json>
 //     [--mode smoke] [--rule d0a-v1|d0a2-v2] [--option-set a1|a2] [--window N,G,S] [--node-budget N] [--mrv-lookahead N] [--coverage-driven-ordering true|false]
@@ -79,6 +84,9 @@ if (role !== undefined) {
   journal({ kind: 'started', pid: process.pid })
   const maxima = { heapUsed: 0, heapTotal: 0, rss: 0, external: 0, samples: 0 }
   let lastJournalMemory = -Infinity
+  // D-0B-2, d0a2-v2 tasks only: the memory at each Target's start and settle and the sampled maximum in between (observed, never semantic).
+  const targetMemory = []
+  let targetWindow = null
   const sample = () => {
     const usage = process.memoryUsage()
     maxima.samples += 1
@@ -86,10 +94,30 @@ if (role !== undefined) {
     maxima.heapTotal = Math.max(maxima.heapTotal, usage.heapTotal)
     maxima.rss = Math.max(maxima.rss, usage.rss)
     maxima.external = Math.max(maxima.external, usage.external)
+    if (targetWindow !== null) {
+      targetWindow.samples += 1
+      targetWindow.heapUsed = Math.max(targetWindow.heapUsed, usage.heapUsed)
+      targetWindow.rss = Math.max(targetWindow.rss, usage.rss)
+    }
     if (atMs() - lastJournalMemory >= JOURNAL_MEMORY_INTERVAL_MS) {
       lastJournalMemory = atMs()
       journal({ kind: 'memory', heapUsed: usage.heapUsed, heapTotal: usage.heapTotal, rss: usage.rss, external: usage.external })
     }
+  }
+  const observeTargetMemory = event => {
+    const usage = process.memoryUsage()
+    const point = { heapUsed: usage.heapUsed, rss: usage.rss }
+    if (event.kind === 'target_started') {
+      targetWindow = { candidateIndex: event.candidateIndex, orderIndex: event.orderIndex, started: point, samples: 0, heapUsed: usage.heapUsed, rss: usage.rss }
+      return
+    }
+    if (targetWindow === null || targetWindow.orderIndex !== event.orderIndex) return
+    targetMemory.push({
+      candidateIndex: targetWindow.candidateIndex, orderIndex: targetWindow.orderIndex, started: targetWindow.started, settled: point,
+      sampledMax: { samples: targetWindow.samples, heapUsed: Math.max(targetWindow.heapUsed, usage.heapUsed), rss: Math.max(targetWindow.rss, usage.rss) },
+    })
+    targetWindow = null
+    journal({ kind: 'memory', heapUsed: usage.heapUsed, heapTotal: usage.heapTotal, rss: usage.rss, external: usage.external })
   }
   sample()
   const timer = setInterval(sample, MEMORY_SAMPLE_INTERVAL_MS)
@@ -112,15 +140,22 @@ if (role !== undefined) {
     const engine = new ProductionRngEngine()
     const dependencies = research.globalResearchDependencies(engine)
     const setupMs = performance.now() - started
+    const shapeTask = task.conditions.rule === 'd0a2-v2'
     let yields = 0
     const result = await runner.runMaterializationSmoke(input, dependencies, { conditions: task.conditions }, {
       now: () => performance.now(),
       yieldControl: () => new Promise(done => { yields += 1; setImmediate(done) }),
-      onProgress: event => journal({ kind: 'progress', event }),
+      onProgress: event => {
+        journal({ kind: 'progress', event })
+        if (shapeTask && (event.kind === 'target_started' || event.kind === 'target_settled')) observeTargetMemory(event)
+      },
     })
     clearInterval(timer)
     sample()
-    const memory = { maxima, heapSizeLimit: getHeapStatistics().heap_size_limit, maxRssKiB: process.resourceUsage().maxRSS, endOfRun: process.memoryUsage() }
+    const memory = {
+      maxima, heapSizeLimit: getHeapStatistics().heap_size_limit, maxRssKiB: process.resourceUsage().maxRSS, endOfRun: process.memoryUsage(),
+      ...(shapeTask ? { targets: targetMemory } : {}),
+    }
     await write(recordPath, {
       role, mode: task.mode, protocolVersion: task.protocolVersion,
       exportVerification: { actual: actualExport, taskMatched: true },
@@ -259,6 +294,24 @@ const cliMatched = expectedExportSha256 === undefined ? null : actualExport.sha2
 if (cliMatched === false) throw new Error(`Export SHA-256 ${actualExport.sha256} is not the expected ${expectedExportSha256}.`)
 
 const docPath = protocol.MATERIALIZATION_D0B_DOC
+// D-0B-2: a d0a2-v2 smoke records how its conditions differ from the D-0C registration and whether its Export is the registered one
+// (the identity block of the D-0B-2 document in the working tree). Neither changes the run; the formal mode stays refused above.
+const d0cRegistration = async () => {
+  const registrationDoc = protocol.MATERIALIZATION_D0B2_DOC
+  let registeredExport
+  if (!existsSync(registrationDoc)) registeredExport = { doc: registrationDoc, documentSha256: null, identity: null, issues: ['the D-0B-2 document is not in the working tree'], differences: null, matches: null }
+  else {
+    const text = await readFile(registrationDoc, 'utf8')
+    const parsed = protocol.readD0cRegisteredExportIdentity(text)
+    const differences = parsed.identity === null ? null : protocol.d0cExportIdentityDifferences(actualExport, parsed.identity)
+    registeredExport = { doc: registrationDoc, documentSha256: sha256(text), identity: parsed.identity, issues: parsed.issues, differences, matches: differences === null ? null : differences.length === 0 }
+  }
+  const differencesFromRegistration = protocol.differencesFromD0cRegistration(conditions, envelope)
+  return {
+    registeredIn: protocol.MATERIALIZATION_D0C_PREREGISTRATION.registeredIn, formalRunEnabled: protocol.MATERIALIZATION_D0C_PREREGISTRATION.formalRun.enabled,
+    registrationIssues: protocol.materializationD0cRegistrationIssues(), differencesFromRegistration, conditionsMatchRegistration: differencesFromRegistration.length === 0, registeredExport,
+  }
+}
 const machine = { cpuModel: cpus()[0]?.model?.trim() ?? null, logicalCpuCount: cpus().length, platform: platform(), arch: arch(), osRelease: release(), totalMemoryBytes: totalmem(), freeMemoryBytes: freemem() }
 const launchedAt = new Date().toISOString()
 const protocolVersion = protocol.materializationProtocolVersion(conditions)
@@ -272,7 +325,9 @@ const provenance = {
   exportVerification: { actual: actualExport, cliExpectedSha256: expectedExportSha256?.toLowerCase() ?? null, cliMatched },
   plannerInputMaxPlanStepsForValidationOnly: PLANNER_INPUT_MAX_PLAN_STEPS_FOR_VALIDATION_ONLY,
   conditions, envelope: { ...envelope, concurrency: 1, retry: 'none' }, conditionBasis, smokeOverrides,
-  formalRegistration: { formalRunEnabled: false, deferredItems: [...(shapeRule ? protocol.MATERIALIZATION_D0A2B_REGISTRATION_ITEMS : protocol.MATERIALIZATION_D0B2_REGISTRATION_ITEMS)], deferredTo: 'D-0B-2 (pre-registration), D-0C (formal measurement)' },
+  formalRegistration: shapeRule
+    ? { formalRunEnabled: false, deferredItems: [...protocol.MATERIALIZATION_D0A2B_REGISTRATION_ITEMS], deferredTo: 'pre-registered in D-0B-2 (MATERIALIZATION_D0C_PREREGISTRATION); formal measurement in D-0C (a separate task)', d0cRegistration: await d0cRegistration() }
+    : { formalRunEnabled: false, deferredItems: [...protocol.MATERIALIZATION_D0B2_REGISTRATION_ITEMS], deferredTo: 'D-0B-2 (pre-registration), D-0C (formal measurement)' },
   launchedAt, machine,
 }
 
@@ -280,7 +335,7 @@ await mkdir(runDir, { recursive: true })
 const startPath = join(runDir, 'start.json')
 await write(startPath, provenance)
 await chmod(startPath, 0o444).catch(() => {})
-console.log(`${launchedAt} START mode=${mode} head=${repositoryHeadSha.slice(0, 12)} clean=${workingTreeClean} uncommittedCode=${uncommittedBenchmarkCode} export=${actualExport.sha256.slice(0, 8)} window=${conditions.window.normal}/${conditions.window.gogma}/${conditions.window.skill} nodeBudget=${conditions.nodeBudget} candidates=${conditions.structuralCandidateLimit} rule=${rule} optionSet=${optionSetRaw ?? "a1(default)"} ${shapeRule ? `projectedGate=${Object.values(conditions.projectedSearchScaleGate).join(",")} shapeGate=${Object.values(conditions.shapeSearchScaleGate).join(",")}` : `deliveryCap=${conditions.deliveryCap} gate=${Object.values(conditions.searchScaleGate).join(",")}`}`)
+console.log(`${launchedAt} START mode=${mode} head=${repositoryHeadSha.slice(0, 12)} clean=${workingTreeClean} uncommittedCode=${uncommittedBenchmarkCode} export=${actualExport.sha256.slice(0, 8)} window=${conditions.window.normal}/${conditions.window.gogma}/${conditions.window.skill} nodeBudget=${conditions.nodeBudget} candidates=${conditions.structuralCandidateLimit} rule=${rule} optionSet=${optionSetRaw ?? "a1(default)"} ${shapeRule ? `projectedGate=${Object.values(conditions.projectedSearchScaleGate).join(",")} shapeGate=${Object.values(conditions.shapeSearchScaleGate).join(",")} matchesD0cRegistration=${provenance.formalRegistration.d0cRegistration.conditionsMatchRegistration} registeredExport=${provenance.formalRegistration.d0cRegistration.registeredExport.matches}` : `deliveryCap=${conditions.deliveryCap} gate=${Object.values(conditions.searchScaleGate).join(",")}`}`)
 
 // A parent interrupt kills the running child and records it as cancelled (never as a materialization outcome).
 const abort = new AbortController()

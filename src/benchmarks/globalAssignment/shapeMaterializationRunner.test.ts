@@ -117,6 +117,34 @@ describe('Phase D-0A-2b runner under d0a2-v2', () => {
     expect(JSON.stringify(summarizeMaterializationRun(v1.result.semantic))).not.toContain('shapeConstrained')
   }, 60_000)
 
+  it('D-0B-2: times each d0a2-v2 Target\'s inspections in the observed record only, and leaves d0a-v1 observed records without them', async () => {
+    const shape = await run(V1_GOLDEN_RUNNER_SPECS.held_crossing, shapeConditions({ projectedSearchScaleGate: { ...OPEN_GATE, maxGogmaLegalWidth: 0 } }))
+    const semantic = shape.result.semantic
+    expect(semantic.candidates[0]!.classification).toBe('all_materialized')
+    const times = shape.result.observed.elapsedMs.candidates[0]!.targets
+    expect(times.map(time => time.orderIndex)).toEqual(semantic.candidates[0]!.targets.map(target => target.orderIndex))
+    for (const time of times) {
+      const target = semantic.candidates[0]!.targets.find(value => value.orderIndex === time.orderIndex)!
+      expect(time.shapeTimeline, `${time.orderIndex}`).toBeDefined()
+      const { projectedInspectedMs, shapeInspectedMs } = time.shapeTimeline!
+      if (target.outcome.kind === 'materialized' && target.outcome.method === 'shape_constrained') {
+        // The first delivery is inspected before the Route checks, inside the Target's time and after any projected inspection.
+        expect(shapeInspectedMs).not.toBeNull()
+        expect(shapeInspectedMs!).toBeGreaterThan(0)
+        expect(shapeInspectedMs!).toBeLessThan(time.ms)
+        if (projectedInspectedMs !== null) expect(projectedInspectedMs).toBeLessThan(shapeInspectedMs!)
+      } else {
+        expect(shapeInspectedMs).toBeNull()
+      }
+    }
+    expect(times.some(time => time.shapeTimeline!.shapeInspectedMs !== null)).toBe(true)
+    // Execution-only: the semantic record carries no time.
+    expect(JSON.stringify(semantic)).not.toContain('shapeTimeline')
+    expect(JSON.stringify(semantic)).not.toContain('InspectedMs')
+    const v1 = await run(V1_GOLDEN_RUNNER_SPECS.held_crossing, v1GoldenConditions())
+    for (const time of v1.result.observed.elapsedMs.candidates[0]!.targets) expect(time).not.toHaveProperty('shapeTimeline')
+  }, 60_000)
+
   it('returns an identical semantic record on a second run', async () => {
     for (const spec of [V1_GOLDEN_RUNNER_SPECS.held_crossing, V1_GOLDEN_RUNNER_SPECS.policy_first]) {
       const one = await run(spec, shapeConditions({ structuralCandidateLimit: 3 }))

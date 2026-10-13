@@ -113,9 +113,39 @@ describe('Phase D-0A-2b rule selection (--rule)', () => {
     expect(written.conditions).not.toHaveProperty('searchPolicyPrecheck')
     expect(written.formalRegistration.deferredItems).toEqual(expect.arrayContaining(['shapeSearchScaleGate', 'shapeSearchBudget', 'routeVerification']))
     expect(written.conditionBasis.shapeSearchScaleGate).toMatch(/no default exists/)
+    // D-0B-2: the smoke records how it differs from the D-0C registration and that its Export is not the registered one; the formal mode stays off.
+    expect(written.formalRegistration.d0cRegistration).toMatchObject({
+      registeredIn: 'Phase D-0B-2', formalRunEnabled: false, registrationIssues: [], conditionsMatchRegistration: false,
+      registeredExport: { doc: 'docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md', issues: [], matches: false },
+    })
+    expect(written.formalRegistration.d0cRegistration.differencesFromRegistration).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^window: /), expect.stringMatching(/^shapeSearchBudget: /), expect.stringMatching(/^reachOptionSet: "global-assignment-reach-options:a1"/),
+    ]))
+    expect(written.formalRegistration.d0cRegistration.registeredExport.differences.length).toBeGreaterThan(0)
     // The child validated the d0a2-v2 task and its protocol; it stopped at the invalid Export, never at its conditions.
     expect(written.runs[0]).toMatchObject({ status: 'unmeasured', reason: 'process_failure' })
     expect(written.processes[0].stderrTail).not.toMatch(/Invalid task conditions|Task protocol/)
+  }, SPAWN_TEST_TIMEOUT_MS)
+
+  it('D-0B-2: a d0a2-v2 smoke with exactly the registered D-0C conditions records no difference from the registration, and stays a smoke', async () => {
+    const { registeredD0cConditions } = await import('../src/benchmarks/globalAssignment/materializationProtocol')
+    const { conditions, envelope } = registeredD0cConditions()
+    const budget = conditions.shapeSearchBudget
+    const { directory, output, runDir } = fixture()
+    const exportFile = join(directory, 'invalid-export.json')
+    writeFileSync(exportFile, '{"schemaVersion":13}\n')
+    const result = spawnSync(process.execPath, [runner, '--export', exportFile, '--run-dir', runDir, '--output', output, '--allow-uncommitted', '--rule', 'd0a2-v2', '--option-set', 'a2',
+      '--window', [conditions.window.normal, conditions.window.gogma, conditions.window.skill].join(','), '--node-budget', String(conditions.nodeBudget), '--mrv-lookahead', String(conditions.mrvLookahead),
+      '--coverage-driven-ordering', String(conditions.coverageDrivenOrdering), '--structural-candidate-limit', String(conditions.structuralCandidateLimit),
+      '--gate', Object.values(conditions.projectedSearchScaleGate).join(','), '--shape-gate', Object.values(conditions.shapeSearchScaleGate).join(','),
+      '--shape-budget', [budget.maxGogmaGeneratedStates, budget.maxSkillStates, budget.maxSettledWork, budget.maxPredictions.normalArtian, budget.maxPredictions.skill, budget.maxPredictions.gogmaReset, budget.maxPredictions.gogmaKeep].join(','),
+      '--wall-ms', String(envelope.childWallMs), '--heap-mb', String(envelope.childHeapMb), '--repeat', '1'], { encoding: 'utf8', timeout: 115_000 })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(2)
+    const written = JSON.parse(readFileSync(output, 'utf8'))
+    expect(written).toMatchObject({ mode: 'smoke', formal: false, conditions })
+    // Only the repeat (1 here, registered 2) differs; the formal mode is still off.
+    expect(written.formalRegistration.d0cRegistration).toMatchObject({ formalRunEnabled: false, differencesFromRegistration: ['repeat: 1 (registered 2)'], conditionsMatchRegistration: false })
   }, SPAWN_TEST_TIMEOUT_MS)
 })
 

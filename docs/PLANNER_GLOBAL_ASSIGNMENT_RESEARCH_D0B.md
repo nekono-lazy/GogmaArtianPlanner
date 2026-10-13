@@ -395,3 +395,14 @@ D-0B関連testの個別実行、実Export非formal smoke（§5）。
 - **D-0A-2への入力（§9）の扱い**: 1（配送順序と長いown chain）・3（sourceの拘束）・4（G3）・6（G1）は、B-ii（Search DomainのResearch専用seam）による形状制約付き経路で
   扱う（オーナー承認待ち）。2（materialization順序）は採らず、Phase Cの順序を維持する（D-0A-2設計 §8）。5（Search費用）は、同設計 §10.3の規模予測
   （depth、held窓、frontier上界）とbudgetで扱い、値はD-0B-2で登録する
+
+## 16. D-0B-2（追記）
+
+[D-0B-2記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md) で、option集合 `a2`・規則 `d0a2-v2` による実Exportの非formal再smokeと、D-0Cの正式計測条件の事前登録
+（`MATERIALIZATION_D0C_PREREGISTRATION`）を行った。本書 §5 / §6の観測値・RESULT・runnerの `d0a-v1` の挙動は変えていない。
+
+- 最初のstructural candidateはa2でも本書と同一（objective 1,766）で、`d0a2-v2` では43 / 43 Targetが `materialized`（Planner未検証）。本書の最初の未解決Target
+  （順序7）は形状制約Searchの最初の配送で期待形になった（D-0B-2記録 §6.3）
+- 計測HEADで `d0a-v1`（本書の既定値）を再実行し、semantic SHA-256が本書のfinal run（`53b1b77c…`）と一致した（D-0B-2記録 §8.1）
+- 本書 §10の登録項目のうち `deliveryCap` / `searchScaleGate` / `searchPolicyShapeRule` は `d0a-v1` の項目であり、D-0Cの登録（規則 `d0a2-v2`）には含めない。
+  `d0a-v1` は旧結果の再現と比較のために残す
