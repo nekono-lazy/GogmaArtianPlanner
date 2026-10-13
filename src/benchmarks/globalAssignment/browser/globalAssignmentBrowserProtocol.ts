@@ -364,9 +364,86 @@ export function gabRequestIssues(value: unknown): string[] {
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Response bodies: the structure the main thread reads (never a deep walk of a semantic record; the re-hash, the Entry set check and
+// the integrity checks of the runner own the rest)
+// ---------------------------------------------------------------------------------------------------------------------
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+const isNonNegativeInteger = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0
+const isPositiveInteger = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) > 0
+const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string')
+const GAB_INPUT_STAGES: readonly GabInputStage[] = ['export_read', 'export_hash', 'utf8_decode', 'json_parse', 'input_build', 'phase0']
+const GAB_EVIDENCE_STAGES: readonly GabEvidenceStage[] = ['materialization_semantic_hash', 'entry_set', 'verification_semantic_hash']
+const MATERIALIZATION_OUTCOME_KINDS = ['unsupported_input', 'scan_cancelled', 'structural_search_invalid', 'no_structural_candidate', 'structural_search_incomplete', 'structural_candidates_materialized']
+const VERIFICATION_OUTCOME_KINDS = ['conditions_met', 'materialization_failed', 'materialization_unconfirmed', 'materialization_unsupported', 'planning_target_set_changed', 'planner_rejected', 'objective_mismatch', 'unmeasured']
+
+/** The environment fields the main thread reads (`gabEnvironmentIssues()`, the runner's provenance checks, the page). */
+function environmentBodyIssues(value: unknown, at: string): string[] {
+  if (!isRecord(value)) return [`${at} must be an object.`]
+  const issues: string[] = []
+  if (typeof value.protocolVersion !== 'string') issues.push(`${at}.protocolVersion must be a string.`)
+  for (const key of ['crossOriginIsolated', 'isSecureContext'] as const) if (value[key] !== null && typeof value[key] !== 'boolean') issues.push(`${at}.${key} must be a boolean or null.`)
+  const capabilities = value.capabilities
+  if (!isRecord(capabilities)) issues.push(`${at}.capabilities must be an object.`)
+  else for (const key of ['cryptoSubtle', 'messageChannel', 'structuredClone', 'textDecoder', 'workerPerformanceMemory']) if (typeof capabilities[key] !== 'boolean') issues.push(`${at}.capabilities.${key} must be a boolean.`)
+  if (typeof value.rngEngineVersion !== 'string') issues.push(`${at}.rngEngineVersion must be a string.`)
+  if (value.buildCommit !== null && typeof value.buildCommit !== 'string') issues.push(`${at}.buildCommit must be a string or null.`)
+  if (value.locale !== null && typeof value.locale !== 'string') issues.push(`${at}.locale must be a string or null.`)
+  return issues
+}
+
+function progressEventIssues(value: unknown): string[] {
+  if (!isRecord(value)) return ['gab_progress.event must be an object.']
+  const status = (status: unknown) => status === 'started' || status === 'finished'
+  switch (value.kind) {
+    case 'input': return GAB_INPUT_STAGES.includes(value.stage as GabInputStage) && status(value.status) ? [] : ['gab_progress input event needs a known stage and status.']
+    case 'evidence': return GAB_EVIDENCE_STAGES.includes(value.stage as GabEvidenceStage) && status(value.status) ? [] : ['gab_progress evidence event needs a known stage and status.']
+    case 'materialization': return isRecord(value.event) && typeof value.event.kind === 'string' ? [] : ['gab_progress materialization event needs event.kind.']
+    case 'verification': return isRecord(value.event) && typeof value.event.stage === 'string' && status(value.event.status) ? [] : ['gab_progress verification event needs event.stage and event.status.']
+    default: return [`gab_progress.event.kind ${JSON.stringify(value.kind)} is unknown.`]
+  }
+}
+
+function numbersIssues(value: Record<string, unknown>, at: string, keys: readonly string[]): string[] {
+  return keys.filter(key => !isFiniteNumber(value[key])).map(key => `${at}.${key} must be a finite number.`)
+}
+
+/** The body of each response type (`gab_result` only as an object here: `gabWorkerResultIssues()` validates it when it is adopted). */
+function responseBodyIssues(type: GabResponseType, message: Record<string, unknown>): string[] {
+  switch (type) {
+    case 'gab_ready': return environmentBodyIssues(message.environment, 'gab_ready.environment')
+    case 'gab_accepted': return [...(message.role === 'first' || message.role === 'fresh' ? [] : ['gab_accepted.role must be first or fresh.']), ...(isFiniteNumber(message.acceptedAtEpochMs) ? [] : ['gab_accepted.acceptedAtEpochMs must be a finite number.'])]
+    case 'gab_progress': return [...progressEventIssues(message.event), ...(isFiniteNumber(message.atMs) ? [] : ['gab_progress.atMs must be a finite number.'])]
+    case 'gab_heartbeat': {
+      const heartbeat = message.heartbeat
+      if (!isRecord(heartbeat)) return ['gab_heartbeat.heartbeat must be an object.']
+      return [...(typeof heartbeat.stage === 'string' ? [] : ['gab_heartbeat.heartbeat.stage must be a string.']),
+        ...numbersIssues(heartbeat, 'gab_heartbeat.heartbeat', ['elapsedMs', 'yields', 'maxSliceMs', 'maxSliceSinceLastHeartbeatMs']),
+        ...(heartbeat.workerHeap === null || isRecord(heartbeat.workerHeap) ? [] : ['gab_heartbeat.heartbeat.workerHeap must be an object or null.'])]
+    }
+    case 'gab_cancel_ack': return []
+    case 'gab_pong': return isNonNegativeInteger(message.pingId) ? [] : ['gab_pong.pingId must be a non-negative integer.']
+    case 'gab_result': return isRecord(message.result) ? [] : ['gab_result.result must be an object.']
+    case 'gab_cancelled': {
+      const observed = message.observed
+      if (!isRecord(observed)) return ['gab_cancelled.observed must be an object.']
+      return [...(typeof observed.stoppedAt === 'string' ? [] : ['gab_cancelled.observed.stoppedAt must be a string.']),
+        ...(observed.via === 'cancel_point' || observed.via === 'before_result' ? [] : ['gab_cancelled.observed.via must be cancel_point or before_result.']),
+        ...numbersIssues(observed, 'gab_cancelled.observed', ['elapsedMs', 'yields', 'maxSliceMs'])]
+    }
+    case 'gab_error': {
+      const error = message.error
+      if (!isRecord(error)) return ['gab_error.error must be an object.']
+      return ['code', 'stage', 'errorName', 'message'].filter(key => typeof error[key] !== 'string').map(key => `gab_error.error.${key} must be a string.`)
+    }
+  }
+}
+
 /**
- * Why a message that claims to be a `gab_` response is malformed (`[]` = well-formed envelope): another protocol version, a missing
- * request ID / ping ID, or a missing body. The main thread fails a run closed on a malformed response; it never guesses its meaning.
+ * Why a message that claims to be a `gab_` response is malformed (`[]` = well-formed): another protocol version, a missing request ID
+ * / ping ID, or a body without the fields the main thread reads. The main thread fails a run closed on a malformed response; it never
+ * guesses its meaning. A `gab_result` body is validated in full by `gabWorkerResultIssues()` before it is adopted.
  */
 export function gabResponseIssues(value: unknown): string[] {
   if (!isGabResponseType(value)) return ['Not a gab_ response.']
@@ -376,11 +453,137 @@ export function gabResponseIssues(value: unknown): string[] {
   const requestScoped = value.type !== 'gab_ready' && value.type !== 'gab_pong'
   if (requestScoped && value.type !== 'gab_error' && typeof message.requestId !== 'string') issues.push(`${value.type} needs a requestId.`)
   if (value.type === 'gab_error' && message.requestId !== null && typeof message.requestId !== 'string') issues.push('gab_error needs a requestId or null.')
-  const body: Partial<Record<GabResponseType, string>> = {
-    gab_ready: 'environment', gab_accepted: 'acceptedAtEpochMs', gab_progress: 'event', gab_heartbeat: 'heartbeat', gab_pong: 'pingId', gab_result: 'result', gab_cancelled: 'observed', gab_error: 'error',
+  issues.push(...responseBodyIssues(value.type, message))
+  return issues
+}
+
+function materializationBodyIssues(value: unknown): string[] {
+  if (!isRecord(value)) return ['result.materialization must be an object or null.']
+  const issues: string[] = []
+  const semantic = value.semantic
+  if (!isRecord(semantic)) issues.push('result.materialization.semantic must be an object.')
+  else {
+    if (!isRecord(semantic.outcome) || !MATERIALIZATION_OUTCOME_KINDS.includes(semantic.outcome.kind as string)) issues.push('result.materialization.semantic.outcome needs a known kind.')
+    if (!isRecord(semantic.input)) issues.push('result.materialization.semantic.input must be an object.')
+    if (!Array.isArray(semantic.candidates)) issues.push('result.materialization.semantic.candidates must be an array.')
+    if (!Array.isArray(semantic.integrityIssues)) issues.push('result.materialization.semantic.integrityIssues must be an array.')
   }
-  const field = body[value.type]
-  if (field !== undefined && (message[field] === undefined || message[field] === null)) issues.push(`${value.type} needs ${field}.`)
+  if (typeof value.semanticSha256 !== 'string' || !SHA256_HEX.test(value.semanticSha256)) issues.push('result.materialization.semanticSha256 must be 64 lower-case hex characters.')
+  if (!isRecord(value.summary)) issues.push('result.materialization.summary must be an object.')
+  if (!isRecord(value.observed) || !isRecord(value.observed.elapsedMs)) issues.push('result.materialization.observed.elapsedMs must be an object.')
+  if (!isNonNegativeInteger(value.handoffCount)) issues.push('result.materialization.handoffCount must be a non-negative integer.')
+  return issues
+}
+
+function verificationBodyIssues(value: unknown): string[] {
+  if (!isRecord(value)) return ['result.verification must be an object or null.']
+  const issues: string[] = []
+  const semantic = value.semantic
+  if (!isRecord(semantic)) issues.push('result.verification.semantic must be an object.')
+  else {
+    const outcome = semantic.outcome
+    if (!isRecord(outcome) || !VERIFICATION_OUTCOME_KINDS.includes(outcome.kind as string)) issues.push('result.verification.semantic.outcome needs a known kind.')
+    if (!isRecord(semantic.candidate) || !isNonNegativeInteger(semantic.candidate.planningTargetCount)) issues.push('result.verification.semantic.candidate.planningTargetCount must be a non-negative integer.')
+    const finalInput = semantic.finalInput
+    if (finalInput !== null && !(isRecord(finalInput) && isStringArray(finalInput.phase0PlanningTargetIds))) issues.push('result.verification.semantic.finalInput must be null or carry phase0PlanningTargetIds.')
+    const planner = semantic.planner
+    if (planner !== null && !(isRecord(planner) && isNonNegativeInteger(planner.fullPlannerRuns))) issues.push('result.verification.semantic.planner must be null or carry fullPlannerRuns.')
+    const physical = semantic.physical
+    if (physical !== null && !(isRecord(physical) && isFiniteNumber(physical.objective))) issues.push('result.verification.semantic.physical must be null or carry objective.')
+    // The judgement reads these of a run that met every condition.
+    if (isRecord(outcome) && outcome.kind === 'conditions_met') {
+      if (!isRecord(finalInput) || !isRecord(planner) || !isRecord(physical) || !isNonNegativeInteger(physical.physicalOperations) || !isNonNegativeInteger(physical.planSteps)) {
+        issues.push('result.verification.semantic of conditions_met needs finalInput, planner and physical (physicalOperations, planSteps).')
+      }
+    }
+  }
+  if (typeof value.semanticSha256 !== 'string' || !SHA256_HEX.test(value.semanticSha256)) issues.push('result.verification.semanticSha256 must be 64 lower-case hex characters.')
+  if (!isRecord(value.observed) || !isRecord(value.observed.elapsedMs)) issues.push('result.verification.observed.elapsedMs must be an object.')
+  return issues
+}
+
+function entrySetBodyIssues(value: unknown): string[] {
+  if (!isRecord(value)) return ['result.entrySet must be an object or null.']
+  const issues: string[] = []
+  const set = value.value
+  if (!isRecord(set) || set.kind !== D1A_ENTRY_SET_KIND || !Array.isArray(set.materializedEntries) || typeof set.entryFingerprint !== 'string' || !isRecord(set.candidate)) {
+    issues.push(`result.entrySet.value must be a ${D1A_ENTRY_SET_KIND} with a candidate, materializedEntries and entryFingerprint.`)
+  } else {
+    if (value.entryFingerprint !== set.entryFingerprint) issues.push('result.entrySet.entryFingerprint is not the Entry set\'s own.')
+    if (value.entryCount !== set.materializedEntries.length) issues.push('result.entrySet.entryCount is not the Entry set\'s own.')
+  }
+  if (typeof value.sha256 !== 'string' || !SHA256_HEX.test(value.sha256)) issues.push('result.entrySet.sha256 must be 64 lower-case hex characters.')
+  if (typeof value.entryFingerprint !== 'string') issues.push('result.entrySet.entryFingerprint must be a string.')
+  if (!isNonNegativeInteger(value.entryCount)) issues.push('result.entrySet.entryCount must be a non-negative integer.')
+  return issues
+}
+
+/**
+ * Why a `gab_result` body must not be adopted (`[]` = the main thread can read it safely): the structure the runner, the judgement and
+ * the page read, which fields may be null and which must exist, and what each role must carry. It does not walk a semantic record: its
+ * content is checked by the main thread's re-hash, the Entry set check and the run's integrity checks. `expected` is the request the
+ * harness is adopting (another request ID or role is never adopted).
+ */
+export function gabWorkerResultIssues(value: unknown, expected?: { requestId: string; role: GabRole }): string[] {
+  if (!isRecord(value)) return ['result must be an object.']
+  const issues: string[] = []
+  if (value.protocolVersion !== GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION) issues.push(`result.protocolVersion must be ${GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION}.`)
+  if (typeof value.requestId !== 'string') issues.push('result.requestId must be a string.')
+  if (value.role !== 'first' && value.role !== 'fresh') issues.push('result.role must be first or fresh.')
+  if (expected !== undefined && (value.requestId !== expected.requestId || value.role !== expected.role)) issues.push(`result is for ${String(value.role)} / ${String(value.requestId)}, not ${expected.role} / ${expected.requestId}.`)
+  issues.push(...environmentBodyIssues(value.environment, 'result.environment'))
+  const observation = value.exportObservation
+  if (!isRecord(observation)) issues.push('result.exportObservation must be an object.')
+  else {
+    if (typeof observation.fileName !== 'string') issues.push('result.exportObservation.fileName must be a string.')
+    if (!isNonNegativeInteger(observation.bytes)) issues.push('result.exportObservation.bytes must be a non-negative integer.')
+    if (typeof observation.sha256 !== 'string' || !SHA256_HEX.test(observation.sha256)) issues.push('result.exportObservation.sha256 must be 64 lower-case hex characters.')
+    if (typeof observation.matchesRequest !== 'boolean') issues.push('result.exportObservation.matchesRequest must be a boolean.')
+  }
+  const context = value.calculationContext
+  if (!isRecord(context) || typeof context.gameVersion !== 'string' || !isFiniteNumber(context.masterDataVersion) || typeof context.rngEngineVersion !== 'string' || !isFiniteNumber(context.appSchemaVersion)) {
+    issues.push('result.calculationContext needs gameVersion, masterDataVersion, rngEngineVersion and appSchemaVersion.')
+  }
+  if (typeof value.rngEngineVersion !== 'string') issues.push('result.rngEngineVersion must be a string.')
+  const conditions = value.conditions
+  if (!isRecord(conditions) || !isRecord(conditions.materialization) || !isPositiveInteger(conditions.researchMaxPlanSteps) || !isPositiveInteger(conditions.verificationBudget) || typeof conditions.source !== 'string') {
+    issues.push('result.conditions needs materialization, researchMaxPlanSteps, verificationBudget and source.')
+  }
+  if (!isPositiveInteger(value.plannerInputMaxPlanStepsForValidationOnly)) issues.push('result.plannerInputMaxPlanStepsForValidationOnly must be a positive integer.')
+  const phase0 = value.phase0
+  if (!isRecord(phase0) || !isNonNegativeInteger(phase0.planningTargetCount) || !(phase0.planningTargetIdsSorted === null || isStringArray(phase0.planningTargetIdsSorted))) {
+    issues.push('result.phase0 needs planningTargetCount and planningTargetIdsSorted (a string array or null).')
+  }
+  for (const key of ['materialization', 'entrySet', 'freshEntrySet', 'verification'] as const) if (!(key in value)) issues.push(`result.${key} is required (null when absent).`)
+  if (value.materialization !== null && value.materialization !== undefined) issues.push(...materializationBodyIssues(value.materialization))
+  if (value.verification !== null && value.verification !== undefined) issues.push(...verificationBodyIssues(value.verification))
+  if (value.entrySet !== null && value.entrySet !== undefined) issues.push(...entrySetBodyIssues(value.entrySet))
+  const fresh = value.freshEntrySet
+  if (fresh !== null && fresh !== undefined && !(isRecord(fresh) && typeof fresh.entryFingerprint === 'string' && isNonNegativeInteger(fresh.entryCount))) issues.push('result.freshEntrySet must be null or carry entryFingerprint and entryCount.')
+  if (!isStringArray(value.integrityIssues)) issues.push('result.integrityIssues must be an array of strings.')
+  const observed = value.observed
+  if (!isRecord(observed)) issues.push('result.observed must be an object.')
+  else {
+    if (!isRecord(observed.timing) || !isFiniteNumber(observed.timing.workerTotalMs)) issues.push('result.observed.timing needs workerTotalMs.')
+    if (!isRecord(observed.slices)) issues.push('result.observed.slices must be an object.')
+    if (observed.longestYieldGap !== null && !(isRecord(observed.longestYieldGap) && isFiniteNumber(observed.longestYieldGap.ms))) issues.push('result.observed.longestYieldGap must be null or carry ms.')
+    for (const key of ['yields', 'heartbeats', 'progressEvents']) if (!isNonNegativeInteger(observed[key])) issues.push(`result.observed.${key} must be a non-negative integer.`)
+    if (observed.workerHeap !== null && !Array.isArray(observed.workerHeap)) issues.push('result.observed.workerHeap must be an array or null.')
+    if (!isFiniteNumber(observed.acceptedAtEpochMs)) issues.push('result.observed.acceptedAtEpochMs must be a finite number.')
+  }
+  if (value.formal !== false || value.oracleFreeExecution !== true) issues.push('result must be formal: false and oracleFreeExecution: true.')
+  // What each role carries (design 6.2 / 7.4): first materializes and hands over an Entry set only with a verified handoff; fresh plans.
+  // (A missing part is reported above as required; these read the parts that are there.)
+  if (value.role === 'first') {
+    if (value.materialization === null) issues.push('a first result needs its materialization record.')
+    if (value.freshEntrySet != null) issues.push('a first result carries no freshEntrySet.')
+    if (value.entrySet != null && value.verification === null) issues.push('a first result with an Entry set needs its verification record.')
+  }
+  if (value.role === 'fresh') {
+    if (value.materialization != null || value.entrySet != null) issues.push('a fresh result carries no materialization record or Entry set.')
+    if (value.verification === null || value.freshEntrySet === null) issues.push('a fresh result needs its verification record and freshEntrySet.')
+    if (isRecord(phase0) && phase0.planningTargetIdsSorted === null) issues.push('a fresh result needs its own Phase 0 planning Target IDs.')
+  }
   return issues
 }
 

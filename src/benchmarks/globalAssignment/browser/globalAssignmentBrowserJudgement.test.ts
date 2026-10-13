@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { judgeD1aRun, type D0cIdentityComparison, type D1aFreshProcessView, type D1aVerdict } from '../verificationProtocol'
 import type { PlannerVerificationSemantic } from '../verify'
 import {
-  gabUnmeasuredReason, judgeBrowserLogicalRun,
-  type GabFreshWorkerView, type GabLogicalRunVerdict, type GabVerificationView, type GabWorkerSettle,
+  gabIntegrityJudgement, gabUnmeasuredReason, judgeBrowserLogicalRun,
+  type GabFreshWorkerView, type GabLogicalRunContext, type GabLogicalRunVerdict, type GabVerificationView, type GabWorkerSettle,
 } from './globalAssignmentBrowserJudgement'
 import { runFirstStage, runFreshStage } from './globalAssignmentBrowserStages'
 import { SYNTHETIC_CONDITIONS, syntheticExport, syntheticPorts, syntheticProvenance } from './globalAssignmentBrowserTestFixture'
@@ -49,6 +49,9 @@ function asBrowser(verdict: D1aVerdict, browserSettle: (run: 'first' | 'fresh') 
   return verdict as GabLogicalRunVerdict
 }
 
+const NOT_CANCELLED: GabLogicalRunContext = { cancelled: false }
+const CANCELLED: GabLogicalRunContext = { cancelled: true }
+
 const SETTLES: GabWorkerSettle[] = ['completed', 'cancelled', 'cancelled_terminated', 'timeout', 'worker_error', 'worker_reported_error', 'page_left', 'page_lost', 'out_of_memory', 'environment_unsupported']
 
 describe('P-1 judgement: D-1A order and meanings', () => {
@@ -74,7 +77,7 @@ describe('P-1 judgement: D-1A order and meanings', () => {
     let compared = 0
     for (const firstVerification of firsts) {
       for (const fresh of freshes) {
-        const browser = judgeBrowserLogicalRun({ settle: 'completed', materializationOutcome: s.materializationOutcome, verification: firstVerification }, fresh, [])
+        const browser = judgeBrowserLogicalRun({ settle: 'completed', stoppedBeforeRequest: null, materializationOutcome: s.materializationOutcome, verification: firstVerification }, fresh, [], NOT_CANCELLED)
         const freshProcess: D1aFreshProcessView['process'] = fresh.settle === 'completed' || fresh.settle === 'not_run' ? fresh.settle : gabUnmeasuredReason(fresh.settle) as D1aFreshProcessView['process']
         const d1a = judgeD1aRun({ process: 'completed', identity: MATCHED_IDENTITY, verification: firstVerification }, { process: freshProcess, phase0PlanningTargetIds: fresh.phase0PlanningTargetIds, verification: fresh.verification }, [])
         expect(browser.verdict).toEqual(asBrowser(d1a.verdict, run => (run === 'first' ? 'completed' : fresh.settle)))
@@ -94,24 +97,43 @@ describe('P-1 judgement: D-1A order and meanings', () => {
 
   it('puts integrity first, never measures an uncompleted (cancelled) request, and never claims a formal status', async () => {
     const s = await semantics()
-    const met = { settle: 'completed' as const, materializationOutcome: s.materializationOutcome, verification: s.met }
+    const met = { settle: 'completed' as const, stoppedBeforeRequest: null, materializationOutcome: s.materializationOutcome, verification: s.met }
     const freshMet: GabFreshWorkerView = { settle: 'completed', phase0PlanningTargetIds: s.phase0, verification: s.metFresh }
-    const conditionsMet = judgeBrowserLogicalRun(met, freshMet, [])
+    const notRunFresh: GabFreshWorkerView = { settle: 'not_run', phase0PlanningTargetIds: null, verification: null }
+    const conditionsMet = judgeBrowserLogicalRun(met, freshMet, [], NOT_CANCELLED)
     expect(conditionsMet.verdict.kind).toBe('browser_nonformal_conditions_met')
     // Any integrity issue wins over two Workers that met every condition.
-    expect(judgeBrowserLogicalRun(met, freshMet, ['first: export_changed']).verdict).toEqual({ kind: 'invalid_run_integrity', issues: ['first: export_changed'] })
+    expect(judgeBrowserLogicalRun(met, freshMet, ['first: export_changed'], NOT_CANCELLED).verdict).toEqual({ kind: 'invalid_run_integrity', issues: ['first: export_changed'] })
     // A cancelled request is unmeasured even with a (discarded) result-shaped view: cancellation never becomes a measurement.
     for (const settle of ['cancelled', 'cancelled_terminated', 'page_left'] as const) {
-      expect(judgeBrowserLogicalRun({ ...met, settle }, freshMet, []).verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'cancelled', browserSettle: settle })
-      expect(judgeBrowserLogicalRun(met, { ...freshMet, settle }, []).verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled', browserSettle: settle })
+      expect(judgeBrowserLogicalRun({ ...met, settle }, freshMet, [], CANCELLED).verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'cancelled', browserSettle: settle })
+      expect(judgeBrowserLogicalRun(met, { ...freshMet, settle }, [], CANCELLED).verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled', browserSettle: settle })
     }
+    // PR #257 Required fix 1: a first request that was never posted is unmeasured (no settlement is invented for it).
+    for (const stop of ['cancel', 'page_left'] as const) {
+      expect(judgeBrowserLogicalRun({ settle: 'not_run', stoppedBeforeRequest: stop, materializationOutcome: null, verification: null }, notRunFresh, [], CANCELLED).verdict)
+        .toEqual({ kind: 'unmeasured', run: 'first', reason: 'cancelled', browserSettle: 'not_run' })
+    }
+    expect(judgeBrowserLogicalRun({ settle: 'not_run', stoppedBeforeRequest: null, materializationOutcome: null, verification: null }, notRunFresh, [], NOT_CANCELLED).verdict)
+      .toEqual({ kind: 'unmeasured', run: 'first', reason: 'process_failure', browserSettle: 'not_run' })
+    // A logical run with a recorded cancel never meets the conditions, even when both requests completed before the cancel was recorded.
+    expect(judgeBrowserLogicalRun(met, freshMet, [], CANCELLED).verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled', browserSettle: 'completed' })
+    expect(judgeBrowserLogicalRun(met, notRunFresh, [], CANCELLED).verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled', browserSettle: 'not_run' })
+    // ...while a first-side outcome stands as it does in D-1A (the first result was adopted before the cancel).
+    const truncatedFirst = { ...met, verification: s.truncated }
+    expect(judgeBrowserLogicalRun(truncatedFirst, notRunFresh, [], CANCELLED).verdict).toEqual(judgeBrowserLogicalRun(truncatedFirst, freshMet, [], NOT_CANCELLED).verdict)
     // A completed first Worker without Phase D': the materialization's own outcome, or process_failure when even that is missing.
-    expect(judgeBrowserLogicalRun({ settle: 'completed', materializationOutcome: { kind: 'no_structural_candidate', reason: 'x' }, verification: null }, { settle: 'not_run', phase0PlanningTargetIds: null, verification: null }, []).verdict)
+    expect(judgeBrowserLogicalRun({ settle: 'completed', stoppedBeforeRequest: null, materializationOutcome: { kind: 'no_structural_candidate', reason: 'x' }, verification: null }, notRunFresh, [], NOT_CANCELLED).verdict)
       .toEqual({ kind: 'phase_d_prime_not_reached', run: 'first', materializationOutcome: { kind: 'no_structural_candidate', reason: 'x' } })
-    expect(judgeBrowserLogicalRun({ settle: 'completed', materializationOutcome: null, verification: null }, { settle: 'not_run', phase0PlanningTargetIds: null, verification: null }, []).verdict)
+    expect(judgeBrowserLogicalRun({ settle: 'completed', stoppedBeforeRequest: null, materializationOutcome: null, verification: null }, notRunFresh, [], NOT_CANCELLED).verdict)
       .toEqual({ kind: 'unmeasured', run: 'first', reason: 'process_failure', browserSettle: 'completed' })
+    // The runner's fallback when a judgement cannot read its records: integrity only, never a measurement.
+    expect(gabIntegrityJudgement(['the judgement failed: x'])).toEqual({
+      verdict: { kind: 'invalid_run_integrity', issues: ['the judgement failed: x'] }, recordClassification: 'browser_nonformal_invalid_run_integrity',
+      crossWorker: { compared: false, identical: null, differingFields: [] }, formal: false, formalValidity: 'not_claimed', acceptance: 'not_claimed', minimality: 'not_claimed',
+    })
     // The labels: browser_nonformal_* only, never verified / nonformal_planner_verified / accepted / proven.
-    const labels = [conditionsMet, judgeBrowserLogicalRun(met, freshMet, ['x']), judgeBrowserLogicalRun({ ...met, settle: 'timeout' }, freshMet, [])].map(judgement => judgement.recordClassification)
+    const labels = [conditionsMet, judgeBrowserLogicalRun(met, freshMet, ['x'], NOT_CANCELLED), judgeBrowserLogicalRun({ ...met, settle: 'timeout' }, freshMet, [], NOT_CANCELLED)].map(judgement => judgement.recordClassification)
     expect(labels).toEqual(['browser_nonformal_conditions_met', 'browser_nonformal_invalid_run_integrity', 'browser_nonformal_unmeasured'])
     expect(JSON.stringify(conditionsMet)).not.toMatch(/"verified"|nonformal_planner_verified|"accepted"|proven_minimum|best_found/)
     expect(conditionsMet).toMatchObject({ formal: false, formalValidity: 'not_claimed', acceptance: 'not_claimed', minimality: 'not_claimed' })

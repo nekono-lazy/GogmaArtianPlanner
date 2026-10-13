@@ -51,4 +51,30 @@ describe('P-1 benchmark page', () => {
     view.unmount()
     expect(globalThis.globalAssignmentBrowserBenchmark).toBeUndefined()
   }, 120_000)
+
+  it('PR #257 Required fix 1: says whether a cancel reached a request or only recorded the logical run\'s stop (no request is posted)', async () => {
+    const synthetic = await syntheticExport()
+    const posted: unknown[] = []
+    let terminated = 0
+    // A Worker that never becomes ready: the cancel lands before any request exists.
+    const dependencies: GlobalAssignmentBrowserRunnerDependencies = {
+      createHarness: () => createGlobalAssignmentBrowserHarness({ createWorker: () => ({ postMessage: message => { posted.push(message) }, addEventListener: () => undefined, removeEventListener: () => undefined, terminate: () => { terminated += 1 } }) }),
+      mainEnvironment: () => ({ isSecureContext: true, crossOriginIsolated: false, cryptoSubtle: true, build: null }),
+      canCloneBlob: () => false, subscribeLifecycle: () => () => undefined, sleep: async () => undefined,
+    }
+    const user = userEvent.setup()
+    const view = render(<GlobalAssignmentBrowserBenchmarkPage runnerDependencies={dependencies} />)
+    await user.upload(view.container.querySelector<HTMLInputElement>('#gab-export-file')!, new File([synthetic.bytes.slice(0)], synthetic.identity.fileName, { type: 'application/json' }))
+    await screen.findByRole('group', { name: 'Export identity' })
+    await user.click(screen.getByRole('button', { name: 'logical runを実行' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'キャンセル' })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'キャンセル' }))
+    expect(await screen.findByText('logical runの停止を記録しました（first Workerへrequestを送る前のため、requestを送らずWorkerを破棄しました）。')).toBeInTheDocument()
+    const record = await screen.findByRole('article', { name: 'logical run run-1' }, { timeout: 10_000 })
+    expect(record).toHaveTextContent('未計測（first: cancelled、Browser分類 not_run）')
+    expect(posted.filter(message => (message as { type: string }).type === 'gab_run')).toEqual([])
+    expect(terminated).toBeGreaterThanOrEqual(1)
+    expect(globalThis.globalAssignmentBrowserBenchmark?.cancel()).toEqual({ kind: 'idle' })
+    view.unmount()
+  }, 60_000)
 })

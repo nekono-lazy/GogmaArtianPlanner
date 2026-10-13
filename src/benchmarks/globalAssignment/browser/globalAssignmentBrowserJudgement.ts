@@ -10,7 +10,9 @@
  *   materialization handed nothing to Phase D' (Phase 0 / A unsupported, no candidate, an incomplete or cancelled structural search, a
  *   fail-closed run); the materialization's own typed outcome is carried as it is
  * - a settlement other than `completed` (the main thread adopted no `gab_result`) is `unmeasured` with the D-1A reason of design 7.11 and
- *   the Browser classification kept beside it; a cancelled request (its result discarded or not) is never anything else
+ *   the Browser classification kept beside it; a cancelled request (its result discarded or not) is never anything else. A first
+ *   request that was never posted (`not_run`) is `unmeasured` too, and a logical run with a recorded cancel never reaches a fresh-side
+ *   outcome or `browser_nonformal_conditions_met` (PR #257 Required fix 1)
  * - both Workers meeting every condition and agreeing is `browser_nonformal_conditions_met`: never `verified`, `nonformal_planner_verified`,
  *   a formal validity, an acceptance or a minimality claim
  *
@@ -50,7 +52,10 @@ export interface GabVerificationView {
 }
 
 export interface GabFirstWorkerView {
-  settle: GabWorkerSettle
+  /** `not_run`: no request was ever posted (the runner records why in `stoppedBeforeRequest`); never a fabricated settlement. */
+  settle: GabWorkerSettle | 'not_run'
+  /** Why a `not_run` first request was never posted: the logical run was cancelled or the page was left first (null otherwise). */
+  stoppedBeforeRequest: 'cancel' | 'page_left' | null
   /** The materialization's own outcome when the first Worker completed (null otherwise). */
   materializationOutcome: MaterializationRunOutcome | null
   /** Null when Phase D' was not reached or the Worker did not complete. */
@@ -65,6 +70,12 @@ export interface GabFreshWorkerView {
 }
 
 export type GabLogicalRunSide = 'first' | 'fresh'
+
+/** What the runner knows of the logical run as a whole (required: a caller cannot judge without saying whether it was cancelled). */
+export interface GabLogicalRunContext {
+  /** A cancel was recorded on the logical run, at any point (a request's cancel, before a request, between the Workers, after a settlement). */
+  cancelled: boolean
+}
 
 export type GabLogicalRunVerdict =
   /** Both Workers completed, met every in-process condition and their semantic records are identical. Non-formal; not `verified`. */
@@ -108,12 +119,24 @@ function classification(verdict: GabLogicalRunVerdict): string {
   return verdict.kind === 'browser_nonformal_conditions_met' ? verdict.kind : `browser_nonformal_${verdict.kind}`
 }
 
+/** The judgement of a run whose records cannot be judged (the runner's fallback when the judgement itself failed): integrity only. */
+export function gabIntegrityJudgement(issues: readonly string[]): GabLogicalRunJudgement {
+  const verdict: GabLogicalRunVerdict = { kind: 'invalid_run_integrity', issues: [...issues] }
+  return {
+    verdict, recordClassification: classification(verdict), crossWorker: { compared: false, identical: null, differingFields: [] },
+    formal: false, formalValidity: 'not_claimed', acceptance: 'not_claimed', minimality: 'not_claimed',
+  }
+}
+
 /**
  * One Browser logical run's verdict. `integrityIssues` is required (a caller cannot judge without saying what it found): any issue is
- * `invalid_run_integrity` whatever the records say. A first-side outcome stands whatever the fresh side shows; one side alone never
- * meets the conditions.
+ * `invalid_run_integrity` whatever the records say. A first request that was never posted is `unmeasured` (`cancelled` when the logical
+ * run was cancelled or the page left before it, `process_failure` otherwise). A first-side outcome stands whatever the fresh side shows;
+ * one side alone never meets the conditions. A logical run with a recorded cancel is never `browser_nonformal_conditions_met` and never
+ * reports a fresh-side outcome: past the first side it is `unmeasured` (`cancelled`), even when its last request completed before the
+ * cancel was recorded.
  */
-export function judgeBrowserLogicalRun(first: GabFirstWorkerView, fresh: GabFreshWorkerView, integrityIssues: readonly string[]): GabLogicalRunJudgement {
+export function judgeBrowserLogicalRun(first: GabFirstWorkerView, fresh: GabFreshWorkerView, integrityIssues: readonly string[], logicalRun: GabLogicalRunContext): GabLogicalRunJudgement {
   const compared = first.verification !== null && fresh.verification !== null
   const differingFields = compared ? differingSemanticFields(first.verification!.semantic, fresh.verification!.semantic) : []
   const crossWorker = { compared, identical: compared ? first.verification!.semanticSha256 === fresh.verification!.semanticSha256 && differingFields.length === 0 : null, differingFields }
@@ -122,6 +145,7 @@ export function judgeBrowserLogicalRun(first: GabFirstWorkerView, fresh: GabFres
   })
 
   if (integrityIssues.length > 0) return judged({ kind: 'invalid_run_integrity', issues: [...integrityIssues] })
+  if (first.settle === 'not_run') return judged({ kind: 'unmeasured', run: 'first', reason: first.stoppedBeforeRequest !== null ? 'cancelled' : 'process_failure', browserSettle: 'not_run' })
   if (first.settle !== 'completed') return judged({ kind: 'unmeasured', run: 'first', reason: gabUnmeasuredReason(first.settle), browserSettle: first.settle })
   if (first.verification === null) {
     if (first.materializationOutcome === null) return judged({ kind: 'unmeasured', run: 'first', reason: 'process_failure', browserSettle: first.settle })
@@ -130,6 +154,7 @@ export function judgeBrowserLogicalRun(first: GabFirstWorkerView, fresh: GabFres
   const firstOutcome = outcomeOf('first', first.settle, first.verification.semantic)
   if (firstOutcome !== null) return judged(firstOutcome)
 
+  if (logicalRun.cancelled) return judged({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled', browserSettle: fresh.settle })
   if (fresh.settle === 'not_run') return judged({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled', browserSettle: 'not_run' })
   if (fresh.settle !== 'completed') return judged({ kind: 'unmeasured', run: 'fresh', reason: gabUnmeasuredReason(fresh.settle), browserSettle: fresh.settle })
   if (fresh.verification === null || fresh.phase0PlanningTargetIds === null) return judged({ kind: 'unmeasured', run: 'fresh', reason: 'process_failure', browserSettle: fresh.settle })

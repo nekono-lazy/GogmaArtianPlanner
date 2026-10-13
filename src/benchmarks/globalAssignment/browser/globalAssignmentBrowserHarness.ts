@@ -18,11 +18,12 @@
  *   C9  a new run is a new harness, a new Worker and a new request ID (`run()` refuses a second request)
  *   C10 (the runner) only a `completed` first request hands its Entry set to a fresh Worker
  *
- * A native `error` / `messageerror`, a malformed `gab_` message and a failed post fail the request closed (`worker_error`). Nothing here
+ * A native `error` / `messageerror`, a malformed `gab_` message (its envelope, or a body without the fields the main thread reads), a
+ * `gab_result` whose result `gabWorkerResultIssues()` refuses, and a failed post fail the request closed (`worker_error`). Nothing here
  * runs a Research calculation, persists anything or reads an expected value; the audit (`audit()`) lets tests prove C1 - C10.
  */
 import {
-  gabErrorMessage, gabErrorName, gabResponseIssues, gabRunRequestIssues, GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, isGabResponseType,
+  gabErrorMessage, gabErrorName, gabResponseIssues, gabRunRequestIssues, gabWorkerResultIssues, GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, isGabResponseType,
   type GabCancelledObservation, type GabExecutionOptions, type GabExportPayload, type GabHeartbeat, type GabProgressEvent, type GabRequest, type GabResponse,
   type GabRole, type GabRunRequest, type GabWorkerEnvironment, type GabWorkerError, type GabWorkerResult,
 } from './globalAssignmentBrowserProtocol'
@@ -234,12 +235,12 @@ export function createGlobalAssignmentBrowserHarness(dependencies: GlobalAssignm
 
   const pending = () => (current !== null && current.state !== 'settled' ? current : null)
 
-  const fail = (code: GabMainThreadError['code'], message: string) => {
+  const fail = (code: GabMainThreadError['code'], message: string, errorName: string = code) => {
     broken ??= message
     for (const waiter of readyWaiters.splice(0)) waiter.reject(new Error(message))
     for (const [pingId, resolve] of [...pongs]) { pongs.delete(pingId); resolve(null) }
     const request = pending()
-    if (request !== null) settle(request, 'worker_error', code === 'native_messageerror' ? 'native_messageerror' : code === 'native_error' ? 'native_error' : code, { error: { code, stage: 'main', errorName: code, message } })
+    if (request !== null) settle(request, 'worker_error', code === 'native_messageerror' ? 'native_messageerror' : code === 'native_error' ? 'native_error' : code, { error: { code, stage: 'main', errorName, message } })
   }
 
   const noteMessage = (request: ActiveRequest, at: number) => {
@@ -272,15 +273,23 @@ export function createGlobalAssignmentBrowserHarness(dependencies: GlobalAssignm
         if (request.state === 'cancelling' && request.cancel !== null) request.cancel.ackAt ??= at
         else late += 1
         return
-      case 'gab_result':
+      case 'gab_result': {
         if (request.state === 'cancelling') {
           // C2 / C4: never adopted, whatever its request ID or send time; the payload is not kept.
           request.cancel!.ignoredResultAt = at
           settle(request, 'cancelled', 'ignored_gab_result')
           return
         }
+        // Only a result the main thread can read safely is adopted; a malformed one fails the request closed (its payload is dropped).
+        const issues = gabWorkerResultIssues(data.result, { requestId: request.requestId, role: request.role })
+        if (issues.length > 0) {
+          invalid += 1
+          fail('protocol_violation', `Malformed gab_result: ${issues.join(' ')}`, 'MalformedResult')
+          return
+        }
         settle(request, 'completed', 'gab_result', { result: data.result })
         return
+      }
       case 'gab_cancelled':
         if (request.state === 'cancelling') { settle(request, 'cancelled', 'gab_cancelled', { cancelledObservation: data.observed }); return }
         // The Worker reports a cancel this harness never asked for: a protocol violation, never a cancellation outcome.
@@ -299,9 +308,9 @@ export function createGlobalAssignmentBrowserHarness(dependencies: GlobalAssignm
     const issues = gabResponseIssues(data)
     if (issues.length > 0) {
       invalid += 1
-      const request = pending()
-      // Fail closed: a malformed response is never interpreted.
-      if (request !== null) settle(request, 'worker_error', 'protocol_violation', { error: { code: 'protocol_violation', stage: 'main', errorName: 'MalformedResponse', message: issues.join(' ') } })
+      // Fail closed: a malformed response is never interpreted, and the Worker that sent it is not trusted again (a pending request
+      // settles as worker_error, a ready wait fails, later pings and requests are refused).
+      fail('protocol_violation', `Malformed ${data.type}: ${issues.join(' ')}`, 'MalformedResponse')
       return
     }
     const message = data as GabResponse

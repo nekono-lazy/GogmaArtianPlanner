@@ -19,7 +19,7 @@ import { createD1aEntrySet, d1aEntrySetIssues, handoffFromEntrySet } from '../ve
 import { verifyPlannerCandidate } from '../verify'
 import { createGlobalAssignmentBrowserController, gabSha256Bytes, type GlobalAssignmentBrowserControllerOptions } from './globalAssignment.worker.benchmark'
 import type { GabWorkerLike } from './globalAssignmentBrowserHarness'
-import { GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, type GabExecutionOptions, type GabResponse, type GabWorkerEnvironment } from './globalAssignmentBrowserProtocol'
+import { GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, type GabExecutionOptions, type GabResponse, type GabWorkerEnvironment, type GabWorkerResult } from './globalAssignmentBrowserProtocol'
 import { GLOBAL_ASSIGNMENT_BROWSER_VALIDATION_MAX_PLAN_STEPS, type GlobalAssignmentStageConditions, type GlobalAssignmentStagePorts } from './globalAssignmentBrowserStages'
 
 /** The D-1A test scenario that ends `conditions_met` (a = owned Gogma Reset at 12, b = new Normal at 5 converting at 7, Reset at 11). */
@@ -164,9 +164,12 @@ export class InProcessWorker implements GabWorkerLike {
   private readonly listeners = new Map<string, Set<Listener>>()
   private readonly controller: ReturnType<typeof createGlobalAssignmentBrowserController>
   private readonly deliverAfter: (message: GabResponse) => number
+  private readonly transform: (message: GabResponse) => unknown
 
-  constructor(options: GlobalAssignmentBrowserControllerOptions, deliverAfter: (message: GabResponse) => number = () => 0) {
+  /** `transform`: what the main thread receives instead of a response (tests of a malformed Worker; the identity by default). */
+  constructor(options: GlobalAssignmentBrowserControllerOptions, deliverAfter: (message: GabResponse) => number = () => 0, transform: (message: GabResponse) => unknown = message => message) {
     this.deliverAfter = deliverAfter
+    this.transform = transform
     this.controller = createGlobalAssignmentBrowserController(response => this.send(response), options)
     queueMicrotask(() => this.send({ type: 'gab_ready', protocolVersion: GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, environment: this.controller.environment() }))
   }
@@ -186,7 +189,7 @@ export class InProcessWorker implements GabWorkerLike {
 
   private send(response: GabResponse): void {
     if (this.terminated) return
-    const data = structuredClone(response)
+    const data = this.transform(structuredClone(response))
     setTimeout(() => {
       if (this.terminated) return
       for (const listener of [...(this.listeners.get('message') ?? [])]) listener({ data } as unknown as Event)
@@ -210,6 +213,45 @@ export async function bytesOf(text: string, fileName = 'synthetic-minimal-export
   const encoded = new TextEncoder().encode(text)
   const bytes = encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength) as ArrayBuffer
   return { bytes, identity: { fileName, bytes: bytes.byteLength, sha256: await gabSha256Bytes(bytes) } }
+}
+
+/** A promise the test settles by hand (an async boundary it controls: an Export read, a ready wait, a memory sample). */
+export function deferred<T = void>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((onResolve, onReject) => { resolve = onResolve; reject = onReject })
+  return { promise, resolve, reject }
+}
+
+export const SYNTHETIC_IDENTITY: ExportIdentity = { fileName: 'synthetic.json', bytes: 4, sha256: 'a'.repeat(64) }
+
+/**
+ * A first-Worker result that `gabWorkerResultIssues()` accepts but that carries no calculation: a materialization record whose outcome
+ * holds `marker` (so a test can prove a payload was dropped), no handoff, no Entry set, no Phase D'. Its `semanticSha256` is not the
+ * hash of its record unless the caller replaces it (a re-hash mismatch).
+ */
+export function syntheticWorkerResult(requestId: string, marker = 'the-calculation', identity: ExportIdentity = SYNTHETIC_IDENTITY): GabWorkerResult {
+  const result = {
+    protocolVersion: GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, requestId, role: 'first', environment: READY_ENVIRONMENT,
+    exportObservation: { ...identity, matchesRequest: true },
+    calculationContext: { gameVersion: 'synthetic', masterDataVersion: 4, rngEngineVersion: READY_ENVIRONMENT.rngEngineVersion, appSchemaVersion: 17 },
+    rngEngineVersion: READY_ENVIRONMENT.rngEngineVersion,
+    conditions: { materialization: structuredClone(SYNTHETIC_CONDITIONS.materialization), researchMaxPlanSteps: 20_000, verificationBudget: 1, source: 'test_injected' },
+    plannerInputMaxPlanStepsForValidationOnly: GLOBAL_ASSIGNMENT_BROWSER_VALIDATION_MAX_PLAN_STEPS,
+    phase0: { planningTargetCount: 0, planningTargetIdsSorted: null },
+    materialization: {
+      semantic: { outcome: { kind: 'no_structural_candidate', reason: marker }, input: {}, candidates: [], integrityIssues: [] }, semanticSha256: 'f'.repeat(64),
+      summary: {}, observed: { elapsedMs: { context: 1, reachTable: null, structuralSearch: null, toFirstStructuralCandidate: null, candidates: [], total: 1 }, yields: 0 }, handoffCount: 0,
+    },
+    entrySet: null, freshEntrySet: null, verification: null, integrityIssues: [],
+    observed: {
+      timing: { input: { exportReadMs: 0, exportHashMs: 0, decodeMs: 0, parseMs: 0, buildInputMs: 0, totalMs: 0 }, phase0Ms: null, materializationWallMs: 1, verificationWallMs: null,
+        evidence: { materializationHashMs: 0, entrySetMs: null, verificationHashMs: null }, stageTotalMs: 1, workerTotalMs: 1 },
+      slices: {}, longestYieldGap: null, yields: 0, heartbeats: 0, progressEvents: 0, workerHeap: null, acceptedAtEpochMs: 1,
+    },
+    formal: false, oracleFreeExecution: true,
+  }
+  return result as unknown as GabWorkerResult
 }
 
 /** Controller options over a synthetic Export's Engine (the conditions injected, as only tests may). */

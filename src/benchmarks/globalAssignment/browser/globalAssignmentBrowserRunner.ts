@@ -13,6 +13,11 @@
  * lifecycle (visibility, freeze, page leave), pings, memory points and timings as observed values. Every logical run carries a run slot
  * (ID, purpose, planned) so that P-2 can bind runs to a committed measurement plan; P-1 runs are all unplanned. Nothing is persisted:
  * records live in memory until the user saves the raw JSON (which may hold Entry bodies and Target IDs: `.local/` only).
+ *
+ * PR #257 Required fixes: a cancel or a page leave is re-checked after every await before a request is posted (none is posted after
+ * either; a Worker without a request is disposed at once and its record is `not_run`, with no settlement invented), `cancel()` says
+ * whether a request accepted the cancel or only the logical run's stop was recorded, and a logical run restores the runner's state on
+ * every exit path (a malformed Worker result, a failed re-hash or integrity check and a runner defect are integrity issues of the run).
  */
 import type { ExportIdentity } from '../assignmentProtocol'
 import { d1aEntrySetIssues, type D1aEntrySet } from '../verificationProtocol'
@@ -20,9 +25,9 @@ import {
   createGlobalAssignmentBrowserHarness, gabEnvironmentIssues,
   type GabHarnessAudit, type GabRequestSettlement, type GlobalAssignmentBrowserHarness,
 } from './globalAssignmentBrowserHarness'
-import { judgeBrowserLogicalRun, type GabLogicalRunJudgement, type GabWorkerSettle } from './globalAssignmentBrowserJudgement'
+import { gabIntegrityJudgement, judgeBrowserLogicalRun, type GabLogicalRunJudgement, type GabWorkerSettle } from './globalAssignmentBrowserJudgement'
 import {
-  buildCommitOf, GAB_UNBUILT_COMMIT, gabProgressKey, GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION,
+  buildCommitOf, GAB_UNBUILT_COMMIT, gabErrorMessage, gabErrorName, gabProgressKey, GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION,
   type GabExecutionOptions, type GabExportPayload, type GabHeartbeat, type GabProgressEvent, type GabRole, type GabWorkerEnvironment,
 } from './globalAssignmentBrowserProtocol'
 
@@ -101,10 +106,17 @@ export interface GabPingSummary {
 export interface GabWorkerRunRecord {
   role: GabRole
   requestId: string
-  /** `not_run`: never started (C10, a cancel before it, or the first Worker's outcome). */
+  /**
+   * `not_run`: no request was posted (C10, the first Worker's outcome, or a cancel / page leave before the post). A request that never
+   * entered the harness has no settlement and no audit entry: none is invented for it.
+   */
   settle: GabWorkerSettle | 'not_run'
   notRunReason: string | null
-  /** Why no request was posted (ready failure, environment refusal), or why the harness refused it. */
+  /** The request entered the harness lifecycle (posted, or refused by a failed post). False: the harness never saw it. */
+  requestStarted: boolean
+  /** Why a request was never posted although its Worker slot had started: a recorded cancel or a page leave (null otherwise). */
+  stoppedBeforeRequest: 'cancel' | 'page_left' | null
+  /** Why no request was posted (Worker creation or ready failure, an unreadable Export), or why the harness refused it. */
   harnessError: string | null
   createToReadyMs: number | null
   environment: GabWorkerEnvironment | null
@@ -114,6 +126,10 @@ export interface GabWorkerRunRecord {
   settlement: GabRequestSettlement | null
   /** The main thread's re-hash of the adopted semantic records (design 7.10). */
   rehash: { materialization: { worker: string; main: string; matched: boolean } | null; verification: { worker: string; main: string; matched: boolean } | null; entrySet: { worker: string; main: string; matched: boolean } | null }
+  /** The re-hash itself failed (an integrity issue of the run; the adopted result is then never trusted). */
+  rehashError: string | null
+  /** A runner defect while this Worker ran (an integrity issue of the run), kept beside whatever was observed. */
+  runnerError: string | null
   ping: GabPingSummary | null
   memory: GabMemorySample[] | null
   lateResponses: number
@@ -125,6 +141,43 @@ export interface GabLifecycleEvent {
   type: string
   atMs: number
   visibilityState: string | null
+}
+
+/** Where the logical run was when its cancel was recorded. */
+export type GabCancelPhase =
+  /** A Worker slot had started but no request was posted (before the Worker was created, while it started, while the Export was read). */
+  | 'before_request'
+  /** The running request accepted the cancel (C1: `running` -> `cancelling`). */
+  | 'request_running'
+  /** The Worker's request had already settled; its outcome stands as settled. */
+  | 'after_request_settled'
+  /** The first Worker was gone and no fresh Worker existed yet. */
+  | 'between_workers'
+
+/**
+ * What `runner.cancel()` did. Only `request_cancel_accepted` means a request accepted a cancel; `logical_run_stop_recorded` means the
+ * logical run records the stop (no request is posted and no Worker is started from then on) without any request accepting one.
+ */
+export type GabRunnerCancelResult =
+  /** No logical run is running: nothing changed. */
+  | { kind: 'idle' }
+  /** The logical run was already stopping (an earlier cancel or a page leave): nothing changed. */
+  | { kind: 'already_stopping'; reason: 'cancel' | 'page_left' }
+  /** The running request accepted the cancel (C1); its result is never adopted. */
+  | { kind: 'request_cancel_accepted'; role: GabRole; requestId: string }
+  /** No request was running: the stop was recorded (a Worker without a request was disposed at once). */
+  | { kind: 'logical_run_stop_recorded'; phase: Exclude<GabCancelPhase, 'request_running'>; role: GabRole | null }
+
+export interface GabLogicalRunCancel {
+  source: string
+  /** Main ms from the logical run's start to the cancel. */
+  requestedAtMs: number
+  phase: GabCancelPhase
+  /** The Worker slot the cancel reached (null between the Workers). */
+  role: GabRole | null
+  /** The request that accepted the cancel (`request_running` only). */
+  acceptedByRequest: string | null
+  triggered: GabCancelTrigger | null
 }
 
 export interface GabLogicalRunRecord {
@@ -140,7 +193,7 @@ export interface GabLogicalRunRecord {
   fresh: GabWorkerRunRecord
   integrityIssues: string[]
   judgement: GabLogicalRunJudgement
-  cancel: { source: string; requestedAtMs: number; acceptedByRequest: string | null; triggered: GabCancelTrigger | null } | null
+  cancel: GabLogicalRunCancel | null
   lifecycle: { visibilityAtStart: string | null; events: GabLifecycleEvent[]; interrupted: boolean; pageLeft: boolean }
   /** Main ms: first Worker creation -> fresh Worker termination (or the end of the run). */
   logicalRunWallMs: number
@@ -169,6 +222,8 @@ export interface GlobalAssignmentBrowserRunnerDependencies {
   readonly sleep?: (ms: number) => Promise<void>
   readonly setTimer?: (callback: () => void, ms: number) => unknown
   readonly clearTimer?: (handle: unknown) => void
+  /** The main thread's Entry set check before a fresh Worker gets it (`d1aEntrySetIssues`; injected by tests only). */
+  readonly entrySetIssues?: typeof d1aEntrySetIssues
   readonly onChange?: (state: GabRunnerState) => void
 }
 
@@ -284,9 +339,29 @@ export function gabLogicalRunOptionIssues(options: GabLogicalRunOptions): string
 
 function emptyWorkerRecord(role: GabRole, requestId: string): GabWorkerRunRecord {
   return {
-    role, requestId, settle: 'not_run', notRunReason: null, harnessError: null, createToReadyMs: null, environment: null, environmentIssues: [], exportTransport: null,
-    settlement: null, rehash: { materialization: null, verification: null, entrySet: null }, ping: null, memory: null, lateResponses: 0, audit: null, progressMilestones: [],
+    role, requestId, settle: 'not_run', notRunReason: null, requestStarted: false, stoppedBeforeRequest: null, harnessError: null, createToReadyMs: null, environment: null,
+    environmentIssues: [], exportTransport: null, settlement: null, rehash: { materialization: null, verification: null, entrySet: null }, rehashError: null, runnerError: null,
+    ping: null, memory: null, lateResponses: 0, audit: null, progressMilestones: [],
   }
+}
+
+/** The Worker slot of the running logical run (one at a time): what a cancel or a page leave can still reach. */
+interface ActiveWorkerSlot {
+  role: GabRole
+  requestId: string
+  /** Null until the Worker is created. */
+  harness: GlobalAssignmentBrowserHarness | null
+  /** Set synchronously right before `harness.run()`: from then on a cancel goes to the request, never around it. */
+  posted: boolean
+  settled: boolean
+  disposed: boolean
+}
+
+interface LogicalRunState {
+  id: string
+  startedAt: number
+  cancel: GabLogicalRunCancel | null
+  pageLeft: boolean
 }
 
 export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignmentBrowserRunnerDependencies = {}) {
@@ -312,51 +387,111 @@ export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignme
   const sleep = dependencies.sleep ?? (ms => new Promise<void>(resolve => globalThis.setTimeout(resolve, ms)))
   const setTimer = dependencies.setTimer ?? ((callback, ms) => globalThis.setTimeout(callback, ms))
   const clearTimer = dependencies.clearTimer ?? (handle => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>))
+  const entrySetIssues = dependencies.entrySetIssues ?? d1aEntrySetIssues
 
   const records: GabLogicalRunRecord[] = []
   let sequence = 0
-  let logical: { id: string; startedAt: number; cancel: GabLogicalRunRecord['cancel']; pageLeft: boolean } | null = null
-  let active: { harness: GlobalAssignmentBrowserHarness; requestId: string; role: GabRole } | null = null
+  let logical: LogicalRunState | null = null
+  let active: ActiveWorkerSlot | null = null
   let current: GabRunnerState['current'] = null
 
-  const notify = () => dependencies.onChange?.({ records: [...records], running: logical !== null, current: current === null ? null : { ...current } })
+  // An observer (the page) that throws never stops the runner or its cleanup: the state it missed is sent again on the next change.
+  const notify = () => {
+    try {
+      dependencies.onChange?.({ records: [...records], running: logical !== null, current: current === null ? null : { ...current } })
+    } catch {
+      // Intentionally ignored (see above).
+    }
+  }
 
-  /** One Worker of a logical run: create, wait ready, check the environment, post, settle, observe late responses, dispose. */
+  /**
+   * One Worker of a logical run: create, wait ready, check the environment, post, settle, observe late responses, dispose. A recorded
+   * cancel or a page leave is re-checked after every await before the post, and nothing awaits between the last check and
+   * `harness.run()`, so no request is ever posted after either (a Worker that has no request yet is disposed by them at once). Every
+   * path disposes the Worker and leaves the slot (`active`) and `current` empty; a runner defect is recorded (`runnerError`), never
+   * thrown past the logical run or turned into a measurement.
+   */
   async function runWorker(role: GabRole, source: GabExportSource, entrySet: D1aEntrySet | null, options: GabLogicalRunOptions, logicalRunId: string, runStart: number): Promise<GabWorkerRunRecord> {
     const requestId = `gab.${logicalRunId}.${role}`
     const record = emptyWorkerRecord(role, requestId)
     const samples: GabMemorySample[] | null = options.memory ? [] : null
     record.memory = samples
-    const sample = async (label: string) => { if (samples !== null) samples.push(await memory.sample(`${role}:${label}`, now() - runStart)) }
-    await sample('before_worker_create')
-    if (logical?.cancel) { record.notRunReason = 'cancelled before the Worker was created'; record.settle = 'cancelled'; return record }
-    const harness = createHarness()
-    active = { harness, requestId, role }
-    current = { logicalRunId, role, requestId, lastProgress: null, lastHeartbeat: null, events: 0, heartbeats: 0, elapsedMs: 0, settledTargets: 0 }
-    notify()
-    try {
-      let ready: Awaited<ReturnType<GlobalAssignmentBrowserHarness['whenReady']>>
+    // A memory reading that fails is recorded as one (status `error`), never thrown.
+    const sample = async (label: string) => {
+      if (samples === null) return
       try {
-        ready = await harness.whenReady(options.envelope.readyTimeoutMs)
+        samples.push(await memory.sample(`${role}:${label}`, now() - runStart))
+      } catch (error) {
+        samples.push({ label: `${role}:${label}`, atMs: now() - runStart, userAgentSpecific: { status: 'error', reason: gabErrorMessage(error) }, mainRealm: null })
+      }
+    }
+    const slot: ActiveWorkerSlot = { role, requestId, harness: null, posted: false, settled: false, disposed: false }
+    active = slot
+    /** True (and the record says why) when the logical run was cancelled or the page left: no request is posted from here on. */
+    const stoppedBeforeRequest = (where: string): boolean => {
+      const stop = logical === null || logical.cancel !== null ? 'cancel' : logical.pageLeft ? 'page_left' : null
+      if (stop === null) return false
+      record.settle = 'not_run'
+      record.stoppedBeforeRequest = stop
+      record.notRunReason = `${stop === 'page_left' ? 'the page was left' : 'the logical run was cancelled'} ${where}; no request was posted`
+      return true
+    }
+    let harness: GlobalAssignmentBrowserHarness | null = null
+    try {
+      await sample('before_worker_create')
+      if (stoppedBeforeRequest('before the Worker was created')) return record
+      let created: GlobalAssignmentBrowserHarness
+      try {
+        created = createHarness()
       } catch (error) {
         record.settle = 'worker_error'
-        record.harnessError = `The Worker never became ready: ${error instanceof Error ? error.message : String(error)}`
+        record.harnessError = `The Worker could not be created: ${gabErrorMessage(error)}`
+        return record
+      }
+      harness = created
+      slot.harness = created
+      current = { logicalRunId, role, requestId, lastProgress: null, lastHeartbeat: null, events: 0, heartbeats: 0, elapsedMs: 0, settledTargets: 0 }
+      notify()
+      let ready: Awaited<ReturnType<GlobalAssignmentBrowserHarness['whenReady']>>
+      try {
+        ready = await created.whenReady(options.envelope.readyTimeoutMs)
+      } catch (error) {
+        // A cancel or a page leave disposes a Worker that has no request: its ready wait ends there, and that is no Worker failure.
+        if (stoppedBeforeRequest('while the Worker was starting')) return record
+        record.settle = 'worker_error'
+        record.harnessError = `The Worker never became ready: ${gabErrorMessage(error)}`
         return record
       }
       record.createToReadyMs = ready.createToReadyMs
       record.environment = ready.environment
       await sample('worker_ready')
+      if (stoppedBeforeRequest('after the Worker became ready')) return record
       record.environmentIssues = gabEnvironmentIssues(ready.environment, options.execution, mainEnvironment())
       if (record.environmentIssues.length > 0) { record.settle = 'environment_unsupported'; return record }
-      if (logical?.cancel || logical?.pageLeft) { record.settle = logical.pageLeft ? 'page_left' : 'cancelled'; record.notRunReason = 'cancelled before the request was posted'; return record }
       const transport = options.exportTransport === 'blob' || options.exportTransport === 'array_buffer' ? options.exportTransport : canCloneBlob() ? 'blob' : 'array_buffer'
       record.exportTransport = transport
-      const exportPayload: GabExportPayload = transport === 'blob' ? { kind: 'blob', blob: source.file } : { kind: 'array_buffer', bytes: await source.file.arrayBuffer() }
+      let exportPayload: GabExportPayload
+      if (transport === 'blob') exportPayload = { kind: 'blob', blob: source.file }
+      else {
+        let bytes: ArrayBuffer
+        try {
+          bytes = await source.file.arrayBuffer()
+        } catch (error) {
+          if (stoppedBeforeRequest('while the Export was read')) return record
+          record.settle = 'worker_error'
+          record.harnessError = `The main thread could not read the Export: ${gabErrorMessage(error)}`
+          return record
+        }
+        exportPayload = { kind: 'array_buffer', bytes }
+      }
+      // The last check before the post. Nothing between it and `harness.run()` awaits: no cancel or page leave can slip in between.
+      if (stoppedBeforeRequest(transport === 'blob' ? 'before the request was posted' : 'while the Export was read')) return record
       let settled = false
       let armedTimer: unknown = null
       const pings: (number | null)[] = []
       let pingChain: Promise<void> | null = null
-      const pending = harness.run({
+      slot.posted = true
+      const pending = created.run({
         requestId, role, exportPayload, exportIdentity: { ...source.identity }, entrySet, execution: { ...options.execution },
         workerWallMs: role === 'first' ? options.envelope.firstWallMs : options.envelope.freshWallMs, cancelGraceMs: options.envelope.cancelGraceMs,
       }, {
@@ -364,7 +499,7 @@ export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignme
           if (options.ping) {
             const timeoutMs = options.ping.timeoutMs
             // Chained: a pong sends the next ping. No ping is sent once the request settled (its Worker is terminated).
-            pingChain = (async () => { while (!settled && harness.state(requestId) !== 'settled') pings.push(await harness.ping(timeoutMs)) })()
+            pingChain = (async () => { while (!settled && created.state(requestId) !== 'settled') pings.push(await created.ping(timeoutMs)) })()
           }
         },
         onProgress: (event, atMs) => {
@@ -382,11 +517,14 @@ export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignme
           notify()
         },
       })
+      // `run()` registers the request synchronously when it accepts it; a refused request never entered the lifecycle.
+      record.requestStarted = created.state(requestId) !== null
       const settlement = await pending.catch((error: unknown) => {
-        record.harnessError = `The harness refused the request: ${error instanceof Error ? error.message : String(error)}`
+        record.harnessError = `The harness refused the request: ${gabErrorMessage(error)}`
         return null
       })
       settled = true
+      slot.settled = true
       if (armedTimer !== null) clearTimer(armedTimer)
       await pingChain
       record.ping = options.ping ? summarizeGabPings(pings) : null
@@ -394,32 +532,61 @@ export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignme
       record.settle = settlement === null ? 'worker_error' : settlement.outcome
       await sample('settled')
       if (options.lateResponseWaitMs) await sleep(options.lateResponseWaitMs)
-      // Re-hash what the main thread adopted (design 7.10): a recorded SHA-256 that is not the hash of its record is an integrity issue.
+      // Re-hash what the main thread adopted (design 7.10): a recorded SHA-256 that is not the hash of its record is an integrity issue,
+      // and so is a record the main thread cannot hash at all.
       const result = settlement?.result ?? null
       if (result !== null) {
-        if (result.materialization !== null) {
-          const main = await sha256Text(JSON.stringify(result.materialization.semantic))
-          record.rehash.materialization = { worker: result.materialization.semanticSha256, main, matched: main === result.materialization.semanticSha256 }
-        }
-        if (result.verification !== null) {
-          const main = await sha256Text(JSON.stringify(result.verification.semantic))
-          record.rehash.verification = { worker: result.verification.semanticSha256, main, matched: main === result.verification.semanticSha256 }
-        }
-        if (result.entrySet !== null) {
-          const main = await sha256Text(JSON.stringify(result.entrySet.value))
-          record.rehash.entrySet = { worker: result.entrySet.sha256, main, matched: main === result.entrySet.sha256 }
+        try {
+          if (result.materialization !== null) {
+            const main = await sha256Text(JSON.stringify(result.materialization.semantic))
+            record.rehash.materialization = { worker: result.materialization.semanticSha256, main, matched: main === result.materialization.semanticSha256 }
+          }
+          if (result.verification !== null) {
+            const main = await sha256Text(JSON.stringify(result.verification.semantic))
+            record.rehash.verification = { worker: result.verification.semanticSha256, main, matched: main === result.verification.semanticSha256 }
+          }
+          if (result.entrySet !== null) {
+            const main = await sha256Text(JSON.stringify(result.entrySet.value))
+            record.rehash.entrySet = { worker: result.entrySet.sha256, main, matched: main === result.entrySet.sha256 }
+          }
+        } catch (error) {
+          record.rehashError = `${gabErrorName(error)}: ${gabErrorMessage(error)}`
         }
       }
       return record
+    } catch (error) {
+      // A runner defect: recorded beside what was observed (an integrity issue of the run), never a measurement and never re-thrown.
+      record.runnerError = `${gabErrorName(error)}: ${gabErrorMessage(error)}`
+      if (record.settle === 'not_run' && record.stoppedBeforeRequest === null) record.settle = 'worker_error'
+      return record
     } finally {
-      record.lateResponses = harness.lateResponses()
-      record.audit = harness.audit()
-      harness.dispose()
-      await sample('after_dispose')
-      if (options.memory && options.memory.gcWaitMs > 0) { await sleep(options.memory.gcWaitMs); await sample('after_gc_wait_reference') }
-      active = null
+      try {
+        if (harness !== null) {
+          record.lateResponses = harness.lateResponses()
+          record.audit = harness.audit()
+          harness.dispose()
+        }
+      } catch (error) {
+        record.runnerError ??= `${gabErrorName(error)}: ${gabErrorMessage(error)}`
+        try {
+          harness?.dispose()
+        } catch {
+          // Recorded above (runnerError): the run is invalid_run_integrity whatever its Worker did.
+        }
+      }
+      slot.disposed = true
       current = null
       notify()
+      try {
+        if (harness !== null) {
+          await sample('after_dispose')
+          if (options.memory && options.memory.gcWaitMs > 0) { await sleep(options.memory.gcWaitMs); await sample('after_gc_wait_reference') }
+        }
+      } catch (error) {
+        record.runnerError ??= `${gabErrorName(error)}: ${gabErrorMessage(error)}`
+      } finally {
+        if (active === slot) active = null
+      }
     }
   }
 
@@ -427,10 +594,15 @@ export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignme
   function workerIntegrityIssues(record: GabWorkerRunRecord, source: GabExportSource, main: GabMainEnvironment): string[] {
     const role = record.role
     const issues: string[] = []
+    if (record.runnerError !== null) issues.push(`${role}: the runner failed while this Worker ran: ${record.runnerError}`)
     const settlement = record.settlement
     // A Worker that refused the Export or the Entry set reports an integrity issue of the run, not a calculation outcome.
     if (settlement?.outcome === 'worker_reported_error' && settlement.error !== null && (settlement.error.code === 'export_changed' || settlement.error.code === 'entry_set_refused')) {
       issues.push(`${role}: the Worker refused the run (${settlement.error.code}): ${settlement.error.message}`)
+    }
+    // A malformed or unrequested response: nothing that Worker sent is trusted (its payload was never adopted).
+    if (settlement?.settledBy === 'protocol_violation' && settlement.error !== null) {
+      issues.push(`${role}: the Worker sent a malformed or unrequested response (${settlement.error.errorName}): ${settlement.error.message}`)
     }
     if (record.environment !== null && main.build !== null && JSON.stringify(record.environment.build) !== JSON.stringify(main.build)) {
       issues.push(`${role}: the Worker's build provenance is not the page's.`)
@@ -443,6 +615,7 @@ export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignme
     if (observed.fileName !== source.identity.fileName || observed.bytes !== source.identity.bytes || observed.sha256 !== source.identity.sha256 || observed.matchesRequest !== true) {
       issues.push(`${role}: export_changed: the Worker read ${observed.fileName} / ${observed.bytes} bytes / ${observed.sha256}, not the picked Export.`)
     }
+    if (record.rehashError !== null) issues.push(`${role}: the main thread could not re-hash the adopted result: ${record.rehashError}`)
     for (const [name, hash] of Object.entries(record.rehash)) {
       if (hash !== null && !hash.matched) issues.push(`${role}: the recorded ${name} SHA-256 ${hash.worker} is not the hash of its record (${hash.main}).`)
     }
@@ -452,8 +625,21 @@ export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignme
     return issues
   }
 
+  /** An integrity check that throws is itself an integrity issue of the run (never skipped, never a measurement). */
+  function checkedIssues(role: GabRole, what: string, check: () => string[]): string[] {
+    try {
+      return check()
+    } catch (error) {
+      return [`${role}: the ${what} failed: ${gabErrorName(error)}: ${gabErrorMessage(error)}`]
+    }
+  }
+
   const runner = {
-    /** One logical run (first Worker, then a fresh Worker when C10 allows). Refused while another one runs (concurrency 1). */
+    /**
+     * One logical run (first Worker, then a fresh Worker when C10 allows). Refused while another one runs (concurrency 1). Whatever
+     * happens inside, the run leaves nothing behind: no Worker, no pending request, no current request, no lifecycle listener, and
+     * `running()` is false again; a failure that escapes the Workers rejects the call after that cleanup (it is never a record).
+     */
     async runLogicalRun(source: GabExportSource, options: GabLogicalRunOptions): Promise<GabLogicalRunRecord> {
       if (logical !== null) throw new Error('A Global Assignment Browser logical run is already running (concurrency 1).')
       const issues = gabLogicalRunOptionIssues(options)
@@ -462,51 +648,53 @@ export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignme
       const id = `run-${sequence}`
       const startedAt = clock()
       const runStart = now()
-      logical = { id, startedAt: runStart, cancel: null, pageLeft: false }
-      const lifecycleEvents: GabLifecycleEvent[] = []
-      const visibilityAtStart = visibilityState()
-      const unsubscribe = subscribeLifecycle(type => {
-        lifecycleEvents.push({ type, atMs: now() - runStart, visibilityState: visibilityState() })
-        if (type === 'pagehide') runner.pagehide()
-      })
-      const main = mainEnvironment()
-      notify()
-      let first: GabWorkerRunRecord
-      let fresh = emptyWorkerRecord('fresh', `gab.${id}.fresh`)
-      const integrityIssues: string[] = []
-      // A harness / runner exception is a failure of that Worker's run (process_failure), never a calculation outcome.
-      const guarded = async (role: GabRole, entrySet: D1aEntrySet | null): Promise<GabWorkerRunRecord> => {
-        try {
-          return await runWorker(role, source, entrySet, options, id, runStart)
-        } catch (error) {
-          const failed = emptyWorkerRecord(role, `gab.${id}.${role}`)
-          failed.settle = 'worker_error'
-          failed.harnessError = `The runner failed: ${error instanceof Error ? error.message : String(error)}`
-          return failed
-        }
-      }
+      const run: LogicalRunState = { id, startedAt: runStart, cancel: null, pageLeft: false }
+      logical = run
+      let unsubscribe: (() => void) | null = null
       try {
-        first = await guarded('first', null)
-        const firstIssues = workerIntegrityIssues(first, source, main)
-        // The main thread re-checks the Entry set before any fresh Worker gets it (design 7.10).
+        const lifecycleEvents: GabLifecycleEvent[] = []
+        const visibilityAtStart = visibilityState()
+        unsubscribe = subscribeLifecycle(type => {
+          lifecycleEvents.push({ type, atMs: now() - runStart, visibilityState: visibilityState() })
+          if (type === 'pagehide') runner.pagehide()
+        })
+        const main = mainEnvironment()
+        notify()
+        let fresh = emptyWorkerRecord('fresh', `gab.${id}.fresh`)
+        const integrityIssues: string[] = []
+        // runWorker() records its own failures; this is the last resort of a runner defect (an integrity issue, never a measurement).
+        const guarded = async (role: GabRole, entrySet: D1aEntrySet | null): Promise<GabWorkerRunRecord> => {
+          try {
+            return await runWorker(role, source, entrySet, options, id, runStart)
+          } catch (error) {
+            const failed = emptyWorkerRecord(role, `gab.${id}.${role}`)
+            failed.settle = 'worker_error'
+            failed.runnerError = `${gabErrorName(error)}: ${gabErrorMessage(error)}`
+            return failed
+          }
+        }
+        const first = await guarded('first', null)
         const firstResult = first.settlement?.result ?? null
+        const firstIssues = checkedIssues('first', 'integrity check', () => workerIntegrityIssues(first, source, main))
+        // The main thread re-checks the Entry set before any fresh Worker gets it (design 7.10).
         if (firstResult !== null && firstResult.entrySet !== null && first.environment !== null) {
-          const entryIssues = d1aEntrySetIssues(firstResult.entrySet.value, {
-            repositoryHeadSha: first.environment.buildCommit ?? GAB_UNBUILT_COMMIT, export: { ...source.identity },
-            calculationContext: firstResult.calculationContext, rngEngineVersion: firstResult.rngEngineVersion, entryFingerprint: firstResult.entrySet.entryFingerprint,
-          })
-          for (const issue of entryIssues) firstIssues.push(`first entry set: ${issue}`)
+          const environment = first.environment
+          const entrySetValue = firstResult.entrySet.value
+          firstIssues.push(...checkedIssues('first', 'Entry set check', () => entrySetIssues(entrySetValue, {
+            repositoryHeadSha: environment.buildCommit ?? GAB_UNBUILT_COMMIT, export: { ...source.identity },
+            calculationContext: firstResult.calculationContext, rngEngineVersion: firstResult.rngEngineVersion, entryFingerprint: firstResult.entrySet!.entryFingerprint,
+          }).map(issue => `first entry set: ${issue}`)))
         }
         integrityIssues.push(...firstIssues)
         // C10: only a completed first Worker with an intact record and an Entry set (an all_materialized candidate) starts a fresh Worker.
-        const freshReason = logical.pageLeft ? 'the page was left'
-          : logical.cancel !== null ? 'the logical run was cancelled'
+        const freshReason = run.pageLeft ? 'the page was left'
+          : run.cancel !== null ? 'the logical run was cancelled'
             : first.settle !== 'completed' ? `the first Worker settled as ${first.settle}`
               : firstIssues.length > 0 ? 'the first Worker\'s record has integrity issues'
                 : firstResult?.entrySet == null ? 'the first Worker returned no Entry set (no all_materialized handoff)' : null
         if (freshReason === null) {
           fresh = await guarded('fresh', firstResult!.entrySet!.value)
-          const freshIssues = workerIntegrityIssues(fresh, source, main)
+          const freshIssues = checkedIssues('fresh', 'integrity check', () => workerIntegrityIssues(fresh, source, main))
           if (first.environment !== null && fresh.environment !== null && JSON.stringify(first.environment.build) !== JSON.stringify(fresh.environment.build)) {
             freshIssues.push('fresh: the fresh Worker\'s build provenance is not the first Worker\'s.')
           }
@@ -514,63 +702,106 @@ export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignme
         } else {
           fresh.notRunReason = freshReason
         }
+        const freshResult = fresh.settlement?.result ?? null
+        let judgement: GabLogicalRunJudgement
+        try {
+          judgement = judgeBrowserLogicalRun(
+            {
+              settle: first.settle, stoppedBeforeRequest: first.stoppedBeforeRequest,
+              materializationOutcome: firstResult?.materialization?.semantic.outcome ?? null,
+              verification: firstResult?.verification ? { semantic: firstResult.verification.semantic, semanticSha256: firstResult.verification.semanticSha256 } : null,
+            },
+            {
+              settle: fresh.settle,
+              phase0PlanningTargetIds: freshResult?.phase0.planningTargetIdsSorted ?? null,
+              verification: freshResult?.verification ? { semantic: freshResult.verification.semantic, semanticSha256: freshResult.verification.semanticSha256 } : null,
+            },
+            integrityIssues,
+            { cancelled: run.cancel !== null },
+          )
+        } catch (error) {
+          // Records the judgement cannot read are no measurement: the run's integrity is what failed.
+          integrityIssues.push(`the judgement failed: ${gabErrorName(error)}: ${gabErrorMessage(error)}`)
+          judgement = gabIntegrityJudgement(integrityIssues)
+        }
+        const { slot, ...rest } = options
+        const record: GabLogicalRunRecord = {
+          id, sequence, slot: { ...slot }, protocolVersion: GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, startedAt, export: { ...source.identity }, main,
+          options: structuredClone(rest), first, fresh, integrityIssues, judgement, cancel: run.cancel === null ? null : { ...run.cancel },
+          lifecycle: {
+            visibilityAtStart, events: lifecycleEvents, pageLeft: run.pageLeft,
+            interrupted: visibilityAtStart === 'hidden' || lifecycleEvents.some(event => event.type === 'freeze' || event.type === 'pagehide' || (event.type === 'visibilitychange' && event.visibilityState === 'hidden')),
+          },
+          logicalRunWallMs: now() - runStart, formal: false, oracleFreeExecution: true,
+        }
+        records.push(record)
+        return record
       } finally {
-        unsubscribe()
+        try {
+          unsubscribe?.()
+        } finally {
+          // Nothing of this logical run outlives it, a runner defect included: no Worker, no pending request, no current request.
+          const leftover = active
+          active = null
+          current = null
+          logical = null
+          try {
+            leftover?.harness?.dispose()
+          } finally {
+            notify()
+          }
+        }
       }
-      const firstResult = first.settlement?.result ?? null
-      const freshResult = fresh.settlement?.result ?? null
-      const judgement = judgeBrowserLogicalRun(
-        {
-          // The first Worker always runs or records why not; `not_run` here would be a runner defect, never a measurement.
-          settle: first.settle === 'not_run' ? 'worker_error' : first.settle,
-          materializationOutcome: firstResult?.materialization?.semantic.outcome ?? null,
-          verification: firstResult?.verification ? { semantic: firstResult.verification.semantic, semanticSha256: firstResult.verification.semanticSha256 } : null,
-        },
-        {
-          settle: fresh.settle,
-          phase0PlanningTargetIds: freshResult?.phase0.planningTargetIdsSorted ?? null,
-          verification: freshResult?.verification ? { semantic: freshResult.verification.semantic, semanticSha256: freshResult.verification.semanticSha256 } : null,
-        },
-        integrityIssues,
-      )
-      const { slot, ...rest } = options
-      const record: GabLogicalRunRecord = {
-        id, sequence, slot: { ...slot }, protocolVersion: GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, startedAt, export: { ...source.identity }, main,
-        options: structuredClone(rest), first, fresh, integrityIssues, judgement, cancel: logical.cancel,
-        lifecycle: {
-          visibilityAtStart, events: lifecycleEvents, pageLeft: logical.pageLeft,
-          interrupted: visibilityAtStart === 'hidden' || lifecycleEvents.some(event => event.type === 'freeze' || event.type === 'pagehide' || (event.type === 'visibilitychange' && event.visibilityState === 'hidden')),
-        },
-        logicalRunWallMs: now() - runStart, formal: false, oracleFreeExecution: true,
-      }
-      records.push(record)
-      logical = null
-      notify()
-      return record
     },
 
     /**
-     * Cancels the running logical run now: the active request (if any) goes `running` -> `cancelling` synchronously (C1) and no fresh
-     * Worker starts afterwards. Returns whether a request accepted the cancel (false between Workers, after a settlement, or idle).
+     * Cancels the running logical run now. A running request goes `running` -> `cancelling` synchronously (C1); a Worker that has no
+     * request yet is disposed at once and none is posted; no fresh Worker starts afterwards. The result says which of these happened
+     * (only `request_cancel_accepted` is a request's cancel).
      */
-    cancel(source = 'api', trigger: GabCancelTrigger | null = null): boolean {
-      if (logical === null) return false
-      const accepted = active !== null && active.harness.cancel(active.requestId, source)
-      logical.cancel ??= { source, requestedAtMs: now() - logical.startedAt, acceptedByRequest: accepted ? active!.requestId : null, triggered: trigger }
+    cancel(source = 'api', trigger: GabCancelTrigger | null = null): GabRunnerCancelResult {
+      if (logical === null) return { kind: 'idle' }
+      if (logical.cancel !== null) return { kind: 'already_stopping', reason: 'cancel' }
+      if (logical.pageLeft) return { kind: 'already_stopping', reason: 'page_left' }
+      const run = logical
+      const requestedAtMs = now() - run.startedAt
+      const recordCancel = (phase: GabCancelPhase, role: GabRole | null, acceptedByRequest: string | null) => {
+        run.cancel = { source, requestedAtMs, phase, role, acceptedByRequest, triggered: trigger }
+      }
+      const slot = active
+      let result: GabRunnerCancelResult
+      if (slot === null || (slot.role === 'first' && slot.disposed) || (slot.role === 'fresh' && slot.harness === null && !slot.disposed)) {
+        // The first Worker is gone and the fresh one does not exist yet: the fresh slot's next check sees the cancel (no Worker is created).
+        recordCancel('between_workers', null, null)
+        result = { kind: 'logical_run_stop_recorded', phase: 'between_workers', role: null }
+      } else if (!slot.posted) {
+        // Recorded first, so the slot's next check sees it: its ready wait or Export read ends without a post. Its Worker goes now.
+        recordCancel('before_request', slot.role, null)
+        slot.harness?.dispose()
+        result = { kind: 'logical_run_stop_recorded', phase: 'before_request', role: slot.role }
+      } else if (!slot.settled && slot.harness !== null && slot.harness.cancel(slot.requestId, source)) {
+        recordCancel('request_running', slot.role, slot.requestId)
+        result = { kind: 'request_cancel_accepted', role: slot.role, requestId: slot.requestId }
+      } else {
+        recordCancel('after_request_settled', slot.role, null)
+        result = { kind: 'logical_run_stop_recorded', phase: 'after_request_settled', role: slot.role }
+      }
       notify()
-      return accepted
+      return result
     },
 
-    /** `pagehide`: the active request settles as `page_left` and no fresh Worker starts. */
+    /** `pagehide`: a running request settles as `page_left`, a Worker without a request is disposed, and nothing else starts. */
     pagehide(): void {
       if (logical === null) return
       logical.pageLeft = true
-      active?.harness.dispose('page_left')
+      active?.harness?.dispose('page_left')
+      notify()
     },
 
     /** One ping to the active Worker (null when idle, lost or broken). */
     async ping(timeoutMs = 10_000): Promise<number | null> {
-      return active === null ? null : active.harness.ping(timeoutMs)
+      const harness = active?.harness ?? null
+      return harness === null ? null : harness.ping(timeoutMs)
     },
 
     /** Creates a Worker, waits for ready, checks the environment and pings once, then disposes it (no request is posted). */

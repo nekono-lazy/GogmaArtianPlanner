@@ -3,8 +3,8 @@ import {
   createGlobalAssignmentBrowserHarness, gabEnvironmentIssues,
   type GabRequestSettlement, type GabRunOptions, type GabTimers, type GlobalAssignmentBrowserHarness,
 } from './globalAssignmentBrowserHarness'
-import { GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, type GabWorkerResult } from './globalAssignmentBrowserProtocol'
-import { READY_ENVIRONMENT, ScriptedWorker, SYNTHETIC_EXECUTION } from './globalAssignmentBrowserTestFixture'
+import { GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION } from './globalAssignmentBrowserProtocol'
+import { READY_ENVIRONMENT, ScriptedWorker, SYNTHETIC_EXECUTION, SYNTHETIC_IDENTITY, syntheticWorkerResult } from './globalAssignmentBrowserTestFixture'
 
 /*
  * Issue #154 Production準備 P-1 (design 7.8 / 10 / 16.1): the main-thread request lifecycle is the only guarantee that a cancelled
@@ -43,11 +43,7 @@ function options(requestId = 'gab.run-1.first', overrides: Partial<GabRunOptions
   }
 }
 
-function fakeResult(requestId: string): GabWorkerResult {
-  return { protocolVersion: V, requestId, role: 'first', semanticMarker: 'the-calculation' } as unknown as GabWorkerResult
-}
-
-const result = (requestId: string) => ({ type: 'gab_result', protocolVersion: V, requestId, result: fakeResult(requestId) })
+const result = (requestId: string) => ({ type: 'gab_result', protocolVersion: V, requestId, result: syntheticWorkerResult(requestId) })
 const accepted = (requestId: string) => ({ type: 'gab_accepted', protocolVersion: V, requestId, role: 'first', acceptedAtEpochMs: 1 })
 const ack = (requestId: string) => ({ type: 'gab_cancel_ack', protocolVersion: V, requestId })
 const cancelled = (requestId: string) => ({ type: 'gab_cancelled', protocolVersion: V, requestId, observed: { stoppedAt: 'phase_a', via: 'cancel_point', elapsedMs: 1, yields: 1, maxSliceMs: 1 } })
@@ -77,7 +73,7 @@ describe('P-1 harness: lifecycle, timings and fresh Worker policy', () => {
     worker.emit(result('gab.run-1.first'))
     const settlement = await pending
     expect(settlement).toMatchObject({ outcome: 'completed', settledBy: 'gab_result', cancelRequested: false, cancel: null, progress: { events: 1 } })
-    expect(settlement.result).toEqual(fakeResult('gab.run-1.first'))
+    expect(settlement.result).toEqual(syntheticWorkerResult('gab.run-1.first'))
     expect(settlement.timing.postToAcceptedMs).toBeGreaterThan(0)
     expect(settlement.timing.roundTripMs).toBeGreaterThan(settlement.timing.postToAcceptedMs!)
     expect(worker.terminated).toBe(1)
@@ -129,7 +125,7 @@ describe('P-1 harness: lifecycle, timings and fresh Worker policy', () => {
     expectCancelSafety(during.harness, settlement, 'gab.run-1.first')
     const malformed = setup()
     const malformedRun = malformed.harness.run(options())
-    malformed.worker.emit({ type: 'gab_result', protocolVersion: 'global-assignment-browser:0', requestId: 'gab.run-1.first', result: fakeResult('gab.run-1.first') })
+    malformed.worker.emit({ type: 'gab_result', protocolVersion: 'global-assignment-browser:0', requestId: 'gab.run-1.first', result: syntheticWorkerResult('gab.run-1.first') })
     expect(await malformedRun).toMatchObject({ outcome: 'worker_error', settledBy: 'protocol_violation', result: null })
     expect(malformed.harness.audit()).toMatchObject({ invalidResponses: 1, requests: [{ adoptedResults: 0, settleCount: 1 }] })
   })
@@ -295,7 +291,7 @@ describe('P-1 harness: C1 - C10, the cancel contract of the main thread', () => 
     expect(harness.cancel('gab.unknown.first')).toBe(false)
     expect(worker.postedOfType('gab_cancel')).toHaveLength(0)
     expect(settlement).toMatchObject({ outcome: 'completed', cancelRequested: false })
-    expect(settlement.result).toEqual(fakeResult('gab.run-1.first'))
+    expect(settlement.result).toEqual(syntheticWorkerResult('gab.run-1.first'))
     expect(harness.audit().requests[0]).toMatchObject({ cancelAccepted: false, settleCount: 1, adoptedResults: 1 })
   })
 
@@ -319,7 +315,7 @@ describe('P-1 harness: C1 - C10, the cancel contract of the main thread', () => 
     second.worker.emit(result('gab.run-2.first'))
     const settlement = await secondRun
     expect(settlement).toMatchObject({ requestId: 'gab.run-2.first', outcome: 'completed', progress: { events: 0 } })
-    expect(settlement.result).toEqual(fakeResult('gab.run-2.first'))
+    expect(settlement.result).toEqual(syntheticWorkerResult('gab.run-2.first'))
     expect(second.harness.audit().requests).toEqual([{ requestId: 'gab.run-2.first', cancelAccepted: false, settleCount: 1, ignoredSettleAttempts: 0, adoptedResults: 1, outcome: 'completed' }])
   })
 
@@ -334,5 +330,87 @@ describe('P-1 harness: C1 - C10, the cancel contract of the main thread', () => 
     const settlement = await pending
     expect(settlement.outcome).toBe('cancelled')
     expectCancelSafety(harness, settlement, 'gab.run-1.first')
+  })
+})
+
+describe('PR #257 Required fix 2: a malformed Worker response is never adopted (the harness fails closed)', () => {
+  const POISON = 'poisoned-payload'
+  const poisoned = () => syntheticWorkerResult('gab.run-1.first', POISON) as unknown as Record<string, unknown>
+  const without = (key: string) => { const value = poisoned(); delete value[key]; return value }
+
+  /** One request receiving `message`: it settles once as worker_error / protocol_violation, adopts nothing and leaves the Worker terminated. */
+  async function expectFailedClosed(message: Record<string, unknown>, errorName: 'MalformedResult' | 'MalformedResponse', issue: RegExp) {
+    const { worker, harness } = setup()
+    const onProgress: unknown[] = []
+    const pending = harness.run(options(), { onProgress: event => { onProgress.push(event) } })
+    worker.emit(accepted('gab.run-1.first'))
+    worker.emit(message)
+    const settlement = await pending
+    expect(settlement).toMatchObject({ outcome: 'worker_error', settledBy: 'protocol_violation', result: null, error: { code: 'protocol_violation', errorName } })
+    expect(settlement.error!.message).toMatch(issue)
+    expect(harness.audit()).toMatchObject({ invalidResponses: 1, terminated: true, requests: [{ settleCount: 1, adoptedResults: 0, outcome: 'worker_error' }] })
+    expect(worker.terminated).toBe(1)
+    expect(onProgress).toEqual([])
+    // The payload is dropped: nothing of it is kept in the settlement.
+    expect(JSON.stringify(settlement)).not.toContain(POISON)
+    // A later valid result is never adopted, and the Worker is not trusted again (no ping, no second request).
+    worker.emit(result('gab.run-1.first'))
+    expect(harness.audit().requests[0]).toMatchObject({ settleCount: 1, adoptedResults: 0 })
+    expect(await harness.ping(10)).toBeNull()
+    await expect(harness.run(options('gab.run-1.again'))).rejects.toThrow()
+  }
+
+  it('refuses a gab_result whose result is not a readable Worker result (null, a primitive, missing or malformed parts)', async () => {
+    const body = (value: unknown) => ({ type: 'gab_result', protocolVersion: V, requestId: 'gab.run-1.first', result: value })
+    // Not even an object: refused at the envelope.
+    await expectFailedClosed(body(null), 'MalformedResponse', /gab_result\.result must be an object/)
+    await expectFailedClosed(body(42), 'MalformedResponse', /gab_result\.result must be an object/)
+    await expectFailedClosed(body('the result'), 'MalformedResponse', /gab_result\.result must be an object/)
+    // An object the runner cannot read safely: refused before it is adopted.
+    await expectFailedClosed(body(without('exportObservation')), 'MalformedResult', /result\.exportObservation must be an object/)
+    await expectFailedClosed(body({ ...poisoned(), exportObservation: { fileName: 'synthetic.json', matchesRequest: true } }), 'MalformedResult', /exportObservation\.bytes .*exportObservation\.sha256/)
+    await expectFailedClosed(body({ ...poisoned(), exportObservation: { ...SYNTHETIC_IDENTITY, bytes: 4.5, matchesRequest: 'yes' } }), 'MalformedResult', /exportObservation\.bytes .*exportObservation\.matchesRequest/)
+    await expectFailedClosed(body({ ...poisoned(), materialization: { semantic: null, semanticSha256: 'x' } }), 'MalformedResult', /materialization\.semantic must be an object/)
+    await expectFailedClosed(body({ ...poisoned(), materialization: { ...(poisoned().materialization as object), semantic: { outcome: { kind: 'invented' }, input: {}, candidates: [], integrityIssues: [] } } }), 'MalformedResult', /materialization\.semantic\.outcome needs a known kind/)
+    await expectFailedClosed(body({ ...poisoned(), verification: { semantic: {}, semanticSha256: 'f'.repeat(64), observed: {} } }), 'MalformedResult', /verification\.semantic\.outcome needs a known kind/)
+    await expectFailedClosed(body({ ...poisoned(), verification: 'conditions_met' }), 'MalformedResult', /verification must be an object or null/)
+    await expectFailedClosed(body({ ...poisoned(), entrySet: { value: {}, sha256: 'f'.repeat(64), entryFingerprint: 'x', entryCount: 0 } }), 'MalformedResult', /entrySet\.value must be a/)
+    await expectFailedClosed(body({ ...poisoned(), integrityIssues: 'none' }), 'MalformedResult', /integrityIssues must be an array of strings/)
+    await expectFailedClosed(body({ ...poisoned(), integrityIssues: [1] }), 'MalformedResult', /integrityIssues must be an array of strings/)
+    await expectFailedClosed(body(without('verification')), 'MalformedResult', /result\.verification is required/)
+    await expectFailedClosed(body(without('observed')), 'MalformedResult', /result\.observed must be an object/)
+    await expectFailedClosed(body({ ...poisoned(), calculationContext: {} }), 'MalformedResult', /calculationContext needs/)
+    // Another request's or role's result is never adopted for this one.
+    await expectFailedClosed(body({ ...poisoned(), requestId: 'gab.run-0.first' }), 'MalformedResult', /result is for first \/ gab\.run-0\.first/)
+    await expectFailedClosed(body({ ...poisoned(), role: 'fresh' }), 'MalformedResult', /result is for fresh/)
+    // A first result must carry its materialization; one with an Entry set must carry its verification.
+    await expectFailedClosed(body({ ...poisoned(), materialization: null }), 'MalformedResult', /a first result needs its materialization record/)
+  })
+
+  it('refuses the other responses whose body lacks the fields the main thread reads', async () => {
+    const id = 'gab.run-1.first'
+    await expectFailedClosed({ type: 'gab_progress', protocolVersion: V, requestId: id, atMs: 1 }, 'MalformedResponse', /gab_progress\.event must be an object/)
+    await expectFailedClosed({ type: 'gab_progress', protocolVersion: V, requestId: id, event: { kind: 'materialization', event: { kind: 1 } }, atMs: 1 }, 'MalformedResponse', /materialization event needs event\.kind/)
+    await expectFailedClosed({ type: 'gab_progress', protocolVersion: V, requestId: id, event: { kind: 'input', stage: 'nowhere', status: 'started' }, atMs: 1 }, 'MalformedResponse', /input event needs a known stage/)
+    await expectFailedClosed({ type: 'gab_progress', protocolVersion: V, requestId: id, event: { kind: 'input', stage: 'export_read', status: 'started' }, atMs: 'soon' }, 'MalformedResponse', /atMs must be a finite number/)
+    await expectFailedClosed({ type: 'gab_heartbeat', protocolVersion: V, requestId: id, heartbeat: 'beat' }, 'MalformedResponse', /heartbeat must be an object/)
+    await expectFailedClosed({ type: 'gab_heartbeat', protocolVersion: V, requestId: id, heartbeat: { stage: 'phase_a', elapsedMs: 1, yields: 1, maxSliceMs: null, maxSliceSinceLastHeartbeatMs: 1, workerHeap: null } }, 'MalformedResponse', /maxSliceMs must be a finite number/)
+    await expectFailedClosed({ type: 'gab_accepted', protocolVersion: V, requestId: id, role: 'first', acceptedAtEpochMs: 'now' }, 'MalformedResponse', /acceptedAtEpochMs must be a finite number/)
+    await expectFailedClosed({ type: 'gab_cancelled', protocolVersion: V, requestId: id, observed: { stoppedAt: 'phase_a' } }, 'MalformedResponse', /observed\.via/)
+    await expectFailedClosed({ type: 'gab_error', protocolVersion: V, requestId: id, error: { code: 'calculation_failed' } }, 'MalformedResponse', /gab_error\.error\.stage must be a string/)
+  })
+
+  it('fails a ready wait on a malformed gab_ready and refuses a malformed pong without adopting it', async () => {
+    const ready = setup()
+    const waiting = ready.harness.whenReady(60_000)
+    ready.worker.emit({ type: 'gab_ready', protocolVersion: V, environment: { ...READY_ENVIRONMENT, capabilities: null } })
+    await expect(waiting).rejects.toThrow(/Malformed gab_ready: gab_ready\.environment\.capabilities must be an object/)
+    await expect(ready.harness.run(options())).rejects.toThrow(/Malformed gab_ready/)
+    expect(ready.worker.postedOfType('gab_run')).toHaveLength(0)
+    const pong = setup()
+    const ping = pong.harness.ping(60_000)
+    pong.worker.emit({ type: 'gab_pong', protocolVersion: V, pingId: 'one' })
+    expect(await ping).toBeNull()
+    expect(pong.harness.audit().invalidResponses).toBe(1)
   })
 })

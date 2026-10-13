@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest'
 import type { GlobalAssignmentBrowserControllerOptions } from './globalAssignment.worker.benchmark'
 import { createGlobalAssignmentBrowserHarness, type GabWorkerLike, type GlobalAssignmentBrowserHarness } from './globalAssignmentBrowserHarness'
 import { GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, type GabResponse, type GabRunRequest } from './globalAssignmentBrowserProtocol'
+import { d1aEntrySetIssues } from '../verificationProtocol'
 import {
-  createGlobalAssignmentBrowserRunner, gabLogicalRunOptionIssues, summarizeGabPings,
-  type GabExportSource, type GabLogicalRunOptions, type GlobalAssignmentBrowserRunnerDependencies,
+  createGlobalAssignmentBrowserRunner, gabLogicalRunOptionIssues, gabWebCryptoSha256Text, summarizeGabPings,
+  type GabExportSource, type GabLogicalRunOptions, type GabLogicalRunRecord, type GabMemorySampler, type GlobalAssignmentBrowserRunnerDependencies,
 } from './globalAssignmentBrowserRunner'
-import { InProcessWorker, READY_ENVIRONMENT, SYNTHETIC_EXECUTION, SYNTHETIC_SPEC, syntheticControllerOptions, syntheticExport, type SyntheticExport } from './globalAssignmentBrowserTestFixture'
+import {
+  deferred, InProcessWorker, READY_ENVIRONMENT, SYNTHETIC_EXECUTION, SYNTHETIC_IDENTITY, SYNTHETIC_SPEC, syntheticControllerOptions, syntheticExport, syntheticWorkerResult,
+  type SyntheticExport,
+} from './globalAssignmentBrowserTestFixture'
 
 /*
  * Issue #154 Production準備 P-1: the runner of logical runs. The first Worker settles and is terminated before a fresh Worker is
@@ -35,8 +39,11 @@ function sourceOf(synthetic: Pick<SyntheticExport, 'bytes' | 'identity'>): GabEx
   return { file: new File([synthetic.bytes.slice(0)], synthetic.identity.fileName, { type: 'application/json' }), identity: { ...synthetic.identity } }
 }
 
-/** A runner whose harnesses run the real controller in this realm; it records every Worker it created. */
-function inProcessRunner(controllerOptions: () => GlobalAssignmentBrowserControllerOptions, extra: Partial<GlobalAssignmentBrowserRunnerDependencies> = {}) {
+/**
+ * A runner whose harnesses run the real controller in this realm; it records every Worker it created. `transformFor` (tests of a
+ * malformed Worker) replaces what the main thread receives from the Worker with that index.
+ */
+function inProcessRunner(controllerOptions: () => GlobalAssignmentBrowserControllerOptions, extra: Partial<GlobalAssignmentBrowserRunnerDependencies> = {}, transformFor: (index: number) => ((message: GabResponse) => unknown) | undefined = () => undefined) {
   const workers: InProcessWorker[] = []
   const harnesses: GlobalAssignmentBrowserHarness[] = []
   const created: { index: number; previousTerminated: boolean }[] = []
@@ -45,7 +52,7 @@ function inProcessRunner(controllerOptions: () => GlobalAssignmentBrowserControl
       const harness = createGlobalAssignmentBrowserHarness({
         createWorker: () => {
           created.push({ index: workers.length, previousTerminated: workers.every(worker => worker.terminated) })
-          const worker = new InProcessWorker(controllerOptions())
+          const worker = new InProcessWorker(controllerOptions(), undefined, transformFor(workers.length))
           workers.push(worker)
           return worker
         },
@@ -126,7 +133,7 @@ describe('P-1 runner: one logical run', () => {
     })
     const cancelledRun = await runner.runLogicalRun(sourceOf(synthetic), runOptions({ cancelTrigger: { role: 'first', onProgressKey: 'materialization:context', delayMs: 0 } }))
     expect(workers).toHaveLength(1)
-    expect(cancelledRun.cancel).toMatchObject({ source: 'trigger', acceptedByRequest: 'gab.run-1.first', triggered: { onProgressKey: 'materialization:context' } })
+    expect(cancelledRun.cancel).toMatchObject({ source: 'trigger', phase: 'request_running', acceptedByRequest: 'gab.run-1.first', triggered: { onProgressKey: 'materialization:context' } })
     expect(cancelledRun.first.settle).toBe('cancelled')
     expect(cancelledRun.first.audit!.requests).toEqual([expect.objectContaining({ cancelAccepted: true, adoptedResults: 0, settleCount: 1 })])
     expect(cancelledRun.first.settlement!.result).toBeNull()
@@ -192,10 +199,8 @@ describe('P-1 runner: C10, integrity and the unmeasured paths (scripted Workers)
     expect(changed.workers).toEqual(['first'])
     expect(refused.judgement.verdict).toEqual({ kind: 'invalid_run_integrity', issues: ['first: the Worker refused the run (export_changed): other bytes'] })
 
-    const tampered = scriptedRunner(request => [{ type: 'gab_result', protocolVersion: V, requestId: request.requestId, result: {
-      protocolVersion: V, requestId: request.requestId, role: 'first', environment: READY_ENVIRONMENT, exportObservation: { ...synthetic.identity, matchesRequest: true },
-      calculationContext: {}, rngEngineVersion: 'v', materialization: { semantic: { outcome: { kind: 'scan_cancelled' } }, semanticSha256: 'f'.repeat(64) }, entrySet: null, verification: null, integrityIssues: [],
-    } }])
+    // A structurally valid result whose recorded materialization SHA-256 is not the hash of its record.
+    const tampered = scriptedRunner(request => [{ type: 'gab_result', protocolVersion: V, requestId: request.requestId, result: syntheticWorkerResult(request.requestId) }])
     const mismatched = await tampered.runner.runLogicalRun(sourceOf(synthetic), runOptions())
     expect(tampered.workers).toEqual(['first'])
     expect(mismatched.first.rehash.materialization).toMatchObject({ worker: 'f'.repeat(64), matched: false })
@@ -238,15 +243,15 @@ describe('P-1 runner: C10, integrity and the unmeasured paths (scripted Workers)
     await expect(hanging.runner.runLogicalRun(sourceOf(synthetic), runOptions())).rejects.toThrow(/already running \(concurrency 1\)/)
     await until(() => hanging.workers.length === 1)
     expect(hanging.runner.running()).toBe(true)
-    expect(hanging.runner.cancel('ui')).toBe(true)
+    expect(hanging.runner.cancel('ui')).toEqual({ kind: 'request_cancel_accepted', role: 'first', requestId: 'gab.run-1.first' })
     const record = await pending
     expect(hanging.workers).toEqual(['first'])
     expect(record.first).toMatchObject({ settle: 'cancelled', settlement: { settledBy: 'gab_cancelled', cancel: { source: 'ui' } } })
     expect(record.first.audit!.requests).toEqual([expect.objectContaining({ cancelAccepted: true, adoptedResults: 0, settleCount: 1 })])
     expect(record.fresh.notRunReason).toBe('the logical run was cancelled')
-    expect(record.cancel).toMatchObject({ source: 'ui', acceptedByRequest: 'gab.run-1.first' })
+    expect(record.cancel).toMatchObject({ source: 'ui', phase: 'request_running', role: 'first', acceptedByRequest: 'gab.run-1.first' })
     // Idle: a cancel does nothing.
-    expect(hanging.runner.cancel('ui')).toBe(false)
+    expect(hanging.runner.cancel('ui')).toEqual({ kind: 'idle' })
     expect(gabLogicalRunOptionIssues(runOptions({ slot: { slotId: 'x y', purpose: 'other' as never, planned: false, note: null } }))).toEqual([
       'slot.slotId must be 1..64 characters of [A-Za-z0-9._:-].', 'slot.purpose must be one of timing, rerun, responsiveness, memory, cancel, pilot.',
     ])
@@ -269,5 +274,330 @@ describe('P-1 runner: C10, integrity and the unmeasured paths (scripted Workers)
     expect(summarizeGabPings([])).toMatchObject({ count: 0, medianMs: null, maxMs: null })
     runner.clear()
     expect(runner.records()).toEqual([])
+  }, 120_000)
+})
+
+// ---------------------------------------------------------------------------------------------------------------------
+// PR #257 Required fixes: every async boundary before the post is driven by hand (Deferred), so a cancel or a page leave lands
+// exactly while the Export is read, while the Worker starts, or between the Workers.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** A Worker double the test drives: it answers a request with `respond(request)`, a cancel with gab_cancelled, and is ready when told. */
+interface DrivenWorker extends GabWorkerLike {
+  posted: Record<string, unknown>[]
+  terminated: number
+  emit(data: unknown): void
+  ready(): void
+}
+
+function drivenRunner(options: { autoReady?: boolean; respond?: (request: GabRunRequest) => unknown[] } = {}, extra: Partial<GlobalAssignmentBrowserRunnerDependencies> = {}) {
+  const workers: DrivenWorker[] = []
+  const runner = createGlobalAssignmentBrowserRunner({
+    createHarness: () => createGlobalAssignmentBrowserHarness({
+      createWorker: () => {
+        const listeners = new Set<(event: Event) => void>()
+        const worker: DrivenWorker = {
+          posted: [], terminated: 0,
+          emit: data => { for (const listener of [...listeners]) listener({ data } as MessageEvent) },
+          ready: () => worker.emit({ type: 'gab_ready', protocolVersion: V, environment: READY_ENVIRONMENT }),
+          postMessage: message => {
+            const record = message as Record<string, unknown>
+            worker.posted.push(record)
+            if (record.type === 'gab_run' && options.respond) queueMicrotask(() => { for (const response of options.respond!(message as GabRunRequest)) worker.emit(response) })
+            if (record.type === 'gab_cancel') {
+              queueMicrotask(() => worker.emit({ type: 'gab_cancelled', protocolVersion: V, requestId: record.requestId, observed: { stoppedAt: 'phase_a', via: 'cancel_point', elapsedMs: 1, yields: 0, maxSliceMs: 1 } }))
+            }
+          },
+          addEventListener: (type, listener) => { if (type === 'message') listeners.add(listener) },
+          removeEventListener: (type, listener) => { if (type === 'message') listeners.delete(listener) },
+          terminate: () => { worker.terminated += 1 },
+        }
+        workers.push(worker)
+        if (options.autoReady !== false) queueMicrotask(() => worker.ready())
+        return worker
+      },
+    }),
+    mainEnvironment: () => MAIN, canCloneBlob: () => false, visibilityState: () => 'visible', subscribeLifecycle: () => () => undefined, sleep: async () => undefined, clock: () => 'T',
+    ...extra,
+  })
+  return { runner, workers }
+}
+
+/** An Export whose n-th `arrayBuffer()` read waits for `gates[n]` (the main thread's read before a request is posted). */
+function gatedSource(synthetic: Pick<SyntheticExport, 'bytes' | 'identity'>, gates: Record<number, Promise<void>> = {}) {
+  let reads = 0
+  const file = { arrayBuffer: async () => { reads += 1; await gates[reads]; return synthetic.bytes.slice(0) } } as unknown as Blob
+  return { source: { file, identity: { ...synthetic.identity } } as GabExportSource, reads: () => reads }
+}
+
+/** A memory sampler whose fixed point `label` waits for `gates[label]` (a place between the runner's steps the test can stop at). */
+function gatedMemory(gates: Record<string, Promise<void>> = {}) {
+  const requested: string[] = []
+  const sampler: GabMemorySampler = {
+    availability: () => ({ measureUserAgentSpecificMemory: false, performanceMemory: false, crossOriginIsolated: false }),
+    sample: async (label, atMs) => { requested.push(label); await gates[label]; return { label, atMs, userAgentSpecific: { status: 'unavailable', reason: 'test' }, mainRealm: null } },
+  }
+  return { sampler, requested }
+}
+
+const runsPosted = (worker: { posted: unknown[] }) => worker.posted.filter(message => (message as { type?: string }).type === 'gab_run')
+const acceptedFor = (request: GabRunRequest) => ({ type: 'gab_accepted', protocolVersion: V, requestId: request.requestId, role: request.role, acceptedAtEpochMs: 1 })
+
+/** A request that was never posted: no settlement, no audit entry, nothing adopted (no settlement is invented for it). */
+function expectNeverPosted(record: GabLogicalRunRecord, role: 'first' | 'fresh', stop: 'cancel' | 'page_left') {
+  expect(record[role]).toMatchObject({ settle: 'not_run', stoppedBeforeRequest: stop, requestStarted: false, settlement: null, harnessError: null, runnerError: null })
+  expect(record[role].audit?.requests ?? []).toEqual([])
+}
+
+describe('PR #257 Required fix 1: no request is posted after a cancel or a page leave', () => {
+  const synthetic = { bytes: new ArrayBuffer(4), identity: { ...SYNTHETIC_IDENTITY } }
+
+  it('(1) / (6) / (7) / (8) a cancel during the main thread\'s Export read posts no gab_run, disposes that Worker at once and starts no other', async () => {
+    const read = deferred()
+    const { source, reads } = gatedSource(synthetic, { 1: read.promise })
+    const { runner, workers } = drivenRunner({ respond: request => [acceptedFor(request), { type: 'gab_result', protocolVersion: V, requestId: request.requestId, result: syntheticWorkerResult(request.requestId) }] })
+    const pending = runner.runLogicalRun(source, runOptions())
+    await until(() => reads() === 1)
+    expect(workers).toHaveLength(1)
+    expect(runner.cancel('ui')).toEqual({ kind: 'logical_run_stop_recorded', phase: 'before_request', role: 'first' })
+    // The Worker without a request goes now, not after the read; a second cancel changes nothing.
+    expect(workers[0]!.terminated).toBe(1)
+    expect(runner.cancel('ui')).toEqual({ kind: 'already_stopping', reason: 'cancel' })
+    read.resolve()
+    const record = await pending
+    expect(runsPosted(workers[0]!)).toEqual([])
+    expectNeverPosted(record, 'first', 'cancel')
+    expect(record.first.notRunReason).toBe('the logical run was cancelled while the Export was read; no request was posted')
+    expect(record.fresh).toMatchObject({ settle: 'not_run', notRunReason: 'the logical run was cancelled', settlement: null })
+    expect(record.cancel).toEqual({ source: 'ui', requestedAtMs: expect.any(Number), phase: 'before_request', role: 'first', acceptedByRequest: null, triggered: null })
+    expect(record.judgement.verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'cancelled', browserSettle: 'not_run' })
+    expect(workers).toHaveLength(1)
+    expect([runner.running(), runner.current()]).toEqual([false, null])
+    expect(runner.cancel('ui')).toEqual({ kind: 'idle' })
+  })
+
+  it('(2) a page leave during the Export read posts no gab_run and disposes that Worker at once', async () => {
+    const read = deferred()
+    const { source, reads } = gatedSource(synthetic, { 1: read.promise })
+    let lifecycle: ((type: string) => void) | null = null
+    const { runner, workers } = drivenRunner({ respond: () => [] }, { subscribeLifecycle: listener => { lifecycle = listener; return () => { lifecycle = null } } })
+    const pending = runner.runLogicalRun(source, runOptions())
+    await until(() => reads() === 1)
+    lifecycle!('pagehide')
+    expect(workers[0]!.terminated).toBe(1)
+    expect(runner.cancel('ui')).toEqual({ kind: 'already_stopping', reason: 'page_left' })
+    read.resolve()
+    const record = await pending
+    expect(runsPosted(workers[0]!)).toEqual([])
+    expectNeverPosted(record, 'first', 'page_left')
+    expect(record.first.notRunReason).toBe('the page was left while the Export was read; no request was posted')
+    expect(record).toMatchObject({ cancel: null, lifecycle: { pageLeft: true, interrupted: true }, fresh: { settle: 'not_run', notRunReason: 'the page was left' } })
+    expect(record.judgement.verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'cancelled', browserSettle: 'not_run' })
+    expect(lifecycle).toBeNull()
+    expect(runner.running()).toBe(false)
+  })
+
+  it('(3) a cancel while the Worker starts ends its ready wait at once (no ready timeout), posts nothing and is no Worker failure', async () => {
+    const { runner, workers } = drivenRunner({ autoReady: false, respond: () => [] })
+    const pending = runner.runLogicalRun(gatedSource(synthetic).source, runOptions({ envelope: { firstWallMs: 600_000, freshWallMs: 600_000, cancelGraceMs: 10_000, readyTimeoutMs: 600_000 } }))
+    await until(() => workers.length === 1)
+    expect(runner.cancel('ui')).toEqual({ kind: 'logical_run_stop_recorded', phase: 'before_request', role: 'first' })
+    expect(workers[0]!.terminated).toBe(1)
+    const record = await pending
+    // A ready message after the cancel reaches nothing (the listeners are gone).
+    workers[0]!.ready()
+    expect(runsPosted(workers[0]!)).toEqual([])
+    expectNeverPosted(record, 'first', 'cancel')
+    expect(record.first.notRunReason).toBe('the logical run was cancelled while the Worker was starting; no request was posted')
+    expect(record.first.createToReadyMs).toBeNull()
+    expect(record.judgement.verdict).toEqual({ kind: 'unmeasured', run: 'first', reason: 'cancelled', browserSettle: 'not_run' })
+    expect(workers).toHaveLength(1)
+    expect(runner.running()).toBe(false)
+  })
+
+  it('(4) / (7) / (8) a cancel after the first Worker completed and before the fresh one is created creates no fresh Worker', async () => {
+    const synthetic = await syntheticExport()
+    for (const [label, expected] of [
+      ['fresh:before_worker_create', { kind: 'logical_run_stop_recorded', phase: 'between_workers', role: null }],
+      ['first:after_dispose', { kind: 'logical_run_stop_recorded', phase: 'between_workers', role: null }],
+      ['first:settled', { kind: 'logical_run_stop_recorded', phase: 'after_request_settled', role: 'first' }],
+    ] as const) {
+      const gate = deferred()
+      const { sampler, requested } = gatedMemory({ [label]: gate.promise })
+      const { runner, workers } = inProcessRunner(() => syntheticControllerOptions(synthetic), { memory: sampler })
+      const pending = runner.runLogicalRun(gatedSource(synthetic).source, runOptions({ memory: { gcWaitMs: 0 } }))
+      await until(() => requested.includes(label), 2_000)
+      expect(runner.cancel('ui'), label).toEqual(expected)
+      gate.resolve()
+      const record = await pending
+      expect(workers, label).toHaveLength(1)
+      expect(workers[0]!.terminated, label).toBe(true)
+      // The first request's result was adopted before the cancel and stands as recorded; the logical run is no measurement.
+      expect(record.first, label).toMatchObject({ settle: 'completed', requestStarted: true })
+      expect(record.first.audit!.requests, label).toEqual([expect.objectContaining({ adoptedResults: 1, settleCount: 1, cancelAccepted: false })])
+      expect(record.fresh.settle, label).toBe('not_run')
+      expect(record.fresh.audit, label).toBeNull()
+      expect(record.fresh.requestStarted, label).toBe(false)
+      expect(record.judgement.verdict, label).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled', browserSettle: 'not_run' })
+      expect(record.cancel, label).toMatchObject({ phase: expected.phase, role: expected.role, acceptedByRequest: null })
+      expect(runner.running(), label).toBe(false)
+    }
+  }, 120_000)
+
+  it('(5) / (9) / (10) a cancel during the fresh Worker\'s Export read posts no fresh gab_run; the next logical run completes with its own Entry set and the same semantics', async () => {
+    const synthetic = await syntheticExport()
+    const read = deferred()
+    const gated = gatedSource(synthetic, { 2: read.promise })
+    const { runner, workers } = inProcessRunner(() => syntheticControllerOptions(synthetic))
+    const pending = runner.runLogicalRun(gated.source, runOptions())
+    await until(() => gated.reads() === 2, 2_000)
+    expect(workers).toHaveLength(2)
+    expect(runner.cancel('ui')).toEqual({ kind: 'logical_run_stop_recorded', phase: 'before_request', role: 'fresh' })
+    expect(workers[1]!.terminated).toBe(true)
+    read.resolve()
+    const cancelled = await pending
+    expect(runsPosted(workers[1]!)).toEqual([])
+    expectNeverPosted(cancelled, 'fresh', 'cancel')
+    expect(cancelled.fresh.notRunReason).toBe('the logical run was cancelled while the Export was read; no request was posted')
+    expect(cancelled.first.settle).toBe('completed')
+    expect(cancelled.judgement.verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled', browserSettle: 'not_run' })
+    // (9) / (10): the next logical run starts from nothing of the cancelled one and meets the conditions like an uncancelled run.
+    const next = await runner.runLogicalRun(gatedSource(synthetic).source, runOptions())
+    const reference = await inProcessRunner(() => syntheticControllerOptions(synthetic)).runner.runLogicalRun(sourceOf(synthetic), runOptions())
+    expect(workers).toHaveLength(4)
+    expect(next.judgement.verdict.kind).toBe('browser_nonformal_conditions_met')
+    expect(next.cancel).toBeNull()
+    expect([next.first.requestId, next.fresh.requestId]).toEqual(['gab.run-2.first', 'gab.run-2.fresh'])
+    const freshRequest = runsPosted(workers[3]!)[0] as unknown as GabRunRequest
+    expect(freshRequest.entrySet).toEqual(next.first.settlement!.result!.entrySet!.value)
+    expect(next.first.settlement!.result!.materialization!.semanticSha256).toBe(reference.first.settlement!.result!.materialization!.semanticSha256)
+    expect(next.fresh.settlement!.result!.verification!.semanticSha256).toBe(reference.fresh.settlement!.result!.verification!.semanticSha256)
+  }, 120_000)
+
+  it('(8) a cancel recorded after both requests completed (before the run ended) still never makes the logical run conditions_met', async () => {
+    const synthetic = await syntheticExport()
+    const gate = deferred()
+    const { sampler, requested } = gatedMemory({ 'fresh:settled': gate.promise })
+    const { runner, workers } = inProcessRunner(() => syntheticControllerOptions(synthetic), { memory: sampler })
+    const pending = runner.runLogicalRun(gatedSource(synthetic).source, runOptions({ memory: { gcWaitMs: 0 } }))
+    await until(() => requested.includes('fresh:settled'), 2_000)
+    expect(runner.cancel('ui')).toEqual({ kind: 'logical_run_stop_recorded', phase: 'after_request_settled', role: 'fresh' })
+    gate.resolve()
+    const record = await pending
+    expect(workers).toHaveLength(2)
+    expect([record.first.settle, record.fresh.settle]).toEqual(['completed', 'completed'])
+    expect(record.judgement.verdict).toEqual({ kind: 'unmeasured', run: 'fresh', reason: 'cancelled', browserSettle: 'completed' })
+    expect(record.judgement.crossWorker).toEqual({ compared: true, identical: true, differingFields: [] })
+  }, 120_000)
+})
+
+describe('PR #257 Required fix 2: a malformed Worker response or a failing check fails the logical run closed and leaves nothing behind', () => {
+  const synthetic = { bytes: new ArrayBuffer(4), identity: { ...SYNTHETIC_IDENTITY } }
+  const POISON = 'poisoned-payload'
+
+  it('adopts no malformed result or body, records it as worker_error + invalid_run_integrity, restores the runner, and runs again', async () => {
+    const semanticSha256 = await gabWebCryptoSha256Text(JSON.stringify(syntheticWorkerResult('x').materialization!.semantic))
+    const good = (request: GabRunRequest) => {
+      const valid = syntheticWorkerResult(request.requestId)
+      return [acceptedFor(request), { type: 'gab_result', protocolVersion: V, requestId: request.requestId, result: { ...valid, materialization: { ...valid.materialization!, semanticSha256 } } }]
+    }
+    const poisoned = (request: GabRunRequest) => syntheticWorkerResult(request.requestId, POISON) as unknown as Record<string, unknown>
+    const withResult = (request: GabRunRequest, value: unknown) => [acceptedFor(request), { type: 'gab_result', protocolVersion: V, requestId: request.requestId, result: value }]
+    const without = (request: GabRunRequest, key: string) => { const value = poisoned(request); delete value[key]; return value }
+    const cases: [string, (request: GabRunRequest) => unknown[]][] = [
+      ['result null', request => withResult(request, null)],
+      ['result primitive', request => withResult(request, 42)],
+      ['exportObservation missing', request => withResult(request, without(request, 'exportObservation'))],
+      ['exportObservation fields missing', request => withResult(request, { ...poisoned(request), exportObservation: { fileName: 'synthetic.json' } })],
+      ['materialization malformed', request => withResult(request, { ...poisoned(request), materialization: { semantic: { outcome: null }, semanticSha256: 'x' } })],
+      ['verification malformed', request => withResult(request, { ...poisoned(request), verification: { semantic: { outcome: { kind: 'conditions_met' } } } })],
+      ['entrySet malformed', request => withResult(request, { ...poisoned(request), entrySet: { value: { kind: 'other' }, sha256: 'x' } })],
+      ['integrityIssues not an array', request => withResult(request, { ...poisoned(request), integrityIssues: { count: 0 } })],
+      ['gab_progress without its event', request => [acceptedFor(request), { type: 'gab_progress', protocolVersion: V, requestId: request.requestId, atMs: 1 }, ...good(request).slice(1)]],
+      ['gab_heartbeat without its numbers', request => [acceptedFor(request), { type: 'gab_heartbeat', protocolVersion: V, requestId: request.requestId, heartbeat: { stage: 'phase_a' } }, ...good(request).slice(1)]],
+    ]
+    for (const [name, bad] of cases) {
+      let respond = bad
+      const states: boolean[] = []
+      const { runner, workers } = drivenRunner({ respond: request => respond(request) }, { onChange: state => { states.push(state.running) } })
+      const record = await runner.runLogicalRun(gatedSource(synthetic).source, runOptions())
+      expect(record.first, name).toMatchObject({ settle: 'worker_error', requestStarted: true, settlement: { outcome: 'worker_error', settledBy: 'protocol_violation', result: null } })
+      expect(record.first.audit!.requests, name).toEqual([expect.objectContaining({ adoptedResults: 0, settleCount: 1 })])
+      expect(record.first.audit!.invalidResponses, name).toBe(1)
+      expect(record.integrityIssues[0], name).toMatch(/^first: the Worker sent a malformed or unrequested response \(Malformed(Result|Response)\): Malformed gab_/)
+      expect(record.judgement.verdict.kind, name).toBe('invalid_run_integrity')
+      expect(record.fresh, name).toMatchObject({ settle: 'not_run', notRunReason: 'the first Worker settled as worker_error' })
+      expect(JSON.stringify(record), name).not.toContain(POISON)
+      // Nothing is left behind: not running, no current request, the Worker terminated, the last notification says idle.
+      expect(workers, name).toHaveLength(1)
+      expect(workers[0]!.terminated, name).toBeGreaterThanOrEqual(1)
+      expect([runner.running(), runner.current(), states.at(-1)], name).toEqual([false, null, false])
+      // The next logical run works and adopts its own result.
+      respond = good
+      const next = await runner.runLogicalRun(gatedSource(synthetic).source, runOptions())
+      expect(next.first, name).toMatchObject({ settle: 'completed', requestId: 'gab.run-2.first' })
+      expect(next.integrityIssues, name).toEqual([])
+      expect(next.judgement.verdict, name).toEqual({ kind: 'phase_d_prime_not_reached', run: 'first', materializationOutcome: { kind: 'no_structural_candidate', reason: 'the-calculation' } })
+    }
+  })
+
+  it('records a re-hash that throws (or cannot hash a record at all) as an integrity issue, never as a result', async () => {
+    const respond = (request: GabRunRequest) => [acceptedFor(request), { type: 'gab_result', protocolVersion: V, requestId: request.requestId, result: syntheticWorkerResult(request.requestId) }]
+    const failing = drivenRunner({ respond }, { sha256Text: async () => { throw new Error('digest failed') } })
+    const failed = await failing.runner.runLogicalRun(gatedSource(synthetic).source, runOptions())
+    expect(failed.first).toMatchObject({ settle: 'completed', rehashError: 'Error: digest failed', runnerError: null })
+    expect(failed.integrityIssues).toContain('first: the main thread could not re-hash the adopted result: Error: digest failed')
+    expect(failed.judgement.verdict.kind).toBe('invalid_run_integrity')
+    expect(failed.fresh.notRunReason).toBe('the first Worker\'s record has integrity issues')
+    expect([failing.runner.running(), failing.workers[0]!.terminated >= 1]).toEqual([false, true])
+    // A record the main thread cannot serialize (a cycle the structured clone kept) is the same integrity failure.
+    const cyclicResult = (request: GabRunRequest) => {
+      const value = syntheticWorkerResult(request.requestId) as unknown as { materialization: { semantic: Record<string, unknown> } }
+      value.materialization.semantic.self = value.materialization.semantic
+      return [acceptedFor(request), { type: 'gab_result', protocolVersion: V, requestId: request.requestId, result: value }]
+    }
+    const cyclic = drivenRunner({ respond: cyclicResult })
+    const unhashable = await cyclic.runner.runLogicalRun(gatedSource(synthetic).source, runOptions())
+    expect(unhashable.first.rehashError).toMatch(/^TypeError: /)
+    expect(unhashable.judgement.verdict.kind).toBe('invalid_run_integrity')
+    expect(cyclic.runner.running()).toBe(false)
+  })
+
+  it('records an integrity check that throws (the Entry set check) as an integrity issue, starts no fresh Worker, and the next run carries nothing over', async () => {
+    const synthetic = await syntheticExport()
+    let failCheck = true
+    const { runner, workers } = inProcessRunner(() => syntheticControllerOptions(synthetic), {
+      entrySetIssues: (...args) => { if (failCheck) throw new Error('check failed'); return d1aEntrySetIssues(...args) },
+    })
+    const failed = await runner.runLogicalRun(sourceOf(synthetic), runOptions())
+    expect(failed.integrityIssues).toEqual(['first: the Entry set check failed: Error: check failed'])
+    expect(failed.judgement.verdict).toEqual({ kind: 'invalid_run_integrity', issues: ['first: the Entry set check failed: Error: check failed'] })
+    expect(failed.fresh.notRunReason).toBe('the first Worker\'s record has integrity issues')
+    expect(workers).toHaveLength(1)
+    expect(runner.running()).toBe(false)
+    failCheck = false
+    const next = await runner.runLogicalRun(sourceOf(synthetic), runOptions())
+    expect(next.judgement.verdict.kind).toBe('browser_nonformal_conditions_met')
+    const freshRequest = workers[2]!.posted.find(message => (message as { type: string }).type === 'gab_run') as GabRunRequest
+    expect(freshRequest.entrySet).toEqual(next.first.settlement!.result!.entrySet!.value)
+  }, 120_000)
+
+  it('drops a malformed result of the real controller path, and the next logical run hands over only its own Entry set', async () => {
+    const synthetic = await syntheticExport()
+    // The first logical run's first Worker sends a result whose integrityIssues is not an array (everything else is the real result).
+    const corrupt = (message: GabResponse) => (message.type === 'gab_result' ? { ...message, result: { ...message.result, integrityIssues: 'none' } } : message)
+    const { runner, workers } = inProcessRunner(() => syntheticControllerOptions(synthetic), {}, index => (index === 0 ? corrupt : undefined))
+    const bad = await runner.runLogicalRun(sourceOf(synthetic), runOptions())
+    expect(bad.first).toMatchObject({ settle: 'worker_error', settlement: { settledBy: 'protocol_violation', result: null } })
+    expect(bad.judgement.verdict.kind).toBe('invalid_run_integrity')
+    expect(workers).toHaveLength(1)
+    expect(workers[0]!.terminated).toBe(true)
+    expect(runner.running()).toBe(false)
+    const next = await runner.runLogicalRun(sourceOf(synthetic), runOptions())
+    const reference = await inProcessRunner(() => syntheticControllerOptions(synthetic)).runner.runLogicalRun(sourceOf(synthetic), runOptions())
+    expect(next.judgement.verdict.kind).toBe('browser_nonformal_conditions_met')
+    const freshRequest = workers[2]!.posted.find(message => (message as { type: string }).type === 'gab_run') as GabRunRequest
+    expect(freshRequest.entrySet).toEqual(next.first.settlement!.result!.entrySet!.value)
+    expect(next.fresh.settlement!.result!.verification!.semanticSha256).toBe(reference.fresh.settlement!.result!.verification!.semanticSha256)
   }, 120_000)
 })

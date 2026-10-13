@@ -8,7 +8,8 @@ import { registeredD1cConditions } from '../verificationRegistration'
 import { buildCommitOf, GLOBAL_ASSIGNMENT_BROWSER_PROTOCOL_VERSION, gabProgressKey, gabResolvedLocale, type GabExecutionOptions, type GabWorkerEnvironment } from './globalAssignmentBrowserProtocol'
 import {
   createGlobalAssignmentBrowserRunner, GAB_RUN_PURPOSES, mainBuildProvenance, observeExportIdentity,
-  type GabExportSource, type GabLogicalRunOptions, type GabLogicalRunRecord, type GabRunnerState, type GabRunPurpose, type GlobalAssignmentBrowserRunner, type GlobalAssignmentBrowserRunnerDependencies,
+  type GabExportSource, type GabLogicalRunOptions, type GabLogicalRunRecord, type GabRunnerCancelResult, type GabRunnerState, type GabRunPurpose, type GlobalAssignmentBrowserRunner,
+  type GlobalAssignmentBrowserRunnerDependencies,
 } from './globalAssignmentBrowserRunner'
 import { GLOBAL_ASSIGNMENT_BROWSER_VALIDATION_MAX_PLAN_STEPS } from './globalAssignmentBrowserStages'
 
@@ -48,7 +49,8 @@ export interface GlobalAssignmentBrowserBenchmarkGlobal {
   probe(): ReturnType<GlobalAssignmentBrowserRunner['probe']>
   /** One logical run with the page's options, overridden field by field (the slot and the execution options included). */
   runLogicalRun(overrides?: Partial<GabLogicalRunOptions>): Promise<GabLogicalRunRecord>
-  cancel(): boolean
+  /** Whether a request accepted the cancel, or only the logical run's stop was recorded (`GabRunnerCancelResult`). */
+  cancel(): GabRunnerCancelResult
   ping(): Promise<number | null>
   running(): boolean
   current(): GabRunnerState['current']
@@ -86,6 +88,21 @@ function verdictText(record: GabLogicalRunRecord): string {
     case 'invalid_run_integrity': return `記録の完全性に問題（${verdict.issues.length}件）`
     case 'phase_d_prime_not_reached': return `Phase D'未到達（materialization: ${verdict.materializationOutcome.kind}）`
     default: return `${verdict.kind}（${'run' in verdict ? verdict.run : ''}）`
+  }
+}
+
+/** What a cancel did (PR #257 Required fix 1): a request's cancel and a recorded logical-run stop are told apart. */
+function cancelNotice(result: GabRunnerCancelResult): string {
+  switch (result.kind) {
+    case 'idle': return 'logical runは実行中ではありません（何も変更していません）。'
+    case 'already_stopping': return result.reason === 'cancel' ? 'キャンセルは記録済みです（何も変更していません）。' : 'ページ離脱を記録済みです（何も変更していません）。'
+    case 'request_cancel_accepted': return `キャンセルを受け付けました（${result.role}のrequestはcancellingになり、その結果は採用しません）。`
+    case 'logical_run_stop_recorded':
+      switch (result.phase) {
+        case 'before_request': return `logical runの停止を記録しました（${result.role ?? ''} Workerへrequestを送る前のため、requestを送らずWorkerを破棄しました）。`
+        case 'between_workers': return 'logical runの停止を記録しました（Worker間のため、fresh Workerを起動しません）。'
+        case 'after_request_settled': return `logical runの停止を記録しました（${result.role ?? ''}のrequestは終了済みです。以降のWorkerは起動せず、このrunを条件達成とはしません）。`
+      }
   }
 }
 
@@ -304,7 +321,7 @@ export function GlobalAssignmentBrowserBenchmarkPage({ runnerDependencies }: Glo
           </Stack>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
             <Button variant="contained" disabled={disabled || info === null} sx={{ minHeight: 44 }} onClick={() => act(() => runOnce())}>logical runを実行</Button>
-            <Button variant="outlined" color="warning" disabled={!state.running} sx={{ minHeight: 44 }} onClick={() => { const accepted = runner.cancel('ui'); setNotice(accepted ? 'キャンセルを受け付けました（実行中のrequestはcancellingになり、その結果は採用しません）。' : 'キャンセルを受け付けました（Worker間のため、次のWorkerを起動しません）。') }}>キャンセル</Button>
+            <Button variant="outlined" color="warning" disabled={!state.running} sx={{ minHeight: 44 }} onClick={() => setNotice(cancelNotice(runner.cancel('ui')))}>キャンセル</Button>
             <Button variant="outlined" disabled={busy || state.running} sx={{ minHeight: 44 }} onClick={() => act(async () => setProbe(await runner.probe({ yieldMode, heartbeatIntervalMs, workerHeapSampling: false }, GAB_PAGE_DEFAULTS.readyTimeoutMs)))}>Workerを確認</Button>
             <Button variant="outlined" disabled={!state.running} sx={{ minHeight: 44 }} onClick={() => act(async () => { const ms = await runner.ping(); setNotice(ms === null ? 'pingの応答がありません（同期区間中、または終了済み）。' : `ping応答 ${ms.toFixed(1)} ms`) })}>Ping</Button>
             <Button variant="outlined" color="inherit" disabled={state.records.length === 0} sx={{ minHeight: 44 }} onClick={download}>JSON保存</Button>

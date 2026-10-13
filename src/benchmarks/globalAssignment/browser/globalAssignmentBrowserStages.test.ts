@@ -50,8 +50,8 @@ describe('P-1 stage module: the D-1A calculation sequence', () => {
     expect(first.verification!.semantic.outcome).toEqual({ kind: 'conditions_met' })
     expect(first.verification!.semanticSha256).toBe(fresh.verification!.semanticSha256)
     const judgement = judgeBrowserLogicalRun(
-      { settle: 'completed', materializationOutcome: first.materialization!.semantic.outcome, verification: viewOf(first) },
-      { settle: 'completed', phase0PlanningTargetIds: fresh.phase0.planningTargetIdsSorted, verification: viewOf(fresh) }, [],
+      { settle: 'completed', stoppedBeforeRequest: null, materializationOutcome: first.materialization!.semantic.outcome, verification: viewOf(first) },
+      { settle: 'completed', phase0PlanningTargetIds: fresh.phase0.planningTargetIdsSorted, verification: viewOf(fresh) }, [], { cancelled: false },
     )
     expect(judgement.verdict).toEqual({ kind: 'browser_nonformal_conditions_met', physicalOperations: reference.first.handoffs[0]!.objective, planSteps: reference.first.handoffs[0]!.objective,
       objective: reference.first.handoffs[0]!.objective, planningTargetCount: 2, fullPlannerRuns: { first: 1, fresh: 1 } })
@@ -162,7 +162,7 @@ describe('P-1 stage module: typed outcomes pass through unchanged', () => {
     expect(first.materialization!.semantic.outcome).toEqual({ kind: 'unsupported_input', stage: 'context', reason: 'no_planning_target' })
     expect(first.materialization!.handoffCount).toBe(0)
     expect(first).toMatchObject({ entrySet: null, verification: null, integrityIssues: [], phase0: { planningTargetCount: 0, planningTargetIdsSorted: null } })
-    const judgement = judgeBrowserLogicalRun({ settle: 'completed', materializationOutcome: first.materialization!.semantic.outcome, verification: null }, { settle: 'not_run', phase0PlanningTargetIds: null, verification: null }, [])
+    const judgement = judgeBrowserLogicalRun({ settle: 'completed', stoppedBeforeRequest: null, materializationOutcome: first.materialization!.semantic.outcome, verification: null }, { settle: 'not_run', phase0PlanningTargetIds: null, verification: null }, [], { cancelled: false })
     expect(judgement.verdict).toEqual({ kind: 'phase_d_prime_not_reached', run: 'first', materializationOutcome: { kind: 'unsupported_input', stage: 'context', reason: 'no_planning_target' } })
     expect(judgement.recordClassification).toBe('browser_nonformal_phase_d_prime_not_reached')
   }, 60_000)
@@ -174,8 +174,8 @@ describe('P-1 stage module: typed outcomes pass through unchanged', () => {
     expect(first.verification!.semantic.outcome).toMatchObject({ kind: 'planner_rejected', reasons: expect.arrayContaining([{ code: 'max_plan_steps_reached', maxPlanSteps: 1 }]) })
     expect(first.entrySet).not.toBeNull()
     const judgement = judgeBrowserLogicalRun(
-      { settle: 'completed', materializationOutcome: first.materialization!.semantic.outcome, verification: viewOf(first) },
-      { settle: 'completed', phase0PlanningTargetIds: fresh.phase0.planningTargetIdsSorted, verification: viewOf(fresh) }, [],
+      { settle: 'completed', stoppedBeforeRequest: null, materializationOutcome: first.materialization!.semantic.outcome, verification: viewOf(first) },
+      { settle: 'completed', phase0PlanningTargetIds: fresh.phase0.planningTargetIdsSorted, verification: viewOf(fresh) }, [], { cancelled: false },
     )
     expect(judgement.verdict).toMatchObject({ kind: 'planner_rejected', run: 'first' })
   }, 120_000)
@@ -234,8 +234,8 @@ describe('P-1 stage module: typed outcomes pass through unchanged', () => {
     expect(first.verification!.semantic.candidate.candidateIndex).toBe(0)
     expect(first.entrySet!.value.candidate.candidateIndex).toBe(0)
     // Any integrity issue makes the logical run invalid_run_integrity, whatever the Planner met (never conditions met).
-    const judgement = judgeBrowserLogicalRun({ settle: 'completed', materializationOutcome: first.materialization!.semantic.outcome, verification: viewOf(first) },
-      { settle: 'completed', phase0PlanningTargetIds: first.phase0.planningTargetIdsSorted, verification: viewOf(first) }, first.integrityIssues)
+    const judgement = judgeBrowserLogicalRun({ settle: 'completed', stoppedBeforeRequest: null, materializationOutcome: first.materialization!.semantic.outcome, verification: viewOf(first) },
+      { settle: 'completed', phase0PlanningTargetIds: first.phase0.planningTargetIdsSorted, verification: viewOf(first) }, first.integrityIssues, { cancelled: false })
     expect(judgement.verdict).toEqual({ kind: 'invalid_run_integrity', issues: first.integrityIssues })
   }, 120_000)
 })
