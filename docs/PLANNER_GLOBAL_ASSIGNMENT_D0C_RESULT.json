@@ -6,44 +6,44 @@
     "function": "deriveD0cPublicResult() (src/benchmarks/globalAssignment/materializationFormalResult.ts)",
     "sources": [
       {
-        "file": "ga-d0c-formal.result.json",
-        "bytes": 225633,
-        "sha256": "dc2d57b455616ba2c5cb089a590a052c1bbaded9765d8429760891052125e9e1"
+        "file": "ga-d0c-formal-r2.result.json",
+        "bytes": 225630,
+        "sha256": "f6a986789984563b94bf6eb1dca2ccd2908d60b07b4e7e662d56f54c4e021389"
       },
       {
-        "file": "ga-d0c-formal.run/materialize-1.journal.jsonl",
-        "bytes": 26219,
-        "sha256": "2ad26c843e30616dad8216c9da26b335f87fa49314a67664769ad880c559da1b"
+        "file": "ga-d0c-formal-r2.run/materialize-1.journal.jsonl",
+        "bytes": 26462,
+        "sha256": "2b0e4ef4e168c2b1efa25d37033b9b1395db61361f6320534144615092291d78"
       },
       {
-        "file": "ga-d0c-formal.run/materialize-1.record.json",
-        "bytes": 520922,
-        "sha256": "7746c9ddfa0f6dc9f63bc72e5da625386313c2a54f23131b629dd2459dab1889"
+        "file": "ga-d0c-formal-r2.run/materialize-1.record.json",
+        "bytes": 520780,
+        "sha256": "b99abfce792faf6883f2cb88fb10cb6b40d5312c4ad12fa8761d03d0906f2855"
       },
       {
-        "file": "ga-d0c-formal.run/materialize-1.task.json",
+        "file": "ga-d0c-formal-r2.run/materialize-1.task.json",
         "bytes": 1776,
-        "sha256": "d7ba94a47ac43d9cba4fb2bd6a3dd4c9202fe7cee81aef787617f0ac824f519c"
+        "sha256": "0630eea73a5a495cdc6a949ec5651886e50050075152141fce2a6e481aeea72f"
       },
       {
-        "file": "ga-d0c-formal.run/materialize-2.journal.jsonl",
-        "bytes": 26404,
-        "sha256": "011627e4c6b69df386f61186ed9a73490abf822d5be131d46f13e927f64b157a"
+        "file": "ga-d0c-formal-r2.run/materialize-2.journal.jsonl",
+        "bytes": 26276,
+        "sha256": "5a1c46afa51477a52845d232dcdcfee10faf8d53d54d5fa2d12a378d8e04525b"
       },
       {
-        "file": "ga-d0c-formal.run/materialize-2.record.json",
-        "bytes": 520938,
-        "sha256": "9e27167c0b4da8859bd05a85b4a0bd1b49e801817d501e278ebc9b1de785af40"
+        "file": "ga-d0c-formal-r2.run/materialize-2.record.json",
+        "bytes": 520928,
+        "sha256": "0555c83b8628bdae1e9f641814f6de3eba2efb674ea64334ad9f689ff09e8576"
       },
       {
-        "file": "ga-d0c-formal.run/materialize-2.task.json",
+        "file": "ga-d0c-formal-r2.run/materialize-2.task.json",
         "bytes": 1776,
-        "sha256": "d7ba94a47ac43d9cba4fb2bd6a3dd4c9202fe7cee81aef787617f0ac824f519c"
+        "sha256": "0630eea73a5a495cdc6a949ec5651886e50050075152141fce2a6e481aeea72f"
       },
       {
-        "file": "ga-d0c-formal.run/start.json",
+        "file": "ga-d0c-formal-r2.run/start.json",
         "bytes": 7738,
-        "sha256": "1872d03d2963d92b1078f777d766f11a19e3302474164e8bbd4f1a8ba6a1307d"
+        "sha256": "abdf90409c8eacf829ddebb5d9fcb27d77a019d2e0e4e5dbddc958f396d1768f"
       }
     ],
     "consistency": {
@@ -212,11 +212,11 @@
     }
   },
   "provenance": {
-    "measurementHeadSha": "851e2f689c26aa969937db10457ee48314aac2d4",
+    "measurementHeadSha": "8ff0e18968e6749e4e6b5e29dfc6232bdc35376c",
     "registrationHead": "3f6717968da0b29fe8e1e7feda44833d29af0678",
     "workingTreeClean": true,
     "uncommittedBenchmarkCode": false,
-    "benchmarkCodeSha256": "7c808111addd4bbda98283aadf67b3f47406e4193504051302c5588dc388a7b0",
+    "benchmarkCodeSha256": "2fce2a7ffcea2d1d749a07a309a9e5a61f9e35893f37398a6260c6d6f97e766a",
     "calculationAudit": {
       "registrationHead": "3f6717968da0b29fe8e1e7feda44833d29af0678",
       "registrationHeadIsAncestor": true,
@@ -262,7 +262,7 @@
     "node": "v24.19.0",
     "v8": "13.6.233.17-node.51",
     "plannerInputMaxPlanStepsForValidationOnly": 1000,
-    "launchedAt": "2026-10-13T07:01:01.283Z",
+    "launchedAt": "2026-10-13T08:28:07.741Z",
     "machine": {
       "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor",
       "logicalCpuCount": 16,
@@ -270,7 +270,7 @@
       "arch": "x64",
       "osRelease": "10.0.26200",
       "totalMemoryBytes": 33377591296,
-      "freeMemoryBytes": 13487075328
+      "freeMemoryBytes": 12257738752
     }
   },
   "exportVerification": {
@@ -307,59 +307,59 @@
       "childGatePassed": true,
       "calculationContextMatched": true,
       "timing": {
-        "setupMs": 1056.283,
-        "wallMs": 34577.179,
+        "setupMs": 1048.902,
+        "wallMs": 34155.816,
         "eventLoopYields": 22548,
         "stagesMs": {
-          "context": 1701.158,
-          "reachTable": 11623.294,
-          "structuralSearch": 18353.153,
-          "toFirstStructuralCandidate": 18352.767,
-          "diagnostics": 2.188,
-          "materialization": 1811.906,
-          "total": 33520.201
+          "context": 1743.686,
+          "reachTable": 11510.203,
+          "structuralSearch": 17997.686,
+          "toFirstStructuralCandidate": 17997.272,
+          "diagnostics": 2.288,
+          "materialization": 1824.585,
+          "total": 33106.172
         },
         "targetMs": {
           "count": 43,
-          "sum": 1788.708,
-          "min": 4.646,
-          "max": 435.195
+          "sum": 1799.251,
+          "min": 4.48,
+          "max": 438.507
         },
         "projectedTargetMs": {
           "count": 21,
-          "sum": 336.088,
-          "min": 4.646,
-          "max": 120.331
+          "sum": 334.321,
+          "min": 4.48,
+          "max": 121.468
         },
         "shapeConstrainedSearchMsApprox": {
           "count": 22,
-          "sum": 1358.917,
-          "min": 5.53,
-          "max": 418.208
+          "sum": 1372.444,
+          "min": 5.941,
+          "max": 421.906
         },
         "shapeConstrainedRouteCheckMsApprox": {
           "count": 22,
-          "sum": 93.703,
-          "min": 1.369,
-          "max": 16.987
+          "sum": 92.487,
+          "min": 1.072,
+          "max": 16.601
         }
       },
       "memory": {
-        "heapUsedMax": 961514432,
-        "heapTotalMax": 1058463744,
-        "rssMax": 1192251392,
+        "heapUsedMax": 769471888,
+        "heapTotalMax": 868212736,
+        "rssMax": 997150720,
         "externalMax": 82010172,
-        "sampleCount": 79,
-        "maxRssKiB": 1164328,
+        "sampleCount": 78,
+        "maxRssKiB": 973800,
         "heapSizeLimit": 4496293888,
         "targetSettledHeapUsed": {
           "count": 43,
-          "min": 751733464,
-          "max": 980881864
+          "min": 559957448,
+          "max": 791110384
         },
         "targetSampledMax": {
-          "heapUsed": 980881864,
-          "rss": 1187033088
+          "heapUsed": 791110384,
+          "rss": 991977472
         }
       },
       "confirmedProgress": null
@@ -374,59 +374,59 @@
       "childGatePassed": true,
       "calculationContextMatched": true,
       "timing": {
-        "setupMs": 1040.697,
-        "wallMs": 34495.505,
+        "setupMs": 1031.139,
+        "wallMs": 34305.884,
         "eventLoopYields": 22548,
         "stagesMs": {
-          "context": 1704.48,
-          "reachTable": 11565.43,
-          "structuralSearch": 18343.799,
-          "toFirstStructuralCandidate": 18343.46,
-          "diagnostics": 1.916,
-          "materialization": 1820.423,
-          "total": 33454.091
+          "context": 1724.552,
+          "reachTable": 11531.173,
+          "structuralSearch": 18157.674,
+          "toFirstStructuralCandidate": 18157.342,
+          "diagnostics": 2.019,
+          "materialization": 1831.634,
+          "total": 33274.029
         },
         "targetMs": {
           "count": 43,
-          "sum": 1799.337,
-          "min": 4.412,
-          "max": 444.2
+          "sum": 1810.202,
+          "min": 4.77,
+          "max": 437.649
         },
         "projectedTargetMs": {
           "count": 21,
-          "sum": 331.883,
-          "min": 4.412,
-          "max": 117.115
+          "sum": 338.369,
+          "min": 4.77,
+          "max": 122.382
         },
         "shapeConstrainedSearchMsApprox": {
           "count": 22,
-          "sum": 1376.958,
-          "min": 6.039,
-          "max": 426.74
+          "sum": 1380.566,
+          "min": 5.385,
+          "max": 420.876
         },
         "shapeConstrainedRouteCheckMsApprox": {
           "count": 22,
-          "sum": 90.497,
-          "min": 1.027,
-          "max": 17.46
+          "sum": 91.267,
+          "min": 1.268,
+          "max": 16.772
         }
       },
       "memory": {
-        "heapUsedMax": 745967856,
-        "heapTotalMax": 842522624,
-        "rssMax": 1028100096,
-        "externalMax": 82010172,
-        "sampleCount": 79,
-        "maxRssKiB": 1004012,
+        "heapUsedMax": 958780048,
+        "heapTotalMax": 1055055872,
+        "rssMax": 1190199296,
+        "externalMax": 82014419,
+        "sampleCount": 78,
+        "maxRssKiB": 1162312,
         "heapSizeLimit": 4496293888,
         "targetSettledHeapUsed": {
           "count": 43,
-          "min": 536155160,
-          "max": 765517680
+          "min": 748713824,
+          "max": 977938848
         },
         "targetSampledMax": {
-          "heapUsed": 765517680,
-          "rss": 1023717376
+          "heapUsed": 977938848,
+          "rss": 1185001472
         }
       },
       "confirmedProgress": null
@@ -441,10 +441,10 @@
       "timedOut": false,
       "cancelled": false,
       "settledBy": "close",
-      "wallObservedMs": 34800.277,
+      "wallObservedMs": 34360.678,
       "wallMs": 1800000,
       "heapMb": 4096,
-      "startedAt": "2026-10-13T07:01:01.286Z",
+      "startedAt": "2026-10-13T08:28:07.744Z",
       "recordWritten": true
     },
     {
@@ -455,10 +455,10 @@
       "timedOut": false,
       "cancelled": false,
       "settledBy": "close",
-      "wallObservedMs": 34697.149,
+      "wallObservedMs": 34520.744,
       "wallMs": 1800000,
       "heapMb": 4096,
-      "startedAt": "2026-10-13T07:01:36.091Z",
+      "startedAt": "2026-10-13T08:28:42.110Z",
       "recordWritten": true
     }
   ],
@@ -475,7 +475,7 @@
     "count": 0,
     "messages": []
   },
-  "totalWallMs": 69613.733,
+  "totalWallMs": 68991.658,
   "input": {
     "plannerInputValid": true,
     "validationIssueCount": 0,

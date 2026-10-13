@@ -1394,7 +1394,8 @@ D-0A-2の詳細設計は [D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md
 ### 9.13 Phase D-0Cの結果（要約）
 
 [D-0C記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0C.md)・[公開RESULT](PLANNER_GLOBAL_ASSIGNMENT_D0C_RESULT.json)（formal measurement）。D-0B-2の登録条件を変えずに
-`--mode formal` を実装・有効化し（`formalRun.enabled = true`）、measurement HEAD `851e2f6` で正式計測した。
+`--mode formal` を実装・有効化し（`formalRun.enabled = true`）、measurement HEAD `8ff0e18` で正式計測した（正式計測2。`851e2f6` での正式計測1は、
+CIのshallow checkoutで失敗したtest assertionを直したcommitの後に登録条件のまま再計測して置き換えた。記録 §0。結果は同一）。
 
 - `formalValidity = valid`（登録条件・clean HEAD・登録Export・登録HEADからの計算コード監査・子processの独立gate・2 runのsemantic一致）
 - 最初のstructural candidate（objective 1,766）の43 / 43 Targetが `materialized`（射影起点21、形状制約22、独立Route検証22件すべて通過、gate / budget / unsupported / fail closed 0件）。
