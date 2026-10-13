@@ -31,6 +31,8 @@ const D1A_RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-d1a.mj
 const D1C_RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-d1c.mjs'
 /** The Phase D-1C public RESULT derivation: reads the runner's raw outputs only and re-derives their conclusion (no Export, no calculation). */
 const D1C_DERIVE_SCRIPT = '../../../scripts/derive-planner-global-assignment-d1c-result.mjs'
+/** The Production準備 P-2 Browser measurement analysis: reads the committed plan, the Browser raw records, the Node reference and the D-1C public RESULT (no Export, no calculation). */
+const BROWSER_ANALYZE_SCRIPT = '../../../scripts/analyze-planner-global-assignment-browser.mjs'
 /** The Phase D-1A modules: Phase D' in one process (verify.ts, the only module that runs the Production Planner) and its protocol. */
 const PHASE_D1A_MODULES = ['./verificationProtocol.ts', './verify.ts']
 /** The Phase D-1B module: the pre-registration of the D-1C formal measurement (plain data and pure checks; it runs nothing). */
@@ -52,18 +54,19 @@ const PHASE_D0A2B_MODULES = [
 ]
 
 describe('Global Assignment Research isolation', () => {
-  it('is imported by no Production module and by no script other than the designated Phase B-2A / D-0B / D-1A / D-1C runners and the D-0C / D-1C RESULT derivations', () => {
+  it('is imported by no Production module and by no script other than the designated Phase B-2A / D-0B / D-1A / D-1C runners and the D-0C / D-1C RESULT derivations (and the P-2 Browser analysis)', () => {
     const productionPaths = Object.keys(production).filter(path => !/\.test\.tsx?$/.test(path))
     expect(productionPaths.length).toBeGreaterThan(100)
     const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity|verifyPlannerCandidate|judgeD1aRun|concludeD1aRun|d1aChildIntegrityIssues|MaterializedEntriesHandoff|onMaterializedEntries|PLANNER_VERIFICATION_D1C_PREREGISTRATION|d1cRegistrationFingerprint|summarizeVerificationPhysical|concludeD1cMeasurement|judgeD1cFormalValidity|d1cFormalStartGate|deriveD1cPublicResult/
     expect(productionPaths.filter(path => forbidden.test(production[path]!))).toEqual([])
-    expect(Object.keys(scripts).filter(path => ![RUNNER_SCRIPT, D0B_RUNNER_SCRIPT, D0C_DERIVE_SCRIPT, D1A_RUNNER_SCRIPT, D1C_RUNNER_SCRIPT, D1C_DERIVE_SCRIPT].includes(path) && forbidden.test(scripts[path]!))).toEqual([])
+    expect(Object.keys(scripts).filter(path => ![RUNNER_SCRIPT, D0B_RUNNER_SCRIPT, D0C_DERIVE_SCRIPT, D1A_RUNNER_SCRIPT, D1C_RUNNER_SCRIPT, D1C_DERIVE_SCRIPT, BROWSER_ANALYZE_SCRIPT].includes(path) && forbidden.test(scripts[path]!))).toEqual([])
     expect(scripts[RUNNER_SCRIPT]).toBeDefined()
     expect(scripts[D0B_RUNNER_SCRIPT]).toBeDefined()
     expect(scripts[D0C_DERIVE_SCRIPT]).toBeDefined()
     expect(scripts[D1A_RUNNER_SCRIPT]).toBeDefined()
     expect(scripts[D1C_RUNNER_SCRIPT]).toBeDefined()
     expect(scripts[D1C_DERIVE_SCRIPT]).toBeDefined()
+    expect(scripts[BROWSER_ANALYZE_SCRIPT]).toBeDefined()
   })
 
   it('has the expected runtime modules, each reading only the PlannerInput, the Engine and the Production authorities', () => {
