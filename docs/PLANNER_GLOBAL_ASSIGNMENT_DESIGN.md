@@ -602,6 +602,9 @@ stream separationと同じ）。
 - `reset_then_keep` の中間Keep（g1とg*の間）、Reset連鎖、Reset Skills連鎖は **optionに含めない**。それらはskippable unitであり、§8の被覆で決まる
 - 所持巨戟の現在Ideal laneに `none` だけを置く上表の規則は、ゲーム上の制限ではない（ゲームではIdeal到達後もReset Skills / Reset / Keepを続けられる）。
   巨戟化の `conversion` (c, s*) はcのSkillがIdealでも列挙しており、扱いが非対称である。監査結果と後続の扱いは §19（D-0B準備監査）
+- **A-2（§19.8）以降、上表はoption集合 `a1`（`global-assignment-reach-options:a1`）の規則である。** option集合 `a2` では、未保護の所持巨戟の
+  現在Ideal laneに `none` の後へ継続option（Skill: `reset_skills` s*、Bonus: `reset` / `keep_from_source` / `reset_then_keep`）を同じsourceで列挙する。
+  ただし現在性能が両軸Idealのsourceは `none / none` だけのまま（G4-iii）。どちらの集合かは `ReachTable.optionSet` が持ち、各Phaseはそれで規則を読む
 
 ### 5.3 必要条件と検証状態
 
@@ -1804,9 +1807,9 @@ lane開始Ideal継続option（S1型・S2型・B1 / B2型）について、整合
 
 | Phase | 変更 |
 | --- | --- |
-| A（A-2） | 所持巨戟の現在Ideal laneについて、`none` に加えて継続option（Skill: `reset_skills` s*、Bonus: `reset` / `keep_from_source` / `reset_then_keep`）を同じsourceで列挙する。現在性能が両軸Idealのsourceについて、そのsource自身を操作する継続optionはPlannerで実行されない見込みだが（監査 §3.6のG4-iii）、根拠は前提P1〜P3（C1と最終入力の構成、所持巨戟を変えるのはsourceのRouteとreserveだけ、再commitは `hasIdeal` がfalseへ戻ったときだけ）に依存するので、**除外するかはA-2でtestとともに判断する**（確定しない）。S1型は削除しない。ReachTable・予測回数は変えない |
-| B | C1 / C2・objective・root下界・`LB(partial)` は不変（定理T）。値順序latticeは継続 / 非継続を別streamにして各optionちょうど1回・単調な配送を再証明する。MRVの計数とTarget選択順は変わり得る |
-| C | 被覆・coverer・materialization順序・`ExpectedRouteShape` の意味は不変。C-1 `validateOption()` の「所持巨戟: `none` ⇔ 現在Ideal」を「現在Idealなら `none` または継続option、非Idealなら `none` 不可」へ改める。§8.6に定理Tによる強化を記録する |
+| A（A-2） | 所持巨戟の現在Ideal laneについて、`none` に加えて継続option（Skill: `reset_skills` s*、Bonus: `reset` / `keep_from_source` / `reset_then_keep`）を同じsourceで列挙する。現在性能が両軸Idealのsourceについて、そのsource自身を操作する継続optionはPlannerで実行されない見込みだが（監査 §3.6のG4-iii）、根拠は前提P1〜P3（C1と最終入力の構成、所持巨戟を変えるのはsourceのRouteとreserveだけ、再commitは `hasIdeal` がfalseへ戻ったときだけ）に依存するので、**除外するかはA-2でtestとともに判断する**（確定しない）。S1型は削除しない。ReachTable・予測回数は変えない。→ A-2で実装し、両軸Ideal sourceの継続optionはPlanner testを根拠に生成しないと決めた（option集合 `a2`。§19.8） |
+| B | C1 / C2・objective・root下界・`LB(partial)` は不変（定理T）。値順序latticeは継続 / 非継続を別streamにして各optionちょうど1回・単調な配送を再証明する。MRVの計数とTarget選択順は変わり得る。→ A-2では値順序keyに成分を足さず、Skill要件列を `none` → `reset_skills` のindex列、Bonusの `none` を独立streamとし、配送1回・単調性・支配順を総当たりで確認した（§19.8） |
+| C | 被覆・coverer・materialization順序・`ExpectedRouteShape` の意味は不変。C-1 `validateOption()` の「所持巨戟: `none` ⇔ 現在Ideal」を「現在Idealなら `none` または継続option、非Idealなら `none` 不可」へ改める。§8.6に定理Tによる強化を記録する。→ A-2で改訂（§19.8） |
 | D | D-0B: S1型（ReachTableだけで判定できる）をSearch前に専用の未実行分類にし、`unconfirmed` / `shape_mismatch` と区別する。§10.3では、Search policy起因の未実行をwindow拡大の根拠にも、cap / gate / envelope見直しの根拠にもしない（D-0Bで `not_executed(search_policy_shape)` として確定。§9.10 / §10.3）。G4（G4-i / G4-ii / G4-iii）は診断として場合分けを記録するだけで、開始時点のIdealだけを理由に候補を不成立・恒久除外に分類しない（成否はPhase D'で判定）。D-0A-2: B-i / B-iiを最終選択し、承認された方式を §9.3の方式選択へ加える（B-iなら §9.4とは別のResearch専用materialization契約を新設し、§9.4本文は変えない）。`matchesExpectedShape()` のrequired位置完全一致は維持する（同値なrequired位置集合の受理は未決）。→ D-0A-2設計でB-iiを主方式に選び、Research専用経路の契約を §9.4とは別に定め（§9.4には参照だけを追加）、方式選択 `d0a2-v2` を §9.3へ組み込んだ。同値なrequired位置集合の受理は採らない（[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §5 / §7 / §11） |
 
 ### 19.7 D-0B / D-0Cとの依存関係と後続PR
@@ -1827,7 +1830,7 @@ formal run前なのでG9に反しない）。
 | 2 | D-0B | 実Export用runner（materialize-only mode、別process、envelope、RESULT）、非formal smoke、上記の診断。事前登録はしない（実施済み。§9.10、[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B.md)） |
 | 3 | D-0A-2設計（docs-only） | 案Bの設計: B-i / B-iiの最終選択、B-iを選ぶ場合のResearch専用materialization契約（§9.4とは別の節）と技術的実現性の確認、継続Routeの正当性検証の手順、G3の扱い、§9.3への組込み、§10.3の未実行の扱い、Search規模予測・gate、test計画（実施。[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md)。B-iiを選定し、実装を2a / 2bに分割。§9.11） |
 | 4 | D-0A-2実装 | 承認された方式での形状制約付きmaterialization、方式選択の拡張、synthetic test、parity test、継続Routeの正当性検証test（2a: Search DomainのResearch専用seam。オーナー承認が前提。2b: Research方式） |
-| 5 | A-2 | Phase Aの継続option、両軸Ideal sourceの扱いの判断（G4-iii）、値順序latticeの別stream化、C-1検査の改訂、総当たりtest、G4の状態遷移test（4と同時でもよい。A-2を4より先に入れると継続optionがmaterializeされない） |
+| 5 | A-2 | Phase Aの継続option、両軸Ideal sourceの扱いの判断（G4-iii）、値順序latticeの別stream化、C-1検査の改訂、総当たりtest、G4の状態遷移test（4と同時でもよい。A-2を4より先に入れると継続optionがmaterializeされない）（実施。§19.8） |
 | 6 | D-0B-2 | 確定したoption集合・方式での再smokeと、delivery cap・Search規模gate・envelope・option集合version・方式選択規則の事前登録 |
 | 7 | D-0C | 登録条件でのformal measurement |
 | 8 | D-1 | Planner検証（統合acceptance） |
@@ -1837,3 +1840,89 @@ B-iならResearch専用materialization契約の承認と継続Routeの正当性�
 それを根拠にした事前登録、clean HEADである。test計画（synthetic、G4の状態遷移、継続Routeの正当性検証、定理Tと拡張後の下界・被覆補題・lattice配送の
 総当たり、案BとPA Searchのparity、isolation）は監査 §9.3にある。正式仕様変更の候補（SEARCH_SPEC 5.6.1の層の注記など。いずれも
 本PRでは変更しない）は監査 §10にある。
+
+### 19.8 Phase A-2の確定事項（option集合 `a2`）
+
+Refs #154。基準main `d7f6f9a`（PR #249 merged）。branch `research/global-assignment-phase-a2`。Production（Search / Planner / RNG / Worker / UI /
+Persistence / schema / version / CalculationContext）、D-0A-2aのSearch seam、方式 `d0a2-v2` の契約、G3の対応方式、Phase Cのmaterialization順序、
+D-0B / B-2Bの実測RESULT、formal計測条件は変更していない（Production changed files = `[]`。Production側の既存test fixture
+`src/test/fixtures/plannerScheduler.ts` を変更せずに利用しただけ）。実Exportの再smoke、formal run、D-1のPlanner検証は行っていない。
+G2のmaterialization結果は [D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §20、G4-iiiの判断の根拠は監査 §14にも記録した。
+
+**option集合version。** option集合を明示的な値 `ReachOptionSetVersion`（`types.ts`）として導入した。
+
+| version | 内容 | 使う所 |
+| --- | --- | --- |
+| `global-assignment-reach-options:a1` | D-0A-2bまでのPhase A（所持巨戟の現在Ideal laneは `none` だけ。§5.2の表） | B-2A formal protocol（`global-assignment-b2a:1`。runnerはa1に固定）、B-2B formal RESULT、C-2 / D-0Bのsmoke、`d0a-v1` golden、`reachOptionSet` を持たないD-0B / D-0A-2bのrunner条件 |
+| `global-assignment-reach-options:a2` | A-2（下表） | runnerの `--option-set a2`（条件 `reachOptionSet` として記録）。**D-0B-2が `optionSetVersion` に登録する値** |
+
+- `buildReachTable(context, engine, window, optionSet, execution)` は既定値を持たず、値を `ReachTable.optionSet` に保持する。走査（予測・support問合せ・
+  行・summary）はoption集合に依存しない（a1 / a2で同一のtableになることをtestで固定。予測回数は増えない）
+- Phase A（列挙）・Phase B（値順序lattice・MRV・下界）・Phase C-1（option検証）・D-0Bの診断は、規則を `sourceLaneAdmission(source, table.optionSet)`
+  の1関数からだけ読む。Phase A / B / Cで同じoptionを別の規則で判定することは無い（旧 `bonusRequirementIsNone()` は削除し、全callsiteを置き換えた）
+- D-0B / D-0A-2bのrunner条件の `reachOptionSet` は任意fieldで、無い記録はa1である（A-2以前の全記録・RESULTはそのままa1と読める。byte単位で不変）。
+  protocol version（`global-assignment-d0b:1` / `global-assignment-d0a2b:1`）は変えない。a1の結果をa2として扱わない
+
+**a2のoption規則**（未保護の所持巨戟について。所持通常・新規Normalと、両軸非Idealの所持巨戟はa1と同じ）
+
+| source（Target tから見た現在性能） | Skill要件 | Bonus要件 |
+| --- | --- | --- |
+| 現在SkillだけIdeal | `none` → `reset_skills` s*（s*昇順、`resetSkillsLimit` 以下のIdeal位置） | 非`none` 要件だけ（従来どおり） |
+| 現在Bonusだけ `gogma_artian` でIdeal | `reset_skills` s*（従来どおり） | `none` → `reset` g* → `keep_from_source` g*（source layoutのKeep supportがあるとき）→ `reset_then_keep` (g1, g*)（compact index、g1 < g*） |
+| 両軸Ideal（未保護） | `none` | `none`（G4-iii。継続optionを生成しない） |
+| 保護中（両軸Idealのときだけsource） | `none` | `none`（REQUIREMENTS 21。両軸Idealとは別の条件として先に判定する） |
+
+位置・layout・supportは従来のReachTableの値（Ideal位置、Reset Ideal位置、source layoutのKeep-Ideal位置、`reset_then_keep` のcompact index）だけを使い、
+window外やunsupportedの位置を追加しない。source × Skill × Bonusの直積を配列にしない（既存generatorとindexのまま）。
+
+**G4-iiiの判断: Target自身の両軸Ideal sourceに操作を追加するoptionは生成しない。** Production scheduler（`createPlannerDeterministicScheduleRun()`）を
+1 stepずつ実行し、各stepのcommitment状態・in-flight・`hasIdeal`・武器の性能を記録する小規模fixtureのtest（`plannerStartIdealTransition.test.ts`、8件）で
+次を確認した（監査 §14）。
+
+| 場合 | 確認したこと |
+| --- | --- |
+| G4-i | どのRouteにも操作されないIdeal武器が残ると、Targetは全stepで `hasIdeal`、そのEntryは全stepで `not_needed` のまま実行されない。他Targetのゼロ操作Route（`existing_gogma_current`）が参照するだけでは、武器はin-flightにならず性能も変わらない（そのEntryは開始時から `secured`） |
+| G4-ii | 他TargetのRouteがIdeal武器を最初に操作したstepでin-flightになり、Targetの `hasIdeal` がfalseへ戻り、次stepのcommitment更新でEntryがcommitされ実行される（completed、Trace Replay valid）。holding unitの位置を既にCounterが通過していればcommitされない（exhausted）。他のIdeal武器がin-flightでなければ `hasIdeal` を保ちcommitされない |
+| G4-iii | Bonus継続・Skill継続・両方の3通りで、そのEntryは全stepで `not_needed`、どのstepも当該sourceを操作せず、in-flightにならず性能も不変。`createProductionPlanWithObserver()` のPlanにも当該Entry・sourceのStepは無い |
+
+前提P1（最終入力でsourceを参照するEntryは1件）・P2（武器の状態とin-flightを変えるのは、その武器をsourceとするRouteの操作とreserveだけ）・
+P3（未commit Entryのcommitは開始時と `hasIdeal` がfalseへ戻ったときだけ）を、これらのfixtureで観測として固定した（一般の入力についての証明ではない。
+将来のPlanner変更ではtestが変化を検出する）。G4-i / G4-iiはPhase Aの静的な除外規則にしない（実行順に依存し、Phase D'でだけ判定する）。
+
+**Phase B。** 所持巨戟のSkill要件列は `none → reset_skills（s*昇順）` のindexable sequence、Bonusは長さ1の `none` streamを既存の `reset` /
+`keep_from_source` / `reset_then_keep` streamと並ぶ独立streamとして加えた（`indexedSkillRequirements()` / `indexedBonusStreams()`）。値順序keyに成分を
+足していない。`none` はstream終端増分が最小で、同点でも最終位置の成分が−1なので、継続optionは同じsourceの支配する非継続option（継続laneを `none` に、
+S1を (c, c) に替えたもの）より必ず後に配送される。下界menuは「laneが `none` を許すか」と「操作の最終位置」を分けて持ち（`skillNone` / `bonusNone`）、
+`none` を許すlaneはorigin終端だけを読むので、`LB(partial)` はa1とa2で同じ関数である（監査 §5.4 系2）。
+
+**Phase C。** `validateOption()` は、laneごとの許可要件を `sourceLaneAdmission()` から読み（現在Idealのlaneは `none` または継続、非Idealのlaneは `none` 不可、
+両軸Ideal・保護は `none` だけ）、保護、sourceがrowのsource（全field一致）であること、window内の位置（Reset Skills / 巨戟化 / Gogma、Reset→Keepの g1 < g*）、
+Keep support、Normal要件、`streamEnd` の再導出を従来どおり独立に検査する（generatorへの問い合わせはしない）。位置がIdealであることは従来どおり
+required-only replay（§5.3）が検査する。C1 / C2・Counter coverage・coverer・materialization順序・`ExpectedRouteShape`・replayの予測semanticsは変更していない。
+現在SkillがIdealの所持巨戟が `reset_skills` を選べば、originからのSkill covererになる（test固定）。
+
+**Phase D。** 継続形の検出器を `CONTINUATION_SHAPE_DETECTORS = [conversionSkillContinuationShapeOf (G1), ownedGogmaContinuationShapeOf (G2)]` とし、
+`searchPolicyShapeOf()` も同じ2つを問う。G2の形は `{ policy: 'lane_start_ideal_owned_gogma_continuation', ownedWeaponId, skill, bonus }` で、Skill（S2）と
+Bonus（B1 / B2、`requirement` / `resetPosition` / `finalPosition`）を別々に記録する。G1の値とserializationはD-0Bのまま。`d0a2-v2` はG2を
+`continuation_shape_constrained_only`（`shape_constrained` だけ）で扱い、`d0a-v1`（precheckあり）は `not_executed(search_policy_shape)` に分類する。
+D-0Bの診断 `countContinuationOptions()` は、a1 tableでは従来の値（`ownedGogmaContinuation: 'not_generated_by_current_phase_a'`）を返し、a2 tableでは
+`{ options, skill, bonus }` を数える。`g4iiiObservability` はa1 / a2とも事実のまま（G4-iiiはどちらの集合でも生成されない）。
+
+**検証結果**（seed付き乱数の手組みtable、Fake / table Engine。いずれもsolver・Phase A generator・Phase C moduleから独立に書いた参照で比較した）
+
+| 項目 | 結果 |
+| --- | --- |
+| Phase A列挙 = 独立参照列挙（順序・option objectまで） | 300 seed × a1 / a2で一致。a2の継続option 1,379件。a2 ⊇ a1で、差は所持巨戟の継続optionだけ（両軸Ideal・保護sourceには無い） |
+| 値順序lattice | 150 seed × 部分割当（空と完全割当のprefix）で、配送列 = 参照optionの値順序全sort、各option 1回、key狭義単調。継続optionが支配する非継続optionより後に配送されることを3,326件で確認。`countUpTo(k)` は参照の資源可行数と一致 |
+| `LB(partial)` のadmissibility | 300 seedの全Target順prefix 8,158件で、真の残り最小値（参照brute force）以下。a1 menuで計算した値と全件一致。root（空の部分割当）の下界もa1 = a2 |
+| 定理T | 300 seedで、構造的最適objectiveが「a2全体」「a2から継続option（S1 / S2 / B）を除いた集合」「a1」で一致。継続optionを含む被覆可能完全割当8,171件のすべてを、独立実装した手続きPで同じsource・objective以下・継続optionなし・C1 / C2・被覆可能な割当へ写せた（うち1,169件はSkill被覆の修復（巨戟化位置の引き下げ）が必要だった） |
+| Phase C | 200 seedのa2の全C1 / C2完全割当で、C-1検査が通り、被覆判定が独立predicateと一致（被覆不成立6,489件を含む）。coverage-gated searchの全候補 = 参照の被覆可能集合（重複なし、決定的、C1 / C2のassignmentが在れば `coverage_infeasible` で終わらない） |
+| root下界段階 | 同じcontextのa1 / a2 tableで構造的最適objectiveが一致し、`measureRootLowerBound()`（table・option集合を読まない）との比較結果も同じ |
+| G2 end-to-end / 補題 | D-0A-2設計 §20 |
+
+**互換性。** `d0a-v1` golden（29ケース、`JSON.stringify` 一致）はそのまま通る。B-2Aの記録はa1に固定。a2では所持巨戟のoption数が増えるので、MRVの
+計数・Target選択順・値順序・候補列はa1と異なり得る。B-2B / C-2 / D-0Bの候補列・数値との比較は「option集合の条件差」として扱い、旧記録を書き換えない。
+
+**未確認・持ち越し**: 定理Tとlatticeの性質は小さい窓の合成fixtureで反例が無いことの確認であり、一般の証明ではない。G4のP1〜P3は小規模fixtureでの
+観測であり、全入力についての証明ではない。a2での実Export上の候補列・Search規模・materialization成否はD-0B-2の再smokeで測る。G2を含む候補の
+Planner成立（Trace Replay、fresh Planner）はD-1で判定する。

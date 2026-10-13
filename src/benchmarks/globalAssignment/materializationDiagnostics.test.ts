@@ -13,7 +13,7 @@ import { createReachOption } from './reachOptions'
 import { buildReachTable } from './reachTable'
 import { buildStructuralCandidate } from './structuralCandidate'
 import { IDEAL_BONUSES, keepToLowRanks, ownedGogma } from './testFixture'
-import type { BonusRequirement, GlobalAssignmentContext, ReachOption, SkillRequirement, SourceCandidate } from './types'
+import { REACH_OPTION_SET_A1, type BonusRequirement, type GlobalAssignmentContext, type ReachOption, type SkillRequirement, type SourceCandidate } from './types'
 import type { OwnedWeapon, TargetWeaponId } from '../../domain/models/publicTypes'
 
 /*
@@ -204,7 +204,7 @@ describe('Phase D-0B G4 diagnostics (Planner-start Ideal)', () => {
     const context: GlobalAssignmentContext = {
       ...scene.context, plannerInput: { ...scene.input, targetWeapons }, planningTargets: scene.context.planningTargets.map(target => targetWeapons.find(value => value.id === target.id)!),
     }
-    const reach = await buildReachTable(context, scene.engine, WINDOW)
+    const reach = await buildReachTable(context, scene.engine, WINDOW, REACH_OPTION_SET_A1)
     if (reach.kind !== 'reach_table') throw new Error(reach.kind)
     const table = reach.table
     const pick = (target: TargetWeaponId, source: (value: SourceCandidate) => boolean, skill: SkillRequirement, bonus: BonusRequirement) =>

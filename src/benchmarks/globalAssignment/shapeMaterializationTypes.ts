@@ -272,14 +272,14 @@ export interface ShapeConstrainedAttempt {
 }
 
 /**
- * Design 11 continuation shapes: a shape whose lane is continued past an already Ideal lane start. Until A-2 the one kind is
- * the G1 conversion continuation (`searchPolicyShapeOf()`); A-2 adds the owned-Gogma continuations (G2) to this union and to
- * `CONTINUATION_SHAPE_DETECTORS`.
+ * Design 11 continuation shapes: a shape whose lane is continued past an already Ideal lane start - the G1 conversion
+ * continuation and, since A-2, the G2 owned-Gogma current-Ideal lane continuation (`CONTINUATION_SHAPE_DETECTORS`). They are
+ * exactly the Search-policy shapes of `d0a-v1`.
  */
 export type ContinuationShape = SearchPolicyShape
 
 export type ShapeMethodSelectionRule =
-  /** A continuation shape (G1; G2 after A-2): `shape_constrained` only. */
+  /** A continuation shape (G1; G2 under a2): `shape_constrained` only. */
   | 'continuation_shape_constrained_only'
   /** Continuous: the projected Candidate Search first, then `shape_constrained` once when it does not match. */
   | 'continuous_projected_then_shape_constrained'

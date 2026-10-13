@@ -8,13 +8,13 @@ import { satisfiesIdealBonuses } from '../../domain/target/targetEvaluator'
 import { collectLowerBoundProblem } from '../plannerGlobalLowerBound'
 import { globalResearchDependencies } from '../plannerGlobalOptimizationResearch'
 import { createGlobalAssignmentContext } from './context'
-import { enumerateReachOptions, sourceResourceKey } from './reachOptions'
+import { enumerateReachOptions, reachOptionKey, sourceResourceKey } from './reachOptions'
 import { assertReachWindow, buildReachTable, reachWindowW0 } from './reachTable'
 import {
   createGlobalAssignmentFixture, createTableEngine, FIXTURE_NORMAL_COUNTER_ID, IDEAL_BONUSES, IDEAL_FAMILIES_REORDERED_NORMAL, keepToIdealRanks,
   keepToLowRanks, layoutKeyOf, OTHER_FAMILIES, ownedGogma, ownedNormal, type GlobalAssignmentFixtureOptions, type TableEngineSpec,
 } from './testFixture'
-import type { GlobalAssignmentContext, ReachTable, ReachWindow, TargetReach } from './types'
+import { REACH_OPTION_SET_A1, REACH_OPTION_SET_A2, type GlobalAssignmentContext, type ReachTable, type ReachWindow, type TargetReach } from './types'
 
 /*
  * Issue #154 Global Assignment Phase A (design 4.2 / 5 / 13.1): the ReachTable holds, per planning
@@ -78,7 +78,7 @@ async function prepared(options: { owned?: OwnedWeapon[]; engine?: ReturnType<ty
 }
 
 async function tableOf(context: GlobalAssignmentContext, engine: RngEngine, window: ReachWindow = WINDOW): Promise<ReachTable> {
-  const result = await buildReachTable(context, engine, window)
+  const result = await buildReachTable(context, engine, window, REACH_OPTION_SET_A1)
   if (result.kind !== 'reach_table') throw new Error(`Expected a table, got ${JSON.stringify(result)}`)
   return result.table
 }
@@ -272,7 +272,7 @@ describe('Phase A ReachTable', () => {
     const context = createGlobalAssignmentContext(unconfirmed, globalResearchDependencies(table.engine))
     expect(context.kind).toBe('context')
     if (context.kind !== 'context') return
-    const refused = await buildReachTable(context.context, table.engine, WINDOW)
+    const refused = await buildReachTable(context.context, table.engine, WINDOW, REACH_OPTION_SET_A1)
     expect(refused).toMatchObject({ kind: 'unsupported_input', reason: 'unconfirmed_counter' })
     expect(refused.kind === 'unsupported_input' && refused.detail).toContain(fixture.targets.a.id)
     expect(table.calls.skill + table.calls.reset + table.calls.normal + table.calls.keep).toBe(0)
@@ -293,38 +293,38 @@ describe('Phase A ReachTable', () => {
     expect(blindInput.normalCounters[0]!.isConfirmed).toBe(true)
     expect(blindInput.buildListEntries.every(entry => entry.candidateSnapshot.route.operations[0]!.type === 'create_normal_artian'
       && (entry.candidateSnapshot.route.operations[0] as { normalCounterBefore: number | null }).normalCounterBefore === null)).toBe(true)
-    expect(await buildReachTable(context, noNormal.engine, WINDOW)).toMatchObject({ kind: 'unsupported_input', reason: 'blind_route_required' })
+    expect(await buildReachTable(context, noNormal.engine, WINDOW, REACH_OPTION_SET_A1)).toMatchObject({ kind: 'unsupported_input', reason: 'blind_route_required' })
     expect(noNormal.calls.skill + noNormal.calls.reset + noNormal.calls.normal + noNormal.calls.keep).toBe(0)
     const { context: ok, input, table } = await prepared({ owned: ownedForGroupA() })
     const modified: GlobalAssignmentContext = { ...ok, plannerInput: { ...input, rngState: { ...input.rngState, gogmaCounter: { value: 10, isConfirmed: false, source: 'manual' } } } }
-    expect(await buildReachTable(modified, table.engine, WINDOW)).toEqual({ kind: 'unsupported_input', reason: 'unconfirmed_rng_state', detail: 'No confirmed value for: Gogma Counter.' })
+    expect(await buildReachTable(modified, table.engine, WINDOW, REACH_OPTION_SET_A1)).toEqual({ kind: 'unsupported_input', reason: 'unconfirmed_rng_state', detail: 'No confirmed value for: Gogma Counter.' })
   })
 
   it('fails closed on a selected intermediate state and on an invalid window', async () => {
     const { context, table } = await prepared({ owned: ownedForGroupA() })
     const pinned: GlobalAssignmentContext = { ...context, validation: { ...context.validation, validBuildListEntries: context.validation.validBuildListEntries.map(({ entry, missingRngRequirements }, index) => ({
       missingRngRequirements, entry: index === 0 ? { ...entry, intermediateStateSelection: { skillOpportunityId: 'opportunity.fixture.skill', bonusOpportunityId: null, improvementPreference: 'planner' } as BuildListEntry['intermediateStateSelection'] } : entry })) } }
-    const refused = await buildReachTable(pinned, table.engine, WINDOW)
+    const refused = await buildReachTable(pinned, table.engine, WINDOW, REACH_OPTION_SET_A1)
     expect(refused).toMatchObject({ kind: 'unsupported_input', reason: 'checkpoint_selection' })
     expect(refused.kind === 'unsupported_input' && refused.detail).toContain(context.validation.validBuildListEntries[0]!.entry.id)
     for (const window of [{ ...WINDOW, skill: 0 }, { ...WINDOW, gogma: -1 }, { ...WINDOW, normal: 1.5 }, { ...WINDOW, skill: Number.NaN }]) {
       expect(() => assertReachWindow(window)).toThrow(RangeError)
-      await expect(buildReachTable(context, table.engine, window)).rejects.toThrow(RangeError)
+      await expect(buildReachTable(context, table.engine, window, REACH_OPTION_SET_A1)).rejects.toThrow(RangeError)
     }
   })
 
   it('fails closed when the Master lacks a bonus rank the Ideal judgement needs', async () => {
     const { context, table, input } = await prepared({ owned: ownedForGroupA() })
     const reduced: GlobalAssignmentContext = { ...context, plannerInput: { ...input, master: { ...input.master, bonusRanks: input.master.bonusRanks.filter(rank => rank.id !== 'bonus_rank.fixture.high') } } }
-    await expect(buildReachTable(reduced, table.engine, WINDOW)).rejects.toThrow()
+    await expect(buildReachTable(reduced, table.engine, WINDOW, REACH_OPTION_SET_A1)).rejects.toThrow()
   })
 
   it('reports cancellation as cancelled with the progress so far, never as an empty table, and yields control', async () => {
     const { context, table } = await prepared({ owned: ownedForGroupA() })
-    const cancelled = await buildReachTable(context, table.engine, WINDOW, { shouldCancel: () => table.calls.skill >= 2 })
+    const cancelled = await buildReachTable(context, table.engine, WINDOW, REACH_OPTION_SET_A1, { shouldCancel: () => table.calls.skill >= 2 })
     expect(cancelled).toMatchObject({ kind: 'cancelled', progress: { predictions: { skill: 2, gogmaReset: 0, gogmaKeep: 0, normal: 0 }, lastGroup: { weaponTypeId: 'weapon.fixture.a', elementId: ELEMENT_A } } })
     let yields = 0
-    const wide = await buildReachTable(context, scanEngine().engine, { ...WINDOW, skill: 100 }, { yieldControl: async () => { yields += 1 } })
+    const wide = await buildReachTable(context, scanEngine().engine, { ...WINDOW, skill: 100 }, REACH_OPTION_SET_A1, { yieldControl: async () => { yields += 1 } })
     expect(wide.kind).toBe('reach_table')
     expect(yields).toBeGreaterThan(0)
   })
@@ -332,6 +332,28 @@ describe('Phase A ReachTable', () => {
   it('names the W0 reference window from recommendedCandidateSearchDefaults and applies no window of its own', () => {
     expect(reachWindowW0()).toEqual({ normal: 350, gogma: 500, skill: 1500 })
     expect(() => assertReachWindow(reachWindowW0())).not.toThrow()
+  })
+
+  it('A-2: stores the named option set and scans exactly the same with a1 and a2 (no extra prediction, support query or row field)', async () => {
+    const a1 = await prepared({ owned: ownedForGroupA() })
+    const a2 = await prepared({ owned: ownedForGroupA() })
+    const built1 = await buildReachTable(a1.context, a1.table.engine, WINDOW, REACH_OPTION_SET_A1)
+    const built2 = await buildReachTable(a2.context, a2.table.engine, WINDOW, REACH_OPTION_SET_A2)
+    if (built1.kind !== 'reach_table' || built2.kind !== 'reach_table') throw new Error('Expected two tables.')
+    expect(built1.table.optionSet).toBe(REACH_OPTION_SET_A1)
+    expect(built2.table.optionSet).toBe(REACH_OPTION_SET_A2)
+    expect({ ...built2.table, optionSet: REACH_OPTION_SET_A1 }).toEqual(built1.table)
+    expect(a2.table.calls).toEqual(a1.table.calls)
+    // The a2 options of the same rows are a superset (the owned-Gogma continuations of g1's / g5's current-Ideal lanes).
+    const keys = (table: ReachTable) => table.targets.flatMap(row => [...enumerateReachOptions(row, table)].map(option => reachOptionKey(option)))
+    const before = keys(built1.table)
+    const after = keys(built2.table)
+    expect(after.length).toBeGreaterThan(before.length)
+    for (const key of before) expect(after).toContain(key)
+    // No default: an unknown option set is refused before any prediction.
+    const refused = await prepared({ owned: ownedForGroupA() })
+    await expect(buildReachTable(refused.context, refused.table.engine, WINDOW, 'a2' as never)).rejects.toThrow(RangeError)
+    expect(refused.table.calls).toMatchObject({ skill: 0, reset: 0, keep: 0, normal: 0 })
   })
 })
 

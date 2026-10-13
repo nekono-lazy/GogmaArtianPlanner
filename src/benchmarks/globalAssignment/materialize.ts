@@ -51,7 +51,7 @@
  *
  * Phase D-0A-2b (`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 5.4 / 10 / 11) added the method rule `d0a2-v2`, chosen
  * only by passing `ShapeMaterializationInputs` (`rule: 'd0a2-v2'`); `MaterializationInputs` without a rule is `d0a-v1`,
- * exactly as before. Under `d0a2-v2` a continuation shape (G1) and a non-continuous shape use the shape-constrained method
+ * exactly as before. Under `d0a2-v2` a continuation shape (G1; G2 under a2) and a non-continuous shape use the shape-constrained method
  * alone, a continuous shape tries the projected Candidate Search first and the shape-constrained method once when it does
  * not match; design 9.1 (Planner Alternative Search) is not part of it. The shape-constrained request is built here from
  * the same formal reservation (`formalReservation()`), re-derived before it runs (`request_mismatch` otherwise), and run and
@@ -122,7 +122,7 @@ export interface MaterializationInputs {
   shouldCancel?: () => boolean
   yieldControl?: () => Promise<void>
   /**
-   * Phase D-0B (design 19.3 G1): `true` classifies a Target whose shape is a Search-policy shape
+   * Phase D-0B (design 19.3 G1; A-2 G2): `true` classifies a Target whose shape is a Search-policy shape
    * (`searchPolicyShapeOf()`) as `not_executed(search_policy_shape)` before any request or Search. Absent or
    * `false`: the D-0A behaviour (the Target is searched like any other).
    */
@@ -142,7 +142,7 @@ export const productionShapeMaterializationSearchPort: ShapeMaterializationSearc
 /**
  * Phase D-0A-2b: the inputs of the rule `d0a2-v2` (design D0A2 11). A type of its own, so a `d0a-v1` input is never read as
  * one: its settings are the shape method's gate and budget plus the projected Search's gate, with no delivery cap and no
- * Search-policy precheck (a G1 shape is a continuation shape here, materialized by the shape-constrained method).
+ * Search-policy precheck (a G1 or G2 shape is a continuation shape here, materialized by the shape-constrained method).
  */
 export interface ShapeMaterializationInputs {
   rule: 'd0a2-v2'
@@ -667,7 +667,7 @@ export async function materializeTarget(
 }
 
 /**
- * Design D0A2 11: one Target under the rule `d0a2-v2`. A continuation shape (G1) and a non-continuous shape use the
+ * Design D0A2 11: one Target under the rule `d0a2-v2`. A continuation shape (G1; G2 under a2) and a non-continuous shape use the
  * shape-constrained method alone; a continuous shape tries the projected Candidate Search first and, when it returns another
  * canonical Ideal, none, or is gated, the shape-constrained method once (never after a cancellation). The formal reservation
  * is the same for both attempts, each has its own gate, and the Target outcome is the projected match or the

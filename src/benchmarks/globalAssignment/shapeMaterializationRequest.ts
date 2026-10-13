@@ -19,7 +19,9 @@ import { normalizePlannerAlternativeReservation, type PlannerAlternativeReservat
 import { createCounterReservation } from '../../domain/search/counterReservation'
 import { SHAPE_CONSTRAINED_ROUTE_POLICY_VERSION, type RouteShapeConstraint } from '../../domain/search/research'
 import type { ExpectedRouteShape } from './coverageTypes'
-import { plannerStartOrigins, searchPolicyShapeOf, shapeSearchExtent, type ShapeOwnPositions } from './materializationShape'
+import {
+  conversionSkillContinuationShapeOf, ownedGogmaContinuationShapeOf, plannerStartOrigins, searchPolicyShapeOf, shapeSearchExtent, type ShapeOwnPositions,
+} from './materializationShape'
 import { GlobalAssignmentMaterializationError, type PredictedSearchScale } from './materializationTypes'
 import { predictShapeSearchScale } from './shapeMaterializationScale'
 import {
@@ -222,11 +224,12 @@ export async function assembleShapeConstrainedRequest(input: {
 export type ContinuationShapeDetector = (option: ReachOption, table: ReachTable) => ContinuationShape | null
 
 /**
- * The detectors `continuationShapeOf()` asks, in order. Until A-2 the one detector is G1 (`searchPolicyShapeOf()`: a
- * conversion whose Skill at `c` is already Ideal, continued to `s* > c`). A-2 adds the owned-Gogma current-Ideal lane
- * continuations (G2) here and widens `ContinuationShape`; nothing else changes.
+ * The detectors `continuationShapeOf()` asks, in order: G1 (`conversionSkillContinuationShapeOf()`: a conversion whose Skill
+ * at `c` is already Ideal, continued to `s* > c`) and, since A-2, G2 (`ownedGogmaContinuationShapeOf()`: an owned Gogma whose
+ * current Skills and / or `gogma_artian` Bonuses are already Ideal, still operated on that lane - S2 / B1 / B2). An option is
+ * at most one of them, so the order decides nothing; `searchPolicyShapeOf()` (the `d0a-v1` classification) asks the same two.
  */
-export const CONTINUATION_SHAPE_DETECTORS: readonly ContinuationShapeDetector[] = Object.freeze([searchPolicyShapeOf])
+export const CONTINUATION_SHAPE_DETECTORS: readonly ContinuationShapeDetector[] = Object.freeze([conversionSkillContinuationShapeOf, ownedGogmaContinuationShapeOf])
 
 /** Design 11 `continuationShapeOf()`: the first detector's continuation shape, or null. Decided from the ReachTable alone. */
 export function continuationShapeOf(option: ReachOption, table: ReachTable): ContinuationShape | null {
@@ -241,7 +244,7 @@ export function continuationShapeOf(option: ReachOption, table: ReachTable): Con
  * Design 11: the deterministic method order of one Target under the rule `d0a2-v2`, from the ReachTable, the shape and its
  * own positions only (never a delivery order, a timing or an earlier result):
  *
- *   continuation shape (G1; G2 after A-2)  -> shape_constrained
+ *   continuation shape (G1; G2 under a2)    -> shape_constrained
  *   continuous (one run per stream)        -> candidate_search_projected, then shape_constrained once when it does not match
  *   non-continuous (crosses held positions) -> shape_constrained
  *

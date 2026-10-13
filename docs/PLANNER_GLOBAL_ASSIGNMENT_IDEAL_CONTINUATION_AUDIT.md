@@ -22,7 +22,7 @@ Production（Search / Planner / RNG / Worker / UI / Persistence / schema / versi
 設計の §5（Phase A）、§6（Phase B）、§8（Phase C、特に §8.6 の被覆補題）、§9（Phase D、特に §9.0 / §9.6 / §9.9）、§10.3（window移行）、
 §14（Phase分割）と、[Phase 2-C2.7-A](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27A.md) のguardrail G1〜G12に従う。
 
-表記: 本書の節は §1〜§13 である（§13はD-0A-2設計後の追記）。設計書の節は原則「設計 §n」と書く。§9.1〜§9.3は本書にも設計書にもあるので、接頭辞の無い §9.1〜§9.3は
+表記: 本書の節は §1〜§14 である（§13はD-0A-2設計後、§14はA-2実装後の追記）。設計書の節は原則「設計 §n」と書く。§9.1〜§9.3は本書にも設計書にもあるので、接頭辞の無い §9.1〜§9.3は
 本書の節を指す。本書に存在しない番号（§8.3 / §8.6 / §9.4 / §9.6 / §10.3 など）を「§n」とだけ書いた箇所は設計書の節を指す。
 
 本書の対象Exportでの発生頻度（43 planning Targetの実Exportで当該ケースが現れるか）は調べていない。発生頻度と設計上の対応要否は切り離し、
@@ -795,3 +795,30 @@ Research設計文書（正式仕様ではない）の変更候補:
 - **G1 / G2**: 新方式（`shape_constrained`）だけで扱い、lane開始Idealでも形が要求するlaneを開く。A-2の継続optionを扱える設計にした。G4-iiiのoption生成はA-2で決める
 - **継続Routeの正当性**: §7.2.1の検証手順を、新方式の採用条件（独立検証器）として具体化した（D-0A-2設計 §9.3）
 - **materialization順序**: Phase Cの順序を維持する（D-0A-2設計 §8）
+
+## 14. A-2での扱い（追記）
+
+A-2（基準main `d7f6f9a`、PR #249 merged）が §8.2の「A-2のoption規則」と「G4の扱い」のうちA-2の範囲を決めた。要約と検証結果は
+[設計](PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md) §19.8、G2のmaterializationは [D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §20 にある。
+本書の §1〜§13の記述（G1〜G4の定義、定理T、案A / 案Cの評価）は変えていない。§3.1の表はoption集合 `a1`（A-2以前）の規則として読む。
+
+- **G2をPhase Aへ追加した（option集合 `a2`）。** 未保護の所持巨戟の現在Ideal laneに、`none` の後へ継続option（S2: `reset_skills` s*、B1 / B2: `reset` /
+  `keep_from_source` / `reset_then_keep`）を同じsourceで列挙する（§6.1の「`none` と追加optionの共存」）。ReachTableの追加情報・追加予測は要らなかった（§3.4のとおり。
+  a1 / a2で走査結果が同一であることをtestで固定）。旧集合は `a1` として明示的に残し、A-2以前の記録・RESULT・B-2A formal protocol・`d0a-v1` goldenはa1のまま
+- **G4-iii: 生成しない（除外を採用）。** §3.6の前提P1〜P3とG4-iiiの非実行を、Production scheduler（決定的scheduler）を1 stepずつ実行する小規模fixtureの
+  test（`src/benchmarks/globalAssignment/plannerStartIdealTransition.test.ts`）で確認した: G4-iii（Bonus継続・Skill継続・両方）のEntryは全stepで `not_needed`、
+  当該sourceは一度も操作されず、in-flightにならず、性能も不変で、Production Plan（`createProductionPlanWithObserver()`）にも当該Entry・sourceのStepが無い。
+  したがって両軸Ideal sourceの継続optionは `none / none` だけを残す。両軸Idealであることと保護状態は別の条件として判定する（保護は常に操作なし。
+  `status` は読まない）。片軸だけIdealのsourceの継続（S2だけ、またはB1 / B2だけ）は生成する（そのsourceはtのIdeal武器ではない。§3.6の区別のとおり）
+- **G4-i / G4-ii: 静的な除外規則にしない。** 同じtestで、G4-i（操作されないIdeal武器が残る。ゼロ操作Routeの参照だけの場合を含む）ではEntryが実行されないこと、
+  G4-ii（他TargetのRouteがIdeal武器を操作する）では最初の操作でin-flightになり `hasIdeal` がfalseへ戻って次のstepでcommit・実行されること、holding位置を
+  通過済みならcommitされないこと、他のIdeal武器がin-flightでなければ充足を保つことを固定した。いずれも実行順に依存するので、判定はPhase D'に残す
+  （D-0Bの診断の意味は変えない）
+- **値順序（§6.2）。** 継続 / 非継続を区別する成分をkeyに足さず、所持巨戟のSkill要件列を `none` → `reset_skills`（s*昇順）のindex列、Bonusの `none` を独立した
+  長さ1のstreamとした。`none` はkeyの最小側にあるので、継続optionは支配する側（§5.2のL1、S1の (c, c)）より後に配送される。latticeの各option 1回・単調な配送、
+  支配順、`countUpTo(k)` を独立参照との総当たりで確認した
+- **定理T（§5.4）。** 独立に実装した参照（option列挙、C1 / C2 brute force、位置ごとの被覆predicate、手続きP）との総当たりで、構造的最適objectiveの一致、
+  継続optionを含む全被覆可能完全割当（300 seedで8,171件）の手続きPによる弱支配（うち1,169件はSkill被覆の修復を要した）、全prefix（8,158件）での `LB(partial)` の
+  admissibilityとa1 / a2での値の一致、root下界の一致を確認した。一般の証明ではなく、小さな窓の合成fixtureで反例が無いことの確認である
+- **C-1 `validateOption()`（§6.3）。** 「現在Idealなら `none` または継続option、非Idealなら `none` 不可」へ改めた（両軸Ideal・保護は `none` だけ）。laneの許可要件は
+  Phase Aと同じ規則関数から読み、位置・Keep support・`streamEnd` などの検査は従来どおり独立に行う

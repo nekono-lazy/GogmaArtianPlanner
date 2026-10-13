@@ -65,9 +65,9 @@ describe('Phase B-1 indexed requirement sequences', () => {
     expect([...enumerateResetThenKeepRequirements(target)].map(requirement => `${requirement.resetPosition}:${requirement.finalPosition}`)).toEqual(['11:13', '12:13', '11:15', '14:15'])
     expect(Array.from({ length: resetThenKeep.length }, (_, index) => resetThenKeep.at(index))).toEqual([...enumerateResetThenKeepRequirements(target)])
     for (const source of [...target.sources, gogmaSource('ideal', { currentBonusIdeal: true }), gogmaSource('nokeep', { layout: 'I', keepSupported: false })]) {
-      const streams = indexedBonusStreams(target, source, resetThenKeep)
+      const streams = indexedBonusStreams(target, source, table, resetThenKeep)
       const concatenated = streams.flatMap(stream => Array.from({ length: stream.length }, (_, index) => stream.at(index)))
-      expect(concatenated, source.kind).toEqual([...enumerateBonusRequirements(target, source)])
+      expect(concatenated, source.kind).toEqual([...enumerateBonusRequirements(target, source, table)])
       for (const stream of streams) {
         const finals = Array.from({ length: stream.length }, (_, index) => stream.at(index)).map(requirement => requirement.kind === 'none' ? -1 : requirement.finalPosition)
         expect(finals, 'ascending final positions').toEqual([...finals].sort((left, right) => left - right))

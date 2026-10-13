@@ -19,7 +19,7 @@ import {
   createGlobalAssignmentFixture, createTableEngine, FIXTURE_NORMAL_COUNTER_ID, IDEAL_BONUSES, IDEAL_FAMILIES_REORDERED_NORMAL, keepToIdealRanks, keepToLowRanks,
   OTHER_FAMILIES, ownedGogma, ownedNormal,
 } from './testFixture'
-import { GlobalAssignmentInvariantError, type BonusRequirement, type ReachOption, type ReachTable, type SkillRequirement, type SourceCandidate } from './types'
+import { GlobalAssignmentInvariantError, REACH_OPTION_SET_A1, type BonusRequirement, type ReachOption, type ReachTable, type SkillRequirement, type SourceCandidate } from './types'
 
 /*
  * Issue #154 Global Assignment Phase C-1 (design 4.4 / 8.2 / 8.3 / 13.1 Phase C): structural candidates
@@ -63,7 +63,7 @@ async function scenario(spec: ScenarioSpec) {
   const input: PlannerInput = { ...fixture.input, ownedWeapons: owned }
   const created = createGlobalAssignmentContext(input, globalResearchDependencies(table.engine))
   if (created.kind !== 'context') throw new Error(created.detail)
-  const reach = await buildReachTable(created.context, table.engine, WINDOW)
+  const reach = await buildReachTable(created.context, table.engine, WINDOW, REACH_OPTION_SET_A1)
   if (reach.kind !== 'reach_table') throw new Error(JSON.stringify(reach))
   const context = created.context
   const ids = { a: fixture.targets.a.id, b: fixture.targets.b.id, c: fixture.targets.c!.id }

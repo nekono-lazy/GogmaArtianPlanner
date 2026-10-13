@@ -143,7 +143,29 @@ export interface ReachScanSummary {
   unsupported: { targetWeaponId: TargetWeaponId; prediction: 'skill' | 'gogma_reset' | 'gogma_keep' | 'normal_artian'; reason: string; layout?: LayoutKey }[]
 }
 
+/**
+ * The option set a ReachTable's options follow (design 5.2 / 19, Issue #154 A-2). Every Phase reads the option rule of a table
+ * through this value, so Phase A, B and C never judge one option by two different rules, and a result produced with one option
+ * set is never read as another.
+ *
+ * - `a1`: the option set of Phase A through D-0A-2b (every record and RESULT before A-2, the B-2A formal protocol, D-0B, the
+ *   `d0a-v1` golden). An owned Gogma's current-Ideal lane has the requirement `none` only.
+ * - `a2`: A-2. An owned Gogma's current-Ideal lane also lists the continuations (G2: `reset_skills` on a current-Ideal Skill,
+ *   `reset` / `keep_from_source` / `reset_then_keep` on a current-Ideal `gogma_artian` Bonus) after `none`, except on a source that
+ *   is Ideal on both axes for the Target (G4-iii, audit 3.6: the Production Planner never commits that Target's own Entry) and
+ *   on a protected source (REQUIREMENTS 21).
+ */
+export const REACH_OPTION_SET_A1 = 'global-assignment-reach-options:a1' as const
+export const REACH_OPTION_SET_A2 = 'global-assignment-reach-options:a2' as const
+export type ReachOptionSetVersion = typeof REACH_OPTION_SET_A1 | typeof REACH_OPTION_SET_A2
+
+export function isReachOptionSetVersion(value: unknown): value is ReachOptionSetVersion {
+  return value === REACH_OPTION_SET_A1 || value === REACH_OPTION_SET_A2
+}
+
 export interface ReachTable {
+  /** The option set every Phase derives and validates this table's options with (`ReachOptionSetVersion`). */
+  optionSet: ReachOptionSetVersion
   originSkill: number
   originGogma: number
   originNormal: Record<NormalArtianCounterId, number>

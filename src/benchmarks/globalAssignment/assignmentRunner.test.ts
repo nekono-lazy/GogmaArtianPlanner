@@ -11,7 +11,7 @@ import {
   createGlobalAssignmentFixture, createTableEngine, IDEAL_BONUSES, IDEAL_FAMILIES_REORDERED_NORMAL, keepToIdealRanks, keepToLowRanks, OTHER_FAMILIES,
   type GlobalAssignmentFixtureOptions, type TableEngineSpec,
 } from './testFixture'
-import type { ReachWindow } from './types'
+import { REACH_OPTION_SET_A1, type ReachWindow } from './types'
 
 /*
  * Issue #154 Global Assignment Phase B-2A (design 12 / 14 Phase B-2): the assignment-only runner as one pure
@@ -113,7 +113,7 @@ describe('Phase B-2A assignment-only runner', () => {
     const { input, dependencies, table } = await prepared()
     const context = createGlobalAssignmentContext(input, dependencies)
     if (context.kind !== 'context') throw new Error(context.reason)
-    const built = await buildReachTable(context.context, table.engine, WINDOW)
+    const built = await buildReachTable(context.context, table.engine, WINDOW, REACH_OPTION_SET_A1)
     if (built.kind !== 'reach_table') throw new Error(built.kind)
     for (const candidateLimit of [1, 2, 100]) {
       const reference = collectResourceAssignments(built.table, context.context.planningTargets, { nodeBudget: 10_000, mrvLookahead: 8 }, candidateLimit)

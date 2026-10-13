@@ -160,14 +160,15 @@ export type ShapeMatchResult =
 
 /**
  * Design 19.3 G1 (Phase D-0B): an expected shape the Production Search policy never returns, decided from the
- * ReachTable alone before any Search (`searchPolicyShapeOf()`). The one kind the current Phase A option set can
- * hold is the lane-start Ideal Skill continuation: a `conversion (c, s*)` with `c < s*` whose conversion Skill at
- * `c` is already Ideal for the Target. The Search attaches no Reset Skills channel to a Route base whose lane-start
+ * ReachTable alone before any Search (`searchPolicyShapeOf()`). This kind - the one the a1 option set can hold - is
+ * the lane-start Ideal Skill continuation of a conversion: a `conversion (c, s*)` with `c < s*` whose conversion Skill
+ * at `c` is already Ideal for the Target. The Search attaches no Reset Skills channel to a Route base whose lane-start
  * Skill is Ideal (SEARCH_SPEC 5.6.1 / 5.6.8, `TargetSearchScheduler.addBase()`), so neither design 9.1 nor 9.2 can
  * deliver it. The Route is legal in the game and representable in the Domain: this is a Search policy, never a
- * mismatch, an extent or delivery stop, a gate, a missing window or "no Route".
+ * mismatch, an extent or delivery stop, a gate, a missing window or "no Route". Its fields and serialization are the
+ * D-0B ones.
  */
-export interface SearchPolicyShape {
+export interface ConversionSkillContinuationShape {
   policy: 'lane_start_ideal_skill_continuation'
   stream: 'skill'
   /** `c`: the conversion position, whose conversion Skill is already Ideal. */
@@ -175,6 +176,35 @@ export interface SearchPolicyShape {
   /** `s*`: the last Reset Skills position of the shape (`c < s*`). */
   finalPosition: number
 }
+
+/** A-2 G2 B1 / B2: the amendment an owned Gogma's current-Ideal `gogma_artian` Bonus lane continues with. */
+export interface OwnedGogmaBonusContinuation {
+  requirement: 'reset' | 'keep_from_source' | 'reset_then_keep'
+  /** `g1` of a `reset_then_keep`, otherwise null. */
+  resetPosition: number | null
+  /** `g*`: the last Bonus operation. */
+  finalPosition: number
+}
+
+/**
+ * A-2 G2 (audit 3.3 / 4): an owned Gogma whose current state - the lane start of its Route base - is already Ideal on a
+ * lane, and whose option still operates that lane: S2 (`reset_skills` on current Ideal Skills) and / or B1 / B2 (an
+ * amendment on current Ideal `gogma_artian` bonuses). Only the a2 option set lists it. The Production Search opens no
+ * channel on an Ideal lane start (`addBase()`), so it is a Search-policy shape exactly like G1; each continued lane is
+ * recorded on its own (the other one is null), and under a2 at most one of them is set (a source Ideal on both axes keeps
+ * `none / none`, G4-iii).
+ */
+export interface OwnedGogmaContinuationShape {
+  policy: 'lane_start_ideal_owned_gogma_continuation'
+  ownedWeaponId: OwnedWeaponId
+  /** S2: the last Reset Skills position when the current Skills are Ideal and the option resets them, otherwise null. */
+  skill: { finalPosition: number } | null
+  /** B1 / B2: the amendment when the current Bonuses are Ideal and the option amends them, otherwise null. */
+  bonus: OwnedGogmaBonusContinuation | null
+}
+
+/** Every Search-policy shape (G1, and G2 under a2): `not_executed(search_policy_shape)` under `d0a-v1`, a continuation shape under `d0a2-v2`. */
+export type SearchPolicyShape = ConversionSkillContinuationShape | OwnedGogmaContinuationShape
 
 /**
  * Design 4.5 / 9.6. Only `shape_mismatch` is "a Search ran to its explicit end without the shape"; every

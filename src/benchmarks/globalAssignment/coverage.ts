@@ -50,7 +50,7 @@ import type {
   CoverageInputIssue, CoverageRequiredPosition, CoverageSegment, CoverageStream, MaterializationDependency, MaterializationPlan,
   StreamCoverage, StreamCoverageResult, UncoveredGap,
 } from './coverageTypes'
-import { bonusRequirementIsNone, sourceResourceKey } from './reachOptions'
+import { laneAdmitsNone, laneAdmitsOperations, sourceLaneAdmission, sourceResourceKey, type LaneAdmission } from './reachOptions'
 import { GlobalAssignmentInvariantError, type ReachOption, type ReachTable, type SourceCandidate, type StreamEnd, type TargetReach } from './types'
 
 class CoverageInputError extends Error {
@@ -102,7 +102,19 @@ function requireRange(value: number, from: number, to: number, what: string): vo
   if (value < from || value > to) reject('invalid_option', `${what} ${value} lies outside ${from}..${to}.`)
 }
 
-/** Checks one option against its Target's ReachTable row (design 5.2 / 5.5) without any prediction. */
+/** How a lane's admission names its requirement kinds in a rejection message. */
+function admissionText(admission: LaneAdmission, operation: string): string {
+  return admission === 'none_only' ? 'none' : admission === 'operations_only' ? operation : `none or ${operation}`
+}
+
+/**
+ * Checks one option against its Target's ReachTable row (design 5.2 / 5.5) without any prediction. Which requirement kinds a
+ * lane admits is the table option set's rule (`sourceLaneAdmission()`, the one rule Phase A enumerates and Phase B orders by);
+ * everything else is checked here on its own, never by asking the Phase A generator whether it lists the option: the source is
+ * a row source (every field), protection, each required position inside the scanned window (a conversion before its final
+ * Skill, a `reset_then_keep` Reset before its Keep), Keep support, the Normal production target, and `streamEnd` re-derived.
+ * Whether a position is Ideal is the required-only replay's question (design 5.3), which Phase C asks before any shape exists.
+ */
 function validateOption(option: ReachOption, row: TargetReach, table: ReachTable): void {
   const id = row.targetWeaponId
   const signature = sourceSignature(option.source)
@@ -111,10 +123,13 @@ function validateOption(option: ReachOption, row: TargetReach, table: ReachTable
   if (source.kind === 'owned_gogma' && source.isProtected && (skillRequired.kind !== 'none' || bonusRequired.kind !== 'none')) {
     reject('invalid_option', `Target ${id}: the protected Gogma ${source.ownedWeaponId} accepts no Skill or Bonus operation (REQUIREMENTS 21).`)
   }
-  // Skill requirement kind and window (design 5.2; the row's limits are the scanned window).
+  const admission = sourceLaneAdmission(source, table.optionSet)
+  // Skill requirement kind and window (design 5.2 / A-2; the row's limits are the scanned window).
   if (source.kind === 'owned_gogma') {
-    const expected = source.currentSkillIdeal ? 'none' : 'reset_skills'
-    if (skillRequired.kind !== expected) reject('invalid_option', `Target ${id}: an owned Gogma ${source.currentSkillIdeal ? 'with' : 'without'} Ideal Skills needs Skill requirement ${expected} (got ${skillRequired.kind}).`)
+    const allowed = (skillRequired.kind === 'none' && laneAdmitsNone(admission.skill)) || (skillRequired.kind === 'reset_skills' && laneAdmitsOperations(admission.skill))
+    if (!allowed) {
+      reject('invalid_option', `Target ${id}: an owned Gogma ${source.currentSkillIdeal ? 'with' : 'without'} Ideal Skills needs Skill requirement ${admissionText(admission.skill, 'reset_skills')} under ${table.optionSet} (got ${skillRequired.kind}).`)
+    }
     if (skillRequired.kind === 'reset_skills') requireRange(skillRequired.finalPosition, table.originSkill, row.skill.resetSkillsLimit, `Target ${id}: Reset Skills position`)
   } else {
     if (skillRequired.kind !== 'conversion') reject('invalid_option', `Target ${id}: a Normal source needs a conversion (got ${skillRequired.kind}).`)
@@ -122,10 +137,10 @@ function validateOption(option: ReachOption, row: TargetReach, table: ReachTable
     requireRange(skillRequired.conversionPosition, table.originSkill, skillRequired.finalPosition, `Target ${id}: conversion position`)
   }
   // Bonus requirement kind and window.
-  if (bonusRequirementIsNone(source)) {
-    if (bonusRequired.kind !== 'none') reject('invalid_option', `Target ${id}: an owned Gogma already Ideal needs Bonus requirement none (got ${bonusRequired.kind}).`)
+  if (bonusRequired.kind === 'none') {
+    if (!laneAdmitsNone(admission.bonus)) reject('invalid_option', `Target ${id}: Bonus requirement none needs an owned Gogma already Ideal in gogma_artian scope.`)
   } else {
-    if (bonusRequired.kind === 'none') reject('invalid_option', `Target ${id}: Bonus requirement none needs an owned Gogma already Ideal in gogma_artian scope.`)
+    if (!laneAdmitsOperations(admission.bonus)) reject('invalid_option', `Target ${id}: an owned Gogma already Ideal needs Bonus requirement ${admissionText(admission.bonus, 'an amendment')} under ${table.optionSet} (got ${bonusRequired.kind}).`)
     requireRange(bonusRequired.finalPosition, table.scanned.gogma.from, table.scanned.gogma.to, `Target ${id}: final Gogma position`)
     if (bonusRequired.kind === 'keep_from_source' && !source.keepSupported) reject('invalid_option', `Target ${id}: keep_from_source needs a Keep-supported source layout.`)
     if (bonusRequired.kind === 'reset_then_keep') {

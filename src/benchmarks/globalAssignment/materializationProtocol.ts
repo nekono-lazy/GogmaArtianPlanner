@@ -18,6 +18,11 @@
  * a type of their own with no default gate or budget, its runs write their own protocol version, and its candidate classes
  * (`unconfirmed_shape_search_budget`, `unsupported_shape_prediction`) have their own design 10.3 roles. The `d0a-v1`
  * conditions, smoke defaults, registration items and classes are unchanged, and a formal run is still refused.
+ *
+ * Phase A-2 adds the option set (`ReachOptionSetVersion`) as the optional condition `reachOptionSet` of either rule. Every
+ * D-0B and D-0A-2b record was produced with the a1 option set and carries no such field, so a condition without it means a1
+ * (`conditionReachOptionSet()`) and its record stays byte for byte what it was; a run of another option set names it, and its
+ * record carries it. The protocol versions are unchanged: the option set is a recorded condition, never inferred.
  */
 import { validateWindowLadder } from './assignmentProtocol'
 import { isValidSearchScaleGate } from './materializationScale'
@@ -25,7 +30,10 @@ import type { MaterializationStageOutcome, SearchScaleGate } from './materializa
 import { reachWindowW0 } from './reachTable'
 import { isValidShapeSearchBudget, isValidShapeSearchScaleGate } from './shapeMaterializationScale'
 import type { ShapeSearchBudget, ShapeSearchScaleGate } from './shapeMaterializationTypes'
-import type { ReachWindow } from './types'
+import { isReachOptionSetVersion, REACH_OPTION_SET_A1, REACH_OPTION_SET_A2, type ReachOptionSetVersion, type ReachWindow } from './types'
+
+/** A-2: the runner's `--option-set` values and the option set each names. */
+export const MATERIALIZATION_REACH_OPTION_SETS: Readonly<Record<'a1' | 'a2', ReachOptionSetVersion>> = Object.freeze({ a1: REACH_OPTION_SET_A1, a2: REACH_OPTION_SET_A2 })
 
 export const MATERIALIZATION_D0B_PROTOCOL_VERSION = 'global-assignment-d0b:1'
 /**
@@ -65,6 +73,8 @@ export interface MaterializationResearchConditions {
   searchScaleGate: SearchScaleGate
   /** Design 19.3 G1: Search-policy shapes are classified before any Search. Always true in D-0B. */
   searchPolicyPrecheck: true
+  /** A-2: the option set of the ReachTable; absent means a1 (every D-0B record). Under a2 a G2 shape is a Search-policy shape too. */
+  reachOptionSet?: ReachOptionSetVersion
 }
 
 /**
@@ -89,6 +99,19 @@ export interface ShapeMaterializationResearchConditions {
   shapeSearchBudget: ShapeSearchBudget
   /** Design D0A2 13 #7: the independent Route checks run on every shape-constrained materialization. */
   routeVerification: 'every_shape_constrained_materialization'
+  /** A-2: the option set of the ReachTable; absent means a1 (every D-0A-2b record). D-0B-2 registers the one it runs. */
+  reachOptionSet?: ReachOptionSetVersion
+}
+
+/** A-2: the option set a run of these conditions builds its ReachTable with (a1 when the condition is absent). */
+export function conditionReachOptionSet(conditions: { reachOptionSet?: ReachOptionSetVersion }): ReachOptionSetVersion {
+  return conditions.reachOptionSet ?? REACH_OPTION_SET_A1
+}
+
+function reachOptionSetIssues(conditions: Record<string, unknown>): string[] {
+  return 'reachOptionSet' in conditions && !isReachOptionSetVersion(conditions.reachOptionSet)
+    ? [`reachOptionSet must be ${REACH_OPTION_SET_A1} or ${REACH_OPTION_SET_A2}, or absent for ${REACH_OPTION_SET_A1} (got ${String(conditions.reachOptionSet)}).`]
+    : []
 }
 
 /** The conditions of either rule: `rule: 'd0a2-v2'` names the new rule, a `d0a-v1` condition carries no rule field at all. */
@@ -132,6 +155,7 @@ export function validateShapeMaterializationResearchConditions(value: unknown): 
   for (const field of ['deliveryCap', 'searchScaleGate', 'searchPolicyPrecheck'] as const) {
     if (field in conditions) issues.push(`${field} belongs to the rule d0a-v1 and is not a d0a2-v2 condition.`)
   }
+  issues.push(...reachOptionSetIssues(conditions))
   return issues
 }
 
@@ -174,6 +198,7 @@ export function validateMaterializationResearchConditions(value: unknown): strin
     issues.push(`searchScaleGate must name maxConversionPositions / maxGogmaLegalWidth / maxSkillLegalWidth / maxNormalForgeCount as non-negative integers (got ${JSON.stringify(conditions.searchScaleGate)}).`)
   }
   if (conditions.searchPolicyPrecheck !== true) issues.push(`searchPolicyPrecheck must be true in Phase D-0B (got ${String(conditions.searchPolicyPrecheck)}).`)
+  issues.push(...reachOptionSetIssues(conditions))
   return issues
 }
 

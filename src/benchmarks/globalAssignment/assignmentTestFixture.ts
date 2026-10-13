@@ -8,7 +8,7 @@
 import type { ElementId, TargetWeaponId, WeaponTypeId } from '../../domain/models/publicTypes'
 import type { PlanningTargetPriority } from './assignmentTypes'
 import { enumerateReachOptions, reachOptionKey } from './reachOptions'
-import type { ReachOption, ReachTable, ReachWindow, SourceCandidate, TargetReach } from './types'
+import { REACH_OPTION_SET_A1, type ReachOption, type ReachOptionSetVersion, type ReachTable, type ReachWindow, type SourceCandidate, type TargetReach } from './types'
 
 export const COUNTER_A = 'weapon.fixture.a:8'
 export const COUNTER_B = 'weapon.fixture.b:8'
@@ -98,6 +98,8 @@ export interface HandBuiltTargetSpec {
 }
 
 export interface HandBuiltTableSpec {
+  /** The table's option set (A-2); a1 by default, so a hand-built table means what it meant before A-2. */
+  optionSet?: ReachOptionSetVersion
   originSkill?: number
   originGogma?: number
   originNormal?: Record<string, number>
@@ -124,6 +126,7 @@ export function handBuiltReachTable(spec: HandBuiltTableSpec): { table: ReachTab
     excludedOwnedWeapons: [],
   }))
   const table: ReachTable = {
+    optionSet: spec.optionSet ?? REACH_OPTION_SET_A1,
     originSkill, originGogma, originNormal, window,
     scanned: {
       skill: { from: originSkill, to: originSkill + window.skill },

@@ -8,51 +8,108 @@
  * time (`countUpTo(k)` for MRV, value ordering, resume), and the order is a pure function of the table.
  *
  * Order (design 5.4): sources as listed (owned by OwnedWeapon ID, then `new_normal` by position);
- * per source, Skill requirements outer, Bonus requirements inner.
+ * per source, Skill requirements outer, Bonus requirements inner. Which requirements one lane of a
+ * source admits is `sourceLaneAdmission()` under the table's option set (`ReachTable.optionSet`):
  *   Skill, owned Gogma:  `none` when the current Skills are Ideal, else `reset_skills` by `s*` asc
- *                         (`s* <= resetSkillsLimit`).
+ *                         (`s* <= resetSkillsLimit`); a2 continuation: `none`, then `reset_skills` by `s*` asc.
  *   Skill, Normal:       `conversion (c, s*)` by `s*` asc (`s* <= conversionLimit`); for one `s*` first
  *                         `c = s*`, then `c = s* - 1, ..., originSkill` (the closest conversion first).
- *   Bonus, owned Gogma already Ideal in `gogma_artian` scope: `none`.
+ *   Bonus, owned Gogma already Ideal in `gogma_artian` scope: `none`; a2 continuation: `none`, then the
+ *                         operations below.
  *   Bonus, otherwise:    `reset` by `g*` asc, then `keep_from_source` by `g*` asc (only when the
  *                         source's layout is Keep-supported), then `reset_then_keep` by `(g*, g1)` asc
  *                         with `g1 < g*` and `layout(Reset(g1))` Keep-Ideal at `g*`.
  * Chains between required positions (Reset -> Reset, Keep -> Keep, Reset Skills -> Reset Skills) are
  * skippable units and are not part of an option (design 5.2); Counter coverage decides them later.
+ * The a2 continuations add no position, layout or prediction: they reuse the Target's Ideal Skill / Reset
+ * positions, the source's Keep-Ideal positions and the compact `reset_then_keep` index (audit 3.4).
  *
- * Phase B-1 (design 6.3 / 6.4) reads the same rules through the per-source and per-requirement entry
- * points below (`skillRequirementBlocks()`, `enumerateSkillRequirements()`, `enumerateBonusRequirements()`,
- * `enumerateReachOptionsOfSource()`, `createReachOption()`), so its lazily ordered enumeration and its
- * lower bound never re-implement an option rule: the full enumeration is exactly the concatenation of
- * the per-source enumerations, and every path builds options through the one factory.
+ * Phase B-1 (design 6.3 / 6.4) and Phase C-1 read the same rules through the per-source and per-requirement
+ * entry points below (`sourceLaneAdmission()`, `skillRequirementBlocks()`, `enumerateSkillRequirements()`,
+ * `enumerateBonusRequirements()`, `enumerateReachOptionsOfSource()`, `createReachOption()`), so its lazily
+ * ordered enumeration, its lower bound and the coverage validation never re-implement an option rule: the
+ * full enumeration is exactly the concatenation of the per-source enumerations, and every path builds
+ * options through the one factory.
  */
-import type { BonusRequirement, LayoutKey, ReachOption, ReachTable, SkillRequirement, SourceCandidate, StreamEnd, TargetReach } from './types'
+import {
+  REACH_OPTION_SET_A1, type BonusRequirement, type LayoutKey, type ReachOption, type ReachOptionSetVersion, type ReachTable, type SkillRequirement,
+  type SourceCandidate, type StreamEnd, type TargetReach,
+} from './types'
+
+/**
+ * Which requirements one lane (Skill or Bonus) of a source admits, in enumeration order:
+ *   `none_only`             `none` alone (no operation on the lane)
+ *   `operations_only`       the lane's operations; `none` is not a requirement of it
+ *   `none_then_operations`  `none`, then the lane's operations (an a2 continuation of a current-Ideal lane)
+ */
+export type LaneAdmission = 'none_only' | 'operations_only' | 'none_then_operations'
+
+export interface SourceLaneAdmission {
+  skill: LaneAdmission
+  bonus: LaneAdmission
+}
+
+/**
+ * The one option rule of a source's two lanes (design 5.2, A-2). Every Phase reads it - the Phase A enumeration, the Phase B
+ * value-order lattice and lower bound, and the Phase C-1 option validation - so no two of them can judge one option by
+ * different rules.
+ *
+ * - A Normal source always converts (Skill) and always amends its `normal_artian` slots (Bonus): `operations_only` on both.
+ * - A protected Gogma accepts no Skill or Bonus operation (REQUIREMENTS 21): `none_only` on both, whatever the option set. A
+ *   protected Gogma is a source only while both of its axes are Ideal (`classifyOwnedSource()`); protection is checked here on
+ *   its own, never inferred from Ideal-ness or `status`.
+ * - `a1`: a current-Ideal lane is `none_only`, a non-Ideal lane `operations_only`.
+ * - `a2`: a current-Ideal lane is `none_then_operations` (G2: the game allows Reset Skills / Reset / Keep after an Ideal, audit
+ *   1.1), a non-Ideal lane `operations_only` - except on a source Ideal on both axes for the Target, which keeps `none_only` on
+ *   both (G4-iii, audit 3.6: the Target is satisfied by that weapon at Planner start and, with that Entry the only Route on it,
+ *   the Production Planner never commits it; fixed by `plannerStartIdealTransition.test.ts`).
+ */
+export function sourceLaneAdmission(source: SourceCandidate, optionSet: ReachOptionSetVersion): SourceLaneAdmission {
+  if (source.kind !== 'owned_gogma') return { skill: 'operations_only', bonus: 'operations_only' }
+  if (source.isProtected) return { skill: 'none_only', bonus: 'none_only' }
+  const continues = optionSet !== REACH_OPTION_SET_A1 && !(source.currentSkillIdeal && source.currentBonusIdeal)
+  const idealLane: LaneAdmission = continues ? 'none_then_operations' : 'none_only'
+  return { skill: source.currentSkillIdeal ? idealLane : 'operations_only', bonus: source.currentBonusIdeal ? idealLane : 'operations_only' }
+}
+
+/** Whether `none` is one of the lane's requirements. */
+export function laneAdmitsNone(admission: LaneAdmission): boolean {
+  return admission !== 'operations_only'
+}
+
+/** Whether an operation is one of the lane's requirements. */
+export function laneAdmitsOperations(admission: LaneAdmission): boolean {
+  return admission !== 'none_only'
+}
 
 /**
  * The structure behind one source's Skill requirements (design 5.2), in enumeration order. `none` is one
- * requirement; `reset_skills` is one per listed final position; `conversion` is, per listed final `s*`,
- * the block `c = s*, s* - 1, ..., originSkill` (`s* - originSkill + 1` requirements).
+ * requirement; `reset_skills` is one per listed final position, after one leading `none` when the lane is an
+ * a2 continuation (`leadingNone`, `sourceLaneAdmission()`); `conversion` is, per listed final `s*`, the block
+ * `c = s*, s* - 1, ..., originSkill` (`s* - originSkill + 1` requirements).
  */
 export type SkillRequirementBlocks =
   | { kind: 'none' }
-  | { kind: 'reset_skills'; finalPositions: number[] }
+  | { kind: 'reset_skills'; leadingNone: boolean; finalPositions: number[] }
   | { kind: 'conversion'; finalPositions: number[]; originSkill: number }
 
-export function skillRequirementBlocks(target: TargetReach, source: SourceCandidate, originSkill: number): SkillRequirementBlocks {
+export function skillRequirementBlocks(target: TargetReach, source: SourceCandidate, table: Pick<ReachTable, 'originSkill' | 'optionSet'>): SkillRequirementBlocks {
   if (source.kind === 'owned_gogma') {
-    if (source.currentSkillIdeal) return { kind: 'none' }
-    return { kind: 'reset_skills', finalPositions: target.skill.idealPositions.filter(position => position <= target.skill.resetSkillsLimit) }
+    const admission = sourceLaneAdmission(source, table.optionSet).skill
+    if (admission === 'none_only') return { kind: 'none' }
+    return { kind: 'reset_skills', leadingNone: laneAdmitsNone(admission), finalPositions: target.skill.idealPositions.filter(position => position <= target.skill.resetSkillsLimit) }
   }
-  return { kind: 'conversion', finalPositions: target.skill.idealPositions.filter(position => position <= target.skill.conversionLimit), originSkill }
+  return { kind: 'conversion', finalPositions: target.skill.idealPositions.filter(position => position <= target.skill.conversionLimit), originSkill: table.originSkill }
 }
 
-function* skillRequirements(target: TargetReach, source: SourceCandidate, originSkill: number): Generator<SkillRequirement, void, undefined> {
-  const blocks = skillRequirementBlocks(target, source, originSkill)
+function* skillRequirements(target: TargetReach, source: SourceCandidate, table: ReachTable): Generator<SkillRequirement, void, undefined> {
+  const blocks = skillRequirementBlocks(target, source, table)
   switch (blocks.kind) {
     case 'none':
       yield { kind: 'none' }
       return
     case 'reset_skills':
+      if (blocks.leadingNone) yield { kind: 'none' }
       for (const finalPosition of blocks.finalPositions) yield { kind: 'reset_skills', finalPosition }
       return
     case 'conversion':
@@ -67,7 +124,7 @@ function* skillRequirements(target: TargetReach, source: SourceCandidate, origin
 
 /** The Skill requirements of one source in enumeration order (the outer loop of `enumerateReachOptionsOfSource()`). */
 export function enumerateSkillRequirements(target: TargetReach, source: SourceCandidate, table: ReachTable): Generator<SkillRequirement, void, undefined> {
-  return skillRequirements(target, source, table.originSkill)
+  return skillRequirements(target, source, table)
 }
 
 /**
@@ -90,7 +147,7 @@ export function resetThenKeepPlan(target: TargetReach): { finalPositions: number
   return { finalPositions: [...finalPositions].sort((left, right) => left - right), resetPositionsByLayout }
 }
 
-/** The `reset_then_keep` requirements of a Target by `(g*, g1)` ascending; the same for every source whose Bonus is not already Ideal. */
+/** The `reset_then_keep` requirements of a Target by `(g*, g1)` ascending; the same for every source whose Bonus lane admits operations. */
 export function* enumerateResetThenKeepRequirements(target: TargetReach): Generator<Extract<BonusRequirement, { kind: 'reset_then_keep' }>, void, undefined> {
   const plan = resetThenKeepPlan(target)
   for (const finalPosition of plan.finalPositions) {
@@ -207,21 +264,18 @@ export function keepFromSourcePositions(target: TargetReach, source: SourceCandi
   return target.bonus.keepIdealPositionsByLayout.get(source.layout) ?? []
 }
 
-/** Whether a source's only Bonus requirement is `none` (an owned Gogma already Ideal in `gogma_artian` scope). */
-export function bonusRequirementIsNone(source: SourceCandidate): boolean {
-  return source.kind === 'owned_gogma' && source.currentBonusIdeal
-}
-
-function* bonusRequirements(target: TargetReach, source: SourceCandidate): Generator<BonusRequirement, void, undefined> {
-  if (bonusRequirementIsNone(source)) { yield { kind: 'none' }; return }
+function* bonusRequirements(target: TargetReach, source: SourceCandidate, table: ReachTable): Generator<BonusRequirement, void, undefined> {
+  const admission = sourceLaneAdmission(source, table.optionSet).bonus
+  if (laneAdmitsNone(admission)) yield { kind: 'none' }
+  if (!laneAdmitsOperations(admission)) return
   for (const finalPosition of target.bonus.resetIdealPositions) yield { kind: 'reset', finalPosition }
   for (const finalPosition of keepFromSourcePositions(target, source)) yield { kind: 'keep_from_source', finalPosition }
   yield* enumerateResetThenKeepRequirements(target)
 }
 
 /** The Bonus requirements of one source in enumeration order (the inner loop of `enumerateReachOptionsOfSource()`). */
-export function enumerateBonusRequirements(target: TargetReach, source: SourceCandidate): Generator<BonusRequirement, void, undefined> {
-  return bonusRequirements(target, source)
+export function enumerateBonusRequirements(target: TargetReach, source: SourceCandidate, table: ReachTable): Generator<BonusRequirement, void, undefined> {
+  return bonusRequirements(target, source, table)
 }
 
 export function reachOptionStreamEnd(target: TargetReach, table: ReachTable, source: SourceCandidate, skill: SkillRequirement, bonus: BonusRequirement): StreamEnd {
@@ -274,8 +328,8 @@ export function reachOptionKey(option: ReachOption): string {
 
 /** Lazily yields every reach option of `target` from one of its sources, Skill requirements outer and Bonus requirements inner. */
 export function* enumerateReachOptionsOfSource(target: TargetReach, table: ReachTable, source: SourceCandidate): Generator<ReachOption, void, undefined> {
-  for (const skillRequired of skillRequirements(target, source, table.originSkill)) {
-    for (const bonusRequired of bonusRequirements(target, source)) {
+  for (const skillRequired of skillRequirements(target, source, table)) {
+    for (const bonusRequired of bonusRequirements(target, source, table)) {
       yield createReachOption(target, table, source, skillRequired, bonusRequired)
     }
   }

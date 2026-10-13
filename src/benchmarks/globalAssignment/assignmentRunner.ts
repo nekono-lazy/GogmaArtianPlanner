@@ -32,7 +32,7 @@ import { createGlobalAssignmentContext } from './context'
 import { takeReachOptions } from './reachOptions'
 import { buildReachTable } from './reachTable'
 import { replayReachOptionRequiredOnly } from './requiredOnlyReplay'
-import { GlobalAssignmentInvariantError, type GlobalAssignmentContext, type ReachTable, type ReachWindow, type TargetReach } from './types'
+import { GlobalAssignmentInvariantError, REACH_OPTION_SET_A1, type GlobalAssignmentContext, type ReachTable, type ReachWindow, type TargetReach } from './types'
 
 /** Per-Target option count saturation for the scan diagnostics (a count, never an enumeration of every option). */
 export const ASSIGNMENT_OPTION_COUNT_CAP = 1_000
@@ -385,9 +385,9 @@ export async function runAssignmentOnly(plannerInput: PlannerInput, dependencies
   }
   const context = contextResult.context
 
-  // Phase A: the ReachTable inside the rung's window.
+  // Phase A: the ReachTable inside the rung's window, with the a1 option set the B-2A protocol (and its formal RESULT) was registered with (A-2).
   const scanStarted = now()
-  const tableResult = await buildReachTable(context, dependencies.rngEngine, conditions.window, { shouldCancel: execution.shouldCancel, yieldControl: execution.yieldControl })
+  const tableResult = await buildReachTable(context, dependencies.rngEngine, conditions.window, REACH_OPTION_SET_A1, { shouldCancel: execution.shouldCancel, yieldControl: execution.yieldControl })
   elapsed.reachTable = now() - scanStarted
   if (tableResult.kind === 'unsupported_input') {
     return finish({
