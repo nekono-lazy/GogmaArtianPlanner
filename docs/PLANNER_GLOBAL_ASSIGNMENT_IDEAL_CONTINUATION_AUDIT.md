@@ -22,7 +22,7 @@ Production（Search / Planner / RNG / Worker / UI / Persistence / schema / versi
 設計の §5（Phase A）、§6（Phase B）、§8（Phase C、特に §8.6 の被覆補題）、§9（Phase D、特に §9.0 / §9.6 / §9.9）、§10.3（window移行）、
 §14（Phase分割）と、[Phase 2-C2.7-A](PLANNER_GLOBAL_OPTIMIZATION_RESEARCH_PHASE2C27A.md) のguardrail G1〜G12に従う。
 
-表記: 本書の節は §1〜§12 である。設計書の節は原則「設計 §n」と書く。§9.1〜§9.3は本書にも設計書にもあるので、接頭辞の無い §9.1〜§9.3は
+表記: 本書の節は §1〜§13 である（§13はD-0A-2設計後の追記）。設計書の節は原則「設計 §n」と書く。§9.1〜§9.3は本書にも設計書にもあるので、接頭辞の無い §9.1〜§9.3は
 本書の節を指す。本書に存在しない番号（§8.3 / §8.6 / §9.4 / §9.6 / §10.3 など）を「§n」とだけ書いた箇所は設計書の節を指す。
 
 本書の対象Exportでの発生頻度（43 planning Targetの実Exportで当該ケースが現れるか）は調べていない。発生頻度と設計上の対応要否は切り離し、
@@ -570,6 +570,9 @@ B-iで利用できるProduction authorityと、Research側に新規実装が必�
   「同値なrequired位置集合の受理」のどちらで扱うか、あるいはmaterialization順序で回避するかは未決（§8）
 - 計算量・メモリ: 形が source・巨戟化位置・最終位置を固定するので、Route baseは1つ、streamは必要depthまで、Lazy Ideal Crossの全pairを作らない。
   D2-G-Aの爆発要因（巨戟化位置数 × depth × state）を持たない見込みである（実測はD-0A-2以降）。Bonusのfrontierは既存のB2代表規則のまま
+  - **D-0A-2設計での訂正**（[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §3.6 / §4.1）: この見込みはSkill側については成り立つが、B-iが読むBonusの
+    held-aware stream（`'all'`）では、1 depthの生成state数が「位置数 × family layout数 × held窓」で増える項がRoute baseを固定しても残る（D-0Bで費用を支配した項）。
+    layoutの因子が消えるのは、Keepの入力履歴を1つに固定する操作種別policy（B-ii）の場合だけである
 - 決定性: 入力（形、reservation、origin、Engine）の純関数として設計する。Candidate / Entry identityは既存のdeterministic materializerを使う
 - Research isolation: B-iなら `src/benchmarks/globalAssignment/` に置き、Productionから到達しない（設計 §11.3のisolation test）。B-iiはProduction fileに触れる
 - D-0Aとの統合: 採用が承認された場合、設計 §9.3の方式選択に第3の方式として加える。適用対象は少なくとも継続option（Searchを呼ぶ前にReachTableで
@@ -660,8 +663,8 @@ streamのconsumer契約）の確認を前提とする。それらが成立しな
 | 事項 | 内容 | 決める場所 |
 | --- | --- | --- |
 | G1の未実行分類の名前と §10.3の扱い | 例: `not_executed(reason: 'search_policy_shape')`。§10.3では「Search policy起因の未実行」はwindow拡大の根拠にもcap / gate / envelope見直しの根拠にもせず、方式（案B）の実装状態を見る | D-0B |
-| G3の発生頻度と対応 | D-0B診断で頻度を測る。対応はB-ii / 同値なrequired位置集合の受理 / materialization順序（chain内のReset位置の所有Targetを先にmaterializeする）のいずれか | D-0B（頻度）、案Bの設計PR（方式） |
-| 案Bの実装方式 | B-i / B-iiの最終選択。B-iなら設計 §9.4の外にあるResearch専用materialization契約（§7.2.1の6項目）の定義と承認、技術的実現性（Route baseの取り出し、`RouteSearchContext` の構成、streamのconsumer契約）の確認、継続Routeの正当性検証の手順。B-iiならProduction file変更の可否とSEARCH_SPECへの記載要否。共通: 適用範囲（継続optionだけか、一般の形の補助方式にもするか）、設計 §9.3の方式選択への組込み、Search規模の予測とgate | D-0A-2設計PR（docs-only） |
+| G3の発生頻度と対応 | D-0B診断で頻度を測る。対応はB-ii / 同値なrequired位置集合の受理 / materialization順序（chain内のReset位置の所有Targetを先にmaterializeする）のいずれか | D-0B（頻度）、案Bの設計PR（方式）。→ D-0A-2設計でB-iiのBonus操作種別policyに決定（§13） |
+| 案Bの実装方式 | B-i / B-iiの最終選択。B-iなら設計 §9.4の外にあるResearch専用materialization契約（§7.2.1の6項目）の定義と承認、技術的実現性（Route baseの取り出し、`RouteSearchContext` の構成、streamのconsumer契約）の確認、継続Routeの正当性検証の手順。B-iiならProduction file変更の可否とSEARCH_SPECへの記載要否。共通: 適用範囲（継続optionだけか、一般の形の補助方式にもするか）、設計 §9.3の方式選択への組込み、Search規模の予測とgate | D-0A-2設計PR（docs-only）。→ B-iiを主方式に選定（オーナー承認待ち。§13） |
 | A-2のoption規則 | 両軸Ideal sourceの継続optionを除外するか（§3.6のG4-iii。前提P1〜P3をtestで固定できるか、除外しない場合の候補outcomeの扱い）、値順序上の位置（継続 / 非継続の別stream化）、C-1 `validateOption()` の改訂 | A-2 |
 | G4の扱い | Planner開始時にIdeal武器を持つTargetについて、G4-i（静的に予測できる非実行）を候補生成側で扱うか、診断・候補outcomeに留めるか。G4-ii（実行順に依存）はPhase D'でだけ判定し、候補生成側で除外しない。cross satisfaction（設計 §15.1）との整合 | D-0B（頻度）、A-2または別PR |
 | 正式文書への記録 | §10の候補をどこまで正式仕様へ入れるか | オーナー判断 |
@@ -777,3 +780,18 @@ Research設計文書（正式仕様ではない）の変更候補:
 | Required fix 2 | 推奨のB-iが、Candidate / Entryを正規のProduction Search結果から作るという設計 §9.4の契約と整合するように読めた | B-iはProduction Search APIの配送Candidateを採用する方式ではなく、§9.4の現行契約の外にあることを明記し、外れる範囲を表にした（§7.2.1）。採用するにはResearch専用materialization経路の契約を §9.4とは別に定義・承認する必要があること、その契約の最低限の項目、利用できるProduction authorityとResearch側の新規責務と未確認の実現性、parity testで確認できる範囲と継続Routeを別途検証する手順（全operationの独立予測、Counter / coverage検査、Candidate validation、unit plan、Planner / Trace Replay。`validateBuildRoute()` の通過だけで同等としない）を整理した（§7.2.1 / §9.3）。B-iは第一候補に留めて採用を確定せず、B-i / B-iiの最終選択をD-0A-2設計PRへ委ねた（§7.5 / §8 / §9）。§9.4本文は変更せず、変更する場合の整理を §10に置いた |
 
 定理T、Phase B / Cの証明、G1〜G3の内容、案A / 案Cの評価は変更していない。
+
+## 13. D-0A-2設計での扱い（追記）
+
+[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md)（docs-only、基準main `502f40d`）が §8.2の「案Bの実装方式」と「G3の発生頻度と対応」を次のとおり決めた。
+本書の §1〜§12の記述（定理T、G1〜G4の定義、案A / 案Cの評価）は変えていない（§7.2の計算量の見込みにだけ訂正を注記した）。
+
+- **案Bの方式**: B-iiを主方式とする（Production file変更のためオーナー承認が前提）。B-iは、base取得・Skill lane・`keep_from_source` のBonus laneを公開APIで
+  構成できるが、`reset` / `reset_then_keep` のBonus laneの費用とG3を外側から抑えられないので主方式にしない（D-0A-2設計 §4）。§7.2.1で求めた
+  Research専用materialization契約は §9.4とは別に定めた（同 §5）
+- **G3**: B-iiのBonus操作種別policy（Keep-only / Reset-only / g1のResetの後だけKeep）で、§3.3の変種（上側）と、D-0A-2設計 §3.7で推定した下側の変種
+  （`reset_then_keep` で q < g1 のReset(q) がReset(g1) と同じlayoutを持ち、q 〜 g1 がheldのとき、frontier順の同点で q 側の履歴が代表になる。未固定）の
+  両方を代表化の対象外にする。同値なrequired位置集合の受理（§6.4）は採らない
+- **G1 / G2**: 新方式（`shape_constrained`）だけで扱い、lane開始Idealでも形が要求するlaneを開く。A-2の継続optionを扱える設計にした。G4-iiiのoption生成はA-2で決める
+- **継続Routeの正当性**: §7.2.1の検証手順を、新方式の採用条件（独立検証器）として具体化した（D-0A-2設計 §9.3）
+- **materialization順序**: Phase Cの順序を維持する（D-0A-2設計 §8）

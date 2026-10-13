@@ -383,3 +383,15 @@ D-0B関連testの個別実行、実Export非formal smoke（§5）。
 - §5 / §6の実Export smokeは修正前のhead（`4f1c148` / `01b740e` / `b7b7b00`）での観測であり、再測定していない。そのsmokeではPlanner開始時にIdeal武器を持つ
   planning Targetが0件だったので、G4の件数は修正前後のどちらの定義でも0件である（新しい2 fieldは当時のrecordには無い）。7 / 43 materialized・objective 1,766・
   G1 / G3の値はG4分類と独立である
+
+## 15. D-0A-2設計からの注記（追記）
+
+[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md)（docs-only）で次を記録した。§5 / §6の観測値・RESULT・runnerの挙動は変えていない。
+
+- **G3の静的risk診断の範囲**: §3.4の静的riskは `keep_from_source` の origin 〜 g* − 1 と `reset_then_keep` の g1 + 1 〜 g* − 1 だけを走査する。D-0A-2設計 §3.7は、
+  コード読取から、`reset_then_keep` で q < g1 のReset(q) がReset(g1) と同じlayoutを持ち、q 〜 g1 がheld（先行Routeのchain位置）のとき、frontier順の同点で
+  q 側の履歴が代表になる下側の変種を推定した（未固定）。この変種は本PRの静的risk 3件の数え方に含まれない。数え方の拡張は、設計 §9.1（Planner Alternative Search）を
+  使う規則 `d0a-v1` の診断としてD-0A-2bで扱う
+- **D-0A-2への入力（§9）の扱い**: 1（配送順序と長いown chain）・3（sourceの拘束）・4（G3）・6（G1）は、B-ii（Search DomainのResearch専用seam）による形状制約付き経路で
+  扱う（オーナー承認待ち）。2（materialization順序）は採らず、Phase Cの順序を維持する（D-0A-2設計 §8）。5（Search費用）は、同設計 §10.3の規模予測
+  （depth、held窓、frontier上界）とbudgetで扱い、値はD-0B-2で登録する

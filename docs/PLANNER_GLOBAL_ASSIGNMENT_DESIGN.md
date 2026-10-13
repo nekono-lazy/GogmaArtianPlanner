@@ -1164,6 +1164,11 @@ Targetごとに決定的に決める。
 | §9.1 が `shape_mismatch`（`exhausted` + 一致なし）で、射影起点側も一致なし | 候補のoutcomeを `materialization_failed`（実行済み・不一致）として記録し、generatorの次の候補へ |
 | §9.1 が `unconfirmed`（`stopped_by_extent` / delivery cap）/ `not_executed` / `unmeasured` | 候補のoutcomeを `materialization_unconfirmed` として記録し、次の候補へ。該当Routeなしとは判定しない |
 
+D-0A-2（[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §11）は、上表（D-0Aの実装規則、§9.9）を規則 `d0a-v1` として残し、形状制約付き
+materialization（方式 `shape_constrained`、同 §5）を含む規則 `d0a2-v2` を定めた: 継続形（§19.3のG1、A-2後のG2）→ `shape_constrained` のみ、連続形 →
+射影起点（§9.2）→ `shape_constrained`、非連続形 → `shape_constrained`。§9.1はv2の既定の方式順に入らず、`d0a-v1` とparity testに残る。v2は
+D-0A-2の実装（2a / 2b）の後に使え、2a（Search DomainのResearch専用seam）のオーナー承認を前提とする。
+
 ### 9.4 identityと決定性
 
 - Candidate / Entry IDはdeterministic materializer（PLANNER_SPEC 9.2.13）が、search identity + Candidate semantic meaningから決める。
@@ -1174,6 +1179,8 @@ Targetごとに決定的に決める。
 - intermediate groupsはmaterializerが抽出する（追加予測なし）。本設計は選択（pin）を一切置かない
 - `validateBuildCandidate()` / `validateBuildListEntry()` を通す。unsupported predictionを含むRouteは生成されない（Searchの契約）
 - Candidate / Entryは常に正規のProduction Search結果から作る。期待形をもとにRouteOperation列を手で組み立ててEntryにすることはしない
+- 本項は §9.1 / §9.2 の経路（Production Search APIの配送物を採用する経路）の契約である。D-0A-2の形状制約付き経路（方式 `shape_constrained`）は
+  この契約の外にあるResearch専用経路であり、[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §5 / §9.1の別の契約に従う
 
 ### 9.5 Production Planner検証（Phase D'）
 
@@ -1225,6 +1232,10 @@ rejected 0（resource_conflict 0）、warnings 0、Trace Replay valid、`physica
 - `shape_mismatch` の例外（`exhausted` 以外で探索完了を判定すること）は設けない。現行Search APIと正式仕様に、特定の形について探索が完了したことを
   `exhausted` 以外で保証する契約が無いためである（§2.6）。将来Search側にそのような明示的証拠が追加された場合も、正式仕様の変更を経てから使う
 - run内でoption・部分割当・Targetを除外集合へ入れることはしない。同じ候補の再試行は、generatorが各完全割当を1回しか生成しないことで防ぐ
+- D-0A-2の形状制約付き経路のTarget outcomeと候補分類は [D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §10 に従う（`materialized` /
+  `unconfirmed(shape_search_budget_reached)` / `not_executed(search_scale_gate)` / `unsupported` / `unmeasured`。必要な予測のunsupportedはPhase Aの判定の有無で
+  fail closed（`prediction_support_inconsistent`）か `unsupported` に分け、形が禁止する操作のunsupportedは分類に使わない。baseに到達し、必要な予測のunsupportedも
+  無いのに一致を配送しないことは同 §5.5の補題の前提違反としてfail closedし、`shape_mismatch` にしない）
 
 ### 9.7 Search規模のgate
 
@@ -1343,6 +1354,27 @@ D-0B（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B.md)）は、実Export用r
 - **D-0A-2への入力**: §9.8の (b) materialization順序（Gogma streamには存在制約が無いので、Gogmaだけを操作するTargetを長いchainを持つTargetより先にする案）と
   (c) 形状制約付き探索（source・巨戟化位置・最終位置の拘束）の両方の根拠を得た。採否・方式はD-0A-2で決める（記録 §9）
 
+### 9.11 Phase D-0A-2の設計判断（要約）
+
+D-0A-2の詳細設計は [D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md)（docs-only）にある。§9.8の (c) を選び、(b) は採らなかった。
+
+- **方式**: B-ii（Search DomainのResearch専用seam。Production callerが使わない形状制約付きRoute探索）を主方式とし、Research側の新方式 `shape_constrained` から
+  呼ぶ。B-iは、base取得・Skill lane・`keep_from_source` のBonus laneを公開APIで構成できるが、`reset` / `reset_then_keep` のBonus laneで、held-aware
+  Bonus streamの「family layout数 × held窓」によるstate数の増加とG3を外側から抑えられないので主方式にしない（同 §3 / §4）
+- **§3.4との関係**: B-iiはProduction source（Search Domain）の変更を伴うので、§3.4の「Production sourceの変更を行わない」の例外であり、2aの開始前に
+  オーナー承認を要する。変更は任意引数・任意field・挙動不変の抽出refactor・Production非使用のResearch moduleに限り、無指定時のProduction挙動、
+  search identity、計算版数を変えない（golden testで固定する）
+- **契約**: §9.4とは別のResearch専用経路（同 §5）。形状制約はRoute base生成の前に、primitiveの選択 → source / Counter / production target →
+  巨戟化位置（正式な合法位置との共通部分）の順で適用し、`addBase()` は最終admissionだけを行う。Skill / Bonus laneは形が要求するものだけを（lane開始Idealでも）
+  開き、Bonusは操作種別policy（Keep-only / Reset-only / g1のResetの後だけKeep）で読み、許す操作のsupportだけを評価する（禁止操作のunsupportedは分類に
+  使わない）。最小Route存在補題（同 §5.5、未検証）により、前提が成り立てば形は最初に配送される
+- **G1 / G2 / G3**: G1 / G2は新方式だけで扱う。G3は上側（D-0Bで確認済み）と下側（D-0A-2設計で推定した、q < g1 の同layout Resetとfrontier順の同点による変種）の
+  両方を、操作種別policyで代表化の対象外にする。同値なrequired位置集合の受理は採らない
+- **順序**: Phase Cの順序を維持する（同 §8。再検討条件と変更範囲を記録）
+- **identity**: 新algorithm token `global-assignment-d0a2-shape-constrained-materialization-v1`。D-0Aのtoken・Candidate IDは不変。Entry IDは既存materializerの
+  規則のまま（同 §9.1）
+- **PR**: 2a（Search Domain seam、要承認）→ 2b（Research方式・方式選択 `d0a2-v2`・独立検証器・parity）→ A-2 → D-0B-2 → D-0C → D-1（同 §12）
+
 ## 10. 目的関数・下界・探索budget
 
 ### 10.1 目的関数と部分割当の下界
@@ -1417,6 +1449,11 @@ Phase Aの走査windowは事前登録したladderで広げる。
 - G3（§19.3。Bonus family-layout frontierの代表化）で期待形が返らない場合、現行の分類では `unconfirmed(stopped_by_extent)` / delivery cap /
   `shape_mismatch` のどれにもなり得る（D-0Bのsynthetic testでは `stopped_by_extent`）。G3はSearch前に確定できない（リスク条件は発生の証明ではない）ので
   D-0Bは事前分類しない。その未確認をcap / gate / envelopeの問題と断定せず、D-0Bの診断（静的risk、request上のheld / blocked、collapse署名）を併記して判断する
+- D-0A-2の形状制約付き経路では、`unconfirmed(shape_search_budget_reached)` とその規模予測による `not_executed(search_scale_gate)` は上表の「拡大しない」行に入り
+  （budget / gateの見直しが先）、`unsupported`（Engineのsupport / capability）も拡大しない。補題の前提違反（fail closed）はrun errorとして移行判定の対象外である
+  （[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §10.2）。
+  G1 / G2を形状制約付き経路で扱う規則 `d0a2-v2` では `not_executed(search_policy_shape)` は生じない（`d0a-v1` でだけ生じる）。G3は同経路では
+  操作種別policyにより代表化の対象外になるので、上記のG3の注意は §9.1を使う試行（`d0a-v1`）にだけ残る
 
 ### 10.4 budgetの分離（G5）
 
@@ -1549,9 +1586,11 @@ materialization方式に依存しないので、D-0の結果でA〜Cをやり直
 | **D-0 materialization方式の設計検証** | `globalAssignment/materialize.ts`（§9.1 / §9.2 / §9.3）、Search規模予測、runner（materialize-only mode）、事前登録docs | 実ExportのPhase B / C出力（最初のstructural candidate）、Engine、Planner-start origin | Target別 `MaterializationOutcome`、`deliveredBeforeMatch`、predicted / 実測Search規模、時間、heap、§9.8の判定 | 全Targetが `materialized` ならD-1へ。残るoutcomeの内訳から (a) 事前登録値の調整 (b) 順序変更 (c) 形状制約付き探索APIのdocs-only設計 のどれが必要かを決める | §13.1 Phase D | D-1の前提 | なし | **要**（事前登録: delivery cap、Search規模gate、方式選択規則、envelope。Planner検証は行わない） |
 | └ **D-0A 本体・synthetic検証**（§9.9） | `globalAssignment/materialize.ts` / `materializationShape.ts` / `materializationScale.ts` / `materializationTypes.ts`、synthetic test、isolation test | structural candidate、Phase 0 context、ReachTable、Engine、caller指定のdelivery cap / Search規模gate | Target別request（予測規模・内訳）・試行・outcome、stage outcome、materialize済みEntry | §13.1 Phase Dのsynthetic条件（empty reservation、正式reservationの非改変、held跨ぎ、照合、`exhausted` / `stoppedByExtent` / cap / gate / cancelの区別、fallback、決定性、fail closed、trace保持、順序依存、isolation） | §13.1 Phase D | D-0Bの入力 | なし | 不要（実Export・条件登録・runnerは行わない） |
 | └ **D-0B runner・非formal smoke・診断**（§9.10、[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B.md)） | runner（materialize-only mode、別process、envelope、progress journal、RESULT）、G1 / G3 / G4診断、Research記録 | D-0Aの入口、実ExportのPhase B / C出力 | 非formal smoke記録、G1の分類規則（`not_executed(search_policy_shape)`）、G3 / G4診断、D-0A-2への入力 | runner・非formal smoke・診断の完了（事前登録はしない。formal runは開始しない） | runner / protocol / diagnostics / child process test | D-0A-2の入力 | なし | 不要（smokeは非formal） |
-| └ **D-0A-2 設計（docs-only）・実装** | 形状制約付きmaterialization（§19.5 案B。B-i / B-iiの最終選択、Research専用materialization契約、継続Routeの正当性検証）、§9.3の方式選択への組込み | D-0Bの診断 | 承認された方式と、その実装・test | §19.7 | synthetic / parity / 継続Route検証 | A-2・D-0B-2の前提 | なし（B-iiはオーナー判断） | 不要 |
-| └ **A-2** | Phase Aの所持巨戟継続option（§19.6） | D-0A-2 | option集合の確定 | §19.7 | 総当たり・G4状態遷移test | D-0B-2の前提 | なし | 不要 |
-| └ **D-0B-2 再smoke・事前登録** | 確定したoption集合・方式での非formal再smoke、delivery cap・Search規模gate・envelope・option集合version・方式選択規則の事前登録 | D-0A-2実装、A-2 | 事前登録値 | 事前登録の完了（formal runは開始しない） | protocol test | D-0Cの入力 | なし | 不要（smokeは非formal） |
+| └ **D-0A-2 設計（docs-only）**（[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md)、§9.11） | 形状制約付きmaterialization（§19.5 案B）: B-i / B-iiの最終選択（B-ii）、Research専用materialization契約（§9.4とは別）、継続Routeの独立検証、G3、materialization順序、方式選択 `d0a2-v2`、PR分割 | D-0Bの診断 | 本設計（B-iiはオーナー承認待ち） | 2aを仕様推測なしに開始できること | — | 2aの前提 | なし | 不要 |
+| └ **D-0A-2a Search Domain seam** | Route search primitive 3つと `routeSearchShared.ts` へのbase生成前の制約分岐、`bonusStream.ts` / `targetSearchScheduler.ts` の任意引数、`plannerAlternativeSearch.ts` の挙動不変な抽出refactor、新規のResearch専用module（D-0A-2設計 §4.2 / §5.3） | D-0A-2設計 | 形状制約付きRoute探索（Search Domain API） | 無指定時のProduction挙動・search identity・計算版数の不変（golden test）、seam test | D-0A-2設計 §12 / §15 | 2bの前提 | **あり**（任意引数とProduction非使用のResearch module。Production挙動は不変。オーナー承認が前提） | 不要 |
+| └ **D-0A-2b Research方式** | 方式 `shape_constrained`、独立検証器、方式選択 `d0a2-v2`、runnerの規則選択（D-0A-2設計 §5.4 / §9 / §10 / §11） | 2a | Target outcome・候補分類 | 補題のproperty test、PAとのparity、継続Route検証 | D-0A-2設計 §12 / §15 | A-2・D-0B-2の前提 | なし | 不要 |
+| └ **A-2** | Phase Aの所持巨戟継続option（§19.6） | D-0A-2b | option集合の確定 | §19.7 | 総当たり・G4状態遷移test | D-0B-2の前提 | なし | 不要 |
+| └ **D-0B-2 再smoke・事前登録** | 確定したoption集合・方式での非formal再smoke、delivery cap・Search規模gate・形状制約付き経路のbudget・envelope・option集合version・方式選択規則の事前登録 | D-0A-2b、A-2 | 事前登録値 | 事前登録の完了（formal runは開始しない） | protocol test | D-0Cの入力 | なし | 不要（smokeは非formal） |
 | └ **D-0C formal measurement** | 計測記録docs・RESULT | D-0B-2の登録条件、clean HEAD | 上記D-0の出力 | 上記D-0のacceptance | — | D-1の前提 | なし | **要** |
 | **D-1 Planner検証（統合acceptance）** | `globalAssignment/verify.ts`、runner（full mode: B → C → D → D'のloop）、analyzer（post-hoc oracle比較） | D-0で確認した方式、verification budget | `VerifiedPlanRecord` / `GlobalAssignmentResult`、候補別outcome、RESULT JSON | 実Exportで `verified`（§13.2）。不成立なら理由別status（§4.6） | §13.1 Phase D'、isolation | Eの基準 | なし | **要**（事前登録: verification budget、Research maxPlanSteps、envelope） |
 | **E 最適化・性能** | incremental coverage pruning、決定的なdiscrepancy探索、中断再開、window拡大（verified時）、メモリ内訳、Browser Worker測定 | D-1の `bestVerified` | 改善した `bestVerified`、性能記録 | 全Target完成を維持したまま物理操作数を改善（8,534未満。§13.2）。時間・メモリは別指標。退行は不受理 | 既存acceptanceの維持、Browser isolation | — | なし（Production化は§16の別PR） | **要** |
@@ -1562,6 +1601,8 @@ materialization方式の実用性はD-0で、43 / 43 Planの統合acceptanceはD
 D-0B準備監査（§19.7）は、D-0以降を「D-0B（runner・非formal smoke・診断）→ D-0A-2設計（形状制約付きmaterialization、docs-only）→ D-0A-2実装 →
 A-2（Phase Aの所持巨戟継続option）→ D-0B-2（再smokeと事前登録）→ D-0C → D-1」とすることを提案した（D-0Bの事前登録をD-0B-2へ移す）。
 この計画はD-0Bの依頼で採用され、上表のD-0B行を改訂してD-0A-2 / A-2 / D-0B-2の行を加えた（D-0Bは事前登録をしない）。
+D-0A-2設計（[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §12）は、D-0A-2実装を2a（Search Domain seam。Production fileを変えるのでオーナー承認が前提）と
+2b（Research方式）に分けた。materialization順序の変更は計画しない（同 §8）。
 
 ## 15. 未決事項・リスク・採用しなかった案
 
@@ -1572,8 +1613,8 @@ A-2（Phase Aの所持巨戟継続option）→ D-0B-2（再smokeと事前登録�
 | window ladderのrungと上限 | W0 = 350 / 500 / 1500は定まるが、W1以降と上限。移行規則は§10.3で確定（全Target共通rung） | Phase A事前登録 |
 | node budget / verification budget | 根拠となる計測が無い。Phase B-2の非formal smokeで決める（B-1のsolverはnode budgetとMRV lookaheadを呼び出し側が明示するpositive integerとして受け取るだけで、既定値を持たない） | Phase B-2 / D-1事前登録 |
 | delivery cap / Search規模gate / 方式選択規則の閾値 | §9.3 / §9.7。D2-G-Aのモデル値をgateの根拠にするか。D-0Bのsmoke（§9.10）では、最初の未解決Targetの原因がcapの大小でなく配送順序（6キー順序のown operation数）だった | Phase D-0B-2事前登録 |
-| **materialization方式の実用性**（Phase D実装前） | §9.0のとおり現行APIは期待Route形を直接強制できない。「正当なreservation + 形状照合」が実Exportのstructural candidateに対して実用的なdelivery数・Search規模で期待形を返すかは未検証。返らない場合、Research専用の形状制約付き探索APIのdocs-only設計が先に要る（§9.8。現行APIを改変して「できる」ことにしない） | Phase D-0（設計検証） |
-| materialization順序とchain長 | Phase Cのtopological順（§8.2）はSkill被覆依存だけを拘束し、残りはmax advance昇順。先行Routeのchainが長くなる順序ではSearch規模が増え得る。順序の別案（Gogma終端昇順など）はD-0の結果で判断。D-0Bのsmoke（§9.10）で、Skill被覆の前提として早く置かれたTargetのGogma chainが長くなり、期待形が配送順序の後方になる例を観測した | Phase D-0A-2（D-0Bの入力） |
+| **materialization方式の実用性**（Phase D実装前） | §9.0のとおり現行APIは期待Route形を直接強制できない。「正当なreservation + 形状照合」が実Exportのstructural candidateに対して実用的なdelivery数・Search規模で期待形を返すかは未検証。返らない場合、Research専用の形状制約付き探索APIのdocs-only設計が先に要る（§9.8。現行APIを改変して「できる」ことにしない）。→ D-0Bで順序7の期待形が配送されないことを観測し、D-0A-2設計でB-ii（Search DomainのResearch専用seam）による形状制約付き経路を主方式とした（オーナー承認待ち。§9.11） | Phase D-0 / D-0A-2 |
+| materialization順序とchain長 | Phase Cのtopological順（§8.2）はSkill被覆依存だけを拘束し、残りはmax advance昇順。先行Routeのchainが長くなる順序ではSearch規模が増え得る。順序の別案（Gogma終端昇順など）はD-0の結果で判断。D-0Bのsmoke（§9.10）で、Skill被覆の前提として早く置かれたTargetのGogma chainが長くなり、期待形が配送順序の後方になる例を観測した。→ D-0A-2設計 §8で現行順序の維持を決めた（形状制約付き経路の成否は順序に依存しない）。再検討はD-0B-2の再smokeで費用が長い先行区間に支配される場合に別PRで行う | D-0A-2で決定（再検討はD-0B-2の後） |
 | checkpoint selectionを持つEntry | 本設計はpinを置かない。元Entryに選択があるTargetは `unsupported_input`（`checkpoint_selection`）でfail closedする（PLANNER_SPEC 9.5.2と同じ扱い）。対象Exportでは0件 | 本書で決定（上記） |
 | Normal Counter未確定 | blind variantをoptionにしない。`unconfirmed_counter` でfail closed | 本書で決定 |
 | cross satisfaction可能ペア | distinct sourceで実行可能解を探し、最小性を主張しない（§10.2）。1本の武器で2 Target完成を割当に含める拡張は行わない | 本書で決定 |
@@ -1751,6 +1792,11 @@ lane開始Ideal継続option（S1型・S2型・B1 / B2型）について、整合
 §9.4は本監査では変更しない。B-iを採用する場合も §9.4の本文（既存D-0A経路 §9.1 / §9.2の契約）は書き換えず、Research専用経路の契約を別の節として
 新設し、§9.4にはその節への参照だけを足す（監査 §10）。
 
+**D-0A-2設計での決定**（[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §4、§9.11）: B-iは、base取得・Skill lane・`keep_from_source` のBonus laneを
+公開APIで構成できるが、`reset` / `reset_then_keep` のBonus laneで、held-aware Bonus streamの「family layout数 × held窓」によるstate数の増加とG3を抑えられないので
+主方式にせず、B-ii（Search DomainのResearch専用seam）を主方式とした（Production file変更のためオーナー承認が前提）。上記のリスクのうち「G3が案B（B-i）では
+解けない」は、B-iiのBonus操作種別policyで上側・下側の変種とも扱う。Research専用経路の契約は §9.4とは別に定め（D-0A-2設計 §5）、§9.4には参照だけを足した。
+
 ### 19.6 Phase A〜Dへの変更範囲
 
 | Phase | 変更 |
@@ -1758,7 +1804,7 @@ lane開始Ideal継続option（S1型・S2型・B1 / B2型）について、整合
 | A（A-2） | 所持巨戟の現在Ideal laneについて、`none` に加えて継続option（Skill: `reset_skills` s*、Bonus: `reset` / `keep_from_source` / `reset_then_keep`）を同じsourceで列挙する。現在性能が両軸Idealのsourceについて、そのsource自身を操作する継続optionはPlannerで実行されない見込みだが（監査 §3.6のG4-iii）、根拠は前提P1〜P3（C1と最終入力の構成、所持巨戟を変えるのはsourceのRouteとreserveだけ、再commitは `hasIdeal` がfalseへ戻ったときだけ）に依存するので、**除外するかはA-2でtestとともに判断する**（確定しない）。S1型は削除しない。ReachTable・予測回数は変えない |
 | B | C1 / C2・objective・root下界・`LB(partial)` は不変（定理T）。値順序latticeは継続 / 非継続を別streamにして各optionちょうど1回・単調な配送を再証明する。MRVの計数とTarget選択順は変わり得る |
 | C | 被覆・coverer・materialization順序・`ExpectedRouteShape` の意味は不変。C-1 `validateOption()` の「所持巨戟: `none` ⇔ 現在Ideal」を「現在Idealなら `none` または継続option、非Idealなら `none` 不可」へ改める。§8.6に定理Tによる強化を記録する |
-| D | D-0B: S1型（ReachTableだけで判定できる）をSearch前に専用の未実行分類にし、`unconfirmed` / `shape_mismatch` と区別する。§10.3では、Search policy起因の未実行をwindow拡大の根拠にも、cap / gate / envelope見直しの根拠にもしない（D-0Bで `not_executed(search_policy_shape)` として確定。§9.10 / §10.3）。G4（G4-i / G4-ii / G4-iii）は診断として場合分けを記録するだけで、開始時点のIdealだけを理由に候補を不成立・恒久除外に分類しない（成否はPhase D'で判定）。D-0A-2: B-i / B-iiを最終選択し、承認された方式を §9.3の方式選択へ加える（B-iなら §9.4とは別のResearch専用materialization契約を新設し、§9.4本文は変えない）。`matchesExpectedShape()` のrequired位置完全一致は維持する（同値なrequired位置集合の受理は未決） |
+| D | D-0B: S1型（ReachTableだけで判定できる）をSearch前に専用の未実行分類にし、`unconfirmed` / `shape_mismatch` と区別する。§10.3では、Search policy起因の未実行をwindow拡大の根拠にも、cap / gate / envelope見直しの根拠にもしない（D-0Bで `not_executed(search_policy_shape)` として確定。§9.10 / §10.3）。G4（G4-i / G4-ii / G4-iii）は診断として場合分けを記録するだけで、開始時点のIdealだけを理由に候補を不成立・恒久除外に分類しない（成否はPhase D'で判定）。D-0A-2: B-i / B-iiを最終選択し、承認された方式を §9.3の方式選択へ加える（B-iなら §9.4とは別のResearch専用materialization契約を新設し、§9.4本文は変えない）。`matchesExpectedShape()` のrequired位置完全一致は維持する（同値なrequired位置集合の受理は未決）。→ D-0A-2設計でB-iiを主方式に選び、Research専用経路の契約を §9.4とは別に定め（§9.4には参照だけを追加）、方式選択 `d0a2-v2` を §9.3へ組み込んだ。同値なrequired位置集合の受理は採らない（[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md) §5 / §7 / §11） |
 
 ### 19.7 D-0B / D-0Cとの依存関係と後続PR
 
@@ -1776,8 +1822,8 @@ formal run前なのでG9に反しない）。
 | --- | --- | --- |
 | 1 | 本PR | docs-only監査 |
 | 2 | D-0B | 実Export用runner（materialize-only mode、別process、envelope、RESULT）、非formal smoke、上記の診断。事前登録はしない（実施済み。§9.10、[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B.md)） |
-| 3 | D-0A-2設計（docs-only） | 案Bの設計: B-i / B-iiの最終選択、B-iを選ぶ場合のResearch専用materialization契約（§9.4とは別の節）と技術的実現性の確認、継続Routeの正当性検証の手順、G3の扱い、§9.3への組込み、§10.3の未実行の扱い、Search規模予測・gate、test計画 |
-| 4 | D-0A-2実装 | 承認された方式での形状制約付きmaterialization、方式選択の拡張、synthetic test、parity test、継続Routeの正当性検証test |
+| 3 | D-0A-2設計（docs-only） | 案Bの設計: B-i / B-iiの最終選択、B-iを選ぶ場合のResearch専用materialization契約（§9.4とは別の節）と技術的実現性の確認、継続Routeの正当性検証の手順、G3の扱い、§9.3への組込み、§10.3の未実行の扱い、Search規模予測・gate、test計画（実施。[D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md)。B-iiを選定し、実装を2a / 2bに分割。§9.11） |
+| 4 | D-0A-2実装 | 承認された方式での形状制約付きmaterialization、方式選択の拡張、synthetic test、parity test、継続Routeの正当性検証test（2a: Search DomainのResearch専用seam。オーナー承認が前提。2b: Research方式） |
 | 5 | A-2 | Phase Aの継続option、両軸Ideal sourceの扱いの判断（G4-iii）、値順序latticeの別stream化、C-1検査の改訂、総当たりtest、G4の状態遷移test（4と同時でもよい。A-2を4より先に入れると継続optionがmaterializeされない） |
 | 6 | D-0B-2 | 確定したoption集合・方式での再smokeと、delivery cap・Search規模gate・envelope・option集合version・方式選択規則の事前登録 |
 | 7 | D-0C | 登録条件でのformal measurement |
