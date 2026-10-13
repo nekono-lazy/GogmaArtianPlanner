@@ -258,6 +258,8 @@ describe('P-1 runner: C10, integrity and the unmeasured paths (scripted Workers)
     const { runner } = inProcessRunner(() => syntheticControllerOptions(synthetic))
     const record = await runner.runLogicalRun(sourceOf(synthetic), runOptions({ ping: { timeoutMs: 5_000 } }))
     expect(record.first.ping!.count).toBeGreaterThan(0)
+    // Only a ping still pending when the request settled can be lost; none is sent to the terminated Worker afterwards.
+    expect(record.first.ping!.lost).toBeLessThanOrEqual(1)
     const exported = JSON.parse(runner.exportJson({ note: 'env' }))
     expect(exported).toMatchObject({ kind: 'global-assignment-browser-raw', protocolVersion: V, formal: false, exportedAt: 'T', environment: { note: 'env' } })
     expect(exported.handling).toMatch(/git-ignored \.local\/ directory, never commit/)

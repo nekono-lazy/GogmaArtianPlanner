@@ -363,7 +363,8 @@ export function createGlobalAssignmentBrowserRunner(dependencies: GlobalAssignme
         onAccepted: () => {
           if (options.ping) {
             const timeoutMs = options.ping.timeoutMs
-            pingChain = (async () => { while (!settled) pings.push(await harness.ping(timeoutMs)) })()
+            // Chained: a pong sends the next ping. No ping is sent once the request settled (its Worker is terminated).
+            pingChain = (async () => { while (!settled && harness.state(requestId) !== 'settled') pings.push(await harness.ping(timeoutMs)) })()
           }
         },
         onProgress: (event, atMs) => {
