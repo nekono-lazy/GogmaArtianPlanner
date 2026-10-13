@@ -21,8 +21,12 @@ const research = import.meta.glob('./*.ts', { query: '?raw', import: 'default', 
 const runtime = Object.entries(research).filter(([path]) => !/\.test\.ts$|[tT]estFixture\.ts$/.test(path))
 const scripts = import.meta.glob('../../../scripts/*.mjs', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-b2a.mjs'
-/** The Phase D-0B materialization runner: the only other script that reaches this folder. */
+/** The Phase D-0B materialization runner (its formal mode is Phase D-0C's). */
 const D0B_RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-d0b.mjs'
+/** The Phase D-0C public RESULT derivation: reads the runner's raw outputs only (no Export, no calculation). */
+const D0C_DERIVE_SCRIPT = '../../../scripts/derive-planner-global-assignment-d0c-result.mjs'
+/** The Phase D-0C formal contract and public RESULT derivation modules. */
+const PHASE_D0C_MODULES = ['./materializationFormal.ts', './materializationFormalResult.ts']
 /** The Phase B-2A modules around the Phase A / B-1 calculation: runner orchestration, root bound stage, window policy, protocol. */
 const PHASE_B2A_MODULES = ['./assignmentProtocol.ts', './assignmentRootBound.ts', './assignmentRunner.ts', './assignmentWindowPolicy.ts']
 /** The Phase D-0A materialization modules: the only runtime modules that read a (generated) Entry's Route or run a Search. */
@@ -36,22 +40,23 @@ const PHASE_D0A2B_MODULES = [
 ]
 
 describe('Global Assignment Research isolation', () => {
-  it('is imported by no Production module and by no script other than the designated Phase B-2A and D-0B runners', () => {
+  it('is imported by no Production module and by no script other than the designated Phase B-2A / D-0B runners and the D-0C RESULT derivation', () => {
     const productionPaths = Object.keys(production).filter(path => !/\.test\.tsx?$/.test(path))
     expect(productionPaths.length).toBeGreaterThan(100)
-    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf/
+    const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity/
     expect(productionPaths.filter(path => forbidden.test(production[path]!))).toEqual([])
-    expect(Object.keys(scripts).filter(path => path !== RUNNER_SCRIPT && path !== D0B_RUNNER_SCRIPT && forbidden.test(scripts[path]!))).toEqual([])
+    expect(Object.keys(scripts).filter(path => ![RUNNER_SCRIPT, D0B_RUNNER_SCRIPT, D0C_DERIVE_SCRIPT].includes(path) && forbidden.test(scripts[path]!))).toEqual([])
     expect(scripts[RUNNER_SCRIPT]).toBeDefined()
     expect(scripts[D0B_RUNNER_SCRIPT]).toBeDefined()
+    expect(scripts[D0C_DERIVE_SCRIPT]).toBeDefined()
   })
 
   it('has the expected runtime modules, each reading only the PlannerInput, the Engine and the Production authorities', () => {
     expect(runtime.map(([path]) => path).sort()).toEqual([
       './assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentProtocol.ts', './assignmentRootBound.ts', './assignmentRunner.ts',
       './assignmentSolver.ts', './assignmentTypes.ts', './assignmentWindowPolicy.ts', './context.ts', './countingRngEngine.ts', './coverage.ts', './coverageSearch.ts', './coverageSearchTypes.ts',
-      './coverageTypes.ts', './materializationDiagnostics.ts', './materializationProtocol.ts', './materializationRunner.ts', './materializationScale.ts',
-      './materializationShape.ts', './materializationTypes.ts', './materialize.ts', './reachOptions.ts', './reachTable.ts',
+      './coverageTypes.ts', './materializationDiagnostics.ts', './materializationFormal.ts', './materializationFormalResult.ts', './materializationProtocol.ts', './materializationRunner.ts',
+      './materializationScale.ts', './materializationShape.ts', './materializationTypes.ts', './materialize.ts', './reachOptions.ts', './reachTable.ts',
       './requiredOnlyReplay.ts', './shapeMaterializationRequest.ts', './shapeMaterializationRun.ts', './shapeMaterializationScale.ts', './shapeMaterializationTypes.ts',
       './shapeRouteVerification.ts', './structuralCandidate.ts', './structuralSearch.ts', './structuralWindowPolicy.ts', './types.ts',
     ])
@@ -73,9 +78,11 @@ describe('Global Assignment Research isolation', () => {
     }
     // The Phase A - C runtime never reads the existing Entries' Route contents (design 4.1): only the context does, through the Production
     // validation. Phase D-0A / D-0A-2b read the Route of the Entries they generate (checked below).
-    for (const [path, source] of runtime.filter(([path]) => path !== './context.ts' && path !== './types.ts' && !PHASE_D0A_MODULES.includes(path) && path !== './shapeRouteVerification.ts')) {
+    for (const [path, source] of runtime.filter(([path]) => path !== './context.ts' && path !== './types.ts' && !PHASE_D0A_MODULES.includes(path) && path !== './shapeRouteVerification.ts' && !PHASE_D0C_MODULES.includes(path))) {
       expect(source, path).not.toMatch(/candidateSnapshot|\.route\b|buildListEntries\b(?!\.length)/)
     }
+    // Phase D-0C names those keys only as strings its public RESULT must not carry; it reads no Entry, snapshot or Route either.
+    for (const path of PHASE_D0C_MODULES) expect(research[path], path).not.toMatch(/\.candidateSnapshot|\.route\b|\.buildListEntries\b/)
     // The Phase B-1 solver reads the ReachTable and the planning Targets' id / priority only: no PlannerInput, Engine, Master or Entry (design 6 / 11).
     for (const path of ['./assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentSolver.ts']) {
       expect(research[path], path).not.toMatch(/plannerInput|RngEngine|predict[A-Z]|\.master\b|ownedWeapons|normalCounters|rngState/)
@@ -111,6 +118,31 @@ describe('Global Assignment Research isolation', () => {
     }
     // The D-0B runner reaches the Research modules through its own runner / protocol only, never the registered B-2A path.
     expect(scripts[D0B_RUNNER_SCRIPT]).not.toMatch(/assignmentRunner|assignmentRootBound|assignmentProtocol|planner-global-assignment-b2a/)
+  })
+
+  it('keeps Phase D-0C a formal contract and a RESULT derivation: no calculation, no Search, no Planner, no Export, no file reading in the modules', () => {
+    const codeOf = (path: string) => research[path]!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    for (const path of PHASE_D0C_MODULES) {
+      expect(research[path], path).toBeDefined()
+      const source = codeOf(path)
+      expect(source, path).not.toMatch(/productionPlanGeneration|plannerTraceReplay|plannerDeterministicSchedule|plannerBeamSearch|createProductionPlan|replayPlannerSearchTrace|runGlobalPlannerResearch|verifyGlobalResearchFreshPlan/)
+      expect(source, path).not.toMatch(/PlannerConflictResolution|conflictResolutions|savePlanner|Repository|from '[^']*\/services\//)
+      expect(source, path).not.toMatch(/production_verified_plan|VerifiedUpperBound|'verified'|'best_found'|'proven_minimum'/)
+      // No RNG prediction, no Search, no materialization of its own: the formal contract reads what the runner observed.
+      expect(source, path).not.toMatch(/\.predict[A-Z]|visitPlannerAlternativeCandidates|searchCandidates\(|visitShapeConstrainedRouteCandidates|materializeStructuralCandidate|runMaterializationSmoke|buildReachTable|new ProductionRngEngine/)
+      expect(source, path).not.toMatch(/from '\.\/(?:materialize|shapeMaterializationRun|shapeRouteVerification|reachTable|structuralSearch|coverageSearch|assignmentSolver|assignmentRunner)'/)
+    }
+    // The registration HEAD is a commit, never an Export hash; the formal gate takes the registered conditions only.
+    expect(research['./materializationFormal.ts']).toMatch(/MATERIALIZATION_D0C_REGISTRATION_HEAD = '[0-9a-f]{40}'/)
+    expect(codeOf('./materializationFormal.ts')).toMatch(/registeredD0cConditions\(\)/)
+    // The derivation script reads the runner's raw outputs and writes exclusively: no Export, no Engine, no oracle, no hard-coded hash.
+    const derive = scripts[D0C_DERIVE_SCRIPT]!
+    expect(derive).not.toMatch(/plannerGlobalOracle|ORACLE_1657|plannerGlobalLowerBound|PLANNER_GLOBAL_[A-Z0-9_]*RESULT|--optimum|--export|ProductionRngEngine|FakeRngEngine|runMaterializationSmoke|createProductionPlan/)
+    expect(derive).not.toMatch(/\b[0-9a-f]{64}\b/i)
+    expect(derive).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+    expect(derive).toMatch(/flag: 'wx'/)
+    expect(derive).toMatch(/deriveD0cPublicResult\(sources\)/)
+    expect(derive).toMatch(/d0cPublicResultIssues\(/)
   })
 
   it('keeps Phase D-0B a materialization runner: no Planner run, Trace Replay, upper bound, conflict resolution or persistence', () => {

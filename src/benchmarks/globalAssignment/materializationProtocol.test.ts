@@ -4,12 +4,12 @@ import { loadMasterData } from '../../domain/master/loadMasterData'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
 import { parseRegisteredExportIdentity } from './assignmentProtocol'
 import {
-  classifyMaterializationStage, d0cExportIdentityDifferences, d0cRegisteredItemKeys, differencesFromD0cRegistration, MATERIALIZATION_D0A2B_PROTOCOL_VERSION,
+  classifyMaterializationStage, d0cExportIdentityDifferences, d0cRegisteredItemKeys, d0cRegistrationGate, differencesFromD0cRegistration, MATERIALIZATION_D0A2B_PROTOCOL_VERSION,
   MATERIALIZATION_D0A2B_REGISTRATION_ITEMS, MATERIALIZATION_D0B_SMOKE_DEFAULTS, MATERIALIZATION_D0B2_DOC, MATERIALIZATION_D0B2_REGISTRATION_ITEMS,
   MATERIALIZATION_D0C_EXTRA_REGISTRATION_ITEMS, MATERIALIZATION_D0C_PREREGISTRATION, MATERIALIZATION_REACH_OPTION_SETS, materializationD0cRegistrationIssues,
   materializationFollowUp, materializationFormalRunIssues, materializationProtocolVersion, MATERIALIZATION_SMOKE_MAX_STRUCTURAL_CANDIDATES, parseProgressJournal,
   readD0cRegisteredExportIdentity, registeredD0cConditions, smokeDefaults, validateMaterializationEnvelope, validateMaterializationResearchConditions,
-  validateShapeMaterializationResearchConditions, type CandidateMaterializationClass, type D0cRegisteredItem, type ProgressJournalLine,
+  validateShapeMaterializationResearchConditions, type CandidateMaterializationClass, type D0cRegisteredItem, type D0cRegistration, type ProgressJournalLine,
 } from './materializationProtocol'
 import type { MaterializationStageOutcome } from './materializationTypes'
 import { reachWindowW0 } from './reachTable'
@@ -19,7 +19,7 @@ import type { TargetWeaponId } from '../../domain/models/publicTypes'
 
 /*
  * Issue #154 Global Assignment Phase D-0B: the runner protocol - conditions and their validation, the non-formal smoke
- * defaults, the refusal of a formal run, the stage classification with its design 10.3 role, and the progress journal that
+ * defaults, the registration gate of a formal run, the stage classification with its design 10.3 role, and the progress journal that
  * keeps the confirmed progress of a run its envelope stopped (never the result of the Target in progress).
  */
 
@@ -63,12 +63,14 @@ describe('Phase D-0B conditions and envelope', () => {
     expect(validateMaterializationEnvelope({ ...envelope, repeat: 3 })[0]).toMatch(/^repeat/)
   })
 
-  it('refuses a formal run: D-0B registers nothing, the formal items are left to D-0B-2 / D-0C', () => {
-    const issues = materializationFormalRunIssues()
-    expect(issues).toHaveLength(1)
-    expect(issues[0]).toMatch(/registers no formal condition/)
-    expect(issues[0]).toMatch(/D-0B-2/)
-    expect(issues[0]).toMatch(/D-0C/)
+  it('gates a formal run by its registration: D-0B registers none, D-0B-2 registered the D-0C conditions, D-0C enabled them', () => {
+    // D-0C enabled the registered formal run; a disabled or incomplete registration (synthetic here) is still refused.
+    expect(materializationFormalRunIssues()).toEqual([])
+    const disabled = { ...MATERIALIZATION_D0C_PREREGISTRATION, formalRun: { enabled: false, enabledBy: null, startsIn: 'D-0C' } } as unknown as D0cRegistration
+    expect(materializationFormalRunIssues(disabled)).toEqual([expect.stringMatching(/^A formal run is not enabled .*rule d0a2-v2 only; use --mode smoke\.$/)])
+    const incomplete = { ...MATERIALIZATION_D0C_PREREGISTRATION, childWallMs: undefined } as unknown as D0cRegistration
+    expect(materializationFormalRunIssues(incomplete)).toEqual(['The D-0C pre-registration is incomplete: childWallMs is not registered.'])
+    // The D-0B (d0a-v1) items stay a D-0B-2 list; the d0a-v1 smoke defaults are never a formal condition.
     for (const item of ['deliveryCap', 'searchScaleGate', 'childWallMs', 'childHeapMb']) expect(MATERIALIZATION_D0B2_REGISTRATION_ITEMS).toContain(item)
   })
 })
@@ -151,7 +153,8 @@ describe('Phase D-0B progress journal', () => {
 /*
  * Phase D-0B-2 (`docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md`): the D-0C formal conditions of the rule d0a2-v2, pre-registered
  * from the non-formal re-smokes. Every item carries its value and the record of why; the conditions are the runner's own d0a2-v2
- * shape; the formal mode stays refused; the d0a-v1 smoke defaults are not the registration. Hashes stay in the documents.
+ * shape; Phase D-0C enabled the formal mode without changing a value; the d0a-v1 smoke defaults are not the registration. Hashes
+ * stay in the documents.
  */
 const d0b2Document = Object.values(import.meta.glob('../../../docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md', { query: '?raw', import: 'default', eager: true }))[0] as string
 const b2aDocument = Object.values(import.meta.glob('../../../docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_B2A.md', { query: '?raw', import: 'default', eager: true }))[0] as string
@@ -237,11 +240,27 @@ describe('Phase D-0B-2 pre-registration of the D-0C conditions', () => {
     })
   })
 
-  it('keeps the formal mode refused and the d0a-v1 smoke defaults apart from the registration', () => {
-    expect(MATERIALIZATION_D0C_PREREGISTRATION.formalRun).toEqual({ enabled: false, enabledBy: null, startsIn: 'D-0C (a separate task)' })
-    const issues = materializationFormalRunIssues()
-    expect(issues).toHaveLength(1)
-    expect(issues[0]).toMatch(/MATERIALIZATION_D0C_PREREGISTRATION, formalRun\.enabled false/)
+  it('D-0C: enables the formal mode without changing a registered value, and keeps the d0a-v1 smoke defaults apart from the registration', () => {
+    expect(MATERIALIZATION_D0C_PREREGISTRATION.formalRun).toEqual({ enabled: true, enabledBy: expect.stringMatching(/^Phase D-0C: .*without changing a registered value/), startsIn: 'D-0C' })
+    expect(materializationFormalRunIssues()).toEqual([])
+    expect(d0cRegistrationGate()).toEqual({ formalRunEnabled: true, registrationIssues: [] })
+    // Every registered value, exactly as Phase D-0B-2 registered it (PR #251): the formal run measures these and nothing else.
+    const { conditions, envelope } = registeredD0cConditions()
+    expect(conditions).toEqual({
+      rule: 'd0a2-v2', window: { normal: 350, gogma: 500, skill: 1_500 }, nodeBudget: 2_000, mrvLookahead: 8, coverageDrivenOrdering: true, structuralCandidateLimit: 1,
+      projectedSearchScaleGate: { maxConversionPositions: 32, maxGogmaLegalWidth: 500, maxSkillLegalWidth: 1_501, maxNormalForgeCount: 350 },
+      shapeSearchScaleGate: { maxDepthUpperBound: 2_000, maxGogmaGeneratedStateUpperBound: 502_000_000, maxNormalForgeCount: 350, maxConversionWalkPositions: 1_501 },
+      shapeSearchBudget: { maxGogmaGeneratedStates: 50_000_000, maxSkillStates: 2_250_000, maxSettledWork: 100_000, maxPredictions: { normalArtian: 350, skill: 1_501, gogmaReset: 500, gogmaKeep: 500 } },
+      routeVerification: 'every_shape_constrained_materialization', reachOptionSet: 'global-assignment-reach-options:a2',
+    })
+    expect(envelope).toEqual({ childWallMs: 1_800_000, childHeapMb: 4_096, repeat: 2 })
+    expect(MATERIALIZATION_D0C_PREREGISTRATION).toMatchObject({ concurrency: 1, retry: 'none', registeredIn: 'Phase D-0B-2' })
+    expect(MATERIALIZATION_D0C_PREREGISTRATION.continuationShapeRule.value).toEqual(['lane_start_ideal_skill_continuation', 'lane_start_ideal_owned_gogma_continuation'])
+    expect(MATERIALIZATION_D0C_PREREGISTRATION.materializationOrderRule.value).toBe('phase-c-design-8.2')
+    expect(MATERIALIZATION_D0C_PREREGISTRATION.methodSelectionRule.value).toBe('d0a2-v2')
+    expect(MATERIALIZATION_D0C_PREREGISTRATION.calculationContext.value).toEqual({ gameVersion: 'unknown-initial', masterDataVersion: 4, rngEngineVersion: 'production-rng:c5-e7', appSchemaVersion: 17 })
+    expect(MATERIALIZATION_D0C_PREREGISTRATION.researchProtocolVersion.value).toBe('global-assignment-d0a2b:1')
+    expect(MATERIALIZATION_D0C_PREREGISTRATION.repositoryRule.value).toBe('clean_head_no_uncommitted_code_calculation_diff_audited')
     // The D-0B (d0a-v1) smoke defaults and registration items are unchanged and are not the registered conditions.
     expect(MATERIALIZATION_D0B2_REGISTRATION_ITEMS).toEqual(['deliveryCap', 'searchScaleGate', 'childWallMs', 'childHeapMb', 'nodeBudget', 'structuralCandidateLimit', 'optionSetVersion', 'methodSelectionRule', 'searchPolicyShapeRule'])
     expect(smokeDefaults().conditions).toMatchObject({ deliveryCap: 500, searchPolicyPrecheck: true })

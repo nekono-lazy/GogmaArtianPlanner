@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -6,9 +7,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 /*
  * Issue #154 Global Assignment Phase D-0B: the materialization runner script refuses before it reads the Export or creates
- * anything (usage, unknown / duplicate / value-less options, a formal run, invalid conditions, an existing output or run dir),
- * reads no oracle, takes no post-hoc argument, and records a child that failed as unmeasured(process_failure) with only the
- * progress its journal confirmed, exiting non-zero (a real parent and a real child over an invalid Export).
+ * anything (usage, unknown / duplicate / value-less options, invalid conditions, an existing output or run dir), reads no oracle,
+ * takes no post-hoc argument, and records a child that failed as unmeasured(process_failure) with only the progress its journal
+ * confirmed, exiting non-zero (a real parent and a real child over an invalid Export). Phase D-0C: a formal run is refused by its
+ * start gate before anything is written (an unregistered Export, a missing or foreign command-line hash, any override,
+ * --allow-uncommitted, outputs outside the git-ignored paths), and a formal child refuses a hand-written task before it computes
+ * anything and writes no record.
  */
 const runner = resolve('scripts/run-planner-global-assignment-d0b.mjs')
 const source = readFileSync(runner, 'utf8')
@@ -31,6 +35,40 @@ function expectRefusal(args: string[], message: string | RegExp) {
   expect(result.stdout).toBe('')
 }
 
+/**
+ * D-0C: a formal refusal joins every reason that applies, and a reason can span lines (a failed git command quotes git's own
+ * stderr). Each expected reason is checked on its own inside the refusal message (the text after `prefix`), never through one
+ * regular expression across reasons, so the assertion holds whatever other reasons the checkout adds (a dirty tree locally, a
+ * history without the registration HEAD in a shallow CI checkout).
+ */
+function expectReasons(stderr: string, prefix: string, reasons: readonly (string | RegExp)[]) {
+  const start = stderr.indexOf(prefix)
+  expect(start, `no "${prefix}" in: ${stderr}`).toBeGreaterThanOrEqual(0)
+  const message = stderr.slice(start + prefix.length)
+  for (const reason of reasons) {
+    if (typeof reason === 'string') expect(message).toContain(reason)
+    else expect(message).toMatch(reason)
+  }
+}
+
+/** The registration HEAD is in this checkout (a shallow CI checkout has only the tested commit). */
+function registrationHeadInCheckout(registrationHead: string): boolean {
+  return spawnSync('git', ['cat-file', '-e', `${registrationHead}^{commit}`], { encoding: 'utf8' }).status === 0
+}
+/** Without the registration HEAD the calculation code audit cannot run, and a formal run fails closed on it. */
+const AUDIT_COULD_NOT_RUN = 'The calculation code audit could not run: '
+
+function expectFormalStartRefusal(args: string[], reasons: readonly (string | RegExp)[], registrationHead: string) {
+  const result = spawnSync(process.execPath, [runner, ...args], { encoding: 'utf8', timeout: 110_000 })
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(1)
+  expect(result.stdout).toBe('')
+  expectReasons(result.stderr, 'A formal run cannot start: ', reasons)
+  // The history audit is never skipped: missing history refuses the run, a complete history raises no audit failure.
+  if (registrationHeadInCheckout(registrationHead)) expect(result.stderr).not.toContain(AUDIT_COULD_NOT_RUN)
+  else expectReasons(result.stderr, 'A formal run cannot start: ', [AUDIT_COULD_NOT_RUN])
+}
+
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
@@ -43,17 +81,81 @@ describe('Phase D-0B runner script refusals', () => {
     expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--optimum', 'x.json'], /Unknown option --optimum/)
     expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--delivery-cap', '1', '--delivery-cap', '2'], /Duplicate option/)
     expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--gate'], /--gate needs a value/)
-    expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--mode', 'later'], /--mode must be smoke/)
+    expectRefusal(['--export', input, '--run-dir', runDir, '--output', output, '--mode', 'later'], /--mode must be smoke or formal \(got later\)/)
     expect(existsSync(runDir)).toBe(false)
   }, SPAWN_TEST_TIMEOUT_MS)
 
-  it('refuses a formal run before anything is read or written: D-0B registers no formal condition', () => {
+  it('D-0C: refuses a formal run whose Export, command-line hash, overrides or output paths fail the start gate, before anything is written', async () => {
+    const { MATERIALIZATION_D0C_REGISTRATION_HEAD } = await import('../src/benchmarks/globalAssignment/materializationFormal')
     const { directory, output, runDir } = fixture()
+    // The registration gate passes (D-0C enabled it), so the start gate decides: an Export that is not the registered one (name,
+    // length, hash), a command-line hash that is not the registered hash, a missing command-line hash, any condition option (an
+    // override, --rule and --option-set included), --allow-uncommitted and a run dir / output outside the git-ignored paths.
+    const notRegistered = join(directory, 'not-the-registered-export.json')
+    writeFileSync(notRegistered, '{}\n')
+    const formal = ['--export', notRegistered, '--run-dir', runDir, '--output', output, '--mode', 'formal']
+    const hash = ['--expected-export-sha256', 'a'.repeat(64)]
+    const refuse = (args: string[], reasons: readonly (string | RegExp)[]) => expectFormalStartRefusal(args, reasons, MATERIALIZATION_D0C_REGISTRATION_HEAD)
+    refuse([...formal, ...hash], [
+      /--expected-export-sha256 a{64} is not the registered Export SHA-256 [0-9a-f]{64}\./, /Export SHA-256 [0-9a-f]{64} is not the registered [0-9a-f]{64}\./,
+      'Export file name not-the-registered-export.json is not the registered ',
+      `--run-dir ${runDir} is not git-ignored; a formal run writes only into ignored paths`, `--output ${output} is not git-ignored`,
+    ])
+    refuse(formal, ['A formal run requires --expected-export-sha256 naming the registered Export SHA-256.'])
+    refuse([...formal, ...hash, '--node-budget', '5'], ['A formal run takes its conditions from the registration only; remove --node-budget.'])
+    refuse([...formal, ...hash, '--rule', 'd0a2-v2', '--option-set', 'a2'], ['remove --rule, --option-set.'])
+    refuse([...formal, ...hash, '--repeat', '1', '--wall-ms', '60000', '--task', 'x.json'], ['remove --repeat, --wall-ms, --task.'])
+    refuse([...formal, ...hash, '--allow-uncommitted'], ['A formal run needs a clean, committed Working Tree (no --allow-uncommitted).'])
+    expect(existsSync(runDir)).toBe(false)
+    expect(existsSync(output)).toBe(false)
+    expect(readdirSync(directory)).toEqual(['not-the-registered-export.json'])
+    expect(readFileSync(notRegistered, 'utf8')).toBe('{}\n')
+  }, SPAWN_TEST_TIMEOUT_MS)
+
+  it('D-0C: a formal child refuses a hand-written task before it computes anything, and writes no record', async () => {
+    const { registeredD0cConditions, readD0cRegisteredExportIdentity, MATERIALIZATION_D0B2_DOC } = await import('../src/benchmarks/globalAssignment/materializationProtocol')
+    const { MATERIALIZATION_D0C_REGISTRATION_HEAD } = await import('../src/benchmarks/globalAssignment/materializationFormal')
+    const { conditions, envelope } = registeredD0cConditions()
+    const registered = readD0cRegisteredExportIdentity(readFileSync(MATERIALIZATION_D0B2_DOC, 'utf8')).identity!
+    const { directory } = fixture()
     const exportFile = join(directory, 'export.json')
     writeFileSync(exportFile, '{}\n')
-    expectRefusal(['--export', exportFile, '--run-dir', runDir, '--output', output, '--mode', 'formal'], /A formal run cannot start: Phase D-0B registers no formal condition: .*D-0B-2 .*D-0C/)
-    expect(readdirSync(directory)).toEqual(['export.json'])
-  }, SPAWN_TEST_TIMEOUT_MS)
+    const raw = readFileSync(exportFile)
+    const actualExport = { fileName: 'export.json', bytes: raw.length, sha256: createHash('sha256').update(raw).digest('hex') }
+    const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim()
+    const task = {
+      protocolVersion: 'global-assignment-d0a2b:1', mode: 'formal', repositoryHeadSha: head, actualExport, conditions, envelope, plannerInputMaxPlanStepsForValidationOnly: 1_000,
+      registrationHead: MATERIALIZATION_D0C_REGISTRATION_HEAD, registeredExport: registered,
+    }
+    let index = 0
+    const runChild = (edited: Record<string, unknown>, nodeFlags = [`--max-old-space-size=${envelope.childHeapMb}`]) => {
+      index += 1
+      const taskPath = join(directory, `task-${index}.json`), recordPath = join(directory, `record-${index}.json`), journalPath = join(directory, `journal-${index}.jsonl`)
+      writeFileSync(taskPath, JSON.stringify({ ...task, ...edited }))
+      const result = spawnSync(process.execPath, [...nodeFlags, runner, '--role', 'materialize', '--export', exportFile, '--task', taskPath, '--record', recordPath, '--journal', journalPath], { encoding: 'utf8', timeout: 110_000 })
+      expect(result.error).toBeUndefined()
+      expect(result.status).not.toBe(0)
+      expect(existsSync(recordPath)).toBe(false)
+      // The child started and confirmed nothing else (memory samples aside): no context, no ReachTable, no Target.
+      expect(readFileSync(journalPath, 'utf8').trim().split('\n').map(line => JSON.parse(line).kind).filter(kind => kind !== 'memory')).toEqual(['started'])
+      return result.stderr
+    }
+    // The Export of a hand-written task is never the registered one here, so every refusal also names it; each case names its own
+    // reason too. Each reason is checked on its own inside the gate's refusal (other reasons - a dirty tree, a shallow history - may join it).
+    const historyPresent = registrationHeadInCheckout(MATERIALIZATION_D0C_REGISTRATION_HEAD)
+    const refused = (stderr: string, reasons: readonly (string | RegExp)[]) => {
+      expectReasons(stderr, 'The formal child gate refused the task: ', [/Export SHA-256 [0-9a-f]{64} is not the registered [0-9a-f]{64}\./, ...reasons])
+      // The child audits the history itself: without the registration HEAD it fails closed, with it the audit raises no failure.
+      if (historyPresent) expect(stderr).not.toContain(AUDIT_COULD_NOT_RUN)
+      else expectReasons(stderr, 'The formal child gate refused the task: ', [AUDIT_COULD_NOT_RUN])
+    }
+    refused(runChild({ repositoryHeadSha: 'f'.repeat(40) }), [`The child runs at HEAD ${head}, not the task's measurement HEAD ${'f'.repeat(40)}.`])
+    refused(runChild({ conditions: { ...conditions, nodeBudget: 5 } }), ['The task conditions are not the registered conditions.'])
+    refused(runChild({ envelope: { ...envelope, childWallMs: 60_000 } }), ['The task envelope is not the registered envelope.'])
+    refused(runChild({ registeredExport: { ...registered, bytes: 1 } }), ['The task does not carry the registered Export identity read from HEAD.'])
+    refused(runChild({}), [])
+    refused(runChild({}, []), ['The child runs without the registered heap envelope --max-old-space-size=4096'])
+  }, 6 * SPAWN_TEST_TIMEOUT_MS)
 
   it('refuses invalid conditions, an existing output or run dir and a malformed hash before anything is created', () => {
     const { directory, output, runDir, input } = fixture()
@@ -107,15 +209,16 @@ describe('Phase D-0A-2b rule selection (--rule)', () => {
         shapeSearchScaleGate: { maxDepthUpperBound: 10, maxGogmaGeneratedStateUpperBound: 1000, maxNormalForgeCount: 5, maxConversionWalkPositions: 10 },
         shapeSearchBudget: { maxGogmaGeneratedStates: 1000, maxSkillStates: 1000, maxSettledWork: 1000, maxPredictions: { normalArtian: 10, skill: 10, gogmaReset: 10, gogmaKeep: 10 } },
       },
-      formalRegistration: { formalRunEnabled: false },
+      formalRegistration: { formalRunEnabled: true },
+      formalValidity: { status: 'not_applicable' },
     })
     expect(written.conditions).not.toHaveProperty('deliveryCap')
     expect(written.conditions).not.toHaveProperty('searchPolicyPrecheck')
     expect(written.formalRegistration.deferredItems).toEqual(expect.arrayContaining(['shapeSearchScaleGate', 'shapeSearchBudget', 'routeVerification']))
     expect(written.conditionBasis.shapeSearchScaleGate).toMatch(/no default exists/)
-    // D-0B-2: the smoke records how it differs from the D-0C registration and that its Export is not the registered one; the formal mode stays off.
+    // D-0B-2: the smoke records how it differs from the D-0C registration and that its Export is not the registered one; it stays a smoke.
     expect(written.formalRegistration.d0cRegistration).toMatchObject({
-      registeredIn: 'Phase D-0B-2', formalRunEnabled: false, registrationIssues: [], conditionsMatchRegistration: false,
+      registeredIn: 'Phase D-0B-2', formalRunEnabled: true, registrationIssues: [], conditionsMatchRegistration: false,
       registeredExport: { doc: 'docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md', issues: [], matches: false },
     })
     expect(written.formalRegistration.d0cRegistration.differencesFromRegistration).toEqual(expect.arrayContaining([
@@ -143,9 +246,9 @@ describe('Phase D-0A-2b rule selection (--rule)', () => {
     expect(result.error).toBeUndefined()
     expect(result.status).toBe(2)
     const written = JSON.parse(readFileSync(output, 'utf8'))
-    expect(written).toMatchObject({ mode: 'smoke', formal: false, conditions })
-    // Only the repeat (1 here, registered 2) differs; the formal mode is still off.
-    expect(written.formalRegistration.d0cRegistration).toMatchObject({ formalRunEnabled: false, differencesFromRegistration: ['repeat: 1 (registered 2)'], conditionsMatchRegistration: false })
+    expect(written).toMatchObject({ mode: 'smoke', formal: false, conditions, formalValidity: { status: 'not_applicable' } })
+    // Only the repeat (1 here, registered 2) differs; registered values in smoke mode are still a smoke, never a formal measurement.
+    expect(written.formalRegistration.d0cRegistration).toMatchObject({ formalRunEnabled: true, differencesFromRegistration: ['repeat: 1 (registered 2)'], conditionsMatchRegistration: false })
   }, SPAWN_TEST_TIMEOUT_MS)
 })
 
@@ -159,6 +262,9 @@ describe('Phase D-0B runner script isolation', () => {
     expect(result.status).toBe(2)
     const written = JSON.parse(readFileSync(output, 'utf8'))
     expect(written).toMatchObject({ mode: 'smoke', formal: false, status: 'smoke', oracleFreeExecution: true, conditions: { window: { normal: 5, gogma: 5, skill: 5 }, searchPolicyPrecheck: true } })
+    // A smoke is never a formal measurement, and an unmeasured run has only its journal-confirmed progress as outcome.
+    expect(written.formalValidity.status).toBe('not_applicable')
+    expect(written.materializationOutcome).toMatchObject({ basis: 'journal_confirmed_progress', verdict: 'unmeasured', candidates: [] })
     expect(written.runs).toHaveLength(1)
     const [run] = written.runs
     expect(run).toMatchObject({ status: 'unmeasured', reason: 'process_failure', semanticSha256: null, recordFile: null })
@@ -185,7 +291,25 @@ describe('Phase D-0B runner script isolation', () => {
     expect(source).toMatch(/runMaterializationSmoke\(/)
     expect(source).toMatch(/oracleFreeExecution: true, oracleInformedDesign: true/)
     expect(source).toMatch(/formal: false/)
-    expect(source).toMatch(/materializationFormalRunIssues\(\)/)
+    // D-0C: one registration gate, one start gate, the child's own gate and CalculationContext check, one validity judgement, the
+    // registered Export identity from the committed document, git-ignored outputs, and the registered conditions only.
+    expect(source).toMatch(/protocol\.d0cRegistrationGateIssues\(registrationGate\)/)
+    expect(source).toMatch(/formal\.d0cFormalStartIssues\(\{/)
+    expect(source).toMatch(/formal\.d0cFormalChildGateIssues\(\{/)
+    expect(source).toMatch(/formal\.d0cFormalChildCalculationIssues\(\{ calculationContext: input\.calculationContext, rngEngineVersion: engine\.version \}\)/)
+    expect(source).toMatch(/formal\.judgeD0cFormalValidity\(\{/)
+    expect(source).toMatch(/formal\.summarizeD0cMaterializationOutcome\(\{/)
+    expect(source).toMatch(/formal\.inspectMaterializationRecord\(record, expectation\)/)
+    expect(source).toMatch(/\['show', source\]/)
+    expect(source).toMatch(/\['check-ignore', '-q', path\]/)
+    expect(source).toMatch(/\['merge-base', '--is-ancestor', registrationHead, 'HEAD'\]/)
+    expect(source).toMatch(/protocol\.registeredD0cConditions\(\)/)
+    expect(source).toMatch(/execArgv: process\.execArgv/)
+    // The child observes the Repository itself and carries the parent's mode through the task.
+    expect(source).toMatch(/const repository = repositoryState\(\)/)
+    expect(source).toMatch(/mode: task\.mode/)
+    // An invalid formal measurement exits non-zero while keeping its record.
+    expect(source).toMatch(/formalValidity\.status === 'invalid'\) process\.exitCode = 1/)
     // Exclusive writes, a synchronous journal, and the D-0B envelope (never the registered B-2A runner or its envelope).
     expect(source).toMatch(/flag: 'wx'/)
     expect(source).toMatch(/appendFileSync\(journalPath/)

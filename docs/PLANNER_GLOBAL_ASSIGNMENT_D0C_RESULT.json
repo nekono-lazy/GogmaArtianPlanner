@@ -1,0 +1,839 @@
+{
+  "resultKind": "global-assignment-d0c-public-result",
+  "derivation": {
+    "revision": 1,
+    "script": "scripts/derive-planner-global-assignment-d0c-result.mjs",
+    "function": "deriveD0cPublicResult() (src/benchmarks/globalAssignment/materializationFormalResult.ts)",
+    "sources": [
+      {
+        "file": "ga-d0c-formal-r2.result.json",
+        "bytes": 225630,
+        "sha256": "f6a986789984563b94bf6eb1dca2ccd2908d60b07b4e7e662d56f54c4e021389"
+      },
+      {
+        "file": "ga-d0c-formal-r2.run/materialize-1.journal.jsonl",
+        "bytes": 26462,
+        "sha256": "2b0e4ef4e168c2b1efa25d37033b9b1395db61361f6320534144615092291d78"
+      },
+      {
+        "file": "ga-d0c-formal-r2.run/materialize-1.record.json",
+        "bytes": 520780,
+        "sha256": "b99abfce792faf6883f2cb88fb10cb6b40d5312c4ad12fa8761d03d0906f2855"
+      },
+      {
+        "file": "ga-d0c-formal-r2.run/materialize-1.task.json",
+        "bytes": 1776,
+        "sha256": "0630eea73a5a495cdc6a949ec5651886e50050075152141fce2a6e481aeea72f"
+      },
+      {
+        "file": "ga-d0c-formal-r2.run/materialize-2.journal.jsonl",
+        "bytes": 26276,
+        "sha256": "5a1c46afa51477a52845d232dcdcfee10faf8d53d54d5fa2d12a378d8e04525b"
+      },
+      {
+        "file": "ga-d0c-formal-r2.run/materialize-2.record.json",
+        "bytes": 520928,
+        "sha256": "0555c83b8628bdae1e9f641814f6de3eba2efb674ea64334ad9f689ff09e8576"
+      },
+      {
+        "file": "ga-d0c-formal-r2.run/materialize-2.task.json",
+        "bytes": 1776,
+        "sha256": "0630eea73a5a495cdc6a949ec5651886e50050075152141fce2a6e481aeea72f"
+      },
+      {
+        "file": "ga-d0c-formal-r2.run/start.json",
+        "bytes": 7738,
+        "sha256": "abdf90409c8eacf829ddebb5d9fcb27d77a019d2e0e4e5dbddc958f396d1768f"
+      }
+    ],
+    "consistency": {
+      "semanticSha256MatchesRecords": true,
+      "materializationOutcomeMatchesRecords": true
+    },
+    "excluded": [
+      "Target / OwnedWeapon / BuildListEntry identifiers and per-Target hashes",
+      "Candidate snapshots and RouteOperation lists",
+      "Target-level Counter positions and requirement labels",
+      "the materialization order, Skill dependencies and source-to-Target correspondence",
+      "reservations and requests per Target",
+      "the Export itself and the absolute run paths",
+      "process stderr"
+    ],
+    "note": "A mechanical aggregate of the formal outputs kept git-ignored in .local; no new measurement, no RNG prediction, no Search. The raw records stay unchanged; their SHA-256 are listed in sources."
+  },
+  "phase": "Issue #154 Global Assignment Phase D-0C: formal materialization measurement of the D-0B-2 registered conditions (rule d0a2-v2, option set a2, the first structural candidate at W0; not a Production Plan, not Planner-verified, no Trace Replay)",
+  "protocolVersion": "global-assignment-d0a2b:1",
+  "mode": "formal",
+  "status": "formal",
+  "nature": "Research: formal D-0C measurement of the D-0B-2 registered conditions (formalValidity decides whether it counts); not a Production Plan, not Planner-verified, no Trace Replay",
+  "formalValidity": {
+    "status": "valid",
+    "issues": [],
+    "checks": {
+      "provenance": {
+        "registrationGate": true,
+        "completeRegistration": true,
+        "startGatePassed": true,
+        "measurementHeadRecorded": true,
+        "committedCleanTree": true,
+        "benchmarkCodeHashRecorded": true,
+        "noOverrides": true,
+        "conditionsMatchRegistration": true,
+        "exportRegisteredMatched": true,
+        "calculationCodeAudit": {
+          "passed": true,
+          "registrationHead": "3f6717968da0b29fe8e1e7feda44833d29af0678",
+          "registrationHeadIsAncestor": true,
+          "changedFiles": [
+            "scripts/derive-planner-global-assignment-d0c-result.mjs",
+            "scripts/derive-planner-global-assignment-d0c-result.test.ts",
+            "scripts/run-planner-global-assignment-d0b.mjs",
+            "scripts/run-planner-global-assignment-d0b.test.ts",
+            "src/benchmarks/globalAssignment/isolation.test.ts",
+            "src/benchmarks/globalAssignment/materializationFormal.test.ts",
+            "src/benchmarks/globalAssignment/materializationFormal.ts",
+            "src/benchmarks/globalAssignment/materializationFormalResult.test.ts",
+            "src/benchmarks/globalAssignment/materializationFormalResult.ts",
+            "src/benchmarks/globalAssignment/materializationFormalTestFixture.ts",
+            "src/benchmarks/globalAssignment/materializationProtocol.test.ts",
+            "src/benchmarks/globalAssignment/materializationProtocol.ts"
+          ],
+          "outsideFormalInfrastructure": []
+        },
+        "childGuardsPassed": true,
+        "calculationContextMatched": true
+      },
+      "reproducibility": {
+        "requiredRuns": 2,
+        "runs": 2,
+        "measuredRuns": 2,
+        "allMeasured": true,
+        "recordsComplete": true,
+        "recordsConsistent": true,
+        "noRunIntegrityIssues": true,
+        "semanticHashesEqual": true,
+        "identical": true
+      },
+      "aggregateIntegrityIssueCount": 0,
+      "noAggregateIntegrityIssues": true
+    }
+  },
+  "registration": {
+    "registeredIn": "Phase D-0B-2",
+    "formalRunEnabled": true,
+    "enabledBy": "Phase D-0C: the formal mode of the D-0B-2 registration, enabled without changing a registered value (docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0C.md)",
+    "registrationIssues": [],
+    "registeredItemKeys": [
+      "window",
+      "nodeBudget",
+      "mrvLookahead",
+      "coverageDrivenOrdering",
+      "structuralCandidateLimit",
+      "optionSetVersion",
+      "methodSelectionRule",
+      "continuationShapeRule",
+      "projectedSearchScaleGate",
+      "shapeSearchScaleGate",
+      "shapeSearchBudget",
+      "routeVerification",
+      "materializationOrderRule",
+      "childWallMs",
+      "childHeapMb",
+      "repeat",
+      "exportIdentity",
+      "calculationContext",
+      "researchProtocolVersion",
+      "repositoryRule"
+    ],
+    "registeredConditionsSha256": "aedb84bae51b22953913f308240acd4446eb9250149a3b3b63b4df8088971424",
+    "differencesFromRegistration": [],
+    "conditionsMatchRegistration": true,
+    "startIssues": [],
+    "registrationHead": "3f6717968da0b29fe8e1e7feda44833d29af0678",
+    "conditions": {
+      "rule": "d0a2-v2",
+      "window": {
+        "normal": 350,
+        "gogma": 500,
+        "skill": 1500
+      },
+      "nodeBudget": 2000,
+      "mrvLookahead": 8,
+      "coverageDrivenOrdering": true,
+      "structuralCandidateLimit": 1,
+      "projectedSearchScaleGate": {
+        "maxConversionPositions": 32,
+        "maxGogmaLegalWidth": 500,
+        "maxSkillLegalWidth": 1501,
+        "maxNormalForgeCount": 350
+      },
+      "shapeSearchScaleGate": {
+        "maxDepthUpperBound": 2000,
+        "maxGogmaGeneratedStateUpperBound": 502000000,
+        "maxNormalForgeCount": 350,
+        "maxConversionWalkPositions": 1501
+      },
+      "shapeSearchBudget": {
+        "maxGogmaGeneratedStates": 50000000,
+        "maxSkillStates": 2250000,
+        "maxSettledWork": 100000,
+        "maxPredictions": {
+          "normalArtian": 350,
+          "skill": 1501,
+          "gogmaReset": 500,
+          "gogmaKeep": 500
+        }
+      },
+      "routeVerification": "every_shape_constrained_materialization",
+      "reachOptionSet": "global-assignment-reach-options:a2"
+    },
+    "envelope": {
+      "childWallMs": 1800000,
+      "childHeapMb": 4096,
+      "repeat": 2,
+      "concurrency": 1,
+      "retry": "none"
+    },
+    "conditionBasis": {
+      "childHeapMb": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "childWallMs": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "coverageDrivenOrdering": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "mrvLookahead": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "nodeBudget": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "projectedSearchScaleGate": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "reachOptionSet": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "repeat": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "routeVerification": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "rule": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "shapeSearchBudget": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "shapeSearchScaleGate": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "structuralCandidateLimit": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)",
+      "window": "registered condition (MATERIALIZATION_D0C_PREREGISTRATION, Phase D-0B-2)"
+    }
+  },
+  "provenance": {
+    "measurementHeadSha": "8ff0e18968e6749e4e6b5e29dfc6232bdc35376c",
+    "registrationHead": "3f6717968da0b29fe8e1e7feda44833d29af0678",
+    "workingTreeClean": true,
+    "uncommittedBenchmarkCode": false,
+    "benchmarkCodeSha256": "2fce2a7ffcea2d1d749a07a309a9e5a61f9e35893f37398a6260c6d6f97e766a",
+    "calculationAudit": {
+      "registrationHead": "3f6717968da0b29fe8e1e7feda44833d29af0678",
+      "registrationHeadIsAncestor": true,
+      "changedFiles": [
+        "scripts/derive-planner-global-assignment-d0c-result.mjs",
+        "scripts/derive-planner-global-assignment-d0c-result.test.ts",
+        "scripts/run-planner-global-assignment-d0b.mjs",
+        "scripts/run-planner-global-assignment-d0b.test.ts",
+        "src/benchmarks/globalAssignment/isolation.test.ts",
+        "src/benchmarks/globalAssignment/materializationFormal.test.ts",
+        "src/benchmarks/globalAssignment/materializationFormal.ts",
+        "src/benchmarks/globalAssignment/materializationFormalResult.test.ts",
+        "src/benchmarks/globalAssignment/materializationFormalResult.ts",
+        "src/benchmarks/globalAssignment/materializationFormalTestFixture.ts",
+        "src/benchmarks/globalAssignment/materializationProtocol.test.ts",
+        "src/benchmarks/globalAssignment/materializationProtocol.ts"
+      ],
+      "formalInfrastructure": [
+        "scripts/derive-planner-global-assignment-d0c-result.mjs",
+        "scripts/derive-planner-global-assignment-d0c-result.test.ts",
+        "scripts/run-planner-global-assignment-d0b.mjs",
+        "scripts/run-planner-global-assignment-d0b.test.ts",
+        "src/benchmarks/globalAssignment/isolation.test.ts",
+        "src/benchmarks/globalAssignment/materializationFormal.test.ts",
+        "src/benchmarks/globalAssignment/materializationFormal.ts",
+        "src/benchmarks/globalAssignment/materializationFormalResult.test.ts",
+        "src/benchmarks/globalAssignment/materializationFormalResult.ts",
+        "src/benchmarks/globalAssignment/materializationFormalTestFixture.ts",
+        "src/benchmarks/globalAssignment/materializationProtocol.test.ts",
+        "src/benchmarks/globalAssignment/materializationProtocol.ts"
+      ],
+      "outsideFormalInfrastructure": [],
+      "issues": []
+    },
+    "registrationDoc": {
+      "source": "HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md",
+      "sha256": "e196ad7e7a5e537c6e0d79075861dfba9d8a63275c0325fb1c8cc4073cca8d39"
+    },
+    "overrideOptions": [],
+    "oracleFreeExecution": true,
+    "oracleInformedDesign": true,
+    "runnerScript": "scripts/run-planner-global-assignment-d0b.mjs",
+    "node": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "plannerInputMaxPlanStepsForValidationOnly": 1000,
+    "launchedAt": "2026-10-13T08:28:07.741Z",
+    "machine": {
+      "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor",
+      "logicalCpuCount": 16,
+      "platform": "win32",
+      "arch": "x64",
+      "osRelease": "10.0.26200",
+      "totalMemoryBytes": 33377591296,
+      "freeMemoryBytes": 12257738752
+    }
+  },
+  "exportVerification": {
+    "actual": {
+      "fileName": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "registered": {
+      "fileName": "gogma-artian-planner-backup_20260927015837.json",
+      "bytes": 19424064,
+      "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+    },
+    "registeredSource": "HEAD:docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md",
+    "registeredMatched": true,
+    "cliExpectedSha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b",
+    "cliMatched": true
+  },
+  "calculationContext": {
+    "gameVersion": "unknown-initial",
+    "masterDataVersion": 4,
+    "rngEngineVersion": "production-rng:c5-e7",
+    "appSchemaVersion": 17
+  },
+  "rngEngineVersion": "production-rng:c5-e7",
+  "runs": [
+    {
+      "id": "materialize-1",
+      "status": "measured",
+      "reason": null,
+      "semanticSha256": "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f",
+      "recordComplete": true,
+      "recordConsistent": true,
+      "childGatePassed": true,
+      "calculationContextMatched": true,
+      "timing": {
+        "setupMs": 1048.902,
+        "wallMs": 34155.816,
+        "eventLoopYields": 22548,
+        "stagesMs": {
+          "context": 1743.686,
+          "reachTable": 11510.203,
+          "structuralSearch": 17997.686,
+          "toFirstStructuralCandidate": 17997.272,
+          "diagnostics": 2.288,
+          "materialization": 1824.585,
+          "total": 33106.172
+        },
+        "targetMs": {
+          "count": 43,
+          "sum": 1799.251,
+          "min": 4.48,
+          "max": 438.507
+        },
+        "projectedTargetMs": {
+          "count": 21,
+          "sum": 334.321,
+          "min": 4.48,
+          "max": 121.468
+        },
+        "shapeConstrainedSearchMsApprox": {
+          "count": 22,
+          "sum": 1372.444,
+          "min": 5.941,
+          "max": 421.906
+        },
+        "shapeConstrainedRouteCheckMsApprox": {
+          "count": 22,
+          "sum": 92.487,
+          "min": 1.072,
+          "max": 16.601
+        }
+      },
+      "memory": {
+        "heapUsedMax": 769471888,
+        "heapTotalMax": 868212736,
+        "rssMax": 997150720,
+        "externalMax": 82010172,
+        "sampleCount": 78,
+        "maxRssKiB": 973800,
+        "heapSizeLimit": 4496293888,
+        "targetSettledHeapUsed": {
+          "count": 43,
+          "min": 559957448,
+          "max": 791110384
+        },
+        "targetSampledMax": {
+          "heapUsed": 791110384,
+          "rss": 991977472
+        }
+      },
+      "confirmedProgress": null
+    },
+    {
+      "id": "materialize-2",
+      "status": "measured",
+      "reason": null,
+      "semanticSha256": "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f",
+      "recordComplete": true,
+      "recordConsistent": true,
+      "childGatePassed": true,
+      "calculationContextMatched": true,
+      "timing": {
+        "setupMs": 1031.139,
+        "wallMs": 34305.884,
+        "eventLoopYields": 22548,
+        "stagesMs": {
+          "context": 1724.552,
+          "reachTable": 11531.173,
+          "structuralSearch": 18157.674,
+          "toFirstStructuralCandidate": 18157.342,
+          "diagnostics": 2.019,
+          "materialization": 1831.634,
+          "total": 33274.029
+        },
+        "targetMs": {
+          "count": 43,
+          "sum": 1810.202,
+          "min": 4.77,
+          "max": 437.649
+        },
+        "projectedTargetMs": {
+          "count": 21,
+          "sum": 338.369,
+          "min": 4.77,
+          "max": 122.382
+        },
+        "shapeConstrainedSearchMsApprox": {
+          "count": 22,
+          "sum": 1380.566,
+          "min": 5.385,
+          "max": 420.876
+        },
+        "shapeConstrainedRouteCheckMsApprox": {
+          "count": 22,
+          "sum": 91.267,
+          "min": 1.268,
+          "max": 16.772
+        }
+      },
+      "memory": {
+        "heapUsedMax": 958780048,
+        "heapTotalMax": 1055055872,
+        "rssMax": 1190199296,
+        "externalMax": 82014419,
+        "sampleCount": 78,
+        "maxRssKiB": 1162312,
+        "heapSizeLimit": 4496293888,
+        "targetSettledHeapUsed": {
+          "count": 43,
+          "min": 748713824,
+          "max": 977938848
+        },
+        "targetSampledMax": {
+          "heapUsed": 977938848,
+          "rss": 1185001472
+        }
+      },
+      "confirmedProgress": null
+    }
+  ],
+  "processes": [
+    {
+      "id": "materialize-1",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "cancelled": false,
+      "settledBy": "close",
+      "wallObservedMs": 34360.678,
+      "wallMs": 1800000,
+      "heapMb": 4096,
+      "startedAt": "2026-10-13T08:28:07.744Z",
+      "recordWritten": true
+    },
+    {
+      "id": "materialize-2",
+      "outcome": "completed",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "cancelled": false,
+      "settledBy": "close",
+      "wallObservedMs": 34520.744,
+      "wallMs": 1800000,
+      "heapMb": 4096,
+      "startedAt": "2026-10-13T08:28:42.110Z",
+      "recordWritten": true
+    }
+  ],
+  "determinism": {
+    "runs": 2,
+    "measuredRuns": 2,
+    "identical": true,
+    "semanticSha256s": [
+      "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f",
+      "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f"
+    ]
+  },
+  "integrityIssues": {
+    "count": 0,
+    "messages": []
+  },
+  "totalWallMs": 68991.658,
+  "input": {
+    "plannerInputValid": true,
+    "validationIssueCount": 0,
+    "planningTargetCount": 43,
+    "targetWeaponCount": 43,
+    "buildListEntryCount": 43,
+    "validEntryCount": 43,
+    "excludedEntryCount": 0,
+    "ownedWeaponCount": 40,
+    "normalCounterCount": 14,
+    "confirmedNormalCounterCount": 14,
+    "rngEngineVersion": "production-rng:c5-e7",
+    "calculationContext": {
+      "gameVersion": "unknown-initial",
+      "masterDataVersion": 4,
+      "rngEngineVersion": "production-rng:c5-e7",
+      "appSchemaVersion": 17
+    }
+  },
+  "reachTable": {
+    "origins": {
+      "skill": 341,
+      "gogma": 55,
+      "normalStreams": 7
+    },
+    "predictions": {
+      "skill": 30020,
+      "gogmaReset": 10000,
+      "gogmaKeep": 299500,
+      "normal": 7000
+    },
+    "memoHits": {
+      "skill": 34523,
+      "gogmaReset": 11500,
+      "gogmaKeep": 5500,
+      "normal": 8050
+    },
+    "supportQueries": 15842,
+    "groupCount": 20,
+    "unsupportedPredictionCount": 0
+  },
+  "structuralSearch": {
+    "outcome": {
+      "kind": "structural_candidates_found",
+      "completeness": "candidate_limit_reached"
+    },
+    "windowDecision": {
+      "action": "hold",
+      "conclusion": "structural_candidates_found_remainder_unconfirmed",
+      "ladderExhausted": false,
+      "concludesInfeasibility": false
+    },
+    "candidatesCollected": 1,
+    "unexploredBranchesRemain": true,
+    "upperBoundSupplied": false,
+    "resource": {
+      "expandedNodes": 44,
+      "maxDepth": 43,
+      "candidates": 1,
+      "rejections": {
+        "gogma_position": 513670,
+        "normal_position": 0,
+        "skill_position": 35689,
+        "source": 63
+      },
+      "pruned": 0,
+      "deadEnds": 0,
+      "completeness": "running"
+    },
+    "completeAssignmentsInspected": 1,
+    "coverageRejections": 0,
+    "coverageFeasible": 1,
+    "coverageDrivenOrdering": {
+      "enabled": true,
+      "phaseActivations": 0,
+      "priorityDeliveries": 0,
+      "prioritySkips": 0,
+      "baseSkips": 0,
+      "priorityChanges": 0
+    },
+    "structuralCandidates": 1,
+    "replayPredictions": {
+      "skill": 22,
+      "gogmaReset": 24,
+      "gogmaKeep": 42,
+      "normal": 5
+    }
+  },
+  "structuralCandidate": {
+    "ordinal": 0,
+    "objective": 1766,
+    "targetCount": 43,
+    "streamEnd": {
+      "skill": 1424,
+      "gogma": 503
+    },
+    "advance": {
+      "skill": 1083,
+      "gogma": 448,
+      "normal": 235,
+      "normalStreamsAdvanced": 4
+    },
+    "sourceKinds": {
+      "owned_gogma": 38,
+      "owned_normal": 0,
+      "new_normal": 5
+    },
+    "skillRequirements": {
+      "none": 21,
+      "reset_skills": 17,
+      "conversion": 5
+    },
+    "bonusRequirements": {
+      "none": 0,
+      "reset": 1,
+      "keep_from_source": 19,
+      "reset_then_keep": 23
+    },
+    "skillDependencyCount": 5,
+    "predictedChainSegmentCount": 74,
+    "diagnostics": {
+      "searchPolicyShapes": 0,
+      "continuationOptions": {
+        "laneStartIdealSkillContinuation": 0,
+        "ownedGogmaContinuation": {
+          "options": 0,
+          "skill": 0,
+          "bonus": 0
+        }
+      },
+      "bonusFrontier": {
+        "applicableOptions": 42,
+        "withStaticRisk": 3,
+        "attemptedWithCollapseCondition": 1,
+        "gogmaRequiredOnlyMismatches": 0,
+        "sameFinalPositionMismatches": 0,
+        "collapseSignatures": 0
+      },
+      "bonusFrontierLower": {
+        "applicableOptions": 23,
+        "withStaticRisk": 0,
+        "attemptedWithCollapseCondition": 0,
+        "collapseSignatures": 0
+      },
+      "plannerStartIdeal": {
+        "zero_operation_ideal": 0,
+        "g4_i": 0,
+        "g4_ii": 0,
+        "g4_iii": 0,
+        "plannerStartIdealTargets": 0,
+        "g4iiiObservability": "not_generated_by_current_phase_a"
+      },
+      "gateExceeded": {
+        "conversionPositions": 0,
+        "gogmaLegalWidth": 0,
+        "skillLegalWidth": 0,
+        "normalForgeCount": 0
+      },
+      "shapeGateExceeded": {
+        "depthUpperBound": 0,
+        "gogmaGeneratedStateUpperBound": 0,
+        "normalForgeCount": 0,
+        "conversionWalkPositions": 0
+      }
+    }
+  },
+  "materializationOutcome": {
+    "basis": "measured_records",
+    "measuredRuns": 2,
+    "consistentAcrossMeasuredRuns": true,
+    "verdict": "all_materialized",
+    "runOutcome": "structural_candidates_materialized",
+    "planningTargetCount": 43,
+    "candidates": [
+      {
+        "candidateIndex": 0,
+        "ordinal": 0,
+        "objective": 1766,
+        "targetCount": 43,
+        "classification": "all_materialized",
+        "attempted": 43,
+        "materialized": 43,
+        "notAttempted": 0,
+        "firstUnresolved": null,
+        "targetOutcomes": {
+          "settled": 43,
+          "materialized": 43,
+          "shapeMismatch": 0,
+          "unconfirmed": {},
+          "notExecuted": {},
+          "unsupported": {},
+          "unmeasured": {},
+          "notAttempted": 0,
+          "inProgressWithoutOutcome": 0
+        },
+        "materializedBy": {
+          "candidate_search_projected": 21,
+          "shape_constrained": 22,
+          "planner_alternative_reservation": 0
+        },
+        "independentStops": {
+          "searchScaleGate": 0,
+          "shapeSearchBudget": 0,
+          "unsupported": 0,
+          "failClosed": 0
+        },
+        "failClosedCode": null
+      }
+    ],
+    "claims": "none: all_materialized is not a Plan and not Planner-verified (D-1 decides); unconfirmed / not executed / unsupported / unmeasured never mean that no Route or Plan exists"
+  },
+  "methodSelection": {
+    "rules": {
+      "continuous_projected_then_shape_constrained": 21,
+      "non_continuous_shape_constrained_only": 22
+    },
+    "continuationShapes": 0,
+    "policyShapesTakenOn": 0,
+    "projectedFellBackToShape": 0
+  },
+  "searchScale": {
+    "projected": {
+      "attempts": 21,
+      "matched": 21,
+      "notExecuted": 0,
+      "predictedMax": {
+        "conversionPositions": 1,
+        "gogmaLegalWidth": 66,
+        "skillLegalWidth": 531,
+        "normalForgeCount": 206
+      }
+    },
+    "shapeConstrained": {
+      "attempts": 22,
+      "executed": 22,
+      "gateRefused": 0,
+      "premiseViolations": 0,
+      "predictedMax": {
+        "depthUpperBound": 321,
+        "gogmaGeneratedStateUpperBound": 21462381,
+        "normalForgeCount": 1,
+        "conversionWalkPositions": 70
+      },
+      "observed": {
+        "deliveredCandidates": {
+          "count": 22,
+          "sum": 22,
+          "min": 1,
+          "max": 1
+        },
+        "gogmaGeneratedStates": {
+          "count": 22,
+          "sum": 365394,
+          "min": 38,
+          "max": 121959
+        },
+        "gogmaDepths": {
+          "count": 22,
+          "sum": 783,
+          "min": 2,
+          "max": 321
+        },
+        "maxGogmaFrontierStates": {
+          "count": 22,
+          "sum": 2586,
+          "min": 1,
+          "max": 249
+        },
+        "skillStates": {
+          "count": 22,
+          "sum": 48595,
+          "min": 0,
+          "max": 27539
+        },
+        "skillDepths": {
+          "count": 22,
+          "sum": 361,
+          "min": 0,
+          "max": 94
+        },
+        "workSettled": {
+          "count": 22,
+          "sum": 1174,
+          "min": 3,
+          "max": 397
+        },
+        "predictions": {
+          "normalArtian": {
+            "count": 22,
+            "sum": 1,
+            "min": 0,
+            "max": 1
+          },
+          "skill": {
+            "count": 22,
+            "sum": 1441,
+            "min": 0,
+            "max": 532
+          },
+          "gogmaReset": {
+            "count": 22,
+            "sum": 1157,
+            "min": 9,
+            "max": 171
+          },
+          "gogmaKeep": {
+            "count": 22,
+            "sum": 1893,
+            "min": 9,
+            "max": 293
+          },
+          "supportQueries": {
+            "count": 22,
+            "sum": 418,
+            "min": 2,
+            "max": 83
+          }
+        }
+      },
+      "stops": {
+        "consumer": 22
+      },
+      "budgetExceededComponents": {},
+      "upperBoundToObservedGogmaStates": {
+        "count": 22,
+        "min": 4.48,
+        "max": 469.74
+      }
+    }
+  },
+  "routeVerification": {
+    "checkedAttempts": 22,
+    "passed": 22,
+    "failed": 0,
+    "issueCodes": {},
+    "checkedOperations": {
+      "count": 22,
+      "sum": 787,
+      "min": 2,
+      "max": 321
+    },
+    "predictions": {
+      "normalArtian": 1,
+      "skill": 300,
+      "gogmaReset": 51,
+      "gogmaKeep": 435,
+      "supportQueries": 0
+    }
+  },
+  "materializedEntries": {
+    "count": 43,
+    "fingerprint": "fnv1a32:ed959cc4"
+  },
+  "claims": "none: no verified / best_found / proven_minimum, and all_materialized is not a Plan (Phase D' is not run)",
+  "unconfirmed": [
+    "Production Planner, Trace Replay and fresh Planner verification (D-1): all_materialized is not a Plan and not verified",
+    "structural candidates after the first one, and windows other than W0",
+    "G1 / G2 continuation shapes, the projected-to-shape fallback and the operation-kind alternative on the real Export unless counted above",
+    "determinism on another machine or Node version"
+  ]
+}
