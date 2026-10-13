@@ -31,7 +31,7 @@ Global Assignment内のResearch authorityは [Global Assignment設計](PLANNER_G
 | --- | --- |
 | first Worker / fresh Worker | Node D-1A / D-1Cのfirst / fresh子processに対応するBrowser Dedicated Worker。first = Export → PlannerInput → Phase 0 → A → B / C → D → D'、fresh = Export → PlannerInput → 自分のPhase 0 → firstのEntry集合 → D'。別Worker（別JS realm・別heap）で実行する |
 | logical run | first Worker 1回とfresh Worker 1回の組（Node D-1Cの「1 complete run」に相当）。D-1Cは2 logical runを登録した |
-| Node reference | 同じmeasurement HEADでNode上の既存Research runner（D-1A non-formal runner）が出したsemantic値（§12.2） |
+| Node reference | 同じmeasurement HEADでNode上の既存Research runner（D-1A non-formal runner）が出したsemantic値（§12.3） |
 | semantic | 実行環境に依存しない計算結果の記録（materialization semantic record、verification semantic record とそのSHA-256、fingerprint）。Nodeと完全一致を要求する |
 | observed | 時間・memory・yield回数・heartbeat・環境情報など実行環境に依存する観測値。Nodeとの一致を要求しない |
 | measurement environment | OS・Browser・端末・serving方法・計測方法の組（§11） |
@@ -99,7 +99,7 @@ Nodeでの観測値（参考。Browserの期待値ではない。§9.6）:
 | --- | --- | --- |
 | protocol（prefix `pg2a_benchmark_`、run / cancel / ping → ready / accepted / pong / cancel_ack / progress / result / cancelled / error） | `src/benchmarks/plannerGlobalBrowserBenchmarkProtocol.ts` | **形だけ再利用**（新しいprefix・versionで別protocolを定義。§7.3）。message・型は流用しない |
 | semantic evidence（Web Crypto SHA-256、`sha256(JSON.stringify(value))`） | `src/benchmarks/plannerGlobalBrowserEvidence.ts` | `webCryptoSha256` / `jsonSha256` は **そのままimport可**（このmoduleの他moduleへの依存は `import type` だけ）。`PlannerGlobalEvidenceCollector` / `plannerGlobalSemantic()` はPhase 1-E用なので使わない |
-| main-thread harness（1 harness = 1 Worker = 1 run、ready / accepted / round trip、cancel ack / settle、ping、late response、native error fail closed） | `src/benchmarks/plannerGlobalBrowserBenchmark.ts` | **仕組みを再利用**（同じ境界・同じfail closed規則で新harnessを作る）。message型が異なるのでmoduleは流用しない |
+| main-thread harness（1 harness = 1 Worker = 1 run、ready / accepted / round trip、cancel ack / settle、ping、late response、native error fail closed） | `src/benchmarks/plannerGlobalBrowserBenchmark.ts` | **仕組みを再利用**（同じ境界・同じfail closed規則で新harnessを作る）。message型が異なるのでmoduleは流用しない。ただしPhase 2-Aのharnessは、cancel要求後に届いた `pg2a_benchmark_result` も `completed` としてsettleする（cancel要求は結果の採用を止めない）。Global Assignmentではこの挙動を引き継がず、§7.8のmain thread側のcancel契約に置き換える（Phase 2-Aのharnessは変更しない） |
 | runner（records、series、controller、chained ping、cancel trigger、memory sampling、JSON export） | `src/benchmarks/plannerGlobalBrowserBenchmarkRunner.ts` | **仕組みを再利用**（memory sampling・JSON export・cancel triggerの方式）。Phase 1-E controllerは使わない |
 | Worker controller / entry（fresh Worker policy、MessageChannel macrotask yield、cancel set、`readWorkerPerformanceMemory()`） | `src/workers/plannerGlobal.worker.benchmark(.entry).ts` | **仕組みを再利用**。ただしこのmoduleはPhase 1-E Research（`runGlobalPlannerResearch` / fallback / raw block / profiler）をruntime importするので、Global AssignmentのWorkerからimportしない。MessageChannel yield（約15行）は既存と同じく局所copyにする（Phase 2-Aも `search.worker.ts` / `planner.worker.ts` を変えないため局所copyにした） |
 | page（Export file選択、`globalResearchInputFromExport()` をmain threadで1回実行、console API `globalThis.plannerGlobalBrowserBenchmark`、「JSON保存」） | `src/pages/PlannerGlobalBrowserBenchmarkPage.tsx` | **UIの方式を再利用**。ただし入力構築はmain threadでなくWorkerで行う（§7.5） |
@@ -200,7 +200,7 @@ Node依存は計算の外側（runner script・formal gate・process envelope）
   `src/domain/search/routeEligibility.ts`（35 / 51 / 79行）、`src/domain/search/candidateFactory.ts`（182行）、`src/domain/rng/capabilities.ts`、
   `src/domain/artian/productionBonusAvailability.ts`。比較結果は実行環境のdefault localeとcollation実装（ICU等）に依存し得る。ASCIIのstable IDで実際に差が出るかは
   **未確認** であり、差が出ると主張しない。P-2は各環境の `navigator.language` / `Intl.DateTimeFormat().resolvedOptions().locale` とuserAgentを記録し、semantic不一致があったときの
-  切り分けに使う（§12.3）。Domainの順序規則は変更しない
+  切り分けに使う（§12.4）。Domainの順序規則は変更しない
 
 ## 5. Node依存一覧
 
@@ -227,7 +227,7 @@ Node依存は計算の外側（runner script・formal gate・process envelope）
   主張しない（§12.4）。Browser用のformal契約が必要になった場合は、P-2の後に別の事前登録PRで設計する
 - **D-1C formal runnerそのもの**: 登録HEAD `d15ea9b` 以降に許可外の計算コード変更があるHEADでは拒否する（意図どおり）。P-1でBrowser adapterを追加した後のHEADでは、D-1C formal runnerは
   計算コード監査で拒否される。D-1Cの正式記録は変わらず、再実行もしない
-- **Node runner script自体**（`scripts/run-planner-global-assignment-d1a.mjs` / `d1c.mjs`）: 変更しない。Node referenceとしてD-1A runnerを **そのまま** 使う（§12.2）
+- **Node runner script自体**（`scripts/run-planner-global-assignment-d1a.mjs` / `d1c.mjs`）: 変更しない。Node referenceとしてD-1A runnerを **そのまま** 使う（§12.3）
 
 ## 6. 再利用可能なResearch計算境界
 
@@ -275,7 +275,7 @@ runFreshStage(exportBytes: ArrayBuffer, entrySet: D1aEntrySet, conditions: Regis
    fresh: Phase 0は `globalResearchDependencies(engineB)`、Phase D'は新しいEngine。D-1A runnerと同じ構築順序にする（PlanのIDがprocess内の先行runに依存しないため）
 3. 条件は `registeredD1cConditions()` だけから取る。run requestに条件fieldを持たせない（D-1Cの子processが「登録moduleから取り直す」のと同じ）。Vitestだけがcontroller optionで別条件を注入できる
 4. semantic SHA-256はWorker内で `JSON.stringify(semantic)` に対して取り、postMessage前の値とする。main threadは受け取ったsemanticを再hashして一致を確認する（D-1Aの親の再hashと同じ）
-5. D-0Cの登録identity・D-1CのRESULT・期待hashを入力に取らない（§12.4）。D-1A runnerの「D-0C同一性が不一致ならPlannerを走らせない」分岐は持たない（Browser runはmaterializationの
+5. D-0Cの登録identity・D-1CのRESULT・期待hashを入力に取らない（§12.5）。D-1A runnerの「D-0C同一性が不一致ならPlannerを走らせない」分岐は持たない（Browser runはmaterializationの
    結果をそのままPhase D'へ渡し、同一性は事後に判定する）
 6. firstのPhase D'は `handoff.stage.kind === 'all_materialized'` でなければ `verifyPlannerCandidate()` が型付きoutcome（`materialization_*`）で止める。stage moduleは独自の判定を足さない
 7. verification budgetは登録値（1）で、D-1A runnerと同じく最初のhandoff（`handoffs[0]`）だけを検証する。structural candidate 1件の条件でhandoffが2件以上ある場合は
@@ -292,7 +292,7 @@ runFreshStage(exportBytes: ArrayBuffer, entrySet: D1aEntrySet, conditions: Regis
 | progress relay | stage event・materialization progress event（`MaterializationProgressEvent`）・verification stage eventをそのまま `gab_progress` で送る |
 | environment probe | `crossOriginIsolated`、`isSecureContext`、`hardwareConcurrency`、`deviceMemory`、userAgent、language / locale、Worker realmの `performance.memory` の有無、`crypto.subtle` の有無、`MessageChannel` の有無、`structuredClone` の有無、Engine version、CalculationContext、build provenance |
 | result packager | semantic・SHA-256・summary・observed・Entry集合（firstだけ）をplain dataでまとめ、送信前にnon-plain値が無いことを確認する |
-| main-thread harness / runner | 1 harness = 1 Worker = 1 run、first → terminate → fresh → terminate の順序、timeout / cancel grace、ping、memory hooks、JSON export（§7.4 / §10） |
+| main-thread harness / runner | 1 harness = 1 Worker = 1 run、requestのlifecycle（`running` / `cancelling` / `settled`。cancel後の結果不採用の最終保証、§7.8 / §10）、first → terminate → fresh → terminate の順序、timeout / cancel grace、ping、memory hooks、JSON export（§7.4） |
 | page | Export選択、条件（登録値の読取り表示だけ。編集不可）、実行・cancel・ping・JSON保存、console API（外部driver用） |
 
 ### 6.4 診断のみで、判定に使わないもの
@@ -314,7 +314,7 @@ src/benchmarks/globalAssignment/browser/
   globalAssignment.worker.benchmark.ts                     Worker controller（fresh Worker policy、cancel、heartbeat、slice計測）
   globalAssignment.worker.benchmark.entry.ts               Worker entry（ProductionRngEngine、globalResearchInputFromExport を注入）
   globalAssignmentBrowserHarness.ts                        main-thread harness（1 harness = 1 Worker = 1 run）
-  globalAssignmentBrowserRunner.ts                         logical runの順序、repeat、cancel trigger、ping run、memory hooks、JSON export
+  globalAssignmentBrowserRunner.ts                         run slotごとのlogical run、request lifecycle（§7.8）、cancel trigger、ping run、memory hooks、JSON export
   globalAssignmentBrowserJudgement.ts                      logical runの判定とparity判定（pure、P-2のanalyzerと共用）
   *.test.ts、browserIsolation.test.ts
 ```
@@ -352,36 +352,38 @@ attachGlobalAssignmentBrowserWorker(self as unknown as WorkerScope, {
 | 方向 | message | field | 規則 |
 | --- | --- | --- | --- |
 | main → Worker | `gab_run` | `protocolVersion`、`requestId`、`role: 'first' \| 'fresh'`、`exportFile: Blob`（fallback: `exportBytes: ArrayBuffer` をtransfer）、`exportIdentity: { fileName, bytes, sha256 }`（main threadの観測値）、`entrySet`（freshだけ。`D1aEntrySet` のplain data）、`execution: { yieldMode, heartbeatIntervalMs, workerHeapSampling }` | 1 Workerで1回だけ（2回目・重複requestIdは `gab_error`）。条件・期待hash・D-0C identity・RESULTのfieldは **持たない**。`role` と `entrySet` の整合（firstはnull、freshは必須）を計算前に検査 |
-| main → Worker | `gab_cancel` | `requestId` | 該当requestのcancel flagを立て、直ちに `gab_cancel_ack` |
+| main → Worker | `gab_cancel` | `requestId` | main threadが対象requestを `cancelling` にした **後** にpostする（§7.8 C1）。Workerはdispatchできた時点でcancel flagを立て、直ちに `gab_cancel_ack` を返す（requestが既に終わっていてもackだけ返す） |
 | main → Worker | `gab_ping` | `pingId` | 直ちに `gab_pong` |
 | Worker → main | `gab_ready` | `environment`（§6.3のprobe、build provenance） | module評価完了 |
 | Worker → main | `gab_accepted` | `requestId` | request検証が通った直後 |
 | Worker → main | `gab_progress` | `requestId`、`event`（input stage / materialization progress / verification stage）、`atMs`（Worker epoch） | §7.7 |
 | Worker → main | `gab_heartbeat` | `requestId`、`stage`、`yields`、`maxSliceMs`、`elapsedMs`、`workerHeap`（取得できる場合だけ） | §7.7 |
 | Worker → main | `gab_cancel_ack` / `gab_pong` | `requestId` / `pingId` | — |
-| Worker → main | `gab_result` | `requestId`、`result`（§8.2） | cancelが一度も要求されずに計算が終わった場合だけ |
-| Worker → main | `gab_cancelled` | `requestId`、`stoppedAt`（stage）、`observed`（それまでの時間・slice） | cancel要求後の終了（計算が先に終わっていても、cancel要求後は結果を送らない。§7.8） |
+| Worker → main | `gab_result` | `requestId`、`result`（§8.2） | 計算が終わったとき、Workerがcancel flagを見ていなければ送る。Workerが `gab_cancel` をdispatchする前に送ったものは、main threadが `cancelling` 以降なら採用しない（§7.8 C2） |
+| Worker → main | `gab_cancelled` | `requestId`、`stoppedAt`（stage）、`observed`（それまでの時間・slice） | Workerがcancel flagを認識した後の終了（cancel点で止まった場合、または `gab_result` を送る直前にflagを見た場合。best effort。§7.8） |
 | Worker → main | `gab_error` | `requestId`、`stage`、`errorName`、`message` | 入力構築の失敗、request不正、予期しない例外。`GlobalAssignmentInvariantError` 等のResearch内部例外もここへ来る（runnerが型付きoutcomeにしないもの） |
 
 `requestId` はmain threadが採番する識別子（例: `gab.<logicalRun>.<role>`）で、semantic recordにもEntry / Plan IDにも入らない。
+Workerは1 requestにつき終了message（`gab_result` / `gab_cancelled` / `gab_error`）を1件だけ送る。どの終了messageを採用するか・捨てるかはmain threadのrequest lifecycle（§7.8 / §10）だけが決める。
 
 ### 7.4 logical runの実行順序
 
 ```text
 page: userがExport fileを選ぶ → main threadでExport identity（name / bytes / SHA-256）を1回観測（計測外として時間を記録）
-for logicalRun in 1..repeat:
+for each run slot of the measurement plan（slot ID・目的を記録に付ける。§12.2）:
   first = new harness → whenReady → run(role first, exportFile, entrySet null)
-          → gab_result（materialization semantic + Entry集合 + verification）を受け取る → semantic再hash → terminate
-  firstがEntry集合を返さない（materializationがall_materializedでない / cancel / error / timeout）→ freshを起動しない（not_run）
+          → firstのrequestが completed でsettle（gab_resultを採用）→ semantic再hash → terminate
+  firstが completed 以外でsettle（cancelled / cancelled_terminated / timeout / error ほか）、またはEntry集合を返さない（all_materializedでない）
+          → Entry集合を取り出さず、freshを起動しない（not_run。§7.8 C10）
   fresh = new harness → whenReady → run(role fresh, exportFile, entrySet = firstのEntry集合)
-          → gab_result（自分のPhase 0 + verification）→ semantic再hash → terminate
+          → freshのrequestが completed でsettle → semantic再hash → terminate
   judgeBrowserLogicalRun(first, fresh, integrityIssues)（§12.1）
-analyzer（事後、P-2）: Node reference・D-1C公開RESULTとparity判定（§12）
+analyzer（事後、P-2）: 測定時commitの計画・Node reference・D-1C公開RESULTとparity判定、cancel試験の判定、未完了の集計（§12）
 ```
 
 - 同時実行は1 Worker（Node D-1Cのconcurrency 1と同じ）。first Workerをterminateしてからfresh Workerを作る（2つのheapを同時に持たない）
 - 2回目以降のlogical runはfirstのmaterializationから再計算する（前runのEntry集合を使わない。D-1Cと同じ）
-- 自動retryはしない（設計 G6 / G7）。失敗したlogical runの再実行はoperatorが明示的に行い、別のrunとして記録する
+- 自動retryはしない（設計 G6 / G7）。失敗・中断したslotを別のrunで置き換えない。operatorが明示的に再実行したrunは計画外のrunとして記録し、比較母集団に入れない（§12.2）
 
 ### 7.5 Workerへの入力の渡し方とPlannerInput構築
 
@@ -416,28 +418,67 @@ materialization progress（`onProgress`）とverification stage（`onStage`）�
   そのまま使える形にしておく）。`target_settled` の件数（k / 43）は事実の件数として表示してよいが、時間の割合として扱わない
 - progressとheartbeatはexecution-onlyで、semantic recordを変えない（`runMaterializationSmoke()` の `onProgress` はstructured cloneを渡す既存仕様）
 
-### 7.8 キャンセル
+### 7.8 キャンセル（安全保証はmain threadのrequest lifecycle）
 
-- cooperative cancel: `gab_cancel` → cancel flag → 次の `shouldCancel()`（Phase Aの64位置、structural searchのnode / 256 option、Searchのcheckpoint、Plannerの64 action）で停止。
+**cancel後の結果不採用を最終的に保証するのはmain thread（harness）である。** Workerは同期区間の間 `gab_cancel` をdispatchできないので、main threadがcancel操作を受け付けた後でも、
+Workerがcancelを知らないまま計算を終えて `gab_result` を送ること、またはcancel受付の時点で `gab_result` が既に送信済みでmain threadに未着であることは避けられない。
+Worker側のcancel flagと送信抑止はbest effortであり、安全保証の根拠にしない。
+
+main thread（harness）の不変条件:
+
+| # | 不変条件 |
+| --- | --- |
+| C1 | userのcancel操作（UI、console API、runnerのcancel trigger）を受け付けたとき、harnessは同じ同期処理の中で対象requestを `running` → `cancelling` に変え、受付時刻を記録する。`gab_cancel` のpostはその後に行う（cooperative cancelの要求） |
+| C2 | `cancelling` のrequestに届いた `gab_result` は、requestIdが一致していても、Workerがいつ送ったかに関わらず採用しない。payloadは保持・hash・保存せず直ちに捨て、観測値 `ignoredResultAfterCancel`（到着時刻）だけを記録する |
+| C3 | `cancelling` から `running` へ戻る遷移は無い。`gab_result` の到着、`gab_cancel_ack` の有無、message間の到着順はこの状態を変えない |
+| C4 | `cancelling` のrequestは、Workerの終了message（`gab_cancelled`、C2で捨てた `gab_result`、`gab_error`）の最初の1件で `cancelled` としてsettleする（`gab_error` の内容は観測値に残す）。Workerは1 requestにつき終了messageを1件しか送らないので、捨てた `gab_result` の後に `gab_cancelled` を待たない |
+| C5 | cancel受付から `cancelGraceMs` 以内に終了messageが無ければ `worker.terminate()` し、`cancelled_terminated` としてsettleする。cancel受付後はwall-clock timeout（`workerWallMs`）のtimerを止め、graceのtimerだけが働く |
+| C6 | settleはrequestごとにちょうど1回（cancel・timeout・error・正常完了・page離脱・disposeのどの経路でも）。2回目以降のsettleは状態を変えない。settle直後にWorkerをterminateする |
+| C7 | settle後に届いたmessageと、未知のrequestIdのmessageは結果として適用せず `lateResponses` に数える（Phase 2-Aと同じ観測値。`gab_cancel_ack` の遅着もここに入る） |
+| C8 | 既にsettledのrequestへのcancel操作は何もしない（状態を変えず、`gab_cancel` もpostせず、`cancel()` はfalseを返す）。採用済みの正常結果を後から取り消すことはしない |
+| C9 | 新しいrunは新しいharness・新しいWorker・新しいrequestIdで始める。前のharnessはdispose済みでlistenerを外し、前のWorkerはterminate済みである。前のrequestのmessageが新しいharnessへ届いても、requestIdが一致しないので `lateResponses` になり、結果・Entry集合・progressとして適用されない |
+| C10 | runnerは、first Workerのrequestが `completed`（`gab_result` を採用）でsettleしたときだけ、そのEntry集合をfreshへ渡す。`cancelled` / `cancelled_terminated` ほか `completed` 以外のfirstからはEntry集合を取り出さず、freshを起動しない。前のlogical runの値を次のlogical runへ渡さない |
+
+Worker（controller）の責務（best effort）:
+
+- `gab_cancel` をdispatchできた時点でcancel flagを立て、直ちに `gab_cancel_ack` を返す（requestが終わっていてもackだけ返す）
+- 計算は既存のcancel点（Phase Aの64位置、structural searchのnode / 256 option、Searchのcheckpoint、Plannerの64 action）でflagを読んで止まり、`gab_cancelled` を送る。
   停止後のoutcomeは既存の型どおり（`scan_cancelled`、`structural_search_incomplete(cancelled)`、Targetの `unmeasured(cancelled)`、verificationの `unmeasured(cancelled)`）で、
-  Browser runとしては `cancelled` に集約する。not found・no match・`planner_rejected` にしない
-- **cancel優先規則**: cancel要求後は、計算がcancel点に当たらずに最後まで終わった場合（同期区間の最中に要求された等）でも `gab_result` を送らず `gab_cancelled` を送る。
-  これにより「cancelしたのに結果が後から適用される」ことが構造上起きない。計算が終わっていたことは `gab_cancelled.observed` に記録する
-- cancel grace: main threadはcancel post後 `cancelGraceMs` 以内に `gab_cancelled` が来なければ `worker.terminate()` し、`cancelled_terminated` と記録する（§10）。
-  Workerはrunごとに使い捨てで状態を永続化しないので、terminateは常に安全である
-- 測るもの: cancel post → `gab_cancel_ack`（cancel messageがWorkerでdispatchされるまで = 同期区間の残り）、cancel post → settle（cooperative停止まで）、terminateの要否（§9.3）
+  not found・no match・`planner_rejected` にしない
+- `gab_result` を送る直前にもflagを確認し、立っていれば `gab_cancelled` を送る。flagが立つ前に送った `gab_result` はmain threadがC2で捨てる
+- 終了messageは1 requestにつき1件。Worker側のこれらの処理をmain threadの安全保証の代わりにしない
+
+境界（main threadのevent loopでどちらのtaskが先に実行されたかで決まり、記録した受付時刻・到着時刻から再現できる）:
+
+| 順序 | 扱い |
+| --- | --- |
+| cancel操作の受付より **前** に、`gab_result` がmain threadで採用された（`completed` でsettle済み） | 正常完了である。その後のcancel操作はC8で何もしない。過去の結果を取り消す保証はしない |
+| cancel操作の受付より **後** に `gab_result` が到着した | Workerの送信時刻に関わらずC2で捨て、C4で `cancelled` としてsettleする |
+
+記録と分類（新しい分類は増やさない）:
+
+- 結果を捨てたrequestのoutcomeは `cancelled` で、観測値 `ignoredResultAfterCancel` を持つ。cooperative停止（`gab_cancelled`）と区別して数えるが、どちらも正常完了ではない
+- 結果を捨てたrequestを含むlogical runは、正常完了とも `browser_nonformal_conditions_met` とも扱わない。§12.1の判定では `unmeasured(cancelled)` になり、parityの比較母集団に入らない（§12.2）
+- 使う分類と観測値は `cancelled` / `cancelled_terminated`（§7.11）、`lateResponses`、`ignoredResultAfterCancel` だけである
+- 測るもの: cancel受付 → `gab_cancel_ack`（cancel messageがWorkerでdispatchされるまで = 同期区間の残り）、cancel受付 → settle、settleの経路（`gab_cancelled` / 捨てた `gab_result` / `gab_error` / terminate）、terminateの件数（§9.3）
+- Workerはrunごとに使い捨てで状態を永続化しないので、terminateは常に安全である
+
+Production Plannerのcancel仕様・既存のProduction Worker protocol・既存benchmark harness（Phase 2-Aを含む）はこの契約で変更しない。この契約はP系列のResearch harnessだけのものである。
 
 ### 7.9 Worker終了・cleanup
 
-- 全ての終了経路（result / cancelled / error / timeout / cancel grace超過 / native error / page離脱 / harness dispose）で `worker.terminate()` を呼ぶ。Workerを再利用しない（fresh Worker policy）
+- 全ての終了経路（採用したresult / cancelled（捨てたresultを含む）/ error / timeout / cancel grace超過 / native error / page離脱 / harness dispose）で、settle（1回だけ、§7.8 C6）の直後に
+  `worker.terminate()` を呼ぶ。Workerを再利用しない（fresh Worker policy）
 - harnessはterminate前にlistenerを外し、未決のping / readyを解決（null / reject）してから終える（Phase 2-Aの `dispose()` と同じ）
 - `pagehide` で実行中のWorkerをterminateし、そのrunを `page_left` として記録する（記録はmemory内なので、page自体が破棄された場合は残らない。§10）
 - terminate後のmemory回収は保証されない。§9.2のrun後採取（dispose後・待機後）で観測だけする
 
 ### 7.10 実行結果の受け取り
 
-- `gab_result` を受けたら、harnessはactive requestと一致する場合だけ適用し、settle後・未知requestのresponseは数えるだけ（`lateResponses`）で適用しない
-- main threadはsemantic（materialization / verification）を受け取ったまま再hashしてWorkerのSHA-256と照合する。Entry集合は `d1aEntrySetIssues()` で検査してからfreshへ渡す
+- harnessが `gab_result` を採用するのは、requestIdがactive requestと一致し、かつそのrequestの状態が `running` のときだけである（そのとき `completed` としてsettleする）。
+  状態が `cancelling` なら捨てて `cancelled` としてsettleし（§7.8 C2 / C4）、settle後・未知requestIdなら `lateResponses` に数えるだけで適用しない（C7 / C9）
+- main threadは採用したsemantic（materialization / verification）を再hashしてWorkerのSHA-256と照合する。Entry集合は、firstが `completed` でsettleした場合だけ（C10）、
+  `d1aEntrySetIssues()` で検査してからfreshへ渡す
 - 受け取ったEntry本体・Plan全Stepはpage memoryだけに置き、page表示は件数・hash・outcomeだけにする（Target ID等の一覧を画面に出さない）
 
 ### 7.11 timeout・OOM・Worker errorの分類
@@ -445,7 +486,8 @@ materialization progress（`onProgress`）とverification stage（`onStage`）�
 | 事象 | 検出 | 分類 | 備考 |
 | --- | --- | --- | --- |
 | 計算が `workerWallMs` を超えた | main threadのtimer | `timeout`（terminate） | 非表示中はtimerが遅れ得るので、発火時刻とvisibilityを記録 |
-| cancel後 `cancelGraceMs` 内に止まらない | main threadのtimer | `cancelled_terminated` | 同期区間の長さの観測値になる |
+| cancel受付後、Workerの終了message（`gab_cancelled` / `gab_result` / `gab_error`）が届いた | main threadのrequest lifecycle | `cancelled` | `gab_result` なら採用せず `ignoredResultAfterCancel` を記録（§7.8 C2 / C4） |
+| cancel受付後 `cancelGraceMs` 内に終了messageが無い | main threadのtimer | `cancelled_terminated` | 同期区間の長さの観測値になる |
 | Worker module評価・実行中の未捕捉例外 | Worker `error` event | `worker_error` | message・filename・lineno（取得できれば）を記録 |
 | messageのdeserialize失敗 | `messageerror` event | `worker_error`（messageerror） | — |
 | Worker内で捕捉したerror | `gab_error` | `worker_reported_error`（stage別） | 入力構築・request検証・予期しない例外 |
@@ -461,7 +503,7 @@ materialization progress（`onProgress`）とverification stage（`onStage`）�
 ### 7.12 実行結果を再利用・永続化しない初期方針
 
 - IndexedDB（Dexie）、`localStorage`、`sessionStorage`、Cache Storage、Service Workerを使わない。結果・Entry・Plan・ReachTableをrun間・page session間で再利用しない
-- first → freshのEntry集合の受け渡しは同じlogical run内のmemoryだけで行い、logical runの終了で捨てる
+- first → freshのEntry集合の受け渡しは、firstが `completed` でsettleした場合だけ（§7.8 C10）、同じlogical run内のmemoryだけで行い、logical runの終了で捨てる
 - 保存はuserが押す「JSON保存」（Blob download）とconsole API `exportJson()` だけ。保存先はoperatorが決め、Repositoryへは最小化したsummaryだけをcommitする（§8.4）
 - 生成Entry（`build-list.constrained.*`）・Research Candidate ID（`candidate.research.global-assignment.*`）・Plan ID（`research.global.plan.*`）をアプリのDBへ書かない。benchmark originは
   アプリ本体のoriginと別（ローカルpreview）だが、それにも依存せず「書かない」ことをisolation testで固定する
@@ -481,8 +523,8 @@ materialization progress（`onProgress`）とverification stage（`onStage`）�
 | --- | --- | --- |
 | Export | userがpageで選んだfile（PC: file picker / 外部driverはCDP `DOM.setFileInputFiles`、スマートフォン: OSのfile picker） | Repositoryに置かない。identity = name / bytes / SHA-256 |
 | 条件 | `registeredD1cConditions()`（Worker内） | pageは読取り表示だけ（編集不可） |
-| execution option | page（`heartbeatIntervalMs`、`workerWallMs`、`cancelGraceMs`、`repeat`、cancel trigger、ping / memory runの選択） | 計算に影響しない。P-2の測定計画で値を固定し記録する（§16） |
-| **入力にしないもの** | oracle manifest / verifier / RESULT JSON、D-0C / D-1Cの登録identity・期待hash、過去のEntry集合・raw record、Target ID・位置、Target順序 | 設計 §11.1と同じ。比較は事後のanalyzerだけ（§12.4） |
+| execution option | page（`heartbeatIntervalMs`、`workerWallMs`、`cancelGraceMs`、run slotの一覧（slot ID・目的・順序。§12.2）、cancel trigger、ping / memory runの選択） | 計算に影響しない。P-2の測定計画で値を固定し記録する（§16） |
+| **入力にしないもの** | oracle manifest / verifier / RESULT JSON、D-0C / D-1Cの登録identity・期待hash、過去のEntry集合・raw record、Target ID・位置、Target順序 | 設計 §11.1と同じ。比較は事後のanalyzerだけ（§12.5） |
 
 ### 8.2 出力（Worker result、提案）
 
@@ -566,21 +608,24 @@ iOSがtabを破棄した理由、空き物理memory（Browserから取得でき�
 | progress通知間隔 | `gab_progress` / `gab_heartbeat` の受信間隔（main）。stage別の最大・中央値 |
 | 最大同期slice | Workerのyield間隔の最大値（stage別、§6.3）。heartbeatが届かない区間の長さとして main 側でも観測 |
 | Workerの応答性 | 別runで chained ping（pong受信で次のping。Phase 2-Aと同じ）。RTTの中央値・p95・最大、200 ms超の回数、stageとの対応。**Worker event loopの応答性でありUI frame rateではない** |
-| cancel受付 | cancel post → `gab_cancel_ack`（stage別に、Phase A / B・C / D / D' Planner / D' Trace Replay中を狙う。triggerは該当stageのprogress受信 + 固定遅延） |
-| cancel停止 | cancel post → `gab_cancelled`。`cancelGraceMs` 超過でterminateした回数 |
-| 停止後の遅延結果混入防止 | `lateResponses` が数えられ、適用された結果が0件であること。cancel後に `gab_result` が来ないこと（§7.8） |
+| cancel受付 | main threadのcancel受付（`cancelling` への遷移、§7.8 C1）→ `gab_cancel_ack`（stage別に、Phase A / B・C / D / D' Planner / D' Trace Replay中を狙う。triggerは該当stageのprogress受信 + 固定遅延） |
+| cancel停止 | cancel受付 → settle。経路（`gab_cancelled` / 捨てた `gab_result`（`ignoredResultAfterCancel`）/ `gab_error` / `cancelGraceMs` 超過のterminate）ごとの件数と時間 |
+| 停止後の遅延結果混入防止 | cancel受付後に届いた `gab_result` が採用されないこと（`ignoredResultAfterCancel`）、settle後・前runのmessageが `lateResponses` に数えられ適用されないこと。cancelしたrequestから採用された結果が0件であること（§7.8） |
 | 再実行可能性 | 同じpage sessionで、cancel・timeout・error・正常終了の後に新しいlogical runを開始し、完了すること。前runの状態が残らないこと（semanticが1回目と一致） |
 | UIの応答性（参考） | main threadのlong task（`PerformanceObserver` の `longtask`、取得できる環境だけ）。入力構築をWorkerへ移したことの確認 |
 
 ### 9.4 再現性（semantic）
 
-D-1Cとの比較項目（§12.1で一致を要求）: planning Target数、materialization semantic SHA-256、Entry fingerprint（semantic record・Entry本体・Entry集合の3つ）、materialized Target数と方式の内訳、
+D-1C・Node referenceとの比較項目（§12.1で一致を要求）: planning Target数、materialization semantic SHA-256、Entry fingerprint（semantic record・Entry本体・Entry集合の3つ）、materialized Target数と方式の内訳、
 completed / total Target数、selected Entry数、Conflict / rejected / resource_conflict / warning数、termination、expandedStates、full Planner run数、Trace Replay（valid、draft数、対応不一致数）、
-物理操作数・Plan steps・非物理Step・Σ stream前進・objective、Plan hash / Step semantic hash / 実行位置hash、verification semantic SHA-256（first / fresh、全logical run）。
+物理操作数・Plan steps・非物理Step・Σ stream前進・objective、Plan hash / Step semantic hash / 実行位置hash、verification semantic SHA-256（first / fresh、比較母集団の全logical run）。
+どのrunをこの比較に使うか（比較母集団）と必要run数は §12.2 で事前に固定し、判定は §12.4 で行う。
 
 ### 9.5 runの種類
 
-timing・responsiveness（ping）・memory・cancel・rerunは互いの計測が干渉するので別runにする（Phase 2-Aと同じ）。どのrunもsemanticは記録し、§12の判定対象にする（cancel runは比較しない）。
+timing・rerun・responsiveness（ping）・memory・cancel・pilotは互いの計測が干渉するので別runにする（Phase 2-Aと同じ）。runの目的は計測前に測定計画のslotとして固定し（§12.2）、目的ごとにparityでの扱いを決める:
+timing / rerunは必須比較run、responsiveness / memoryは完了した場合だけ比較する追加比較run、cancel / pilotは比較母集団から除外する。cancel試験の合否・応答性・memory・未完了runの件数は、
+parityとは独立に評価・記録する（§12.6）。どのrunもsemanticは記録する（比較に使わないrunでも、記録は残す）。
 
 ### 9.6 Node値の扱い
 
@@ -592,16 +637,24 @@ Global Assignmentでも同じとは仮定しない。Browserの時間はBrowser�
 状態遷移（harness、提案）:
 
 ```text
-created ──ready──▶ ready ──run──▶ running ──result──────────────▶ settled(completed) ─▶ terminated
-                                     │ ├──cancel──▶ cancelling ──cancelled──▶ settled(cancelled) ─▶ terminated
-                                     │ │                       └─grace超過──▶ settled(cancelled_terminated)（terminate済み）
-                                     │ ├──timeout──▶ settled(timeout)（terminate）
-                                     │ ├──error / messageerror / gab_error──▶ settled(worker_error | worker_reported_error) ─▶ terminated
-                                     │ └──pagehide / dispose──▶ settled(page_left) ─▶ terminated
-                                     └（renderer crash: harnessごと消える → 外部記録で page_lost）
+created ──ready──▶ ready ──run──▶ running
+                                    ├──gab_result（採用）──────────────────────────────▶ settled(completed)
+                                    ├──timeout──────────────────────────────────────────▶ settled(timeout)
+                                    ├──gab_error / error / messageerror─────────────────▶ settled(worker_reported_error | worker_error)
+                                    ├──pagehide / dispose────────────────────────────────▶ settled(page_left)
+                                    └──cancel受付（同期。この後に gab_cancel をpost）──▶ cancelling
+                                          cancelling ──gab_cancelled / gab_result（採用しない）/ gab_error──▶ settled(cancelled)
+                                          cancelling ──cancelGraceMs超過─────────────────────────────────▶ settled(cancelled_terminated)
+                                          cancelling ──error / messageerror──────────────────────────────▶ settled(worker_error)
+                                          cancelling ──pagehide / dispose────────────────────────────────▶ settled(page_left)
+settled(*) ──▶ terminated（全経路でsettle直後にterminate）。settled後のmessageは lateResponses（適用しない）
+settled(*) へのcancel操作は何もしない（cancel() は false）
+（renderer crash: harnessごと消える → 外部記録で page_lost）
 ```
 
-- settleは1回だけ。settle後のresponseは適用しない（late count）
+- §7.8のC1〜C10がこの状態遷移の不変条件である。`cancelling` から `running` へ戻る遷移は無く、`cancelling` の間に届いた `gab_result` は採用しない
+- settleはrequestごとにちょうど1回。settle後のmessageは適用しない（`lateResponses`）。cancelを受け付けたrequestから採用された結果は0件でなければならない（P-1のtestで確認する。§16.1）
+- `cancelling` 中の native `error` / `messageerror` は `worker_error`（`cancelRequested: true` を記録）としてsettleし、cancel試験の評価では `cancel_failed`（理由 `worker_error_during_cancel`）として数える（§12.6）
 - logical runの判定（§12.1）はfirst / freshのsettle結果だけから行い、`out_of_memory` を外部証拠なしに付けない
 - cancel・timeout・errorのrunは、性能の集計（時間・memory）から除外し、件数と停止stageを別に数える
 - 分類はすべて「未計測（unmeasured）」側であり、Production Plannerの成立・不成立、materializationの `shape_mismatch` と混同しない（設計 §9.6）
@@ -614,7 +667,7 @@ created ──ready──▶ ready ──run──▶ running ──result──
 
 | 環境 | P-1（synthetic・基盤） | P-2（実Export） | 備考 |
 | --- | --- | --- | --- |
-| Windows + Chrome（stable、headed、専用profile） | **確認する**（bundle・Worker起動・protocol・異常系・cleanup。実Exportは使わない） | **必須**（timing / ping / memory / cancel / rerun、logical run 2回以上） | 外部CDP driverとOS memoryを使える。既存Browser記録と同じ系統 |
+| Windows + Chrome（stable、headed、専用profile） | **確認する**（bundle・Worker起動・protocol・異常系・cleanup。実Exportは使わない） | **必須**（timing / rerun / ping / memory / cancel。必須比較run（timing / rerun）は2 logical run以上を測定計画で固定。§12.2） | 外部CDP driverとOS memoryを使える。既存Browser記録と同じ系統 |
 | Android + Chrome（実機） | しない | **端末を用意できれば実施**（timing / cancel / rerun。memoryはCDP経由で取れる範囲） | USB debugging（`adb`）が要る。端末のRAM・SoCを記録 |
 | iPhone + Safari（実機） | しない | **端末とsecure contextの経路を用意できれば実施**（timing / cancel / rerun。memoryはMacのWeb Inspectorがある場合だけ） | HTTPSが要る（§11.2） |
 | その他（Edge、Firefox、iPad等） | しない | 任意 | 実施した場合だけ記録 |
@@ -670,14 +723,14 @@ OS・version、Browser・version（userAgent、UA-CHが取れればplatformVersi
 | | materialization semantic SHA-256 | `6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f` |
 | | Entry fingerprint（semantic record・handoffのEntry本体・Entry集合・fresh側） | `fnv1a32:ed959cc4` |
 | | materialized Target数 / 方式 | 43（射影起点21、形状制約22） |
-| | verification semantic SHA-256（first / fresh、全logical run） | `0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4` |
+| | verification semantic SHA-256（first / fresh、比較母集団の全logical run。§12.2） | `0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4` |
 | | termination / expandedStates / completed / total | `completed` / 1,809 / 43 / 43 |
 | | selected Entry / Conflict / rejected / resource_conflict / warning | 43 / 0 / 0 / 0 / 0 |
 | | Trace Replay | valid、draft 1,809、対応不一致0 |
 | | 物理操作数 = Plan steps = Σ stream前進 = objective、非物理Step | 1,766、0 |
 | | Plan hash / Step semantic hash / 実行位置hash | `fnv1a32:903e4274` / `fnv1a32:8d28811e` / `fnv1a32:3cf477e7` |
 | | full Planner run数 | 1 |
-| | first / freshのverification semanticの一致、logical run間の一致 | 一致 |
+| | first / freshのverification semanticの一致、比較母集団のlogical run間の一致 | 一致 |
 | **観測（一致を期待するが判定に使わない）** | yield回数、progress event数（同じ計算経路なら同じになると期待されるが、adapterのwrapperの有無で変わり得る） | — |
 | **環境依存（一致を要求しない）** | 全ての時間、memory、heartbeat間隔、ping、cancel latency、Worker起動時間、userAgent・端末・locale、build provenance（HEAD）、Entry集合をserializeしたtextのSHA-256（provenanceにHEADを含むため。D-1Cでも正式計測1と2で異なった） | — |
 
@@ -688,9 +741,43 @@ logical runの判定（Browser内、§6.2のstage結果だけから）: 提案 `
 （integrity issue → firstの終了状態 → firstのverification outcome → freshの終了状態 → freshのPhase 0集合がfirstと同じ → freshのoutcome → first / freshのsemantic一致）で、
 `differingSemanticFields()` を再利用する。違いはD-0C identityの照合を持たないこと（§6.2 5）と、結果のlabelを `browser_nonformal_conditions_met`（両Workerが全条件を満たし一致）とし、
 `verified` / `nonformal_planner_verified` / `accepted` を名乗らないことである。integrity issue（Export identityの不一致、main threadの再hash不一致、Entry集合の検査不合格、build provenanceの不一致）が
-1件でもあれば `invalid_run_integrity`。
+1件でもあれば `invalid_run_integrity`。firstまたはfreshのrequestが `completed`（main threadが `gab_result` を採用）以外でsettleした場合は、§7.11の対応で `unmeasured(<side>, <reason>)` とし、
+cancelを受け付けたrequest（`ignoredResultAfterCancel` を持つものを含む）は `unmeasured(<side>, cancelled)` である。`browser_nonformal_conditions_met` は、両Workerが `completed` でsettleし、
+全条件を満たし、semanticが一致した場合だけに付く。
 
-### 12.2 Node reference
+### 12.2 比較母集団（run目的・必要run数の事前固定）
+
+semantic parityは、計測前に固定した **比較母集団** のrunだけで判定する。cancel試験・応答性・memory・未完了runの結果は、parityとは別に評価・記録する（§12.6）。
+
+P-2の測定計画は、計測前に環境ごと（PC、端末ごとのAndroid / iPhone）のrun slotを固定する: slot ID、目的、実行順、cancel試験ならtriggerのstage、そして必須比較runの必要数。
+runの目的とparityでの扱いは次のとおり。
+
+| 目的 | 正常完了の意図 | parityでの扱い | 別評価（§12.6） |
+| --- | --- | --- | --- |
+| `timing` | あり | **必須比較run**（必要数に数える） | 時間 |
+| `rerun` | あり | **必須比較run**（必要数に数える） | 再実行可能性 |
+| `responsiveness`（ping） | あり | **追加比較run**: 両Workerが完了した場合だけ比較する | 応答性 |
+| `memory` | あり | **追加比較run**: 同上 | memory |
+| `cancel` | なし（正しく中断することが目的） | 比較母集団から除外 | cancel試験の合否 |
+| `pilot` | 測定計画で定める | 比較母集団から除外 | 記録だけ |
+
+規則:
+
+- **必要run数**: 必須比較run（`timing` / `rerun`）の必要logical run数を、環境ごとに測定計画で固定する（1 logical run = first Worker + fresh Worker）。PC（Windows + Chrome）は2以上。
+  スマートフォンは端末ごとの測定計画で決める。`parity_confirmed` を主張し得る環境の必要数は2以上とする（D-1Cの2 complete runsと同じく、Browser内のrun間決定性を確認するため）。
+  必要数を1と計画した環境は、計画の時点で `parity_confirmed` を主張しない環境として扱う
+- **必須比較slotはすべて完了して初めて必要数を満たす**。計画した必須比較slotのうち1つでも、firstかfreshが `completed` 以外でsettleした（cancel、timeout、worker error、page loss等）・
+  実行されなかった・integrity issueがある場合は、必要数を満たさない。失敗・中断したslotを追加runで置き換えない、成功したrunだけを選んで必要数に数えない
+- **計測後に変更しない**: 必要数を減らさない、runの目的を付け替えない（失敗した `timing` を `pilot` / `cancel` にしない）、比較母集団を足し引きしない。
+  計画外のrun（計画のslotに対応しないrun）は記録を残すが比較母集団に入れない。必要数の不足を補うには、新しい測定計画（新しいcommit）で測り直す
+- **追加比較run** は、両Workerが `completed` でsettleした場合だけ比較し、不一致があれば `parity_mismatch` の根拠にする。完了しなかった場合は比較母集団に入れず、その件数はparityと独立に
+  記録する（§12.6）。追加比較runの未完了をparityの成立・不成立に読み替えない
+- integrity issueのあるrunは比較母集団に入れず、成功runとして採用しない（必須比較slotなら「完了していない」）
+- `environment_interrupted`（非表示・凍結。§11.4）のrunは、両Workerが `completed` でsettleしていればsemanticは比較に使う（時間・応答性の集計からだけ除外する）
+- **計画の固定方法**: 測定計画はmeasurement HEADにcommitしたfile（P-2で作る）に置く。各Browser recordはbuild provenanceのcommitと、そのrunに割り当てたslot ID・目的を持つ。
+  analyzerはrecordのcommitから計画を `git show <commit>:<計画file>` で読み直し、その計画のslot・目的・必要数だけを使う。計画fileを測定後に書き換えても、測定時commitの計画が使われる
+
+### 12.3 Node reference
 
 - **同じmeasurement HEADのNode値**: P-2で、Browserと同じHEADで既存のD-1A non-formal runner（`scripts/run-planner-global-assignment-d1a.mjs`、変更しない）を1回実行し、
   materialization semantic SHA-256、Entry fingerprint、first / freshのverification semantic SHA-256を得る（runnerの既存のCLI規約どおり、D-0Cの値は事後照合のためにだけ渡される）。
@@ -699,22 +786,54 @@ logical runの判定（Browser内、§6.2のstage結果だけから）: 提案 `
   sourceにhard-codeしない
 - D-1C formal runnerはP-1以降のHEADで計算コード監査により拒否されるので使わない（§5.1）
 
-### 12.3 判定
+### 12.4 判定
 
-| 判定 | 条件 |
-| --- | --- |
-| `parity_confirmed` | Browserのlogical runがすべて `browser_nonformal_conditions_met`、§12.1の完全一致項目がNode referenceとD-1C記録の両方と一致 |
-| `parity_mismatch` | 完了したrunで、完全一致項目のどれかがNode referenceまたはD-1C記録と異なる（異なるfieldを列挙。`differingSemanticFields()` で最上位fieldを特定） |
-| `not_comparable` | 比較できるrunが無い（全runが `cancelled` / `timeout` / `worker_error` / `page_lost` / `environment_unsupported` 等）。不一致とも一致とも言わない |
+判定は環境ごとに、3分類 `parity_confirmed` / `parity_mismatch` / `not_comparable` のどれか1つに決める。次の順に評価する。
 
+1. **比較の前提**: Browser recordとD-1C公開RESULTの間で、Export identity（name / bytes / SHA-256）、CalculationContext、Engine version、Master data version、条件
+   （`registeredD1cConditions()` の値）が一致すること。Node referenceがある場合は、Node referenceもそれらが一致し、かつ§12.1の要求項目がD-1C公開RESULTと一致すること。
+   成り立たなければ `not_comparable`（理由: `export_identity_mismatch` / `calculation_context_mismatch` / `conditions_mismatch` / `reference_inconsistent` 等）。前提が違う入力どうしの差は
+   不一致と呼ばない（Node referenceとD-1Cが食い違う場合は、Browserとは独立した重大な所見として別に記録する）
+2. **比較母集団の確定**: §12.2の規則で、必須比較slotの結果と、完了した追加比較runを集める。integrity issueのあるrunを除く
+3. **確定した不一致**: 比較母集団の完了run（必須比較・追加比較を問わない）のどれかで、§12.1の完全一致項目がD-1C公開RESULTまたは（ある場合は）Node referenceと異なる、または
+   Browser内のrunどうしが異なる → `parity_mismatch`。異なるrun（slot ID・Worker）とfieldを記録する（`differingSemanticFields()` で最上位fieldを特定）。
+   **必要run数に満たない場合でも、確定した不一致は隠さない**（4・5より優先する）
+4. **Node referenceの欠落** → `not_comparable`（理由 `node_reference_missing`）
+5. **必要run数の不足** → `not_comparable`（理由 `required_runs_incomplete`。各必須比較slotのsettle結果を併記。完了runが1件も無い場合も同じ理由で、件数0と記録する）。
+   計画した必要数が2未満の環境は、全slotが完了しても `not_comparable`（理由 `planned_runs_below_minimum`。§12.2）
+6. 以上のどれにも当たらない → `parity_confirmed`
+
+`parity_confirmed` の条件をまとめると: 測定計画で事前固定した必須比較runが必要数そろい、各logical runのfirst / freshが `completed` でsettleし、各logical runが
+`browser_nonformal_conditions_met` を満たし、比較母集団のBrowser run間でsemanticが一致し、Node referenceとD-1C公開RESULTの要求項目と一致し、比較母集団のintegrity issueが0件であること。
+
+- `not_comparable` の理由は具体的に記録する（上の理由コードと、その根拠になったslot・値）。「一致」とも「不一致」とも言わない
 - 不一致が出た場合は、(1) 環境（locale・engine）、(2) 入力（Export identity、CalculationContext）、(3) build（HEAD・未commit）の順に切り分ける。原因を推測で書かず、
   切り分けで確定できなければ「原因未特定」と記録する。Domainの計算規則・条件を変えて一致させない
-- `parity_confirmed` は「この環境・このExport・この条件でNodeと同じ計算結果になった」ことだけを意味し、Production defaultの根拠・正式acceptance・性能の合格を意味しない
+- `parity_confirmed` は「この環境・このExport・この条件で、計画した必須比較runがNodeと同じ計算結果になった」ことだけを意味し、Production defaultの根拠・正式acceptance・
+  性能の合格・cancelの合格を意味しない。環境をまたいだ1つの「Browser全体のparity」は作らず、環境ごとの結果を並べて記録する
 
-### 12.4 判定する場所
+### 12.5 判定する場所
 
-Worker・stage moduleは期待値を受け取らず、比較もしない。比較はP-2の事後analyzer（Node script、提案名 `scripts/analyze-planner-global-assignment-browser.mjs`）だけが、Browserの「JSON保存」file・
-Node referenceのraw output・D-1C公開RESULTを読んで行う。analyzerの出力をBrowser runへ戻さない（設計 §11.1のpost-hoc evaluationと同じ境界）。
+Worker・stage moduleは期待値を受け取らず、比較もしない。比較はP-2の事後analyzer（Node script、提案名 `scripts/analyze-planner-global-assignment-browser.mjs`）だけが、
+測定時commitの測定計画・Browserの「JSON保存」file・Node referenceのraw output・D-1C公開RESULTを読んで行う。analyzerの出力（parity、cancel試験、未完了の集計）をBrowser runへ戻さない
+（設計 §11.1のpost-hoc evaluationと同じ境界）。
+
+### 12.6 parityと独立に評価・記録するもの
+
+- **未完了・終了経路の集計**: 環境・目的ごとに、firstとfreshのsettle結果（`completed` / `cancelled`（うち `ignoredResultAfterCancel`）/ `cancelled_terminated` / `timeout` / `worker_error` /
+  `worker_reported_error` / `page_left` / `page_lost` / `out_of_memory` / `environment_unsupported`）と `environment_interrupted` の件数・slotを記録する。parityの判定と独立に記録し、
+  parityの結果から逆算しない
+- **cancel試験**（目的 `cancel` のslotごと。P-2の独立したacceptance項目）:
+
+  | 判定 | 条件 |
+  | --- | --- |
+  | `cancel_passed` | cancel受付時にrequestが `running` だった、settleがちょうど1回、settle結果が `cancelled`（経路が `gab_cancelled` または捨てた `gab_result`）または `cancelled_terminated`、cancelしたrequestから採用された結果が0件、Workerがterminateされた、測定計画がその試験の後に置いた再実行slot（あれば）が `completed` でsettleした |
+  | `cancel_failed` | 上のどれかが成り立たない（結果が採用された、settleが2回以上、grace超過後もterminateされない、`cancelling` 中の `worker_error`（`worker_error_during_cancel`）または `gab_error` による終了（`worker_reported_error_during_cancel`。結果の不採用は守られていても異常終了として扱う）、cancel後の再実行が完了しない等。理由を記録） |
+  | `cancel_not_exercised` | cancelが試されなかった（triggerのstageに達する前にrequestがsettleした、cancel操作時にrequestが既にsettled等）。合格にも不合格にも数えない |
+
+  内訳として、settleの経路（cooperative停止 `gab_cancelled` / 捨てた `gab_result` / `gab_error` / terminate）の件数と、cancel受付 → `gab_cancel_ack` / settle の時間をstage別に記録する。
+  cancel試験の合否はparityの比較母集団にもparity判定にも影響しない
+- **応答性・memory**: §9.2 / §9.3の値として別に記録する。responsiveness / memoryのrunが完了しなかったこと（page loss等）は、その評価項目の所見として記録し、parityへ読み替えない
 
 ## 13. Research isolationの維持方法
 
@@ -750,7 +869,7 @@ P-1 / P-2のPR検証で、`npm run build` 後の `dist/` に `gab_`、`global-as
 
 ### 13.4 oracle isolation
 
-設計 §11をそのまま適用する。Worker・stage module・pageはoracle manifest / verifier / RESULT JSON・D-0C / D-1Cの登録identityを読まない。analyzerだけがformal run（Browser run）の後に読む。
+設計 §11をそのまま適用する。Worker・stage module・pageはoracle manifest / verifier / RESULT JSON・D-0C / D-1Cの登録identityを読まない。analyzerだけが、Browser runの終了後に、測定計画・Node reference・D-1C公開RESULTとともに読む（§12.5）。
 
 ### 13.5 永続化しないことの確認
 
@@ -808,20 +927,21 @@ Production fileを変更しない。どちらも1 PR、main向けDraft PR、merg
 | 実装範囲 | §7.1のfile一式（protocol、stage module、Worker controller / entry、harness、runner、judgement、page、`main.tsx`）、`benchmark-global-assignment.html`、`vite.benchmark.config.ts`（2つ目のinputと `BENCHMARK_CODE_PATHS`）、`.gitignore` への `dist-benchmark/` 追加（任意。行わない場合はbuild成果物をcommitしないことを確認）、test、P-1記録docs（非formal） |
 | 変更しないもの | Production file全て、既存のGlobal Assignment runtime module・runner script・登録module・D-1C記録 / RESULT、`isolation.test.ts`、`benchmark.html` / `BenchmarkApp.tsx`、Phase 2-A等の既存harness |
 | 依存 | P-0（本書）のmerge |
-| test | (1) protocol: guard、request検証（role / entrySetの整合、条件fieldが無いこと、重複・2回目の拒否）。(2) stage module: syntheticシーン（既存の `materializationScenario()` 等。小さな表から計算する決定的なtest用Engine、実データなし）で、D-1A子processと同じ直接呼出し列とsemantic・SHA-256が完全一致、dependency構築順序、検証用maxPlanSteps 1,000、条件が `registeredD1cConditions()` 由来（Vitestの注入時を除く）。(3) controller（fake postMessage、Engine・入力構築・条件を注入）: ready / accepted / progress / heartbeat / result、cancel優先規則（同期区間中のcancelで結果を送らない）、各stageでのcancel、`gab_error`、Export SHA不一致、fresh Worker policy。(4) harness（fake Worker）: 時間境界、cancel ack / settle、grace超過のterminate、timeout、native `error` / `messageerror`、late response非適用、dispose、pagehide。(5) runner: first → terminate → fresh の順序、firstが失敗したときfreshを起動しない、logical run間で状態を持ち越さない、JSON exportの最小化。(6) judgement: `judgeD1aRun()` と同じ優先順位、`browser_nonformal_conditions_met` / `invalid_run_integrity` / 各outcome、`verified` を名乗らない、parity判定3分類。(7) `browserIsolation.test.ts`（§13.2）。(8) 既存testが全てそのまま通る |
+| test | (1) protocol: guard、request検証（role / entrySetの整合、条件fieldが無いこと、重複・2回目の拒否）。(2) stage module: syntheticシーン（既存の `materializationScenario()` 等。小さな表から計算する決定的なtest用Engine、実データなし）で、D-1A子processと同じ直接呼出し列とsemantic・SHA-256が完全一致、dependency構築順序、検証用maxPlanSteps 1,000、条件が `registeredD1cConditions()` 由来（Vitestの注入時を除く）。(3) controller（fake postMessage、Engine・入力構築・条件を注入）: ready / accepted / progress / heartbeat / result、`gab_cancel` でflagを立ててackを返すこと、各stageのcancel点での `gab_cancelled`、`gab_result` 直前のflag確認（best effort）、1 requestにつき終了message 1件、`gab_error`、Export SHA不一致、fresh Worker policy。(4) harness（fake Worker）: 時間境界、§7.8のC1〜C10と§10の状態遷移（cancel受付で同期的に `cancelling`、`cancelling` から戻らない、settleちょうど1回、settle直後のterminate、grace超過のterminate、cancel受付後のwall timer停止、settled requestへのcancelが何もしない）、timeout、native `error` / `messageerror`（`cancelling` 中を含む）、`lateResponses`、dispose、pagehide、**下記の競合ケース1〜8**。(5) runner: first → terminate → fresh の順序、firstが `completed` 以外でsettleしたときEntry集合を取り出さずfreshを起動しない（C10）、logical run間で結果・message・Entry集合を持ち越さない、JSON exportの最小化。(6) judgement（logical run）: `judgeD1aRun()` と同じ優先順位、`browser_nonformal_conditions_met` / `invalid_run_integrity` / 各outcome、`completed` 以外のsettle（`ignoredResultAfterCancel` を含む）が `unmeasured` になり `browser_nonformal_conditions_met` にならない、`verified` を名乗らない（parityの3分類はP-2で実装・testする）。(7) `browserIsolation.test.ts`（§13.2）。(8) 既存testが全てそのまま通る |
+| 競合test（fake Worker、message配送の順序をtestが制御する） | 1. Workerが `gab_result` を送信済み（fake Workerのqueueに入れたが未配送）の状態でcancelする → `cancelling` の後に配送された結果を採用せず `cancelled`（`ignoredResultAfterCancel`）。2. `cancelling` になった後に同じrequestIdの `gab_result` が届く → 採用しない。3. `gab_cancel_ack` より先に `gab_result` が届く → 結果を採用せず `cancelled` でsettle、後から届いたackは `lateResponses`。4. cancel後に `gab_cancelled` が届く → `cancelled`。5. cancel graceを超過する → `worker.terminate()` を呼び `cancelled_terminated`、その後に配送されたmessageは `lateResponses`。6. 既にsettled（`completed`）のrequestへcancelする → `cancel()` がfalse、`gab_cancel` をpostしない、採用済みの結果は変わらない。7. 前のrequestのmessage（結果・progress・Entry集合を含む）が次のrunの開始後に届く → 新しいrunへ適用されず `lateResponses`。8. cancel後に新しいlogical runを始める → 新しいrunが `completed` でsettleし、semanticがcancelの無いrunと一致し、前runのEntry集合を使わない。**全ケースで、cancelを受け付けたrequestから採用された結果が0件、各requestのsettleがちょうど1回**であることをassertする（採用件数をharnessの観測値として数え、testが読む） |
 | 実Browser確認（非formal） | Windows + Chrome、benchmark build + preview（isolated / 非isolatedの両方）。bundleの読込、Worker ready、environment probe、`File` のstructured clone可否、request検証の拒否、合成入力（Repository内のdomain fixtureから作った実データを含まないExport。planning Targetが0件などでPhase 0までに型付きで止まるもの）での `unsupported_input`、不正JSON・Export検証失敗の `gab_error`、ping、cancel、terminate、timeout（小さい値）、連続再実行、`indexedDB.databases()` / storageの不変（§13.5）。**実Exportは使わない** |
-| 受入条件 | lint / test / build / benchmark build成功、`git diff --check`・`npm run check:nul`、Production changed files `[]`、`dist/` に§13.3の識別子が無い、syntheticでstage moduleとNode直接呼出しのsemantic完全一致、実Browser確認の各項目の記録 |
+| 受入条件 | lint / test / build / benchmark build成功、`git diff --check`・`npm run check:nul`、Production changed files `[]`、`dist/` に§13.3の識別子が無い、syntheticでstage moduleとNode直接呼出しのsemantic完全一致、**cancel後の結果不採用がmain threadのrequest lifecycleで保証されていること**（§7.8 C1〜C10、競合test 1〜8が全て通り、どのケースでもcancelしたrequestからの採用結果0件・settle 1回）、Worker側のcancel処理を安全保証の根拠にしていないこと、実Browser確認の各項目の記録。実Exportを使った性能測定は開始しない |
 
 ### 16.2 P-2: 実ExportのPC / スマートフォン測定
 
 | 区分 | 内容 |
 | --- | --- |
-| 実装範囲 | analyzer script（`scripts/analyze-planner-global-assignment-browser.mjs`、提案）とそのtest、`isolation.test.ts` の指定script一覧へのanalyzer追加、測定記録docs、公開summary JSON（最小化）。P-1の基盤に不具合が見つかった場合の修正は、計測の **前** に別commitで行い、記録する |
+| 実装範囲 | 測定計画file（§12.2。計測前にcommit）、parity判定・cancel試験判定・未完了集計のpure関数（`globalAssignmentBrowserJudgement.ts`）とそのtest、analyzer script（`scripts/analyze-planner-global-assignment-browser.mjs`、提案）とそのtest、`isolation.test.ts` の指定script一覧へのanalyzer追加、測定記録docs、公開summary JSON（最小化）。P-1の基盤に不具合が見つかった場合の修正は、計測の **前** に別commitで行い、記録する |
 | 依存 | P-1のmerge、オーナーによる端末・環境の決定（§11.1） |
-| 測定計画（計測前にdocsへ固定し、結果を見て変えない） | measurement HEAD（clean）、benchmark build provenance、環境一覧、条件（`registeredD1cConditions()` の値。D-1Cと同じ）、Browser envelope（`workerWallMs`、`cancelGraceMs`）、heartbeat間隔、repeat（PCはlogical run 2回以上）、runの種類（timing / ping / memory / cancel / rerun）と順序、cancel triggerのstage、memoryの方法（環境別）、pilot runの扱い、集計から除外する条件（`environment_interrupted` ほか）。値の根拠をNode D-1Cの観測から推測しない（必要なら非formalのpilotを先に行い、それを記録する） |
-| 実施 | (1) 同じHEADでNode reference（D-1A non-formal runner）を1回。(2) PC Windows + Chrome（必須）。(3) Android + Chrome、iPhone + Safari（端末と経路がある場合）。(4) analyzerでparity判定と集計 |
-| test | analyzer: 入力の検査（Browser JSON・Node raw・D-1C公開RESULTの読取り、欠落・改変の検出）、parity判定3分類、最小化検査（ID・path・per-Target配列が無い）、未実施環境が「未確認」になること |
-| 受入条件 | 測定計画どおりに実施した環境ごとの記録（実施できなかった環境は未確認として理由を記録）、PCでのparity判定（`parity_confirmed` / `parity_mismatch` / `not_comparable` のいずれかを根拠付きで）、§9の各指標の記録、Production changed files `[]`、oracleを実行入力にしていないこと。**性能の許容値・Production可否の判定は行わない**（オーナーが結果を見て判断する。§15 #9 / #10） |
+| 測定計画（計測前にcommitし、結果を見て変えない） | measurement HEAD（clean）、benchmark build provenance、環境一覧、条件（`registeredD1cConditions()` の値。D-1Cと同じ。変更しない）、Browser envelope（`workerWallMs`、`cancelGraceMs`）、heartbeat間隔、**環境ごとのrun slot一覧（slot ID・目的 `timing` / `rerun` / `responsiveness` / `memory` / `cancel` / `pilot`・実行順・cancel試験のtrigger stageと後続の再実行slot）**、**環境ごとの必須比較runの必要logical run数**（PCは2以上。parity_confirmedを主張し得る環境は2以上。§12.2）、memoryの方法（環境別）、集計から除外する条件（`environment_interrupted` ほか）、logical runごとの記録保存手順（§10）。値の根拠をNode D-1Cの観測から推測しない（必要なら目的 `pilot` のslotを計画に入れて先に行い、それを記録する） |
+| 実施 | (1) 同じHEADでNode reference（D-1A non-formal runner）を1回。(2) PC Windows + Chrome（必須）。(3) Android + Chrome、iPhone + Safari（端末と経路がある場合）。(4) analyzerで、環境ごとのparity判定、cancel試験の判定、未完了の集計を行う。計画外のrun・slotの置き換え・必要数の変更はしない |
+| test | analyzer / judgement: 入力の検査（測定時commitの計画file・Browser JSON・Node raw・D-1C公開RESULTの読取り、欠落・改変の検出）、最小化検査（ID・path・per-Target配列が無い）、未実施環境が「未確認」になること、そして**parity判定の必須ケース**: 1. PCで必須比較2 logical runが正常完了しsemantic一致 → `parity_confirmed`。2. PCで必須比較のうち1 logical runだけ正常完了 → `not_comparable`（`required_runs_incomplete`）。3. 意図的なcancel runがあり、必須比較runは必要数を満たす → `parity_confirmed`（cancel runは母集団外）。4. 意図的なcancel runのみ（完了した比較対象runが無い）→ `not_comparable`。5. 正常完了runでsemantic不一致 → `parity_mismatch`（runとfieldを記録）。6. 必要run数に満たなくても、完了runで確定したsemantic不一致は `parity_mismatch` として隠さない。7. Node referenceが欠落（Browser runはD-1Cと一致）→ `not_comparable`（`node_reference_missing`）。8. Export identity不一致 → `not_comparable`（`export_identity_mismatch`）。9. integrity issueのあるrunを成功runとして採用しない（必須比較slotなら必要数に数えない）。10. cancel / timeout / worker error / page lossの件数がparity判定とは独立に記録される（parityの結果が変わってもこの集計は変わらない）。11. 実行後に比較母集団や必要run数を変更できない（計画外run・目的を付け替えたrecord・必要数を減らした計画fileは測定時commitの計画に従って扱われ、比較母集団に入らない）。加えて、cancel試験の判定（`cancel_passed` / `cancel_failed` / `cancel_not_exercised`、§12.6）と、cancel試験の結果がparityに影響しないこと |
+| 受入条件 | 測定計画どおりに実施した環境ごとの記録（実施できなかった環境は未確認として理由を記録）、環境ごとのparity判定（`parity_confirmed` / `parity_mismatch` / `not_comparable` のいずれかと、その根拠・理由コード）、**parityとは独立した** cancel試験の判定と未完了runの集計、§9の各指標の記録、Production changed files `[]`、正式D-1Cの計測条件・過去のRESULTを変更していないこと、oracle・過去RESULTを実行入力にしていないこと。**性能の許容値・Production可否の判定は行わない**（オーナーが結果を見て判断する。§15 #9 / #10） |
 
 ### 16.3 P-2の後（本書の範囲外）
 
@@ -840,3 +960,13 @@ Production fileを変更しない。どちらも1 PR、main向けDraft PR、merg
   （既存 `isolation.test.ts` の検査対象）、通常build（`vite.config.ts`、`index.html`）とbenchmark build（`vite.benchmark.config.ts`、`benchmark.html`、`dist-benchmark/`）の分離、
   D-1C記録・公開RESULT・設計 §9.16 / §13.2 / §14 / §16との数値・用語の整合
 - 実行したcommandと結果はPR本文に記載する（`git diff --check`、`npm run check:nul`）。docs-onlyのため挙動変化は無い。Browser実行・Search実行・formal run・RESULT生成は行っていない
+- PR #256のRequired fix 2件（§18）は本書だけを変更した。設計（`PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md`）との整合を確認し、設計側の変更は要らなかった
+  （設計 §12のcancel記述はcooperative cancelのseamについてであり、Browser harnessのrequest lifecycleとは衝突しない。parityの比較母集団はP系列だけの規則で、設計 §13.2の正式acceptanceを変えない）
+
+## 18. レビュー対応（PR #256、初版 `bb35546` に対する修正）
+
+| 区分 | 指摘 | 対応 |
+| --- | --- | --- |
+| Required fix 1 | cancel後に `gab_result` を送らないことをWorkerのcancel flagで保証していたが、同期区間中のWorkerは `gab_cancel` をdispatchできず、main threadのcancel受付後に `gab_result` が送られる（または既に送信済みで未着である）ことは防げない | 安全保証をmain threadのrequest lifecycleへ移した（§7.8）。cancel受付で同期的に `cancelling` にし（C1）、以降の `gab_result` はrequestIdが一致しても採用しない（C2）、`cancelling` から戻らない（C3）、終了message 1件で `cancelled` / grace超過で `cancelled_terminated`（C4 / C5）、settleちょうど1回（C6）、settle後は `lateResponses`（C7）、settled requestへのcancelは何もしない（C8）、新しいrunへ持ち越さない（C9 / C10）。Workerのflag・送信抑止はbest effortと明記した。cancel受付の前後の境界、記録（`ignoredResultAfterCancel`）、結果を捨てたrunを `browser_nonformal_conditions_met` にしないことを定めた。§7.3 / §7.9 / §7.10 / §7.11 / §9.3 / §10 / §12.1を整合させ、P-1に競合test 1〜8と受入条件を追加した（§16.1）。Phase 2-A harnessがcancel後の結果を採用する挙動は引き継がないことを§3.2に書いた |
+| Required fix 2 | `parity_confirmed` が「logical runがすべて `browser_nonformal_conditions_met`」を要求しており、意図的なcancel runがあるだけでparityが成立しなかった | semantic parityを、計測前に固定した比較母集団（必須比較run `timing` / `rerun`、完了した追加比較run `responsiveness` / `memory`）だけで判定し、`cancel` / `pilot` を母集団から除外した（§12.2）。必要logical run数を環境ごとに事前固定し（PCは2以上）、必須比較slotは全て完了して初めて必要数を満たす、失敗slotの置き換え・成功runだけの抽出・計測後の必要数変更や目的の付け替えを禁止し、測定時commitの計画だけを使う方法を定めた。判定順（前提 → 母集団 → 確定した不一致 → Node reference欠落 → 必要数不足 → confirmed）と3分類の条件・理由コードを書き直した（§12.4）。cancel試験の判定（`cancel_passed` / `cancel_failed` / `cancel_not_exercised`）と未完了runの集計をparityと独立に定めた（§12.6）。§9.4 / §9.5 / §11.1 / §12.5を整合させ、P-2の測定計画・テスト（必須ケース1〜11）・受入条件を更新した（§16.2） |
+| Optional（今回変更しない） | `plannerGlobalOptimizationResearch.ts` を介したDexie / `AppDatabase` への推移的依存 | 依頼どおり変更しない。§4.3の注意書き、§13.5のP-1確認、§14の未確認事項、§15 #16は維持した |
