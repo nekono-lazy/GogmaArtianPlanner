@@ -1273,3 +1273,7 @@ required位置の一致、決定性、規則 `d0a2-v2` 全体での `all_materia
   gate / budgetの登録根拠にする（本PRは値を決めない）
 - G4-i / G4-iiはD-0Bと同じく診断だけで、成否はPhase D'（D-1）で判定する。G4-iiiはa2でも生成されない（`g4iiiObservability` はそのまま事実）
 - 本PRのPlanner実行は小規模fixtureの観測であり、G2を含む実候補のPlanner成立はD-1で確認する
+- （D-0B-2で実施。[D-0B-2記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md)）実Exportの最初の候補は継続optionを選ばず（ReachTable全体ではG2のSkill継続optionが76,659件ある）、
+  `d0a2-v2` で43 / 43 Targetが `materialized`。shape gate・shape budget・envelope・規則・継続形・独立検証・順序を `MATERIALIZATION_D0C_PREREGISTRATION` に登録した。
+  §19.8の「G3下側を `d0a-v1` のrun記録に出すか」は、`d0a-v1` の記録を変えないため出さない（`d0a2-v2` の記録だけに残す）。「操作種別の別解」は、旧方式と新方式の
+  両方でmaterializeされた順序0〜6には現れなかった（同記録 §8.3）

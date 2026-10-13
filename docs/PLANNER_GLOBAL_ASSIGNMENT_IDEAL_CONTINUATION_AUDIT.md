@@ -822,3 +822,10 @@ A-2（基準main `d7f6f9a`、PR #249 merged）が §8.2の「A-2のoption規則�
   admissibilityとa1 / a2での値の一致、root下界の一致を確認した。一般の証明ではなく、小さな窓の合成fixtureで反例が無いことの確認である
 - **C-1 `validateOption()`（§6.3）。** 「現在Idealなら `none` または継続option、非Idealなら `none` 不可」へ改めた（両軸Ideal・保護は `none` だけ）。laneの許可要件は
   Phase Aと同じ規則関数から読み、位置・Keep support・`streamEnd` などの検査は従来どおり独立に行う
+
+## 15. D-0B-2での扱い（追記）
+
+[D-0B-2記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md) §9。実Export（a2、W0）の最初のstructural candidateはG1 / G2の継続optionを選ばなかった（a1と同じ候補）。
+ReachTable全体ではG2のSkill継続option（S2）が25 Targetに76,659件あり、Bonus継続（B1 / B2）は0件、G1形の (c, s*) 組は全43 Targetにある。G3上側の静的risk 3件のうち
+request上の条件が成立した1件は、`d0a2-v2` の形状制約Searchが最初の配送で期待形を返した（collapse署名0）。G4の対象は0件。§9.2の計画のうちD-0B-2は実施済みで、
+D-0C・D-1は未実施である。
