@@ -48,6 +48,14 @@
  * `searchPolicyPrecheck` classifies a Target whose shape the Production Search policy never returns
  * (`searchPolicyShapeOf()`) as `not_executed(search_policy_shape)` before any request or Search, and `observer`
  * receives execution-only copies of the Target starts, the inspected Candidates and the settled Target records.
+ *
+ * Phase D-0A-2b (`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 5.4 / 10 / 11) added the method rule `d0a2-v2`, chosen
+ * only by passing `ShapeMaterializationInputs` (`rule: 'd0a2-v2'`); `MaterializationInputs` without a rule is `d0a-v1`,
+ * exactly as before. Under `d0a2-v2` a continuation shape (G1) and a non-continuous shape use the shape-constrained method
+ * alone, a continuous shape tries the projected Candidate Search first and the shape-constrained method once when it does
+ * not match; design 9.1 (Planner Alternative Search) is not part of it. The shape-constrained request is built here from
+ * the same formal reservation (`formalReservation()`), re-derived before it runs (`request_mismatch` otherwise), and run and
+ * classified by `shapeMaterializationRun.ts`.
  */
 import { createBuildListEntry } from '../../domain/buildList'
 import { hashStableValue, stableStringify, validateBuildListEntry } from '../../domain/models/publicTypes'
@@ -63,6 +71,7 @@ import {
   type PlannerAlternativeCandidate, type PlannerAlternativeReservation, type PlannerAlternativeSearchExecution, type PlannerAlternativeSearchInstrumentation,
 } from '../../domain/search/alternative'
 import { searchCandidates } from '../../domain/search/candidateSearch'
+import { visitShapeConstrainedRouteCandidates } from '../../domain/search/research'
 import { CandidateSearchError, type CandidateSearchInput, type CandidateSearchResult } from '../../domain/search/searchTypes'
 import { GLOBAL_RESEARCH_TIME, materializeGlobalResearchCandidate } from '../plannerGlobalOptimizationResearch'
 import type { ExpectedRouteShape, StructuralCandidate } from './coverageTypes'
@@ -75,9 +84,13 @@ import {
   type CandidateInspection, type MaterializationAttempt, type MaterializationObserver, type MaterializationOutcome, type MaterializationSettings,
   type MaterializationStageOutcome, type MethodSelection,
   type ObservedPlannerAlternativeSearch, type PlannerAlternativeAttempt, type PlannerAlternativeMaterializationRequest, type PredictedSearchScale,
-  type ProjectedAttempt, type ProjectedMaterializationRequest, type ProjectedSearchOrigin, type ShapeMismatch, type StructuralCandidateMaterialization,
+  type ProjectedAttempt, type ProjectedMaterializationRequest, type ProjectedSearchOrigin, type SearchScaleGate, type ShapeMismatch, type StructuralCandidateMaterialization,
   type StructuralCandidateMaterializationResult, type TargetMaterializationRecord,
 } from './materializationTypes'
+import { assembleShapeConstrainedRequest, selectShapeMaterializationMethods } from './shapeMaterializationRequest'
+import { runShapeConstrainedRequest } from './shapeMaterializationRun'
+import { isValidShapeSearchBudget, isValidShapeSearchScaleGate } from './shapeMaterializationScale'
+import type { ShapeConstrainedAttempt, ShapeConstrainedMaterializationRequest, ShapeMaterializationSettings } from './shapeMaterializationTypes'
 import { buildStructuralCandidate, checkTableBelongsToContext } from './structuralCandidate'
 import type { GlobalAssignmentContext, ReachTable } from './types'
 
@@ -118,7 +131,39 @@ export interface MaterializationInputs {
   observer?: MaterializationObserver
 }
 
-function inspected(inputs: MaterializationInputs, inspection: CandidateInspection): void {
+/** The Search entry points of the rule `d0a2-v2` (the D-0A-2a seam and the projected Candidate Search), injectable for tests. */
+export interface ShapeMaterializationSearchPort {
+  visitShapeConstrainedRouteCandidates: typeof visitShapeConstrainedRouteCandidates
+  searchCandidates: typeof searchCandidates
+}
+
+export const productionShapeMaterializationSearchPort: ShapeMaterializationSearchPort = { visitShapeConstrainedRouteCandidates, searchCandidates }
+
+/**
+ * Phase D-0A-2b: the inputs of the rule `d0a2-v2` (design D0A2 11). A type of its own, so a `d0a-v1` input is never read as
+ * one: its settings are the shape method's gate and budget plus the projected Search's gate, with no delivery cap and no
+ * Search-policy precheck (a G1 shape is a continuation shape here, materialized by the shape-constrained method).
+ */
+export interface ShapeMaterializationInputs {
+  rule: 'd0a2-v2'
+  context: GlobalAssignmentContext
+  table: ReachTable
+  engine: RngEngine
+  settings: ShapeMaterializationSettings
+  search?: ShapeMaterializationSearchPort
+  shouldCancel?: () => boolean
+  yieldControl?: () => Promise<void>
+  observer?: MaterializationObserver
+}
+
+/** Either rule's inputs: `rule: 'd0a2-v2'` names the new rule, its absence is `d0a-v1`. */
+export type AnyMaterializationInputs = MaterializationInputs | ShapeMaterializationInputs
+
+export function isShapeMaterializationInputs(inputs: AnyMaterializationInputs): inputs is ShapeMaterializationInputs {
+  return (inputs as { rule?: unknown }).rule === 'd0a2-v2'
+}
+
+function inspected(inputs: { observer?: MaterializationObserver }, inspection: CandidateInspection): void {
   inputs.observer?.onCandidateInspected?.(structuredClone(inspection))
 }
 
@@ -130,6 +175,24 @@ function isValidSettings(settings: MaterializationSettings): boolean {
 function assertSettings(settings: MaterializationSettings): void {
   if (!isValidSettings(settings)) {
     throw new GlobalAssignmentMaterializationError('invalid_settings', null, `deliveryCap must be a positive safe integer and every gate value a non-negative safe integer (got ${JSON.stringify(settings)}).`)
+  }
+}
+
+/** Design D0A2 10.3 / 10.4: every gate and budget value of the rule `d0a2-v2` is the caller's explicit non-negative safe integer. */
+function isValidShapeSettings(settings: ShapeMaterializationSettings): boolean {
+  return settings !== null && typeof settings === 'object' && isValidSearchScaleGate(settings.projectedSearchScaleGate)
+    && isValidShapeSearchScaleGate(settings.shapeSearchScaleGate) && isValidShapeSearchBudget(settings.shapeSearchBudget)
+}
+
+const SHAPE_SETTINGS_ISSUE = 'projectedSearchScaleGate, shapeSearchScaleGate and shapeSearchBudget must name every value as a non-negative safe integer'
+
+function assertAnySettings(inputs: AnyMaterializationInputs): void {
+  if (!isShapeMaterializationInputs(inputs)) {
+    assertSettings(inputs.settings)
+    return
+  }
+  if (!isValidShapeSettings(inputs.settings)) {
+    throw new GlobalAssignmentMaterializationError('invalid_settings', null, `${SHAPE_SETTINGS_ISSUE} (got ${JSON.stringify(inputs.settings)}).`)
   }
 }
 
@@ -169,24 +232,28 @@ function researchAlternativeIdentity(request: Pick<PlannerAlternativeMaterializa
 }
 
 /**
+ * The formal reservation of the Entries materialized so far (design 9.1, D0A2 5.2), shared by both rules: empty with no
+ * Entry, otherwise exactly `derivePlannerAlternativeReservation(materializedEntries)`. Never edited afterwards.
+ */
+function formalReservation(shape: ExpectedRouteShape, materializedEntries: readonly BuildListEntry[], inputs: { engine: RngEngine }): PlannerAlternativeReservation {
+  if (materializedEntries.length === 0) return structuredClone(emptyPlannerAlternativeReservation)
+  try {
+    return derivePlannerAlternativeReservation(materializedEntries, inputs.engine)
+  } catch (error) {
+    if (error instanceof PlannerAlternativeReservationError) {
+      throw new GlobalAssignmentMaterializationError('reservation_derivation_failed', shape.targetWeaponId, `${error.code} (${error.buildListEntryId}): ${error.message}`)
+    }
+    throw error
+  }
+}
+
+/**
  * The design 9.1 request of one Target after `materializedEntries` (in materialization order). The
  * reservation is the formal one and nothing else: empty with no Entry, otherwise exactly
  * `derivePlannerAlternativeReservation(materializedEntries)`.
  */
 export async function buildPlannerAlternativeRequest(shape: ExpectedRouteShape, materializedEntries: readonly BuildListEntry[], inputs: MaterializationInputs): Promise<PlannerAlternativeMaterializationRequest> {
-  let reservation: PlannerAlternativeReservation
-  if (materializedEntries.length === 0) {
-    reservation = structuredClone(emptyPlannerAlternativeReservation)
-  } else {
-    try {
-      reservation = derivePlannerAlternativeReservation(materializedEntries, inputs.engine)
-    } catch (error) {
-      if (error instanceof PlannerAlternativeReservationError) {
-        throw new GlobalAssignmentMaterializationError('reservation_derivation_failed', shape.targetWeaponId, `${error.code} (${error.buildListEntryId}): ${error.message}`)
-      }
-      throw error
-    }
-  }
+  const reservation = formalReservation(shape, materializedEntries, inputs)
   const origins = plannerStartOrigins(shape, inputs.table)
   const extent = shapeSearchExtent(shape, origins)
   const { scale, detail } = await predictSearchScale({
@@ -232,7 +299,7 @@ function projectedSearchInput(request: Pick<ProjectedMaterializationRequest, 'ta
 }
 
 /** The design 9.2 request of one continuous shape (a non-continuous shape fails closed: design 9.1 only). */
-export async function buildProjectedRequest(shape: ExpectedRouteShape, inputs: MaterializationInputs, own: ShapeOwnPositions = shapeOwnPositions(shape)): Promise<ProjectedMaterializationRequest> {
+export async function buildProjectedRequest(shape: ExpectedRouteShape, inputs: Pick<MaterializationInputs, 'context' | 'table'>, own: ShapeOwnPositions = shapeOwnPositions(shape)): Promise<ProjectedMaterializationRequest> {
   const { context, table } = inputs
   if (!own.continuous) {
     throw new GlobalAssignmentMaterializationError('invalid_shape', shape.targetWeaponId, `Target ${shape.targetWeaponId}: a projected Candidate Search needs a continuous shape (design 9.2).`)
@@ -311,15 +378,15 @@ function searchError(shape: ExpectedRouteShape, error: unknown): never {
   throw error
 }
 
-function gateOutcome(predictedSearchScale: PredictedSearchScale, settings: MaterializationSettings) {
-  const exceeded = exceededSearchScaleGate(predictedSearchScale, settings.searchScaleGate)
+function gateOutcome(predictedSearchScale: PredictedSearchScale, searchScaleGate: SearchScaleGate) {
+  const exceeded = exceededSearchScaleGate(predictedSearchScale, searchScaleGate)
   return exceeded.length === 0 ? null : { kind: 'not_executed' as const, reason: 'search_scale_gate' as const, predictedSearchScale: { ...predictedSearchScale }, exceeded }
 }
 
 async function runPlannerAlternative(request: PlannerAlternativeMaterializationRequest, inputs: MaterializationInputs): Promise<PlannerAlternativeAttempt> {
   const { context, engine, settings } = inputs
   const { shape } = request
-  const gated = gateOutcome(request.predictedSearchScale, settings)
+  const gated = gateOutcome(request.predictedSearchScale, settings.searchScaleGate)
   if (gated !== null) return { method: 'planner_alternative_reservation', request, outcome: gated, observed: null }
 
   const origin = createPlannerStartSearchOrigin(context.plannerInput)
@@ -418,16 +485,34 @@ async function runPlannerAlternative(request: PlannerAlternativeMaterializationR
   return { method: 'planner_alternative_reservation', request, outcome, observed }
 }
 
-async function runProjected(request: ProjectedMaterializationRequest, inputs: MaterializationInputs): Promise<ProjectedAttempt> {
-  const { context, engine, settings } = inputs
+/** What one projected Candidate Search needs; both rules run the very same design 9.2 method through it. */
+interface ProjectedRunDependencies {
+  context: GlobalAssignmentContext
+  engine: RngEngine
+  searchScaleGate: SearchScaleGate
+  searchCandidates: MaterializationSearchPort['searchCandidates']
+  shouldCancel?: () => boolean
+  yieldControl?: () => Promise<void>
+  observer?: MaterializationObserver
+}
+
+function projectedDependencies(inputs: AnyMaterializationInputs): ProjectedRunDependencies {
+  const { context, engine, shouldCancel, yieldControl, observer } = inputs
+  return isShapeMaterializationInputs(inputs)
+    ? { context, engine, shouldCancel, yieldControl, observer, searchScaleGate: inputs.settings.projectedSearchScaleGate, searchCandidates: (inputs.search ?? productionShapeMaterializationSearchPort).searchCandidates }
+    : { context, engine, shouldCancel, yieldControl, observer, searchScaleGate: inputs.settings.searchScaleGate, searchCandidates: (inputs.search ?? productionMaterializationSearchPort).searchCandidates }
+}
+
+async function runProjected(request: ProjectedMaterializationRequest, inputs: ProjectedRunDependencies): Promise<ProjectedAttempt> {
+  const { context, engine } = inputs
   const { shape } = request
-  const gated = gateOutcome(request.predictedSearchScale, settings)
+  const gated = gateOutcome(request.predictedSearchScale, inputs.searchScaleGate)
   if (gated !== null) return { method: 'candidate_search_projected', request, result: gated, observed: null }
 
   const searchInput = projectedSearchInput(request, context, request.searchRunId)
   let result: CandidateSearchResult
   try {
-    result = await (inputs.search ?? productionMaterializationSearchPort).searchCandidates(searchInput, engine, {
+    result = await inputs.searchCandidates(searchInput, engine, {
       now: () => GLOBAL_RESEARCH_TIME, shouldCancel: inputs.shouldCancel, yieldControl: inputs.yieldControl,
     })
   } catch (error) {
@@ -495,7 +580,49 @@ export async function executeMaterializationRequest(
   if (!sameStableValue(expected, request)) {
     throw new GlobalAssignmentMaterializationError('request_mismatch', request.targetWeaponId, `The ${request.method} request of Target ${request.targetWeaponId} differs from its derivation.`)
   }
-  return expected.method === 'planner_alternative_reservation' ? runPlannerAlternative(expected, inputs) : runProjected(expected, inputs)
+  return expected.method === 'planner_alternative_reservation' ? runPlannerAlternative(expected, inputs) : runProjected(expected, projectedDependencies(inputs))
+}
+
+/**
+ * Design D0A2 5.4 steps 1 - 5: the shape-constrained request of one Target after `materializedEntries` (in materialization
+ * order), from the same formal reservation the D-0A request reads. Nothing is predicted or searched here.
+ */
+export async function buildShapeConstrainedRequest(
+  shape: ExpectedRouteShape,
+  materializedEntries: readonly BuildListEntry[],
+  inputs: Pick<ShapeMaterializationInputs, 'context' | 'table' | 'engine'>,
+): Promise<ShapeConstrainedMaterializationRequest> {
+  const reservation = formalReservation(shape, materializedEntries, inputs)
+  return assembleShapeConstrainedRequest({
+    shape, reservation, reservationSourceEntryIds: materializedEntries.map(entry => entry.id), context: inputs.context, table: inputs.table,
+  })
+}
+
+function runShapeConstrained(request: ShapeConstrainedMaterializationRequest, materializedEntries: readonly BuildListEntry[], inputs: ShapeMaterializationInputs): Promise<ShapeConstrainedAttempt> {
+  return runShapeConstrainedRequest(request, {
+    context: inputs.context, table: inputs.table, engine: inputs.engine, settings: inputs.settings, materializedEntries,
+    collisionCheckEntries: collisionCheckEntries(inputs.context), researchTime: GLOBAL_RESEARCH_TIME,
+    visit: (inputs.search ?? productionShapeMaterializationSearchPort).visitShapeConstrainedRouteCandidates,
+    shouldCancel: inputs.shouldCancel, yieldControl: inputs.yieldControl, onInspected: inspection => inspected(inputs, inspection),
+  })
+}
+
+/**
+ * Design D0A2 5.4 / 6 (`executeMaterializationRequest()` of the shape-constrained method): the request is re-derived from its
+ * shape and `materializedEntries` first - its Target, shape, source, reservation, extent, identity and predicted scale - and
+ * a request that differs fails closed with `request_mismatch` before any Search. Its values are never trusted on their own.
+ */
+export async function executeShapeConstrainedRequest(
+  request: ShapeConstrainedMaterializationRequest,
+  materializedEntries: readonly BuildListEntry[],
+  inputs: ShapeMaterializationInputs,
+): Promise<ShapeConstrainedAttempt> {
+  assertAnySettings(inputs)
+  const expected = await buildShapeConstrainedRequest(request.shape, materializedEntries, inputs)
+  if (!sameStableValue(expected, request)) {
+    throw new GlobalAssignmentMaterializationError('request_mismatch', request.targetWeaponId, `The shape_constrained request of Target ${request.targetWeaponId} differs from its derivation.`)
+  }
+  return runShapeConstrained(expected, materializedEntries, inputs)
 }
 
 /** Design 9.3: the deterministic method order of one Target. */
@@ -527,14 +654,50 @@ export function selectMaterializationMethods(
 export async function materializeTarget(
   shape: ExpectedRouteShape,
   materializedEntries: readonly BuildListEntry[],
-  inputs: MaterializationInputs,
+  inputs: AnyMaterializationInputs,
   orderIndex = 0,
 ): Promise<TargetMaterializationRecord> {
-  assertSettings(inputs.settings)
+  assertAnySettings(inputs)
   inputs.observer?.onTargetStarted?.({ targetWeaponId: shape.targetWeaponId, orderIndex })
-  const record = await materializeTargetRecord(shape, materializedEntries, inputs, orderIndex)
+  const record = isShapeMaterializationInputs(inputs)
+    ? await materializeShapeTargetRecord(shape, materializedEntries, inputs, orderIndex)
+    : await materializeTargetRecord(shape, materializedEntries, inputs, orderIndex)
   inputs.observer?.onTargetSettled?.(structuredClone(record))
   return record
+}
+
+/**
+ * Design D0A2 11: one Target under the rule `d0a2-v2`. A continuation shape (G1) and a non-continuous shape use the
+ * shape-constrained method alone; a continuous shape tries the projected Candidate Search first and, when it returns another
+ * canonical Ideal, none, or is gated, the shape-constrained method once (never after a cancellation). The formal reservation
+ * is the same for both attempts, each has its own gate, and the Target outcome is the projected match or the
+ * shape-constrained attempt's own.
+ */
+async function materializeShapeTargetRecord(
+  shape: ExpectedRouteShape,
+  materializedEntries: readonly BuildListEntry[],
+  inputs: ShapeMaterializationInputs,
+  orderIndex: number,
+): Promise<TargetMaterializationRecord> {
+  const attempts: MaterializationAttempt[] = []
+  if (inputs.shouldCancel?.()) {
+    return { targetWeaponId: shape.targetWeaponId, orderIndex, selection: null, attempts, outcome: { kind: 'unmeasured', reason: 'cancelled' } }
+  }
+  const own = shapeOwnPositions(shape)
+  const request = await buildShapeConstrainedRequest(shape, materializedEntries, inputs)
+  const projected = own.continuous ? await buildProjectedRequest(shape, inputs, own) : null
+  const selection = selectShapeMaterializationMethods(shape, own, inputs.table, { shapeConstrained: request.predictedScale, projected: projected?.predictedSearchScale ?? null })
+  const record = (outcome: MaterializationOutcome): TargetMaterializationRecord => ({ targetWeaponId: shape.targetWeaponId, orderIndex, selection, attempts, outcome })
+  if (selection.order[0] === 'candidate_search_projected') {
+    const first = await runProjected(projected!, projectedDependencies(inputs))
+    attempts.push(first)
+    if (first.result.kind === 'matched') return record(first.result.outcome)
+    if (first.result.kind === 'unmeasured') return record({ kind: 'unmeasured', reason: first.result.reason })
+    // Not matched (another canonical Ideal, none in the projected extent, or gated): the shape-constrained method once.
+  }
+  const attempt = await runShapeConstrained(request, materializedEntries, inputs)
+  attempts.push(attempt)
+  return record(attempt.outcome)
 }
 
 async function materializeTargetRecord(
@@ -560,7 +723,7 @@ async function materializeTargetRecord(
   const record = (outcome: MaterializationOutcome): TargetMaterializationRecord => ({ targetWeaponId: shape.targetWeaponId, orderIndex, selection, attempts, outcome })
 
   if (selection.order[0] === 'candidate_search_projected') {
-    const first = await runProjected(projected!, inputs)
+    const first = await runProjected(projected!, projectedDependencies(inputs))
     attempts.push(first)
     if (first.result.kind === 'matched') return record(first.result.outcome)
     if (first.result.kind === 'unmeasured') return record({ kind: 'unmeasured', reason: first.result.reason })
@@ -573,7 +736,7 @@ async function materializeTargetRecord(
   attempts.push(first)
   if (first.outcome.kind !== 'shape_mismatch' || projected === null || selection.order.length < 2) return record(first.outcome)
   // Owned Gogma with design 9.1 first: design 9.2 once after a shape_mismatch only.
-  const second = await runProjected(projected, inputs)
+  const second = await runProjected(projected, projectedDependencies(inputs))
   attempts.push(second)
   if (second.result.kind === 'matched') return record(second.result.outcome)
   if (second.result.kind === 'unmeasured') return record({ kind: 'unmeasured', reason: second.result.reason })
@@ -581,7 +744,7 @@ async function materializeTargetRecord(
 }
 
 /** Why the value is not the Phase C derivation of its own assignment, or null when it is. */
-function structuralCandidateMismatch(candidate: StructuralCandidate, inputs: MaterializationInputs): string | null {
+function structuralCandidateMismatch(candidate: StructuralCandidate, inputs: AnyMaterializationInputs): string | null {
   if (candidate === null || typeof candidate !== 'object' || candidate.kind !== 'structural_candidate') return 'The value is not a structural candidate.'
   // A replay inconsistency of the assignment propagates as GlobalAssignmentInvariantError (never an input issue).
   const rebuilt = buildStructuralCandidate(candidate.assignment, { table: inputs.table, context: inputs.context, engine: inputs.engine })
@@ -598,8 +761,10 @@ function structuralCandidateMismatch(candidate: StructuralCandidate, inputs: Mat
  * settings, the table's membership of the context, and that the candidate is exactly Phase C's derivation of
  * its assignment (so the order and the shapes are never edited). Not a Planner verification.
  */
-export async function materializeStructuralCandidate(candidate: StructuralCandidate, inputs: MaterializationInputs): Promise<StructuralCandidateMaterializationResult> {
-  if (!isValidSettings(inputs.settings)) {
+export async function materializeStructuralCandidate(candidate: StructuralCandidate, inputs: AnyMaterializationInputs): Promise<StructuralCandidateMaterializationResult> {
+  if (isShapeMaterializationInputs(inputs)) {
+    if (!isValidShapeSettings(inputs.settings)) return { kind: 'invalid_input', reason: 'invalid_settings', detail: `${SHAPE_SETTINGS_ISSUE} (got ${JSON.stringify(inputs.settings)}).` }
+  } else if (!isValidSettings(inputs.settings)) {
     return { kind: 'invalid_input', reason: 'invalid_settings', detail: `deliveryCap must be a positive safe integer and every gate value a non-negative safe integer (got ${JSON.stringify(inputs.settings)}).` }
   }
   const tableIssue = checkTableBelongsToContext(inputs.table, inputs.context)
@@ -632,7 +797,9 @@ export async function materializeStructuralCandidate(candidate: StructuralCandid
     }
     const stage: MaterializationStageOutcome = outcome.kind === 'shape_mismatch'
       ? { kind: 'materialization_failed', targetWeaponId, outcome }
-      : { kind: 'materialization_unconfirmed', targetWeaponId, outcome }
+      : outcome.kind === 'unsupported'
+        ? { kind: 'materialization_unsupported', targetWeaponId, outcome }
+        : { kind: 'materialization_unconfirmed', targetWeaponId, outcome }
     return finish(stage, order.slice(index + 1))
   }
   return finish({ kind: 'all_materialized' }, [])

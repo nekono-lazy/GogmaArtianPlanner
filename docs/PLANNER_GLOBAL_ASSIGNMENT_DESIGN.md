@@ -1374,6 +1374,9 @@ D-0A-2の詳細設計は [D-0A-2設計](PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md
 - **identity**: 新algorithm token `global-assignment-d0a2-shape-constrained-materialization-v1`。D-0Aのtoken・Candidate IDは不変。Entry IDは既存materializerの
   規則のまま（同 §9.1）
 - **PR**: 2a（Search Domain seam、要承認）→ 2b（Research方式・方式選択 `d0a2-v2`・独立検証器・parity）→ A-2 → D-0B-2 → D-0C → D-1（同 §12）
+- **実装**: 2aの記録は D-0A-2設計 §18、2b（方式 `shape_constrained`、規則 `d0a2-v2`、独立検証器、補題のproperty test、parity）の記録は同 §19。
+  2bのparityで、`reset(g*)` の形に対しPlanner Alternative Searchが同じ位置・同じ最終多重集合のKeep chainを最初の一致として返す「操作種別の別解」が見つかった
+  （同 §19.5。D-0A-2設計 §9.2の見込みとの差異。補題には影響しない）
 
 ## 10. 目的関数・下界・探索budget
 

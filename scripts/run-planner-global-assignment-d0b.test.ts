@@ -76,6 +76,49 @@ describe('Phase D-0B runner script refusals', () => {
   }, SPAWN_TEST_TIMEOUT_MS)
 })
 
+describe('Phase D-0A-2b rule selection (--rule)', () => {
+  it('keeps d0a-v1 the default, and refuses an unknown rule, a missing d0a2-v2 gate or budget, and a condition of the other rule', () => {
+    const { directory, output, runDir, input } = fixture()
+    const base = ['--export', input, '--run-dir', runDir, '--output', output]
+    const shape = ['--shape-gate', '10,1000,5,10', '--shape-budget', '1000,1000,1000,10,10,10,10']
+    expectRefusal([...base, '--rule', 'd0a2-v3'], /--rule must be d0a-v1 or d0a2-v2 \(got d0a2-v3\)/)
+    expectRefusal([...base, '--rule', 'd0a2-v2'], /--rule d0a2-v2 needs --shape-gate D,G,N,W and --shape-budget G,S,W,PN,PS,PR,PK: the shape-constrained method has no default gate or budget/)
+    expectRefusal([...base, '--rule', 'd0a2-v2', '--shape-gate', '10,1000,5,10'], /needs --shape-gate D,G,N,W and --shape-budget/)
+    expectRefusal([...base, '--rule', 'd0a2-v2', ...shape, '--delivery-cap', '500'], /--delivery-cap is a d0a-v1 condition/)
+    expectRefusal([...base, ...shape], /--shape-gate and --shape-budget are d0a2-v2 conditions; pass --rule d0a2-v2/)
+    expectRefusal([...base, '--rule', 'd0a2-v2', '--shape-gate', '1,2,3', '--shape-budget', '1,2,3,4,5,6,7'], /--shape-gate must be 4 comma-separated integers/)
+    expectRefusal([...base, '--rule', 'd0a2-v2', '--shape-gate', '1,2,3,4', '--shape-budget', '1,2,3'], /--shape-budget must be 7 comma-separated integers/)
+    expect(readdirSync(directory)).toEqual([])
+  }, SPAWN_TEST_TIMEOUT_MS)
+
+  it('records a d0a2-v2 run with its own protocol, conditions and deferred items, and the child accepts its task', () => {
+    const { directory, output, runDir } = fixture()
+    const exportFile = join(directory, 'invalid-export.json')
+    writeFileSync(exportFile, '{"schemaVersion":13}\n')
+    const result = spawnSync(process.execPath, [runner, '--export', exportFile, '--run-dir', runDir, '--output', output, '--allow-uncommitted', '--rule', 'd0a2-v2', '--window', '5,5,5',
+      '--shape-gate', '10,1000,5,10', '--shape-budget', '1000,1000,1000,10,10,10,10', '--wall-ms', '100000'], { encoding: 'utf8', timeout: 115_000 })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(2)
+    const written = JSON.parse(readFileSync(output, 'utf8'))
+    expect(written).toMatchObject({
+      protocolVersion: 'global-assignment-d0a2b:1', mode: 'smoke', formal: false,
+      conditions: {
+        rule: 'd0a2-v2', window: { normal: 5, gogma: 5, skill: 5 }, routeVerification: 'every_shape_constrained_materialization',
+        shapeSearchScaleGate: { maxDepthUpperBound: 10, maxGogmaGeneratedStateUpperBound: 1000, maxNormalForgeCount: 5, maxConversionWalkPositions: 10 },
+        shapeSearchBudget: { maxGogmaGeneratedStates: 1000, maxSkillStates: 1000, maxSettledWork: 1000, maxPredictions: { normalArtian: 10, skill: 10, gogmaReset: 10, gogmaKeep: 10 } },
+      },
+      formalRegistration: { formalRunEnabled: false },
+    })
+    expect(written.conditions).not.toHaveProperty('deliveryCap')
+    expect(written.conditions).not.toHaveProperty('searchPolicyPrecheck')
+    expect(written.formalRegistration.deferredItems).toEqual(expect.arrayContaining(['shapeSearchScaleGate', 'shapeSearchBudget', 'routeVerification']))
+    expect(written.conditionBasis.shapeSearchScaleGate).toMatch(/no default exists/)
+    // The child validated the d0a2-v2 task and its protocol; it stopped at the invalid Export, never at its conditions.
+    expect(written.runs[0]).toMatchObject({ status: 'unmeasured', reason: 'process_failure' })
+    expect(written.processes[0].stderrTail).not.toMatch(/Invalid task conditions|Task protocol/)
+  }, SPAWN_TEST_TIMEOUT_MS)
+})
+
 describe('Phase D-0B runner script isolation', () => {
   it('records a child that failed as unmeasured(process_failure) with its journal-confirmed progress and exits non-zero', () => {
     const { directory, output, runDir } = fixture()
