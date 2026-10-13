@@ -1,0 +1,2556 @@
+{
+  "resultKind": "global-assignment-browser-p2-public-result",
+  "derivation": {
+    "revision": 1,
+    "script": "scripts/analyze-planner-global-assignment-browser.mjs",
+    "function": "deriveGabPublicResult() (src/benchmarks/globalAssignment/browser/globalAssignmentBrowserAnalysis.ts)",
+    "sources": [
+      {
+        "file": "01-pc.pilot.1.json",
+        "bytes": 2806211,
+        "sha256": "1acd512bdfda176261795516aafe9ff211a024acd009e106cbae3c29c3ffba09"
+      },
+      {
+        "file": "02-pc.timing.1.json",
+        "bytes": 2806027,
+        "sha256": "073156a9648eb350d3d59f07f7d20849af3bc3b39932db6cb3da6d2af0ccd4af"
+      },
+      {
+        "file": "03-pc.rerun.1.json",
+        "bytes": 2806160,
+        "sha256": "7844d1a12c186eeb80186db6fa389c6dc9e19469d088bff8e48ba662387fd04a"
+      },
+      {
+        "file": "04-pc.responsiveness.1.json",
+        "bytes": 3169093,
+        "sha256": "4cd92c5b1ee5ddef708a95232a12852697d109ac26c35325da7795be82957dd4"
+      },
+      {
+        "file": "05-pc.cancel.phase-a.json",
+        "bytes": 12455,
+        "sha256": "1949fed081e0645ffd7d4f27741aea30ca996d4afcaedf91def85128aa698e44"
+      },
+      {
+        "file": "06-pc.cancel.phase-bc.json",
+        "bytes": 12567,
+        "sha256": "1efbf1b09d88d0ee0f6a04c0da944f73ca113628ee02b81321bcd07d2b9dffeb"
+      },
+      {
+        "file": "07-pc.cancel.phase-d.json",
+        "bytes": 16949,
+        "sha256": "9b8c4ca1a61b9cba6d0814d244cfd0aba63f37826c61850f90724dfb8abf2cf7"
+      },
+      {
+        "file": "08-pc.cancel.planner.json",
+        "bytes": 24216,
+        "sha256": "85fe921ddbc170726bb44f09d69e919e2a6060f6705ecb75c37105075e78dec8"
+      },
+      {
+        "file": "09-pc.cancel.trace-replay.json",
+        "bytes": 24251,
+        "sha256": "036a7629a53f4e0f66e715ba6ffc7a76f346064589a2b3f7477732ebc8824ed8"
+      },
+      {
+        "file": "10-pc.cancel.fresh-planner.json",
+        "bytes": 2762280,
+        "sha256": "0f0571c8d5eb83821da81b93cc31a16dd37ddb0d9aee1a0c17bd60115f81e31d"
+      },
+      {
+        "file": "11-pc.rerun.2.json",
+        "bytes": 2805875,
+        "sha256": "db22ecb1a319718dee37caf9ef49b4eab34d6b0bf60caed154888f63fe8ec952"
+      },
+      {
+        "file": "12-pc.memory.1.json",
+        "bytes": 2812364,
+        "sha256": "bea759522442e776a95ef73efc023add94b9c7ebc624d9f8611e71ec92ead486"
+      },
+      {
+        "file": "3dfe24aa3574921bfe4596db3b2280a7a397cc91:docs/PLANNER_GLOBAL_ASSIGNMENT_BROWSER_P2_PLAN.md",
+        "bytes": 30052,
+        "sha256": "dfebc5776f7891170c43a20398fdf5d86831b0acd73f2b2e1b6d935bdf088abd"
+      },
+      {
+        "file": "3dfe24aa3574921bfe4596db3b2280a7a397cc91:docs/PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json",
+        "bytes": 54965,
+        "sha256": "9e9e33d77e99c45b24fbb52ac27248fc1fbaa8fc210bba72af164daa4431fb46"
+      },
+      {
+        "file": "driver.json",
+        "bytes": 58853,
+        "sha256": "b2323da6f3c33b7e416d35e6ffd961f770ff8165b0b1d44d43171dd8f165d5cb"
+      },
+      {
+        "file": "first.record.json",
+        "bytes": 647052,
+        "sha256": "fbf2b218c18dc2b938b89a5afe55e8dc0ea1c77ad08b41a338d5da479cbbda1b"
+      },
+      {
+        "file": "fresh.record.json",
+        "bytes": 31947,
+        "sha256": "b181adb66da36d473a559538be58aecf42d77d763f2597c757b1db47278120d8"
+      },
+      {
+        "file": "node.result.json",
+        "bytes": 182878,
+        "sha256": "1cb1e33a4637e6d59bd1536a2595f9423e08acd33fce378a20b3fcc936162668"
+      }
+    ],
+    "withheld": [
+      "Target / OwnedWeapon / BuildListEntry / Candidate identifiers and per-Target values",
+      "Entry bodies, Routes and Plan Steps",
+      "Counter positions and stream ends",
+      "the Export itself and absolute paths",
+      "integrity issue texts (their counts are kept)"
+    ],
+    "note": "A mechanical aggregate of the raw Browser records, the driver record, the Node reference and the D-1C public RESULT kept in git-ignored .local files (the plan and the D-1C RESULT read at the measured commit); no new calculation."
+  },
+  "phase": "Issue #154 Production準備 P-2: the real Export in the Browser Worker, its semantic parity with the Node reference and the D-1C public RESULT, and its observed performance",
+  "nature": "Research, non-formal (formal: false): no formal validity, acceptance, minimality, performance threshold or Production decision is claimed",
+  "formal": false,
+  "measurement": {
+    "measurementHead": "3dfe24aa3574921bfe4596db3b2280a7a397cc91",
+    "protocolVersion": "global-assignment-browser:1",
+    "plan": {
+      "file": "3dfe24aa3574921bfe4596db3b2280a7a397cc91:docs/PLANNER_GLOBAL_ASSIGNMENT_BROWSER_P2_PLAN.md",
+      "sha256": "dfebc5776f7891170c43a20398fdf5d86831b0acd73f2b2e1b6d935bdf088abd",
+      "revision": 1,
+      "series": "p2-r1",
+      "baseCommit": "d3716304b6f6749f6bdbc9e3cf6e8bdf7bd2ab3e"
+    },
+    "benchmarkBuild": {
+      "commit": "3dfe24aa3574921bfe4596db3b2280a7a397cc91",
+      "uncommittedBenchmarkCode": false,
+      "benchmarkCodeSha256": "6d356860a33f94ec9ea02d1a14a312517158d86d5c038d1dce13f633d1502c35"
+    },
+    "recordedLogicalRuns": 12,
+    "driver": {
+      "driverSha256": "caff73b1c50b440d28a3b8f0670177515a1ec8b68819fac3c87c1c9c3dfbed1d",
+      "browser": "chrome",
+      "version": "Chrome/154.0.8037.98",
+      "headless": false,
+      "flags": [
+        "--remote-debugging-port",
+        "--remote-allow-origins=*",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-backgrounding-occluded-windows",
+        "--window-size=1280,900",
+        "--new-window"
+      ],
+      "profile": "dedicated_scratch",
+      "machine": {
+        "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor",
+        "logicalCpuCount": 16,
+        "totalMemoryBytes": 33377591296,
+        "os": "win32 10.0.26200 x64"
+      }
+    }
+  },
+  "export": {
+    "fileName": "gogma-artian-planner-backup_20260927015837.json",
+    "bytes": 19424064,
+    "sha256": "cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b"
+  },
+  "calculationContext": {
+    "gameVersion": "unknown-initial",
+    "masterDataVersion": 4,
+    "rngEngineVersion": "production-rng:c5-e7",
+    "appSchemaVersion": 17
+  },
+  "conditions": {
+    "source": "registeredD1cConditions",
+    "registrationFingerprint": "fnv1a32:2393847e",
+    "materializationRule": "d0a2-v2",
+    "window": {
+      "normal": 350,
+      "gogma": 500,
+      "skill": 1500
+    },
+    "reachOptionSet": "global-assignment-reach-options:a2",
+    "structuralCandidateLimit": 1,
+    "nodeBudget": 2000,
+    "mrvLookahead": 8,
+    "researchMaxPlanSteps": 20000,
+    "verificationBudget": 1
+  },
+  "references": {
+    "d1cPublicResult": {
+      "path": "docs/PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json",
+      "sha256": "9e9e33d77e99c45b24fbb52ac27248fc1fbaa8fc210bba72af164daa4431fb46",
+      "matchesPlan": true,
+      "measurementHeadSha": "68a1ac8696560ba8eab61e3bfc887cb3f13f5898",
+      "formalValidity": "valid",
+      "candidateOutcome": "verified",
+      "acceptance": "accepted",
+      "processCount": 4,
+      "materializationSemanticSha256": "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f",
+      "verificationSemanticSha256": "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4",
+      "entryFingerprint": "fnv1a32:ed959cc4",
+      "planningTargetCount": 43,
+      "physicalOperations": 1766,
+      "premiseIssueCount": 0
+    },
+    "nodeReference": {
+      "present": true,
+      "runner": "scripts/run-planner-global-assignment-d1a.mjs",
+      "repositoryHeadSha": "3dfe24aa3574921bfe4596db3b2280a7a397cc91",
+      "uncommittedBenchmarkCode": false,
+      "verdictKind": "verified",
+      "integrityIssueCount": 0,
+      "node": "v24.19.0",
+      "materializationSemanticSha256": "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f",
+      "entryFingerprint": "fnv1a32:ed959cc4",
+      "verificationSemanticSha256s": [
+        "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4",
+        "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4"
+      ],
+      "firstWallObservedMs": 35061.218,
+      "freshWallObservedMs": 7285.224,
+      "firstMaterializationWallMs": 29280.248,
+      "firstPlannerMs": 3960.02,
+      "freshPlannerMs": 3977.532,
+      "comparable": true,
+      "premiseIssueCount": 0
+    }
+  },
+  "environments": [
+    {
+      "environmentId": "pc-windows-chrome",
+      "status": "planned",
+      "description": "Windows 11 Pro 10.0.26200 x64, AMD Ryzen 7 9700X (16 logical CPUs), 31.1 GiB; Google Chrome 154 stable, headed, dedicated scratch profile, driven over CDP by an uncommitted external driver",
+      "unavailableReason": null,
+      "confirmation": "measured",
+      "parity": {
+        "status": "parity_confirmed",
+        "reasonCodes": [],
+        "requiredComparisonRuns": 3,
+        "completedRequiredRuns": 3,
+        "comparedWorkerCount": 10,
+        "premiseIssues": [],
+        "referenceMismatches": [],
+        "mismatches": [],
+        "claims": "parity_confirmed means only that this environment's planned required comparison runs gave the semantic values of the Node reference of the same measurement HEAD and of the D-1C public RESULT; it is no performance, cancel, formal validity, acceptance or Production claim"
+      },
+      "observedEnvironment": {
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 16,
+        "deviceMemory": 32,
+        "language": "ja",
+        "workerLocale": "ja",
+        "isSecureContext": true,
+        "workerRealmPerformanceMemory": false,
+        "crossOriginIsolatedByOrigin": {
+          "non_isolated": false,
+          "isolated": true
+        },
+        "exportTransports": [
+          "blob"
+        ]
+      },
+      "semanticValues": {
+        "comparedWorkerCount": 10,
+        "materializationSemanticSha256s": [
+          "6f790d33839ce9dcae2bd030b2e0b92c0dd1c5e7c4850de9cbd54dc4ab4cb18f"
+        ],
+        "verificationSemanticSha256s": [
+          "0a56da0f24206f1fcde76246b5ad47a6101d7a5fc9517f24c2bcdbc894833dd4"
+        ],
+        "entryFingerprints": [
+          "fnv1a32:ed959cc4"
+        ],
+        "planningTargetCount": 43,
+        "materializedEntryCount": 43,
+        "materializedBy": {
+          "candidate_search_projected": 21,
+          "shape_constrained": 22,
+          "planner_alternative_reservation": 0
+        },
+        "terminationStatus": "completed",
+        "expandedStates": 1809,
+        "completedTargetCount": 43,
+        "totalTargetCount": 43,
+        "selectedEntryCount": 43,
+        "conflictCount": 0,
+        "rejectedCount": 0,
+        "resourceConflictCount": 0,
+        "warningCount": 0,
+        "fullPlannerRuns": 1,
+        "traceReplayValid": true,
+        "traceReplayDrafts": 1809,
+        "traceReplayMismatchCount": 0,
+        "physicalOperations": 1766,
+        "planSteps": 1766,
+        "nonPhysicalStepCount": 0,
+        "streamAdvanceSum": 1766,
+        "objective": 1766,
+        "planHash": "fnv1a32:903e4274",
+        "stepSemanticsHash": "fnv1a32:8d28811e",
+        "executedHash": "fnv1a32:3cf477e7"
+      },
+      "slots": [
+        {
+          "slotId": "pc.pilot.1",
+          "purpose": "pilot",
+          "order": 1,
+          "origin": "non_isolated",
+          "comparisonRole": "excluded",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:14:44.085Z",
+          "cpuLoadPercentBefore": 12,
+          "firstSettle": "completed",
+          "freshSettle": "completed",
+          "verdictKind": "browser_nonformal_conditions_met",
+          "integrityIssueCount": 0,
+          "parityCompleted": false,
+          "comparedWorkers": [],
+          "interrupted": false,
+          "cancelPhase": null,
+          "logicalRunWallMs": 34518.7,
+          "first": {
+            "timing": {
+              "workerStartupMs": 31,
+              "requestAcceptMs": 0.5,
+              "roundTripMs": 27562.6,
+              "exportReadMs": 13.3,
+              "exportHashMs": 11.7,
+              "utf8DecodeMs": 13.5,
+              "jsonParseMs": 21.2,
+              "plannerInputBuildMs": 72.5,
+              "inputTotalMs": 132.4,
+              "phase0Ms": 1064.5,
+              "phaseAMs": 9124.3,
+              "phaseBcMs": 12204.4,
+              "toFirstStructuralCandidateMs": 12204.2,
+              "phaseDDiagnosticsMs": 1.9,
+              "phaseDMaterializationMs": 1205.7,
+              "materializationTotalMs": 23618,
+              "dPrimeHandoffMs": 0.6,
+              "dPrimeFinalInputMs": 190.6,
+              "dPrimePlannerMs": 3267.9,
+              "traceReplayMs": 283.7,
+              "physicalSummaryMs": 2,
+              "dPrimeTotalMs": 3785.1,
+              "evidenceMs": 11.5,
+              "workerTotalMs": 27553.3
+            },
+            "responsiveness": {
+              "yields": 22575,
+              "heartbeats": 20,
+              "progressEvents": 118,
+              "mainMaxMessageGapMs": 2829.9,
+              "longestYieldGap": {
+                "ms": 2830.9,
+                "fromStage": "phase_a",
+                "toStage": "phase_bc"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.2,
+                "evidence": 4.4,
+                "evidence:entry_set": 10.2,
+                "evidence:materialization_semantic_hash": 0.8,
+                "evidence:verification_semantic_hash": 0.6,
+                "input": 132.3,
+                "phase0": 1065.4,
+                "phase_a": 6.5,
+                "phase_bc": 2829.9,
+                "phase_d": 30.3,
+                "phase_d_prime": 35.7,
+                "phase_d_prime:final_input": 190.6,
+                "phase_d_prime:handoff": 0.6,
+                "phase_d_prime:physical": 2,
+                "phase_d_prime:planner": 2400.1,
+                "phase_d_prime:trace_replay": 283.7
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": 19.4,
+              "requestAcceptMs": 3.3,
+              "roundTripMs": 4886.5,
+              "exportReadMs": 11.4,
+              "exportHashMs": 10.2,
+              "utf8DecodeMs": 11.5,
+              "jsonParseMs": 18.2,
+              "plannerInputBuildMs": 63,
+              "inputTotalMs": 114.5,
+              "phase0Ms": 1015.1,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": 0.6,
+              "dPrimeFinalInputMs": 183.8,
+              "dPrimePlannerMs": 3234.8,
+              "traceReplayMs": 281.8,
+              "physicalSummaryMs": 1.9,
+              "dPrimeTotalMs": 3743.5,
+              "evidenceMs": 0.2,
+              "workerTotalMs": 4880.2
+            },
+            "responsiveness": {
+              "yields": 27,
+              "heartbeats": 1,
+              "progressEvents": 24,
+              "mainMaxMessageGapMs": 3027,
+              "longestYieldGap": {
+                "ms": 2704.1,
+                "fromStage": "phase_d_prime:planner",
+                "toStage": "evidence"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.2,
+                "entry_set_check": 10.6,
+                "evidence": 0.1,
+                "evidence:verification_semantic_hash": 0.2,
+                "input": 114.4,
+                "phase0": 1015.1,
+                "phase_d_prime": 36.2,
+                "phase_d_prime:final_input": 183.8,
+                "phase_d_prime:handoff": 0.6,
+                "phase_d_prime:physical": 2,
+                "phase_d_prime:planner": 2383.6,
+                "phase_d_prime:trace_replay": 281.8
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.timing.1",
+          "purpose": "timing",
+          "order": 2,
+          "origin": "non_isolated",
+          "comparisonRole": "required",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:15:25.697Z",
+          "cpuLoadPercentBefore": 29,
+          "firstSettle": "completed",
+          "freshSettle": "completed",
+          "verdictKind": "browser_nonformal_conditions_met",
+          "integrityIssueCount": 0,
+          "parityCompleted": true,
+          "comparedWorkers": [
+            "first",
+            "fresh"
+          ],
+          "interrupted": false,
+          "cancelPhase": null,
+          "logicalRunWallMs": 35113.5,
+          "first": {
+            "timing": {
+              "workerStartupMs": 25.7,
+              "requestAcceptMs": 0.5,
+              "roundTripMs": 28065.1,
+              "exportReadMs": 12.5,
+              "exportHashMs": 11.2,
+              "utf8DecodeMs": 12.6,
+              "jsonParseMs": 20.2,
+              "plannerInputBuildMs": 75.5,
+              "inputTotalMs": 132.3,
+              "phase0Ms": 1062,
+              "phaseAMs": 9164.8,
+              "phaseBcMs": 12677.1,
+              "toFirstStructuralCandidateMs": 12677,
+              "phaseDDiagnosticsMs": 1.8,
+              "phaseDMaterializationMs": 1199.3,
+              "materializationTotalMs": 24120.5,
+              "dPrimeHandoffMs": 0.7,
+              "dPrimeFinalInputMs": 186.4,
+              "dPrimePlannerMs": 3274.9,
+              "traceReplayMs": 279.9,
+              "physicalSummaryMs": 2,
+              "dPrimeTotalMs": 3784.4,
+              "evidenceMs": 12.3,
+              "workerTotalMs": 28055.4
+            },
+            "responsiveness": {
+              "yields": 22575,
+              "heartbeats": 20,
+              "progressEvents": 118,
+              "mainMaxMessageGapMs": 3105.7,
+              "longestYieldGap": {
+                "ms": 3107,
+                "fromStage": "phase_a",
+                "toStage": "phase_bc"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.2,
+                "evidence": 4.3,
+                "evidence:entry_set": 11,
+                "evidence:materialization_semantic_hash": 0.8,
+                "evidence:verification_semantic_hash": 0.5,
+                "input": 132.2,
+                "phase0": 1062.6,
+                "phase_a": 8.5,
+                "phase_bc": 3105.7,
+                "phase_d": 27.8,
+                "phase_d_prime": 36.5,
+                "phase_d_prime:final_input": 186.4,
+                "phase_d_prime:handoff": 0.7,
+                "phase_d_prime:physical": 2,
+                "phase_d_prime:planner": 2403.1,
+                "phase_d_prime:trace_replay": 279.9
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": 19.6,
+              "requestAcceptMs": 3.4,
+              "roundTripMs": 4990.5,
+              "exportReadMs": 11.3,
+              "exportHashMs": 10.1,
+              "utf8DecodeMs": 11.6,
+              "jsonParseMs": 16.7,
+              "plannerInputBuildMs": 65.9,
+              "inputTotalMs": 115.9,
+              "phase0Ms": 1026.2,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": 0.6,
+              "dPrimeFinalInputMs": 186.9,
+              "dPrimePlannerMs": 3320.7,
+              "traceReplayMs": 284.4,
+              "physicalSummaryMs": 2.5,
+              "dPrimeTotalMs": 3834.5,
+              "evidenceMs": 0.2,
+              "workerTotalMs": 4984.2
+            },
+            "responsiveness": {
+              "yields": 27,
+              "heartbeats": 1,
+              "progressEvents": 24,
+              "mainMaxMessageGapMs": 3109.3,
+              "longestYieldGap": {
+                "ms": 2763.4,
+                "fromStage": "phase_d_prime:planner",
+                "toStage": "evidence"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.1,
+                "entry_set_check": 11.3,
+                "evidence": 0,
+                "evidence:verification_semantic_hash": 0.2,
+                "input": 115.9,
+                "phase0": 1026.2,
+                "phase_d_prime": 35,
+                "phase_d_prime:final_input": 186.9,
+                "phase_d_prime:handoff": 0.6,
+                "phase_d_prime:physical": 2.5,
+                "phase_d_prime:planner": 2441.1,
+                "phase_d_prime:trace_replay": 284.4
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.rerun.1",
+          "purpose": "rerun",
+          "order": 3,
+          "origin": "non_isolated",
+          "comparisonRole": "required",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:16:07.337Z",
+          "cpuLoadPercentBefore": 6,
+          "firstSettle": "completed",
+          "freshSettle": "completed",
+          "verdictKind": "browser_nonformal_conditions_met",
+          "integrityIssueCount": 0,
+          "parityCompleted": true,
+          "comparedWorkers": [
+            "first",
+            "fresh"
+          ],
+          "interrupted": false,
+          "cancelPhase": null,
+          "logicalRunWallMs": 34644.1,
+          "first": {
+            "timing": {
+              "workerStartupMs": 25.7,
+              "requestAcceptMs": 0.4,
+              "roundTripMs": 27647.4,
+              "exportReadMs": 13.2,
+              "exportHashMs": 11.2,
+              "utf8DecodeMs": 13.4,
+              "jsonParseMs": 19.6,
+              "plannerInputBuildMs": 65,
+              "inputTotalMs": 122.8,
+              "phase0Ms": 1044.2,
+              "phaseAMs": 9124.8,
+              "phaseBcMs": 12278.5,
+              "toFirstStructuralCandidateMs": 12278.3,
+              "phaseDDiagnosticsMs": 1.7,
+              "phaseDMaterializationMs": 1189.6,
+              "materializationTotalMs": 23654.2,
+              "dPrimeHandoffMs": 0.4,
+              "dPrimeFinalInputMs": 194.4,
+              "dPrimePlannerMs": 3273.5,
+              "traceReplayMs": 331.9,
+              "physicalSummaryMs": 2.1,
+              "dPrimeTotalMs": 3843.7,
+              "evidenceMs": 11.2,
+              "workerTotalMs": 27638.4
+            },
+            "responsiveness": {
+              "yields": 22575,
+              "heartbeats": 20,
+              "progressEvents": 118,
+              "mainMaxMessageGapMs": 2796.3,
+              "longestYieldGap": {
+                "ms": 2797.4,
+                "fromStage": "phase_a",
+                "toStage": "phase_bc"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.2,
+                "evidence": 4.3,
+                "evidence:entry_set": 10.1,
+                "evidence:materialization_semantic_hash": 0.8,
+                "evidence:verification_semantic_hash": 0.3,
+                "input": 122.7,
+                "phase0": 1045,
+                "phase_a": 6.7,
+                "phase_bc": 2796.2,
+                "phase_d": 27.5,
+                "phase_d_prime": 37.1,
+                "phase_d_prime:final_input": 194.4,
+                "phase_d_prime:handoff": 0.4,
+                "phase_d_prime:physical": 2.1,
+                "phase_d_prime:planner": 2404.2,
+                "phase_d_prime:trace_replay": 332
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": 18.7,
+              "requestAcceptMs": 4,
+              "roundTripMs": 4937.5,
+              "exportReadMs": 11.7,
+              "exportHashMs": 10.2,
+              "utf8DecodeMs": 11.5,
+              "jsonParseMs": 17.3,
+              "plannerInputBuildMs": 61.5,
+              "inputTotalMs": 112.3,
+              "phase0Ms": 1022.7,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": 0.5,
+              "dPrimeFinalInputMs": 185.8,
+              "dPrimePlannerMs": 3272.8,
+              "traceReplayMs": 285.8,
+              "physicalSummaryMs": 2.1,
+              "dPrimeTotalMs": 3787.6,
+              "evidenceMs": 0.5,
+              "workerTotalMs": 4930.4
+            },
+            "responsiveness": {
+              "yields": 27,
+              "heartbeats": 1,
+              "progressEvents": 24,
+              "mainMaxMessageGapMs": 3061,
+              "longestYieldGap": {
+                "ms": 2739,
+                "fromStage": "phase_d_prime:planner",
+                "toStage": "evidence"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.2,
+                "entry_set_check": 10.6,
+                "evidence": 0.1,
+                "evidence:verification_semantic_hash": 0.5,
+                "input": 112.3,
+                "phase0": 1022.9,
+                "phase_d_prime": 36.1,
+                "phase_d_prime:final_input": 185.8,
+                "phase_d_prime:handoff": 0.6,
+                "phase_d_prime:physical": 2.2,
+                "phase_d_prime:planner": 2414,
+                "phase_d_prime:trace_replay": 285.8
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.responsiveness.1",
+          "purpose": "responsiveness",
+          "order": 4,
+          "origin": "non_isolated",
+          "comparisonRole": "additional",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:16:49.017Z",
+          "cpuLoadPercentBefore": 36,
+          "firstSettle": "completed",
+          "freshSettle": "completed",
+          "verdictKind": "browser_nonformal_conditions_met",
+          "integrityIssueCount": 0,
+          "parityCompleted": true,
+          "comparedWorkers": [
+            "first",
+            "fresh"
+          ],
+          "interrupted": false,
+          "cancelPhase": null,
+          "logicalRunWallMs": 34601.2,
+          "first": {
+            "timing": {
+              "workerStartupMs": 29,
+              "requestAcceptMs": 0.8,
+              "roundTripMs": 27597.8,
+              "exportReadMs": 14.4,
+              "exportHashMs": 11.9,
+              "utf8DecodeMs": 13.1,
+              "jsonParseMs": 20,
+              "plannerInputBuildMs": 71.5,
+              "inputTotalMs": 131.4,
+              "phase0Ms": 1048.2,
+              "phaseAMs": 9103.6,
+              "phaseBcMs": 12146.4,
+              "toFirstStructuralCandidateMs": 12146.2,
+              "phaseDDiagnosticsMs": 1.7,
+              "phaseDMaterializationMs": 1240.9,
+              "materializationTotalMs": 23556,
+              "dPrimeHandoffMs": 0.6,
+              "dPrimeFinalInputMs": 191.1,
+              "dPrimePlannerMs": 3311.7,
+              "traceReplayMs": 337.6,
+              "physicalSummaryMs": 2,
+              "dPrimeTotalMs": 3883.4,
+              "evidenceMs": 11.1,
+              "workerTotalMs": 27588.1
+            },
+            "responsiveness": {
+              "yields": 22575,
+              "heartbeats": 20,
+              "progressEvents": 118,
+              "mainMaxMessageGapMs": 2828.4,
+              "longestYieldGap": {
+                "ms": 2829.5,
+                "fromStage": "phase_a",
+                "toStage": "phase_bc"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.4,
+                "evidence": 4.4,
+                "evidence:entry_set": 10.2,
+                "evidence:materialization_semantic_hash": 0.8,
+                "evidence:verification_semantic_hash": 0.1,
+                "input": 131.2,
+                "phase0": 1048.8,
+                "phase_a": 6.6,
+                "phase_bc": 2828.3,
+                "phase_d": 27.2,
+                "phase_d_prime": 36.4,
+                "phase_d_prime:final_input": 191.1,
+                "phase_d_prime:handoff": 0.6,
+                "phase_d_prime:physical": 2,
+                "phase_d_prime:planner": 2441.8,
+                "phase_d_prime:trace_replay": 337.6
+              },
+              "ping": {
+                "count": 15295,
+                "lost": 1,
+                "medianMs": 0.1,
+                "p95Ms": 2.2,
+                "maxMs": 2829.7
+              }
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": 18.3,
+              "requestAcceptMs": 3.4,
+              "roundTripMs": 4937,
+              "exportReadMs": 11.7,
+              "exportHashMs": 10,
+              "utf8DecodeMs": 11.4,
+              "jsonParseMs": 17.4,
+              "plannerInputBuildMs": 64.6,
+              "inputTotalMs": 115.6,
+              "phase0Ms": 1014.8,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": 0.7,
+              "dPrimeFinalInputMs": 185.2,
+              "dPrimePlannerMs": 3286.4,
+              "traceReplayMs": 279.5,
+              "physicalSummaryMs": 2.1,
+              "dPrimeTotalMs": 3792.7,
+              "evidenceMs": 0.3,
+              "workerTotalMs": 4930.8
+            },
+            "responsiveness": {
+              "yields": 27,
+              "heartbeats": 1,
+              "progressEvents": 24,
+              "mainMaxMessageGapMs": 3075.8,
+              "longestYieldGap": {
+                "ms": 2723.9,
+                "fromStage": "phase_d_prime:planner",
+                "toStage": "evidence"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.1,
+                "entry_set_check": 10.9,
+                "evidence": 0,
+                "evidence:verification_semantic_hash": 0.3,
+                "input": 115.7,
+                "phase0": 1014.8,
+                "phase_d_prime": 34.7,
+                "phase_d_prime:final_input": 185.2,
+                "phase_d_prime:handoff": 0.7,
+                "phase_d_prime:physical": 2.1,
+                "phase_d_prime:planner": 2407.1,
+                "phase_d_prime:trace_replay": 279.5
+              },
+              "ping": {
+                "count": 203,
+                "lost": 1,
+                "medianMs": 0,
+                "p95Ms": 28,
+                "maxMs": 1529.7
+              }
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.cancel.phase-a",
+          "purpose": "cancel",
+          "order": 5,
+          "origin": "non_isolated",
+          "comparisonRole": "excluded",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:17:30.683Z",
+          "cpuLoadPercentBefore": 14,
+          "firstSettle": "cancelled",
+          "freshSettle": "not_run",
+          "verdictKind": "unmeasured",
+          "integrityIssueCount": 0,
+          "parityCompleted": false,
+          "comparedWorkers": [],
+          "interrupted": false,
+          "cancelPhase": "request_running",
+          "logicalRunWallMs": 4225.3,
+          "first": {
+            "timing": {
+              "workerStartupMs": 25.2,
+              "requestAcceptMs": 0.5,
+              "roundTripMs": 3196.4,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": 1054.6,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": null,
+              "requestAcceptMs": null,
+              "roundTripMs": null,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": null,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.cancel.phase-bc",
+          "purpose": "cancel",
+          "order": 6,
+          "origin": "non_isolated",
+          "comparisonRole": "excluded",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:17:42.090Z",
+          "cpuLoadPercentBefore": 9,
+          "firstSettle": "cancelled",
+          "freshSettle": "not_run",
+          "verdictKind": "unmeasured",
+          "integrityIssueCount": 0,
+          "parityCompleted": false,
+          "comparedWorkers": [],
+          "interrupted": false,
+          "cancelPhase": "request_running",
+          "logicalRunWallMs": 14789.2,
+          "first": {
+            "timing": {
+              "workerStartupMs": 24.9,
+              "requestAcceptMs": 0.5,
+              "roundTripMs": 13757.7,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": 2893.9,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": null,
+              "requestAcceptMs": null,
+              "roundTripMs": null,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": null,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.cancel.phase-d",
+          "purpose": "cancel",
+          "order": 7,
+          "origin": "non_isolated",
+          "comparisonRole": "excluded",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:18:03.547Z",
+          "cpuLoadPercentBefore": 14,
+          "firstSettle": "cancelled",
+          "freshSettle": "not_run",
+          "verdictKind": "unmeasured",
+          "integrityIssueCount": 0,
+          "parityCompleted": false,
+          "comparedWorkers": [],
+          "interrupted": false,
+          "cancelPhase": "request_running",
+          "logicalRunWallMs": 24150.7,
+          "first": {
+            "timing": {
+              "workerStartupMs": 25.4,
+              "requestAcceptMs": 0.5,
+              "roundTripMs": 23124.8,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": 2835.3,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": null,
+              "requestAcceptMs": null,
+              "roundTripMs": null,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": null,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.cancel.planner",
+          "purpose": "cancel",
+          "order": 8,
+          "origin": "non_isolated",
+          "comparisonRole": "excluded",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:18:34.101Z",
+          "cpuLoadPercentBefore": 6,
+          "firstSettle": "cancelled",
+          "freshSettle": "not_run",
+          "verdictKind": "unmeasured",
+          "integrityIssueCount": 0,
+          "parityCompleted": false,
+          "comparedWorkers": [],
+          "interrupted": false,
+          "cancelPhase": "request_running",
+          "logicalRunWallMs": 28615.5,
+          "first": {
+            "timing": {
+              "workerStartupMs": 25.5,
+              "requestAcceptMs": 1.2,
+              "roundTripMs": 27585.4,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": 2827.5,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": null,
+              "requestAcceptMs": null,
+              "roundTripMs": null,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": null,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.cancel.trace-replay",
+          "purpose": "cancel",
+          "order": 9,
+          "origin": "non_isolated",
+          "comparisonRole": "excluded",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:19:09.615Z",
+          "cpuLoadPercentBefore": 12,
+          "firstSettle": "cancelled",
+          "freshSettle": "not_run",
+          "verdictKind": "unmeasured",
+          "integrityIssueCount": 0,
+          "parityCompleted": false,
+          "comparedWorkers": [],
+          "interrupted": false,
+          "cancelPhase": "request_running",
+          "logicalRunWallMs": 29043.5,
+          "first": {
+            "timing": {
+              "workerStartupMs": 25.7,
+              "requestAcceptMs": 0.6,
+              "roundTripMs": 28015.2,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": 2908.2,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": null,
+              "requestAcceptMs": null,
+              "roundTripMs": null,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": null,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.cancel.fresh-planner",
+          "purpose": "cancel",
+          "order": 10,
+          "origin": "non_isolated",
+          "comparisonRole": "excluded",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:19:45.150Z",
+          "cpuLoadPercentBefore": 15,
+          "firstSettle": "completed",
+          "freshSettle": "cancelled",
+          "verdictKind": "unmeasured",
+          "integrityIssueCount": 0,
+          "parityCompleted": false,
+          "comparedWorkers": [],
+          "interrupted": false,
+          "cancelPhase": "request_running",
+          "logicalRunWallMs": 34394.6,
+          "first": {
+            "timing": {
+              "workerStartupMs": 26.1,
+              "requestAcceptMs": 0.5,
+              "roundTripMs": 27393.9,
+              "exportReadMs": 13.3,
+              "exportHashMs": 11.3,
+              "utf8DecodeMs": 12.7,
+              "jsonParseMs": 19.7,
+              "plannerInputBuildMs": 65.6,
+              "inputTotalMs": 123,
+              "phase0Ms": 1021.7,
+              "phaseAMs": 9095.9,
+              "phaseBcMs": 12133.2,
+              "toFirstStructuralCandidateMs": 12133.1,
+              "phaseDDiagnosticsMs": 2,
+              "phaseDMaterializationMs": 1197.6,
+              "materializationTotalMs": 23466.2,
+              "dPrimeHandoffMs": 0.6,
+              "dPrimeFinalInputMs": 191,
+              "dPrimePlannerMs": 3261.5,
+              "traceReplayMs": 282.6,
+              "physicalSummaryMs": 2.1,
+              "dPrimeTotalMs": 3778.5,
+              "evidenceMs": 12.1,
+              "workerTotalMs": 27385.9
+            },
+            "responsiveness": {
+              "yields": 22575,
+              "heartbeats": 20,
+              "progressEvents": 118,
+              "mainMaxMessageGapMs": 2794.5,
+              "longestYieldGap": {
+                "ms": 2795.6,
+                "fromStage": "phase_a",
+                "toStage": "phase_bc"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.2,
+                "evidence": 4.2,
+                "evidence:entry_set": 10.5,
+                "evidence:materialization_semantic_hash": 0.8,
+                "evidence:verification_semantic_hash": 0.8,
+                "input": 122.9,
+                "phase0": 1022.4,
+                "phase_a": 6.6,
+                "phase_bc": 2794.5,
+                "phase_d": 28.2,
+                "phase_d_prime": 36.6,
+                "phase_d_prime:final_input": 191,
+                "phase_d_prime:handoff": 0.6,
+                "phase_d_prime:physical": 2.1,
+                "phase_d_prime:planner": 2383.8,
+                "phase_d_prime:trace_replay": 282.7
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": 18.9,
+              "requestAcceptMs": 3.5,
+              "roundTripMs": 4938.2,
+              "exportReadMs": null,
+              "exportHashMs": null,
+              "utf8DecodeMs": null,
+              "jsonParseMs": null,
+              "plannerInputBuildMs": null,
+              "inputTotalMs": null,
+              "phase0Ms": null,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": null,
+              "dPrimeFinalInputMs": null,
+              "dPrimePlannerMs": null,
+              "traceReplayMs": null,
+              "physicalSummaryMs": null,
+              "dPrimeTotalMs": null,
+              "evidenceMs": null,
+              "workerTotalMs": null
+            },
+            "responsiveness": {
+              "yields": null,
+              "heartbeats": null,
+              "progressEvents": null,
+              "mainMaxMessageGapMs": 3057.4,
+              "longestYieldGap": null,
+              "maxSliceMsByStage": null,
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.rerun.2",
+          "purpose": "rerun",
+          "order": 11,
+          "origin": "non_isolated",
+          "comparisonRole": "required",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:20:26.768Z",
+          "cpuLoadPercentBefore": 7,
+          "firstSettle": "completed",
+          "freshSettle": "completed",
+          "verdictKind": "browser_nonformal_conditions_met",
+          "integrityIssueCount": 0,
+          "parityCompleted": true,
+          "comparedWorkers": [
+            "first",
+            "fresh"
+          ],
+          "interrupted": false,
+          "cancelPhase": null,
+          "logicalRunWallMs": 34754.9,
+          "first": {
+            "timing": {
+              "workerStartupMs": 25.8,
+              "requestAcceptMs": 0.5,
+              "roundTripMs": 27722.9,
+              "exportReadMs": 14,
+              "exportHashMs": 12.5,
+              "utf8DecodeMs": 14.6,
+              "jsonParseMs": 21.3,
+              "plannerInputBuildMs": 73.2,
+              "inputTotalMs": 136,
+              "phase0Ms": 1066.5,
+              "phaseAMs": 9081.4,
+              "phaseBcMs": 12335,
+              "toFirstStructuralCandidateMs": 12334.9,
+              "phaseDDiagnosticsMs": 3.3,
+              "phaseDMaterializationMs": 1206.6,
+              "materializationTotalMs": 23708.7,
+              "dPrimeHandoffMs": 0.4,
+              "dPrimeFinalInputMs": 194.1,
+              "dPrimePlannerMs": 3327.7,
+              "traceReplayMs": 285,
+              "physicalSummaryMs": 2.2,
+              "dPrimeTotalMs": 3851.1,
+              "evidenceMs": 11.6,
+              "workerTotalMs": 27713.5
+            },
+            "responsiveness": {
+              "yields": 22575,
+              "heartbeats": 20,
+              "progressEvents": 118,
+              "mainMaxMessageGapMs": 2843.5,
+              "longestYieldGap": {
+                "ms": 2844.6,
+                "fromStage": "phase_a",
+                "toStage": "phase_bc"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.4,
+                "evidence": 4.2,
+                "evidence:entry_set": 10.2,
+                "evidence:materialization_semantic_hash": 0.8,
+                "evidence:verification_semantic_hash": 0.7,
+                "input": 135.8,
+                "phase0": 1067.1,
+                "phase_a": 7.2,
+                "phase_bc": 2843.5,
+                "phase_d": 27.9,
+                "phase_d_prime": 37.6,
+                "phase_d_prime:final_input": 194.1,
+                "phase_d_prime:handoff": 0.4,
+                "phase_d_prime:physical": 2.2,
+                "phase_d_prime:planner": 2455.1,
+                "phase_d_prime:trace_replay": 285
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": 19.5,
+              "requestAcceptMs": 3.4,
+              "roundTripMs": 4970.5,
+              "exportReadMs": 11.1,
+              "exportHashMs": 10.2,
+              "utf8DecodeMs": 11.5,
+              "jsonParseMs": 17.6,
+              "plannerInputBuildMs": 62.7,
+              "inputTotalMs": 113.3,
+              "phase0Ms": 1033,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": 0.5,
+              "dPrimeFinalInputMs": 191.7,
+              "dPrimePlannerMs": 3287,
+              "traceReplayMs": 287.5,
+              "physicalSummaryMs": 2,
+              "dPrimeTotalMs": 3810.2,
+              "evidenceMs": 0.3,
+              "workerTotalMs": 4964
+            },
+            "responsiveness": {
+              "yields": 27,
+              "heartbeats": 1,
+              "progressEvents": 24,
+              "mainMaxMessageGapMs": 3066.1,
+              "longestYieldGap": {
+                "ms": 2750.5,
+                "fromStage": "phase_d_prime:planner",
+                "toStage": "evidence"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.2,
+                "entry_set_check": 11,
+                "evidence": 0,
+                "evidence:verification_semantic_hash": 0.3,
+                "input": 113.4,
+                "phase0": 1033,
+                "phase_d_prime": 36.9,
+                "phase_d_prime:final_input": 191.7,
+                "phase_d_prime:handoff": 0.5,
+                "phase_d_prime:physical": 2.1,
+                "phase_d_prime:planner": 2423.4,
+                "phase_d_prime:trace_replay": 287.5
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        },
+        {
+          "slotId": "pc.memory.1",
+          "purpose": "memory",
+          "order": 12,
+          "origin": "isolated",
+          "comparisonRole": "additional",
+          "recorded": true,
+          "external": null,
+          "startedAt": "2026-10-13T23:21:18.831Z",
+          "cpuLoadPercentBefore": 20,
+          "firstSettle": "completed",
+          "freshSettle": "completed",
+          "verdictKind": "browser_nonformal_conditions_met",
+          "integrityIssueCount": 0,
+          "parityCompleted": true,
+          "comparedWorkers": [
+            "first",
+            "fresh"
+          ],
+          "interrupted": false,
+          "cancelPhase": null,
+          "logicalRunWallMs": 232518.785,
+          "first": {
+            "timing": {
+              "workerStartupMs": 29.2,
+              "requestAcceptMs": 0.54,
+              "roundTripMs": 28141.49,
+              "exportReadMs": 12.725,
+              "exportHashMs": 11.205,
+              "utf8DecodeMs": 13.625,
+              "jsonParseMs": 17.985,
+              "plannerInputBuildMs": 81.035,
+              "inputTotalMs": 136.945,
+              "phase0Ms": 1037.385,
+              "phaseAMs": 9139.44,
+              "phaseBcMs": 12640.76,
+              "toFirstStructuralCandidateMs": 12640.625,
+              "phaseDDiagnosticsMs": 1.845,
+              "phaseDMaterializationMs": 1200.385,
+              "materializationTotalMs": 24036.135,
+              "dPrimeHandoffMs": 0.56,
+              "dPrimeFinalInputMs": 190.93,
+              "dPrimePlannerMs": 3417.625,
+              "traceReplayMs": 287.735,
+              "physicalSummaryMs": 2.375,
+              "dPrimeTotalMs": 3939.855,
+              "evidenceMs": 11.825,
+              "workerTotalMs": 28130.605
+            },
+            "responsiveness": {
+              "yields": 22575,
+              "heartbeats": 20,
+              "progressEvents": 118,
+              "mainMaxMessageGapMs": 3132.485,
+              "longestYieldGap": {
+                "ms": 3133.56,
+                "fromStage": "phase_a",
+                "toStage": "phase_bc"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.225,
+                "evidence": 4.27,
+                "evidence:entry_set": 10.84,
+                "evidence:materialization_semantic_hash": 0.82,
+                "evidence:verification_semantic_hash": 0.195,
+                "input": 136.84,
+                "phase0": 1038.125,
+                "phase_a": 13.475,
+                "phase_bc": 3132.45,
+                "phase_d": 28.06,
+                "phase_d_prime": 36.31,
+                "phase_d_prime:final_input": 190.945,
+                "phase_d_prime:handoff": 0.58,
+                "phase_d_prime:physical": 2.395,
+                "phase_d_prime:planner": 2542.365,
+                "phase_d_prime:trace_replay": 287.75
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          },
+          "fresh": {
+            "timing": {
+              "workerStartupMs": 21.68,
+              "requestAcceptMs": 4.095,
+              "roundTripMs": 5108.02,
+              "exportReadMs": 12.485,
+              "exportHashMs": 11.445,
+              "utf8DecodeMs": 13.35,
+              "jsonParseMs": 17.56,
+              "plannerInputBuildMs": 83.205,
+              "inputTotalMs": 138.385,
+              "phase0Ms": 1060.74,
+              "phaseAMs": null,
+              "phaseBcMs": null,
+              "toFirstStructuralCandidateMs": null,
+              "phaseDDiagnosticsMs": null,
+              "phaseDMaterializationMs": null,
+              "materializationTotalMs": null,
+              "dPrimeHandoffMs": 0.555,
+              "dPrimeFinalInputMs": 191.04,
+              "dPrimePlannerMs": 3346.765,
+              "traceReplayMs": 310.485,
+              "physicalSummaryMs": 2.155,
+              "dPrimeTotalMs": 3893.345,
+              "evidenceMs": 0.995,
+              "workerTotalMs": 5101.07
+            },
+            "responsiveness": {
+              "yields": 27,
+              "heartbeats": 1,
+              "progressEvents": 24,
+              "mainMaxMessageGapMs": 3132.43,
+              "longestYieldGap": {
+                "ms": 2830.965,
+                "fromStage": "phase_d_prime:planner",
+                "toStage": "evidence"
+              },
+              "maxSliceMsByStage": {
+                "accepted": 0.22,
+                "entry_set_check": 11.21,
+                "evidence": 0.085,
+                "evidence:verification_semantic_hash": 1,
+                "input": 138.375,
+                "phase0": 1060.76,
+                "phase_d_prime": 38.015,
+                "phase_d_prime:final_input": 191.055,
+                "phase_d_prime:handoff": 0.575,
+                "phase_d_prime:physical": 2.18,
+                "phase_d_prime:planner": 2478.96,
+                "phase_d_prime:trace_replay": 310.5
+              },
+              "ping": null
+            },
+            "lateResponses": 0
+          }
+        }
+      ],
+      "cancelTrials": [
+        {
+          "slotId": "pc.cancel.phase-a",
+          "status": "cancel_passed",
+          "reasonCodes": [],
+          "plannedTrigger": {
+            "role": "first",
+            "onProgressKey": "materialization:context",
+            "delayMs": 2000
+          },
+          "cancelPhase": "request_running",
+          "cancelledRole": "first",
+          "settle": "cancelled",
+          "settledBy": "gab_cancelled",
+          "stoppedAt": "evidence",
+          "via": "before_result",
+          "acceptedAtMs": 3192.8,
+          "ackMs": 3.5,
+          "settledMs": 3.6,
+          "ignoredResultAfterCancel": false,
+          "adoptedResults": 0,
+          "settleCount": 1,
+          "terminated": true,
+          "lateResponses": 0,
+          "freshStarted": false,
+          "rerun": {
+            "slotId": "pc.rerun.2",
+            "recorded": true,
+            "completed": true
+          }
+        },
+        {
+          "slotId": "pc.cancel.phase-bc",
+          "status": "cancel_passed",
+          "reasonCodes": [],
+          "plannedTrigger": {
+            "role": "first",
+            "onProgressKey": "materialization:reach_table",
+            "delayMs": 3000
+          },
+          "cancelPhase": "request_running",
+          "cancelledRole": "first",
+          "settle": "cancelled",
+          "settledBy": "gab_cancelled",
+          "stoppedAt": "evidence",
+          "via": "before_result",
+          "acceptedAtMs": 13382.4,
+          "ackMs": 370.8,
+          "settledMs": 375.3,
+          "ignoredResultAfterCancel": false,
+          "adoptedResults": 0,
+          "settleCount": 1,
+          "terminated": true,
+          "lateResponses": 0,
+          "freshStarted": false,
+          "rerun": {
+            "slotId": "pc.rerun.2",
+            "recorded": true,
+            "completed": true
+          }
+        },
+        {
+          "slotId": "pc.cancel.phase-d",
+          "status": "cancel_passed",
+          "reasonCodes": [],
+          "plannedTrigger": {
+            "role": "first",
+            "onProgressKey": "materialization:candidate_started",
+            "delayMs": 500
+          },
+          "cancelPhase": "request_running",
+          "cancelledRole": "first",
+          "settle": "cancelled",
+          "settledBy": "gab_cancelled",
+          "stoppedAt": "phase_d_prime",
+          "via": "cancel_point",
+          "acceptedAtMs": 23111.9,
+          "ackMs": 2.9,
+          "settledMs": 12.9,
+          "ignoredResultAfterCancel": false,
+          "adoptedResults": 0,
+          "settleCount": 1,
+          "terminated": true,
+          "lateResponses": 0,
+          "freshStarted": false,
+          "rerun": {
+            "slotId": "pc.rerun.2",
+            "recorded": true,
+            "completed": true
+          }
+        },
+        {
+          "slotId": "pc.cancel.planner",
+          "status": "cancel_passed",
+          "reasonCodes": [],
+          "plannedTrigger": {
+            "role": "first",
+            "onProgressKey": "verification:planner:started",
+            "delayMs": 1000
+          },
+          "cancelPhase": "request_running",
+          "cancelledRole": "first",
+          "settle": "cancelled",
+          "settledBy": "ignored_gab_result",
+          "stoppedAt": null,
+          "via": null,
+          "acceptedAtMs": 24907.4,
+          "ackMs": null,
+          "settledMs": 2678,
+          "ignoredResultAfterCancel": true,
+          "adoptedResults": 0,
+          "settleCount": 1,
+          "terminated": true,
+          "lateResponses": 0,
+          "freshStarted": false,
+          "rerun": {
+            "slotId": "pc.rerun.2",
+            "recorded": true,
+            "completed": true
+          }
+        },
+        {
+          "slotId": "pc.cancel.trace-replay",
+          "status": "cancel_passed",
+          "reasonCodes": [],
+          "plannedTrigger": {
+            "role": "first",
+            "onProgressKey": "verification:trace_replay:started",
+            "delayMs": 100
+          },
+          "cancelPhase": "request_running",
+          "cancelledRole": "first",
+          "settle": "cancelled",
+          "settledBy": "ignored_gab_result",
+          "stoppedAt": null,
+          "via": null,
+          "acceptedAtMs": 27768.3,
+          "ackMs": null,
+          "settledMs": 246.9,
+          "ignoredResultAfterCancel": true,
+          "adoptedResults": 0,
+          "settleCount": 1,
+          "terminated": true,
+          "lateResponses": 0,
+          "freshStarted": false,
+          "rerun": {
+            "slotId": "pc.rerun.2",
+            "recorded": true,
+            "completed": true
+          }
+        },
+        {
+          "slotId": "pc.cancel.fresh-planner",
+          "status": "cancel_passed",
+          "reasonCodes": [],
+          "plannedTrigger": {
+            "role": "fresh",
+            "onProgressKey": "verification:planner:started",
+            "delayMs": 1000
+          },
+          "cancelPhase": "request_running",
+          "cancelledRole": "fresh",
+          "settle": "cancelled",
+          "settledBy": "ignored_gab_result",
+          "stoppedAt": null,
+          "via": null,
+          "acceptedAtMs": 2347.3,
+          "ackMs": null,
+          "settledMs": 2590.9,
+          "ignoredResultAfterCancel": true,
+          "adoptedResults": 0,
+          "settleCount": 1,
+          "terminated": true,
+          "lateResponses": 0,
+          "freshStarted": true,
+          "rerun": {
+            "slotId": "pc.rerun.2",
+            "recorded": true,
+            "completed": true
+          }
+        }
+      ],
+      "outcomes": {
+        "plannedSlots": 12,
+        "recordedSlots": 12,
+        "unrecordedSlots": [],
+        "external": {
+          "page_lost": 0,
+          "out_of_memory": 0
+        },
+        "bySettle": {
+          "first": {
+            "completed": 7,
+            "cancelled": 5,
+            "cancelled_terminated": 0,
+            "timeout": 0,
+            "worker_error": 0,
+            "worker_reported_error": 0,
+            "page_left": 0,
+            "page_lost": 0,
+            "out_of_memory": 0,
+            "environment_unsupported": 0,
+            "not_run": 0
+          },
+          "fresh": {
+            "completed": 6,
+            "cancelled": 1,
+            "cancelled_terminated": 0,
+            "timeout": 0,
+            "worker_error": 0,
+            "worker_reported_error": 0,
+            "page_left": 0,
+            "page_lost": 0,
+            "out_of_memory": 0,
+            "environment_unsupported": 0,
+            "not_run": 5
+          }
+        },
+        "byPurpose": {
+          "pilot": {
+            "slots": 1,
+            "recorded": 1,
+            "firstCompleted": 1,
+            "freshCompleted": 1
+          },
+          "timing": {
+            "slots": 1,
+            "recorded": 1,
+            "firstCompleted": 1,
+            "freshCompleted": 1
+          },
+          "rerun": {
+            "slots": 2,
+            "recorded": 2,
+            "firstCompleted": 2,
+            "freshCompleted": 2
+          },
+          "responsiveness": {
+            "slots": 1,
+            "recorded": 1,
+            "firstCompleted": 1,
+            "freshCompleted": 1
+          },
+          "cancel": {
+            "slots": 6,
+            "recorded": 6,
+            "firstCompleted": 1,
+            "freshCompleted": 0
+          },
+          "memory": {
+            "slots": 1,
+            "recorded": 1,
+            "firstCompleted": 1,
+            "freshCompleted": 1
+          }
+        },
+        "ignoredResultAfterCancel": 3,
+        "interrupted": 0,
+        "incomplete": [],
+        "unplannedRecords": {
+          "count": 0,
+          "reasonCounts": {}
+        }
+      },
+      "performance": {
+        "basis": "timing / rerun slots whose two Workers completed with an intact record and no visibility / freeze interruption (observed values; no threshold, no pass)",
+        "eligibleSlots": [
+          "pc.timing.1",
+          "pc.rerun.1",
+          "pc.rerun.2"
+        ],
+        "first": {
+          "workerStartupMs": {
+            "n": 3,
+            "min": 25.7,
+            "median": 25.7,
+            "max": 25.8
+          },
+          "requestAcceptMs": {
+            "n": 3,
+            "min": 0.4,
+            "median": 0.5,
+            "max": 0.5
+          },
+          "roundTripMs": {
+            "n": 3,
+            "min": 27647.4,
+            "median": 27722.9,
+            "max": 28065.1
+          },
+          "exportReadMs": {
+            "n": 3,
+            "min": 12.5,
+            "median": 13.2,
+            "max": 14
+          },
+          "exportHashMs": {
+            "n": 3,
+            "min": 11.2,
+            "median": 11.2,
+            "max": 12.5
+          },
+          "utf8DecodeMs": {
+            "n": 3,
+            "min": 12.6,
+            "median": 13.4,
+            "max": 14.6
+          },
+          "jsonParseMs": {
+            "n": 3,
+            "min": 19.6,
+            "median": 20.2,
+            "max": 21.3
+          },
+          "plannerInputBuildMs": {
+            "n": 3,
+            "min": 65,
+            "median": 73.2,
+            "max": 75.5
+          },
+          "inputTotalMs": {
+            "n": 3,
+            "min": 122.8,
+            "median": 132.3,
+            "max": 136
+          },
+          "phase0Ms": {
+            "n": 3,
+            "min": 1044.2,
+            "median": 1062,
+            "max": 1066.5
+          },
+          "phaseAMs": {
+            "n": 3,
+            "min": 9081.4,
+            "median": 9124.8,
+            "max": 9164.8
+          },
+          "phaseBcMs": {
+            "n": 3,
+            "min": 12278.5,
+            "median": 12335,
+            "max": 12677.1
+          },
+          "toFirstStructuralCandidateMs": {
+            "n": 3,
+            "min": 12278.3,
+            "median": 12334.9,
+            "max": 12677
+          },
+          "phaseDDiagnosticsMs": {
+            "n": 3,
+            "min": 1.7,
+            "median": 1.8,
+            "max": 3.3
+          },
+          "phaseDMaterializationMs": {
+            "n": 3,
+            "min": 1189.6,
+            "median": 1199.3,
+            "max": 1206.6
+          },
+          "materializationTotalMs": {
+            "n": 3,
+            "min": 23654.2,
+            "median": 23708.7,
+            "max": 24120.5
+          },
+          "dPrimeHandoffMs": {
+            "n": 3,
+            "min": 0.4,
+            "median": 0.4,
+            "max": 0.7
+          },
+          "dPrimeFinalInputMs": {
+            "n": 3,
+            "min": 186.4,
+            "median": 194.1,
+            "max": 194.4
+          },
+          "dPrimePlannerMs": {
+            "n": 3,
+            "min": 3273.5,
+            "median": 3274.9,
+            "max": 3327.7
+          },
+          "traceReplayMs": {
+            "n": 3,
+            "min": 279.9,
+            "median": 285,
+            "max": 331.9
+          },
+          "physicalSummaryMs": {
+            "n": 3,
+            "min": 2,
+            "median": 2.1,
+            "max": 2.2
+          },
+          "dPrimeTotalMs": {
+            "n": 3,
+            "min": 3784.4,
+            "median": 3843.7,
+            "max": 3851.1
+          },
+          "evidenceMs": {
+            "n": 3,
+            "min": 11.2,
+            "median": 11.6,
+            "max": 12.3
+          },
+          "workerTotalMs": {
+            "n": 3,
+            "min": 27638.4,
+            "median": 27713.5,
+            "max": 28055.4
+          }
+        },
+        "fresh": {
+          "workerStartupMs": {
+            "n": 3,
+            "min": 18.7,
+            "median": 19.5,
+            "max": 19.6
+          },
+          "requestAcceptMs": {
+            "n": 3,
+            "min": 3.4,
+            "median": 3.4,
+            "max": 4
+          },
+          "roundTripMs": {
+            "n": 3,
+            "min": 4937.5,
+            "median": 4970.5,
+            "max": 4990.5
+          },
+          "exportReadMs": {
+            "n": 3,
+            "min": 11.1,
+            "median": 11.3,
+            "max": 11.7
+          },
+          "exportHashMs": {
+            "n": 3,
+            "min": 10.1,
+            "median": 10.2,
+            "max": 10.2
+          },
+          "utf8DecodeMs": {
+            "n": 3,
+            "min": 11.5,
+            "median": 11.5,
+            "max": 11.6
+          },
+          "jsonParseMs": {
+            "n": 3,
+            "min": 16.7,
+            "median": 17.3,
+            "max": 17.6
+          },
+          "plannerInputBuildMs": {
+            "n": 3,
+            "min": 61.5,
+            "median": 62.7,
+            "max": 65.9
+          },
+          "inputTotalMs": {
+            "n": 3,
+            "min": 112.3,
+            "median": 113.3,
+            "max": 115.9
+          },
+          "phase0Ms": {
+            "n": 3,
+            "min": 1022.7,
+            "median": 1026.2,
+            "max": 1033
+          },
+          "phaseAMs": {
+            "n": 0,
+            "min": null,
+            "median": null,
+            "max": null
+          },
+          "phaseBcMs": {
+            "n": 0,
+            "min": null,
+            "median": null,
+            "max": null
+          },
+          "toFirstStructuralCandidateMs": {
+            "n": 0,
+            "min": null,
+            "median": null,
+            "max": null
+          },
+          "phaseDDiagnosticsMs": {
+            "n": 0,
+            "min": null,
+            "median": null,
+            "max": null
+          },
+          "phaseDMaterializationMs": {
+            "n": 0,
+            "min": null,
+            "median": null,
+            "max": null
+          },
+          "materializationTotalMs": {
+            "n": 0,
+            "min": null,
+            "median": null,
+            "max": null
+          },
+          "dPrimeHandoffMs": {
+            "n": 3,
+            "min": 0.5,
+            "median": 0.5,
+            "max": 0.6
+          },
+          "dPrimeFinalInputMs": {
+            "n": 3,
+            "min": 185.8,
+            "median": 186.9,
+            "max": 191.7
+          },
+          "dPrimePlannerMs": {
+            "n": 3,
+            "min": 3272.8,
+            "median": 3287,
+            "max": 3320.7
+          },
+          "traceReplayMs": {
+            "n": 3,
+            "min": 284.4,
+            "median": 285.8,
+            "max": 287.5
+          },
+          "physicalSummaryMs": {
+            "n": 3,
+            "min": 2,
+            "median": 2.1,
+            "max": 2.5
+          },
+          "dPrimeTotalMs": {
+            "n": 3,
+            "min": 3787.6,
+            "median": 3810.2,
+            "max": 3834.5
+          },
+          "evidenceMs": {
+            "n": 3,
+            "min": 0.2,
+            "median": 0.3,
+            "max": 0.5
+          },
+          "workerTotalMs": {
+            "n": 3,
+            "min": 4930.4,
+            "median": 4964,
+            "max": 4984.2
+          }
+        },
+        "logicalRunWallMs": {
+          "n": 3,
+          "min": 34644.1,
+          "median": 34754.9,
+          "max": 35113.5
+        },
+        "excludedSlots": []
+      },
+      "memory": {
+        "basis": "memory slots only: fixed points of measureUserAgentSpecificMemory (cross-origin isolated), the external CDP Worker heap sampling and the OS renderer process memory (max sampled, never a continuous peak); null / not_sampled where unavailable, never estimated",
+        "slots": [
+          {
+            "slotId": "pc.memory.1",
+            "recorded": true,
+            "fixedPoints": [
+              {
+                "label": "first:before_worker_create",
+                "atMs": 0.33,
+                "status": "ok",
+                "bytes": 7402747,
+                "dedicatedWorkerBytes": 0,
+                "windowBytes": 6847962,
+                "resolveMs": 19029.415,
+                "unavailableReason": null,
+                "mainRealmUsedJSHeapSize": 25766777,
+                "mainRealmJSHeapSizeLimit": 4395630592
+              },
+              {
+                "label": "first:worker_ready",
+                "atMs": 19059.4,
+                "status": "ok",
+                "bytes": 10000626,
+                "dedicatedWorkerBytes": 2503706,
+                "windowBytes": 6986065,
+                "resolveMs": 10007.965,
+                "unavailableReason": null,
+                "mainRealmUsedJSHeapSize": 6428440,
+                "mainRealmJSHeapSizeLimit": 4395630592
+              },
+              {
+                "label": "first:settled",
+                "atMs": 57209.925,
+                "status": "ok",
+                "bytes": 9325652,
+                "dedicatedWorkerBytes": 0,
+                "windowBytes": 8771105,
+                "resolveMs": 60001.535,
+                "unavailableReason": null,
+                "mainRealmUsedJSHeapSize": 8276391,
+                "mainRealmJSHeapSizeLimit": 4395630592
+              },
+              {
+                "label": "first:after_dispose",
+                "atMs": 118215.965,
+                "status": "ok",
+                "bytes": 9340944,
+                "dedicatedWorkerBytes": 0,
+                "windowBytes": 8791023,
+                "resolveMs": 6453.485,
+                "unavailableReason": null,
+                "mainRealmUsedJSHeapSize": 9297906,
+                "mainRealmJSHeapSizeLimit": 4395630592
+              },
+              {
+                "label": "first:after_gc_wait_reference",
+                "atMs": 134675.025,
+                "status": "ok",
+                "bytes": 9337888,
+                "dedicatedWorkerBytes": 0,
+                "windowBytes": 8789413,
+                "resolveMs": 1216.055,
+                "unavailableReason": null,
+                "mainRealmUsedJSHeapSize": 8282355,
+                "mainRealmJSHeapSizeLimit": 4395630592
+              },
+              {
+                "label": "fresh:before_worker_create",
+                "atMs": 135898.345,
+                "status": "ok",
+                "bytes": 9354820,
+                "dedicatedWorkerBytes": 0,
+                "windowBytes": 5548027,
+                "resolveMs": 8242.52,
+                "unavailableReason": null,
+                "mainRealmUsedJSHeapSize": 8298951,
+                "mainRealmJSHeapSizeLimit": 4395630592
+              },
+              {
+                "label": "fresh:worker_ready",
+                "atMs": 144162.6,
+                "status": "ok",
+                "bytes": 11914525,
+                "dedicatedWorkerBytes": 2503706,
+                "windowBytes": 8857056,
+                "resolveMs": 10014.815,
+                "unavailableReason": null,
+                "mainRealmUsedJSHeapSize": 8360307,
+                "mainRealmJSHeapSizeLimit": 4395630592
+              },
+              {
+                "label": "fresh:settled",
+                "atMs": 159285.72,
+                "status": "ok",
+                "bytes": 9487239,
+                "dedicatedWorkerBytes": 0,
+                "windowBytes": 8925390,
+                "resolveMs": 60010.9,
+                "unavailableReason": null,
+                "mainRealmUsedJSHeapSize": 8445126,
+                "mainRealmJSHeapSizeLimit": 4395630592
+              },
+              {
+                "label": "fresh:after_dispose",
+                "atMs": 220300.815,
+                "status": "ok",
+                "bytes": 9327564,
+                "dedicatedWorkerBytes": 0,
+                "windowBytes": 8777212,
+                "resolveMs": 967.595,
+                "unavailableReason": null,
+                "mainRealmUsedJSHeapSize": 8294085,
+                "mainRealmJSHeapSizeLimit": 4395630592
+              },
+              {
+                "label": "fresh:after_gc_wait_reference",
+                "atMs": 231274.205,
+                "status": "ok",
+                "bytes": 9319448,
+                "dedicatedWorkerBytes": 0,
+                "windowBytes": 8770829,
+                "resolveMs": 1243.74,
+                "unavailableReason": null,
+                "mainRealmUsedJSHeapSize": 8263931,
+                "mainRealmJSHeapSizeLimit": 4395630592
+              }
+            ],
+            "cdpWorkerHeap": {
+              "status": "sampled",
+              "intervalMs": 500,
+              "errors": 0,
+              "first": {
+                "samples": 75,
+                "maxSampledUsedBytes": 430659028,
+                "maxSampledTotalBytes": 474796032
+              },
+              "fresh": {
+                "samples": 29,
+                "maxSampledUsedBytes": 373307116,
+                "maxSampledTotalBytes": 434372608
+              }
+            },
+            "osRendererMemory": {
+              "status": "sampled",
+              "intervalMs": 1000,
+              "samples": 225,
+              "maxSampledPrivateBytes": 1243992064,
+              "maxSampledWorkingSetBytes": 1299509248,
+              "maxProcessCount": 4
+            }
+          }
+        ],
+        "workerRealmPerformanceMemory": "unavailable",
+        "dedicatedWorkerHeapLimit": "unknown (not exposed by the Browser)"
+      },
+      "storage": {
+        "sessions": [
+          {
+            "sessionId": "s1-non_isolated",
+            "crossOriginIsolated": false,
+            "before": {
+              "indexedDbDatabases": 0,
+              "localKeys": 0,
+              "sessionKeys": 0,
+              "cacheKeys": 0,
+              "workerRegistrations": 0
+            },
+            "after": {
+              "indexedDbDatabases": 0,
+              "localKeys": 0,
+              "sessionKeys": 0,
+              "cacheKeys": 0,
+              "workerRegistrations": 0
+            },
+            "pageLost": false
+          },
+          {
+            "sessionId": "s2-isolated",
+            "crossOriginIsolated": true,
+            "before": {
+              "indexedDbDatabases": 0,
+              "localKeys": 0,
+              "sessionKeys": 0,
+              "cacheKeys": 0,
+              "workerRegistrations": 0
+            },
+            "after": {
+              "indexedDbDatabases": 0,
+              "localKeys": 0,
+              "sessionKeys": 0,
+              "cacheKeys": 0,
+              "workerRegistrations": 0
+            },
+            "pageLost": false
+          }
+        ],
+        "unchanged": true
+      },
+      "binding": {
+        "boundSlots": 12,
+        "unplannedRecords": 0,
+        "unplannedReasons": {},
+        "orderFollowed": true,
+        "outOfOrderSlots": []
+      }
+    },
+    {
+      "environmentId": "android-chrome",
+      "status": "not_available",
+      "description": "Android + Chrome (real device)",
+      "unavailableReason": "No Android device was attached when the plan was registered (adb devices listed none); no Android measurement is planned in this series, so Android stays unconfirmed.",
+      "confirmation": "unconfirmed",
+      "parity": null,
+      "observedEnvironment": null,
+      "semanticValues": null,
+      "slots": [],
+      "cancelTrials": [],
+      "outcomes": null,
+      "performance": null,
+      "memory": null,
+      "storage": null,
+      "binding": {
+        "boundSlots": 0,
+        "unplannedRecords": 0,
+        "orderFollowed": null,
+        "outOfOrderSlots": []
+      }
+    },
+    {
+      "environmentId": "iphone-safari",
+      "status": "not_available",
+      "description": "iPhone + Safari (real device)",
+      "unavailableReason": "No trusted local HTTPS route to an iPhone (and no Mac Web Inspector) is prepared, and publishing the build or the Export through an external host or tunnel is excluded; iPhone stays unconfirmed.",
+      "confirmation": "unconfirmed",
+      "parity": null,
+      "observedEnvironment": null,
+      "semanticValues": null,
+      "slots": [],
+      "cancelTrials": [],
+      "outcomes": null,
+      "performance": null,
+      "memory": null,
+      "storage": null,
+      "binding": {
+        "boundSlots": 0,
+        "unplannedRecords": 0,
+        "orderFollowed": null,
+        "outOfOrderSlots": []
+      }
+    }
+  ],
+  "verdicts": {
+    "performance": "not_judged",
+    "production": "not_judged",
+    "formal": "not_claimed"
+  },
+  "unconfirmed": [
+    "environments recorded as not_available (unconfirmed; never substituted by another environment)",
+    "other Exports, windows, conditions and structural candidates",
+    "determinism on other machines, Browsers or Browser versions",
+    "the Dedicated Worker heap limit and any continuous memory peak between samples",
+    "performance thresholds and Production suitability (not judged here)"
+  ]
+}

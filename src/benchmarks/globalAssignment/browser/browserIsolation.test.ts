@@ -31,9 +31,9 @@ const runRequestFieldsAreTheProtocolFields: Equal<keyof GabRunRequest, (typeof G
 describe('Global Assignment Browser Worker isolation (P-1)', () => {
   it('has the expected modules and is reached by no Production module (no exclusion pattern)', () => {
     expect(runtime.map(([path]) => path).sort()).toEqual([
-      './GlobalAssignmentBrowserBenchmarkPage.tsx', './globalAssignment.worker.benchmark.entry.ts', './globalAssignment.worker.benchmark.ts', './globalAssignmentBrowserHarness.ts',
-      './globalAssignmentBrowserJudgement.ts', './globalAssignmentBrowserProtocol.ts', './globalAssignmentBrowserRunner.ts', './globalAssignmentBrowserStages.ts',
-      './globalAssignmentBrowserWorkerOptions.ts', './main.tsx',
+      './GlobalAssignmentBrowserBenchmarkPage.tsx', './globalAssignment.worker.benchmark.entry.ts', './globalAssignment.worker.benchmark.ts', './globalAssignmentBrowserAnalysis.ts',
+      './globalAssignmentBrowserHarness.ts', './globalAssignmentBrowserJudgement.ts', './globalAssignmentBrowserMeasurementPlan.ts', './globalAssignmentBrowserProtocol.ts',
+      './globalAssignmentBrowserRunner.ts', './globalAssignmentBrowserStages.ts', './globalAssignmentBrowserWorkerOptions.ts', './main.tsx',
     ])
     const productionPaths = Object.keys(production)
     expect(productionPaths.length).toBeGreaterThan(100)
@@ -88,6 +88,43 @@ describe('Global Assignment Browser Worker isolation (P-1)', () => {
     expect(callers).toEqual(['./globalAssignmentBrowserStages.ts'])
     // The stage module reads no clock, file or random value of its own: everything is injected.
     expect(codeOf(browser['./globalAssignmentBrowserStages.ts']!)).not.toMatch(/performance\.now|Date\.now|new Date\(|crypto\.subtle|setTimeout|MessageChannel|\bself\b/)
+  })
+
+  it('keeps the P-2 plan and analysis off the page, the runner, the harness and the Worker: no expected value reaches a calculation', () => {
+    // The post-hoc modules (the committed plan, the parity / cancel / tally analysis over the raw records and the references) are read
+    // by the analyzer script and the tests only. Neither the main thread nor the Worker imports them, directly or through another module.
+    const postHoc = ['./globalAssignmentBrowserAnalysis', './globalAssignmentBrowserMeasurementPlan']
+    for (const [path, source] of runtime) {
+      if (postHoc.some(module => path === `${module}.ts`)) continue
+      expect(source, path).not.toMatch(/from '\.\/globalAssignmentBrowser(?:Analysis|MeasurementPlan)'/)
+    }
+    // The judgement module carries the expected values as arguments only and imports nothing that reads them.
+    expect(codeOf(browser['./globalAssignmentBrowserJudgement.ts']!)).not.toMatch(/from '\.\.\/verificationFormalResult'|from '\.\/globalAssignmentBrowser(?:Analysis|MeasurementPlan)'/)
+    // The analysis runs no calculation and reads no file of its own (the script reads them); the plan module likewise.
+    for (const path of ['./globalAssignmentBrowserAnalysis.ts', './globalAssignmentBrowserMeasurementPlan.ts']) {
+      const source = codeOf(browser[path]!)
+      expect(source, path).not.toMatch(/runMaterializationSmoke|verifyPlannerCandidate|createGlobalAssignmentContext|runFirstStage|runFreshStage|globalResearchInputFromExport|ProductionRngEngine|createProductionPlan|replayPlannerSearchTrace|\.predict[A-Z]/)
+      expect(source, path).not.toMatch(/readFile|execFile|child_process|from 'node:|import\('node:|performance\.now|Date\.now|new Date\(/)
+    }
+  })
+
+  it('keeps the P-2 analyzer script a post-hoc reader: no Export, no calculation, the plan and the D-1C RESULT from the measured commit, exclusive writes', () => {
+    const scripts = import.meta.glob('../../../../scripts/*.mjs', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+    const analyzer = scripts['../../../../scripts/analyze-planner-global-assignment-browser.mjs']
+    expect(analyzer).toBeDefined()
+    expect(analyzer).not.toMatch(/--export|ProductionRngEngine|FakeRngEngine|runMaterializationSmoke|verifyPlannerCandidate|createProductionPlan|globalResearchInputFromExport|plannerGlobalOracle|ORACLE_1657/)
+    // The D-1C RESULT path is the plan's: no RESULT file name, hash or UUID is written into the script.
+    expect(analyzer).not.toMatch(/PLANNER_GLOBAL_[A-Z0-9_]*RESULT|\b[0-9a-f]{40,64}\b|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+    expect(analyzer).toMatch(/git\('show', `\$\{head\}:\$\{path\}`\)/)
+    expect(analyzer).toMatch(/atHead\(extracted\.plan\.references\.d1cPublicResult\.path\)/)
+    expect(analyzer).toMatch(/flag: 'wx'/)
+    expect(analyzer).toMatch(/deriveGabPublicResult\(sources, ports\)/)
+    expect(analyzer).toMatch(/gabPublicResultIssues\(/)
+    // It refuses to analyze with code other than the measured code.
+    expect(analyzer).toMatch(/git', \['diff', '--quiet', head, '--', \.\.\.CODE_PATHS\]/)
+    // No other script loads the P-2 analysis.
+    const loaders = Object.keys(scripts).filter(path => /globalAssignmentBrowser(?:Analysis|MeasurementPlan)/.test(scripts[path]!))
+    expect(loaders).toEqual(['../../../../scripts/analyze-planner-global-assignment-browser.mjs'])
   })
 
   it('carries no condition, expected hash or registration in a run request', () => {

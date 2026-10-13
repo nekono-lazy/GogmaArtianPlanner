@@ -16,12 +16,18 @@
  * - both Workers meeting every condition and agreeing is `browser_nonformal_conditions_met`: never `verified`, `nonformal_planner_verified`,
  *   a formal validity, an acceptance or a minimality claim
  *
- * The parity of P-2 (Node reference, D-1C RESULT, comparison population) is not judged here. Pure; no clock, file or expected value.
+ * P-2 adds three judgements that never feed one another (design 12.2 / 12.4 / 12.6), over values the analysis module extracted from the
+ * raw records (`globalAssignmentBrowserAnalysis.ts`): the semantic parity of one measurement environment (`parity_confirmed` /
+ * `parity_mismatch` / `not_comparable`, judged on the comparison population of the committed measurement plan only), the cancel trial of
+ * one cancel slot (`cancel_passed` / `cancel_failed` / `cancel_not_exercised`) and the tally of how every slot ended. None of them reads a
+ * clock, a file or the Worker; the expected values are arguments (the D-1C public RESULT and the Node reference, read post hoc).
  */
 import type { MaterializationRunOutcome } from '../materializationRunner'
 import { differingSemanticFields, type D1aCandidateOutcome, type D1aUnmeasuredReason } from '../verificationProtocol'
 import type { PlannerVerificationSemantic } from '../verify'
-import type { GabSettleOutcome } from './globalAssignmentBrowserHarness'
+import type { GabCancelObservation, GabSettledBy, GabSettleOutcome } from './globalAssignmentBrowserHarness'
+import type { GabRole } from './globalAssignmentBrowserProtocol'
+import type { GabRunPurpose } from './globalAssignmentBrowserRunner'
 
 /**
  * How one Worker's request ended, as the main thread recorded it: a harness settlement, `environment_unsupported` (no request was
@@ -178,4 +184,469 @@ export function judgeBrowserLogicalRun(first: GabFirstWorkerView, fresh: GabFres
     planningTargetCount: first.verification.semantic.candidate.planningTargetCount,
     fullPlannerRuns: { first: first.verification.semantic.planner!.fullPlannerRuns, fresh: fresh.verification.semantic.planner!.fullPlannerRuns },
   })
+}
+
+// =====================================================================================================================================
+// P-2: the semantic parity of one measurement environment (design 12.2 / 12.4)
+// =====================================================================================================================================
+
+/** Design 12.2: how a run purpose enters the semantic parity (`required` counts towards the planned runs; `additional` is compared when both Workers completed). */
+export type GabComparisonRole = 'required' | 'additional' | 'excluded'
+
+export function gabComparisonRole(purpose: GabRunPurpose): GabComparisonRole {
+  switch (purpose) {
+    case 'timing':
+    case 'rerun': return 'required'
+    case 'responsiveness':
+    case 'memory': return 'additional'
+    case 'cancel':
+    case 'pilot': return 'excluded'
+  }
+}
+
+/** Design 12.2: an environment that planned fewer required comparison runs than this never claims `parity_confirmed`. */
+export const GAB_MINIMUM_REQUIRED_COMPARISON_RUNS = 2
+
+/** The design 12.1 materialization items of one first Worker (or one reference process), in a form every source can give. */
+export interface GabMaterializationParityView {
+  semanticSha256: string
+  planningTargetCount: number | null
+  runOutcome: string | null
+  verdict: string
+  candidate: {
+    ordinal: number; objective: number; targetCount: number; classification: string; materialized: number; notAttempted: number
+    materializedBy: Record<string, number>; independentStops: Record<string, number>
+  } | null
+  /** The Entry fingerprint the semantic record names (`materializedEntriesFingerprintOfSemantic`). */
+  entryFingerprint: string | null
+  /** `hashStableValue` of each top-level field of the semantic record; null where only a summary exists (the D-1C public RESULT). */
+  semanticKeyHashes: Record<string, string> | null
+}
+
+/** The design 12.1 Planner integration items of one Worker (or one reference process). */
+export interface GabVerificationParityView {
+  semanticSha256: string
+  outcomeKind: string
+  planningTargetCount: number
+  materializedEntryCount: number
+  entryFingerprint: string
+  termination: { status: string; reachedLimits: string[]; limits: Record<string, number>; expandedStates: number; completedTargetCount: number; totalTargetCount: number } | null
+  selectedEntryCount: number | null
+  conflictCount: number | null
+  rejectedCount: number | null
+  resourceConflictCount: number | null
+  warningCount: number | null
+  fullPlannerRuns: number | null
+  plannerPlanSteps: number | null
+  planHash: string | null
+  stepSemanticsHash: string | null
+  traceReplay: { isValid: boolean | null; draftsTotal: number; draftsPhysical: number; draftsReserve: number; mismatchCount: number | null; counterPositionMismatchCount: number | null } | null
+  physical: { physicalOperations: number | null; planSteps: number | null; nonPhysicalStepCount: number | null; streamAdvanceSum: number | null; objective: number; executedHash: string | null } | null
+  semanticKeyHashes: Record<string, string> | null
+}
+
+/** What one Worker (or reference process) contributes to the comparison; a null part is one it did not produce. */
+export interface GabWorkerParityView {
+  phase0PlanningTargetCount: number | null
+  /** First Worker only. */
+  materialization: GabMaterializationParityView | null
+  /** First: the Entry set it handed over; fresh: the Entry set it planned with. */
+  entryFingerprint: string | null
+  verification: GabVerificationParityView | null
+}
+
+/** A reference (the D-1C public RESULT, or the Node reference of the same measurement HEAD): one first and one fresh process. */
+export interface GabReferenceView {
+  first: GabWorkerParityView
+  fresh: GabWorkerParityView
+}
+
+/** Design 12.4 step 1: a premise of the comparison that does not hold (the inputs are not comparable, so no difference is a mismatch). */
+export type GabPremiseReason = 'export_identity_mismatch' | 'calculation_context_mismatch' | 'conditions_mismatch' | 'reference_inconsistent' | 'node_reference_head_mismatch'
+
+export interface GabPremiseIssue {
+  reason: GabPremiseReason
+  /** What does not hold it: `plan`, `d1c_result`, `node_reference`, `registration` or a slot ID. */
+  source: string
+  detail: string
+}
+
+export type GabParityStatus = 'parity_confirmed' | 'parity_mismatch' | 'not_comparable'
+export type GabParityReason = GabPremiseReason | 'node_reference_missing' | 'required_runs_incomplete' | 'planned_runs_below_minimum'
+export type GabParityPart = 'phase0' | 'materialization' | 'entry_set' | 'verification'
+
+/** One planned slot of the environment and the record bound to it (null: no record of the measurement is bound to it). */
+export interface GabParitySlot {
+  slotId: string
+  purpose: GabRunPurpose
+  record: {
+    integrityIssueCount: number
+    verdictKind: string
+    first: { settle: string; view: GabWorkerParityView | null }
+    fresh: { settle: string; view: GabWorkerParityView | null }
+  } | null
+}
+
+export interface GabEnvironmentParityInput {
+  environmentId: string
+  /** The planned number of required comparison runs (the plan at the measured commit). */
+  requiredComparisonRuns: number
+  /** The environment's planned slots, in plan order. */
+  slots: readonly GabParitySlot[]
+  premiseIssues: readonly GabPremiseIssue[]
+  d1c: GabReferenceView
+  node: GabReferenceView | null
+}
+
+export interface GabParityMismatch {
+  against: 'd1c_result' | 'node_reference' | 'browser_internal'
+  slotId: string
+  worker: GabRole
+  part: GabParityPart
+  fields: string[]
+  /** `browser_internal`: the slot and Worker it was compared with. */
+  comparedWith: { slotId: string; worker: GabRole } | null
+}
+
+export interface GabParitySlotStatus {
+  slotId: string
+  purpose: GabRunPurpose
+  comparisonRole: GabComparisonRole
+  recorded: boolean
+  firstSettle: string | null
+  freshSettle: string | null
+  verdictKind: string | null
+  integrityIssueCount: number | null
+  /** Required: both Workers completed, met every condition and the record is intact (it counts towards the planned runs). */
+  completed: boolean
+  /** The Workers whose values entered the comparison. */
+  comparedWorkers: GabRole[]
+}
+
+export interface GabEnvironmentParity {
+  environmentId: string
+  status: GabParityStatus
+  /** Why, in the order of design 12.4 (the first decides the status; the rest are recorded beside it). */
+  reasonCodes: GabParityReason[]
+  premiseIssues: GabPremiseIssue[]
+  /** The Node reference against the D-1C public RESULT: a finding of its own whatever the Browser shows (design 12.4 step 1). */
+  referenceMismatches: { worker: GabRole; part: GabParityPart; fields: string[] }[]
+  mismatches: GabParityMismatch[]
+  requiredComparisonRuns: number
+  completedRequiredRuns: number
+  slots: GabParitySlotStatus[]
+  comparedWorkerCount: number
+  formal: false
+  claims: string
+}
+
+const PARITY_CLAIMS = 'parity_confirmed means only that this environment\'s planned required comparison runs gave the semantic values of the Node reference of the same measurement HEAD and of the D-1C public RESULT; it is no performance, cancel, formal validity, acceptance or Production claim'
+
+/** Leaf paths of a plain value (arrays are leaves; `semanticKeyHashes` is compared only when both sides carry one). */
+function flattenView(value: unknown, prefix: string, out: Map<string, string>): void {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [key, item] of Object.entries(value)) flattenView(item, prefix === '' ? key : `${prefix}.${key}`, out)
+    return
+  }
+  out.set(prefix, JSON.stringify(value ?? null))
+}
+
+/** The fields in which two views differ (`(absent)` when only one side has the part). */
+function viewDifferences<T extends { semanticKeyHashes: Record<string, string> | null }>(left: T | null, right: T | null): string[] {
+  if (left === null && right === null) return []
+  if (left === null || right === null) return ['(absent)']
+  const { semanticKeyHashes: leftKeys, ...leftRest } = left
+  const { semanticKeyHashes: rightKeys, ...rightRest } = right
+  const leftMap = new Map<string, string>()
+  const rightMap = new Map<string, string>()
+  flattenView(leftRest, '', leftMap)
+  flattenView(rightRest, '', rightMap)
+  if (leftKeys !== null && rightKeys !== null) {
+    flattenView({ semanticKeyHashes: leftKeys }, '', leftMap)
+    flattenView({ semanticKeyHashes: rightKeys }, '', rightMap)
+  }
+  return [...new Set([...leftMap.keys(), ...rightMap.keys()])].filter(key => leftMap.get(key) !== rightMap.get(key)).sort()
+}
+
+/** The parts in which two Workers' values differ; `withMaterialization` compares the first-Worker part too. */
+function workerDifferences(left: GabWorkerParityView, right: GabWorkerParityView, withMaterialization: boolean): { part: GabParityPart; fields: string[] }[] {
+  const parts: { part: GabParityPart; fields: string[] }[] = []
+  if (left.phase0PlanningTargetCount !== right.phase0PlanningTargetCount) parts.push({ part: 'phase0', fields: ['phase0PlanningTargetCount'] })
+  if (withMaterialization) {
+    const fields = viewDifferences(left.materialization, right.materialization)
+    if (fields.length > 0) parts.push({ part: 'materialization', fields })
+  }
+  if (left.entryFingerprint !== right.entryFingerprint) parts.push({ part: 'entry_set', fields: ['entryFingerprint'] })
+  const verification = viewDifferences(left.verification, right.verification)
+  if (verification.length > 0) parts.push({ part: 'verification', fields: verification })
+  return parts
+}
+
+/**
+ * The semantic parity of one environment (design 12.4), judged on the comparison population of the committed plan only:
+ *
+ * 1. a premise that does not hold (the Export, CalculationContext or conditions of a record or reference, or a Node reference that is
+ *    not the D-1C one, or from another HEAD) -> `not_comparable` (no difference between such inputs is called a mismatch)
+ * 2. the population: every Worker of a required slot (`timing` / `rerun`) that completed with an intact record, and both Workers of an
+ *    additional slot (`responsiveness` / `memory`) when both completed with an intact record; `cancel` / `pilot` never
+ * 3. a confirmed difference of any compared Worker from the D-1C public RESULT, the Node reference, or another compared Browser Worker
+ *    -> `parity_mismatch`, even when the required runs are short (never hidden behind 4 / 5)
+ * 4. no Node reference -> `not_comparable` (`node_reference_missing`)
+ * 5. a required slot that is not completed (not run, a cancel, a timeout, a Worker error, a page loss, an integrity issue, conditions not
+ *    met) -> `not_comparable` (`required_runs_incomplete`); fewer than two planned -> `planned_runs_below_minimum`
+ * 6. otherwise `parity_confirmed`
+ *
+ * Nothing here substitutes a run, re-labels a purpose or changes the planned number: the slots and the number are the plan's.
+ */
+export function judgeGabEnvironmentParity(input: GabEnvironmentParityInput): GabEnvironmentParity {
+  const premiseIssues = [...input.premiseIssues]
+  const referenceMismatches = input.node === null ? [] : (['first', 'fresh'] as const).flatMap(worker =>
+    workerDifferences(input.node![worker], input.d1c[worker], worker === 'first').map(difference => ({ worker, ...difference })))
+  if (referenceMismatches.length > 0) {
+    premiseIssues.push({ reason: 'reference_inconsistent', source: 'node_reference', detail: `The Node reference differs from the D-1C public RESULT in ${referenceMismatches.map(item => `${item.worker} ${item.part}`).join(', ')}.` })
+  }
+
+  const compared: { slotId: string; worker: GabRole; view: GabWorkerParityView }[] = []
+  const slots: GabParitySlotStatus[] = input.slots.map(slot => {
+    const role = gabComparisonRole(slot.purpose)
+    const record = slot.record
+    const comparedWorkers: GabRole[] = []
+    if (role !== 'excluded' && record !== null && record.integrityIssueCount === 0) {
+      const completed = (['first', 'fresh'] as const).filter(worker => record[worker].settle === 'completed' && record[worker].view !== null)
+      if (role === 'required' || completed.length === 2) {
+        for (const worker of completed) {
+          comparedWorkers.push(worker)
+          compared.push({ slotId: slot.slotId, worker, view: record[worker].view! })
+        }
+      }
+    }
+    return {
+      slotId: slot.slotId, purpose: slot.purpose, comparisonRole: role, recorded: record !== null,
+      firstSettle: record?.first.settle ?? null, freshSettle: record?.fresh.settle ?? null, verdictKind: record?.verdictKind ?? null,
+      integrityIssueCount: record?.integrityIssueCount ?? null,
+      completed: role === 'required' ? record !== null && record.integrityIssueCount === 0 && record.verdictKind === 'browser_nonformal_conditions_met' && comparedWorkers.length === 2
+        : role === 'additional' && comparedWorkers.length === 2,
+      comparedWorkers,
+    }
+  })
+  const required = slots.filter(slot => slot.comparisonRole === 'required')
+  const completedRequiredRuns = required.filter(slot => slot.completed).length
+  const base = {
+    environmentId: input.environmentId, premiseIssues, referenceMismatches, requiredComparisonRuns: input.requiredComparisonRuns, completedRequiredRuns, slots,
+    comparedWorkerCount: compared.length, formal: false as const, claims: PARITY_CLAIMS,
+  }
+
+  if (premiseIssues.length > 0) {
+    return { ...base, status: 'not_comparable', reasonCodes: [...new Set(premiseIssues.map(issue => issue.reason))], mismatches: [] }
+  }
+
+  const mismatches: GabParityMismatch[] = []
+  const firstOfRole: Partial<Record<GabRole, { slotId: string; worker: GabRole; view: GabWorkerParityView }>> = {}
+  const firstCompared = compared[0] ?? null
+  for (const item of compared) {
+    const withMaterialization = item.worker === 'first'
+    for (const difference of workerDifferences(item.view, input.d1c[item.worker], withMaterialization)) mismatches.push({ against: 'd1c_result', slotId: item.slotId, worker: item.worker, ...difference, comparedWith: null })
+    if (input.node !== null) {
+      for (const difference of workerDifferences(item.view, input.node[item.worker], withMaterialization)) mismatches.push({ against: 'node_reference', slotId: item.slotId, worker: item.worker, ...difference, comparedWith: null })
+    }
+    // Browser-internal, transitively: every Worker against the first compared Worker of its role (the materialization too for first
+    // Workers), and the first compared Worker of the other role against the environment's first compared Worker (a first and a fresh
+    // Worker of one logical run plan the same Entry set, so their Phase 0, Entry set and Planner values are the same).
+    const sameRole = firstOfRole[item.worker]
+    const against = sameRole ?? (firstCompared !== null && firstCompared.worker !== item.worker ? firstCompared : null)
+    if (sameRole === undefined) firstOfRole[item.worker] = item
+    if (against !== null && against !== item) {
+      for (const difference of workerDifferences(item.view, against.view, withMaterialization && against.worker === 'first')) {
+        mismatches.push({ against: 'browser_internal', slotId: item.slotId, worker: item.worker, ...difference, comparedWith: { slotId: against.slotId, worker: against.worker } })
+      }
+    }
+  }
+  if (mismatches.length > 0) return { ...base, status: 'parity_mismatch', reasonCodes: [], mismatches }
+
+  const reasonCodes: GabParityReason[] = []
+  if (input.node === null) reasonCodes.push('node_reference_missing')
+  if (required.length === 0 || completedRequiredRuns < Math.max(required.length, input.requiredComparisonRuns)) reasonCodes.push('required_runs_incomplete')
+  if (input.requiredComparisonRuns < GAB_MINIMUM_REQUIRED_COMPARISON_RUNS) reasonCodes.push('planned_runs_below_minimum')
+  if (reasonCodes.length > 0) return { ...base, status: 'not_comparable', reasonCodes, mismatches }
+  return { ...base, status: 'parity_confirmed', reasonCodes, mismatches }
+}
+
+// =====================================================================================================================================
+// P-2: a cancel trial (design 12.6), judged apart from the parity
+// =====================================================================================================================================
+
+export type GabCancelTrialStatus = 'cancel_passed' | 'cancel_failed' | 'cancel_not_exercised'
+
+/** One Worker of the cancel slot's record, as the main thread recorded it. */
+export interface GabCancelTrialWorker {
+  role: GabRole
+  settle: string
+  requestStarted: boolean
+  settledBy: GabSettledBy | null
+  resultAdopted: boolean
+  cancelRequested: boolean
+  errorCode: string | null
+  cancel: GabCancelObservation | null
+  /** The Worker's own `gab_cancelled` observation (the stage it stopped at, and how). */
+  stoppedAt: string | null
+  via: string | null
+  audit: { settleCount: number; adoptedResults: number; cancelAccepted: boolean } | null
+  terminated: boolean | null
+  lateResponses: number
+}
+
+export interface GabCancelTrialInput {
+  slotId: string
+  plannedTrigger: { role: GabRole; onProgressKey: string; delayMs: number }
+  record: {
+    cancel: { source: string; phase: string; role: GabRole | null; acceptedByRequest: string | null; requestedAtMs: number; triggered: { role: GabRole; onProgressKey: string; delayMs: number } | null } | null
+    first: GabCancelTrialWorker
+    fresh: GabCancelTrialWorker
+  } | null
+  /** An external observation of the slot (the driver): the page was lost, or an OOM was evidenced. */
+  external: 'page_lost' | 'out_of_memory' | null
+  /** The slot the plan placed after the trial to re-run (null: none planned); `completed`: both of its Workers completed. */
+  rerun: { slotId: string; recorded: boolean; completed: boolean } | null
+}
+
+export interface GabCancelTrial {
+  slotId: string
+  status: GabCancelTrialStatus
+  reasonCodes: string[]
+  plannedTrigger: { role: GabRole; onProgressKey: string; delayMs: number }
+  cancelPhase: string | null
+  cancelledRole: GabRole | null
+  settle: string | null
+  settledBy: string | null
+  stoppedAt: string | null
+  via: string | null
+  /** Main ms from the request post to the cancel's acceptance, then to the Worker's ack and to the settlement. */
+  acceptedAtMs: number | null
+  ackMs: number | null
+  settledMs: number | null
+  ignoredResultAfterCancel: boolean
+  adoptedResults: number | null
+  settleCount: number | null
+  terminated: boolean | null
+  lateResponses: number | null
+  freshStarted: boolean | null
+  rerun: { slotId: string; recorded: boolean; completed: boolean } | null
+}
+
+/**
+ * One cancel trial (design 12.6). `cancel_passed`: the planned trigger's cancel was accepted while the request ran, that request settled
+ * exactly once as `cancelled` (a `gab_cancelled`, or a `gab_result` dropped unadopted) or `cancelled_terminated`, no result was adopted,
+ * the Worker was terminated, no fresh Worker started after a first-side cancel, and the re-run slot the plan placed after it completed.
+ * `cancel_failed`: any of those does not hold (an error while cancelling is a failure even though no result was adopted).
+ * `cancel_not_exercised`: no request was running when the cancel came (or none came, or the record was lost): neither a pass nor a failure.
+ */
+export function judgeGabCancelTrial(input: GabCancelTrialInput): GabCancelTrial {
+  const record = input.record
+  const base: GabCancelTrial = {
+    slotId: input.slotId, status: 'cancel_not_exercised', reasonCodes: [], plannedTrigger: { ...input.plannedTrigger }, cancelPhase: record?.cancel?.phase ?? null, cancelledRole: record?.cancel?.role ?? null,
+    settle: null, settledBy: null, stoppedAt: null, via: null, acceptedAtMs: null, ackMs: null, settledMs: null, ignoredResultAfterCancel: false, adoptedResults: null, settleCount: null,
+    terminated: null, lateResponses: null, freshStarted: record === null ? null : record.fresh.requestStarted, rerun: input.rerun === null ? null : { ...input.rerun },
+  }
+  if (record === null) return { ...base, reasonCodes: [input.external === null ? 'slot_not_run' : `record_lost_${input.external}`] }
+  const cancel = record.cancel
+  if (cancel === null) return { ...base, reasonCodes: ['cancel_not_triggered'] }
+  const planned = input.plannedTrigger
+  if (cancel.source !== 'trigger' || cancel.triggered === null || cancel.triggered.role !== planned.role || cancel.triggered.onProgressKey !== planned.onProgressKey || cancel.triggered.delayMs !== planned.delayMs) {
+    return { ...base, reasonCodes: ['cancel_not_from_planned_trigger'] }
+  }
+  if (cancel.phase !== 'request_running' || cancel.role === null) return { ...base, reasonCodes: ['no_request_running'] }
+  const worker = record[cancel.role]
+  const observation = worker.cancel
+  const failures: string[] = []
+  if (worker.audit === null) failures.push('no_harness_audit')
+  else {
+    if (worker.audit.settleCount !== 1) failures.push('settle_count_not_one')
+    if (worker.audit.adoptedResults !== 0) failures.push('result_adopted')
+    if (!worker.audit.cancelAccepted) failures.push('cancel_not_accepted')
+  }
+  if (worker.resultAdopted && !failures.includes('result_adopted')) failures.push('result_adopted')
+  switch (worker.settle) {
+    case 'cancelled':
+      if (worker.settledBy === 'gab_error') failures.push('worker_reported_error_during_cancel')
+      else if (worker.settledBy !== 'gab_cancelled' && worker.settledBy !== 'ignored_gab_result') failures.push(`unexpected_settle_path_${String(worker.settledBy)}`)
+      break
+    case 'cancelled_terminated': break
+    case 'worker_error': failures.push('worker_error_during_cancel'); break
+    case 'completed': if (!failures.includes('result_adopted')) failures.push('result_adopted'); break
+    default: failures.push(`${worker.settle}_during_cancel`)
+  }
+  if (worker.terminated !== true) failures.push('worker_not_terminated')
+  if (cancel.role === 'first' && record.fresh.requestStarted) failures.push('fresh_started_after_cancel')
+  if (input.rerun !== null && !input.rerun.completed) failures.push(input.rerun.recorded ? 'rerun_not_completed' : 'rerun_not_run')
+  return {
+    ...base, status: failures.length === 0 ? 'cancel_passed' : 'cancel_failed', reasonCodes: failures,
+    settle: worker.settle, settledBy: worker.settledBy, stoppedAt: worker.stoppedAt, via: worker.via,
+    acceptedAtMs: observation?.acceptedAtMs ?? null, ackMs: observation?.ackMs ?? null, settledMs: observation?.settledMs ?? null,
+    ignoredResultAfterCancel: observation?.ignoredResultAfterCancel !== null && observation?.ignoredResultAfterCancel !== undefined,
+    adoptedResults: worker.audit?.adoptedResults ?? null, settleCount: worker.audit?.settleCount ?? null, terminated: worker.terminated, lateResponses: worker.lateResponses,
+  }
+}
+
+// =====================================================================================================================================
+// P-2: how every slot ended (design 12.6), tallied apart from the parity and the cancel trials
+// =====================================================================================================================================
+
+export const GAB_SETTLE_CLASSES = Object.freeze([
+  'completed', 'cancelled', 'cancelled_terminated', 'timeout', 'worker_error', 'worker_reported_error', 'page_left', 'page_lost', 'out_of_memory', 'environment_unsupported', 'not_run',
+] as const)
+
+export interface GabOutcomeTallySlot {
+  slotId: string
+  purpose: GabRunPurpose
+  record: { firstSettle: string; freshSettle: string; interrupted: boolean; ignoredResultAfterCancel: { first: boolean; fresh: boolean } } | null
+  external: 'page_lost' | 'out_of_memory' | null
+}
+
+export interface GabOutcomeTally {
+  plannedSlots: number
+  recordedSlots: number
+  /** Planned slots with no record (never run, or the record was lost: `external` says which were lost). */
+  unrecordedSlots: string[]
+  external: { page_lost: number; out_of_memory: number }
+  bySettle: { first: Record<string, number>; fresh: Record<string, number> }
+  byPurpose: Record<string, { slots: number; recorded: number; firstCompleted: number; freshCompleted: number }>
+  ignoredResultAfterCancel: number
+  interrupted: number
+  /** Slots meant to complete (every purpose but `cancel`) that did not complete both Workers, with how they ended. */
+  incomplete: { slotId: string; purpose: GabRunPurpose; firstSettle: string | null; freshSettle: string | null; external: string | null }[]
+  unplannedRecords: { count: number; reasonCounts: Record<string, number> }
+}
+
+/** The tally of every planned slot's ending and of the unplanned records (independent of the parity: nothing here reads it). */
+export function tallyGabOutcomes(slots: readonly GabOutcomeTallySlot[], unplanned: readonly { reason: string }[]): GabOutcomeTally {
+  const zero = () => Object.fromEntries(GAB_SETTLE_CLASSES.map(name => [name, 0])) as Record<string, number>
+  const tally: GabOutcomeTally = {
+    plannedSlots: slots.length, recordedSlots: 0, unrecordedSlots: [], external: { page_lost: 0, out_of_memory: 0 }, bySettle: { first: zero(), fresh: zero() }, byPurpose: {},
+    ignoredResultAfterCancel: 0, interrupted: 0, incomplete: [], unplannedRecords: { count: unplanned.length, reasonCounts: {} },
+  }
+  for (const slot of slots) {
+    const purpose = (tally.byPurpose[slot.purpose] ??= { slots: 0, recorded: 0, firstCompleted: 0, freshCompleted: 0 })
+    purpose.slots += 1
+    if (slot.external !== null) tally.external[slot.external] += 1
+    const record = slot.record
+    if (record === null) {
+      tally.unrecordedSlots.push(slot.slotId)
+      if (slot.purpose !== 'cancel') tally.incomplete.push({ slotId: slot.slotId, purpose: slot.purpose, firstSettle: null, freshSettle: null, external: slot.external })
+      continue
+    }
+    tally.recordedSlots += 1
+    purpose.recorded += 1
+    tally.bySettle.first[record.firstSettle] = (tally.bySettle.first[record.firstSettle] ?? 0) + 1
+    tally.bySettle.fresh[record.freshSettle] = (tally.bySettle.fresh[record.freshSettle] ?? 0) + 1
+    if (record.firstSettle === 'completed') purpose.firstCompleted += 1
+    if (record.freshSettle === 'completed') purpose.freshCompleted += 1
+    if (record.ignoredResultAfterCancel.first) tally.ignoredResultAfterCancel += 1
+    if (record.ignoredResultAfterCancel.fresh) tally.ignoredResultAfterCancel += 1
+    if (record.interrupted) tally.interrupted += 1
+    if (slot.purpose !== 'cancel' && (record.firstSettle !== 'completed' || record.freshSettle !== 'completed')) {
+      tally.incomplete.push({ slotId: slot.slotId, purpose: slot.purpose, firstSettle: record.firstSettle, freshSettle: record.freshSettle, external: slot.external })
+    }
+  }
+  for (const { reason } of unplanned) tally.unplannedRecords.reasonCounts[reason] = (tally.unplannedRecords.reasonCounts[reason] ?? 0) + 1
+  return tally
 }
