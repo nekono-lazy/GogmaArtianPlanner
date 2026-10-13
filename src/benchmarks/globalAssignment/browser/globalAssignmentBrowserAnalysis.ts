@@ -919,7 +919,10 @@ function environmentSummary(environment: GabEnvironmentAnalysis, analysis: GabMe
     observedEnvironment: observedEnvironment(environment, analysis),
     semanticValues: semanticSummary(environment),
     slots: environment.slots.map(row => slotSummary(row, parity)),
-    cancelTrials: environment.cancelTrials.map(trial => ({ ...trial, plannedTrigger: { ...trial.plannedTrigger }, reasonCodes: [...trial.reasonCodes], rerun: trial.rerun === null ? null : { ...trial.rerun } })),
+    cancelTrials: environment.cancelTrials.map(trial => ({
+      ...trial, plannedTrigger: { ...trial.plannedTrigger }, reasonCodes: [...trial.reasonCodes], rerun: trial.rerun === null ? null : { ...trial.rerun },
+      acceptedAtMs: roundOrNull(trial.acceptedAtMs), ackMs: roundOrNull(trial.ackMs), settledMs: roundOrNull(trial.settledMs),
+    })),
     outcomes: structuredClone(environment.outcomes),
     performance: {
       basis: 'timing / rerun slots whose two Workers completed with an intact record and no visibility / freeze interruption (observed values; no threshold, no pass)',
