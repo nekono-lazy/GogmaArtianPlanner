@@ -7,11 +7,12 @@
 import type { BuildListEntry } from '../../domain/models/publicTypes'
 import type { PlannerDependencies } from '../../domain/planner/plannerTypes'
 import { globalResearchDependencies } from '../plannerGlobalOptimizationResearch'
-import { NONE, reset, resetThenKeep } from './coverageTestFixture'
+import { conversion, NONE, reset, resetThenKeep } from './coverageTestFixture'
 import { materializeStructuralCandidate } from './materialize'
 import { materializedEntriesHandoff, type MaterializedEntriesHandoff } from './materializationRunner'
 import {
-  ELEMENT_A, materializationScenario, ownedSource, REORDERED_GOGMA, scenarioHeldCrossing, SERIES_IDEAL, TARGET, type MaterializationScenario, type ScenarioWithCandidate,
+  ELEMENT_A, ELEMENT_B, materializationScenario, newNormalSource, ownedSource, REORDERED_GOGMA, scenarioHeldCrossing, SERIES_IDEAL, TARGET, type MaterializationScenario,
+  type ScenarioWithCandidate,
 } from './materializationTestFixture'
 import { shapeInputs } from './shapeMaterializationTestFixture'
 import { IDEAL_BONUSES, ownedGogma } from './testFixture'
@@ -67,6 +68,62 @@ export async function conflictingHandoff(): Promise<{ scene: MaterializationScen
   const handoff = structuredClone(hx)
   handoff.materializedEntries = handoff.materializedEntries.map(row => (row.targetWeaponId === TARGET.c ? structuredClone(hy.materializedEntries.find(other => other.targetWeaponId === TARGET.c)!) : row))
   return { scene, handoff, entries: { x: hx.materializedEntries.map(row => row.entry), y: hy.materializedEntries.map(row => row.entry) } }
+}
+
+/**
+ * D-1B: real materializations whose Production Plan holds `confirm_owned_ideal` Steps (non-physical: no Counter advances). Targets with a
+ * zero-operation option (an owned Gogma Ideal on both axes, `none / none`) get one `confirm_owned_ideal` each; b forges a new Normal at 5,
+ * converts at 7 and Resets to its Ideal at 11, so the Plan also has physical Steps (an all-Ideal Plan warns `all_targets_already_satisfied`).
+ * `zero: ['a']` gives one non-physical Step; `zero: ['a', 'c']` two (c shares a's Ideal and holds its own Ideal weapon).
+ */
+export async function zeroOperationHandoff(zero: readonly ('a' | 'c')[]): Promise<{ scenario: ScenarioWithCandidate; handoff: MaterializedEntriesHandoff }> {
+  const idealWeapon = (key: 'a' | 'c') => ownedGogma(`owned.ideal.${key}`, { seriesSkillId: SERIES_IDEAL, restorationBonuses: structuredClone(IDEAL_BONUSES) })
+  const scene = await materializationScenario({
+    targets: [...zero, 'b'],
+    owned: zero.map(idealWeapon),
+    skillIdeal: { [ELEMENT_B]: [7] },
+    reset: { [ELEMENT_B]: { 11: IDEAL_BONUSES } },
+    window: { skill: 3, gogma: 5, normal: 2 },
+  })
+  const candidate = scene.candidate([
+    ...zero.map(key => scene.option(TARGET[key], ownedSource(`owned.ideal.${key}`), NONE, NONE)),
+    scene.option(TARGET.b, newNormalSource(5), conversion(7, 7), reset(11)),
+  ])
+  const scenario: ScenarioWithCandidate = { scene, candidate, shape: {} }
+  return { scenario, handoff: await materializedHandoff(scenario) }
+}
+
+/**
+ * D-1B: a real Production runtime-unsupported retry. The scenario of `scenarioConversionFallback()` (a = owned Gogma Reset at 12, b = new
+ * Normal at 5 converting at 7 and Resetting at 11) on an Engine whose Skill support for b's element turns unsupported once `switch.on` is
+ * set. The returned port is the Production one with a single change: it sets `switch.on` when the first full Planner run returned, so the
+ * Production Trace Replay inside Plan generation finds b's conversion unsupported, excludes b's Entry and reruns the full Planner
+ * (`productionPlanGeneration.ts` `generatePlanFromFullRun()`). Nothing else of the Production result is touched.
+ */
+export async function runtimeUnsupportedRetryHandoff(): Promise<{ scenario: ScenarioWithCandidate; handoff: MaterializedEntriesHandoff; port: PlannerVerificationPort; switch: { on: boolean } }> {
+  const flag = { on: false }
+  const scene = await materializationScenario({
+    targets: ['a', 'b'],
+    owned: [ownedGogma('owned.g1', { seriesSkillId: SERIES_IDEAL })],
+    skillIdeal: { [ELEMENT_B]: [7] },
+    reset: { [ELEMENT_A]: { 12: IDEAL_BONUSES }, [ELEMENT_B]: { 11: IDEAL_BONUSES } },
+    window: { skill: 3, gogma: 5, normal: 2 },
+    support: input => (flag.on && input.type === 'skill' && input.elementId === ELEMENT_B ? { supported: false, reason: 'reference_adapter_unsupported' } : null),
+  })
+  const candidate = scene.candidate([
+    scene.option(TARGET.a, ownedSource('owned.g1'), NONE, reset(12)),
+    scene.option(TARGET.b, newNormalSource(5), conversion(7, 7), reset(11)),
+  ])
+  const scenario: ScenarioWithCandidate = { scene, candidate, shape: {} }
+  const handoff = await materializedHandoff(scenario)
+  const port: PlannerVerificationPort = {
+    ...productionPlannerVerificationPort,
+    createProductionPlanWithObserver: (input, dependencies, options, observer) => productionPlannerVerificationPort.createProductionPlanWithObserver(input, dependencies, options, observer === undefined ? undefined : {
+      ...observer,
+      afterPlannerRun: run => { flag.on = true; observer.afterPlannerRun?.(run) },
+    }),
+  }
+  return { scenario, handoff, port, switch: flag }
 }
 
 /** The Production port with the Plan generation result edited after the real run (the Trace Replay stays the real one). */

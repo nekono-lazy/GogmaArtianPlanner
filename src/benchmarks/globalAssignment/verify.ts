@@ -16,12 +16,21 @@
  * 4. `createProductionPlanWithObserver()` (the Production deterministic scheduler; full runs counted by `beforePlannerRun()`)
  * 5. an independent `replayPlannerSearchTrace()` over the last run's trace, its Step correspondence with the Plan (operation,
  *    Entry, progressed Targets, RNG advance, Counter position) and its final Counters
- * 6. `summarizePlanPhysical()`: Plan steps, physical operations, stream advances and the structural objective
+ * 6. `summarizePlanPhysical()`: Plan steps, physical operations, non-physical steps, stream advances and the structural objective
  *
- * The in-process conditions (design 9.5, items 1 - 12 of the D-1A record) are all required; the fresh-process condition (13) is
- * judged by `verificationProtocol.ts` from two of these records. Nothing here is `verified`, persisted, a user-fixed Route, an
- * explicit resolution or a lineage (design 16, G1). Planner non-completion is never read as "no Route" (design 9.6). The Planner
- * and Trace Replay are the Production entry points; a test may inject them through `PlannerVerificationExecution.planner`.
+ * The in-process conditions (design 9.5, items 1 - 12 of the D-1A record, revised in D-1B) are all required; the fresh-process
+ * condition (13) is judged by `verificationProtocol.ts` from two of these records. Nothing here is `verified`, persisted, a user-fixed
+ * Route, an explicit resolution or a lineage (design 16, G1). Planner non-completion is never read as "no Route" (design 9.6). The
+ * Planner and Trace Replay are the Production entry points; a test may inject them through `PlannerVerificationExecution.planner`.
+ *
+ * Phase D-1B (`docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1B.md`) revised two rules and so the protocol version:
+ *
+ * - condition 11 is three exact identities, not `physical === plan.steps.length`: a `confirm_owned_ideal` Step advances no Counter and
+ *   is no physical operation (REQUIREMENTS 22.1, PLANNER_SPEC 16.3), so physical operations = Plan steps − non-physical steps =
+ *   Σ stream advances, and (condition 12) = the structural objective. The counts are `summarizePlanPhysical()`'s; a zero-advance Step of
+ *   any other type is never a non-physical Step of a current Plan and breaks the first identity. No tolerance
+ * - the number of full Planner runs (`beforePlannerRun()`) is recorded, never a condition of its own: a Production runtime-unsupported
+ *   retry fails the conditions it actually breaks (its `rng_prediction_unsupported` warning, the excluded Entry, the completed count)
  */
 import {
   applyBuildListEntryReplacements, resolveBuildListEntryReplacement, validateBuildListEntryReplacements,
@@ -37,7 +46,16 @@ import { createProductionPlanWithObserver } from '../../domain/planner/productio
 import { streamKeyOfNormal, summarizePlanPhysical } from '../plannerGlobalPhase2BPlan'
 import type { MaterializedEntriesHandoff } from './materializationRunner'
 
-export const PLANNER_VERIFICATION_PROTOCOL_VERSION = 'global-assignment-d1a:1'
+/** D-1A wrote `global-assignment-d1a:1`; D-1B revised condition 11 and the full-run rule (this module's header), so its records differ. */
+export const PLANNER_VERIFICATION_PROTOCOL_VERSION = 'global-assignment-d1b:1'
+
+/**
+ * The Plan Steps that advance no Counter and are no physical operation: `confirm_owned_ideal` alone (PLANNER_SPEC 16.3, a zero-operation
+ * Entry's completion; REQUIREMENTS 22.1 counts no Step without an in-game consumption). A current Plan holds no other one (the legacy
+ * `reserve_weapon` / `confirm_result` are never generated), so any other zero-advance Step breaks the step-count identity.
+ */
+export const PLANNER_VERIFICATION_NON_PHYSICAL_STEP_TYPES = Object.freeze(['confirm_owned_ideal'] as const)
+const NON_PHYSICAL_STEP_TYPES: ReadonlySet<string> = new Set(PLANNER_VERIFICATION_NON_PHYSICAL_STEP_TYPES)
 
 /** The Research conditions of one Phase D' run (D-1A: non-formal values; D-1B registers the formal ones). */
 export interface PlannerVerificationConditions {
@@ -98,7 +116,6 @@ export type PlannerRejectionReason =
   | { code: 'conflicts'; count: number; kinds: Record<string, number> }
   | { code: 'rejected_entries'; count: number; reasons: Record<string, number>; resourceConflicts: number }
   | { code: 'warnings'; count: number; kinds: Record<string, number> }
-  | { code: 'runtime_unsupported_retry'; fullPlannerRuns: number }
   | { code: 'trace_replay_not_run' }
   | { code: 'trace_replay_invalid'; issueCodes: string[] }
   | { code: 'trace_replay_unsupported_input' }
@@ -106,9 +123,13 @@ export type PlannerRejectionReason =
 
 /** Why the physical operations break the design 9.5 identities (design 9.6 `objective_mismatch`). */
 export type ObjectiveMismatchReason =
+  /** `summarizePlanPhysical()` refused the Plan (a Step advancing two Counters or by two, a physical operation or a non-physical Step advancing the wrong Counter or none). */
   | { code: 'physical_summary_error'; message: string }
+  /** physical operations ≠ Σ stream advances. */
   | { code: 'physical_identity_broken'; physicalOperations: number; streamAdvanceSum: number }
-  | { code: 'physical_steps_mismatch'; physicalOperations: number; planSteps: number; nonPhysicalSteps: number }
+  /** physical operations ≠ Plan steps − non-physical steps (`nonPhysicalSteps`: the `confirm_owned_ideal` Steps; `unexpected`: zero-advance Steps of another type). */
+  | { code: 'physical_steps_mismatch'; physicalOperations: number; planSteps: number; nonPhysicalSteps: number; unexpectedNonPhysicalSteps: Record<string, number> }
+  /** physical operations ≠ the structural objective. */
   | { code: 'physical_objective_mismatch'; physicalOperations: number; objective: number }
 
 /** The in-process outcome of Phase D' (the fresh-process condition is judged elsewhere). */
@@ -122,7 +143,7 @@ export type PlannerVerificationRunOutcome =
   /** The Planner's own cancel seam stopped the run: never a Planner result (G6). */
   | { kind: 'unmeasured'; reason: 'cancelled' }
 
-/** The D-1A conditions 1 - 12 (`null` = not evaluated because an earlier stage stopped). */
+/** The D-1A conditions 1 - 12 with the D-1B condition 11 (`null` = not evaluated because an earlier stage stopped). */
 export interface PlannerConditionChecks {
   planPresent: boolean | null
   terminationCompleted: boolean | null
@@ -134,8 +155,12 @@ export interface PlannerConditionChecks {
   noResourceConflicts: boolean | null
   noWarnings: boolean | null
   traceReplayValid: boolean | null
-  physicalEqualsPlanSteps: boolean | null
-  physicalEqualsObjective: boolean | null
+  /** 11a: physical operations = Plan steps − non-physical (`confirm_owned_ideal`) steps. */
+  physicalStepCountIdentity: boolean | null
+  /** 11b: physical operations = Σ stream advances (every physical operation advances exactly one Counter by one). */
+  physicalStreamAdvanceIdentity: boolean | null
+  /** 12: physical operations = the structural objective. */
+  physicalObjectiveIdentity: boolean | null
 }
 
 export interface FinalInputRecord {
@@ -161,7 +186,10 @@ export interface FinalInputRecord {
 }
 
 export interface PlannerRunRecord {
-  /** `beforePlannerRun()` calls: the first run plus every runtime-unsupported retry. */
+  /**
+   * `beforePlannerRun()` calls: the first run plus every runtime-unsupported retry. Observed and recorded (design 10.4), never a condition
+   * of its own (D-1B): a retry fails the conditions it breaks. Not the Research runner's child-process retry (there is none).
+   */
   fullPlannerRuns: number
   error: { name: string; message: string } | null
   termination: PlannerRunTermination | null
@@ -200,12 +228,25 @@ export interface TraceReplayRecord {
 export interface PhysicalRecord {
   error: string | null
   planSteps: number | null
+  /** `summarizePlanPhysical()`: Steps that advance exactly one Counter by one, each Plan Step once (a shared physical Step is one). */
   physicalOperations: number | null
+  /** `summarizePlanPhysical()`: the zero-advance Steps by operation type, whatever the type. */
   nonPhysicalSteps: Record<string, number>
+  /** The zero-advance Steps of `PLANNER_VERIFICATION_NON_PHYSICAL_STEP_TYPES` (the only non-physical Steps of a current Plan). */
   nonPhysicalStepCount: number | null
+  /** Zero-advance Steps of any other type, by type (never in a current Plan; each breaks the step-count identity). */
+  unexpectedNonPhysicalSteps: Record<string, number>
   operationCounts: Record<string, number> | null
   streamAdvanceSum: number | null
-  identityHolds: boolean | null
+  /** The three exact identities of conditions 11 and 12 (null when the physical summary was refused or no Plan exists). */
+  identities: {
+    /** physicalOperations === planSteps − nonPhysicalStepCount */
+    stepCount: boolean | null
+    /** physicalOperations === streamAdvanceSum (`summarizePlanPhysical().identityHolds`) */
+    streamAdvance: boolean | null
+    /** physicalOperations === objective */
+    objective: boolean | null
+  }
   sharedPhysicalSteps: number | null
   streams: { stream: string; start: number; end: number; advance: number }[]
   /** The structural candidate's stream advances (end − origin; design 10.1) beside the Plan's (diagnostic: only the total is a condition). */
@@ -262,7 +303,8 @@ export function materializedEntriesFingerprint(entries: readonly { orderIndex: n
 function emptyChecks(): PlannerConditionChecks {
   return {
     planPresent: null, terminationCompleted: null, completedEqualsPlanningTargets: null, totalEqualsPlanningTargets: null, allPlanningEntriesSelected: null,
-    noConflicts: null, noRejectedEntries: null, noResourceConflicts: null, noWarnings: null, traceReplayValid: null, physicalEqualsPlanSteps: null, physicalEqualsObjective: null,
+    noConflicts: null, noRejectedEntries: null, noResourceConflicts: null, noWarnings: null, traceReplayValid: null,
+    physicalStepCountIdentity: null, physicalStreamAdvanceIdentity: null, physicalObjectiveIdentity: null,
   }
 }
 
@@ -426,7 +468,9 @@ function traceReplayRecord(replay: PlannerTraceReplayResult | null, plan: Produc
   let correspondence: TraceReplayRecord['correspondence'] = null
   if (plan !== null) {
     const targetOf = new Map(input.buildListEntries.map(entry => [entry.id as string, entry.targetWeaponId as string]))
-    const physicalSteps = plan.steps.filter(step => step.operationType !== 'confirm_owned_ideal')
+    // The Plan's physical Steps face the replay's route-operation drafts one to one; reserve drafts are not compared (a reserve rides on
+    // its Entry's last physical Step, or is a zero-operation Entry's confirm_owned_ideal, the one non-physical Step type).
+    const physicalSteps = plan.steps.filter(step => !NON_PHYSICAL_STEP_TYPES.has(step.operationType))
     let mismatches = 0
     let counterPositionMismatches = 0
     const firstMismatches: { index: number; fields: string[] }[] = []
@@ -476,10 +520,17 @@ function traceReplayRecord(replay: PlannerTraceReplayResult | null, plan: Produc
   }
 }
 
-function physicalRecord(plan: ProductionPlan | null, input: PlannerInput, handoff: MaterializedEntriesHandoff): { record: PhysicalRecord; ends: Map<string, number> | null } {
+/** What the physical summary compares a Plan with: the structural candidate's objective and stream ends (a handoff carries them). */
+export type PhysicalStructuralStreams = Pick<MaterializedEntriesHandoff, 'objective' | 'origins' | 'streamEnd'>
+
+/**
+ * The physical operations of a Plan (`summarizePlanPhysical()`, never re-counted here), the non-physical Steps split into the registered
+ * type and any other, the three identities of conditions 11 and 12, and the stream ends condition 10 compares with the replay. Pure.
+ */
+export function summarizeVerificationPhysical(plan: ProductionPlan | null, input: PlannerInput, structural: PhysicalStructuralStreams): { record: PhysicalRecord; ends: Map<string, number> | null } {
   const empty: PhysicalRecord = {
-    error: null, planSteps: null, physicalOperations: null, nonPhysicalSteps: {}, nonPhysicalStepCount: null, operationCounts: null, streamAdvanceSum: null,
-    identityHolds: null, sharedPhysicalSteps: null, streams: [], streamComparison: [], objective: handoff.objective, executedHash: null,
+    error: null, planSteps: null, physicalOperations: null, nonPhysicalSteps: {}, nonPhysicalStepCount: null, unexpectedNonPhysicalSteps: {}, operationCounts: null, streamAdvanceSum: null,
+    identities: { stepCount: null, streamAdvance: null, objective: null }, sharedPhysicalSteps: null, streams: [], streamComparison: [], objective: structural.objective, executedHash: null,
   }
   if (plan === null) return { record: empty, ends: null }
   let summary: ReturnType<typeof summarizePlanPhysical>
@@ -489,20 +540,32 @@ function physicalRecord(plan: ProductionPlan | null, input: PlannerInput, handof
     return { record: { ...empty, planSteps: plan.steps.length, error: error instanceof Error ? error.message : String(error) }, ends: null }
   }
   const streams = sorted(Object.keys(summary.streams)).map(stream => ({ stream, start: summary.streams[stream]!.start, end: summary.streams[stream]!.end, advance: summary.streams[stream]!.advance }))
-  const structural = new Map<string, number>([['skill', handoff.streamEnd.skill - handoff.origins.skill], ['gogma', handoff.streamEnd.gogma - handoff.origins.gogma]])
-  for (const [counterId, end] of Object.entries(handoff.streamEnd.normal)) structural.set(streamKeyOfNormal(counterId), end - (handoff.origins.normal[counterId] ?? end))
+  const structuralAdvances = new Map<string, number>([['skill', structural.streamEnd.skill - structural.origins.skill], ['gogma', structural.streamEnd.gogma - structural.origins.gogma]])
+  for (const [counterId, end] of Object.entries(structural.streamEnd.normal)) structuralAdvances.set(streamKeyOfNormal(counterId), end - (structural.origins.normal[counterId] ?? end))
   const planAdvance = new Map(streams.map(stream => [stream.stream, stream.advance]))
-  const streamComparison = sorted(new Set([...structural.keys(), ...planAdvance.keys()])).map(stream => {
-    const structuralAdvance = structural.get(stream) ?? 0
+  const streamComparison = sorted(new Set([...structuralAdvances.keys(), ...planAdvance.keys()])).map(stream => {
+    const structuralAdvance = structuralAdvances.get(stream) ?? 0
     const advance = planAdvance.get(stream) ?? 0
     return { stream, structuralAdvance, planAdvance: advance, equal: structuralAdvance === advance }
   })
-  const nonPhysicalStepCount = Object.values(summary.nonPhysicalSteps).reduce((sum, count) => sum + count, 0)
+  let nonPhysicalStepCount = 0
+  const unexpectedNonPhysicalSteps: Record<string, number> = {}
+  for (const type of sorted(Object.keys(summary.nonPhysicalSteps))) {
+    const count = summary.nonPhysicalSteps[type]!
+    if (NON_PHYSICAL_STEP_TYPES.has(type)) nonPhysicalStepCount += count
+    else unexpectedNonPhysicalSteps[type] = count
+  }
+  const physicalOperations = summary.physicalOperations
   return {
     record: {
-      error: null, planSteps: summary.planSteps, physicalOperations: summary.physicalOperations, nonPhysicalSteps: { ...summary.nonPhysicalSteps }, nonPhysicalStepCount,
-      operationCounts: { ...summary.operationCounts }, streamAdvanceSum: summary.streamAdvanceSum, identityHolds: summary.identityHolds,
-      sharedPhysicalSteps: summary.sharedPhysicalSteps, streams, streamComparison, objective: handoff.objective, executedHash: hashStableValue(summary.executed),
+      error: null, planSteps: summary.planSteps, physicalOperations, nonPhysicalSteps: { ...summary.nonPhysicalSteps }, nonPhysicalStepCount, unexpectedNonPhysicalSteps,
+      operationCounts: { ...summary.operationCounts }, streamAdvanceSum: summary.streamAdvanceSum,
+      identities: {
+        stepCount: physicalOperations === summary.planSteps - nonPhysicalStepCount,
+        streamAdvance: physicalOperations === summary.streamAdvanceSum,
+        objective: physicalOperations === structural.objective,
+      },
+      sharedPhysicalSteps: summary.sharedPhysicalSteps, streams, streamComparison, objective: structural.objective, executedHash: hashStableValue(summary.executed),
     },
     ends: new Map(streams.map(stream => [stream.stream, stream.end])),
   }
@@ -531,7 +594,8 @@ function rejectionReasons(planner: PlannerRunRecord, replay: TraceReplayRecord, 
     reasons.push({ code: 'rejected_entries', count: planner.rejected.length, reasons: countKinds(planner.rejected.map(entry => entry.reason)), resourceConflicts: planner.rejected.filter(entry => entry.reason === 'resource_conflict').length })
   }
   if (planner.warnings.length > 0) reasons.push({ code: 'warnings', count: planner.warnings.length, kinds: countKinds(planner.warnings.map(warning => warning.kind)) })
-  if (planner.fullPlannerRuns > 1) reasons.push({ code: 'runtime_unsupported_retry', fullPlannerRuns: planner.fullPlannerRuns })
+  // `planner.fullPlannerRuns` is recorded, never a reason of its own (D-1B): a runtime-unsupported retry is rejected through the
+  // conditions it breaks (its warning, the Entry it excluded, the completed count), and a run whose conditions all hold is not.
   if (!replay.ran) reasons.push({ code: 'trace_replay_not_run' })
   else {
     if (replay.isValid !== true) reasons.push({ code: 'trace_replay_invalid', issueCodes: [...replay.issueCodes] })
@@ -547,13 +611,19 @@ function rejectionReasons(planner: PlannerRunRecord, replay: TraceReplayRecord, 
   return reasons
 }
 
-function objectiveReasons(physical: PhysicalRecord): ObjectiveMismatchReason[] {
+/**
+ * Why a Plan's physical summary breaks conditions 11 / 12 (`[]` = the three exact identities hold): the summary itself refused the Plan,
+ * physical ≠ Plan steps − non-physical steps, physical ≠ Σ stream advances, physical ≠ structural objective. No tolerance. Pure.
+ */
+export function physicalIdentityReasons(physical: PhysicalRecord): ObjectiveMismatchReason[] {
   if (physical.error !== null) return [{ code: 'physical_summary_error', message: physical.error }]
   const reasons: ObjectiveMismatchReason[] = []
   const operations = physical.physicalOperations!
-  if (!physical.identityHolds) reasons.push({ code: 'physical_identity_broken', physicalOperations: operations, streamAdvanceSum: physical.streamAdvanceSum! })
-  if (operations !== physical.planSteps) reasons.push({ code: 'physical_steps_mismatch', physicalOperations: operations, planSteps: physical.planSteps!, nonPhysicalSteps: physical.nonPhysicalStepCount! })
-  if (operations !== physical.objective) reasons.push({ code: 'physical_objective_mismatch', physicalOperations: operations, objective: physical.objective })
+  if (physical.identities.stepCount !== true) {
+    reasons.push({ code: 'physical_steps_mismatch', physicalOperations: operations, planSteps: physical.planSteps!, nonPhysicalSteps: physical.nonPhysicalStepCount!, unexpectedNonPhysicalSteps: { ...physical.unexpectedNonPhysicalSteps } })
+  }
+  if (physical.identities.streamAdvance !== true) reasons.push({ code: 'physical_identity_broken', physicalOperations: operations, streamAdvanceSum: physical.streamAdvanceSum! })
+  if (physical.identities.objective !== true) reasons.push({ code: 'physical_objective_mismatch', physicalOperations: operations, objective: physical.objective })
   return reasons
 }
 
@@ -629,7 +699,7 @@ export async function verifyPlannerCandidate(original: PlannerInput, handoff: Ma
   if (planner.termination?.status === 'cancelled') return finish({ finalInput: built.record, planner, traceReplay: null, physical: null, outcome: { kind: 'unmeasured', reason: 'cancelled' } })
 
   // 6 first (5 reads the Plan's stream ends), then 5: the independent Trace Replay of the last full run's trace.
-  const physical = await stage('physical', () => physicalRecord(plan, finalInput, handoff))
+  const physical = await stage('physical', () => summarizeVerificationPhysical(plan, finalInput, handoff))
   const bestState = observed.lastRun?.bestState ?? null
   const traceReplay = await stage('trace_replay', () => traceReplayRecord(
     bestState === null ? null : port.replayPlannerSearchTrace(finalInput, bestState, dependencies.rngEngine), plan, finalInput, physical.ends,
@@ -648,9 +718,11 @@ export async function verifyPlannerCandidate(original: PlannerInput, handoff: Ma
   checks.noWarnings = result !== null && planner.warnings.length === 0
   checks.traceReplayValid = traceReplay.ran && traceReplay.isValid === true && !traceReplay.unsupportedInput && traceReplay.correspondence !== null
     && traceReplay.correspondence.mismatches === 0 && traceReplay.finalCountersMatchPlan !== false
-  const objectiveIssues = plan === null ? null : objectiveReasons(physical.record)
-  checks.physicalEqualsPlanSteps = objectiveIssues === null ? null : physical.record.error === null && physical.record.identityHolds === true && physical.record.physicalOperations === physical.record.planSteps
-  checks.physicalEqualsObjective = objectiveIssues === null ? null : physical.record.error === null && physical.record.physicalOperations === handoff.objective
+  const objectiveIssues = plan === null ? null : physicalIdentityReasons(physical.record)
+  const identities = physical.record.identities
+  checks.physicalStepCountIdentity = objectiveIssues === null ? null : physical.record.error === null && identities.stepCount === true
+  checks.physicalStreamAdvanceIdentity = objectiveIssues === null ? null : physical.record.error === null && identities.streamAdvance === true
+  checks.physicalObjectiveIdentity = objectiveIssues === null ? null : physical.record.error === null && identities.objective === true
 
   const rejected = rejectionReasons(planner, traceReplay, planningTargetCount)
   const semantic = { finalInput: built.record, planner, traceReplay, physical: physical.record }
