@@ -52,9 +52,46 @@ function expectReasons(stderr: string, prefix: string, reasons: readonly (string
     else expect(message).toMatch(reason)
   }
 }
-/** The registration HEAD is in this checkout (a shallow CI checkout has only the tested commit). */
-const registrationHeadInCheckout = () => spawnSync('git', ['cat-file', '-e', `${PLANNER_VERIFICATION_D1C_REGISTRATION_HEAD}^{commit}`], { encoding: 'utf8' }).status === 0
+const REGISTRATION_HEAD = PLANNER_VERIFICATION_D1C_REGISTRATION_HEAD
+/** The code paths the runner audits (read from its source, so the probe runs the very diff the formal guard runs). */
+const CODE_PATHS = JSON.parse(/^const CODE_PATHS = (\[[^\]]+\])$/m.exec(source)![1]!.replace(/'/g, '"')) as string[]
+
+/**
+ * What this checkout's git history lets the formal guard answer, probed with the very git commands the guard runs, one by one (a shallow
+ * CI checkout has only the tested commit). A commit object being present does not prove that its D-1B document can be read, that it is an
+ * ancestor of HEAD or that the diff since it can be computed, so each is probed on its own. The probes only choose which refusal reasons
+ * to expect: every environment expects a refusal, and a history the guard cannot read is never read as "no change".
+ */
+function registrationHistory() {
+  const answers = (args: string[]) => spawnSync('git', args, { encoding: 'utf8', maxBuffer: 1 << 26 }).status === 0
+  return {
+    commitAvailable: answers(['cat-file', '-e', `${REGISTRATION_HEAD}^{commit}`]),
+    d1bDocumentAtRegistrationHeadReadable: answers(['show', `${REGISTRATION_HEAD}:${PLANNER_VERIFICATION_D1B_DOC}`]),
+    d1bDocumentAtHeadReadable: answers(['show', `HEAD:${PLANNER_VERIFICATION_D1B_DOC}`]),
+    ancestor: answers(['merge-base', '--is-ancestor', REGISTRATION_HEAD, 'HEAD']),
+    diffAnswerable: answers(['diff', '--name-only', `${REGISTRATION_HEAD}..HEAD`, '--', ...CODE_PATHS]),
+  }
+}
+type RegistrationHistory = ReturnType<typeof registrationHistory>
+const registeredD0cReadable = (history: RegistrationHistory) => history.d1bDocumentAtRegistrationHeadReadable && history.d1bDocumentAtHeadReadable
 const AUDIT_COULD_NOT_RUN = 'The calculation code audit could not run: '
+const NOT_AN_ANCESTOR = `The registration HEAD ${REGISTRATION_HEAD} is not an ancestor of the measured HEAD.`
+const FINGERPRINT_BLOCK_UNREADABLE = `The registered fingerprint block at the registration HEAD could not be read from ${REGISTRATION_HEAD}:${PLANNER_VERIFICATION_D1B_DOC}`
+
+/**
+ * The refusal reasons that depend on the git history, each present exactly when the guard's own git command cannot answer: the audit that
+ * could not run, the registration HEAD that is not (or cannot be shown to be) an ancestor, the registered fingerprint block that cannot be
+ * read at the registration HEAD. A complete history raises none of them; a missing one always fails closed.
+ */
+function expectHistoryReasons(stderr: string, prefix: string, history: RegistrationHistory) {
+  const start = stderr.indexOf(prefix)
+  expect(start, `no "${prefix}" in: ${stderr}`).toBeGreaterThanOrEqual(0)
+  const message = stderr.slice(start + prefix.length)
+  for (const [reason, present] of [[AUDIT_COULD_NOT_RUN, !history.diffAnswerable], [NOT_AN_ANCESTOR, !history.ancestor], [FINGERPRINT_BLOCK_UNREADABLE, !history.d1bDocumentAtRegistrationHeadReadable]] as const) {
+    if (present) expect(message, reason).toContain(reason)
+    else expect(message, reason).not.toContain(reason)
+  }
+}
 
 function run(args: string[], nodeFlags: string[] = []) {
   const result = spawnSync(process.execPath, [...nodeFlags, runner, ...args], { encoding: 'utf8', timeout: 110_000 })
@@ -73,9 +110,12 @@ function expectStartRefusal(args: string[], reasons: readonly (string | RegExp)[
   // Nothing was started: no START line, no CHILD line.
   expect(result.stdout).toBe('')
   expectReasons(result.stderr, 'A formal run cannot start: ', reasons)
-  // The history audit is never skipped: missing history refuses the run, a complete history raises no audit failure.
-  if (registrationHeadInCheckout()) expect(result.stderr).not.toContain(AUDIT_COULD_NOT_RUN)
-  else expectReasons(result.stderr, 'A formal run cannot start: ', [AUDIT_COULD_NOT_RUN])
+  // The history audit is never skipped: missing history refuses the run, a complete history raises no history failure.
+  const history = registrationHistory()
+  expectHistoryReasons(result.stderr, 'A formal run cannot start: ', history)
+  // The registered D-0C identity is read from both D-1B documents; one that cannot be read refuses the start as well.
+  if (registeredD0cReadable(history)) expect(result.stderr).not.toContain('The registered D-0C identity could not be read')
+  else expectReasons(result.stderr, 'A formal run cannot start: ', ['The registered D-0C identity could not be read: '])
 }
 
 describe('Phase D-1C runner script refusals', () => {
@@ -135,33 +175,64 @@ describe('Phase D-1C runner script refusals', () => {
     const runDir = join(directory, 'run-1')
     mkdirSync(runDir)
     const task = createD1cFormalTask({ role: 'first', runIndex: 1, measurementHeadSha: head, registrationFingerprint: d1cRegistrationFingerprint(), actualExport, registeredExport, expectedD0c, runDir: resolve(runDir), entrySet: null })
+    const history = registrationHistory()
+    const GATE = 'The formal child gate refused the task: '
     let index = 0
     const runChild = (edited: Record<string, unknown>, nodeFlags = [`--max-old-space-size=${expectation.conditions.envelope.childHeapMb}`], role = 'first') => {
       index += 1
       const taskPath = join(runDir, `task-${index}.json`), recordPath = join(runDir, `record-${index}.json`), journalPath = join(runDir, `journal-${index}.jsonl`)
       writeFileSync(taskPath, JSON.stringify({ ...task, ...edited }))
       const result = run(['--role', role, '--export', input, '--task', taskPath, '--record', recordPath, '--journal', journalPath], nodeFlags)
+      // In every environment: a non-zero exit, the formal child gate's refusal, no record.
       expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain(GATE)
       expect(existsSync(recordPath)).toBe(false)
-      // The child started and confirmed nothing else (memory samples aside): no materialization, no identity, no Entry set, no stage.
-      expect(readFileSync(journalPath, 'utf8').trim().split('\n').map(line => JSON.parse(line).kind).filter(kind => kind !== 'memory')).toEqual(['started'])
+      // The child started and confirmed nothing else (memory samples aside): no materialization progress, no D-0C identity, no Entry set,
+      // no Phase D' stage (so no Production Planner), no finish.
+      const kinds = readFileSync(journalPath, 'utf8').trim().split('\n').map(line => JSON.parse(line).kind).filter(kind => kind !== 'memory')
+      expect(kinds).toEqual(['started'])
+      for (const kind of ['progress', 'identity', 'entry_set', 'verification_stage', 'finished']) expect(kinds).not.toContain(kind)
+      expect(readdirSync(runDir).filter(name => name.endsWith('.entry-set.json'))).toEqual([])
       return result.stderr
     }
     const refused = (stderr: string, reasons: readonly (string | RegExp)[]) => {
-      // The Export of a hand-written task here is never the registered one, so every refusal names it too.
-      expectReasons(stderr, 'The formal child gate refused the task: ', [/Export SHA-256 [0-9a-f]{64} is not the registered [0-9a-f]{64}\./, ...reasons])
-      if (registrationHeadInCheckout()) expect(stderr).not.toContain(AUDIT_COULD_NOT_RUN)
-      else expectReasons(stderr, 'The formal child gate refused the task: ', [AUDIT_COULD_NOT_RUN])
+      // The Export of a hand-written task here is never the registered one, so every refusal names it too. Every reason is checked on
+      // its own inside the refusal, which spans lines when a failed git command quotes git's stderr.
+      expectReasons(stderr, GATE, [/Export SHA-256 [0-9a-f]{64} is not the registered [0-9a-f]{64}\./, ...reasons])
+      // The child audits the history itself: a history it cannot read fails closed, a complete one raises no history failure.
+      expectHistoryReasons(stderr, GATE, history)
     }
-    expect(runChild({ mode: 'smoke' })).toContain('The formal child gate refused the task: A D-1C child runs formal tasks only (got mode smoke).')
+    expect(runChild({ mode: 'smoke' })).toContain(`${GATE}A D-1C child runs formal tasks only (got mode smoke).`)
     refused(runChild({ repositoryHeadSha: 'f'.repeat(40) }), [`The child runs at HEAD ${head}, not the task's measurement HEAD ${'f'.repeat(40)}.`])
     refused(runChild({}, undefined, 'fresh'), ['The task is for the first process, not fresh.', 'A fresh task names no Entry set.'])
     refused(runChild({ conditions: { ...task.conditions, verification: { ...task.conditions.verification, researchMaxPlanSteps: 1_000 } } }), ['The task conditions are not the registered conditions.'])
-    refused(runChild({ expectedD0c: { ...expectedD0c, entryFingerprint: 'fnv1a32:00000000' } }), ['The task D-0C identity is not the registered one read from HEAD.'])
+    // An edited D-0C identity: compared with the registered one where the child can read it (the registration HEAD's and HEAD's D-1B
+    // documents); where it cannot, the child fails closed on the unreadable identity itself and compares nothing.
+    const d0c = runChild({ expectedD0c: { ...expectedD0c, entryFingerprint: 'fnv1a32:00000000' } })
+    if (registeredD0cReadable(history)) {
+      refused(d0c, ['The task D-0C identity is not the registered one read from HEAD.'])
+      expect(d0c).not.toContain('The child could not read the registered D-0C identity')
+    } else {
+      refused(d0c, ['The child could not read the registered D-0C identity: '])
+      expect(d0c).not.toContain('The task D-0C identity is not the registered one read from HEAD.')
+    }
     refused(runChild({ runDir: resolve(directory) }), [/The task run directory .* is not run-1\./])
     refused(runChild({}, []), ['The child runs without the registered heap envelope --max-old-space-size=8192'])
     expect(readdirSync(runDir).filter(name => name.endsWith('.entry-set.json') || name.startsWith('record-'))).toEqual([])
   }, 8 * SPAWN_TEST_TIMEOUT_MS)
+
+  it('probes each git answer the formal guard needs on its own, and fails closed on any history it cannot read', () => {
+    const history = registrationHistory()
+    // Without the registration commit none of the guard's history answers can succeed (a shallow CI checkout): each one fails closed.
+    if (!history.commitAvailable) expect(history).toMatchObject({ d1bDocumentAtRegistrationHeadReadable: false, ancestor: false, diffAnswerable: false })
+    // The probes are the guard's own commands, read from the runner source (no second definition of the audit).
+    expect(source).toMatch(/execFileSync\('git', \['merge-base', '--is-ancestor', registrationHead, 'HEAD'\]/)
+    expect(source).toMatch(/git\('diff', '--name-only', `\$\{registrationHead\}\.\.HEAD`, '--', \.\.\.CODE_PATHS\)/)
+    expect(source).toMatch(/execFileSync\('git', \['show', source\]/)
+    expect(CODE_PATHS).toEqual(['src', 'scripts', 'package.json', 'package-lock.json', 'vite.config.ts', 'vitest.config.ts', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json'])
+    // A git failure is recorded as an audit error, never as an empty change list.
+    expect(source).toMatch(/return \{ registrationHead, registrationHeadIsAncestor, changedFiles: \[\], error: `git diff failed: /)
+  })
 
   it('decides the start gate before it writes anything, concludes once and takes its exit code from that conclusion', () => {
     const parent = source.slice(source.indexOf('// ------------------------------------------------------------------ parent'))
