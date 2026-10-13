@@ -378,10 +378,10 @@ export const PLANNER_VERIFICATION_D1C_PREREGISTRATION = deepFreeze({
     unconfirmedRange: '—',
   } satisfies D1cRegisteredItem<D1cAcceptanceInterpretation>,
   formalRun: {
-    enabled: false as boolean,
+    enabled: true as boolean,
     startsIn: 'D-1C' as const,
     /** Set by D-1C when it enables the formal mode (null: never enabled). */
-    enabledBy: null as string | null,
+    enabledBy: 'Phase D-1C' as string | null,
   },
 })
 
