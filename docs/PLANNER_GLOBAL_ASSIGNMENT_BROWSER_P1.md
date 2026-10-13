@@ -19,8 +19,12 @@ P-0 §16.1のP-1として、D-1Cで正式acceptanceされたGlobal Assignmentの
 | 修正commit 1 | `7de10bb386499b8fb3e10276f698773cffbbf94b`（実Browser確認で見つかった2件: settle時の未応答ping、375px幅の横はみ出し。§12.4） |
 | 修正commit 2 = **実Browser確認のmeasurement HEAD** | `43820f01b7a4d4930d08b8508338ebec9439d76f`（settle後にchained pingを送らない。§12.4） |
 | 実Browser確認のbuild provenance | commit `43820f0…`、`uncommittedBenchmarkCode: false`、benchmark code SHA-256 `e835126e4201eae3f4d78a747b3adb046626b096ea13bb233b7e65da8817373d` |
+| 記録文書commit | `e38fc710b4cc0244ffa1e93e910008a90a491d4d`（docs-only。PR #257 Required fixの修正前HEAD） |
+| Required fix commit = **Required fix再確認のmeasurement HEAD** | `4890e036fc1495e553e63871f0284bbe5b1b59e2`（cancel後のrequest送信防止、不正Worker応答のfail closed。§17） |
+| Required fix再確認のbuild provenance | commit `4890e03…`、`uncommittedBenchmarkCode: false`、benchmark code SHA-256 `d3d97e06b27a36f703bc80d1c040f521384d9343afc5ed62242df226730100e0` |
 
-本書はdocs-only commitとして上の後に追加する（`docs/` は `BENCHMARK_CODE_PATHS` に含まれないので、benchmark code SHA-256は変わらない）。
+本書はdocs-only commitとして上の後に追加する（`docs/` は `BENCHMARK_CODE_PATHS` に含まれないので、benchmark code SHA-256は変わらない）。§17の追記もdocs-only commitで行った。
+§12・§13の実Browser結果はmeasurement HEAD `43820f0` のbuildのもので、Required fix後に再確認した範囲は§17.5に分けて記す。
 
 ## 3. 実装ファイル一覧
 
@@ -40,7 +44,7 @@ Phase 2-A等の既存harnessも変更していない。
 | `.../globalAssignmentBrowserJudgement.ts` | logical runの判定（P-0 §12.1） |
 | `.../GlobalAssignmentBrowserBenchmarkPage.tsx`、`.../main.tsx` | benchmark画面とpage entry |
 | `.../globalAssignmentBrowserTestFixture.ts` | test専用（合成scenario、Engine factory、D-1A直接呼出し列、Worker double） |
-| `.../*.test.ts(x)`（8 file、64 test） | protocol 5、stage 11、controller 13、harness 16、runner 9、判定 3、page 1、`browserIsolation.test.ts` 6 |
+| `.../*.test.ts(x)`（8 file、79 test） | protocol 6、stage 11、controller 13、harness 19、runner 19、判定 3、page 2、`browserIsolation.test.ts` 6（Required fix前は64 test: protocol 5、harness 16、runner 9、page 1。§17.4） |
 | `benchmark-global-assignment.html` | 独立HTML entry（repo直下） |
 | `vite.benchmark.config.ts` | `rollupOptions.input` を `{ benchmark: 'benchmark.html', globalAssignment: 'benchmark-global-assignment.html' }` に、`BENCHMARK_CODE_PATHS` に新HTMLを追加 |
 | `.gitignore` | `dist-benchmark` を追加 |
@@ -147,7 +151,10 @@ requestごとの `cancelAccepted` / `settleCount` / `ignoredSettleAttempts` / `a
 | C7 | settle後・未知requestIdのmessageは適用せず `lateResponses` | race 3・4・5・7、timeout |
 | C8 | settled（cancellingも）requestへの `cancel()` は何もせず `false`、`gab_cancel` もpostしない | race 6 |
 | C9 | 1 harness = 1 Worker = 1 request（2回目の `run()` は拒否） | lifecycle test、race 7 |
-| C10 | runnerは `completed` かつintegrity issueなし・Entry集合ありのfirstからだけfreshを起動 | `globalAssignmentBrowserRunner.test.ts`（Phase 0未到達、Worker error、`export_changed`、再hash不一致、環境拒否、cancel、page離脱で fresh `not_run`） |
+| C10 | runnerは `completed` かつintegrity issueなし・Entry集合ありのfirstからだけfreshを起動 | `globalAssignmentBrowserRunner.test.ts`（Phase 0未到達、Worker error、`export_changed`、再hash不一致、環境拒否、cancel、page離脱で fresh `not_run`。Required fix後はWorker間・fresh起動前のcancelも。§17） |
+
+PR #257 Required fixで、requestがまだ無い段階（Worker作成前・起動中・main threadのExport読込み中）のcancel / page離脱でもrequestを送らないことをrunner側で保証した（§17.2）。
+C1〜C9（harnessのrequest lifecycle）は変更していない。
 
 native `error` / `messageerror`（`cancelling` 中を含む）、timeout、`pagehide` / dispose、postの失敗（structured clone不可）、不正形式の応答もそれぞれtestで1回だけsettleする。
 
@@ -281,6 +288,7 @@ P-0との相違は無いと判断した。設計上の矛盾は見つからな�
 - **IndexedDBが作られないこと**: 合成入力のrunでだけ確認（実Exportのrunでは未確認）
 - **`localeCompare` を使うDomain順序の環境差**: 未確認（P-0 §4.6。今回の環境は `ja` のみ）
 - Android / iPhone、Edge / Firefox / Safari: 未確認
+- PR #257 Required fixに関する未確認事項は§17.6
 
 ## 16. P-2への引き継ぎ
 
@@ -299,3 +307,149 @@ P-0との相違は無いと判断した。設計上の矛盾は見つからな�
   - Dexieの推移的依存は残っている。実Exportのrunでも前後の `indexedDB.databases()` を記録する
   - 外部driverはcommitせずSHA-256を記録する（本PRと同じ）
 - 本PRのmeasurement HEAD以降でBrowser基盤に修正が要る場合は、P-2の計測の **前** に別commitで行い記録する（P-0 §16.2）
+- PR #257 Required fixで基盤を修正した（`4890e03`）。P-2の計測は `4890e03` 以降のbuildで行う。外部driverの `cancel()` は真偽値ではなく `GabRunnerCancelResult` を返す（§17.2）。
+  logical run記録のworker側に `requestStarted` / `stoppedBeforeRequest` / `rehashError` / `runnerError`、`cancel` に `phase` / `role` が増えた
+
+## 17. PR #257 Required fix（レビュー指摘2件）
+
+### 17.1 基準
+
+| 区分 | 値 |
+| --- | --- |
+| 修正前HEAD | `e38fc710b4cc0244ffa1e93e910008a90a491d4d`（= PR #257のreview HEAD。作業開始時にlocal HEAD = PR head、Working Tree clean、stash / 追加worktreeなしを確認） |
+| 修正commit | `4890e036fc1495e553e63871f0284bbe5b1b59e2`（コードとtest。`src/benchmarks/globalAssignment/browser/**` だけ） |
+| 記録 | 本節（docs-only commit） |
+
+変更範囲は `src/benchmarks/globalAssignment/browser/**` と本書だけ。Production file、既存Global Assignment計算module、D-1A / D-1C runner、D-1C登録条件・RESULT、既存Browser benchmark、
+永続化・schema、`vite.config.ts`、`vite.benchmark.config.ts` は変更していない。
+
+### 17.2 Fix 1: cancel後に `gab_run` が送られ得た
+
+**原因**: `runWorker()` はWorker作成前とready直後にだけcancelを確認し、その後 `await source.file.arrayBuffer()`（`array_buffer` transport）を挟んで `harness.run()` を呼んでいた。
+この読込み中にcancelされると、`runner.cancel()` はまだrequestが無いのでどのrequestにも届かず（`false`）、logical runにcancelを記録するだけで、読込み完了後に `gab_run` がpostされた
+（first / freshとも）。ready待機中のcancelも、readyかready timeoutまで待っていた。page離脱では破棄済みharnessの `run()` が拒否され、`worker_error` と記録された。
+戻り値の `false` は「Worker間」と「request未作成」と「request終了後」を区別していなかった。
+
+**修正**:
+
+1. request送信前の全てのawait（memory固定点、ready待機、Export読込み）の後でcancel / page離脱を再確認し、最後の確認から `harness.run()` までawaitを置かない（同じ同期処理でpostする）
+2. requestをまだ持たないWorker（作成前・起動中・Export読込み中）は、cancel / pagehideの時点でdispose（terminate）する。ready待機はその場で終わり、ready timeoutを待たない
+3. 送らなかったrequestは `settle: 'not_run'`、`stoppedBeforeRequest`（`cancel` / `page_left`）、`requestStarted: false`、`notRunReason`（どの段階か）で記録し、settlementもharness auditのrequest entryも作らない（settle回数を捏造しない）
+4. `runner.cancel()` の戻り値を型付きにした（`GabRunnerCancelResult`）
+
+   | kind | 意味 |
+   | --- | --- |
+   | `idle` | logical runが無い。何も変えない |
+   | `already_stopping`（`cancel` / `page_left`） | 既にcancel済み / page離脱済み。何も変えない |
+   | `request_cancel_accepted`（role、requestId） | 実行中のrequestがcancelを受け付けた（C1: `running` → `cancelling`）。その結果は採用しない |
+   | `logical_run_stop_recorded`（phase、role） | requestはcancelを受け付けていない。logical runの停止だけを記録した。phase `before_request`（requestの無いWorkerは即dispose）/ `between_workers`（fresh Workerを作らない）/ `after_request_settled`（requestは終了済み、以降のWorkerは起動しない） |
+
+5. logical run記録の `cancel` に `phase`（上記 + `request_running`）と `role`
+6. 判定（`judgeBrowserLogicalRun()` の第4引数 `{ cancelled }` を必須にした）: 送らなかったfirstは `unmeasured(first, cancelled, browserSettle: not_run)`（停止理由が無ければ `process_failure`）。
+   cancelを記録したlogical runはfresh側の評価に進まず `unmeasured(fresh, cancelled)` になり、両requestがcancel前に完了していても `browser_nonformal_conditions_met` にならない。
+   first側のoutcome（D-1Aと同じく「first側の結果はfreshに関係なく残る」）は変えない。D-1A `judgeD1aRun()` との75通りの同値testは `cancelled: false` で従来どおり一致する
+7. benchmark画面のcancel表示を戻り値で区別し、console API `cancel()` は戻り値をそのまま返す
+
+### 17.3 Fix 2: 不正なWorker結果を採用し得た / 異常時に状態が戻らない経路があった
+
+**原因**: `gabResponseIssues()` はprotocol version・requestId・body fieldがnull / undefinedでないことだけを見ていたので、`gab_result.result` がobjectでなくても、
+runnerが読むfieldが欠けていても採用された。runnerは採用結果の `exportObservation` 等を直接読み、再hash（`JSON.stringify` / Web Crypto）やEntry集合検査の例外を捕まえていなかった。
+例外は `guarded()` が空のworker記録に置き換え（settlement等の診断を失う）、`runWorker()` のfinally内のawaitで例外が出ると `active` / `current` が戻らない経路があった。
+
+**修正**:
+
+1. protocol: `gabResponseIssues()` が各応答のbodyを、main threadが読むfieldについて検証する（`gab_ready` の環境probe、`gab_accepted` の時刻、`gab_progress` のevent種別・stage・`atMs`、
+   `gab_heartbeat` の数値、`gab_pong` の `pingId`、`gab_cancelled` の `observed`、`gab_error` の `error`。`gab_result` は `result` がobjectであること）
+2. `gabWorkerResultIssues(result, { requestId, role })`: 採用前の構造検証。他request / 他roleの結果、protocol version、環境、`exportObservation`（name・bytes・SHA-256・`matchesRequest`）、
+   `calculationContext`、`rngEngineVersion`、`conditions`、`phase0`、`integrityIssues`（文字列配列）、`observed`、`formal: false` / `oracleFreeExecution: true`。
+   nullableな部分（`materialization` / `entrySet` / `freshEntrySet` / `verification`）はkey必須・null可とし、nullでなければ形を検査する。role別に、firstはmaterialization必須・`freshEntrySet` なし・
+   Entry集合があればverification必須、freshはmaterialization / Entry集合なし・verification・`freshEntrySet`・自分のPhase 0必須。`conditions_met` のverificationは判定が読むfield
+   （finalInput、planner、physicalのphysicalOperations / planSteps）必須。Entry集合はD-1A Entry集合の形と、fingerprint・件数の自己整合だけを見る。
+   **semantic recordの中身は走査しない**（有界。循環構造でも止まらない）。中身は従来どおりmain threadの再hash・`d1aEntrySetIssues()`・integrity checkが担う
+3. harness: 不正な応答・結果はpayloadを捨て、`worker_error` / `settledBy: protocol_violation`（errorName `MalformedResponse` / `MalformedResult`）でsettleしWorkerをterminateする。
+   そのWorkerは以後信頼しない（ready待機は失敗、pingとrequestは拒否）
+4. runner:
+   - `protocol_violation` のsettlementはintegrity issue（判定は `invalid_run_integrity`、Workerのsettleは `worker_error` のまま。既存分類の両方で記録）
+   - 再hashの例外（record化できない循環構造を含む）は `rehashError` として残しintegrity issue
+   - integrity check・Entry集合検査の例外はintegrity issue（fresh Workerは起動しない）。Entry集合検査はtest専用に依存注入できる（`entrySetIssues`）
+   - 判定自体の例外は `gabIntegrityJudgement()`（`invalid_run_integrity`）
+   - runner自身の例外は `runnerError` として観測値（settlement等）と一緒に残しintegrity issue。memory固定点の失敗は `status: error` の標本として残す
+   - 全exit pathで `running()` false、`current` null、Worker slot・lifecycle listener解除・Worker disposeを戻す。onChange observer（画面）の例外でcleanupは止まらない。
+     logical runの外へ例外が出る場合（runner不具合）はcleanupの後でrejectし、記録にはしない（正常結果に握りつぶさない）
+
+### 17.4 test
+
+新規 / 変更: protocol +1、harness +3、runner +10、page +1（判定testは既存2件を拡張）。全体は433 file passed / 1 skipped、**7,019 passed** / 3 skipped（skipは既存の `src/research/issue74`）。
+
+Fix 1（runner test。Export読込み・ready待機・memory固定点を `deferred()` で止め、その間にcancel / pagehideを入れる）:
+
+| # | 要求 | test |
+| --- | --- | --- |
+| 1 | Export読込み中（`array_buffer`）のcancel | `gab_run` なし、Workerはcancel時点でterminate、first `not_run`（while the Export was read）、audit request 0、fresh未起動、`unmeasured(first, cancelled, not_run)` |
+| 2 | Export読込み中のpagehide | 同上（`page_left`）、`lifecycle.pageLeft`、listener解除 |
+| 3 | Worker ready待機中のcancel | ready timeout 600秒でも即終了、`gab_run` なし、後から届くreadyは無視、`worker_error` にしない |
+| 4 | first完了後・fresh開始前のcancel | memory固定点 `fresh:before_worker_create` / `first:after_dispose`（`between_workers`）と `first:settled`（`after_request_settled`）で、fresh Workerを作らない。firstの採用結果は残り、判定は `unmeasured(fresh, cancelled, not_run)` |
+| 5 | fresh Export読込み中のcancel | fresh Workerはterminate、fresh `gab_run` なし、`before_request`（fresh） |
+| 6 | cancel後に `gab_run` を送らない | 1・2・3・5（WorkerのpostMessage記録で確認） |
+| 7 | 不要なWorkerを作らない | 1〜5でWorker数を確認 |
+| 8 | cancelしたrunを正常完了にしない | 1〜5、および両request完了後（`fresh:settled`）のcancelでも `unmeasured(fresh, cancelled, completed)` |
+| 9 | cancel後の新しいlogical run | 5の後のrunが `browser_nonformal_conditions_met`、freshに渡るEntry集合はそのrunのfirstのもの |
+| 10 | 通常のfirst / fresh semanticが不変 | 9のrunのmaterialization / verification semantic SHA-256がcancelの無い別runnerのrunと一致。既存の実controller testも不変 |
+
+Fix 2:
+
+| 要求 | test |
+| --- | --- |
+| resultがnull / primitive / 文字列 | harness（envelopeで拒否）、runner |
+| `exportObservation` 欠落 / 必須field欠落・型違い | harness、runner |
+| materialization / verification / Entry集合の不正 | harness、runner、protocol（role別要件・自己整合・conditions_metの必須field） |
+| `integrityIssues` が配列でない / 文字列配列でない | harness、runner、実controller経路（InProcessWorkerの応答を改変） |
+| `gab_progress` / `gab_heartbeat` / `gab_accepted` / `gab_cancelled` / `gab_error` / `gab_pong` / `gab_ready` のbody不正 | harness（hookは呼ばれない、ready待機は失敗）、runner（progress・heartbeat） |
+| 他request / 他roleの結果 | harness、protocol |
+| runner再hash中の例外 | Web Crypto失敗の注入、循環構造の結果（`rehashError`、`invalid_run_integrity`、fresh未起動） |
+| integrity check中の例外 | Entry集合検査が投げる注入（`first: the Entry set check failed: …`、fresh未起動）、次runは注入を外して条件達成 |
+| 不正応答後の状態 | `running()` false、`current()` null、最後の通知が `running: false`、Worker terminate、harness audit `adoptedResults` 0・`invalidResponses` 1 |
+| 不正payloadの不採用 | settlement・記録のJSONにpayloadの目印文字列が含まれない |
+| 旧Entry集合を持ち越さない | 実controller経路で、不正結果のrunの後のrunのfreshには、そのrunのfirstのEntry集合だけが渡る |
+| 新しいlogical runの成功 | 各不正ケースの後、同じrunnerで次のrunが採用・判定まで進む |
+
+**修正を外したときに失敗することの確認**（一時的に変更してtestを実行し、元に戻した）: Fix 1の最後の確認とcancel時のdisposeを外すと1・2・3・5の4 testが失敗した。
+harnessの `gabWorkerResultIssues()` を外すとFix 2の3 test（harness、runner、実controller経路）が失敗した。
+
+C1〜C10（§8）と競合8ケース（§9）のtestは全て通過している（harness / runnerの変更後も同じassert）。Synthetic semantic parity（§6）のtestも不変で通過している。
+
+### 17.5 実Chrome再確認（PC、非formal、合成入力のみ）
+
+| 項目 | 値 |
+| --- | --- |
+| 環境 | §12.1と同じmachine、Google Chrome 154.0.8037.98（`--headless=new`、新しい一時profile、CDP）。user agent `HeadlessChrome/154.0.0.0`、locale `ja` |
+| build | `4890e03` のbenchmark build（provenance §2）を `vite preview --config vite.benchmark.config.ts` で `http://127.0.0.1:4179/GogmaArtianPlanner/` に配信（**非isolatedだけ**） |
+| 入力 | **実Exportは使用していない**。最小合成Export（973 bytes、SHA-256 `1502661c…02615`）、不正JSON、`{}`、60,000,010 byteの合成JSON（Exportではない。作り直した） |
+| driver | 外部Node CDP script（commitしない）、SHA-256 `630bb14d9c99b6815b3b07d8a7c391a3926636a65852fd4f4e8d64616b597d56` |
+| 記録 | `.local/global-assignment-browser-p1/required-fix/`（raw JSON SHA-256 `8db03af3f539421b5f30422c7996247650790d48b6d258d0055a657fca58edc1`、375px screenshot）。実施 2026-10-13T22:07:49Z〜22:08:00Z |
+
+| 確認 | 結果 |
+| --- | --- |
+| Worker起動 | probe ready 29.5 ms、ping 0.2 ms、環境issue 0、Worker・pageのbuild commit `4890e03…` |
+| synthetic run | `browser_nonformal_phase_d_prime_not_reached`、materialization semantic SHA-256 `84430962…01446`（§12.2と同じ）、main threadの再hash一致 |
+| cancel（呼出しと同じtask = Worker作成前） | `logical_run_stop_recorded` / `before_request` / first、Workerを作らず、first `not_run`（before the Worker was created）、logical run 0.2 ms |
+| cancel 1 / 5 / 10 / 20 ms後（Worker起動中） | 全て `before_request`、first `not_run`（while the Worker was starting）、`requestStarted: false`、harness audit request 0、logical runはcancel時刻（7〜20 ms）で終了（ready timeoutを待たない） |
+| cancel 30 / 40 / 50 / 60 ms後（`array_buffer`、60 MB合成JSONのmain thread読込み中） | 全て `before_request`、first `not_run`（while the Export was read）、`requestStarted: false`、audit request 0。logical runは62〜71 ms（読込み自体は中断できないので完了まで待つが、postはしない） |
+| cancel 80 / 100 ms後（request実行中） | `request_cancel_accepted` → Workerは同期decode中でackできず、grace 1 ms超過で `cancelled_terminated`。採用0・settle 1・late 0 |
+| cancel 150 ms後 | `logical_run_stop_recorded` / `after_request_settled`（requestは既に `worker_reported_error` で終了。合成JSONはExportではない）。判定はfirst側の `unmeasured(process_failure)` のまま |
+| 2回目のcancel / 終了後のcancel | `already_stopping(cancel)` / `idle`。終了後は `running()` false、`current()` null |
+| cancel後の再実行 | 最小合成Exportのrunが同じSHA-256で完了 |
+| 不正入力後の復旧 | 不正JSON・`{}` → `unmeasured(first, process_failure)`（`worker_reported_error`）、その後の最小runが同じSHA-256で完了 |
+| 狭幅375px | 画面のbuttonで実行→即キャンセル: 「logical runの停止を記録しました（first Workerへrequestを送る前のため、requestを送らずWorkerを破棄しました）。」を表示、記録はfirst `not_run`・audit request 0。`scrollWidth` 375（横はみ出しなし）、button最小高さ44 px |
+| storage | 前後とも IndexedDB 0・localStorage 0・sessionStorage 0・Cache 0・Service Worker 0 |
+| page error | 0 |
+
+requestを送らなかったことは、実Browserではharnessの記録（audit request、`requestStarted`、settlementなし）で確認した。Workerが受け取ったmessageそのものを観測したのはtest（Worker doubleのpost記録）だけである。
+
+### 17.6 未確認事項（Required fix）
+
+- **不正なWorker応答（Fix 2）の実Browserでの発生**: Workerを改変しないので実Workerからは発生させていない。testでのみ確認
+- **isolated origin・memory固定点のrun・既存 `benchmark.html`・通常アプリ表示**: `4890e03` では再確認していない（§12の `43820f0` の結果のまま）。通常 `dist/` に研究識別子（追加した `gabWorkerResultIssues` 等を含む）が0件であることは、`4890e03` とcommit前に同じコードでbuildした `dist/` で確認した
+- **headed Chrome、Android / iPhone**: 今回は実施していない（指示どおり）
+- **main threadのExport読込みの中断**: `Blob.arrayBuffer()` は中断できないので、読込み中のcancelは読込み完了まで待ってから（postせずに）終わる。60 MBの合成JSONで62〜71 ms。実Exportでの値は未確認（P-2）
+- C2（cancel後に結果が届く経路）の実Browserでの発生は引き続き未観測（§15）
