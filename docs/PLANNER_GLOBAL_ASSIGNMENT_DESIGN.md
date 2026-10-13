@@ -1401,6 +1401,26 @@ CIのshallow checkoutで失敗したtest assertionを直したcommitの後に登
 - 最初のstructural candidate（objective 1,766）の43 / 43 Targetが `materialized`（射影起点21、形状制約22、独立Route検証22件すべて通過、gate / budget / unsupported / fail closed 0件）。
   semantic SHA-256はD-0B-2の登録値run（非formal）と同一。`all_materialized` はPlanではなく、Planner検証はD-1で行う
 
+### 9.14 Phase D-1Aの結果（要約）
+
+[D-1A記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1A.md)（**非formal**、事前登録・formal runなし）。D-1をD-1A（Phase D'の統合と非formal確認）・D-1B（正式条件の事前登録）・
+D-1C（formal run）に分けた（§14）。
+
+- **実装**: materialization runnerのexecution-only seam（`onMaterializedEntries`。同じmaterializationのEntry本体をprocess内で渡し、semantic recordは不変）、
+  `verify.ts`（§9.5の1 process分: handoff検査、Productionのreplacement authorityによるfinal input、planning Target集合の一致、`createProductionPlanWithObserver()`、
+  独立Trace Replayとその対応、`summarizePlanPhysical()`、条件1〜12と型付きoutcome）、`verificationProtocol.ts`（非formal条件、D-0C同一性照合、fresh用Entry集合、
+  2 processの判定 = 条件13）、Research runner（first / fresh子process）
+- **run integrity（PR #253 Required fix）**: 親が検出した子process record・checkoutの不整合（role / HEAD / Export、semantic SHA-256の再hash不一致、読取り不能、実行中のcheckout変化）は
+  判定に渡し、1件でもあればD-1A専用のrun-level verdict `invalid_run_integrity` とする（§4.6の `CandidateOutcome` は拡張せず、Planner不成立とも区別する）。
+  verdict・分類・post-hoc・exit codeは1つの結論から導く
+- **実Export（非formal、現行HEAD `3fd5c14`。`933546e` での確認1をRequired fix後に置き換え、結果は同一）**: D-0Cの登録条件で再実行したmaterializationのsemantic SHA-256とEntry fingerprintが
+  D-0Cと一致。最初のstructural candidateの43 Entryで、first / freshの両processが §9.5の全条件を満たし（43 / 43 completed、Conflict / rejected / warning 0、Trace Replay valid、
+  Plan steps = 物理操作数 = objective = 1,766）、verification semantic recordが一致し、integrity issueは0件だった。記録用分類 `nonformal_planner_verified`（正式な `VerifiedPlanRecord` /
+  `bestVerified` ではなく、`proven_minimum` も主張しない）
+- **注意**: §9.5の `physical.total === plan.steps.length` は、Counterを進めない `confirm_owned_ideal` Stepを含むPlanでは成り立たない（このExportの候補では非物理step 0）。
+  D-1Bの前に扱いを決める（D-1A記録 §12）。runtime-unsupported retry（full run 2回以上）を独立の不成立理由にしている `verify.ts` の規則も、D-1Bの前に仕様として整理する
+  （同 §11。D-1Aでは変更していない）
+
 ## 10. 目的関数・下界・探索budget
 
 ### 10.1 目的関数と部分割当の下界
@@ -1619,6 +1639,8 @@ materialization方式に依存しないので、D-0の結果でA〜Cをやり直
 | └ **D-0B-2 再smoke・事前登録**（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0B2.md)、§9.12） | 確定したoption集合・方式での非formal再smoke、delivery cap・Search規模gate・形状制約付き経路のbudget・envelope・option集合version・方式選択規則の事前登録 | D-0A-2b、A-2 | 事前登録値 | 事前登録の完了（formal runは開始しない） | protocol test | D-0Cの入力 | なし | 不要（smokeは非formal） |
 | └ **D-0C formal measurement**（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D0C.md)、§9.13） | 計測記録docs・RESULT | D-0B-2の登録条件、clean HEAD | 上記D-0の出力 | 上記D-0のacceptance | — | D-1の前提 | なし | **要** |
 | **D-1 Planner検証（統合acceptance）** | `globalAssignment/verify.ts`、runner（full mode: B → C → D → D'のloop）、analyzer（post-hoc oracle比較） | D-0で確認した方式、verification budget | `VerifiedPlanRecord` / `GlobalAssignmentResult`、候補別outcome、RESULT JSON | 実Exportで `verified`（§13.2）。不成立なら理由別status（§4.6） | §13.1 Phase D'、isolation | Eの基準 | なし | **要**（事前登録: verification budget、Research maxPlanSteps、envelope） |
+| └ **D-1A Phase D'の統合・非formal確認**（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1A.md)、§9.14） | `globalAssignment/verify.ts`（Phase D'の1 process分）、`verificationProtocol.ts`（非formal条件・D-0C同一性照合・fresh用Entry集合・2 processの判定）、materialization runnerのexecution-only引渡しseam、Research runner（first / fresh子process）、synthetic test | D-0Cの登録条件で再実行したmaterialization（最初のstructural candidate） | 候補1件の型付きoutcome（`verified` は `nonformal_planner_verified` として記録）、非formal実Export記録 | 実装とsynthetic test、実Exportの非formal確認（正式acceptanceではない） | §13.1 Phase D'、isolation | D-1Bの入力 | なし | 不要（非formal） |
+| └ **D-1B 正式条件の事前登録** / **D-1C formal run** | D-1Aの実測を根拠にverification budget・Research maxPlanSteps・envelopeを登録（D-1B）し、登録条件でformal runを行う（D-1C） | D-1A | — | §13.2 | — | — | なし | D-1Cで **要** |
 | **E 最適化・性能** | incremental coverage pruning、決定的なdiscrepancy探索、中断再開、window拡大（verified時）、メモリ内訳、Browser Worker測定 | D-1の `bestVerified` | 改善した `bestVerified`、性能記録 | 全Target完成を維持したまま物理操作数を改善（8,534未満。§13.2）。時間・メモリは別指標。退行は不受理 | 既存acceptanceの維持、Browser isolation | — | なし（Production化は§16の別PR） | **要** |
 
 最初の実装Phase（A、B-1）は、小さなsynthetic fixtureだけで意味論を検証できる。実Exportの43 TargetはPhase B-2（assignment-only）で初めて使い、

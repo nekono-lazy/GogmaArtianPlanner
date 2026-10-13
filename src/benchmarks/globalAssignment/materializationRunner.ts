@@ -22,6 +22,11 @@
  *
  * Phase D-0B-2: a `d0a2-v2` run's observed record adds each Target's `shapeTimeline` (execution-only inspection times that split
  * a shape-constrained materialization into its Search and its independent Route checks); the semantic record is unchanged.
+ *
+ * Phase D-1A (`docs/PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1A.md`): the optional execution callback `onMaterializedEntries` hands the
+ * Entry bodies of each materialized candidate - the very Entries the semantic record identifies, from this one materialization -
+ * to the Research process that verifies them with the Production Planner (Phase D'). It is execution-only: the semantic and the
+ * observed records are exactly the same with or without it, and nothing here persists, verifies or plans.
  */
 import { hashStableValue } from '../../domain/models/publicTypes'
 import type { BuildListEntry, OwnedWeaponId, TargetWeaponId } from '../../domain/models/publicTypes'
@@ -47,7 +52,7 @@ import {
 import {
   GlobalAssignmentMaterializationError,
   type CandidateInspection, type MaterializationAttempt, type MaterializationMethod, type MaterializationObserver, type MaterializationOutcome, type MaterializationStageOutcome, type MethodSelection,
-  type ObservedPlannerAlternativeSearch, type PredictedSearchScale, type ProjectedAttemptResult, type SearchScaleDetail, type TargetMaterializationRecord,
+  type ObservedPlannerAlternativeSearch, type PredictedSearchScale, type ProjectedAttemptResult, type SearchScaleDetail, type StructuralCandidateMaterialization, type TargetMaterializationRecord,
 } from './materializationTypes'
 import type {
   MinimalRoutePremiseViolation, RouteCheckReport, ShapeConstrainedAttempt, ShapeMethodSelection, ShapeSearchObserved, ShapeSearchScale, ShapeSearchScaleComponent,
@@ -78,6 +83,54 @@ export interface MaterializationRunExecution {
   search?: MaterializationSearchPort
   /** D-0A-2b: the rule `d0a2-v2`'s Search entry points (the shape-constrained seam and the projected Search); a test may observe them. */
   shapeSearch?: ShapeMaterializationSearchPort
+  /**
+   * D-1A, execution-only: called once per candidate whose materialization returned (every stage outcome; never after a fail-closed
+   * stop), after the Target records settled, with structured clones of the Entry bodies. Never changes either record.
+   */
+  onMaterializedEntries?: (handoff: MaterializedEntriesHandoff) => void
+}
+
+/**
+ * Phase D-1A (execution-only, never part of a record): the Entry bodies of one materialized structural candidate for Phase D'
+ * (`docs/PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md` 9.5) in the same process. They are the Entries the semantic record identifies by
+ * Entry ID and `hashStableValue(entry)`, from the one materialization - never a second one, never rebuilt from an expected shape.
+ * Research data: never persisted, never a user-fixed Route, a resolution or a lineage (design 16, G1).
+ */
+export interface MaterializedEntriesHandoff {
+  candidateIndex: number
+  /** The structural candidate's generation ordinal (diagnostics, never an identity). */
+  ordinal: number
+  /** The structural objective (Σ stream end − origin): a necessary-condition value, never a Plan's step count. */
+  objective: number
+  streamEnd: StreamEnd
+  /** The Phase A stream origins the objective is measured from (design 10.1). */
+  origins: { skill: number; gogma: number; normal: Record<string, number> }
+  /** Phase 0 (design 4.1): the planning Target IDs in the context's order, the denominator of Phase D'. */
+  planningTargetIds: TargetWeaponId[]
+  materializationOrder: TargetWeaponId[]
+  /** The D-0A stage outcome: Phase D' verifies an `all_materialized` candidate only. */
+  stage: MaterializationStageOutcome
+  /** Every materialized Target in materialization order, with its Entry body (a structured clone). */
+  materializedEntries: { orderIndex: number; targetWeaponId: TargetWeaponId; entry: BuildListEntry }[]
+}
+
+/** The handoff of one returned materialization (the runner's only constructor of it; exported for the D-1A tests). */
+export function materializedEntriesHandoff(candidateIndex: number, candidate: StructuralCandidate, context: { planningTargets: readonly { id: TargetWeaponId }[] }, table: ReachTable,
+  materialization: StructuralCandidateMaterialization): MaterializedEntriesHandoff {
+  const materializedEntries = materialization.targets.flatMap(record => record.outcome.kind === 'materialized'
+    ? [{ orderIndex: record.orderIndex, targetWeaponId: record.targetWeaponId, entry: structuredClone(record.outcome.entry) }] : [])
+  if (materializedEntries.length !== materialization.materializedEntries.length) {
+    throw new RangeError(`The materialization of candidate ${candidateIndex} lists ${materialization.materializedEntries.length} Entries but ${materializedEntries.length} materialized Targets.`)
+  }
+  return {
+    candidateIndex, ordinal: candidate.ordinal, objective: candidate.assignment.objective,
+    streamEnd: { skill: candidate.assignment.streamEnd.skill, gogma: candidate.assignment.streamEnd.gogma, normal: { ...candidate.assignment.streamEnd.normal } },
+    origins: { skill: table.originSkill, gogma: table.originGogma, normal: { ...table.originNormal } },
+    planningTargetIds: context.planningTargets.map(target => target.id),
+    materializationOrder: [...candidate.materializationOrder],
+    stage: structuredClone(materialization.outcome),
+    materializedEntries,
+  }
 }
 
 export interface MaterializationInputSummary {
@@ -741,6 +794,8 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
     let failClosed: CandidateMaterializationRecord['failClosed'] = null
     let stage: MaterializationStageOutcome | null = null
     let notAttemptedFromRun: TargetWeaponId[] | null = null
+    // D-1A: the returned materialization, handed over (execution-only) after the records below are complete.
+    let returned: StructuralCandidateMaterialization | null = null
     const observer: MaterializationObserver = {
       onTargetStarted: event => {
         targetStartedAt = now()
@@ -784,6 +839,7 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
       else {
         stage = result.outcome
         notAttemptedFromRun = [...result.notAttemptedTargetWeaponIds]
+        returned = result
       }
     } catch (error) {
       if (error instanceof GlobalAssignmentMaterializationError) {
@@ -830,6 +886,8 @@ export async function runMaterializationSmoke(plannerInput: PlannerInput, depend
     })
     elapsed.candidates.push({ candidateIndex, diagnostics: diagnosticsMs, materialization: materializationMs, targets: targetTimes })
     progress({ kind: 'candidate_settled', candidateIndex, classification, materializedTargetCount, notAttemptedTargetCount: notAttempted.length })
+    // D-1A: the Entry bodies of this materialization (never after a fail-closed stop, which returned none).
+    if (returned !== null && execution.onMaterializedEntries) execution.onMaterializedEntries(materializedEntriesHandoff(candidateIndex, candidate, context, table, returned))
     // A fail-closed stop is an error of the run and a cancellation stops the run: no later candidate is materialized.
     if (failClosed !== null || (stage?.kind === 'materialization_unconfirmed' && stage.outcome.kind === 'unmeasured')) break
   }
