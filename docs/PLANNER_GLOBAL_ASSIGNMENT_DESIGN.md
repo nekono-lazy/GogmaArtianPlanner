@@ -1792,6 +1792,9 @@ Production準備の第一段階として、D-1Cで正式acceptanceされた最�
 [Browser readiness設計](PLANNER_GLOBAL_ASSIGNMENT_BROWSER_READINESS.md) に置く。そのP系列（P-1: Browser Worker実行基盤・synthetic検証、P-2: 実ExportのPC / スマートフォン測定）は
 §14 Phase Eの「Browser Worker測定」（操作数の改善と性能）とは別の系列であり、本設計の意味・Phase分割・acceptanceを変えない。上記の事項とProduction統合の課題の整理は同書 §15。
 
+P-2の後、上記の事項に対するProduction統合の詳細仕様の設計案（P-3、docs-only）を [Production統合設計](PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md) に置く。
+同書は正式仕様ではなく、推奨案はOwner判断と正式仕様PRを経るまで確定しない。本設計の意味・Phase分割・acceptance、Research記録とRESULTは変更しない。
+
 ## 17. 本PRの検証
 
 - `git diff --check`、`npm run check:nul`、`npm run lint`、`npm test`、`npm run build` を実行した（結果はPR本文に記載）。docs-onlyのため挙動変化は無い
