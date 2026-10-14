@@ -24,6 +24,10 @@ Plannerが追う到達目標はTargetの理想品だけである。実用品を�
 生成したProductionPlanを実行するExecution lifecycle（Step単位の確定、中断 / 再開、
 再計画Previewと採用、ゲーム内セーブ地点、作成中武器の追跡、Target完了、Undo）は16章で定義する。
 
+作成リスト全体の作成ルートを組み直し、本Plannerで最終検証する「作成リストの全体最適化」（Issue #260）は
+17章で定義する。17章は正式仕様のみで未実装であり、現在の作成リストの「生産計画を作成」は本Planner（7章）を
+1回実行する。
+
 初期版で実装しないこと。
 
 - ユーザーによる作成順の完全固定
@@ -284,7 +288,10 @@ export type PlannerWarningKind =
   | "multiple_selected_checkpoint_entries"
   | "selected_checkpoint_target_already_ideal"
   | "selected_checkpoint_fixes_target_entry"
-  | "invalid_checkpoint_selection";
+  | "invalid_checkpoint_selection"
+  // Build List cardinality / Target lifecycle（4.1、16.13）
+  | "duplicate_build_list_entries_for_target"
+  | "completed_target_excluded";
 
 export interface PlannerWarning {
   kind: PlannerWarningKind;
@@ -317,6 +324,12 @@ export interface PlannerWarning {
   全件が除外されたこと）を表し、計画対象Targetも0件になる（4.1）
 - `all_targets_already_satisfied` は、計画対象Target（4.1）がすべてPlanner開始時点で
   Idealを所持していることを表す。作成リストに有効な候補が無いTargetは判定に含めない
+- `duplicate_build_list_entries_for_target` は、通常のPlannerInputで同じplanning TargetのEntryが2件以上ある
+  （legacy duplicate）ことを表し、validation issueに添えて返してPlanner入力全体をfail closedする（4.1）
+- `completed_target_excluded` は、`completed` Target（16.13）を参照するEntryを入力validationで除外したことを表す。
+  除外されたEntryはstaleではない
+- 上の2 kindは実装（`plannerWarningKinds`）に既にあり、本節の列挙から漏れていたものを補正した
+  （Issue #260 PR-1。意味の変更ではない）。全体最適化（17章）は除外warningを成立判定に使う（17.7）
 
 `max_steps_reached` は `maxPlanSteps` に到達した場合だけ使用する。Production Planner（決定的scheduler）の
 boundは `maxPlanSteps` だけである。Beam Search oracleの `maxExpandedStates` 到達を表すwarning kindは無い:
@@ -385,6 +398,8 @@ export interface PlannerTargetSatisfaction {
   B10の再計算、実行中Planの再計画Preview（16.8）、Production Plan生成内部の
   runtime-unsupported retryはすべてここを通るので、同じ計算方式を使う。機能ごとに別の探索方式を
   持たない（constrained re-search内部だけBeam Searchを使う、等をしない）
+- 作成リストの全体最適化（17章、Issue #260。正式仕様のみで未実装）も、組み直したRoute集合の最終検証で
+  この入口を使う。全体最適化はRoute集合を組み直す上位層であり、Planの生成・schedulingに別の計算方式を持たない
 - Productionに計算方式の切替手段は置かない。`PlannerInput`、Worker request、`AppSettings`、UI、
   環境変数、feature flag、query parameterのいずれもstrategyを持たない
 - `createProductionPlanWithSearchRunner()` はfull runだけを差し替えられる共有実装であり、後段
@@ -937,6 +952,11 @@ pure helper（`src/services/planner/plannerRuntimeOptions.ts`）で導出し、`
   `plannerInput.options` 自体は上記の競合解決の導出（`conflictResolutionPlannerOptions(表示中Plan)`）を使う
   （[UI_FLOW.md](./UI_FLOW.md) 11.2 / 11.4）。旧B9 what-ifの `defaultPlannerWhatIfBounds` はPhase 6-B2bで削除した
 - Worker Client、Worker、Domainはこれらを適用しない（Application callerがauthority）
+- 全体最適化（17章、正式仕様のみで未実装）の最終検証の `maxPlanSteps` は、この導出の対象外である。全体最適化Domainが
+  structural candidateごとに `roundUpPlannerMaxPlanSteps(structuralObjective + planningTargetCount) + 500` で導出し、
+  Application・Worker・UIは計算しない（17.13）。全体最適化の実装PRで500刻みの切り上げ規則を同じ契約のまま共有Domain
+  pure helperへ移し、本節のService API（`roundUpPlannerMaxPlanSteps()` / `PLANNER_MAX_PLAN_STEPS_INCREMENT`）は
+  それを再exportする形で残す（DomainからServiceへの依存を作らない）。上記の推奨値と競合解決再計算の上限の規則・値は変えない
 - `PlannerOptions` は引き続きruntime-onlyであり、ProductionPlan、`PlanningInputSnapshot`、
   AppSettings、IndexedDB、Export / Import、`CalculationContext` へ追加しない。Planner計算の意味は
   変わらないため、いずれのschema / calculation versionも変更せず、既存Planをstaleにしない
@@ -3330,7 +3350,14 @@ BuildListEntryの生成主体を拡張する。
 ```text
 1. ユーザーがCandidate Search結果から選択して追加する
 2. Planner constrained re-searchがPlan生成に必要としてmaterializeする
+   （現在はPlanner Alternative actual repairの採用。9.2.19）
+3. 作成リストの全体最適化の結果をユーザーがPreviewで確認して明示的に採用する
+   （17章、Issue #260。正式仕様のみで未実装）
 ```
+
+3は本節以下のconstrained re-search固有の規則（conflict context、preflight、fixed constraint）を使わない。永続形状、
+provenanceを追加しないこと、決定的Entry ID、同一意味の既存Entryの再利用、保存直前のfreshness再検証、Planとの
+同一transaction保存は共有する（17.11 / 17.12）。
 
 規則。
 
@@ -3876,6 +3903,19 @@ Planが置換後Build Listだけを参照すること、CalculationContext、旧
 
 を1つのDexie read-write transactionで行い、Entryだけ・Planだけ・lineageだけのpartial saveを残さない。
 
+**作成リストの全体最適化の採用（17.11、Issue #260。正式仕様のみで未実装）。** 全体最適化のartifactは、通常の
+`savePlannerResult()` へもPlanner Alternative repairの保存へも変換せず、全体最適化専用の保存API（inspect / save）で
+保存する。本節の保存境界（transaction内のcurrent state再読込・再validation、CalculationContext、generated Entryの
+staleness、`initialExecutionState`、`targetWeaponsHash`、置換後集合の `buildListEntriesHash`、Plan参照、旧Draftのatomic
+replacement、partial save禁止）と9.2.18の置換規則を共有し、既存の共通保存検証helper
+（`checkPlannerRunTerminationPersistable()`、`checkPersistablePlannerResultShape()`、
+`checkPersistableOrdinaryPlannerResultShape()`（`conflictRepairLineage === null`）、`prepareFinalReplacementBuildList()`、
+`checkGeneratedBuildListEntriesFresh()`、`checkProductionPlanBuildListEntryReferences()`）を契約を変えずに呼ぶ。全体最適化
+固有の検査（作成リスト全体の入力token、実行中Planが無いこと、observed Draft ID、completed・全計画対象Target完成・Conflict 0・
+rejected 0・除外warningだけ・物理操作数の恒等式）は、これらに **追加** する検査であり、どれも省略しない。保存transaction内の
+generated Entry freshnessの再計算は、入力tokenが一致しても省略しない。実行中Planが無いことを前提にするので、Plan-breakingの
+承認は発生しない。検証順序と拒否codeは17.11にある。
+
 ### 9.2.16 bounds
 
 B8 constrained re-searchは必ずfiniteであること。boundsは責務ごとに2つへ分離する。
@@ -4176,11 +4216,19 @@ generated Entryを含むaugmented inputそのものでPlanを計算していた�
 自動整理せず、通常Planner入力のfail closed（4.1）とBuild Listの整理案内で扱う。
 
 **現在のauthority（Phase 6完了後）。** 本節の置換契約を使うのはPlanner Alternative（「比較する」what-ifのtrialと
-「この候補を優先」actual repairのtrial・保存、9.2.19）だけである。本節の「constrained re-search（B8）」「what-if（B9）」
+「この候補を優先」actual repairのtrial・保存、9.2.19）だけである（現在のmain。目標仕様の全体最適化の採用も使う、下記）。本節の「constrained re-search（B8）」「what-if（B9）」
 「orchestration」の記述は、そのtrialと保存へ読み替える。旧B8 / B9の計算・保存API（`PlannerOrchestrationResult`、
 `inspectPlannerOrchestrationResultSave()` / `savePlannerOrchestrationResult()`）はPhase 6-B2bで削除しており、以下で
 それらを名指しする箇所は **Phase 6-B2b以前のhistorical contract** として明示する。ordinary Planner（作成リストの通常作成、
 再計画Preview / 採用）はgenerated Entryを持たず、置換を生じない（Phase 6-A）。
+
+作成リストの全体最適化（17章、Issue #260。正式仕様のみで未実装）の採用も、本節の置換の共通authority
+（`BuildListEntryReplacement`、`prepareFinalReplacementBuildList()` が使う置換後Build Listの構築と検証、cardinality）を使う。
+全体最適化は計画対象Target全体を一括して置換し（部分採用なし）、1 Targetにつきreplacementは高々1件、置換対象 `O` はその
+Targetの唯一の永続Entryである。生成Entryの途中採用状態・改善優先は既定値（両lane未選択、`planner`）であり、`O` から
+引き継がない。同一意味の既存Entryを再利用するTargetは置換しない。全体最適化はtemporary augmented input（`O + G` の共存）を
+保存しない。保存の詳細は17.11、本節の置換規則以外のB8 / B9由来の記述（preflight、fixed constraintの再対応付け）は
+全体最適化に適用しない（全体最適化は `conflictResolutions = []` の入力だけを扱う、17.2）。
 
 実装の要点。
 
@@ -7625,7 +7673,7 @@ Build Listでユーザーが明示選択した妥協checkpoint（7.5）へExecut
 そのmilestoneを持つStepの確定transactionで、追跡武器を `status = "practical"` にする。
 
 - 選択していない状態へ性能上たまたま到達しても、Bonus / Skill性能だけを見て自動でPracticalに
-  しない
+  しない。実用品条件への到達を知らせる表示（Issue #261）は本節のcheckpointとは別概念であり、16.19で境界を定める
 - Practicalになっても作成中状態は継続し、`isProtected` は変更しない。Planはそのまま理想品へ進む
 - 開始時点で到達済みのcheckpoint（7.5.2）は、そのEntryの最初の物理Stepの確定transactionで
   `practical` にする（statusは非semanticなので時点の差はPlan検証に影響しない）
@@ -8123,3 +8171,583 @@ staleness semantics、PlanStep / reserve semantics、Expected execution state、
 Counterは各Step確定時にリアルタイム更新するが、Debug Mode OFFでSeed / Counterの数値を通常表示
 しない契約（[REQUIREMENTS.md](./REQUIREMENTS.md) 33）は変更しない。Debug ModeではStepごとの
 before / afterを従来どおり確認できる。
+
+### 16.19 実用品到達地点の表示（Issue #261、後続設計）
+
+実装状態: **未実装**。本節はIssue #260のPR-1（docs-only）で、Issue #261の要求と既存の途中採用checkpoint
+（7.5 / 16.12）との **責務境界だけ** を定める。到達判定のauthority（どの評価関数・どの状態をauthorityにするか、
+理想条件を満たす状態の扱いを含む）、PlanStepへの投影、永続shapeの要否、生産計画詳細・実行ナビでの表示方法は、
+Issue #261の後続設計で正式に定める（17.19のU4）。本節はそれらのdata契約を確定しない。
+
+目的。理想品が完成する前に、計画上の同じ追跡武器が目標武器の実用品条件（[REQUIREMENTS.md](./REQUIREMENTS.md)
+11 / 12の実用・代替ボーナス条件と実用スキル条件）を満たす地点を、生産計画の手順詳細と実行ナビで知らせる。
+
+区別する3種類。
+
+```text
+1. 復元ボーナスが実用品条件を満たす地点
+2. スキルが実用品条件を満たす地点
+3. 同じ武器で、復元ボーナスとスキルの両方の実用品条件を同時に満たす地点
+```
+
+- スキルと復元ボーナスが同じStepで条件を満たす必要はない。3は、実際のPlan上で同一の追跡武器が、その時点で両方の
+  条件を満たしていることを確認して判定する。追跡武器をどのfieldで同定するか（例えば `executionEffects.trackedOwnedWeaponId`、
+  Plan内で登録する作成対象Normalから巨戟化した武器の扱いを含む）はU4で定める
+- `BuildCandidate.intermediateStateGroups` はlane別の到達候補であり、両軸が同じ武器で同時に成立することの保証には
+  使わない（Issue #261の制約）
+- 実行前の地点は予測（計画上の到達予定）、Step確定後の地点は実行済み（到達済み）として区別する
+- 計画開始時点で既に条件を満たしている場合も扱う。そのために仮想的なStepをPlanへ追加しない
+- 一度満たした条件が後の操作で満たされなくなる場合を扱う。到達を恒久的な状態と仮定しない
+- 複数Target・共有Step（`progressedTargetWeaponIds`）を考慮する。判定の単位（Target / Entryごとか等）はU4で定める。
+  共有Stepを複製しない既存契約（[DATA_MODEL.md](./DATA_MODEL.md) 11.3）は変えない
+
+既存の途中採用checkpointとの境界。
+
+- `PlanStep.checkpointMilestones` と `executionEffects.compromiseLabels`（7.5.4 / 16.12）は、ユーザーが作成リストで
+  **明示選択した** 途中採用checkpointの情報である。任意の実用品到達通知とは別概念であり、実用品到達通知を
+  checkpoint milestoneや `compromiseLabels` として記録しない。逆に、明示選択したcheckpointの意味（hard constraint、
+  pin、`practical` ラベル、「この武器を妥協品として確定して終了」）を実用品到達通知で変えない
+- 実用品到達通知だけを理由に、武器のstatusを変更しない（`practical` 化を含む。16.12の「選択していない状態へ
+  性能上たまたま到達しても自動でPracticalにしない」を維持する）。自動確保、Target完了、Planの自動終了、
+  RNG予測、Counter進行、操作数、操作順、Route選択、Planner / Searchの計算も変えない
+- 目標武器に実用品条件が設定されていることは、全体最適化（17章）の実行可否に影響しない（17.4）
+- 表示のために永続データを暗黙に変更しない。永続fieldを追加するかどうかはIssue #261の設計で判断し、
+  追加する場合はschema / 計算版数の判断を伴う
+
+---
+
+## 17. 作成リストの全体最適化（Global Assignment、Issue #260）
+
+### 17.1 位置づけと実装状態
+
+実装状態: **正式仕様のみ（未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
+（[PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md](./PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md)、
+PR #259。非normativeの設計記録）とOwnerの判断（O1〜O21、17.20）を正式仕様へ反映したものである。Production code、
+Worker、UI、Persistence、version定数は変更していない。
+
+- **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
+  （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
+- **目標仕様（本章）**: 「生産計画を作成」を全体最適化の標準操作にする。画面の切替はIssue #260の後続PR（UI公開PR）で
+  行う。本章の「標準の生産計画作成」を、切替前の画面の挙動として読まない
+- Production統合はIssue #260、Global Assignment ResearchはIssue #154として管理する（O20）。本章はResearchの契約・
+  記録（[PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md](./PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md)、D-1C / P-2のformal記録とRESULT）を
+  変更しない
+
+**全体最適化** は、作成リストに有効な候補がある目標武器（計画対象Target、4.1）全体について、既存EntryのRoute内容に
+縛られずに各Targetの作成Routeを選び直し、選び直したRoute集合を7章の内部Plannerで最終検証する処理である。
+
+Owner決定（O1）: 作成リスト画面の「生産計画を作成」を全体最適化の標準操作にする。通常Plannerの「生産計画を作成」を
+主操作として残し、全体最適化を別の副操作（「全体最適化を試す」）として並べる案（設計案の初版の推奨）は採らない。
+
+利用の流れ（目標仕様）。
+
+```text
+1. 作成リストで「生産計画を作成」を実行する
+2. 有効な計画対象Target全体について、Route集合を再構成する（17.6のStage 0〜D）
+3. 再構成した候補集合（置換後Build List）を内部Plannerで最終検証する（Stage D'、17.7）
+4. 成立した結果を未採用のPreviewとして表示する（17.9）。何も保存しない
+5. ユーザーが明示的に採用した場合だけ、Entryの一括置換と新Draftの保存を1つのtransactionで行う（17.11）
+6. 採用後は通常の生産計画詳細（UI_FLOW 11）、作成開始、実行ナビ（16章）を使う
+```
+
+最短性（物理操作数の最小）は保証しない。結果は探索範囲・探索上限の中で見つかった成立解であり、最小性の証明を
+伴わない（Researchの `best_found` に当たる）。UIは「最短」「最適解」と表示しない。
+
+### 17.2 内部Planner・既存機能との責務
+
+| 層 | 責務 | 本章による変更 |
+| --- | --- | --- |
+| 全体最適化（本章） | 計画対象Target全体のRoute集合を再構成し、成立した結果をPreviewとして返す。採用時だけEntry置換とDraft保存を行う | 新規（目標仕様） |
+| 内部Planner（7章） | 与えられたBuild ListのRouteをRoute commitment + 決定的schedulingで実行順へ並べ、Planを生成する。[REQUIREMENTS.md](./REQUIREMENTS.md) 19の「登録済みRouteを確定して決定的にスケジューリングする」契約 | 変更しない。全体最適化の最終検証はこの内部Plannerを `createProductionPlanWithObserver()` で実行する。全体最適化専用のPlanner・scheduler・strategy flagを持たない（7章「Production routing」） |
+| Planner Alternative（9.2.19） | 保存済みDraftの競合について、ユーザーの明示決定から1段の代替探索と競合repairを行う | 変更しない・削除しない |
+| 再計画Preview / 採用（16.8） | 実行中Planがあるときの現在地点からの再計画 | 変更しない。全体最適化は実行中Planがある間は提供しない（17.4） |
+| Plan lifecycle・実行ナビ・履歴・Undo（16章） | 保存済みPlanの開始・実行・終了 | 変更しない。採用したDraftは通常のDraftと同じに扱う |
+
+- 採用したDraftは「採用後の作成リストに対して内部Plannerが生成したPlan」と同じ意味を持つ。保存shapeは既存の
+  `ProductionPlan` であり、`conflictRepairLineage = null`（新しいchain）である
+- 既存の生産計画（全体最適化の導入前に作ったDraft、実行中・完了・終了済みPlan）の閲覧・作成開始・実行を本章によって
+  妨げない。全体最適化はそれらを読み替えない
+- 全体最適化は競合解決ではない。Research上の仮割当（structural candidate、reservation、形状条件）をユーザーの明示的な
+  競合選択として扱わず、`PlannerConflictResolution`、`ProductionPlan.conflictRepairLineage`、
+  `PlanConflict.selectedBuildListEntryId` へ書かない。入力の `conflictResolutions` は空とし、保存済みDraftの明示解決・
+  lineage・`baseSnapshot` を読まない（[REQUIREMENTS.md](./REQUIREMENTS.md) 23）
+- **自動フォールバックを仕様にしない。** 全体最適化が `unsupported` / `not_found` / `search_bound_reached` / 計算失敗 /
+  キャンセルで終わった場合に、通常Plannerを自動で実行して結果を差し替えない。Ownerは自動フォールバックを決定して
+  いない。標準操作の切替後に、全体最適化を伴わない通常Plannerの生産計画作成を通常UIにどの程度残すか、全体最適化が
+  使えない入力で通常Plannerを手動で起動できる代替経路を設けるかは、実装前に整理し、遅くともUI公開PRの実装前に決める
+  （17.19のU1）
+
+### 17.3 計画対象Target
+
+- 対象は4.1の計画対象Target（`validatePlannerInput().validBuildListEntries` から `derivePlannerPlanningTargets()` で
+  導出する集合）だけである。範囲を広げない。Entryの無いTarget、stale Entryしか持たないTarget、disabled / completed
+  Target、その他validationで除外されたEntryしか持たないTargetは対象外であり、完成数の分母に入れない
+- 対象外TargetのEntry、および入力validationで除外されたEntryは、変更・削除・置換しない
+- 計算開始時（Stage 0）に計画対象Target集合を固定し、以後増減させない。最終検証の入力から再導出した集合が
+  Stage 0と一致しなければfail closedする
+- 1本の武器で複数Targetを満たし得る入力でも、Targetごとに別の作成Routeを割り当てる。最小性を主張しない
+
+### 17.4 前提条件と未対応入力（O2 / O4 / O6）
+
+初期Production版はResearchで検証した入力前提を維持する。満たさない入力では全体最適化を行わず、typedな未対応理由を
+返す（UIは理由、該当Target、不足情報、導線を示し、「解が存在しない」とは表示しない）。未対応であることを理由に、
+通常Candidate Search、内部Planner、Execution、Identificationの既存の挙動・部分RNG対応を変更・縮小しない。
+
+| 未対応理由（概念名。型名は実装PRで確定） | 条件 | 根拠 |
+| --- | --- | --- |
+| `running_plan_exists` | 実行中Plan（`active` / `stale`）がある | O6 |
+| `invalid_planner_input` | 作成リストに整理が必要な項目がある（legacy duplicate（4.1）、壊れた途中採用状態の選択（7.5.9）など、通常Plannerの入力fail closed） | 既存規則 |
+| `no_planning_target` | 有効な候補（valid Entry）が0件 | 既存規則（4.1） |
+| `checkpoint_selection` | 計画対象TargetのEntryのいずれかが途中採用状態を明示選択している | O2 |
+| `unconfirmed_rng_state` | Base Seed / Skill Counter / Gogma Counterのいずれかが確定値でない | O4 |
+| `target_without_source` | 使える所持sourceが無く、その武器種の確定レア8通常アーティアCounterも無い計画対象Targetがある | O4 |
+| `blind_route_required` | 所持sourceが無く、通常アーティア予測がunsupportedで、予測できない作成経路（blind）しか無い計画対象Targetがある | O4 |
+
+**途中採用状態（O2）。**
+
+- 目標武器に実用品条件（`practicalBonusConditions` / `alternativeBonusRules` / `practicalSkillCondition`）が
+  設定されているだけでは、全体最適化を拒否しない
+- Candidate Snapshotに実用品として使える途中状態（`intermediateStateGroups`）があるだけでも拒否しない
+- 拒否するのは、計画対象TargetのEntryで `intermediateStateSelection.skillOpportunityId` または
+  `bonusOpportunityId` が `null` でない（ユーザーが作成リストで途中採用checkpointを明示選択している）場合だけである。
+  改善優先（`improvementPreference`）が `planner` 以外であることは明示選択に当たらない（17.5）
+- 選択を自動解除したり、別のopportunity・別Route上の似た状態へ読み替えたりしない（7.5のhard constraint）。
+  拒否時は該当Targetと理由を示し、作成リストの該当グループへの導線を出す
+- 明示checkpointを保護したまま全体最適化する拡張は後続検討とする（17.19のU5）
+
+**部分的なRNG未確定（O4）。**
+
+- 上表の `unconfirmed_rng_state` / `target_without_source` / `blind_route_required` では全体最適化を開始しない。
+  理由と不足情報（RNG状態ならRNG Setup、通常アーティアCounterならNormal Counter Setup）への導線を示す
+- 通常Candidate Search、内部Planner（4章のEntryごとのcapability判定と除外）、Execution、Identificationの
+  部分RNG対応は変更しない
+- [REQUIREMENTS.md](./REQUIREMENTS.md) 5は、不足値に依存する経路だけを無効化し、利用可能な経路まで一括で無効化しない
+  ことを求める。標準操作を全体最適化へ切り替えたうえで全体最適化しか提供しないと、これらの入力やO2の明示checkpointを
+  持つ入力からは作成リストの生産計画を作れなくなる。これを避ける手段（17.2の代替経路）はUI公開PRの前に決める
+  （17.19のU1）。本仕様は内部Plannerのこれらの入力への対応を残す
+
+**実行中Plan（O6）。**
+
+- 実行中Plan（`active` / `stale`）がある間は全体最適化を提供しない。理由と導線（現在地点からの再計画の試算16.8、
+  Planの破棄・完了）を示す。採用時にも再確認する（17.11のT2）
+- Draftの存在は実行中Planと区別する。Draftがあっても全体最適化を提供し、採用時にそのDraftを置き換える（17.11）
+- 実行中Planの再計画（16.8）は本章で変更しない
+
+### 17.5 改善優先とEntry設定（O3）
+
+- 置換されるTargetの新Entryは、途中採用状態を両laneとも未選択、改善優先を「生産計画に任せる」（`planner`）とする。
+  旧Entryの途中採用状態・改善優先を引き継がない（9.2.18、[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1と同じ規則）
+- 旧Entryの改善優先が `planner` 以外で、置換によって `planner` へ戻るTargetを、Previewと採用確認で一覧表示する
+- 計算の結果が現在のEntryと同一意味のRouteになるTarget（generated Entryが既存Entryと同一semanticで再利用される
+  Target、17.12）は「変更なし」とし、そのEntryとその改善優先などの設定をそのまま維持する
+- O2により、全体最適化の対象になる入力のEntryは途中採用状態を選択していない
+
+### 17.6 入力と計算の構成
+
+- 入力は通常Plannerと同じく、main threadがcurrent persisted stateから `createPlannerInput()` で作る `PlannerInput`
+  である。`conflictResolutions = []` とする。保存済みDraftの `baseSnapshot`・明示解決・lineage、実行中Planの情報を
+  入力にしない（16.8のPreview入力と同じ規則）。ResearchのExport読込経路は使わない
+- 計算はResearch（Issue #154）でD-1C正式acceptanceを得た組み合わせ（option集合 `a2`、方式選択規則 `d0a2-v2`）を
+  Production Domainへ移したものとする。Research専用の組み合わせ（`a1`、`d0a-v1`）はResearchに残す
+
+```text
+Stage 0   入力確認      validatePlannerInput() → derivePlannerPlanningTargets()、17.4の前提条件、除外Entry集合の記録
+Stage A   到達表        計画対象Targetごとの到達option（Production window、17.13）
+Stage B/C 割当探索      sourceとrequired unitの割当、Counter被覆、期待Route形（探索上限、17.13）
+Stage D   ルート生成    割当順にTargetごとに、射影起点のCandidate Search、合わなければ形状制約付きRoute探索
+                         （SEARCH_SPEC 5.6.9）。形状制約付きRouteは独立Route検証
+                         （全operationの再予測）を通したものだけを使う
+Stage D'  最終検証      置換後Build Listで内部Planner（createProductionPlanWithObserver()）を実行し、17.7の成立条件を判定。
+                         成立しなければ次のstructural candidateへ進む（探索上限まで）
+```
+
+- 計算はWeb Workerで行う。WorkerはIndexedDB / Dexieへアクセスせず、Worker bundleへ `src/db/**` を含めない。
+  計算は永続状態を一切変更しない
+- 段階表示のためのprogressは全体最適化の計算に固有のmessageとし、Production Planner Worker（14章）へprogress
+  responseを戻さない。Workerの具体的なmessage・lifecycle（専用Workerか等）は実装PR（Worker / Application接続）で
+  確定する
+- Research codeをProductionから直接importしない（GA設計 §11.3、Research isolation test）。中立なProduction Domain
+  moduleへの責務移管で行い（9.2.19.16のPhase 6-B2aと同じ依存方向）、Research側はそれを使うthin consumerにする。
+  Productionは `src/benchmarks/**` と、Researchに残る `src/domain/search/research/**` をimportしない。isolation testの
+  改訂は移管PRで意図的に行い、Research専用symbol（formal gate、事前登録、runner、RESULT導出、oracle関係）が
+  Productionへ現れないことを固定する
+- 同じ入力からは同じReachTable、structural candidate列、ルート生成順、Candidateの意味、generated Entry ID、Planの
+  semantic（Step列、物理操作数）を返す。Plan ID・Step ID・予約OwnedWeapon ID・時刻はProductionのID factory / Clockで
+  決まり、run間で一致しない（15.9.1と同じsemantic determinism）
+- 計算結果に影響する順序付け（`String.prototype.localeCompare()` 等）のlocale・engine依存は、Domain移管の実装PRで
+  監査する
+
+### 17.7 最終検証の成立条件（O21）
+
+Stage D'の結果は、次をすべて満たす場合だけ成立（`optimized`）とする。
+
+1. `termination.status === "completed"`、かつ `completedTargetCount` と `totalTargetCount` がどちらも、Stage 0で固定した
+   計画対象Target数と等しい
+2. `plan.selectedBuildListEntryIds` が計画対象Target全体のEntry、`conflicts` が0件、`rejectedBuildListEntries` が0件
+3. warningは、Stage 0の入力validationで除外したEntryに対応するものだけである。除外Entry集合は入力validationの
+   結果（`validatePlannerInput()` の `excludedBuildListEntries` と、その除外理由のwarning kind）から得て、warningの
+   messageを解析しない。最終入力の除外Entry集合（Entry IDと除外理由のkind）がStage 0の除外Entry集合と完全一致し、
+   それに対応しないwarningが1件も無いことを要求する。除外理由のkindには `build_list_entry_stale`、
+   `completed_target_excluded`、`calculation_context_incompatible`、`protected_weapon_required`、`rng_state_missing`、
+   `rng_prediction_unsupported` などがあり得る（Stage 0で正当に除外されたEntryがあることだけでは不成立にしない）。
+   除外集合に対応しないwarning（Plan生成内のruntime-unsupported retryで新たに除外されたEntry、
+   `invalid_conflict_resolution`、`max_steps_reached` など）があれば不成立。warning kindとEntry IDの対応の具体的な
+   表現は実装PRで確定する
+4. generated Entry・再利用Entryが1件も入力validationで除外されていない
+5. Plan生成内のTrace Replayが成立する（Plan生成が成功する。7章「Trace Replayを省略しない」）
+6. 物理操作数の恒等式: 物理操作数（`steps.length` − `confirm_owned_ideal` Step数）= Σ stream前進 = 割当の
+   structural objective。不一致は「成立しない候補」ではなく前提違反としてerrorでfail closedし、採用可能な結果にしない
+7. 最終入力から再導出した計画対象Target集合がStage 0と同じ
+
+- Researchの成立条件のうち「warning 0」は、通常の作成リストに完了済みTarget・stale EntryのEntryが残ることを考慮して
+  条件3の除外集合の完全一致へ置き換える（Research D-1Cの成立判定そのものは変更しない）。実装PRで除外Entryを含む
+  synthetic fixtureにより固定する
+- 条件を満たさないことを競合として返さない。Conflictを `PlannerConflictResolution` で解決しようとしない
+- Researchの別processでのfresh二重実行（first / fresh）は、Productionの成立条件にしない（O21）。同じ入力の2回の計算で
+  semanticが一致することは自動テストとPC Browserの受入で確認する（17.21）。一方、保存直前のgenerated Entry
+  freshnessの再検証（17.11のT5）は必須であり、省略しない
+
+### 17.8 結果の分類
+
+```ts
+// 概念型。型名・field名は実装PRで確定する
+type BuildListOptimizationResult =
+  | { status: "optimized"; artifact: BuildListOptimizationArtifact }
+  /** 探索上限の内側で探索を終え、成立する候補が無かった（この探索範囲では見つからない） */
+  | { status: "not_found"; reason: "no_structural_candidate" | "candidates_rejected" }
+  /** 探索上限への到達、または確認できない段階で止まった（候補が無いとは結論しない） */
+  | { status: "search_bound_reached"; bounds: BuildListOptimizationBound[] }
+  | { status: "unsupported"; reasons: BuildListOptimizationUnsupportedReason[] };
+// キャンセル・Worker failureはmain threadの状態であり、Workerの結果ではない
+```
+
+- 探索上限への到達（`search_bound_reached`）と、成立する候補が無かったこと（`not_found`）を区別する。どちらも
+  「解が存在しない」とは表示しない（[REQUIREMENTS.md](./REQUIREMENTS.md) 15と同じ考え方）
+- 前提違反・契約違反（恒等式の不一致、materializationの契約違反）はerrorとしてfail closedし、採用可能な結果にしない
+- どの結果でも、自動で通常Plannerへ切り替えない（自動フォールバックはU1で決定するまで実装しない。17.2）
+
+### 17.9 Preview（O7）
+
+- 計算が成立しても保存・採用しない。Previewは永続状態（作成リスト、Draft、実行中Plan、所持武器、目標武器、RNG状態、
+  通常アーティアCounter）を一切変更しない
+- 結果（artifact）はruntime-onlyであり、IndexedDB、Export、AppSettings、URLへ入れない。Previewを閉じる、画面を離れる、
+  新しい計算を始める、同じ画面で作成リストを変更すると破棄する
+- Previewは未採用の試算であることと、まだ作成リストと生産計画は変更されていないことを明示する（16.8の再計画Previewと
+  同じ文言規則）
+- diagnostics（段階別の時間、探索量、候補outcome）はDebug Modeの表示だけに使い、判定に使わない
+
+| 表示項目 | authority |
+| --- | --- |
+| 完成予定の目標武器数 | 最終Planの `executionEffects.targetCompletions` のdistinct Target数。分母は `termination.totalTargetCount`（今回の計画対象Target数）だけとし、登録Target全体を分母にしない |
+| 対象外の目標武器 | 入力から全体最適化Domainが導出した件数と内訳（作成リストに候補なし / 候補が除外（staleなど）/ 検索対象OFF / 完了済み）。計画対象の分母へ加えない。UIは再計算しない |
+| 物理操作数（ゲーム内操作の回数）と計画ステップ数 | 最終Planから導出した値。別の行で示し混同しない（計画ステップ数は `confirm_owned_ideal` を含む） |
+| 置換される作成リスト項目 | replacementの一覧と件数、「変更なし」の目標武器数。0件なら計画だけを作成することを示す |
+| 起点武器の変化 | 置換前Entryと新EntryのRoute base（所持武器の名称、または新規の通常アーティア）。IDを通常UIに出さない。優先起点と異なる起点を採るTarget（17.14） |
+| 改善優先が既定へ戻る目標武器 | 17.5 |
+| 競合 | 成立条件によりConflict 0件。「競合なし」と文字で示す |
+| 計画全体の内容 | 最終Planを既存のPlan内容表示（[UI_FLOW.md](./UI_FLOW.md) 11.0）で読み取り専用に表示する |
+| 必要素材・費用の目安 | 最終Planの物理Step列（[REQUIREMENTS.md](./REQUIREMENTS.md) 22.1） |
+
+- 推定完了率、残り時間、最短性、Seed / Counterの数値（通常UI）は表示しない
+
+**現在のDraftとの比較（O7）。**
+
+- Draftは最大1件の不変条件（[DATA_MODEL.md](./DATA_MODEL.md) 11.1）を維持する。試算は保存せず、Draftと並べて永続化しない
+- 比較は、現在のDraftが全体最適化の入力と **同じ入力状態** から作られている場合だけ行う。条件は、Draftが存在し、
+  CalculationContextが互換で、その `baseSnapshot` の `initialExecutionState`・`targetWeaponsHash`・
+  `buildListEntriesHash` が全体最適化の入力token（17.10）と一致することである
+- 条件を満たす場合は、完成予定の目標武器数、物理操作数、計画ステップ数、競合件数（記録件数）を並べてよい。満たさない
+  場合は比較値を推測で作らず、比較できる現在の生産計画が無いことを示す
+- 比較を目的とする追加の通常Planner実行（baseline run）は初期版では行わない
+- 採用すると既存Draftはatomicに置き換わる（17.11）。PreviewとUIの採用確認でそのことを示す
+
+### 17.10 入力token
+
+採用時の再検証のため、計算開始時に次のtokenを確定し、artifactとApplicationが保持する（永続化しない）。
+
+| 項目 | 内容 | 確定する場所 |
+| --- | --- | --- |
+| `initialExecutionState` | RngState / 通常アーティアCounter / OwnedWeaponのsemantic hash（`createExpectedPlanState()` と同じ正規化。最終Planの `baseSnapshot.initialExecutionState` と同じ値） | Worker |
+| `targetWeaponsHash` | `createPlanningTargetWeaponsHash()`（最終Planと同じ値） | Worker |
+| `inputBuildListEntriesHash` | 入力時点の作成リスト全体の `createPlanningBuildListEntriesHash()`。最終Planの `buildListEntriesHash` は置換後集合なので別に持つ | Worker |
+| `calculationContext` | 入力のCalculationContext | Worker |
+| observed Draft ID | 計算開始時の現在Draft ID（無ければ `null`） | Application（main thread） |
+| 実行中Planが無いこと | 計算開始時に `active` / `stale` Planが無いこと | Application（main thread） |
+
+- tokenは作成リスト **全体** で照合する（Planner Alternative repairの「置換対象 `O` だけ」より厳しい）。全体最適化は
+  全計画対象Targetを同時に割り当てるので、別Targetの追加・Entry変更・優先度変更でも割当の前提が変わるためである
+- 所持武器のstatus・名称・memoだけの変更は `initialExecutionState` の `ownedWeaponsHash`（[DATA_MODEL.md](./DATA_MODEL.md) 11.2）にも
+  generated Entryの `referencedOwnedWeaponsHash`（同 9.4）にも入らず、採用を妨げない
+
+### 17.11 一括採用と永続化（O5）
+
+- 採用は計画対象Target全体で一括して行う。部分採用（一部Targetだけの置換）は提供しない。全体最適化のRoute集合は
+  held位置を跨ぐRouteや他Targetの操作に依存するCounter被覆で成り立つため、一部だけを置換した組み合わせは最終検証して
+  いない別の集合になり、stall・競合・未完成が起こり得るためである
+- 計画対象外TargetのEntryと、Stage 0の除外Entryは削除・置換しない
+- 採用は、既存のPlanner保存境界（9.2.15、[DATA_MODEL.md](./DATA_MODEL.md) 14.5）を共有する全体最適化専用の保存API
+  （事前確認 inspect / 保存 save）で行う。全体最適化のartifactを通常の `PlannerResult` 保存やPlanner Alternative repair
+  artifactへ変換して保存しない。逆に、通常の `PlannerResult` を全体最適化の保存APIへ渡せない
+- 既存の共通保存検証helper（`checkPlannerRunTerminationPersistable()`、`checkPersistablePlannerResultShape()`、
+  `checkPersistableOrdinaryPlannerResultShape()`、`prepareFinalReplacementBuildList()`、
+  `checkGeneratedBuildListEntriesFresh()`、`checkProductionPlanBuildListEntryReferences()`。
+  `src/domain/planner/plannerResultPersistenceValidation.ts`）の **契約を変更しない**。全体最適化の保存はこれらを呼び、
+  全体最適化固有の検証をその後に追加する。同じ検証を全体最適化用に書き直さない
+
+検証と書き込みの順序（すべての検証を通るまで何も書かない）。
+
+```text
+[P1] artifactの保存可能性（現在状態に依存しない。transactionの前にfail fast）
+  既存helper  termination（incompleteはpartial Planがあっても拒否）、plan.status = draft、
+              conflictRepairLineage = null、ProductionPlanのDomain validation、
+              generated Entryのentity validationとID一意性、1 generated Entryにつき1 replacement・同じTarget
+  固有        plan !== null、termination.status = completed、完成数 = 計画対象Target数、
+              Conflict 0・rejected 0、除外warningだけ（17.7の3）、物理操作数の恒等式（17.7の6）、
+              replacement / 変更なし / 計画対象TargetのID集合の整合
+[transaction内]（既存のPlanBreakingChangeGuardを通る1つのguarded mutation。inspectと保存で同じmutationを使う）
+  T1 現在状態の再読込    RngState / 通常アーティアCounter / OwnedWeapon / TargetWeapon / BuildListEntry / ProductionPlan
+  T2 全体最適化の前提    実行中Plan（active / stale）が無い。Draftが0件、または1件でそのIDがobserved Draft IDと一致する。
+                         現在状態が入力token（initialExecutionState / targetWeaponsHash / inputBuildListEntriesHash /
+                         CalculationContext）と一致する
+  T3 replacementの現在性 各replacementの置換対象 O が今もそのTargetのちょうど1件のEntryである
+  T4 置換後Build List    prepareFinalReplacementBuildList()（generated IDの既存衝突、O の現在性、置換後のcardinality）
+  T5 freshness           checkGeneratedBuildListEntriesFresh()。T1で読み直した現在状態から、Target性能定義hash・
+                         searchStateHash・referencedOwnedWeaponsHash・CalculationContext互換を再計算する
+  T6 Planと現在状態      CalculationContext互換、baseSnapshotの initialExecutionState・targetWeaponsHash・
+                         置換後集合の buildListEntriesHash、checkProductionPlanBuildListEntryReferences(plan, 置換後Build List)
+  T7 atomic write        各 O 削除 + G 追加 → 新Plan IDの非衝突確認 → 旧Draft削除 → 新Draft追加
+```
+
+- T3は `prepareFinalReplacementBuildList()` 内の既存の確認で行い、別実装しない。内部の検査順序は既存Serviceの構造
+  （CalculationContext → 置換後Build List → `initialExecutionState` → hash → freshness）に合わせてよい。要件は、どの
+  検査も省略しないことと、すべてが通るまで何も書かないことである
+- **generated Entry freshness（T5）**: 永続化される `isStale` / `staleReasons`、artifact生成時の判定をauthorityにしない。
+  1件でもstaleなら採用全体を拒否し（`planner_state_changed`）、staleなgenerated Entryを正常な置換として保存しない
+- **入力token（T2）とfreshness（T5）は互いの代わりにしない。** tokenは「全体最適化の前提（作成リスト全体と割当の入力）が
+  計算開始時と同じか」の照合であり、freshnessは「保存する各generated Entryが現在状態に対してstaleでないか」という
+  Planner-generated Entryの共通契約（9.2.15、[DATA_MODEL.md](./DATA_MODEL.md) 9.4）である。tokenが一致してもfreshnessを
+  省略しない。artifactの不整合を検出するのはfreshnessである
+- 実行中Planが無いことを前提にするので、Plan-breakingの承認は発生しない（承認を渡した場合は既存guardの
+  `plan_breaking_change_approval_not_required`）
+- 拒否は既存のtyped code（`planner_state_changed`、`planner_result_invalid`、`draft_plan_conflict`、
+  `transaction_failed`）を再利用する。UIは試算後に作成リストまたは状態が変わったことを示して再計算を求め、自動で
+  再計算しない
+- 失敗時はtransaction rollbackにより何も残さない（旧Entry・旧Draftを維持する）。旧Draftが参照していたEntry・Candidate・
+  Targetをcascade deleteしない。実行中・完了・終了済みPlanを削除しない
+- 置換が0件（全Targetが「変更なし」）の採用は、Entryを変えずDraftだけを保存する
+- 成功時はPersistenceが返したPlanの `id` だけをauthorityとして `/plans/:planId` へ遷移する（[UI_FLOW.md](./UI_FLOW.md) 10.2）。
+  保存したDraftの開始は既存の「作成開始」（`prepareProductionPlanStart()`）で行い、全体最適化専用の開始処理を持たない
+- 保存しないもの: artifact全体、diagnostics、探索上限、入力token、Previewの比較値、全体最適化由来を示すprovenance（17.12）
+- 既存ProductionPlan、Export / Importの互換性を変えない。採用後のEntry・Draftは通常データとしてExport / Importで往復する
+
+### 17.12 identityとprovenance（O13）
+
+| 対象 | 規約 |
+| --- | --- |
+| generated Entry ID | 既存のdeterministic materializer規則（`build-list.constrained.<hash>`。Candidateの意味・`targetDefinitionHash`・`searchStateHash`・`referencedOwnedWeaponsHash`・CalculationContextから導出）。Planner Alternativeと同じEntry ID空間を共有し、prefixを変えない（prefixはID値の一部である） |
+| 同一意味の既存Entry | 現在のsemanticがすべて一致する既存Entryは再利用し、そのTargetを「変更なし」とする（17.5）。同ID・異内容はfail closed |
+| Candidate ID / `searchRunId` / algorithm・route policy token | Production専用の決定的identity。random UUID・Clock・request ID・enumeration ordinalを含めない（9.2.13）。Researchのtoken・prefix（`global-assignment-*`、`research-shape-constrained-route-policy:v1`、`candidate.research.global-assignment.`）を永続化しない |
+| Plan ID / Step ID / 予約OwnedWeapon ID / `createdAt` | 通常PlannerのProduction ID factoryとClock |
+| 生成Entryの途中採用状態・改善優先 | 両lane未選択、`planner`（17.5） |
+| provenance | 全体最適化由来を示す永続fieldを追加しない（O13）。採用後のEntryとDraftは通常のEntry・Draftであり、`/plans` 等で区別表示しない |
+
+### 17.13 最大計画ステップ数・探索範囲・探索上限（O8〜O10、O14）
+
+**最終検証の最大計画ステップ数（O8）。**
+
+```text
+requiredActions          = structuralObjective + planningTargetCount
+optimizationMaxPlanSteps = roundUpPlannerMaxPlanSteps(requiredActions) + 500
+```
+
+- 決定的schedulerはRoute actionに加えて、Entry完成時の確保action（`reserve_candidate`）と開始時の
+  `confirm_owned_ideal` も `maxPlanSteps` へ数える。操作0のEntryでは `confirm_owned_ideal` がそのTargetの確保actionそのもの
+  であり（`applyPlannerZeroOperationConfirms()`）、確保とは別に数えない。成立するPlanは計画対象Targetごとに確保
+  （`reserve_candidate` または `confirm_owned_ideal`）を高々1回行い、`confirm_owned_ideal` はstructural objectiveに
+  0を加えるので、使うaction数は `requiredActions` 以下である。`+ 500` は成立判定のためではなく、恒等式が破れた場合に `incomplete` では
+  なく前提違反として診断するための余裕である
+- 例: D-1C相当（structural objective 1,766、計画対象43）では `requiredActions = 1,809` →
+  `roundUpPlannerMaxPlanSteps(1,809) = 2,000` → **2,500**
+- 導出は全体最適化Domainがstructural candidateごとに行う（structural objectiveはStage B / Cで初めて決まるため）。
+  Application・Worker adapter・Worker Client・UIは計算せず、導出済みの値を読むだけである
+- 500刻みの切り上げ規則は共有Domain pure helperに置き、DomainからServiceへの依存を作らない。現在の
+  `roundUpPlannerMaxPlanSteps()` / `PLANNER_MAX_PLAN_STEPS_INCREMENT` はService層（`src/services/planner/plannerRuntimeOptions.ts`）
+  にある（7.2.1）。全体最適化の実装PRでこの規則を同じ契約（非負の有限値を500の倍数へ切り上げ、それ以外は `RangeError`）の
+  まま共有Domain helperへ移し、Serviceの同名APIはそれを再exportする形で残す。通常Plannerの推奨値
+  （`recommendedBuildListMaxPlanSteps()`）と競合解決再計算の上限（`conflictResolutionMaxPlanSteps()`）の規則と値は変えない
+- 入力が非負のsafe integerでない、計画対象Targetが0件、結果がsafe integerを超えるなどの場合は、推測した値
+  （1000、20,000等）へfallbackせずfail closedする
+- ユーザーが編集できる設定にしない。永続化しない。Researchの `maxPlanSteps` 20,000をProductionの値にしない。成立しない
+  候補で `maxPlanSteps` を自動で増やして再実行しない
+- これは7.2.1の通常Plannerの `PlannerInput.options` authority（Application callerが書く）とは別のauthorityであり、
+  全体最適化はBuild List画面の「最大計画ステップ数」を使わない
+
+**旧「最大計画ステップ数」設定（O14）。** 標準操作の切替に伴い、Build List画面の「最大計画ステップ数」（通常Planner用、
+Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開PRで見直す（17.19のU7）。Issue #130の推奨値規則、
+`PlannerOptions` の契約、内部Plannerの値は勝手に変更しない。
+
+**探索範囲・探索上限（O9 / O10）。**
+
+- 到達表のwindow（通常アーティア / 復元ボーナス / スキル）、割当探索のnode budget・lookahead、structural candidate数・
+  verification budget、Searchの規模gateと実行budgetは、全体最適化専用のProduction定数とする
+- 具体値は、Production計算（Production adapter・Production token・Production build）のPC Browser計測を経て、根拠と
+  未確認範囲を記録した別PRで確定する（17.19のU2）。Researchで登録した値（window W0 = 通常アーティア 350 / 復元ボーナス
+  500 / スキル 1500、node budget 2,000、lookahead 8、structural candidate 1、verification budget 1など）を、根拠なしに
+  Productionの正式値へ転用しない。本仕様は具体値を確定しない
+- 候補検索の推奨既定値（`recommendedCandidateSearchDefaults`）とユーザーの保存値（`AppSettings.candidateSearchDefaults`）を
+  authorityにしない。候補検索の設定変更で全体最適化が黙って変わらないようにする（9.2.19.12と同じ考え方）
+- Domain APIは上限をcaller必須で受け取り、fallback・補完・clampをしない。Production adapterがWorker内で定数を渡し、
+  Worker request・Application caller・UIは持たない
+- 初期版ではユーザーへ公開しない
+- 探索上限はdevice非依存の決定的なwork boundとし、wall-clock時間・heap量を成立判定に使わない
+
+### 17.14 優先起点（O17）
+
+- `TargetWeapon.preferredOwnedWeaponId` を全体最適化の固定制約にしない（Researchと同じ）。全体最適化はTargetの
+  優先起点と異なる起点の作成Routeを採用し得る
+- その場合はPreviewで、起点武器の変化とともに優先起点と異なることを説明する
+- 全体最適化の計算・採用は `preferredOwnedWeaponId` を変更しない。既存武器の紐付けは従来どおり作成開始時の効果
+  （16.2 / 16.11）である
+
+### 17.15 継続Routeの `match = "ideal"` 途中状態（O15）
+
+- 全体最適化の形状制約付きRouteは、lane開始状態がIdealでもそのlaneを継続する形（[SEARCH_SPEC.md](./SEARCH_SPEC.md)
+  5.6.9）を含み得る。そのCandidateへ中間状態抽出（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.8）を適用すると、lane位置0または
+  途中に `match = "ideal"` の中間状態が現れ得る
+- 既存の正式判定との照合結果: [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.8.1は、canonical Ideal以外のPlanner由来Candidate
+  （後続Counter位置の同一結果）について `match = "ideal"` の途中位置を明示的に許容している。抽出（`extractIntermediateStateGroups()`）
+  はlane位置0から終点の手前までを軸ごとのIdeal / Practical（BonusはAlternativeを含む）判定で候補にし、Domain validation
+  （`IntermediateStateGroup.match`）も `ideal` を受理する。全体最適化のために抽出規則とvalidationを変更しない
+- 全体最適化が生成するEntryは途中採用状態を選択しない（17.5）。O2により、明示選択を持つ入力では全体最適化を行わない。
+  したがって全体最適化自身は `match = "ideal"` の中間状態をcheckpointとして使わない
+- 採用後にユーザーが作成リストでそのような状態を途中採用として選択した場合は、既存のPlanner-generated Entryと同じ
+  既存semantics（7.5、16.12）に従い、本仕様で変更しない。その場合、理想条件を満たす状態に到達したStepで `practical`
+  ラベルと「この武器を妥協品として確定して終了」が提示され得る。この組み合わせについて選択を制限する・抽出から除くなどの
+  変更が必要かは後続判断とする（17.19のU6）。抽出規則を変える場合は通常Candidateの出力も変わり得るので、計算版数の判断を伴う
+
+### 17.16 性能・キャンセル・page loss（O11 / O18）
+
+- 自動のwall-clock timeoutによる強制終了を置かない。ユーザーはいつでもキャンセルできる
+- 計算中は段階名（例: 入力確認 / 到達条件の計算 / 割当の探索 / ルートの生成 / 計画の検証）とキャンセルを表示し、
+  推定完了率・残り時間・件数の分母を表示しない（[REQUIREMENTS.md](./REQUIREMENTS.md) 19、[UI_FLOW.md](./UI_FLOW.md) 10.0）。
+  長時間化したときの案内を出す時間閾値はPC計測の後に決める（17.19のU3）
+- キャンセルを受け付けたら直ちにキャンセル済みとして扱い、その後に届いた結果・progressを適用しない。Workerは状態を持たず
+  何も書かないので、直ちに終了させてよい。キャンセルしたrequestから採用される結果は0件である
+- runごとに新しく計算し、前のrunの結果・中間データを再利用しない（永続cacheを持たない）。古いrequestの結果を適用しない
+- 探索上限への到達を「解が存在しない」と混同しない（17.8）
+- Workerの `error` / `messageerror` は計算失敗とし、メモリ不足と断定しない
+- page loss（tab破棄・再読込）後の中断履歴の表示や、計算の再開の永続機能は追加しない（O18）。計算中であることの印を
+  storageへ保存しない
+
+### 17.17 PCとスマートフォン（O12 / O16 / O19）
+
+機能の対応範囲。
+
+- PC・スマートフォンでDomain semanticsや機能を意図的に分岐・削減しない（[REQUIREMENTS.md](./REQUIREMENTS.md) 3.2、
+  [UI_FLOW.md](./UI_FLOW.md) 3.1）。端末（user agent等）による提供可否の分岐を置かない
+- Androidからも全体最適化を実行できる。iPhoneをuser agent等で明示的にブロックしない
+- 既存のスマートフォンUI・実行ナビの機能を維持する
+
+検証方針。
+
+- PC BrowserをProductionの性能・計算結果・キャンセルの正式な受入環境とする
+- Android実機での厳密な性能測定・全ケース検証は、公開前の必須ゲートにしない。AndroidではGitHub Pages上で実際に利用し、
+  問題があれば修正するかIssueとして管理する
+- iPhone Safari実機検証は公開前の必須ゲートにしない。iPhoneは「未検証」として扱い、「非対応」「動作不可」とは
+  表示・記録しない
+- Android / iPhone実機間の厳密なparity測定は必須ゲートにしない（O16）。Domainの決定性は自動テスト（Node。監査結果に
+  応じて複数locale）とPC Browserの受入で確認する
+- iPhone検証のための事前公開環境（Debug Modeだけの入口、外部hosting等）を新設しない（O19）
+- 自動テスト、一般的な狭幅（375px）でのBrowser確認、Domainの決定性テストは継続する
+- 実行ナビのAndroidでの操作性と、Step確定・保存の安全性は従来どおり重視する
+- 実機テストを必須にしないことと、機能を提供しないことを混同しない。未測定の端末について性能・成否を保証する表示をしない
+  （「端末によっては時間がかかります」などの一般的な案内は可）
+
+### 17.18 version
+
+- 本章の正式仕様化は、`CURRENT_CALCULATION_APP_SCHEMA_VERSION`（17）、`DATABASE_SCHEMA_VERSION`（10）、
+  `ExportRoot.schemaVersion`（13）、`AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、
+  `PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、Master `dataVersion`（4）を変更しない
+- 実装の目標状態でも、次がすべて成り立つ限りversion変更を要しないと判断する。各実装PRはこれを確認して記録し、
+  成り立たない場合は停止して仕様へ戻る
+  1. 内部Planner、通常Candidate Search、Planner Alternativeの、同じ入力に対する計算・保存の意味を変えない
+     （17.7の成立規則は全体最適化の判定だけに使う）
+  2. 形状制約付きRoute探索のProduction API化が、無指定時のSearch出力・search identityを変えない（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.9）
+  3. 永続shapeを増やさない（provenanceを追加しない、17.12）
+  4. 中間状態抽出の規則を変えない（17.15）
+- 標準操作の切替は、作成リストを置き換えたうえで内部Plannerを実行するものであり、内部Plannerの同じ `PlannerInput` に
+  対する出力を変えない。この点で、同じ `PlannerInput` に対する内部の計算結果が変わったIssue #136 / #101 Phase 6-A
+  （version 17）とは異なる。採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持ち、既存Planの
+  読み方を変えない
+- `localeCompare()` 等の置換が通常Candidate Searchの出力を変える場合、中間状態抽出・途中採用の規則を変える場合（U6）、
+  provenanceや実用品到達の情報を永続化する場合（U4）は、そのPRで計算版数・schemaの判断を行う
+
+### 17.19 後続判断（未決事項）
+
+次は本仕様で確定しない。推測で仕様や実装方式を確定せず、記載した時期までに判断する。
+
+| ID | 事項 | 判断の時期 |
+| --- | --- | --- |
+| U1 | 全体最適化が `unsupported` / `not_found` / `search_bound_reached` の場合に、全体最適化を伴わない通常Plannerの生産計画作成をユーザーへ提供するか。通常UIにどの程度残すか、手動で起動できる代替経路を設けるか。O2の明示checkpoint・O4の部分RNG未確定の入力と[REQUIREMENTS.md](./REQUIREMENTS.md) 5 / 18の原則との関係（17.4）を含む。現在の案内（競合解決の再計算が上限に達した場合の「ビルドリスト画面から生産計画を作り直す」、[REQUIREMENTS.md](./REQUIREMENTS.md) 19 / [UI_FLOW.md](./UI_FLOW.md) 11.4）が切替後に指す操作も含む。自動フォールバックは、決定するまで実装しない | 実装前に整理する。遅くともUI公開PRの実装前（必須） |
+| U2 | Productionの探索範囲・window・探索上限の具体値（17.13） | Production計測PR |
+| U3 | 長時間化の案内の時間閾値（17.16） | PC計測の後 |
+| U4 | 実用品到達通知の到達判定authority、PlanStepへの投影、永続化の要否、表示方法（16.19） | Issue #261の後続設計 |
+| U5 | 明示checkpointを保護したまま全体最適化する拡張、部分RNG未確定のTargetを固定して他Targetを最適化する拡張（17.4） | 後続Issue |
+| U6 | O15の監査で判明する互換性問題。`match = "ideal"` の中間状態を途中採用として選択した場合の扱い（17.15） | 後続判断 |
+| U7 | 旧「最大計画ステップ数」設定の画面上の配置（17.13）。現在の「無効な値では『生産計画を作成』と再計画の試算をdisabledにする」規則（[UI_FLOW.md](./UI_FLOW.md) 10.0）を、この設定を使わない全体最適化の標準操作に対してどう扱うかを含む | UI公開PR |
+
+### 17.20 Owner判断（O1〜O21）の反映先
+
+| # | 決定 | 本章 |
+| --- | --- | --- |
+| O1 | 「生産計画を作成」を全体最適化の標準操作にする。2ボタン案は採らない。最短性を保証しない。自動フォールバックは未決定 | 17.1 / 17.2 / 17.19 U1 |
+| O2 | 実用品条件・途中状態の存在では拒否しない。明示checkpoint選択がある場合は初期版で実行不可。自動解除・読み替えをしない | 17.4 |
+| O3 | 置換されたEntryの改善優先は `planner`。変わるTargetを明示。同一意味の再利用Entryは設定を維持 | 17.5 |
+| O4 | Researchの入力前提を維持。Candidate Search・既存Plannerの部分RNG対応を変更・縮小しない。理由と不足情報を表示 | 17.4 |
+| O5 | 計画対象Target全体を一括採用。部分採用なし。対象外を変更しない | 17.11 |
+| O6 | 実行中Planがある間は提供しない。Draftとは区別。再計画は変更しない | 17.4 |
+| O7 | Draft最大1件を維持。同じ入力状態のDraftとだけ比較。比較用の追加の通常Planner実行をしない | 17.9 |
+| O8 | `roundUpPlannerMaxPlanSteps(structuralObjective + planningTargetCount) + 500`。共有Domain helper。ユーザー設定なし | 17.13 |
+| O9 / O10 | 探索上限・windowはProduction計測で決める。Research値を転用しない。候補検索の保存設定と独立 | 17.13 |
+| O11 | 自動timeoutなし、キャンセルあり。長時間案内の閾値はPC計測後 | 17.16 |
+| O12 / O16 / O19 | 機能を端末で分けない。PCが正式な受入環境。Android・iPhone実機検証は公開の必須ゲートにしない。iPhoneは未検証。事前公開環境を新設しない | 17.17 |
+| O13 | 全体最適化由来の永続provenanceを追加しない | 17.12 |
+| O14 | 旧「最大計画ステップ数」設定のUI配置を見直す。Issue #130と内部Plannerの値・契約は変えない | 17.13 / 17.19 U7 |
+| O15 | 継続Routeの `match = "ideal"` 途中状態を既存判定と照合。未監査の意味論を変えない | 17.15 |
+| O17 | `preferredOwnedWeaponId` を固定制約にしない。異なる起点をPreviewで説明 | 17.14 |
+| O18 | page loss後の中断履歴・計算再開の永続機能を追加しない | 17.16 |
+| O20 | Production統合はIssue #260、ResearchはIssue #154 | 17.1 |
+| O21 | Researchのfresh二重実行を成立条件にしない。保存直前のgenerated Entry freshness検証は必須 | 17.7 / 17.11 |
+
+### 17.21 テスト観点
+
+実装PRで少なくとも次を固定する（どのPRが担うかは設計案の §20を参照し、各PRで確定する）。
+
+- 計画対象Target: Entry無し、stale、disabled、completed、legacy duplicate、一部だけ有効、valid Entry 0件。分母に
+  `targetWeapons.length` を使わない
+- 未対応理由（17.4）の各ケース。明示checkpoint選択では実行せず、選択を解除・読み替えしない。実用品条件の存在や途中状態の
+  存在だけでは拒否しない。改善優先が `planner` 以外であることだけでは拒否しない
+- 除外Entryを含む入力（完了済みTarget・stale Entry）で成立し、除外集合の不一致・追加warningで不成立になる（17.7）
+- 成立条件の各違反で採用不可、恒等式違反がerrorでfail closed、bound到達時に `maxPlanSteps` を自動増加しない
+- 最大計画ステップ数の導出: 500刻みの境界値（0 → 0、1 → 500、500 → 500、501 → 1,000）、負数・NaN・Infinityの `RangeError`、
+  Serviceの既存APIと共有Domain helperの一致、通常Plannerの推奨値・競合解決再計算の上限が変わらないこと、D-1C相当で2,500、
+  `confirm_owned_ideal` を含むfixtureでrequiredActionsが正しいこと、不正値でfallbackせずfail closedすること、
+  全体最適化Domainと共有helperが `src/services/**` をimportしないこと
+- identity: generated Entry IDが既存規則と一致、同一意味の既存Entryの再利用（変更なし）とその設定の維持、同ID異内容の拒否、
+  Candidate ID / `searchRunId` / tokenにResearch文字列が無い、Plan / Step IDがProduction ID factory由来
+- 決定性: 同じ入力の2回の計算でsemanticが一致する（ID・時刻を除く）
+- 結果分類: `optimized` / `not_found` / `search_bound_reached` / `unsupported` とキャンセル・失敗を区別し、
+  いずれでも通常Plannerへ自動で切り替えない（U1で決定するまで）
+- Preview: 永続状態を一切変更しない。完成予定数の分母が `termination.totalTargetCount`、対象外の件数を分母に加えない、
+  物理操作数と計画ステップ数の区別、置換0件、Draft比較が同じ入力状態の場合だけ行われる
+- 永続化: 一括置換 + Draft置換の原子性、各write失敗でのrollback、実行中Planの出現・Draft IDの不一致・Draft 2件以上・
+  tokenの各項目の変化での拒否、`O` の不一致、generated ID衝突、cardinality違反、Plan参照違反、artifactの各検査違反、
+  RNG状態・通常アーティアCounter・参照OwnedWeapon・Target性能定義・CalculationContextの変化でstaleになったgenerated Entryの拒否、
+  永続 `isStale` がfalseでも再計算でstaleなら拒否、tokenによる拒否とfreshnessによる拒否を別々に固定、status / 名称 / memo
+  だけの変更では拒否しない、保存後のDraftが `prepareProductionPlanStart()` でそのまま開始できる、Export / Importで往復する、
+  既存の `savePlannerResult()` / `savePlannerAlternativeRepair()` の挙動が変わらない
+- isolation: Productionが `src/benchmarks/**` と `src/domain/search/research/**` をimportしない、Worker bundleが
+  `src/db/**` を含まない、Research専用symbolがProductionに無い、Production Planner Worker protocolを変えない
+- キャンセル: キャンセル後・settle後・古いrequestのmessageを適用しない、キャンセルしたrequestから採用される結果が0件
+- 受入: PC Browser（Production build）で、Production計算のsemanticが同じHEADのNode referenceと一致すること、キャンセル、
+  再実行を記録する。Android / iPhoneは公開の必須ゲートにしない（17.17）
