@@ -209,7 +209,7 @@ export async function searchNormalArtianRoutes(
     return result
   }
   if (constraint !== undefined && normalSkip !== null) {
-    // A Research shape names a predicted production target (5.6.9): the blind
+    // A shape names a predicted production target (5.6.9): the blind
     // variant is never its stand-in and is never registered.
     result.skippedRoutes.push({ route: 'normal_artian_to_gogma', ...normalSkip })
     return result
@@ -395,7 +395,7 @@ function searchPredictedNormalRoutes(
 ): void {
   const { engine, input, target } = context
   const baseSeed = input.rngState.baseSeed.value as string
-  // A Research shape constraint (5.6.9) keeps only the shape's Counter and its
+  // A shape constraint (5.6.9) keeps only the shape's Counter and its
   // one production target offset, before any Normal is predicted or queued.
   const constraint = context.routeBaseConstraint?.kind === 'new_normal' ? context.routeBaseConstraint : undefined
   const counters = selectSearchableNormalCounters(target, input.normalCounters)

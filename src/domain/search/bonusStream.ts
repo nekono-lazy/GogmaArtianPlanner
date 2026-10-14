@@ -132,7 +132,7 @@ export type BonusStreamBase = {
   /** Initial Search only: later Normal representatives need no Reset branches. */
   amendmentPolicy?: 'all' | 'keep_only'
   /**
-   * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the Bonus operation kinds the
+   * Shape-constrained Route search only (`docs/SEARCH_SPEC.md` 5.6.9): the Bonus operation kinds the
    * shape-constrained Route search allows on this lane. Only the held-aware
    * `readReservedDepth()` reads it; the ordinary `readDepth()` / `solve()` /
    * `reachesBeyondExtent()` refuse a base that carries it, and it never
@@ -153,7 +153,7 @@ export type BonusStreamBase = {
 )
 
 /**
- * The Bonus operation kinds of one Research shape-constrained Bonus lane
+ * The Bonus operation kinds of one shape-constrained Bonus lane
  * (`docs/SEARCH_SPEC.md` 5.6.9), each ending with its last own operation at
  * `finalPosition`:
  *
@@ -959,7 +959,7 @@ export function createTargetBonusStream(
   }
 
   /**
-   * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the shape-constrained lane's
+   * Shape-constrained Route search only (`docs/SEARCH_SPEC.md` 5.6.9): the shape-constrained lane's
    * next own Bonus positions after one state, by operation. The held window is
    * the ordinary `nextOperationPositions()` walk, cut right after
    * `finalPosition`: that cut is the shape's own end, never an extent stop, so
@@ -983,7 +983,7 @@ export function createTargetBonusStream(
   }
 
   /**
-   * Research only (`docs/SEARCH_SPEC.md` 5.6.9): one depth of a
+   * Shape-constrained Route search only (`docs/SEARCH_SPEC.md` 5.6.9): one depth of a
    * shape-constrained held-aware Bonus stream base (`BonusStreamBase.shapePolicy`).
    *
    * It is the held-aware depth of `generateReservedDepth()` restricted to the
@@ -1100,7 +1100,7 @@ export function createTargetBonusStream(
     return solutions
   }
 
-  /** Research only (5.6.9): whether any frontier state of a shape-constrained stream can place a further own operation. */
+  /** Shape-constrained Route search only (5.6.9): whether any frontier state of a shape-constrained stream can place a further own operation. */
   async function shapeStreamContinues(set: ReservedSet, shape: BonusShapePolicy): Promise<boolean> {
     let continues = false
     for (const state of set.frontier) {
@@ -1331,7 +1331,7 @@ export function createTargetBonusStream(
  * layout and shares the single unknown stream, whose axis starts at the first
  * Reset. The initial-Search Keep-only policy has a distinct key so it never
  * aliases a full stream used by an owned source or constrained enumeration.
- * A Research shape-constrained base (`shapePolicy`, 5.6.9) adds its shape as a
+ * A shape-constrained base (`shapePolicy`, 5.6.9) adds its shape as a
  * further element, so it never aliases a Production stream or another shape;
  * a base without one keeps the Production key unchanged.
  */

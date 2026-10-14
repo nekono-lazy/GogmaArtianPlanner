@@ -33,7 +33,7 @@ import {
 
 /*
  * Issue #154 Global Assignment Phase D-0A-2a (`docs/SEARCH_SPEC.md` 5.6.9, `docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md`
- * 5.3 / 6 / 7 / 15): the Research-only shape-constrained Route search. Fixture Counters: Normal 4, Skill 7, Gogma 10,
+ * 5.3 / 6 / 7 / 15; Production API since Issue #260 PR-2): the shape-constrained Route search. Fixture Counters: Normal 4, Skill 7, Gogma 10,
  * every advance +1; Ideal Skill = `series_skill.fixture.a`; layout L = the Ideal's families, layout P = Practical-only.
  *
  * The three Route search primitives are wrapped (same behavior) so a test can see which ones ran.

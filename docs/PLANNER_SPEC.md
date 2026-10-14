@@ -25,7 +25,7 @@ Plannerが追う到達目標はTargetの理想品だけである。実用品を�
 再計画Previewと採用、ゲーム内セーブ地点、作成中武器の追跡、Target完了、Undo）は16章で定義する。
 
 作成リスト全体の作成ルートを組み直し、本Plannerで最終検証する「作成リストの全体最適化」（Issue #260）は
-17章で定義する。17章は正式仕様のみで未実装であり、現在の作成リストの「生産計画を作成」は本Planner（7章）を
+17章で定義する。17章は機能としては未実装であり、現在の作成リストの「生産計画を作成」は本Planner（7章）を
 1回実行する。目標仕様でも、作成リストの有効な候補が1件の場合と、全体最適化が使えない・成立しない場合に
 ユーザーが明示的に選ぶ補助導線では、本Plannerで生産計画を作成する（17.2の作成方式の選択、U1）。
 
@@ -399,7 +399,7 @@ export interface PlannerTargetSatisfaction {
   B10の再計算、実行中Planの再計画Preview（16.8）、Production Plan生成内部の
   runtime-unsupported retryはすべてここを通るので、同じ計算方式を使う。機能ごとに別の探索方式を
   持たない（constrained re-search内部だけBeam Searchを使う、等をしない）
-- 作成リストの全体最適化（17章、Issue #260。正式仕様のみで未実装）も、組み直したRoute集合の最終検証で
+- 作成リストの全体最適化（17章、Issue #260。機能としては未実装）も、組み直したRoute集合の最終検証で
   この入口を使う。全体最適化はRoute集合を組み直す上位層であり、Planの生成・schedulingに別の計算方式を持たない
 - Productionに計算方式の切替手段は置かない。`PlannerInput`、Worker request、`AppSettings`、UI、
   環境変数、feature flag、query parameterのいずれもstrategyを持たない
@@ -932,7 +932,8 @@ Worker request・UIのいずれにも存在せず、Beam Search oracle（test / 
 変更しない。各画面のApplication callerは、そのとき利用できる正式な情報から十分なruntime上限を
 pure helper（`src/services/planner/plannerRuntimeOptions.ts`）で導出し、`PlannerInput.options` へ
 明示的に書く。500刻みは共通定数 `PLANNER_MAX_PLAN_STEPS_INCREMENT = 500`、切り上げは
-`roundUpPlannerMaxPlanSteps()` だけが行う。
+`roundUpPlannerMaxPlanSteps()` だけが行う。この2つは共有Domain pure helper `src/domain/planner/plannerStepBound.ts` にあり
+（Issue #260 PR-2で同じ名前・値・例外のままService層から移した）、`plannerRuntimeOptions.ts` は同じ名前で再exportする。
 
 - BuildList画面の推奨値（`recommendedBuildListMaxPlanSteps(entries)`）:
   `max(1000, ceilTo500(登録Entryの最大 candidateSnapshot.estimatedOperationCount + 1))`。
@@ -953,11 +954,11 @@ pure helper（`src/services/planner/plannerRuntimeOptions.ts`）で導出し、`
   `plannerInput.options` 自体は上記の競合解決の導出（`conflictResolutionPlannerOptions(表示中Plan)`）を使う
   （[UI_FLOW.md](./UI_FLOW.md) 11.2 / 11.4）。旧B9 what-ifの `defaultPlannerWhatIfBounds` はPhase 6-B2bで削除した
 - Worker Client、Worker、Domainはこれらを適用しない（Application callerがauthority）
-- 全体最適化（17章、正式仕様のみで未実装）の最終検証の `maxPlanSteps` は、この導出の対象外である。全体最適化Domainが
+- 全体最適化（17章。機能としては未実装）の最終検証の `maxPlanSteps` は、この導出の対象外である。全体最適化Domainが
   structural candidateごとに `roundUpPlannerMaxPlanSteps(structuralObjective + planningTargetCount) + 500` で導出し、
-  Application・Worker・UIは計算しない（17.13）。全体最適化の実装PRで500刻みの切り上げ規則を同じ契約のまま共有Domain
-  pure helperへ移し、本節のService API（`roundUpPlannerMaxPlanSteps()` / `PLANNER_MAX_PLAN_STEPS_INCREMENT`）は
-  それを再exportする形で残す（DomainからServiceへの依存を作らない）。上記の推奨値と競合解決再計算の上限の規則・値は変えない
+  Application・Worker・UIは計算しない（17.13）。500刻みの切り上げ規則は同じ契約のまま共有Domain pure helperへ移してあり
+  （PR-2）、本節のService API（`roundUpPlannerMaxPlanSteps()` / `PLANNER_MAX_PLAN_STEPS_INCREMENT`）はそれを再exportする
+  （DomainからServiceへの依存を作らない）。上記の推奨値と競合解決再計算の上限の規則・値は変えていない
 - `PlannerOptions` は引き続きruntime-onlyであり、ProductionPlan、`PlanningInputSnapshot`、
   AppSettings、IndexedDB、Export / Import、`CalculationContext` へ追加しない。Planner計算の意味は
   変わらないため、いずれのschema / calculation versionも変更せず、既存Planをstaleにしない
@@ -3353,7 +3354,7 @@ BuildListEntryの生成主体を拡張する。
 2. Planner constrained re-searchがPlan生成に必要としてmaterializeする
    （現在はPlanner Alternative actual repairの採用。9.2.19）
 3. 作成リストの全体最適化の結果をユーザーがPreviewで確認して明示的に採用する
-   （17章、Issue #260。正式仕様のみで未実装）
+   （17章、Issue #260。機能としては未実装）
 ```
 
 3は本節以下のconstrained re-search固有の規則（conflict context、preflight、fixed constraint）を使わない。永続形状、
@@ -3904,7 +3905,7 @@ Planが置換後Build Listだけを参照すること、CalculationContext、旧
 
 を1つのDexie read-write transactionで行い、Entryだけ・Planだけ・lineageだけのpartial saveを残さない。
 
-**作成リストの全体最適化の採用（17.11、Issue #260。正式仕様のみで未実装）。** 全体最適化のartifactは、通常の
+**作成リストの全体最適化の採用（17.11、Issue #260。機能としては未実装）。** 全体最適化のartifactは、通常の
 `savePlannerResult()` へもPlanner Alternative repairの保存へも変換せず、全体最適化専用の保存API（inspect / save）で
 保存する。本節の保存境界（transaction内のcurrent state再読込・再validation、CalculationContext、generated Entryの
 staleness、`initialExecutionState`、`targetWeaponsHash`、置換後集合の `buildListEntriesHash`、Plan参照、旧Draftのatomic
@@ -4223,7 +4224,7 @@ generated Entryを含むaugmented inputそのものでPlanを計算していた�
 それらを名指しする箇所は **Phase 6-B2b以前のhistorical contract** として明示する。ordinary Planner（作成リストの通常作成、
 再計画Preview / 採用）はgenerated Entryを持たず、置換を生じない（Phase 6-A）。
 
-作成リストの全体最適化（17章、Issue #260。正式仕様のみで未実装）の採用も、本節の置換の共通authority
+作成リストの全体最適化（17章、Issue #260。機能としては未実装）の採用も、本節の置換の共通authority
 （`BuildListEntryReplacement`、`prepareFinalReplacementBuildList()` が使う置換後Build Listの構築と検証、cardinality）を使う。
 全体最適化は計画対象Target全体を一括して置換し（部分採用なし）、1 Targetにつきreplacementは高々1件、置換対象 `O` はその
 Targetの唯一の永続Entryである。生成Entryの途中採用状態・改善優先は既定値（両lane未選択、`planner`）であり、`O` から
@@ -8221,11 +8222,22 @@ Issue #261の後続設計で正式に定める（17.19のU4）。本節はそれ
 
 ### 17.1 位置づけと実装状態
 
-実装状態: **正式仕様のみ（未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
+実装状態: **Domain / Search基盤だけ実装済み（機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
 （[PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md](./PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md)、
-PR #259。非normativeの設計記録）とOwnerの判断（O1〜O21、17.20）を正式仕様へ反映したものである。Production code、
-Worker、UI、Persistence、version定数は変更していない。
+PR #259。非normativeの設計記録）とOwnerの判断（O1〜O21、17.20）を正式仕様へ反映したものである。PR-1はProduction code、
+Worker、UI、Persistence、version定数を変更していない。
 
+- **実装済み（Issue #260 PR-2）**: 計算基盤の中立なProduction Domainへの責務移管だけを行った。
+  - Stage 0〜C（17.6）: `src/domain/planner/buildListOptimization/`（計画対象Targetのcontext、ReachTableとreach option、
+    割当solver、coverage-gated structural candidate、required-only replay、materialization順序と期待Route形）。option集合は
+    `BUILD_LIST_OPTIMIZATION_REACH_OPTION_SET`（ResearchがD-1Cで受理した `a2` と同じ規則。現在Ideal laneの継続はtableに
+    明示する規則 `continuesCurrentIdealLanes` として持ち、各Stageはtableから読む）だけを持つ。Research（Issue #154）の
+    `src/benchmarks/globalAssignment/` は同じpathのthin adapterとしてこれを使い、`a1`・識別子・root下界・formal gate・protocol・
+    runner・RESULT導出・Phase D / D'はResearchに残る
+  - 形状制約付きRoute探索のProduction API（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.9、`src/domain/search/shapeConstrained/`）
+  - 500刻みの切り上げ規則の共有Domain pure helper（`src/domain/planner/plannerStepBound.ts`、17.13 / 7.2.1）
+  - Stage 0〜Cの計算はProductionのどのcallerからもまだ呼ばれない。Stage D / D'（ルート生成と最終検証、結果型、identity）、
+    Worker、Application、Persistence、UIは未実装である
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
 - **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。
@@ -8513,7 +8525,18 @@ Stage D'  最終検証      置換後Build Listで内部Planner（createProducti
   semantic（Step列、物理操作数）を返す。Plan ID・Step ID・予約OwnedWeapon ID・時刻はProductionのID factory / Clockで
   決まり、run間で一致しない（15.9.1と同じsemantic determinism）
 - 計算結果に影響する順序付け（`String.prototype.localeCompare()` 等）のlocale・engine依存は、Domain移管の実装PRで
-  監査する
+  監査する。監査結果（PR-2、Node 24 / ICU 78、67 locale）:
+  - Stage 0〜Cの全体最適化Domain moduleは `localeCompare` / `Intl` を使わず、順序はすべてcode unit比較か数値比較である
+    （isolation testで固定）。Stage 0〜Cの結果（計画対象Target、除外Entry、ReachTable、割当、structural candidate、予測回数）は、
+    `localeCompare` を照合順序の異なるlocale（`da`、`cs`、`haw`）へ強制しても一致する（test）
+  - Stage 0〜Cが経由し、Stage Dが使う既存の共有Domain helper（Master selector、`routeEligibility`、`candidateFactory` の
+    必要素材の並び、RNG capability）は `localeCompare` を使う。現在のMasterでは各一覧の `sortOrder` / `order` が一意で、
+    IDによる同順位解決に到達しない。Master IDの照合順序は `ja` / `en` / root ではcode unit順と一致し、`cs` / `sk`（`ch`）と
+    `haw` でだけ異なる。OwnedWeapon ID（UUID）は `da` / `nb` / `nn` / `fo`（`aa`）と `haw` で順序が変わり得るが、これは
+    Route base候補の走査順であり、Candidateの選択と順序は意味的な全順序（stable keyで終わる）で決まる
+  - 共有helperは変更していない（変更すると通常Candidate Searchの走査順に触れ、計算版数の判断を伴い得るため。17.18）。
+    Stage D（形状制約付きRoute探索と射影起点Candidate Search）を含む全体最適化全体のlocale非依存は、Stage Dの実装PRの
+    Node（照合順序を強制したrun）とBrowser受入で確認する
 
 ### 17.7 最終検証の成立条件（O21）
 
@@ -8711,11 +8734,12 @@ optimizationMaxPlanSteps = roundUpPlannerMaxPlanSteps(requiredActions) + 500
   `roundUpPlannerMaxPlanSteps(1,809) = 2,000` → **2,500**
 - 導出は全体最適化Domainがstructural candidateごとに行う（structural objectiveはStage B / Cで初めて決まるため）。
   Application・Worker adapter・Worker Client・UIは計算せず、導出済みの値を読むだけである
-- 500刻みの切り上げ規則は共有Domain pure helperに置き、DomainからServiceへの依存を作らない。現在の
-  `roundUpPlannerMaxPlanSteps()` / `PLANNER_MAX_PLAN_STEPS_INCREMENT` はService層（`src/services/planner/plannerRuntimeOptions.ts`）
-  にある（7.2.1）。全体最適化の実装PRでこの規則を同じ契約（非負の有限値を500の倍数へ切り上げ、それ以外は `RangeError`）の
-  まま共有Domain helperへ移し、Serviceの同名APIはそれを再exportする形で残す。通常Plannerの推奨値
-  （`recommendedBuildListMaxPlanSteps()`）と競合解決再計算の上限（`conflictResolutionMaxPlanSteps()`）の規則と値は変えない
+- 500刻みの切り上げ規則は共有Domain pure helperに置き、DomainからServiceへの依存を作らない。Issue #260 PR-2でこの規則を
+  同じ契約（非負の有限値を500の倍数へ切り上げ、それ以外は `RangeError`）のまま共有Domain helper
+  `src/domain/planner/plannerStepBound.ts`（`roundUpPlannerMaxPlanSteps()` / `PLANNER_MAX_PLAN_STEPS_INCREMENT`）へ移した。
+  Service層（`src/services/planner/plannerRuntimeOptions.ts`）の同名APIはそれを再exportする形で残る（7.2.1）。通常Plannerの推奨値
+  （`recommendedBuildListMaxPlanSteps()`）と競合解決再計算の上限（`conflictResolutionMaxPlanSteps()`）の規則と値は変えていない。
+  全体最適化専用の導出（本項の式と `+ 500`）はStage D'の実装PRで全体最適化Domainに置く（未実装）
 - 入力が非負のsafe integerでない、計画対象Targetが0件、結果がsafe integerを超えるなどの場合は、推測した値
   （1000、20,000等）へfallbackせずfail closedする
 - ユーザーが編集できる設定にしない。永続化しない。Researchの `maxPlanSteps` 20,000をProductionの値にしない。成立しない

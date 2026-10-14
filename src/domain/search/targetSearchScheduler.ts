@@ -88,7 +88,7 @@ export interface ScheduledComposition {
 export type ScheduledCompositionHandler = (composition: ScheduledComposition) => void
 
 /**
- * Which lanes of one admitted Route base the Research shape-constrained Route
+ * Which lanes of one admitted Route base the shape-constrained Route
  * search opens (`docs/SEARCH_SPEC.md` 5.6.9).
  *
  * - `zero`: the lane's zero-operation solution alone, and no stream channel
@@ -104,9 +104,9 @@ export interface ScheduledRouteLaneAdmission {
 }
 
 /**
- * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the final admission of the
+ * Shape-constrained Route search only (`docs/SEARCH_SPEC.md` 5.6.9): the final admission of the
  * shape-constrained Route search, read from `RouteSearchContext.routeShapeFilter`.
- * No Production context carries one.
+ * No Candidate Search or Planner Alternative Search context carries one.
  *
  * The Route search primitives have already restricted the source, Counter,
  * production target and conversion position before generating a base
@@ -134,7 +134,7 @@ interface CrossAxes {
 }
 
 /**
- * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the Cross axes of one admitted
+ * Shape-constrained Route search only (`docs/SEARCH_SPEC.md` 5.6.9): the Cross axes of one admitted
  * shape-constrained Route base. A `zero` lane takes its zero-operation solution
  * only; a `stream` lane takes only the solutions whose last own operation stands
  * at its `finalPosition`, so its zero-operation solution never enters the
@@ -229,7 +229,7 @@ export class TargetSearchScheduler {
    */
   private readonly runtime: SearchRuntimeObserver | undefined
   /**
-   * Research only (5.6.9): `RouteSearchContext.routeShapeFilter`, undefined in
+   * Shape-constrained Route search only (5.6.9): `RouteSearchContext.routeShapeFilter`, undefined in
    * every Production scheduler.
    */
   private readonly shapeFilter: ScheduledRouteShapeFilter | undefined
@@ -239,7 +239,7 @@ export class TargetSearchScheduler {
    * (`searchRunId`, `CalculationContext`), so only a
    * `CandidateSearchRouteContext` may omit the handler. Any other consumer
    * supplies its own handler and never fabricates a `CandidateSearchInput`.
-   * A context carrying the Research shape filter (`docs/SEARCH_SPEC.md` 5.6.9)
+   * A context carrying the shape filter (`docs/SEARCH_SPEC.md` 5.6.9)
    * runs only under the Planner Alternative policy.
    */
   constructor(context: CandidateSearchRouteContext)
@@ -289,7 +289,7 @@ export class TargetSearchScheduler {
       this.registerBase(base, undefined)
       return
     }
-    // Research shape filter (5.6.9): the final admission, before anything is
+    // Shape filter (5.6.9): the final admission, before anything is
     // queued. The admitted base hands its Bonus notices to the filter as well.
     const filter = this.shapeFilter
     const lanes = filter.admit(base)
@@ -305,7 +305,7 @@ export class TargetSearchScheduler {
   }
 
   /**
-   * Registers one Route base. `lanes` is the Research shape admission
+   * Registers one Route base. `lanes` is the shape admission
    * (5.6.9) and is undefined for every Production base, which opens its lanes
    * by the lane-start Ideal rule exactly as before.
    */
@@ -367,7 +367,7 @@ export class TargetSearchScheduler {
         const cost = baseCost + bonus.solution.gogmaAdvance + skill.solution.resetCount
         this.queue.enqueue({ lowerBound: cost, settle: settleComposition(bonus, skill, cost) })
       })
-    // A Research shape admission (5.6.9) lets each axis take only its lane's
+    // A shape admission (5.6.9) lets each axis take only its lane's
     // solutions: the zero-operation one of a `zero` lane, the ones ending at
     // `finalPosition` of a `stream` lane.
     const cross = lanes === undefined ? axes : shapeLaneAxes(axes, lanes)

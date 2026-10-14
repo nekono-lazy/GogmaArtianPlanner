@@ -4134,10 +4134,16 @@ Respect search bounds and return the best state available within the limits.
 
 `docs/PLANNER_SPEC.md` 17 (with `docs/REQUIREMENTS.md` 19.1 / 24.1, `docs/UI_FLOW.md` 10.4,
 `docs/SEARCH_SPEC.md` 5.6.9 / 5.8.1 and `docs/DATA_MODEL.md` 9.4 / 14.5) is the formal contract for the
-Production integration of the Global Assignment Research (Issue #154). It is specification only:
-nothing is implemented yet, and the Build List's 「生産計画を作成」 still runs the ordinary Planner
-(`createPlan()`) until the Issue #260 UI publication PR switches it. Never describe the target
-behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
+Production integration of the Global Assignment Research (Issue #154). Only the Domain / Search
+foundation is implemented (PR-2): Stage 0 - C in `src/domain/planner/buildListOptimization/` (the
+`BUILD_LIST_OPTIMIZATION_REACH_OPTION_SET` = the Research `a2` rule, carried on the table as
+`continuesCurrentIdealLanes`), the shape-constrained Route search as a Production Search API
+(`src/domain/search/shapeConstrained/`, Production token `shape-constrained-route-policy:v1`), and the shared
+500 rounding helper `src/domain/planner/plannerStepBound.ts` (the Service re-exports it unchanged). The Research
+files kept their paths as thin adapters and keep `a1`, their tokens and everything Research-only; no Production
+caller runs Stage 0 - C yet. Stage D / D', the Worker, Persistence and the UI are not implemented, and the Build
+List's 「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR
+switches it. Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.
 
 - Target: 「生産計画を作成」 becomes the standard whole-Build-List optimization (O1): rebuild the Route
@@ -4181,7 +4187,7 @@ non-normative design record; where it differs, the formal specification wins.
   set between Stage 0 and the final input; the physical operation identity stays mandatory
 - The final verification's `maxPlanSteps` is derived by the Domain as
   `roundUpPlannerMaxPlanSteps(structuralObjective + planningTargetCount) + 500` (D-1C: 2,500), never a
-  user setting; the 500 rounding moves to a shared Domain helper with the Service API re-exporting it
+  user setting; the 500 rounding moved (PR-2) to a shared Domain helper with the Service API re-exporting it
   (no Domain -> Service import). Window and search bounds are Production constants decided by PC
   measurement, independent of the Candidate Search defaults; never copy Research values without basis
 - PC Browser is the formal performance / correctness / cancel acceptance environment. Android real-device

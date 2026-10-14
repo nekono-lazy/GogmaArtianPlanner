@@ -18,7 +18,8 @@ import { EMPTY_COUNTER_RESERVATION } from '../counterReservation'
 import type { RouteShapeConstraint, ShapeBaseUnavailableReason } from './shapeConstrainedTypes'
 
 /*
- * Research only (`docs/SEARCH_SPEC.md` 5.6.9, `docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 5.3 item 3): whether the
+ * The base diagnosis of the shape-constrained Route search (`docs/SEARCH_SPEC.md` 5.6.9,
+ * `docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 5.3 item 3): whether the
  * shape's Route base can be reached, evaluated before any Route search primitive runs, with the very helpers the
  * primitives use (the source selectors, `isAvailableRouteSource()`, `selectSearchableNormalCounters()`, the Normal
  * reservation, the formal `conversionSkillPositions()` walk, the Engine capabilities, the cached prediction support

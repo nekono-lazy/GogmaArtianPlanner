@@ -19,6 +19,25 @@ const production = {
 } as Record<string, string>
 const research = import.meta.glob('./*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const runtime = Object.entries(research).filter(([path]) => !/\.test\.ts$|[tT]estFixture\.ts$/.test(path))
+/**
+ * Issue #260 PR-2: the Phase 0 - C calculation moved to the Production Domain module below; this folder keeps a thin
+ * adapter per moved module (same path, same Research API) and everything Research-only. The module is read by its own
+ * `./x.ts` names, so the checks that followed the calculation keep their meaning there.
+ */
+const OPTIMIZATION_DIR = '../../domain/planner/buildListOptimization/'
+const optimization = Object.fromEntries(Object.entries(import.meta.glob('../../domain/planner/buildListOptimization/*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)
+  .filter(([path]) => !/\.test\.ts$/.test(path)).map(([path, source]) => [path.replace(OPTIMIZATION_DIR, './'), source]))
+/** The Research files of the moved Phase 0 - C modules: adapters of the Production module, no calculation of their own. */
+const PHASE_0_C_ADAPTERS = [
+  './assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentSolver.ts', './assignmentTypes.ts', './context.ts', './coverage.ts',
+  './coverageSearch.ts', './coverageSearchTypes.ts', './coverageTypes.ts', './reachOptions.ts', './reachTable.ts', './requiredOnlyReplay.ts', './structuralCandidate.ts',
+  './structuralSearch.ts', './types.ts',
+]
+/** Research-only symbols (formal gates, pre-registrations, runners, RESULT derivations, oracle, root lower bound, Research option sets and names). */
+const RESEARCH_ONLY_SYMBOLS = /globalAssignment|GlobalAssignment|global-assignment|reachWindowW0|REACH_OPTION_SET_A[12]|runAssignmentOnly|measureRootLowerBound|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity|verifyPlannerCandidate|judgeD1aRun|concludeD1aRun|d1aChildIntegrityIssues|MaterializedEntriesHandoff|onMaterializedEntries|PLANNER_VERIFICATION_D1C_PREREGISTRATION|d1cRegistrationFingerprint|summarizeVerificationPhysical|concludeD1cMeasurement|judgeD1cFormalValidity|d1cFormalStartGate|deriveD1cPublicResult|MATERIALIZATION_D0C_PREREGISTRATION|ASSIGNMENT_B2B_PREREGISTRATION|plannerGlobalLowerBound|plannerGlobalOracle|ORACLE_1657|plannerGlobal|GlobalResearch/
+/** The Phase 0 - C concepts moved to the Production module; until Stage D / D', the Worker and the UI exist, no other Production module names them. */
+const MOVED_PHASE_0_C_CONCEPTS = /buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|createBuildListOptimizationContext|BuildListOptimization/
+const codeOnly = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 const scripts = import.meta.glob('../../../scripts/*.mjs', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-b2a.mjs'
 /** The Phase D-0B materialization runner (its formal mode is Phase D-0C's). */
@@ -57,8 +76,20 @@ describe('Global Assignment Research isolation', () => {
   it('is imported by no Production module and by no script other than the designated Phase B-2A / D-0B / D-1A / D-1C runners and the D-0C / D-1C RESULT derivations (and the P-2 Browser analysis)', () => {
     const productionPaths = Object.keys(production).filter(path => !/\.test\.tsx?$/.test(path))
     expect(productionPaths.length).toBeGreaterThan(100)
+    // Issue #260 PR-2 (design P-3 7.8): the Phase 0 - C concept names moved to Production, so the former ban of those names is replaced by
+    // the import direction (no Production module imports a benchmark or the Research search adapter), the Research-only symbols, and the
+    // confinement of the moved concepts to the Production module.
+    // The benchmark harness entry points that live beside the app (`*.worker.benchmark*.ts`, the benchmark pages, built by the separate
+    // benchmark Vite config only) are benchmark code, not Production modules; every other module is held to the boundary.
+    const harness = /\.worker\.benchmark(?:\.entry)?\.ts$|BenchmarkPage\.tsx$|\/BenchmarkApp\.tsx$|\/benchmark\.tsx$/
+    const modules = productionPaths.filter(path => !harness.test(path))
+    expect(modules.length).toBeGreaterThan(100)
+    expect(modules.filter(path => /from '[^']*\/(?:benchmarks|research)(?:\/[^']*)?'/.test(production[path]!))).toEqual([])
+    expect(modules.filter(path => RESEARCH_ONLY_SYMBOLS.test(production[path]!))).toEqual([])
+    expect(productionPaths.filter(path => !path.startsWith(OPTIMIZATION_DIR) && MOVED_PHASE_0_C_CONCEPTS.test(production[path]!))).toEqual([])
+    expect(productionPaths.filter(path => path.startsWith(OPTIMIZATION_DIR)).length).toBeGreaterThan(15)
+    // Scripts: only the designated runners and derivations reach this folder (the former name list, unchanged).
     const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity|verifyPlannerCandidate|judgeD1aRun|concludeD1aRun|d1aChildIntegrityIssues|MaterializedEntriesHandoff|onMaterializedEntries|PLANNER_VERIFICATION_D1C_PREREGISTRATION|d1cRegistrationFingerprint|summarizeVerificationPhysical|concludeD1cMeasurement|judgeD1cFormalValidity|d1cFormalStartGate|deriveD1cPublicResult/
-    expect(productionPaths.filter(path => forbidden.test(production[path]!))).toEqual([])
     expect(Object.keys(scripts).filter(path => ![RUNNER_SCRIPT, D0B_RUNNER_SCRIPT, D0C_DERIVE_SCRIPT, D1A_RUNNER_SCRIPT, D1C_RUNNER_SCRIPT, D1C_DERIVE_SCRIPT, BROWSER_ANALYZE_SCRIPT].includes(path) && forbidden.test(scripts[path]!))).toEqual([])
     expect(scripts[RUNNER_SCRIPT]).toBeDefined()
     expect(scripts[D0B_RUNNER_SCRIPT]).toBeDefined()
@@ -103,14 +134,21 @@ describe('Global Assignment Research isolation', () => {
     for (const [path, source] of runtime.filter(([path]) => path !== './context.ts' && path !== './types.ts' && !PHASE_D0A_MODULES.includes(path) && path !== './shapeRouteVerification.ts' && !PHASE_D0C_MODULES.includes(path) && path !== './verificationFormalResult.ts' && path !== './verify.ts')) {
       expect(source, path).not.toMatch(/candidateSnapshot|\.route\b|buildListEntries\b(?!\.length)/)
     }
+    // The same holds where the Phase A - C calculation now lives (only the Stage 0 context reads the Entries, through the Production validation).
+    expect(Object.keys(optimization).length).toBeGreaterThan(15)
+    for (const [path, source] of Object.entries(optimization).filter(([path]) => path !== './planningContext.ts' && path !== './buildListOptimizationTypes.ts')) {
+      expect(source, path).not.toMatch(/candidateSnapshot|\.route\b|buildListEntries\b(?!\.length)/)
+    }
     // Phase D-0C names those keys only as strings its public RESULT must not carry; it reads no Entry, snapshot or Route either.
     for (const path of PHASE_D0C_MODULES) expect(research[path], path).not.toMatch(/\.candidateSnapshot|\.route\b|\.buildListEntries\b/)
     // Phase D-1C likewise names them only as keys its public RESULT must not carry.
     expect(research['./verificationFormalResult.ts']).not.toMatch(/\.candidateSnapshot|\.route\b|\.buildListEntries\b/)
     // The Phase B-1 solver reads the ReachTable and the planning Targets' id / priority only: no PlannerInput, Engine, Master or Entry (design 6 / 11).
+    // It lives in the Production module (Issue #260 PR-2); the Research files of the same names are adapters of it (checked below).
     for (const path of ['./assignmentFeasibility.ts', './assignmentLowerBound.ts', './assignmentOrdering.ts', './assignmentSolver.ts']) {
+      expect(optimization[path], path).not.toMatch(/plannerInput|RngEngine|predict[A-Z]|\.master\b|ownedWeapons|normalCounters|rngState/)
+      for (const match of optimization[path]!.matchAll(/from '([^']+)'/g)) expect(match[1], `${path} imports ${match[1]}`).toMatch(/^\.\//)
       expect(research[path], path).not.toMatch(/plannerInput|RngEngine|predict[A-Z]|\.master\b|ownedWeapons|normalCounters|rngState/)
-      for (const match of research[path]!.matchAll(/from '([^']+)'/g)) expect(match[1], `${path} imports ${match[1]}`).toMatch(/^\.\//)
     }
   })
 
@@ -192,44 +230,89 @@ describe('Global Assignment Research isolation', () => {
     expect(codeOf('./materializationDiagnostics.ts')).toMatch(/deriveTargetSatisfaction\(context\.planningTargets, input\.ownedWeapons, input\.master\)/)
   })
 
+  // Phase C-1 / C-2 moved to the Production module (Issue #260 PR-2): the checks below read the calculation where it lives - the
+  // Production module for a moved file, this folder for the Research-only window policy.
+  const calculation = (path: string): string => optimization[path] ?? research[path]!
+
   it('keeps Phase C-1 a post-processing of resource assignments: no Search, Planner, reservation or upper bound', () => {
     const phaseC1 = ['./coverage.ts', './coverageTypes.ts', './structuralCandidate.ts']
     for (const path of phaseC1) {
-      expect(research[path], path).toBeDefined()
-      expect(research[path], path).not.toMatch(/productionPlanGeneration|plannerTraceReplay|plannerDeterministicSchedule|plannerBeamSearch|candidateSearch|search\/alternative|constrainedCandidate|createProductionPlan|replayPlannerSearchTrace|visitPlannerAlternativeCandidates|searchCandidates|plannerRouteProgress|plannerAlternativeReservation|derivePlannerAlternativeReservation/)
-      expect(research[path], path).not.toMatch(/readVerifiedUpperBound|production_verified_plan|VerifiedUpperBound/)
+      expect(optimization[path], path).toBeDefined()
+      expect(calculation(path), path).not.toMatch(/productionPlanGeneration|plannerTraceReplay|plannerDeterministicSchedule|plannerBeamSearch|candidateSearch|search\/alternative|constrainedCandidate|createProductionPlan|replayPlannerSearchTrace|visitPlannerAlternativeCandidates|searchCandidates|plannerRouteProgress|plannerAlternativeReservation|derivePlannerAlternativeReservation/)
+      expect(calculation(path), path).not.toMatch(/readVerifiedUpperBound|production_verified_plan|VerifiedUpperBound/)
       // No change to the Phase B-1 search: the solver, its value order and its lower bound are not imported.
-      expect(research[path], path).not.toMatch(/from '\.\/(?:assignmentSolver|assignmentOrdering|assignmentLowerBound|assignmentRunner|assignmentRootBound|reachTable)'/)
+      expect(calculation(path), path).not.toMatch(/from '\.\/(?:assignmentSolver|assignmentOrdering|assignmentLowerBound|assignmentRunner|assignmentRootBound|reachTable)'/)
     }
-    // The coverage pre-check is pure: no Engine, no PlannerInput, no prediction; only this folder and the ID types.
-    expect(research['./coverage.ts']).not.toMatch(/RngEngine|predict[A-Z]|plannerInput|\.master\b|ownedWeapons|normalCounters|rngState/)
-    for (const match of research['./coverage.ts']!.matchAll(/from '([^']+)'/g)) expect(match[1]).toMatch(/^\.\/|^\.\.\/\.\.\/domain\/models\/publicTypes$/)
+    // The coverage pre-check is pure: no Engine, no PlannerInput, no prediction; only its own module and the ID types.
+    expect(calculation('./coverage.ts')).not.toMatch(/RngEngine|predict[A-Z]|plannerInput|\.master\b|ownedWeapons|normalCounters|rngState/)
+    for (const match of calculation('./coverage.ts').matchAll(/from '([^']+)'/g)) expect(match[1]).toMatch(/^\.\/|^\.\.\/\.\.\/models\/publicTypes$/)
     // The structural candidate reads RNG only through the one required-only replay authority.
-    expect(research['./structuralCandidate.ts']).not.toMatch(/\.predict[A-Z]/)
-    expect(research['./structuralCandidate.ts']).toMatch(/replayReachOptionRequiredOnly\(/)
+    expect(calculation('./structuralCandidate.ts')).not.toMatch(/\.predict[A-Z]/)
+    expect(calculation('./structuralCandidate.ts')).toMatch(/replayReachOptionRequiredOnly\(/)
   })
 
   it('keeps Phase C-2 a coverage-gated assignment search: no Search, Planner, reservation or materialization, and no unverified upper bound', () => {
     const phaseC2 = ['./coverageSearch.ts', './coverageSearchTypes.ts', './structuralSearch.ts', './structuralWindowPolicy.ts']
+    expect(phaseC2.filter(path => optimization[path] !== undefined)).toEqual(['./coverageSearch.ts', './coverageSearchTypes.ts', './structuralSearch.ts'])
     for (const path of phaseC2) {
-      expect(research[path], path).toBeDefined()
-      expect(research[path], path).not.toMatch(/productionPlanGeneration|plannerTraceReplay|plannerDeterministicSchedule|plannerBeamSearch|candidateSearch|search\/alternative|constrainedCandidate|createProductionPlan|replayPlannerSearchTrace|visitPlannerAlternativeCandidates|searchCandidates|plannerRouteProgress|plannerAlternativeReservation|derivePlannerAlternativeReservation/)
+      expect(calculation(path), path).toBeDefined()
+      expect(calculation(path), path).not.toMatch(/productionPlanGeneration|plannerTraceReplay|plannerDeterministicSchedule|plannerBeamSearch|candidateSearch|search\/alternative|constrainedCandidate|createProductionPlan|replayPlannerSearchTrace|visitPlannerAlternativeCandidates|searchCandidates|plannerRouteProgress|plannerAlternativeReservation|derivePlannerAlternativeReservation/)
       // No verified / proven claim, and no structural or coverage-feasible objective ever becomes a VerifiedUpperBound.
-      expect(research[path], path).not.toMatch(/production_verified_plan|'verified'|'proven_minimum'/)
+      expect(calculation(path), path).not.toMatch(/production_verified_plan|'verified'|'proven_minimum'/)
       // The registered Phase B-2A / B-2B runner path is neither imported nor changed by Phase C-2.
-      expect(research[path], path).not.toMatch(/from '\.\/(?:assignmentRunner|assignmentRootBound|assignmentWindowPolicy)'/)
+      expect(calculation(path), path).not.toMatch(/from '\.\/(?:assignmentRunner|assignmentRootBound|assignmentWindowPolicy)'/)
     }
     // The coverage-gated search reads the ReachTable and the planning Targets only: no Engine, PlannerInput, Master or Entry.
     for (const path of ['./coverageSearch.ts', './coverageSearchTypes.ts', './structuralWindowPolicy.ts']) {
-      expect(research[path], path).not.toMatch(/plannerInput|RngEngine|predict[A-Z]|\.master\b|ownedWeapons|normalCounters|rngState/)
+      expect(calculation(path), path).not.toMatch(/plannerInput|RngEngine|predict[A-Z]|\.master\b|ownedWeapons|normalCounters|rngState/)
     }
     // The upper bound is forwarded from the caller only; the coverage-gated search never builds one.
-    expect(research['./coverageSearch.ts']).not.toMatch(/physicalOperations\s*[:=]|provenance\s*[:=]/)
+    expect(calculation('./coverageSearch.ts')).not.toMatch(/physicalOperations\s*[:=]|provenance\s*[:=]/)
     // The structural layer reads RNG only through the Phase C-1 builder (and so the one required-only replay authority).
-    expect(research['./structuralSearch.ts']).not.toMatch(/\.predict[A-Z]|replayReachOptionRequiredOnly/)
-    expect(research['./structuralSearch.ts']).toMatch(/buildStructuralCandidate\(/)
+    expect(calculation('./structuralSearch.ts')).not.toMatch(/\.predict[A-Z]|replayReachOptionRequiredOnly/)
+    expect(calculation('./structuralSearch.ts')).toMatch(/buildStructuralCandidate\(/)
     // The Phase B-2A runner keeps the Phase B-1 value order: it never opts into the coverage-driven ordering.
     expect(research['./assignmentRunner.ts']).not.toMatch(/readPriorityConversionPosition|coverageDrivenOrdering|createCoverageSearch|createStructuralCandidateSearch/)
+  })
+
+  it('keeps the moved Phase 0 - C files thin adapters of the Production module: no calculation of their own (Issue #260 PR-2)', () => {
+    for (const path of PHASE_0_C_ADAPTERS) {
+      expect(research[path], path).toBeDefined()
+      const code = codeOnly(research[path]!)
+      // They reach the Production module, and otherwise only this folder, the W0 window's Candidate Search defaults and the Engine type.
+      expect(code, path).toMatch(/from '\.\.\/\.\.\/domain\/planner\/buildListOptimization'/)
+      for (const match of code.matchAll(/from '([^']+)'/g)) {
+        expect(match[1], `${path} imports ${match[1]}`).toMatch(/^\.\/[A-Za-z]+$|^\.\.\/\.\.\/domain\/planner\/buildListOptimization$|^\.\.\/\.\.\/domain\/models\/common$|^\.\.\/\.\.\/domain\/rng\/rngEngine$/)
+      }
+      // No loop, ordering, collection, prediction or Search: a re-export, a renamed re-export, or a call handing a Research table over.
+      expect(code, path).not.toMatch(/\bfor \(|\bwhile \(|\.sort\(|new (?:Map|Set)\b|\.predict[A-Z]|visitPlannerAlternativeCandidates|searchCandidates|visitShapeConstrainedRouteCandidates|localeCompare/)
+    }
+    // Only the Research's own parts stay as values here: the option set identities, the W0 window and the table view conversion.
+    expect(codeOnly(research['./types.ts']!)).toMatch(/REACH_OPTION_SET_A1 = 'global-assignment-reach-options:a1'/)
+    expect(codeOnly(research['./types.ts']!)).toMatch(/REACH_OPTION_SET_A2 = 'global-assignment-reach-options:a2'/)
+    expect(codeOnly(research['./types.ts']!)).toMatch(/return optionSet !== REACH_OPTION_SET_A1\n/)
+    expect(codeOnly(research['./reachTable.ts']!)).toMatch(/export function reachWindowW0\(\)/)
+    // Every moved module has its Production counterpart (the Research context is the Production Stage 0).
+    for (const path of PHASE_0_C_ADAPTERS.filter(path => !['./types.ts', './context.ts'].includes(path))) expect(optimization[path], path).toBeDefined()
+    expect(optimization['./planningContext.ts']).toBeDefined()
+    expect(optimization['./buildListOptimizationTypes.ts']).toBeDefined()
+  })
+
+  it('keeps the Production module (Stage 0 - C) a pure Domain module: no Research, Service, persistence, clock, random value or locale-dependent order', () => {
+    for (const [path, source] of Object.entries(optimization)) {
+      const code = codeOnly(source)
+      // Only the Production Domain: this module, the Planner Domain and the Domain models, RNG, target and Master authorities.
+      for (const match of code.matchAll(/from '([^']+)'/g)) {
+        expect(match[1], `${path} imports ${match[1]}`).toMatch(/^\.\/[A-Za-z]+$|^\.\.\/[A-Za-z]+$|^\.\.\/\.\.\/(?:models|rng|target|master)\/[A-Za-z/]+$/)
+      }
+      expect(source, path).not.toMatch(RESEARCH_ONLY_SYMBOLS)
+      expect(source, path).not.toMatch(/research-shape-constrained-route-policy|candidate\.research\.|global-assignment-reach-options|plannerGlobalOracle|ORACLE_1657|PLANNER_GLOBAL_[A-Z0-9_]*RESULT|\.json['"]/)
+      expect(code, path).not.toMatch(/readFile|fetch\(|indexedDB|Dexie|localStorage|sessionStorage|Math\.random|Date\.now|new Date\(|randomUUID|performance\.now/)
+      // Determinism across locales and engines (design P-3 7.6): every order is a code-unit or numeric comparison.
+      expect(code, path).not.toMatch(/localeCompare|Intl\.|toLocale/)
+      // No window, bound or default of its own from the Candidate Search defaults or a saved setting (PLANNER_SPEC 17.13).
+      expect(code, path).not.toMatch(/recommendedCandidateSearchDefaults|candidateSearchDefaults|AppSettings/)
+    }
   })
 
   it('keeps Phase D-0A a materialization through the formal Search APIs: no Planner run, Trace Replay, conflict resolution or edited reservation', () => {
