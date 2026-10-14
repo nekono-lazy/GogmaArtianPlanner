@@ -5,18 +5,21 @@ import type { UnsupportedAmendmentPrediction } from '../bonusStream'
 import type { ConstrainedSearchOrigin } from '../constrained/constrainedTypes'
 
 /*
- * Research only: the shape-constrained Route search of the Global Assignment Research (Issue #154 Phase D-0A-2a,
- * `docs/SEARCH_SPEC.md` 5.6.9, `docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 5.3). No Production caller (Planner,
- * Worker, UI, Service) imports this folder, and `src/domain/search/index.ts` does not re-export it.
+ * The shape-constrained Route search (`docs/SEARCH_SPEC.md` 5.6.9): a Production Search Domain API, exported by
+ * `src/domain/search/index.ts`. Its one Production caller is the Build List global optimization
+ * (`docs/PLANNER_SPEC.md` 17); the Global Assignment Research (Issue #154) reuses it through its own adapter
+ * (`src/domain/search/research/`), which keeps the Research route policy token. Callers that pass no shape - Candidate
+ * Search, Planner Alternative Search - are unchanged by it.
  */
 
 /**
  * The version of the seam semantics (`docs/SEARCH_SPEC.md` 5.6.9): the early Route base restriction, the base
  * admission, the lane opening whatever the lane start state is, the Bonus operation kind policy and the final
- * position restriction. A Research caller folds it into its own search identity; the Search Domain builds no
- * identity of its own.
+ * position restriction. A caller folds it into its own search identity; the Search Domain builds no identity of its
+ * own. It is the Production token; the Research adapter keeps its own, distinct token so that the Research records
+ * keep their meaning.
  */
-export const SHAPE_CONSTRAINED_ROUTE_POLICY_VERSION = 'research-shape-constrained-route-policy:v1'
+export const SHAPE_CONSTRAINED_ROUTE_POLICY_VERSION = 'shape-constrained-route-policy:v1'
 
 /** The one Route base of the shape: its kind, its source and, for a conversion base, its conversion Skill position. */
 export type ShapeConstrainedRouteBase =

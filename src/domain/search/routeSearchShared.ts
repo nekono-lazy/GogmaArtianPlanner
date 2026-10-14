@@ -109,7 +109,7 @@ export interface RouteSearchInput {
 export type SearchFrontierPolicy = 'initial_candidate_search' | 'planner_alternative'
 
 /**
- * Which operations the lanes of one Research shape-constrained Route base use
+ * Which operations the lanes of one shape-constrained Route base use
  * (`docs/SEARCH_SPEC.md` 5.6.9). They decide which stream bases a constrained
  * Route search primitive builds and which prediction support it requires; an
  * operation the shape forbids is never a requirement and its support is never
@@ -123,9 +123,10 @@ export interface RouteBaseLaneNeeds {
 }
 
 /**
- * The Research-only Route base restriction of the shape-constrained Route
- * search (`docs/SEARCH_SPEC.md` 5.6.9, Issue #154 Global Assignment Research).
- * No Production caller sets it.
+ * The Route base restriction of the shape-constrained Route
+ * search (`docs/SEARCH_SPEC.md` 5.6.9).
+ * Only the shape-constrained Route search sets it; Candidate Search and
+ * Planner Alternative Search never do.
  *
  * A Route search primitive reads it before it generates any Route base: only
  * the primitive of the shape's base kind runs, and it enumerates only the
@@ -152,15 +153,15 @@ export interface RouteSearchContext {
    */
   reservation?: RouteSearchReservation
   /**
-   * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the shape-constrained Route
-   * search's Route base restriction. Absent in every Production context, where
+   * Shape-constrained Route search only (`docs/SEARCH_SPEC.md` 5.6.9): the shape-constrained Route
+   * search's Route base restriction. Absent in every Candidate Search and Planner Alternative Search context, where
    * every primitive enumerates exactly as before.
    */
   routeBaseConstraint?: RouteBaseConstraint
   /**
-   * Research only (`docs/SEARCH_SPEC.md` 5.6.9): the final base admission and
+   * Shape-constrained Route search only (`docs/SEARCH_SPEC.md` 5.6.9): the final base admission and
    * lane decision the `TargetSearchScheduler` of this context applies. Absent in
-   * every Production context, where the scheduler registers every base by the
+   * every Candidate Search and Planner Alternative Search context, where the scheduler registers every base by the
    * lane-start Ideal rule exactly as before.
    */
   routeShapeFilter?: ScheduledRouteShapeFilter
@@ -241,7 +242,7 @@ export async function conversionSkillPositions(
   const legal = await legalConversionSkillPositions(context, origin)
   const constraint = context.routeBaseConstraint
   if (constraint === undefined) return legal
-  // Research shape constraint (5.6.9): the formal legal positions are always
+  // Shape constraint (5.6.9): the formal legal positions are always
   // walked; only the shape's own position survives, and a position outside the
   // shape is no unread work, so no extent stop is reported for it.
   if (constraint.kind === 'owned_gogma') {
@@ -255,7 +256,7 @@ export async function conversionSkillPositions(
 
 /**
  * The formal legal conversion Skill positions of `conversionSkillPositions()`
- * before any Research shape restriction: the same walk, with the same
+ * before any shape restriction: the same walk, with the same
  * checkpoints, whether or not a `routeBaseConstraint` is set.
  */
 export async function legalConversionSkillPositions(
@@ -274,7 +275,7 @@ export async function legalConversionSkillPositions(
 }
 
 /**
- * Why the Bonus lane of a Research shape-constrained Route base cannot have a
+ * Why the Bonus lane of a shape-constrained Route base cannot have a
  * Bonus stream base (`docs/SEARCH_SPEC.md` 5.6.9), or `null` when it can.
  *
  * Only the operations the shape's Bonus lane uses are required: confirmed
@@ -282,7 +283,7 @@ export async function legalConversionSkillPositions(
  * only when the lane resets, Keep Bonuses capability only when it keeps. The
  * Keep support of one concrete input is the stream's to evaluate, at the stage
  * and state that Keeps. The constrained Route search primitives and the
- * Research base diagnosis share this one authority, so they never disagree.
+ * shape base diagnosis share this one authority, so they never disagree.
  */
 export type RouteBaseLaneBlocker =
   | {

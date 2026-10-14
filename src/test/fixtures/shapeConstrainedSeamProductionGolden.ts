@@ -35,7 +35,7 @@ import { seamFixture, slotsText, type SeamFixture, type SeamFixtureOptions } fro
 
 /*
  * Issue #154 Global Assignment Phase D-0A-2a (`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 4.2 / 15): the Production
- * golden of every Search Domain seam the Research-only shape-constrained Route search touches.
+ * golden of every Search Domain seam the shape-constrained Route search (Research-only until Issue #260 PR-2) touches.
  *
  * `recordSeamProductionGolden()` runs, on the synthetic `seamFixture()`:
  *

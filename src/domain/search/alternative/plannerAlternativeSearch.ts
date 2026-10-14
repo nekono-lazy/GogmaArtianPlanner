@@ -166,7 +166,7 @@ export const PLANNER_ALTERNATIVE_ROUTE_REGISTRATIONS: ReadonlyArray<readonly [Se
  * A validated Planner Alternative frontier input: the searched Target, the
  * normalized reservation, the Planner-start origin, the extent, the Engine
  * and the execution options. `routeBaseConstraint` and `shapeFilter` are the
- * Research shape-constrained Route search's (`docs/SEARCH_SPEC.md` 5.6.9);
+ * shape-constrained Route search's (`docs/SEARCH_SPEC.md` 5.6.9);
  * Planner Alternative Search never passes them.
  */
 export interface PlannerAlternativeFrontierSetup {
@@ -193,13 +193,13 @@ export interface PlannerAlternativeFrontier {
     registrations: ReadonlyArray<readonly [SearchRuntimeSection, PlannerAlternativeRoutePrimitive]>
     excludedRouteKeys: readonly string[]
   }): Promise<PlannerAlternativeSearchExecution>
-  /** Closes the setup and Search root sections of a frontier that will not run (Research base diagnosis, 5.6.9). */
+  /** Closes the setup and Search root sections of a frontier that will not run (shape base diagnosis, 5.6.9). */
   closeWithoutRun(): void
 }
 
 /**
  * The setup, Route registration and delivery loop of
- * `visitPlannerAlternativeCandidates()`, shared with the Research
+ * `visitPlannerAlternativeCandidates()`, shared with the
  * shape-constrained Route search (`docs/SEARCH_SPEC.md` 5.6.9) so neither
  * duplicates the context, the scheduler, the cost-layer buffer, the six-key
  * delivery or the termination. Not part of the Search Domain's public exports
@@ -269,7 +269,7 @@ export function createPlannerAlternativeFrontier(setup: PlannerAlternativeFronti
       instrumentation?.onGogmaReservedDepth,
       instrumentation?.onGogmaReservedRuntime,
     ),
-    // Research only (5.6.9); a Planner Alternative context never carries either.
+    // Shape-constrained Route search only (5.6.9); a Planner Alternative context never carries either.
     ...(setup.routeBaseConstraint === undefined ? {} : { routeBaseConstraint: setup.routeBaseConstraint }),
     ...(setup.shapeFilter === undefined ? {} : { routeShapeFilter: setup.shapeFilter }),
   }
@@ -378,7 +378,7 @@ export function createPlannerAlternativeFrontier(setup: PlannerAlternativeFronti
 /**
  * Opens the Search root and setup runtime sections of one frontier, before the
  * caller validates its input, exactly as `visitPlannerAlternativeCandidates()`
- * does: for the Research shape-constrained Route search (5.6.9), which shares
+ * does: for the shape-constrained Route search (5.6.9), which shares
  * the frontier and so its runtime section hierarchy.
  */
 export function openPlannerAlternativeSearchSections(options: PlannerAlternativeSearchExecutionOptions): void {

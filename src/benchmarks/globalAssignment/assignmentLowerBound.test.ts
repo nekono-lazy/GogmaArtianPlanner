@@ -9,7 +9,10 @@ import type { ReachOption, ReachTable } from './types'
  * Issue #154 Global Assignment Phase B-1 (design 10.1): `LB(partial)` never exceeds the objective of
  * any completion of the partial assignment, judged against the brute force, and it reads resources only.
  */
-const research = import.meta.glob('./*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+// The Phase B-1 modules live in the Production Domain module since Issue #260 PR-2 (the Research files are adapters), so the
+// dependency direction is checked there, by the same module names.
+const research = Object.fromEntries(Object.entries(import.meta.glob('../../domain/planner/buildListOptimization/*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)
+  .map(([path, source]) => [path.replace('../../domain/planner/buildListOptimization/', './'), source]))
 
 function twoTargets(): ReachTable {
   return handBuiltReachTable({ targets: [
@@ -113,10 +116,10 @@ describe('Phase B-1 partial assignment lower bound', () => {
 
   it('depends one way: feasibility reads no bound, the bound reads no enumeration, filter or solver, only the solver prunes', () => {
     const importsOf = (path: string) => [...research[path]!.matchAll(/from '([^']+)'/g)].map(match => match[1]!).sort()
-    expect(importsOf('./assignmentFeasibility.ts')).toEqual(['./assignmentTypes', './reachOptions', './types'])
-    expect(importsOf('./assignmentLowerBound.ts')).toEqual(['./assignmentTypes', './reachOptions', './types'])
-    expect(importsOf('./assignmentOrdering.ts')).toEqual(['./assignmentFeasibility', './assignmentTypes', './reachOptions', './types'])
-    expect(importsOf('./assignmentSolver.ts')).toEqual(['./assignmentFeasibility', './assignmentLowerBound', './assignmentOrdering', './assignmentTypes', './reachOptions', './types'])
+    expect(importsOf('./assignmentFeasibility.ts')).toEqual(['./assignmentTypes', './buildListOptimizationTypes', './reachOptions'])
+    expect(importsOf('./assignmentLowerBound.ts')).toEqual(['./assignmentTypes', './buildListOptimizationTypes', './reachOptions'])
+    expect(importsOf('./assignmentOrdering.ts')).toEqual(['./assignmentFeasibility', './assignmentTypes', './buildListOptimizationTypes', './reachOptions'])
+    expect(importsOf('./assignmentSolver.ts')).toEqual(['./assignmentFeasibility', './assignmentLowerBound', './assignmentOrdering', './assignmentTypes', './buildListOptimizationTypes', './reachOptions'])
     // The bound names no option enumeration and no feasibility filter; the comparison against an upper bound lives in the solver alone.
     expect(research['./assignmentLowerBound.ts']).not.toMatch(/findResourceViolation|enumerateReachOptions|countFeasibleOptionsUpTo|readVerifiedUpperBound|physicalOperations/)
     expect(research['./assignmentFeasibility.ts']).not.toMatch(/partialAssignmentLowerBound|minimalStreamEnds|readVerifiedUpperBound/)

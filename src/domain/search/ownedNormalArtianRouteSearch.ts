@@ -20,7 +20,7 @@ export async function searchOwnedNormalArtianRoutes(
 ): Promise<RouteSearchResult> {
   const { engine, input, target } = context
   const result: RouteSearchResult = { candidates: [], searchedRoutes: [], skippedRoutes: [], warnings: [] }
-  // A Research shape constraint (5.6.9) keeps only the shape's own OwnedWeapon,
+  // A shape constraint (5.6.9) keeps only the shape's own OwnedWeapon,
   // before any base is generated; it is no reservation edit.
   const constraint = context.routeBaseConstraint
   if (constraint !== undefined && constraint.kind !== 'owned_normal') {

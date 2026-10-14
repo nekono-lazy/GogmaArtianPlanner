@@ -1,5 +1,6 @@
 import type { BuildListEntry, ProductionPlan } from '../../domain/models/publicTypes'
 import { defaultPlannerOptions, type PlannerOptions } from '../../domain/planner'
+import { roundUpPlannerMaxPlanSteps } from '../../domain/planner/plannerStepBound'
 
 /**
  * Runtime `PlannerOptions` derivation for the Application callers
@@ -13,8 +14,12 @@ import { defaultPlannerOptions, type PlannerOptions } from '../../domain/planner
  * Domain module applies them on its own.
  */
 
-/** The granularity every derived `maxPlanSteps` is rounded up to. */
-export const PLANNER_MAX_PLAN_STEPS_INCREMENT = 500
+/**
+ * The 500 rounding rule lives in the shared Domain helper (`src/domain/planner/plannerStepBound.ts`, Issue #260 PR-2)
+ * so that a Domain caller never imports this Service; these names are re-exported unchanged (same value, same
+ * `RangeError`) for the existing Application callers.
+ */
+export { PLANNER_MAX_PLAN_STEPS_INCREMENT, roundUpPlannerMaxPlanSteps } from '../../domain/planner/plannerStepBound'
 
 /**
  * The headroom a conflict resolution recalculation adds on top of the current
@@ -34,17 +39,6 @@ export const CONFLICT_RESOLUTION_MAX_PLAN_STEPS_MARGIN = 500
  * Candidate needs 1001 Planner actions to complete on its own.
  */
 export const CANDIDATE_RESERVE_PLANNER_ACTION_COUNT = 1
-
-/** Rounds a non-negative Step count up to the next multiple of 500. */
-export function roundUpPlannerMaxPlanSteps(value: number): number {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(`A Planner Step count must be a non-negative finite number: ${value}`)
-  }
-  return (
-    Math.ceil(value / PLANNER_MAX_PLAN_STEPS_INCREMENT) *
-    PLANNER_MAX_PLAN_STEPS_INCREMENT
-  )
-}
 
 /**
  * The Build List detail settings' recommended `maxPlanSteps`:

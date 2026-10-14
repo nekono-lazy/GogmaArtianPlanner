@@ -133,8 +133,11 @@ function routeEndsAtShape(shape: RouteShapeConstraint, route: BuildRoute): boole
 }
 
 /**
- * Research only: the shape-constrained Route search (`docs/SEARCH_SPEC.md` 5.6.9, Issue #154 Global Assignment
- * Research Phase D-0A-2a, `docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 5.3). No Production caller uses it.
+ * The shape-constrained Route search (`docs/SEARCH_SPEC.md` 5.6.9, `docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 5.3):
+ * the Production Search API the Build List global optimization (`docs/PLANNER_SPEC.md` 17) materializes a shape with,
+ * first built for the Global Assignment Research (Issue #154 Phase D-0A-2a), which reuses it through its adapter. A
+ * Route it delivers can hold a form ordinary Candidate Search never returns (a lane continued past an Ideal lane
+ * start), so a caller verifies it independently before using it as a Candidate.
  *
  * It is Planner Alternative Search's frontier (`createPlannerAlternativeFrontier()`: the same context, streams,
  * scheduler, Lazy Ideal Cross, Candidate factory, cost-layer buffer, six-key delivery, deduplication, consumer stop,

@@ -20,7 +20,7 @@ import {
 
 /*
  * Issue #154 Global Assignment Phase D-0A-2a: the synthetic Search fixture shared by the
- * Production golden of the seams the Research-only shape-constrained Route search touches and by
+ * Production golden of the seams the shape-constrained Route search (Research-only until Issue #260 PR-2) touches and by
  * that seam's own tests (`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 15).
  *
  * It is the Planner Alternative frontier fixture (`plannerAlternativeFrontier.ts`: Counters Normal 4,

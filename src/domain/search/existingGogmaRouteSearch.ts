@@ -21,7 +21,7 @@ const bonusAmendmentKinds = ['existing_gogma_reset_bonuses', 'existing_gogma_kee
  * A weapon a Planner reservation holds for a fixed Route is neither a Route
  * source nor an amendment subject here, its zero-operation current Route
  * included (SEARCH_SPEC 5.6.8); the ordinary Search has no reservation.
- * A Research shape constraint (5.6.9) further keeps only the shape's own
+ * A shape constraint (5.6.9) further keeps only the shape's own
  * OwnedWeapon, before any base is generated; it is no reservation edit.
  */
 function compatibleSources(context: RouteSearchContext): OwnedGogmaArtianWeapon[] {
@@ -74,7 +74,7 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
   result.searchedRoutes.push('existing_gogma_current')
 
   const mutableSources = all.filter((weapon) => !weapon.isProtected)
-  // A Research shape constraint (5.6.9) opens only the lanes its shape operates
+  // A shape constraint (5.6.9) opens only the lanes its shape operates
   // on, and never queries the support of a lane it leaves at zero operations.
   const lanes = context.routeBaseConstraint?.lanes
 

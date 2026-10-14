@@ -1779,14 +1779,17 @@ instrumentation consumerはSearch semanticsを変更する用途に使わない�
 `BuildCandidate` ID生成規則、Production RNG prediction semantics、`PRODUCTION_RNG_ENGINE_VERSION` を変更しない。
 held位置を跨ぐRouteはPlanner Alternative Searchだけが生成する。
 
-### 5.6.9 Research専用: 形状制約付きRoute探索（Global Assignment Research）
+### 5.6.9 形状制約付きRoute探索（Production API。Global Assignment Researchで導入）
 
-Issue #154のGlobal Assignment Research（`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` §5.3、Phase D-0A-2a）だけが使う、
-Search DomainのResearch専用API `visitShapeConstrainedRouteCandidates()`（`src/domain/search/research/`）を定める。
-Production caller（Planner、Planner Worker、UI、Service）は呼ばず、`src/domain/search/index.ts` から再exportしない。
-本節はProduction契約ではなく、5.6.8までのProduction Searchの意味を変更しない。5.6.8の「held位置を跨ぐRouteは
-Planner Alternative Searchだけが生成する」はProduction Searchについての規定であり、本APIはPlanner Alternative Searchの
-frontierをそのまま使うので、同じcoverage条件でheld位置を跨ぐ。
+Search DomainのAPI `visitShapeConstrainedRouteCandidates()` を定める。Issue #154のGlobal Assignment Research
+（`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` §5.3、Phase D-0A-2a）でResearch専用APIとして導入し、Issue #260 PR-2で
+中立なProduction Search Domain module `src/domain/search/shapeConstrained/` へ責務移管した（`src/domain/search/index.ts` から
+公開する）。Productionの呼び出し元は作成リストの全体最適化（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章）のルート生成
+（Stage D）だけであり、それは未実装なので、現在はProductionのcallerが無い。Candidate Search・Planner Alternative Search・
+Planner・Worker・UI・Serviceは呼ばない。Research（`src/domain/search/research/`）は同じ関数を再exportするadapterとして使い続ける。
+本APIの追加は5.6.8までのSearchの意味を変更しない。5.6.8の「held位置を跨ぐRouteはPlanner Alternative Searchだけが生成する」は
+Candidate Search・Planner Alternative Searchについての規定であり、本APIはPlanner Alternative Searchのfrontierをそのまま使うので、
+同じcoverage条件でheld位置を跨ぐ。
 
 - **共有するもの**: Planner Alternative Search（5.6.8）と同じfrontierを使う。origin / Target / extent / reservationの検証と正規化、
   `RouteSearchContext`、held-aware Skill / Bonus stream、予測memo、`TargetSearchScheduler`、Lazy Ideal Cross、Candidate factory
@@ -1826,21 +1829,26 @@ frontierをそのまま使うので、同じcoverage条件でheld位置を跨ぐ
 - **観測**: shape付きBonus streamのdepthは既存のdepth observation（`onGogmaReservedDepth`）を報告するが、runtime phase section
   （`onGogmaReservedRuntime` のphase）は報告しない（depth境界は報告する）
 - **無指定時の不変性**: `RouteSearchContext.routeBaseConstraint` / `RouteSearchContext.routeShapeFilter` /
-  `BonusStreamBase.shapePolicy` はいずれも任意fieldであり、Production
-  callerは渡さない。渡さない経路では、起動するprimitive、source / Counter / offset / 巨戟化位置の列挙、support・capabilityの
+  `BonusStreamBase.shapePolicy` はいずれも任意fieldであり、本API以外（Candidate Search、Planner Alternative Search）は
+  渡さない。渡さない経路では、起動するprimitive、source / Counter / offset / 巨戟化位置の列挙、support・capabilityの
   問合せとunsupportedの記録・通知、stream base生成条件、Bonus streamの生成state・frontier・memo・single-pass、予測内容と
   回数、Candidateの内容と順序、summary、instrumentationの通知境界、search identityを変更しない
 - 本APIはRNG semantics、Candidate Search・Planner Alternative Search・Plannerの結果、永続形状、Worker protocolを変更せず、
   `CURRENT_CALCULATION_APP_SCHEMA_VERSION`、`DATABASE_SCHEMA_VERSION`、`ExportRoot.schemaVersion`、`PRODUCTION_RNG_ENGINE_VERSION`、
-  Master `dataVersion` に影響しない。本APIの結果はResearch上のspeculativeな値であり、Production Searchの結果として扱わず、
-  Plannerによる検証（Phase D'）を経るまで `verified` と呼ばない
+  Master `dataVersion` に影響しない。本APIの結果はspeculativeな値であり、Candidate Searchの結果として扱わず、
+  Plannerによる検証（Researchの Phase D'、全体最適化のStage D'）を経るまで `verified` と呼ばない
 
-**Production化の方針（Issue #260、目標仕様）。** 実装状態: **未実装**。現在の本APIは上記のとおりResearch専用であり、
-Production callerは呼ばない。作成リストの全体最適化（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章）は本APIの能力を必要とする
+**Production化（Issue #260）。** 実装状態: **Production APIへの責務移管は実装済み（Issue #260 PR-2）。Productionのcaller
+（全体最適化のStage D）は未実装**。作成リストの全体最適化（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章）は本APIの能力を必要とする
 （Research D-1Cでは43 Entryのうち22件を形状制約付きの方式で得た。射影起点は21件。形状制約付きの方式を持たない
-D-0Bの方式では7 / 43で止まった）。全体最適化の実装PR（Domain / Search基盤）で、
-本APIを中立なProduction Search Domain module（Production API）へ責務移管し、Research側はそれを使うthin consumerにする。
-移管後も次を契約として維持する。
+D-0Bの方式では7 / 43で止まった）。PR-2で本APIを中立なProduction Search Domain module `src/domain/search/shapeConstrained/`
+（型・入力validation・base到達の診断・探索本体）へ移し、`src/domain/search/index.ts` から公開した。Planner Alternative Searchと
+共有するseam helper（`createPlannerAlternativeFrontier()` 等）はSearch Domainの内部のままで公開しない。Research
+（`src/domain/search/research/`）は同じ関数を再exportするadapterになり、Researchのroute policy token
+`research-shape-constrained-route-policy:v1` を自分で持ち続ける。Productionのroute policy tokenは
+`shape-constrained-route-policy:v1` で、Researchのtokenとは別である。移管で無指定時のSearchの挙動は変わらず
+（既存のgolden `shapeConstrainedSeamProductionGoldenPreD0A2A.json`、Candidate Search・Planner Alternative Searchの既存testを
+期待値を変えずに通した）、seam fieldを持つ7つのSearch fileはコメント以外を変更していない。移管後も次を契約として維持する。
 
 - 無指定時の不変性（上記）。Candidate Search・Planner Alternative Searchの起動primitive、列挙、support問合せ、stream生成、
   予測内容と回数、Candidateの内容と順序、summary、search identityを変えない（既存goldenと既存testを変更せずに通す）
@@ -1849,8 +1857,10 @@ D-0Bの方式では7 / 43で止まった）。全体最適化の実装PR（Domai
   （5.6.1）は変えない
 - 形状制約付きRouteは通常のCandidate Search・Planner Alternative Searchが返さない形を含み得るので、Candidateとして使う前に
   独立Route検証（全operationの再予測）を行い、失敗はfail closedする
-- Productionの呼び出し元は全体最適化だけである。Research上の識別子（route policy `research-shape-constrained-route-policy:v1`
-  など）はResearch adapterに残し、Production APIは別のtokenを持つ（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.12）
+- Productionの呼び出し元は全体最適化だけである（isolation testで、形状制約の名前とseam fieldをSearch Domainの外で使わない
+  ことを固定している。全体最適化のStage Dを実装するPRで、その呼び出し元を加えて改訂する）。Research上の識別子（route policy
+  `research-shape-constrained-route-policy:v1` など）はResearch adapterに残し、Production APIは別のtokenを持つ
+  （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.12）
 - 移管が無指定時のSearch出力を変える場合は許容しない（設計を見直す。やむを得ない場合は計算版数を仕様で判断する）
 
 ## 5.7 Candidate出力はcanonical Idealだけである
