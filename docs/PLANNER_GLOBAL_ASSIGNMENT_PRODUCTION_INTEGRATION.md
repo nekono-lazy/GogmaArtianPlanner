@@ -7,6 +7,20 @@ Refs #154。**docs-only**。基準main: PR #258 merged `4ab8e07654241c27df5e0a07
 Global AssignmentをGogmaArtianPlannerの通常機能として導入するためのProduction統合仕様を **設計案** として示す。
 実装、正式仕様の書き換え、Production code・Research code・test・version定数の変更、実Exportの再計測は行っていない。
 
+> **Owner判断と正式仕様への反映（Issue #260 PR-1）。** 本書の推奨案はOwnerの判断（§21）を経て、正式仕様
+> [PLANNER_SPEC.md](PLANNER_SPEC.md) 17章（意味論のauthority）、[REQUIREMENTS.md](REQUIREMENTS.md) 19.1 / 24.1、
+> [UI_FLOW.md](UI_FLOW.md) 10.4、[SEARCH_SPEC.md](SEARCH_SPEC.md) 5.6.9 / 5.8.1、[DATA_MODEL.md](DATA_MODEL.md) 9.4 / 14.5 へ反映した。
+> 初版の推奨から変わった主な点は次の2つである。
+>
+> 1. **O1**: 作成リストの「生産計画を作成」そのものを全体最適化の標準操作にする。初版の「通常Plannerの『生産計画を作成』を
+>    主操作に残し、『全体最適化を試す』を副操作として並べる」推奨（§3.1 / §17.1）は採らない。全体最適化が使えない場合の
+>    通常Plannerへの自動フォールバックはOwnerが決定しておらず、仕様にしない（正式仕様17.19のU1）
+> 2. **O12 / O16 / O19**: PC Browserを正式な受入環境とし、Android / iPhone実機の受入を公開の必須条件にしない。iPhoneは
+>    「未検証」であり「非対応」ではない。iPhone検証のための事前公開の仕組み（HTTPS配信の前提を含む）は設けない（§16 / §20）
+>
+> 本書は設計記録として残すが、正式仕様と異なる箇所は正式仕様に従う。各決定と反映先は §21と §25に示す。
+> Owner判断に合わせて本文を改めた箇所は「［決定 O#］」で示す。
+
 ## 1. 位置づけとauthority
 
 ### 1.1 本書の性格
@@ -17,8 +31,11 @@ Global AssignmentをGogmaArtianPlannerの通常機能として導入するため
   [Browser readiness（P-0）](PLANNER_GLOBAL_ASSIGNMENT_BROWSER_READINESS.md)、[P-2記録](PLANNER_GLOBAL_ASSIGNMENT_BROWSER_P2.md)）より下位であり、
   それらのResearch契約（G1〜G12、oracle isolation、formal記録）を変更しない
 - 現在の正式仕様は初期版v1として固定されている（REQUIREMENTS 39）。全体最適化の追加はv1仕様への **機能追加** であり、
-  本書の推奨案はOwnerの承認と正式仕様PR（§20 PR-1）を経るまで確定事項ではない
-- 正式仕様と衝突する推奨案は §22 に「対応が必要な節」と「修正文案」を示す。本PRでは正式仕様の本文を変更しない
+  本書の推奨案はOwnerの承認と正式仕様PR（§20 PR-1）を経るまで確定事項ではない。PR-1（Issue #260）でOwnerの判断を経て
+  正式仕様へ反映した（§25）
+- 正式仕様と衝突する推奨案は §22 に「対応が必要な節」と「修正文案」を示す。PR #259では正式仕様の本文を変更していない
+  （PR-1で、O1などの決定に合わせて文案を改めたうえで反映した）
+- 本書の「［推奨］」「［Owner］」はPR #259時点の記述である。PR-1で決定した事項は §21の決定表と「［決定 O#］」を優先する
 
 ### 1.2 決定事項の区別（tag）
 
@@ -32,14 +49,15 @@ Global AssignmentをGogmaArtianPlannerの通常機能として導入するため
 | ［D-1C］ | Research D-1C formal measurement（[記録](PLANNER_GLOBAL_ASSIGNMENT_RESEARCH_D1C.md)、[RESULT](PLANNER_GLOBAL_ASSIGNMENT_D1C_RESULT.json)）で確認済み |
 | ［P-2］ | P-2 Browser実測（非formal、[記録](PLANNER_GLOBAL_ASSIGNMENT_BROWSER_P2.md)、[RESULT](PLANNER_GLOBAL_ASSIGNMENT_BROWSER_P2_RESULT.json)）で確認済み |
 | ［推奨］ | 本書のProduction向け推奨案（未確定。正式仕様PRで確定する） |
-| ［Owner］ | Ownerの判断が必要（§21に一覧） |
+| ［Owner］ | Ownerの判断が必要（§21に一覧）。PR-1で決定済みのものは §21の決定表を参照 |
+| ［決定 O#］ | PR-1（Issue #260）でOwnerが決定し、正式仕様へ反映した事項（§21、§25） |
 
 ### 1.3 用語
 
 | 用語 | 意味 |
 | --- | --- |
 | Global Assignment（GA） | Issue #154のResearch algorithm（Phase 0 → A → B / C → D → D'）。Research codeは `src/benchmarks/globalAssignment/` と `src/domain/search/research/` |
-| 作成リストの全体最適化（全体最適化） | 本書が提案するProduction機能名［推奨］。UIの操作名は「全体最適化を試す」。内部識別子の提案は `buildListOptimization`（§7.8） |
+| 作成リストの全体最適化（全体最適化） | 本書が提案するProduction機能名［推奨］。初版はUIの操作名を「全体最適化を試す」としたが、［決定 O1］で作成リストの「生産計画を作成」を全体最適化の標準操作にし、別の操作名のボタンは設けない。内部識別子の提案は `buildListOptimization`（§7.8） |
 | 計画対象Target（planning Target） | PLANNER_SPEC 4.1の規則で決まるTarget［仕様］ |
 | structural candidate / verified | GA設計 §3.1の区別。Production Planner検証を通ったものだけがverified［Research］ |
 | 最適化結果（artifact） | 全体最適化の計算が返す、保存前のruntime-onlyな結果（§9.2）［推奨］ |
@@ -102,11 +120,18 @@ Research maxPlanSteps 20,000、node budget 2,000、MRV lookahead 8）で次を�
 
 | 機能 | 入力 | Routeの扱い | 競合 | 出力・保存 | 根拠 |
 | --- | --- | --- | --- | --- | --- |
-| 通常Planner（「生産計画を作成」） | current stateの `createPlannerInput()`、`conflictResolutions = []` | 作成リストに登録済みのRouteをそのまま実行順へ並べる | 暫定帰結 + ユーザー判断待ちの競合を返す | `savePlannerResult()` でDraft保存。Build Listを書かない | ［仕様］REQUIREMENTS 19、PLANNER_SPEC 7 / 9.2.15 |
+| 通常Planner（現行の「生産計画を作成」。［決定 O1］後は全体最適化の内部Planner） | current stateの `createPlannerInput()`、`conflictResolutions = []` | 作成リストに登録済みのRouteをそのまま実行順へ並べる | 暫定帰結 + ユーザー判断待ちの競合を返す | `savePlannerResult()` でDraft保存。Build Listを書かない | ［仕様］REQUIREMENTS 19、PLANNER_SPEC 7 / 9.2.15 |
 | Planner Alternative（「比較する」「この候補を優先」） | 表示中Draft + 明示決定 + lineage | 決定した競合の相手側Targetだけ代替Routeを探す（1段） | ユーザーの明示選択が起点 | repair artifactを `savePlannerAlternativeRepair()` で保存（Entry置換 + Draft + lineage） | ［仕様］REQUIREMENTS 23.1、PLANNER_SPEC 9.2.19 |
 | 全体最適化（新規） | current stateの `createPlannerInput()`（§6） | 全planning TargetのRoute集合を、既存EntryのRoute内容を使わずに再構成し、Production Plannerで検証する | 競合解決ではない。検証済み結果は競合0 | Preview → 明示採用で「Entry一括置換 + Draft保存」（§12） | ［推奨］ |
 
-［推奨］全体最適化は従来の「生産計画を作成」を **置き換えない**。ユーザーが作成リスト画面から明示的に起動する別操作とする。
+~~［推奨］全体最適化は従来の「生産計画を作成」を **置き換えない**。ユーザーが作成リスト画面から明示的に起動する別操作とする。~~
+（初版の推奨。採らない）
+
+［決定 O1］作成リスト画面の「生産計画を作成」を全体最適化の標準操作にする。通常Plannerを主操作に残して全体最適化を副操作として
+並べる2ボタン構成は採らない。通常Plannerの計算方式（Route commitment + 決定的scheduling）と最終検証は全体最適化の内部Plannerとして
+維持し、既存ProductionPlan・実行ナビ・再計画・履歴の意味を変えない。全体最適化を伴わない通常の生産計画作成を通常UIにどの程度残すか、
+未対応入力で手動起動できる代替経路を設けるかは実装前に整理し、全体最適化の失敗・未対応時に通常Plannerを自動実行すること
+（自動フォールバック）は仕様にしない（正式仕様 PLANNER_SPEC 17.2 / 17.19のU1）。画面の切替は後続のUI公開PRで行う。
 Planner Alternativeは既存機能としてそのまま維持し、変更しない。
 
 ### 3.2 全体最適化が守る境界
@@ -149,9 +174,9 @@ Planner Alternativeは既存機能としてそのまま維持し、変更しな�
 | legacy duplicate（同じTargetのEntryが2件以上） | 通常Plannerと同じく入力が不正（`duplicate_build_list_entries_for_target`）。全体最適化を開始せず、既存の「要整理」案内で整理を求める | ［仕様］4.1、DATA_MODEL 9.4.1 / ［実装］Research `invalid_planner_input` |
 | 一部のTargetだけ有効 | 有効なplanning Targetだけを最適化する。対象外TargetのEntryは変更しない | ［仕様］4.1 / ［推奨］ |
 | valid Entry 0件 | 全体最適化を開始しない（通常Plannerと同じく計画対象なし） | ［仕様］4.1 / ［実装］Research `no_planning_target` |
-| 途中採用状態を選択したEntry | §5.1 | ［Owner］ |
-| 改善優先が `planner` 以外のEntry | §5.2 | ［Owner］ |
-| 部分的なRNG未確定 | §5.3 | ［推奨］ |
+| 途中採用状態を選択したEntry | §5.1 | ［決定 O2］ |
+| 改善優先が `planner` 以外のEntry | §5.2 | ［決定 O3］ |
+| 部分的なRNG未確定 | §5.3 | ［決定 O4］ |
 | Planner開始時に理想品の所持巨戟を持つTarget（G4） | option集合 `a2` の規則（両軸Ideal sourceは操作0）に従う | ［実装］`sourceLaneAdmission()` |
 | 1本の武器で2 Targetを満たし得る入力（cross satisfaction） | distinct sourceで探し、最小性を主張しない | ［Research］GA設計 §10.2 |
 
@@ -192,6 +217,11 @@ Planner Alternativeは既存機能としてそのまま維持し、変更しな�
 ため、全体最適化を使えません」と対象Target名を示し、作成リストの該当グループへの導線を出す。Plannerにもpreviewにも選択の読み替え・解除を
 持ち込まない。Bは別Issue・新しいResearch Phaseの対象とする［Owner］。
 
+［決定 O2］初期Production版は案A。ただし判定対象は **明示選択**（計画対象TargetのEntryの `intermediateStateSelection.skillOpportunityId` /
+`bonusOpportunityId` が非null）だけである。目標武器に実用品条件が設定されているだけ、Candidateに実用品として使える途中状態があるだけでは
+拒否しない。選択を自動解除・読み替えしない。明示checkpointを保護したまま最適化する拡張（案B）は後続検討（正式仕様 PLANNER_SPEC 17.4、
+17.19のU5）。
+
 ### 5.2 改善優先（improvement preference）
 
 ［仕様］改善優先はsoft preferenceであり、Entry置換では旧Entryの途中採用状態と改善優先を引き継がない（DATA_MODEL 9.4.1、PLANNER_SPEC 9.2.18）。
@@ -207,6 +237,9 @@ Planner Alternativeは既存機能としてそのまま維持し、変更しな�
 生成Entryの既定値（`planner`）で行うので、引き継いだ値で保存すると検証していないPlanになる。soft preferenceの性質上、hard constraintの扱い（§5.1）とは
 区別する。［Owner］案1と案2の選択。
 
+［決定 O3］案1。置換されるEntryの改善優先は「生産計画に任せる」へ戻し、変わるTargetをPreviewと採用確認で明示する。同一意味のEntryを
+そのまま再利用するTargetはそのEntryの設定を維持する（正式仕様 PLANNER_SPEC 17.5）。
+
 ### 5.3 部分的なRNG未確定状態
 
 ［実装］Researchは次を全体fail closedにする（`buildReachTable()`）。
@@ -217,9 +250,15 @@ Planner Alternativeは既存機能としてそのまま維持し、変更しな�
 
 ［仕様］AGENTS.md「Partial RNG State and Capabilities」は、capability不足が依存Routeだけを無効化し、無関係なRouteを無効化しないことを求める。
 全体最適化を使えない場合も通常Planner・Candidate Searchは従来どおり使えるので、この原則と衝突しない。
+（初版の判断。［決定 O1］で「生産計画を作成」が全体最適化の標準操作になり、通常Plannerを別ボタンとして残す前提が無くなったため、
+この結論はそのままでは成り立たない。通常Plannerの代替経路を設けない場合、部分RNG未確定の入力・明示checkpointを持つ入力からは生産計画を
+作れなくなる。正式仕様では、REQUIREMENTS 5との関係を含めてUI公開PRの前に判断する事項（PLANNER_SPEC 17.4 / 17.19のU1）とした。）
 
 ［推奨］初期ProductionはResearchと同じく全体fail closedとし、理由と該当Target（RNG状態ならRNG Setup、Normal CounterならNormal Counter Setup）への導線を示す。
 該当Targetだけ既存Entryを固定して他を最適化する拡張は §5.1 案Bと同じ設計を要するので、同じ後続Issueで扱う［Owner］。
+
+［決定 O4］初期Production版はResearchで検証した入力前提を維持する（上記の3条件で全体最適化を行わない）。通常Candidate Searchや既存Plannerの
+部分RNG対応は変更・縮小しない。未対応理由と不足情報を表示する（正式仕様 PLANNER_SPEC 17.4）。
 
 ### 5.4 その他のunsupported条件と分類
 
@@ -337,7 +376,9 @@ Production化は、Phase 6-B2a（PLANNER_SPEC 9.2.19.16。共有primitiveを `sr
 
 - ［推奨］Researchの「別processのfresh検証」と「独立Trace Replayのevidence記録」はProductionに残さない。理由: (1) 採用時の保存境界がcurrent stateの
   再読込・hash再検証・Plan参照検証を行う（§12）、(2) 最終Planは通常Plan生成（内部でTrace Replayを実行）で作られる、(3) Workerは1 runごとに新しく作る（§8）。
-  fresh検証はResearchとCIの回帰（§19）とBrowser受入（§20 PR-8）に残す［Owner］
+  fresh検証はResearchとCIの回帰（§19）とBrowser受入（§20 PR-8）に残す［Owner］。
+  ［決定 O21］Researchのfresh二重実行をProductionの成立条件にしない。ただし保存直前のgenerated Entry freshness validation（§12.2のT5）は必須であり、
+  省略しない（正式仕様 PLANNER_SPEC 17.7 / 17.11）
 - ［推奨］恒等式の不一致（`objective_mismatch`）は「成立しない候補」ではなく前提違反としてfail closed（error）にし、採用可能な結果にしない（GA設計 §9.6）
 
 ### 7.6 決定性
@@ -346,7 +387,8 @@ Production化は、Phase 6-B2a（PLANNER_SPEC 9.2.19.16。共有primitiveを `sr
   ProductionのPlan ID / Step ID / 予約OwnedWeapon IDはProduction ID factory（UUID）で決まり、run間で一致しない（PLANNER_SPEC 15.9.1と同じ「semantic determinism」）
 - ［実装・未検証］Domainの一部の順序付けは `String.prototype.localeCompare()` を使う（P-0 §4.6）。［P-2］`ja` locale・Chromeでは差が観測されなかったが、
   他locale・他engineは未確認である。［推奨］Production Domain foundation PR（§20 PR-2）で、全体最適化の計算結果に影響する `localeCompare` を監査し、
-  Node（複数locale）とBrowser受入（§20 PR-8）で確認する。置換が必要な場合、その関数を通常Candidate Searchも使うなら計算版数の判断を伴う（§18.3）
+  Node（複数locale）とBrowser受入（§20 PR-8）で確認する。置換が必要な場合、その関数を通常Candidate Searchも使うなら計算版数の判断を伴う（§18.3）。
+  ［決定 O16］Browser受入はPC Browserで行い、Android / iPhone実機間の厳密なparity測定は必須ゲートにしない
 
 ### 7.7 WorkerからDexieをimportしない構造
 
@@ -530,6 +572,8 @@ interface BuildListOptimizationArtifact {
 - 満たさない場合: 比較値を推測で作らず、「比較できる現在の生産計画がありません（下書きが無いか、作成後に作成リストまたは状態が変わっています）」と示し、
   全体最適化側の値だけを表示する
 - 全体最適化と同じrunで通常Plannerを比較用に追加実行する案（baseline run）は、時間・memoryの追加費用が未計測なので初期版では行わない［Owner］
+- ［決定 O7］Draft最大1件の不変条件を維持し、同じ入力状態から作られたDraftとだけ比較する。試算は保存せず、採用時だけ既存Draftをatomicに置き換える。
+  比較を目的とする追加の通常Planner実行は初期版では行わない（正式仕様 PLANNER_SPEC 17.9）
 
 ### 10.4 表示しないもの
 
@@ -548,6 +592,8 @@ interface BuildListOptimizationArtifact {
 | Targetごとの部分採用 | ユーザーが一部Targetだけを選んで置換する | 全体最適化のRoute集合は、held位置を跨ぐ非連続Route・他Targetのchainに依存する被覆（GA設計 §8、§9.1）で成り立つ。一部だけを置換すると、残した旧Routeとの組み合わせはPhase D'で検証していない別の集合になり、stall・競合・未完成が起こり得る。単純なEntry置換では実現できず、部分集合ごとに再検証する別操作になる |
 
 ［推奨］初期Productionは **一括採用だけ** とする。部分採用は提供しない（必要なら「部分集合を固定して再最適化する」別機能として、§5.1案Bと同じ後続Issueで設計する）。
+
+［決定 O5］有効な計画対象Target全体を一括採用する。部分採用は提供しない。対象外のTargetやEntryを削除・置換しない（正式仕様 PLANNER_SPEC 17.11）。
 
 ### 11.2 identity（Production規約の提案）
 
@@ -658,12 +704,16 @@ Planを壊す変更は事前警告と承認を要する（PLANNER_SPEC 16.6）�
 
 | 案 | 内容 | 評価 |
 | --- | --- | --- |
-| A: 実行中Planが無いときだけ提供 | 実行中Plan（active / stale）があれば「全体最適化を試す」を無効化し、理由と導線（再計画の試算、生産計画の破棄・完了）を示す。採用時も再確認する | UI_FLOW 10.3と整合。Plan-breaking承認・セーブ地点選択が発生しない |
+| A: 実行中Planが無いときだけ提供 | 実行中Plan（active / stale）があれば「全体最適化を試す」（初版の操作名。［決定 O1］後は全体最適化としての「生産計画を作成」）を無効化し、理由と導線（再計画の試算、生産計画の破棄・完了）を示す。採用時も再確認する | UI_FLOW 10.3と整合。Plan-breaking承認・セーブ地点選択が発生しない |
 | B: Draftとして保存し、壊す場合はPlan-breaking承認 | 実行中Planがあっても計算・Draft保存を許し、置換が実行中PlanのPlan依存Entryに触れる場合は既存guardで承認を求める | 既存のrepair保存と同じ経路だが、「実行中Plan中に通常の下書き作成ボタンを追加しない」と衝突する |
 | C: 再計画としての全体最適化 | 現在地点から全体最適化を試算し、採用で旧Planを `replan_adopted`、新Planを `active` にする | 16.8の再計画採用にEntry置換（Phase 6-Aで除去した）を戻すことになり、正式仕様の変更が大きい |
 
 ［推奨］初期ProductionはA。保存は §12 のとおり既存guardを通すが、実行中Planが無いことを前提条件にするので承認は発生しない
 （承認を渡した場合は既存の `plan_breaking_change_approval_not_required`）。B・Cは後続の判断とする［Owner］。
+
+［決定 O6］案A。active / stale Planがある場合は初期版の全体最適化を提供しない（［決定 O1］後は、作成リストの「生産計画を作成」として
+提供しない。実行中Planがある間の作成リスト画面のPlanner操作は従来どおり再計画の試算だけである）。Draftの存在は実行中Planと区別する。
+既存の実行中Planの再計画機能は変更しない（正式仕様 PLANNER_SPEC 17.4）。
 
 - ［推奨］stale Planも実行中Planとして扱う（invariantどおり）。staleの解消（再計画・破棄）後に全体最適化を使う
 - ［推奨］既存Draftは採用時に通常どおり置き換える。Previewと採用確認で「現在の未開始の生産計画は置き換えられます」と示す（UI_FLOW 10.3と同じ文言規則）
@@ -719,6 +769,12 @@ optimizationMaxPlanSteps = roundUpPlannerMaxPlanSteps(requiredActions) + OPTIMIZ
 （Issue #130）。採用後の作成リストで通常の「生産計画を作成」をやり直すと、推奨値が `requiredActions` より小さく `incomplete` になり得る。
 ［推奨］初期版はIssue #130の規則を変えず、採用時にDraftを保存済みであることと、作り直す場合は最大計画ステップ数を増やす必要があり得ることを案内する。
 
+［決定 O8］上記の導出（`roundUpPlannerMaxPlanSteps(structuralObjective + planningTargetCount) + 500`、500刻みは共有Domain pure helper、
+ユーザー編集なし）を正式仕様とした（PLANNER_SPEC 17.13）。D-1C相当で2,500。
+
+［決定 O14］標準Planner切替（O1）に伴い、旧「最大計画ステップ数」設定（通常Planner用）のUI配置を見直す。Issue #130の規則と内部Plannerの値・契約は
+勝手に変更しない（PLANNER_SPEC 17.13、17.19のU7）。O1後に通常の「生産計画を作成」をやり直す経路が残るかは17.19のU1による。
+
 ### 14.2 探索範囲・探索上限
 
 | 上限 | Research登録値（D-0C / D-1C、候補値） | Production（推奨） |
@@ -736,6 +792,8 @@ optimizationMaxPlanSteps = roundUpPlannerMaxPlanSteps(requiredActions) + OPTIMIZ
 - ［推奨］初期版ではユーザーに探索上限を公開しない。REQUIREMENTS 19の「ユーザーが変更できるPlannerの設定は最大計画ステップ数だけ」を通常Plannerについて維持する
   （全体最適化にユーザー設定を足す場合は正式仕様の変更になる）［Owner O9］
 - ［推奨］探索上限はdevice非依存の決定的なwork boundとし、wall-clock・heapを意味論的判定に使わない（GA設計 G6 / G7）
+- ［決定 O9 / O10］探索上限・windowの具体値はProduction計測によって決める。Researchで使った値を根拠なしにProductionの正式値へ転用しない。
+  候補検索画面の保存設定値とは独立にする。本PR-1では具体値を確定しない（PLANNER_SPEC 17.13、17.19のU2）。計測はPC Browserを正式な環境とする（O12）
 
 ## 15. 性能・キャンセル
 
@@ -745,6 +803,9 @@ optimizationMaxPlanSteps = roundUpPlannerMaxPlanSteps(requiredActions) + OPTIMIZ
 （［仕様］PLANNER_SPEC 7.2.1）、(2) 端末性能で結果が「失敗」に変わる非決定性を持ち込まない、(3) 計算量は §14.2 の決定的上限で有界である。
 長時間化した場合に「時間がかかっています。キャンセルして後で試すこともできます」を示す閾値は、端末計測（§20 PR-5 / PR-8）の後にOwnerが決める［Owner O11］。
 P-2のPC実測値から機械的に決めない。
+
+［決定 O11］自動wall-clock timeoutなし、ユーザーによるキャンセルあり。長時間案内の具体的な閾値は **PC計測** の後に確定する。探索上限到達と
+「解が存在しない」を混同しない（PLANNER_SPEC 17.16、17.19のU3）。
 
 ### 15.2 cancel
 
@@ -771,6 +832,7 @@ P-2のPC実測値から機械的に決めない。
 
 - ［推奨］Workerの `error` / `messageerror` は「計算を完了できませんでした」とし、メモリ不足と断定しない。renderer crash・tab破棄はページ自身が観測できない
 - ［推奨］run中であることの印をstorageへ保存しない（再読込後の「前回中断」通知は行わない）。行う場合は正式仕様の追加が要る［Owner O18］
+- ［決定 O18］page loss後の中断履歴・計算再開の永続機能を追加しない（PLANNER_SPEC 17.16）
 
 ### 15.6 Worker起動・停止時のメモリ解放
 
@@ -784,8 +846,11 @@ P-2のPC実測値から機械的に決めない。
 
 ### 15.8 Browser間の決定性
 
-［推奨］run内の決定性はDomainで保証する。Browser間・locale間の一致は §7.6 の監査と §20 PR-8 の受入（Chrome / Edge / Firefox / Safariのうち、Ownerが決めた環境）で確認し、
+［推奨］（初版。直後の［決定 O16］で上書き）run内の決定性はDomainで保証する。Browser間・locale間の一致は §7.6 の監査と §20 PR-8 の受入（Chrome / Edge / Firefox / Safariのうち、Ownerが決めた環境）で確認し、
 一致しない環境が見つかった場合は原因を切り分けてから公開を判断する。
+
+［決定 O16］Domainの決定性は自動テストとProduction Browser検証（PC）で確認する。Android / iPhone実機間の厳密なparity測定は必須ゲートにしない。
+Androidの実利用やその他の環境で不一致が見つかった場合は修正またはIssueとして扱う（PLANNER_SPEC 17.17）。
 
 ### 15.9 必要な性能・メモリ検証
 
@@ -793,6 +858,8 @@ P-2のPC実測値から機械的に決めない。
 
 - PC Chrome、Android Chrome、iPhone Safari（§16）: 各段の時間、最大同期slice、Worker heap（取れる範囲）、結果clone時間、Preview表示時のmain thread long task、cancelの応答、再実行
 - 合格基準（許容時間・memory）は計測の **前に** Ownerが決める。P-2の値から機械的に決めない
+- ［決定 O12］正式な計測と受入はPC Browserで行う。Android Chromeでの計測は必須にせず、GitHub Pages上での実利用で問題を確認する。
+  iPhone Safariは必須の計測対象にしない（未検証として扱う）。上のAndroid / iPhoneの項目は、実施できる場合の参考項目である
 
 ## 16. PC / スマートフォン
 
@@ -802,22 +869,37 @@ P-2のPC実測値から機械的に決めない。
 - ［推奨］全体最適化をPC限定の機能にしない（正式仕様と衝突する）。端末（user agent）による提供可否の分岐を置かない
 - ［推奨］未測定の端末での性能・成否を保証する表示をしない。「端末によっては時間がかかります」「計算中は画面を表示したままにしてください」を示す
   （iOS等でbackgroundへ移ったtabのJS実行が止まり得ることは一般的な挙動であり、本Repositoryで観測した事実ではない。P-0 §11.4）
-- ［推奨］**Production公開（UIの入口を出すPRのmerge）前に、実機での受入を必須とする**。GitHub Pagesはmainのmergeで公開されるので、受入はmerge前に行う（§20）
+- ~~［推奨］**Production公開（UIの入口を出すPRのmerge）前に、実機での受入を必須とする**。GitHub Pagesはmainのmergeで公開されるので、受入はmerge前に行う（§20）~~
+  （初版の推奨。採らない）
 
-実機検証の手段:
+［決定 O12 / O16 / O19］Ownerの利用環境（PCを主要な計画作成環境とする。Android端末を所持しGitHub Pages上で実際に利用できる。iPhone実機は
+所持しておらずテストできない）を踏まえ、次のとおりとする（正式仕様 PLANNER_SPEC 17.17、REQUIREMENTS 19.1、UI_FLOW 10.4）。
+
+- 機能の対応範囲: PC・スマートフォンでDomain semanticsや機能を意図的に分岐・削減しない。Androidからも全体最適化を実行できる。iPhoneを
+  user agent等で明示的にブロックしない。既存のスマートフォンUI・実行ナビの機能を維持する。REQUIREMENTS 3.2の主要機能共通方針は維持する
+- PC BrowserをProduction性能・計算結果・キャンセルの正式な受入環境とする
+- Android実機での厳密な性能測定・全ケース検証は公開前の必須ゲートにしない。AndroidではGitHub Pages上で実際に利用し、問題があれば修正・Issue化する
+- iPhone Safari実機検証は公開前の必須ゲートにしない。iPhoneは「未検証」と扱い、「非対応」「動作不可」とは決めつけない
+- Android / iPhone実機間の厳密なparity測定は必須ゲートにしない（O16）。自動テスト・一般的な狭幅Browser確認・Domainの決定性テストは継続する
+- iPhone検証のための事前公開環境（HTTPS事前配信、Debug Modeだけの入口など）を新設しない（O19）。UI公開を実機検証の完了まで止めない
+- Androidでの実行ナビの操作性と、Step確定・保存の安全性は従来どおり重視する
+- 実機テストを必須にしないことと、機能を提供しないことを混同しない
+
+実機検証の手段（初版の記述。［決定 O12 / O19］により、iPhoneの事前HTTPS配信・事前公開は行わない。Androidの `adb` 経由の計測は、Ownerが
+任意で行う場合の参考である。必須の受入はPC Browserで行う）:
 
 | 環境 | 手段 | 備考 |
 | --- | --- | --- |
-| Android Chrome | `adb reverse` で端末の `http://localhost` からPCのpreviewへ接続（secure context）、CDPは `adb forward` | P-0 §11.2。端末の用意はOwner |
-| iPhone Safari | (a) 端末が信頼するローカル証明書でHTTPS配信（Ownerの操作）、(b) Production buildをGitHub Pagesへ公開した後に端末でImportして確認（UI入口の公開前に確認するには、事前公開の仕組み（例: Debug Modeだけの入口）が要り、正式仕様の判断を伴う） | 外部hosting・tunnelへbuildやExportを公開しない（P-0 §11.2） |
+| Android Chrome | `adb reverse` で端末の `http://localhost` からPCのpreviewへ接続（secure context）、CDPは `adb forward` | P-0 §11.2。端末の用意はOwner。必須ではない（O12）。GitHub Pages上の実利用確認を基本とする |
+| iPhone Safari | ~~(a) 端末が信頼するローカル証明書でHTTPS配信（Ownerの操作）、(b) Production buildをGitHub Pagesへ公開した後に端末でImportして確認（UI入口の公開前に確認するには、事前公開の仕組み（例: Debug Modeだけの入口）が要り、正式仕様の判断を伴う）~~ | ［決定 O19］事前公開の仕組みを設けない。iPhoneは未検証として扱う。外部hosting・tunnelへbuildやExportを公開しない（P-0 §11.2） |
 | 代替（参考） | Chrome DevToolsのCPU throttling / device emulation | 実機の代替にしない（sanity checkだけ） |
 
-性能不足の場合の対応候補（いずれも［Owner O12］）:
+性能不足の場合の対応候補（いずれも［Owner O12］。PCの計測やAndroidの実利用で問題が見つかった場合に、Issueとして判断する）:
 
 1. 探索上限・windowを下げる（成立機会と操作数のtrade-off。Production定数の再決定）
 2. 同期区間の分割・memory削減（Production codeの最適化。Phase Eとは別のProduction PR）
 3. 端末差の扱いを正式仕様で定める（REQUIREMENTS 3.2の変更が必要。Owner判断なしに行わない）
-4. 公開を見送る
+4. 公開を見送る（［決定 O12］により、Android / iPhone実機検証が未了であることだけを理由に公開を止めない）
 
 ## 17. UI / UX
 
@@ -827,6 +909,8 @@ UI / UXの具体設計は `ui-ux-pro-max` の指針（Accessibility / Touch & In
 
 ### 17.1 入口（作成リスト画面）
 
+初版の案（2ボタン構成。［決定 O1］により採らない）:
+
 ```text
 作成リスト  ─ Planner操作（実行中の生産計画が無い場合）
   [生産計画を作成]（主操作・contained）
@@ -835,8 +919,18 @@ UI / UXの具体設計は `ui-ux-pro-max` の指針（Accessibility / Touch & In
   結果は確認してから採用でき、採用するまで作成リストと生産計画は変更されません。最短であることは保証しません。
 ```
 
-- 1画面1主操作（`primary-action`）を守り、既存の「生産計画を作成」を主操作のままにする
-- PCでは横並び、375px幅では縦に全幅で並べ、各ボタンは高さ44px以上・間隔8px以上（`touch-target-size` / `touch-spacing`）
+［決定 O1］後の構成（正式仕様 UI_FLOW 10.4。最終的な文言はUI公開PRで確定する）:
+
+```text
+作成リスト  ─ Planner操作（実行中の生産計画が無い場合）
+  [生産計画を作成]（主操作。全体最適化の標準操作）
+  作成リストの目標武器全体の作成ルートを組み直し、計画全体を検証します。
+  結果は確認してから採用でき、採用するまで作成リストと生産計画は変更されません。最短であることは保証しません。
+```
+
+- 1画面1主操作（`primary-action`）を守る。~~既存の「生産計画を作成」を主操作のままにする~~（初版）→［決定 O1］「生産計画を作成」を全体最適化の
+  標準操作とし、「全体最適化を試す」の副操作ボタンを置かない。全体最適化を伴わない通常の生産計画作成を画面に残すかはPLANNER_SPEC 17.19のU1で決める
+- ボタンは高さ44px以上（`touch-target-size`）。複数の操作を並べる場合はPCで横並び、375px幅で縦に全幅、間隔8px以上（`touch-spacing`）
 - 使えない場合はボタンを無効化し、理由をボタン近くの本文（`aria-describedby`）で示す。tooltipだけにしない（実行中Plan、valid Entry 0件、途中採用状態の選択、
   legacy duplicateなど、開始前に分かる理由）。Workerの `unsupported` 結果は計算後に同じ形式で示す
 - 開始前の判定は、WorkerのStage 0と同じ判定を行うDomainの共有pure helper（提案）だけで行い、UIが独自の規則で判定しない
@@ -847,7 +941,7 @@ UI / UXの具体設計は `ui-ux-pro-max` の指針（Accessibility / Touch & In
 
 - `role="status"` の領域に見出し「全体最適化を計算しています…」、indeterminateな進捗バー、現在の段階名（文字）、経過時間（任意）、「キャンセル」（44px以上）を表示する
 - 段階の変化は1つのstatus領域で文として通知し、focusを移さない（`contextual-live-badge-updates`）。進捗バーは `prefers-reduced-motion` で動きを抑える
-- 計算中と結果表示中は、同じ画面のPlanner操作（生産計画を作成・全体最適化）と作成リストの変更操作（途中採用状態・改善優先の変更、削除）を一時無効化する
+- 計算中と結果表示中は、同じ画面のPlanner操作（生産計画を作成。［決定 O1］後は全体最適化そのもの）と作成リストの変更操作（途中採用状態・改善優先の変更、削除）を一時無効化する
   （Plan-breaking警告待ちの間に別のguarded変更を積まない既存規則と同じ考え方。UI_FLOW 16.3）。他画面での変更は採用時の再検証が検出する
 - スマートフォンでは「計算中は画面を表示したままにしてください」を添える
 
@@ -894,7 +988,8 @@ UI / UXの具体設計は `ui-ux-pro-max` の指針（Accessibility / Touch & In
 | `cancelled` | 「全体最適化をキャンセルしました。」（notice。エラーにしない） |
 | `failed` | 「全体最適化の計算を完了できませんでした。もう一度試してください。」（retry） |
 
-いずれの場合も作成リストと保存済み生産計画は変更されていないことを示す。
+いずれの場合も作成リストと保存済み生産計画は変更されていないことを示す。［決定 O1］いずれの結果でも通常Plannerへ自動で切り替えない
+（自動フォールバックは未決定。PLANNER_SPEC 17.19のU1）。
 
 ## 18. versioning / compatibility
 
@@ -926,7 +1021,11 @@ UI / UXの具体設計は `ui-ux-pro-max` の指針（Accessibility / Touch & In
    Ideal / Practical条件を満たす状態を候補にするので、継続Routeでは `match = ideal` の中間状態が現れ得る。通常Searchのcanonical Idealでこれが現れるかは
    本書では監査していない。現れないなら、作成リストでその状態を途中採用として選ぶと「理想条件を満たす状態で妥協品として終了できる」という、通常の候補には
    無い組み合わせが生じる。扱い（そのまま / 作成リストで選択不可 / 抽出から除く）は正式仕様PRで決める［Owner O15］。抽出規則を変える場合は通常Candidateの出力も
-   変わり得るので、その時点で計算版数を判断する
+   変わり得るので、その時点で計算版数を判断する。
+   ［決定 O15］PR-1で正式な既存判定と照合した。SEARCH_SPEC 5.8.1は、canonical Ideal以外のPlanner由来Candidate（後続Counter位置の同一結果）について
+   `match = "ideal"` の途中位置を明示的に許容しており、Domain validationも `ideal` を受理する。したがって全体最適化のCandidateで現れても既存の許容の範囲であり、
+   抽出規則とvalidationは変えない（未監査の意味論を推測で変えない）。全体最適化の生成Entryは途中採用状態を選択せず、O2により明示選択を持つ入力では全体最適化を
+   行わない。採用後にユーザーがその状態を途中採用として選んだ場合は既存semanticsに従い、制限・除外が必要かは後続判断U6とした（PLANNER_SPEC 17.15）
 
 ### 18.3 version変更が必要になる条件と担当PR
 
@@ -939,6 +1038,7 @@ UI / UXの具体設計は `ui-ux-pro-max` の指針（Accessibility / Touch & In
 | Build List画面の `maxPlanSteps` 推奨規則の変更（O14） | versionなし（runtime-only、PLANNER_SPEC 7.2.1） | 別PR |
 | 500刻み切り上げ規則の共有Domain helperへの移設（§7.2 / §14.1） | versionなし（同じ規則・同じ値の移設で、`PlannerOptions` はruntime-only。通常Planner・Planner Alternativeの上限値を変えない） | PR-2 |
 | 通常Plannerへ全体最適化を組み込み「生産計画を作成」の結果を変える | 計算版数（同じ入力のPlanが変わる）。本書は推奨しない | — |
+| ［決定 O1］「生産計画を作成」を全体最適化の標準操作にする（作成リストを置き換えたうえで内部Plannerを実行する） | versionなし（PLANNER_SPEC 17.18）。内部Plannerの同じ `PlannerInput` に対する出力は変わらず、採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持つ。上の行（内部Plannerそのものの計算を変える）とは異なる。§18.2の前提が崩れる場合は停止して仕様へ戻る | UI公開PR |
 
 isolation test等が固定している現行version（`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、`DATABASE_SCHEMA_VERSION` 10、`EXPORT_SCHEMA_VERSION` 13、
 `production-rng:c5-e7`）は、versionを動かすPRだけが更新する。
@@ -1018,8 +1118,10 @@ isolation test等が固定している現行version（`CURRENT_CALCULATION_APP_S
 
 ### 19.5 Browser受入（PR-5・PR-8）
 
-- 計測前にcommitした測定計画に従い、PC Chrome・Android Chrome・iPhone Safari（Ownerが決めた環境）で、Production計算のsemanticが同じHEADのNode referenceと一致すること、
+- （初版。直後の［決定 O12 / O16］で上書き）計測前にcommitした測定計画に従い、PC Chrome・Android Chrome・iPhone Safari（Ownerが決めた環境）で、Production計算のsemanticが同じHEADのNode referenceと一致すること、
   cancel試験、再実行、時間・memoryの記録。未実施の環境は「未確認」と記録する
+- ［決定 O12 / O16］必須の受入環境はPC Browserだけとする。Android Chromeは任意（GitHub Pages上の実利用確認を基本とする）、iPhone Safariは必須にしない。
+  未実施の環境は「未確認 / 未検証」と記録し、「非対応」とは記録しない
 - `npm run build` 後の `dist/` にResearch token（`research.global`、`global-assignment-d0a`、`research-shape-constrained-route-policy` 等）が無いこと
 
 ## 20. 実装PR分割案
@@ -1027,51 +1129,63 @@ isolation test等が固定している現行version（`CURRENT_CALCULATION_APP_S
 Production統合はResearch Issue #154とは別の機能開発として、**新しいIssue**（例: 「作成リストの全体最適化（Global Assignment）のProduction統合」）で管理することを推奨する［推奨・O20］。
 #154はResearch（Phase Eを含む）のまま残し、両Issueを相互に参照する。本PRではIssueを登録しない。
 
-GitHub Pagesはmainへのmergeで公開されるので、利用者に見える入口を出すPR（PR-7）は最後に置き、そのmerge前に実機受入（PR-8）を終える。
+GitHub Pagesはmainへのmergeで公開されるので、利用者に見える入口を出すPR（PR-7）は最後に置き、そのmerge前に~~実機受入~~受入（PR-8。［決定 O12］PC Browser）を終える。
+
+［決定 O20 / O12］Production統合はIssue #260、ResearchはIssue #154として管理する（PR-1で反映）。PR-7のmerge前に終える受入はPC Browserでの
+Production受入であり、Android / iPhone実機の受入は公開の必須条件にしない（Androidは公開後もGitHub Pages上で実利用し、問題は修正・Issue化する）。
+全体最適化を伴わない通常の生産計画作成の扱いと自動フォールバックの可否（PLANNER_SPEC 17.19のU1）は実装前に整理し、遅くともPR-7の実装前に決める。
 
 | PR | 目的 | 変更するmodule | 変更しないmodule | 依存 | テスト | 受入条件 | version境界 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **PR-1 正式仕様への反映**（docs-only） | §21のOwner判断を反映し、§22の修正文案を正式仕様へ入れる | REQUIREMENTS 18 / 19 / 23、PLANNER_SPEC（新節、5 / 7.2.1 / 9.2.15 / 9.2.18）、SEARCH_SPEC 5.6.9、DATA_MODEL 9.4 / 9.4.1 / 14.5、UI_FLOW 10、AGENTS.md（要約） | code一式 | 本PR、Owner判断 | — | 正式仕様間の整合、Research契約との整合 | なし（判断を記録） |
+| **PR-1 正式仕様への反映**（docs-only。Issue #260で実施、§25） | §21のOwner判断を反映し、§22の修正文案（O1に合わせて改めた）を正式仕様へ入れる | REQUIREMENTS 18 / 19（19.1）/ 23 / 24.1 / 25.4 / 32 / 39、PLANNER_SPEC（17章、16.19、2 / 5 / 7 / 7.2.1 / 9.2.8 / 9.2.15 / 9.2.18 / 16.12）、SEARCH_SPEC 5.6.9 / 5.8.1、DATA_MODEL 9.4 / 9.4.1 / 11.3 / 14.5、UI_FLOW 10 / 10.0〜10.4 / 11.0 / 12 / 16.4 / 19、AGENTS.md（要約）、本書 | code一式 | 本PR、Owner判断 | — | 正式仕様間の整合、Research契約との整合 | なし（判断を記録） |
 | **PR-2 Production Domain / Search基盤** | 形状制約付きRoute探索のProduction API化と、Phase 0〜Cの中立Production Domain moduleへの責務移管。共有step bound helper（500刻み切り上げ）のDomainへの移設と既存Serviceの互換維持（§7.2 / §14.1） | `src/domain/search/shapeConstrained/`（新）、`src/domain/search/research/`（Research adapterへ縮小）、`src/domain/planner/buildListOptimization/`（Phase 0〜C）、`src/domain/planner/plannerStepBound.ts`（新、共有helper）、`src/services/planner/plannerRuntimeOptions.ts`（共有helperを再exportする薄いwrapperへ。導出規則と値は不変）、Research moduleのimport先、isolation test | Production Planner / Candidate Search / Planner Alternativeの挙動、通常Plannerの推奨値・競合解決再計算の上限、Worker、UI、Persistence、D-1C / P-2記録 | PR-1 | §19.1（移管・Search不変・Research回帰・isolation、step boundの1〜4・8）、localeCompare監査 | golden不変、Research D-1A runnerが§7.2の3値を再現（非formal記録）、既存 `plannerRuntimeOptions.test.ts` が無変更で通る、lint / test / build | なし（変える場合は停止して仕様へ戻る） |
 | **PR-3 Production全体最適化計算** | Phase D / D'（射影起点 + 形状制約、独立Route検証、最終入力、§4.3 / §7.5の成立条件、§14.1の全体最適化専用bound導出（共有Domain helperを使用）と最終入力への適用、結果型・artifact（`inputExclusions`、`outOfScopeTargetCounts` を含む）、Production identity） | `src/domain/planner/buildListOptimization/`、Production materializer adapter | Planner本体、Search API、共有step bound helperの契約、Worker、UI、Persistence | PR-2 | §19.1（成立条件・除外Entry・identity・決定性・結果分類、step boundの5〜7） | synthetic全ケース、実ExportでのNode非formal確認（43 / 43、物理操作数1,766の再現と、Production tokenでのsemantic一致） | なし |
 | **PR-4 Worker / Application接続** | 専用Worker、protocol、Client lifecycle、Production adapter（探索上限定数の受け渡し口。Phase D'のstep boundは計算しない）、入力とtokenの作成 | `src/workers/buildListOptimization.worker*.ts`（新）、`src/services/planner/` の新Client・Application service | Planner Worker protocol / Client、全体最適化Domainのbound導出、UI、Persistence | PR-3 | §19.2（step boundを重複実装しないことを含む） | lifecycle・cancel・isolation（Worker bundleに `src/db/**` が無い） | なし |
-| **PR-5 Production上限の計測と確定** | Production計算のBrowser Worker計測（PC / Android / iPhone）で §14.2の定数を根拠付きで確定 | benchmark-only harness（`src/benchmarks/**`）、計測記録docs、Production定数 | UI、Persistence | PR-4 | 計測計画のcommit、analyzer | 測定計画どおりの記録、定数の根拠と未確認範囲の記録 | なし |
+| **PR-5 Production上限の計測と確定** | Production計算のBrowser Worker計測（初版はPC / Android / iPhone。［決定 O12］PC Browserを必須の計測環境とし、Android / iPhoneは必須にしない）で §14.2の定数を根拠付きで確定 | benchmark-only harness（`src/benchmarks/**`）、計測記録docs、Production定数 | UI、Persistence | PR-4 | 計測計画のcommit、analyzer | 測定計画どおりの記録、定数の根拠と未確認範囲の記録 | なし |
 | **PR-6 採用・Persistence** | 保存API（inspect / save）と保存transaction（§12.2のP1・T1〜T7。既存の共通保存検証とgenerated Entry freshnessを再利用し、全体最適化固有の検査を追加） | `PlannerResultPersistenceService`（共有保存経路への追加）、`src/domain/planner/plannerResultPersistenceValidation.ts`（全体最適化固有の追加検査関数） | UI、既存の保存APIの意味、既存の共通保存検証helperの契約 | PR-3（PR-4と並行可） | §19.3（freshness・保存可能性の1〜11、tokenとfreshnessの別々の固定を含む） | 原子性・各拒否・Export往復、既存の保存APIのtestが無変更で通る | なし |
-| **PR-7 Preview / 採用UI**（初の利用者向け公開） | 入口、計算中、Preview、採用確認、結果別表示 | `src/pages/BuildListPage.tsx`、新しいPreview component | Domain、Worker protocol、Persistenceの意味 | PR-4、PR-5、PR-6 | §19.4 | PC / 375pxの確認、a11y、Debug Mode、完成予定数と対象外の表示4ケース（§19.4。分母は `termination.totalTargetCount`）。**merge前にPR-8の受入をOwnerが確認** | なし |
-| **PR-8 回帰・性能・実Browser受入** | Production build（PR-7のhead）での実機受入と回帰記録 | 受入記録docs（必要ならbenchmark harnessの追加） | Production code | PR-7（merge前） | §19.5 | Ownerが事前に決めた合格基準、未確認環境の明記 | なし |
+| **PR-7 Preview / 採用UI**（初の利用者向け公開） | 入口、計算中、Preview、採用確認、結果別表示 | `src/pages/BuildListPage.tsx`、新しいPreview component | Domain、Worker protocol、Persistenceの意味 | PR-4、PR-5、PR-6 | §19.4 | PC / 375pxの確認、a11y、Debug Mode、完成予定数と対象外の表示4ケース（§19.4。分母は `termination.totalTargetCount`）。**merge前にPR-8の受入（PC Browser）をOwnerが確認**。実装前にPLANNER_SPEC 17.19のU1を決定済みであること | なし |
+| **PR-8 回帰・性能・実Browser受入** | Production build（PR-7のhead）でのPC Browser受入と回帰記録（初版は実機受入。［決定 O12］Android / iPhone実機受入は必須にしない） | 受入記録docs（必要ならbenchmark harnessの追加） | Production code | PR-7（merge前） | §19.5 | Ownerが事前に決めた合格基準（PC）、未確認 / 未検証環境の明記（「非対応」とは書かない） | なし |
 
 - 各PRは1 PR = 1責務とし、main向けDraft PR、mergeはOwner判断（docs/AI_DEVELOPMENT_WORKFLOW.md）
 - PR-2とPR-3はProduction source（Search Domain・Planner Domain）を変更するので、開始前にOwner承認を要する（D-0A-2aと同じ扱い）
 
-## 21. Ownerの判断が必要な事項
+## 21. Ownerの判断が必要な事項（PR-1で決定済み）
 
-| # | 事項 | 本書の推奨 |
-| --- | --- | --- |
-| O1 | 全体最適化をv1仕様への機能追加として採用するか（REQUIREMENTS 39の固定との関係）、機能名・UI名 | 採用する場合、PR-1で正式仕様化。名称「作成リストの全体最適化」/ 操作名「全体最適化を試す」 |
-| O2 | 途中採用状態の選択を持つ入力（§5.1） | 案A（全体fail closed、自動解除しない）。案Bは後続Issue |
-| O3 | 改善優先が `planner` 以外の入力（§5.2） | 案1（開示して既定へ戻す） |
-| O4 | 部分的なRNG未確定・sourceの無いTarget（§5.3） | 全体fail closed。固定Route拡張は後続Issue |
-| O5 | 採用の単位（§11.1） | 一括採用だけ |
-| O6 | 実行中Planがある場合（§13） | 案A（提供しない） |
-| O7 | Previewの比較対象（§10.3） | 同じ入力から作られた現在Draftだけ。baseline runは行わない |
-| O8 | Phase D'の `maxPlanSteps` 導出（§14.1） | `roundUpPlannerMaxPlanSteps(objective + planningTargetCount) + 500`、ユーザー編集不可。計算authorityは全体最適化Domain、500刻みは共有Domain helper（Domain → Serviceの依存を作らない） |
-| O9 | 探索上限の値と公開範囲（§14.2） | PR-5の計測で定数を確定。ユーザーには公開しない |
-| O10 | 到達表window（§14.2） | Production専用定数（候補検索の既定値・ユーザー保存値をauthorityにしない） |
-| O11 | wall-clock上限・長時間化の案内閾値（§15.1） | 自動timeoutなし。案内閾値は端末計測後に決める |
-| O12 | スマートフォンの公開条件、iPhoneの検証経路、性能不足時の対応（§16） | 公開前に実機受入必須。経路と合格基準はOwnerが計測前に決める |
-| O13 | 全体最適化で作られたことを示す永続表示（`/plans` 等） | 追加しない（schema変更を避ける） |
-| O14 | 採用後に通常Plannerを作り直す場合の最大計画ステップ数（§14.1） | Issue #130の規則は変えず、案内だけ |
-| O15 | 継続Routeの `match = ideal` 中間状態の扱い（§18.2の4） | 正式仕様PRで決める（監査を先に行う） |
-| O16 | Browser間・locale間の決定性の確認範囲（§7.6、§15.8） | PR-2で監査、PR-8でOwnerが決めた環境を確認 |
-| O17 | 割当で優先起点（`preferredOwnedWeaponId`）を使うか | 使わない（Researchと同じ）。Previewで優先起点と異なる起点を示す |
-| O18 | page loss後の「前回中断」通知（§15.5） | 行わない（storageへ保存しない） |
-| O19 | iPhone検証のための事前公開の仕組み（§16） | 必要になった場合だけ検討（正式仕様の判断を伴う） |
-| O20 | Production統合用の新Issue（§20） | #154とは別Issueで管理 |
-| O21 | Researchのfresh検証をProductionの成立条件に残すか（§7.5） | 残さない（CI・受入に残す） |
+PR #259時点ではOwner判断待ちだった事項である。Issue #260 PR-1で、Ownerの決定を正式仕様へ反映した（反映先は主に
+[PLANNER_SPEC.md](PLANNER_SPEC.md) 17章。対応表は同 17.20）。「決定」列が正式な扱いであり、「初版の推奨」列は記録として残す。
+
+| # | 事項 | 初版の推奨（PR #259） | Owner決定（Issue #260 PR-1） | 反映先 |
+| --- | --- | --- | --- | --- |
+| O1 | 全体最適化をv1仕様への機能追加として採用するか（REQUIREMENTS 39の固定との関係）、機能名・UI名 | 採用する場合、PR-1で正式仕様化。名称「作成リストの全体最適化」/ 操作名「全体最適化を試す」（通常Plannerの「生産計画を作成」を主操作に残す2ボタン構成） | **変更**。採用する。作成リストの「生産計画を作成」を全体最適化の標準操作にし、2ボタン構成は採らない。通常Plannerの計算と最終検証は内部Plannerとして維持する。最短性は保証しない。自動フォールバックは未決定で、仕様にしない。旧Plannerを通常UIにどの程度残すか、未対応入力の手動の代替経路は実装前に整理する | PLANNER_SPEC 17.1 / 17.2 / 17.19 U1、REQUIREMENTS 19.1、UI_FLOW 10.4 |
+| O2 | 途中採用状態の選択を持つ入力（§5.1） | 案A（全体fail closed、自動解除しない）。案Bは後続Issue | 案A。ただし対象は明示選択（opportunity IDが非null）だけ。実用品条件の設定や途中状態の存在だけでは拒否しない。該当Targetと理由を表示。保護したまま最適化する拡張は後続検討 | PLANNER_SPEC 17.4 |
+| O3 | 改善優先が `planner` 以外の入力（§5.2） | 案1（開示して既定へ戻す） | 案1。置換されるEntryは「生産計画に任せる」へ戻し、変わるTargetをPreview・採用確認で明示。同一意味のEntryを再利用する場合はその設定を維持 | PLANNER_SPEC 17.5 |
+| O4 | 部分的なRNG未確定・sourceの無いTarget（§5.3） | 全体fail closed。固定Route拡張は後続Issue | Researchの入力前提を維持。通常Candidate Search・既存Plannerの部分RNG対応を変更・縮小しない。未対応理由と不足情報を表示。O1との組み合わせはU1で判断 | PLANNER_SPEC 17.4 / 17.19 U1・U5 |
+| O5 | 採用の単位（§11.1） | 一括採用だけ | 有効な計画対象Target全体を一括採用。部分採用なし。対象外のTarget・Entryを削除・置換しない | PLANNER_SPEC 17.11 |
+| O6 | 実行中Planがある場合（§13） | 案A（提供しない） | 案A。Draftの存在は実行中Planと区別。実行中Planの再計画は変更しない | PLANNER_SPEC 17.4 |
+| O7 | Previewの比較対象（§10.3） | 同じ入力から作られた現在Draftだけ。baseline runは行わない | 同じ。Draft最大1件を維持し、試算は保存せず、採用時だけ既存Draftをatomicに置換 | PLANNER_SPEC 17.9 / 17.11 |
+| O8 | Phase D'の `maxPlanSteps` 導出（§14.1） | `roundUpPlannerMaxPlanSteps(objective + planningTargetCount) + 500`、ユーザー編集不可。計算authorityは全体最適化Domain、500刻みは共有Domain helper（Domain → Serviceの依存を作らない） | 同じ。D-1C相当で2,500 | PLANNER_SPEC 17.13 / 7.2.1 |
+| O9 | 探索上限の値と公開範囲（§14.2） | PR-5の計測で定数を確定。ユーザーには公開しない | Production計測で決める。Research値を根拠なしに転用しない。本PRでは確定しない | PLANNER_SPEC 17.13 / 17.19 U2 |
+| O10 | 到達表window（§14.2） | Production専用定数（候補検索の既定値・ユーザー保存値をauthorityにしない） | 同じ。具体値はProduction計測で決める | PLANNER_SPEC 17.13 |
+| O11 | wall-clock上限・長時間化の案内閾値（§15.1） | 自動timeoutなし。案内閾値は端末計測後に決める | 自動timeoutなし、キャンセルあり。閾値はPC計測後に確定。上限到達と解の不存在を混同しない | PLANNER_SPEC 17.16 / 17.19 U3 |
+| O12 | スマートフォンの公開条件、iPhoneの検証経路、性能不足時の対応（§16） | 公開前に実機受入必須。経路と合格基準はOwnerが計測前に決める | **変更**。機能を端末で分けない（Androidから実行可、iPhoneをブロックしない）。PC Browserを正式な受入環境とする。Android実機の厳密測定・全ケース検証とiPhone実機検証は公開の必須ゲートにしない。iPhoneは未検証であり非対応ではない | PLANNER_SPEC 17.17、REQUIREMENTS 19.1、UI_FLOW 10.4 |
+| O13 | 全体最適化で作られたことを示す永続表示（`/plans` 等） | 追加しない（schema変更を避ける） | 同じ | PLANNER_SPEC 17.12、DATA_MODEL 9.4 |
+| O14 | 採用後に通常Plannerを作り直す場合の最大計画ステップ数（§14.1） | Issue #130の規則は変えず、案内だけ | 標準Planner切替に伴い旧「最大計画ステップ数」設定のUI配置を見直す。Issue #130と内部Plannerの値・契約は変えない | PLANNER_SPEC 17.13 / 17.19 U7、UI_FLOW 10.0 |
+| O15 | 継続Routeの `match = ideal` 中間状態の扱い（§18.2の4） | 正式仕様PRで決める（監査を先に行う） | 正式な既存判定と照合する。未監査の意味論を推測で変更しない。照合結果: SEARCH_SPEC 5.8.1が既に許容。抽出規則は変えない。途中採用として選んだ場合の扱いは後続判断 | PLANNER_SPEC 17.15 / 17.19 U6、SEARCH_SPEC 5.8.1 |
+| O16 | Browser間・locale間の決定性の確認範囲（§7.6、§15.8） | PR-2で監査、PR-8でOwnerが決めた環境を確認 | **変更**。自動テストとPC Browser検証で確認。Android / iPhone実機間の厳密なparity測定は必須ゲートにしない | PLANNER_SPEC 17.17 |
+| O17 | 割当で優先起点（`preferredOwnedWeaponId`）を使うか | 使わない（Researchと同じ）。Previewで優先起点と異なる起点を示す | 固定制約にしない。異なる起点が採用される場合はPreviewで説明 | PLANNER_SPEC 17.14 |
+| O18 | page loss後の「前回中断」通知（§15.5） | 行わない（storageへ保存しない） | 中断履歴・計算再開の永続機能を追加しない | PLANNER_SPEC 17.16 |
+| O19 | iPhone検証のための事前公開の仕組み（§16） | 必要になった場合だけ検討（正式仕様の判断を伴う） | **変更**。新設しない | PLANNER_SPEC 17.17 |
+| O20 | Production統合用の新Issue（§20） | #154とは別Issueで管理 | Production統合はIssue #260、ResearchはIssue #154。実用品到達の表示はIssue #261 | PLANNER_SPEC 17.1 |
+| O21 | Researchのfresh検証をProductionの成立条件に残すか（§7.5） | 残さない（CI・受入に残す） | 成立条件に持ち込まない。ただし保存直前のgenerated Entry freshness validationは必須で、省略しない | PLANNER_SPEC 17.7 / 17.11 |
 
 ## 22. 正式仕様への修正文案（付録A。本PRでは適用しない）
 
 以下は **提案** であり、Owner判断（§21）の後にPR-1で正式仕様へ反映する。採否・文言は変わり得る。
+
+> **PR-1（Issue #260）での適用。** 以下の文案は、O1などの決定に合わせて改めたうえで正式仕様へ反映した（§25）。特に、§22.1の
+> 「通常の『生産計画を作成』とは別に、ユーザーが明示的に起動する『全体最適化』を提供する」は採らず、「生産計画を作成」を全体最適化の
+> 標準操作として記述した（REQUIREMENTS 19.1）。新節は「9.3」ではなく、競合解決（9章）と読まれないようPLANNER_SPECの新しい章（17章）とした。
+> UI_FLOWの新節は10.4、REQUIREMENTSは19.1とした。以下の文案は記録として残す。
 
 ### 22.1 REQUIREMENTS
 
@@ -1174,3 +1288,56 @@ GitHub Pagesはmainへのmergeで公開されるので、利用者に見える�
 
 本対応でも、正式仕様（REQUIREMENTS / PLANNER_SPEC / SEARCH_SPEC / DATA_MODEL / UI_FLOW）、Production / Research code、test、D-1C / P-2の記録とRESULT、version定数は変更していない。
 Owner判断事項O1〜O21は確定していない（O8に計算authorityの補足を加えただけで、推奨する数値規則は初版と同じ）。
+（PR #259時点の記述。O1〜O21はIssue #260 PR-1で決定した。§21、§25）
+
+## 25. Owner判断と正式仕様への反映（Issue #260 PR-1、docs-only）
+
+Refs #260、#261、#154。本書（PR #259）の設計案とOwnerとの協議結果を、正式仕様へ反映した。Production code、Research code、Worker、
+UI component、test、IndexedDB / schema / migration、Export形式、version定数、D-1C / P-2のformal記録とRESULTは変更していない。
+
+### 25.1 正式仕様の反映先
+
+| 正式仕様 | 反映内容 |
+| --- | --- |
+| [PLANNER_SPEC.md](PLANNER_SPEC.md) 17章（新設） | 全体最適化の意味論のauthority: 位置づけ・実装状態、内部Planner / Planner Alternative / 再計画との責務、計画対象Target、未対応入力（O2 / O4 / O6）、改善優先（O3）、計算の構成、成立条件（除外warning集合の一致、物理操作数の恒等式、O21）、結果分類、Preview（O7）、入力token、一括採用と保存transaction（O5。既存helperの契約を変えずに呼び、generated Entry freshnessを必ず再計算）、identityとprovenance（O13）、最大計画ステップ数・探索上限（O8〜O10、O14）、優先起点（O17）、`match = "ideal"` 途中状態（O15）、性能・キャンセル（O11 / O18）、PC / スマートフォン（O12 / O16 / O19）、version、後続判断U1〜U7、O1〜O21の対応表、テスト観点 |
+| PLANNER_SPEC 16.19（新設）/ 16.12 | Issue #261の実用品到達通知と、明示選択checkpoint（`checkpointMilestones` / `compromiseLabels`）との責務境界 |
+| PLANNER_SPEC 2 / 5 / 7 / 7.2.1 / 9.2.8 / 9.2.15 / 9.2.18 | 17章への参照。§4.3注記の `PlannerWarningKind` 列挙の記載漏れ（`duplicate_build_list_entries_for_target`、`completed_target_excluded`）の補正。全体最適化の `maxPlanSteps` が通常Plannerの導出と別authorityであること、500刻み規則の共有Domain helperへの移設方針。全体最適化の採用が保存境界と置換契約を共有すること |
+| [REQUIREMENTS.md](REQUIREMENTS.md) 19.1（新設）/ 18 / 19 / 23 / 24.1（新設）/ 25.4 / 32 / 39 | 製品要件としての標準操作化（O1）と各決定、生成主体の追加、最大計画ステップ数設定との関係（O14）、全体最適化が競合解決の再検索でないこと、実用品到達表示の境界、version判断、v1仕様への機能追加の記録 |
+| [UI_FLOW.md](UI_FLOW.md) 10.4（新設）/ 10 / 10.0〜10.3 / 11.0 / 12 / 16.4 / 19 | 目標仕様の画面（入口、計算中、Preview、採用確認、結果別表示、PC / スマートフォン）、現行の挙動との区別、実用品到達表示とcheckpoint表示の区別、テスト観点 |
+| [SEARCH_SPEC.md](SEARCH_SPEC.md) 5.6.9 / 5.8.1 | 形状制約付きRoute探索のProduction化の方針（無指定時不変、reservation非流用、lane開始Ideal継続の限定、独立Route検証）、O15の照合結果 |
+| [DATA_MODEL.md](DATA_MODEL.md) 9.4.1 / Planner-generated BuildListEntry / 11.3 / 14.5 | 3つ目の生成主体（全体最適化の採用）、provenanceを追加しないこと、保存transaction、checkpoint fieldをIssue #261の表示に流用しないこと |
+| [AGENTS.md](../AGENTS.md) | 実装担当AI向けの要約（Build List Global Optimization） |
+
+### 25.2 初版の推奨から変わったもの
+
+- **O1**: 2ボタン構成（§3.1 / §17.1）を採らず、「生産計画を作成」を全体最適化の標準操作にした。自動フォールバックは仕様にせず、通常Plannerの
+  扱いを後続判断U1とした。初版 §5.3の「通常Plannerが別に使えるので部分RNGの原則と衝突しない」という判断は、O1の下ではそのまま成り立たない
+  ため、U1でREQUIREMENTS 5 / 18との関係を含めて判断する
+- **O12 / O16 / O19**: スマートフォン実機受入を公開の必須条件にしない。iPhoneのHTTPS事前公開手段を前提にしない。実機検証の完了までUI公開を
+  止めない。PR-5 / PR-8の必須検証対象をPC Browserにした（§15.9、§16、§19.5、§20）
+- **O2**: 拒否条件を「明示選択」に限定し、実用品条件・途中状態の存在だけでは拒否しないことを明記した
+- **O15**: 監査を行い、SEARCH_SPEC 5.8.1が `match = "ideal"` の途中位置を既に許容していることを確認した。抽出規則は変えず、途中採用として
+  選んだ場合の扱いを後続判断U6とした
+- **O14**: 「案内だけ」から、旧「最大計画ステップ数」設定のUI配置の見直し（U7）へ変えた
+- **O21**: fresh二重実行を成立条件にしないことに加え、保存直前のgenerated Entry freshness検証が必須であることを明記した
+
+### 25.3 維持したもの
+
+- 通常Planner（内部Planner）のRoute commitment + 決定的scheduling、Planner Alternative、実行中Planの再計画、Execution、履歴、Undoの意味論
+- 既存Draftと旧方式で作成したPlanの閲覧・実行
+- REQUIREMENTS 3.2のPC / スマートフォン共通方針
+- §12.2の保存境界（入力token、generated Entryとreplacementの対応、置換後のcardinality、保存直前のfreshness再計算、Plan全体のDomain
+  validation、terminationの保存可能性、Planと最終Build Listの参照整合、atomic write、rollback、既存ProductionPlan・Export・Importの互換性）
+- Research（Issue #154）の契約・記録・formal結果
+
+### 25.4 後続判断（正式仕様 PLANNER_SPEC 17.19）
+
+| ID | 事項 | 時期 |
+| --- | --- | --- |
+| U1 | 全体最適化が使えない・成立しない場合の通常Plannerの提供方法（通常UIに残す範囲、手動の代替経路）。自動フォールバックの可否 | 実装前に整理する。遅くともUI公開PR（PR-7）の実装前。必須 |
+| U2 | Productionの探索範囲・window・探索上限の具体値 | PR-5 |
+| U3 | 長時間化の案内の時間閾値 | PC計測の後 |
+| U4 | 実用品到達通知のauthority・投影・永続化・表示 | Issue #261 |
+| U5 | 明示checkpoint・部分RNG未確定のTargetを固定して他を最適化する拡張 | 後続Issue |
+| U6 | `match = "ideal"` の途中状態を途中採用として選んだ場合の扱い | 後続判断 |
+| U7 | 旧「最大計画ステップ数」設定のUI配置 | PR-7 |

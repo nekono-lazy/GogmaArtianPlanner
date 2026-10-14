@@ -1835,6 +1835,24 @@ frontierをそのまま使うので、同じcoverage条件でheld位置を跨ぐ
   Master `dataVersion` に影響しない。本APIの結果はResearch上のspeculativeな値であり、Production Searchの結果として扱わず、
   Plannerによる検証（Phase D'）を経るまで `verified` と呼ばない
 
+**Production化の方針（Issue #260、目標仕様）。** 実装状態: **未実装**。現在の本APIは上記のとおりResearch専用であり、
+Production callerは呼ばない。作成リストの全体最適化（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章）は本APIの能力を必要とする
+（Research D-1Cでは43 Entryのうち22件を形状制約付きの方式で得た。射影起点は21件。形状制約付きの方式を持たない
+D-0Bの方式では7 / 43で止まった）。全体最適化の実装PR（Domain / Search基盤）で、
+本APIを中立なProduction Search Domain module（Production API）へ責務移管し、Research側はそれを使うthin consumerにする。
+移管後も次を契約として維持する。
+
+- 無指定時の不変性（上記）。Candidate Search・Planner Alternative Searchの起動primitive、列挙、support問合せ、stream生成、
+  予測内容と回数、Candidateの内容と順序、summary、search identityを変えない（既存goldenと既存testを変更せずに通す）
+- 形状制約をreservationへ流用・追加・改変しない
+- lane開始Idealでの継続は、形状制約付きAPIで形が明示的に要求した場合だけに限る。通常Candidate Searchのlane開始Ideal規則
+  （5.6.1）は変えない
+- 形状制約付きRouteは通常のCandidate Search・Planner Alternative Searchが返さない形を含み得るので、Candidateとして使う前に
+  独立Route検証（全operationの再予測）を行い、失敗はfail closedする
+- Productionの呼び出し元は全体最適化だけである。Research上の識別子（route policy `research-shape-constrained-route-policy:v1`
+  など）はResearch adapterに残し、Production APIは別のtokenを持つ（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.12）
+- 移管が無指定時のSearch出力を変える場合は許容しない（設計を見直す。やむを得ない場合は計算版数を仕様で判断する）
+
 ## 5.7 Candidate出力はcanonical Idealだけである
 
 1 Target 1 requestの出力は、canonical Ideal Candidate 1件または `null` である。
@@ -1911,6 +1929,12 @@ Bonus lane位置  : evaluateTargetBonusMatch()  が ideal / practical / alternat
 canonical Idealでは各laneの終点が最初のIdeal位置なので、終点より手前でIdeal判定になる位置は
 通常存在しない。Planner-driven constrained enumeration由来のCandidate（後続Counter位置の
 同一結果）では手前にIdeal位置が現れうるため、`match = "ideal"` の途中位置も許容する。
+
+作成リストの全体最適化（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章、Issue #260）が生成する形状制約付きのCandidate
+（5.6.9。lane開始状態がIdealでもlaneを継続する形を含む）でも、lane位置0または途中に `match = "ideal"` の位置が現れ得る。
+これは本節の既存の許容に含まれ、全体最適化のために抽出規則を変更しない（O15の照合結果。PLANNER_SPEC 17.15）。
+全体最適化が生成するEntryは途中採用状態を選択しない。採用後にユーザーがそのような状態を途中採用として選ぶ場合の扱いを
+変えるかどうかは後続判断であり、抽出規則を変える場合は通常Candidateの出力も変わり得るので計算版数の判断を伴う。
 
 ### 5.8.2 2層モデル : groupとopportunity
 

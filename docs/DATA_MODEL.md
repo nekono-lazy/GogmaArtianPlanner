@@ -1486,8 +1486,9 @@ deriveBuildListEntryStaleReasons(
 - これはBuild List自体の契約である。Plannerの都合ではなく、「作成リストは目標武器ごとに、
   ユーザーが現在採用した作成ルートを1件だけ持つ」ことを表す
 - staleなEntryも数える。stale Entryは同じTargetの新しいEntryと並べて残さず、置換で入れ替える
-- 生成主体（ユーザー追加 / Planner constrained re-searchの採用）を区別する永続provenance fieldは
-  追加しない。正式採用後はどちらも「そのTargetの現在のBuildListEntry」である
+- 生成主体（ユーザー追加 / Planner constrained re-searchの採用 / 作成リストの全体最適化の採用（下記
+  「Planner-generated BuildListEntry」、Issue #260の目標仕様））を区別する永続provenance fieldは追加しない。
+  正式採用後はいずれも「そのTargetの現在のBuildListEntry」である
 - 通常のPlannerInputはこのinvariantをそのまま継承する。constrained re-search / what-ifの
   temporary augmented inputだけが、元Entryとtemporary generated Entryの一時的な共存を許される
   例外であり、永続化されない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）
@@ -1613,6 +1614,24 @@ generated IDがすでに永続化されていれば、置換ではなくID colli
 Candidate semantic identityにはrestoration bonus scopeを含める。現行の
 `createBuildCandidateMeaningFingerprint()` はscopeを含まないため、B8実装時に
 scopeを含むauthorityへ修正または統合する。
+
+**作成リストの全体最適化の採用（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章、Issue #260）。** 実装状態: **正式仕様のみ
+（未実装）**。作成リストの全体最適化で組み直した作成ルートの結果を、ユーザーがPreviewで確認して明示的に採用した場合も、
+生成されたEntryを本節の規則で保存する（3つ目の生成主体）。
+
+- 本節の `BuildListEntry` 形状をそのまま使い、生成主体（全体最適化由来）を表す永続provenance fieldを追加しない。
+  `ProductionPlan` にも全体最適化由来を示すfieldを追加しない（PLANNER_SPEC 17.12）
+- 計算中に試したCandidate・未採用の試算は保存しない。採用したEntryだけを、新Draftと同一Dexie transactionで保存する
+  （14.5）
+- 採用は計画対象Target全体で一括して行い（部分採用なし）、各Targetの元Entryを **置換** する（9.4.1。1 Target最大1件）。
+  計画対象外TargetのEntryと入力validationで除外されたEntryは変更しない
+- generated BuildListEntry IDは上記の決定的規則（Planner Alternativeと同じEntry ID空間）で生成する。現在の内容がすべて
+  一致する既存Entryは再利用し、そのTargetは置換しない（そのEntryの途中採用状態・改善優先も維持する）。ID一致で内容が
+  異なる場合はfail closedとする
+- 置換で作る新Entryの `intermediateStateSelection` は既定値（両lane未選択、`improvementPreference = "planner"`）であり、
+  元Entryから引き継がない
+- 保存transaction内で、generated Entryのfreshness（Target定義、Search状態、OwnedWeapon参照状態、CalculationContext）を
+  現在状態から再計算し、永続 `isStale` や計算時の判定をauthorityにしない（14.5）
 
 Planner-generated Entryの `candidateSnapshot` も本節9.1の `BuildCandidate` 形状で
 ある。ただしconstrained enumeratorが返すのはtransientな `ConstrainedCandidate` で
@@ -2094,6 +2113,10 @@ export interface PlanStepExecutionEffects {
   createdAtを失わない
 - 妥協checkpointへ到達したStepは `compromiseLabels` で追跡武器を `practical` にする。保護と作成中状態は
   変更せず、Planは続く
+- `checkpointMilestones`（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.5.4）と `compromiseLabels` は、ユーザーが作成リストで
+  明示選択した途中採用checkpointだけを表す。選択していない実用品条件への到達を知らせる表示（Issue #261、
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.19）とは別概念であり、その表示のためにこれらのfieldを流用しない。実用品到達の
+  情報を永続shapeへ追加するかどうかはIssue #261の後続設計で判断し、追加する場合はschema / 計算版数の判断を伴う
 - 理想品完成は、新規生成武器でも既存武器でも `status = "ideal"`、`isProtected = true`、作成中OFF、
   Target `completed`、`preferredOwnedWeaponId = null` とする。旧契約の「既存Gogmaは保存済みの保護状態を
   維持する」は廃止した
@@ -2757,6 +2780,15 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   （`savePlannerResult()`）には適用しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）
 - `plannerResult.conflicts` と `plan.conflicts` は順序を含めたPlanConflict全体の構造一致を要求し、IDだけの比較にしない。
   不一致のartifactは `planner_result_invalid` で何も保存しない
+- 作成リストの全体最適化の採用（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.11、Issue #260。正式仕様のみで未実装）は、
+  全体最適化専用の保存API（inspect / save）で同じtransaction境界を使う。artifactを通常の `PlannerResult` 保存やrepair
+  artifactへ変換しない。既存の共通保存検証（termination、Plan / Entryのvalidation、`conflictRepairLineage === null`、
+  置換後Build Listの構築とcardinality、generated Entry freshnessの再計算、Plan参照）の契約を変えずに呼び、全体最適化固有の
+  検証（作成リスト全体の入力token、実行中Planが無いこと、current Draftが0件または計算開始時に観測したDraft 1件であること、
+  完成・Conflict 0・除外warningだけ・物理操作数の恒等式）を追加する。入力tokenが一致してもfreshnessの再計算を省略しない。
+  すべて通った場合だけ、各Targetの元Entry削除 + generated Entry追加、旧Draft削除、新Draft追加（lineage `null`）を
+  1つのDexie read-write transactionで行い、失敗時は何も書かない（旧Entry・旧Draftを維持する）。実行中Planが無いことを
+  前提にするのでPlan-breakingの承認は発生しない。新しいtable / index / fieldは追加しない
 
 Planner save transactionのための新しいtable / indexは追加しない。`buildListEntries` と
 `productionPlans` の既存tableをそのまま使う（Draft最大1件契約自体はDexie v8で既存Draftを

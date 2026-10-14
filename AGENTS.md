@@ -3489,7 +3489,9 @@ reselection. Never synthesize a substitute fixed Entry from
 `recommendedBuildListEntryId` or a bestState participant.
 
 BuildListEntry now has two producers: the user selecting a search result, and
-Planner constrained re-search materializing one. A Planner-generated Entry uses
+Planner constrained re-search materializing one (the Build List global optimization
+adoption of Issue #260 is a specified, not yet implemented, third producer; see
+"Build List Global Optimization" below). A Planner-generated Entry uses
 the ordinary `BuildListEntry` shape — no new persisted provenance field, no
 Candidate Snapshot embedded in `ProductionPlan`, and no new persisted entity.
 Candidates found during enumeration are temporary Planner trial input; only the
@@ -4125,6 +4127,59 @@ stand in for it; the persisted `isStale` flag stays untrusted as before.
 Complete optimality is not required.
 
 Respect search bounds and return the best state available within the limits.
+
+---
+
+## Build List Global Optimization (Issue #260)
+
+`docs/PLANNER_SPEC.md` 17 (with `docs/REQUIREMENTS.md` 19.1 / 24.1, `docs/UI_FLOW.md` 10.4,
+`docs/SEARCH_SPEC.md` 5.6.9 / 5.8.1 and `docs/DATA_MODEL.md` 9.4 / 14.5) is the formal contract for the
+Production integration of the Global Assignment Research (Issue #154). It is specification only:
+nothing is implemented yet, and the Build List's 「生産計画を作成」 still runs the ordinary Planner
+(`createPlan()`) until the Issue #260 UI publication PR switches it. Never describe the target
+behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
+non-normative design record; where it differs, the formal specification wins.
+
+- Target: 「生産計画を作成」 becomes the standard whole-Build-List optimization (O1): rebuild the Route
+  set of every planning Target (`docs/PLANNER_SPEC.md` 4.1), verify it with the unchanged internal
+  Planner (`createProductionPlanWithObserver()`), show an unsaved Preview, and only on an explicit
+  adoption replace the Entries and save the Draft in one transaction. No second 「全体最適化を試す」
+  button. Shortest is never claimed
+- The internal Planner contract (Route commitment + deterministic scheduling), Planner Alternative,
+  replan, Execution and history semantics are unchanged and not removed. Never add an automatic
+  fallback to the ordinary Planner. Whether the ordinary Planner stays reachable, and how (U1), is an
+  open decision to organise before implementation and settle at the latest before the UI
+  publication PR, because an optimization-only standard
+  operation would leave explicit-checkpoint and partial-RNG inputs without a plan
+- Unsupported in the initial version (reasons shown, never auto-cleared or reinterpreted): an explicit
+  `intermediateStateSelection` opportunity on a planning Target's Entry (a Practical condition, offered
+  intermediate states or a non-`planner` preference alone never block); unconfirmed Base Seed / Skill /
+  Gogma Counter; a Target with neither a usable source nor a confirmed rarity-8 Normal Counter; a
+  blind-only Target; a running (`active` / `stale`) Plan. A Draft is not a running Plan. The partial-RNG
+  support of Candidate Search and the internal Planner is not narrowed
+- Adoption is all-or-nothing over the planning Targets; replaced Entries get no selection and
+  `planner`; a reused same-meaning Entry keeps its settings; out-of-scope Entries are untouched; no
+  provenance field; `conflictResolutions = []`; lineage `null`; `preferredOwnedWeaponId` is not a fixed
+  constraint. Saving calls the existing persistence helpers with unchanged contracts and adds the
+  optimization checks; it always recomputes generated Entry freshness
+  (`checkGeneratedBuildListEntriesFresh()`) inside the transaction, in addition to the whole-Build-List
+  input token. The Research fresh double run is not a Production success condition
+- The success rule replaces the Research "warning 0" with an exact match of the excluded-Entry warning
+  set between Stage 0 and the final input; the physical operation identity stays mandatory
+- The final verification's `maxPlanSteps` is derived by the Domain as
+  `roundUpPlannerMaxPlanSteps(structuralObjective + planningTargetCount) + 500` (D-1C: 2,500), never a
+  user setting; the 500 rounding moves to a shared Domain helper with the Service API re-exporting it
+  (no Domain -> Service import). Window and search bounds are Production constants decided by PC
+  measurement, independent of the Candidate Search defaults; never copy Research values without basis
+- PC Browser is the formal performance / correctness / cancel acceptance environment. Android real-device
+  use and iPhone are not release gates; iPhone is "unverified", never "unsupported"; no device is
+  blocked or given fewer features
+- Practical-reach notices (Issue #261, `docs/PLANNER_SPEC.md` 16.19) are a separate future concept from
+  `PlanStep.checkpointMilestones` / `compromiseLabels`; they never change status, secure, finish, or
+  reorder anything, and their authority / projection / persistence are not decided yet
+- No version moves for this specification (17 / 10 / 13). `docs/PLANNER_SPEC.md` 17.18 lists the
+  premises under which the implementation also needs none; stop and return to the specification if one
+  breaks
 
 ---
 
