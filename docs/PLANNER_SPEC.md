@@ -26,7 +26,8 @@ Plannerが追う到達目標はTargetの理想品だけである。実用品を�
 
 作成リスト全体の作成ルートを組み直し、本Plannerで最終検証する「作成リストの全体最適化」（Issue #260）は
 17章で定義する。17章は正式仕様のみで未実装であり、現在の作成リストの「生産計画を作成」は本Planner（7章）を
-1回実行する。
+1回実行する。目標仕様でも、作成リストの有効な候補が1件の場合と、全体最適化が使えない・成立しない場合に
+ユーザーが明示的に選ぶ補助導線では、本Plannerで生産計画を作成する（17.2の作成方式の選択、U1）。
 
 初期版で実装しないこと。
 
@@ -8227,8 +8228,10 @@ Worker、UI、Persistence、version定数は変更していない。
 
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
-- **目標仕様（本章）**: 「生産計画を作成」を全体最適化の標準操作にする。画面の切替はIssue #260の後続PR（UI公開PR）で
-  行う。本章の「標準の生産計画作成」を、切替前の画面の挙動として読まない
+- **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。
+  有効な候補が1件の場合は同じ操作で通常Planner（7章）を実行し、全体最適化が使えない・成立しない場合には通常Plannerの
+  補助導線を出す（17.2の作成方式の選択、U1）。画面の切替はIssue #260の後続PR（UI公開PR）で行う。本章の「標準の
+  生産計画作成」を、切替前の画面の挙動として読まない
 - Production統合はIssue #260、Global Assignment ResearchはIssue #154として管理する（O20）。本章はResearchの契約・
   記録（[PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md](./PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md)、D-1C / P-2のformal記録とRESULT）を
   変更しない
@@ -8239,7 +8242,12 @@ Worker、UI、Persistence、version定数は変更していない。
 Owner決定（O1）: 作成リスト画面の「生産計画を作成」を全体最適化の標準操作にする。通常Plannerの「生産計画を作成」を
 主操作として残し、全体最適化を別の副操作（「全体最適化を試す」）として並べる案（設計案の初版の推奨）は採らない。
 
-利用の流れ（目標仕様）。
+Owner決定（U1、17.2）: 作成リスト画面の生産計画の作成は主操作「生産計画を作成」1つのままとし、作成方式は
+`validatePlannerInput()` の有効件数で選ぶ。有効な候補が2件以上なら全体最適化、1件なら通常Plannerを実行し、0件なら
+作成できない。全体最適化が未対応（通常Planner自身は実行可能な入力に限る）・`not_found`・`search_bound_reached` の場合だけ、
+ユーザーが明示的に選べる通常Plannerの補助導線を出す。自動フォールバックは行わない。
+
+利用の流れ（目標仕様。有効な候補が2件以上の場合）。
 
 ```text
 1. 作成リストで「生産計画を作成」を実行する
@@ -8271,11 +8279,123 @@ Owner決定（O1）: 作成リスト画面の「生産計画を作成」を全�
   競合選択として扱わず、`PlannerConflictResolution`、`ProductionPlan.conflictRepairLineage`、
   `PlanConflict.selectedBuildListEntryId` へ書かない。入力の `conflictResolutions` は空とし、保存済みDraftの明示解決・
   lineage・`baseSnapshot` を読まない（[REQUIREMENTS.md](./REQUIREMENTS.md) 23）
-- **自動フォールバックを仕様にしない。** 全体最適化が `unsupported` / `not_found` / `search_bound_reached` / 計算失敗 /
-  キャンセルで終わった場合に、通常Plannerを自動で実行して結果を差し替えない。Ownerは自動フォールバックを決定して
-  いない。標準操作の切替後に、全体最適化を伴わない通常Plannerの生産計画作成を通常UIにどの程度残すか、全体最適化が
-  使えない入力で通常Plannerを手動で起動できる代替経路を設けるかは、実装前に整理し、遅くともUI公開PRの実装前に決める
-  （17.19のU1）
+- **自動フォールバックを行わない。** 全体最適化が `unsupported` / `not_found` / `search_bound_reached` / 計算失敗 /
+  キャンセルで終わった場合に、通常Plannerを自動で実行して結果を差し替えない（U1で決定）。通常Plannerは、下記の
+  作成方式の選択で有効な候補が1件の場合と、ユーザーが補助導線を明示的に選んだ場合にだけ実行する
+
+#### 作成方式の選択（U1）
+
+実装状態: **正式仕様のみ（未実装）**。現在のmainの「生産計画を作成」は件数にかかわらず通常Plannerを1回実行する
+（[UI_FLOW.md](./UI_FLOW.md) 10.2）。本項はUI公開PRで切り替える目標仕様である。
+
+Owner決定（U1）。作成リスト画面の生産計画の作成は主操作「生産計画を作成」1つとし、作成方式を次の判定で選ぶ。
+
+| 順 | 条件 | 作成方式 |
+| --- | --- | --- |
+| 1 | 実行中Plan（`active` / `stale`）がある（Applicationの `getRunningProductionPlan()`） | 新規作成を提供しない。補助導線も出さない。Planner操作は従来どおり現在地点からの再計画の試算（16.8）だけ |
+| 2 | 実行中Planまたは現在のDraftを確認できない（読込失敗、Persistence invariant違反を含む） | どの方式も提供しない（[UI_FLOW.md](./UI_FLOW.md) 10.3と同じ。「無い」と推測しない） |
+| 3 | `validatePlannerInput()` が入力全体をfail closedにする（`isValid === false`。legacy duplicate（4.1）、壊れた途中採用状態の選択（7.5.9）、同じTargetの複数の途中採用状態選択（7.5.7）、優先起点の参照違反（[DATA_MODEL.md](./DATA_MODEL.md) 8.5）など） | どの方式も開始しない（通常Plannerを実行しても同じfail closedで計画を作らない）。作成リストの整理が必要な理由を示す。補助導線を出さない |
+| 4 | 有効件数が0 | 作成できない。有効な候補が無い理由（再検索が必要な候補・完了済みの目標武器など）と候補検索への導線を示す |
+| 5 | 有効件数が1 | 通常Planner（7章）を実行する |
+| 6 | 有効件数が2以上 | 全体最適化（本章）を実行する |
+
+- **有効件数** は `validatePlannerInput()` の `validBuildListEntries` の件数である。staleなEntry、完了済み・検索対象OFF・
+  削除済みTargetのEntry、CalculationContext非互換、RNG capability不足（`rng_state_missing`）、予測非対応
+  （`rng_prediction_unsupported`）、保護武器の破壊的利用（`protected_weapon_required`）などで除外されたEntryを数えない
+  （4.1）。作成リストは目標武器ごとに候補を1件しか持たないので（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）、fail closed
+  でない入力の有効件数は計画対象Target数（17.3）と等しい
+- 判定の入力は、主操作を押した時点のcurrent persisted stateから `createPlannerInput()` で作るfresh `PlannerInput`
+  （`conflictResolutions = []`）である。作成リスト画面の表示用の絞り込み（[UI_FLOW.md](./UI_FLOW.md) 3.2 / 10）、画面が
+  保持する表示用の件数（raw件数・stale件数・グループ数）、「最大計画ステップ数」の設定値を判定に使わない。
+  判定の入力の `options` は `createPlannerInput()` の既定値（`defaultPlannerOptions`）のままとし、ユーザーの設定値で
+  置き換えない。設定の無効値を判定3として扱わない（設定値の扱いは下記「最大計画ステップ数の適用範囲」）
+- 判定はDomainの共有判定（`validatePlannerInput()` を使う純粋関数。名前と返却形は実装PRで確定）で行い、UIが件数を
+  独自に数えたりfail closedの条件を再実装したりしない。開始前の表示（[UI_FLOW.md](./UI_FLOW.md) 10.4）のために同じ判定を
+  読み込み済みの状態へ適用してよいが、その表示は実行のauthorityではない。主操作を押した時点のfresh inputで判定し直す。
+  `validatePlannerInput()` はRNG Engineを依存に取るので、判定を実行する場所（Worker / main thread）は実装PRで確定する
+- 判定3は件数より先に行う。有効件数が1でも入力全体がfail closedなら、通常Plannerへ回してfail closedを経由させるのではなく、
+  判定3として扱う。逆に、`validatePlannerInput()` の後の初期状態で検出するfail closed（既に理想品を所持している目標武器の
+  途中採用状態選択 `selected_checkpoint_target_already_ideal`、7.5.8）は判定3に含めない。通常Plannerを実行した場合は、
+  通常Planner自身の結果（Plan未生成とwarning）として従来どおり表示する
+- 有効件数が1の場合は、全体最適化を行わない。1件ではTarget間でCounter位置を分け合う割当が生じないため、ユーザーが
+  作成リストで採用したルートをそのまま使う通常Plannerとする。そのEntryの途中採用状態の選択（hard constraint、7.5）と
+  理想品までの改善優先（`intermediateStateSelection.improvementPreference` の `planner` / `skill_first` / `bonus_first`、
+  soft preference、7.6。決定的schedulerの順序key 2）を通常Plannerがそのまま使う。既存の選択UI、保存契約
+  （[DATA_MODEL.md](./DATA_MODEL.md) 9.4）、soft preferenceの意味を再利用し、1件専用の永続設定・Domain field・Planner
+  optionを追加しない。途中採用状態を選択した1件、RNG状態の一部が未確定でも有効な1件も通常Plannerで作成できる
+- 実行中Planの再計画の試算（16.8）は作成方式の選択の対象にしない。有効件数にかかわらず従来どおり通常Plannerを使い、
+  全体最適化を使わない（O6）
+
+#### 通常Plannerの補助導線（U1）
+
+有効件数が2以上で全体最適化を実行する場合、次のいずれかに当たるときだけ、全体最適化の未対応理由・結果の表示の中に、
+ユーザーが明示的に選べる通常Plannerの生産計画作成（補助操作）を出す。
+
+| 全体最適化の状態 | 補助導線 |
+| --- | --- |
+| `unsupported`（開始前の判定、または計算で返った未対応）で、通常Planner自身が実行可能な入力 | 出す。17.4の `checkpoint_selection`、`unconfirmed_rng_state`、`target_without_source`、`blind_route_required` だけが理由の場合がこれに当たる |
+| `unsupported` で、理由に `running_plan_exists`、`invalid_planner_input`、`no_planning_target` を含む | 出さない（通常Planner自身も実行できない。作成方式の選択の1・3・4で全体最適化の前に扱う） |
+| `not_found` | 出す |
+| `search_bound_reached` | 出す |
+| `optimized` | 出さない。従来どおりPreview（17.9） |
+| キャンセル | 出さない。キャンセルを通常Plannerの開始とみなさない |
+| 計算失敗（Workerの `error` / `messageerror`） | 出さない。もう一度試す導線を示す |
+| 前提違反・契約違反のerror（17.7の6、17.8） | 出さない。errorを `unsupported` / `not_found` へ変換しない |
+| 採用の拒否（17.11） | 出さない。再計算を求める |
+
+「通常Planner自身が実行可能」とは、作成方式の選択の1〜4に当たらない（実行中Planが無く、実行中Plan・Draftを確認でき、
+`validatePlannerInput()` が入力全体をfail closedにせず、有効件数が1以上である）ことをいう。全Targetの完成・計画の作成を
+保証する意味ではない。
+
+- **明示選択だけで実行する。** 補助操作を押すまで通常Plannerを実行しない。全体最適化のどの結果でも自動で通常Plannerへ
+  切り替えない
+- **未対応理由と結果を隠さない。** 補助操作は理由・結果の表示の代わりにならない。補助操作を出すことで、全体最適化の
+  未対応理由・`not_found`・`search_bound_reached` の表示を省略しない
+- **常設の2つ目のボタンにしない。** 主操作「生産計画を作成」の横に通常Plannerの作成ボタンを常時並べない（O1）。補助操作は
+  上記の条件を満たす理由・結果の表示の中にだけ置く
+- **開始前に分かる未対応。** 17.4の未対応理由のうち開始前にDomainの共有判定で確定するものがある場合、主操作から
+  全体最適化を開始しない（計算しても同じ `unsupported` になるため。主操作の表示は[UI_FLOW.md](./UI_FLOW.md) 10.4）。
+  未対応理由の表示の中に、条件を満たす場合だけ補助操作を置く。開始前の表示は実行のauthorityではなく、主操作・補助操作とも
+  押した時点のfresh inputで判定し直す（押した時点で通常Plannerが実行可能でなくなっていれば、補助操作は通常Plannerを
+  開始せず、その理由を示す）
+- **補助操作は通常Planner実行そのものである**（[UI_FLOW.md](./UI_FLOW.md) 10.2）。押した時点のcurrent persisted stateから
+  fresh `PlannerInput` を作り直し、`PlannerInput.options` にはユーザーの「最大計画ステップ数」（`PlannerOptions.maxPlanSteps`、
+  7.2.1）をApplication callerが設定し、`createPlan()` と `savePlannerResult()` と保存成功時の遷移を既存どおり行う。
+  全体最適化のartifact・入力token（17.10）・Route・diagnosticsを使わない。既存BuildListEntryのRouteをそのまま使い、
+  全体最適化によるRoute再構成をしない。Entryを置換・生成しない。比較用の追加の通常Planner実行（17.9のbaseline run）
+  ではない
+- **通常Plannerの結果は既存のまま扱う。** 通常Plannerが計画を生成しても、すべてのTargetの完成や競合が無いことを
+  保証しない。探索未完了（7.2.1、[UI_FLOW.md](./UI_FLOW.md) 10.1）、Plan未生成、warning、暫定帰結と競合（7章、9章）の表示を
+  維持する。保存したDraftの競合は従来どおり生産計画画面のPlanner Alternative（9.2.19）で扱う
+- **明示checkpoint（O2）。** 補助導線で通常Plannerを使う場合も、途中採用状態の選択を自動で解除・読み替えしない。選択は
+  通常Plannerのhard constraint（7.5）としてそのまま使う
+- **部分的なRNG未確定（O4）。** 通常Plannerの既存のEntryごとのcapability判定と除外（4章）を変更しない。不足値に依存する
+  Entryだけを除外し、残りで計画を作る（[REQUIREMENTS.md](./REQUIREMENTS.md) 5）
+- **提供期間。** 補助導線は、それを出す根拠が有効な間だけ提供する。開始前の判定に基づく補助導線は、その判定の表示と
+  一緒に現在の状態から決まる。全体最適化の結果に基づく補助導線は、その結果の表示を破棄する条件（17.9と同じ: 画面を
+  離れる、新しい全体最適化の計算を始める、同じ画面で作成リストを変更する）で一緒に破棄する。補助操作による通常Planner
+  の実行は、この破棄条件の「新しい計算」に当たらない。補助操作で実行した通常Plannerが探索未完了・Plan未生成・
+  キャンセルで終わった場合は、その根拠の表示が残っている間は同じ補助操作で再実行できる（「最大計画ステップ数」を
+  変えて再実行する場合を含む）
+- 補助操作で保存したDraftは通常のDraftであり（`conflictRepairLineage = null`）、現在のDraftを既存のatomic replacement
+  （9.2.15）で置き換える。provenanceを追加しない
+
+#### 最大計画ステップ数の適用範囲
+
+- ユーザーが変更できる「最大計画ステップ数」（`PlannerOptions.maxPlanSteps`、7.2.1、Issue #130の推奨値規則、
+  [UI_FLOW.md](./UI_FLOW.md) 10.0）は、通常Plannerを実行する操作（有効件数が1の場合の「生産計画を作成」、通常Plannerの
+  補助操作、現在地点からの再計画の試算）だけに使う
+- 全体最適化はこの設定を使わない。最終検証の `maxPlanSteps` はDomainが導出する（17.13）。設定値によって全体最適化の
+  計算・結果を変えない
+- 設定の画面上の配置と、全体最適化を実行する主操作に対して設定の無効値をどう扱うかはU7で決める（17.19）。本項は
+  配置を確定しない
+
+#### 競合解決の再計算からの案内
+
+競合解決の再計算が上限に達した場合の案内「ビルドリスト画面から生産計画を作り直してください」（[REQUIREMENTS.md](./REQUIREMENTS.md)
+19、[UI_FLOW.md](./UI_FLOW.md) 11.4）は、切替後は作成リスト画面の主操作（本項の作成方式の選択）と、条件を満たす場合の
+通常Plannerの補助導線を指す。案内文は特定の作成方式を約束しない。この案内の文言と、競合解決の再計算の上限の導出
+（7.2.1の `conflictResolutionMaxPlanSteps()`）は変えない。
 
 ### 17.3 計画対象Target
 
@@ -8303,6 +8423,16 @@ Owner決定（O1）: 作成リスト画面の「生産計画を作成」を全�
 | `target_without_source` | 使える所持sourceが無く、その武器種の確定レア8通常アーティアCounterも無い計画対象Targetがある | O4 |
 | `blind_route_required` | 所持sourceが無く、通常アーティア予測がunsupportedで、予測できない作成経路（blind）しか無い計画対象Targetがある | O4 |
 
+- 作成方式の選択（17.2、U1）により、作成リスト画面の主操作から全体最適化を開始するのは、実行中Planが無く、入力全体が
+  fail closedでなく、有効件数が2以上の場合だけである。`running_plan_exists`、`invalid_planner_input`、`no_planning_target`
+  は作成方式の選択の1・3・4で全体最適化の前に扱うため、主操作からは全体最適化の結果として現れない。全体最適化の判定
+  （Stage 0）はこれらを引き続き防御的に返し、作成方式の選択に依存して省略しない
+- `checkpoint_selection`、`unconfirmed_rng_state`、`target_without_source`、`blind_route_required` だけが理由の場合は、
+  通常Planner自身が実行可能な入力であり、未対応理由とともに通常Plannerの補助導線を出す（17.2）。未対応理由に
+  `running_plan_exists` / `invalid_planner_input` / `no_planning_target` を含む場合は補助導線を出さない
+- 有効件数が1の入力は全体最適化の対象にしない（17.2）。途中採用状態の明示選択やRNG状態の一部未確定があっても、
+  有効な1件は通常Plannerで作成する
+
 **途中採用状態（O2）。**
 
 - 目標武器に実用品条件（`practicalBonusConditions` / `alternativeBonusRules` / `practicalSkillCondition`）が
@@ -8313,6 +8443,8 @@ Owner決定（O1）: 作成リスト画面の「生産計画を作成」を全�
   改善優先（`improvementPreference`）が `planner` 以外であることは明示選択に当たらない（17.5）
 - 選択を自動解除したり、別のopportunity・別Route上の似た状態へ読み替えたりしない（7.5のhard constraint）。
   拒否時は該当Targetと理由を示し、作成リストの該当グループへの導線を出す
+- 有効件数が2以上で明示checkpointを持つ入力は、全体最適化では未対応のままとし、通常Plannerの補助導線（17.2）で
+  作成できるようにする。補助導線の通常Plannerも選択をhard constraintとしてそのまま使い、解除・読み替えしない
 - 明示checkpointを保護したまま全体最適化する拡張は後続検討とする（17.19のU5）
 
 **部分的なRNG未確定（O4）。**
@@ -8323,13 +8455,17 @@ Owner決定（O1）: 作成リスト画面の「生産計画を作成」を全�
   部分RNG対応は変更しない
 - [REQUIREMENTS.md](./REQUIREMENTS.md) 5は、不足値に依存する経路だけを無効化し、利用可能な経路まで一括で無効化しない
   ことを求める。標準操作を全体最適化へ切り替えたうえで全体最適化しか提供しないと、これらの入力やO2の明示checkpointを
-  持つ入力からは作成リストの生産計画を作れなくなる。これを避ける手段（17.2の代替経路）はUI公開PRの前に決める
-  （17.19のU1）。本仕様は内部Plannerのこれらの入力への対応を残す
+  持つ入力からは作成リストの生産計画を作れなくなる。U1（17.2）でこれを次のように解決した: 有効件数が1なら通常Plannerを
+  実行し、2以上で上表の理由により全体最適化が未対応なら、ユーザーが明示的に選べる通常Plannerの補助導線を出す。
+  通常Plannerは既存のEntryごとのcapability判定のまま、不足値に依存するEntryだけを除外して計画を作る。本仕様は
+  内部Plannerのこれらの入力への対応を変えない
 
 **実行中Plan（O6）。**
 
 - 実行中Plan（`active` / `stale`）がある間は全体最適化を提供しない。理由と導線（現在地点からの再計画の試算16.8、
   Planの破棄・完了）を示す。採用時にも再確認する（17.11のT2）
+- 実行中Planがある間は、通常Plannerによる新規作成の補助導線も出さない（17.2の作成方式の選択1）。Planner操作は
+  既存の再計画の試算だけとする
 - Draftの存在は実行中Planと区別する。Draftがあっても全体最適化を提供し、採用時にそのDraftを置き換える（17.11）
 - 実行中Planの再計画（16.8）は本章で変更しない
 
@@ -8341,6 +8477,8 @@ Owner決定（O1）: 作成リスト画面の「生産計画を作成」を全�
 - 計算の結果が現在のEntryと同一意味のRouteになるTarget（generated Entryが既存Entryと同一semanticで再利用される
   Target、17.12）は「変更なし」とし、そのEntryとその改善優先などの設定をそのまま維持する
 - O2により、全体最適化の対象になる入力のEntryは途中採用状態を選択していない
+- 通常Planner（有効件数が1の場合、補助導線、17.2）はEntryを置換しないので、改善優先を含むEntryの設定を変更しない。
+  置換したEntryの改善優先を `planner` へ戻す規則（本節）は全体最適化の置換だけに適用し、U1で変更しない
 
 ### 17.6 入力と計算の構成
 
@@ -8423,8 +8561,11 @@ type BuildListOptimizationResult =
 
 - 探索上限への到達（`search_bound_reached`）と、成立する候補が無かったこと（`not_found`）を区別する。どちらも
   「解が存在しない」とは表示しない（[REQUIREMENTS.md](./REQUIREMENTS.md) 15と同じ考え方）
-- 前提違反・契約違反（恒等式の不一致、materializationの契約違反）はerrorとしてfail closedし、採用可能な結果にしない
-- どの結果でも、自動で通常Plannerへ切り替えない（自動フォールバックはU1で決定するまで実装しない。17.2）
+- 前提違反・契約違反（恒等式の不一致、materializationの契約違反）はerrorとしてfail closedし、採用可能な結果にしない。
+  内部不変条件違反を含むerrorを `unsupported` / `not_found` / `search_bound_reached` へ変換しない
+- どの結果でも、自動で通常Plannerへ切り替えない（U1で自動フォールバックを採らないと決定した。17.2）
+- `unsupported`（通常Planner自身が実行可能な入力に限る）、`not_found`、`search_bound_reached` では、結果の表示の中に
+  ユーザーが明示的に選べる通常Plannerの補助導線を出す。`optimized`、キャンセル、計算失敗、errorでは出さない（17.2）
 
 ### 17.9 Preview（O7）
 
@@ -8584,7 +8725,9 @@ optimizationMaxPlanSteps = roundUpPlannerMaxPlanSteps(requiredActions) + 500
 
 **旧「最大計画ステップ数」設定（O14）。** 標準操作の切替に伴い、Build List画面の「最大計画ステップ数」（通常Planner用、
 Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開PRで見直す（17.19のU7）。Issue #130の推奨値規則、
-`PlannerOptions` の契約、内部Plannerの値は勝手に変更しない。
+`PlannerOptions` の契約、内部Plannerの値は勝手に変更しない。U1により、この設定は通常Plannerを実行する操作（有効件数が1の
+場合の「生産計画を作成」、通常Plannerの補助操作、再計画の試算）だけに使い、全体最適化は使わない（17.2の
+「最大計画ステップ数の適用範囲」）。
 
 **探索範囲・探索上限（O9 / O10）。**
 
@@ -8679,6 +8822,9 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
   対する出力を変えない。この点で、同じ `PlannerInput` に対する内部の計算結果が変わったIssue #136 / #101 Phase 6-A
   （version 17）とは異なる。採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持ち、既存Planの
   読み方を変えない
+- U1の作成方式の選択と通常Plannerの補助導線（17.2）は、作成リスト画面からどの操作で通常Plannerを呼ぶかを決める
+  だけであり、通常Plannerの同じ `PlannerInput` に対する計算・保存の意味（`createPlan()`、`savePlannerResult()`、
+  `PlannerOptions`）、永続shapeを変えない。上記の前提1〜4に影響せず、それ自体はversion変更を要しない
 - `localeCompare()` 等の置換が通常Candidate Searchの出力を変える場合、中間状態抽出・途中採用の規則を変える場合（U6）、
   provenanceや実用品到達の情報を永続化する場合（U4）は、そのPRで計算版数・schemaの判断を行う
 
@@ -8688,19 +8834,24 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
 
 | ID | 事項 | 判断の時期 |
 | --- | --- | --- |
-| U1 | 全体最適化が `unsupported` / `not_found` / `search_bound_reached` の場合に、全体最適化を伴わない通常Plannerの生産計画作成をユーザーへ提供するか。通常UIにどの程度残すか、手動で起動できる代替経路を設けるか。O2の明示checkpoint・O4の部分RNG未確定の入力と[REQUIREMENTS.md](./REQUIREMENTS.md) 5 / 18の原則との関係（17.4）を含む。現在の案内（競合解決の再計算が上限に達した場合の「ビルドリスト画面から生産計画を作り直す」、[REQUIREMENTS.md](./REQUIREMENTS.md) 19 / [UI_FLOW.md](./UI_FLOW.md) 11.4）が切替後に指す操作も含む。自動フォールバックは、決定するまで実装しない | 実装前に整理する。遅くともUI公開PRの実装前（必須） |
 | U2 | Productionの探索範囲・window・探索上限の具体値（17.13） | Production計測PR |
 | U3 | 長時間化の案内の時間閾値（17.16） | PC計測の後 |
 | U4 | 実用品到達通知の到達判定authority、PlanStepへの投影、永続化の要否、表示方法（16.19） | Issue #261の後続設計 |
 | U5 | 明示checkpointを保護したまま全体最適化する拡張、部分RNG未確定のTargetを固定して他Targetを最適化する拡張（17.4） | 後続Issue |
 | U6 | O15の監査で判明する互換性問題。`match = "ideal"` の中間状態を途中採用として選択した場合の扱い（17.15） | 後続判断 |
-| U7 | 旧「最大計画ステップ数」設定の画面上の配置（17.13）。現在の「無効な値では『生産計画を作成』と再計画の試算をdisabledにする」規則（[UI_FLOW.md](./UI_FLOW.md) 10.0）を、この設定を使わない全体最適化の標準操作に対してどう扱うかを含む | UI公開PR |
+| U7 | 旧「最大計画ステップ数」設定の画面上の配置（17.13）。現在の「無効な値では『生産計画を作成』と再計画の試算をdisabledにする」規則（[UI_FLOW.md](./UI_FLOW.md) 10.0）を、この設定を使わない全体最適化の標準操作に対してどう扱うかを含む。設定の適用範囲（通常Plannerを実行する操作だけに使い、全体最適化は使わない）はU1で決定済み（17.2）であり、U7は配置と無効値の画面上の扱いだけを決める | UI公開PR |
 
-### 17.20 Owner判断（O1〜O21）の反映先
+解決済みの後続判断。
+
+| ID | 決定 | 反映先 |
+| --- | --- | --- |
+| U1 | 作成リスト画面の主操作は「生産計画を作成」1つ。作成方式は `validatePlannerInput()` の有効件数で選び（0件は作成不可、1件は通常Planner、2件以上は全体最適化）、表示filterやraw件数を使わず、入力全体のfail closedを迂回しない。有効件数2以上で全体最適化が未対応（通常Planner自身が実行可能な入力に限る）・`not_found`・`search_bound_reached` の場合だけ、ユーザーが明示的に選べる通常Plannerの補助導線を出す。補助操作は既存EntryのRouteを使う通常Planner実行であり、Route再構成をしない。自動フォールバックを行わず、キャンセルを通常Plannerの開始とみなさず、主操作と補助操作を常設の2ボタンにせず、errorを未対応へ変換しない。1件の場合は既存の改善優先を通常Plannerが使う。実行中Planがある間は補助導線を出さず再計画の試算を維持する。O3、`PlannerOptions.maxPlanSteps`（通常Plannerだけが使う）、通常Plannerの部分RNG対応を変えない。競合解決の再計算からの案内は主操作と補助導線を指す | 17.1 / 17.2 / 17.4 / 17.5 / 17.8 / 17.13 / 17.18、[REQUIREMENTS.md](./REQUIREMENTS.md) 19 / 19.1、[UI_FLOW.md](./UI_FLOW.md) 10 / 10.0〜10.4 / 16.4 / 19 |
+
+### 17.20 Owner判断（O1〜O21、U1）の反映先
 
 | # | 決定 | 本章 |
 | --- | --- | --- |
-| O1 | 「生産計画を作成」を全体最適化の標準操作にする。2ボタン案は採らない。最短性を保証しない。自動フォールバックは未決定 | 17.1 / 17.2 / 17.19 U1 |
+| O1 | 「生産計画を作成」を全体最適化の標準操作にする。2ボタン案は採らない。最短性を保証しない。自動フォールバックは採らない（U1） | 17.1 / 17.2 |
 | O2 | 実用品条件・途中状態の存在では拒否しない。明示checkpoint選択がある場合は初期版で実行不可。自動解除・読み替えをしない | 17.4 |
 | O3 | 置換されたEntryの改善優先は `planner`。変わるTargetを明示。同一意味の再利用Entryは設定を維持 | 17.5 |
 | O4 | Researchの入力前提を維持。Candidate Search・既存Plannerの部分RNG対応を変更・縮小しない。理由と不足情報を表示 | 17.4 |
@@ -8718,6 +8869,7 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
 | O18 | page loss後の中断履歴・計算再開の永続機能を追加しない | 17.16 |
 | O20 | Production統合はIssue #260、ResearchはIssue #154 | 17.1 |
 | O21 | Researchのfresh二重実行を成立条件にしない。保存直前のgenerated Entry freshness検証は必須 | 17.7 / 17.11 |
+| U1 | 主操作は1つ。有効件数（`validatePlannerInput()`）で0件は作成不可・1件は通常Planner・2件以上は全体最適化。全体最適化の未対応（通常Planner自身が実行可能な入力）・`not_found`・`search_bound_reached` でだけ通常Plannerの補助導線を出す。自動フォールバックなし。1件は既存の改善優先を使う。実行中Plan中は補助導線なし | 17.2 / 17.4 / 17.8 / 17.19 |
 
 ### 17.21 テスト観点
 
@@ -8737,7 +8889,38 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
   Candidate ID / `searchRunId` / tokenにResearch文字列が無い、Plan / Step IDがProduction ID factory由来
 - 決定性: 同じ入力の2回の計算でsemanticが一致する（ID・時刻を除く）
 - 結果分類: `optimized` / `not_found` / `search_bound_reached` / `unsupported` とキャンセル・失敗を区別し、
-  いずれでも通常Plannerへ自動で切り替えない（U1で決定するまで）
+  いずれでも通常Plannerへ自動で切り替えない（U1）。内部不変条件違反・前提違反のerrorが `unsupported` / `not_found` /
+  `search_bound_reached` として返らない
+- 作成方式の選択（17.2、U1）:
+  - 有効件数0（Entry無し、全Entryがstale、完了済み・検索対象OFFのTargetのEntryだけ、RNG capability不足で全Entry除外）で
+    どの方式も開始しない。有効件数1で通常Planner、2以上で全体最適化を選ぶ
+  - raw件数と有効件数が異なる入力（例: 3件のうち2件がstaleで有効1件、2件が完了済みTargetのEntryで有効1件）で、
+    有効件数だけで選ぶ。作成リストの表示filter、表示用の件数、「最大計画ステップ数」の設定値（無効値を含む）が選択を
+    変えない
+  - 入力全体がfail closedになる入力（legacy duplicate、壊れた途中採用状態の選択、同じTargetの複数の選択、優先起点の
+    参照違反）では、有効件数が1でも2以上でもどの方式も開始せず、補助導線を出さない。fail closedを迂回しない
+  - 実行中Plan（`active` / `stale`）がある間は新規作成も補助導線も出さず、再計画の試算だけを提供する。実行中Plan・
+    Draftの読込失敗ではどの方式も提供しない。Draftがあるだけでは選択を変えない
+  - 開始前の表示に使った判定と、主操作を押した時点のfresh inputの判定が異なる場合（他の画面で状態が変わった等）は、
+    押した時点の判定に従う
+- 有効件数1の通常Planner:
+  - 途中採用状態を明示選択した1件、RNG状態の一部が未確定でも有効な1件で、通常Plannerが計画を作る。選択を解除しない
+  - 改善優先 `planner` / `skill_first` / `bonus_first` が決定的schedulerの順序に反映される（両laneが同時に安全な1件で、
+    `skill_first` はSkill lane、`bonus_first` はBonus laneを先に実行する）。1件専用の永続設定・Domain field・option が無い
+  - 全体最適化のDomain・Workerを呼ばない。ユーザーの `maxPlanSteps` を `PlannerInput.options` に使う
+- 通常Plannerの補助導線（有効件数2以上）:
+  - 全体最適化の未対応理由が `checkpoint_selection` / `unconfirmed_rng_state` / `target_without_source` /
+    `blind_route_required` だけの場合、`not_found`、`search_bound_reached` で補助導線が出る
+  - `optimized`、キャンセル、計算失敗、前提違反のerror、採用の拒否、および未対応理由に `running_plan_exists` /
+    `invalid_planner_input` / `no_planning_target` を含む場合は補助導線が出ない
+  - 補助操作を押すまで通常Plannerを実行しない。主操作の横に通常Plannerのボタンが常設されない。未対応理由・結果の表示が
+    補助操作と一緒に残る
+  - 補助操作はfresh `PlannerInput` とユーザーの `maxPlanSteps` で `createPlan()` を実行し、`savePlannerResult()` で保存する。
+    全体最適化のartifact・入力token・Routeを使わず、BuildListEntryを置換・生成せず、改善優先・途中採用状態の選択を変えない
+  - 通常Plannerの結果（探索未完了、Plan未生成、warning、競合、完成しないTarget）を既存どおり表示する。探索未完了の後、
+    「最大計画ステップ数」を変えて同じ補助操作で再実行できる
+  - 全体最適化の結果の破棄条件（画面を離れる、新しい計算、作成リストの変更）で補助導線も消える
+- 全体最適化の結果は「最大計画ステップ数」の設定値に依存しない（設定を変えても同じ入力の全体最適化の結果が変わらない）
 - Preview: 永続状態を一切変更しない。完成予定数の分母が `termination.totalTargetCount`、対象外の件数を分母に加えない、
   物理操作数と計画ステップ数の区別、置換0件、Draft比較が同じ入力状態の場合だけ行われる
 - 永続化: 一括置換 + Draft置換の原子性、各write失敗でのrollback、実行中Planの出現・Draft IDの不一致・Draft 2件以上・

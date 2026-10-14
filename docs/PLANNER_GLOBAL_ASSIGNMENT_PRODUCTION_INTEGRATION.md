@@ -20,6 +20,13 @@ Global AssignmentをGogmaArtianPlannerの通常機能として導入するため
 >
 > 本書は設計記録として残すが、正式仕様と異なる箇所は正式仕様に従う。各決定と反映先は §21と §25に示す。
 > Owner判断に合わせて本文を改めた箇所は「［決定 O#］」で示す。
+>
+> **後続判断U1の決定（Issue #260、U1確定PR、docs-only）。** 本書で「U1（未決）」としている通常Plannerの提供方法は、
+> 正式仕様 [PLANNER_SPEC.md](PLANNER_SPEC.md) 17.2（作成方式の選択、通常Plannerの補助導線）で決定した。主操作
+> 「生産計画を作成」は1つのまま、`validatePlannerInput()` の有効件数が1なら通常Planner、2以上なら全体最適化を実行し、
+> 全体最適化の未対応（通常Planner自身が実行可能な入力に限る）・`not_found`・`search_bound_reached` の場合だけ、ユーザーが
+> 明示的に選べる通常Plannerの補助導線を出す。自動フォールバックは行わない。本書の本文中の「U1で判断する」「未決」の
+> 記述は当時の記録として残し、書き換えない。
 
 ## 1. 位置づけとauthority
 
@@ -1334,7 +1341,7 @@ UI component、test、IndexedDB / schema / migration、Export形式、version定
 
 | ID | 事項 | 時期 |
 | --- | --- | --- |
-| U1 | 全体最適化が使えない・成立しない場合の通常Plannerの提供方法（通常UIに残す範囲、手動の代替経路）。自動フォールバックの可否 | 実装前に整理する。遅くともUI公開PR（PR-7）の実装前。必須 |
+| U1 | 全体最適化が使えない・成立しない場合の通常Plannerの提供方法（通常UIに残す範囲、手動の代替経路）。自動フォールバックの可否 | **決定済み**（U1確定PR、正式仕様 PLANNER_SPEC 17.2。本書冒頭の注記を参照） |
 | U2 | Productionの探索範囲・window・探索上限の具体値 | PR-5 |
 | U3 | 長時間化の案内の時間閾値 | PC計測の後 |
 | U4 | 実用品到達通知のauthority・投影・永続化・表示 | Issue #261 |

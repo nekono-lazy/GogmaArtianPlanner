@@ -4147,10 +4147,23 @@ non-normative design record; where it differs, the formal specification wins.
   button. Shortest is never claimed
 - The internal Planner contract (Route commitment + deterministic scheduling), Planner Alternative,
   replan, Execution and history semantics are unchanged and not removed. Never add an automatic
-  fallback to the ordinary Planner. Whether the ordinary Planner stays reachable, and how (U1), is an
-  open decision to organise before implementation and settle at the latest before the UI
-  publication PR, because an optimization-only standard
-  operation would leave explicit-checkpoint and partial-RNG inputs without a plan
+  fallback to the ordinary Planner
+- Planning method selection (U1, decided; `docs/PLANNER_SPEC.md` 17.2, specification only): one primary
+  「生産計画を作成」. The method follows the valid Entry count of `validatePlannerInput()` over the fresh
+  `createPlannerInput()` input - never the raw / filtered / display counts or the `maxPlanSteps`
+  setting: 0 -> no plan, 1 -> the ordinary Planner (the Entry's own checkpoint selection and
+  `improvementPreference` as they are; no 1-Entry-only setting), 2+ -> the global optimization. A
+  whole-input fail closed (`isValid === false`: legacy duplicate, broken selection, ...) starts neither
+  method whatever the count, and a running (`active` / `stale`) Plan or an unreadable running Plan /
+  Draft offers no creation (replan stays). With 2+ Entries, an explicit, user-chosen ordinary-Planner
+  auxiliary path appears only inside the display of an `unsupported` result whose reasons the ordinary
+  Planner can run (`checkpoint_selection` / `unconfirmed_rng_state` / `target_without_source` /
+  `blind_route_required` only), `not_found` or `search_bound_reached` - never for `optimized`, cancel,
+  calculation failure, an invariant error (never turned into `unsupported` / `not_found`) or an
+  adoption refusal, and never as a standing second button. It is the plain ordinary Planner run (fresh
+  input, the user's `maxPlanSteps`, `createPlan()`, `savePlannerResult()`): existing Entry Routes, no
+  Route rebuild, no Entry replacement, selections kept. `maxPlanSteps` serves only ordinary-Planner
+  runs; its placement is still U7
 - Unsupported in the initial version (reasons shown, never auto-cleared or reinterpreted): an explicit
   `intermediateStateSelection` opportunity on a planning Target's Entry (a Practical condition, offered
   intermediate states or a non-`planner` preference alone never block); unconfirmed Base Seed / Skill /
