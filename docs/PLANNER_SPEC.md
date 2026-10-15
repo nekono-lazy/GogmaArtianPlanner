@@ -8228,7 +8228,7 @@ Issue #261の後続設計で正式に定める（17.19のU4）。本節はそれ
 
 ### 17.1 位置づけと実装状態
 
-実装状態: **Domain計算（Stage 0〜D'）、専用Worker・Application接続、採用のPersistence、作成方式の共通判定とその開始境界まで実装済み（画面からは未接続で、機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
+実装状態: **Domain計算（Stage 0〜D'）、専用Worker・Application接続、採用のPersistence、作成方式の共通判定とその開始境界、計算中表示・結果表示・未採用PreviewのUI部品まで実装済み（画面からは未接続で、機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
 （[PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md](./PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md)、
 PR #259。非normativeの設計記録）とOwnerの判断（O1〜O21、17.20）を正式仕様へ反映したものである。PR-1はProduction code、
 Worker、UI、Persistence、version定数を変更していない。
@@ -8366,6 +8366,24 @@ Worker、UI、Persistence、version定数を変更していない。
     しない。主操作が開始前未対応で開始しなかった状態から `startOrdinaryPlanner()` を押した場合も、同じ開始前の判定として押した時点の
     判定に従う（`isOrdinaryPlannerAuxiliaryOffered()` のガードは変えない）。全体最適化の計算結果に基づく補助導線は従来どおり、
     結果の表示中に通常Plannerが実行可能なら実行する
+- **実装済み（Issue #260 PR-6B2、UI部品のみ。画面へは未公開）**: 計算中表示（17.16、U3）・結果別の表示（17.8）・未採用Preview（17.9）を、
+  再利用可能なPresentation部品として置いた（`src/components/planner/BuildListOptimizationRunningPanel.tsx`、`BuildListOptimizationResultPanel.tsx`、
+  `BuildListOptimizationPreviewPanel.tsx`、`buildListOptimizationPresentation.ts`）。作成リスト画面の「生産計画を作成」はこれらを使わず、
+  従来どおり通常Plannerを実行する（下記「現在のmain」）。採用確認Dialog、採用のinspect / save / 遷移、画面との接続は後続PR（PR-6C）である。
+  - 入力はApplication / Domainの型付きの状態だけである（段階 `BuildListOptimizationStage`、`BuildListOptimizationResult`、Sessionのキャンセル・
+    failure）。作成方式・未対応・補助導線の提供可否・結果の分類をUIで新たに判定しない。補助操作は、Applicationが提供している間（`isOrdinaryPlannerAuxiliaryOffered()` /
+    `isOrdinaryPlannerAuxiliaryOfferedForPreparation()`）にcallerが渡したときだけ、それを出す結果（Domainの `isOrdinaryPlannerAuxiliaryOfferedForResult()`）の
+    表示の中に置き、押されるまで何も実行しない。Worker失敗と前提違反・契約違反はerrorとし、`unsupported` / `not_found` と表示しない
+  - 計算中: 1つの `role="status"` 領域に見出し・indeterminateな進捗・段階名・キャンセルを置き、段階の変化でfocusを移さない。30秒の案内（U3）は
+    そのrunの計算中表示を最初に出した時点からの画面上のtimerで、run（`runKey`）ごとに0から数え直し、終了・キャンセル・失敗・unmountで破棄する。
+    Worker・Domainへ渡さず、自動キャンセルしない
+  - Preview: 数値は `artifact.summary`（計画対象Target数・対象外の内訳・物理操作数・計画ステップ数）、`replacements`、`unchangedTargetWeaponIds`、
+    最終Planの記録（`targetCompletions`、`conflicts`）をそのまま使い、UIで数え直さない。置換前Entry・目標武器名・優先起点・所持武器名は、
+    callerが明示的に渡す計算開始時の入力（作成方式を判定したその `PlannerInput` の作成リスト・目標武器・所持武器）だけから読み、現在の別のsnapshotで
+    補わない。渡されない場合や解決できない場合はIDや推測値を出さない。現在のDraftとの比較は、`draft` で、CalculationContextが互換
+    （`isCalculationContextCompatible()`）、`baseSnapshot` の `initialExecutionState`・`targetWeaponsHash`・`buildListEntriesHash` が入力tokenの
+    `initialExecutionState`・`targetWeaponsHash`・`inputBuildListEntriesHash` と一致する場合だけ行う。計画全体は既存の読み取り専用表示
+    （`ProductionPlanContent`）の未保存Preview用の表示引数（`variant="unsaved_preview"`。保存済みPlanの表示は変えない）で示す。何も永続化しない
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
 - **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。

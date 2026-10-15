@@ -67,6 +67,10 @@ const BUILD_LIST_OPTIMIZATION_CALLERS = [
   '../../services/planner/plannerResultPersistenceService.ts',
   // Issue #260 PR-6B1: the plan creation boundary (the method judgement at the press, the ordinary Planner or the optimization start).
   '../../services/planner/planCreationService.ts',
+  // Issue #260 PR-6B2: the Presentation components of the running state, the typed results and the unsaved Preview (no screen mounts them yet).
+  '../../components/planner/buildListOptimizationPresentation.ts', '../../components/planner/useBuildListOptimizationLongRunNotice.ts',
+  '../../components/planner/BuildListOptimizationRunningPanel.tsx', '../../components/planner/BuildListOptimizationResultPanel.tsx',
+  '../../components/planner/BuildListOptimizationPreviewPanel.tsx', '../../components/planner/BuildListOptimizationDiagnostics.tsx',
 ]
 const codeOnly = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 const scripts = import.meta.glob('../../../scripts/*.mjs', { query: '?raw', import: 'default', eager: true }) as Record<string, string>

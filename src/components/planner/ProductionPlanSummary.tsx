@@ -13,8 +13,12 @@ const statusTones: Record<ProductionPlanStatus, StatusTone> = {
   abandoned: 'neutral',
 }
 
-/** One figure of the overview. Numbers are tabular; long tokens wrap. */
-function SummaryFigure({
+/**
+ * One figure of the overview (a `dt` / `dd` pair inside the caller's `dl`).
+ * Numbers are tabular; long tokens wrap. Shared with the Build List
+ * optimization Preview overview so both read alike.
+ */
+export function SummaryFigure({
   label,
   value,
   span = false,

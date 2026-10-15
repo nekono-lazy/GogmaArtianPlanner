@@ -30,6 +30,21 @@ import { ProductionPlanCostEstimate } from './ProductionPlanCostEstimate'
 import { ProductionPlanSummary } from './ProductionPlanSummary'
 import { ProductionPlanStepList } from './ProductionPlanStepList'
 
+/**
+ * What the read-only view shows.
+ *
+ * - `persisted` (the default): an exact persisted Plan, exactly as before.
+ * - `unsaved_preview`: a runtime-only Plan no screen has saved (the Build List
+ *   global optimization Preview, `docs/PLANNER_SPEC.md` 17.9). Presentation
+ *   only: the caller shows its own overview from its own authority, so the
+ *   persisted overview (status, Plan ID, creation time) is left out; the
+ *   sections sit one heading level below the caller's Preview heading; the
+ *   timeline does not call the order "saved"; and an unresolved reference reads
+ *   as unresolved without its raw ID. The Plan, its Steps and every derivation
+ *   are the same.
+ */
+export type ProductionPlanContentVariant = 'persisted' | 'unsaved_preview'
+
 interface ProductionPlanContentProps {
   plan: ProductionPlan
   targetWeapons: readonly TargetWeapon[]
@@ -43,10 +58,19 @@ interface ProductionPlanContentProps {
    * state never move into this read-only view.
    */
   conflictSection?: ReactNode
+  variant?: ProductionPlanContentVariant
 }
 
 /** A titled, border-based section of the read-only Plan view. */
-function PlanSection({ title, children }: { title: string; children: ReactNode }) {
+function PlanSection({
+  title,
+  headingLevel = 'h2',
+  children,
+}: {
+  title: string
+  headingLevel?: 'h2' | 'h3'
+  children: ReactNode
+}) {
   const headingId = useId()
   return (
     <Paper
@@ -56,7 +80,7 @@ function PlanSection({ title, children }: { title: string; children: ReactNode }
       sx={{ p: { xs: 2, md: 2.5 }, minWidth: 0 }}
     >
       <Stack spacing={1.5}>
-        <Typography id={headingId} component="h2" variant="h2">
+        <Typography id={headingId} component={headingLevel} variant={headingLevel}>
           {title}
         </Typography>
         {children}
@@ -90,6 +114,7 @@ export function ProductionPlanContent({
   master,
   debugMode = false,
   conflictSection,
+  variant = 'persisted',
 }: ProductionPlanContentProps) {
   const orderedSteps = useMemo(() => orderPlanSteps(plan), [plan])
   const targetGroups = useMemo(() => groupPlanStepsByTargetWeapon(plan), [plan])
@@ -98,18 +123,24 @@ export function ProductionPlanContent({
     () => createTargetWeaponLookup(targetWeapons),
     [targetWeapons],
   )
+  const preview = variant === 'unsaved_preview'
+  const sectionHeadingLevel = preview ? 'h3' : 'h2'
+  const disclosureHeadingLevel = preview ? 'h4' : 'h3'
+  const stepHeadingLevel = preview ? 'h5' : 'h4'
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <ProductionPlanSummary plan={plan} />
+      {!preview && <ProductionPlanSummary plan={plan} />}
 
-      <PlanSection title="計画全体の実行順">
+      <PlanSection title="計画全体の実行順" headingLevel={sectionHeadingLevel}>
         <Typography variant="body2" color="text.secondary">
-          保存された順番のとおりに表示します。他の目標武器と共有する操作も、ここでは1回だけ現れます。
+          {preview
+            ? '計画の順番のとおりに表示します。他の目標武器と共有する操作も、ここでは1回だけ現れます。'
+            : '保存された順番のとおりに表示します。他の目標武器と共有する操作も、ここでは1回だけ現れます。'}
         </Typography>
         <DisclosureAccordion
           title={`全${orderedSteps.length}ステップを表示`}
-          headingLevel="h3"
+          headingLevel={disclosureHeadingLevel}
           unmountOnExit
         >
           {/* One physical Step appears exactly once here, even when it
@@ -120,11 +151,13 @@ export function ProductionPlanContent({
             master={master}
             label="計画全体の実行順"
             debugMode={debugMode}
+            hideUnresolvedTargetIds={preview}
+            headingLevel={stepHeadingLevel}
           />
         </DisclosureAccordion>
       </PlanSection>
 
-      <PlanSection title="必要素材・費用の目安">
+      <PlanSection title="必要素材・費用の目安" headingLevel={sectionHeadingLevel}>
         <ProductionPlanCostEstimate plan={plan} targetWeapons={targetWeapons} />
       </PlanSection>
 
@@ -132,7 +165,7 @@ export function ProductionPlanContent({
           recorded any: nothing is re-summed, and the estimate above is the
           user-facing figure (`docs/UI_FLOW.md` 11.0). */}
       {plan.requiredMaterials.length > 0 && (
-        <PlanSection title="必要素材（アイテム）合計">
+        <PlanSection title="必要素材（アイテム）合計" headingLevel={sectionHeadingLevel}>
           <Box
             component="ul"
             aria-label="必要素材（アイテム）合計"
@@ -170,7 +203,7 @@ export function ProductionPlanContent({
 
       {conflictSection}
 
-      <PlanSection title="目標武器ごとの作成ルート">
+      <PlanSection title="目標武器ごとの作成ルート" headingLevel={sectionHeadingLevel}>
         {isLegacy && (
           <Alert severity="info">
             この計画は共有Target進行情報の保存機能追加前に作成されたため、
@@ -188,12 +221,14 @@ export function ProductionPlanContent({
               const target = lookup.byId(group.targetWeaponId)
               const name = target
                 ? target.name
-                : `削除済みまたは参照できない目標武器（${group.targetWeaponId}）`
+                : preview
+                  ? '参照できない目標武器'
+                  : `削除済みまたは参照できない目標武器（${group.targetWeaponId}）`
               return (
                 <DisclosureAccordion
                   key={group.targetWeaponId}
                   title={`${name}（${group.steps.length}ステップ）`}
-                  headingLevel="h3"
+                  headingLevel={disclosureHeadingLevel}
                   unmountOnExit
                 >
                   <ProductionPlanStepList
@@ -203,6 +238,8 @@ export function ProductionPlanContent({
                     showSharedBadge
                     label={`${name}の作成ルート`}
                     debugMode={debugMode}
+                    hideUnresolvedTargetIds={preview}
+                    headingLevel={stepHeadingLevel}
                   />
                 </DisclosureAccordion>
               )
@@ -212,7 +249,7 @@ export function ProductionPlanContent({
       </PlanSection>
 
       {plan.rejectedBuildListEntries.length === 0 ? (
-        <PlanSection title="採用されなかった候補">
+        <PlanSection title="採用されなかった候補" headingLevel={sectionHeadingLevel}>
           <Typography variant="body2" color="text.secondary">
             採用されなかった候補はありません。
           </Typography>
@@ -220,7 +257,7 @@ export function ProductionPlanContent({
       ) : (
         <DisclosureAccordion
           title={`採用されなかった候補（${plan.rejectedBuildListEntries.length}件）`}
-          headingLevel="h2"
+          headingLevel={sectionHeadingLevel}
           unmountOnExit
         >
           <Stack
@@ -242,9 +279,11 @@ export function ProductionPlanContent({
                   <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
                     {rejected.detail}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                    BuildListEntry ID: {rejected.buildListEntryId}
-                  </Typography>
+                  {(!preview || debugMode) && (
+                    <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                      BuildListEntry ID: {rejected.buildListEntryId}
+                    </Typography>
+                  )}
                 </Stack>
               </Box>
             ))}

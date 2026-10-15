@@ -32,12 +32,16 @@ import {
 function TargetWeaponReference({
   targetWeaponId,
   lookup,
+  hideUnresolvedId = false,
 }: {
   targetWeaponId: TargetWeaponId
   lookup: TargetWeaponLookup
+  /** An unsaved Preview names an unresolved Target without its raw ID (the ID is never a display name). */
+  hideUnresolvedId?: boolean
 }) {
   const target = lookup.byId(targetWeaponId)
   if (target) return <>{target.name}</>
+  if (hideUnresolvedId) return <>参照できない目標武器</>
   return <>削除済みまたは参照できない目標武器（{targetWeaponId}）</>
 }
 
@@ -115,6 +119,7 @@ export function ProductionPlanStepCard({
   showSharedBadge = false,
   headingLevel = 'h4',
   debugMode = false,
+  hideUnresolvedTargetIds = false,
 }: {
   step: PlanStep
   lookup: TargetWeaponLookup
@@ -126,6 +131,8 @@ export function ProductionPlanStepCard({
    * internal information; the normal UI shows neither.
    */
   debugMode?: boolean
+  /** An unsaved Preview: a Target the lookup cannot resolve is named without its raw ID. */
+  hideUnresolvedTargetIds?: boolean
 }) {
   // `undefined` means the Plan predates the field: nothing is inferred for it
   // from a Candidate or Entry, and no section is shown. `[]` means this Step
@@ -177,6 +184,7 @@ export function ProductionPlanStepCard({
             <TargetWeaponReference
               targetWeaponId={step.targetWeaponId}
               lookup={lookup}
+              hideUnresolvedId={hideUnresolvedTargetIds}
             />
           )}
         </Typography>
@@ -205,6 +213,7 @@ export function ProductionPlanStepCard({
                   <TargetWeaponReference
                     targetWeaponId={completion.targetWeaponId}
                     lookup={lookup}
+                    hideUnresolvedId={hideUnresolvedTargetIds}
                   />
                 </Typography>
               ))}
@@ -231,7 +240,11 @@ export function ProductionPlanStepCard({
                   className="tabular-nums"
                   sx={{ overflowWrap: 'anywhere' }}
                 >
-                  <TargetWeaponReference targetWeaponId={milestone.targetWeaponId} lookup={lookup} />
+                  <TargetWeaponReference
+                    targetWeaponId={milestone.targetWeaponId}
+                    lookup={lookup}
+                    hideUnresolvedId={hideUnresolvedTargetIds}
+                  />
                   （ボーナス判定: {compromiseBonusMatchLabels[milestone.conditionMatch.bonus]} ／ スキル判定:{' '}
                   {compromiseSkillMatchLabels[milestone.conditionMatch.skill]}、理想まで残り{milestone.remainingOperationCount}操作）
                   {debugMode && (
@@ -277,6 +290,7 @@ export function ProductionPlanStepList({
   headingLevel = 'h4',
   label,
   debugMode = false,
+  hideUnresolvedTargetIds = false,
 }: {
   steps: readonly PlanStep[]
   lookup: TargetWeaponLookup
@@ -286,6 +300,8 @@ export function ProductionPlanStepList({
   /** Accessible name of the list. */
   label: string
   debugMode?: boolean
+  /** An unsaved Preview: a Target the lookup cannot resolve is named without its raw ID. */
+  hideUnresolvedTargetIds?: boolean
 }) {
   return (
     <Stack component="ol" spacing={1} aria-label={label} sx={{ m: 0, p: 0, minWidth: 0 }}>
@@ -298,6 +314,7 @@ export function ProductionPlanStepList({
           showSharedBadge={showSharedBadge}
           headingLevel={headingLevel}
           debugMode={debugMode}
+          hideUnresolvedTargetIds={hideUnresolvedTargetIds}
         />
       ))}
     </Stack>
