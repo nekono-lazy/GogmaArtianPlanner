@@ -183,6 +183,108 @@ export function bloDriverSlotExclusions(slots: readonly Pick<BloDriverSlotEntry,
   return exclusions
 }
 
+/**
+ * Issue #260 PR-5B: the driver's observation of the Worker release after a cancel (CDP `Target.detachedFromTarget`).
+ *
+ * The page's run settles at once on a cancel (the Client settles synchronously and terminates its Worker); a Worker busy in the
+ * calculation is released by the Browser later. The driver therefore keeps observing after the run settled - never delaying the
+ * Client's cancel or the Worker's `terminate()` - until the run's Worker detaches or the observation window (counted from the cancel
+ * request) ends, and stops as soon as it detaches. It measures nothing it cannot attribute:
+ *
+ * - the observed Worker is the one Worker target attached during the slot, before the cancel request; zero or several such targets, or
+ *   one attached after the cancel, are `worker_not_identified` (no time is made up);
+ * - a detach is accepted only when the page still responds afterwards: a target that vanished because the page was lost or closed is
+ *   `page_lost`, never a release;
+ * - a detach before the cancel request is `detached_before_cancel`; no detach within the window is `not_observed`.
+ *
+ * Only `detached` carries a time; the analysis derives the release time from the record's own cancel request and accepts nothing else.
+ */
+export const BLO_CANCEL_DETACH_OBSERVATION_WINDOW_MS = 10_000
+export const BLO_CANCEL_DETACH_POLL_MS = 50
+
+export type BloCancelDetachOutcome = 'detached' | 'not_observed' | 'page_lost' | 'worker_not_identified' | 'detached_before_cancel'
+export const BLO_CANCEL_DETACH_OUTCOMES: readonly BloCancelDetachOutcome[] = ['detached', 'not_observed', 'page_lost', 'worker_not_identified', 'detached_before_cancel']
+
+/** The driver record's observation of one cancelled run's Worker release (wall-clock epoch milliseconds of the driver's machine). */
+export interface BloCancelDetachObservation {
+  outcome: BloCancelDetachOutcome
+  /** The observed Worker target (the slot's own; null when none could be identified). */
+  target: string | null
+  /** The cancel request, from the page's record of the run (`startedAt` + `timeline.cancelRequestedAtMs`). */
+  cancelRequestedAtEpochMs: number
+  /** The detach of `target` (only with `detached` / `detached_before_cancel`). */
+  detachedAtEpochMs: number | null
+  windowMs: number
+  /** When the observation ended. */
+  observedUntilEpochMs: number
+}
+
+export interface BloSlotWorkerTarget {
+  target: string
+  attachedAtEpochMs: number
+  detachedAtEpochMs: number | null
+}
+
+/** What the observation reads from the Browser: the slot's Worker targets as seen so far, and whether the page still responds. */
+export interface BloCancelDetachPort {
+  now(): number
+  sleep(ms: number): Promise<void>
+  /** The Worker targets attached since the slot started (live: a later detach shows up in a later call). */
+  slotWorkers(): readonly BloSlotWorkerTarget[]
+  /** Whether the page is still there and responds (false when it was lost or closed). Must not throw. */
+  pageResponds(): Promise<boolean>
+}
+
+/**
+ * The epoch of a run's cancel request from its saved record (`startedAt` + `timeline.cancelRequestedAtMs`), or null when the run had
+ * no cancel request (a slot without a cancel, or a cancel trial whose cancel never ran): only such a run is observed after it settled.
+ */
+export function bloCancelRequestEpochMs(record: { startedAt: string; timeline: { cancelRequestedAtMs: number | null } }): number | null {
+  if (record.timeline.cancelRequestedAtMs === null) return null
+  const started = Date.parse(record.startedAt)
+  return Number.isFinite(started) ? started + record.timeline.cancelRequestedAtMs : null
+}
+
+/** Observes the release of the cancelled run's Worker (see above). Starts after the run settled; returns as soon as the Worker detaches. */
+export async function observeBloCancelWorkerDetach(
+  cancelRequestedAtEpochMs: number,
+  port: BloCancelDetachPort,
+  options: { windowMs?: number; pollMs?: number } = {},
+): Promise<BloCancelDetachObservation> {
+  const windowMs = options.windowMs ?? BLO_CANCEL_DETACH_OBSERVATION_WINDOW_MS
+  const pollMs = options.pollMs ?? BLO_CANCEL_DETACH_POLL_MS
+  const end = (outcome: BloCancelDetachOutcome, target: string | null, detachedAtEpochMs: number | null): BloCancelDetachObservation =>
+    ({ outcome, target, cancelRequestedAtEpochMs, detachedAtEpochMs, windowMs, observedUntilEpochMs: port.now() })
+  const candidates = port.slotWorkers()
+  if (candidates.length !== 1 || candidates[0]!.attachedAtEpochMs > cancelRequestedAtEpochMs) return end('worker_not_identified', null, null)
+  const target = candidates[0]!.target
+  for (;;) {
+    const current = port.slotWorkers().find(worker => worker.target === target)
+    const detachedAt = current?.detachedAtEpochMs ?? null
+    if (detachedAt !== null || port.now() >= cancelRequestedAtEpochMs + windowMs) {
+      // A target that vanished with its page is no release: the page must still respond after the detach (or at the window's end).
+      if (!(await port.pageResponds())) return end('page_lost', target, null)
+      if (detachedAt === null) return end('not_observed', target, null)
+      return end(detachedAt < cancelRequestedAtEpochMs ? 'detached_before_cancel' : 'detached', target, detachedAt)
+    }
+    await port.sleep(pollMs)
+  }
+}
+
+/** Why a driver record's observation entry is malformed (null = well-formed or absent). */
+export function bloCancelDetachObservationIssue(value: unknown): string | null {
+  if (value === null) return null
+  if (typeof value !== 'object' || Array.isArray(value)) return 'an observation must be an object or null'
+  const entry = value as Record<string, unknown>
+  const time = (key: string) => typeof entry[key] === 'number' && Number.isFinite(entry[key] as number)
+  if (!BLO_CANCEL_DETACH_OUTCOMES.includes(entry.outcome as BloCancelDetachOutcome)) return 'an observation needs a known outcome'
+  if (!(entry.target === null || typeof entry.target === 'string') || !time('cancelRequestedAtEpochMs') || !time('windowMs') || !time('observedUntilEpochMs')) return 'an observation needs its target, cancel request, window and end'
+  const detached = entry.outcome === 'detached' || entry.outcome === 'detached_before_cancel'
+  if (detached !== time('detachedAtEpochMs') || (!detached && entry.detachedAtEpochMs !== null)) return 'a detach time goes exactly with a detached outcome'
+  if ((entry.outcome === 'worker_not_identified') !== (entry.target === null)) return 'a target goes exactly with an identified Worker'
+  return null
+}
+
 /** The Browser mode a page shows itself: a headless Chrome names `HeadlessChrome` in its user agent; null when no user agent was read. */
 export function bloObservedBrowserMode(userAgent: string | null): 'headed' | 'headless' | null {
   if (userAgent === null) return null

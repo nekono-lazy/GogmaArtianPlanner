@@ -1,6 +1,14 @@
 import { stableStringify } from '../../domain/models/publicTypes'
 import type { BuildListOptimizationStage } from '../../domain/planner/buildListOptimization'
-import { bloObservedBrowserMode, type BloDriverPageRestart, type BloDriverSlotOutcome } from './buildListOptimizationBenchmarkDriverControl'
+import {
+  bloCancelDetachObservationIssue,
+  bloCancelRequestEpochMs,
+  bloObservedBrowserMode,
+  type BloCancelDetachObservation,
+  type BloCancelDetachOutcome,
+  type BloDriverPageRestart,
+  type BloDriverSlotOutcome,
+} from './buildListOptimizationBenchmarkDriverControl'
 import {
   BLO_PLAN_KIND,
   bindBloRecordsToPlan,
@@ -69,11 +77,13 @@ export interface BloDriverSlot {
   external: { kind: 'page_lost' | 'out_of_memory'; evidence: string } | null
   cdpWorkerHeap: { intervalMs: number; samples: BloDriverHeapSample[]; errors: number; workerTargets: { target: string; attachedAtEpochMs: number; detachedAtEpochMs: number | null }[] } | null
   osRendererMemory: { intervalMs: number; samples: BloDriverOsSample[] } | null
+  /** Revision 3 (PR-5B): the observation of a cancelled run's Worker release after the run settled; null for a run without a cancel request. */
+  cancelDetachObservation: BloCancelDetachObservation | null
 }
 
 export interface BloDriverRecord {
   kind: typeof BLO_DRIVER_RECORD_KIND
-  revision: 2
+  revision: 3
   measurementHead: string
   plan: { path: string; sha256: string }
   driverSha256: string
@@ -186,21 +196,33 @@ function storageCountsChanged(before: BloStorageSnapshot | null, after: BloStora
   return keys.some(key => before[key] !== after[key])
 }
 
-function epochOf(iso: string): number {
-  return Date.parse(iso)
+/**
+ * How a cancelled run's Worker release reads: `detached` (with a time) only when the driver observed the detach of the slot's own Worker
+ * for exactly this record's cancel request; otherwise the driver's own outcome, `not_recorded` (no observation) or `record_mismatch`
+ * (the observation names another cancel request or a target the slot did not list). Null for a run without a cancel request.
+ */
+export type BloWorkerDetachReading = BloCancelDetachOutcome | 'not_recorded' | 'record_mismatch'
+
+/** The release time of a cancelled run's Worker: derived from the record's own cancel request and the driver's observation alone. */
+function workerDetachOf(slot: BloDriverSlot, record: BloRunRecord | undefined): { reading: BloWorkerDetachReading | null; afterCancelMs: number | null } {
+  if (record === undefined || record.timeline.cancelRequestedAtMs === null) return { reading: null, afterCancelMs: null }
+  const observation = slot.cancelDetachObservation ?? null
+  const cancelEpoch = bloCancelRequestEpochMs(record)
+  if (observation === null) return { reading: 'not_recorded', afterCancelMs: null }
+  if (cancelEpoch === null || observation.cancelRequestedAtEpochMs !== cancelEpoch) return { reading: 'record_mismatch', afterCancelMs: null }
+  if (observation.outcome !== 'detached') return { reading: observation.outcome, afterCancelMs: null }
+  const listed = slot.cdpWorkerHeap?.workerTargets.some(target => target.target === observation.target && target.detachedAtEpochMs === observation.detachedAtEpochMs) ?? false
+  if (!listed || observation.detachedAtEpochMs === null) return { reading: 'record_mismatch', afterCancelMs: null }
+  return { reading: 'detached', afterCancelMs: observation.detachedAtEpochMs - cancelEpoch }
 }
 
-/** The slot's driver memory, reduced to max sampled values (never called a continuous peak). */
+/** The slot's driver memory, reduced to max sampled values (never called a continuous peak), and a cancelled run's Worker release. */
 function driverMemoryView(slot: BloDriverSlot | undefined, record: BloRunRecord | undefined) {
-  if (slot === undefined) return { workerHeapUsedMaxSampled: null, workerHeapTotalMaxSampled: null, heapSamples: 0, heapErrors: null, rendererPrivateMaxSampled: null, rendererWorkingSetMaxSampled: null, osSamples: 0, workerGoneAfterCancelMs: null }
+  if (slot === undefined) return { workerHeapUsedMaxSampled: null, workerHeapTotalMaxSampled: null, heapSamples: 0, heapErrors: null, rendererPrivateMaxSampled: null, rendererWorkingSetMaxSampled: null, osSamples: 0, workerDetachObservation: null, workerGoneAfterCancelMs: null }
   const heap = slot.cdpWorkerHeap
   const os = slot.osRendererMemory
-  let workerGoneAfterCancelMs: number | null = null
-  if (heap !== null && record !== undefined && record.timeline.cancelRequestedAtMs !== null) {
-    const cancelEpoch = epochOf(record.startedAt) + record.timeline.cancelRequestedAtMs
-    const detached = heap.workerTargets.map(target => target.detachedAtEpochMs).filter((value): value is number => value !== null && value >= cancelEpoch - 1_000)
-    if (detached.length > 0) workerGoneAfterCancelMs = Math.max(0, Math.min(...detached) - cancelEpoch)
-  }
+  const detach = workerDetachOf(slot, record)
+  const workerGoneAfterCancelMs = detach.afterCancelMs
   return {
     workerHeapUsedMaxSampled: heap === null || heap.samples.length === 0 ? null : Math.max(...heap.samples.map(sample => sample.usedSize)),
     workerHeapTotalMaxSampled: heap === null || heap.samples.length === 0 ? null : Math.max(...heap.samples.map(sample => sample.totalSize)),
@@ -209,6 +231,7 @@ function driverMemoryView(slot: BloDriverSlot | undefined, record: BloRunRecord 
     rendererPrivateMaxSampled: os === null || os.samples.length === 0 ? null : Math.max(...os.samples.map(sample => sample.privateBytes)),
     rendererWorkingSetMaxSampled: os === null || os.samples.length === 0 ? null : Math.max(...os.samples.map(sample => sample.workingSetBytes)),
     osSamples: os?.samples.length ?? 0,
+    workerDetachObservation: detach.reading,
     workerGoneAfterCancelMs,
   }
 }
@@ -309,8 +332,8 @@ function readDriver(file: BloSourceFile | null, head: string, plan: BloSourceFil
   } catch {
     return { record: null, issues: [`${file.file}: the driver record is not JSON.`] }
   }
-  if (!isRecord(value) || value.kind !== BLO_DRIVER_RECORD_KIND || value.revision !== 2 || !Array.isArray(value.slots) || !Array.isArray(value.sessions) || !Array.isArray(value.pageRestarts)) {
-    return { record: null, issues: [`${file.file}: not a Build List optimization driver record (revision 2).`] }
+  if (!isRecord(value) || value.kind !== BLO_DRIVER_RECORD_KIND || value.revision !== 3 || !Array.isArray(value.slots) || !Array.isArray(value.sessions) || !Array.isArray(value.pageRestarts)) {
+    return { record: null, issues: [`${file.file}: not a Build List optimization driver record (revision 3).`] }
   }
   const issues: string[] = []
   if (value.measurementHead !== head) issues.push(`${file.file}: the driver ran at ${String(value.measurementHead)}, not at the measurement HEAD.`)
@@ -324,6 +347,16 @@ function readDriver(file: BloSourceFile | null, head: string, plan: BloSourceFil
   if (!value.slots.every(slot => isRecord(slot) && typeof slot.slotId === 'string' && outcomes.includes(slot.outcome as string) && (slot.pageIndex === null || Number.isSafeInteger(slot.pageIndex))
     && (slot.outcome === 'record_saved') === (typeof slot.rawFile === 'string'))) {
     issues.push(`${file.file}: a driver slot entry is malformed (a raw file goes exactly with a saved record).`)
+  }
+  // Revision 3: every slot the driver ran names its cancel detach observation (null without a cancel request); a slot never run may omit it.
+  for (const slot of value.slots) {
+    if (!isRecord(slot)) continue
+    if (!('cancelDetachObservation' in slot)) {
+      if (slot.outcome !== 'not_run') issues.push(`${file.file}: the driver slot ${String(slot.slotId)} names no cancel detach observation.`)
+      continue
+    }
+    const issue = bloCancelDetachObservationIssue(slot.cancelDetachObservation)
+    if (issue !== null) issues.push(`${file.file}: the driver slot ${String(slot.slotId)} has a malformed cancel detach observation (${issue}).`)
   }
   return { record: issues.length === 0 ? (value as unknown as BloDriverRecord) : null, issues }
 }
@@ -451,7 +484,8 @@ function cancelTrials(plan: BloMeasurementPlan, slots: Map<string, BloSlotView>,
     else status = 'cancel_failed'
     return {
       slotId: slot.slotId, trigger: slot.cancelTrigger, status, stageAtCancel: run?.cancel?.lastStage ?? null,
-      cancelSettleMs: run?.intervals.cancelSettleMs ?? null, workerGoneAfterCancelMs: run?.memory.driver.workerGoneAfterCancelMs ?? null,
+      cancelSettleMs: run?.intervals.cancelSettleMs ?? null, workerDetachObservation: run?.memory.driver.workerDetachObservation ?? null,
+      workerGoneAfterCancelMs: run?.memory.driver.workerGoneAfterCancelMs ?? null,
       resultAdopted: run === null ? null : run.result !== null, lateMessages: run?.lateMessages ?? null,
       rerunSlotId: slot.rerunSlotId, rerunCompleted, rerunIdenticalToGroup: rerunIdentical, rerunIdenticalToNodeReference,
     }

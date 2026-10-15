@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BLO_CANCEL_DETACH_OBSERVATION_WINDOW_MS,
+  BLO_CANCEL_DETACH_POLL_MS,
+  bloCancelDetachObservationIssue,
+  bloCancelRequestEpochMs,
   bloDriverLaunchModeIssue,
   bloDriverSlotExclusions,
   bloObservedBrowserMode,
   bloPageBrowserModeIssue,
+  observeBloCancelWorkerDetach,
   runBloDriverSessions,
+  type BloCancelDetachPort,
   type BloDriverPagePort,
   type BloDriverSession,
   type BloDriverSlotEnd,
@@ -111,6 +117,79 @@ describe('Build List optimization driver slot control (Issue #260 PR-5A)', () =>
       { slotId: 'e', sessionId: 's1', pageIndex: null, outcome: 'not_run' },
     ])
     expect([...exclusions]).toEqual([['b', 'driver_outcome_not_saved'], ['c', 'page_not_replaced'], ['e', 'driver_outcome_not_saved']])
+  })
+
+  describe('the Worker release after a cancel (PR-5B r2)', () => {
+    const CANCEL = 1_792_000_000_000
+    /** A fake Browser on a fake clock: the Worker detaches at `detachAt` (or never), the page may stop responding at `pageLostAt`. */
+    function fakeBrowser(options: { workers?: { target: string; attachedAt: number; detachAt: number | null }[]; pageLostAt?: number; startAt?: number }) {
+      let now = options.startAt ?? CANCEL + 1_000
+      const workers = options.workers ?? [{ target: 'worker-4', attachedAt: CANCEL - 2_000, detachAt: CANCEL + 2_015 }]
+      const sleeps: number[] = []
+      const port: BloCancelDetachPort = {
+        now: () => now,
+        sleep: async (ms) => { sleeps.push(ms); now += ms },
+        slotWorkers: () => workers.map(worker => ({ target: worker.target, attachedAtEpochMs: worker.attachedAt, detachedAtEpochMs: worker.detachAt !== null && worker.detachAt <= now ? worker.detachAt : null })),
+        pageResponds: async () => options.pageLostAt === undefined || now < options.pageLostAt,
+      }
+      return { port, sleeps, clock: () => now }
+    }
+
+    it('records the release of the slot Worker and stops as soon as it detaches', async () => {
+      const browser = fakeBrowser({})
+      const observation = await observeBloCancelWorkerDetach(CANCEL, browser.port)
+      expect(observation).toEqual({ outcome: 'detached', target: 'worker-4', cancelRequestedAtEpochMs: CANCEL, detachedAtEpochMs: CANCEL + 2_015, windowMs: 10_000, observedUntilEpochMs: CANCEL + 2_050 })
+      // It started after the run settled (1 s after the cancel) and waited only until the detach, never to the end of the window.
+      expect(browser.clock() - CANCEL).toBe(2_050)
+      expect(browser.sleeps.every(ms => ms === BLO_CANCEL_DETACH_POLL_MS)).toBe(true)
+      expect(BLO_CANCEL_DETACH_OBSERVATION_WINDOW_MS).toBeGreaterThan(3_000)
+      // A Worker that is already gone when the observation starts is read at once.
+      const early = fakeBrowser({ workers: [{ target: 'worker-4', attachedAt: CANCEL - 2_000, detachAt: CANCEL + 300 }] })
+      expect(await observeBloCancelWorkerDetach(CANCEL, early.port)).toMatchObject({ outcome: 'detached', detachedAtEpochMs: CANCEL + 300 })
+      expect(early.sleeps).toEqual([])
+    })
+
+    it('makes up no release: no detach in the window, a lost page, an unidentifiable Worker, a detach before the cancel', async () => {
+      const never = fakeBrowser({ workers: [{ target: 'worker-4', attachedAt: CANCEL - 2_000, detachAt: null }] })
+      expect(await observeBloCancelWorkerDetach(CANCEL, never.port)).toMatchObject({ outcome: 'not_observed', target: 'worker-4', detachedAtEpochMs: null })
+      expect(never.clock()).toBe(CANCEL + 10_000)
+      // The page vanished: its Workers' targets go with it, which is no release.
+      const lost = fakeBrowser({ workers: [{ target: 'worker-4', attachedAt: CANCEL - 2_000, detachAt: CANCEL + 1_500 }], pageLostAt: CANCEL + 1_500 })
+      expect(await observeBloCancelWorkerDetach(CANCEL, lost.port)).toMatchObject({ outcome: 'page_lost', target: 'worker-4', detachedAtEpochMs: null })
+      const lostLater = fakeBrowser({ workers: [{ target: 'worker-4', attachedAt: CANCEL - 2_000, detachAt: null }], pageLostAt: CANCEL + 5_000 })
+      expect(await observeBloCancelWorkerDetach(CANCEL, lostLater.port)).toMatchObject({ outcome: 'page_lost', detachedAtEpochMs: null })
+      // Two Worker targets in the slot, none, or one attached after the cancel: no Worker is guessed.
+      for (const workers of [
+        [{ target: 'worker-4', attachedAt: CANCEL - 2_000, detachAt: CANCEL + 2_015 }, { target: 'worker-5', attachedAt: CANCEL - 1_000, detachAt: CANCEL + 100 }],
+        [],
+        [{ target: 'worker-5', attachedAt: CANCEL + 10, detachAt: CANCEL + 100 }],
+      ]) {
+        expect(await observeBloCancelWorkerDetach(CANCEL, fakeBrowser({ workers }).port)).toMatchObject({ outcome: 'worker_not_identified', target: null, detachedAtEpochMs: null })
+      }
+      const before = fakeBrowser({ workers: [{ target: 'worker-4', attachedAt: CANCEL - 2_000, detachAt: CANCEL - 5 }] })
+      expect(await observeBloCancelWorkerDetach(CANCEL, before.port)).toMatchObject({ outcome: 'detached_before_cancel', detachedAtEpochMs: CANCEL - 5 })
+      // Another Worker's later detach is never read as the slot Worker's.
+      const other = fakeBrowser({ workers: [{ target: 'worker-4', attachedAt: CANCEL - 2_000, detachAt: null }] })
+      const port = { ...other.port, slotWorkers: () => [...other.port.slotWorkers(), ...(other.clock() > CANCEL + 2_000 ? [{ target: 'worker-9', attachedAtEpochMs: CANCEL + 1_900, detachedAtEpochMs: CANCEL + 2_000 }] : [])] }
+      expect(await observeBloCancelWorkerDetach(CANCEL, port)).toMatchObject({ outcome: 'not_observed', target: 'worker-4', detachedAtEpochMs: null })
+    })
+
+    it('observes a run only when its saved record carries a cancel request, and checks the observation shape', () => {
+      const record = (cancelRequestedAtMs: number | null) => ({ startedAt: '2026-10-15T06:00:00.000Z', timeline: { cancelRequestedAtMs } })
+      expect(bloCancelRequestEpochMs(record(2_191.6))).toBe(Date.parse('2026-10-15T06:00:00.000Z') + 2_191.6)
+      // A run without a cancel request (every non-cancel slot, a cancel trial whose cancel never ran) is not observed: as before.
+      expect(bloCancelRequestEpochMs(record(null))).toBeNull()
+      expect(bloCancelRequestEpochMs({ startedAt: 'not a date', timeline: { cancelRequestedAtMs: 5 } })).toBeNull()
+      const detached = { outcome: 'detached', target: 'worker-4', cancelRequestedAtEpochMs: CANCEL, detachedAtEpochMs: CANCEL + 2_015, windowMs: 10_000, observedUntilEpochMs: CANCEL + 2_050 }
+      expect(bloCancelDetachObservationIssue(null)).toBeNull()
+      expect(bloCancelDetachObservationIssue(detached)).toBeNull()
+      expect(bloCancelDetachObservationIssue({ ...detached, outcome: 'not_observed', detachedAtEpochMs: null })).toBeNull()
+      expect(bloCancelDetachObservationIssue({ ...detached, outcome: 'not_observed' })).toMatch(/detach time goes exactly with a detached outcome/)
+      expect(bloCancelDetachObservationIssue({ ...detached, detachedAtEpochMs: null })).toMatch(/detach time goes exactly/)
+      expect(bloCancelDetachObservationIssue({ ...detached, outcome: 'worker_not_identified', detachedAtEpochMs: null })).toMatch(/target goes exactly with an identified Worker/)
+      expect(bloCancelDetachObservationIssue({ ...detached, outcome: 'released' })).toMatch(/known outcome/)
+      expect(bloCancelDetachObservationIssue({ ...detached, windowMs: undefined })).toMatch(/window/)
+    })
   })
 
   it('decides the Browser mode from the plan at launch and from the page itself', () => {

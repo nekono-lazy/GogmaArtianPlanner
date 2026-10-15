@@ -107,7 +107,13 @@ describe('Build List optimization measurement harness isolation (Issue #260 PR-5
     expect(driver).toMatch(/control\.bloPageBrowserModeIssue\(environmentValue\.userAgent \?\? null, launchMode\)/)
     expect(driver).toMatch(/control\.runBloDriverSessions\(sessions, \{ openPage, runSlot, closePage, readStorage \}/)
     expect(driver).toMatch(/deadlineOption !== undefined && \(mode !== 'mechanics'/)
-    expect(driver).toMatch(/revision: 2/)
+    expect(driver).toMatch(/revision: 3/)
+    // PR-5B r2: a cancelled run's Worker release is observed by the shared observation, after the run settled, from the saved
+    // record's cancel request; the scratch profile must lie outside the Repository.
+    expect(driver).toMatch(/control\.bloCancelRequestEpochMs\(saved\)/)
+    expect(driver).toMatch(/control\.observeBloCancelWorkerDetach\(cancelEpoch, \{/)
+    expect(driver.indexOf("exportJson()', 300_000)")).toBeLessThan(driver.indexOf('control.observeBloCancelWorkerDetach('))
+    expect(driver).toMatch(/if \(inRepository\(profile\)\) throw new Error/)
     expect(driver).toMatch(/DOM\.setFileInputFiles/)
     expect(driver).toMatch(/build\?\.commit !== head \|\| build\?\.uncommittedBenchmarkCode !== false/)
     expect(driver).toMatch(/flag: 'wx'/)

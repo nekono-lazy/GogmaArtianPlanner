@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import mechanicsPlanText from '../../../docs/BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_PLAN.md?raw'
 import measurementPlanText from '../../../docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md?raw'
+import r1ResultText from '../../../docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_RESULT.json?raw'
 import { runBuildListOptimization } from '../../domain/planner/buildListOptimization'
 import { createProductionBuildListOptimizationWorkerDependencies } from '../../workers/buildListOptimization.worker.production'
 import { loadMasterData } from '../../domain/master/loadMasterData'
@@ -187,6 +188,8 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
 
   interface DriverOptions {
     mode?: 'headed' | 'headless'
+    /** The release of each cancelled run's Worker after its cancel request (default 20 ms), as the driver observed it. */
+    detachAfterCancelMs?: number
     /** Edits the driver's slot entries (index-aligned with the records). */
     slots?: (slots: BloDriverRecord['slots']) => void
     pageRestarts?: BloDriverRecord['pageRestarts']
@@ -196,6 +199,8 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
     const mode = options.mode ?? 'headed'
     const slots: BloDriverRecord['slots'] = records.map((record, index) => {
       const start = Date.parse(record.startedAt)
+      const cancelEpoch = record.timeline.cancelRequestedAtMs === null ? null : start + record.timeline.cancelRequestedAtMs
+      const detachedAt = cancelEpoch === null ? start + 21300 : cancelEpoch + (options.detachAfterCancelMs ?? 20)
       return {
         slotId: record.slot.slotId, sessionId: record.slot.purpose === 'memory' ? 's2-isolated' : 's1-non_isolated', pageIndex: record.slot.purpose === 'memory' ? 2 : 1,
         startedAt: record.startedAt, endedAt: record.endedAt, outcome: 'record_saved', rawFile: `${String(index + 1).padStart(2, '0')}-${record.slot.slotId}.json`, note: null,
@@ -203,14 +208,16 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
         cdpWorkerHeap: {
           intervalMs: 500, errors: 0,
           samples: record.slot.purpose === 'memory' ? [{ atEpochMs: start + 2000, target: 'worker-1', usedSize: 400_000_000, totalSize: 450_000_000 }, { atEpochMs: start + 9000, target: 'worker-1', usedSize: 430_000_000, totalSize: 470_000_000 }] : [],
-          workerTargets: [{ target: 'worker-1', attachedAtEpochMs: start + 950, detachedAtEpochMs: record.timeline.cancelRequestedAtMs === null ? start + 21300 : start + record.timeline.cancelRequestedAtMs + 20 }],
+          workerTargets: [{ target: 'worker-1', attachedAtEpochMs: start + 950, detachedAtEpochMs: detachedAt }],
         },
         osRendererMemory: record.slot.purpose === 'memory' ? { intervalMs: 1000, samples: [{ atEpochMs: start + 3000, privateBytes: 1_200_000_000, workingSetBytes: 1_300_000_000, processCount: 2 }] } : null,
+        cancelDetachObservation: cancelEpoch === null ? null
+          : { outcome: 'detached', target: 'worker-1', cancelRequestedAtEpochMs: cancelEpoch, detachedAtEpochMs: detachedAt, windowMs: 10_000, observedUntilEpochMs: detachedAt + 50 },
       }
     })
     options.slots?.(slots)
     return {
-      kind: 'build-list-optimization-browser-driver-record', revision: 2, measurementHead: TEST_MEASUREMENT_HEAD, plan: { path: 'docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md', sha256: planFile.sha256 },
+      kind: 'build-list-optimization-browser-driver-record', revision: 3, measurementHead: TEST_MEASUREMENT_HEAD, plan: { path: 'docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md', sha256: planFile.sha256 },
       driverSha256: 'e'.repeat(64), launcher: { browser: 'chrome', version: 'Chrome/154.0', headless: mode === 'headless', mode, planBrowserMode: 'headed', flags: [] }, slotDeadlineMs: 1_800_000,
       machine: { cpuModel: 'test', logicalCpuCount: 16, totalMemoryBytes: 1, os: 'test' },
       sessions: [
@@ -334,6 +341,62 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
     expect(cancelLifecycleOf(noNode.result)).toEqual(everySet('not_comparable'))
   })
 
+  /** The registered variant with the Owner's 2026-10-15 cancel → Worker detach bound (3,000 ms), whatever the committed plan says. */
+  const registered3000 = structuredClone(registered)
+  registered3000.criteria.items.find(item => item.criterionId === 'cancel.worker-gone')!.threshold = 3000
+  const detachOf = (result: Record<string, never>) => (result.cancelTrials as { workerDetachObservation: string | null; workerGoneAfterCancelMs: number | null; cancelSettleMs: number | null }[])
+  const workerGoneOf = (result: Record<string, never>) => gateOf(result).results.find(entry => entry.criterionId === 'cancel.worker-gone')!
+
+  it('times the Worker release from the driver observation alone and judges it against 3,000 ms on every set (PR-5B r2)', async () => {
+    // About 2,015 ms (the out-of-plan diagnostic of r1): within 3,000 ms, so the common gate passes for every set.
+    const usual = await analyze(registered3000, recordsOf(registered3000), { detachAfterCancelMs: 2015 })
+    expect(detachOf(usual.result).map(trial => [trial.workerDetachObservation, trial.workerGoneAfterCancelMs])).toEqual(Array.from({ length: 5 }, () => ['detached', 2015]))
+    expect(workerGoneOf(usual.result)).toMatchObject({ status: 'passed', observed: [2015, 2015, 2015, 2015, 2015] })
+    expect(gateOf(usual.result).verdict).toBe('passed')
+    expect(cancelLifecycleOf(usual.result)).toEqual(everySet('passed'))
+    expect(allCriteriaOf(usual.result)).toEqual(everySet('passed'))
+    // Waiting for the release never moves the Client's cancel: the cancel settle is the page's own record.
+    expect(detachOf(usual.result).every(trial => trial.cancelSettleMs === 1)).toBe(true)
+    expect(bloPublicResultIssues(usual.result, usual.sources)).toEqual([])
+    // The bound itself passes; anything beyond it fails the gate, and with it every set.
+    expect(workerGoneOf((await analyze(registered3000, recordsOf(registered3000), { detachAfterCancelMs: 3000 })).result).status).toBe('passed')
+    const late = await analyze(registered3000, recordsOf(registered3000), { detachAfterCancelMs: 3001 })
+    expect(workerGoneOf(late.result)).toMatchObject({ status: 'failed', observed: [3001, 3001, 3001, 3001, 3001] })
+    expect(cancelLifecycleOf(late.result)).toEqual(everySet('failed'))
+    expect(allCriteriaOf(late.result)).toEqual(everySet('failed'))
+  })
+
+  it('never makes up a release time: no observation, a lost page, another Worker or another cancel request is unmeasured (PR-5B r2)', async () => {
+    const records = recordsOf(registered3000)
+    const cancelAt = records.findIndex(record => record.slot.slotId === 'pc.cancel.reach-table')
+    const variants: [string, (slot: BloDriverRecord['slots'][number]) => BloDriverRecord['slots'][number], string][] = [
+      ['not observed within the window', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, outcome: 'not_observed', detachedAtEpochMs: null } }), 'not_observed'],
+      ['the page was lost', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, outcome: 'page_lost', detachedAtEpochMs: null } }), 'page_lost'],
+      ['the Worker could not be identified', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, outcome: 'worker_not_identified', target: null, detachedAtEpochMs: null } }), 'worker_not_identified'],
+      ['no observation was recorded', slot => ({ ...slot, cancelDetachObservation: null }), 'not_recorded'],
+      ['another cancel request', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, cancelRequestedAtEpochMs: slot.cancelDetachObservation!.cancelRequestedAtEpochMs - 1000 } }), 'record_mismatch'],
+      ['a Worker the slot did not list', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, target: 'worker-9' } }), 'record_mismatch'],
+      ['another detach than the listed one', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, detachedAtEpochMs: slot.cancelDetachObservation!.detachedAtEpochMs! - 500 } }), 'record_mismatch'],
+    ]
+    for (const [label, edit, reading] of variants) {
+      const { result } = await analyze(registered3000, records, { detachAfterCancelMs: 2015, slots: slots => { slots[cancelAt] = edit(slots[cancelAt]!) } })
+      expect(detachOf(result)[1], label).toMatchObject({ workerDetachObservation: reading, workerGoneAfterCancelMs: null })
+      expect(workerGoneOf(result).status, label).toBe('unmeasured')
+      expect(allCriteriaOf(result), label).toEqual(everySet('not_comparable'))
+      expect((result.unmeasured as string[]), label).toContain('cancel_worker_gone_cdp')
+    }
+    // A malformed observation refuses the driver record as a source.
+    const sources = await sourcesOf(registered3000, records, { detachAfterCancelMs: 2015 })
+    const driver = JSON.parse(sources.driver!.text) as BloDriverRecord
+    driver.slots[cancelAt] = { ...driver.slots[cancelAt]!, cancelDetachObservation: { ...driver.slots[cancelAt]!.cancelDetachObservation!, outcome: 'detached', detachedAtEpochMs: null } }
+    expect(deriveBloPublicResult({ ...sources, driver: await source('driver.json', JSON.stringify(driver)) })).toEqual({ ok: false, issues: [expect.stringMatching(/malformed cancel detach observation \(a detach time goes exactly with a detached outcome\)/)] })
+    const withoutKey = JSON.parse(sources.driver!.text) as Record<string, unknown> & { slots: Record<string, unknown>[] }
+    delete withoutKey.slots[cancelAt]!.cancelDetachObservation
+    expect(deriveBloPublicResult({ ...sources, driver: await source('driver.json', JSON.stringify(withoutKey)) })).toEqual({ ok: false, issues: [expect.stringMatching(/names no cancel detach observation/)] })
+    // A revision 2 driver record (PR-5B r1) is no source of this code.
+    expect(deriveBloPublicResult({ ...sources, driver: await source('driver.json', JSON.stringify({ ...driver, revision: 2 })) })).toEqual({ ok: false, issues: ['driver.json: not a Build List optimization driver record (revision 3).'] })
+  })
+
   it('never overlooks a failed re-run or a re-run whose semantics differ (PR-5B)', async () => {
     // The re-run after the cancels failed: it did not complete, and its semantics are not identical.
     const failed = await analyze(registered, recordsOf(registered, record => (record.slot.slotId === 'pc.rerun.2'
@@ -435,6 +498,16 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
     // A record read from another raw file than the one the driver saved for its slot is refused.
     const swapped = await analyze(registered, records, { slots: slots => { slots[0] = { ...slots[0]!, rawFile: '99-other.json' } } })
     expect(unplannedOf(swapped.result)).toEqual([expect.objectContaining({ slotId: 'pc.pilot.1', reason: 'driver_source_mismatch' })])
+  })
+
+  it('keeps the published PR-5B r1 RESULT as it was measured (series pr5b-r1, measurement HEAD e0c176b)', async () => {
+    // Re-derivable only with the code of its own measurement HEAD; this code never rewrites it.
+    expect(await testSha256(r1ResultText)).toBe('1e93438f7aba644d2389ce189b318356223a4d4d188f7b11fdb90c12a05f9b9c')
+    const r1 = JSON.parse(r1ResultText) as Record<string, never>
+    expect(r1.derivation).toMatchObject({ measurementHead: 'e0c176bcd49adc0035408d94e13339766b02000b' })
+    expect(r1.plan).toMatchObject({ series: 'pr5b-r1', status: 'registered', judged: true })
+    expect(allCriteriaOf(r1)).toEqual({ 'w0-research': 'not_comparable', 'w0-candidates-3': 'not_comparable', 'w-half': 'failed', 'w-wide': 'failed' })
+    expect(gateOf(r1).verdict).toBe('not_comparable')
   })
 
   it('names every interval apart and never mixes them into one total', () => {
