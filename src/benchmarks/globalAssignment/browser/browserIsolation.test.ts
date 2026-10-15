@@ -139,8 +139,9 @@ describe('Global Assignment Browser Worker isolation (P-1)', () => {
     const normal = Object.entries(configs).find(([path]) => path.endsWith('/vite.config.ts'))![1]
     const benchmark = Object.entries(configs).find(([path]) => path.endsWith('/vite.benchmark.config.ts'))![1]
     expect(normal).not.toMatch(/benchmark-global-assignment|globalAssignment|Cross-Origin-(?:Opener|Embedder)-Policy|PLANNER_GLOBAL/)
-    expect(benchmark).toMatch(/rollupOptions: \{ input: \{ benchmark: 'benchmark\.html', globalAssignment: 'benchmark-global-assignment\.html' \} \}/)
-    expect(benchmark).toMatch(/'benchmark\.html', 'benchmark-global-assignment\.html'\]/)
+    // Issue #260 PR-5A added a third input (the Production Build List optimization measurement page) after these two.
+    expect(benchmark).toMatch(/rollupOptions: \{ input: \{ benchmark: 'benchmark\.html', globalAssignment: 'benchmark-global-assignment\.html', buildListOptimization: 'benchmark-build-list-optimization\.html' \} \}/)
+    expect(benchmark).toMatch(/'benchmark\.html', 'benchmark-global-assignment\.html', 'benchmark-build-list-optimization\.html'\]/)
     const html = Object.entries(htmlEntries)
     expect(html.find(([path]) => path.endsWith('/index.html'))![1]).not.toMatch(/globalAssignment|benchmark/)
     expect(html.find(([path]) => path.endsWith('/benchmark.html'))![1]).toMatch(/src="\/src\/benchmark\.tsx"/)

@@ -8286,6 +8286,16 @@ Worker、UI、Persistence、version定数を変更していない。
     そのstartを `worker_start_failed` で失敗させて `preparing` に残さず、失敗したClientを解放して次のstartで作り直す。古いstartの
     失敗で新しいstartの状態を上書きしない。何も書かず、どの結果でも通常Plannerへ切り替えない
   - Persistence（採用の保存、17.11）とUIは未実装である
+- **実装済み（Issue #260 PR-5A）**: 探索上限（U2）を決めるための、benchmark専用のProduction Browser計測基盤だけを置いた。Production code・
+  Worker protocol・Client・Application・永続shape・versionは変更していない。
+  - 計測page（`benchmark-build-list-optimization.html`、`vite.benchmark.config.ts` だけがbuildする）と `src/benchmarks/buildListOptimization/`。
+    PR-4のProduction Clientと計測Worker（Production controller・adapter・`ProductionRngEngine`・Production ID factory / Clock）をそのまま使い、
+    boundsはbenchmark専用の設定messageだけで渡す。入力はExportからImportの検証（`prepareExportRootForImport()` / `validateExportRootForFullReplacement()`）と
+    通常の `createPlannerInput()` で作り、実行中Plan・RngState欠落はProductionの開始readerと同じ位置で止める
+  - raw recordは件数・分類・時間区間・memory・semantic fingerprint（Plan ID・Step ID・予約OwnedWeapon ID・時刻を除く）だけを持ち、ID・Seed・Counter・pathを持たない。
+    計画blockはmeasurement HEADから読み、analyzerはsemantic parity・計算成立・性能とmemory・cancel / lifecycleを分けて導出する
+  - PR-5Bの測定計画は案（`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`、`proposed` / Owner承認待ち）である。承認前は合否を判定せず、
+    `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` のままとする。正式な実Export計測はPR-5Bで行う
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
 - **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。
@@ -8939,6 +8949,8 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
 - PR-4（Worker / Application接続）の確認: 前提1〜4は成り立ち、versionを変更しない。Domain計算・既存Worker protocol・
   永続shape・Export shapeを変えず、新しいWorker protocolは永続化しないruntime messageだけである。Application境界は
   読み取り専用で何も書かない
+- PR-5A（Browser計測基盤）の確認: 前提1〜4は成り立ち、versionを変更しない。benchmark専用のcode・script・測定計画案だけを追加し、
+  Production code・Worker protocol・Client・Application・永続shape・Export shape・探索上限（`null`）を変えていない
 - 標準操作の切替は、作成リストを置き換えたうえで内部Plannerを実行するものであり、内部Plannerの同じ `PlannerInput` に
   対する出力を変えない。この点で、同じ `PlannerInput` に対する内部の計算結果が変わったIssue #136 / #101 Phase 6-A
   （version 17）とは異なる。採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持ち、既存Planの
