@@ -4,12 +4,26 @@ import { AppDatabase } from '../../db/AppDatabase'
 import { RepositoryError } from '../../db/repositoryError'
 import { loadMasterData } from '../../domain/master/loadMasterData'
 import type { ProductionPlan, ProductionPlanId } from '../../domain/models/publicTypes'
-import { createProductionPlannerDependencies, defaultPlannerOptions, type PlannerDependencies, type PlannerInput, type PlannerResult } from '../../domain/planner'
+import {
+  createProductionPlannerDependencies,
+  defaultPlannerOptions,
+  type PlannerDependencies,
+  type PlannerInput,
+  type PlannerOptions,
+  type PlannerResult,
+} from '../../domain/planner'
 import type { BuildListOptimizationResult, BuildListOptimizationStage } from '../../domain/planner/buildListOptimization'
 import { ProductionRngEngine, PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
-import { createValidProductionPlan } from '../../test/fixtures/domainData'
-import { bonusPart, checkpointPart, legacyDuplicateScenario, planCreationScenario } from '../../test/fixtures/planCreationMethod'
-import type { OrchestrationScenario } from '../../test/fixtures/plannerConstrainedOrchestration'
+import { createValidNormalArtianCounter, createValidProductionPlan } from '../../test/fixtures/domainData'
+import {
+  blindPart,
+  bonusPart,
+  checkpointPart,
+  legacyDuplicateScenario,
+  planCreationScenario,
+  withPlanCreationRngState,
+} from '../../test/fixtures/planCreationMethod'
+import { CONFLICT_SKILL_COUNTER, type OrchestrationScenario } from '../../test/fixtures/plannerConstrainedOrchestration'
 import { createPlannerSchedulerWorkloadInput } from '../../test/fixtures/plannerSchedulerWorkloads'
 import { createBuildListCalculationContext } from '../buildList/createBuildListCalculationContext'
 import {
@@ -26,9 +40,11 @@ import type {
   BuildListOptimizationWorkerClient,
 } from './buildListOptimizationWorkerClient'
 import {
+  acceptsPreStartOrdinaryPlannerAuxiliary,
   createPlanCreationPreparer,
   createPlanCreationSession,
   isOrdinaryPlannerAuxiliaryOffered,
+  isOrdinaryPlannerAuxiliaryOfferedForPreparation,
   type PlanCreationPreparation,
   type PlanCreationSession,
   type PlanCreationSessionState,
@@ -121,8 +137,10 @@ interface Harness {
   preparations: PlanCreationPreparation[]
   /** The session's preparer, called once per fresh read (before the read settles). */
   prepare: ReturnType<typeof vi.fn>
-  /** The ordinary Planner auxiliary operation with a valid setting. */
+  /** The ordinary Planner auxiliary operation beside what the session holds (`startOrdinaryPlanner()`) with a valid setting. */
   pressAuxiliary(): Promise<PlanCreationSessionState>
+  /** The ordinary Planner auxiliary operation beside a pre-start judgement (`startOrdinaryPlannerForPreStartUnsupported()`). */
+  pressPreStart(plannerOptions?: PlannerOptions | null): Promise<PlanCreationSessionState>
   /** The optimization session's own start reader: never called (the session hands it the start it judged). */
   optimizationOwnReader: ReturnType<typeof vi.fn>
 }
@@ -153,16 +171,19 @@ function harness(startReader: BuildListOptimizationStartReader, plannerDependenc
   return {
     session, states, optimization, planner, createPlannerClient, createOptimizationClient, preparations, prepare, optimizationOwnReader,
     pressAuxiliary: () => session.startOrdinaryPlanner({ plannerOptions: { maxPlanSteps: 40 } }),
+    pressPreStart: (plannerOptions = { maxPlanSteps: 40 }) => session.startOrdinaryPlannerForPreStartUnsupported({ plannerOptions }),
   }
 }
 
 /**
- * Presses the auxiliary operation where the session does not offer it (17.2) and checks that the press had no side effect at all: the
- * very same state object, nothing published, no fresh read, no Client created, no Worker run started or cancelled.
+ * Presses an auxiliary entry where the session does not take it (17.2) and checks that the press had no side effect at all: the very
+ * same state object, nothing published, no fresh read, no Client created, no Worker run started or cancelled. `entry` names the entry:
+ * `startOrdinaryPlanner()` (`'result'`) or `startOrdinaryPlannerForPreStartUnsupported()` (`'pre_start'`).
  */
-async function expectAuxiliaryRefused(h: Harness, label: string): Promise<void> {
+async function expectAuxiliaryRefused(h: Harness, label: string, entry: 'result' | 'pre_start' = 'result'): Promise<void> {
   const before = h.session.getState()
-  expect(isOrdinaryPlannerAuxiliaryOffered(before), label).toBe(false)
+  if (entry === 'result') expect(isOrdinaryPlannerAuxiliaryOffered(before), label).toBe(false)
+  else expect(acceptsPreStartOrdinaryPlannerAuxiliary(before), label).toBe(false)
   const published = h.states.length
   const prepareCalls = h.prepare.mock.calls.length
   const plannerClients = h.createPlannerClient.mock.calls.length
@@ -171,7 +192,7 @@ async function expectAuxiliaryRefused(h: Harness, label: string): Promise<void> 
   const optimizationClients = h.createOptimizationClient.mock.calls.length
   const optimizationRuns = h.optimization.runs.length
   const runCancels = h.optimization.runs.map(({ cancel }) => cancel.mock.calls.length)
-  const returned = await h.pressAuxiliary()
+  const returned = await (entry === 'result' ? h.pressAuxiliary() : h.pressPreStart())
   expect(returned, label).toBe(before)
   expect(h.session.getState(), label).toBe(before)
   expect(h.states, label).toHaveLength(published)
@@ -209,6 +230,27 @@ const memoryDependencies = (): PlannerDependencies => planCreationScenario([bonu
 const twoValid = () => planCreationScenario([bonusPart('a'), bonusPart('b')])
 const oneValid = () => planCreationScenario([checkpointPart('a')])
 const checkpointUnsupported = () => planCreationScenario([checkpointPart('a'), bonusPart('b')])
+/** Two valid Entries whose Routes need no Skill Counter, and an unconfirmed Skill Counter (`unconfirmed_rng_state`). */
+const unconfirmedRngUnsupported = () => withPlanCreationRngState(planCreationScenario([bonusPart('a'), bonusPart('b')]), (state) => {
+  state.skillCounter = { value: CONFLICT_SKILL_COUNTER, isConfirmed: false, source: 'manual' }
+})
+/** Two blind-only Targets and no Normal Counter (`target_without_source`). */
+const withoutSourceUnsupported = () => planCreationScenario([blindPart('a'), blindPart('b')], { normalCounters: [] })
+/** Two blind-only Targets whose Normal prediction is unsupported (`blind_route_required`): judged with the scenario's own Engine. */
+const blindUnsupported = () => planCreationScenario([blindPart('a'), blindPart('b')], { normalCounters: [createValidNormalArtianCounter()], normalSupported: false })
+/** An explicit checkpoint and an unconfirmed Skill Counter at once (`unconfirmed_rng_state`, `checkpoint_selection`). */
+const severalReasonsUnsupported = () => withPlanCreationRngState(planCreationScenario([checkpointPart('a'), bonusPart('b')]), (state) => {
+  state.skillCounter = { value: CONFLICT_SKILL_COUNTER, isConfirmed: false, source: 'manual' }
+})
+
+/** A scenario as the start reader reads it (the fresh input, the start snapshot beside it). */
+function ready(built: OrchestrationScenario): BuildListOptimizationStartPreparation {
+  return {
+    status: 'ready',
+    plannerInput: { ...built.input, options: { ...defaultPlannerOptions }, conflictResolutions: [] },
+    startSnapshot: { observedDraftPlanId: null, runningPlanAbsent: true },
+  }
+}
 
 function primary(state: PlanCreationSessionState) {
   return state.primary
@@ -878,5 +920,360 @@ describe('Plan creation session lifecycle: no automatic fallback, superseded pre
     expect(h.states).toEqual([])
     expect(h.createPlannerClient).not.toHaveBeenCalled()
     expect(h.createOptimizationClient).not.toHaveBeenCalled()
+  })
+})
+
+describe('Plan creation session: the auxiliary operation beside a pre-start judgement (PLANNER_SPEC 17.2 「開始前に分かる未対応」)', () => {
+  it('runs the ordinary Planner from the inspect() display alone, never pressing the primary operation, on the input read at the press', async () => {
+    const shown = checkpointUnsupported()
+    const fresh = checkpointUnsupported()
+    const h = harness(memoryReader(shown, fresh), memoryDependencies())
+    const inspection = await h.session.inspect()
+    expect(inspection).toMatchObject({
+      kind: 'judged',
+      selection: { kind: 'build_list_optimization_unsupported', reasons: [{ kind: 'checkpoint_selection' }], ordinaryPlannerAuxiliary: true },
+    })
+    expect(isOrdinaryPlannerAuxiliaryOfferedForPreparation(inspection)).toBe(true)
+    // inspect() changed and started nothing. Its judgement offers the pre-start entry; the session itself offers no other entry.
+    expect(h.session.getState()).toEqual({ primary: { status: 'idle' }, auxiliary: { status: 'idle' } })
+    expect(acceptsPreStartOrdinaryPlannerAuxiliary(h.session.getState())).toBe(true)
+    expect(h.createPlannerClient).not.toHaveBeenCalled()
+    await expectAuxiliaryRefused(h, 'startOrdinaryPlanner() beside an inspect() judgement')
+
+    const press = h.pressPreStart({ maxPlanSteps: 73 })
+    expect(h.session.getState()).toEqual({ primary: { status: 'idle' }, auxiliary: { status: 'preparing', runId: 1 } })
+    await flush()
+    // A fresh read at the press (the inspect() read is never reused), and the ordinary Planner on exactly the input it read.
+    expect(h.prepare).toHaveBeenCalledTimes(2)
+    const judged = h.preparations[1]!
+    if (judged.kind !== 'judged') throw new Error(judged.kind)
+    expect(judged.selection.kind).toBe('build_list_optimization_unsupported')
+    expect(h.planner.calls).toHaveLength(1)
+    const call = h.planner.calls[0]!
+    expect(call.input).toEqual({ ...judged.plannerInput, options: { maxPlanSteps: 73 } })
+    expect(call.input.buildListEntries).toBe(judged.plannerInput.buildListEntries)
+    expect(call.input.buildListEntries).toBe(fresh.input.buildListEntries)
+    expect(call.input.buildListEntries).not.toBe(shown.input.buildListEntries)
+    expect(h.session.getState().auxiliary).toEqual({ status: 'ordinary_planner', runId: 1, run: { status: 'running', requestId: 'planner-request-1' } })
+    call.resolve(PLANNER_RESULT)
+    expect(await press).toEqual({
+      primary: { status: 'idle' },
+      auxiliary: { status: 'ordinary_planner', runId: 1, run: { status: 'completed', requestId: 'planner-request-1', result: PLANNER_RESULT } },
+    })
+    // The primary operation was never pressed, and the optimization never started.
+    expect(h.states.every(({ primary: current }) => current.status === 'idle')).toBe(true)
+    expect(h.createOptimizationClient).not.toHaveBeenCalled()
+    expect(h.optimization.runs).toHaveLength(0)
+  })
+
+  it('runs it for every unsupported reason the ordinary Planner can run despite, alone or together', async () => {
+    const cases: [string, () => OrchestrationScenario, string[]][] = [
+      ['checkpoint selection', checkpointUnsupported, ['checkpoint_selection']],
+      ['unconfirmed RNG state', unconfirmedRngUnsupported, ['unconfirmed_rng_state']],
+      ['Target without a source', withoutSourceUnsupported, ['target_without_source']],
+      ['blind Route required', blindUnsupported, ['blind_route_required']],
+      ['several reasons', severalReasonsUnsupported, ['unconfirmed_rng_state', 'checkpoint_selection']],
+    ]
+    for (const [label, make, kinds] of cases) {
+      const shown = make()
+      const fresh = make()
+      const h = harness(memoryReader(shown, fresh), shown.dependencies)
+      const inspection = await h.session.inspect()
+      if (inspection.kind !== 'judged' || inspection.selection.kind !== 'build_list_optimization_unsupported') throw new Error(label)
+      expect(inspection.selection.reasons.map(({ kind }) => kind), label).toEqual(kinds)
+      expect(inspection.selection.validation.validBuildListEntries, label).toHaveLength(2)
+      expect(isOrdinaryPlannerAuxiliaryOfferedForPreparation(inspection), label).toBe(true)
+      const press = h.pressPreStart({ maxPlanSteps: 40 })
+      await flush()
+      const judged = h.preparations[1]!
+      if (judged.kind !== 'judged') throw new Error(`${label}: ${judged.kind}`)
+      expect(judged.selection, label).toMatchObject({ kind: 'build_list_optimization_unsupported', ordinaryPlannerAuxiliary: true })
+      expect(h.planner.calls, label).toHaveLength(1)
+      // What made the optimization unsupported stays in the input: the ordinary Planner handles it itself (4章 / 7.5).
+      expect(h.planner.calls[0]!.input, label).toEqual({ ...judged.plannerInput, options: { maxPlanSteps: 40 } })
+      h.planner.calls[0]!.resolve(PLANNER_RESULT)
+      expect((await press).auxiliary, label).toEqual({ status: 'ordinary_planner', runId: 1, run: { status: 'completed', requestId: 'planner-request-1', result: PLANNER_RESULT } })
+      expect(h.createOptimizationClient, label).not.toHaveBeenCalled()
+      expect(primary(h.session.getState()), label).toEqual({ status: 'idle' })
+    }
+  })
+
+  it('hands the ordinary Planner every explicit checkpoint and improvement preference as they are', async () => {
+    const make = () => {
+      const built = checkpointUnsupported()
+      const [selected, other] = built.input.buildListEntries
+      selected!.intermediateStateSelection = { ...selected!.intermediateStateSelection!, improvementPreference: 'skill_first' }
+      other!.intermediateStateSelection = { skillOpportunityId: null, bonusOpportunityId: null, improvementPreference: 'bonus_first' }
+      return built
+    }
+    const fresh = make()
+    const expected = structuredClone(fresh.input.buildListEntries)
+    const h = harness(memoryReader(make(), fresh), memoryDependencies())
+    expect(isOrdinaryPlannerAuxiliaryOfferedForPreparation(await h.session.inspect())).toBe(true)
+    void h.pressPreStart()
+    await flush()
+    expect(h.planner.calls).toHaveLength(1)
+    const entries = h.planner.calls[0]!.input.buildListEntries
+    // Neither cleared, reread nor replaced: the selection stays the ordinary Planner's hard constraint, the preference its soft one.
+    expect(entries).toEqual(expected)
+    expect(entries[0]!.intermediateStateSelection?.bonusOpportunityId).not.toBeNull()
+    expect(entries.map(({ intermediateStateSelection }) => intermediateStateSelection?.improvementPreference)).toEqual(['skill_first', 'bonus_first'])
+    h.session.dispose()
+  })
+
+  it('runs on the user setting only: an invalid one starts nothing and is never filled in by a default', async () => {
+    for (const plannerOptions of [null, { maxPlanSteps: 0 }, { maxPlanSteps: -3 }, { maxPlanSteps: 1.5 }, { maxPlanSteps: Number.NaN }]) {
+      const h = harness(memoryReader(checkpointUnsupported()), memoryDependencies())
+      const state = await h.pressPreStart(plannerOptions)
+      expect(state, JSON.stringify(plannerOptions)).toEqual({ primary: { status: 'idle' }, auxiliary: { status: 'not_started', runId: 1, reason: { kind: 'planner_options_invalid' } } })
+      expect(h.createPlannerClient).not.toHaveBeenCalled()
+      expect(h.createOptimizationClient).not.toHaveBeenCalled()
+    }
+    const h = harness(memoryReader(checkpointUnsupported()), memoryDependencies())
+    void h.pressPreStart({ maxPlanSteps: 1 })
+    await flush()
+    expect(h.planner.calls[0]!.input.options).toEqual({ maxPlanSteps: 1 })
+    expect(h.planner.calls[0]!.input.options).not.toEqual(defaultPlannerOptions)
+    h.session.dispose()
+  })
+
+  it('starts nothing when the judgement read at the press no longer offers it, returning that judgement and never another method', async () => {
+    const cases: { label: string; read: OrchestrationScenario | BuildListOptimizationStartPreparation | Error; reason: Record<string, unknown> }[] = [
+      { label: 'a running Plan appeared', read: { status: 'running_plan_exists', runningPlanId: 'plan.running' as ProductionPlanId }, reason: { kind: 'running_plan_exists', runningPlanId: 'plan.running' } },
+      { label: 'the state cannot be read', read: new RepositoryError('active_plan_conflict', 'two running Plans'), reason: { kind: 'start_read_failed', code: 'active_plan_conflict' } },
+      { label: 'the whole input fails closed', read: legacyDuplicateScenario(), reason: { kind: 'invalid_planner_input' } },
+      { label: 'no valid Entry is left', read: planCreationScenario([]), reason: { kind: 'no_valid_build_list_entry' } },
+      { label: 'the unsupported input was resolved', read: twoValid(), reason: { kind: 'ordinary_planner_auxiliary_not_offered', selection: { kind: 'build_list_optimization' } } },
+      { label: 'one valid Entry is left', read: oneValid(), reason: { kind: 'ordinary_planner_auxiliary_not_offered', selection: { kind: 'ordinary_planner' } } },
+    ]
+    for (const { label, read, reason } of cases) {
+      for (const plannerOptions of [{ maxPlanSteps: 40 }, null]) {
+        const h = harness(memoryReader(checkpointUnsupported(), read), memoryDependencies())
+        expect(isOrdinaryPlannerAuxiliaryOfferedForPreparation(await h.session.inspect()), label).toBe(true)
+        const state = await h.pressPreStart(plannerOptions)
+        // The reason the fresh judgement gives comes before the setting: an invalid setting is never the reason here.
+        expect(state.auxiliary, label).toMatchObject({ status: 'not_started', runId: 1, reason })
+        expect(h.prepare, label).toHaveBeenCalledTimes(2)
+        if (reason.kind === 'ordinary_planner_auxiliary_not_offered') {
+          // The fresh judgement as it is, so the screen shows the current state (for example an enabled primary operation).
+          const judged = h.preparations[1]!
+          if (judged.kind !== 'judged') throw new Error(label)
+          expect(state.auxiliary, label).toEqual({ status: 'not_started', runId: 1, reason: { kind: 'ordinary_planner_auxiliary_not_offered', selection: judged.selection } })
+        }
+        // Neither the ordinary Planner on the strength of the old display, nor the method the fresh judgement chose.
+        expect(h.createPlannerClient, label).not.toHaveBeenCalled()
+        expect(h.createOptimizationClient, label).not.toHaveBeenCalled()
+        expect(h.optimization.runs, label).toHaveLength(0)
+        expect(primary(state), label).toEqual({ status: 'idle' })
+      }
+    }
+  })
+
+  it('writes nothing over the persisted state when it starts no Worker', async () => {
+    await withDatabase(async (database) => {
+      const input = await seed(database, 3, [plan('plan.draft', 'draft')])
+      const h = harness(databaseReader(database), productionDependencies())
+      const press = async (expected: Record<string, unknown>, label: string) => {
+        const before = await dumpAll(database)
+        const state = await h.pressPreStart()
+        expect(state.auxiliary, label).toMatchObject({ status: 'not_started', reason: expected })
+        expect(await dumpAll(database), label).toEqual(before)
+      }
+      // The optimization is supported (no offer), then a running Plan, a legacy duplicate, no valid Entry and one valid Entry.
+      expect(isOrdinaryPlannerAuxiliaryOfferedForPreparation(await h.session.inspect())).toBe(false)
+      await press({ kind: 'ordinary_planner_auxiliary_not_offered', selection: { kind: 'build_list_optimization' } }, 'supported')
+      await database.productionPlans.put(plan('plan.running', 'active'))
+      await press({ kind: 'running_plan_exists', runningPlanId: 'plan.running' }, 'running Plan')
+      await database.productionPlans.delete('plan.running' as ProductionPlanId)
+      await database.buildListEntries.put({ ...structuredClone(input.buildListEntries[0]!), id: 'build-list.duplicate' as never })
+      await press({ kind: 'invalid_planner_input' }, 'legacy duplicate')
+      await database.buildListEntries.clear()
+      await press({ kind: 'no_valid_build_list_entry' }, 'no Entry')
+      await database.buildListEntries.put(structuredClone(input.buildListEntries[0]!))
+      await press({ kind: 'ordinary_planner_auxiliary_not_offered', selection: { kind: 'ordinary_planner' } }, 'one Entry')
+      expect(h.createPlannerClient).not.toHaveBeenCalled()
+      expect(h.createOptimizationClient).not.toHaveBeenCalled()
+    })
+  })
+
+  it('refuses before any side effect while a calculation is in progress or the primary operation holds an optimization', async () => {
+    // A primary press reading and judging, then its ordinary Planner running: neither is cancelled.
+    const slow = deferred<BuildListOptimizationStartPreparation>()
+    const reading = harness(memoryReader(() => slow.promise), memoryDependencies())
+    const readingRun = reading.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+    await expectAuxiliaryRefused(reading, 'primary press reading', 'pre_start')
+    slow.resolve(ready(oneValid()))
+    await flush()
+    expect(primary(reading.session.getState())).toEqual({ status: 'ordinary_planner', runId: 1, run: { status: 'running', requestId: 'planner-request-1' } })
+    await expectAuxiliaryRefused(reading, 'primary ordinary Planner running', 'pre_start')
+    reading.planner.calls[0]!.resolve(PLANNER_RESULT)
+    expect(primary(await readingRun)).toMatchObject({ run: { status: 'completed' } })
+
+    // The optimization preparing (the optimization session's own preparing) and running: never cancelled, its result arrives.
+    const preparing = harness(memoryReader(twoValid()), memoryDependencies())
+    let refusedWhilePreparing: { press: Promise<PlanCreationSessionState>; before: PlanCreationSessionState } | null = null
+    preparing.session.subscribe((state) => {
+      const current = state.primary
+      if (refusedWhilePreparing === null && current.status === 'build_list_optimization' && current.optimization.status === 'preparing') {
+        refusedWhilePreparing = { press: preparing.pressPreStart(), before: state }
+      }
+    })
+    const preparingRun = preparing.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+    await flush()
+    expect(refusedWhilePreparing).not.toBeNull()
+    expect(await refusedWhilePreparing!.press).toBe(refusedWhilePreparing!.before)
+    expect(preparing.prepare).toHaveBeenCalledTimes(1)
+    expect(preparing.optimization.runs).toHaveLength(1)
+    await expectAuxiliaryRefused(preparing, 'optimization running', 'pre_start')
+    expect(preparing.optimization.runs[0]!.cancel).not.toHaveBeenCalled()
+    preparing.optimization.runs[0]!.settle({ status: 'completed', requestId: 'optimization-run-1', result: NOT_FOUND })
+    expect(primary(await preparingRun)).toMatchObject({ status: 'build_list_optimization', optimization: { status: 'completed', completion: { result: NOT_FOUND } } })
+    // Beside an optimization result only the other entry applies: not_found offers startOrdinaryPlanner(), never the pre-start entry.
+    await expectAuxiliaryRefused(preparing, 'not_found result', 'pre_start')
+    expect(isOrdinaryPlannerAuxiliaryOffered(preparing.session.getState())).toBe(true)
+
+    // Every other optimization outcome the primary operation holds, optimized included.
+    const outcomes: [string, BuildListOptimizationRunOutcome | 'cancel'][] = [
+      ['optimized', { status: 'completed', requestId: 'optimization-run-1', result: { status: 'optimized', artifact: { marker: 'artifact' } as never } }],
+      ['search_bound_reached', { status: 'completed', requestId: 'optimization-run-1', result: SEARCH_BOUND }],
+      ['unsupported result', { status: 'completed', requestId: 'optimization-run-1', result: { status: 'unsupported', reasons: [{ kind: 'checkpoint_selection', entries: [] }] } }],
+      ['cancelled', 'cancel'],
+      ['Worker failure', { status: 'failed', requestId: 'optimization-run-1', failure: { kind: 'worker_error', message: null } }],
+    ]
+    for (const [label, settle] of outcomes) {
+      const h = harness(memoryReader(twoValid(), checkpointUnsupported()), memoryDependencies())
+      const finished = h.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+      await flush()
+      if (settle === 'cancel') h.session.cancel()
+      else h.optimization.runs[0]!.settle(settle)
+      await finished
+      await expectAuxiliaryRefused(h, label, 'pre_start')
+    }
+
+    // A pre-start auxiliary press still reading, then its ordinary Planner running: a second press never cancels it.
+    const pending = deferred<BuildListOptimizationStartPreparation>()
+    const auxiliary = harness(memoryReader(() => pending.promise, checkpointUnsupported()), memoryDependencies())
+    const auxiliaryRun = auxiliary.pressPreStart()
+    await expectAuxiliaryRefused(auxiliary, 'pre-start press reading', 'pre_start')
+    pending.resolve(ready(checkpointUnsupported()))
+    await flush()
+    expect(auxiliary.planner.calls).toHaveLength(1)
+    await expectAuxiliaryRefused(auxiliary, 'pre-start ordinary Planner running', 'pre_start')
+    auxiliary.planner.calls[0]!.resolve(PLANNER_RESULT)
+    expect((await auxiliaryRun).auxiliary).toMatchObject({ status: 'ordinary_planner', runId: 1, run: { status: 'completed' } })
+
+    // A disposed session.
+    const disposed = harness(memoryReader(checkpointUnsupported()), memoryDependencies())
+    disposed.session.dispose()
+    await expectAuxiliaryRefused(disposed, 'disposed', 'pre_start')
+  })
+
+  it('applies nothing a superseded, cancelled, discarded or disposed press reads or returns', async () => {
+    // Superseded by a primary press while it reads: the late read starts nothing, the primary press goes on.
+    const superseded = deferred<BuildListOptimizationStartPreparation>()
+    const a = harness(memoryReader(() => superseded.promise, twoValid()), memoryDependencies())
+    const aPress = a.pressPreStart()
+    void a.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+    expect(a.session.getState()).toEqual({ primary: { status: 'preparing', runId: 2 }, auxiliary: { status: 'idle' } })
+    await flush()
+    superseded.resolve(ready(checkpointUnsupported()))
+    await aPress
+    expect(a.createPlannerClient).not.toHaveBeenCalled()
+    expect(a.session.getState()).toMatchObject({ primary: { status: 'build_list_optimization', runId: 2 }, auxiliary: { status: 'idle' } })
+    a.session.dispose()
+
+    // Cancelled, discarded or disposed while it reads: the late read starts nothing.
+    for (const end of ['cancel', 'discard', 'dispose'] as const) {
+      const read = deferred<BuildListOptimizationStartPreparation>()
+      const h = harness(memoryReader(() => read.promise, checkpointUnsupported()), memoryDependencies())
+      const pressed = h.pressPreStart()
+      h.session[end]()
+      const settled = h.session.getState()
+      expect(settled.auxiliary, end).toEqual(end === 'cancel' ? { status: 'cancelled', runId: 1, reason: 'cancelled' } : { status: end === 'discard' ? 'idle' : 'disposed' })
+      read.resolve(ready(checkpointUnsupported()))
+      await pressed
+      await flush()
+      expect(h.session.getState(), end).toBe(settled)
+      expect(h.createPlannerClient, end).not.toHaveBeenCalled()
+      if (end === 'dispose') continue
+      // The press can be made again afterwards, and reads afresh.
+      void h.pressPreStart()
+      await flush()
+      expect(h.prepare, end).toHaveBeenCalledTimes(2)
+      expect(h.planner.calls, end).toHaveLength(1)
+      h.session.dispose()
+    }
+
+    // Cancelled, discarded or disposed while its ordinary Planner runs: the run is cancelled and its late result never applied.
+    for (const end of ['cancel', 'discard', 'dispose'] as const) {
+      const h = harness(memoryReader(checkpointUnsupported()), memoryDependencies())
+      const pressed = h.pressPreStart()
+      await flush()
+      expect(h.planner.calls, end).toHaveLength(1)
+      h.session[end]()
+      expect(h.planner.client.cancelPlan, end).toHaveBeenCalledWith('planner-request-1')
+      const settled = h.session.getState()
+      h.planner.calls[0]!.resolve(PLANNER_RESULT)
+      await pressed
+      expect(h.session.getState(), end).toBe(settled)
+      expect(settled.auxiliary, end).toEqual(end === 'cancel'
+        ? { status: 'ordinary_planner', runId: 1, run: { status: 'cancelled', requestId: 'planner-request-1', reason: 'cancelled' } }
+        : { status: end === 'discard' ? 'idle' : 'disposed' })
+      if (end === 'dispose') expect(h.planner.client.dispose, end).toHaveBeenCalledTimes(1)
+      expect(h.createOptimizationClient, end).not.toHaveBeenCalled()
+    }
+  })
+
+  it('runs again after its run ended - an incomplete search, no Plan, a cancel or a failure - judging afresh with the setting of each press', async () => {
+    const incomplete = { termination: { status: 'incomplete' }, plan: { marker: 'partial' } } as unknown as PlannerResult
+    const noPlan = { termination: { status: 'exhausted' }, plan: null } as unknown as PlannerResult
+    const h = harness(memoryReader(checkpointUnsupported()), memoryDependencies())
+    const ends: [string, (index: number) => void][] = [
+      ['incomplete search', (index) => h.planner.calls[index]!.resolve(incomplete)],
+      ['no Plan', (index) => h.planner.calls[index]!.resolve(noPlan)],
+      ['cancelled', () => h.session.cancel()],
+      ['failed', (index) => h.planner.calls[index]!.reject(new Error('Planner Worker failed.'))],
+    ]
+    for (const [index, [label, end]] of ends.entries()) {
+      expect(acceptsPreStartOrdinaryPlannerAuxiliary(h.session.getState()), label).toBe(true)
+      const pressed = h.pressPreStart({ maxPlanSteps: 40 + index })
+      await flush()
+      expect(h.prepare, label).toHaveBeenCalledTimes(index + 1)
+      expect(h.planner.calls, label).toHaveLength(index + 1)
+      expect(h.planner.calls[index]!.input.options, label).toEqual({ maxPlanSteps: 40 + index })
+      end(index)
+      const state = await pressed
+      expect(state.auxiliary, label).toMatchObject({ status: 'ordinary_planner', runId: index + 1 })
+      expect(primary(state), label).toEqual({ status: 'idle' })
+    }
+    expect(h.createOptimizationClient).not.toHaveBeenCalled()
+    h.session.dispose()
+  })
+
+  it('judges an auxiliary press beside a primary press that started nothing exactly as the pre-start entry does', async () => {
+    // The primary press found the optimization unsupported; at the auxiliary press the input is no longer unsupported.
+    for (const [label, read, selection] of [['resolved', twoValid(), 'build_list_optimization'], ['one valid Entry', oneValid(), 'ordinary_planner']] as const) {
+      const h = harness(memoryReader(checkpointUnsupported(), read), memoryDependencies())
+      const started = await h.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+      expect(primary(started), label).toMatchObject({ status: 'not_started', reason: { kind: 'build_list_optimization_unsupported', ordinaryPlannerAuxiliary: true } })
+      expect(isOrdinaryPlannerAuxiliaryOffered(started), label).toBe(true)
+      const basis = primary(started)
+      const state = await h.pressAuxiliary()
+      expect(state.auxiliary, label).toMatchObject({ status: 'not_started', runId: 2, reason: { kind: 'ordinary_planner_auxiliary_not_offered', selection: { kind: selection } } })
+      expect(primary(state), label).toBe(basis)
+      expect(h.createPlannerClient, label).not.toHaveBeenCalled()
+      expect(h.createOptimizationClient, label).not.toHaveBeenCalled()
+    }
+    // Still unsupported: either entry runs the ordinary Planner beside it.
+    for (const entry of ['result', 'pre_start'] as const) {
+      const h = harness(memoryReader(checkpointUnsupported(), checkpointUnsupported()), memoryDependencies())
+      await h.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+      expect(acceptsPreStartOrdinaryPlannerAuxiliary(h.session.getState()), entry).toBe(true)
+      void (entry === 'result' ? h.pressAuxiliary() : h.pressPreStart())
+      await flush()
+      expect(h.planner.calls, entry).toHaveLength(1)
+      expect(primary(h.session.getState()), entry).toMatchObject({ status: 'not_started', reason: { kind: 'build_list_optimization_unsupported' } })
+      h.session.dispose()
+    }
   })
 })

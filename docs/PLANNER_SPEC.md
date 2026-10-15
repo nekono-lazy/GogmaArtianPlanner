@@ -8354,6 +8354,18 @@ Worker、UI、Persistence、version定数を変更していない。
     cancel・読込・状態変更・Worker生成をせずに現在の状態を返す。提供中は読み直して判定し、通常Planner自身が実行可能なら通常Plannerを実行し、
     主操作の結果を変えない。開始前の表示用に `inspect()`（read-only、実行のauthorityではない）を持つ。
     何も書かず、通常Plannerの結果の保存は既存の `savePlannerResult()`、`optimized` の採用はPR-6Aの保存APIである
+  - **補完（Issue #260 PR-6B1補完）**: 開始前未対応の補助操作の入口 `startOrdinaryPlannerForPreStartUnsupported()` を追加した。
+    作成リスト画面は開始前に全体最適化の未対応が確定している間は主操作を無効にするので（[UI_FLOW.md](./UI_FLOW.md) 10.4）、この入口は
+    主操作を押すことを前提にしない。`inspect()` の判定が補助導線を出すかは `isOrdinaryPlannerAuxiliaryOfferedForPreparation()` で決め、
+    その表示は実行のauthorityではない。押した時点で読み直して判定し、その判定が補助導線を出す開始前未対応（通常Plannerが実行可能な
+    理由だけ）である場合だけ、その入力とユーザーの有効な `PlannerOptions` で通常Plannerを実行する。実行中Plan・読込失敗・入力全体の
+    fail closed・有効件数0は従来の型付き理由で、判定が補助導線を出さなくなった場合（未対応が解消した、有効件数が1になった等）は
+    `ordinary_planner_auxiliary_not_offered` と押した時点の判定で、設定の無効値は `planner_options_invalid` で開始せず、別の方式へ
+    切り替えない。Session側の受付条件（`acceptsPreStartOrdinaryPlannerAuxiliary()`）は、主操作・補助操作のどちらも読込中・計算中で
+    なく、主操作が全体最適化の開始・計算・結果を保持していないことである。満たさない呼出しはcancel・読込・状態変更・Worker生成を
+    しない。主操作が開始前未対応で開始しなかった状態から `startOrdinaryPlanner()` を押した場合も、同じ開始前の判定として押した時点の
+    判定に従う（`isOrdinaryPlannerAuxiliaryOffered()` のガードは変えない）。全体最適化の計算結果に基づく補助導線は従来どおり、
+    結果の表示中に通常Plannerが実行可能なら実行する
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
 - **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。
@@ -8413,7 +8425,7 @@ Owner決定（U1、17.2）: 作成リスト画面の生産計画の作成は主�
 
 #### 作成方式の選択（U1）
 
-実装状態: **Domainの共通判定とApplicationの開始境界は実装済み（Issue #260 PR-6B1、17.1）、画面は未接続**。現在のmainの
+実装状態: **Domainの共通判定とApplicationの開始境界は実装済み（Issue #260 PR-6B1・PR-6B1補完、17.1）、画面は未接続**。現在のmainの
 「生産計画を作成」は件数にかかわらず通常Plannerを1回実行する（[UI_FLOW.md](./UI_FLOW.md) 10.2）。画面の切替はUI公開PRで行う。
 下記の「名前と返却形は実装PRで確定」はPR-6B1で `selectPlanCreationMethod()` / `PlanCreationMethodSelection` と確定し、判定を実行する
 場所はmain thread（main threadのProduction Engineによるsupport問い合わせだけ）と確定した。
@@ -8487,7 +8499,9 @@ Owner決定（U1）。作成リスト画面の生産計画の作成は主操作�
   全体最適化を開始しない（計算しても同じ `unsupported` になるため。主操作の表示は[UI_FLOW.md](./UI_FLOW.md) 10.4）。
   未対応理由の表示の中に、条件を満たす場合だけ補助操作を置く。開始前の表示は実行のauthorityではなく、主操作・補助操作とも
   押した時点のfresh inputで判定し直す（押した時点で通常Plannerが実行可能でなくなっていれば、補助操作は通常Plannerを
-  開始せず、その理由を示す）
+  開始せず、その理由を示す）。この補助操作は主操作を押すことを前提にしない。押した時点の判定が補助導線を出す開始前未対応
+  （上表で「出す」とした理由だけの `unsupported`）でなくなっていれば（未対応が解消した、有効件数が1になった等）、通常Plannerが
+  実行可能でも補助操作は通常Plannerを開始せず、別の作成方式へも切り替えず、押した時点の判定を示す
 - **補助操作は通常Planner実行そのものである**（[UI_FLOW.md](./UI_FLOW.md) 10.2）。押した時点のcurrent persisted stateから
   fresh `PlannerInput` を作り直し、`PlannerInput.options` にはユーザーの「最大計画ステップ数」（`PlannerOptions.maxPlanSteps`、
   7.2.1）をApplication callerが設定し、`createPlan()` と `savePlannerResult()` と保存成功時の遷移を既存どおり行う。
@@ -8501,8 +8515,8 @@ Owner決定（U1）。作成リスト画面の生産計画の作成は主操作�
   通常Plannerのhard constraint（7.5）としてそのまま使う
 - **部分的なRNG未確定（O4）。** 通常Plannerの既存のEntryごとのcapability判定と除外（4章）を変更しない。不足値に依存する
   Entryだけを除外し、残りで計画を作る（[REQUIREMENTS.md](./REQUIREMENTS.md) 5）
-- **提供期間。** 補助導線は、それを出す根拠が有効な間だけ提供する。開始前の判定に基づく補助導線は、その判定の表示と
-  一緒に現在の状態から決まる。全体最適化の結果に基づく補助導線は、その結果の表示を破棄する条件（17.9と同じ: 画面を
+- **提供期間。** 補助導線は、それを出す根拠が有効な間だけ提供する。開始前の判定に基づく補助導線（主操作を押して開始しなかった
+  場合の判定を含む）は、その判定の表示と一緒に現在の状態から決まり、補助操作を押した時点の判定で確かめる。全体最適化の結果に基づく補助導線は、その結果の表示を破棄する条件（17.9と同じ: 画面を
   離れる、新しい全体最適化の計算を始める、同じ画面で作成リストを変更する）で一緒に破棄する。補助操作による通常Planner
   の実行は、この破棄条件の「新しい計算」に当たらない。補助操作で実行した通常Plannerが探索未完了・Plan未生成・
   キャンセルで終わった場合は、その根拠の表示が残っている間は同じ補助操作で再実行できる（「最大計画ステップ数」を
@@ -9083,6 +9097,9 @@ Accordionを通常Planner用であることを明示して使い、全体最適�
   （`deriveBuildListOptimizationUnsupportedReasons()`）へ切り出しただけで、返す理由・順序は変わらない。Applicationの開始境界は読み取り専用で
   何も書かず、既存の通常Planner（`createPlan()`）と全体最適化のsession（PR-4。読み直さずに開始する `startPrepared()` を追加し、`start()` の
   契約は変えていない）を呼ぶだけである。永続shape、Export shape、Worker protocol、探索上限、UIは変えていない
+- PR-6B1補完（開始前未対応の補助操作の入口）の確認: 前提1〜4は成り立ち、versionを変更しない。Applicationの開始境界に、主操作を
+  押さずに使える補助操作の入口と、押した時点の判定で補助導線を確かめる規則を加えただけである。Domainの判定、通常Planner
+  （`createPlan()`）と全体最適化のsessionの呼び方、永続shape、Export shape、Worker protocol、探索上限、UIは変えていない
 - 標準操作の切替は、作成リストを置き換えたうえで内部Plannerを実行するものであり、内部Plannerの同じ `PlannerInput` に
   対する出力を変えない。この点で、同じ `PlannerInput` に対する内部の計算結果が変わったIssue #136 / #101 Phase 6-A
   （version 17）とは異なる。採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持ち、既存Planの
@@ -9184,6 +9201,9 @@ Accordionを通常Planner用であることを明示して使い、全体最適�
     `invalid_planner_input` / `no_planning_target` を含む場合は補助導線が出ない
   - 補助操作を押すまで通常Plannerを実行しない。主操作の横に通常Plannerのボタンが常設されない。未対応理由・結果の表示が
     補助操作と一緒に残る
+  - 開始前未対応の補助操作は、主操作を一度も押さずに実行できる。押した時点の判定が補助導線を出す開始前未対応でなくなって
+    いれば（未対応の解消、有効件数1、実行中Plan、入力全体のfail closed、有効件数0）、通常Plannerも全体最適化も開始せず、押した
+    時点の判定を返す。全体最適化の計算中・結果の保持中にこの入口を呼んでも、計算をキャンセルせず何も変えない
   - 補助操作はfresh `PlannerInput` とユーザーの `maxPlanSteps` で `createPlan()` を実行し、`savePlannerResult()` で保存する。
     全体最適化のartifact・入力token・Routeを使わず、BuildListEntryを置換・生成せず、改善優先・途中採用状態の選択を変えない
   - 通常Plannerの結果（探索未完了、Plan未生成、warning、競合、完成しないTarget）を既存どおり表示する。探索未完了の後、
