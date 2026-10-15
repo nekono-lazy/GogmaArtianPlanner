@@ -48,8 +48,17 @@ const STAGE_D_MODULES = [
 const STAGE_D_PRIME_MODULES = ['./buildListOptimizationResult.ts', './finalVerification.ts', './optimizationInputScope.ts', './optimizeBuildList.ts', './planPhysicalOperations.ts']
 /** Research-only symbols (formal gates, pre-registrations, runners, RESULT derivations, oracle, root lower bound, Research option sets and names). */
 const RESEARCH_ONLY_SYMBOLS = /globalAssignment|GlobalAssignment|global-assignment|reachWindowW0|REACH_OPTION_SET_A[12]|runAssignmentOnly|measureRootLowerBound|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity|verifyPlannerCandidate|judgeD1aRun|concludeD1aRun|d1aChildIntegrityIssues|MaterializedEntriesHandoff|onMaterializedEntries|PLANNER_VERIFICATION_D1C_PREREGISTRATION|d1cRegistrationFingerprint|summarizeVerificationPhysical|concludeD1cMeasurement|judgeD1cFormalValidity|d1cFormalStartGate|deriveD1cPublicResult|MATERIALIZATION_D0C_PREREGISTRATION|ASSIGNMENT_B2B_PREREGISTRATION|plannerGlobalLowerBound|plannerGlobalOracle|ORACLE_1657|plannerGlobal|GlobalResearch/
-/** The Phase 0 - C concepts moved to the Production module (Stage D / D' live there too since PR-3); until the Worker and the UI exist, no other Production module names them. */
+/**
+ * The Phase 0 - C concepts moved to the Production module (Stage D / D' live there too since PR-3). Outside it, only the dedicated
+ * Worker, its Client and the Application boundary of Issue #260 PR-4 name them (the UI does not yet).
+ */
 const MOVED_PHASE_0_C_CONCEPTS = /buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|createBuildListOptimizationContext|BuildListOptimization/
+/** Issue #260 PR-4: the Worker / Client / Application modules of the Build List global optimization (the measurement Worker included). */
+const BUILD_LIST_OPTIMIZATION_CALLERS = [
+  '../../workers/buildListOptimizationWorkerContracts.ts', '../../workers/buildListOptimization.worker.ts', '../../workers/buildListOptimization.worker.production.ts',
+  '../../workers/buildListOptimization.worker.entry.ts', '../../workers/buildListOptimization.worker.benchmark.ts', '../../workers/buildListOptimization.worker.benchmark.entry.ts',
+  '../../services/planner/buildListOptimizationWorkerClient.ts', '../../services/planner/buildListOptimizationService.ts',
+]
 const codeOnly = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 const scripts = import.meta.glob('../../../scripts/*.mjs', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const RUNNER_SCRIPT = '../../../scripts/run-planner-global-assignment-b2a.mjs'
@@ -99,7 +108,7 @@ describe('Global Assignment Research isolation', () => {
     expect(modules.length).toBeGreaterThan(100)
     expect(modules.filter(path => /from '[^']*\/(?:benchmarks|research)(?:\/[^']*)?'/.test(production[path]!))).toEqual([])
     expect(modules.filter(path => RESEARCH_ONLY_SYMBOLS.test(production[path]!))).toEqual([])
-    expect(productionPaths.filter(path => !path.startsWith(OPTIMIZATION_DIR) && MOVED_PHASE_0_C_CONCEPTS.test(production[path]!))).toEqual([])
+    expect(productionPaths.filter(path => !path.startsWith(OPTIMIZATION_DIR) && MOVED_PHASE_0_C_CONCEPTS.test(production[path]!)).sort()).toEqual([...BUILD_LIST_OPTIMIZATION_CALLERS].sort())
     expect(productionPaths.filter(path => path.startsWith(OPTIMIZATION_DIR)).length).toBeGreaterThan(15)
     // Scripts: only the designated runners and derivations reach this folder (the former name list, unchanged).
     const forbidden = /globalAssignment|GlobalAssignment|buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|runAssignmentOnly|measureRootLowerBound|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity|verifyPlannerCandidate|judgeD1aRun|concludeD1aRun|d1aChildIntegrityIssues|MaterializedEntriesHandoff|onMaterializedEntries|PLANNER_VERIFICATION_D1C_PREREGISTRATION|d1cRegistrationFingerprint|summarizeVerificationPhysical|concludeD1cMeasurement|judgeD1cFormalValidity|d1cFormalStartGate|deriveD1cPublicResult/
