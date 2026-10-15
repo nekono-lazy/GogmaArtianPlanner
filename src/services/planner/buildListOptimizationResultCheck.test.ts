@@ -53,6 +53,32 @@ describe('buildListOptimizationResultIssues', () => {
       .toMatch(/result\.artifact\.plannerResult\.plan could not be validated|baseSnapshot/)
   })
 
+  it('refuses an optimized artifact reporting a Conflict, a rejected Entry or a broken physical identity (17.7, read as reported)', () => {
+    const plan = () => optimized.artifact.plannerResult.plan!
+    expect(plan().conflicts).toEqual([])
+    expect(plan().rejectedBuildListEntries).toEqual([])
+    expect(optimized.artifact.plannerResult.conflicts).toEqual([])
+    expect(optimized.artifact.summary.structuralObjective).toBe(optimized.artifact.summary.physicalOperationCount)
+    const conflict = { id: 'conflict.x', kind: 'same_gogma_counter', buildListEntryIds: [], recommendedBuildListEntryId: null, selectedBuildListEntryId: null }
+    const cases: [(result: Optimized) => void, string][] = [
+      // The structural objective must equal the physical operations it was verified against (one changed, the other kept).
+      [result => { result.artifact.summary.structuralObjective += 1 }, 'result.artifact.summary.structuralObjective must equal physicalOperationCount.'],
+      [result => { result.artifact.summary.structuralObjective -= 1 }, 'result.artifact.summary.structuralObjective must equal physicalOperationCount.'],
+      [result => { result.artifact.plannerResult.conflicts = [conflict as never] }, 'result.artifact.plannerResult.conflicts must be empty.'],
+      [result => { (result.artifact.plannerResult as unknown as Record<string, unknown>).conflicts = { length: 0 } }, 'result.artifact.plannerResult.conflicts must be an array.'],
+      [result => { delete (result.artifact.plannerResult as unknown as Record<string, unknown>).conflicts }, 'result.artifact.plannerResult.conflicts must be an array.'],
+      [result => { result.artifact.plannerResult.plan!.conflicts = [conflict as never] }, 'result.artifact.plannerResult.plan.conflicts must be empty.'],
+      [result => { (result.artifact.plannerResult.plan as unknown as Record<string, unknown>).conflicts = null }, 'result.artifact.plannerResult.plan.conflicts must be an array.'],
+      [result => { delete (result.artifact.plannerResult.plan as unknown as Record<string, unknown>).conflicts }, 'result.artifact.plannerResult.plan.conflicts must be an array.'],
+      [result => { result.artifact.plannerResult.plan!.rejectedBuildListEntries = [{ buildListEntryId: 'x', reason: 'counter_before_current' } as never] }, 'result.artifact.plannerResult.plan.rejectedBuildListEntries must be empty.'],
+      [result => { (result.artifact.plannerResult.plan as unknown as Record<string, unknown>).rejectedBuildListEntries = 'none' }, 'result.artifact.plannerResult.plan.rejectedBuildListEntries must be an array.'],
+      [result => { delete (result.artifact.plannerResult.plan as unknown as Record<string, unknown>).rejectedBuildListEntries }, 'result.artifact.plannerResult.plan.rejectedBuildListEntries must be an array.'],
+    ]
+    for (const [change, issue] of cases) expect(buildListOptimizationResultIssues(corrupt(change)), issue).toContain(issue)
+    // Each check names its own field only: the untouched result raises none of them.
+    expect(buildListOptimizationResultIssues(structuredClone(optimized))).toEqual([])
+  })
+
   it('refuses a summary that contradicts the Plan or the termination it was read from (it recomputes none of them)', () => {
     const cases: [(result: Optimized) => void, string][] = [
       [result => { result.artifact.summary.planStepCount += 1 }, 'result.artifact.summary.planStepCount must equal the Plan Step count.'],

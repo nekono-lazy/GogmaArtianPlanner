@@ -4,6 +4,7 @@ import type {
   BuildListOptimizationStage,
 } from '../../domain/planner/buildListOptimization'
 import {
+  addressableBuildListOptimizationRequestId,
   BUILD_LIST_OPTIMIZATION_WORKER_PROTOCOL_VERSION,
   buildListOptimizationWorkerResponseIssues,
   type BuildListOptimizationWorkerErrorCode,
@@ -182,8 +183,11 @@ export function createBuildListOptimizationWorkerClient(
 
   const receive = (run: ActiveRun, data: unknown) => {
     if (run.settled || current !== run) return
-    // A message naming another request (or none) is never applied to this run.
-    if (typeof data !== 'object' || data === null || (data as { requestId?: unknown }).requestId !== run.requestId) return
+    // Only a message validly addressed to another request is stale and ignored. A message this run's Worker sent with no valid
+    // requestId (not an object, no requestId, a null / empty / non-string one) is addressed to nobody: with no timeout to end the
+    // run, ignoring it could leave the run waiting forever, so it fails the run below like any other protocol violation.
+    const addressee = addressableBuildListOptimizationRequestId(data)
+    if (addressee !== null && addressee !== run.requestId) return
     const issues = buildListOptimizationWorkerResponseIssues(data)
     if (issues.length > 0) {
       fail(run, { kind: 'protocol_violation', issues })

@@ -4162,7 +4162,7 @@ injection point `createBuildListOptimizationCalculation(bounds)`; `PRODUCTION_BU
 guessing), a benchmark-only measurement entry (`buildListOptimization.worker.benchmark*.ts`, bounds in its own
 configuration message, never in `blo_run`), the Client (`src/services/planner/buildListOptimizationWorkerClient.ts`:
 a new Worker and requestId per run, cancel / supersede / dispose / `pagehide` settle synchronously and terminate at
-once, one settle per run, other requestIds and late messages ignored, `error` / `messageerror` / malformed messages /
+once, one settle per run, messages validly naming another requestId and late messages ignored, `error` / `messageerror` / malformed messages (one naming no valid requestId included) /
 results failing `buildListOptimizationResultIssues()` fail closed, no timeout) and the Application session
 (`buildListOptimizationService.ts`: one read-only transaction reads the running Plan, the current Draft and the fresh
 `createPlannerInput()` value with `conflictResolutions = []`, never creating a missing RngState; a running Plan is the

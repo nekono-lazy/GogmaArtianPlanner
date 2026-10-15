@@ -8274,7 +8274,7 @@ Worker、UI、Persistence、version定数を変更していない。
   - Client（`src/services/planner/buildListOptimizationWorkerClient.ts`）。runごとに新しいWorkerと新しいrequestIdを使い、
     キャンセル（画面・route変更・unmount用の `cancel()`、新しいrunによる置換、`dispose()`、`pagehide`）は同期的に `cancelled`
     とし、直ちにWorkerをterminateする（ackやcooperative cancelを待たない）。settleは1 runにつき1回で、settle直後にterminateする。
-    別requestIdのmessage・settle後のmessageを適用しない。Workerの `error` / `messageerror`、protocol違反、main threadの構造検査
+    有効な別requestIdのmessage・settle後のmessageは無視して適用しない。Workerの `error` / `messageerror`、protocol違反（有効なrequestIdを持たないmessageを含む）、main threadの構造検査
     （`buildListOptimizationResultIssues()`）に通らない結果はfailedとし、メモリ不足と断定しない。自動wall-clock timeoutを
     置かない。Web Workerの無い環境は明示的なunavailable failureで、main threadで計算しない
   - Application（`src/services/planner/buildListOptimizationService.ts`）。1つのread-only transactionで実行中Plan
@@ -8282,7 +8282,9 @@ Worker、UI、Persistence、version定数を変更していない。
     （`conflictResolutions = []`）を読む。RngStateが無ければ作らずfail closedし、実行中Plan・Draftの読込失敗やinvariant違反を
     「無い」と読まない。実行中Planがあれば計算せず `running_plan_exists`（Application判定）とする。入力tokenのmain thread側の
     2項目（17.10）は開始時snapshot `{ observedDraftPlanId, runningPlanAbsent: true }` としてartifactと並べてruntime-onlyに保持し、
-    採用（PR-6）へ渡す型 `BuildListOptimizationAdoptionSource` を用意した。何も書かず、どの結果でも通常Plannerへ切り替えない
+    採用（PR-6）へ渡す型 `BuildListOptimizationAdoptionSource` を用意した。Clientの生成やrunの開始が同期的に失敗した場合は、
+    そのstartを `worker_start_failed` で失敗させて `preparing` に残さず、失敗したClientを解放して次のstartで作り直す。古いstartの
+    失敗で新しいstartの状態を上書きしない。何も書かず、どの結果でも通常Plannerへ切り替えない
   - Persistence（採用の保存、17.11）とUIは未実装である
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない

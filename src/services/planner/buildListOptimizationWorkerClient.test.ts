@@ -6,6 +6,7 @@ import {
 } from '../../test/fixtures/buildListOptimizationWorkerFixtures'
 import {
   BUILD_LIST_OPTIMIZATION_WORKER_PROTOCOL_VERSION,
+  buildListOptimizationWorkerResponseIssues,
   type BuildListOptimizationWorkerRequest,
 } from '../../workers/buildListOptimizationWorkerContracts'
 import {
@@ -329,6 +330,81 @@ describe('Build List optimization Worker Client: failures', () => {
     const third = application.client.run(createBuildListOptimizationTestInput())
     application.workers[0]!.message({ type: 'blo_result', requestId: 'run-1', result: { status: 'unsupported', reasons: [{ kind: 'running_plan_exists' }] } })
     expect(await third.outcome).toMatchObject({ status: 'failed', failure: { kind: 'invalid_result' } })
+  })
+
+  it('ignores only a message validly addressed to another request: the current run continues and completes', async () => {
+    const { client, workers } = setUp()
+    const stages: string[] = []
+    const handle = client.run(createBuildListOptimizationTestInput(), { onStage: stage => stages.push(stage) })
+    const worker = workers[0]!
+    worker.message({ type: 'blo_result', requestId: 'run-0', result: optimized })
+    worker.message({ type: 'blo_error', requestId: 'another-run', stage: null, code: 'calculation_failed', domainCode: null, message: 'x' })
+    // Even a malformed body is someone else's when it validly names another request.
+    worker.message({ type: 'blo_progress', requestId: 'another-run', stage: 'not_a_stage' })
+    expect(client.getState()).toBe('running')
+    expect(worker.terminated).toBe(0)
+    worker.message({ type: 'blo_progress', requestId: 'run-1', stage: 'input_check' })
+    worker.message({ type: 'blo_result', requestId: 'run-1', result: optimized })
+    expect(stages).toEqual(['input_check'])
+    expect(await handle.outcome).toEqual({ status: 'completed', requestId: 'run-1', result: optimized })
+  })
+
+  it('fails closed on a message addressed to nobody: protocol violation, terminated, released, settled once', async () => {
+    const result = NOT_FOUND
+    const unaddressed: [string, unknown][] = [
+      ['null', null],
+      ['a string', 'blo_result'],
+      ['a number', 42],
+      ['an array', [{ type: 'blo_result', requestId: 'run-1', result }]],
+      ['no requestId', { type: 'blo_result', result }],
+      ['a null requestId', { type: 'blo_result', requestId: null, result }],
+      ['an empty requestId', { type: 'blo_result', requestId: '', result }],
+      ['a numeric requestId', { type: 'blo_result', requestId: 1, result }],
+      ['a broken envelope for this run', { type: 'blo_result', requestId: 'run-1' }],
+    ]
+    for (const [label, data] of unaddressed) {
+      const { client, workers, page } = setUp()
+      const stages: string[] = []
+      const handle = client.run(createBuildListOptimizationTestInput(), { onStage: stage => stages.push(stage) })
+      const settled = track(handle.outcome)
+      const worker = workers[0]!
+      worker.message(data)
+      expect(client.getState(), label).toBe('failed')
+      expect(worker.terminated, label).toBe(1)
+      expect(worker.listenerCount, label).toBe(0)
+      expect(page.listeners.size, label).toBe(0)
+      // Neither a later valid result nor a progress of the same Worker is applied, and the outcome stays the first one.
+      worker.lateMessage({ type: 'blo_progress', requestId: 'run-1', stage: 'reach_table' })
+      worker.lateMessage({ type: 'blo_result', requestId: 'run-1', result: optimized })
+      worker.emit('error', { message: 'late' })
+      const outcome = await handle.outcome
+      await Promise.resolve()
+      expect(outcome, label).toEqual({ status: 'failed', requestId: 'run-1', failure: { kind: 'protocol_violation', issues: buildListOptimizationWorkerResponseIssues(data) } })
+      expect(outcome.status === 'failed' && outcome.failure.kind === 'protocol_violation' && outcome.failure.issues.length > 0, label).toBe(true)
+      expect(settled, label).toEqual([outcome])
+      expect(stages, label).toEqual([])
+      expect(client.getState(), label).toBe('failed')
+      expect(worker.terminated, label).toBe(1)
+    }
+  })
+
+  it('fails an optimized result reporting a Conflict as invalid_result, terminates and adopts nothing later', async () => {
+    const { client, workers } = setUp()
+    const handle = client.run(createBuildListOptimizationTestInput())
+    const settled = track(handle.outcome)
+    const worker = workers[0]!
+    const broken = structuredClone(optimized)
+    broken.artifact.plannerResult.plan!.conflicts = [{ id: 'conflict.x' } as never]
+    worker.message({ type: 'blo_result', requestId: 'run-1', result: broken })
+    expect(client.getState()).toBe('failed')
+    expect(worker.terminated).toBe(1)
+    expect(worker.listenerCount).toBe(0)
+    worker.lateMessage({ type: 'blo_result', requestId: 'run-1', result: optimized })
+    const outcome = await handle.outcome
+    await Promise.resolve()
+    if (outcome.status !== 'failed' || outcome.failure.kind !== 'invalid_result') throw new Error('expected invalid_result')
+    expect(outcome.failure.issues).toContain('result.artifact.plannerResult.plan.conflicts must be empty.')
+    expect(settled).toEqual([outcome])
   })
 
   it('reports a missing Web Worker explicitly and never calculates on the main thread', async () => {

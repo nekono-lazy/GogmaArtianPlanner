@@ -244,12 +244,33 @@ export function createBuildListOptimizationSession(
         return state
       }
       const { plannerInput, startSnapshot } = preparation
-      client ??= dependencies.createClient()
-      const current = client.run(plannerInput, {
-        onStage: (stage) => {
-          if (isCurrent(runId) && state.status === 'running') publish({ ...state, stage })
-        },
-      })
+      let current: BuildListOptimizationRunHandle
+      try {
+        client ??= dependencies.createClient()
+        current = client.run(plannerInput, {
+          onStage: (stage) => {
+            if (isCurrent(runId) && state.status === 'running') publish({ ...state, stage })
+          },
+        })
+      } catch (error: unknown) {
+        // The Client could not be created or refused the run (it starts no Worker then): the start failed, never stays
+        // `preparing`. A Client that threw is released and dropped, so the next start creates a new one.
+        const broken = client
+        client = null
+        try {
+          broken?.dispose()
+        } catch {
+          // Releasing a Client that already failed must not hide the start failure itself.
+        }
+        if (!isCurrent(runId)) return state
+        publish({ status: 'failed', runId, failure: { kind: 'worker_start_failed', message: error instanceof Error ? error.message : String(error) } })
+        return state
+      }
+      if (!isCurrent(runId)) {
+        // Superseded while the run was being started: that run is never followed.
+        current.cancel()
+        return state
+      }
       handle = current
       publish({ status: 'running', runId, requestId: current.requestId, stage: null, startSnapshot })
       const outcome = await current.outcome

@@ -145,7 +145,10 @@ export function buildListOptimizationRunRequestIssues(value: unknown): string[] 
   return issues
 }
 
-/** The requestId a malformed request can still be answered under, or null when it names none. */
+/**
+ * The requestId a message validly names (an object with a non-empty string `requestId`), or null when it names none. The Worker
+ * answers a malformed request under it; the Client ignores a response naming another request and fails on one naming none.
+ */
 export function addressableBuildListOptimizationRequestId(value: unknown): string | null {
   return isRecord(value) && isNonEmptyString(value.requestId) ? value.requestId : null
 }

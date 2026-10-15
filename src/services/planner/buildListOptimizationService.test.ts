@@ -308,6 +308,82 @@ describe('Build List optimization session', () => {
     expect(session.getState()).toEqual({ status: 'idle' })
   })
 
+  it('fails a start whose Client cannot be created, and starts normally afterwards', async () => {
+    const { client, runs } = fakeClient()
+    const createClient = vi.fn<() => BuildListOptimizationWorkerClient>()
+      .mockImplementationOnce(() => {
+        throw new Error('no Worker constructor')
+      })
+      .mockImplementation(() => client)
+    const session = createBuildListOptimizationSession({ startReader: { read: async () => START }, createClient })
+    expect(await session.start()).toEqual({ status: 'failed', runId: 1, failure: { kind: 'worker_start_failed', message: 'no Worker constructor' } })
+    expect(session.getState().status).toBe('failed')
+    const finished = session.start()
+    await flush()
+    expect(createClient).toHaveBeenCalledTimes(2)
+    expect(session.getState()).toMatchObject({ status: 'running', runId: 2 })
+    runs[0]!.settle({ status: 'completed', requestId: 'run-1', result: NOT_FOUND })
+    expect(await finished).toMatchObject({ status: 'completed', runId: 2 })
+  })
+
+  it('fails a start whose Client refuses the run, releases that Client and uses a new one next time', async () => {
+    const broken = fakeClient()
+    vi.mocked(broken.client.run).mockImplementation(() => {
+      throw new Error('The Build List optimization Worker Client is disposed.')
+    })
+    const healthy = fakeClient()
+    const createClient = vi.fn<() => BuildListOptimizationWorkerClient>().mockReturnValueOnce(broken.client).mockReturnValue(healthy.client)
+    const session = createBuildListOptimizationSession({ startReader: { read: async () => START }, createClient })
+    expect(await session.start()).toEqual({ status: 'failed', runId: 1, failure: { kind: 'worker_start_failed', message: 'The Build List optimization Worker Client is disposed.' } })
+    expect(broken.client.dispose).toHaveBeenCalledTimes(1)
+    const finished = session.start()
+    await flush()
+    expect(createClient).toHaveBeenCalledTimes(2)
+    expect(healthy.runs).toHaveLength(1)
+    healthy.runs[0]!.settle({ status: 'completed', requestId: 'run-1', result: NOT_FOUND })
+    expect(await finished).toMatchObject({ status: 'completed', runId: 2 })
+  })
+
+  it('never lets a superseded start, failing or not while it starts its run, overwrite the newer start', async () => {
+    // The run of start 1 starts start 2 synchronously, then throws: start 1's failure is not published.
+    const throwing = fakeClient()
+    let second: Promise<BuildListOptimizationSessionState> | null = null
+    vi.mocked(throwing.client.run).mockImplementationOnce(() => {
+      second = session.start()
+      throw new Error('refused')
+    })
+    const healthy = fakeClient()
+    const createClient = vi.fn<() => BuildListOptimizationWorkerClient>().mockReturnValueOnce(throwing.client).mockReturnValue(healthy.client)
+    const session = createBuildListOptimizationSession({ startReader: { read: async () => START }, createClient })
+    const first = await session.start()
+    expect(first).toEqual({ status: 'preparing', runId: 2 })
+    await flush()
+    expect(session.getState()).toMatchObject({ status: 'running', runId: 2 })
+    healthy.runs[0]!.settle({ status: 'completed', requestId: 'run-1', result: NOT_FOUND })
+    expect(await second!).toMatchObject({ status: 'completed', runId: 2 })
+
+    // The run of start 1 starts start 2 synchronously and returns: start 1's run is cancelled, never followed.
+    const reentrant = fakeClient()
+    let laterStart: Promise<BuildListOptimizationSessionState> | null = null
+    let reentered = false
+    const baseRun = vi.mocked(reentrant.client.run).getMockImplementation()!
+    vi.mocked(reentrant.client.run).mockImplementation((input, observer) => {
+      if (!reentered) {
+        reentered = true
+        laterStart = other.start()
+      }
+      return baseRun(input, observer)
+    })
+    const other = createBuildListOptimizationSession({ startReader: { read: async () => START }, createClient: () => reentrant.client })
+    await other.start()
+    await flush()
+    expect(reentrant.runs).toHaveLength(2)
+    expect(reentrant.runs[0]!.cancel).toHaveBeenCalledTimes(1)
+    expect(other.getState()).toMatchObject({ status: 'running', runId: 2, requestId: 'run-2' })
+    reentrant.runs[1]!.settle({ status: 'completed', requestId: 'run-2', result: NOT_FOUND })
+    expect(await laterStart!).toMatchObject({ status: 'completed', runId: 2 })
+  })
+
   it('disposes: cancels, releases the Client and ignores every later start', async () => {
     const { session, runs, client } = sessionWith(async () => START)
     void session.start()

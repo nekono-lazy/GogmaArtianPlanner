@@ -91,13 +91,20 @@ function optimizedArtifactIssues(artifact: unknown): string[] {
     else plan = plannerResult.plan
     if (!isRecord(plannerResult.termination)) issues.push('result.artifact.plannerResult.termination must be an object.')
     else termination = plannerResult.termination
+    // An optimized result holds no Conflict (`docs/PLANNER_SPEC.md` 17.7 item 2): an empty list, read as reported.
     if (!Array.isArray(plannerResult.conflicts)) issues.push('result.artifact.plannerResult.conflicts must be an array.')
+    else if (plannerResult.conflicts.length !== 0) issues.push('result.artifact.plannerResult.conflicts must be empty.')
     if (!Array.isArray(plannerResult.warnings)) issues.push('result.artifact.plannerResult.warnings must be an array.')
   }
   if (plan !== null) {
     issues.push(...domainIssues('result.artifact.plannerResult.plan', () => validateProductionPlan(plan as unknown as ProductionPlan)))
     if (plan.status !== 'draft') issues.push('result.artifact.plannerResult.plan.status must be draft.')
     if (plan.conflictRepairLineage !== null) issues.push('result.artifact.plannerResult.plan.conflictRepairLineage must be null.')
+    // Neither a Conflict nor a rejected Entry is recorded on the Plan itself either (17.7 item 2).
+    if (!Array.isArray(plan.conflicts)) issues.push('result.artifact.plannerResult.plan.conflicts must be an array.')
+    else if (plan.conflicts.length !== 0) issues.push('result.artifact.plannerResult.plan.conflicts must be empty.')
+    if (!Array.isArray(plan.rejectedBuildListEntries)) issues.push('result.artifact.plannerResult.plan.rejectedBuildListEntries must be an array.')
+    else if (plan.rejectedBuildListEntries.length !== 0) issues.push('result.artifact.plannerResult.plan.rejectedBuildListEntries must be empty.')
   }
   if (termination !== null && termination.status !== 'completed') issues.push('result.artifact.plannerResult.termination.status must be completed.')
 
@@ -116,6 +123,11 @@ function optimizedArtifactIssues(artifact: unknown): string[] {
     if (isNonNegativeInteger(summary.physicalOperationCount) && isNonNegativeInteger(summary.nonPhysicalStepCount)
       && summary.physicalOperationCount + summary.nonPhysicalStepCount !== summary.planStepCount) {
       issues.push('result.artifact.summary: physicalOperationCount + nonPhysicalStepCount must equal planStepCount.')
+    }
+    // The physical identity the calculation verified (17.7 item 6), compared as reported: nothing is re-derived from the Steps.
+    if (isNonNegativeInteger(summary.structuralObjective) && isNonNegativeInteger(summary.physicalOperationCount)
+      && summary.structuralObjective !== summary.physicalOperationCount) {
+      issues.push('result.artifact.summary.structuralObjective must equal physicalOperationCount.')
     }
     if (summary.completedTargetCount !== summary.totalTargetCount) issues.push('result.artifact.summary: every planning Target must be completed.')
     if (plan !== null && Array.isArray(plan.steps) && plan.steps.length !== summary.planStepCount) {
