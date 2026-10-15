@@ -8266,9 +8266,10 @@ Worker、UI、Persistence、version定数を変更していない。
   - Worker（`buildListOptimization.worker.ts`）はrunごとに1回だけ計算し、`runBuildListOptimization()` へ委譲する。Engine・ID factory・
     Clockは14章と同じくWorker内で作る。Worker bundleは `src/db/**`・Service・UI・benchmark・Researchへ到達しない（import graph test）
   - 探索上限（17.13）の注入点はWorker内のProduction adapter（`buildListOptimization.worker.production.ts` の
-    `createBuildListOptimizationCalculation(bounds)`）だけである。Productionの探索上限はまだ無い（U2）ので、
+    `createBuildListOptimizationCalculation(bounds)`）だけである。PR-4の時点ではProductionの探索上限がまだ無かった（U2）ので、
     `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` とし、Production Workerは推測値を使わず `search_bounds_unavailable` で
-    計算を拒否する。PR-5（Production計測）はこの値を計測済みの定数へ置き換える。計測用には、同じcontroller・adapter・
+    計算を拒否した。Issue #260 PR-5Bがこの値を計測済みの定数（`w0-candidates-3`、17.13）へ置き換えた。boundsを持たないrunの
+    拒否（`search_bounds_unavailable`）は、設定messageより前にrunが届いた計測Workerのためにadapterに残る。計測用には、同じcontroller・adapter・
     Production依存を使い、boundsをbenchmark専用の設定messageで受け取る計測Worker（`buildListOptimization.worker.benchmark*.ts`）を
     用意した。設定messageはProduction protocolの一部ではなく、通常のアプリはこのentryを読み込まない
   - Client（`src/services/planner/buildListOptimizationWorkerClient.ts`）。runごとに新しいWorkerと新しいrequestIdを使い、
@@ -8294,8 +8295,16 @@ Worker、UI、Persistence、version定数を変更していない。
     通常の `createPlannerInput()` で作り、実行中Plan・RngState欠落はProductionの開始readerと同じ位置で止める
   - raw recordは件数・分類・時間区間・memory・semantic fingerprint（Plan ID・Step ID・予約OwnedWeapon ID・時刻を除く）だけを持ち、ID・Seed・Counter・pathを持たない。
     計画blockはmeasurement HEADから読み、analyzerはsemantic parity・計算成立・性能とmemory・cancel / lifecycleを分けて導出する
-  - PR-5Bの測定計画は案（`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`、`proposed` / Owner承認待ち）である。承認前は合否を判定せず、
-    `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` のままとする。正式な実Export計測はPR-5Bで行う
+  - PR-5Bの測定計画は案（`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`、`proposed` / Owner承認待ち）だった。承認前は合否を判定せず、
+    `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` のままとした。正式な実Export計測はPR-5Bで行った（下記）
+- **実装済み（Issue #260 PR-5B）**: Owner承認済みの測定計画を登録し、PC Browser（Windows、headed Chrome）で正式計測し、探索上限（U2）を確定した。
+  計算意味論・Worker protocol・Client・Application・UI・永続shape・versionは変更していない。
+  - 判定規則: 各基準は適用方法（`application`）を持つ。キャンセル試験はbaselineだけで行い、全探索上限セットの共通必須ゲートとする
+    （失敗・未測定・未成立ならどのセットも採用不可）。driverはrunのsettle後もslotのWorkerのdetachを観測する（Clientのキャンセルは待たせない）
+  - series `pr5b-r1`（measurement HEAD `e0c176b`）はキャンセル → Worker detachを観測できず（driverの観測窓）、全基準合格のセットが無かった。
+    観測を直し、Ownerがこの基準だけを2,000 msから3,000 msへ変えて（2026-10-15）、series `pr5b-r2`（measurement HEAD `b4d4ce8`）で測り直した
+  - `pr5b-r2`: `w0-research` と `w0-candidates-3` が全基準に合格し、`w-half`（`not_found`）と `w-wide`（計算時間）は不合格だった。
+    Ownerが `w0-candidates-3` を採用した（17.13）。記録は [BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md](./BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md) 8 / 9
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
 - **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。
@@ -8857,14 +8866,35 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
 - 具体値は、Production計算（Production adapter・Production token・Production build）のPC Browser計測を経て、根拠と
   未確認範囲を記録した別PRで確定する（17.19のU2）。Researchで登録した値（window W0 = 通常アーティア 350 / 復元ボーナス
   500 / スキル 1500、node budget 2,000、lookahead 8、structural candidate 1、verification budget 1など）を、根拠なしに
-  Productionの正式値へ転用しない。本仕様は具体値を確定しない
+  Productionの正式値へ転用しない
+- **Productionの値（U2、Issue #260 PR-5Bで確定）**: 登録済み測定計画（`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`、series
+  `pr5b-r2`）の探索上限セット `w0-candidates-3` を、補完・推測なしに全項目そのまま採用した（`buildListOptimization.worker.production.ts` の
+  `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS`）
+
+  | 項目 | 値 |
+  | --- | --- |
+  | 到達表のwindow | 通常アーティア 350 / 復元ボーナス 500 / スキル 1500 |
+  | 割当探索 | node budget 2,000、MRV lookahead 8 |
+  | structural candidate数 / 最終検証の回数 | 3 / 3 |
+  | 射影起点の規模gate | 変換位置 32、復元ボーナス幅 500、スキル幅 1,501、通常forge数 350 |
+  | 形状制約の規模gate | 深さ上界 2,000、復元ボーナス生成状態上界 502,000,000、通常forge数 350、変換walk位置 1,501 |
+  | 形状制約の実行budget | 復元ボーナス生成状態 50,000,000、スキル状態 2,250,000、settled work 100,000、予測回数 通常 350 / スキル 1,501 / 復元ボーナスReset 500 / Keep 500 |
+
+  - 根拠: 代表Export（43目標武器）のPC Browser計測（`pr5b-r2`、[BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md](./BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md) 8 / 9）で
+    計画のすべての基準（semantic一致、`optimized`・全Target完成、計算時間、memory、共通キャンセルゲート）に合格し、同じHEADの機能確認にも合格した。
+    同じく合格した `w0-research`（structural candidate数・最終検証の回数が1 / 1で、他は同じ）と代表ケースの結果・時間は同等であり、Ownerは
+    最初のstructural candidateがPlannerで棄却されたときにも次の候補を検証できる余地を残すために `w0-candidates-3` を選んだ（2026-10-15）
+  - 未確認: 2件目以降のstructural candidateが必要な入力の追加コスト（割当探索の続き、Route生成、Planner検証）は測っていない（代表ケースでは最初の
+    候補が採用された）。その場合の計算時間が代表ケース（約27 s）と同程度に収まるとは主張しない。他のExport・他のPC・Android・iPhoneも未確認である
 - 候補検索の推奨既定値（`recommendedCandidateSearchDefaults`）とユーザーの保存値（`AppSettings.candidateSearchDefaults`）を
-  authorityにしない。候補検索の設定変更で全体最適化が黙って変わらないようにする（9.2.19.12と同じ考え方）
+  authorityにしない。候補検索の設定変更で全体最適化が黙って変わらないようにする（9.2.19.12と同じ考え方）。上のwindowは
+  候補検索の推奨既定値と数値が同じ部分があるが、計測した探索上限セットとして決めたものであり、候補検索の設定から読まない
 - Domain APIは上限をcaller必須で受け取り、fallback・補完・clampをしない。Production adapterがWorker内で定数を渡し、
   Worker request・Application caller・UIは持たない。PR-3の `runBuildListOptimization()` は上限を `BuildListOptimizationBounds`
   （window、node budget、lookahead、structural candidate数、最終検証の回数、Stage Dの規模gateと実行budget）として必須で
-  受け取り、正の整数でない値は `RangeError` で拒否する。Production定数（U2）はまだ無い。Issue #260 PR-4のWorker adapterは
-  上限を渡す唯一の注入点であり、定数が無い間は推測値を使わず計算を拒否する（`search_bounds_unavailable`、17.1）
+  受け取り、正の整数でない値は `RangeError` で拒否する。Issue #260 PR-4のWorker adapterは上限を渡す唯一の注入点であり、
+  Production Workerは上の定数を渡す。boundsを持たないrunは推測値を使わず拒否する（`search_bounds_unavailable`、17.1。設定messageより前に
+  runが届いた計測Workerだけが該当する）
 - 初期版ではユーザーへ公開しない
 - 探索上限はdevice非依存の決定的なwork boundとし、wall-clock時間・heap量を成立判定に使わない
 
@@ -8967,7 +8997,6 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
 
 | ID | 事項 | 判断の時期 |
 | --- | --- | --- |
-| U2 | Productionの探索範囲・window・探索上限の具体値（17.13） | Production計測PR |
 | U3 | 長時間化の案内の時間閾値（17.16） | PC計測の後 |
 | U4 | 実用品到達通知の到達判定authority、PlanStepへの投影、永続化の要否、表示方法（16.19） | Issue #261の後続設計 |
 | U5 | 明示checkpointを保護したまま全体最適化する拡張、部分RNG未確定のTargetを固定して他Targetを最適化する拡張（17.4） | 後続Issue |
@@ -8979,8 +9008,9 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
 | ID | 決定 | 反映先 |
 | --- | --- | --- |
 | U1 | 作成リスト画面の主操作は「生産計画を作成」1つ。作成方式は `validatePlannerInput()` の有効件数で選び（0件は作成不可、1件は通常Planner、2件以上は全体最適化）、表示filterやraw件数を使わず、入力全体のfail closedを迂回しない。有効件数2以上で全体最適化が未対応（通常Planner自身が実行可能な入力に限る）・`not_found`・`search_bound_reached` の場合だけ、ユーザーが明示的に選べる通常Plannerの補助導線を出す。補助操作は既存EntryのRouteを使う通常Planner実行であり、Route再構成をしない。自動フォールバックを行わず、キャンセルを通常Plannerの開始とみなさず、主操作と補助操作を常設の2ボタンにせず、errorを未対応へ変換しない。1件の場合は既存の改善優先を通常Plannerが使う。実行中Planがある間は補助導線を出さず再計画の試算を維持する。O3、`PlannerOptions.maxPlanSteps`（通常Plannerだけが使う）、通常Plannerの部分RNG対応を変えない。競合解決の再計算からの案内は主操作と補助導線を指す | 17.1 / 17.2 / 17.4 / 17.5 / 17.8 / 17.13 / 17.18、[REQUIREMENTS.md](./REQUIREMENTS.md) 19 / 19.1、[UI_FLOW.md](./UI_FLOW.md) 10 / 10.0〜10.4 / 16.4 / 19 |
+| U2 | Productionの探索範囲・window・探索上限は、PC Browserの正式計測（Issue #260 PR-5B、series `pr5b-r2`）で全基準に合格した探索上限セット `w0-candidates-3` を全項目そのまま採用する（window 350 / 500 / 1500、node budget 2,000、lookahead 8、structural candidate数 3、最終検証の回数 3、Stage Dの規模gateと実行budgetは計画blockの値）。Owner決定 2026-10-15。2件目以降の候補が必要な入力の追加コストは未測定 | 17.13、`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS`、[BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md](./BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md) 8 / 9 |
 
-### 17.20 Owner判断（O1〜O21、U1）の反映先
+### 17.20 Owner判断（O1〜O21、U1、U2）の反映先
 
 | # | 決定 | 本章 |
 | --- | --- | --- |
@@ -9003,6 +9033,7 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
 | O20 | Production統合はIssue #260、ResearchはIssue #154 | 17.1 |
 | O21 | Researchのfresh二重実行を成立条件にしない。保存直前のgenerated Entry freshness検証は必須 | 17.7 / 17.11 |
 | U1 | 主操作は1つ。有効件数（`validatePlannerInput()`）で0件は作成不可・1件は通常Planner・2件以上は全体最適化。全体最適化の未対応（通常Planner自身が実行可能な入力）・`not_found`・`search_bound_reached` でだけ通常Plannerの補助導線を出す。自動フォールバックなし。1件は既存の改善優先を使う。実行中Plan中は補助導線なし | 17.2 / 17.4 / 17.8 / 17.19 |
+| U2 | Productionの探索上限は計測で全基準に合格した `w0-candidates-3` を全項目そのまま採用（2026-10-15）。2件目以降の候補の追加コストは未測定 | 17.13 / 17.19 |
 
 ### 17.21 テスト観点
 

@@ -44,6 +44,13 @@ import {
   type BuildListOptimizationWorkerRunRequest,
 } from './buildListOptimizationWorkerContracts'
 
+// The Domain entry is observed (and called through unchanged) so the adapter's injection of the bounds can be checked.
+vi.mock('../domain/planner/buildListOptimization', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../domain/planner/buildListOptimization')>()
+  return { ...original, runBuildListOptimization: vi.fn(original.runBuildListOptimization) }
+})
+const runSpy = vi.mocked(runBuildListOptimization)
+
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
 const runRequestKeysAreTheProtocolKeys: Equal<keyof BuildListOptimizationWorkerRunRequest, (typeof BUILD_LIST_OPTIMIZATION_RUN_REQUEST_KEYS)[number]> = true
 const stagesAreTheDomainStages: Equal<(typeof BUILD_LIST_OPTIMIZATION_STAGES)[number], BuildListOptimizationStage> = true
@@ -257,12 +264,32 @@ describe('Build List optimization Worker controller', () => {
 })
 
 describe('Build List optimization Production Worker adapter', () => {
-  it('has no Production search bounds yet, and refuses to run instead of guessing them', async () => {
-    expect(PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS).toBeNull()
+  it('runs the Production Worker with the Production search bounds: a copy of the constant reaches the Domain (Issue #260 PR-5B)', async () => {
+    const before = structuredClone(PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS)
+    runSpy.mockClear()
+    const posted: BuildListOptimizationWorkerResponse[] = []
+    await createBuildListOptimizationWorkerController(createProductionBuildListOptimizationWorkerRuntime(), response => posted.push(structuredClone(response))).handleMessage(request())
+    // The one injection point handed the Domain exactly the Production bounds, as its own copy.
+    expect(runSpy).toHaveBeenCalledTimes(1)
+    const injected = runSpy.mock.calls[0]![2]
+    expect(injected).toEqual(PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS)
+    expect(injected).not.toBe(PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS)
+    expect(PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS).toEqual(before)
+    // The run is no longer refused: stage names, then a structurally valid result with the Production window.
+    expect(posted.filter(response => response.type === 'blo_progress').map(response => response.type === 'blo_progress' ? response.stage : null)).toEqual([...BUILD_LIST_OPTIMIZATION_STAGES])
+    const terminal = posted.at(-1)!
+    if (terminal.type !== 'blo_result') throw new Error(`expected a result, got ${JSON.stringify(terminal)}`)
+    expect(buildListOptimizationResultIssues(terminal.result)).toEqual([])
+    if (terminal.result.status !== 'optimized') throw new Error(`expected an optimized result, got ${terminal.result.status}`)
+    expect(terminal.result.artifact.diagnostics.reachTable?.window).toEqual(PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS.window)
+    expect(terminal.result.artifact.summary.completedTargetCount).toBe(3)
+  }, 60_000)
+
+  it('still refuses a run without bounds (only the benchmark measurement Worker can pass none) instead of guessing them', async () => {
     await expect(createBuildListOptimizationCalculation(null)(createBuildListOptimizationTestInput(), fakeDependencies, {}))
       .rejects.toBeInstanceOf(BuildListOptimizationSearchBoundsUnavailableError)
     const posted: BuildListOptimizationWorkerResponse[] = []
-    await createBuildListOptimizationWorkerController(createProductionBuildListOptimizationWorkerRuntime(), response => posted.push(response)).handleMessage(request())
+    await createBuildListOptimizationWorkerController(createBuildListOptimizationWorkerRuntime(null), response => posted.push(response)).handleMessage(request())
     expect(posted).toEqual([{
       type: 'blo_error', requestId: 'request-1', stage: null, code: 'search_bounds_unavailable', domainCode: null,
       message: new BuildListOptimizationSearchBoundsUnavailableError().message,

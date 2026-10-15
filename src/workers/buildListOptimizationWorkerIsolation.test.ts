@@ -163,8 +163,12 @@ describe('Build List optimization Worker isolation (Issue #260 PR-4)', () => {
       // No bound from the Candidate Search defaults, a saved setting or the Research registrations.
       expect(codeOf(bySrcPath.get(path)!), path).not.toMatch(/recommendedCandidateSearchDefaults|candidateSearchDefaults|AppSettings|settingsRepository|reachWindowW0|registeredD[01]cConditions|MATERIALIZATION_D0C|PREREGISTRATION/)
     }
-    // The Production bounds are not decided yet (U2): the adapter supplies none rather than a guessed value.
-    expect(codeOf(bySrcPath.get('src/workers/buildListOptimization.worker.production.ts')!)).toMatch(/export const PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS: BuildListOptimizationBounds \| null = null\n/)
+    // The Production bounds (U2, decided by Issue #260 PR-5B) are one literal constant of the adapter - never null, never derived
+    // from another value - and the Production runtime passes exactly that constant to the one injection point.
+    const adapter = codeOf(bySrcPath.get('src/workers/buildListOptimization.worker.production.ts')!)
+    expect(adapter).toMatch(/export const PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS: BuildListOptimizationBounds = \{\n/)
+    expect(adapter).not.toMatch(/PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS: BuildListOptimizationBounds \| null/)
+    expect(adapter).toMatch(/return createBuildListOptimizationWorkerRuntime\(PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS\)/)
     expect(codeOf(bySrcPath.get(WORKER_ENTRY)!)).toMatch(/createProductionBuildListOptimizationWorkerRuntime\(\)/)
     // Only benchmark harness files name the measurement entry; the normal application never loads it. Since Issue #260 PR-5A the
     // Production measurement harness (`src/benchmarks/buildListOptimization/`, built by the benchmark Vite config only) names it: its

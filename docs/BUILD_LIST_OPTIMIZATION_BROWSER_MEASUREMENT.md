@@ -8,7 +8,7 @@ Production定数（17.13、17.19のU2）を決めるために、Production計算
 - PR-5B: 共通キャンセルゲート（判定規則）の追加、Owner承認済みの計画の登録（measurement HEAD `e0c176b`）、実Exportの正式計測（series `pr5b-r1`、§6）。
   r1でキャンセル → Worker detachが未測定だったので、driverの観測を直し（`ae21b9a`）、Ownerの決定（2026-10-15、この基準だけ2,000 → 3,000 ms）で
   計画を登録し直して測り直した（series `pr5b-r2`、measurement HEAD `b4d4ce8`、§8）。
-  **探索上限の採用セットは計測結果をOwnerが確認して決める**。それまで `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` のままである
+  Ownerが結果を確認し、`w0-candidates-3` を採用した（2026-10-15）。`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` はそのboundsの全項目である（§9）
 - 実Export（`gogma-artian-planner-backup_20260927015837.json`、19,424,064 bytes、SHA-256 `cc35fb5b…e1e6b`）はローカルの同じファイルを
   使った（bytes・SHA-256を計測前に照合）。Repositoryへ置かず、外部へ送っていない
 
@@ -363,7 +363,7 @@ series `pr5b-r2` で16 slot全体を測り直した（§8）。以下はr1の時
 ### 8.0 結論
 
 **`w0-research` と `w0-candidates-3` が全基準に合格した。`w-half`（計算成立）と `w-wide`（性能）は不合格である。**
-採用するセットはOwnerが決める。それまで `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` のままである（本計測では確定しない）。
+採用するセットはOwnerが決める（計測の時点では確定しなかった。その後Ownerが `w0-candidates-3` を採用した、§9）。
 
 | セット | semantic | 計算成立 | performance | memory | cancel / lifecycle | 全基準 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -504,8 +504,40 @@ series `pr5b-r2` で16 slot全体を測り直した（§8）。以下はr1の時
 - memoryはsamplingの最大値（max sampled）であり、連続的な真のpeakではない。Production Workerの最大同期区間は測っていない
 - `w-wide` はwindowの違いで代表ケースのRouteが変わる（fingerprintが異なる）。最短性は主張しない
 
-### 8.9 Ownerの判断事項と残作業
+### 8.9 Ownerの判断事項と残作業（計測の時点）
 
-1. 採用する探索上限セット: `w0-research` と `w0-candidates-3` のどちらか（どちらも全基準・mechanicsに合格。違いは §8.7）
-2. 決定の後、別commitで `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` を確定し、PR-4のisolation testの `null` 固定を同時に更新する（本Draft PRへ追加）
+1. 採用する探索上限セット: `w0-research` と `w0-candidates-3` のどちらか（どちらも全基準・mechanicsに合格。違いは §8.7）→ **`w0-candidates-3` に決定（§9）**
+2. 決定の後、別commitで `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` を確定し、PR-4のisolation testの `null` 固定を同時に更新する（本Draft PRへ追加）→ **対応済み（§9）**
 3. 長時間化の案内の時間閾値（17.19のU3）はUI公開PRで決める（代表ケースで約27 s）
+
+## 9. Production探索上限の採用（17.19のU2）
+
+**決定**: Ownerは2026-10-15に、series `pr5b-r2` で全基準に合格した探索上限セットのうち **`w0-candidates-3`** をProduction定数として採用した。
+`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS`（`src/workers/buildListOptimization.worker.production.ts`）は、登録済み計画（series `pr5b-r2`）の
+`w0-candidates-3` のboundsの全項目であり、値を補完・推測・丸めしていない（テストが計画blockとの完全一致と、その計画が `pr5b-r2` の公開RESULTの
+計画と同じbytesであることを固定する）。正式仕様は [PLANNER_SPEC.md](PLANNER_SPEC.md) 17.13 / 17.19。
+
+| 項目 | 値 |
+| --- | --- |
+| 到達表のwindow | 通常アーティア 350 / 復元ボーナス 500 / スキル 1500 |
+| 割当探索 | node budget 2,000、MRV lookahead 8 |
+| structural candidate数 / 最終検証の回数 | 3 / 3 |
+| 射影起点の規模gate | 変換位置 32、復元ボーナス幅 500、スキル幅 1,501、通常forge数 350 |
+| 形状制約の規模gate | 深さ上界 2,000、復元ボーナス生成状態上界 502,000,000、通常forge数 350、変換walk位置 1,501 |
+| 形状制約の実行budget | 復元ボーナス生成状態 50,000,000、スキル状態 2,250,000、settled work 100,000、予測回数 通常 350 / スキル 1,501 / 復元ボーナスReset 500 / Keep 500 |
+
+根拠:
+
+- `pr5b-r2` で計画のすべての基準（semantic一致、`optimized`・全計画対象Target完成、request → 結果 median ≤ 40 s・max ≤ 60 s、long task ≤ 1 s、
+  Worker heap ≤ 1 GiB、renderer private ≤ 2 GiB、結果保持 ≤ 256 MiB、Worker解放後0、共通キャンセルゲート）に合格し、同じHEADの機能確認にも合格した（§8）
+- `w0-research` も全基準に合格し、代表ケースの結果（同一fingerprint）・時間（27,121 / 27,030 ms）・memoryは同等だった。違いはstructural candidate数と
+  最終検証の回数（1 / 1 と 3 / 3）だけである
+- 採用理由: 最初のstructural candidateがPlannerで棄却された場合でも、次の候補を検証できる余地を残すため（`w0-research` ではその場合に計画を作らずに終わる）
+
+未確認範囲（採用時点）:
+
+- **2件目以降の候補が必要なケースの追加コストは未測定である**。代表ケースでは最初の候補が採用されたので、2件目・3件目のstructural candidateを探す割当探索の続き
+  （node budget 2,000まで）、そのRoute生成、Planner検証（最大3回）にかかる時間・memoryは観測していない。その場合の計算時間が代表ケース（約27 s）以内に
+  終わるとも、計画の基準（median ≤ 40 s、max ≤ 60 s）に収まるとも主張しない
+- 入力は代表Export 1件、計測PCは1台だけである。他のExport・他のPC・Android・iPhone（未検証、非対応ではない）は未確認（§8.8）
+- 全体最適化は通常UIからまだ使えない（UI公開PRで「生産計画を作成」へ接続する）。採用した値で利用者の環境での時間を観測するのはその後である
