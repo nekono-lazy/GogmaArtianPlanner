@@ -113,7 +113,12 @@ describe('buildListOptimizationResultIssues', () => {
       [result => { result.artifact.inputToken.targetWeaponsHash = '' }, 'result.artifact.inputToken.targetWeaponsHash must be a non-empty string.'],
       [result => { result.artifact.inputToken.inputBuildListEntriesHash = '' }, 'result.artifact.inputToken.inputBuildListEntriesHash must be a non-empty string.'],
       [result => { result.artifact.inputToken.calculationContext.appSchemaVersion = 0 }, 'result.artifact.inputToken.calculationContext.appSchemaVersion must be a positive integer.'],
-      [result => { result.artifact.inputExclusions = [{ buildListEntryId: 'x' }] as never }, 'result.artifact.inputExclusions must list the excluded Entries with their Target and warning kind.'],
+      [result => { result.artifact.inputExclusions = [{ buildListEntryId: 'x' }] as never }, 'result.artifact.inputExclusions must list the excluded Entries with their Target, warning kind and warning message.'],
+      // The warning message is part of the record the adoption matches the final warnings against (PLANNER_SPEC 17.7 item 3).
+      ...[undefined, '', 7].map((warningMessage): [(result: Optimized) => void, string] => [
+        result => { result.artifact.inputExclusions = [{ buildListEntryId: 'x', targetWeaponId: 't', warningKind: 'build_list_entry_stale', warningMessage }] as never },
+        'result.artifact.inputExclusions must list the excluded Entries with their Target, warning kind and warning message.',
+      ]),
       [result => { (result.artifact as unknown as Record<string, unknown>).diagnostics = null }, 'result.artifact.diagnostics must be an object.'],
     ]
     for (const [change, issue] of cases) expect(buildListOptimizationResultIssues(corrupt(change)), issue).toContain(issue)

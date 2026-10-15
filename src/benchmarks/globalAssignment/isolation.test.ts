@@ -46,11 +46,13 @@ const STAGE_D_MODULES = [
 ]
 /** Issue #260 PR-3: Stage D' (the final verification by the ordinary Planner), the result types and the whole calculation. */
 const STAGE_D_PRIME_MODULES = ['./buildListOptimizationResult.ts', './finalVerification.ts', './optimizationInputScope.ts', './optimizeBuildList.ts', './planPhysicalOperations.ts']
+/** Issue #260 PR-6A: the pure, state-independent artifact checks of the adoption save (the save itself is the Persistence Service's). */
+const ADOPTION_MODULES = ['./buildListOptimizationAdoption.ts']
 /** Research-only symbols (formal gates, pre-registrations, runners, RESULT derivations, oracle, root lower bound, Research option sets and names). */
 const RESEARCH_ONLY_SYMBOLS = /globalAssignment|GlobalAssignment|global-assignment|reachWindowW0|REACH_OPTION_SET_A[12]|runAssignmentOnly|measureRootLowerBound|materializeStructuralCandidate|MaterializationOutcome|matchExpectedShape|predictSearchScale|runMaterializationSmoke|searchPolicyShapeOf|verifyShapeConstrainedRoute|runShapeConstrainedRequest|predictShapeSearchScale|createPredictionCountingEngine|continuationShapeOf|deriveD0cPublicResult|judgeD0cFormalValidity|verifyPlannerCandidate|judgeD1aRun|concludeD1aRun|d1aChildIntegrityIssues|MaterializedEntriesHandoff|onMaterializedEntries|PLANNER_VERIFICATION_D1C_PREREGISTRATION|d1cRegistrationFingerprint|summarizeVerificationPhysical|concludeD1cMeasurement|judgeD1cFormalValidity|d1cFormalStartGate|deriveD1cPublicResult|MATERIALIZATION_D0C_PREREGISTRATION|ASSIGNMENT_B2B_PREREGISTRATION|plannerGlobalLowerBound|plannerGlobalOracle|ORACLE_1657|plannerGlobal|GlobalResearch/
 /**
  * The Phase 0 - C concepts moved to the Production module (Stage D / D' live there too since PR-3). Outside it, only the dedicated
- * Worker, its Client and the Application boundary of Issue #260 PR-4 name them (the UI does not yet).
+ * Worker, its Client and the Application boundary of Issue #260 PR-4, and the adoption save of PR-6A, name them (the UI does not yet).
  */
 const MOVED_PHASE_0_C_CONCEPTS = /buildReachTable|enumerateReachOptions|replayReachOptionRequiredOnly|ReachTable|ResourceAssignment|createResourceAssignmentSearch|collectResourceAssignments|checkStreamCoverage|buildStructuralCandidate|StructuralCandidate|ExpectedRouteShape|createBuildListOptimizationContext|BuildListOptimization/
 /** Issue #260 PR-4: the Worker / Client / Application modules of the Build List global optimization (the measurement Worker included). */
@@ -58,6 +60,8 @@ const BUILD_LIST_OPTIMIZATION_CALLERS = [
   '../../workers/buildListOptimizationWorkerContracts.ts', '../../workers/buildListOptimization.worker.ts', '../../workers/buildListOptimization.worker.production.ts',
   '../../workers/buildListOptimization.worker.entry.ts', '../../workers/buildListOptimization.worker.benchmark.ts', '../../workers/buildListOptimization.worker.benchmark.entry.ts',
   '../../services/planner/buildListOptimizationWorkerClient.ts', '../../services/planner/buildListOptimizationService.ts',
+  // Issue #260 PR-6A: the adoption save (inspect / save) beside the ordinary and repair saves.
+  '../../services/planner/plannerResultPersistenceService.ts',
 ]
 const codeOnly = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 const scripts = import.meta.glob('../../../scripts/*.mjs', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
@@ -330,7 +334,7 @@ describe('Global Assignment Research isolation', () => {
 
   it("keeps the Production module (Stage 0 - D') a pure Domain module: no Research, Service, persistence, clock, random value or locale-dependent order", () => {
     // Every file belongs to one stage explicitly (a new file is placed in one of them, with its import rule).
-    expect(Object.keys(optimization).sort()).toEqual([...STAGE_0_C_MODULES, ...STAGE_D_MODULES, ...STAGE_D_PRIME_MODULES].sort())
+    expect(Object.keys(optimization).sort()).toEqual([...STAGE_0_C_MODULES, ...STAGE_D_MODULES, ...STAGE_D_PRIME_MODULES, ...ADOPTION_MODULES].sort())
     const stage0C = /^\.\/[A-Za-z]+$|^\.\.\/[A-Za-z]+$|^\.\.\/\.\.\/(?:models|rng|target|master)\/[A-Za-z/]+$/
     // Issue #260 PR-3: Stage D / D' add the public Production Search APIs (Candidate Search, Planner Alternative Search's reservation
     // primitives, the shape-constrained search), the Build List Entry factory and replacement authority, the Target evaluation and the
@@ -531,6 +535,33 @@ describe('Global Assignment Research isolation', () => {
     expect(final).toMatch(/conflictResolutions: \[\], options: \{ maxPlanSteps \} \}/)
     // The whole calculation refuses an input carrying a resolution and never reads one.
     expect(codeOnly(optimization['./optimizeBuildList.ts']!)).toMatch(/if \(plannerInput\.conflictResolutions\.length > 0\) \{\n {4}throw new RangeError\(/)
+  })
+
+  it('keeps the adoption checks (Issue #260 PR-6A) pure and on the shared save-time helpers: no Planner run, prediction, persistence or message parsing', () => {
+    for (const path of ADOPTION_MODULES) {
+      const source = codeOnly(optimization[path]!)
+      // Only this module, the shared save-time helpers, the Domain models and the replacement type.
+      for (const match of source.matchAll(/from '([^']+)'/g)) {
+        expect(match[1], `${path} imports ${match[1]}`).toMatch(/^\.\/(?:buildListOptimizationResult|finalVerification)$|^\.\.\/plannerResultPersistenceValidation$|^\.\.\/\.\.\/models\/publicTypes$|^\.\.\/\.\.\/buildList\/buildListEntryReplacement$/)
+      }
+      expect(source, path).not.toMatch(/createProductionPlan[A-Za-z]*\(|runPlanner|replayPlannerSearchTrace|validatePlannerInput\(|runBuildListOptimization|verifyBuildListOptimizationCandidate|summarizePlanPhysicalOperations/)
+      expect(source, path).not.toMatch(/\.predict[A-Z]|searchCandidates\(|visitShapeConstrainedRouteCandidates|visitPlannerAlternativeCandidates/)
+      expect(source, path).not.toMatch(/Repository|Dexie|indexedDB|from '[^']*\/services\/|PlannerConflictResolution|savePlanner/)
+      // Typed fields only: a warning is compared as a whole value through the shared rule, never parsed; no diagnostics.
+      expect(source, path).not.toMatch(/\.message\b|[mM]essage\??\.(?:match|matchAll|split|includes|indexOf|slice|substring|replace|startsWith|endsWith|search)\(|new RegExp|\.diagnostics\b|elapsedMs|plannerVerifications/)
+    }
+    // The shared save-time helpers come first, with their contracts unchanged; the exclusion warnings are matched by the one rule
+    // Stage D' applies (kind and message, multiplicity counted), over Stage 0's record.
+    const adoption = codeOnly(optimization['./buildListOptimizationAdoption.ts']!)
+    for (const call of [
+      'checkPersistablePlannerResultShape(plan, generatedEntries, plannerResult.termination, replacements)', 'checkPersistableOrdinaryPlannerResultShape(plan, plannerResult.termination)',
+      'unexplainedBuildListOptimizationWarnings(\n    plannerResult.warnings,\n    artifact.inputExclusions.map(({ warningKind, warningMessage }) => ({ kind: warningKind, message: warningMessage })),\n  )',
+    ]) {
+      expect(adoption, call).toContain(call)
+    }
+    const final = codeOnly(optimization['./finalVerification.ts']!)
+    expect(final).toContain('unexplainedBuildListOptimizationWarnings(result.warnings, validation.excludedBuildListEntryWarnings.map(({ warning }) => warning))')
+    expect(final).not.toMatch(/[mM]essage\??\.(?:match|matchAll|split|includes|indexOf|slice|substring|replace|startsWith|endsWith|search)\(|new RegExp/)
   })
 
   it('keeps Phase D-1B a registration: plain data and pure checks, no Planner, Search, Trace Replay, file or formal run', () => {

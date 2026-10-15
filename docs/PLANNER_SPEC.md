@@ -3859,7 +3859,8 @@ approval?)` で保存する。ordinary resultはgenerated Entryもreplacementも
   `plan_breaking_change_approval_not_required` で拒否される）
 - B8の `savePlannerOrchestrationResult()` / `inspectPlannerOrchestrationResultSave()` は、Phase 6-A以降通常のApplication
   runtimeから呼ばれず、Phase 6-B2bで削除した。保存APIはordinaryの `savePlannerResult()` と下記のPlanner Alternative
-  actual repair用の2つだけである
+  actual repair用の2つだけである（Issue #260 PR-6Aで、作成リストの全体最適化の採用用の
+  `inspectBuildListOptimizationAdoptionSave()` / `saveBuildListOptimizationAdoption()` が本節の保存境界を共有して加わった。17.11）
 
 **Planner Alternative actual repairの保存（9.2.19.8、Phase 5-B）。** 「この候補を優先」のPure Domain artifact
 （`PlannerAlternativeRepairArtifact`）は旧B8の `PlannerOrchestrationResult`（Phase 6-B2bで削除済み）へ変換せず、専用の
@@ -8227,7 +8228,7 @@ Issue #261の後続設計で正式に定める（17.19のU4）。本節はそれ
 
 ### 17.1 位置づけと実装状態
 
-実装状態: **Domain計算（Stage 0〜D'）と専用Worker・Application接続まで実装済み（機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
+実装状態: **Domain計算（Stage 0〜D'）、専用Worker・Application接続と採用のPersistenceまで実装済み（画面からは未接続で、機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
 （[PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md](./PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md)、
 PR #259。非normativeの設計記録）とOwnerの判断（O1〜O21、17.20）を正式仕様へ反映したものである。PR-1はProduction code、
 Worker、UI、Persistence、version定数を変更していない。
@@ -8286,7 +8287,7 @@ Worker、UI、Persistence、version定数を変更していない。
     採用（PR-6）へ渡す型 `BuildListOptimizationAdoptionSource` を用意した。Clientの生成やrunの開始が同期的に失敗した場合は、
     そのstartを `worker_start_failed` で失敗させて `preparing` に残さず、失敗したClientを解放して次のstartで作り直す。古いstartの
     失敗で新しいstartの状態を上書きしない。何も書かず、どの結果でも通常Plannerへ切り替えない
-  - Persistence（採用の保存、17.11）とUIは未実装である
+  - PR-4の時点では、Persistence（採用の保存、17.11）とUIは未実装だった（Persistenceは下記PR-6Aで実装した）
 - **実装済み（Issue #260 PR-5A）**: 探索上限（U2）を決めるための、benchmark専用のProduction Browser計測基盤だけを置いた。Production code・
   Worker protocol・Client・Application・永続shape・versionは変更していない。
   - 計測page（`benchmark-build-list-optimization.html`、`vite.benchmark.config.ts` だけがbuildする）と `src/benchmarks/buildListOptimization/`。
@@ -8305,6 +8306,36 @@ Worker、UI、Persistence、version定数を変更していない。
     観測を直し、Ownerがこの基準だけを2,000 msから3,000 msへ変えて（2026-10-15）、series `pr5b-r2`（measurement HEAD `b4d4ce8`）で測り直した
   - `pr5b-r2`: `w0-research` と `w0-candidates-3` が全基準に合格し、`w-half`（`not_found`）と `w-wide`（計算時間）は不合格だった。
     Ownerが `w0-candidates-3` を採用した（17.13）。記録は [BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md](./BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md) 8 / 9
+- **実装済み（Issue #260 PR-6A）**: 採用の保存API（17.11）を、既存のPlanner保存境界を共有する全体最適化専用のinspect / saveとして
+  置いた。どの画面もまだ呼ばない（UI公開はIssue #260の後続PR）。
+  - `PlannerResultPersistenceService.inspectBuildListOptimizationAdoptionSave()` / `saveBuildListOptimizationAdoption()`。入力はApplicationが
+    保持する `BuildListOptimizationAdoptionSource`（`optimized` artifactと開始時snapshot）だけで、通常の `PlannerResult`・Planner
+    Alternative repair artifactは受け付けない（構造検査で `planner_result_invalid`）。artifactを通常のPlanner保存やrepair保存へ変換しない
+  - [P1]: 構造検査（`buildListOptimizationResultIssues()`、Worker結果のmain thread検査と同じ）と開始時snapshotの形の後、既存の共通helper
+    （`checkPersistablePlannerResultShape()`、`checkPersistableOrdinaryPlannerResultShape()`。契約は変えない）、全体最適化固有の検査
+    （`src/domain/planner/buildListOptimization/buildListOptimizationAdoption.ts` の `checkPersistableBuildListOptimizationArtifact()`: `completed`、
+    完成数 = 総数 = 計画対象Target数、Conflict 0・rejected 0、選択Entryが計画対象Targetごとに1件でgenerated Entryを含み置換対象を含まない、
+    置換 / 変更なしが計画対象Targetをちょうど分割する、除外記録が除外Entryごとにちょうど1件でwarningのmessageを持つ、除外Entryが
+    計画対象Target・Route・置換・選択に現れない、Planner結果のwarningがStage 0の除外記録のwarning（kindとmessageの組）の多重集合に
+    収まる（17.7の3。Stage D'と同じ純粋helper `unexplainedBuildListOptimizationWarnings()` で照合し、messageを解析しない）、物理操作数
+    （Step数 − `confirm_owned_ideal`）= stream前進の和 = structural objective = summaryの値、入力tokenの `initialExecutionState`・
+    `targetWeaponsHash`・CalculationContextが最終Plan自身のものと一致）の順に行う
+  - 除外記録（artifactの `inputExclusions`、`BuildListOptimizationInputExclusion`）は、Entry・Target・warningのkindに加えてwarningの
+    message（`warningMessage`）を持つ。どれもStage 0の `validatePlannerInput().excludedBuildListEntryWarnings` の値をそのまま写した
+    runtime-onlyの値で、永続化しない。Stage D'の除外Entry集合の比較（Entry・Target・kindの組）とwarningの照合規則は変えていない
+    （照合を共有helperへ切り出しただけ）。最終入力は除外Entryと状態をStage 0と共有するので、その検証はStage 0と同じkindとmessageを
+    返し、Stage D'で成立した結果を[P1]が新たに拒否することはない（実計算fixtureのtestで固定）
+  - transaction内は既存の保存mutationとPlanBreakingChangeGuardを共有し、inspectも同じmutationをread-only transactionで実行する。
+    T2（実行中Planが無い、Draftが0件または1件でobserved Draft IDと一致、現在状態が入力tokenの4項目と一致）を共有のT3〜T6の前に行い、
+    T6の参照検査の後で選択Entryが置換後Build Listで計画対象Targetをちょうど1件ずつ指すこと（`checkBuildListOptimizationFinalSelection()`）と、
+    除外記録の各EntryがBuild Listにあり記録どおりのTargetに属すること（`checkBuildListOptimizationExclusionsInBuildList()`）を確認する。
+    T7は共有の書込み（guardによる `O` 削除・`G` 追加、新Plan IDの非衝突確認、旧Draft削除、新Draft追加）である
+  - 承認（`PlanBreakingChangeApproval`）を渡した保存は、何も読む前に `plan_breaking_change_approval_not_required` で拒否する。既存guardは
+    `active` Planが無いときの承認を `plan_breaking_change_state_changed` とするので、この拒否は保存APIが行う。拒否のcodeは既存のもの
+    （`planner_state_changed`、`planner_result_invalid`、`draft_plan_conflict`、`production_plan_id_conflict`、`running_plan_invariant_violated`、
+    `validation_failed`、`transaction_failed`）だけである
+  - inspectの戻り値は、採用が置き換えるDraft（observed Draft ID）、置換ごとの旧Entryの改善優先（17.5で既定へ戻るもの）、変更なしの
+    Target IDである（[UI_FLOW.md](./UI_FLOW.md) 10.4の採用確認の表示用）。書込みのauthorityではない
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
 - **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。
@@ -8727,7 +8758,8 @@ type BuildListOptimizationResult =
   一致することを確かめる）。`initialExecutionState` はPlan依存Targetの状態を含むのでPlanから読み、入力だけからは作らない。
   Application側の2項目は、Issue #260 PR-4で入力と同じread-only transactionから読む開始時snapshot
   （`BuildListOptimizationStartSnapshot`: `observedDraftPlanId`、`runningPlanAbsent`）として実装した。Applicationは
-  Worker側の4項目を作り直さない。採用時の照合（T2）は採用・保存のPRで実装する（未実装）
+  Worker側の4項目を作り直さない。採用時の照合（T2）はIssue #260 PR-6Aで実装した（17.11。`inputBuildListEntriesHash` は現在の
+  作成リスト全体、他の3項目は現在状態と照合し、artifactのtokenが最終Plan自身の値であることは[P1]で確認する）
 - tokenは作成リスト **全体** で照合する（Planner Alternative repairの「置換対象 `O` だけ」より厳しい）。全体最適化は
   全計画対象Targetを同時に割り当てるので、別Targetの追加・Entry変更・優先度変更でも割当の前提が変わるためである
 - 所持武器のstatus・名称・memoだけの変更は `initialExecutionState` の `ownedWeaponsHash`（[DATA_MODEL.md](./DATA_MODEL.md) 11.2）にも
@@ -8781,8 +8813,9 @@ type BuildListOptimizationResult =
   計算開始時と同じか」の照合であり、freshnessは「保存する各generated Entryが現在状態に対してstaleでないか」という
   Planner-generated Entryの共通契約（9.2.15、[DATA_MODEL.md](./DATA_MODEL.md) 9.4）である。tokenが一致してもfreshnessを
   省略しない。artifactの不整合を検出するのはfreshnessである
-- 実行中Planが無いことを前提にするので、Plan-breakingの承認は発生しない（承認を渡した場合は既存guardの
-  `plan_breaking_change_approval_not_required`）
+- 実行中Planが無いことを前提にするので、Plan-breakingの承認は発生しない（承認を渡した場合は既存のtyped code
+  `plan_breaking_change_approval_not_required`。既存guardは `active` Planが無いときの承認を `plan_breaking_change_state_changed`
+  とするので、PR-6Aの保存APIが何も読む前にこのcodeで拒否する）
 - 拒否は既存のtyped code（`planner_state_changed`、`planner_result_invalid`、`draft_plan_conflict`、
   `transaction_failed`）を再利用する。UIは試算後に作成リストまたは状態が変わったことを示して再計算を求め、自動で
   再計算しない
@@ -8981,6 +9014,15 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
   読み取り専用で何も書かない
 - PR-5A（Browser計測基盤）の確認: 前提1〜4は成り立ち、versionを変更しない。benchmark専用のcode・script・測定計画案だけを追加し、
   Production code・Worker protocol・Client・Application・永続shape・Export shape・探索上限（`null`）を変えていない
+- PR-6A（採用・Persistence）の確認: 前提1〜4は成り立ち、versionを変更しない。保存するのは既存shapeの `BuildListEntry` と `ProductionPlan`
+  （`conflictRepairLineage = null`）だけで、table・index・field・provenance・Export shapeを追加していない。既存の保存API
+  （`savePlannerResult()` / `savePlannerAlternativeRepair()`）の挙動と、共通保存検証helperの契約を変えていない（既存の保存Serviceの
+  内部は、全体最適化の前提確認を差し込めるように共有部分を切り出しただけである）。Domain計算・Worker protocol・探索上限・UIは変えていない。
+  レビュー修正で、runtime-onlyのartifactの除外記録にwarningのmessage（`warningMessage`）を加えた。永続shape・Export shapeには入らず、
+  Workerとmain threadは同じbuildの同じ構造検査を使うのでWorker protocol versionも変えない。Stage D'の成立条件（除外Entry集合の比較key、
+  warningの照合規則）・計画・Routeは変わらない。benchmark計測のsemantic fingerprint（PR-5A）の `inputExclusions` componentは、除外Entryを
+  持つ結果ではmessageを含むので、それより前のHEADで計算した値と一致しない。PR-5Bの記録はそのmeasurement HEADのcodeで導出したものであり、
+  書き換えない
 - 標準操作の切替は、作成リストを置き換えたうえで内部Plannerを実行するものであり、内部Plannerの同じ `PlannerInput` に
   対する出力を変えない。この点で、同じ `PlannerInput` に対する内部の計算結果が変わったIssue #136 / #101 Phase 6-A
   （version 17）とは異なる。採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持ち、既存Planの
