@@ -3,7 +3,7 @@
  * Stage 0 (planning Target context), Stage A (ReachTable and reach options), Stage B / C (resource assignment,
  * coverage-gated structural candidates, materialization order and expected Route shapes), Stage D (route generation)
  * and Stage D' (the final verification by the ordinary Planner), moved from the Global Assignment Research (Issue #154),
- * which reuses it through its own adapters.
+ * which reuses it through its own adapters, and the pure artifact checks of the adoption save (Issue #260 PR-6A).
  *
  * Not re-exported by `src/domain/planner/index.ts`: callers import this module path.
  */
@@ -12,6 +12,7 @@ export * from './assignmentLowerBound'
 export * from './assignmentOrdering'
 export * from './assignmentSolver'
 export * from './assignmentTypes'
+export * from './buildListOptimizationAdoption'
 export * from './buildListOptimizationResult'
 export * from './buildListOptimizationTypes'
 export * from './countingRngEngine'

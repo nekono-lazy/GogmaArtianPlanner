@@ -13,6 +13,7 @@ import {
 } from '../../db/repositoryError'
 import type { BuildListEntryReplacement } from '../../domain/buildList'
 import {
+  ExecutionRuntimeError,
   unchangedMutableState,
   type PlanBreakingChangeApproval,
   type PlanBreakingChangeInspection,
@@ -25,6 +26,7 @@ import type {
   ExecutionHistoryId,
   ExecutionSavePoint,
   ExpectedPlanState,
+  ImprovementPreference,
   ISODateTimeString,
   NormalArtianCounter,
   OwnedWeapon,
@@ -32,6 +34,7 @@ import type {
   ProductionPlanId,
   RngState,
   TargetWeapon,
+  TargetWeaponId,
 } from '../../domain/models/publicTypes'
 import {
   createExpectedPlanState,
@@ -47,16 +50,25 @@ import {
   collectProductionPlanDependentTargetWeaponIds,
   createPlanningBuildListEntriesHash,
   createPlanningTargetWeaponsHash,
+  entryImprovementPreference,
   prepareFinalReplacementBuildList,
   type PlannerAlternativeRepairArtifact,
   type PlannerResult,
   type PlannerResultPersistenceIssue,
 } from '../../domain/planner'
+import {
+  checkBuildListOptimizationFinalSelection,
+  checkPersistableBuildListOptimizationArtifact,
+} from '../../domain/planner/buildListOptimization/buildListOptimizationAdoption'
+import type { BuildListOptimizationInputToken } from '../../domain/planner/buildListOptimization/buildListOptimizationResult'
 import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
+import { buildListOptimizationResultIssues } from './buildListOptimizationResultCheck'
+import type { BuildListOptimizationAdoptionSource } from './buildListOptimizationService'
 
 /**
- * The save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18. Two Planner results
- * are saved, each through its own entry points (Phase 6 complete, 9.2.19.16):
+ * The save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18. Three Planner results
+ * are saved, each through its own entry points (Phase 6 complete, 9.2.19.16;
+ * the third since Issue #260 PR-6A):
  *
  * - The ordinary Planner result (`createPlan()`, Phase 6-A) is saved through
  *   `savePlannerResult()`: it carries no generated BuildListEntry and no
@@ -69,12 +81,20 @@ import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
  *   Its accepted replacement set is the authority, so a generated Entry the
  *   final Plan does not select is still saved, and the Draft is stored with
  *   `conflictRepairLineage` set exactly to the artifact's lineage.
+ * - The Build List global optimization (`docs/PLANNER_SPEC.md` 17.11, Issue
+ *   #260 PR-6A) is adopted through `inspectBuildListOptimizationAdoptionSave()`
+ *   / `saveBuildListOptimizationAdoption()`. Its artifact replaces the Entry of
+ *   every planning Target whose Route changed in one all-or-nothing save; the
+ *   artifact is never converted into an ordinary result or a repair artifact.
+ *   On top of the shared boundary it re-checks the start state of its
+ *   calculation (no running Plan, the observed Draft) and the whole input token
+ *   (the input Build List included), and its Draft starts a new chain.
  *
- * Both are pure calculations over the snapshot the Planner Worker was handed.
+ * All three are pure calculations over the snapshot their Worker was handed.
  * Persisting one therefore re-reads the current state *inside* the same Dexie
  * read-write transaction that writes, re-validates the Plan against that state
  * with the existing snapshot authorities, and only then deletes the previous
- * Draft, replaces each Entry the repair replaced with its generated
+ * Draft, replaces each Entry the repair or the optimization replaced with its generated
  * BuildListEntry and adds the new Draft together. There is no window between
  * the check and the write, and no partial save: either the previous Draft is
  * gone, every replaced Entry is gone, every generated Entry and the new Plan
@@ -88,7 +108,8 @@ import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
  * is a dependency of the `active` Plan the save is refused without the user's
  * approval, and with it ends that Plan (`breaking_change_approved`) in the same
  * transaction. A Draft, stale or ended Plan referencing `O` never needs one.
- * Without any replacement the save never breaks a Plan.
+ * Without any replacement the save never breaks a Plan. A Build List
+ * optimization is adopted only while no Plan runs, so it never needs one.
  *
  * The result was calculated from the state before any save point restore, so
  * choosing 「最後のゲーム内セーブ地点へ戻す」 in that approval never saves it over
@@ -109,8 +130,8 @@ import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
  * (`production_plan_id_conflict`).
  *
  * It re-runs nothing. The full Planner run, Trace Replay, Planner Alternative
- * Search and Candidate trials stay the Worker's authority, so no `RngEngine` is
- * created on the main thread. Save time only compares the finished Plan against
+ * Search, Candidate trials and the Build List optimization's Stage 0 - D' stay
+ * the Workers' authority, so no `RngEngine` is created on the main thread. Save time only compares the finished Plan against
  * current persisted state.
  *
  * The legacy B8 orchestration save shared this boundary until Phase 6-B2b
@@ -184,6 +205,39 @@ export type PlannerAlternativeRepairSaveOutcome = Exclude<
 >
 
 /**
+ * How one Build List optimization adoption ended (`docs/PLANNER_SPEC.md`
+ * 17.11): the replacements, the previous Draft's removal and the new Draft are
+ * stored. An adoption is refused while a Plan runs, so no Plan-breaking
+ * approval - and no save point restore - ever applies to it: every refusal
+ * throws and writes nothing.
+ */
+export type BuildListOptimizationAdoptionSaveOutcome = Extract<
+  PlannerResultSaveOutcome,
+  { kind: 'saved' }
+>
+
+/** One Entry the adoption replaces, with the improvement preference its replacement does not carry over (17.5). */
+export interface BuildListOptimizationAdoptionReplacementInspection extends BuildListEntryReplacement {
+  /** The persisted `O`'s `improvementPreference`; the generated `G` starts at `planner`. */
+  replacedImprovementPreference: ImprovementPreference
+}
+
+/**
+ * What adopting one Build List optimization would write, read in the same
+ * snapshot that validated it (`docs/UI_FLOW.md` 10.4 adoption confirmation).
+ * It is never write authority: the save validates everything again in its own
+ * transaction.
+ */
+export interface BuildListOptimizationAdoptionInspection {
+  /** The current Draft the adoption deletes - the one observed when the calculation started - or `null` when there is none. */
+  replacedDraftPlanId: ProductionPlanId | null
+  /** In the artifact's order. Empty when every planning Target keeps its Entry: only the Draft is saved. */
+  replacements: BuildListOptimizationAdoptionReplacementInspection[]
+  /** The planning Targets whose current Entry is kept with its settings. */
+  unchangedTargetWeaponIds: TargetWeaponId[]
+}
+
+/**
  * Current persisted state diverged from the Plan's own snapshot. Nothing was
  * written; re-running the Planner over the current state is the recovery.
  */
@@ -251,7 +305,26 @@ interface PersistablePlannerResult {
    * the displayed Draft.
    */
   expectedSourceDraftId: ProductionPlanId | null
+  /**
+   * The start state and the input token a Build List optimization adoption
+   * re-checks (`docs/PLANNER_SPEC.md` 17.10 / 17.11 T2); `null` for the
+   * ordinary result and the repair.
+   */
+  buildListOptimization: BuildListOptimizationAdoptionPremises | null
 }
+
+/** What a Build List optimization adoption re-checks against the current state, beside the shared boundary. */
+interface BuildListOptimizationAdoptionPremises {
+  /** The Application's start snapshot: the Draft current when the calculation started, or `null`. */
+  observedDraftPlanId: ProductionPlanId | null
+  /** The Worker-side input token items (17.10). */
+  inputToken: BuildListOptimizationInputToken
+  planningTargetWeaponIds: readonly TargetWeaponId[]
+  unchangedTargetWeaponIds: readonly TargetWeaponId[]
+}
+
+/** Receives the post-validation view of one adoption (the inspection only). */
+type BuildListOptimizationAdoptionObserver = (inspection: BuildListOptimizationAdoptionInspection) => void
 
 export class PlannerResultPersistenceService {
   private readonly database: AppDatabase
@@ -358,16 +431,79 @@ export class PlannerResultPersistenceService {
     )
   }
 
+  /**
+   * Reads whether one Build List optimization can be adopted now
+   * (`docs/PLANNER_SPEC.md` 17.11) and what the adoption would write, in one
+   * read-only transaction over the same guarded mutation the save runs. It
+   * writes nothing and refuses exactly what the save would refuse. Its success
+   * is no write authority: the save checks everything again.
+   */
+  async inspectBuildListOptimizationAdoptionSave(
+    source: BuildListOptimizationAdoptionSource,
+    currentCalculationContext: CalculationContext,
+  ): Promise<BuildListOptimizationAdoptionInspection> {
+    const persistable = this.persistableBuildListOptimization(source)
+    const observed: { inspection: BuildListOptimizationAdoptionInspection | null } = { inspection: null }
+    const guarded = await this.guard(currentCalculationContext).inspect(
+      this.saveMutation(persistable, currentCalculationContext, (inspection) => {
+        observed.inspection = inspection
+      }),
+    )
+    if (guarded.approvalRequired || observed.inspection === null) {
+      // Unreachable: the mutation refuses any running Plan before the guard judges one.
+      throw new Error('A Build List optimization adoption never breaks a running Plan.')
+    }
+    return observed.inspection
+  }
+
+  /**
+   * Adopts one Build List optimization (`docs/PLANNER_SPEC.md` 17.11, O5): in
+   * one transaction every replacement deletes its Target's `O` and adds its
+   * generated `G`, the previous Draft is deleted, and the final Plan is added
+   * as the new Draft (`conflictRepairLineage = null`, no provenance). A
+   * replacement-free adoption writes the Draft alone.
+   *
+   * The artifact is checked first ([P1]: the shared shape helpers and the
+   * optimization's own conditions), then inside the transaction: no running
+   * Plan and the Draft observed when the calculation started (T2), the current
+   * state against the whole input token (T2), each `O` still its Target's one
+   * Entry and the replaced Build List (T3 / T4), the generated Entries' freshness
+   * recomputed from the current state (T5), and the Plan's snapshot and
+   * references against the replaced Build List (T6). Every failure throws and
+   * writes nothing - the Build List, the previous Draft and every other table
+   * stay as they were: `planner_state_changed` (the state moved after the
+   * calculation started), `planner_result_invalid` (the artifact is not
+   * persistable), `draft_plan_conflict`, `production_plan_id_conflict`,
+   * `validation_failed` or `transaction_failed`.
+   *
+   * No Plan runs while an optimization is adopted, so no Plan-breaking approval
+   * applies: an approval given anyway is refused
+   * (`plan_breaking_change_approval_not_required`) before anything is read.
+   */
+  async saveBuildListOptimizationAdoption(
+    source: BuildListOptimizationAdoptionSource,
+    currentCalculationContext: CalculationContext,
+    approval: PlanBreakingChangeApproval | null = null,
+  ): Promise<BuildListOptimizationAdoptionSaveOutcome> {
+    const persistable = this.persistableBuildListOptimization(source)
+    if (approval !== null) {
+      throw new ExecutionRuntimeError(
+        'plan_breaking_change_approval_not_required',
+        'A Build List optimization is adopted only while no Plan runs, so no Plan-breaking approval applies; review the adoption again.',
+      )
+    }
+    return this.applyGuarded(persistable, currentCalculationContext, null)
+  }
+
   /** The one guarded save both Planner result kinds go through. */
   private async saveGuarded(
     persistable: PersistablePlannerResult,
     currentCalculationContext: CalculationContext,
     approval: PlanBreakingChangeApproval | null,
   ): Promise<PlannerAlternativeRepairSaveOutcome> {
-    const { plan } = persistable
-    const guard = this.guard(currentCalculationContext)
-    const mutation = this.saveMutation(persistable, currentCalculationContext)
     if (approval?.savePointDecision?.kind === 'restore_save_point') {
+      const guard = this.guard(currentCalculationContext)
+      const mutation = this.saveMutation(persistable, currentCalculationContext)
       // The restore makes this pre-restore result stale by construction: the
       // guard re-derives the approval and the 16.10 choice, restores, and
       // writes nothing of the result (`docs/PLANNER_SPEC.md` 9.2.18).
@@ -379,8 +515,22 @@ export class PlannerResultPersistenceService {
         deletedExecutionHistoryIds: restore.deletedExecutionHistoryIds,
       }
     }
-    const outcome = await guard.apply(
-      mutation,
+    return this.applyGuarded(persistable, currentCalculationContext, approval)
+  }
+
+  /**
+   * The guarded write every Planner result kind shares: the save mutation's
+   * Build List post-state (each `O` deleted, each `G` added), then the new
+   * Plan ID check and the Draft replacement, in one transaction.
+   */
+  private async applyGuarded(
+    persistable: PersistablePlannerResult,
+    currentCalculationContext: CalculationContext,
+    approval: PlanBreakingChangeApproval | null,
+  ): Promise<Extract<PlannerResultSaveOutcome, { kind: 'saved' }>> {
+    const { plan } = persistable
+    const outcome = await this.guard(currentCalculationContext).apply(
+      this.saveMutation(persistable, currentCalculationContext),
       approval,
       {
         afterWrite: async () => {
@@ -415,7 +565,7 @@ export class PlannerResultPersistenceService {
     const { plan } = result
     if (plan === null) return null
     throwIssue(checkPersistableOrdinaryPlannerResultShape(plan, result.termination))
-    return { plan, generatedEntries: [], replacements: [], expectedSourceDraftId: null }
+    return { plan, generatedEntries: [], replacements: [], expectedSourceDraftId: null, buildListOptimization: null }
   }
 
   /** The artifact-shape invariants of a Planner Alternative repair; the Plan carries its lineage. */
@@ -428,7 +578,49 @@ export class PlannerResultPersistenceService {
       throwIssue(checked.issue)
       throw resultInvalid('The Planner Alternative repair artifact is not persistable.')
     }
-    return { ...checked.repair, expectedSourceDraftId }
+    return { ...checked.repair, expectedSourceDraftId, buildListOptimization: null }
+  }
+
+  /**
+   * [P1] of a Build List optimization adoption (`docs/PLANNER_SPEC.md` 17.11):
+   * the runtime-only source is untrusted until it passes the main thread's
+   * structural check of an `optimized` Worker result, and its start snapshot is
+   * the Application's. Then the Domain's artifact checks. An ordinary
+   * `PlannerResult` or a repair artifact is not an optimization artifact and is
+   * refused here.
+   */
+  private persistableBuildListOptimization(source: BuildListOptimizationAdoptionSource): PersistablePlannerResult {
+    const candidate: unknown = source
+    if (typeof candidate !== 'object' || candidate === null) {
+      throw resultInvalid('A Build List optimization adoption needs the optimized artifact and its start snapshot.')
+    }
+    const { artifact, startSnapshot } = candidate as Partial<BuildListOptimizationAdoptionSource>
+    const issues = buildListOptimizationResultIssues({ status: 'optimized', artifact })
+    if (issues.length > 0 || artifact === undefined) {
+      throw resultInvalid(`The Build List optimization artifact is malformed: ${issues.join(' ')}`)
+    }
+    const observedDraftPlanId: unknown = startSnapshot?.observedDraftPlanId
+    if (
+      typeof startSnapshot !== 'object' || startSnapshot === null || startSnapshot.runningPlanAbsent !== true ||
+      !(observedDraftPlanId === null || (typeof observedDraftPlanId === 'string' && observedDraftPlanId.length > 0))
+    ) {
+      throw resultInvalid('The Build List optimization start snapshot must name the observed Draft (or none) and the absence of a running Plan.')
+    }
+    const checked = checkPersistableBuildListOptimizationArtifact(artifact)
+    if (checked.issue !== null) {
+      throwIssue(checked.issue)
+      throw resultInvalid('The Build List optimization artifact is not persistable.')
+    }
+    return {
+      ...checked.adoption,
+      expectedSourceDraftId: null,
+      buildListOptimization: {
+        observedDraftPlanId: startSnapshot.observedDraftPlanId,
+        inputToken: artifact.inputToken,
+        planningTargetWeaponIds: artifact.planningTargetWeaponIds,
+        unchangedTargetWeaponIds: artifact.unchangedTargetWeaponIds,
+      },
+    }
   }
 
   private guard(currentCalculationContext: CalculationContext): PlanBreakingChangeGuard {
@@ -444,27 +636,138 @@ export class PlannerResultPersistenceService {
    * is given - the current one, or a restored one after 「最後のゲーム内セーブ
    * 地点へ戻す」 - it re-validates the Plan and returns the final Build List
    * (the replacement set) as the post-state the Plan-breaking guard judges.
+   *
+   * A Build List optimization adoption adds its own premises around the shared
+   * checks: the start state and the input token before them (17.11 T2), the
+   * final selection after them, and - for the inspection only - `observe`
+   * receives what the adoption would write once everything passed.
    */
   private saveMutation(
     persistable: PersistablePlannerResult,
     currentCalculationContext: CalculationContext,
+    observe?: BuildListOptimizationAdoptionObserver,
   ): PlanGuardedMutation<ProductionPlan> {
     return (base: PlanGuardedMutationBase) => {
-      const { plan } = persistable
+      const { plan, buildListOptimization } = persistable
       if (persistable.expectedSourceDraftId !== null) {
         this.assertSourceDraftCurrent(base, persistable.expectedSourceDraftId)
       }
+      if (buildListOptimization !== null) {
+        this.assertBuildListOptimizationStartState(base, buildListOptimization.observedDraftPlanId)
+      }
       const current = this.currentState(base)
+      if (buildListOptimization !== null) {
+        this.assertBuildListOptimizationInputToken(persistable, buildListOptimization, current, currentCalculationContext)
+      }
       const finalEntries = this.assertCurrentStateMatchesPlan(
         persistable,
         current,
         currentCalculationContext,
       )
       this.assertPlanReferences(persistable, finalEntries)
+      if (buildListOptimization !== null) {
+        throwIssue(checkBuildListOptimizationFinalSelection(plan, finalEntries, buildListOptimization.planningTargetWeaponIds))
+        observe?.(this.buildListOptimizationInspection(persistable, buildListOptimization, current))
+      }
       return {
         state: { ...unchangedMutableState(base), buildListEntries: finalEntries },
         result: plan,
       }
+    }
+  }
+
+  /** The Draft records the mutation's base holds; two or more break the Draft invariant (`docs/DATA_MODEL.md` 11.1). */
+  private currentDrafts(base: PlanGuardedMutationBase): ProductionPlan[] {
+    const drafts = base.productionPlans.filter(({ status }) => status === 'draft')
+    if (drafts.length > 1) {
+      throw new RepositoryError(
+        'draft_plan_conflict',
+        `ProductionPlan draft invariant violated: ${drafts.length} draft ProductionPlans are stored.`,
+      )
+    }
+    return drafts
+  }
+
+  /**
+   * T2 of a Build List optimization adoption (`docs/PLANNER_SPEC.md` 17.11):
+   * the calculation started with no running Plan and with the Draft it observed
+   * (or none), and the adoption replaces exactly that Draft. A Plan started,
+   * a Draft created, deleted or replaced meanwhile moved the state on. The
+   * Draft's ID is the authority - never a body comparison. (Two running Plans
+   * are refused by the guard before this mutation runs.)
+   */
+  private assertBuildListOptimizationStartState(base: PlanGuardedMutationBase, observedDraftPlanId: ProductionPlanId | null) {
+    const running = base.productionPlans.find(({ status }) => status === 'active' || status === 'stale')
+    if (running !== undefined) {
+      throw stateChanged(
+        `ProductionPlan '${running.id}' is running (${running.status}); a Build List optimization is adopted only while no Plan is active or stale.`,
+      )
+    }
+    const drafts = this.currentDrafts(base)
+    const currentDraftId = drafts[0]?.id ?? null
+    if (currentDraftId !== observedDraftPlanId) {
+      const describe = (id: ProductionPlanId | null) => (id === null ? 'no Draft' : `Draft '${id}'`)
+      throw stateChanged(
+        `The Build List optimization started with ${describe(observedDraftPlanId)}, but ${describe(currentDraftId)} is current now; the Drafts changed after the calculation started.`,
+      )
+    }
+  }
+
+  /**
+   * T2 of a Build List optimization adoption (`docs/PLANNER_SPEC.md` 17.10 /
+   * 17.11): the current state is the input the calculation assigned every
+   * planning Target over - the whole Build List before any replacement, every
+   * Target, the RNG state, Normal Counters, OwnedWeapons and Plan-dependent
+   * Targets, and the CalculationContext. This is stricter than a repair's
+   * replaced-Entry check and never stands in for the generated Entries'
+   * freshness, which the shared checks recompute afterwards (T5).
+   */
+  private assertBuildListOptimizationInputToken(
+    persistable: PersistablePlannerResult,
+    premises: BuildListOptimizationAdoptionPremises,
+    current: PlannerSaveCurrentState,
+    currentCalculationContext: CalculationContext,
+  ) {
+    const { inputToken } = premises
+    if (!isCalculationContextCompatible(currentCalculationContext, inputToken.calculationContext)) {
+      throw stateChanged('The current CalculationContext differs from the Build List optimization input token.')
+    }
+    if (createPlanningBuildListEntriesHash([...current.buildListEntries]) !== inputToken.inputBuildListEntriesHash) {
+      throw stateChanged(
+        'The current Build List differs from the Build List the optimization was calculated over (input token inputBuildListEntriesHash).',
+      )
+    }
+    if (createPlanningTargetWeaponsHash([...current.targetWeapons]) !== inputToken.targetWeaponsHash) {
+      throw stateChanged('Current TargetWeapons differ from the Build List optimization input token (targetWeaponsHash).')
+    }
+    // The token's state is the final Plan's own (checked in [P1]), so its Plan-dependent Targets are the Plan's. The Plan selects the
+    // replaced Build List; adding the generated Entries to the current ones names the same Targets, because an `O` and its `G` share
+    // their Target.
+    const executionState = this.currentExecutionState(persistable.plan, current, [...current.buildListEntries, ...persistable.generatedEntries])
+    if (!sameExpectedPlanState(executionState, inputToken.initialExecutionState)) {
+      throw stateChanged(
+        'Current RngState, Normal Artian counters, OwnedWeapons or Plan-dependent Target execution state differ from the Build List optimization input token (initialExecutionState).',
+      )
+    }
+  }
+
+  /** What the adoption writes, read from the validated state (the inspection's view). */
+  private buildListOptimizationInspection(
+    persistable: PersistablePlannerResult,
+    premises: BuildListOptimizationAdoptionPremises,
+    current: PlannerSaveCurrentState,
+  ): BuildListOptimizationAdoptionInspection {
+    const currentById = new Map(current.buildListEntries.map((entry) => [entry.id, entry]))
+    return {
+      replacedDraftPlanId: premises.observedDraftPlanId,
+      replacements: persistable.replacements.map((replacement) => ({
+        ...replacement,
+        // Each `O` is its Target's current Entry (checked by the shared replacement set above).
+        replacedImprovementPreference: entryImprovementPreference(
+          currentById.get(replacement.replacedBuildListEntryId) as BuildListEntry,
+        ),
+      })),
+      unchangedTargetWeaponIds: [...premises.unchangedTargetWeaponIds],
     }
   }
 
@@ -476,13 +779,7 @@ export class PlannerResultPersistenceService {
    * by the snapshot authorities below. Two Drafts break the Draft invariant.
    */
   private assertSourceDraftCurrent(base: PlanGuardedMutationBase, expectedSourceDraftId: ProductionPlanId) {
-    const drafts = base.productionPlans.filter(({ status }) => status === 'draft')
-    if (drafts.length > 1) {
-      throw new RepositoryError(
-        'draft_plan_conflict',
-        `ProductionPlan draft invariant violated: ${drafts.length} draft ProductionPlans are stored.`,
-      )
-    }
+    const drafts = this.currentDrafts(base)
     if (drafts.length === 0 || drafts[0].id !== expectedSourceDraftId) {
       throw stateChanged(
         `The repair was calculated from Draft '${expectedSourceDraftId}', but the current Draft is ${drafts.length === 0 ? 'missing' : `'${drafts[0].id}'`}; another change moved the repair chain on after the calculation.`,
@@ -547,23 +844,9 @@ export class PlannerResultPersistenceService {
     throwIssue(finalBuildList.issue)
     const finalEntries = finalBuildList.finalEntries as BuildListEntry[]
 
-    // A freshly calculated Draft has no confirmed Step yet, so no observation
-    // binding applies and the current state hashes with its real values.
-    const currentExecutionState = createExpectedPlanState(
-      current.rngState,
-      [...current.normalCounters],
-      [...current.ownedWeapons],
-      {
-        targetWeapons: [...current.targetWeapons],
-        dependentTargetWeaponIds: collectProductionPlanDependentTargetWeaponIds(
-          plan,
-          finalEntries,
-        ),
-      },
-    )
     if (
       !sameExpectedPlanState(
-        currentExecutionState,
+        this.currentExecutionState(plan, current, finalEntries),
         plan.baseSnapshot.initialExecutionState,
       )
     ) {
@@ -595,6 +878,31 @@ export class PlannerResultPersistenceService {
     )
 
     return finalEntries
+  }
+
+  /**
+   * The current state's `ExpectedPlanState` over the Plan's dependent Targets,
+   * named through `entries`. A freshly calculated Draft has no confirmed Step
+   * yet, so no observation binding applies and the current state hashes with
+   * its real values.
+   */
+  private currentExecutionState(
+    plan: ProductionPlan,
+    current: PlannerSaveCurrentState,
+    entries: readonly BuildListEntry[],
+  ): ExpectedPlanState {
+    return createExpectedPlanState(
+      current.rngState,
+      [...current.normalCounters],
+      [...current.ownedWeapons],
+      {
+        targetWeapons: [...current.targetWeapons],
+        dependentTargetWeaponIds: collectProductionPlanDependentTargetWeaponIds(
+          plan,
+          entries,
+        ),
+      },
+    )
   }
 
   /**

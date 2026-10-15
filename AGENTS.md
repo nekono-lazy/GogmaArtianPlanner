@@ -3490,8 +3490,8 @@ reselection. Never synthesize a substitute fixed Entry from
 
 BuildListEntry now has two producers: the user selecting a search result, and
 Planner constrained re-search materializing one (the Build List global optimization
-adoption of Issue #260 is a specified, not yet implemented, third producer; see
-"Build List Global Optimization" below). A Planner-generated Entry uses
+adoption of Issue #260 is a third producer whose save PR-6A implemented and no
+screen calls yet; see "Build List Global Optimization" below). A Planner-generated Entry uses
 the ordinary `BuildListEntry` shape — no new persisted provenance field, no
 Candidate Snapshot embedded in `ProductionPlan`, and no new persisted entity.
 Candidates found during enumeration are temporary Planner trial input; only the
@@ -4190,7 +4190,23 @@ The Owner adopted `w0-candidates-3` (2026-10-15; U2, `docs/PLANNER_SPEC.md` 17.1
 registered plan set field by field (window 350 / 500 / 1500, node budget 2,000, lookahead 8, 3 structural candidates and 3 verifications, the
 plan's Stage D gates and budgets; tests pin it to the plan block and the plan to the bytes the `pr5b-r2` RESULT judged, and check that the
 Production Worker hands the Domain a copy). It keeps room to verify the next candidate when the Planner rejects the first; what a second or third
-candidate costs was never measured, so no time for it is claimed. Persistence and the UI are not implemented, and the Build List's
+candidate costs was never measured, so no time for it is claimed. PR-6A added the adoption Persistence (`docs/PLANNER_SPEC.md` 17.1 /
+17.11), which no screen calls yet: `PlannerResultPersistenceService.inspectBuildListOptimizationAdoptionSave()` /
+`saveBuildListOptimizationAdoption()` take the Application's `BuildListOptimizationAdoptionSource` only (an ordinary `PlannerResult` or a repair
+artifact fails the structural check, `planner_result_invalid`; nothing is converted into another save). [P1] is the Worker-result structural check
+(`buildListOptimizationResultIssues()`), the unchanged shared helpers (`checkPersistablePlannerResultShape()`,
+`checkPersistableOrdinaryPlannerResultShape()`) and the pure Domain `checkPersistableBuildListOptimizationArtifact()`
+(`src/domain/planner/buildListOptimization/buildListOptimizationAdoption.ts`: completed, every planning Target counted, no Conflict / rejected
+Entry, one selected Entry per planning Target with every generated one, the replaced / unchanged partition, excluded Entries untouched, warnings
+inside the exclusion warning kinds by multiplicity - no message read -, the physical identity from the Plan's own Steps, and the input token items
+equal to the final Plan's). Inside the transaction it shares the existing save mutation and `PlanBreakingChangeGuard` (inspect runs the same
+mutation read-only): T2 (no running Plan, Draft 0 / 1 and equal to the observed Draft ID, the current state against the four token items - the
+whole input Build List included) before the shared T3 - T6 (`prepareFinalReplacementBuildList()`, `checkGeneratedBuildListEntriesFresh()` recomputed
+from the current state, the Plan snapshot, `checkProductionPlanBuildListEntryReferences()`), then `checkBuildListOptimizationFinalSelection()`, and
+the shared T7 write (each `O` deleted, each `G` added, the new Plan ID checked, every Draft deleted, the new Draft added). An approval is refused
+before anything is read (`plan_breaking_change_approval_not_required`; the guard would say `plan_breaking_change_state_changed` with no active
+Plan). The inspection returns the replaced Draft ID, each replaced Entry's lost improvement preference and the unchanged Targets. The UI is not
+implemented, and the Build List's
 「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.
 

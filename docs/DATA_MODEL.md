@@ -2736,7 +2736,8 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   orchestrationも同じ保存境界を使っていたが、B8の保存API（`savePlannerOrchestrationResult()` /
   `inspectPlannerOrchestrationResultSave()`）はPhase 6-B2bで削除した（B8のWorker / Client経路はPhase 6-B1で削除済み）。
   現在の保存APIは上記のordinary `savePlannerResult()` と、下記のactual repair用
-  `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` だけである
+  `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`、および下記の作成リストの全体最適化の採用用
+  `inspectBuildListOptimizationAdoptionSave()` / `saveBuildListOptimizationAdoption()`（Issue #260 PR-6A）だけである
 
 - Planner-generated BuildListEntry群と `ProductionPlan` を1つのDexie
   read-write transactionで保存する
@@ -2780,15 +2781,17 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   （`savePlannerResult()`）には適用しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）
 - `plannerResult.conflicts` と `plan.conflicts` は順序を含めたPlanConflict全体の構造一致を要求し、IDだけの比較にしない。
   不一致のartifactは `planner_result_invalid` で何も保存しない
-- 作成リストの全体最適化の採用（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.11、Issue #260。正式仕様のみで未実装）は、
-  全体最適化専用の保存API（inspect / save）で同じtransaction境界を使う。artifactを通常の `PlannerResult` 保存やrepair
+- 作成リストの全体最適化の採用（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.11、Issue #260。PersistenceはPR-6Aで実装済み、
+  画面からはまだ呼ばれない）は、全体最適化専用の保存API（`PlannerResultPersistenceService.inspectBuildListOptimizationAdoptionSave()` /
+  `saveBuildListOptimizationAdoption()`）で同じtransaction境界を使う。artifactを通常の `PlannerResult` 保存やrepair
   artifactへ変換しない。既存の共通保存検証（termination、Plan / Entryのvalidation、`conflictRepairLineage === null`、
   置換後Build Listの構築とcardinality、generated Entry freshnessの再計算、Plan参照）の契約を変えずに呼び、全体最適化固有の
   検証（作成リスト全体の入力token、実行中Planが無いこと、current Draftが0件または計算開始時に観測したDraft 1件であること、
   完成・Conflict 0・除外warningだけ・物理操作数の恒等式）を追加する。入力tokenが一致してもfreshnessの再計算を省略しない。
   すべて通った場合だけ、各Targetの元Entry削除 + generated Entry追加、旧Draft削除、新Draft追加（lineage `null`）を
   1つのDexie read-write transactionで行い、失敗時は何も書かない（旧Entry・旧Draftを維持する）。実行中Planが無いことを
-  前提にするのでPlan-breakingの承認は発生しない。新しいtable / index / fieldは追加しない
+  前提にするのでPlan-breakingの承認は発生しない（承認を渡した場合は保存APIが何も読む前に
+  `plan_breaking_change_approval_not_required` で拒否する）。新しいtable / index / fieldは追加しない
 
 Planner save transactionのための新しいtable / indexは追加しない。`buildListEntries` と
 `productionPlans` の既存tableをそのまま使う（Draft最大1件契約自体はDexie v8で既存Draftを
