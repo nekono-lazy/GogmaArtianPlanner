@@ -87,7 +87,37 @@ driver・Node reference・analyzerのcommandは各計画書の手順を参照す
 
 ## 5. PR-5Aの機能確認
 
-機能確認計画のmeasurement HEADは、本書と計測基盤をcommitしたcommitである。結果は、そのHEADで実行した後の記録commitで本節に追記する。
+**結果: `mechanics: passed`（10 / 10 slotが期待どおり）**。公開RESULTは
+[BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_RESULT.json](BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_RESULT.json)
+（50,246 bytes、SHA-256 `aebbac41a7ea2b7e11c6e2d68fabc6f5071315bc46a854e238226ff903ee64c5`）。同じrawからの再導出（`--check`）は一致した。
+syntheticの機能確認であり、性能・memoryの合否やProduction定数の根拠ではない。
+
+| 項目 | 値 |
+| --- | --- |
+| measurement HEAD | `a5858ad7ff6a6d00a4db9000198107990a156717`（clean。benchmark buildのprovenanceも同じcommit、`uncommittedBenchmarkCode: false`） |
+| 計画 | `docs/BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_PLAN.md`（そのHEAD、SHA-256 `372a66b1…`。`--validate-plan` ok。測定計画案も同じHEADで `--validate-plan` ok） |
+| 環境 | Windows 11 Pro 10.0.26200 x64、AMD Ryzen 7 9700X（16 logical CPU）、31.1 GiB、Google Chrome 154.0.8037.98 **headless**、専用の一時profile。各slot前のCPU負荷79〜94%（動画エンコード等が並行していた） |
+| driver | `scripts/drive-build-list-optimization-browser.mjs`（SHA-256 `0cfac049…`）、raw・driver記録・Node referenceは `.local/pr5a-mech/`（git-ignored） |
+| binding | 10 / 10 slotを計画順に記録、計画外0、欠落0 |
+| semantic | `synthetic.open`: Browser 2 run + Node referenceが同一（`8b6ddbf6…`）。`synthetic.wide-window`: Browser 2 run（非isolatedの再実行とisolatedのmemory slot）+ Nodeが同一（`4a884d01…`） |
+| 結果分類 | optimized（7操作、3 / 3 Target）、unsupported（`invalid_planner_input`）、search_bound_reached（`structural_search_node_budget`）、cancelled ×2、failed（`worker_error`、`invalid_result`） |
+| キャンセル | `input_check` 直後・`reach_table` 中（0.33 s）とも、`cancelled` までの時間 0 / 0.1 ms、結果の採用なし、settle後のmessage 0、再実行は完了しsemanticも一致。キャンセル → Worker targetのdetach（CDP）は1,151 ms / 816 ms |
+| lifecycle | Workerの `error` eventは `worker_error`、壊した結果は `invalid_result` の失敗になり、どちらも結果として扱われない。storage（IndexedDB / localStorage / sessionStorage / Cache / Service Worker）は両sessionで変化なし、page loss・中断なし |
+| 時間（参考） | request → 結果: `synthetic.open` 97 / 85 ms、`synthetic.wide-window` 1,246 / 1,199 ms（後者はmemory slot。Worker内の `reach_table` 1,099 ms）。入力準備 0.6〜2.8 ms、Clientの処理 ≤ 1.8 ms、main threadのlong task 0件 |
+| memory（参考、memory slot） | CDP Worker heap used max sampled 7,280,040 bytes（runが1.2 sのため2 sample）、renderer private max sampled 74,702,848 bytes（96 sample）、main thread heapの結果保持 587,110 bytes、`measureUserAgentSpecificMemory()` は4固定点とも取得でき、解放後のWorker bytesは0。未測定項目なし |
+
+観測と注意:
+
+- キャンセルからWorker targetのdetachまで0.8〜1.2 sかかった（CDPの観測で、高いCPU負荷のheadless環境）。画面上のキャンセルは同期的に完了しており、
+  これはWorkerの資源を返すまでの時間である。測定計画案の基準案はこの観測を踏まえて ≤ 2 sとした（[MEASUREMENT_PLAN](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md) §9の3）
+- memory slotは `measureUserAgentSpecificMemory()` の4固定点（各読取りがGCを待つ）とGC待ちのため、run自体が1.2 sでも約100 sかかった。
+  実Exportのmemory slotも同程度の付加時間がかかる
+- Production Workerは計算中にevent loopへ戻らないので、in-processのtestではキャンセルのtimerが結果より後になる。testでは即時実行にし、
+  実Workerでの非同期キャンセルを本機能確認で確かめた
+- headlessで実行した。PR-5Bの正式計測は測定計画案どおりheadedで行う
+
+自動テスト（本PR）: `src/benchmarks/buildListOptimization/` の8 file（protocol、入力、semantic、runner、計画、解析、page、isolation）、
+既存isolation test 2件の更新（PR-4のWorker isolation、Research P-1のbenchmark config固定）。
 
 ## 6. PR-5Bで実測を始めるための残作業
 

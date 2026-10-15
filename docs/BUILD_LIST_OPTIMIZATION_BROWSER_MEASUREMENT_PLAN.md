@@ -140,7 +140,7 @@ taskであり、Workerを変更せずに区間を分けて測れない。本計�
 | main threadの結果保持 | memory | ≤ 256 MiB | Previewがartifactを保持する分 |
 | Worker memoryの解放 | memory | 解放後に0 | settle時にterminateする（17.16） |
 | キャンセル → `cancelled` | cancel（w0-research） | ≤ 100 ms | Clientは同期的にキャンセルする |
-| キャンセル → Worker detach | cancel（w0-research） | ≤ 1 s | `terminate()` は待たずに止める |
+| キャンセル → Worker detach | cancel（w0-research） | ≤ 2 s | 画面は既に `cancelled`（上の基準）で、Workerの終了はCPUとmemoryを返すだけである。PR-5Aの機能確認ではCPU負荷85〜90%のheadless環境でCDPのdetachがキャンセルの0.8 s / 1.2 s後だった（§9の3） |
 | キャンセル後の結果不採用 / 再実行の完了 | cancel（w0-research） | すべて | 17.16 |
 | 永続状態の不変 | 全run | すべて | Preview・計算は何も書かない（17.9） |
 
@@ -152,7 +152,9 @@ Research P-2の計測値（同じExportでResearch harnessのfirst Workerが約2
 1. **43目標武器の代表ケースで許容する計算時間**: 推奨は request → 結果のmedian ≤ 40 s、各run ≤ 60 s（計測PC）。より遅いPCでの体感（約2〜3分）を上限と
    みなす考え方を採るか、長時間化の案内（U3）を前提にもっと長く許すかを決める
 2. **PC BrowserでのWorker memory**: 推奨はWorker heap max sampled ≤ 1 GiB、renderer private ≤ 2 GiB、main threadの結果保持 ≤ 256 MiB
-3. **キャンセル後の終了時間**: 推奨は `cancelled` まで ≤ 100 ms、Worker detachまで ≤ 1 s（CDPで測れない場合は未測定とし、合格とは数えない）
+3. **キャンセル後の終了時間**: 推奨は `cancelled` まで ≤ 100 ms、Worker detachまで ≤ 2 s（CDPで測れない場合は未測定とし、合格とは数えない）。
+   当初は ≤ 1 sを考えたが、PR-5Aの機能確認（synthetic、headless、CPU負荷85〜90%）でdetachまでが816 ms / 1,151 msだったため、machine負荷を
+   測ってしまわないよう2 sを推奨する。画面上のキャンセル（`cancelled`）は同期的であり、この時間は利用者の待ち時間ではない。1 sを採るかはOwnerが決める
 4. **必要なsemantic一致run数**: 推奨はbaseline 4 run（非isolated 3 + isolated 1）+ Node 1、比較セット各2 run + Node 1
 5. **`search_bound_reached` の許容条件**: 推奨は「採用するセットでは代表ケースで許容しない（`optimized` 必須）」。比較セットでの `search_bound_reached` /
    `not_found` は観測結果として記録し、そのセットを採用できない理由になるだけとする。syntheticの機能確認（mechanics）では意図した結果である
@@ -998,9 +1000,9 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
         },
         "aggregate": "each",
         "comparator": "at_most",
-        "threshold": 1000,
+        "threshold": 2000,
         "unit": "ms",
-        "rationale": "terminate() stops the Worker without waiting for it; its CPU and heap are released within a second."
+        "rationale": "The screen is already cancelled (cancel.settle); the Worker's release only returns CPU and memory. The PR-5A mechanics check saw the CDP detach 0.8 / 1.2 s after the cancel under 85 - 90 % CPU load (headless), so 1 s would also measure the machine load; 2 s keeps this a check of the release itself."
       },
       {
         "criterionId": "cancel.no-result",
