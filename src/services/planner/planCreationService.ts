@@ -1,7 +1,7 @@
 import { appDatabase, type AppDatabase } from '../../db/AppDatabase'
 import { RepositoryError } from '../../db/repositoryError'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
-import type { ProductionPlanId } from '../../domain/models/publicTypes'
+import type { BuildListEntry, OwnedWeapon, ProductionPlanId, TargetWeapon } from '../../domain/models/publicTypes'
 import {
   createProductionPlannerDependencies,
   validatePlannerOptions,
@@ -70,6 +70,10 @@ import {
  *
  * It writes nothing. The ordinary Planner's result is saved by the existing `PlannerResultPersistenceService.savePlannerResult()`, and
  * an `optimized` result is adopted by `saveBuildListOptimizationAdoption()` (Issue #260 PR-6A), both outside this session.
+ *
+ * A primary press that starts the optimization keeps, beside the optimization session's state, the start context of the input it judged
+ * and started (`PlanCreationStartContext`, Issue #260 PR-6C): the Preview's start-time Build List, Targets and owned weapons. It is the
+ * press's own runtime value - replaced with the press, dropped by `discard()` / `dispose()` - and never a read of its own.
  */
 
 /** The two operations the screen offers: 「生産計画を作成」 and the ordinary Planner auxiliary operation. */
@@ -168,10 +172,55 @@ type PlanCreationOperationState =
 /** The ordinary Planner auxiliary operation: it never starts the optimization. */
 export type OrdinaryPlannerAuxiliaryState = PlanCreationOperationState
 
+/**
+ * The start-time state of one optimization press (`docs/PLANNER_SPEC.md` 17.9, Issue #260 PR-6C): the Build List, the Targets and the
+ * owned weapons of the very PlannerInput the press judged and handed to the optimization. The screen reads the Preview's replaced
+ * Entries, Target names, preferred weapons and route bases from it - never from a later read, an `inspect()` judgement or the Entries
+ * the screen shows - so the Preview describes the state the calculation ran on. Runtime-only and read-only: never persisted, never
+ * sent to the Worker (the Worker receives the PlannerInput itself), and dropped with the press it belongs to.
+ */
+export interface PlanCreationStartContext {
+  readonly buildListEntries: readonly BuildListEntry[]
+  readonly targetWeapons: readonly TargetWeapon[]
+  readonly ownedWeapons: readonly OwnedWeapon[]
+}
+
+/** The start context of a judged input: its own collections, frozen as they were judged (the elements are the input's). */
+export function planCreationStartContextOf(input: PlannerInput): PlanCreationStartContext {
+  return Object.freeze({
+    buildListEntries: Object.freeze([...input.buildListEntries]),
+    targetWeapons: Object.freeze([...input.targetWeapons]),
+    ownedWeapons: Object.freeze([...input.ownedWeapons]),
+  })
+}
+
 /** 「生産計画を作成」: the ordinary Planner, or the Build List optimization session's own state (Issue #260 PR-4). */
 export type PrimaryPlanCreationState =
   | PlanCreationOperationState
-  | { status: 'build_list_optimization'; runId: number; optimization: BuildListOptimizationSessionState }
+  | {
+      status: 'build_list_optimization'
+      runId: number
+      optimization: BuildListOptimizationSessionState
+      /**
+       * The start-time state of this press's input (`planCreationStartContextOf()` of the input it judged and started). It belongs to
+       * this `runId` alone: a later press, `discard()` and `dispose()` replace the whole primary state, so it never outlives its run
+       * or pairs with another run's result.
+       */
+      startContext: PlanCreationStartContext
+    }
+
+/**
+ * The primary operation's optimization, when it holds one: its press, the optimization session's state of that press and the start
+ * context of the input it ran on. The three are one press's; the adoption source of an `optimized` result comes from `optimization`
+ * (`buildListOptimizationAdoptionSourceOf()`, the artifact and the start snapshot of the same run).
+ */
+export function planCreationOptimizationOf(
+  state: PlanCreationSessionState,
+): { runId: number; optimization: BuildListOptimizationSessionState; startContext: PlanCreationStartContext } | null {
+  const primary = state.primary
+  if (primary.status !== 'build_list_optimization') return null
+  return { runId: primary.runId, optimization: primary.optimization, startContext: primary.startContext }
+}
 
 export interface PlanCreationSessionState {
   /** The latest 「生産計画を作成」 press. An auxiliary press never changes it. */
@@ -432,7 +481,16 @@ export function createPlanCreationSession(dependencies: PlanCreationSessionDepen
       case 'ordinary_planner':
         return runOrdinaryPlanner(operation, runId, decision.input)
       case 'build_list_optimization':
-        publish({ ...state, primary: { status: 'build_list_optimization', runId, optimization: optimization.getState() } })
+        // The start context comes from the very input handed to the optimization, so the Preview names what was calculated.
+        publish({
+          ...state,
+          primary: {
+            status: 'build_list_optimization',
+            runId,
+            optimization: optimization.getState(),
+            startContext: planCreationStartContextOf(decision.preparation.plannerInput),
+          },
+        })
         await optimization.startPrepared(decision.preparation)
         return state
     }

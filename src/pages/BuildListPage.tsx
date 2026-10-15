@@ -21,18 +21,16 @@ import { usePlanBreakingChangeApproval } from '../components/execution/usePlanBr
 import type { PlanBreakingChangeApproval, PlanBreakingChangeInspection } from '../domain/execution'
 import { useProductionPlanReplanPreview } from '../components/execution/useProductionPlanReplanPreview'
 import { CandidateCard } from '../components/search/CandidateCard'
-import {
-  createPlannerCompletedTargetsText,
-  createPlannerReachedLimitMessages,
-  plannerIncompleteSearchTitle,
-} from '../components/planner/plannerSearchLimitPresentation'
+import { BuildListPlanCreationSection } from '../components/planner/BuildListPlanCreationSection'
+import { PLAN_CREATION_BUILD_LIST_LOCKED_NOTE } from '../components/planner/planCreationPresentation'
 import {
   plannerOptionInvalidMessage,
-  productionPlannerDetailSettingsDescription,
+  productionPlannerDetailSettingsDescriptionLines,
+  productionPlannerDetailSettingsTitle,
   productionPlannerMaxPlanStepsField,
-  productionPlannerRunningNote,
-  productionPlannerRunningTitles,
+  productionPlannerOptionsInvalidMessage,
 } from '../components/planner/productionPlannerSettingsPresentation'
+import { useBuildListPlanCreation } from '../components/planner/useBuildListPlanCreation'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type {
@@ -45,15 +43,9 @@ import type {
   TargetWeapon,
   TargetWeaponId,
 } from '../domain/models/publicTypes'
-import type {
-  PlannerInput,
-  PlannerOptions,
-  PlannerResult,
-  PlannerRunTermination,
-  PlannerWarning,
-} from '../domain/planner'
+import type { PlannerOptions, PlannerResult } from '../domain/planner'
 import { defaultIntermediateStateSelection, findBuildListTargetDuplicates } from '../domain/buildList'
-import { plannerWarningLabels, productionPlanStatusLabels, staleReasonLabels } from '../presentation/labels'
+import { productionPlanStatusLabels, staleReasonLabels } from '../presentation/labels'
 import { compareByRegistrationOrder, sortByRegistrationOrder } from '../presentation/managementListOrder'
 import {
   emptyWeaponListFilter,
@@ -67,11 +59,15 @@ import { productionPlanRepository } from '../db/repositories/productionPlanRepos
 import { useSettingsStore } from '../stores/settingsStore'
 import { buildListService } from '../services/buildList/buildListService'
 import { createBuildListCalculationContext } from '../services/buildList/createBuildListCalculationContext'
+import type { BuildListOptimizationAdoptionSource } from '../services/planner/buildListOptimizationService'
 import {
-  createPlannerCalculationContext,
-  createPlannerInput,
-} from '../services/planner/createPlannerInput'
-import { plannerResultPersistenceService } from '../services/planner/plannerResultPersistenceService'
+  createProductionPlanCreationSession,
+  type PlanCreationSession,
+} from '../services/planner/planCreationService'
+import {
+  plannerResultPersistenceService,
+  type BuildListOptimizationAdoptionInspection,
+} from '../services/planner/plannerResultPersistenceService'
 import { recommendedBuildListMaxPlanSteps } from '../services/planner/plannerRuntimeOptions'
 import {
   createProductionPlanReplanDependencies,
@@ -79,7 +75,6 @@ import {
 } from '../services/execution/productionPlanReplanDependencies'
 import {
   createProductionPlannerWorkerClient,
-  PlannerCancelledError,
   type PlannerWorkerClient,
 } from '../services/planner/plannerWorkerClient'
 
@@ -88,9 +83,38 @@ const defaultMaster = loadedMaster.ok ? loadedMaster.data : null
 
 export interface BuildListPageDependencies {
   master: MasterDataRoot
+  /**
+   * The Production Planner Worker Client of the 16.8 replan Preview. The plan
+   * creation's own Planner runs belong to its session (`createPlanCreationSession`).
+   */
   createWorkerClient(): PlannerWorkerClient
   refresh(calculationContext: CalculationContext): Promise<{ entries: BuildListEntry[]; targets: TargetWeapon[]; ownedWeapons: OwnedWeapon[] }>
-  createInput(calculationContext: CalculationContext): Promise<PlannerInput>
+  /**
+   * The plan creation boundary of 「生産計画を作成」 (`docs/PLANNER_SPEC.md` 17.2,
+   * Issue #260 PR-6C): one session per page mount, which reads and judges at
+   * every press and runs the ordinary Planner or the Build List global
+   * optimization. The page disposes it on unmount; a re-read of the page's
+   * data never recreates it.
+   */
+  createPlanCreationSession(): PlanCreationSession
+  /**
+   * The read-only adoption inspection of an `optimized` result
+   * (`docs/PLANNER_SPEC.md` 17.11): what the adoption would replace. Never
+   * write authority.
+   */
+  inspectBuildListOptimizationAdoption(
+    source: BuildListOptimizationAdoptionSource,
+    currentCalculationContext: CalculationContext,
+  ): Promise<BuildListOptimizationAdoptionInspection>
+  /**
+   * Adopts an `optimized` result in one transaction (the Entry replacements
+   * and the new Draft) and returns the stored Draft (17.11). Every refusal
+   * throws and writes nothing.
+   */
+  saveBuildListOptimizationAdoption(
+    source: BuildListOptimizationAdoptionSource,
+    currentCalculationContext: CalculationContext,
+  ): Promise<ProductionPlan>
   /**
    * Persists the ordinary Planner result as the new Draft through the atomic
    * Draft save (PLANNER_SPEC 9.2.15, Phase 6-A): the previous Draft is
@@ -156,8 +180,12 @@ function createDefaultDependencies(master: MasterDataRoot): BuildListPageDepende
     createWorkerClient: createProductionPlannerWorkerClient,
     refresh: (calculationContext) =>
       buildListService.refreshStaleness(calculationContext),
-    createInput: (calculationContext) =>
-      createPlannerInput(master, calculationContext),
+    createPlanCreationSession: () => createProductionPlanCreationSession(master),
+    inspectBuildListOptimizationAdoption: (source, currentCalculationContext) =>
+      plannerResultPersistenceService.inspectBuildListOptimizationAdoptionSave(source, currentCalculationContext),
+    // No approval: an adoption never runs beside a running Plan (17.11).
+    saveBuildListOptimizationAdoption: async (source, currentCalculationContext) =>
+      (await plannerResultPersistenceService.saveBuildListOptimizationAdoption(source, currentCalculationContext)).plan,
     // The ordinary Draft creation passes no approval, so a save point restore
     // (which only an approval can choose) never happens here.
     savePlannerResult: async (result, currentCalculationContext) => {
@@ -237,14 +265,6 @@ function parsePlannerOptions(inputs: PlannerOptionInputs): PlannerOptions | null
 interface CheckpointFeedback {
   severity: 'info' | 'error'
   message: string
-}
-
-/** A Planner run that ended without a saved Plan, typed rather than as text. */
-type PlannerNotice = 'cancelled' | 'no_plan'
-
-const plannerNoticeMessages: Record<PlannerNotice, string> = {
-  cancelled: '生産計画の作成をキャンセルしました。',
-  no_plan: '現在の入力から作成できる生産計画はありませんでした。',
 }
 
 /** The operation-specific line under the breaking-change warning (`docs/UI_FLOW.md` 16.3). */
@@ -522,32 +542,23 @@ interface BuildListPageProps { dependencies?: BuildListPageDependencies }
 export function BuildListPage({ dependencies = defaultDependencies ?? undefined }: BuildListPageProps) {
   const debugMode = useSettingsStore((state) => state.debugMode)
   const navigate = useNavigate()
-  const progressHeadingId = useId()
   const entriesHeadingId = useId()
   const [entries, setEntries] = useState<BuildListEntry[]>([])
   const [targets, setTargets] = useState<TargetWeapon[]>([])
   const [ownedWeapons, setOwnedWeapons] = useState<OwnedWeapon[]>([])
   const [loading, setLoading] = useState(dependencies !== undefined)
-  const [planning, setPlanning] = useState(false)
-  const [warnings, setWarnings] = useState<PlannerWarning[]>([])
   // `null` while the user has not edited the detail settings: the field then
   // shows the current Build List's recommended bound. Once the user edits it,
   // that input is the authority and no refresh, re-render or save replaces it
   // (UI_FLOW 10.0, Issue #130).
   const [editedOptionInputs, setEditedOptionInputs] =
     useState<PlannerOptionInputs | null>(null)
-  // A search a `PlannerOptions` bound truncated. It is held separately from
-  // `warnings` because it is the typed result, not a diagnostic message.
-  const [incompleteSearch, setIncompleteSearch] =
-    useState<PlannerRunTermination | null>(null)
   // The failure and notice sources stay separate: a load failure is never
   // shown as an empty Build List, and a Planner, selection, or remove problem
   // stays next to the control that caused it (`docs/UI_FLOW.md` 10).
   const [loadError, setLoadError] = useState<string | null>(
     dependencies ? null : 'マスターデータを読み込めません。',
   )
-  const [plannerError, setPlannerError] = useState<string | null>(null)
-  const [plannerNotice, setPlannerNotice] = useState<PlannerNotice | null>(null)
   const [checkpointFeedback, setCheckpointFeedback] = useState<CheckpointFeedback | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
   // An Entry delete that also ended the running Plan, reported at the top:
@@ -566,8 +577,18 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   // A runtime change against the running Plan (a save point restore, a refused
   // adoption) re-reads the Build List and the running Plan.
   const [loadSequence, setLoadSequence] = useState(0)
-  const clientRef = useRef<PlannerWorkerClient | null>(null)
-  const activeRequestRef = useRef<string | null>(null)
+  // 「生産計画を作成」 (`docs/PLANNER_SPEC.md` 17.2, Issue #260 PR-6C): one plan
+  // creation session per page mount, never recreated by a re-read of the page.
+  // It owns the ordinary Planner and the Build List optimization runs; the
+  // replan Preview below keeps its own state machine and Worker.
+  const planCreation = useBuildListPlanCreation({
+    dependencies: dependencies ?? null,
+    // Persistence's stored Draft (an ordinary save or an adoption) is the only
+    // navigation target, never a Worker result's Plan ID.
+    onSaved: (plan) => void navigate(`/plans/${plan.id}`),
+    onPersistedStateChanged: () => setLoadSequence((sequence) => sequence + 1),
+  })
+  const { refreshPreStart } = planCreation
   /**
    * Per-Entry serialization of intermediate state selection saves.
    *
@@ -685,8 +706,6 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     if (!dependencies) {
       return
     }
-    const client = dependencies.createWorkerClient()
-    clientRef.current = client
     const calculationContext = createBuildListCalculationContext(dependencies.master)
     void dependencies.getRunningProductionPlan().then((plan) => {
       if (active) setRunningPlan(plan === undefined ? { status: 'none' } : { status: 'running', plan })
@@ -708,95 +727,8 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     }).finally(() => { if (active) setLoading(false) })
     return () => {
       active = false
-      activeRequestRef.current = null
-      client.dispose()
-      clientRef.current = null
     }
   }, [dependencies, loadSequence])
-
-  const startPlanning = async () => {
-    if (!dependencies || !clientRef.current || plannerOptions === null) return
-    const client = clientRef.current
-    const requestId = globalThis.crypto?.randomUUID?.() ?? `planner-${Date.now()}`
-    activeRequestRef.current = requestId
-    setPlanning(true)
-    setWarnings([])
-    setPlannerNotice(null)
-    setPlannerError(null)
-    setIncompleteSearch(null)
-    try {
-      const calculationContext = createPlannerCalculationContext(
-        dependencies.master,
-        client.engineVersion,
-      )
-      const createdInput = await dependencies.createInput(calculationContext)
-      if (activeRequestRef.current !== requestId) return
-      // The Application caller is the Planner bound authority: the values
-      // the user reviewed in the detail settings are written into
-      // `PlannerInput.options` here, and neither the Worker Client nor the
-      // Worker substitutes a default of its own (PLANNER_SPEC 7.2.1).
-      const input: PlannerInput = {
-        ...createdInput,
-        options: { ...plannerOptions },
-      }
-      // The ordinary Planner run (Phase 6-A): this fresh input restores no
-      // conflict resolution, so no constrained re-search could ever start
-      // (PLANNER_SPEC 9.2.7) and the run is the whole calculation. The running
-      // state is indeterminate (UI_FLOW 10.0): the Production Planner Worker
-      // reports no progress, only a result, an error or a cancellation.
-      const result = await client.createPlan(requestId, input)
-      if (activeRequestRef.current !== requestId) return
-      setWarnings(result.warnings)
-      // `maxPlanSteps` truncated the Planner run, so its best state is a
-      // partial Planner artifact rather than a finished production plan.
-      // It is never saved and never opened: the user is told which bound was
-      // reached and asked to raise it (PLANNER_SPEC 7.2.1). The typed status
-      // decides this, never a warning message.
-      if (result.termination.status === 'incomplete') {
-        setIncompleteSearch(result.termination)
-        return
-      }
-      // Rebuilt at save time rather than reusing the Planner-start context, so
-      // the compatibility check is against current state, not the state the
-      // calculation started from (PLANNER_SPEC 9.2.15).
-      const saveCalculationContext = createPlannerCalculationContext(
-        dependencies.master,
-        client.engineVersion,
-      )
-      // The complete result is always handed over, `plan === null` included:
-      // the Persistence service alone judges whether it is persistable.
-      const savedPlan = await dependencies.savePlannerResult(
-        result,
-        saveCalculationContext,
-      )
-      if (activeRequestRef.current !== requestId) return
-      // Persistence, not the Worker result, is the success authority: the
-      // stored Plan's own id is the only navigation target, never the Worker
-      // result's Plan id, the Active Plan, or the latest Plan.
-      if (savedPlan) {
-        void navigate(`/plans/${savedPlan.id}`)
-      } else {
-        setPlannerNotice('no_plan')
-      }
-    } catch (caught: unknown) {
-      if (activeRequestRef.current !== requestId || caught instanceof PlannerCancelledError) return
-      setPlannerError(caught instanceof Error ? caught.message : '生産計画の作成に失敗しました。')
-    } finally {
-      if (activeRequestRef.current === requestId) {
-        activeRequestRef.current = null
-        setPlanning(false)
-      }
-    }
-  }
-
-  const cancelPlanning = () => {
-    const requestId = activeRequestRef.current
-    if (!requestId) return
-    activeRequestRef.current = null
-    clientRef.current?.cancelPlan(requestId)
-    setPlanning(false)
-    setPlannerNotice('cancelled')
-  }
 
   /**
    * Applies one selector change to an Entry.
@@ -811,7 +743,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
     rendered: IntermediateStateSelection,
     next: IntermediateStateSelection,
   ) => {
-    if (!dependencies || planGuard.deciding) return
+    if (!dependencies || planGuard.deciding || planCreation.busy) return
     const deps = dependencies
     const chain = checkpointSaveChainRef.current
     // The last selection known to be persisted. Only the very first change of
@@ -872,6 +804,9 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
         severity: 'info',
         message: planAbandoned ? SELECTION_UPDATED_PLAN_ABANDONED_MESSAGE : SELECTION_UPDATED_MESSAGE,
       })
+      // A Build List change on this screen drops the shown plan creation
+      // results (PLANNER_SPEC 17.9): they were calculated from the old Entry.
+      planCreation.buildListChanged()
       // The Plan the approval ended is no longer running: the running Plan
       // state, its replan entry and the Entries are re-read.
       if (planAbandoned) setLoadSequence((sequence) => sequence + 1)
@@ -884,7 +819,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   }
 
   const remove = async (id: BuildListEntryId) => {
-    if (!dependencies || planGuard.deciding) return
+    if (!dependencies || planGuard.deciding || planCreation.busy) return
     setRemoveError(null)
     setRemoveNotice(null)
     try {
@@ -900,6 +835,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
       }
       checkpointSaveChainRef.current.delete(id)
       setEntries((current) => current.filter((entry) => entry.id !== id))
+      planCreation.buildListChanged()
       if (outcome.planAbandoned) {
         setRemoveNotice(ENTRY_DELETED_PLAN_ABANDONED_MESSAGE)
         setLoadSequence((sequence) => sequence + 1)
@@ -910,15 +846,29 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
   }
 
   const loaded = !loading && loadError === null
-  // The Planner bounds the user reviews. They reach the ordinary Planner run
-  // and the replan Preview alike as `PlannerInput.options`.
+  // 「生産計画の作成」 is offered while no Plan runs and the Draft is known
+  // (`docs/UI_FLOW.md` 10.3); its pre-start judgement follows every re-read or
+  // change of the Build List. The judgement is display only: each press reads
+  // and judges again.
+  const creationOffered =
+    loaded && runningPlan.status === 'none' && (draftPlan.status === 'none' || draftPlan.status === 'draft') && entries.length > 0
+  useEffect(() => {
+    if (creationOffered) refreshPreStart()
+  }, [creationOffered, entries, refreshPreStart])
+  // The ordinary Planner bound the user reviews (U7). It reaches the ordinary
+  // Planner runs and the replan Preview as `PlannerInput.options`; the Build
+  // List optimization never reads it.
   const maxPlanStepsInvalid = plannerOptions === null
   const plannerDetailSettings = (
-    <DisclosureAccordion title="詳細設定" headingLevel="h3">
+    <DisclosureAccordion title={productionPlannerDetailSettingsTitle} headingLevel="h3">
       <Stack spacing={1.5}>
-        <Typography variant="body2" color="text.secondary">
-          {productionPlannerDetailSettingsDescription}
-        </Typography>
+        <Stack spacing={0.5}>
+          {productionPlannerDetailSettingsDescriptionLines.map((line) => (
+            <Typography variant="body2" color="text.secondary" key={line}>
+              {line}
+            </Typography>
+          ))}
+        </Stack>
         {/* One field only (Issue #103 Phase D-1): the Production scheduler's
             safety bound. Its width is capped on wide screens so the helper
             text keeps a readable line length. */}
@@ -1100,7 +1050,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
             </Alert>
             {plannerOptions === null && (
               <Alert severity="warning">
-                詳細設定に無効な値があるため、再計画を試算できません。
+                {productionPlannerOptionsInvalidMessage}
               </Alert>
             )}
             {plannerDetailSettings}
@@ -1120,103 +1070,16 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
           </PageSection>
         )}
 
-        {loaded && runningPlan.status === 'none' && (draftPlan.status === 'none' || draftPlan.status === 'draft') && entries.length > 0 && (
+        {creationOffered && masterForDisplay && (
           <PageSection title="生産計画の作成" accent>
-            <Stack
-              direction={{ xs: 'column', md: 'row' }}
-              spacing={{ xs: 1.5, md: 3 }}
-              sx={{ justifyContent: 'space-between', alignItems: { xs: 'stretch', md: 'center' } }}
-            >
-              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
-                再検索が必要な候補は生産計画に含まれません。作成に成功すると、保存された生産計画の画面へ移動します。
-                {draftPlan.status === 'draft' && (
-                  // An explanation of the existing atomic replacement
-                  // (`savePlannerResult()`), not a UI-side rule.
-                  <>
-                    {' '}
-                    新しい生産計画を保存すると、現在の未開始の生産計画は置き換えられます。
-                  </>
-                )}
-              </Typography>
-              <Button
-                variant="contained"
-                disabled={planning || plannerOptions === null}
-                onClick={() => void startPlanning()}
-                sx={{ minHeight: 44, px: 3, flexShrink: 0 }}
-              >
-                生産計画を作成
-              </Button>
-            </Stack>
-            {plannerOptions === null && (
-              <Alert severity="warning">
-                詳細設定に無効な値があるため、生産計画を作成できません。
-              </Alert>
-            )}
-            {plannerDetailSettings}
-
-            {planning && (
-              <Paper
-                component="section"
-                variant="outlined"
-                role="status"
-                aria-live="polite"
-                aria-labelledby={progressHeadingId}
-                sx={{ p: { xs: 1.5, md: 2 }, minWidth: 0 }}
-              >
-                <Stack spacing={1.5}>
-                  <Typography id={progressHeadingId} component="h3" variant="h3">
-                    {productionPlannerRunningTitles.plan}
-                  </Typography>
-                  {/* Indeterminate (UI_FLOW 10.0, Issue #103 Phase D-1): no
-                      authority knows the final Step count in advance, and
-                      `maxExpandedStates` is not a Production bound. */}
-                  <LinearProgress aria-label="生産計画の作成中" variant="indeterminate" />
-                  <Typography variant="caption" color="text.secondary">
-                    {productionPlannerRunningNote}
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    onClick={cancelPlanning}
-                    sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
-                  >
-                    キャンセル
-                  </Button>
-                </Stack>
-              </Paper>
-            )}
-
-            {incompleteSearch && (
-              <Alert severity="warning">
-                <AlertTitle>{plannerIncompleteSearchTitle}</AlertTitle>
-                <Stack spacing={0.5}>
-                  {createPlannerReachedLimitMessages(incompleteSearch).map((message) => (
-                    <Typography variant="body2" key={message}>{message}</Typography>
-                  ))}
-                  <Typography variant="body2" className="tabular-nums">
-                    {createPlannerCompletedTargetsText(incompleteSearch)}
-                  </Typography>
-                </Stack>
-              </Alert>
-            )}
-            {warnings.length > 0 && (
-              <Alert severity="warning">
-                <AlertTitle>Planner警告</AlertTitle>
-                <Box component="ul" sx={{ m: 0, pl: 2.5, display: 'grid', gap: 0.75 }}>
-                  {warnings.map((warning, index) => (
-                    <li key={`${warning.kind}:${index}`}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {plannerWarningLabels[warning.kind]}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                        {warning.message}
-                      </Typography>
-                    </li>
-                  ))}
-                </Box>
-              </Alert>
-            )}
-            {plannerNotice && <Alert severity="info">{plannerNoticeMessages[plannerNotice]}</Alert>}
-            {plannerError && <Alert severity="error">{plannerError}</Alert>}
+            <BuildListPlanCreationSection
+              controller={planCreation}
+              master={masterForDisplay}
+              debugMode={debugMode}
+              plannerOptions={plannerOptions}
+              currentDraft={draftPlan.status === 'draft' ? draftPlan.plan : null}
+              detailSettings={plannerDetailSettings}
+            />
           </PageSection>
         )}
 
@@ -1227,6 +1090,11 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
             </Typography>
             {checkpointFeedback && (
               <Alert severity={checkpointFeedback.severity}>{checkpointFeedback.message}</Alert>
+            )}
+            {planCreation.busy && (
+              <Typography variant="body2" color="text.secondary">
+                {PLAN_CREATION_BUILD_LIST_LOCKED_NOTE}
+              </Typography>
             )}
             <WeaponListFilterBar
               label="作成リストの絞り込み"
@@ -1351,7 +1219,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                         headingLevel="h4"
                         intermediateStateSelectionContext="build_list"
                         intermediateStateSelection={entrySelection(entry)}
-                        intermediateStateSelectionDisabled={planGuard.deciding}
+                        intermediateStateSelectionDisabled={planGuard.deciding || planCreation.busy}
                         onIntermediateStateSelectionChange={(next) =>
                           void changeSelection(entry, entrySelection(entry), next)
                         }
@@ -1367,7 +1235,7 @@ export function BuildListPage({ dependencies = defaultDependencies ?? undefined 
                       <Button
                         color="error"
                         variant="text"
-                        disabled={planGuard.deciding}
+                        disabled={planGuard.deciding || planCreation.busy}
                         onClick={() => void remove(entry.id)}
                         sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
                       >

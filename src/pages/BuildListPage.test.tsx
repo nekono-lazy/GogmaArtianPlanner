@@ -53,6 +53,33 @@ const BONUS_ONE = 'この途中状態を採用する: 復元ボーナス操作1�
 const SKILL_ONE = 'この途中状態を採用する: スキルリセット1回目の直後'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
 import type { ProductionPlanReplanDependencies } from '../services/execution/productionPlanReplanDependencies'
+import { createTestPlanCreationSession } from '../test/fixtures/buildListPagePlanCreation'
+import type { CalculationContext } from '../domain/models/publicTypes'
+
+/**
+ * The page's dependencies plus the fresh input every read of the plan
+ * creation session returns (Issue #260 PR-6C): the session reads it for the
+ * pre-start judgement and again at every press, with the current
+ * CalculationContext. The judgement is the ordinary Planner (one valid Entry)
+ * in these fixtures; the optimization path has its own tests.
+ */
+type TestDependencies = BuildListPageDependencies & {
+  createInput: ReturnType<typeof vi.fn<(calculationContext: CalculationContext) => Promise<PlannerInput>>>
+}
+
+function withPlanCreation(deps: Omit<TestDependencies, 'createPlanCreationSession' | 'inspectBuildListOptimizationAdoption' | 'saveBuildListOptimizationAdoption'>): TestDependencies {
+  const withSession: TestDependencies = {
+    ...deps,
+    createPlanCreationSession: () => createTestPlanCreationSession({
+      // Read lazily, so a test that replaces `createInput` or the Client is honoured.
+      createInput: () => withSession.createInput(createBuildListCalculationContext(withSession.master)),
+      createPlannerClient: () => withSession.createWorkerClient(),
+    }),
+    inspectBuildListOptimizationAdoption: vi.fn(() => Promise.reject(new Error('adoption is not expected in this test'))),
+    saveBuildListOptimizationAdoption: vi.fn(() => Promise.reject(new Error('adoption is not expected in this test'))),
+  }
+  return withSession
+}
 
 /** No Plan runs in these fixtures, so the replan runtime is never reached. */
 function unusedReplanDependencies(): ProductionPlanReplanDependencies {
@@ -95,7 +122,7 @@ function createPlannerClient(
 function dependencies(
   staleReasons: BuildListEntryStaleReason[] = [],
   client: PlannerWorkerClient = createPlannerClient(),
-): BuildListPageDependencies {
+): TestDependencies {
   const target = createValidTargetWeapon()
   const candidate = createValidBuildCandidate()
   candidate.searchStateHash = createSearchStateHash(candidate.route, createValidRngState(), [createValidNormalArtianCounter()])
@@ -103,11 +130,11 @@ function dependencies(
   entry.targetDefinitionHash = createTargetDefinitionHash(target)
   entry.isStale = staleReasons.length > 0
   entry.staleReasons = staleReasons
-  return {
+  return withPlanCreation({
     master: createValidMasterDataFixture(),
     createWorkerClient: () => client,
     refresh: vi.fn(async () => ({ entries: [entry], targets: [target], ownedWeapons: [] })),
-    createInput: vi.fn(async (calculationContext): Promise<PlannerInput> => ({
+    createInput: vi.fn(async (calculationContext: CalculationContext): Promise<PlannerInput> => ({
       rngState: createValidRngState(),
       normalCounters: [createValidNormalArtianCounter()],
       ownedWeapons: [],
@@ -134,7 +161,7 @@ function dependencies(
     getRunningProductionPlan: vi.fn(async () => undefined),
     getDraftProductionPlan: vi.fn(async () => undefined),
     replan: unusedReplanDependencies(),
-  }
+  })
 }
 
 /**
@@ -200,6 +227,17 @@ function PlanDestination() {
   return <div>Plan destination: {planId}</div>
 }
 
+
+/**
+ * The primary operation once the pre-start judgement settled (Issue #260 PR-6C): while the plan creation
+ * session judges the Build List, 「生産計画を作成」 is disabled, so a test presses it only after that.
+ */
+async function enabledCreateButton() {
+  const button = await screen.findByRole('button', { name: '生産計画を作成' })
+  await waitFor(() => expect(button).toBeEnabled())
+  return button
+}
+
 describe('BuildListPage', () => {
   it('uses the Production RNG version as the current staleness authority', () => {
     expect(createBuildListCalculationContext(createValidMasterDataFixture()).rngEngineVersion)
@@ -211,7 +249,7 @@ describe('BuildListPage', () => {
     const client = createPlannerClient()
     const deps = dependencies([], client)
     renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
     await screen.findByText(/^Plan destination:/)
 
     expect(deps.refresh).toHaveBeenCalledWith(expect.objectContaining({
@@ -245,7 +283,7 @@ describe('BuildListPage', () => {
     const client = createPlannerClient(result)
     const deps = dependencies([], client)
     renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
     await screen.findByText(/^Plan destination:/)
 
     // The complete result, never only its Plan, and never dressed up as a B8
@@ -265,7 +303,7 @@ describe('BuildListPage', () => {
     const client = createPlannerClient()
     const deps = dependencies([], client)
     renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
     await screen.findByText(/^Plan destination:/)
 
     const [plannerStartContext] = vi.mocked(deps.createInput).mock.calls[0]
@@ -288,7 +326,7 @@ describe('BuildListPage', () => {
     const deps = dependencies([], client)
     deps.savePlannerResult = vi.fn(async () => null)
     renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     expect(await screen.findByText('現在の入力から作成できる生産計画はありませんでした。')).toBeInTheDocument()
     // `plan === null` still reaches the service: only it judges the result.
@@ -306,7 +344,7 @@ describe('BuildListPage', () => {
       throw new Error('生産計画を保存できませんでした。')
     })
     renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     expect(await screen.findByText('生産計画を保存できませんでした。')).toBeInTheDocument()
     // The Worker returned a Plan, but nothing was stored, so nothing to open.
@@ -320,7 +358,7 @@ describe('BuildListPage', () => {
     const storedPlan = { ...createValidProductionPlan(), id: productionPlanId('plan.b8d2b.stored') }
     deps.savePlannerResult = vi.fn(async () => storedPlan)
     renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     expect(await screen.findByText(`Plan destination: ${storedPlan.id}`)).toBeInTheDocument()
   })
@@ -340,7 +378,7 @@ describe('BuildListPage', () => {
     ))
     deps.savePlannerResult = vi.fn(async () => stored)
     const view = renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     expect(await screen.findByText(`Plan destination: ${stored.id}`)).toBeInTheDocument()
     // Persistence is the authority: never the Worker result's Plan id, an
@@ -359,7 +397,7 @@ describe('BuildListPage', () => {
     ))
     deps.savePlannerResult = vi.fn(async () => null)
     const view = renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     expect(await screen.findByText('現在の入力から作成できる生産計画はありませんでした。'))
       .toBeInTheDocument()
@@ -373,31 +411,55 @@ describe('BuildListPage', () => {
       throw new Error('生産計画を保存できませんでした。')
     })
     const view = renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     expect(await screen.findByText('生産計画を保存できませんでした。')).toBeInTheDocument()
     expect(view.router.state.location.pathname).toBe('/build-list')
   })
 
-  it('does not navigate after the planning request was cancelled', async () => {
+  it('does not save or navigate after the planning request was cancelled, even when the Worker answers late', async () => {
+    const user = userEvent.setup()
+    let releasePlan: (result: PlannerResult) => void = () => undefined
+    const client = createPlannerClient()
+    client.createPlan = vi.fn(() => new Promise<PlannerResult>((resolve) => {
+      releasePlan = resolve
+    }))
+    const deps = dependencies([], client)
+    const view = renderPage(deps)
+    await user.click(await enabledCreateButton())
+    await user.click(await screen.findByRole('button', { name: 'キャンセル' }))
+
+    expect(await screen.findByText('生産計画の作成をキャンセルしました。')).toBeInTheDocument()
+    expect(client.cancelPlan).toHaveBeenCalledOnce()
+    // A result the Worker sends after the cancellation is never saved or opened.
+    releasePlan(createPlannerResult())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(deps.savePlannerResult).not.toHaveBeenCalled()
+    expect(view.router.state.location.pathname).toBe('/build-list')
+    expect(screen.queryByText(/^Plan destination:/)).not.toBeInTheDocument()
+  })
+
+  it('shows the save of a finished run as its own state, without a cancel that would leave a saved Draft unopened', async () => {
     const user = userEvent.setup()
     let releaseSave: () => void = () => undefined
     const savePending = new Promise<void>((resolve) => {
       releaseSave = resolve
     })
     const deps = dependencies()
+    const stored = { ...createValidProductionPlan(), id: productionPlanId('plan.saved.after.wait') }
     deps.savePlannerResult = vi.fn(async () => {
       await savePending
-      return createValidProductionPlan()
+      return stored
     })
     const view = renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
-    await user.click(await screen.findByRole('button', { name: 'キャンセル' }))
+    await user.click(await enabledCreateButton())
 
+    expect(await screen.findByText('生産計画を保存しています…')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'キャンセル' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeDisabled()
     releaseSave()
-    await screen.findByText('生産計画の作成をキャンセルしました。')
-    expect(view.router.state.location.pathname).toBe('/build-list')
-    expect(screen.queryByText(/^Plan destination:/)).not.toBeInTheDocument()
+    expect(await screen.findByText(`Plan destination: ${stored.id}`)).toBeInTheDocument()
+    expect(view.router.state.location.pathname).toBe(`/plans/${stored.id}`)
   })
 
   it('renders from Candidate Snapshot and shows stale reasons', async () => {
@@ -420,11 +482,11 @@ describe('BuildListPage', () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     renderPage(dependencies([], client))
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.click(await screen.findByRole('button', { name: '詳細設定（通常Planner用）' }))
 
     expect(await screen.findByLabelText('最大計画ステップ数')).toHaveValue(1000)
 
-    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
     await screen.findByText(/^Plan destination:/)
     // `maxPlanSteps` is the whole Production `PlannerOptions`: no Beam Search
     // oracle bound reaches the Worker request (Issue #103 Phase D-2a).
@@ -438,9 +500,12 @@ describe('BuildListPage', () => {
   it('exposes maxPlanSteps as the only Planner bound (Issue #103 Phase D-1)', async () => {
     const user = userEvent.setup()
     renderPage(dependencies())
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.click(await screen.findByRole('button', { name: '詳細設定（通常Planner用）' }))
 
-    expect(await screen.findByText(/^生産計画の作成に使う安全上限です。/)).toBeInTheDocument()
+    // U7 (UI_FLOW 10.0): the ordinary Planner's safety bound, which the global optimization does not use.
+    expect(await screen.findByText('通常Plannerで生産計画を作るときの安全上限です。')).toBeInTheDocument()
+    expect(screen.getByText('有効な候補が2件以上のときの「生産計画を作成」（全体最適化）には適用されません。全体最適化の上限はアプリが決めます。'))
+      .toBeInTheDocument()
     expect(screen.getByLabelText('最大計画ステップ数')).toHaveAccessibleDescription(
       '計画で実行する操作数の安全上限です。通常は変更不要です。上限に達して計画が完了しなかった場合は、この値を増やして再実行してください。',
     )
@@ -455,11 +520,11 @@ describe('BuildListPage', () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     renderPage(dependencies([], client))
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.click(await screen.findByRole('button', { name: '詳細設定（通常Planner用）' }))
     await user.clear(await screen.findByLabelText('最大計画ステップ数'))
     await user.type(screen.getByLabelText('最大計画ステップ数'), '20000')
 
-    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
     await screen.findByText(/^Plan destination:/)
 
     // `PlannerInput.options` is the single Planner bound authority, so the
@@ -479,7 +544,7 @@ describe('BuildListPage', () => {
       () => new Promise<PlannerResult>(() => undefined),
     )
     renderPage(dependencies([], client))
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     const status = await screen.findByRole('status', { name: '生産計画を作成しています…' })
     expect(within(status).getByRole('progressbar', { name: '生産計画の作成中' })).not.toHaveAttribute('aria-valuenow')
@@ -497,7 +562,7 @@ describe('BuildListPage', () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     renderPage(dependenciesWithOperationCounts([450, 870], client))
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.click(await screen.findByRole('button', { name: '詳細設定（通常Planner用）' }))
     expect(await screen.findByLabelText('最大計画ステップ数')).toHaveValue(1000)
     expect(screen.getByText(/既定値は登録候補の必要操作数に応じて500刻みで補正されます（最低1,000）。/)).toBeInTheDocument()
   })
@@ -511,10 +576,10 @@ describe('BuildListPage', () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     renderPage(dependenciesWithOperationCounts([300, operationCount], client))
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.click(await screen.findByRole('button', { name: '詳細設定（通常Planner用）' }))
     await waitFor(() => expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(expected))
 
-    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
     await screen.findByText(/^Plan destination:/)
     expect(vi.mocked(client.createPlan).mock.calls[0][1].options).toEqual({
       maxPlanSteps: expected,
@@ -525,7 +590,7 @@ describe('BuildListPage', () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     await renderExpanded(dependenciesWithOperationCounts([1470, 300], client))
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.click(await screen.findByRole('button', { name: '詳細設定（通常Planner用）' }))
     await waitFor(() => expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1500))
     await user.clear(screen.getByLabelText('最大計画ステップ数'))
     await user.type(screen.getByLabelText('最大計画ステップ数'), '1234')
@@ -541,7 +606,7 @@ describe('BuildListPage', () => {
     await user.click(screen.getByRole('button', { name: '既定値に戻す' }))
     expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1000)
 
-    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
     await screen.findByText(/^Plan destination:/)
     expect(vi.mocked(client.createPlan).mock.calls[0][1].options).toEqual({
       maxPlanSteps: 1000,
@@ -551,7 +616,7 @@ describe('BuildListPage', () => {
   it('resets to the recommended bound of a large Candidate, not to a fixed 1000', async () => {
     const user = userEvent.setup()
     renderPage(dependenciesWithOperationCounts([1470]))
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.click(await screen.findByRole('button', { name: '詳細設定（通常Planner用）' }))
     await waitFor(() => expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1500))
     await user.clear(screen.getByLabelText('最大計画ステップ数'))
     await user.type(screen.getByLabelText('最大計画ステップ数'), '99')
@@ -563,7 +628,7 @@ describe('BuildListPage', () => {
   it('restores the recommended bound (defaultPlannerOptions for a small Candidate) with the reset control', async () => {
     const user = userEvent.setup()
     renderPage(dependencies())
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.click(await screen.findByRole('button', { name: '詳細設定（通常Planner用）' }))
     await user.clear(await screen.findByLabelText('最大計画ステップ数'))
     await user.type(screen.getByLabelText('最大計画ステップ数'), '99')
     expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(99)
@@ -581,7 +646,7 @@ describe('BuildListPage', () => {
     const user = userEvent.setup()
     const client = createPlannerClient()
     renderPage(dependencies([], client))
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.click(await screen.findByRole('button', { name: '詳細設定（通常Planner用）' }))
     await user.clear(await screen.findByLabelText('最大計画ステップ数'))
     if (raw !== '') await user.type(screen.getByLabelText('最大計画ステップ数'), raw)
 
@@ -600,7 +665,7 @@ describe('BuildListPage', () => {
       }),
     })))
     const view = renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     expect(await screen.findByText('生産計画の探索が完了していません')).toBeInTheDocument()
     expect(screen.getByText(/最大計画ステップ数 1,000 に到達しました。/)).toBeInTheDocument()
@@ -631,7 +696,7 @@ describe('BuildListPage', () => {
       }),
     })))
     renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     await screen.findByText(/^Plan destination:/)
     expect(deps.savePlannerResult).toHaveBeenCalledOnce()
@@ -710,7 +775,7 @@ describe('BuildListPage presentation', () => {
     expect(screen.getByText('優先度 3')).toBeInTheDocument()
     expect(screen.getByText('候補 1件')).toBeInTheDocument()
     // The primary CTA is an ordinary button in the flow, never fixed or sticky.
-    expect(screen.getByRole('button', { name: '生産計画を作成' })).toBeEnabled()
+    expect(await enabledCreateButton()).toBeEnabled()
   })
 
   it('summarizes the loaded Entries for display only', async () => {
@@ -728,8 +793,8 @@ describe('BuildListPage presentation', () => {
 
   it('gives the detail settings a real heading and a wired disclosure', async () => {
     renderPage(dependencies())
-    const toggle = await screen.findByRole('button', { name: '詳細設定' })
-    const heading = screen.getByRole('heading', { level: 3, name: '詳細設定' })
+    const toggle = await screen.findByRole('button', { name: '詳細設定（通常Planner用）' })
+    const heading = screen.getByRole('heading', { level: 3, name: '詳細設定（通常Planner用）' })
     expect(heading).toContainElement(toggle)
     expect(within(toggle).queryByRole('heading')).not.toBeInTheDocument()
     const contentId = toggle.getAttribute('aria-controls')
@@ -924,7 +989,7 @@ describe('BuildListPage presentation', () => {
       }),
     )
     renderPage(dependencies([], client))
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     expect(await screen.findByRole('heading', { name: '生産計画を作成しています…' })).toBeInTheDocument()
     const bar = screen.getByRole('progressbar', { name: '生産計画の作成中' })
@@ -944,7 +1009,7 @@ describe('BuildListPage presentation', () => {
     })))
     deps.savePlannerResult = vi.fn(async () => null)
     renderPage(deps)
-    await user.click(await screen.findByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
 
     expect(await screen.findByText('再検索が必要なビルドリスト項目があります')).toBeInTheDocument()
     expect(screen.getByText('Typed warning message')).toBeInTheDocument()
@@ -1185,12 +1250,13 @@ describe('BuildListPage registration order and display filter (Issue #123)', () 
     expect(screen.getByRole('status')).toHaveTextContent('目標武器2件中 1件を表示')
     expect(screen.getByText(/絞り込みに関係なく作成リストのすべての候補を対象にします/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
     await screen.findByText(/^Plan destination:/)
-    // The input comes from the persisted state alone; the filter never reaches it.
-    expect(deps.createInput).toHaveBeenCalledOnce()
+    // The input comes from the persisted state alone; the filter never reaches it. The pre-start judgement reads it as well as
+    // the press, and the press sends its own read on.
+    expect(deps.createInput).toHaveBeenCalled()
     expect(deps.createInput).toHaveBeenCalledWith(expect.objectContaining({ rngEngineVersion: client.engineVersion }))
-    const input = await vi.mocked(deps.createInput).mock.results[0].value
+    const input = await vi.mocked(deps.createInput).mock.results.at(-1)!.value
     expect(client.createPlan).toHaveBeenCalledWith(expect.any(String), input)
   })
 
@@ -1442,12 +1508,13 @@ describe('BuildListPage collapsible Target groups (Issue #124)', () => {
     renderPage(deps)
     await screen.findByRole('button', { name: '一本目の目標' })
     if (open) await user.click(screen.getByRole('button', { name: 'すべて展開' }))
-    await user.click(screen.getByRole('button', { name: '生産計画を作成' }))
+    await user.click(await enabledCreateButton())
     await screen.findByText(/^Plan destination:/)
-    // The input comes from the persisted state alone; the open state never reaches it.
-    expect(deps.createInput).toHaveBeenCalledOnce()
+    // The input comes from the persisted state alone; the open state never reaches it. The pre-start judgement reads it as well
+    // as the press, and the press sends its own read on.
+    expect(deps.createInput).toHaveBeenCalled()
     expect(deps.createInput).toHaveBeenCalledWith(expect.objectContaining({ rngEngineVersion: client.engineVersion }))
-    const input = await vi.mocked(deps.createInput).mock.results[0].value
+    const input = await vi.mocked(deps.createInput).mock.results.at(-1)!.value
     expect(client.createPlan).toHaveBeenCalledWith(expect.any(String), input)
   })
 })

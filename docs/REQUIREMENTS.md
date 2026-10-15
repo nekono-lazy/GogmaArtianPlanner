@@ -680,9 +680,10 @@ BuildCandidateのRouteには、通常アーティア作成、巨戟化、Reset B
 
 ### 19.1 作成リストの全体最適化（標準の生産計画作成、Issue #260）
 
-実装状態: **正式仕様のみ（未実装）**。現在の画面の「生産計画を作成」は、上記の通常Plannerを1回実行する。
-本節はIssue #260の後続PRで実装し、画面の公開PRで標準操作を切り替える目標仕様であり、切替前の画面の挙動を
-表すものではない。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章、画面は[UI_FLOW.md](./UI_FLOW.md) 10.4で定める。
+実装状態: **実装済み（Issue #260 PR-6Cで作成リスト画面へ接続）**。作成リスト画面の「生産計画を作成」は、下記の作成方式の
+選択に従って通常Plannerまたは全体最適化を実行し、全体最適化の結果は未採用の試算として表示して、ユーザーが採用を確認した場合
+だけ保存する。PR-6Cの受入（レビューと実Browser確認）が確定するまで、Issue #260はCloseしない。
+意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章、画面は[UI_FLOW.md](./UI_FLOW.md) 10.4で定める。
 背景の設計記録は[PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md](./PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md)
 （PR #259）、研究はIssue #154（Global Assignment Research）である。
 

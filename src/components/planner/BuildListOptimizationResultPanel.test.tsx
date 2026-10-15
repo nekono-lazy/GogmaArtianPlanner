@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type { BuildListOptimizationResult } from '../../domain/planner/buildListOptimization'
 import type { BuildListOptimizationSessionState } from '../../services/planner/buildListOptimizationService'
-import { isOrdinaryPlannerAuxiliaryOffered, type PlanCreationSessionState } from '../../services/planner/planCreationService'
+import { isOrdinaryPlannerAuxiliaryOffered, planCreationStartContextOf, type PlanCreationSessionState } from '../../services/planner/planCreationService'
 import {
   BONUS_ONLY_TARGET_ID,
   MIXED_KEEP_TARGET_ID,
@@ -223,7 +223,7 @@ describe('BuildListOptimizationResultPanel', () => {
   it('follows the Application offer (isOrdinaryPlannerAuxiliaryOffered) when the caller connects the session state', () => {
     const snapshot = { observedDraftPlanId: null, runningPlanAbsent: true } as const
     const primaryWith = (optimization: BuildListOptimizationSessionState): PlanCreationSessionState => ({
-      primary: { status: 'build_list_optimization', runId: 1, optimization },
+      primary: { status: 'build_list_optimization', runId: 1, optimization, startContext: planCreationStartContextOf(fixture.input) },
       auxiliary: { status: 'idle' },
     })
     const cases: [string, BuildListOptimizationSessionState, boolean][] = [

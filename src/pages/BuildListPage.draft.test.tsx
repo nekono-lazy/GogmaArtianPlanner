@@ -21,6 +21,8 @@ import {
   productionPlanId,
 } from '../test/fixtures/domainData'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
+import { PLAN_CREATION_DRAFT_REPLACED_NOTE } from '../components/planner/planCreationPresentation'
+import { testPlanCreationDependencies } from '../test/fixtures/buildListPagePlanCreation'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
 
 /** No Preview is started here, so the replan runtime is never reached. */
@@ -68,7 +70,7 @@ function dependencies(options: {
     master: createValidMasterDataFixture(),
     createWorkerClient: () => unusedClient(),
     refresh: vi.fn(async () => ({ entries: options.entries === 'none' ? [] : [entry], targets: [target], ownedWeapons: [] })),
-    createInput: vi.fn(async (calculationContext): Promise<PlannerInput> => ({
+    ...testPlanCreationDependencies(createValidMasterDataFixture(), () => unusedClient(), async (calculationContext): Promise<PlannerInput> => ({
       rngState: createValidRngState(),
       normalCounters: [createValidNormalArtianCounter()],
       ownedWeapons: [],
@@ -120,14 +122,25 @@ function renderPage(deps: BuildListPageDependencies) {
 
 const CREATE = '生産計画を作成'
 const START = '現在地点から再計画を試算'
-const REPLACEMENT = '新しい生産計画を保存すると、現在の未開始の生産計画は置き換えられます。'
+const REPLACEMENT = PLAN_CREATION_DRAFT_REPLACED_NOTE
+
+
+/**
+ * The primary operation once the pre-start judgement settled (Issue #260 PR-6C): while the plan creation
+ * session judges the Build List, 「生産計画を作成」 is disabled, so a test presses it only after that.
+ */
+async function enabledCreateButton() {
+  const button = await screen.findByRole('button', { name: '生産計画を作成' })
+  await waitFor(() => expect(button).toBeEnabled())
+  return button
+}
 
 describe('BuildListPage current Draft guidance', () => {
   it('shows nothing about a Draft, and no replacement note, when none is stored', async () => {
     const deps = dependencies()
     renderPage(deps)
 
-    expect(await screen.findByRole('button', { name: CREATE })).toBeEnabled()
+    expect(await enabledCreateButton()).toBeEnabled()
     expect(deps.getDraftProductionPlan).toHaveBeenCalledOnce()
     expect(screen.queryByText('未開始の生産計画があります。')).not.toBeInTheDocument()
     expect(screen.queryByText('未開始の下書きも保存されています。')).not.toBeInTheDocument()
@@ -152,7 +165,7 @@ describe('BuildListPage current Draft guidance', () => {
   it('says the next saved Plan replaces the current Draft where the ordinary creation is offered', async () => {
     renderPage(dependencies({ draft: draftPlan() }))
 
-    expect(await screen.findByRole('button', { name: CREATE })).toBeEnabled()
+    expect(await enabledCreateButton()).toBeEnabled()
     const section = screen.getByRole('heading', { name: '生産計画の作成' }).closest('section') as HTMLElement
     expect(within(section).getByText(REPLACEMENT, { exact: false })).toBeInTheDocument()
   })
