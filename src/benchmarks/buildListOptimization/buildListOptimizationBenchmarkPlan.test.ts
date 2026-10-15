@@ -51,9 +51,21 @@ describe('Build List optimization measurement plans (Issue #260 PR-5A)', () => {
 
   it('commits the PR-5B measurement plan registered: Owner-approved on 2026-10-15, criteria registered, the Research baseline verbatim', () => {
     expect(measurement).toMatchObject({
-      planKind: 'measurement', series: 'pr5b-r1', status: 'registered', approval: { state: 'owner_approved', approvedBy: 'Owner', approvedOn: '2026-10-15' },
-      criteria: { status: 'registered' }, baseCommit: 'c501a85ef8c7b02d8bf852a3337d2a0f1fb2014f',
+      planKind: 'measurement', series: 'pr5b-r2', status: 'registered', approval: { state: 'owner_approved', approvedBy: 'Owner', approvedOn: '2026-10-15' },
+      criteria: { status: 'registered' }, baseCommit: 'ae21b9a8878fe146d01891aac100f01d9d517f00',
     })
+    // Series pr5b-r2: the Owner changed only the cancel → Worker detach bound (2,000 → 3,000 ms); every other bound is the r1 one.
+    expect(measurement.criteria.items.map(item => [item.criterionId, item.comparator, item.threshold])).toEqual([
+      ['semantic.identical', 'equals', true], ['computation.optimized', 'equals', 'optimized'], ['computation.all-targets', 'equals', true],
+      ['performance.request-to-result.median', 'at_most', 40000], ['performance.request-to-result.max', 'at_most', 60000], ['performance.main-long-task', 'at_most', 1000],
+      ['memory.worker-heap', 'at_most', 1073741824], ['memory.renderer-private', 'at_most', 2147483648], ['memory.main-retained', 'at_most', 268435456], ['memory.worker-released', 'equals', true],
+      ['cancel.trial-passed', 'equals', true], ['cancel.settle', 'at_most', 100], ['cancel.worker-gone', 'at_most', 3000], ['cancel.no-result', 'equals', true],
+      ['cancel.rerun', 'equals', true], ['cancel.rerun-identical', 'equals', true], ['lifecycle.storage-counts', 'equals', true],
+    ])
+    expect(measurement.environments[0]!.slots.filter(slot => slot.purpose === 'cancel').map(slot => slot.cancelTrigger)).toEqual([
+      { stage: 'input_check', delayMs: 100 }, { stage: 'reach_table', delayMs: 1000 }, { stage: 'assignment_search', delayMs: 100 },
+      { stage: 'route_generation', delayMs: 200 }, { stage: 'plan_verification', delayMs: 500 },
+    ])
     expect(measurement.inputs).toEqual([expect.objectContaining({ kind: 'export', fileName: 'gogma-artian-planner-backup_20260927015837.json', bytes: 19424064, sha256: 'cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b' })])
     // The baseline is the Research D-0C registration verbatim (a comparison reference, never adopted by being the baseline).
     const baseline = measurement.boundsSets.find(set => set.role === 'baseline')!
