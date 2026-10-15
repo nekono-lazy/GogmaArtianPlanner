@@ -96,9 +96,35 @@ driver・Node reference・analyzerのcommandは各計画書の手順を参照す
 
 ## 5. PR-5Aの機能確認
 
-### 5.0 r2（レビュー修正後のcode）
+### 5.0 r2（レビュー修正後のcode、現在の記録）
 
-r2の結果は、修正後のcodeと計画をcommitしたHEADで実行した後の記録commitで追記する。
+**結果: `mechanics: passed`（10 / 10 slotが期待どおり）**。公開RESULTは
+[BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_RESULT_R2.json](BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_RESULT_R2.json)
+（51,887 bytes、SHA-256 `15aa053271eaf414b3813cbdc7747d0b8a1239584226728c1d3be88e10d951e3`）。同じrawからの再導出（`--check`）は一致した。
+syntheticの機能確認であり、性能・memoryの合否やProduction定数の根拠ではない。
+
+| 項目 | 値 |
+| --- | --- |
+| measurement HEAD | `87df1b4d4d28329025b4509b10ef38b352cd7ddc`（clean。benchmark buildのprovenanceも同じcommit、`uncommittedBenchmarkCode: false`） |
+| 計画 | `docs/BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_PLAN.md`（series `pr5a-mech-r2`、`browserMode: either`、そのHEADでSHA-256 `4136bde4…`。`--validate-plan` ok。測定計画案も同じHEADで ok） |
+| 環境 | r1と同じPC、Google Chrome 154.0.8037.98 **headless**（driver記録 revision 2の `launcher.mode: headless`、各recordのuser agentも `HeadlessChrome`）。各slot前のCPU負荷7〜28% |
+| driver | `scripts/drive-build-list-optimization-browser.mjs`（SHA-256 `57c86aea…`）。raw・driver記録・Node referenceは `.local/pr5a-mech-r2/`（git-ignored） |
+| 正常系のpage | 非isolated sessionの9 slotはpage #1を再利用、isolated sessionのmemory slotはpage #2。page再生成0件（正常終了時は従来どおりの実行方式） |
+| semantic | `synthetic.open`: Browser 2 run + Node referenceが同一（`e5a5fd8c…`）。`synthetic.wide-window`: Browser 2 run + Nodeが同一（`ce4dee4f…`）。r1の値（`8b6ddbf6…` / `4a884d01…`）と異なるのは、fingerprintにStepの実行効果を加えたためである |
+| 結果分類・lifecycle | r1と同じ（optimized、unsupported、search_bound_reached、cancelled ×2、`worker_error` / `invalid_result` の失敗）。storageの件数は両sessionで変化なし |
+| キャンセル | `cancelled` までの時間 0 / 0.1 ms、結果の採用なし、再実行は完了しsemanticも一致。キャンセル → Worker targetのdetach（CDP）は777 ms / 473 ms |
+| 時間（参考） | request → 結果: `synthetic.open` 67 / 60 ms、`synthetic.wide-window` 790 / 795 ms。main threadのlong task 0件 |
+| memory（参考） | CDP Worker heap used max sampled 14,375,284 bytes（2 sample）、renderer private max sampled 74,694,656 bytes、main thread heapの結果保持 442,074 bytes、解放後のWorker bytes 0。未測定項目なし |
+
+**driverの期限超過（実Chromeでの確認、計画外）**: 同じHEAD・同じ計画で、mechanicsだけが使える `--slot-deadline-ms` を短くした確認runを2回
+行った（`.local/pr5a-mech-r2/deadline-check*`、RESULTには使わない）。
+
+- 期限1,000 ms: 各runは結果の後にpageが1秒の遅着message待ちをするので、全10 slotが `driver_deadline` になった。各slotの後に
+  そのpageを閉じて新しいpageを開き直し（page #1〜#12。各sessionの終わりのstorage読取り用を含む）、どのslotも再実行されず、rawは1件も保存されなかった
+- 期限2,000 ms: 非isolatedの9 slotはpage #1で保存され、memory slotだけが `driver_deadline` になってpage #2を閉じ、page #3を開き直した
+  （`pageRestarts` に記録）。このrawをanalyzerにかけると `mechanics: failed`、`missingSlots: ["mech.memory"]` となり、期限超過したslotを
+  成功とも後続の結果とも扱わなかった
+- 期限超過をpage lossや `search_bound_reached` とは記録せず、OOMとも判定していない
 
 ### 5.1 r1（修正前のcode、`a5858ad`）
 
@@ -135,7 +161,7 @@ syntheticの機能確認であり、性能・memoryの合否やProduction定数�
   実Workerでの非同期キャンセルを本機能確認で確かめた
 - headlessで実行した。PR-5Bの正式計測は測定計画案どおりheadedで行う
 
-自動テスト（r1時点）: `src/benchmarks/buildListOptimization/` の8 file（protocol、入力、semantic、runner、計画、解析、page、isolation）、
+自動テスト（r2時点）: `src/benchmarks/buildListOptimization/` の9 file（protocol、入力、semantic、runner、計画、解析、driver制御、page、isolation）、
 既存isolation test 2件の更新（PR-4のWorker isolation、Research P-1のbenchmark config固定）。
 
 ## 6. PR-5Bで実測を始めるための残作業
