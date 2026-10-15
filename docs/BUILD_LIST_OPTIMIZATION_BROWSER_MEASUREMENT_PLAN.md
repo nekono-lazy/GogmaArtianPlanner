@@ -45,7 +45,17 @@ Refs #260（PR-5A）。**提案（`proposed`）・Owner承認待ち（`owner_app
 3. **性能とmemory**: 区間ごとの時間、main threadのlong task、Worker heap、renderer memory、main threadが保持する結果
 4. **cancel / lifecycle**: キャンセルの即時性、結果の不採用、Worker終了、再実行、storage件数の不変、中断
 
-基準は探索上限セットごとに判定する（基準の対象を特定のセットに限るもの以外）。Ownerはすべての基準を満たすセットから定数を選ぶ。
+基準は探索上限セットごとに判定する。各基準は計画blockの `application` で適用方法を明示する:
+
+- `per_bounds_set`: 各セットの自分のrunで判定する（`scope.boundsId` はnull）
+- `common_gate`（**共通ゲート**、PR-5Bで追加）: `scope.boundsId` が名指すセットのrunで1回だけ判定し、その1つの結果を **すべてのセットの必須条件**
+  とする。キャンセル試験（`cancel.*`）がこれにあたる。キャンセル経路はboundsに依存しない同じClient / Workerのcodeなので、試験はbaseline
+  （`w0-research`）だけで行い、比較セットごとに追加のキャンセルrunは置かない。共通ゲートが失敗・未測定・未成立（`cancel_not_exercised` を含む）なら、
+  どのセットも cancel / lifecycle 軸が `passed` にならず、正式採用可能と判定されない。比較セットがstorage件数の不変だけでこの軸を通ることはない
+- 1つのセットを名指す基準は必ず共通ゲートである（計画の検証が拒否する）。特定のセットだけに黙って適用され、他のセットが判定されない基準は置けない
+
+公開RESULTは共通ゲートの結果と判定を `commonGate`（適用先のセット、証拠のセット、各基準の結果、判定）に、各セットの全基準の判定を
+`verdicts.allCriteriaPerBoundsSet` に明示する。Ownerはすべての基準を満たすセットから定数を選ぶ。
 
 ## 4. 比較する探索上限の候補
 
@@ -147,9 +157,11 @@ taskであり、Workerを変更せずに区間を分けて測れない。本計�
 | renderer private（max sampled） | memory | ≤ 2 GiB | tab全体 |
 | main threadの結果保持 | memory | ≤ 256 MiB | Previewがartifactを保持する分 |
 | Worker memoryの解放 | memory | 解放後に0 | settle時にterminateする（17.16） |
-| キャンセル → `cancelled` | cancel（w0-research） | ≤ 100 ms | Clientは同期的にキャンセルする |
-| キャンセル → Worker detach | cancel（w0-research） | ≤ 2 s | 画面は既に `cancelled`（上の基準）で、Workerの終了はCPUとmemoryを返すだけである。PR-5Aの機能確認ではCPU負荷85〜90%のheadless環境でCDPのdetachがキャンセルの0.8 s / 1.2 s後だった（§9の3） |
-| キャンセル後の結果不採用 / 再実行の完了 | cancel（w0-research） | すべて | 17.16 |
+| キャンセル試験の成立 | cancel（w0-research、共通ゲート） | すべて `cancel_passed` | 試験自身のキャンセル要求で `cancelled` になり、結果を採用せず、integrity issueが無い。キャンセルが実行されなかった試験（`cancel_not_exercised`）・未記録は未測定であり合格としない |
+| キャンセル → `cancelled` | cancel（w0-research、共通ゲート） | ≤ 100 ms | Clientは同期的にキャンセルする |
+| キャンセル → Worker detach | cancel（w0-research、共通ゲート） | ≤ 2 s | 画面は既に `cancelled`（上の基準）で、Workerの終了はCPUとmemoryを返すだけである。PR-5Aの機能確認ではCPU負荷85〜90%のheadless環境でCDPのdetachがキャンセルの0.8 s / 1.2 s後だった（§9の3） |
+| キャンセル後の結果不採用 / 再実行の完了 | cancel（w0-research、共通ゲート） | すべて | 17.16。再実行の完了は `completed` かつintegrity issue無し |
+| 再実行のsemantic一致 | cancel（w0-research、共通ゲート） | Node referenceと一致 | キャンセルは何も残さず、次のrunはキャンセルされなかったrunと同じsemanticになる。完了しなかった再実行は不一致、Node referenceが無ければ未測定 |
 | storage件数の不変 | 全run | すべて | Preview・計算は何も書かない（17.9）。database・キー・cacheの件数だけを比べ、内容の不変は証明しない |
 
 Research P-2の計測値（同じExportでResearch harnessのfirst Workerが約28 s、Worker heap max sampled約431 MB）は参考であり、上の値は
@@ -793,6 +805,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "semantic.identical",
         "axis": "semantic",
+        "application": "per_bounds_set",
         "description": "Every listed Browser run of the set completed with one semantic fingerprint, equal to the Node reference at the same HEAD.",
         "metric": "semantic_group_identical",
         "scope": {
@@ -814,6 +827,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "computation.optimized",
         "axis": "computation",
+        "application": "per_bounds_set",
         "description": "Every comparison run of the set is optimized (search_bound_reached and not_found are not accepted for an adopted set on the representative case).",
         "metric": "result_status",
         "scope": {
@@ -835,6 +849,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "computation.all-targets",
         "axis": "computation",
+        "application": "per_bounds_set",
         "description": "Every planning Target is completed in every comparison run.",
         "metric": "all_planning_targets_completed",
         "scope": {
@@ -856,6 +871,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "performance.request-to-result.median",
         "axis": "performance",
+        "application": "per_bounds_set",
         "description": "Median of request → result over the timing population of the set.",
         "metric": "request_to_terminal_ms",
         "scope": {
@@ -876,6 +892,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "performance.request-to-result.max",
         "axis": "performance",
+        "application": "per_bounds_set",
         "description": "Every run of the timing population.",
         "metric": "request_to_terminal_ms",
         "scope": {
@@ -896,6 +913,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "performance.main-long-task",
         "axis": "performance",
+        "application": "per_bounds_set",
         "description": "The longest main-thread long task between the run start and the outcome (the Client's result check included).",
         "metric": "main_long_task_max_ms",
         "scope": {
@@ -916,6 +934,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "memory.worker-heap",
         "axis": "memory",
+        "application": "per_bounds_set",
         "description": "Max sampled Worker V8 used heap (CDP Runtime.getHeapUsage every 0.5 s).",
         "metric": "worker_heap_used_max_bytes",
         "scope": {
@@ -934,6 +953,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "memory.renderer-private",
         "axis": "memory",
+        "application": "per_bounds_set",
         "description": "Max sampled private bytes of the renderer process (OS, every 1 s).",
         "metric": "renderer_private_max_bytes",
         "scope": {
@@ -952,6 +972,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "memory.main-retained",
         "axis": "memory",
+        "application": "per_bounds_set",
         "description": "Main-thread heap held after the outcome (after_outcome − before_run, performance.memory).",
         "metric": "main_heap_retained_bytes",
         "scope": {
@@ -970,6 +991,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "memory.worker-released",
         "axis": "memory",
+        "application": "per_bounds_set",
         "description": "No Worker memory is attributed after the run and the release wait (measureUserAgentSpecificMemory).",
         "metric": "worker_memory_released",
         "scope": {
@@ -986,9 +1008,29 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
         "rationale": "The Client terminates the Worker at settle (PLANNER_SPEC 17.16)."
       },
       {
+        "criterionId": "cancel.trial-passed",
+        "axis": "cancel_lifecycle",
+        "application": "common_gate",
+        "description": "Every cancel trial passed: the run ended cancelled by the trial's own cancel request, adopted no result and has no integrity issue. A trial whose cancel never ran (cancel_not_exercised) or that was not recorded is unmeasured, never a pass. A common gate: judged once on the baseline's cancel trials and required of every bounds set.",
+        "metric": "cancel_trial_passed",
+        "scope": {
+          "inputId": "real-export",
+          "boundsId": "w0-research",
+          "purposes": [
+            "cancel"
+          ]
+        },
+        "aggregate": "each",
+        "comparator": "equals",
+        "threshold": true,
+        "unit": null,
+        "rationale": "PLANNER_SPEC 17.16. The cancel path is the same Client / Worker code for every bounds set, so the trials run on the baseline only and gate every set (no set is adoptable while they failed or went unmeasured)."
+      },
+      {
         "criterionId": "cancel.settle",
         "axis": "cancel_lifecycle",
-        "description": "From the cancel request to the cancelled outcome on the main thread.",
+        "application": "common_gate",
+        "description": "From the cancel request to the cancelled outcome on the main thread. A common gate: judged once on the baseline's cancel trials and required of every bounds set.",
         "metric": "cancel_settle_ms",
         "scope": {
           "inputId": "real-export",
@@ -1006,7 +1048,8 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "cancel.worker-gone",
         "axis": "cancel_lifecycle",
-        "description": "From the cancel request to the Worker target being detached (CDP; same machine wall clock).",
+        "application": "common_gate",
+        "description": "From the cancel request to the Worker target being detached (CDP; same machine wall clock). A common gate: judged once on the baseline's cancel trials and required of every bounds set.",
         "metric": "cancel_worker_gone_ms",
         "scope": {
           "inputId": "real-export",
@@ -1024,7 +1067,8 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "cancel.no-result",
         "axis": "cancel_lifecycle",
-        "description": "A cancelled run adopts no result.",
+        "application": "common_gate",
+        "description": "A cancelled run adopts no result. A common gate: judged once on the baseline's cancel trials and required of every bounds set.",
         "metric": "cancel_no_result_adopted",
         "scope": {
           "inputId": "real-export",
@@ -1042,7 +1086,8 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "cancel.rerun",
         "axis": "cancel_lifecycle",
-        "description": "The re-run slot after the cancel trials completes.",
+        "application": "common_gate",
+        "description": "The re-run slot after the cancel trials completes (outcome completed, no integrity issue). A common gate: judged once on the baseline and required of every bounds set.",
         "metric": "cancel_rerun_completed",
         "scope": {
           "inputId": "real-export",
@@ -1058,8 +1103,28 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
         "rationale": "A new run starts from scratch after a cancel (PLANNER_SPEC 17.16)."
       },
       {
+        "criterionId": "cancel.rerun-identical",
+        "axis": "cancel_lifecycle",
+        "application": "common_gate",
+        "description": "The re-run after the cancel trials has the semantic fingerprint of the Node reference of the same input and bounds set. A re-run that did not complete is not identical; a missing Node reference leaves it unmeasured. A common gate: judged once on the baseline and required of every bounds set.",
+        "metric": "cancel_rerun_semantic_identical",
+        "scope": {
+          "inputId": "real-export",
+          "boundsId": "w0-research",
+          "purposes": [
+            "cancel"
+          ]
+        },
+        "aggregate": "each",
+        "comparator": "equals",
+        "threshold": true,
+        "unit": null,
+        "rationale": "A cancel leaves nothing behind: the next run starts from scratch and yields the same semantics as an uncancelled run (PLANNER_SPEC 17.6 / 17.16)."
+      },
+      {
         "criterionId": "lifecycle.storage-counts",
         "axis": "cancel_lifecycle",
+        "application": "per_bounds_set",
         "description": "The storage counts are unchanged by each run: the IndexedDB database count, the localStorage / sessionStorage key counts, the Cache Storage cache count and the Service Worker registration count. Counts only: a same-count content change is not detected, and an unread count is unmeasured, never unchanged.",
         "metric": "storage_counts_unchanged",
         "scope": {

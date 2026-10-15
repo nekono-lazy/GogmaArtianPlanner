@@ -79,11 +79,18 @@ describe('Build List optimization measurement plans (Issue #260 PR-5A)', () => {
   })
 
   it('refuses a plan that would let the judgement drift', () => {
-    expect(variant(measurement, plan => { plan.status = 'registered' })).toEqual(expect.arrayContaining([expect.stringMatching(/Owner-approved/), expect.stringMatching(/criteria.status must equal/)]))
-    expect(variant(measurement, plan => { plan.approval = { ...plan.approval, state: 'owner_approved' } })).toEqual(expect.arrayContaining([expect.stringMatching(/still pending/)]))
-    expect(variant(measurement, plan => { plan.status = 'registered'; plan.criteria.status = 'registered'; plan.approval = { state: 'owner_approved', approvedBy: null, approvedOn: null, note: '' } }))
+    // The approval states, from a proposed variant of the committed plan (whatever its committed status).
+    const proposed = structuredClone(measurement)
+    proposed.status = 'proposed'
+    proposed.criteria.status = 'proposed'
+    proposed.approval = { state: 'owner_approval_pending', approvedBy: null, approvedOn: null, note: '' }
+    expect(bloMeasurementPlanIssues(proposed)).toEqual([])
+    expect(variant(proposed, plan => { plan.status = 'registered' })).toEqual(expect.arrayContaining([expect.stringMatching(/Owner-approved/), expect.stringMatching(/criteria.status must equal/)]))
+    expect(variant(proposed, plan => { plan.approval = { ...plan.approval, state: 'owner_approved' } })).toEqual(expect.arrayContaining([expect.stringMatching(/still pending/)]))
+    expect(variant(proposed, plan => { plan.status = 'registered'; plan.criteria.status = 'registered'; plan.approval = { state: 'owner_approved', approvedBy: null, approvedOn: null, note: '' } }))
       .toEqual([expect.stringMatching(/names who approved it/)])
-    expect(variant(measurement, plan => { plan.status = 'registered'; plan.criteria.status = 'registered'; plan.approval = { state: 'owner_approved', approvedBy: 'owner', approvedOn: '2026-10-16', note: '' } })).toEqual([])
+    expect(variant(proposed, plan => { plan.status = 'registered'; plan.criteria.status = 'registered'; plan.approval = { state: 'owner_approved', approvedBy: 'owner', approvedOn: '2026-10-16', note: '' } })).toEqual([])
+    expect(variant(proposed, plan => { plan.criteria.status = 'registered' })).toEqual(expect.arrayContaining([expect.stringMatching(/criteria.status must equal/)]))
     expect(variant(measurement, plan => { plan.environments[0]!.slots[1]!.faultInjection = 'worker_error' })).toEqual(expect.arrayContaining([expect.stringMatching(/fault injection belongs to a lifecycle slot/)]))
     expect(variant(measurement, plan => { plan.environments[0]!.slots[12]!.origin = 'non_isolated' })).toEqual(expect.arrayContaining([expect.stringMatching(/isolated origin/)]))
     expect(variant(measurement, plan => { plan.environments[0]!.slots[3]!.cancelTrigger = null })).toEqual(expect.arrayContaining([expect.stringMatching(/cancel slot needs one/)]))
@@ -101,6 +108,33 @@ describe('Build List optimization measurement plans (Issue #260 PR-5A)', () => {
     expect(variant(measurement, plan => { plan.environments[0]!.browserMode = 'visible' as never })).toEqual(['environments[0].browserMode must be headed, headless or either.'])
     expect(variant(measurement, plan => { plan.environments[0]!.browserMode = 'headless' })).toEqual([])
     expect(variant(mechanics, plan => { plan.environments[0]!.browserMode = 'headed' })).toEqual([])
+  })
+
+  it('makes every criterion say how it applies, and a criterion naming one bounds set a common gate (PR-5B)', () => {
+    // The committed plan: the cancel trials (baseline only) are the common gate of every set; everything else is per set.
+    expect(measurement.criteria.items.map(item => [item.criterionId, item.application, item.scope.boundsId])).toEqual([
+      ['semantic.identical', 'per_bounds_set', null], ['computation.optimized', 'per_bounds_set', null], ['computation.all-targets', 'per_bounds_set', null],
+      ['performance.request-to-result.median', 'per_bounds_set', null], ['performance.request-to-result.max', 'per_bounds_set', null], ['performance.main-long-task', 'per_bounds_set', null],
+      ['memory.worker-heap', 'per_bounds_set', null], ['memory.renderer-private', 'per_bounds_set', null], ['memory.main-retained', 'per_bounds_set', null], ['memory.worker-released', 'per_bounds_set', null],
+      ['cancel.trial-passed', 'common_gate', 'w0-research'], ['cancel.settle', 'common_gate', 'w0-research'], ['cancel.worker-gone', 'common_gate', 'w0-research'],
+      ['cancel.no-result', 'common_gate', 'w0-research'], ['cancel.rerun', 'common_gate', 'w0-research'], ['cancel.rerun-identical', 'common_gate', 'w0-research'],
+      ['lifecycle.storage-counts', 'per_bounds_set', null],
+    ])
+    expect(measurement.criteria.items.find(item => item.criterionId === 'cancel.rerun-identical')).toMatchObject({ metric: 'cancel_rerun_semantic_identical', comparator: 'equals', threshold: true })
+    expect(measurement.criteria.items.find(item => item.criterionId === 'cancel.trial-passed')).toMatchObject({ metric: 'cancel_trial_passed', comparator: 'equals', threshold: true })
+    const settle = measurement.criteria.items.findIndex(item => item.criterionId === 'cancel.settle')
+    const storage = measurement.criteria.items.findIndex(item => item.criterionId === 'lifecycle.storage-counts')
+    // A criterion that names one bounds set without being a common gate would judge that set alone: refused.
+    expect(variant(measurement, plan => { plan.criteria.items[settle]!.application = 'per_bounds_set' })).toEqual([expect.stringMatching(/a criterion naming one bounds set is a common gate/)])
+    // A common gate names the set of its evidence.
+    expect(variant(measurement, plan => { plan.criteria.items[storage]!.application = 'common_gate' })).toEqual([expect.stringMatching(/a common gate names the bounds set of its evidence/)])
+    expect(variant(measurement, plan => { delete (plan.criteria.items[0] as unknown as Record<string, unknown>).application })).toEqual(['criteria.items[0].application must be per_bounds_set or common_gate.'])
+    expect(variant(measurement, plan => { plan.criteria.items[0]!.application = 'shared' as never })).toEqual(['criteria.items[0].application must be per_bounds_set or common_gate.'])
+    // A common gate on another baseline / comparison set is a valid plan; on a synthetic set it is not.
+    expect(variant(measurement, plan => { plan.criteria.items[settle]!.scope.boundsId = 'w-half' })).toEqual([])
+    expect(variant(mechanics, plan => {
+      plan.criteria.items = [{ ...structuredClone(measurement.criteria.items[settle]!), scope: { inputId: null, boundsId: plan.boundsSets[0]!.boundsId, purposes: ['cancel'] } }]
+    })).toEqual([expect.stringMatching(/a common gate reads a baseline or comparison bounds set/)])
   })
 
   it('binds a record to a slot only with the slot exactly, and never repairs one', () => {

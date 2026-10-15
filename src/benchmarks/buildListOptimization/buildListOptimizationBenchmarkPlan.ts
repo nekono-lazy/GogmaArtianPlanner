@@ -131,19 +131,31 @@ export const BLO_CRITERION_METRICS = {
   renderer_private_max_bytes: 'memory',
   main_heap_retained_bytes: 'memory',
   worker_memory_released: 'memory',
+  cancel_trial_passed: 'cancel_lifecycle',
   cancel_settle_ms: 'cancel_lifecycle',
   cancel_worker_gone_ms: 'cancel_lifecycle',
   cancel_no_result_adopted: 'cancel_lifecycle',
   cancel_rerun_completed: 'cancel_lifecycle',
+  cancel_rerun_semantic_identical: 'cancel_lifecycle',
   storage_counts_unchanged: 'cancel_lifecycle',
   no_interruption: 'cancel_lifecycle',
 } as const satisfies Record<string, BloCriterionAxis>
 export type BloCriterionMetric = keyof typeof BLO_CRITERION_METRICS
 
+/**
+ * How a criterion applies to the bounds sets (Issue #260 PR-5B):
+ * - `per_bounds_set`: judged on each measured bounds set's own runs (`scope.boundsId` is null);
+ * - `common_gate`: judged once, on the runs of the one bounds set its scope names (`scope.boundsId`, e.g. the cancel trials of the
+ *   baseline), and that one result is a required gate of every bounds set - a failed or unmeasured gate leaves no set adoptable.
+ * A criterion naming one bounds set is always a common gate, so no criterion silently applies to one set and leaves the others unjudged.
+ */
+export type BloCriterionApplication = 'per_bounds_set' | 'common_gate'
+
 /** One criterion: a metric, how it is aggregated, and a threshold (null: an observation reported without a pass / fail). */
 export interface BloCriterion {
   criterionId: string
   axis: BloCriterionAxis
+  application: BloCriterionApplication
   description: string
   metric: BloCriterionMetric
   scope: { inputId: string | null; boundsId: string | null; purposes: BloRunPurpose[] }
@@ -282,8 +294,9 @@ function slotIssues(slot: unknown, at: string, plan: Record<string, unknown>, in
  * orders of each environment are 1..n; purpose-specific options (a cancel trigger only and always in a cancel slot, memory options
  * only and always in a memory slot on the isolated origin, a fault only in a lifecycle slot); a measurement plan runs real Exports on
  * baseline / comparison bounds and no mechanics slot, a mechanics plan synthetic inputs with an expectation per slot; the semantic
- * groups name existing comparison slots of their input and bounds set and require exactly as many runs as they list; a registered
- * measurement plan is Owner-approved with registered criteria; a proposed one is still pending.
+ * groups name existing comparison slots of their input and bounds set and require exactly as many runs as they list; a criterion
+ * naming one bounds set is a common gate (`BloCriterionApplication`); a registered measurement plan is Owner-approved with registered
+ * criteria; a proposed one is still pending.
  */
 export function bloMeasurementPlanIssues(value: unknown): string[] {
   if (!isRecord(value)) return ['The plan is not an object.']
@@ -456,6 +469,13 @@ export function bloMeasurementPlanIssues(value: unknown): string[] {
       if (!isRecord(scope) || !(scope.inputId === null || inputs.has(scope.inputId as string)) || !(scope.boundsId === null || bounds.has(scope.boundsId as string))
         || !Array.isArray(scope.purposes) || !scope.purposes.every(purpose => BLO_RUN_PURPOSES.includes(purpose as BloRunPurpose))) {
         issues.push(`${at}.scope must name plan inputs / bounds sets (or null) and run purposes.`)
+      }
+      if (item.application !== 'per_bounds_set' && item.application !== 'common_gate') {
+        issues.push(`${at}.application must be per_bounds_set or common_gate.`)
+      } else if (isRecord(scope) && (item.application === 'common_gate') !== (scope.boundsId !== null)) {
+        issues.push(`${at}: a common gate names the bounds set of its evidence (scope.boundsId), and a criterion naming one bounds set is a common gate.`)
+      } else if (item.application === 'common_gate' && isRecord(scope) && bounds.get(scope.boundsId as string)?.role === 'synthetic') {
+        issues.push(`${at}: a common gate reads a baseline or comparison bounds set.`)
       }
     })
   }
