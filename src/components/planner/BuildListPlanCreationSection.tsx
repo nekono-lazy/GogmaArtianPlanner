@@ -221,6 +221,11 @@ export function BuildListPlanCreationSection({
   const descriptionId = useId()
   const invalidOptionsId = useId()
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
+  const adoptButtonRef = useRef<HTMLButtonElement>(null)
+  // Where focus returns once the change that removed its place is committed: 「この計画を採用」 after the confirmation closed, the
+  // primary operation after the result was dropped. Applied in an effect (after the commit, the Dialog's own restore included), so it
+  // depends neither on the press's focus events nor on animation frames.
+  const pendingFocusRef = useRef<'adopt' | 'primary' | null>(null)
   const refusalRef = useRef<HTMLDivElement>(null)
   const { state, preStart, adoption, adoptionRefusal, busy } = controller
   const { primary, auxiliary } = state
@@ -229,6 +234,15 @@ export function BuildListPlanCreationSection({
   useEffect(() => {
     if (adoptionRefusal !== null) refusalRef.current?.focus()
   }, [adoptionRefusal])
+
+  useEffect(() => {
+    const pending = pendingFocusRef.current
+    if (pending === null) return
+    const target = pending === 'adopt' ? adoptButtonRef.current : primaryButtonRef.current
+    if (target === null) return
+    pendingFocusRef.current = null
+    target.focus()
+  })
 
   const preparation = preStart.status === 'ready' ? preStart.preparation : null
   const selection = preparation?.kind === 'judged' ? preparation.selection : null
@@ -248,10 +262,17 @@ export function BuildListPlanCreationSection({
     }
   }
 
+  // The confirmation closed without saving: focus returns to 「この計画を採用」 explicitly. The Dialog's own restore depends on the
+  // focus events of the press (a click that does not focus a button, or a window without focus, records nothing to return to).
+  const cancelAdoption = () => {
+    pendingFocusRef.current = 'adopt'
+    controller.cancelAdoption()
+  }
+
   const discardResult = () => {
-    controller.discardResult()
     // The result the focus was in is gone: back to the operation that starts a new calculation.
-    requestAnimationFrame(() => primaryButtonRef.current?.focus())
+    pendingFocusRef.current = 'primary'
+    controller.discardResult()
   }
 
   let preStartBody: ReactNode
@@ -386,6 +407,7 @@ export function BuildListPlanCreationSection({
           tabIndex={-1}
           severity={adoptionRefusal.cause === 'save_failed' || adoptionRefusal.cause === 'unknown' ? 'error' : 'warning'}
           onClose={controller.dismissAdoptionRefusal}
+          slotProps={{ closeButton: { sx: { minWidth: 44, minHeight: 44 } } }}
         >
           <AlertTitle>{adoptionRefusal.title}</AlertTitle>
           <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
@@ -428,6 +450,7 @@ export function BuildListPlanCreationSection({
           onAdopt={controller.requestAdoption}
           actionsDisabled={adoption.status === 'saving' || auxiliaryInProgress || ordinarySaving}
           focusHeadingOnMount
+          adoptButtonRef={adoptButtonRef}
         />
       )}
       {adoption.status === 'inspecting' && (
@@ -443,7 +466,7 @@ export function BuildListPlanCreationSection({
         startContext={optimization?.startContext ?? null}
         master={master}
         submitting={adoption.status === 'saving'}
-        onCancel={controller.cancelAdoption}
+        onCancel={cancelAdoption}
         onConfirm={controller.confirmAdoption}
       />
     </Stack>
