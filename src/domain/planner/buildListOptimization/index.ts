@@ -3,7 +3,8 @@
  * Stage 0 (planning Target context), Stage A (ReachTable and reach options), Stage B / C (resource assignment,
  * coverage-gated structural candidates, materialization order and expected Route shapes), Stage D (route generation)
  * and Stage D' (the final verification by the ordinary Planner), moved from the Global Assignment Research (Issue #154),
- * which reuses it through its own adapters, and the pure artifact checks of the adoption save (Issue #260 PR-6A).
+ * which reuses it through its own adapters, the pure artifact checks of the adoption save (Issue #260 PR-6A) and the plan creation
+ * method judgement of the Build List screen (Issue #260 PR-6B1).
  *
  * Not re-exported by `src/domain/planner/index.ts`: callers import this module path.
  */
@@ -23,6 +24,7 @@ export * from './coverageTypes'
 export * from './finalVerification'
 export * from './optimizationInputScope'
 export * from './optimizeBuildList'
+export * from './planCreationMethod'
 export * from './planningContext'
 export * from './planPhysicalOperations'
 export * from './projectedRouteGeneration'

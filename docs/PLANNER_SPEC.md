@@ -8228,7 +8228,7 @@ Issue #261の後続設計で正式に定める（17.19のU4）。本節はそれ
 
 ### 17.1 位置づけと実装状態
 
-実装状態: **Domain計算（Stage 0〜D'）、専用Worker・Application接続と採用のPersistenceまで実装済み（画面からは未接続で、機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
+実装状態: **Domain計算（Stage 0〜D'）、専用Worker・Application接続、採用のPersistence、作成方式の共通判定とその開始境界まで実装済み（画面からは未接続で、機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
 （[PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md](./PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md)、
 PR #259。非normativeの設計記録）とOwnerの判断（O1〜O21、17.20）を正式仕様へ反映したものである。PR-1はProduction code、
 Worker、UI、Persistence、version定数を変更していない。
@@ -8336,6 +8336,22 @@ Worker、UI、Persistence、version定数を変更していない。
     `validation_failed`、`transaction_failed`）だけである
   - inspectの戻り値は、採用が置き換えるDraft（observed Draft ID）、置換ごとの旧Entryの改善優先（17.5で既定へ戻るもの）、変更なしの
     Target IDである（[UI_FLOW.md](./UI_FLOW.md) 10.4の採用確認の表示用）。書込みのauthorityではない
+- **実装済み（Issue #260 PR-6B1）**: 作成方式の選択（17.2、U1）のDomain共通判定と、主操作・補助操作を押した時点の開始境界（Application）を
+  置いた。どの画面もまだ呼ばない（作成リスト画面の「生産計画を作成」は従来どおり通常Plannerを呼ぶ）。
+  - Domain: `selectPlanCreationMethod(plannerInput, dependencies)`（`src/domain/planner/buildListOptimization/planCreationMethod.ts`）。返却は
+    `PlanCreationMethodSelection`（`invalid_planner_input` / `no_valid_build_list_entry` / `ordinary_planner` / `build_list_optimization` /
+    `build_list_optimization_unsupported`。どれも `validatePlannerInput()` の結果全体を保持する）。判定は `defaultPlannerOptions` の
+    options validationで行い、入力の `options` を読まない。全体最適化の開始前未対応理由は、Stage 0と同じ規則（`createBuildListOptimizationContextFromValidation()`
+    と `deriveBuildListOptimizationUnsupportedReasons()`。`runBuildListOptimization()` のStage 0も同じ関数を使う）を同じvalidationから導出する。
+    補助導線の可否は `isOrdinaryPlannerAuxiliaryOfferedForResult()` / `isOrdinaryPlannerAuxiliaryOfferedForUnsupported()`
+  - 判定を実行する場所はmain threadである。判定はEngineのsupport問い合わせだけ（予測なし）なので、main threadのProduction Engine
+    （`productionRngEngine`）で行い、Worker protocolを変えない
+  - Application: `createPlanCreationSession()` / `createProductionPlanCreationSession()`（`src/services/planner/planCreationService.ts`）。
+    押すたびに全体最適化の開始reader（PR-4、1つのread-only transaction）で実行中Plan・Draft・fresh inputを読み直し、その入力を判定し、
+    判定したその入力で通常Planner（Production Planner Workerの `createPlan()`、ユーザーの有効な `PlannerOptions` だけを設定）または
+    全体最適化（PR-4のsessionへ、読み直さずに開始する `startPrepared()`）を開始する。補助操作（`startOrdinaryPlanner()`）も読み直して判定し、
+    通常Planner自身が実行可能なら通常Plannerを実行し、主操作の結果を変えない。開始前の表示用に `inspect()`（read-only、実行のauthorityではない）を持つ。
+    何も書かず、通常Plannerの結果の保存は既存の `savePlannerResult()`、`optimized` の採用はPR-6Aの保存APIである
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
 - **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。
@@ -8395,8 +8411,10 @@ Owner決定（U1、17.2）: 作成リスト画面の生産計画の作成は主�
 
 #### 作成方式の選択（U1）
 
-実装状態: **正式仕様のみ（未実装）**。現在のmainの「生産計画を作成」は件数にかかわらず通常Plannerを1回実行する
-（[UI_FLOW.md](./UI_FLOW.md) 10.2）。本項はUI公開PRで切り替える目標仕様である。
+実装状態: **Domainの共通判定とApplicationの開始境界は実装済み（Issue #260 PR-6B1、17.1）、画面は未接続**。現在のmainの
+「生産計画を作成」は件数にかかわらず通常Plannerを1回実行する（[UI_FLOW.md](./UI_FLOW.md) 10.2）。画面の切替はUI公開PRで行う。
+下記の「名前と返却形は実装PRで確定」はPR-6B1で `selectPlanCreationMethod()` / `PlanCreationMethodSelection` と確定し、判定を実行する
+場所はmain thread（main threadのProduction Engineによるsupport問い合わせだけ）と確定した。
 
 Owner決定（U1）。作成リスト画面の生産計画の作成は主操作「生産計画を作成」1つとし、作成方式を次の判定で選ぶ。
 
@@ -9058,6 +9076,11 @@ Accordionを通常Planner用であることを明示して使い、全体最適�
   warningの照合規則）・計画・Routeは変わらない。benchmark計測のsemantic fingerprint（PR-5A）の `inputExclusions` componentは、除外Entryを
   持つ結果ではmessageを含むので、それより前のHEADで計算した値と一致しない。PR-5Bの記録はそのmeasurement HEADのcodeで導出したものであり、
   書き換えない
+- PR-6B1（作成方式の共通判定と開始境界）の確認: 前提1〜4は成り立ち、versionを変更しない。Domainの判定は `validatePlannerInput()` と
+  全体最適化のStage 0の既存規則を読むだけで、計算・保存の意味を変えない。`runBuildListOptimization()` のStage 0は未対応理由の導出を共有関数
+  （`deriveBuildListOptimizationUnsupportedReasons()`）へ切り出しただけで、返す理由・順序は変わらない。Applicationの開始境界は読み取り専用で
+  何も書かず、既存の通常Planner（`createPlan()`）と全体最適化のsession（PR-4。読み直さずに開始する `startPrepared()` を追加し、`start()` の
+  契約は変えていない）を呼ぶだけである。永続shape、Export shape、Worker protocol、探索上限、UIは変えていない
 - 標準操作の切替は、作成リストを置き換えたうえで内部Plannerを実行するものであり、内部Plannerの同じ `PlannerInput` に
   対する出力を変えない。この点で、同じ `PlannerInput` に対する内部の計算結果が変わったIssue #136 / #101 Phase 6-A
   （version 17）とは異なる。採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持ち、既存Planの

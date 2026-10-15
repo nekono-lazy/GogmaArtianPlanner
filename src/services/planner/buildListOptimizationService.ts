@@ -169,6 +169,14 @@ export interface BuildListOptimizationSession {
    * previous result. Resolves with this start's final state, or with the state that superseded it.
    */
   start(): Promise<BuildListOptimizationSessionState>
+  /**
+   * `start()` with the read replaced by a start state the caller already read through the same start reader (Issue #260 PR-6B1: the
+   * plan creation boundary judged the method over this very `plannerInput`, so the calculation runs on the input that was judged and
+   * the state is not read twice). Everything else is `start()`'s: the earlier start is cancelled and its result dropped, a running
+   * Plan is the Application's refusal, the start snapshot is kept beside the result, and a superseded start never overwrites a later
+   * one.
+   */
+  startPrepared(preparation: BuildListOptimizationStartPreparation): Promise<BuildListOptimizationSessionState>
   /** Cancels the start preparing or running (synchronously; the Worker is terminated at once). */
   cancel(): void
   /** Drops the current result (17.9: closing the Preview, leaving, a Build List change), cancelling a running start first. */
@@ -208,6 +216,81 @@ export function createBuildListOptimizationSession(
     active?.cancel()
   }
 
+  /** One start: `read` is the start reader, or the preparation the caller already read. */
+  const begin = async (read: () => Promise<BuildListOptimizationStartPreparation>): Promise<BuildListOptimizationSessionState> => {
+    if (state.status === 'disposed') return state
+    cancelActive('superseded')
+    latestRunId += 1
+    const runId = latestRunId
+    publish({ status: 'preparing', runId })
+    let preparation: BuildListOptimizationStartPreparation
+    try {
+      preparation = await read()
+    } catch (error: unknown) {
+      if (!isCurrent(runId)) return state
+      publish({
+        status: 'failed',
+        runId,
+        failure: {
+          kind: 'start_read_failed',
+          code: error instanceof RepositoryError ? error.code : 'transaction_failed',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      })
+      return state
+    }
+    if (!isCurrent(runId)) return state
+    if (preparation.status === 'running_plan_exists') {
+      publish({ status: 'completed', runId, completion: { decidedBy: 'application', result: { status: 'unsupported', reasons: [{ kind: 'running_plan_exists' }] } } })
+      return state
+    }
+    const { plannerInput, startSnapshot } = preparation
+    let current: BuildListOptimizationRunHandle
+    try {
+      client ??= dependencies.createClient()
+      current = client.run(plannerInput, {
+        onStage: (stage) => {
+          if (isCurrent(runId) && state.status === 'running') publish({ ...state, stage })
+        },
+      })
+    } catch (error: unknown) {
+      // The Client could not be created or refused the run (it starts no Worker then): the start failed, never stays
+      // `preparing`. A Client that threw is released and dropped, so the next start creates a new one.
+      const broken = client
+      client = null
+      try {
+        broken?.dispose()
+      } catch {
+        // Releasing a Client that already failed must not hide the start failure itself.
+      }
+      if (!isCurrent(runId)) return state
+      publish({ status: 'failed', runId, failure: { kind: 'worker_start_failed', message: error instanceof Error ? error.message : String(error) } })
+      return state
+    }
+    if (!isCurrent(runId)) {
+      // Superseded while the run was being started: that run is never followed.
+      current.cancel()
+      return state
+    }
+    handle = current
+    publish({ status: 'running', runId, requestId: current.requestId, stage: null, startSnapshot })
+    const outcome = await current.outcome
+    if (!isCurrent(runId)) return state
+    handle = null
+    switch (outcome.status) {
+      case 'completed':
+        publish({ status: 'completed', runId, completion: { decidedBy: 'calculation', result: outcome.result, startSnapshot } })
+        break
+      case 'failed':
+        publish({ status: 'failed', runId, failure: outcome.failure })
+        break
+      case 'cancelled':
+        publish({ status: 'cancelled', runId, reason: outcome.reason })
+        break
+    }
+    return state
+  }
+
   return {
     getState: () => state,
     subscribe: (listener) => {
@@ -216,79 +299,8 @@ export function createBuildListOptimizationSession(
         listeners.delete(listener)
       }
     },
-    start: async () => {
-      if (state.status === 'disposed') return state
-      cancelActive('superseded')
-      latestRunId += 1
-      const runId = latestRunId
-      publish({ status: 'preparing', runId })
-      let preparation: BuildListOptimizationStartPreparation
-      try {
-        preparation = await dependencies.startReader.read()
-      } catch (error: unknown) {
-        if (!isCurrent(runId)) return state
-        publish({
-          status: 'failed',
-          runId,
-          failure: {
-            kind: 'start_read_failed',
-            code: error instanceof RepositoryError ? error.code : 'transaction_failed',
-            message: error instanceof Error ? error.message : String(error),
-          },
-        })
-        return state
-      }
-      if (!isCurrent(runId)) return state
-      if (preparation.status === 'running_plan_exists') {
-        publish({ status: 'completed', runId, completion: { decidedBy: 'application', result: { status: 'unsupported', reasons: [{ kind: 'running_plan_exists' }] } } })
-        return state
-      }
-      const { plannerInput, startSnapshot } = preparation
-      let current: BuildListOptimizationRunHandle
-      try {
-        client ??= dependencies.createClient()
-        current = client.run(plannerInput, {
-          onStage: (stage) => {
-            if (isCurrent(runId) && state.status === 'running') publish({ ...state, stage })
-          },
-        })
-      } catch (error: unknown) {
-        // The Client could not be created or refused the run (it starts no Worker then): the start failed, never stays
-        // `preparing`. A Client that threw is released and dropped, so the next start creates a new one.
-        const broken = client
-        client = null
-        try {
-          broken?.dispose()
-        } catch {
-          // Releasing a Client that already failed must not hide the start failure itself.
-        }
-        if (!isCurrent(runId)) return state
-        publish({ status: 'failed', runId, failure: { kind: 'worker_start_failed', message: error instanceof Error ? error.message : String(error) } })
-        return state
-      }
-      if (!isCurrent(runId)) {
-        // Superseded while the run was being started: that run is never followed.
-        current.cancel()
-        return state
-      }
-      handle = current
-      publish({ status: 'running', runId, requestId: current.requestId, stage: null, startSnapshot })
-      const outcome = await current.outcome
-      if (!isCurrent(runId)) return state
-      handle = null
-      switch (outcome.status) {
-        case 'completed':
-          publish({ status: 'completed', runId, completion: { decidedBy: 'calculation', result: outcome.result, startSnapshot } })
-          break
-        case 'failed':
-          publish({ status: 'failed', runId, failure: outcome.failure })
-          break
-        case 'cancelled':
-          publish({ status: 'cancelled', runId, reason: outcome.reason })
-          break
-      }
-      return state
-    },
+    start: () => begin(() => dependencies.startReader.read()),
+    startPrepared: (preparation) => begin(async () => preparation),
     cancel: () => cancelActive('cancelled'),
     discard: () => {
       if (state.status === 'disposed') return

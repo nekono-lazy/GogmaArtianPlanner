@@ -11,11 +11,19 @@
  */
 import { derivePlannerPlanningTargets } from '../plannerPlanningTargets'
 import type { PlannerDependencies, PlannerInput } from '../plannerTypes'
-import { validatePlannerInput } from '../plannerValidation'
+import { validatePlannerInput, type PlannerInputValidationResult } from '../plannerValidation'
 import type { BuildListOptimizationContext, BuildListOptimizationContextResult } from './buildListOptimizationTypes'
 
 export function createBuildListOptimizationContext(plannerInput: PlannerInput, dependencies: PlannerDependencies): BuildListOptimizationContextResult {
-  const validation = validatePlannerInput(plannerInput, dependencies)
+  return createBuildListOptimizationContextFromValidation(plannerInput, validatePlannerInput(plannerInput, dependencies))
+}
+
+/**
+ * The same Stage 0 context over a `validatePlannerInput()` result of `plannerInput` the caller already holds (the plan creation
+ * method of `docs/PLANNER_SPEC.md` 17.2 judges the input once and derives the optimization's preconditions from that very
+ * validation). The rule is `createBuildListOptimizationContext()`'s; `validation` must be the validation of `plannerInput`.
+ */
+export function createBuildListOptimizationContextFromValidation(plannerInput: PlannerInput, validation: PlannerInputValidationResult): BuildListOptimizationContextResult {
   if (!validation.isValid) {
     const detail = validation.issues.map(issue => `${issue.path}: ${issue.message}`).join(' ')
     return { kind: 'unsupported_input', reason: 'invalid_planner_input', detail, validation }
