@@ -4173,9 +4173,17 @@ import-graph test). PR-5A added only the benchmark-only Production Browser measu
 `vite.benchmark.config.ts`, and `scripts/drive-` / `run-` / `analyze-build-list-optimization-*.mjs`): the Production Client over the PR-4
 measurement entry, the input built through the Import authorities and the ordinary `createPlannerInput()`, a minimized raw record
 (counts, classifications, SHA-256 semantic fingerprints; no ID, Seed, Counter or path), a committed plan read from the measured commit,
-and a post-hoc analysis keeping semantic parity, computation, performance / memory and cancel / lifecycle apart. Its PR-5B measurement plan
-(`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`) is a proposal pending Owner approval: no criterion is judged and
-`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` stays `null` until PR-5B. Persistence and the UI are not implemented, and the Build List's
+and a post-hoc analysis keeping semantic parity, computation, performance / memory and cancel / lifecycle apart. PR-5B made every
+criterion name its `application` (`per_bounds_set`, or `common_gate`: judged once on the bounds set its scope names and required of every
+set, so the baseline's cancel trials gate the comparison sets, which never pass cancel / lifecycle on their storage counts alone; a
+criterion naming one set is always a common gate), added `cancel_trial_passed` (`cancel_not_exercised` / unrecorded = unmeasured) and
+`cancel_rerun_semantic_identical` (the re-run against the Node reference), and the RESULT's `commonGate` / `verdicts.allCriteriaPerBoundsSet`
+(`c501a85`); then registered the Owner-approved plan (`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`, 2026-10-15; measurement
+HEAD `e0c176b`) and measured series `pr5b-r1` headed on the PC (`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md` 6 / 7). No bounds
+set met every criterion: `w0-research` / `w0-candidates-3` passed everything but the common gate's cancel → Worker detach (unmeasured: the
+driver closes a cancel slot about 1 s after the cancel, before the busy Worker detaches; an out-of-plan diagnostic saw about 2,015 ms),
+`w-half` was `not_found` and `w-wide` took about 112 s. So `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` stays `null` until the Owner decides
+the detach criterion and a new series measures again. Persistence and the UI are not implemented, and the Build List's
 「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.
 
