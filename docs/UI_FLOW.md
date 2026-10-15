@@ -1534,8 +1534,10 @@ Build Listは `ProductionPlanRepository.getDraftProductionPlan()` で現在の�
 
 ### 10.4 全体最適化による生産計画の作成（Issue #260、目標仕様）
 
-実装状態: **正式仕様のみ（未実装）**。現在のmainの「生産計画を作成」は10.2の通常Planner実行であり、本節の画面は
-存在しない。本節はIssue #260の画面公開PRで切り替える目標仕様である。意味論のauthorityは
+実装状態: **画面は未実装（UI部品のみ実装済み）**。現在のmainの「生産計画を作成」は10.2の通常Planner実行であり、本節の画面は
+存在しない。本節はIssue #260の画面公開PRで切り替える目標仕様である。下記の「計算中」「Preview（未採用の試算）」「結果別の表示」と
+通常Plannerの補助導線の表示は、Issue #260 PR-6B2で再利用可能なUI部品（`src/components/planner/BuildListOptimization*Panel.tsx`）として
+実装したが、作成リスト画面へは接続していない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.1）。採用確認Dialogと採用・遷移、主操作の切替は後続PRで行う。意味論のauthorityは
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章であり、本節は画面上の扱いを定める。UI componentの具体的な配置・最終的な
 文言は画面公開PRで確定する（設計案: [PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md](./PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md) §17）。
 

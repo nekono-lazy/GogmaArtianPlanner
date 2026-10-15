@@ -4233,8 +4233,20 @@ user's valid setting only when that fresh judgement still offers it; otherwise t
 (running Plan, read failure, whole-input fail closed, no valid Entry), `ordinary_planner_auxiliary_not_offered` carrying the fresh judgement (the
 unsupported input resolved, one valid Entry left) or `planner_options_invalid`, and never switches method. `startOrdinaryPlanner()` keeps its
 `isOrdinaryPlannerAuxiliaryOffered()` guard; beside a primary press that started nothing (a pre-start judgement) it judges the press the same way,
-and beside an optimization result it still runs whenever the ordinary Planner can run. No version moved. The
-UI is not implemented, and the Build List's
+and beside an optimization result it still runs whenever the ordinary Planner can run. No version moved. PR-6B2 added the reusable
+Presentation components only, which no screen mounts yet (`docs/PLANNER_SPEC.md` 17.1, `docs/UI_FLOW.md` 10.4): the running state
+(`BuildListOptimizationRunningPanel`: one `role="status"` region with heading, indeterminate progress, the stage name from
+`BuildListOptimizationStage` and cancel; the U3 30 s notice is a screen-side timer per `runKey`, cleared on end / cancel / failure / unmount,
+never sent to the Worker or Domain, never a cancel), the typed results (`BuildListOptimizationResultPanel`: `not_found` / `search_bound_reached`
+/ typed `unsupported` reasons by Target name / cancellation as a notice / Worker failure and contract violation as errors, never turned into
+unsupported or not found; the auxiliary operation only when the caller passes it from the Application offer and the result offers it by
+`isOrdinaryPlannerAuxiliaryOfferedForResult()`, never started on its own) and the unsaved Preview (`BuildListOptimizationPreviewPanel`: the
+figures from `artifact.summary`, `replacements`, `unchangedTargetWeaponIds` and the final Plan's records; the replaced Entries, Target names,
+preferences and owned weapon names only from the start-time input the caller passes, never from a later read, with no ID or guess when absent;
+the current Draft compared only under the 17.9 same-input conditions; the Plan through `ProductionPlanContent variant="unsaved_preview"`,
+which leaves the persisted view unchanged; Debug-only diagnostics; 「戻る」 calls the caller's discard and 「この計画を採用」 exists only when the
+caller passes `onAdopt`). Nothing is persisted. The adoption dialog, the adoption inspect / save / navigation and the screen connection are
+PR-6C. The screen is not switched, and the Build List's
 「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.
 
