@@ -57,7 +57,17 @@ describe('Planner Alternative Phase 3-A benchmark isolation', () => {
 
   it('passes the Search instrumentation from no Production caller', () => {
     const users = productionPaths.filter((path) => /\bonSkillReservedDepth\b|\bonGogmaReservedDepth\b|\bonGogmaReservedRuntime\b|\bonSearchRuntime\b|\binstrumentation\?\.onWorkSettled\b/.test(production[path]))
-    expect(users).toEqual(['../domain/search/alternative/plannerAlternativeSearch.ts'])
+    // Issue #260 PR-3: the one other user is the Build List optimization's Stage D, which counts the shape-constrained search's
+    // work through these observers to enforce its caller-required execution budget (`docs/PLANNER_SPEC.md` 17.13, a deterministic
+    // work bound). It hands them to the shape-constrained search only - never to Planner Alternative Search or Candidate Search -
+    // and observes no section runtime.
+    expect(users.sort()).toEqual([
+      '../domain/planner/buildListOptimization/shapeConstrainedRun.ts',
+      '../domain/search/alternative/plannerAlternativeSearch.ts',
+    ])
+    const stageD = production['../domain/planner/buildListOptimization/shapeConstrainedRun.ts']
+    expect(stageD).not.toMatch(/\bonGogmaReservedRuntime\b|\bonSearchRuntime\b|visitPlannerAlternativeCandidates|searchCandidates\(/)
+    expect(stageD).toMatch(/\{ shouldCancel, yieldControl: deps\.yieldControl, instrumentation \},\n/)
     // Issue #154 Phase 2-C2.6-A4: the section boundary observer reaches the scheduler only from the Planner Alternative
     // Search, which reads it from its optional instrumentation; every other scheduler is constructed without one.
     const runtimeUsers = productionPaths.filter((path) => /SearchRuntimeObserver/.test(production[path]))

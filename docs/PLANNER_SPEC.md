@@ -8222,7 +8222,7 @@ Issue #261の後続設計で正式に定める（17.19のU4）。本節はそれ
 
 ### 17.1 位置づけと実装状態
 
-実装状態: **Domain / Search基盤だけ実装済み（機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
+実装状態: **Domain計算（Stage 0〜D'）まで実装済み（機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
 （[PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md](./PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md)、
 PR #259。非normativeの設計記録）とOwnerの判断（O1〜O21、17.20）を正式仕様へ反映したものである。PR-1はProduction code、
 Worker、UI、Persistence、version定数を変更していない。
@@ -8236,8 +8236,23 @@ Worker、UI、Persistence、version定数を変更していない。
     runner・RESULT導出・Phase D / D'はResearchに残る
   - 形状制約付きRoute探索のProduction API（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.9、`src/domain/search/shapeConstrained/`）
   - 500刻みの切り上げ規則の共有Domain pure helper（`src/domain/planner/plannerStepBound.ts`、17.13 / 7.2.1）
-  - Stage 0〜Cの計算はProductionのどのcallerからもまだ呼ばれない。Stage D / D'（ルート生成と最終検証、結果型、identity）、
-    Worker、Application、Persistence、UIは未実装である
+- **実装済み（Issue #260 PR-3）**: Stage D（ルート生成）とStage D'（通常Plannerによる最終検証）、結果型、Production identity、
+  全体最適化専用の最大計画ステップ数の導出を、同じProduction Domain moduleへ置いた。
+  - 1回の全体最適化計算 `runBuildListOptimization(plannerInput, dependencies, bounds, execution)`（Stage 0〜D'。17.6）。結果は
+    `BuildListOptimizationResult`（17.8）とruntime-onlyのartifact（17.9 / 17.10）、キャンセルは結果ではなく
+    `{ kind: 'cancelled' }` を返す。探索範囲・探索上限（`BuildListOptimizationBounds`）はcaller必須で、既定値を持たない（17.13）
+  - Stage D: Researchの方式選択規則 `d0a2-v2`（連続形状は射影起点のCandidate Search、合わなければ形状制約付きRoute探索。
+    継続形状・非連続形状は形状制約付きRoute探索だけ）の計算をProductionへ移した（`generateStructuralCandidateRoutes()`）。
+    形状一致、探索規模予測、request組立、形状制約付きRoute探索の実行、独立Route検証、射影起点Candidateの起点再構築、
+    予測回数のcounting wrapper、Planの物理操作数の集計がその責務である。identityはProduction専用（17.12）
+  - Stage D': 置換後Build Listの組立、計画対象Target集合の再確認、`createProductionPlanWithObserver()` の実行、17.7の成立条件の
+    判定（`verifyBuildListOptimizationCandidate()`）。除外Entryとそのwarningの対応は入力validationの結果
+    （`PlannerInputValidationResult.excludedBuildListEntryWarnings`、17.7の3）から得る
+  - Research（Issue #154）の `src/benchmarks/globalAssignment/` は、移したmoduleを同じpath・同じResearch APIのthin adapterとして
+    使い、Researchのtoken・識別子（`global-assignment-*` 等）、方式選択規則 `d0a-v1`（Planner Alternative Search）、formal gate・
+    protocol・runner・RESULT導出・D-1A / D-1CのPhase D'を持ち続ける。Researchの記録・semantic値は変わらない
+  - 全体最適化の計算はProductionのどのcallerからもまだ呼ばれない。Worker、Application、Persistence（採用の保存、17.11）、
+    UIは未実装である。observed Draft IDと実行中Planが無いことの確認（17.10）はApplication接続のPRで行う
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
 - **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。
@@ -8537,6 +8552,15 @@ Stage D'  最終検証      置換後Build Listで内部Planner（createProducti
   - 共有helperは変更していない（変更すると通常Candidate Searchの走査順に触れ、計算版数の判断を伴い得るため。17.18）。
     Stage D（形状制約付きRoute探索と射影起点Candidate Search）を含む全体最適化全体のlocale非依存は、Stage Dの実装PRの
     Node（照合順序を強制したrun）とBrowser受入で確認する
+- 監査結果（PR-3、Stage D / D'を含む全体）:
+  - Stage D / D'のmodule（17.1）も `localeCompare` / `Intl` を使わず、順序はcode unit比較か数値比較である（isolation testで固定）。
+    共有helperは引き続き変更していない
+  - synthetic fixtureで、全体最適化の計算全体（`runBuildListOptimization()`）の結果のsemantic（generated Entry ID、Candidate ID、
+    `searchRunId`、Route、replacement、除外Entry、入力token、summary、Step列、warning、候補ごとの診断）が、2回の計算の間でも、
+    `localeCompare` を `da` / `cs` / `haw` へ強制した計算との間でも一致する（test）。Plan ID・Step ID・時刻はID factory / Clockの
+    値なので比較から除く
+  - 実Export（43 Target）のNode実行（非formal。Research D-0C登録条件を探索上限として明示的に渡した）でも、通常の2回と
+    `da` / `cs` / `haw` を強制した3回の計5回で結果のsemanticが一致した。PC Browserでの受入は計測PR（17.19のU2）で行う
 
 ### 17.7 最終検証の成立条件（O21）
 
@@ -8552,8 +8576,12 @@ Stage D'の結果は、次をすべて満たす場合だけ成立（`optimized`�
    `completed_target_excluded`、`calculation_context_incompatible`、`protected_weapon_required`、`rng_state_missing`、
    `rng_prediction_unsupported` などがあり得る（Stage 0で正当に除外されたEntryがあることだけでは不成立にしない）。
    除外集合に対応しないwarning（Plan生成内のruntime-unsupported retryで新たに除外されたEntry、
-   `invalid_conflict_resolution`、`max_steps_reached` など）があれば不成立。warning kindとEntry IDの対応の具体的な
-   表現は実装PRで確定する
+   `invalid_conflict_resolution`、`max_steps_reached` など）があれば不成立。warning kindとEntry IDの対応は、
+   `validatePlannerInput()` が除外Entryごとに返す `excludedBuildListEntryWarnings`（Entry IDと、そのEntryを除外したときに
+   積んだwarning）で表す（PR-3）。除外Entry集合は（Entry ID、warning kind）の組の集合として比較する。Planner結果の
+   warningは1件ずつ、最終入力の `excludedBuildListEntryWarnings` のwarning（kindとmessageの組。多重度を数える）の
+   どれかと一致しなければならず、一致しないものがあれば不成立とする（同じvalidationが生成したwarning値との一致であり、
+   messageからEntry IDを読み取らない）
 4. generated Entry・再利用Entryが1件も入力validationで除外されていない
 5. Plan生成内のTrace Replayが成立する（Plan生成が成功する。7章「Trace Replayを省略しない」）
 6. 物理操作数の恒等式: 物理操作数（`steps.length` − `confirm_owned_ideal` Step数）= Σ stream前進 = 割当の
@@ -8571,7 +8599,8 @@ Stage D'の結果は、次をすべて満たす場合だけ成立（`optimized`�
 ### 17.8 結果の分類
 
 ```ts
-// 概念型。型名・field名は実装PRで確定する
+// 概念型。実装（PR-3、src/domain/planner/buildListOptimization/buildListOptimizationResult.ts）は同じ4分類で、
+// not_found / search_bound_reached（とoptimizedのartifact）はDebug表示用のdiagnosticsも持つ
 type BuildListOptimizationResult =
   | { status: "optimized"; artifact: BuildListOptimizationArtifact }
   /** 探索上限の内側で探索を終え、成立する候補が無かった（この探索範囲では見つからない） */
@@ -8582,6 +8611,9 @@ type BuildListOptimizationResult =
 // キャンセル・Worker failureはmain threadの状態であり、Workerの結果ではない
 ```
 
+- Domain計算（PR-3）は、callerのキャンセルを結果ではなく `BuildListOptimizationRun` の `{ kind: 'cancelled' }` で返す。
+  キャンセルを `not_found` / `search_bound_reached` へ変換しない。Stage 0の前提不足は1つの `unsupported` にすべての理由を
+  まとめて返す
 - 探索上限への到達（`search_bound_reached`）と、成立する候補が無かったこと（`not_found`）を区別する。どちらも
   「解が存在しない」とは表示しない（[REQUIREMENTS.md](./REQUIREMENTS.md) 15と同じ考え方）
 - 前提違反・契約違反（恒等式の不一致、materializationの契約違反）はerrorとしてfail closedし、採用可能な結果にしない。
@@ -8638,6 +8670,10 @@ type BuildListOptimizationResult =
 | observed Draft ID | 計算開始時の現在Draft ID（無ければ `null`） | Application（main thread） |
 | 実行中Planが無いこと | 計算開始時に `active` / `stale` Planが無いこと | Application（main thread） |
 
+- Workerで確定する4項目は、Domainの純関数 `deriveBuildListOptimizationInputToken()`（PR-3）がartifactの `inputToken` として
+  導出する（`initialExecutionState` は最終Planの `baseSnapshot` の値、`targetWeaponsHash` は入力から計算して最終Planの値と
+  一致することを確かめる）。`initialExecutionState` はPlan依存Targetの状態を含むのでPlanから読み、入力だけからは作らない。
+  採用時の照合（T2）とApplication側の2項目は、採用・保存のPRで実装する（未実装）
 - tokenは作成リスト **全体** で照合する（Planner Alternative repairの「置換対象 `O` だけ」より厳しい）。全体最適化は
   全計画対象Targetを同時に割り当てるので、別Targetの追加・Entry変更・優先度変更でも割当の前提が変わるためである
 - 所持武器のstatus・名称・memoだけの変更は `initialExecutionState` の `ownedWeaponsHash`（[DATA_MODEL.md](./DATA_MODEL.md) 11.2）にも
@@ -8715,6 +8751,19 @@ type BuildListOptimizationResult =
 | 生成Entryの途中採用状態・改善優先 | 両lane未選択、`planner`（17.5） |
 | provenance | 全体最適化由来を示す永続fieldを追加しない（O13）。採用後のEntryとDraftは通常のEntry・Draftであり、`/plans` 等で区別表示しない |
 
+Production identity（PR-3、`BUILD_LIST_OPTIMIZATION_ROUTE_IDENTITY`）。どれもtokenと入力のsemanticだけから決まり、Clock・UUID・
+request ID・候補の列挙順を含まない。
+
+| 項目 | 値 |
+| --- | --- |
+| algorithm token（射影起点・形状制約付きの両方式） | `build-list-optimization-materialization:v1` |
+| route policy token（形状制約付きRoute探索） | `shape-constrained-route-policy:v1`（Production Search APIの `SHAPE_CONSTRAINED_ROUTE_POLICY_VERSION`） |
+| 射影起点Candidate Searchの `searchRunId` | `build-list-optimization-search.projected.<hash>`（起点で再構築したCandidateの `searchRunId` は `build-list-optimization-search.origin.<hash>`） |
+| 形状制約付きRoute探索のsearch identity / `searchRunId` | `build-list-optimization-search.shape.<hash>` |
+| Candidate ID | `candidate.build-list-optimization.<hash>`（射影起点）、`candidate.build-list-optimization.shape.<hash>`（形状制約付き） |
+| generated Entry ID | 上表のとおり既存規則（`build-list.constrained.<hash>`）。Candidate IDに依存しないので、同じRouteならResearchと同じEntry IDになる |
+| Candidate / Entryの `createdAt` | callerのClock（表示専用。identityに入らない） |
+
 ### 17.13 最大計画ステップ数・探索範囲・探索上限（O8〜O10、O14）
 
 **最終検証の最大計画ステップ数（O8）。**
@@ -8739,7 +8788,10 @@ optimizationMaxPlanSteps = roundUpPlannerMaxPlanSteps(requiredActions) + 500
   `src/domain/planner/plannerStepBound.ts`（`roundUpPlannerMaxPlanSteps()` / `PLANNER_MAX_PLAN_STEPS_INCREMENT`）へ移した。
   Service層（`src/services/planner/plannerRuntimeOptions.ts`）の同名APIはそれを再exportする形で残る（7.2.1）。通常Plannerの推奨値
   （`recommendedBuildListMaxPlanSteps()`）と競合解決再計算の上限（`conflictResolutionMaxPlanSteps()`）の規則と値は変えていない。
-  全体最適化専用の導出（本項の式と `+ 500`）はStage D'の実装PRで全体最適化Domainに置く（未実装）
+  全体最適化専用の導出（本項の式と `+ 500`）はIssue #260 PR-3で全体最適化Domainに置いた
+  （`deriveBuildListOptimizationMaxPlanSteps()`、`BUILD_LIST_OPTIMIZATION_MAX_PLAN_STEPS_MARGIN = 500`）。structural candidate
+  ごとに導出し、最終入力の `options` とartifactのsummary（`maxPlanSteps`）へ入れる。入力の `options.maxPlanSteps`
+  （Build List画面の値）は読まない
 - 入力が非負のsafe integerでない、計画対象Targetが0件、結果がsafe integerを超えるなどの場合は、推測した値
   （1000、20,000等）へfallbackせずfail closedする
 - ユーザーが編集できる設定にしない。永続化しない。Researchの `maxPlanSteps` 20,000をProductionの値にしない。成立しない
@@ -8764,7 +8816,9 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
 - 候補検索の推奨既定値（`recommendedCandidateSearchDefaults`）とユーザーの保存値（`AppSettings.candidateSearchDefaults`）を
   authorityにしない。候補検索の設定変更で全体最適化が黙って変わらないようにする（9.2.19.12と同じ考え方）
 - Domain APIは上限をcaller必須で受け取り、fallback・補完・clampをしない。Production adapterがWorker内で定数を渡し、
-  Worker request・Application caller・UIは持たない
+  Worker request・Application caller・UIは持たない。PR-3の `runBuildListOptimization()` は上限を `BuildListOptimizationBounds`
+  （window、node budget、lookahead、structural candidate数、最終検証の回数、Stage Dの規模gateと実行budget）として必須で
+  受け取り、正の整数でない値は `RangeError` で拒否する。Production定数（U2）はまだ無い
 - 初期版ではユーザーへ公開しない
 - 探索上限はdevice非依存の決定的なwork boundとし、wall-clock時間・heap量を成立判定に使わない
 
@@ -8842,6 +8896,10 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
   2. 形状制約付きRoute探索のProduction API化が、無指定時のSearch出力・search identityを変えない（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.9）
   3. 永続shapeを増やさない（provenanceを追加しない、17.12）
   4. 中間状態抽出の規則を変えない（17.15）
+- PR-3（Stage D / D'）の確認: 前提1〜4は成り立ち、versionを変更しない。内部Planner・通常Candidate Search・
+  Planner Alternative・形状制約付きRoute探索の計算と既存testの期待値を変えていない。`validatePlannerInput()` へ追加した
+  `excludedBuildListEntryWarnings` は既存の除外判定・warning・除外Entryを変えない戻り値fieldである。永続shape、Worker protocol、
+  中間状態抽出は変えていない。Researchのsemantic値（D-1A / D-1Cの記録）も変わらない
 - 標準操作の切替は、作成リストを置き換えたうえで内部Plannerを実行するものであり、内部Plannerの同じ `PlannerInput` に
   対する出力を変えない。この点で、同じ `PlannerInput` に対する内部の計算結果が変わったIssue #136 / #101 Phase 6-A
   （version 17）とは異なる。採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持ち、既存Planの

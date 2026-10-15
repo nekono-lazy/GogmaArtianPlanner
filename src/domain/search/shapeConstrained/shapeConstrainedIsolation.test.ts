@@ -21,6 +21,7 @@ import { SHAPE_CONSTRAINED_ROUTE_POLICY_VERSION } from './shapeConstrainedTypes'
  * - no Production module imports the Research adapter (`src/domain/search/research/`), which re-exports the very same
  *   functions and keeps its own route policy token, distinct from the Production one
  * - no calculation, persistence or RNG version moved
+ * - its one Production caller is Stage D of the Build List global optimization (Issue #260 PR-3), through the public module
  */
 
 /** Every source by repository path (Vite names glob keys relative to this file, so they are resolved first). */
@@ -52,9 +53,20 @@ describe('shape-constrained Route search: Production API boundary', () => {
     expect(productionPaths.filter((path) => /research-shape-constrained-route-policy/.test(production[path]!))).toEqual([])
   })
 
-  it('is named, outside its own module, by the public Search barrel only (its one Production caller comes with Stage D)', () => {
+  it('is named, outside its own module, by the public Search barrel and the Build List optimization Stage D only (Issue #260 PR-3)', () => {
     const callers = productionPaths.filter((path) => /visitShapeConstrainedRouteCandidates|ShapeConstrainedSearch|RouteShapeConstraint/.test(production[path]!))
-    expect(callers.filter((path) => !path.startsWith(SHAPE_CONSTRAINED_MODULE))).toEqual([])
+    // Stage D (`docs/PLANNER_SPEC.md` 17.4) is its one Production caller; no other Planner, Service, Worker or UI module names it.
+    expect(callers.filter((path) => !path.startsWith(SHAPE_CONSTRAINED_MODULE)).sort()).toEqual([
+      'src/domain/planner/buildListOptimization/routeGeneration.ts',
+      'src/domain/planner/buildListOptimization/routeGenerationTypes.ts',
+      'src/domain/planner/buildListOptimization/shapeConstrainedRequest.ts',
+      'src/domain/planner/buildListOptimization/shapeConstrainedRun.ts',
+      'src/domain/planner/buildListOptimization/shapeSearchScale.ts',
+    ])
+    // It reaches the search through its public module only, never a file inside it.
+    for (const path of productionPaths.filter((value) => value.startsWith('src/domain/planner/buildListOptimization/'))) {
+      for (const match of production[path]!.matchAll(/from '([^']*\/search\/shapeConstrained[^']*)'/g)) expect(match[1], path).toBe('../../search/shapeConstrained')
+    }
     expect(production['src/domain/search/index.ts']).toMatch(/^export \* from '\.\/shapeConstrained'$/m)
   })
 

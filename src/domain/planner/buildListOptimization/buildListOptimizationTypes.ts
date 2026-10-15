@@ -259,6 +259,14 @@ export type BuildListOptimizationInvariantCode =
   | 'window_invalid'
   /** Phase C-1: a coverage / materialization order derivation contradicted its own pre-check (design 8.2). */
   | 'coverage_invariant'
+  /** Stage D': the structural objective or the planning Target count cannot derive a final verification bound (`docs/PLANNER_SPEC.md` 17.13). */
+  | 'step_bound_invalid'
+  /** Stage D': the generated Entries do not replace the Build List through the replacement authority as Stage D promised. */
+  | 'final_input_invariant'
+  /** Stage D': a Plan meeting every other condition breaks the physical operation identities (`docs/PLANNER_SPEC.md` 17.7 item 6). */
+  | 'objective_mismatch'
+  /** A Stage's own output contradicts the next Stage's contract (a structural candidate without every planning Target, an unknown event). */
+  | 'stage_contract_violation'
 
 /**
  * An internal inconsistency (design 5.3): the scan and the Ideal judgement share one authority, so a mismatch is a bug, never a game

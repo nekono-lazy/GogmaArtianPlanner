@@ -48,7 +48,20 @@ export interface PlannerInputValidationResult extends DomainValidationResult {
   validConflictResolutions: PlannerConflictResolution[]
   validBuildListEntries: ValidatedBuildListEntry[]
   excludedBuildListEntries: ExcludedBuildListEntry[]
+  /**
+   * The typed exclusion reason of every excluded Entry, in the order of `excludedBuildListEntries`: its ID and the one warning
+   * its exclusion added to `warnings` (the same value). A caller that must tell an exclusion warning apart from any other
+   * warning (the Build List global optimization's final verification, `docs/PLANNER_SPEC.md` 17.7) reads this instead of
+   * parsing a warning message. It adds nothing to `warnings` and changes no validation.
+   */
+  excludedBuildListEntryWarnings: PlannerExcludedEntryWarning[]
   warnings: PlannerWarning[]
+}
+
+/** One excluded Entry and the warning its exclusion added (`PlannerInputValidationResult.excludedBuildListEntryWarnings`). */
+export interface PlannerExcludedEntryWarning {
+  buildListEntryId: BuildListEntry['id']
+  warning: PlannerWarning
 }
 
 function issue(
@@ -126,14 +139,18 @@ function entryWarning(
   return { kind, message: `BuildListEntry '${entry.id}' ${message}` }
 }
 
+/** Appends the Entry's warning once; returns the warning of that Entry and kind (added now or earlier). */
 function appendUniqueEntryWarning(
-  warnings: PlannerWarning[], warningKeys: Set<string>, entry: BuildListEntry,
+  warnings: PlannerWarning[], warningKeys: Map<string, PlannerWarning>, entry: BuildListEntry,
   kind: PlannerWarning['kind'], message: string,
-) {
+): PlannerWarning {
   const key = `${kind}:${entry.id}`
-  if (warningKeys.has(key)) return
-  warningKeys.add(key)
-  warnings.push(entryWarning(kind, entry, message))
+  const existing = warningKeys.get(key)
+  if (existing !== undefined) return existing
+  const warning = entryWarning(kind, entry, message)
+  warningKeys.set(key, warning)
+  warnings.push(warning)
+  return warning
 }
 
 interface EntryPredictionSupportFailure {
@@ -388,11 +405,12 @@ export function validatePlannerInput(
   const issues = [...options.issues]
   const warnings: PlannerWarning[] = []
   const validConflictResolutions: PlannerConflictResolution[] = []
-  const warningKeys = new Set<string>()
+  const warningKeys = new Map<string, PlannerWarning>()
   const supportCache: PlannerPredictionSupportCache = new Map()
   const eligibilityByEntryId = new Map<string, ReturnType<typeof currentEntryEligibility>>()
   const validBuildListEntries: ValidatedBuildListEntry[] = []
   const excludedBuildListEntries: ExcludedBuildListEntry[] = []
+  const excludedBuildListEntryWarnings: PlannerExcludedEntryWarning[] = []
 
   const entriesByStableId = [...input.buildListEntries]
     .sort((left, right) => compareStableStrings(left.id, right.id))
@@ -423,7 +441,8 @@ export function validatePlannerInput(
         return
       }
       excludedBuildListEntries.push({ entry, reason: eligibility.reason })
-      appendUniqueEntryWarning(warnings, warningKeys, entry, eligibility.warningKind, eligibility.reason)
+      const warning = appendUniqueEntryWarning(warnings, warningKeys, entry, eligibility.warningKind, eligibility.reason)
+      excludedBuildListEntryWarnings.push({ buildListEntryId: entry.id, warning: { ...warning } })
     })
 
   // Build List cardinality (`docs/DATA_MODEL.md` 9.4.1, `docs/PLANNER_SPEC.md`
@@ -532,6 +551,7 @@ export function validatePlannerInput(
     validConflictResolutions,
     validBuildListEntries,
     excludedBuildListEntries,
+    excludedBuildListEntryWarnings,
     warnings,
   }
 }

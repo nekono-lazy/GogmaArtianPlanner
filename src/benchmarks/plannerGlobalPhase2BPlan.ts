@@ -7,106 +7,25 @@
  * Counter position or be silently fast-forwarded). Nothing here feeds a Search or a Planner run.
  */
 import type { BuildListEntry, ProductionPlan, RouteOperation } from '../domain/models/publicTypes'
+import { summarizePlanPhysicalOperations as summarizePlanPhysical, type PlanPhysicalSummary as Phase2BPlanPhysical } from '../domain/planner/buildListOptimization'
 import { createPlannerRouteUnitPlans } from '../domain/planner/plannerRouteProgress'
 import type { PlannerInput } from '../domain/planner/plannerTypes'
 import type { RngEngine } from '../domain/rng/rngEngine'
 import type { GlobalResearchReport } from './plannerGlobalOptimizationResearch'
 
-export const PHYSICAL_OPERATION_TYPES = ['create_normal_artian', 'convert_normal_to_gogma', 'reset_skills', 'reset_bonuses', 'keep_bonuses'] as const
-export type PhysicalOperationType = typeof PHYSICAL_OPERATION_TYPES[number]
-/** `skill`, `gogma`, or `normal:<NormalArtianCounter id>`. */
-export type Phase2BStreamKey = string
-
-export interface Phase2BStreamRange { readonly start: number; readonly end: number; readonly advance: number }
-
-export interface Phase2BPlanPhysical {
-  readonly planSteps: number
-  /** Steps that advance exactly one Counter by one. */
-  readonly physicalOperations: number
-  /** Steps that advance no Counter (`confirm_owned_ideal`), by operation type. Not physical operations. */
-  readonly nonPhysicalSteps: Readonly<Record<string, number>>
-  readonly operationCounts: Readonly<Record<PhysicalOperationType, number>>
-  readonly streams: Readonly<Record<Phase2BStreamKey, Phase2BStreamRange & { readonly weaponTypeId: string | null }>>
-  readonly streamAdvanceSum: number
-  /** physical operations === sum of stream advances (every physical operation advances exactly one Counter by one). */
-  readonly identityHolds: boolean
-  /** Steps whose primary Target is shared with other progressed Targets. */
-  readonly sharedPhysicalSteps: number
-  /** Compact executed positions, one per physical step in Plan order: [streamIndex, position, operationTypeIndex, targetIndex]. */
-  readonly executed: { readonly streams: readonly Phase2BStreamKey[]; readonly targets: readonly string[]; readonly rows: readonly (readonly [number, number, number, number])[] }
-  readonly perTarget: Readonly<Record<string, { readonly physical: number; readonly byType: Readonly<Record<string, number>>; readonly byStream: Readonly<Record<Phase2BStreamKey, number>> }>>
-}
-
-const operationTypeIndex = (type: string) => PHYSICAL_OPERATION_TYPES.indexOf(type as PhysicalOperationType)
-
-export function streamKeyOfNormal(counterId: string): Phase2BStreamKey { return `normal:${counterId}` }
-
-/**
- * Reads the physical operations of a Plan. Stream positions are replayed from the Planner-start origin in Plan
- * order and cross-checked against each Step's own debug start Counter when present (fail closed on a mismatch).
+/*
+ * The physical summary of a finished Plan is the Production Domain's (`summarizePlanPhysicalOperations()`, the Build List global
+ * optimization's Stage D' identity, Issue #260 PR-3); this module keeps the Research names.
  */
-export function summarizePlanPhysical(plan: ProductionPlan, input: PlannerInput): Phase2BPlanPhysical {
-  const skillOrigin = input.rngState.skillCounter.value, gogmaOrigin = input.rngState.gogmaCounter.value
-  if (skillOrigin === null || gogmaOrigin === null) throw new Error('Planner origin lacks a Skill / Gogma Counter.')
-  const position = new Map<Phase2BStreamKey, number>([['skill', skillOrigin], ['gogma', gogmaOrigin]])
-  const origin = new Map(position)
-  const weaponTypeOf = new Map<Phase2BStreamKey, string | null>([['skill', null], ['gogma', null]])
-  for (const counter of input.normalCounters) {
-    if (counter.counter === null) continue
-    position.set(streamKeyOfNormal(counter.id), counter.counter)
-    origin.set(streamKeyOfNormal(counter.id), counter.counter)
-    weaponTypeOf.set(streamKeyOfNormal(counter.id), counter.weaponTypeId)
-  }
-  const operationCounts = Object.fromEntries(PHYSICAL_OPERATION_TYPES.map(type => [type, 0])) as Record<PhysicalOperationType, number>
-  const nonPhysicalSteps: Record<string, number> = {}
-  const streams: Phase2BStreamKey[] = [], targets: string[] = []
-  const rows: [number, number, number, number][] = []
-  const perTarget: Record<string, { physical: number; byType: Record<string, number>; byStream: Record<string, number> }> = {}
-  let sharedPhysicalSteps = 0
-  for (const step of plan.steps) {
-    const { skillCounterDelta: skill, gogmaCounterDelta: gogma, normalCounterDelta: normal, affectedNormalCounterId } = step.rngAdvance
-    const advanced = [skill, gogma, normal ?? 0]
-    if (advanced.every(delta => delta === 0)) {
-      if (operationTypeIndex(step.operationType) >= 0) throw new Error(`Physical operation ${step.operationType} advanced no Counter.`)
-      nonPhysicalSteps[step.operationType] = (nonPhysicalSteps[step.operationType] ?? 0) + 1
-      continue
-    }
-    if (advanced.filter(delta => delta !== 0).length !== 1 || advanced.some(delta => delta !== 0 && delta !== 1)) {
-      throw new Error(`Step ${step.id} does not advance exactly one Counter by one.`)
-    }
-    const typeIndex = operationTypeIndex(step.operationType)
-    if (typeIndex < 0) throw new Error(`Unknown physical operation ${step.operationType}.`)
-    const stream: Phase2BStreamKey = skill === 1 ? 'skill' : gogma === 1 ? 'gogma' : streamKeyOfNormal(affectedNormalCounterId ?? '')
-    const expected = (step.operationType === 'create_normal_artian' && !stream.startsWith('normal:')) ||
-      ((step.operationType === 'reset_bonuses' || step.operationType === 'keep_bonuses') && stream !== 'gogma') ||
-      ((step.operationType === 'reset_skills' || step.operationType === 'convert_normal_to_gogma') && stream !== 'skill')
-    if (expected) throw new Error(`Operation ${step.operationType} advanced ${stream}.`)
-    const at = position.get(stream)
-    if (at === undefined) throw new Error(`No Planner-start origin for stream ${stream}.`)
-    const debugStart = stream === 'skill' ? step.debug?.startSkillCounter : stream === 'gogma' ? step.debug?.startGogmaCounter : step.debug?.startNormalCounter
-    if (debugStart !== undefined && debugStart !== null && debugStart !== at) throw new Error(`Step ${step.id} debug start ${debugStart} differs from replayed ${at} (${stream}).`)
-    position.set(stream, at + 1)
-    operationCounts[step.operationType as PhysicalOperationType] += 1
-    const target = step.targetWeaponId ?? '(none)'
-    if (!streams.includes(stream)) streams.push(stream)
-    if (!targets.includes(target)) targets.push(target)
-    rows.push([streams.indexOf(stream), at, typeIndex, targets.indexOf(target)])
-    const entry = perTarget[target] ??= { physical: 0, byType: {}, byStream: {} }
-    entry.physical += 1
-    entry.byType[step.operationType] = (entry.byType[step.operationType] ?? 0) + 1
-    entry.byStream[stream] = (entry.byStream[stream] ?? 0) + 1
-    if ((step.progressedTargetWeaponIds?.length ?? 0) > 1) sharedPhysicalSteps += 1
-  }
-  const ranges: Record<Phase2BStreamKey, Phase2BStreamRange & { weaponTypeId: string | null }> = {}
-  for (const [key, end] of position) {
-    const start = origin.get(key)!
-    if (end !== start || key === 'skill' || key === 'gogma') ranges[key] = { start, end, advance: end - start, weaponTypeId: weaponTypeOf.get(key) ?? null }
-  }
-  const physicalOperations = rows.length
-  const streamAdvanceSum = Object.values(ranges).reduce((sum, range) => sum + range.advance, 0)
-  return { planSteps: plan.steps.length, physicalOperations, nonPhysicalSteps, operationCounts, streams: ranges, streamAdvanceSum,
-    identityHolds: streamAdvanceSum === physicalOperations, sharedPhysicalSteps, executed: { streams, targets, rows }, perTarget }
-}
+export {
+  physicalStreamKeyOfNormal as streamKeyOfNormal,
+  PLAN_PHYSICAL_OPERATION_TYPES as PHYSICAL_OPERATION_TYPES,
+  summarizePlanPhysicalOperations as summarizePlanPhysical,
+  type PlanPhysicalOperationType as PhysicalOperationType,
+  type PlanPhysicalStreamKey as Phase2BStreamKey,
+  type PlanPhysicalStreamRange as Phase2BStreamRange,
+  type PlanPhysicalSummary as Phase2BPlanPhysical,
+} from '../domain/planner/buildListOptimization'
 
 export interface Phase2BStreamUse {
   readonly first: number

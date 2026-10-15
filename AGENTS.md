@@ -4140,10 +4140,20 @@ foundation is implemented (PR-2): Stage 0 - C in `src/domain/planner/buildListOp
 `continuesCurrentIdealLanes`), the shape-constrained Route search as a Production Search API
 (`src/domain/search/shapeConstrained/`, Production token `shape-constrained-route-policy:v1`), and the shared
 500 rounding helper `src/domain/planner/plannerStepBound.ts` (the Service re-exports it unchanged). The Research
-files kept their paths as thin adapters and keep `a1`, their tokens and everything Research-only; no Production
-caller runs Stage 0 - C yet. Stage D / D', the Worker, Persistence and the UI are not implemented, and the Build
-List's 「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR
-switches it. Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
+files kept their paths as thin adapters and keep `a1`, their tokens and everything Research-only. PR-3 added
+Stage D (route generation: the Research rule `d0a2-v2` moved to `generateStructuralCandidateRoutes()`, with the
+shape match, scale predictions, request assembly, shape-constrained run, independent Route checks, projected
+origin rebuild and counting Engine) and Stage D' (`verifyBuildListOptimizationCandidate()`: the replaced final
+input, the planning Target recheck, `createProductionPlanWithObserver()`, the 17.7 conditions and the physical
+identity), the typed result / runtime-only artifact, the Production identity tokens
+(`BUILD_LIST_OPTIMIZATION_ROUTE_IDENTITY`; `docs/PLANNER_SPEC.md` 17.12), the derived `maxPlanSteps`
+(`deriveBuildListOptimizationMaxPlanSteps()`) and the whole calculation `runBuildListOptimization()` with
+caller-required `BuildListOptimizationBounds` (no default). `validatePlannerInput()` gained the return field
+`excludedBuildListEntryWarnings` (Entry ID + its exclusion warning) and changed nothing else. The Research
+`d0a2-v2` path now runs that Production calculation through adapters under its own tokens (records unchanged;
+`d0a-v1` stays Research). No Production caller runs it yet: the Worker, Application, Persistence and the UI are
+not implemented, and the Build List's 「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the
+Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.
 
 - Target: 「生産計画を作成」 becomes the standard whole-Build-List optimization (O1): rebuild the Route

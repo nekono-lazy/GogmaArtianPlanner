@@ -16,91 +16,49 @@
  * Phase D-0A-2b (`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` 10 / 11) added the method `shape_constrained` of the
  * rule `d0a2-v2` (`shapeMaterializationTypes.ts`): its outcomes, attempt, method selection, stage end and fail-closed
  * codes join the unions below. The rule `d0a-v1` never produces any of them, so its values are unchanged.
+ *
+ * Issue #260 PR-3: the types the rule `d0a2-v2` shares with the Build List global optimization (the projected Candidate Search's
+ * request, scale and attempt, the shape match, the continuation shapes and the fail-closed error) moved to the Production Domain
+ * (`src/domain/planner/buildListOptimization/routeGenerationTypes.ts`) and are re-exported here under their Research names. The rule
+ * `d0a-v1`'s own types (Planner Alternative Search) stay here.
  */
+import type { BuildListEntry, BuildListEntryId, TargetWeaponId } from '../../domain/models/publicTypes'
 import type {
-  BuildListEntry, BuildListEntryId, OwnedWeaponId, RouteKind, TargetWeaponId,
-} from '../../domain/models/publicTypes'
+  BuildListOptimizationMaterializationErrorCode, PredictedSearchScale, ProjectedAttempt, ProjectedRouteRequest, RouteContinuationShape,
+  RouteGenerationMethod, RouteSearchInstrumentation, SearchScaleDetail, SearchScaleGate, ShapeMatchResult, ShapeMismatch,
+} from '../../domain/planner/buildListOptimization'
 import type { PlannerAlternativeReservation, PlannerAlternativeSearchExtent } from '../../domain/search/alternative'
-import type { CandidateRouteFilter, CandidateSearchSettings } from '../../domain/search/searchTypes'
 import type { RequiredPositions } from './assignmentTypes'
 import type { ExpectedRouteShape } from './coverageTypes'
 import type { ShapeConstrainedAttempt, ShapeConstrainedOutcome, ShapeMethodSelection } from './shapeMaterializationTypes'
-import type { InclusiveRange, NormalArtianCounterId } from './types'
+
+export {
+  BuildListOptimizationMaterializationError as GlobalAssignmentMaterializationError,
+  type ConversionSkillContinuationShape,
+  type OwnedGogmaBonusContinuation,
+  type OwnedGogmaContinuationShape,
+  type PredictedSearchScale,
+  type ProjectedAttempt,
+  type ProjectedAttemptResult,
+  type ProjectedRouteRequest as ProjectedMaterializationRequest,
+  type ProjectedSearchOrigin,
+  type SearchScaleDetail,
+  type SearchScaleGate,
+  type ShapeMatchResult,
+  type ShapeMismatch,
+  type ShapeMismatchReason,
+} from '../../domain/planner/buildListOptimization'
 
 /** Design 4.5 / 9.1 / 9.2, and the D-0A-2b shape-constrained method (design D0A2 5). */
-export type MaterializationMethod = 'planner_alternative_reservation' | 'candidate_search_projected' | 'shape_constrained'
+export type MaterializationMethod = 'planner_alternative_reservation' | RouteGenerationMethod
 
-/**
- * Design 9.7: the Search scale computed from the reservation and the extent before any Search runs.
- * Research diagnostics and the gate's input only, never a formal Search work unit (G8).
- */
-export interface PredictedSearchScale {
-  /** Legal conversion Skill positions (`nextOperationPositions()` from the Skill origin); 0 for an owned Gogma. */
-  conversionPositions: number
-  /** Non-blocked positions of the Gogma extent window. */
-  gogmaLegalWidth: number
-  /** Non-blocked positions of the Skill extent window (a conversion Route's window is one position longer). */
-  skillLegalWidth: number
-  /** Own forges of the canonical held-prefix Normal creation up to the production target; 0 for an owned source. */
-  normalForgeCount: number
-}
-
-/**
- * Design 9.7 / 10.4: the caller's explicit upper bound per scale component (non-negative safe integers).
- * D-0A decides no value; D-0B pre-registers them. A request above any of them is never executed.
- */
-export interface SearchScaleGate {
-  maxConversionPositions: number
-  maxGogmaLegalWidth: number
-  maxSkillLegalWidth: number
-  maxNormalForgeCount: number
-}
-
-/** The windows and positions one scale prediction counted (diagnostics for the D-0B comparison). */
-export interface SearchScaleDetail {
-  origins: { skill: number; gogma: number; normal: { counterId: NormalArtianCounterId; position: number } | null }
-  /** The legal conversion Skill positions in ascending order (empty for an owned Gogma). */
-  conversionSkillPositions: number[]
-  /** `nextOperationPositions().beyondLimit` of the conversion walk: a legal position still lay at or beyond the extent. */
-  conversionBeyondExtent: boolean
-  /** Inclusive Skill window of the extent (`origin .. origin + M - 1`, a conversion `origin .. origin + M`). */
-  skillWindow: InclusiveRange
-  /** Inclusive Gogma window of the extent. */
-  gogmaWindow: InclusiveRange
-  /** The canonical held-prefix creation (PLANNER_SPEC 9.2.19.4) of a new Normal source, otherwise null. */
-  normalCreation: { normalCounterBefore: number; normalCounterAfter: number; count: number } | null
-}
-
-/** Design 9.2: the projected start of each stream and the restricted inventory of a projected Candidate Search. */
-export interface ProjectedSearchOrigin {
-  /** The first own Skill position of the shape, or the Planner-start Skill Counter when the shape has none. */
-  skillCounter: number
-  /** The first own Gogma position of the shape, or the Planner-start Gogma Counter when the shape has none. */
-  gogmaCounter: number
-  /** A new Normal source's Counter and its first own forge position; null for an owned source (Counters unchanged). */
-  normal: { counterId: NormalArtianCounterId; counter: number } | null
-  /** The source's Route family: `existing_gogma` for an owned Gogma, `normal_artian` for a Normal source. */
-  routeFilter: Extract<CandidateRouteFilter, 'existing_gogma' | 'normal_artian'>
-  /** The restricted inventory: the source weapon alone, or none for a new Normal. */
-  ownedWeaponIds: OwnedWeaponId[]
-  /**
-   * The Target's own preference when it names the source weapon, otherwise null: the restricted inventory
-   * holds no other weapon, and the Production validation refuses a preference outside it. Never set to a
-   * weapon the Target does not already prefer.
-   */
-  preferredOwnedWeaponId: OwnedWeaponId | null
-}
-
-interface MaterializationRequestBase {
+/** Design 4.5 / 9.1: a Planner Alternative Search under the formal reservation of the Entries materialized so far. */
+export interface PlannerAlternativeMaterializationRequest {
+  method: 'planner_alternative_reservation'
   targetWeaponId: TargetWeaponId
   shape: ExpectedRouteShape
   predictedSearchScale: PredictedSearchScale
   scaleDetail: SearchScaleDetail
-}
-
-/** Design 4.5 / 9.1: a Planner Alternative Search under the formal reservation of the Entries materialized so far. */
-export interface PlannerAlternativeMaterializationRequest extends MaterializationRequestBase {
-  method: 'planner_alternative_reservation'
   /**
    * `emptyPlannerAlternativeReservation` when no Entry precedes, otherwise exactly
    * `derivePlannerAlternativeReservation(materialized Entries)`. Never edited to steer the shape.
@@ -116,95 +74,16 @@ export interface PlannerAlternativeMaterializationRequest extends Materializatio
   searchIdentity: string
 }
 
-/** Design 4.5 / 9.2: one ordinary Candidate Search from the projected start of a continuous shape. */
-export interface ProjectedMaterializationRequest extends MaterializationRequestBase {
-  method: 'candidate_search_projected'
-  reservation: null
-  projection: ProjectedSearchOrigin
-  /** The minimal extent from the projected start (design 9.1 `extentFor` with the projected origins). */
-  extent: CandidateSearchSettings
-  /** The projected request's `searchRunId` (deterministic; the projected Candidate is rebuilt at the origin afterwards). */
-  searchRunId: string
-}
-
-export type MaterializationRequest = PlannerAlternativeMaterializationRequest | ProjectedMaterializationRequest
-
-/** Why one materialized Entry does not have the expected Route shape (design 8.3 / 9.1 `matchesExpectedShape()`). */
-export type ShapeMismatchReason =
-  | 'target'
-  /** `createPlannerRouteUnitPlans()` rejected the Route, so no required position exists to compare. */
-  | 'unit_plan_rejected'
-  | 'source'
-  /** A required unit without a Counter position (a blind creation); no expected shape has one. */
-  | 'unpositioned_required_unit'
-  | 'skill_required'
-  | 'gogma_required'
-  | 'normal_required'
-  | 'final_bonuses'
-  | 'restoration_bonus_scope'
-  | 'series_skill'
-  | 'group_skill'
-
-export interface ShapeMismatch {
-  /** 1-based delivery index of the Candidate (always 1 for a projected canonical Ideal). */
-  deliveredIndex: number
-  reasons: ShapeMismatchReason[]
-  /** The Route's required positions per stream, or null when no unit plan exists. */
-  plannerRequired: RequiredPositions | null
-  sourceOwnedWeaponId: OwnedWeaponId | null
-}
-
-export type ShapeMatchResult =
-  | { matches: true; plannerRequired: RequiredPositions }
-  | { matches: false; reasons: ShapeMismatchReason[]; plannerRequired: RequiredPositions | null }
+export type MaterializationRequest = PlannerAlternativeMaterializationRequest | ProjectedRouteRequest
 
 /**
- * Design 19.3 G1 (Phase D-0B): an expected shape the Production Search policy never returns, decided from the
- * ReachTable alone before any Search (`searchPolicyShapeOf()`). This kind - the one the a1 option set can hold - is
- * the lane-start Ideal Skill continuation of a conversion: a `conversion (c, s*)` with `c < s*` whose conversion Skill
- * at `c` is already Ideal for the Target. The Search attaches no Reset Skills channel to a Route base whose lane-start
- * Skill is Ideal (SEARCH_SPEC 5.6.1 / 5.6.8, `TargetSearchScheduler.addBase()`), so neither design 9.1 nor 9.2 can
- * deliver it. The Route is legal in the game and representable in the Domain: this is a Search policy, never a
- * mismatch, an extent or delivery stop, a gate, a missing window or "no Route". Its fields and serialization are the
- * D-0B ones.
+ * Design 19.3 G1 (Phase D-0B) and A-2 G2: an expected shape the Production Search policy never returns, decided from the ReachTable
+ * alone before any Search (`searchPolicyShapeOf()`): the lane-start Ideal Skill continuation of a conversion, and the owned-Gogma
+ * current-Ideal lane continuation. The Route is legal in the game and representable in the Domain: this is a Search policy, never a
+ * mismatch, an extent or delivery stop, a gate, a missing window or "no Route". `not_executed(search_policy_shape)` under `d0a-v1`,
+ * a continuation shape under `d0a2-v2` (the Production continuation shapes).
  */
-export interface ConversionSkillContinuationShape {
-  policy: 'lane_start_ideal_skill_continuation'
-  stream: 'skill'
-  /** `c`: the conversion position, whose conversion Skill is already Ideal. */
-  conversionPosition: number
-  /** `s*`: the last Reset Skills position of the shape (`c < s*`). */
-  finalPosition: number
-}
-
-/** A-2 G2 B1 / B2: the amendment an owned Gogma's current-Ideal `gogma_artian` Bonus lane continues with. */
-export interface OwnedGogmaBonusContinuation {
-  requirement: 'reset' | 'keep_from_source' | 'reset_then_keep'
-  /** `g1` of a `reset_then_keep`, otherwise null. */
-  resetPosition: number | null
-  /** `g*`: the last Bonus operation. */
-  finalPosition: number
-}
-
-/**
- * A-2 G2 (audit 3.3 / 4): an owned Gogma whose current state - the lane start of its Route base - is already Ideal on a
- * lane, and whose option still operates that lane: S2 (`reset_skills` on current Ideal Skills) and / or B1 / B2 (an
- * amendment on current Ideal `gogma_artian` bonuses). Only the a2 option set lists it. The Production Search opens no
- * channel on an Ideal lane start (`addBase()`), so it is a Search-policy shape exactly like G1; each continued lane is
- * recorded on its own (the other one is null), and under a2 at most one of them is set (a source Ideal on both axes keeps
- * `none / none`, G4-iii).
- */
-export interface OwnedGogmaContinuationShape {
-  policy: 'lane_start_ideal_owned_gogma_continuation'
-  ownedWeaponId: OwnedWeaponId
-  /** S2: the last Reset Skills position when the current Skills are Ideal and the option resets them, otherwise null. */
-  skill: { finalPosition: number } | null
-  /** B1 / B2: the amendment when the current Bonuses are Ideal and the option amends them, otherwise null. */
-  bonus: OwnedGogmaBonusContinuation | null
-}
-
-/** Every Search-policy shape (G1, and G2 under a2): `not_executed(search_policy_shape)` under `d0a-v1`, a continuation shape under `d0a2-v2`. */
-export type SearchPolicyShape = ConversionSkillContinuationShape | OwnedGogmaContinuationShape
+export type SearchPolicyShape = RouteContinuationShape
 
 /**
  * Design 4.5 / 9.6. Only `shape_mismatch` is "a Search ran to its explicit end without the shape"; every
@@ -256,18 +135,7 @@ export interface ObservedPlannerAlternativeSearch {
   stoppedByConsumer: boolean
   /** Distinct conversion Skill positions of the delivered Candidates, ascending. */
   deliveredConversionSkillPositions: number[]
-  instrumentation: {
-    workSettled: number
-    skillStreams: number
-    skillDepths: number
-    skillStates: number
-    maxSkillStatesPerDepth: number
-    skillTransitions: number
-    gogmaStreams: number
-    gogmaDepths: number
-    gogmaGeneratedStates: number
-    maxGogmaFrontierStates: number
-  }
+  instrumentation: RouteSearchInstrumentation
 }
 
 export interface PlannerAlternativeAttempt {
@@ -276,27 +144,6 @@ export interface PlannerAlternativeAttempt {
   outcome: MaterializationOutcome
   /** Null when the Search did not run (gate) or did not finish (cancel). */
   observed: ObservedPlannerAlternativeSearch | null
-}
-
-/**
- * One projected Candidate Search. It never decides the Target outcome on its own (design 9.2): a non-match is
- * this method's limit, not evidence about the shape, so it only switches to (or keeps) design 9.1's result.
- */
-export type ProjectedAttemptResult =
-  | { kind: 'matched'; outcome: Extract<MaterializationOutcome, { kind: 'materialized' }> }
-  /** The canonical Ideal from the projected start is a different shape. */
-  | { kind: 'canonical_mismatch'; mismatch: ShapeMismatch }
-  /** No canonical Ideal inside the projected extent. */
-  | { kind: 'no_candidate' }
-  | { kind: 'not_executed'; reason: 'search_scale_gate'; predictedSearchScale: PredictedSearchScale; exceeded: (keyof PredictedSearchScale)[] }
-  | { kind: 'unmeasured'; reason: 'cancelled' }
-
-export interface ProjectedAttempt {
-  method: 'candidate_search_projected'
-  request: ProjectedMaterializationRequest
-  result: ProjectedAttemptResult
-  /** Null when the Search did not run (gate) or did not finish (cancel). */
-  observed: { searchedRoutes: RouteKind[]; skippedRoutes: { route: RouteKind; reason: string }[]; candidateFound: boolean } | null
 }
 
 export type MaterializationAttempt = PlannerAlternativeAttempt | ProjectedAttempt | ShapeConstrainedAttempt
@@ -405,52 +252,13 @@ export interface MaterializationObserver {
   onTargetSettled?: (record: TargetMaterializationRecord) => void
 }
 
+/**
+ * The fail-closed codes of the materialization (design 9.4): the Production route generation's codes plus the two of the
+ * Research's own request re-derivation and Planner Alternative Search (`d0a-v1`).
+ */
 export type MaterializationFailClosedCode =
-  /** `deliveryCap` or a gate value is invalid (a lower-level API called without the run's settings check). */
-  | 'invalid_settings'
+  | BuildListOptimizationMaterializationErrorCode
   /** A request differs from its re-derivation (reservation, extent, projection, identity or predicted scale). */
   | 'request_mismatch'
-  /** The shape's own positions are not a valid partition (an internal inconsistency of the shape). */
-  | 'invalid_shape'
-  /** `derivePlannerAlternativeReservation()` refused the materialized Entries. */
-  | 'reservation_derivation_failed'
-  /** The Production Search rejected a derived input (not a cancellation). */
-  | 'search_refused'
   /** The Search's completion report has neither `exhausted`, `stoppedByExtent` nor a consumer stop. */
   | 'search_contract_violation'
-  /** The deterministic materializer or the projected adapter refused (ID collision, invalid Candidate, projection). */
-  | 'entry_materialization_refused'
-  /** The generated Entry no longer matched after its probe matched (D-0A-2b: the delivered Entry did not match its shape). */
-  | 'match_inconsistent'
-  /**
-   * D-0A-2b (design D0A2 10.1 区分 5): a position / source / Counter premise of the minimal Route lemma is broken - the
-   * pre-Search premise check or the seam's base diagnosis (an unconfirmed RNG input included: Phase 0 / A required it).
-   */
-  | 'shape_base_unavailable'
-  /** D-0A-2b (区分 4): Phase A judged the same support question supported, the Search answers unsupported. */
-  | 'prediction_support_inconsistent'
-  /** D-0A-2b: the base was admitted, no needed prediction was unsupported, and the Search ended without delivering: the lemma's premises broke. */
-  | 'shape_constrained_unreachable'
-  /** D-0A-2b: the D-0A-2a seam broke its own contract (or ended without exhausted / stoppedByExtent / a consumer stop). */
-  | 'shape_search_contract_violation'
-  /** D-0A-2b (design D0A2 9.3): the independent Route checks of the delivered Entry failed. */
-  | 'route_verification_failed'
-
-/**
- * A fail-closed stop of the materialization (design 9.4): never classified as a `MaterializationOutcome`,
- * never read as "no Route". The D-0B runner records it as an error of the run. `detail` is optional plain data a D-0A-2b
- * stop carries (the broken premise, the contradicting support question, the failed Route checks); D-0A stops carry none.
- */
-export class GlobalAssignmentMaterializationError extends Error {
-  readonly code: MaterializationFailClosedCode
-  readonly targetWeaponId: TargetWeaponId | null
-  readonly detail: unknown
-
-  constructor(code: MaterializationFailClosedCode, targetWeaponId: TargetWeaponId | null, message: string, detail?: unknown) {
-    super(message)
-    this.name = 'GlobalAssignmentMaterializationError'
-    this.code = code
-    this.targetWeaponId = targetWeaponId
-    this.detail = detail
-  }
-}
