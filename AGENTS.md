@@ -4237,7 +4237,23 @@ non-normative design record; where it differs, the formal specification wins.
   adoption refusal, and never as a standing second button. It is the plain ordinary Planner run (fresh
   input, the user's `maxPlanSteps`, `createPlan()`, `savePlannerResult()`): existing Entry Routes, no
   Route rebuild, no Entry replacement, selections kept. `maxPlanSteps` serves only ordinary-Planner
-  runs; its placement is still U7
+  runs
+- Setting placement and invalid value (U7, `docs/PLANNER_SPEC.md` 17.2 / `docs/UI_FLOW.md` 10.0,
+  specification only): the 「最大計画ステップ数」 field and 「既定値に戻す」 stay in the existing detail
+  Accordion, titled as the ordinary Planner's and saying the global optimization does not use it. An
+  invalid value blocks only the operations that use it (the 1-Entry 「生産計画を作成」, the auxiliary
+  path, the replan Preview) and never the global optimization start; the method is never chosen from
+  it, and when the press-time fresh judgement picks the ordinary Planner with an invalid value nothing
+  starts (no switch to the global optimization, no default substituted). The edit state, 「既定値に戻す」,
+  Issue #130's `recommendedBuildListMaxPlanSteps()` stay; nothing is newly persisted; no global
+  optimization bound or window enters the settings UI
+- Long-run notice (U3, `docs/PLANNER_SPEC.md` 17.16 / `docs/UI_FLOW.md` 10.4, specification only): 30 s
+  after a global optimization run started and still running, the computing display adds that it is
+  taking time, still running and cancellable. A display threshold, never a timeout: no Worker / Domain
+  bound or time behaviour changes, the elapsed time is UI-side only (never sent to the Worker, never
+  persisted), the notice ends on any result / cancel / failure / leaving the screen, and a new run
+  restarts the count. No ratio, remaining time or denominator. Basis: PR-5B `pr5b-r2` representative
+  case about 27 s (`w0-candidates-3`); completion within 30 s is never promised
 - Unsupported in the initial version (reasons shown, never auto-cleared or reinterpreted): an explicit
   `intermediateStateSelection` opportunity on a planning Target's Entry (a Practical condition, offered
   intermediate states or a non-`planner` preference alone never block); unconfirmed Base Seed / Skill /
