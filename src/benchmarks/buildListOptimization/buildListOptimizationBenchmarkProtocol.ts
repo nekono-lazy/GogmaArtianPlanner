@@ -212,6 +212,7 @@ export interface BloMemoryReading {
   error: string | null
 }
 
+/** Storage counts of the page's origin (no name, key or content; null where the Browser gives none). They show a new database, key or cache, not a same-count content change. */
 export interface BloStorageSnapshot {
   indexedDbDatabases: number | null
   localStorageKeys: number | null

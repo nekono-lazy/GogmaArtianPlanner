@@ -8,6 +8,9 @@ Production計算をPC Browserで計測する基盤（[BUILD_LIST_OPTIMIZATION_BR
   synthetic Exportだけで、実Exportは使わない
 - 探索上限はPR-4のWorker / Client testの値（`BUILD_LIST_OPTIMIZATION_TEST_BOUNDS`）とその変形であり、Productionの候補値ではない
 - Owner承認を要しない（`approval.state = not_required`）。slotごとに期待する結果（`expect`）を持ち、analyzerはそれとの一致だけを判定する
+- Browserの実行形態は `either`（headedでもheadlessでもよい）。機能確認は計測基盤の動作だけを見るためで、正式計測の計画は `headed` / `headless` のどちらかを固定する
+- series `pr5a-mech-r2`。PR #267のレビュー修正（driverのpage隔離、driver記録revision 2、`browserMode`、`executionEffects` のsemantic比較）の後のcodeで測る。
+  修正前のcode（`a5858ad`）で測った `pr5a-mech-r1` の記録とRESULTはそのまま残す（[MEASUREMENT](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md) §5）
 - 計画blockは、この文書をcommitしたcommit（measurement HEAD）から `git show` で読まれる。計測後に本書を書き換えても、そのHEADの計画が使われる
 
 ## 1. 確認すること
@@ -65,7 +68,7 @@ Production計算をPC Browserで計測する基盤（[BUILD_LIST_OPTIMIZATION_BR
     "appSchemaVersion": 17
   },
   "planKind": "mechanics",
-  "series": "pr5a-mech-r1",
+  "series": "pr5a-mech-r2",
   "status": "registered",
   "approval": {
     "state": "not_required",
@@ -220,6 +223,7 @@ Production計算をPC Browserで計測する基盤（[BUILD_LIST_OPTIMIZATION_BR
       "environmentId": "pc-windows-chrome",
       "status": "planned",
       "reason": null,
+      "browserMode": "either",
       "description": "Windows 11 Pro 10.0.26200 x64, AMD Ryzen 7 9700X (16 logical CPUs), 31.1 GiB; Google Chrome stable, dedicated scratch profile, driven over CDP by scripts/drive-build-list-optimization-browser.mjs",
       "userAgentMustInclude": [
         "Windows NT 10.0",
@@ -423,6 +427,7 @@ Production計算をPC Browserで計測する基盤（[BUILD_LIST_OPTIMIZATION_BR
       "environmentId": "android-chrome",
       "status": "excluded",
       "reason": "A harness check: PC only.",
+      "browserMode": "either",
       "description": "Android + Chrome (real device)",
       "userAgentMustInclude": [],
       "slots": []
@@ -431,6 +436,7 @@ Production計算をPC Browserで計測する基盤（[BUILD_LIST_OPTIMIZATION_BR
       "environmentId": "iphone-safari",
       "status": "excluded",
       "reason": "Not a verification target of this series (unverified, never unsupported).",
+      "browserMode": "either",
       "description": "iPhone + Safari (real device)",
       "userAgentMustInclude": [],
       "slots": []

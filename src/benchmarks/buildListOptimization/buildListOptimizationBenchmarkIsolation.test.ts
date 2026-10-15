@@ -27,7 +27,8 @@ const importsOf = (source: string) => [...codeOf(source).matchAll(/(?:from|impor
 
 const MAIN_THREAD = ['./BuildListOptimizationBenchmarkPage.tsx', './main.tsx', './buildListOptimizationBenchmarkRunner.ts', './buildListOptimizationBenchmarkBrowserPorts.ts',
   './buildListOptimizationBenchmarkInput.ts', './buildListOptimizationBenchmarkSemantic.ts', './buildListOptimizationBenchmarkSynthetic.ts', './buildListOptimizationBenchmarkProtocol.ts']
-const POST_HOC = ['./buildListOptimizationBenchmarkPlan.ts', './buildListOptimizationBenchmarkAnalysis.ts']
+/** Read by the driver, the Node reference and the analyzer only (the driver's slot control included). */
+const POST_HOC = ['./buildListOptimizationBenchmarkPlan.ts', './buildListOptimizationBenchmarkAnalysis.ts', './buildListOptimizationBenchmarkDriverControl.ts']
 
 describe('Build List optimization measurement harness isolation (Issue #260 PR-5A)', () => {
   it('has the expected modules, and no Production module or normal build reaches them', () => {
@@ -81,7 +82,7 @@ describe('Build List optimization measurement harness isolation (Issue #260 PR-5
 
   it('keeps the committed plan and the analysis post-hoc: no page or runner module imports them', () => {
     for (const path of MAIN_THREAD) {
-      expect(importsOf(harness[path]!), path).not.toEqual(expect.arrayContaining([expect.stringMatching(/buildListOptimizationBenchmark(?:Plan|Analysis)$/)]))
+      expect(importsOf(harness[path]!), path).not.toEqual(expect.arrayContaining([expect.stringMatching(/buildListOptimizationBenchmark(?:Plan|Analysis|DriverControl)$/)]))
     }
     for (const path of POST_HOC) {
       expect(codeOf(harness[path]!), path).not.toMatch(/runBuildListOptimization|ProductionRngEngine|createBuildListOptimizationWorkerClient|new Worker|performance\.now|Date\.now|readFile|from 'node:/)
@@ -99,6 +100,14 @@ describe('Build List optimization measurement harness isolation (Issue #260 PR-5
     expect(analyzer).toMatch(/flag: 'wx'/)
     expect(analyzer).not.toMatch(/--export|runBuildListOptimization|ProductionRngEngine|createBuildListOptimizationCalculation/)
     expect(driver).toMatch(/plan\.status !== 'registered' \|\| plan\.approval\.state !== 'owner_approved'/)
+    // The driver validates the plan, takes the Browser mode from it before launching, checks every page's mode, and leaves the
+    // slot order and the page replacement to the shared slot control; only a mechanics run may shorten the slot deadline.
+    expect(driver).toMatch(/planModule\.bloMeasurementPlanIssues\(extracted\.plan\)/)
+    expect(driver).toMatch(/control\.bloDriverLaunchModeIssue\(plan\.planKind, environment\.browserMode, launchMode\)/)
+    expect(driver).toMatch(/control\.bloPageBrowserModeIssue\(environmentValue\.userAgent \?\? null, launchMode\)/)
+    expect(driver).toMatch(/control\.runBloDriverSessions\(sessions, \{ openPage, runSlot, closePage, readStorage \}/)
+    expect(driver).toMatch(/deadlineOption !== undefined && \(mode !== 'mechanics'/)
+    expect(driver).toMatch(/revision: 2/)
     expect(driver).toMatch(/DOM\.setFileInputFiles/)
     expect(driver).toMatch(/build\?\.commit !== head \|\| build\?\.uncommittedBenchmarkCode !== false/)
     expect(driver).toMatch(/flag: 'wx'/)

@@ -179,36 +179,62 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
     })
   }
 
-  function driverOf(planFile: BloSourceFile, records: readonly BloRunRecord[]): BloDriverRecord {
+  interface DriverOptions {
+    mode?: 'headed' | 'headless'
+    /** Edits the driver's slot entries (index-aligned with the records). */
+    slots?: (slots: BloDriverRecord['slots']) => void
+    pageRestarts?: BloDriverRecord['pageRestarts']
+  }
+
+  function driverOf(planFile: BloSourceFile, records: readonly BloRunRecord[], options: DriverOptions = {}): BloDriverRecord {
+    const mode = options.mode ?? 'headed'
+    const slots: BloDriverRecord['slots'] = records.map((record, index) => {
+      const start = Date.parse(record.startedAt)
+      return {
+        slotId: record.slot.slotId, sessionId: record.slot.purpose === 'memory' ? 's2-isolated' : 's1-non_isolated', pageIndex: record.slot.purpose === 'memory' ? 2 : 1,
+        startedAt: record.startedAt, endedAt: record.endedAt, outcome: 'record_saved', rawFile: `${String(index + 1).padStart(2, '0')}-${record.slot.slotId}.json`, note: null,
+        cpuLoadPercentBefore: 5, external: null,
+        cdpWorkerHeap: {
+          intervalMs: 500, errors: 0,
+          samples: record.slot.purpose === 'memory' ? [{ atEpochMs: start + 2000, target: 'worker-1', usedSize: 400_000_000, totalSize: 450_000_000 }, { atEpochMs: start + 9000, target: 'worker-1', usedSize: 430_000_000, totalSize: 470_000_000 }] : [],
+          workerTargets: [{ target: 'worker-1', attachedAtEpochMs: start + 950, detachedAtEpochMs: record.timeline.cancelRequestedAtMs === null ? start + 21300 : start + record.timeline.cancelRequestedAtMs + 20 }],
+        },
+        osRendererMemory: record.slot.purpose === 'memory' ? { intervalMs: 1000, samples: [{ atEpochMs: start + 3000, privateBytes: 1_200_000_000, workingSetBytes: 1_300_000_000, processCount: 2 }] } : null,
+      }
+    })
+    options.slots?.(slots)
     return {
-      kind: 'build-list-optimization-browser-driver-record', revision: 1, measurementHead: TEST_MEASUREMENT_HEAD, plan: { path: 'docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md', sha256: planFile.sha256 },
-      driverSha256: 'e'.repeat(64), launcher: { browser: 'chrome', version: 'Chrome/154.0', headless: false, flags: [] }, machine: { cpuModel: 'test', logicalCpuCount: 16, totalMemoryBytes: 1, os: 'test' },
-      sessions: [{ sessionId: 's1-non_isolated', origin: 'non_isolated', storageBefore: null, storageAfter: null, pageLost: false }],
-      slots: records.map(record => {
-        const start = Date.parse(record.startedAt)
-        return {
-          slotId: record.slot.slotId, sessionId: 's1', startedAt: record.startedAt, endedAt: record.endedAt, outcome: 'record_saved', rawFile: `${record.slot.slotId}.json`, cpuLoadPercentBefore: 5, external: null,
-          cdpWorkerHeap: {
-            intervalMs: 500, errors: 0,
-            samples: record.slot.purpose === 'memory' ? [{ atEpochMs: start + 2000, target: 'worker-1', usedSize: 400_000_000, totalSize: 450_000_000 }, { atEpochMs: start + 9000, target: 'worker-1', usedSize: 430_000_000, totalSize: 470_000_000 }] : [],
-            workerTargets: [{ target: 'worker-1', attachedAtEpochMs: start + 950, detachedAtEpochMs: record.timeline.cancelRequestedAtMs === null ? start + 21300 : start + record.timeline.cancelRequestedAtMs + 20 }],
-          },
-          osRendererMemory: record.slot.purpose === 'memory' ? { intervalMs: 1000, samples: [{ atEpochMs: start + 3000, privateBytes: 1_200_000_000, workingSetBytes: 1_300_000_000, processCount: 2 }] } : null,
-        }
-      }),
+      kind: 'build-list-optimization-browser-driver-record', revision: 2, measurementHead: TEST_MEASUREMENT_HEAD, plan: { path: 'docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md', sha256: planFile.sha256 },
+      driverSha256: 'e'.repeat(64), launcher: { browser: 'chrome', version: 'Chrome/154.0', headless: mode === 'headless', mode, planBrowserMode: 'headed', flags: [] }, slotDeadlineMs: 1_800_000,
+      machine: { cpuModel: 'test', logicalCpuCount: 16, totalMemoryBytes: 1, os: 'test' },
+      sessions: [
+        { sessionId: 's1-non_isolated', origin: 'non_isolated', storageBefore: null, storageAfter: null, pageLost: false, pagesOpened: 1, pageOpenFailures: [] },
+        { sessionId: 's2-isolated', origin: 'isolated', storageBefore: null, storageAfter: null, pageLost: false, pagesOpened: 1, pageOpenFailures: [] },
+      ],
+      slots,
+      pageRestarts: options.pageRestarts ?? [],
     }
   }
 
-  async function analyze(plan: BloMeasurementPlan, records: BloRunRecord[]) {
+  async function sourcesOf(plan: BloMeasurementPlan, records: BloRunRecord[], driver: DriverOptions | null = {}): Promise<BloAnalysisSources> {
     const planFile = await source(`${TEST_MEASUREMENT_HEAD}:docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`, documentWith(measurementPlanText, plan))
-    const semanticOf = (boundsId: string) => records.find(record => record.slot.boundsId === boundsId && record.result !== null)!.result!.semantic
+    const semanticOf = (boundsId: string) => records.find(record => record.slot.boundsId === boundsId && record.result !== null)?.result?.semantic ?? { sha256: '0'.repeat(64), components: {} }
     const nodes = await nodeFiles(await Promise.all(plan.nodeReference!.runs.map(run => nodeReference(plan, planFile, run.inputId, run.boundsId, semanticOf(run.boundsId)))))
-    const driver = driverOf(planFile, records)
-    const value: BloAnalysisSources = { measurementHead: TEST_MEASUREMENT_HEAD, plan: planFile, browserRaw: await rawFiles(records), driver: await source('driver.json', JSON.stringify(driver)), nodeReferences: nodes }
+    return {
+      measurementHead: TEST_MEASUREMENT_HEAD, plan: planFile, browserRaw: await rawFiles(records),
+      driver: driver === null ? null : await source('driver.json', JSON.stringify(driverOf(planFile, records, driver))), nodeReferences: nodes,
+    }
+  }
+
+  async function analyze(plan: BloMeasurementPlan, records: BloRunRecord[], driver: DriverOptions | null = {}) {
+    const value = await sourcesOf(plan, records, driver)
     const derived = deriveBloPublicResult(value)
     if (!derived.ok) throw new Error(derived.issues.join(' / '))
     return { result: derived.result as Record<string, never>, sources: value }
   }
+
+  const perSetOf = (result: Record<string, never>) => (result.verdicts as { perBoundsSet: Record<string, Record<string, string>> }).perBoundsSet
+  const unplannedOf = (result: Record<string, never>) => (result.binding as { unplanned: { slotId: string; reason: string }[] }).unplanned
 
   const registered = structuredClone(proposed)
   registered.status = 'registered'
@@ -254,6 +280,61 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
     const boundSets = (bound.result.verdicts as { perBoundsSet: Record<string, Record<string, string>> }).perBoundsSet
     expect(boundSets['w-half']!.computation).toBe('failed')
     expect(boundSets['w0-research']!.computation).toBe('passed')
+  })
+
+  it('binds a mode-bound environment only to records made in its Browser mode, as the records and the driver both say', async () => {
+    const headlessAgent = TEST_USER_AGENT.replace('Chrome/', 'HeadlessChrome/')
+    const headlessRecords = recordsOf(registered, record => ({ ...record, environment: { ...record.environment, userAgent: headlessAgent } }))
+    // Headless records from a headless launch can never be accepted as the headed measurement the plan requires.
+    const headless = await analyze(registered, headlessRecords, { mode: 'headless' })
+    expect(new Set(unplannedOf(headless.result).map(entry => entry.reason))).toEqual(new Set(['browser_mode_mismatch']))
+    expect(unplannedOf(headless.result)).toHaveLength(16)
+    for (const verdicts of Object.values(perSetOf(headless.result))) expect(Object.values(verdicts)).not.toContain('passed')
+    // Records that say headed under a driver that launched headless: still a mismatch.
+    const relabelled = await analyze(registered, recordsOf(registered), { mode: 'headless' })
+    expect(new Set(unplannedOf(relabelled.result).map(entry => entry.reason))).toEqual(new Set(['browser_mode_mismatch']))
+    // Without a driver record the mode cannot be verified: nothing binds.
+    const unverified = await analyze(registered, recordsOf(registered), null)
+    expect(new Set(unplannedOf(unverified.result).map(entry => entry.reason))).toEqual(new Set(['browser_mode_unverified']))
+    expect(perSetOf(unverified.result)['w0-research']!.semantic).not.toBe('passed')
+    // A driver record naming no consistent mode is refused as a source.
+    const sources = await sourcesOf(registered, recordsOf(registered))
+    const broken = JSON.parse(sources.driver!.text) as BloDriverRecord
+    const inconsistent = { ...broken, launcher: { ...broken.launcher, headless: true, mode: 'headed' } }
+    expect(deriveBloPublicResult({ ...sources, driver: await source('driver.json', JSON.stringify(inconsistent)) })).toEqual({ ok: false, issues: ['driver.json: the driver record names no consistent Browser mode.'] })
+    const missing = { ...broken, launcher: { ...broken.launcher, mode: undefined } }
+    expect(deriveBloPublicResult({ ...sources, driver: await source('driver.json', JSON.stringify(missing)) })).toMatchObject({ ok: false })
+    // The headed records of a headed launch bind, and the RESULT names the modes.
+    const headed = await analyze(registered, recordsOf(registered))
+    expect(unplannedOf(headed.result)).toEqual([])
+    expect(headed.result.browserModes).toEqual([{ environmentId: 'pc-windows-chrome', required: 'headed', driver: 'headed', observed: ['headed'] }, { environmentId: 'android-chrome', required: 'headed', driver: 'headed', observed: [] }])
+  })
+
+  it('never accepts a slot the driver did not end with a saved record, or a later slot of a page it did not replace', async () => {
+    const records = recordsOf(registered)
+    const deadlineAt = records.findIndex(record => record.slot.slotId === 'pc.rerun.1')
+    // The deadline slot's page was replaced: only that slot is lost, the later ones ran on page 3.
+    const replaced = await analyze(registered, records, {
+      slots: slots => {
+        slots[deadlineAt] = { ...slots[deadlineAt]!, outcome: 'driver_deadline', rawFile: null, note: 'The run did not settle within 1800000 ms.' }
+        for (const slot of slots.slice(deadlineAt + 1)) if (slot.pageIndex === 1) slot.pageIndex = 3
+      },
+      pageRestarts: [{ sessionId: 's1-non_isolated', afterSlotId: 'pc.rerun.1', reason: 'driver_deadline', closedPageIndex: 1, openedPageIndex: 3 }],
+    })
+    expect(unplannedOf(replaced.result)).toEqual([expect.objectContaining({ slotId: 'pc.rerun.1', reason: 'driver_outcome_not_saved' })])
+    expect((replaced.result.binding as { missingSlots: string[] }).missingSlots).toEqual(['pc.rerun.1'])
+    expect(perSetOf(replaced.result)['w0-research']!.semantic).toBe('not_comparable')
+    expect((replaced.result.driver as { pageRestarts: unknown[] }).pageRestarts).toHaveLength(1)
+    // Not replaced: every later slot of that page is refused as well.
+    const kept = await analyze(registered, records, { slots: slots => { slots[deadlineAt] = { ...slots[deadlineAt]!, outcome: 'driver_deadline', rawFile: null } } })
+    const reasons = new Map(unplannedOf(kept.result).map(entry => [entry.slotId, entry.reason]))
+    expect(reasons.get('pc.rerun.1')).toBe('driver_outcome_not_saved')
+    expect(reasons.get('pc.cancel.input-check')).toBe('page_not_replaced')
+    expect(reasons.get('pc.bounds.w-wide')).toBe('page_not_replaced')
+    expect(reasons.has('pc.memory.w-wide')).toBe(false)
+    // A record read from another raw file than the one the driver saved for its slot is refused.
+    const swapped = await analyze(registered, records, { slots: slots => { slots[0] = { ...slots[0]!, rawFile: '99-other.json' } } })
+    expect(unplannedOf(swapped.result)).toEqual([expect.objectContaining({ slotId: 'pc.pilot.1', reason: 'driver_source_mismatch' })])
   })
 
   it('names every interval apart and never mixes them into one total', () => {

@@ -1,5 +1,6 @@
 import { stableStringify } from '../../domain/models/publicTypes'
 import type { BuildListOptimizationStage } from '../../domain/planner/buildListOptimization'
+import { bloObservedBrowserMode, type BloDriverPageRestart, type BloDriverSlotOutcome } from './buildListOptimizationBenchmarkDriverControl'
 import {
   BLO_PLAN_KIND,
   bindBloRecordsToPlan,
@@ -54,10 +55,13 @@ export interface BloDriverOsSample { atEpochMs: number; privateBytes: number; wo
 export interface BloDriverSlot {
   slotId: string
   sessionId: string
-  startedAt: string
+  /** The page the slot ran on; null when no page was available. */
+  pageIndex: number | null
+  startedAt: string | null
   endedAt: string | null
-  outcome: 'record_saved' | 'page_lost' | 'driver_deadline' | 'driver_error'
+  outcome: BloDriverSlotOutcome
   rawFile: string | null
+  note: string | null
   cpuLoadPercentBefore: number | null
   external: { kind: 'page_lost' | 'out_of_memory'; evidence: string } | null
   cdpWorkerHeap: { intervalMs: number; samples: BloDriverHeapSample[]; errors: number; workerTargets: { target: string; attachedAtEpochMs: number; detachedAtEpochMs: number | null }[] } | null
@@ -66,14 +70,21 @@ export interface BloDriverSlot {
 
 export interface BloDriverRecord {
   kind: typeof BLO_DRIVER_RECORD_KIND
-  revision: 1
+  revision: 2
   measurementHead: string
   plan: { path: string; sha256: string }
   driverSha256: string
-  launcher: { browser: string; version: string; headless: boolean; flags: string[] }
+  /** `mode` is the Browser mode the driver launched (`headless` exactly when `headless` is true); `planBrowserMode` the plan's. */
+  launcher: { browser: string; version: string; headless: boolean; mode: 'headed' | 'headless'; planBrowserMode: string; flags: string[] }
+  /** The driver's deadline of one slot (the run is left unsettled and its page replaced when it passes). */
+  slotDeadlineMs: number
   machine: { cpuModel: string | null; logicalCpuCount: number; totalMemoryBytes: number; os: string }
-  sessions: { sessionId: string; origin: 'non_isolated' | 'isolated'; storageBefore: BloStorageSnapshot | null; storageAfter: BloStorageSnapshot | null; pageLost: boolean }[]
+  sessions: {
+    sessionId: string; origin: 'non_isolated' | 'isolated'; storageBefore: BloStorageSnapshot | null; storageAfter: BloStorageSnapshot | null
+    pageLost: boolean; pagesOpened: number; pageOpenFailures: string[]
+  }[]
   slots: BloDriverSlot[]
+  pageRestarts: BloDriverPageRestart[]
 }
 
 export interface BloNodeReferenceRecord {
@@ -159,7 +170,13 @@ function roundIntervals(intervals: BloRunIntervals): BloRunIntervals {
   }
 }
 
-function storageChanged(before: BloStorageSnapshot | null, after: BloStorageSnapshot | null): boolean | null {
+/**
+ * Whether the storage counts changed: the IndexedDB database count, the localStorage / sessionStorage key counts, the Cache Storage
+ * cache count and the Service Worker registration count (`BloStorageSnapshot`). It compares counts only - a same-count content change
+ * is not detected - and an unread count makes it unknown (null), never "unchanged". The calculation's independence from persistence
+ * is the Worker isolation test's (no `src/db/**` in the Worker bundle).
+ */
+function storageCountsChanged(before: BloStorageSnapshot | null, after: BloStorageSnapshot | null): boolean | null {
   if (before === null || after === null) return null
   const keys = Object.keys(before) as (keyof BloStorageSnapshot)[]
   if (keys.some(key => before[key] === null || after[key] === null)) return null
@@ -253,7 +270,7 @@ function slotView(slot: BloPlanSlot, run: BloRecordedRun | undefined, driverSlot
       mainThread: record.mainThread,
       memory: { page: pageMemoryView(record), driver: driverMemoryView(driverSlot, record) },
       interruptions: record.interruptions.map(entry => entry.type),
-      storageChanged: storageChanged(record.storage.before, record.storage.after),
+      storageCountsChanged: storageCountsChanged(record.storage.before, record.storage.after),
       integrityIssues: record.integrityIssues,
       environment: { userAgent: record.environment.userAgent, crossOriginIsolated: record.environment.crossOriginIsolated, hardwareConcurrency: record.environment.hardwareConcurrency },
     },
@@ -289,12 +306,22 @@ function readDriver(file: BloSourceFile | null, head: string, plan: BloSourceFil
   } catch {
     return { record: null, issues: [`${file.file}: the driver record is not JSON.`] }
   }
-  if (!isRecord(value) || value.kind !== BLO_DRIVER_RECORD_KIND || value.revision !== 1 || !Array.isArray(value.slots) || !Array.isArray(value.sessions)) {
-    return { record: null, issues: [`${file.file}: not a Build List optimization driver record.`] }
+  if (!isRecord(value) || value.kind !== BLO_DRIVER_RECORD_KIND || value.revision !== 2 || !Array.isArray(value.slots) || !Array.isArray(value.sessions) || !Array.isArray(value.pageRestarts)) {
+    return { record: null, issues: [`${file.file}: not a Build List optimization driver record (revision 2).`] }
   }
   const issues: string[] = []
   if (value.measurementHead !== head) issues.push(`${file.file}: the driver ran at ${String(value.measurementHead)}, not at the measurement HEAD.`)
   if (!isRecord(value.plan) || value.plan.sha256 !== plan.sha256) issues.push(`${file.file}: the driver followed another plan.`)
+  // The Browser mode the driver launched: missing or inconsistent fails closed (it decides which records a mode-bound plan accepts).
+  const launcher = value.launcher
+  if (!isRecord(launcher) || (launcher.mode !== 'headed' && launcher.mode !== 'headless') || launcher.headless !== (launcher.mode === 'headless')) {
+    issues.push(`${file.file}: the driver record names no consistent Browser mode.`)
+  }
+  const outcomes: readonly string[] = ['record_saved', 'page_lost', 'driver_deadline', 'driver_error', 'not_run']
+  if (!value.slots.every(slot => isRecord(slot) && typeof slot.slotId === 'string' && outcomes.includes(slot.outcome as string) && (slot.pageIndex === null || Number.isSafeInteger(slot.pageIndex))
+    && (slot.outcome === 'record_saved') === (typeof slot.rawFile === 'string'))) {
+    issues.push(`${file.file}: a driver slot entry is malformed (a raw file goes exactly with a saved record).`)
+  }
   return { record: issues.length === 0 ? (value as unknown as BloDriverRecord) : null, issues }
 }
 
@@ -476,8 +503,8 @@ function metricValues(criterion: BloCriterion, slots: Map<string, BloSlotView>, 
       return trials.filter(trial => scoped.some(view => view.slotId === trial.slotId)).map(trial => trial.status === 'not_recorded' || trial.status === 'cancel_not_exercised' ? null : trial.resultAdopted === false)
     case 'cancel_rerun_completed':
       return trials.filter(trial => scoped.some(view => view.slotId === trial.slotId)).map(trial => trial.rerunCompleted)
-    case 'storage_unchanged':
-      return scoped.map(view => { const changed = runOf(view)?.storageChanged; return changed === null || changed === undefined ? null : !changed })
+    case 'storage_counts_unchanged':
+      return scoped.map(view => { const changed = runOf(view)?.storageCountsChanged; return changed === null || changed === undefined ? null : !changed })
     case 'no_interruption':
       return scoped.map(view => { const run = runOf(view); return run === null ? null : run.interruptions.length === 0 })
   }
@@ -539,7 +566,7 @@ export function deriveBloPublicResult(sources: BloAnalysisSources): BloPublicRes
   const nodes = readNodeReferences(sources.nodeReferences, sources.measurementHead, sources.plan, plan)
   if (nodes.issues.length > 0) return { ok: false, issues: nodes.issues }
 
-  const binding = bindBloRecordsToPlan(plan, browser.runs)
+  const binding = bindBloRecordsToPlan(plan, browser.runs, driver.record === null ? null : { mode: driver.record.launcher.mode, slots: driver.record.slots })
   const driverSlots = new Map((driver.record?.slots ?? []).map(slot => [slot.slotId, slot]))
   const views = new Map<string, BloSlotView>()
   for (const environment of plan.environments) for (const slot of environment.slots) views.set(slot.slotId, slotView(slot, binding.bound.get(slot.slotId), driverSlots.get(slot.slotId)))
@@ -605,7 +632,19 @@ export function deriveBloPublicResult(sources: BloAnalysisSources): BloPublicRes
     nodeReferences: nodes.records.map(record => ({ inputId: record.inputId, boundsId: record.boundsId, status: record.outcome.status, resultStatus: record.resultStatus, semanticSha256: record.semantic?.sha256 ?? null, elapsedMs: record.elapsedMs })),
     timings: timingPopulations(views),
     cancelTrials: trials,
-    sessions: driver.record?.sessions.map(session => ({ sessionId: session.sessionId, origin: session.origin, storageChanged: storageChanged(session.storageBefore, session.storageAfter), pageLost: session.pageLost })) ?? [],
+    sessions: driver.record?.sessions.map(session => ({
+      sessionId: session.sessionId, origin: session.origin, storageCountsChanged: storageCountsChanged(session.storageBefore, session.storageAfter), pageLost: session.pageLost,
+      pagesOpened: session.pagesOpened, pageOpenFailures: session.pageOpenFailures.length,
+    })) ?? [],
+    driver: driver.record === null ? null : {
+      browserMode: driver.record.launcher.mode, planBrowserMode: driver.record.launcher.planBrowserMode, slotDeadlineMs: driver.record.slotDeadlineMs,
+      slotOutcomes: driver.record.slots.map(slot => ({ slotId: slot.slotId, pageIndex: slot.pageIndex, outcome: slot.outcome })),
+      pageRestarts: driver.record.pageRestarts.map(restart => ({ ...restart })),
+    },
+    browserModes: plan.environments.filter(environment => environment.status !== 'excluded').map(environment => ({
+      environmentId: environment.environmentId, required: environment.browserMode, driver: driver.record?.launcher.mode ?? null,
+      observed: [...new Set([...binding.bound.values()].filter(run => environment.slots.some(slot => slot.slotId === run.record.slot.slotId)).map(run => bloObservedBrowserMode(run.record.environment.userAgent)))],
+    })),
     criteria,
     mechanics,
     verdicts,

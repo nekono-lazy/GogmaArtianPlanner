@@ -58,6 +58,11 @@ async function readMemory(label: BloMemoryReading['label'], atMs: number): Promi
   }
 }
 
+/**
+ * The storage counts of the page's origin: IndexedDB databases, localStorage / sessionStorage keys, Cache Storage caches, Service Worker
+ * registrations. Counts only - no name, key or content is read, so a same-count content change is not visible here - and a count
+ * the Browser does not give is null (unknown), never 0.
+ */
 async function readStorage(): Promise<BloStorageSnapshot> {
   const read = async <T>(value: () => Promise<T> | T): Promise<T | null> => {
     try {

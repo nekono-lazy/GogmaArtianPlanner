@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OwnedWeaponId, PlanStepId, ProductionPlanId } from '../../domain/models/publicTypes'
+import type { BuildListEntryId, OwnedWeaponId, PlanStep, PlanStepExecutionEffects, PlanStepId, PlanStepNormalCreationRole, ProductionPlanId, TargetWeaponId } from '../../domain/models/publicTypes'
 import type { PlannerDependencies } from '../../domain/planner'
 import { runBuildListOptimization, type BuildListOptimizationResult } from '../../domain/planner/buildListOptimization'
 import { createProductionBuildListOptimizationWorkerDependencies } from '../../workers/buildListOptimization.worker.production'
@@ -58,6 +58,77 @@ describe('Build List optimization semantic fingerprint (Issue #260 PR-5A)', () =
     expect(bound.status).toBe('search_bound_reached')
     expect(Object.keys((await bloSemanticFingerprint(bound, testSha256)).components)).toEqual(['status', 'bounds', 'diagnostics'])
   }, 60_000)
+
+  it('compares the Execution effects of every Step by meaning, with registered weapons by registration order', async () => {
+    const base = await result('synthetic.open')
+    if (base.status !== 'optimized') throw new Error('not optimized')
+    const steps = base.artifact.plannerResult.plan!.steps
+    expect(steps.every(step => step.executionEffects !== undefined)).toBe(true)
+    const entry = steps[0]!.buildListEntryId!
+    const target = steps[0]!.targetWeaponId!
+    const otherTarget = steps.find(step => step.targetWeaponId !== target)!.targetWeaponId!
+    const stepsOf = async (edit: (copy: PlanStep[]) => void) => {
+      const copy = structuredClone(base)
+      edit(copy.artifact.plannerResult.plan!.steps)
+      return (await bloSemanticFingerprint(copy, testSha256)).components.steps
+    }
+    const effects = (copy: PlanStep[], index: number) => copy[index]!.executionEffects!
+    const unchanged = await stepsOf(() => undefined)
+    expect(unchanged).toBe((await bloSemanticFingerprint(base, testSha256)).components.steps)
+
+    // Each field of the effects is semantics.
+    const role = async (value: PlanStepNormalCreationRole | null) => stepsOf(copy => { effects(copy, 0).normalCreationRole = value })
+    expect(await role('counter_advance')).not.toBe(await role('production_target'))
+    expect(await stepsOf(copy => { effects(copy, 0).registersTrackedWeapon = !effects(copy, 0).registersTrackedWeapon })).not.toBe(unchanged)
+    expect(await stepsOf(copy => { effects(copy, 0).observationBinding = { kind: 'normal_restoration_bonuses' } })).not.toBe(await stepsOf(copy => { effects(copy, 0).observationBinding = null }))
+    const link = async (targetWeaponId: TargetWeaponId) => stepsOf(copy => { effects(copy, 0).targetLinks = [{ buildListEntryId: entry, targetWeaponId }] })
+    expect(await link(target)).not.toBe(await link(otherTarget))
+    expect(await link(target)).not.toBe(await stepsOf(copy => { effects(copy, 0).targetLinks = [] }))
+    const completion = async (targetWeaponId: TargetWeaponId) => stepsOf(copy => {
+      effects(copy, 0).targetCompletions = [{ buildListEntryId: entry, targetWeaponId, ownedWeaponId: 'weapon.input.a' as OwnedWeaponId }]
+    })
+    expect(await completion(target)).not.toBe(await completion(otherTarget))
+    const label = async (buildListEntryId: BuildListEntryId) => stepsOf(copy => { effects(copy, 0).compromiseLabels = [{ buildListEntryId, ownedWeaponId: 'weapon.input.a' as OwnedWeaponId }] })
+    expect(await label(entry)).not.toBe(await label('build-list.other' as BuildListEntryId))
+    // Absent effects (a legacy Step) are never the same as present ones, empty or not.
+    const empty: PlanStepExecutionEffects = { trackedOwnedWeaponId: null, normalCreationRole: null, registersTrackedWeapon: false, observationBinding: null, targetLinks: [], compromiseLabels: [], targetCompletions: [] }
+    expect(await stepsOf(copy => { delete copy[0]!.executionEffects })).not.toBe(await stepsOf(copy => { copy[0]!.executionEffects = structuredClone(empty) }))
+
+    // A weapon the Plan registers: the reserved ID itself never counts, the relation between the Steps naming it does.
+    const registered = async (registration: string, later: string) => stepsOf(copy => {
+      copy[0]!.executionEffects = { ...structuredClone(empty), trackedOwnedWeaponId: registration as OwnedWeaponId, normalCreationRole: 'production_target', registersTrackedWeapon: true }
+      copy[0]!.ownedWeaponId = registration as OwnedWeaponId
+      copy[1]!.executionEffects = { ...structuredClone(empty), trackedOwnedWeaponId: later as OwnedWeaponId, targetCompletions: [{ buildListEntryId: entry, targetWeaponId: target, ownedWeaponId: later as OwnedWeaponId }] }
+      copy[1]!.ownedWeaponId = later as OwnedWeaponId
+    })
+    const sameWeapon = await registered('0f8fad5b-d9cb-469f-a165-70867728950e', '0f8fad5b-d9cb-469f-a165-70867728950e')
+    expect(await registered('7c9e6679-7425-40de-944b-e07fc1f90ae7', '7c9e6679-7425-40de-944b-e07fc1f90ae7')).toBe(sameWeapon)
+    // The later Step names another weapon: an input weapon, or another reserved ID nothing registered.
+    const inputWeapon = steps.find(step => step.ownedWeaponId !== null)!.ownedWeaponId!
+    expect(await registered('0f8fad5b-d9cb-469f-a165-70867728950e', inputWeapon)).not.toBe(sameWeapon)
+    expect(await registered('0f8fad5b-d9cb-469f-a165-70867728950e', '7c9e6679-7425-40de-944b-e07fc1f90ae7')).not.toBe(sameWeapon)
+    // An input weapon's ID is kept as it is: another input weapon is another Step meaning.
+    expect(await stepsOf(copy => { copy[0]!.ownedWeaponId = 'weapon.input.a' as OwnedWeaponId })).not.toBe(await stepsOf(copy => { copy[0]!.ownedWeaponId = 'weapon.input.b' as OwnedWeaponId }))
+  }, 60_000)
+
+  it('gives one fingerprint to two real runs of a Plan that registers weapons, whose reserved IDs and times differ', async () => {
+    // representative-12 has new Normal Routes: under this test window the optimized Plan registers production-target Normals.
+    const bounds = { ...bloSyntheticBounds('synthetic.open').bounds, window: { normal: 10, gogma: 400, skill: 400 } }
+    const runWith = async (dependencies: PlannerDependencies) => {
+      const run = await runBuildListOptimization(createPlannerSchedulerWorkloadInput('representative-12').input, dependencies, structuredClone(bounds))
+      if (run.kind !== 'result' || run.result.status !== 'optimized') throw new Error('not optimized')
+      return run.result
+    }
+    const first = await runWith(taggedDependencies('one', '2026-10-15T00:00:00.000Z'))
+    const registrations = first.artifact.plannerResult.plan!.steps.filter(step => step.executionEffects?.registersTrackedWeapon)
+    expect(registrations.length).toBeGreaterThan(0)
+    expect(registrations.every(step => step.executionEffects!.trackedOwnedWeaponId!.startsWith('weapon.one.'))).toBe(true)
+    const second = await runWith(createProductionBuildListOptimizationWorkerDependencies())
+    expect(await bloSemanticFingerprint(second, testSha256)).toEqual(await bloSemanticFingerprint(first, testSha256))
+    const text = JSON.stringify(bloSemanticComponents(first))
+    expect(text).toContain('registered-weapon#1')
+    expect(text).not.toMatch(/weapon\.one\./)
+  }, 120_000)
 
   it('keeps counts and classifications in the result view, and no identity', async () => {
     const optimized = await result('synthetic.open')

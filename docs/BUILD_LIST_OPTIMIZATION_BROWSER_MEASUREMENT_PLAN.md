@@ -33,6 +33,7 @@ Refs #260（PR-5A）。**提案（`proposed`）・Owner承認待ち（`owner_app
 | CalculationContext | gameVersion `unknown-initial`、masterDataVersion 4、rngEngineVersion `production-rng:c5-e7`、appSchemaVersion 17 |
 | build | measurement HEAD（clean）で `npx vite build --config vite.benchmark.config.ts`。pageはbuild provenance（commit、未commitの変更の有無、code SHA-256）を記録し、driver / analyzerはHEADと一致しないpageを拒否する |
 | serving | `vite preview --config vite.benchmark.config.ts`。非isolated `http://127.0.0.1:4181/`、isolated（`BENCHMARK_CROSS_ORIGIN_ISOLATED=1`）`http://127.0.0.1:4182/` |
+| Browserの実行形態 | **headed**（計画blockの環境ごとの `browserMode`）。driverは計画と異なる形態の起動を拒否し、開いた各pageのuser agent（headlessは `HeadlessChrome`）でも確かめる。analyzerは、記録自身のuser agentとdriver記録の起動形態の両方が計画と一致する記録だけを結び付ける（driver記録が無ければ確かめられないので結び付けない）。headlessで作ったraw・driver記録は、後からheadedの計測として採用されない |
 | driver / analyzer / Node reference | `scripts/drive-build-list-optimization-browser.mjs`、`scripts/analyze-build-list-optimization-browser.mjs`、`scripts/run-build-list-optimization-node-reference.mjs`（いずれもmeasurement HEADのcode） |
 
 ## 3. 4つの判定軸
@@ -42,7 +43,7 @@ Refs #260（PR-5A）。**提案（`proposed`）・Owner承認待ち（`owner_app
 1. **semantic parity**: 同じ入力・同じ探索上限のBrowser run同士、およびNode referenceとsemantic fingerprintが一致する
 2. **計算成立・探索上限**: 結果の分類（`optimized` / `not_found` / `search_bound_reached` / `unsupported`）、計画対象Targetの完成、探索の診断値
 3. **性能とmemory**: 区間ごとの時間、main threadのlong task、Worker heap、renderer memory、main threadが保持する結果
-4. **cancel / lifecycle**: キャンセルの即時性、結果の不採用、Worker終了、再実行、永続状態の不変、中断
+4. **cancel / lifecycle**: キャンセルの即時性、結果の不採用、Worker終了、再実行、storage件数の不変、中断
 
 基準は探索上限セットごとに判定する（基準の対象を特定のセットに限るもの以外）。Ownerはすべての基準を満たすセットから定数を選ぶ。
 
@@ -111,7 +112,10 @@ Worker heap used / total（CDP）、renderer process private / working set（OS�
 
 **操作性・安全性**: progressの順と受信時刻、main threadのlong task（最大・合計）、キャンセル → `cancelled` の時間、キャンセル → Worker targetのdetach
 （CDP、同一machineの時計）、キャンセル後の結果不採用、settle後に届いたmessage数、再実行の完了、Workerの `error` / `messageerror`、page loss / OOM
-（driverが外部証拠で記録）、visibility / freeze / pagehide、IndexedDB / localStorage / sessionStorage / Cache / Service Workerの不変。
+（driverが外部証拠で記録）、visibility / freeze / pagehide、storageの件数（IndexedDBのdatabase数、localStorage / sessionStorageのキー数、
+Cache Storageのcache数、Service Workerの登録数）の不変。件数だけの比較であり、同じ件数のまま内容が変わった場合は検出しない。
+取得できない件数は未測定とし、不変とは推測しない。計算が永続化層に依存しないことは、Worker bundleが `src/db/**` に到達しないことを
+固定するWorker isolation testで確認する
 
 **測定できない項目**: Production Workerの最大同期区間。Production Workerは計算中にevent loopへ戻らない（`yieldControl` を渡さない）ので計算全体が1つの
 taskであり、Workerを変更せずに区間を分けて測れない。本計測ではWorkerを変更せず、UIへの影響としてmain threadのlong taskを測る。
@@ -119,8 +123,12 @@ taskであり、Workerを変更せずに区間を分けて測れない。本計�
 ## 7. semantic比較
 
 - fingerprintの成分: status、generated Entry（ID、Candidate、hash、Route。作成時刻を除く）、置換、unchanged Target、計画対象Target、除外Entry、入力token、
-  summary、termination、Conflict、warning、Plan（ID・時刻・現在Step IDを除く）、Step列（Step ID、予約OwnedWeapon ID、期待状態hash、実行効果、表示文言を除く）、
-  診断（Workerの時間を除く）。Plan ID・Step ID・予約OwnedWeapon ID・時刻は比較しない（[PLANNER_SPEC.md](PLANNER_SPEC.md) 17.6）
+  summary、termination、Conflict、warning、Plan（ID・時刻・現在Step IDを除く）、Step列（Step ID、期待状態hash、inventory change、表示文言を除く）、
+  診断（Workerの時間を除く）。Plan ID・Step ID・時刻は比較しない（[PLANNER_SPEC.md](PLANNER_SPEC.md) 17.6）
+- Stepの実行効果（`executionEffects`: Normal作成の役割、登録、観測binding、Target link、妥協ラベル、Target完成とそのEntry / Target、順序）と
+  Stepが扱う武器は比較する。OwnedWeapon IDのうち、Planが登録する武器の予約ID（Production ID factoryの値）だけを登録順の記号
+  （`registered-weapon#n`）へ置き換え、入力由来の武器IDはそのまま比較する。同じ登録武器を指すStepの関係は保たれ、予約IDの値には依存しない。
+  `executionEffects` が無いStepと空の効果を持つStepは区別する
 - 比較group: 各探索上限セットのcomparison slot（baselineは4 run、比較セットは2 run）がすべて完了して1つのfingerprintになり、同じHEADのNode referenceと一致する
 - 欠けたrun・完了しなかったrunは比較できないものとして扱い、一致とは数えない（`incomplete`）
 
@@ -142,7 +150,7 @@ taskであり、Workerを変更せずに区間を分けて測れない。本計�
 | キャンセル → `cancelled` | cancel（w0-research） | ≤ 100 ms | Clientは同期的にキャンセルする |
 | キャンセル → Worker detach | cancel（w0-research） | ≤ 2 s | 画面は既に `cancelled`（上の基準）で、Workerの終了はCPUとmemoryを返すだけである。PR-5Aの機能確認ではCPU負荷85〜90%のheadless環境でCDPのdetachがキャンセルの0.8 s / 1.2 s後だった（§9の3） |
 | キャンセル後の結果不採用 / 再実行の完了 | cancel（w0-research） | すべて | 17.16 |
-| 永続状態の不変 | 全run | すべて | Preview・計算は何も書かない（17.9） |
+| storage件数の不変 | 全run | すべて | Preview・計算は何も書かない（17.9）。database・キー・cacheの件数だけを比べ、内容の不変は証明しない |
 
 Research P-2の計測値（同じExportでResearch harnessのfirst Workerが約28 s、Worker heap max sampled約431 MB）は参考であり、上の値は
 そこから機械的に決めたものではない。
@@ -166,7 +174,13 @@ Research P-2の計測値（同じExportでResearch harnessのfirst Workerが約2
 ## 10. 異常・中断の扱い（事前に固定）
 
 - 自動retryをしない。失敗・中断・timeoutしたslotを別のrunで置き換えない、元のslotに上書きしない、目的を付け替えない。同じslotの2件目以降は計画外
-- renderer crash・page lossはdriverが記録する（`page_lost`。crash dumpにOOMの注記がある場合だけ `out_of_memory`）。残りのslotは新しいpage loadで続け、失ったslotは再実行しない
+- 保存したrecordで終わらなかったslot（driverの期限超過 `driver_deadline`、page loss `page_lost`、settleが不明なdriver error `driver_error`）は、
+  その終了経路を記録し、再実行しない。そのpageは閉じ（Workerも終わる）、次のslotは新しく開き直して検証（build provenance・origin・isolation・
+  Browserの実行形態）したpageで実行する。page再生成はdriver記録（`pageRestarts`）に残る。新しいpageを開けなければ、その時点の
+  sessionの残りslotは `not_run` とし、補わない。analyzerは、driverが保存しなかったslotの記録、交換されなかったpageで異常の後に作られた記録、
+  driverが保存したraw file以外から読んだ記録を結び付けない
+- renderer crash・page lossはdriverが記録する（`page_lost`。crash dumpにOOMの注記がある場合だけ `out_of_memory`）。期限超過をpage lossや
+  `search_bound_reached` と扱わない。外部証拠の無いOOM判定をしない
 - visibility / freeze / pagehideがあったrunは時間の集計から除く（両方完了していればsemanticは比較に使う）
 - driverが途中で止まった場合、残りのslotは未記録とし、同じ系列で補わない。必要なら新しい計画commit・新しい系列で測り直す
 - BrowserとNodeの結果が異なっても、計算や条件を合わせて変更しない。原因を切り分けで確定できなければ「原因未特定」と記録する
@@ -397,6 +411,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       "environmentId": "pc-windows-chrome",
       "status": "planned",
       "reason": null,
+      "browserMode": "headed",
       "description": "Windows 11 Pro 10.0.26200 x64, AMD Ryzen 7 9700X (16 logical CPUs), 31.1 GiB; Google Chrome stable, dedicated scratch profile, driven over CDP by scripts/drive-build-list-optimization-browser.mjs",
       "userAgentMustInclude": [
         "Windows NT 10.0",
@@ -668,6 +683,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       "environmentId": "android-chrome",
       "status": "optional",
       "reason": "Not a release gate (PLANNER_SPEC 17.17, O12): measured only if a device and a safe local route are available; otherwise unconfirmed.",
+      "browserMode": "headed",
       "description": "Android + Chrome (real device)",
       "userAgentMustInclude": [
         "Android"
@@ -678,6 +694,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       "environmentId": "iphone-safari",
       "status": "excluded",
       "reason": "Not a verification target (PLANNER_SPEC 17.17, O12 / O19): unverified, never unsupported; no pre-release hosting is created for it.",
+      "browserMode": "headed",
       "description": "iPhone + Safari (real device)",
       "userAgentMustInclude": [],
       "slots": []
@@ -1041,10 +1058,10 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
         "rationale": "A new run starts from scratch after a cancel (PLANNER_SPEC 17.16)."
       },
       {
-        "criterionId": "lifecycle.storage",
+        "criterionId": "lifecycle.storage-counts",
         "axis": "cancel_lifecycle",
-        "description": "IndexedDB / localStorage / sessionStorage / Cache Storage / Service Worker registrations unchanged by each run.",
-        "metric": "storage_unchanged",
+        "description": "The storage counts are unchanged by each run: the IndexedDB database count, the localStorage / sessionStorage key counts, the Cache Storage cache count and the Service Worker registration count. Counts only: a same-count content change is not detected, and an unread count is unmeasured, never unchanged.",
+        "metric": "storage_counts_unchanged",
         "scope": {
           "inputId": "real-export",
           "boundsId": null,
@@ -1061,13 +1078,13 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
         "comparator": "equals",
         "threshold": true,
         "unit": null,
-        "rationale": "The calculation and the Preview write nothing (PLANNER_SPEC 17.9)."
+        "rationale": "The calculation and the Preview write nothing (PLANNER_SPEC 17.9); a write would show as a new database, key or cache. Content-level immutability is not proven here: the Worker bundle reaching no persistence is the Worker isolation test."
       }
     ]
   },
   "anomalyRules": [
     "No automatic retry: a failed, cancelled-by-environment, interrupted or timed-out slot keeps its record; nothing re-runs it under its slot ID, moves it to another slot or changes its purpose.",
-    "A page loss or renderer crash is recorded by the driver (page_lost; out_of_memory only with crash-dump OOM evidence); the remaining slots continue in a new page load and the lost slot is not re-run.",
+    "A slot that does not end with a saved record (driver_deadline, page_lost, or a driver_error after which the run's settlement is unknown) keeps that end and is never re-run; its page is closed with its Worker, and the next slot runs on a new page verified again (build provenance, origin, isolation, Browser mode), recorded in pageRestarts. A page that cannot be opened leaves the session's remaining slots not_run. out_of_memory needs crash-dump OOM evidence; a deadline is never a page loss or search_bound_reached.",
     "A run with a visibility change, freeze or pagehide is excluded from the timing population (its semantics still count if it completed).",
     "A driver stop leaves the remaining slots unrecorded; they are never filled in within this series (a new plan commit and series measure again).",
     "Records of another HEAD or of uncommitted benchmark code are refused by the analysis; code changed after the measurement started makes a new measurement HEAD.",

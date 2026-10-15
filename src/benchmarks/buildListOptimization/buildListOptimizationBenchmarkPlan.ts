@@ -1,5 +1,6 @@
 import { stableStringify } from '../../domain/models/publicTypes'
 import type { BuildListOptimizationBounds } from '../../domain/planner/buildListOptimization'
+import { bloDriverSlotExclusions, bloObservedBrowserMode, type BloDriverExclusionReason, type BloDriverSlotEntry } from './buildListOptimizationBenchmarkDriverControl'
 import {
   BLO_BENCHMARK_CONFIG_PROTOCOL,
   BLO_BROWSER_RECORD_PROTOCOL,
@@ -32,7 +33,8 @@ import {
  *
  * Binding a record to a slot never repairs it: the record must say it was planned, name a slot of a planned environment, carry the
  * slot's purpose, input, bounds set (and the bounds themselves, field by field), cancel trigger, fault injection and memory options,
- * have run on the slot's origin and Browser and on the plan's input identity, and the slot must still be free.
+ * have run on the slot's origin and Browser - in the environment's Browser mode (`browserMode`) - and on the plan's input identity,
+ * have been saved by the driver for that slot, and the slot must still be free.
  */
 
 export const BLO_PLAN_KIND = 'build-list-optimization-browser-plan' as const
@@ -83,11 +85,19 @@ export interface BloPlanSlot {
   note: string
 }
 
+/**
+ * How the Browser runs: `headed` (a visible window) or `headless`. A measurement plan names one for every environment it may measure;
+ * only a mechanics plan may accept `either` (its runs check the harness, not the Browser's performance).
+ */
+export type BloBrowserMode = 'headed' | 'headless' | 'either'
+
 export interface BloPlanEnvironment {
   environmentId: string
   /** `planned`: measured; `optional`: measured only when available (never required); `excluded`: not measured in this series. */
   status: 'planned' | 'optional' | 'excluded'
   reason: string | null
+  /** The Browser mode every run of this environment must have been made in (driver launch, driver record and each record's Browser). */
+  browserMode: BloBrowserMode
   description: string
   userAgentMustInclude: string[]
   slots: BloPlanSlot[]
@@ -125,7 +135,7 @@ export const BLO_CRITERION_METRICS = {
   cancel_worker_gone_ms: 'cancel_lifecycle',
   cancel_no_result_adopted: 'cancel_lifecycle',
   cancel_rerun_completed: 'cancel_lifecycle',
-  storage_unchanged: 'cancel_lifecycle',
+  storage_counts_unchanged: 'cancel_lifecycle',
   no_interruption: 'cancel_lifecycle',
 } as const satisfies Record<string, BloCriterionAxis>
 export type BloCriterionMetric = keyof typeof BLO_CRITERION_METRICS
@@ -367,6 +377,8 @@ export function bloMeasurementPlanIssues(value: unknown): string[] {
         if (!isNonEmptyString(environment.reason) || environment.slots.length !== 0) issues.push(`${at}: an excluded environment has a reason and no slot.`)
         return
       }
+      if (!['headed', 'headless', 'either'].includes(environment.browserMode as string)) issues.push(`${at}.browserMode must be headed, headless or either.`)
+      else if (value.planKind === 'measurement' && environment.browserMode === 'either') issues.push(`${at}.browserMode of a measurement plan must be headed or headless.`)
       if (environment.status === 'planned' && (environment.reason !== null || environment.slots.length === 0 || (environment.userAgentMustInclude as unknown[]).length === 0)) {
         issues.push(`${at}: a planned environment has no reason, names its user agent and has slots.`)
       }
@@ -454,7 +466,14 @@ export function bloMeasurementPlanIssues(value: unknown): string[] {
 
 export type BloUnplannedReason =
   | 'not_planned' | 'unknown_slot' | 'environment_not_measured' | 'purpose_mismatch' | 'input_mismatch' | 'bounds_mismatch' | 'options_mismatch'
-  | 'origin_mismatch' | 'environment_mismatch' | 'duplicate_slot'
+  | 'origin_mismatch' | 'environment_mismatch' | 'browser_mode_mismatch' | 'browser_mode_unverified' | BloDriverExclusionReason | 'duplicate_slot'
+
+/** What the driver record says about the runs (null: no driver record was given to the analysis). */
+export interface BloDriverContext {
+  /** The Browser mode the driver launched (its record's `launcher.mode`). */
+  mode: 'headed' | 'headless'
+  slots: readonly Pick<BloDriverSlotEntry, 'slotId' | 'sessionId' | 'pageIndex' | 'outcome' | 'rawFile'>[]
+}
 
 export interface BloRecordedRun {
   record: BloRunRecord
@@ -476,8 +495,15 @@ function inputMatches(input: BloPlanInput, record: BloRunRecord): boolean {
   return identity.kind === 'synthetic' && identity.caseId === input.caseId
 }
 
-/** Binds recorded runs to the plan's slots (see the module comment). Records are taken in start order; nothing is repaired. */
-export function bindBloRecordsToPlan(plan: BloMeasurementPlan, runs: readonly BloRecordedRun[]): BloSlotBinding {
+/**
+ * Binds recorded runs to the plan's slots (see the module comment). Records are taken in start order; nothing is repaired. With a
+ * driver record, a record also needs the driver to have saved it for its slot (from that raw file, on a page that saw no abnormal end
+ * before it, `bloDriverSlotExclusions()`). An environment with a Browser mode binds only records made in that mode, as both the
+ * record's own Browser and the driver's launch say; without a driver record such a mode cannot be verified and nothing binds.
+ */
+export function bindBloRecordsToPlan(plan: BloMeasurementPlan, runs: readonly BloRecordedRun[], driver: BloDriverContext | null = null): BloSlotBinding {
+  const exclusions = driver === null ? new Map<string, BloDriverExclusionReason>() : bloDriverSlotExclusions(driver.slots)
+  const driverSlots = new Map((driver?.slots ?? []).map(slot => [slot.slotId, slot]))
   const slots = new Map<string, { environment: BloPlanEnvironment; slot: BloPlanSlot }>()
   for (const environment of plan.environments) for (const slot of environment.slots) slots.set(slot.slotId, { environment, slot })
   const inputs = new Map(plan.inputs.map(input => [input.inputId, input]))
@@ -499,6 +525,16 @@ export function bindBloRecordsToPlan(plan: BloMeasurementPlan, runs: readonly Bl
     if (record.environment.crossOriginIsolated !== (slot.origin === 'isolated')) { unplanned('origin_mismatch'); continue }
     const userAgent = record.environment.userAgent
     if (userAgent === null || !environment.userAgentMustInclude.every(part => userAgent.includes(part))) { unplanned('environment_mismatch'); continue }
+    if (environment.browserMode !== 'either') {
+      if (bloObservedBrowserMode(userAgent) !== environment.browserMode) { unplanned('browser_mode_mismatch'); continue }
+      if (driver === null) { unplanned('browser_mode_unverified'); continue }
+      if (driver.mode !== environment.browserMode) { unplanned('browser_mode_mismatch'); continue }
+    }
+    if (driver !== null) {
+      const exclusion = exclusions.get(slot.slotId)
+      if (exclusion !== undefined) { unplanned(exclusion); continue }
+      if (driverSlots.get(slot.slotId)?.rawFile !== run.source) { unplanned('driver_source_mismatch'); continue }
+    }
     if (binding.bound.has(slot.slotId)) { unplanned('duplicate_slot'); continue }
     binding.bound.set(slot.slotId, run)
   }

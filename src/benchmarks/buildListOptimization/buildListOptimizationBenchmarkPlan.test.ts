@@ -35,7 +35,9 @@ const variant = (plan: BloMeasurementPlan, edit: (copy: BloMeasurementPlan) => v
 
 describe('Build List optimization measurement plans (Issue #260 PR-5A)', () => {
   it('commits a registered mechanics plan whose synthetic bounds are the harness presets', () => {
-    expect(mechanics).toMatchObject({ planKind: 'mechanics', status: 'registered', approval: { state: 'not_required' }, criteria: { status: 'registered', items: [] } })
+    expect(mechanics).toMatchObject({ planKind: 'mechanics', series: 'pr5a-mech-r2', status: 'registered', approval: { state: 'not_required' }, criteria: { status: 'registered', items: [] } })
+    // A harness check may run headless: its Browser mode is either.
+    expect(mechanics.environments.map(environment => environment.browserMode)).toEqual(['either', 'either', 'either'])
     for (const set of mechanics.boundsSets) expect(set.bounds, set.boundsId).toEqual(BLO_SYNTHETIC_BOUNDS.find(entry => entry.boundsId === set.boundsId)!.bounds)
     const slots = mechanics.environments.flatMap(environment => environment.slots)
     expect(slots.map(slot => [slot.slotId, slot.expect?.outcome, slot.expect?.resultStatus ?? slot.expect?.failureKind ?? null])).toEqual([
@@ -67,7 +69,9 @@ describe('Build List optimization measurement plans (Issue #260 PR-5A)', () => {
     expect(wide.routeGeneration.shapeSearchScaleGate).toEqual({ maxDepthUpperBound: 3000, maxGogmaGeneratedStateUpperBound: 3000 * 750 * 752, maxNormalForgeCount: 525, maxConversionWalkPositions: 2251 })
     expect(wide.routeGeneration.shapeSearchBudget).toEqual({ maxGogmaGeneratedStates: 50_000_000, maxSkillStates: 2250 * 2250, maxSettledWork: 100_000, maxPredictions: { normalArtian: 525, skill: 2251, gogmaReset: 750, gogmaKeep: 750 } })
     // PC only: Android optional, iPhone excluded (unverified, never unsupported).
-    expect(measurement.environments.map(environment => [environment.environmentId, environment.status])).toEqual([['pc-windows-chrome', 'planned'], ['android-chrome', 'optional'], ['iphone-safari', 'excluded']])
+    expect(measurement.environments.map(environment => [environment.environmentId, environment.status, environment.browserMode])).toEqual([['pc-windows-chrome', 'planned', 'headed'], ['android-chrome', 'optional', 'headed'], ['iphone-safari', 'excluded', 'headed']])
+    // The storage criterion names what it checks: the storage counts, not the content.
+    expect(measurement.criteria.items.find(item => item.axis === 'cancel_lifecycle' && item.metric === 'storage_counts_unchanged')!.description).toMatch(/Counts only: a same-count content change is not detected/)
     expect(measurement.environments[0]!.slots).toHaveLength(16)
     expect(measurement.semanticComparison.groups.map(group => [group.groupId, group.requiredBrowserRuns, group.nodeReferenceRequired])).toEqual([
       ['real.w0-research', 4, true], ['real.w0-candidates-3', 2, true], ['real.w-half', 2, true], ['real.w-wide', 2, true],
@@ -91,6 +95,12 @@ describe('Build List optimization measurement plans (Issue #260 PR-5A)', () => {
     expect(variant(mechanics, plan => { plan.environments[0]!.slots[0]!.expect = null })).toEqual(expect.arrayContaining([expect.stringMatching(/expectation belongs to every mechanics slot/)]))
     expect(variant(mechanics, plan => { plan.approval = { ...plan.approval, state: 'owner_approval_pending' } })).toEqual(expect.arrayContaining([expect.stringMatching(/mechanics plan is registered/)]))
     expect(extractBloMeasurementPlan('no block').issues).toEqual([expect.stringMatching(/exactly one plan block/)])
+    // The Browser mode: a measurement plan names headed or headless for every environment; only a mechanics plan accepts either.
+    expect(variant(measurement, plan => { plan.environments[0]!.browserMode = 'either' })).toEqual(['environments[0].browserMode of a measurement plan must be headed or headless.'])
+    expect(variant(measurement, plan => { delete (plan.environments[0] as unknown as Record<string, unknown>).browserMode })).toEqual(['environments[0].browserMode must be headed, headless or either.'])
+    expect(variant(measurement, plan => { plan.environments[0]!.browserMode = 'visible' as never })).toEqual(['environments[0].browserMode must be headed, headless or either.'])
+    expect(variant(measurement, plan => { plan.environments[0]!.browserMode = 'headless' })).toEqual([])
+    expect(variant(mechanics, plan => { plan.environments[0]!.browserMode = 'headed' })).toEqual([])
   })
 
   it('binds a record to a slot only with the slot exactly, and never repairs one', () => {
@@ -99,9 +109,11 @@ describe('Build List optimization measurement plans (Issue #260 PR-5A)', () => {
     const identity = input.kind === 'export' ? { kind: 'export' as const, fileName: input.fileName, bytes: input.bytes, sha256: input.sha256 } : null
     const record = (overrides: Parameters<typeof fabricatedRecord>[1] = {}, slot = spec) => fabricatedRecord(slot, { input: { ...fabricatedRecord(slot).input, identity }, ...overrides })
     const run = (value: ReturnType<typeof record>, source = 'raw.json') => ({ record: value, source })
-    const bound = bindBloRecordsToPlan(measurement, [run(record())])
+    // The driver saved the slot's record in raw.json, in a headed Browser (the plan's mode).
+    const driver = { mode: 'headed' as const, slots: [{ slotId: 'pc.timing.1', sessionId: 's1-non_isolated', pageIndex: 1, outcome: 'record_saved' as const, rawFile: 'raw.json' }] }
+    const bound = bindBloRecordsToPlan(measurement, [run(record())], driver)
     expect([...bound.bound.keys()]).toEqual(['pc.timing.1'])
-    const reasons = (value: ReturnType<typeof record>) => bindBloRecordsToPlan(measurement, [run(value)]).unplanned.map(entry => entry.reason)
+    const reasons = (value: ReturnType<typeof record>, context: Parameters<typeof bindBloRecordsToPlan>[2] = driver) => bindBloRecordsToPlan(measurement, [run(value)], context).unplanned.map(entry => entry.reason)
     expect(reasons(record({ slot: { ...record().slot, planned: false } }))).toEqual(['not_planned'])
     expect(reasons(record({ slot: { ...record().slot, slotId: 'pc.other' } }))).toEqual(['unknown_slot'])
     expect(reasons(record({ bounds: { ...spec.bounds, nodeBudget: 2001 } }))).toEqual(['bounds_mismatch'])
@@ -109,8 +121,15 @@ describe('Build List optimization measurement plans (Issue #260 PR-5A)', () => {
     expect(reasons(record({ input: { ...record().input, identity: { kind: 'export', fileName: input.kind === 'export' ? input.fileName : '', bytes: 1, sha256: 'f'.repeat(64) } } }))).toEqual(['input_mismatch'])
     expect(reasons(record({ environment: { ...record().environment, crossOriginIsolated: true } }))).toEqual(['origin_mismatch'])
     expect(reasons(record({ environment: { ...record().environment, userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/154.0' } }))).toEqual(['environment_mismatch'])
-    const twice = bindBloRecordsToPlan(measurement, [run(record(), 'a.json'), run({ ...record(), recordId: 'second', startedAt: '2026-10-15T00:01:00.000Z' }, 'b.json')])
-    expect(twice.bound.get('pc.timing.1')!.source).toBe('a.json')
-    expect(twice.unplanned).toEqual([expect.objectContaining({ reason: 'duplicate_slot', source: 'b.json' })])
+    // The Browser mode: the record's own Browser, then the driver's launch; without a driver record it cannot be verified.
+    expect(reasons(record({ environment: { ...record().environment, userAgent: record().environment.userAgent!.replace('Chrome/', 'HeadlessChrome/') } }))).toEqual(['browser_mode_mismatch'])
+    expect(reasons(record(), { ...driver, mode: 'headless' })).toEqual(['browser_mode_mismatch'])
+    expect(reasons(record(), null)).toEqual(['browser_mode_unverified'])
+    // The driver's own end of the slot and the raw file it saved decide too.
+    expect(reasons(record(), { ...driver, slots: [{ ...driver.slots[0]!, outcome: 'driver_deadline', rawFile: null }] })).toEqual(['driver_outcome_not_saved'])
+    expect(reasons(record(), { ...driver, slots: [{ ...driver.slots[0]!, rawFile: 'other.json' }] })).toEqual(['driver_source_mismatch'])
+    const twice = bindBloRecordsToPlan(measurement, [run(record()), run({ ...record(), recordId: 'second', startedAt: '2026-10-15T00:01:00.000Z' })], driver)
+    expect(twice.bound.get('pc.timing.1')!.record.recordId).toBe(record().recordId)
+    expect(twice.unplanned).toEqual([expect.objectContaining({ reason: 'duplicate_slot', source: 'raw.json' })])
   })
 })

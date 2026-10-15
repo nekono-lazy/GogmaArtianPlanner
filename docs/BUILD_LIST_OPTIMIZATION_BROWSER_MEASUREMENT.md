@@ -42,17 +42,18 @@ page（main thread）                                計測Worker（benchmark en
 | `buildListOptimizationBenchmarkInput.ts` | Export → PlannerInput（上記のProduction経路） |
 | `buildListOptimizationBenchmarkSynthetic.ts` | 機能確認用のsynthetic Export（`sanity-3` fixture）とsynthetic探索上限（PR-4のtest値とその変形。Productionの候補ではない） |
 | `buildListOptimizationBenchmarkSemantic.ts` | 結果のsemantic射影と成分別SHA-256 fingerprint（Plan ID・Step ID・予約OwnedWeapon ID・時刻を除く、PLANNER_SPEC 17.6） |
-| `buildListOptimizationBenchmarkRunner.ts` | 1 slotのrun（Client、計測Worker、cancel trigger、固定点memory、long task、lifecycle、storage） |
-| `buildListOptimizationBenchmarkBrowserPorts.ts` | Browserの読取り（`performance.memory`、`measureUserAgentSpecificMemory()`、`PerformanceObserver('longtask')`、storage） |
+| `buildListOptimizationBenchmarkRunner.ts` | 1 slotのrun（Client、計測Worker、cancel trigger、固定点memory、long task、lifecycle、storageの件数） |
+| `buildListOptimizationBenchmarkBrowserPorts.ts` | Browserの読取り（`performance.memory`、`measureUserAgentSpecificMemory()`、`PerformanceObserver('longtask')`、storageの件数） |
 | `BuildListOptimizationBenchmarkPage.tsx` / `main.tsx` | 計測page。driver用のconsole API `globalThis.buildListOptimizationBenchmark` |
 | `buildListOptimizationBenchmarkPlan.ts` | 計画blockの抽出・検証・slotへの結び付け（post-hoc。page / runnerはimportしない） |
 | `buildListOptimizationBenchmarkAnalysis.ts` | 公開RESULTの導出と再検証（post-hoc） |
+| `buildListOptimizationBenchmarkDriverControl.ts` | driverのslot制御（page再利用の条件、異常終了後のpage交換、`not_run`）とBrowser実行形態の判定。analyzerも同じ規則でdriver記録を読む（post-hoc） |
 
 script:
 
 | script | 役割 |
 | --- | --- |
-| `scripts/drive-build-list-optimization-browser.mjs` | CDP driver。計画をmeasurement HEADから読み、専用profileのChromeで計画順にslotを実行し、slotごとにrecordを保存する。CDPでWorker targetのattach / detach（全slot）とWorker heap（memory slot）、OSのrenderer memory（memory slot、Windows）、crash（OOMの注記）を記録する。実Exportの計測は `registered` かつ `owner_approved` の計画でしか始めない |
+| `scripts/drive-build-list-optimization-browser.mjs` | CDP driver。計画をmeasurement HEADから読んで検証し、計画の `browserMode` と異なる起動（headed / headless）を拒否したうえで、専用profileのChromeで計画順にslotを実行し、slotごとにrecordを保存する。CDPでWorker targetのattach / detach（全slot）とWorker heap（memory slot）、OSのrenderer memory（memory slot、Windows）、crash（OOMの注記）を記録する。保存したrecordで終わらなかったslot（期限超過・page loss・settle不明のerror）の後はpageを閉じて開き直し、そのslotを再実行しない（driver記録 revision 2の `pageRestarts`）。期限（30分）を短くする `--slot-deadline-ms` はmechanicsだけ。実Exportの計測は `registered` かつ `owner_approved` の計画でしか始めない |
 | `scripts/run-build-list-optimization-node-reference.mjs` | 同じHEADのNode reference（同じ入力準備・同じProduction adapterと依存・同じfingerprint）。`--preflight-only` は計算せず入力の準備だけを記録する |
 | `scripts/analyze-build-list-optimization-browser.mjs` | analyzer。計画をmeasurement HEADから `git show` で読み、解析時のcodeがmeasurement HEADと異なれば解析しない。`--public` は排他的に書き、`--check` は同じrawから再導出して比較する |
 
@@ -64,6 +65,14 @@ script:
 - record・driver記録・Node referenceが別のHEAD・未commitのcodeで作られていれば、analyzerは何も導出しない
 - 欠けたslot・完了しなかったrun・取得できなかった値を成功と数えない（`missingSlots`、`incomplete`、`not_comparable`、`unmeasured`）
 - 計画外のrecord（`planned: false`、計画に無いslot、目的・入力・探索上限・option・origin・Browserの不一致、同じslotの2件目）は除外し、理由を記録する
+- Browserの実行形態: 計画が `headed` / `headless` を定める環境では、記録自身のuser agent（headlessは `HeadlessChrome`）とdriver記録の起動形態の両方が
+  一致する記録だけを結び付ける（`browser_mode_mismatch`、driver記録が無ければ `browser_mode_unverified`）。mechanicsの計画は `either`
+- driverの終了経路: driverが保存しなかったslotの記録（`driver_outcome_not_saved`）、異常終了の後に交換されなかったpageの記録（`page_not_replaced`）、
+  driverが保存したraw file以外から読んだ記録（`driver_source_mismatch`）は結び付けない。異常終了したslotは欠けたslotとして扱う
+- semantic fingerprintはStepの実行効果（`executionEffects`）を含む。予約OwnedWeapon IDだけを登録順の記号へ置き換え、入力由来の武器IDと
+  Target / Entry IDはそのまま比べる（[MEASUREMENT_PLAN](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md) §7）
+- storageは件数（IndexedDBのdatabase数、localStorage / sessionStorageのキー数、Cache Storageのcache数、Service Workerの登録数）だけを比べる。
+  同じ件数のままの内容変更は検出しない。取得できない件数は不変と推測しない（`storage_counts_unchanged` / `storageCountsChanged`）
 - 測定できない項目: Production Workerの最大同期区間（Production Workerは計算中にevent loopへ戻らないので計算全体が1つのtaskである。
   Workerを変更して測ることはしない）。UIへの影響はmain threadのlong taskで測る
 
@@ -86,6 +95,16 @@ driver・Node reference・analyzerのcommandは各計画書の手順を参照す
 `dist-benchmark/`、`.local/`（rawの保存先）はcommitしない。
 
 ## 5. PR-5Aの機能確認
+
+### 5.0 r2（レビュー修正後のcode）
+
+r2の結果は、修正後のcodeと計画をcommitしたHEADで実行した後の記録commitで追記する。
+
+### 5.1 r1（修正前のcode、`a5858ad`）
+
+PR #267のレビュー修正の前のcodeで測った最初の記録である。修正（driverのpage隔離、driver記録revision 2、`browserMode`、
+`executionEffects` のsemantic比較、storage件数の名称）でcodeが変わったので、このRESULTは現在のcodeでは再導出できない（analyzerは
+measurement HEADと異なるcodeで解析しない）。`a5858ad` をcheckoutすれば同じrawから再導出できる。書き換えずに残す。
 
 **結果: `mechanics: passed`（10 / 10 slotが期待どおり）**。公開RESULTは
 [BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_RESULT.json](BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_RESULT.json)
@@ -116,7 +135,7 @@ syntheticの機能確認であり、性能・memoryの合否やProduction定数�
   実Workerでの非同期キャンセルを本機能確認で確かめた
 - headlessで実行した。PR-5Bの正式計測は測定計画案どおりheadedで行う
 
-自動テスト（本PR）: `src/benchmarks/buildListOptimization/` の8 file（protocol、入力、semantic、runner、計画、解析、page、isolation）、
+自動テスト（r1時点）: `src/benchmarks/buildListOptimization/` の8 file（protocol、入力、semantic、runner、計画、解析、page、isolation）、
 既存isolation test 2件の更新（PR-4のWorker isolation、Research P-1のbenchmark config固定）。
 
 ## 6. PR-5Bで実測を始めるための残作業

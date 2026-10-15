@@ -1,5 +1,5 @@
 import { stableStringify } from '../../domain/models/publicTypes'
-import type { BuildListEntry, PlanStep, ProductionPlan } from '../../domain/models/publicTypes'
+import type { BuildListEntry, OwnedWeaponId, PlanStep, PlanStepExecutionEffects, ProductionPlan } from '../../domain/models/publicTypes'
 import type {
   BuildListOptimizationDiagnostics,
   BuildListOptimizationResult,
@@ -12,7 +12,8 @@ import type { BloDiagnosticsView, BloResultView, BloSemanticFingerprint } from '
  * `docs/PLANNER_SPEC.md` 17.6: the same input gives the same ReachTable, structural candidates, route generation order, Candidate
  * meaning, generated Entry IDs and Plan semantics (Step sequence, physical operation count); the Plan ID, Step IDs, reserved
  * OwnedWeapon IDs and every time come from the Production ID factory and Clock and differ between runs. The projection below keeps
- * the former and drops the latter, so two runs are compared by meaning, never by a UUID or a time. Each component is fingerprinted
+ * the former and drops or normalizes the latter (a reserved weapon ID becomes a symbol of its registration order, so the relations
+ * between Steps survive), so two runs are compared by meaning, never by a UUID or a time. Each component is fingerprinted
  * on its own (a mismatch names the component) and the whole projection once; the projection itself never leaves the page.
  */
 
@@ -33,14 +34,57 @@ function entrySemantics(entry: BuildListEntry) {
   return withoutClockFields(entry)
 }
 
+/** A weapon reference of one Plan: an input weapon's ID, or the symbol of a weapon the Plan registers (see `weaponReferencesOf()`). */
+type WeaponReference = (id: OwnedWeaponId | null) => string | null
+
+/**
+ * The OwnedWeapon reference normalization of one Plan.
+ *
+ * Two kinds of OwnedWeapon ID appear in a Plan. An existing weapon's ID comes from the input (the Export) and is the same in every
+ * run, so it is kept as it is: which input weapon a Step works on is semantics. A weapon the Plan registers (the production-target
+ * Normal, `executionEffects.registersTrackedWeapon`) gets a reserved ID from the Production ID factory (a UUID that differs per run),
+ * and every later Step names that same ID (conversion and amendments keep it, `docs/PLANNER_SPEC.md` 16.3). Such an ID is replaced
+ * by `registered-weapon#<n>`, `n` counting the registrations in Step order: the symbol depends on the Plan's order alone, never on
+ * the ID's value, and the relation "these Steps name the same registered weapon" survives. A reserved ID that some Step names
+ * without any registration is left as it is, so it would differ between runs and fail the comparison rather than pass it.
+ */
+function weaponReferencesOf(plan: ProductionPlan): WeaponReference {
+  const registered = new Map<string, string>()
+  for (const step of plan.steps) {
+    const effects = step.executionEffects
+    if (effects?.registersTrackedWeapon === true && effects.trackedOwnedWeaponId !== null && !registered.has(effects.trackedOwnedWeaponId)) {
+      registered.set(effects.trackedOwnedWeaponId, `registered-weapon#${registered.size + 1}`)
+    }
+  }
+  return id => (id === null ? null : registered.get(id) ?? id)
+}
+
+/**
+ * A Step's Execution effects by meaning (`docs/DATA_MODEL.md` 11.3): every field as it is - the Normal creation role, the
+ * registration, the observation binding, the Target links, the compromise labels and the Target completions with their Entries and
+ * Targets, in order - except the OwnedWeapon IDs, which go through the weapon reference normalization. An absent `executionEffects`
+ * (a legacy Step) is `{ present: false }`, never the same as present effects that are empty.
+ */
+function effectsSemantics(effects: PlanStepExecutionEffects | undefined, weapon: WeaponReference) {
+  if (effects === undefined) return { present: false }
+  return {
+    present: true,
+    ...structuredClone(effects),
+    trackedOwnedWeaponId: weapon(effects.trackedOwnedWeaponId),
+    compromiseLabels: effects.compromiseLabels.map(label => ({ ...label, ownedWeaponId: weapon(label.ownedWeaponId) })),
+    targetCompletions: effects.targetCompletions.map(completion => ({ ...completion, ownedWeaponId: weapon(completion.ownedWeaponId) })),
+  }
+}
+
 /**
  * A Plan Step by meaning. Kept: the order, operation, the Target / Entry / Candidate it serves, the Targets it progresses, its
- * checkpoint milestones, the expected result, the Counter advance and the debug Counter positions. Dropped: the Step ID, the
- * OwnedWeapon ID and inventory change (a Planner-reserved weapon ID comes from the ID factory), the expected state hashes (they hash
- * reserved weapon IDs), the execution effects (they name reserved weapon IDs), the title / instruction texts (presentation) and the
- * completion fields of a draft.
+ * checkpoint milestones, the expected result, the Counter advance, the debug Counter positions, the weapon it works on and its
+ * Execution effects (both through the weapon reference normalization). Dropped: the Step ID (ID factory), the expected state hashes
+ * (they hash reserved weapon IDs), the inventory change (whole OwnedWeapon bodies with reserved IDs, the Plan's in-progress mark and
+ * times; the effects above carry what a Step does to which weapon), the title / instruction texts (presentation) and the completion
+ * fields of a draft.
  */
-function stepSemantics(step: PlanStep) {
+function stepSemantics(step: PlanStep, weapon: WeaponReference) {
   return {
     order: step.order,
     operationType: step.operationType,
@@ -49,8 +93,10 @@ function stepSemantics(step: PlanStep) {
     progressedTargetWeaponIds: step.progressedTargetWeaponIds ?? null,
     checkpointMilestones: step.checkpointMilestones ?? null,
     candidateId: step.candidateId,
+    ownedWeaponId: weapon(step.ownedWeaponId),
     expectedResult: step.expectedResult,
     rngAdvance: step.rngAdvance,
+    executionEffects: effectsSemantics(step.executionEffects, weapon),
     requiresUserConfirmation: step.requiresUserConfirmation,
     debug: step.debug === null ? null : {
       startGogmaCounter: step.debug.startGogmaCounter, endGogmaCounter: step.debug.endGogmaCounter,
@@ -58,6 +104,12 @@ function stepSemantics(step: PlanStep) {
       startNormalCounter: step.debug.startNormalCounter, endNormalCounter: step.debug.endNormalCounter,
     },
   }
+}
+
+/** Every Step of a Plan by meaning, under one weapon reference normalization of that Plan. */
+function stepsSemantics(plan: ProductionPlan) {
+  const weapon = weaponReferencesOf(plan)
+  return plan.steps.map(step => stepSemantics(step, weapon))
 }
 
 /** The Plan by meaning: everything but its ID, current Step ID and times. */
@@ -100,7 +152,7 @@ export function bloSemanticComponents(result: BuildListOptimizationResult): Reco
         conflicts: artifact.plannerResult.conflicts,
         warnings: artifact.plannerResult.warnings,
         plan: plan === null ? null : planSemantics(plan),
-        steps: plan === null ? null : plan.steps.map(stepSemantics),
+        steps: plan === null ? null : stepsSemantics(plan),
         diagnostics: diagnosticsSemantics(artifact.diagnostics),
       }
     }
