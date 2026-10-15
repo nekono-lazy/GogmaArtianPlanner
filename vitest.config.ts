@@ -62,6 +62,9 @@ const auditedNodeTestFiles = [
   'src/services/execution/productionPlanOperationCountRecovery.test.ts',
   'src/services/execution/productionPlanReplanAdoption.test.ts',
   'src/services/execution/productionPlanStart.test.ts',
+  'src/services/planner/buildListOptimizationResultCheck.test.ts',
+  'src/services/planner/buildListOptimizationService.test.ts',
+  'src/services/planner/buildListOptimizationWorkerClient.test.ts',
   'src/services/planner/createPlannerInput.test.ts',
   'src/services/planner/plannerResultPersistenceService.alternative.test.ts',
   'src/services/planner/plannerResultPersistenceService.savePoint.test.ts',
@@ -81,6 +84,7 @@ const auditedNodeTestFiles = [
   'src/services/search/batchCandidateSearch.test.ts',
   'src/services/search/createCandidateSearchInput.test.ts',
   'src/services/search/searchWorkerClient.test.ts',
+  'src/workers/buildListOptimization.worker.test.ts',
 ]
 
 // A renamed or deleted entry must not linger here unnoticed.

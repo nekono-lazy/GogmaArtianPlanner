@@ -6243,6 +6243,11 @@ cancel                                   / error                                
 generation、stale responseの無視、wrong discriminantの `PlannerWorkerProtocolError`、Worker非対応時の明示的unavailable
 error（main-thread fallbackなし）は変えていない。
 
+作成リストの全体最適化（17章）はこのProduction Planner Workerを使わない。Issue #260 PR-4で、1 runごとの専用Worker
+（`buildListOptimization.worker.entry.ts`）と専用protocol（`build-list-optimization:1`。`blo_run` / `blo_progress` /
+`blo_result` / `blo_error`）、専用Client（キャンセルはWorkerのterminate）を別に置いた（17.1）。上記のProduction Planner
+Worker protocol・Client・yieldは変えていない。
+
 ---
 
 ## 15. テスト観点
@@ -8222,7 +8227,7 @@ Issue #261の後続設計で正式に定める（17.19のU4）。本節はそれ
 
 ### 17.1 位置づけと実装状態
 
-実装状態: **Domain計算（Stage 0〜D'）まで実装済み（機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
+実装状態: **Domain計算（Stage 0〜D'）と専用Worker・Application接続まで実装済み（機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
 （[PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md](./PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md)、
 PR #259。非normativeの設計記録）とOwnerの判断（O1〜O21、17.20）を正式仕様へ反映したものである。PR-1はProduction code、
 Worker、UI、Persistence、version定数を変更していない。
@@ -8251,8 +8256,34 @@ Worker、UI、Persistence、version定数を変更していない。
   - Research（Issue #154）の `src/benchmarks/globalAssignment/` は、移したmoduleを同じpath・同じResearch APIのthin adapterとして
     使い、Researchのtoken・識別子（`global-assignment-*` 等）、方式選択規則 `d0a-v1`（Planner Alternative Search）、formal gate・
     protocol・runner・RESULT導出・D-1A / D-1CのPhase D'を持ち続ける。Researchの記録・semantic値は変わらない
-  - 全体最適化の計算はProductionのどのcallerからもまだ呼ばれない。Worker、Application、Persistence（採用の保存、17.11）、
-    UIは未実装である。observed Draft IDと実行中Planが無いことの確認（17.10）はApplication接続のPRで行う
+  - PR-3の時点では、全体最適化の計算はProductionのどのcallerからも呼ばれなかった（Worker・Applicationは下記PR-4で接続した）
+- **実装済み（Issue #260 PR-4）**: 全体最適化専用のWorkerとApplication境界を置いた。どの画面もまだ呼ばない。
+  - 専用protocol（`src/workers/buildListOptimizationWorkerContracts.ts`、version `build-list-optimization:1`）。main → Workerは
+    `blo_run`（`requestId` と fresh `PlannerInput` だけ。探索範囲・探索上限・step bound・期待hash・入力token・observed Draft IDを
+    運ばない）、Worker → mainは `blo_progress`（段階名だけ）、終端の `blo_result`（`BuildListOptimizationResult`）/ `blo_error`
+    （typed code。Domainのerrorを `unsupported` / `not_found` / `search_bound_reached` へ変換しない）。1 requestにつき終端は高々1件
+    で、終端の後にprogressを送らない。Production Planner Worker protocol（14章）・Clientは変更していない
+  - Worker（`buildListOptimization.worker.ts`）はrunごとに1回だけ計算し、`runBuildListOptimization()` へ委譲する。Engine・ID factory・
+    Clockは14章と同じくWorker内で作る。Worker bundleは `src/db/**`・Service・UI・benchmark・Researchへ到達しない（import graph test）
+  - 探索上限（17.13）の注入点はWorker内のProduction adapter（`buildListOptimization.worker.production.ts` の
+    `createBuildListOptimizationCalculation(bounds)`）だけである。Productionの探索上限はまだ無い（U2）ので、
+    `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` とし、Production Workerは推測値を使わず `search_bounds_unavailable` で
+    計算を拒否する。PR-5（Production計測）はこの値を計測済みの定数へ置き換える。計測用には、同じcontroller・adapter・
+    Production依存を使い、boundsをbenchmark専用の設定messageで受け取る計測Worker（`buildListOptimization.worker.benchmark*.ts`）を
+    用意した。設定messageはProduction protocolの一部ではなく、通常のアプリはこのentryを読み込まない
+  - Client（`src/services/planner/buildListOptimizationWorkerClient.ts`）。runごとに新しいWorkerと新しいrequestIdを使い、
+    キャンセル（画面・route変更・unmount用の `cancel()`、新しいrunによる置換、`dispose()`、`pagehide`）は同期的に `cancelled`
+    とし、直ちにWorkerをterminateする（ackやcooperative cancelを待たない）。settleは1 runにつき1回で、settle直後にterminateする。
+    別requestIdのmessage・settle後のmessageを適用しない。Workerの `error` / `messageerror`、protocol違反、main threadの構造検査
+    （`buildListOptimizationResultIssues()`）に通らない結果はfailedとし、メモリ不足と断定しない。自動wall-clock timeoutを
+    置かない。Web Workerの無い環境は明示的なunavailable failureで、main threadで計算しない
+  - Application（`src/services/planner/buildListOptimizationService.ts`）。1つのread-only transactionで実行中Plan
+    （`getRunningProductionPlan()`）、現在のDraft（`getDraftProductionPlan()`）、通常の `createPlannerInput()` によるfresh input
+    （`conflictResolutions = []`）を読む。RngStateが無ければ作らずfail closedし、実行中Plan・Draftの読込失敗やinvariant違反を
+    「無い」と読まない。実行中Planがあれば計算せず `running_plan_exists`（Application判定）とする。入力tokenのmain thread側の
+    2項目（17.10）は開始時snapshot `{ observedDraftPlanId, runningPlanAbsent: true }` としてartifactと並べてruntime-onlyに保持し、
+    採用（PR-6）へ渡す型 `BuildListOptimizationAdoptionSource` を用意した。何も書かず、どの結果でも通常Plannerへ切り替えない
+  - Persistence（採用の保存、17.11）とUIは未実装である
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
 - **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。
@@ -8529,8 +8560,8 @@ Stage D'  最終検証      置換後Build Listで内部Planner（createProducti
 - 計算はWeb Workerで行う。WorkerはIndexedDB / Dexieへアクセスせず、Worker bundleへ `src/db/**` を含めない。
   計算は永続状態を一切変更しない
 - 段階表示のためのprogressは全体最適化の計算に固有のmessageとし、Production Planner Worker（14章）へprogress
-  responseを戻さない。Workerの具体的なmessage・lifecycle（専用Workerか等）は実装PR（Worker / Application接続）で
-  確定する
+  responseを戻さない。Workerの具体的なmessage・lifecycleはIssue #260 PR-4で、1 runごとの専用Worker、専用protocol
+  `build-list-optimization:1`、terminateによるキャンセルとして確定した（17.1）
 - Research codeをProductionから直接importしない（GA設計 §11.3、Research isolation test）。中立なProduction Domain
   moduleへの責務移管で行い（9.2.19.16のPhase 6-B2aと同じ依存方向）、Research側はそれを使うthin consumerにする。
   Productionは `src/benchmarks/**` と、Researchに残る `src/domain/search/research/**` をimportしない。isolation testの
@@ -8673,7 +8704,9 @@ type BuildListOptimizationResult =
 - Workerで確定する4項目は、Domainの純関数 `deriveBuildListOptimizationInputToken()`（PR-3）がartifactの `inputToken` として
   導出する（`initialExecutionState` は最終Planの `baseSnapshot` の値、`targetWeaponsHash` は入力から計算して最終Planの値と
   一致することを確かめる）。`initialExecutionState` はPlan依存Targetの状態を含むのでPlanから読み、入力だけからは作らない。
-  採用時の照合（T2）とApplication側の2項目は、採用・保存のPRで実装する（未実装）
+  Application側の2項目は、Issue #260 PR-4で入力と同じread-only transactionから読む開始時snapshot
+  （`BuildListOptimizationStartSnapshot`: `observedDraftPlanId`、`runningPlanAbsent`）として実装した。Applicationは
+  Worker側の4項目を作り直さない。採用時の照合（T2）は採用・保存のPRで実装する（未実装）
 - tokenは作成リスト **全体** で照合する（Planner Alternative repairの「置換対象 `O` だけ」より厳しい）。全体最適化は
   全計画対象Targetを同時に割り当てるので、別Targetの追加・Entry変更・優先度変更でも割当の前提が変わるためである
 - 所持武器のstatus・名称・memoだけの変更は `initialExecutionState` の `ownedWeaponsHash`（[DATA_MODEL.md](./DATA_MODEL.md) 11.2）にも
@@ -8818,7 +8851,8 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
 - Domain APIは上限をcaller必須で受け取り、fallback・補完・clampをしない。Production adapterがWorker内で定数を渡し、
   Worker request・Application caller・UIは持たない。PR-3の `runBuildListOptimization()` は上限を `BuildListOptimizationBounds`
   （window、node budget、lookahead、structural candidate数、最終検証の回数、Stage Dの規模gateと実行budget）として必須で
-  受け取り、正の整数でない値は `RangeError` で拒否する。Production定数（U2）はまだ無い
+  受け取り、正の整数でない値は `RangeError` で拒否する。Production定数（U2）はまだ無い。Issue #260 PR-4のWorker adapterは
+  上限を渡す唯一の注入点であり、定数が無い間は推測値を使わず計算を拒否する（`search_bounds_unavailable`、17.1）
 - 初期版ではユーザーへ公開しない
 - 探索上限はdevice非依存の決定的なwork boundとし、wall-clock時間・heap量を成立判定に使わない
 
@@ -8900,6 +8934,9 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
   Planner Alternative・形状制約付きRoute探索の計算と既存testの期待値を変えていない。`validatePlannerInput()` へ追加した
   `excludedBuildListEntryWarnings` は既存の除外判定・warning・除外Entryを変えない戻り値fieldである。永続shape、Worker protocol、
   中間状態抽出は変えていない。Researchのsemantic値（D-1A / D-1Cの記録）も変わらない
+- PR-4（Worker / Application接続）の確認: 前提1〜4は成り立ち、versionを変更しない。Domain計算・既存Worker protocol・
+  永続shape・Export shapeを変えず、新しいWorker protocolは永続化しないruntime messageだけである。Application境界は
+  読み取り専用で何も書かない
 - 標準操作の切替は、作成リストを置き換えたうえで内部Plannerを実行するものであり、内部Plannerの同じ `PlannerInput` に
   対する出力を変えない。この点で、同じ `PlannerInput` に対する内部の計算結果が変わったIssue #136 / #101 Phase 6-A
   （version 17）とは異なる。採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持ち、既存Planの

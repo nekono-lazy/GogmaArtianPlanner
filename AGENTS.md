@@ -4151,9 +4151,25 @@ identity), the typed result / runtime-only artifact, the Production identity tok
 caller-required `BuildListOptimizationBounds` (no default). `validatePlannerInput()` gained the return field
 `excludedBuildListEntryWarnings` (Entry ID + its exclusion warning) and changed nothing else. The Research
 `d0a2-v2` path now runs that Production calculation through adapters under its own tokens (records unchanged;
-`d0a-v1` stays Research). No Production caller runs it yet: the Worker, Application, Persistence and the UI are
-not implemented, and the Build List's 「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the
-Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
+`d0a-v1` stays Research). PR-4 added the dedicated one-run Worker and its Application boundary, which no screen calls
+yet: its own typed protocol (`src/workers/buildListOptimizationWorkerContracts.ts`, `build-list-optimization:1`:
+`blo_run` carrying the fresh PlannerInput alone, `blo_progress` with the stage name only, one terminal `blo_result` /
+`blo_error` per request; the Production Planner Worker protocol and Client are untouched), the controller
+(`buildListOptimization.worker.ts`, delegating to `runBuildListOptimization()`; a Domain error stays an error, never
+`unsupported` / `not_found`), the Production adapter (`buildListOptimization.worker.production.ts`, the only bounds
+injection point `createBuildListOptimizationCalculation(bounds)`; `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` is
+`null` until PR-5 (U2) measures them, so the Production Worker refuses with `search_bounds_unavailable` instead of
+guessing), a benchmark-only measurement entry (`buildListOptimization.worker.benchmark*.ts`, bounds in its own
+configuration message, never in `blo_run`), the Client (`src/services/planner/buildListOptimizationWorkerClient.ts`:
+a new Worker and requestId per run, cancel / supersede / dispose / `pagehide` settle synchronously and terminate at
+once, one settle per run, other requestIds and late messages ignored, `error` / `messageerror` / malformed messages /
+results failing `buildListOptimizationResultIssues()` fail closed, no timeout) and the Application session
+(`buildListOptimizationService.ts`: one read-only transaction reads the running Plan, the current Draft and the fresh
+`createPlannerInput()` value with `conflictResolutions = []`, never creating a missing RngState; a running Plan is the
+Application's `running_plan_exists`; the start snapshot `{ observedDraftPlanId, runningPlanAbsent }` stays runtime-only
+beside the artifact for the PR-6 adoption). The Worker bundle reaches the Domain only (no `src/db/**`, fixed by an
+import-graph test). Persistence and the UI are not implemented, and the Build List's 「生産計画を作成」 still runs the
+ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.
 
 - Target: 「生産計画を作成」 becomes the standard whole-Build-List optimization (O1): rebuild the Route
