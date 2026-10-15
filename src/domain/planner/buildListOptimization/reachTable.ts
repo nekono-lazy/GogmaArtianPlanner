@@ -30,6 +30,7 @@ import { keepFamilyLayoutKey, keepFamilyMultisetKey } from '../../rng/gogmaBonus
 import type { NormalizedSeed, RngEngine, RngPredictionSupportInput } from '../../rng/rngEngine'
 import { evaluateSkillCondition } from '../../target/skillConditionEvaluator'
 import { satisfiesIdealBonuses } from '../../target/targetEvaluator'
+import type { BuildListOptimizationUnsupportedReason } from './buildListOptimizationResult'
 import {
   BuildListOptimizationInvariantError,
   type ExcludedOwnedWeaponReason, type BuildListOptimizationContext, type InclusiveRange, type LayoutKey, type NormalArtianCounterId,
@@ -176,6 +177,30 @@ export function collectReachTablePreconditionViolations(context: BuildListOptimi
     }
   }
   return violations
+}
+
+/**
+ * Every typed 17.4 reason of the ReachTable preconditions over a context (`collectReachTablePreconditionViolations()` with
+ * `all: true`), grouped by reason in the order the ReachTable checks them; empty when the optimization may start. The one rule
+ * Stage 0 of `runBuildListOptimization()` and the plan creation method (`docs/PLANNER_SPEC.md` 17.2) apply: only support queries
+ * are asked, nothing is predicted, and a reason never says that a plan or an Ideal does not exist.
+ */
+export function deriveBuildListOptimizationUnsupportedReasons(context: BuildListOptimizationContext, engine: RngEngine): BuildListOptimizationUnsupportedReason[] {
+  const reasons: BuildListOptimizationUnsupportedReason[] = []
+  for (const violation of collectReachTablePreconditionViolations(context, engine, { all: true })) {
+    switch (violation.reason) {
+      case 'unconfirmed_rng_state': reasons.push({ kind: 'unconfirmed_rng_state', missing: [...violation.missing] }); break
+      case 'checkpoint_selection': reasons.push({ kind: 'checkpoint_selection', entries: structuredClone(violation.entries) }); break
+      case 'target_without_source':
+      case 'blind_route_required': {
+        const existing = reasons.find((reason): reason is Extract<BuildListOptimizationUnsupportedReason, { kind: typeof violation.reason }> => reason.kind === violation.reason)
+        if (existing !== undefined) existing.targetWeaponIds.push(violation.targetWeaponId)
+        else reasons.push({ kind: violation.reason, targetWeaponIds: [violation.targetWeaponId] })
+        break
+      }
+    }
+  }
+  return reasons
 }
 
 export function assertReachOptionSet(optionSet: ReachOptionSet): void {

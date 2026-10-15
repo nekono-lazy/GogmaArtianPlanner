@@ -384,6 +384,41 @@ describe('Build List optimization session', () => {
     expect(await laterStart!).toMatchObject({ status: 'completed', runId: 2 })
   })
 
+  it('starts from a preparation the caller already read (Issue #260 PR-6B1) with the lifecycle of start(), never reading the state itself', async () => {
+    const { client, runs } = fakeClient()
+    const read = vi.fn(async () => START)
+    const session = createBuildListOptimizationSession({ startReader: { read }, createClient: () => client })
+    const prepared = session.startPrepared(START)
+    expect(session.getState()).toEqual({ status: 'preparing', runId: 1 })
+    await flush()
+    expect(read).not.toHaveBeenCalled()
+    expect(runs).toHaveLength(1)
+    expect(runs[0]!.input).toBe(START.plannerInput)
+    expect(session.getState()).toEqual({ status: 'running', runId: 1, requestId: 'run-1', stage: null, startSnapshot: START.startSnapshot })
+    // A later start() supersedes it: its Worker run is cancelled and its late outcome is ignored.
+    const later = session.start()
+    expect(runs[0]!.cancel).toHaveBeenCalledTimes(1)
+    await flush()
+    expect(read).toHaveBeenCalledTimes(1)
+    runs[0]!.settle({ status: 'completed', requestId: 'run-1', result: NOT_FOUND })
+    runs[1]!.settle({ status: 'completed', requestId: 'run-2', result: NOT_FOUND })
+    expect(await later).toEqual({ status: 'completed', runId: 2, completion: { decidedBy: 'calculation', result: NOT_FOUND, startSnapshot: START.startSnapshot } })
+    expect(await prepared).not.toMatchObject({ runId: 1 })
+    // A running Plan is the Application's refusal, exactly as with start(); nothing is calculated for it.
+    expect(await session.startPrepared({ status: 'running_plan_exists', runningPlanId: 'plan.running' as ProductionPlanId }))
+      .toEqual({ status: 'completed', runId: 3, completion: { decidedBy: 'application', result: { status: 'unsupported', reasons: [{ kind: 'running_plan_exists' }] } } })
+    expect(client.run).toHaveBeenCalledTimes(2)
+    // Cancel, discard and dispose behave as for start().
+    void session.startPrepared(START)
+    await flush()
+    session.cancel()
+    expect(session.getState()).toEqual({ status: 'cancelled', runId: 4, reason: 'cancelled' })
+    expect(runs[2]!.cancel).toHaveBeenCalledTimes(1)
+    session.dispose()
+    expect(await session.startPrepared(START)).toEqual({ status: 'disposed' })
+    expect(client.run).toHaveBeenCalledTimes(3)
+  })
+
   it('disposes: cancels, releases the Client and ignores every later start', async () => {
     const { session, runs, client } = sessionWith(async () => START)
     void session.start()

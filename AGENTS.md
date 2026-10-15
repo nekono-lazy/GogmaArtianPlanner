@@ -4209,8 +4209,22 @@ from the current state, the Plan snapshot, `checkProductionPlanBuildListEntryRef
 `checkBuildListOptimizationExclusionsInBuildList()`, and
 the shared T7 write (each `O` deleted, each `G` added, the new Plan ID checked, every Draft deleted, the new Draft added). An approval is refused
 before anything is read (`plan_breaking_change_approval_not_required`; the guard would say `plan_breaking_change_state_changed` with no active
-Plan). The inspection returns the replaced Draft ID, each replaced Entry's lost improvement preference and the unchanged Targets. The UI is not
-implemented, and the Build List's
+Plan). The inspection returns the replaced Draft ID, each replaced Entry's lost improvement preference and the unchanged Targets. PR-6B1 added
+the U1 plan creation method (`docs/PLANNER_SPEC.md` 17.1 / 17.2), which no screen calls yet: the pure Domain `selectPlanCreationMethod()`
+(`src/domain/planner/buildListOptimization/planCreationMethod.ts`; `validatePlannerInput()` validated with `defaultPlannerOptions`, never the
+input's own options; `isValid === false` before the `validBuildListEntries.length` count: `invalid_planner_input` / `no_valid_build_list_entry` /
+`ordinary_planner` / `build_list_optimization` / `build_list_optimization_unsupported` with Stage 0's own reasons from that very validation through
+`createBuildListOptimizationContextFromValidation()` and `deriveBuildListOptimizationUnsupportedReasons()`, which `runBuildListOptimization()` Stage
+0 now shares; no fail-closed rule of its own) with the auxiliary offer helpers `isOrdinaryPlannerAuxiliaryOfferedForResult()` /
+`isOrdinaryPlannerAuxiliaryOfferedForUnsupported()`, judged on the main thread with the main-thread Production Engine (support queries only), and
+the Application `createPlanCreationSession()` / `createProductionPlanCreationSession()` (`src/services/planner/planCreationService.ts`): each press
+re-reads through the PR-4 start reader (one read-only transaction; a read failure, a running Plan or an invariant violation starts nothing), judges
+that input, and runs the judged input - the ordinary Planner (`createPlan()` with the user's valid `PlannerOptions` only; an invalid setting is
+`planner_options_invalid`, never a default) or the optimization (the PR-4 session's new `startPrepared()`, which never reads again; `start()` is
+unchanged) - or reports a typed `not_started` reason; the auxiliary `startOrdinaryPlanner()` starts only while `isOrdinaryPlannerAuxiliaryOffered()`
+holds (otherwise it returns the state with no cancel, read, state change or Worker), then re-reads and runs the ordinary Planner when it can
+run, keeping the primary result; `inspect()` is the read-only pre-start judgement. No outcome of the optimization starts the ordinary Planner. The
+UI is not implemented, and the Build List's
 「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.
 

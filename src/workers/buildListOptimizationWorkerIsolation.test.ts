@@ -202,3 +202,35 @@ describe('Build List optimization Worker isolation (Issue #260 PR-4)', () => {
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
   })
 })
+
+describe('Plan creation boundary (Issue #260 PR-6B1)', () => {
+  const PLAN_CREATION = 'src/services/planner/planCreationService.ts'
+
+  it('reads the state once per press through the optimization start reader, and hands the optimization the start it judged', () => {
+    const code = codeOf(bySrcPath.get(PLAN_CREATION)!)
+    // No read of its own: the one read-only start reader (running Plan, Draft and fresh input in one transaction).
+    expect(code).not.toMatch(/createPlannerInput\(|\.transaction\(|Repository\(|getRunningProductionPlan|getDraftProductionPlan/)
+    expect(code.match(/startReader\.read\(\)/g)).toHaveLength(1)
+    expect(code).toContain('selectPlanCreationMethod(preparation.plannerInput, dependencies.plannerDependencies)')
+    // The optimization runs the judged start; its own start() would read the state a second time.
+    expect(code).toContain('await optimization.startPrepared(decision.preparation)')
+    expect(code).not.toMatch(/optimization\.start\(\)/)
+    // The ordinary Planner runs the judged input with the user's options only.
+    expect(code).toContain("return { kind: 'ordinary_planner', input: { ...plannerInput, options: { maxPlanSteps: options.maxPlanSteps } } }")
+  })
+
+  it('carries no search or step bound, persists nothing and ends nothing on a timer', () => {
+    const code = codeOf(bySrcPath.get(PLAN_CREATION)!)
+    expect(code).not.toMatch(/BuildListOptimizationBounds|PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS|nodeBudget|mrvLookahead|maxStructuralCandidates|maxPlannerVerifications|routeGeneration/)
+    expect(code).not.toMatch(/deriveBuildListOptimizationMaxPlanSteps|roundUpPlannerMaxPlanSteps|recommendedBuildListMaxPlanSteps|conflictResolutionMaxPlanSteps|defaultPlannerOptions|plannerRuntimeOptions/)
+    expect(code).not.toMatch(/recommendedCandidateSearchDefaults|candidateSearchDefaults|AppSettings|settingsRepository/)
+    expect(code).not.toMatch(/localStorage|sessionStorage|indexedDB|caches\.|setTimeout|setInterval|fetch\(/)
+    expect(code).not.toMatch(/savePlanner|saveBuildListOptimizationAdoption|inspectBuildListOptimizationAdoptionSave|transaction\(\s*'rw'/)
+  })
+
+  it('is reached by no Worker bundle', () => {
+    for (const entry of [WORKER_ENTRY, BENCHMARK_ENTRY, 'src/workers/planner.worker.entry.ts']) {
+      expect(reachable(entry).modules.has(PLAN_CREATION), entry).toBe(false)
+    }
+  })
+})

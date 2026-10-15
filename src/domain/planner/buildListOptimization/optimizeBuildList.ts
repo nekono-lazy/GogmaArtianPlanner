@@ -23,7 +23,7 @@ import type { PlannerDependencies, PlannerInput } from '../plannerTypes'
 import type { createProductionPlanWithObserver } from '../productionPlanGeneration'
 import type {
   BuildListOptimizationBound, BuildListOptimizationBounds, BuildListOptimizationCandidateDiagnostics, BuildListOptimizationDiagnostics,
-  BuildListOptimizationResult, BuildListOptimizationRun, BuildListOptimizationStage, BuildListOptimizationUnsupportedReason,
+  BuildListOptimizationResult, BuildListOptimizationRun, BuildListOptimizationStage,
 } from './buildListOptimizationResult'
 import { BUILD_LIST_OPTIMIZATION_REACH_OPTION_SET, BuildListOptimizationInvariantError, type ReachTable } from './buildListOptimizationTypes'
 import { noCandidateReason } from './coverageSearch'
@@ -32,7 +32,7 @@ import type { StructuralCandidate } from './coverageTypes'
 import { buildListOptimizationInputExclusionsOf, verifyBuildListOptimizationCandidate } from './finalVerification'
 import { countBuildListOptimizationOutOfScopeTargets, deriveBuildListOptimizationInputToken } from './optimizationInputScope'
 import { createBuildListOptimizationContext } from './planningContext'
-import { assertReachWindow, buildReachTable, collectReachTablePreconditionViolations, type ReachTablePreconditionViolation } from './reachTable'
+import { assertReachWindow, buildReachTable, deriveBuildListOptimizationUnsupportedReasons } from './reachTable'
 import { generateStructuralCandidateRoutes, isValidRouteGenerationSettings, ROUTE_GENERATION_SETTINGS_ISSUE, type RouteGenerationSearchPort } from './routeGeneration'
 import type { RouteGenerationIdentityTokens, RouteGenerationMethod } from './routeGenerationTypes'
 import { createStructuralCandidateSearch } from './structuralSearch'
@@ -80,25 +80,6 @@ export function assertBuildListOptimizationBounds(bounds: BuildListOptimizationB
     if (!isPositiveSafeInteger(bounds[key])) throw new RangeError(`${key} must be a positive safe integer (got ${String(bounds[key])}).`)
   }
   if (!isValidRouteGenerationSettings(bounds.routeGeneration)) throw new RangeError(`${ROUTE_GENERATION_SETTINGS_ISSUE} (got ${JSON.stringify(bounds.routeGeneration)}).`)
-}
-
-/** The typed 17.4 reasons of the precondition violations, grouped by reason in the order the ReachTable checks them. */
-function unsupportedReasonsOf(violations: readonly ReachTablePreconditionViolation[]): BuildListOptimizationUnsupportedReason[] {
-  const reasons: BuildListOptimizationUnsupportedReason[] = []
-  for (const violation of violations) {
-    switch (violation.reason) {
-      case 'unconfirmed_rng_state': reasons.push({ kind: 'unconfirmed_rng_state', missing: [...violation.missing] }); break
-      case 'checkpoint_selection': reasons.push({ kind: 'checkpoint_selection', entries: structuredClone(violation.entries) }); break
-      case 'target_without_source':
-      case 'blind_route_required': {
-        const existing = reasons.find((reason): reason is Extract<BuildListOptimizationUnsupportedReason, { kind: typeof violation.reason }> => reason.kind === violation.reason)
-        if (existing !== undefined) existing.targetWeaponIds.push(violation.targetWeaponId)
-        else reasons.push({ kind: violation.reason, targetWeaponIds: [violation.targetWeaponId] })
-        break
-      }
-    }
-  }
-  return reasons
 }
 
 function methodCounts(records: { outcome: { kind: string; method?: RouteGenerationMethod } }[]): Record<RouteGenerationMethod, number> {
@@ -163,8 +144,8 @@ export async function runBuildListOptimization(plannerInput: PlannerInput, depen
       : { kind: 'no_planning_target' }] })
   }
   const { context } = created
-  const violations = collectReachTablePreconditionViolations(context, engine, { all: true })
-  if (violations.length > 0) return finish({ status: 'unsupported', reasons: unsupportedReasonsOf(violations) })
+  const unsupportedReasons = deriveBuildListOptimizationUnsupportedReasons(context, engine)
+  if (unsupportedReasons.length > 0) return finish({ status: 'unsupported', reasons: unsupportedReasons })
   const inputExclusions = buildListOptimizationInputExclusionsOf(context.validation)
   const outOfScopeTargetCounts = countBuildListOptimizationOutOfScopeTargets(plannerInput, context.planningTargetIds)
   if (shouldCancel?.()) return cancelled()
