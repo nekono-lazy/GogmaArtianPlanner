@@ -4224,6 +4224,16 @@ that input, and runs the judged input - the ordinary Planner (`createPlan()` wit
 unchanged) - or reports a typed `not_started` reason; the auxiliary `startOrdinaryPlanner()` starts only while `isOrdinaryPlannerAuxiliaryOffered()`
 holds (otherwise it returns the state with no cancel, read, state change or Worker), then re-reads and runs the ordinary Planner when it can
 run, keeping the primary result; `inspect()` is the read-only pre-start judgement. No outcome of the optimization starts the ordinary Planner. The
+PR-6B1 follow-up (`docs/PLANNER_SPEC.md` 17.1 / 17.2) added the pre-start auxiliary entry `startOrdinaryPlannerForPreStartUnsupported()`, because
+the screen disables the primary operation while the optimization is known unsupported before the start, so no primary press may be its premise:
+whether `inspect()` offers it is `isOrdinaryPlannerAuxiliaryOfferedForPreparation()` (display only, never authority); the press is taken only
+while `acceptsPreStartOrdinaryPlannerAuxiliary()` holds (nothing reading or running in either operation, no optimization start / calculation /
+result held by the primary - otherwise no cancel, read, state change or Worker), re-reads, and runs the ordinary Planner on that input with the
+user's valid setting only when that fresh judgement still offers it; otherwise the auxiliary ends `not_started` with the existing typed reason
+(running Plan, read failure, whole-input fail closed, no valid Entry), `ordinary_planner_auxiliary_not_offered` carrying the fresh judgement (the
+unsupported input resolved, one valid Entry left) or `planner_options_invalid`, and never switches method. `startOrdinaryPlanner()` keeps its
+`isOrdinaryPlannerAuxiliaryOffered()` guard; beside a primary press that started nothing (a pre-start judgement) it judges the press the same way,
+and beside an optimization result it still runs whenever the ordinary Planner can run. No version moved. The
 UI is not implemented, and the Build List's
 「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.

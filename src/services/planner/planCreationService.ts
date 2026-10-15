@@ -49,12 +49,24 @@ import {
  * The input that is judged is the input that is calculated: nothing reads the state a second time between the judgement and the
  * start. Every press reads afresh: a judgement shown before the press (`inspect()`) is never the start authority.
  *
- * The ordinary Planner auxiliary operation (17.2 「通常Plannerの補助導線」) starts only while the session offers it
- * (`isOrdinaryPlannerAuxiliaryOffered()`: beside the primary press's pre-start refusal or optimization result that offers it); a press
- * outside that changes nothing at all. Offered, it reads and judges afresh too, and runs the ordinary Planner when the ordinary Planner
- * itself can run on that state (no running Plan, a readable state, a valid input, one or more valid Entries). It never changes the
- * primary operation's result, so the result it was offered beside stays. Nothing here falls back from the optimization to the ordinary
- * Planner: no cancellation, failure or result of the optimization starts the ordinary Planner, which runs only on a press.
+ * The ordinary Planner auxiliary operation (17.2 「通常Plannerの補助導線」) has two entries, one per basis of its offer (17.2 「提供期間」):
+ *
+ *   - beside a pre-start judgement (`startOrdinaryPlannerForPreStartUnsupported()`): the screen showed a judgement of the current
+ *     state - `inspect()`, or a primary press that started nothing - whose optimization is unsupported for reasons the ordinary Planner
+ *     can run despite. The offer is that judgement's, so it holds only while the judgement of the current state still says so: the press
+ *     reads and judges afresh and runs the ordinary Planner only when that fresh judgement offers it
+ *     (`isOrdinaryPlannerAuxiliaryOfferedForPreparation()`). Otherwise it starts nothing and returns the fresh judgement (the unsupported
+ *     input resolved, one valid Entry left, ...), never turning into another method's start. No primary press is needed first
+ *   - beside what the session holds (`startOrdinaryPlanner()`, only while `isOrdinaryPlannerAuxiliaryOffered()`): an optimization
+ *     result that offers it, whose offer lasts while that result is shown, so the press reads and judges afresh and runs the ordinary
+ *     Planner when the ordinary Planner itself can run on that state (no running Plan, a readable state, a valid input, one or more
+ *     valid Entries); or a primary press that started nothing for such unsupported reasons, which is a pre-start judgement and so is
+ *     judged at the press exactly as the pre-start entry judges it
+ *
+ * A press its entry does not take (outside the offer, or while a calculation it could not take over is in progress) changes nothing at
+ * all: no cancellation, no read, no state change, no Worker. Neither entry changes the primary operation's result, so the result or
+ * judgement it was offered beside stays. Nothing here falls back from the optimization to the ordinary Planner: no cancellation, failure
+ * or result of the optimization starts the ordinary Planner, which runs only on a press.
  *
  * It writes nothing. The ordinary Planner's result is saved by the existing `PlannerResultPersistenceService.savePlannerResult()`, and
  * an `optimized` result is adopted by `saveBuildListOptimizationAdoption()` (Issue #260 PR-6A), both outside this session.
@@ -114,6 +126,15 @@ export function createPlanCreationPreparer(dependencies: PlanCreationPreparerDep
 export type PlanCreationNotStartedReason =
   | Exclude<PlanCreationPreparation, { kind: 'judged' }>
   | Extract<PlanCreationMethodSelection, { kind: 'invalid_planner_input' | 'no_valid_build_list_entry' | 'build_list_optimization_unsupported' }>
+  /**
+   * An auxiliary press beside a pre-start judgement whose fresh judgement no longer offers it (17.2 「提供期間」): the ordinary Planner
+   * could run, but the optimization is supported again, one valid Entry is left, or a reason the ordinary Planner cannot run despite
+   * joined. `selection` is that fresh judgement, for the screen to show the current state; the press starts no other method.
+   */
+  | {
+      kind: 'ordinary_planner_auxiliary_not_offered'
+      selection: Extract<PlanCreationMethodSelection, { kind: 'ordinary_planner' | 'build_list_optimization' | 'build_list_optimization_unsupported' }>
+    }
   /** U7: the ordinary Planner was chosen and the screen's 「最大計画ステップ数」 is not a valid `PlannerOptions` (no default fills it). */
   | { kind: 'planner_options_invalid' }
 
@@ -160,10 +181,23 @@ export interface PlanCreationSessionState {
 }
 
 /**
- * Whether the state offers the ordinary Planner auxiliary operation (`docs/PLANNER_SPEC.md` 17.2): a primary press that the
- * optimization's pre-start judgement refused for reasons the ordinary Planner can run despite, or a primary press whose optimization
- * calculation returned `not_found`, `search_bound_reached` or such an `unsupported`. Never `optimized`, a cancellation, a failure, a
- * running Plan, an invalid input, no valid Entry or an adoption refusal. An auxiliary run keeps the offer, so it can be run again.
+ * Whether a pre-start judgement offers the ordinary Planner auxiliary operation (`docs/PLANNER_SPEC.md` 17.2 「開始前に分かる未対応」):
+ * the optimization is unsupported only for reasons the ordinary Planner can run despite (`checkpoint_selection`,
+ * `unconfirmed_rng_state`, `target_without_source`, `blind_route_required`). The screen applies it to `inspect()` to show the operation,
+ * and an auxiliary press beside a pre-start judgement applies it to the judgement it reads at the press, which alone decides.
+ */
+export function isOrdinaryPlannerAuxiliaryOfferedForPreparation(preparation: PlanCreationPreparation): boolean {
+  return preparation.kind === 'judged' && preparation.selection.kind === 'build_list_optimization_unsupported'
+    && preparation.selection.ordinaryPlannerAuxiliary
+}
+
+/**
+ * Whether the state offers the ordinary Planner auxiliary operation through `startOrdinaryPlanner()` (`docs/PLANNER_SPEC.md` 17.2): a
+ * primary press that the optimization's pre-start judgement refused for reasons the ordinary Planner can run despite, or a primary press
+ * whose optimization calculation returned `not_found`, `search_bound_reached` or such an `unsupported`. Never `optimized`, a
+ * cancellation, a failure, a running Plan, an invalid input, no valid Entry or an adoption refusal. An auxiliary run keeps the offer, so
+ * it can be run again. A judgement `inspect()` returned is no state of the session and never offers it here (the pre-start entry is
+ * `startOrdinaryPlannerForPreStartUnsupported()`).
  */
 export function isOrdinaryPlannerAuxiliaryOffered(state: PlanCreationSessionState): boolean {
   const primary = state.primary
@@ -172,6 +206,24 @@ export function isOrdinaryPlannerAuxiliaryOffered(state: PlanCreationSessionStat
   const optimization = primary.optimization
   return optimization.status === 'completed' && optimization.completion.decidedBy === 'calculation'
     && isOrdinaryPlannerAuxiliaryOfferedForResult(optimization.completion.result)
+}
+
+/** True while the slot's press is reading and judging, or its ordinary Planner run is going. */
+function isOperationInProgress(slot: PrimaryPlanCreationState): boolean {
+  return slot.status === 'preparing' || (slot.status === 'ordinary_planner' && slot.run.status === 'running')
+}
+
+/**
+ * Whether the session takes a press of the auxiliary operation beside a pre-start judgement
+ * (`startOrdinaryPlannerForPreStartUnsupported()`): the session is not disposed, nothing is reading, judging or running in either
+ * operation, and the primary operation holds no optimization - an optimization start, calculation or result is the other entry's basis
+ * (`startOrdinaryPlanner()`), and a press here never cancels it. Whether the auxiliary operation is offered is not the session's to say:
+ * the judgement read at the press decides (`isOrdinaryPlannerAuxiliaryOfferedForPreparation()`).
+ */
+export function acceptsPreStartOrdinaryPlannerAuxiliary(state: PlanCreationSessionState): boolean {
+  const { primary, auxiliary } = state
+  if (primary.status === 'disposed' || primary.status === 'build_list_optimization') return false
+  return !isOperationInProgress(primary) && !isOperationInProgress(auxiliary)
 }
 
 export interface PlanCreationRequest {
@@ -188,7 +240,8 @@ export interface PlanCreationSession {
   subscribe(listener: (state: PlanCreationSessionState) => void): () => void
   /**
    * The judgement over the current persisted state for the display before a press (`docs/UI_FLOW.md` 10.4). Read-only, it changes
-   * no state and is never the start authority: every press reads and judges again.
+   * no state and is never the start authority: every press reads and judges again. Whether it offers the auxiliary operation beside it
+   * is `isOrdinaryPlannerAuxiliaryOfferedForPreparation()`, and that operation is `startOrdinaryPlannerForPreStartUnsupported()`.
    */
   inspect(): Promise<PlanCreationPreparation>
   /**
@@ -198,13 +251,28 @@ export interface PlanCreationSession {
    */
   start(request: PlanCreationRequest): Promise<PlanCreationSessionState>
   /**
-   * The ordinary Planner auxiliary operation. Only while `isOrdinaryPlannerAuxiliaryOffered()` holds for the session state: otherwise
-   * it resolves with the state as it is, having cancelled, read, created and changed nothing (a running calculation and every result
-   * stay). Offered, it cancels a previous auxiliary run still going, reads and judges afresh, and runs the ordinary Planner when it can
-   * run on the current state (one or more valid Entries, whatever the method the count would choose). The primary operation's result -
-   * the offer's basis - stays, so the operation can be pressed again.
+   * The ordinary Planner auxiliary operation beside what the session holds. Only while `isOrdinaryPlannerAuxiliaryOffered()` holds for
+   * the session state: otherwise it resolves with the state as it is, having cancelled, read, created and changed nothing (a running
+   * calculation and every result stay). Offered, it cancels a previous auxiliary run still going and reads and judges afresh. Beside an
+   * optimization result it runs the ordinary Planner when it can run on the current state (one or more valid Entries, whatever the
+   * method the count would choose); beside a primary press that started nothing (a pre-start judgement) it runs it only when the fresh
+   * judgement still offers it, as `startOrdinaryPlannerForPreStartUnsupported()` does. The primary operation's result - the offer's
+   * basis - stays, so the operation can be pressed again.
    */
   startOrdinaryPlanner(request: PlanCreationRequest): Promise<PlanCreationSessionState>
+  /**
+   * The ordinary Planner auxiliary operation beside a pre-start judgement (`docs/PLANNER_SPEC.md` 17.2 「開始前に分かる未対応」): the
+   * screen showed `inspect()` (or a primary press that started nothing) saying the optimization is unsupported for reasons the ordinary
+   * Planner can run despite, and the primary operation is disabled there, so no primary press comes first. Only while
+   * `acceptsPreStartOrdinaryPlannerAuxiliary()` holds: otherwise it resolves with the state as it is, having cancelled, read, created
+   * and changed nothing. Taken, it reads and judges afresh - the judgement shown before is no authority - and runs the ordinary Planner
+   * on that fresh input with the user's valid setting only when the fresh judgement offers it
+   * (`isOrdinaryPlannerAuxiliaryOfferedForPreparation()`). Otherwise the auxiliary operation ends `not_started` with the typed reason:
+   * the running Plan, the read failure, the whole-input fail closed or no valid Entry that stops the ordinary Planner, then
+   * `ordinary_planner_auxiliary_not_offered` with the fresh judgement, then `planner_options_invalid`. It never starts the optimization
+   * and never changes the primary operation's state; after its run ended it can be pressed again.
+   */
+  startOrdinaryPlannerForPreStartUnsupported(request: PlanCreationRequest): Promise<PlanCreationSessionState>
   /** Cancels what is preparing or running (synchronously; a Worker run is cancelled at once). Results stay. */
   cancel(): void
   /** Cancels what is running and drops every result back to `idle`. */
@@ -227,8 +295,18 @@ type PlanCreationDecision =
   | { kind: 'build_list_optimization'; preparation: Extract<BuildListOptimizationStartPreparation, { status: 'ready' }> }
   | { kind: 'ordinary_planner'; input: PlannerInput }
 
+/**
+ * What an auxiliary press stands on (`docs/PLANNER_SPEC.md` 17.2 「提供期間」), which decides what its fresh judgement must say: an
+ * optimization result offers it while the result is shown, a pre-start judgement only while the judgement of the current state does.
+ */
+type OrdinaryPlannerAuxiliaryBasis = 'optimization_result' | 'pre_start_judgement'
+
+type PlanCreationPress =
+  | { operation: 'primary' }
+  | { operation: 'ordinary_planner_auxiliary'; basis: OrdinaryPlannerAuxiliaryBasis }
+
 /** What a press starts over its preparation. The optimization is the primary operation's only; the options are the ordinary Planner's only. */
-function decide(operation: PlanCreationOperation, preparation: PlanCreationPreparation, request: PlanCreationRequest): PlanCreationDecision {
+function decide(press: PlanCreationPress, preparation: PlanCreationPreparation, request: PlanCreationRequest): PlanCreationDecision {
   if (preparation.kind !== 'judged') return { kind: 'not_started', reason: preparation }
   const { selection, plannerInput, startSnapshot } = preparation
   switch (selection.kind) {
@@ -236,13 +314,19 @@ function decide(operation: PlanCreationOperation, preparation: PlanCreationPrepa
     case 'no_valid_build_list_entry':
       return { kind: 'not_started', reason: selection }
     case 'build_list_optimization':
-      if (operation === 'primary') return { kind: 'build_list_optimization', preparation: { status: 'ready', plannerInput, startSnapshot } }
+      if (press.operation === 'primary') return { kind: 'build_list_optimization', preparation: { status: 'ready', plannerInput, startSnapshot } }
       break
     case 'build_list_optimization_unsupported':
-      if (operation === 'primary') return { kind: 'not_started', reason: selection }
+      if (press.operation === 'primary') return { kind: 'not_started', reason: selection }
       break
     case 'ordinary_planner':
       break
+  }
+  // Beside a pre-start judgement the offer is the current state's judgement: the ordinary Planner could run here, but when the fresh
+  // judgement no longer offers the auxiliary operation, the press starts nothing - neither the method the fresh judgement chose nor the
+  // ordinary Planner on the strength of the judgement shown before.
+  if (press.operation === 'ordinary_planner_auxiliary' && press.basis === 'pre_start_judgement' && !isOrdinaryPlannerAuxiliaryOfferedForPreparation(preparation)) {
+    return { kind: 'not_started', reason: { kind: 'ordinary_planner_auxiliary_not_offered', selection } }
   }
   // The ordinary Planner (the primary operation with one valid Entry, or the auxiliary operation): the user's valid setting only.
   const options = request.plannerOptions
@@ -325,8 +409,9 @@ export function createPlanCreationSession(dependencies: PlanCreationSessionDepen
     return state
   }
 
-  const begin = async (operation: PlanCreationOperation, request: PlanCreationRequest): Promise<PlanCreationSessionState> => {
+  const begin = async (press: PlanCreationPress, request: PlanCreationRequest): Promise<PlanCreationSessionState> => {
     if (disposed) return state
+    const { operation } = press
     cancelActive('superseded')
     latestRunId += 1
     const runId = latestRunId
@@ -339,7 +424,7 @@ export function createPlanCreationSession(dependencies: PlanCreationSessionDepen
     }
     const preparation = await dependencies.preparer.prepare()
     if (!isFollowing(operation, runId)) return state
-    const decision = decide(operation, preparation, request)
+    const decision = decide(press, preparation, request)
     switch (decision.kind) {
       case 'not_started':
         setSlot(operation, { status: 'not_started', runId, reason: decision.reason })
@@ -362,13 +447,22 @@ export function createPlanCreationSession(dependencies: PlanCreationSessionDepen
       }
     },
     inspect: () => dependencies.preparer.prepare(),
-    start: (request) => begin('primary', request),
+    start: (request) => begin({ operation: 'primary' }, request),
     startOrdinaryPlanner: (request) => {
       // 17.2: the auxiliary operation exists only beside the reason or result that offers it. Checked before any side effect - no
       // cancel, no press (runId), no state change, no read, no Worker - so a press outside the offer leaves everything as it is. Being
       // offered and the fresh input being runnable are separate judgements: begin() still reads and judges afresh.
       if (!isOrdinaryPlannerAuxiliaryOffered(state)) return Promise.resolve(state)
-      return begin('ordinary_planner_auxiliary', request)
+      // A primary press that started nothing holds a pre-start judgement, whose offer lasts only while the current state's does.
+      const basis: OrdinaryPlannerAuxiliaryBasis = state.primary.status === 'not_started' ? 'pre_start_judgement' : 'optimization_result'
+      return begin({ operation: 'ordinary_planner_auxiliary', basis }, request)
+    },
+    startOrdinaryPlannerForPreStartUnsupported: (request) => {
+      // 17.2 「開始前に分かる未対応」: the basis is a judgement of the current state, which only the fresh read can confirm, so nothing
+      // in progress may be cancelled for it and no optimization of the primary operation may be taken over. Checked before any side
+      // effect, exactly like the other entry; begin() then reads, and decide() starts the ordinary Planner only when that read offers it.
+      if (!acceptsPreStartOrdinaryPlannerAuxiliary(state)) return Promise.resolve(state)
+      return begin({ operation: 'ordinary_planner_auxiliary', basis: 'pre_start_judgement' }, request)
     },
     cancel: () => {
       if (!disposed) cancelActive('cancelled')
