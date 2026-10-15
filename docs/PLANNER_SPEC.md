@@ -8349,8 +8349,10 @@ Worker、UI、Persistence、version定数を変更していない。
   - Application: `createPlanCreationSession()` / `createProductionPlanCreationSession()`（`src/services/planner/planCreationService.ts`）。
     押すたびに全体最適化の開始reader（PR-4、1つのread-only transaction）で実行中Plan・Draft・fresh inputを読み直し、その入力を判定し、
     判定したその入力で通常Planner（Production Planner Workerの `createPlan()`、ユーザーの有効な `PlannerOptions` だけを設定）または
-    全体最適化（PR-4のsessionへ、読み直さずに開始する `startPrepared()`）を開始する。補助操作（`startOrdinaryPlanner()`）も読み直して判定し、
-    通常Planner自身が実行可能なら通常Plannerを実行し、主操作の結果を変えない。開始前の表示用に `inspect()`（read-only、実行のauthorityではない）を持つ。
+    全体最適化（PR-4のsessionへ、読み直さずに開始する `startPrepared()`）を開始する。補助操作（`startOrdinaryPlanner()`）は、Sessionが補助導線を
+    提供している間（`isOrdinaryPlannerAuxiliaryOffered()`。主操作の開始前未対応・計算結果が補助導線を出す場合）だけ開始でき、それ以外では
+    cancel・読込・状態変更・Worker生成をせずに現在の状態を返す。提供中は読み直して判定し、通常Planner自身が実行可能なら通常Plannerを実行し、
+    主操作の結果を変えない。開始前の表示用に `inspect()`（read-only、実行のauthorityではない）を持つ。
     何も書かず、通常Plannerの結果の保存は既存の `savePlannerResult()`、`optimized` の採用はPR-6Aの保存APIである
 - **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
   （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない

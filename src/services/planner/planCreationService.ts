@@ -49,10 +49,12 @@ import {
  * The input that is judged is the input that is calculated: nothing reads the state a second time between the judgement and the
  * start. Every press reads afresh: a judgement shown before the press (`inspect()`) is never the start authority.
  *
- * The ordinary Planner auxiliary operation (17.2 「通常Plannerの補助導線」) reads and judges afresh too, and runs the ordinary Planner
- * whenever the ordinary Planner itself can run (no running Plan, a readable state, a valid input, one or more valid Entries). It never
- * changes the primary operation's result, so the result it was offered beside stays. Nothing here falls back from the optimization to
- * the ordinary Planner: no cancellation, failure or result of the optimization starts the ordinary Planner, which runs only on a press.
+ * The ordinary Planner auxiliary operation (17.2 「通常Plannerの補助導線」) starts only while the session offers it
+ * (`isOrdinaryPlannerAuxiliaryOffered()`: beside the primary press's pre-start refusal or optimization result that offers it); a press
+ * outside that changes nothing at all. Offered, it reads and judges afresh too, and runs the ordinary Planner when the ordinary Planner
+ * itself can run on that state (no running Plan, a readable state, a valid input, one or more valid Entries). It never changes the
+ * primary operation's result, so the result it was offered beside stays. Nothing here falls back from the optimization to the ordinary
+ * Planner: no cancellation, failure or result of the optimization starts the ordinary Planner, which runs only on a press.
  *
  * It writes nothing. The ordinary Planner's result is saved by the existing `PlannerResultPersistenceService.savePlannerResult()`, and
  * an `optimized` result is adopted by `saveBuildListOptimizationAdoption()` (Issue #260 PR-6A), both outside this session.
@@ -196,9 +198,11 @@ export interface PlanCreationSession {
    */
   start(request: PlanCreationRequest): Promise<PlanCreationSessionState>
   /**
-   * The ordinary Planner auxiliary operation: cancels whatever is preparing or running, reads and judges afresh, and runs the
-   * ordinary Planner when it can run on the current state (one or more valid Entries, whatever the method the count would choose).
-   * The primary operation's result stays.
+   * The ordinary Planner auxiliary operation. Only while `isOrdinaryPlannerAuxiliaryOffered()` holds for the session state: otherwise
+   * it resolves with the state as it is, having cancelled, read, created and changed nothing (a running calculation and every result
+   * stay). Offered, it cancels a previous auxiliary run still going, reads and judges afresh, and runs the ordinary Planner when it can
+   * run on the current state (one or more valid Entries, whatever the method the count would choose). The primary operation's result -
+   * the offer's basis - stays, so the operation can be pressed again.
    */
   startOrdinaryPlanner(request: PlanCreationRequest): Promise<PlanCreationSessionState>
   /** Cancels what is preparing or running (synchronously; a Worker run is cancelled at once). Results stay. */
@@ -359,7 +363,13 @@ export function createPlanCreationSession(dependencies: PlanCreationSessionDepen
     },
     inspect: () => dependencies.preparer.prepare(),
     start: (request) => begin('primary', request),
-    startOrdinaryPlanner: (request) => begin('ordinary_planner_auxiliary', request),
+    startOrdinaryPlanner: (request) => {
+      // 17.2: the auxiliary operation exists only beside the reason or result that offers it. Checked before any side effect - no
+      // cancel, no press (runId), no state change, no read, no Worker - so a press outside the offer leaves everything as it is. Being
+      // offered and the fresh input being runnable are separate judgements: begin() still reads and judges afresh.
+      if (!isOrdinaryPlannerAuxiliaryOffered(state)) return Promise.resolve(state)
+      return begin('ordinary_planner_auxiliary', request)
+    },
     cancel: () => {
       if (!disposed) cancelActive('cancelled')
     },
