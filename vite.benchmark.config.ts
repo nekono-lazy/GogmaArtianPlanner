@@ -10,7 +10,7 @@ import react from '@vitejs/plugin-react'
  * the Node Research runners), so a Browser record names the exact code it measured. Benchmark build only.
  */
 const BENCHMARK_CODE_PATHS = ['src', 'scripts', 'package.json', 'package-lock.json', 'vite.config.ts', 'vite.benchmark.config.ts',
-  'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json', 'benchmark.html', 'benchmark-global-assignment.html']
+  'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json', 'benchmark.html', 'benchmark-global-assignment.html', 'benchmark-build-list-optimization.html']
 function benchmarkBuildProvenance() {
   try {
     const git = (...args: string[]) => execFileSync('git', args, { encoding: 'utf8' }).trim()
@@ -36,7 +36,8 @@ const crossOriginIsolation = process.env.BENCHMARK_CROSS_ORIGIN_ISOLATED === '1'
 
 /**
  * Isolated C8 production-build entry; it does not change the normal app build. Issue #154 Production準備 P-1 adds the second input
- * `benchmark-global-assignment.html` (the Global Assignment Browser Worker page); `benchmark.html` and its harnesses are unchanged.
+ * `benchmark-global-assignment.html` (the Global Assignment Browser Worker page); `benchmark.html` and its harnesses are unchanged. Issue #260
+ * PR-5A adds the third input `benchmark-build-list-optimization.html` (the Production Build List optimization measurement page).
  */
 export default defineConfig(({ command }) => ({
   plugins: [react()],
@@ -47,6 +48,6 @@ export default defineConfig(({ command }) => ({
   build: {
     outDir: 'dist-benchmark',
     emptyOutDir: true,
-    rollupOptions: { input: { benchmark: 'benchmark.html', globalAssignment: 'benchmark-global-assignment.html' } },
+    rollupOptions: { input: { benchmark: 'benchmark.html', globalAssignment: 'benchmark-global-assignment.html', buildListOptimization: 'benchmark-build-list-optimization.html' } },
   },
 }))

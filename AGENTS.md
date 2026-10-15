@@ -4168,8 +4168,15 @@ results failing `buildListOptimizationResultIssues()` fail closed, no timeout) a
 `createPlannerInput()` value with `conflictResolutions = []`, never creating a missing RngState; a running Plan is the
 Application's `running_plan_exists`; the start snapshot `{ observedDraftPlanId, runningPlanAbsent }` stays runtime-only
 beside the artifact for the PR-6 adoption). The Worker bundle reaches the Domain only (no `src/db/**`, fixed by an
-import-graph test). Persistence and the UI are not implemented, and the Build List's 「生産計画を作成」 still runs the
-ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
+import-graph test). PR-5A added only the benchmark-only Production Browser measurement harness
+(`src/benchmarks/buildListOptimization/`, page `benchmark-build-list-optimization.html` as a third input of
+`vite.benchmark.config.ts`, and `scripts/drive-` / `run-` / `analyze-build-list-optimization-*.mjs`): the Production Client over the PR-4
+measurement entry, the input built through the Import authorities and the ordinary `createPlannerInput()`, a minimized raw record
+(counts, classifications, SHA-256 semantic fingerprints; no ID, Seed, Counter or path), a committed plan read from the measured commit,
+and a post-hoc analysis keeping semantic parity, computation, performance / memory and cancel / lifecycle apart. Its PR-5B measurement plan
+(`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`) is a proposal pending Owner approval: no criterion is judged and
+`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` stays `null` until PR-5B. Persistence and the UI are not implemented, and the Build List's
+「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.
 
 - Target: 「生産計画を作成」 becomes the standard whole-Build-List optimization (O1): rebuild the Route

@@ -166,9 +166,17 @@ describe('Build List optimization Worker isolation (Issue #260 PR-4)', () => {
     // The Production bounds are not decided yet (U2): the adapter supplies none rather than a guessed value.
     expect(codeOf(bySrcPath.get('src/workers/buildListOptimization.worker.production.ts')!)).toMatch(/export const PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS: BuildListOptimizationBounds \| null = null\n/)
     expect(codeOf(bySrcPath.get(WORKER_ENTRY)!)).toMatch(/createProductionBuildListOptimizationWorkerRuntime\(\)/)
-    // Only benchmark harness files name the measurement entry; the normal application never loads it.
+    // Only benchmark harness files name the measurement entry; the normal application never loads it. Since Issue #260 PR-5A the
+    // Production measurement harness (`src/benchmarks/buildListOptimization/`, built by the benchmark Vite config only) names it: its
+    // runner sends the benchmark bounds message, its Browser ports create the measurement Worker, and its test fixture runs the
+    // measurement Worker logic in process.
     const namers = [...bySrcPath].filter(([path, source]) => !path.includes('.worker.benchmark') && /buildListOptimization\.worker\.benchmark/.test(codeOf(source))).map(([path]) => path)
-    expect(namers).toEqual([])
+    expect(namers.filter(path => !path.startsWith('src/benchmarks/'))).toEqual([])
+    expect(namers.sort()).toEqual([
+      'src/benchmarks/buildListOptimization/buildListOptimizationBenchmarkBrowserPorts.ts',
+      'src/benchmarks/buildListOptimization/buildListOptimizationBenchmarkRunner.ts',
+      'src/benchmarks/buildListOptimization/buildListOptimizationBenchmarkTestFixture.ts',
+    ])
   })
 
   it('persists nothing, ends no run on a timer and never falls back to the ordinary Planner', () => {
