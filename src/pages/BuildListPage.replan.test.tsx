@@ -30,6 +30,8 @@ import {
 } from '../test/fixtures/domainData'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import { completedPlannerTermination } from '../test/fixtures/plannerTermination'
+import { productionPlannerOptionsInvalidMessage } from '../components/planner/productionPlannerSettingsPresentation'
+import { testPlanCreationDependencies } from '../test/fixtures/buildListPagePlanCreation'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
 
 /**
@@ -162,7 +164,7 @@ function dependencies(options: {
     master: createValidMasterDataFixture(),
     createWorkerClient: vi.fn(() => client),
     refresh: vi.fn(async () => ({ entries, targets: [target], ownedWeapons: [] })),
-    createInput: vi.fn(async (calculationContext): Promise<PlannerInput> => ({ ...plannerInput(target, entry), calculationContext })),
+    ...testPlanCreationDependencies(createValidMasterDataFixture(), () => client, async (calculationContext): Promise<PlannerInput> => ({ ...plannerInput(target, entry), calculationContext })),
     savePlannerResult: vi.fn(async () => createValidProductionPlan()),
     deleteEntry: vi.fn(async () => undefined),
     inspectEntryDelete: vi.fn(async () => ({ approvalRequired: false as const })),
@@ -193,6 +195,17 @@ function renderPage(deps: BuildListPageDependencies) {
 }
 
 const START = '現在地点から再計画を試算'
+
+/**
+ * The primary operation once the pre-start judgement settled (Issue #260 PR-6C): while the plan creation
+ * session judges the Build List, 「生産計画を作成」 is disabled, so a test presses it only after that.
+ */
+async function enabledCreateButton() {
+  const button = await screen.findByRole('button', { name: '生産計画を作成' })
+  await waitFor(() => expect(button).toBeEnabled())
+  return button
+}
+
 const CREATE = '生産計画を作成'
 const PREVIEW_TITLE = '再計画の試算（未採用）'
 const ADOPT = 'この再計画を採用'
@@ -201,7 +214,7 @@ describe('BuildListPage replan entry', () => {
   it('offers the ordinary Draft creation when no Plan runs', async () => {
     const { deps } = dependencies({ running: 'none' })
     renderPage(deps)
-    expect(await screen.findByRole('button', { name: CREATE })).toBeEnabled()
+    expect(await enabledCreateButton()).toBeEnabled()
     expect(screen.queryByRole('button', { name: START })).not.toBeInTheDocument()
     expect(deps.getRunningProductionPlan).toHaveBeenCalledOnce()
   })
@@ -290,7 +303,7 @@ describe('BuildListPage replan entry', () => {
     const maxSteps = await screen.findByLabelText('最大計画ステップ数')
     await user.clear(maxSteps)
     await user.type(maxSteps, '0')
-    expect(await screen.findByText('詳細設定に無効な値があるため、再計画を試算できません。')).toBeInTheDocument()
+    expect(await screen.findByText(productionPlannerOptionsInvalidMessage)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: START })).toBeDisabled()
     expect(replan.prepareProductionPlanReplanPreview).not.toHaveBeenCalled()
   })

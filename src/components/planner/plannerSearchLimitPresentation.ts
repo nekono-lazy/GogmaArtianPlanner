@@ -29,15 +29,30 @@ function formatCount(value: number): string {
 export const plannerIncompleteSearchTitle = '生産計画の探索が完了していません'
 
 /**
+ * Where the bound is set and what to run again (UI_FLOW 10.1). The Build List
+ * names its detail settings by their U7 heading 「詳細設定（通常Planner用）」, and
+ * an ordinary Planner auxiliary run is re-run through that very operation, not
+ * through 「生産計画を作成」 (which runs the global optimization there). The
+ * defaults are the wording every other caller keeps.
+ */
+export interface PlannerReachedLimitMessageOptions {
+  /** The heading of the detail settings that hold 「最大計画ステップ数」. */
+  settingsHeading?: string
+  /** What to do again, completing 「もう一度…してください」. */
+  retryAction?: string
+}
+
+/**
  * One line per reached bound, naming the bound, the value it ran with, and
  * the detail setting to raise.
  */
 export function createPlannerReachedLimitMessages(
   termination: PlannerRunTermination,
+  { settingsHeading = '詳細設定', retryAction = '生産計画を作成' }: PlannerReachedLimitMessageOptions = {},
 ): string[] {
   return termination.reachedLimits.map(
     () =>
-      `最大計画ステップ数 ${formatCount(termination.limits.maxPlanSteps)} に到達しました。すべての目標武器を含む完成計画を作成できませんでした。「詳細設定」の「最大計画ステップ数」を増やして、もう一度生産計画を作成してください。`,
+      `最大計画ステップ数 ${formatCount(termination.limits.maxPlanSteps)} に到達しました。すべての目標武器を含む完成計画を作成できませんでした。「${settingsHeading}」の「最大計画ステップ数」を増やして、もう一度${retryAction}してください。`,
   )
 }
 

@@ -23,6 +23,7 @@ import {
 import { buildListEntryId, createValidProductionPlan, productionPlanId } from '../test/fixtures/domainData'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import { planBreakingApproval, planBreakingInspection } from '../test/fixtures/planBreakingInspection'
+import { testPlanCreationDependencies } from '../test/fixtures/buildListPagePlanCreation'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
 
 /**
@@ -80,7 +81,7 @@ function harness(estimatedOperationCount?: number) {
     master: createValidMasterDataFixture(),
     createWorkerClient: vi.fn(() => client()),
     refresh: vi.fn(async () => ({ entries: entry === null ? [] : [entry], targets: [target], ownedWeapons: [source] })),
-    createInput: vi.fn(async () => { throw new Error('not expected') }),
+    ...testPlanCreationDependencies(createValidMasterDataFixture(), () => client(), async () => { throw new Error('not expected') }),
     savePlannerResult: vi.fn(async () => null),
     deleteEntry: vi.fn(async () => { entry = null as unknown as BuildListEntry }),
     inspectEntryDelete: vi.fn<() => Promise<PlanBreakingChangeInspection>>(async () => ({ approvalRequired: false })),
@@ -172,7 +173,7 @@ describe('BuildListPage breaking-change warning', () => {
     const inspection = planBreakingInspection({ reasons: ['build_list_changed'] })
     deps.inspectIntermediateStateSelectionUpdate.mockResolvedValue(inspection)
     await renderExpanded(deps)
-    await user.click(await screen.findByRole('button', { name: '詳細設定' }))
+    await user.click(await screen.findByRole('button', { name: '詳細設定（通常Planner用）' }))
     await waitFor(() => expect(screen.getByLabelText('最大計画ステップ数')).toHaveValue(1500))
     await user.clear(screen.getByLabelText('最大計画ステップ数'))
     await user.type(screen.getByLabelText('最大計画ステップ数'), '1234')

@@ -45,6 +45,7 @@ import {
   createPlanCreationSession,
   isOrdinaryPlannerAuxiliaryOffered,
   isOrdinaryPlannerAuxiliaryOfferedForPreparation,
+  planCreationOptimizationOf,
   type PlanCreationPreparation,
   type PlanCreationSession,
   type PlanCreationSessionState,
@@ -1275,5 +1276,92 @@ describe('Plan creation session: the auxiliary operation beside a pre-start judg
       expect(primary(h.session.getState()), entry).toMatchObject({ status: 'not_started', reason: { kind: 'build_list_optimization_unsupported' } })
       h.session.dispose()
     }
+  })
+})
+
+describe('Plan creation session: the start context of an optimization press (Issue #260 PR-6C, PLANNER_SPEC 17.9)', () => {
+  /** Three valid Entries: a different start-time Build List from `twoValid()`. */
+  const threeValid = () => planCreationScenario([bonusPart('a'), bonusPart('b'), bonusPart('c')])
+
+  it('keeps the collections of the very input the press judged and handed to the optimization, read-only', async () => {
+    const h = harness(memoryReader(twoValid()), memoryDependencies())
+    void h.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+    await vi.waitFor(() => expect(h.optimization.runs).toHaveLength(1))
+    const judged = h.preparations[0]!
+    if (judged.kind !== 'judged') throw new Error(judged.kind)
+    const held = planCreationOptimizationOf(h.session.getState())
+    if (held === null) throw new Error('no optimization held')
+    expect(held.runId).toBe(1)
+    // The same Entries, Targets and owned weapons the Worker received - element by element, never a second read.
+    const sent = h.optimization.runs[0]!.input
+    expect(sent).toBe(judged.plannerInput)
+    expect(held.startContext.buildListEntries).toEqual(sent.buildListEntries)
+    expect(held.startContext.targetWeapons).toEqual(sent.targetWeapons)
+    expect(held.startContext.ownedWeapons).toEqual(sent.ownedWeapons)
+    held.startContext.buildListEntries.forEach((entry, index) => expect(entry).toBe(sent.buildListEntries[index]))
+    expect(Object.isFrozen(held.startContext)).toBe(true)
+    expect(Object.isFrozen(held.startContext.buildListEntries)).toBe(true)
+    // The Worker's input is not frozen by it: the context holds copies of the collections.
+    expect(Object.isFrozen(sent.buildListEntries)).toBe(false)
+    // The optimization's progress and result keep the same context (one press, one context).
+    h.optimization.runs[0]!.observer?.onStage?.('reach_table')
+    expect(planCreationOptimizationOf(h.session.getState())?.startContext).toBe(held.startContext)
+    h.optimization.runs[0]!.settle({ status: 'completed', requestId: 'optimization-run-1', result: NOT_FOUND })
+    await vi.waitFor(() => expect(planCreationOptimizationOf(h.session.getState())?.optimization.status).toBe('completed'))
+    expect(planCreationOptimizationOf(h.session.getState())?.startContext).toBe(held.startContext)
+    h.session.dispose()
+  })
+
+  it('takes the press-time input, never the judgement inspect() returned before it', async () => {
+    // inspect() reads two valid Entries; the state then changes and the press reads three.
+    const h = harness(memoryReader(twoValid(), threeValid()), memoryDependencies())
+    const inspected = await h.session.inspect()
+    if (inspected.kind !== 'judged') throw new Error(inspected.kind)
+    expect(inspected.plannerInput.buildListEntries).toHaveLength(2)
+    void h.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+    await vi.waitFor(() => expect(h.optimization.runs).toHaveLength(1))
+    const held = planCreationOptimizationOf(h.session.getState())
+    expect(held?.startContext.buildListEntries).toHaveLength(3)
+    expect(held?.startContext.buildListEntries).toEqual(h.optimization.runs[0]!.input.buildListEntries)
+    h.session.dispose()
+  })
+
+  it('never pairs a context with another press: a later press, discard() and dispose() drop it', async () => {
+    const h = harness(memoryReader(twoValid(), threeValid()), memoryDependencies())
+    void h.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+    await vi.waitFor(() => expect(h.optimization.runs).toHaveLength(1))
+    const first = planCreationOptimizationOf(h.session.getState())!
+    expect(first.startContext.buildListEntries).toHaveLength(2)
+    const second = h.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+    // While the second press reads, no context is held: the first one went with its press.
+    expect(planCreationOptimizationOf(h.session.getState())).toBeNull()
+    await vi.waitFor(() => expect(h.optimization.runs).toHaveLength(2))
+    // The first run's late result is never shown with the second press's context.
+    h.optimization.runs[0]!.settle({ status: 'completed', requestId: 'optimization-run-1', result: NOT_FOUND })
+    await flush()
+    const held = planCreationOptimizationOf(h.session.getState())!
+    expect(held.runId).toBe(2)
+    expect(held.startContext.buildListEntries).toHaveLength(3)
+    expect(held.optimization.status).toBe('running')
+    h.optimization.runs[1]!.settle({ status: 'completed', requestId: 'optimization-run-2', result: SEARCH_BOUND })
+    await second
+    expect(planCreationOptimizationOf(h.session.getState())).toMatchObject({ runId: 2, optimization: { status: 'completed', completion: { result: SEARCH_BOUND } } })
+    h.session.discard()
+    expect(planCreationOptimizationOf(h.session.getState())).toBeNull()
+    expect(h.session.getState().primary).toEqual({ status: 'idle' })
+    h.session.dispose()
+    expect(planCreationOptimizationOf(h.session.getState())).toBeNull()
+  })
+
+  it('holds no context for an ordinary Planner press or a press that started nothing', async () => {
+    const h = harness(memoryReader(oneValid(), checkpointUnsupported()), memoryDependencies())
+    void h.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+    await vi.waitFor(() => expect(h.planner.calls).toHaveLength(1))
+    expect(planCreationOptimizationOf(h.session.getState())).toBeNull()
+    expect('startContext' in h.session.getState().primary).toBe(false)
+    const refused = await h.session.start({ plannerOptions: { maxPlanSteps: 40 } })
+    expect(primary(refused).status).toBe('not_started')
+    expect(planCreationOptimizationOf(refused)).toBeNull()
+    h.session.dispose()
   })
 })

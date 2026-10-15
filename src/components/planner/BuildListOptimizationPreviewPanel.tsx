@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, type ReactNode, type Ref } from 'react'
 import {
   Alert,
   Box,
@@ -377,7 +377,8 @@ function PreviewConflicts({ plan }: { plan: ProductionPlan }) {
  *
  * 「戻る」 calls `onDiscard` (the caller discards the result). 「この計画を採用」 exists only when the caller passes `onAdopt` - the
  * adoption confirmation and save belong to the caller - so no unconnected adoption is ever shown. `focusHeadingOnMount` moves
- * focus to the Preview heading once, when the calculation just finished.
+ * focus to the Preview heading once, when the calculation just finished. `adoptButtonRef` lets the caller return focus to
+ * 「この計画を採用」 after its confirmation closes.
  */
 export function BuildListOptimizationPreviewPanel({
   artifact,
@@ -389,6 +390,7 @@ export function BuildListOptimizationPreviewPanel({
   onAdopt,
   actionsDisabled = false,
   focusHeadingOnMount = false,
+  adoptButtonRef,
 }: {
   artifact: BuildListOptimizationArtifact
   startContext: BuildListOptimizationPreviewStartContext | null
@@ -400,6 +402,7 @@ export function BuildListOptimizationPreviewPanel({
   onAdopt?: () => void
   actionsDisabled?: boolean
   focusHeadingOnMount?: boolean
+  adoptButtonRef?: Ref<HTMLButtonElement>
 }) {
   const headingId = useId()
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -453,7 +456,7 @@ export function BuildListOptimizationPreviewPanel({
         )}
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
           {onAdopt !== undefined && (
-            <Button variant="contained" disabled={actionsDisabled} onClick={onAdopt} sx={actionSx}>
+            <Button ref={adoptButtonRef} variant="contained" disabled={actionsDisabled} onClick={onAdopt} sx={actionSx}>
               この計画を採用
             </Button>
           )}

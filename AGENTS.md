@@ -4134,8 +4134,9 @@ Respect search bounds and return the best state available within the limits.
 
 `docs/PLANNER_SPEC.md` 17 (with `docs/REQUIREMENTS.md` 19.1 / 24.1, `docs/UI_FLOW.md` 10.4,
 `docs/SEARCH_SPEC.md` 5.6.9 / 5.8.1 and `docs/DATA_MODEL.md` 9.4 / 14.5) is the formal contract for the
-Production integration of the Global Assignment Research (Issue #154). Only the Domain / Search
-foundation is implemented (PR-2): Stage 0 - C in `src/domain/planner/buildListOptimization/` (the
+Production integration of the Global Assignment Research (Issue #154). It is implemented and connected to the Build List screen
+(PR-6C; Issue #260 stays open until the PR-6C review and acceptance are settled). The Domain / Search foundation came first
+(PR-2): Stage 0 - C in `src/domain/planner/buildListOptimization/` (the
 `BUILD_LIST_OPTIMIZATION_REACH_OPTION_SET` = the Research `a2` rule, carried on the table as
 `continuesCurrentIdealLanes`), the shape-constrained Route search as a Production Search API
 (`src/domain/search/shapeConstrained/`, Production token `shape-constrained-route-policy:v1`), and the shared
@@ -4245,9 +4246,25 @@ figures from `artifact.summary`, `replacements`, `unchangedTargetWeaponIds` and 
 preferences and owned weapon names only from the start-time input the caller passes, never from a later read, with no ID or guess when absent;
 the current Draft compared only under the 17.9 same-input conditions; the Plan through `ProductionPlanContent variant="unsaved_preview"`,
 which leaves the persisted view unchanged; Debug-only diagnostics; 「戻る」 calls the caller's discard and 「この計画を採用」 exists only when the
-caller passes `onAdopt`). Nothing is persisted. The adoption dialog, the adoption inspect / save / navigation and the screen connection are
-PR-6C. The screen is not switched, and the Build List's
-「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
+caller passes `onAdopt`). Nothing is persisted. PR-6C connected the screen and the adoption (`docs/PLANNER_SPEC.md` 17.1, `docs/UI_FLOW.md`
+10.0 / 10.4): the Application keeps, on the primary operation's `build_list_optimization` state only, a runtime-only read-only start context of
+the very `PlannerInput` the press judged and started (`PlanCreationStartContext` from `planCreationStartContextOf()`, read through
+`planCreationOptimizationOf()`; it belongs to that `runId`, is dropped by a new press / `discard()` / `dispose()`, and never changes the start
+snapshot, the input token or the adoption artifact), which is the only source of the Preview's start-time Entries, Target names and weapons (never
+`inspect()` or a later read). `BuildListPage` gained `createPlanCreationSession()` (Production `createProductionPlanCreationSession()`),
+`inspectBuildListOptimizationAdoption()` / `saveBuildListOptimizationAdoption()` (the PR-6A APIs, no approval) and lost `createInput()`;
+`createWorkerClient()` now serves the replan Preview only. The controller `useBuildListPlanCreation()` creates one session per mount (disposed on
+unmount, never recreated by a page re-read), shows `inspect()` as the display-only pre-start judgement (sequence-guarded, a running Plan or a
+refused adoption re-reads the page), follows each press to its end (an ordinary result is saved with `savePlannerResult()`, an `incomplete` one never;
+navigation only to the Plan Persistence returned), and runs the adoption: the shown run's `buildListOptimizationAdoptionSourceOf()` ->
+inspection -> `BuildListOptimizationAdoptionDialog` (counts, preference resets, Draft replacement, not undoable, all-or-nothing, from the
+inspection) -> one save; a refusal (typed codes only, `presentBuildListOptimizationAdoptionRefusal()`) drops the Preview, re-reads the page and
+starts nothing by itself, and a discarded Preview, a new run or an unmount drops a pending adoption. `BuildListPlanCreationSection` renders the one
+primary operation with its pre-start body (`aria-describedby`), the pre-start unsupported reasons with the auxiliary operation
+(`startOrdinaryPlannerForPreStartUnsupported()`), the U7 accordion 「詳細設定（通常Planner用）」, and the running / result / Preview panels with the
+result-side auxiliary operation (`startOrdinaryPlanner()`). While a calculation, a save or an adoption check runs, the Build List edits on the screen
+are disabled; an applied edit while a result is shown drops it, a settings edit never does. The GA isolation test lists the new callers. No version
+moved (17 / 10 / 13). `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.
 
 - Target: 「生産計画を作成」 becomes the standard whole-Build-List optimization (O1): rebuild the Route
@@ -4258,7 +4275,7 @@ non-normative design record; where it differs, the formal specification wins.
 - The internal Planner contract (Route commitment + deterministic scheduling), Planner Alternative,
   replan, Execution and history semantics are unchanged and not removed. Never add an automatic
   fallback to the ordinary Planner
-- Planning method selection (U1, decided; `docs/PLANNER_SPEC.md` 17.2, specification only): one primary
+- Planning method selection (U1, decided; `docs/PLANNER_SPEC.md` 17.2, implemented in PR-6B1 / PR-6C): one primary
   「生産計画を作成」. The method follows the valid Entry count of `validatePlannerInput()` over the fresh
   `createPlannerInput()` input - never the raw / filtered / display counts or the `maxPlanSteps`
   setting: 0 -> no plan, 1 -> the ordinary Planner (the Entry's own checkpoint selection and
@@ -4275,7 +4292,7 @@ non-normative design record; where it differs, the formal specification wins.
   Route rebuild, no Entry replacement, selections kept. `maxPlanSteps` serves only ordinary-Planner
   runs
 - Setting placement and invalid value (U7, `docs/PLANNER_SPEC.md` 17.2 / `docs/UI_FLOW.md` 10.0,
-  specification only): the 「最大計画ステップ数」 field and 「既定値に戻す」 stay in the existing detail
+  implemented in PR-6C): the 「最大計画ステップ数」 field and 「既定値に戻す」 stay in the existing detail
   Accordion, titled as the ordinary Planner's and saying the global optimization does not use it. An
   invalid value blocks only the operations that use it (the 1-Entry 「生産計画を作成」, the auxiliary
   path, the replan Preview) and never the global optimization start; the method is never chosen from
@@ -4283,7 +4300,7 @@ non-normative design record; where it differs, the formal specification wins.
   starts (no switch to the global optimization, no default substituted). The edit state, 「既定値に戻す」,
   Issue #130's `recommendedBuildListMaxPlanSteps()` stay; nothing is newly persisted; no global
   optimization bound or window enters the settings UI
-- Long-run notice (U3, `docs/PLANNER_SPEC.md` 17.16 / `docs/UI_FLOW.md` 10.4, specification only): 30 s
+- Long-run notice (U3, `docs/PLANNER_SPEC.md` 17.16 / `docs/UI_FLOW.md` 10.4, implemented in PR-6B2 / PR-6C): 30 s
   after a global optimization run started and still running, the computing display adds that it is
   taking time, still running and cancellable. A display threshold, never a timeout: no Worker / Domain
   bound or time behaviour changes, the elapsed time is UI-side only (never sent to the Worker, never

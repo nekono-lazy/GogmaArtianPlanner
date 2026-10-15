@@ -71,6 +71,11 @@ const BUILD_LIST_OPTIMIZATION_CALLERS = [
   '../../components/planner/buildListOptimizationPresentation.ts', '../../components/planner/useBuildListOptimizationLongRunNotice.ts',
   '../../components/planner/BuildListOptimizationRunningPanel.tsx', '../../components/planner/BuildListOptimizationResultPanel.tsx',
   '../../components/planner/BuildListOptimizationPreviewPanel.tsx', '../../components/planner/BuildListOptimizationDiagnostics.tsx',
+  // Issue #260 PR-6C: the Build List screen connection (the plan creation section and controller, the adoption confirmation and the
+  // screen itself).
+  '../../components/planner/BuildListOptimizationAdoptionDialog.tsx', '../../components/planner/BuildListPlanCreationSection.tsx',
+  '../../components/planner/planCreationPresentation.ts', '../../components/planner/useBuildListPlanCreation.ts',
+  '../../pages/BuildListPage.tsx',
 ]
 const codeOnly = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 const scripts = import.meta.glob('../../../scripts/*.mjs', { query: '?raw', import: 'default', eager: true }) as Record<string, string>

@@ -23,6 +23,7 @@ import {
   type ExecutionFixture,
 } from '../test/fixtures/executionRuntime'
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
+import { testPlanCreationDependencies } from '../test/fixtures/buildListPagePlanCreation'
 import { BuildListPage, type BuildListPageDependencies } from './BuildListPage'
 
 /**
@@ -87,7 +88,7 @@ function realDependencies(database: AppDatabase, fixture: ExecutionFixture): Bui
     master: createValidMasterDataFixture(),
     createWorkerClient: () => unusedClient(),
     refresh: (calculationContext) => buildList.refreshStaleness(calculationContext),
-    createInput: () => Promise.reject(new Error('planning is not expected')),
+    ...testPlanCreationDependencies(createValidMasterDataFixture(), () => unusedClient(), () => Promise.reject(new Error('planning is not expected'))),
     savePlannerResult: () => Promise.reject(new Error('planning is not expected')),
     deleteEntry: (id, approval) => buildList.deleteEntry(id, approval ?? null),
     inspectEntryDelete: (id) => buildList.inspectEntryDelete(id),

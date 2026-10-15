@@ -28,12 +28,27 @@ export const productionPlannerMaxPlanStepsField: ProductionPlannerOptionFieldPre
 }
 
 /**
- * The Build List's default is the recommended bound for the Entries it holds
- * (`recommendedBuildListMaxPlanSteps()`, Issue #130), so the description says
- * how that default is sized instead of naming a fixed number.
+ * The heading of the Build List detail settings (U7, `docs/UI_FLOW.md` 10.0, Issue #260 PR-6C): the setting belongs to the ordinary
+ * Planner, never to the global optimization, so the heading says so instead of a bare 「詳細設定」.
  */
-export const productionPlannerDetailSettingsDescription =
-  '生産計画の作成に使う安全上限です。1以上の整数だけが有効で、この画面を再読み込みすると既定値へ戻ります。既定値は登録候補の必要操作数に応じて500刻みで補正されます（最低1,000）。'
+export const productionPlannerDetailSettingsTitle = '詳細設定（通常Planner用）'
+
+/**
+ * The Build List detail settings description (U7, `docs/UI_FLOW.md` 10.0): which operations use the bound - the one valid Entry
+ * 「生産計画を作成」, the ordinary Planner auxiliary operation and the replan Preview - that the global optimization (two or more valid
+ * Entries) does not, and the existing rules. The Build List's default is the recommended bound for the Entries it holds
+ * (`recommendedBuildListMaxPlanSteps()`, Issue #130), so it says how that default is sized instead of naming a fixed number.
+ */
+export const productionPlannerDetailSettingsDescriptionLines: readonly string[] = [
+  '通常Plannerで生産計画を作るときの安全上限です。',
+  '有効な候補が1件のときの「生産計画を作成」、「登録済みの候補で生産計画を作成」、「現在地点から再計画を試算」で使います。',
+  '有効な候補が2件以上のときの「生産計画を作成」（全体最適化）には適用されません。全体最適化の上限はアプリが決めます。',
+  '1以上の整数だけが有効で、この画面を再読み込みすると既定値へ戻ります。既定値は登録候補の必要操作数に応じて500刻みで補正されます（最低1,000）。',
+]
+
+/** U7: shown beside an ordinary Planner operation (the one valid Entry 「生産計画を作成」, the replan Preview) while the setting is invalid. */
+export const productionPlannerOptionsInvalidMessage =
+  '通常Plannerの詳細設定の「最大計画ステップ数」が無効なため、開始できません。1以上の整数を入力してください。'
 
 export const plannerOptionInvalidMessage = '1以上の整数を入力してください。'
 

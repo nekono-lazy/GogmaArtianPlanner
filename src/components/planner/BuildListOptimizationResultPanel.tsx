@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef } from 'react'
+import { useEffect, useId, useMemo, useRef, type Ref } from 'react'
 import { Alert, Box, Button, Paper, Stack, Typography, type AlertColor } from '@mui/material'
 import { Link as RouterLink } from 'react-router-dom'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
@@ -237,6 +237,7 @@ export function BuildListOptimizationResultPanel({
   onAdopt,
   actionsDisabled = false,
   focusHeadingOnMount = false,
+  adoptButtonRef,
 }: {
   outcome: BuildListOptimizationOutcome
   /** The state the calculation was judged and run on (see `BuildListOptimizationPreviewStartContext`); null when unknown. */
@@ -251,6 +252,8 @@ export function BuildListOptimizationResultPanel({
   onAdopt?: () => void
   actionsDisabled?: boolean
   focusHeadingOnMount?: boolean
+  /** The Preview's 「この計画を採用」, for the caller's focus return after its confirmation. */
+  adoptButtonRef?: Ref<HTMLButtonElement>
 }) {
   const headingId = useId()
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -274,6 +277,7 @@ export function BuildListOptimizationResultPanel({
         onAdopt={onAdopt}
         actionsDisabled={actionsDisabled}
         focusHeadingOnMount={focusHeadingOnMount}
+        adoptButtonRef={adoptButtonRef}
       />
     )
   }

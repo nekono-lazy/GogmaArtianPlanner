@@ -8228,7 +8228,7 @@ Issue #261の後続設計で正式に定める（17.19のU4）。本節はそれ
 
 ### 17.1 位置づけと実装状態
 
-実装状態: **Domain計算（Stage 0〜D'）、専用Worker・Application接続、採用のPersistence、作成方式の共通判定とその開始境界、計算中表示・結果表示・未採用PreviewのUI部品まで実装済み（画面からは未接続で、機能としては未実装）**。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
+実装状態: **実装済み（Issue #260 PR-6Cで作成リスト画面へ接続。PR-6Cの受入が確定するまでIssue #260はCloseしない）**。Domain計算（Stage 0〜D'）、専用Worker・Application接続、採用のPersistence、作成方式の共通判定とその開始境界、計算中表示・結果表示・未採用PreviewのUI部品、画面の接続と採用確認を実装した。本章はIssue #260のPR-1（docs-only）で、Production統合の設計案
 （[PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md](./PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md)、
 PR #259。非normativeの設計記録）とOwnerの判断（O1〜O21、17.20）を正式仕様へ反映したものである。PR-1はProduction code、
 Worker、UI、Persistence、version定数を変更していない。
@@ -8368,8 +8368,8 @@ Worker、UI、Persistence、version定数を変更していない。
     結果の表示中に通常Plannerが実行可能なら実行する
 - **実装済み（Issue #260 PR-6B2、UI部品のみ。画面へは未公開）**: 計算中表示（17.16、U3）・結果別の表示（17.8）・未採用Preview（17.9）を、
   再利用可能なPresentation部品として置いた（`src/components/planner/BuildListOptimizationRunningPanel.tsx`、`BuildListOptimizationResultPanel.tsx`、
-  `BuildListOptimizationPreviewPanel.tsx`、`buildListOptimizationPresentation.ts`）。作成リスト画面の「生産計画を作成」はこれらを使わず、
-  従来どおり通常Plannerを実行する（下記「現在のmain」）。採用確認Dialog、採用のinspect / save / 遷移、画面との接続は後続PR（PR-6C）である。
+  `BuildListOptimizationPreviewPanel.tsx`、`buildListOptimizationPresentation.ts`）。PR-6B2の時点では作成リスト画面はこれらを使わず、
+  従来どおり通常Plannerを実行した。採用確認Dialog、採用のinspect / save / 遷移、画面との接続はPR-6C（下記）で実装した。
   - 入力はApplication / Domainの型付きの状態だけである（段階 `BuildListOptimizationStage`、`BuildListOptimizationResult`、Sessionのキャンセル・
     failure）。作成方式・未対応・補助導線の提供可否・結果の分類をUIで新たに判定しない。補助操作は、Applicationが提供している間（`isOrdinaryPlannerAuxiliaryOffered()` /
     `isOrdinaryPlannerAuxiliaryOfferedForPreparation()`）にcallerが渡したときだけ、それを出す結果（Domainの `isOrdinaryPlannerAuxiliaryOfferedForResult()`）の
@@ -8384,12 +8384,31 @@ Worker、UI、Persistence、version定数を変更していない。
     （`isCalculationContextCompatible()`）、`baseSnapshot` の `initialExecutionState`・`targetWeaponsHash`・`buildListEntriesHash` が入力tokenの
     `initialExecutionState`・`targetWeaponsHash`・`inputBuildListEntriesHash` と一致する場合だけ行う。計画全体は既存の読み取り専用表示
     （`ProductionPlanContent`）の未保存Preview用の表示引数（`variant="unsaved_preview"`。保存済みPlanの表示は変えない）で示す。何も永続化しない
-- **現在のmain**: 作成リストの「生産計画を作成」は7章の通常Planner（ordinary Planner、`createPlan()`）を1回実行する
-  （[UI_FLOW.md](./UI_FLOW.md) 10.2）。全体最適化は通常UIから利用できない
+- **実装済み（Issue #260 PR-6C、画面の接続と一括採用）**: 作成リスト画面の「生産計画を作成」を作成方式の選択（17.2）へ切り替え、
+  全体最適化の計算中表示・結果・未採用Preview・採用確認・採用を接続した。Domain計算、Worker protocol、永続shape、探索上限は変えていない。
+  - Application: 主操作が全体最適化を開始した状態（`PrimaryPlanCreationState` の `build_list_optimization`）に、その押下が判定して
+    全体最適化へ渡した `PlannerInput` から導出した読み取り専用のstart context（`PlanCreationStartContext`: 作成リスト・目標武器・所持武器。
+    `planCreationStartContextOf()`、`planCreationOptimizationOf()`）を加えた。そのrun（`runId`）の状態とだけ対応し、新しい主操作・`discard()`・
+    `dispose()` で主操作の状態ごと破棄する。runtime-onlyで永続化せず、Workerへ送らず、`BuildListOptimizationStartSnapshot`・入力token・
+    採用用artifactの意味を変えない。Previewはこのstart contextだけから置換前Entry・目標武器名・優先起点・所持武器名を読み、`inspect()` の結果や
+    計算後の再読込で補わない
+  - 画面（`src/pages/BuildListPage.tsx`、`src/components/planner/BuildListPlanCreationSection.tsx`、`useBuildListPlanCreation.ts`）:
+    画面のmountごとに1つの `PlanCreationSession`（Productionは `createProductionPlanCreationSession()`）を作り、unmountでdisposeする（計算は中止）。
+    画面データの再読込ではSessionを作り直さない。開始前の表示は `inspect()`（表示専用。古い応答で新しい表示を上書きせず、判定中は古い判定を
+    現在の判定として出さない。読込失敗を候補0件と読まない）で、押下時は常にSessionのfresh判定に従う。有効件数1の通常Planner・補助操作の結果は
+    既存の `savePlannerResult()` で保存し（`incomplete` は保存・遷移しない）、Persistenceが返したPlanの `/plans/:planId` へ遷移する。補助操作は
+    開始前未対応の本文（`startOrdinaryPlannerForPreStartUnsupported()`）と、それを出す計算結果の表示（`startOrdinaryPlanner()`）の中にだけ置く
+  - 採用: Previewの「この計画を採用」で、同じrunの `buildListOptimizationAdoptionSourceOf()` を `inspectBuildListOptimizationAdoptionSave()` へ渡し、
+    成功した場合だけ採用確認Dialog（`BuildListOptimizationAdoptionDialog`）を開く。Dialogの内容（置換件数、変更なしの件数、改善優先が戻る目標武器、
+    下書きの置換、元に戻せないこと、部分採用しないこと）はinspectionの結果から示す。確認後に `saveBuildListOptimizationAdoption()` を1回だけ呼び
+    （承認tokenを作らず、`savePlannerResult()` へ変換しない）、Persistenceが返したDraftへ遷移する。事前確認・保存の拒否は既存のtyped codeで
+    理由を示し、Previewを破棄して画面を再読込し、再計算・通常Plannerを自動で始めない。Previewの破棄・別runの開始・unmountで採用中の状態を捨て、
+    古い事前確認の結果でDialogを開かない
+  - 計算・保存・採用確認の間は、同じ画面の作成リストの変更（途中採用状態・改善優先の変更、削除）を一時的に無効にする（[UI_FLOW.md](./UI_FLOW.md) 10.4）。
+    結果の表示中に作成リストを変更した場合は結果を破棄する。「最大計画ステップ数」の変更では破棄しない（U7）
 - **目標仕様（本章）**: 「生産計画を作成」を、有効な候補（valid Entry）が2件以上ある場合の全体最適化の標準操作にする。
   有効な候補が1件の場合は同じ操作で通常Planner（7章）を実行し、全体最適化が使えない・成立しない場合には通常Plannerの
-  補助導線を出す（17.2の作成方式の選択、U1）。画面の切替はIssue #260の後続PR（UI公開PR）で行う。本章の「標準の
-  生産計画作成」を、切替前の画面の挙動として読まない
+  補助導線を出す（17.2の作成方式の選択、U1）。画面の切替はIssue #260 PR-6Cで行った
 - Production統合はIssue #260、Global Assignment ResearchはIssue #154として管理する（O20）。本章はResearchの契約・
   記録（[PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md](./PLANNER_GLOBAL_ASSIGNMENT_DESIGN.md)、D-1C / P-2のformal記録とRESULT）を
   変更しない
@@ -8443,8 +8462,8 @@ Owner決定（U1、17.2）: 作成リスト画面の生産計画の作成は主�
 
 #### 作成方式の選択（U1）
 
-実装状態: **Domainの共通判定とApplicationの開始境界は実装済み（Issue #260 PR-6B1・PR-6B1補完、17.1）、画面は未接続**。現在のmainの
-「生産計画を作成」は件数にかかわらず通常Plannerを1回実行する（[UI_FLOW.md](./UI_FLOW.md) 10.2）。画面の切替はUI公開PRで行う。
+実装状態: **実装済み**。Domainの共通判定とApplicationの開始境界はIssue #260 PR-6B1・PR-6B1補完（17.1）、作成リスト画面の切替は
+PR-6C（17.1）で実装した。
 下記の「名前と返却形は実装PRで確定」はPR-6B1で `selectPlanCreationMethod()` / `PlanCreationMethodSelection` と確定し、判定を実行する
 場所はmain thread（main threadのProduction Engineによるsupport問い合わせだけ）と確定した。
 
@@ -9118,6 +9137,10 @@ Accordionを通常Planner用であることを明示して使い、全体最適�
 - PR-6B1補完（開始前未対応の補助操作の入口）の確認: 前提1〜4は成り立ち、versionを変更しない。Applicationの開始境界に、主操作を
   押さずに使える補助操作の入口と、押した時点の判定で補助導線を確かめる規則を加えただけである。Domainの判定、通常Planner
   （`createPlan()`）と全体最適化のsessionの呼び方、永続shape、Export shape、Worker protocol、探索上限、UIは変えていない
+- PR-6C（画面の接続と一括採用）の確認: 前提1〜4は成り立ち、versionを変更しない。Applicationへ加えたstart contextはruntime-onlyの読み取り専用値で、
+  永続shape・Export shape・Worker protocol・入力token・採用用artifactへ入らない。画面は既存の通常Planner（`createPlan()` / `savePlannerResult()`）、
+  全体最適化のsession、PR-6Aの採用API（inspect / save）を呼ぶだけで、Domain計算・内部Planner・候補検索・探索上限・既存のPlan保存と実行ナビの意味を
+  変えない。U7の見出し・説明文・無効値の扱いは画面上の表示と操作の開始可否だけである
 - 標準操作の切替は、作成リストを置き換えたうえで内部Plannerを実行するものであり、内部Plannerの同じ `PlannerInput` に
   対する出力を変えない。この点で、同じ `PlannerInput` に対する内部の計算結果が変わったIssue #136 / #101 Phase 6-A
   （version 17）とは異なる。採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持ち、既存Planの
