@@ -1785,8 +1785,9 @@ Search DomainのAPI `visitShapeConstrainedRouteCandidates()` を定める。Issu
 （`docs/PLANNER_GLOBAL_ASSIGNMENT_D0A2_DESIGN.md` §5.3、Phase D-0A-2a）でResearch専用APIとして導入し、Issue #260 PR-2で
 中立なProduction Search Domain module `src/domain/search/shapeConstrained/` へ責務移管した（`src/domain/search/index.ts` から
 公開する）。Productionの呼び出し元は作成リストの全体最適化（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章）のルート生成
-（Stage D）だけであり、それは未実装なので、現在はProductionのcallerが無い。Candidate Search・Planner Alternative Search・
-Planner・Worker・UI・Serviceは呼ばない。Research（`src/domain/search/research/`）は同じ関数を再exportするadapterとして使い続ける。
+（Stage D。Issue #260 PR-3で実装した `src/domain/planner/buildListOptimization/` のDomain計算）だけである。その計算自体は
+まだWorker・Application・UIから呼ばれない。Candidate Search・Planner Alternative Search・Planner・Worker・UI・Serviceは呼ばない。
+Research（`src/domain/search/research/`）は同じ関数を再exportするadapterとして使い続ける。
 本APIの追加は5.6.8までのSearchの意味を変更しない。5.6.8の「held位置を跨ぐRouteはPlanner Alternative Searchだけが生成する」は
 Candidate Search・Planner Alternative Searchについての規定であり、本APIはPlanner Alternative Searchのfrontierをそのまま使うので、
 同じcoverage条件でheld位置を跨ぐ。
@@ -1839,7 +1840,8 @@ Candidate Search・Planner Alternative Searchについての規定であり、�
   Plannerによる検証（Researchの Phase D'、全体最適化のStage D'）を経るまで `verified` と呼ばない
 
 **Production化（Issue #260）。** 実装状態: **Production APIへの責務移管は実装済み（Issue #260 PR-2）。Productionのcaller
-（全体最適化のStage D）は未実装**。作成リストの全体最適化（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章）は本APIの能力を必要とする
+（全体最適化のStage D）もDomain計算として実装済み（Issue #260 PR-3）。通常UIからはまだ使えない**。
+作成リストの全体最適化（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章）は本APIの能力を必要とする
 （Research D-1Cでは43 Entryのうち22件を形状制約付きの方式で得た。射影起点は21件。形状制約付きの方式を持たない
 D-0Bの方式では7 / 43で止まった）。PR-2で本APIを中立なProduction Search Domain module `src/domain/search/shapeConstrained/`
 （型・入力validation・base到達の診断・探索本体）へ移し、`src/domain/search/index.ts` から公開した。Planner Alternative Searchと
@@ -1858,7 +1860,9 @@ D-0Bの方式では7 / 43で止まった）。PR-2で本APIを中立なProductio
 - 形状制約付きRouteは通常のCandidate Search・Planner Alternative Searchが返さない形を含み得るので、Candidateとして使う前に
   独立Route検証（全operationの再予測）を行い、失敗はfail closedする
 - Productionの呼び出し元は全体最適化だけである（isolation testで、形状制約の名前とseam fieldをSearch Domainの外で使わない
-  ことを固定している。全体最適化のStage Dを実装するPRで、その呼び出し元を加えて改訂する）。Research上の識別子（route policy
+  ことを固定している。Issue #260 PR-3で、Stage Dの5 fileを公開module `src/domain/search/shapeConstrained` 経由の
+  呼び出し元として加えて改訂した。Stage Dは独立Route検証（`checkShapeConstrainedRoute()`）を通したRouteだけを使う）。
+  Research上の識別子（route policy
   `research-shape-constrained-route-policy:v1` など）はResearch adapterに残し、Production APIは別のtokenを持つ
   （[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.12）
 - 移管が無指定時のSearch出力を変える場合は許容しない（設計を見直す。やむを得ない場合は計算版数を仕様で判断する）

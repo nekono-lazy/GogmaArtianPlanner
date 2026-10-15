@@ -24,7 +24,7 @@
  * The window is the caller's: this module applies no window of its own, widens none, and reads neither the
  * Candidate Search defaults nor a saved setting (`docs/PLANNER_SPEC.md` 17.13).
  */
-import type { ElementId, OwnedWeapon, RestorationBonusSet, TargetWeapon, TargetWeaponId, WeaponTypeId } from '../../models/publicTypes'
+import type { BuildListEntryId, ElementId, OwnedWeapon, RestorationBonusSet, TargetWeapon, TargetWeaponId, WeaponTypeId } from '../../models/publicTypes'
 import type { PlannerInput } from '../plannerTypes'
 import { keepFamilyLayoutKey, keepFamilyMultisetKey } from '../../rng/gogmaBonusFamily'
 import type { NormalizedSeed, RngEngine, RngPredictionSupportInput } from '../../rng/rngEngine'
@@ -111,6 +111,73 @@ function classifyOwnedSource(target: TargetWeapon, weapon: OwnedWeapon, master: 
   return { kind: 'source', gogma: { currentSkillIdeal, currentBonusIdeal } }
 }
 
+/**
+ * One input precondition of the ReachTable that does not hold (`docs/PLANNER_SPEC.md` 17.4): every reason is an input the
+ * optimization does not support, never "the Ideal is unreachable".
+ */
+export type ReachTablePreconditionViolation =
+  | { reason: 'unconfirmed_rng_state'; missing: ('base_seed' | 'skill_counter' | 'gogma_counter')[]; detail: string }
+  | { reason: 'checkpoint_selection'; entries: { buildListEntryId: BuildListEntryId; targetWeaponId: TargetWeaponId }[]; detail: string }
+  | { reason: 'target_without_source'; targetWeaponId: TargetWeaponId; detail: string }
+  | { reason: 'blind_route_required'; targetWeaponId: TargetWeaponId; detail: string }
+
+/**
+ * The ReachTable's input preconditions over a context, in the order the scan checks them: the confirmed Base Seed / Skill Counter /
+ * Gogma Counter, no selected intermediate state on a planning Target's valid Entry (design 15.1: this design places no pin), and
+ * for every planning Target (grouped by weapon type / element, in the order the first Target of each group appears) an owned
+ * source or a confirmed rarity-8 Normal Counter whose Normal prediction is supported (the blind variant is never an option).
+ *
+ * `all: false` stops at the first violation with the very Engine queries the scan made before (`buildReachTable()` reports it);
+ * `all: true` evaluates every precondition, so the caller can name every unsupported reason and Target at once. Only support
+ * queries are asked; nothing is predicted.
+ */
+export function collectReachTablePreconditionViolations(context: BuildListOptimizationContext, engine: RngEngine, options: { all: boolean }): ReachTablePreconditionViolation[] {
+  const violations: ReachTablePreconditionViolation[] = []
+  const input = context.plannerInput
+  const master = input.master
+  const { baseSeed, skillCounter, gogmaCounter } = input.rngState
+  if (!baseSeed.isConfirmed || baseSeed.value === null || !skillCounter.isConfirmed || skillCounter.value === null
+    || !gogmaCounter.isConfirmed || gogmaCounter.value === null) {
+    const missing = [!baseSeed.isConfirmed || baseSeed.value === null ? 'base_seed' as const : null,
+      !skillCounter.isConfirmed || skillCounter.value === null ? 'skill_counter' as const : null,
+      !gogmaCounter.isConfirmed || gogmaCounter.value === null ? 'gogma_counter' as const : null].filter((value): value is NonNullable<typeof value> => value !== null)
+    const label = { base_seed: 'Base Seed', skill_counter: 'Skill Counter', gogma_counter: 'Gogma Counter' } as const
+    violations.push({ reason: 'unconfirmed_rng_state', missing, detail: `No confirmed value for: ${missing.map(value => label[value]).join(', ')}.` })
+    if (!options.all) return violations
+  }
+  // Design 15.1: this design places no intermediate state pin, so a selected state is not planned here.
+  const pinned = context.validation.validBuildListEntries
+    .filter(({ entry }) => context.planningTargetIds.has(entry.targetWeaponId) && entry.intermediateStateSelection !== undefined
+      && (entry.intermediateStateSelection.skillOpportunityId !== null || entry.intermediateStateSelection.bonusOpportunityId !== null))
+    .map(({ entry }) => entry)
+  if (pinned.length > 0) {
+    violations.push({ reason: 'checkpoint_selection', entries: pinned.map(entry => ({ buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId })),
+      detail: `BuildListEntries with a selected intermediate state: ${pinned.map(entry => entry.id).join(', ')}.` })
+    if (!options.all) return violations
+  }
+  // Fail closed before any prediction when a Target has no source kind at all (design 5.2).
+  for (const group of groupTargets(context.planningTargets)) {
+    const counter = confirmedRarity8Counter(input, group.weaponTypeId)
+    const normalSupported = engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: group.weaponTypeId, elementId: group.elementId, rarity: 8 }).supported
+    for (const target of group.targets) {
+      const hasOwnedSource = compatibleOwnedWeapons(input, group).some(weapon => classifyOwnedSource(target, weapon, master).kind === 'source')
+      if (hasOwnedSource) continue
+      if (counter === null) {
+        violations.push({ reason: 'target_without_source', targetWeaponId: target.id,
+          detail: `Target ${target.id} has no owned source and no confirmed rarity-8 Normal Counter for ${group.weaponTypeId}; the blind variant is never an option.` })
+        if (!options.all) return violations
+        continue
+      }
+      if (!normalSupported) {
+        violations.push({ reason: 'blind_route_required', targetWeaponId: target.id,
+          detail: `Target ${target.id} has no owned source and Normal Artian prediction is unsupported for ${group.weaponTypeId} / ${group.elementId}; only a blind Route could reach it.` })
+        if (!options.all) return violations
+      }
+    }
+  }
+  return violations
+}
+
 export function assertReachOptionSet(optionSet: ReachOptionSet): void {
   if (optionSet === null || typeof optionSet !== 'object' || typeof optionSet.id !== 'string' || optionSet.id.length === 0
     || typeof optionSet.continuesCurrentIdealLanes !== 'boolean') {
@@ -133,45 +200,15 @@ export async function buildReachTable(context: BuildListOptimizationContext, eng
   assertReachOptionSet(optionSet)
   const input = context.plannerInput
   const master = input.master
+  // The first precondition that does not hold, with the very Engine queries the scan always made before it predicts.
+  const [violation] = collectReachTablePreconditionViolations(context, engine, { all: false })
+  if (violation !== undefined) return { kind: 'unsupported_input', reason: violation.reason, detail: violation.detail }
   const { baseSeed, skillCounter, gogmaCounter } = input.rngState
-  if (!baseSeed.isConfirmed || baseSeed.value === null || !skillCounter.isConfirmed || skillCounter.value === null
-    || !gogmaCounter.isConfirmed || gogmaCounter.value === null) {
-    const missing = [!baseSeed.isConfirmed || baseSeed.value === null ? 'Base Seed' : null,
-      !skillCounter.isConfirmed || skillCounter.value === null ? 'Skill Counter' : null,
-      !gogmaCounter.isConfirmed || gogmaCounter.value === null ? 'Gogma Counter' : null].filter((value): value is string => value !== null)
-    return { kind: 'unsupported_input', reason: 'unconfirmed_rng_state', detail: `No confirmed value for: ${missing.join(', ')}.` }
-  }
-  // Design 15.1: this design places no intermediate state pin, so a selected state is not planned here.
-  const pinned = context.validation.validBuildListEntries
-    .filter(({ entry }) => context.planningTargetIds.has(entry.targetWeaponId) && entry.intermediateStateSelection !== undefined
-      && (entry.intermediateStateSelection.skillOpportunityId !== null || entry.intermediateStateSelection.bonusOpportunityId !== null))
-    .map(({ entry }) => entry.id)
-  if (pinned.length > 0) {
-    return { kind: 'unsupported_input', reason: 'checkpoint_selection', detail: `BuildListEntries with a selected intermediate state: ${pinned.join(', ')}.` }
-  }
   // The persisted Base Seed is already normalized; the Domain passes it to the Engine as is.
   const seed = baseSeed.value as NormalizedSeed
-  const originSkill = skillCounter.value
-  const originGogma = gogmaCounter.value
+  const originSkill = skillCounter.value!
+  const originGogma = gogmaCounter.value!
   const groups = groupTargets(context.planningTargets)
-
-  // Fail closed before any prediction when a Target has no source kind at all (design 5.2).
-  for (const group of groups) {
-    const counter = confirmedRarity8Counter(input, group.weaponTypeId)
-    const normalSupported = engine.getPredictionSupport({ type: 'normal_artian', weaponTypeId: group.weaponTypeId, elementId: group.elementId, rarity: 8 }).supported
-    for (const target of group.targets) {
-      const hasOwnedSource = compatibleOwnedWeapons(input, group).some(weapon => classifyOwnedSource(target, weapon, master).kind === 'source')
-      if (hasOwnedSource) continue
-      if (counter === null) {
-        return { kind: 'unsupported_input', reason: 'target_without_source',
-          detail: `Target ${target.id} has no owned source and no confirmed rarity-8 Normal Counter for ${group.weaponTypeId}; the blind variant is never an option.` }
-      }
-      if (!normalSupported) {
-        return { kind: 'unsupported_input', reason: 'blind_route_required',
-          detail: `Target ${target.id} has no owned source and Normal Artian prediction is unsupported for ${group.weaponTypeId} / ${group.elementId}; only a blind Route could reach it.` }
-      }
-    }
-  }
 
   const predictions = emptyCounts()
   const memoHits = emptyCounts()
