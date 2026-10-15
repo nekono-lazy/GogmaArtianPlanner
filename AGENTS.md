@@ -4157,9 +4157,9 @@ yet: its own typed protocol (`src/workers/buildListOptimizationWorkerContracts.t
 `blo_error` per request; the Production Planner Worker protocol and Client are untouched), the controller
 (`buildListOptimization.worker.ts`, delegating to `runBuildListOptimization()`; a Domain error stays an error, never
 `unsupported` / `not_found`), the Production adapter (`buildListOptimization.worker.production.ts`, the only bounds
-injection point `createBuildListOptimizationCalculation(bounds)`; `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` is
-`null` until PR-5 (U2) measures them, so the Production Worker refuses with `search_bounds_unavailable` instead of
-guessing), a benchmark-only measurement entry (`buildListOptimization.worker.benchmark*.ts`, bounds in its own
+injection point `createBuildListOptimizationCalculation(bounds)`; `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` was
+`null` until PR-5B (U2) fixed it, so the Production Worker refused with `search_bounds_unavailable` instead of
+guessing; a run without bounds is still refused so, which only the measurement Worker can now meet), a benchmark-only measurement entry (`buildListOptimization.worker.benchmark*.ts`, bounds in its own
 configuration message, never in `blo_run`), the Client (`src/services/planner/buildListOptimizationWorkerClient.ts`:
 a new Worker and requestId per run, cancel / supersede / dispose / `pagehide` settle synchronously and terminate at
 once, one settle per run, messages validly naming another requestId and late messages ignored, `error` / `messageerror` / malformed messages (one naming no valid requestId included) /
@@ -4173,9 +4173,24 @@ import-graph test). PR-5A added only the benchmark-only Production Browser measu
 `vite.benchmark.config.ts`, and `scripts/drive-` / `run-` / `analyze-build-list-optimization-*.mjs`): the Production Client over the PR-4
 measurement entry, the input built through the Import authorities and the ordinary `createPlannerInput()`, a minimized raw record
 (counts, classifications, SHA-256 semantic fingerprints; no ID, Seed, Counter or path), a committed plan read from the measured commit,
-and a post-hoc analysis keeping semantic parity, computation, performance / memory and cancel / lifecycle apart. Its PR-5B measurement plan
-(`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`) is a proposal pending Owner approval: no criterion is judged and
-`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` stays `null` until PR-5B. Persistence and the UI are not implemented, and the Build List's
+and a post-hoc analysis keeping semantic parity, computation, performance / memory and cancel / lifecycle apart. PR-5B made every
+criterion name its `application` (`per_bounds_set`, or `common_gate`: judged once on the bounds set its scope names and required of every
+set, so the baseline's cancel trials gate the comparison sets, which never pass cancel / lifecycle on their storage counts alone; a
+criterion naming one set is always a common gate), added `cancel_trial_passed` (`cancel_not_exercised` / unrecorded = unmeasured) and
+`cancel_rerun_semantic_identical` (the re-run against the Node reference), and the RESULT's `commonGate` / `verdicts.allCriteriaPerBoundsSet`
+(`c501a85`); then registered the Owner-approved plan (`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`, 2026-10-15; measurement
+HEAD `e0c176b`) and measured series `pr5b-r1` headed on the PC (`docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md` 6 / 7): no bounds set
+met every criterion, because the cancel → Worker detach went unmeasured (the driver closed a cancel slot about 1 s after the cancel, before
+the busy Worker detached). The driver now observes the release after the run settled - the slot's one Worker target, until it detaches or
+10 s after the cancel request, never delaying the cancel; a lost page, another Worker or no detach is no time (`observeBloCancelWorkerDetach()`,
+driver record revision 3, `ae21b9a`) - and the Owner changed only that bound to 3,000 ms (2026-10-15). Series `pr5b-r2` (measurement HEAD
+`b4d4ce8`, `docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md` 8): `w0-research` and `w0-candidates-3` passed every criterion (same
+semantics, about 27 s, detach 2,005 - 2,014 ms), `w-half` was `not_found` and `w-wide` took about 126 s; the r1 records and RESULT are kept.
+The Owner adopted `w0-candidates-3` (2026-10-15; U2, `docs/PLANNER_SPEC.md` 17.13 / 17.19): `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` is that
+registered plan set field by field (window 350 / 500 / 1500, node budget 2,000, lookahead 8, 3 structural candidates and 3 verifications, the
+plan's Stage D gates and budgets; tests pin it to the plan block and the plan to the bytes the `pr5b-r2` RESULT judged, and check that the
+Production Worker hands the Domain a copy). It keeps room to verify the next candidate when the Planner rejects the first; what a second or third
+candidate costs was never measured, so no time for it is claimed. Persistence and the UI are not implemented, and the Build List's
 「生産計画を作成」 still runs the ordinary Planner (`createPlan()`) until the Issue #260 UI publication PR switches it. No version moved (17 / 10 / 13). Never describe the target behaviour as current behaviour. `docs/PLANNER_GLOBAL_ASSIGNMENT_PRODUCTION_INTEGRATION.md` (PR #259) is a
 non-normative design record; where it differs, the formal specification wins.
 

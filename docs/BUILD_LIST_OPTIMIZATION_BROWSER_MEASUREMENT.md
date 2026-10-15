@@ -1,14 +1,16 @@
-# 作成リスト全体最適化 Production Browser計測基盤（Issue #260 PR-5A）
+# 作成リスト全体最適化 Production Browser計測基盤と計測記録（Issue #260 PR-5A / PR-5B）
 
 Refs #260。**benchmark専用**。本書は、作成リスト全体最適化（[PLANNER_SPEC.md](PLANNER_SPEC.md) 17章）の探索範囲・探索上限の
-Production定数（17.13、17.19のU2）を決めるために、Production計算をPC Browserで計測する基盤の記録である。
+Production定数（17.13、17.19のU2）を決めるために、Production計算をPC Browserで計測する基盤と、その計測の記録である。
 
-- PR-5A（本PR）: 計測基盤、機能確認計画（[MECHANICS_PLAN](BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_PLAN.md)）とその結果、
-  PR-5Bの測定計画案（[MEASUREMENT_PLAN](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md)、Owner承認待ち）
-- PR-5B（後続）: Owner承認済みの計画を登録したcommitで実Exportを計測し、Production定数を確定する
-- PR-5Aは正式な実Export計測もProduction定数の確定も行わない。`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` のままである
-- 実Export（`gogma-artian-planner-backup_20260927015837.json`、19,424,064 bytes、SHA-256 `cc35fb5b…e1e6b`）はローカルに存在することを
-  確認しただけで、PR-5Aでは読み込んでいない（入力変換の事前確認もPR-5Bの登録後に行う）
+- PR-5A: 計測基盤、機能確認計画（[MECHANICS_PLAN](BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_PLAN.md)）とその結果、
+  PR-5Bの測定計画案（[MEASUREMENT_PLAN](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md)）
+- PR-5B: 共通キャンセルゲート（判定規則）の追加、Owner承認済みの計画の登録（measurement HEAD `e0c176b`）、実Exportの正式計測（series `pr5b-r1`、§6）。
+  r1でキャンセル → Worker detachが未測定だったので、driverの観測を直し（`ae21b9a`）、Ownerの決定（2026-10-15、この基準だけ2,000 → 3,000 ms）で
+  計画を登録し直して測り直した（series `pr5b-r2`、measurement HEAD `b4d4ce8`、§8）。
+  Ownerが結果を確認し、`w0-candidates-3` を採用した（2026-10-15）。`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` はそのboundsの全項目である（§9）
+- 実Export（`gogma-artian-planner-backup_20260927015837.json`、19,424,064 bytes、SHA-256 `cc35fb5b…e1e6b`）はローカルの同じファイルを
+  使った（bytes・SHA-256を計測前に照合）。Repositoryへ置かず、外部へ送っていない
 
 ## 1. 何を計測するか（Production計算をそのまま）
 
@@ -62,6 +64,9 @@ script:
 - 4軸（semantic parity、計算成立・探索上限、性能とmemory、cancel / lifecycle）を分けて導出し、どれも他を読まない
 - 計画が `proposed`（Owner承認待ち）なら観測だけを導出し、判定はすべて `not_yet_registered` とする。`registered` かつ `owner_approved` の
   計画だけを基準で判定し、基準は探索上限セットごとに判定する
+- 共通ゲート（PR-5B）: 基準は `application` で適用方法を明示する。`common_gate` の基準（キャンセル試験。baselineだけで実施）は1回だけ判定し、
+  その結果をすべてのセットの判定に含める。RESULTの `commonGate` に適用先・証拠のセット・各基準の結果・判定を、`verdicts.allCriteriaPerBoundsSet` に
+  セットごとの全基準の判定を出す。共通ゲートが失敗・未測定ならどのセットも全基準合格にならない（[MEASUREMENT_PLAN](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md) §3）
 - record・driver記録・Node referenceが別のHEAD・未commitのcodeで作られていれば、analyzerは何も導出しない
 - 欠けたslot・完了しなかったrun・取得できなかった値を成功と数えない（`missingSlots`、`incomplete`、`not_comparable`、`unmeasured`）
 - 計画外のrecord（`planned: false`、計画に無いslot、目的・入力・探索上限・option・origin・Browserの不一致、同じslotの2件目）は除外し、理由を記録する
@@ -164,12 +169,375 @@ syntheticの機能確認であり、性能・memoryの合否やProduction定数�
 自動テスト（r2時点）: `src/benchmarks/buildListOptimization/` の9 file（protocol、入力、semantic、runner、計画、解析、driver制御、page、isolation）、
 既存isolation test 2件の更新（PR-4のWorker isolation、Research P-1のbenchmark config固定）。
 
-## 6. PR-5Bで実測を始めるための残作業
+## 6. PR-5Bの正式計測（series `pr5b-r1`）
 
-1. Ownerが測定計画案の判断事項（[MEASUREMENT_PLAN](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md) §9）を決める
-2. 決定を計画blockへ反映し（`status: registered`、`criteria.status: registered`、`approval: owner_approved` と承認者・日付、`baseCommit` の更新）、
-   そのcommitをmeasurement HEADとする
-3. measurement HEADで機能確認計画を再実行し（同じHEADの基盤が動くことの確認）、Node referenceの `--preflight-only` で実Exportの入力準備を確認する
-4. 計測中は他の重い処理を止め、headed Chromeでdriverを実行する（非isolated 4181 → isolated 4182）。各探索上限セットのNode referenceを実行する
-5. analyzerで公開RESULTを導出・再検証し、結果・未確認範囲（他のExport、他のmachine、Android / iPhone、2件目以降の候補）を記録する
-6. 別commitで `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` を確定する（PR-4のisolation testの `null` 固定を同時に更新する）
+r1の記録である。書き換えずに残す（公開RESULTも `e0c176b` のcodeでそのまま再導出できる）。r1で判定できなかったキャンセル → Worker detachは
+r2で測り直した（§8）。
+
+### 6.0 結論
+
+**全基準を満たした探索上限セットは0件である。Production定数は確定しない（`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` のまま）。**
+
+| セット | 判定（全基準） | 理由 |
+| --- | --- | --- |
+| `w0-research`（baseline） | **判定不能**（`not_comparable`） | 共通キャンセルゲートの1基準（キャンセル → Worker detach）が未測定。それ以外の全基準（semantic・計算成立・performance・memory・他のcancel / lifecycle）は合格 |
+| `w0-candidates-3` | **判定不能**（`not_comparable`） | 同上。代表ケースの結果・時間・memoryは `w0-research` と同じ |
+| `w-half` | **不合格**（`failed`） | 計算成立: 2 runとも `not_found`（`no_structural_candidate` / `target_without_option`）。共通ゲートも未測定 |
+| `w-wide` | **不合格**（`failed`） | performance: request → 結果 112,099 ms（基準 median ≤ 40,000 ms・各run ≤ 60,000 ms）。共通ゲートも未測定 |
+
+- 未測定の原因（§6.5）: driverはキャンセルのslotをキャンセルの約1.0 s後（結果の遅着message待ち1 s）に締め、その時点のWorker targetを記録する。実Exportの計算中に
+  キャンセルしたWorkerのdetachはその後に起きたので、5試験とも `detachedAtEpochMs = null` となり、≤ 2,000 msを判定できなかった。取得できない値を
+  0や合格に置き換えず、計画どおり判定不能とした（共通ゲートなので全セットが判定不能以下になる）
+- 計画外の診断（正式記録ではない、§6.5）では、同じHEADのbuild・実Export・`w0-research` でキャンセル → detachが3試験とも **約2,015 ms** だった。
+  観測窓を延ばして測り直しても、登録基準 ≤ 2,000 msは約15 ms超過で不合格になる見込みである。採用の前にOwnerの判断が要る（§7）
+
+### 6.1 計測の同一性
+
+| 項目 | 値 |
+| --- | --- |
+| 判定規則のcommit | `c501a85ef8c7b02d8bf852a3337d2a0f1fb2014f`（共通キャンセルゲート。計画の `baseCommit`） |
+| measurement HEAD | `e0c176bcd49adc0035408d94e13339766b02000b`（計画の登録commit。clean。benchmark buildのprovenanceも同じcommit、`uncommittedBenchmarkCode: false`） |
+| 計画 | `docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`（series `pr5b-r1`、`registered` / `owner_approved`、approvedBy Owner、2026-10-15。そのHEADでSHA-256 `81408be0…62f7`、`--validate-plan` ok） |
+| 環境 | Windows 11 Pro 10.0.26200 x64、AMD Ryzen 7 9700X（16 logical CPU）、31.1 GiB、Google Chrome 154.0.8037.98 **headed**（driver記録 `launcher.mode: headed`、全recordのuser agentもheaded）、計測専用の新しいprofile |
+| CPU負荷（各slot前） | 5〜29%（driverの瞬時値）。計測開始前に、ゲームと動画エンコードが動いていないことを確認した（エンコードソフトのGUIは常駐していたが処理は無かった） |
+| driver | `scripts/drive-build-list-optimization-browser.mjs`（SHA-256 `57c86aea…`、PR-5A r2と同じ）。raw・driver記録・Node referenceは `.local/pr5b/`（git-ignored） |
+| 公開RESULT | [BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_RESULT.json](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_RESULT.json)（121,433 bytes、SHA-256 `1e93438f7aba644d2389ce189b318356223a4d4d188f7b11fdb90c12a05f9b9c`）。measurement HEADのcodeで同じsourceから再導出（`--check`）して一致 |
+
+手順（すべてmeasurement HEADのclean checkoutで実行。順序は計画どおり）:
+
+1. `npx vite build --config vite.benchmark.config.ts`、preview 4181（非isolated）/ 4182（isolated）
+2. 機能確認計画（mechanics）の再実行（§6.2）
+3. 実ExportのNode reference `--preflight-only`: 入力準備 `ready`（計画対象43 Target、Entry 43、所持武器40、Normal Counter 14、Draftあり・実行中Planなし）
+4. headed Chromeで16 slot（driver。非isolated 12 slotはpage #1、isolated 4 slotはpage #2。page再生成0件）
+5. 4セットのNode reference（Browserの計測の後に逐次実行）
+6. analyzer `--public` → `--check`
+
+### 6.2 同じHEADの機能確認（synthetic mechanics）
+
+**結果: `mechanics: passed`（10 / 10 slotが期待どおり、headed）**。公開RESULTは
+[BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_RESULT_PR5B.json](BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_RESULT_PR5B.json)
+（51,897 bytes、SHA-256 `035a199e89cba49c05bb41495833a62e8e247f3357de29890962f9d59f7db627`、`--check` 一致）。計画はPR-5Aの登録済みmechanics計画
+（series `pr5a-mech-r2`）をそのまま使った。semanticは `synthetic.open` `e5a5fd8c…`、`synthetic.wide-window` `ce4dee4f…`（Browser 2 run + Nodeが同一、
+PR-5A r2と同じ値）。キャンセル2試験とも `cancelled` まで0.1 ms、結果不採用、再実行完了・Nodeと一致、キャンセル → Worker detach 675 ms / 365 ms
+（syntheticの計算は短く、キャンセル時のWorkerはほぼ空いている）。storage件数は両sessionで変化なし、未測定項目なし。
+
+### 6.3 16 slotの実行結果
+
+全16 slotが `record_saved` で終わり、計画順に記録された（計画外0、欠落0、page loss・期限超過・driver error 0、visibility / freeze / pagehideの中断0、
+integrity issue 0、settle後のmessage 0）。storageの件数（IndexedDB・localStorage・sessionStorage・Cache・Service Worker）はslotごと・sessionごとに変化なし。
+
+| 順 | slot | セット | 結果 | request → 結果（ms） | 各slot前のCPU |
+| ---: | --- | --- | --- | ---: | ---: |
+| 1 | `pc.pilot.1` | w0-research | `optimized` 43 / 43 | 27,312（母集団外） | 5% |
+| 2 | `pc.timing.1` | w0-research | `optimized` 43 / 43 | 26,803 | 20% |
+| 3 | `pc.rerun.1` | w0-research | `optimized` 43 / 43 | 26,467 | 18% |
+| 4 | `pc.cancel.input-check` | w0-research | `cancelled`（`input_check` 中、要求0.23 s） | — | 14% |
+| 5 | `pc.cancel.reach-table` | w0-research | `cancelled`（`reach_table` 中、2.19 s） | — | 10% |
+| 6 | `pc.cancel.assignment` | w0-research | `cancelled`（`assignment_search` 中、10.13 s） | — | 11% |
+| 7 | `pc.cancel.route-generation` | w0-research | `cancelled`（`route_generation` 中、22.31 s） | — | 21% |
+| 8 | `pc.cancel.plan-verification` | w0-research | `cancelled`（`plan_verification` 中、23.69 s） | — | 21% |
+| 9 | `pc.rerun.2` | w0-research | `optimized` 43 / 43 | 26,631 | 7% |
+| 10 | `pc.bounds.w0-candidates-3` | w0-candidates-3 | `optimized` 43 / 43 | 26,909 | 28% |
+| 11 | `pc.bounds.w-half` | w-half | `not_found` | 5,162 | 12% |
+| 12 | `pc.bounds.w-wide` | w-wide | `optimized` 43 / 43 | 112,099 | 14% |
+| 13 | `pc.memory.w0-research` | w0-research | `optimized` 43 / 43 | 26,681（母集団外） | 29% |
+| 14 | `pc.memory.w0-candidates-3` | w0-candidates-3 | `optimized` 43 / 43 | 27,023（母集団外） | 15% |
+| 15 | `pc.memory.w-half` | w-half | `not_found` | 5,036（母集団外） | 15% |
+| 16 | `pc.memory.w-wide` | w-wide | `optimized` 43 / 43 | 113,284（母集団外） | 12% |
+
+キャンセルは5試験とも目標のstageで受け付けられた（`cancel_not_exercised` 0件）。キャンセルの要求時刻はrun開始からの時間。
+
+### 6.4 探索上限セットの比較
+
+| 項目 | `w0-research` | `w0-candidates-3` | `w-half` | `w-wide` |
+| --- | --- | --- | --- | --- |
+| 結果（Browser全run / Node） | `optimized` 4 / 4、Node `optimized` | `optimized` 2 / 2、Node `optimized` | `not_found` 2 / 2、Node `not_found` | `optimized` 2 / 2、Node `optimized` |
+| 完成Target | 43 / 43 | 43 / 43 | —（Plan無し） | 43 / 43 |
+| 物理操作数 / Plan Step数 | 1,766 / 1,766 | 1,766 / 1,766 | — | 1,766 / 1,766 |
+| structural objective / 最終検証の `maxPlanSteps` | 1,766 / 2,500 | 1,766 / 2,500 | — | 1,766 / 2,500 |
+| generated Entry / unchanged Target | 43 / 0 | 43 / 0 | — | 43 / 0 |
+| Conflict / rejected / warning / 除外Entry | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | — | 0 / 0 / 0 / 0 |
+| structural search展開node / candidate数 | 44 / 1（`running`、最初の候補で停止） | 44 / 1 | 1 / 0（`exhausted`、`target_without_option`） | 44 / 1 |
+| Planner検証回数 / 結果 | 1 / `optimized`（full run 1） | 1 / `optimized` | 0 | 1 / `optimized` |
+| Stage Dの生成方式 | 投影 21 / 形状制約 22 | 投影 21 / 形状制約 22 | — | 投影 21 / 形状制約 22 |
+| semantic fingerprint | `3cdc8927…`（4 run + Node一致） | `3cdc8927…`（2 run + Node一致、`w0-research` と同一） | `f0f50282…`（2 run + Node一致） | `0289aab8…`（2 run + Node一致、`w0-research` と異なる） |
+| request → 結果（timing母集団） | median 26,631 / max 26,803 ms（3 run） | 26,909 ms（1 run） | 5,162 ms（1 run） | 112,099 ms（1 run） |
+| Worker stage（timing母集団の範囲） | 入力確認 1.02〜1.05 s、到達表 8.86〜9.07 s、割当 11.97〜12.15 s、Route生成 1.09 s、検証 3.45〜3.48 s | 1.13 / 8.95 / 12.22 / 1.10 / 3.48 s | 1.10 / 2.43 / 1.62 s（割当で終了） | 1.05 / 19.63 / 86.73 / 1.11 / 3.54 s |
+| main threadのlong task最大 | 104 ms（各run 1件） | 117 ms | 105 ms | 113 ms |
+| Worker heap used max sampled | 573,858,448 bytes（約547 MiB） | 571,988,696 bytes（約545 MiB） | 364,700,056 bytes（約348 MiB） | 749,246,148 bytes（約715 MiB） |
+| renderer private max sampled | 1,540,042,752 bytes（約1.43 GiB） | 1,638,023,168 bytes（約1.53 GiB） | 708,263,936 bytes（約0.66 GiB） | 1,968,115,712 bytes（約1.83 GiB、基準の92%） |
+| main threadの結果保持 | 6,222,397 bytes | 10,403,576 bytes | −27,239,830 bytes（GCで減少） | 22,617,412 bytes |
+| Worker解放後のattributed memory | 0 | 0 | 0 | 0 |
+| Node referenceの経過時間（参考） | 33,432 ms | 33,759 ms | 6,295 ms | 142,580 ms |
+
+- `w0-research` と `w0-candidates-3`: 代表ケースでは最初のstructural candidate（node 44）が採用されるので、候補数・検証回数の3は使われず、結果
+  （fingerprint）・時間・memoryは同じだった。候補が棄却された場合の追加コストは、この入力では測れない（未確認範囲）
+- `w-half`: 到達表は速いが、計画対象Targetのうち少なくとも1つがwindow内に選択肢を持たず（`target_without_option`）、割当探索の最初のnodeで尽きた。
+  代表ケースには半分のwindowでは足りない
+- `w-wide`: 結果は `optimized` で物理操作数・structural objectiveも同じ1,766だが、Routeが異なる（fingerprintが異なる）。到達表が約2.2倍、割当探索が約7倍に
+  なり、時間基準を大きく超えた。renderer privateも基準（2 GiB）の92%に達した
+- main threadのlong taskは、非isolated sessionの各runで1件（約100〜120 ms、入力準備の時間と同程度）、isolatedのmemory slotでは0件だった。
+  原因は特定していない（基準 ≤ 1,000 msには余裕がある）
+- main threadの結果保持は `performance.memory` の固定点の差であり粗い（`w-half` はGCで負になった）。基準は満たしているが、精密な保持量ではない
+
+### 6.5 共通キャンセルゲートと、キャンセル → Worker detachの未測定
+
+共通ゲート（`w0-research` の5試験で1回判定し、全セットに適用）:
+
+| 基準 | 結果 | 観測 |
+| --- | --- | --- |
+| `cancel.trial-passed` | passed | 5 / 5 `cancel_passed`（試験自身のキャンセルで `cancelled`、結果不採用、integrity issue無し） |
+| `cancel.settle`（≤ 100 ms） | passed | 0 / 0 / 0.1 / 0 / 0.1 ms |
+| `cancel.worker-gone`（≤ 2,000 ms） | **unmeasured** | 5試験とも、slotの終わりまでにWorker targetのdetachを観測していない（`null`） |
+| `cancel.no-result` | passed | 5 / 5 結果不採用、settle後のmessage 0 |
+| `cancel.rerun` | passed | 再実行 `pc.rerun.2` は `completed`、integrity issue無し |
+| `cancel.rerun-identical` | passed | `pc.rerun.2` のfingerprintが同じセットのNode referenceと一致（`3cdc8927…`） |
+
+共通ゲートの判定は `not_comparable`（1基準が未測定）であり、どのセットの cancel / lifecycle 軸も `passed` にならない。比較セットの storage件数の
+不変（合格）だけでこの軸が通ることはない（PR-5Bで直した判定規則のとおり）。
+
+未測定の原因: driverは各slotの終わり（キャンセルの約1.0 s後。runnerの遅着message待ち1 sと記録の保存）に、そのslotで生成されたWorker targetの
+attach / detachを記録して締める。実Exportの計算中のWorkerはその時点でまだdetachしていなかった。synthetic（§6.2）ではキャンセル時のWorkerの計算が
+短いので、0.4〜0.7 sでdetachを観測できていた。計画の観測方法そのものの窓が、計画の基準（2 s）を判定するには短かった。
+
+**計画外の診断（正式記録ではない。RESULTに入れていない）**: 同じmeasurement HEADのbenchmark build、同じ実Export、`w0-research`、headed Chrome、別の
+新しいprofile、非isolated pageで、scratchのCDP scriptがpageの `runSlot`（`planned: false` の計画外run）を呼び、slotが終わった後も最大20 sまで
+Worker targetのdetachを観測した。
+
+| キャンセル | 受け付けたstage | `cancelled` まで | slot終了（キャンセル後） | Worker detach（キャンセル後） |
+| --- | --- | ---: | ---: | ---: |
+| `reach_table` + 1 s | `reach_table` | 0.2 ms | 1,013 ms | **2,015 ms** |
+| `assignment_search` + 0.1 s | `assignment_search` | 0.1 ms | 1,003 ms | **2,016 ms** |
+| `plan_verification` + 0.5 s | `plan_verification` | 0.1 ms | 1,006 ms | **2,014 ms** |
+
+- 3回とも約2,015 msで一定であり、stageや計算の進み具合に依存しなかった。Production Workerは計算中にevent loopへ戻らない（`yieldControl` を渡さない）ので、
+  `terminate()` の後もWorkerは計算中であり、Browserが強制終了するまでの待ち時間でdetachが決まっていると考えられる。Chromium（Blink）がWorkerの終了時に
+  強制終了taskを予約する設計であることは公開情報で確認したが、その待ち時間の値はこのPRでは確認していない（原因は推定であり、特定していない）
+- 画面上のキャンセル（`cancelled`）はいずれも0.2 ms以内であり、結果は採用されない。2 sはWorkerがCPU・memoryを返すまでの時間である
+- 観測窓を延ばして正式に測り直しても、登録基準 ≤ 2,000 msは約15 ms超過で `failed` になる見込みである
+
+### 6.6 各探索上限セットの判定
+
+| セット | semantic | 計算成立 | performance | memory | cancel / lifecycle | 全基準 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `w0-research` | passed | passed | passed | passed | not_comparable（共通ゲート） | **判定不能** |
+| `w0-candidates-3` | passed | passed | passed | passed | not_comparable（共通ゲート） | **判定不能** |
+| `w-half` | passed | **failed**（`not_found`） | passed | passed | not_comparable（共通ゲート） | **不合格** |
+| `w-wide` | passed | passed | **failed**（112 s） | passed | not_comparable（共通ゲート） | **不合格** |
+
+採用可能条件（計画 §9 の6）のうち「同じHEADのmechanicsが `passed`」は満たした（§6.2）が、全基準を満たしたセットが無いので、どのセットも正式採用可能ではない。
+
+### 6.7 未確認範囲と残るリスク
+
+- 入力は代表Export 1件（43目標武器）だけである。他のExport・他の利用者の入力で成立するか、時間・memoryがどうなるかは未確認
+- 計測PCは1台（Ryzen 7 9700X）。より遅いPC・memoryの少ないPCは未確認。Android（任意）は計測していない。iPhoneは未検証（非対応ではない）
+- 代表ケースでは最初のstructural candidateが採用されるので、2件目以降の候補（棄却後の再探索・再検証）のコストは測れていない。`w0-candidates-3` の
+  候補数・検証回数3の効果と費用は未確認
+- `w-wide` のRouteが `w0-research` と異なることから、windowの違いで代表ケースの結果（Route）が変わる。最短性は主張しない
+- memoryはsamplingの最大値（max sampled）であり、連続的な真のpeakではない。renderer privateはtab全体の値である
+- Production Workerの最大同期区間は測っていない（計算全体が1つのtask、§3）
+- キャンセル → Worker detachは正式には未測定であり、計画外の診断値（約2,015 ms）は判定に使っていない
+
+## 7. r1の後の計測案とOwnerの判断事項（r1時点の記録）
+
+**対応済み**: Ownerは2026-10-15に下記1の(b)としてキャンセル → Worker detachの基準を ≤ 3,000 msへ変更し、下記2のdriver修正（`ae21b9a`）の後に
+series `pr5b-r2` で16 slot全体を測り直した（§8）。以下はr1の時点で書いた案の記録である。
+
+全基準を満たしたセットが0件なので、Production定数は確定しない。採用に進むには、キャンセル → Worker detachの基準を判定できる計測が要る。
+
+1. **Owner判断: キャンセル → Worker detachの基準**。計画外の診断では約2,015 msで一定だった（§6.5）。選択肢:
+   - (a) 基準 ≤ 2,000 msを維持する: 現在のProduction Worker（計算中にyieldしない）とこのChromeでは満たせない見込みであり、どのセットも採用できない。
+     Workerを変える場合は計算意味論・Worker契約の変更になり、PR-5の範囲外である
+   - (b) 基準を見直して計画を登録し直す（例: ≤ 3,000 ms。根拠: 画面上のキャンセルは0.2 ms以内で結果は採用されず、この時間はWorkerの資源を返すまでの
+     Browser側の強制終了の待ちである）。値と根拠はOwnerが決める
+2. **driverの観測窓の修正（計測code）**: キャンセルのslotでは、Worker targetのdetachを観測するか一定時間（例: キャンセルから10 s）経つまでslotを締めない。
+   計測codeの変更なので、新しいmeasurement HEADと新しいseries（例: `pr5b-r2`）で16 slot全体を測り直す。`pr5b-r1` の記録は上書きせず、混在させない
+3. 比較セット・slot・cancel trigger・他の基準は変えない（計画 §9 の7・8）。計測時間の目安はBrowser約17分 + Node reference約4分
+4. 測り直しの後、全基準を満たしたセットからOwnerが採用セットを決め、別commitで `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` を確定する
+   （PR-4のisolation testの `null` 固定を同時に更新する）。`pr5b-r1` の範囲では、`w0-research` と `w0-candidates-3` が共通ゲート以外の全基準を満たし、
+   代表ケースで同じ結果・時間・memoryだった。両者の違いは2件目以降の候補が必要な入力でだけ現れ、その費用は未測定である（§6.7）
+5. 長時間化の案内の時間閾値（17.19のU3）は、本計測の時間（代表ケースで約27 s）を参考にUI公開PRで決める（本PRでは決めない）
+
+## 8. PR-5Bの正式計測（series `pr5b-r2`）
+
+### 8.0 結論
+
+**`w0-research` と `w0-candidates-3` が全基準に合格した。`w-half`（計算成立）と `w-wide`（性能）は不合格である。**
+採用するセットはOwnerが決める（計測の時点では確定しなかった。その後Ownerが `w0-candidates-3` を採用した、§9）。
+
+| セット | semantic | 計算成立 | performance | memory | cancel / lifecycle | 全基準 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `w0-research`（baseline） | passed | passed | passed | passed | passed | **合格** |
+| `w0-candidates-3` | passed | passed | passed | passed | passed | **合格** |
+| `w-half` | passed | **failed**（`not_found` 2 / 2） | passed | passed | passed | **不合格** |
+| `w-wide` | passed | passed | **failed**（request → 結果 126,446 ms） | passed | passed | **不合格** |
+
+- 共通キャンセルゲート（`w0-research` の5試験、全セットに適用）は全6基準に合格した。キャンセル → Worker detachは5試験とも観測でき、2,004.6〜2,013.7 ms（基準 ≤ 3,000 ms）
+- 同じHEADのsynthetic mechanicsも合格した（§8.2）。採用可能条件（計画 §9 の6）のうち、全基準とmechanicsの2つを `w0-research` と `w0-candidates-3` が満たす。
+  残る1つ（未確認範囲の記録）は §8.7
+
+### 8.1 計測の同一性
+
+| 項目 | 値 |
+| --- | --- |
+| 計測codeのcommit | `ae21b9a8878fe146d01891aac100f01d9d517f00`（キャンセル後のWorker detach観測、driver記録 revision 3。計画の `baseCommit`） |
+| measurement HEAD | `b4d4ce8b44ccf7eef5c1154552a6f6b002d603a6`（series `pr5b-r2` の計画を登録したcommit。clean。benchmark buildのprovenanceも同じcommit、`uncommittedBenchmarkCode: false`） |
+| 計画 | `docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`（series `pr5b-r2`、`registered` / `owner_approved`、approvedBy Owner、2026-10-15。そのHEADでSHA-256 `b0d57773…5d6f`、`--validate-plan` ok）。r1からの差は `cancel.worker-gone` の閾値（2,000 → 3,000 ms）だけ |
+| 環境 | r1と同じPC（Windows 11 Pro 10.0.26200 x64、Ryzen 7 9700X、31.1 GiB）、Google Chrome 154.0.8037.98 **headed**、計測専用の新しいprofile（Repository外の専用ディレクトリ） |
+| CPU負荷（各slot前） | 非isolated sessionは5〜35%、isolated session（memory slot）は30% / **70%** / 32% / 15%。計測開始前にゲーム・動画エンコードが動いていないことを確認した。70%の原因は特定していない（計測中はリモートデスクトップのセッションが動作していた）。memory slotは時間の母集団外なので、時間の判定には入らない（§8.4） |
+| driver | `scripts/drive-build-list-optimization-browser.mjs`（SHA-256 `2bb950de…`、revision 3）。raw・driver記録・Node referenceは `.local/pr5b-r2/`（git-ignored）、`pr5b-r1` の記録（`.local/pr5b/`）とは混ぜていない |
+| 公開RESULT | [BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_RESULT_R2.json](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_RESULT_R2.json)（122,747 bytes、SHA-256 `6abc73b04b00908eb68c9aae37e5b8d49484dd32dd9444277ce9f94990710c61`）。measurement HEADのcodeで同じsourceから再導出（`--check`）して一致 |
+
+手順はr1と同じ（§6.1）。measurement HEADのclean checkoutで、benchmark build → 計画のvalidation → mechanics → 実ExportのNode reference `--preflight-only`
+（`ready`、計画対象43 Target、Entry 43、所持武器40、Normal Counter 14、Draftあり・実行中Planなし）→ headed Chromeで16 slot → 4セットのNode reference
+（Browserの後に逐次）→ analyzer `--public` → `--check`。実Exportはbytes・SHA-256を計測前に照合した。
+
+計測codeの非正式な動作確認（RESULTに使わない）: `ae21b9a` で、Repository内のprofileをdriverが拒否すること、mechanics計画のキャンセル2試験でdetachを
+682 ms / 365 msで観測し、analyzerがrevision 3の記録から導出できることを確かめてから計画を登録した（`.local/pr5b-r2-smoke/`）。
+
+### 8.2 同じHEADの機能確認（synthetic mechanics）
+
+**結果: `mechanics: passed`（10 / 10 slotが期待どおり、headed）**。公開RESULTは
+[BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_RESULT_PR5B_R2.json](BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_RESULT_PR5B_R2.json)
+（52,474 bytes、SHA-256 `d23c20ea8b2f81665147109c90ed967bf77e8c6c74ab3495dfe60a72aaf0497c`、`--check` 一致）。semanticは `synthetic.open` `e5a5fd8c…`、
+`synthetic.wide-window` `ce4dee4f…`（Browser 2 run + Nodeが同一）。キャンセル2試験とも `cancelled` まで0〜0.1 ms、結果不採用、再実行完了・Nodeと一致、
+キャンセル → Worker detach 674.8 / 362.8 ms（revision 3の観測）。storage件数は両sessionで変化なし、未測定項目なし。
+
+### 8.3 16 slotの実行結果
+
+全16 slotが `record_saved` で終わり、計画順に記録された（計画外0、欠落0、page loss・期限超過・driver error 0、page再生成0、visibility / freeze / pagehideの
+中断0、integrity issue 0、settle後のmessage 0、未測定項目0）。storageの件数はslotごと・sessionごとに変化なし。
+
+| 順 | slot | セット | 結果 | request → 結果（ms） | 各slot前のCPU |
+| ---: | --- | --- | --- | ---: | ---: |
+| 1 | `pc.pilot.1` | w0-research | `optimized` 43 / 43 | 27,113（母集団外） | 10% |
+| 2 | `pc.timing.1` | w0-research | `optimized` 43 / 43 | 27,118 | 11% |
+| 3 | `pc.rerun.1` | w0-research | `optimized` 43 / 43 | 27,146 | 5% |
+| 4〜8 | `pc.cancel.*` | w0-research | `cancelled` ×5（§8.5） | — | 15% / 23% / 10% / 16% / 35% |
+| 9 | `pc.rerun.2` | w0-research | `optimized` 43 / 43 | 27,121 | 9% |
+| 10 | `pc.bounds.w0-candidates-3` | w0-candidates-3 | `optimized` 43 / 43 | 27,030 | 15% |
+| 11 | `pc.bounds.w-half` | w-half | `not_found` | 5,143 | 31% |
+| 12 | `pc.bounds.w-wide` | w-wide | `optimized` 43 / 43 | 126,446 | 20% |
+| 13 | `pc.memory.w0-research` | w0-research | `optimized` 43 / 43 | 35,592（母集団外） | 30% |
+| 14 | `pc.memory.w0-candidates-3` | w0-candidates-3 | `optimized` 43 / 43 | 33,044（母集団外） | 70% |
+| 15 | `pc.memory.w-half` | w-half | `not_found` | 6,656（母集団外） | 32% |
+| 16 | `pc.memory.w-wide` | w-wide | `optimized` 43 / 43 | 149,043（母集団外） | 15% |
+
+### 8.4 探索上限セットの比較
+
+| 項目 | `w0-research` | `w0-candidates-3` | `w-half` | `w-wide` |
+| --- | --- | --- | --- | --- |
+| 結果（Browser全run / Node） | `optimized` 4 / 4、Node `optimized` | `optimized` 2 / 2、Node `optimized` | `not_found` 2 / 2、Node `not_found` | `optimized` 2 / 2、Node `optimized` |
+| 完成Target | 43 / 43 | 43 / 43 | —（Plan無し） | 43 / 43 |
+| 物理操作数 / Plan Step数 / structural objective | 1,766 / 1,766 / 1,766 | 1,766 / 1,766 / 1,766 | — | 1,766 / 1,766 / 1,766 |
+| generated Entry / Conflict / warning | 43 / 0 / 0 | 43 / 0 / 0 | — | 43 / 0 / 0 |
+| structural search展開node / candidate / Planner検証 | 44 / 1 / 1（最初の候補を採用） | 44 / 1 / 1 | 1 / 0 / 0（`no_structural_candidate` / `target_without_option`） | 44 / 1 / 1 |
+| semantic fingerprint | `3cdc8927…`（4 run + Node一致） | `3cdc8927…`（2 run + Node一致、`w0-research` と同一） | `f0f50282…`（2 run + Node一致） | `0289aab8…`（2 run + Node一致） |
+| request → 結果（timing母集団） | median 27,121 / max 27,146 ms（3 run） | 27,030 ms（1 run） | 5,143 ms（1 run） | 126,446 ms（1 run） |
+| Worker stage（timing母集団の範囲） | 入力確認 1.03〜1.06 s、到達表 9.01〜9.18 s、割当 12.23〜12.38 s、Route生成 1.10〜1.13 s、検証 3.50〜3.56 s | 1.05 / 9.06 / 12.28 / 1.11 / 3.50 s | 1.12 / 2.41 / 1.60 s（割当で終了） | 1.06 / 19.67 / 99.73 / 1.46 / 4.48 s |
+| main threadのlong task最大 | 117 ms | 106 ms | 101 ms | 100 ms |
+| Worker heap used max sampled | 581,289,928 bytes（約554 MiB） | 561,436,036 bytes（約535 MiB） | 372,340,924 bytes（約355 MiB） | 807,296,616 bytes（約770 MiB） |
+| renderer private max sampled | 1,653,633,024 bytes（約1.54 GiB、基準の77%） | 1,547,825,152 bytes（約1.44 GiB、72%） | 708,038,656 bytes（約0.66 GiB） | 2,003,361,792 bytes（約1.87 GiB、**基準の93%**） |
+| main threadの結果保持 | 4,279,273 bytes | 12,366,016 bytes | −24,530,798 bytes（GCで減少） | 9,416,628 bytes |
+| Worker解放後のattributed memory | 0 | 0 | 0 | 0 |
+| Node referenceの経過時間（参考） | 38,977 ms | 38,252 ms | 7,309 ms | 167,885 ms |
+
+### 8.5 キャンセル試験と共通キャンセルゲート
+
+| 試験 | 受け付けたstage | `cancelled` まで | Worker detach（キャンセル後） | 観測の終了（キャンセル後） | 結果採用 | settle後のmessage |
+| --- | --- | ---: | ---: | ---: | --- | ---: |
+| `pc.cancel.input-check`（+0.1 s） | `input_check` | 0.2 ms | **2,008.9 ms** | 2,025 ms | なし | 0 |
+| `pc.cancel.reach-table`（+1 s） | `reach_table` | 0 ms | **2,009.4 ms** | 2,039 ms | なし | 0 |
+| `pc.cancel.assignment`（+0.1 s） | `assignment_search` | 0.1 ms | **2,004.6 ms** | 2,036 ms | なし | 0 |
+| `pc.cancel.route-generation`（+0.2 s） | `route_generation` | 0.1 ms | **2,011.9 ms** | 2,071 ms | なし | 0 |
+| `pc.cancel.plan-verification`（+0.5 s） | `plan_verification` | 0 ms | **2,013.7 ms** | 2,075 ms | なし | 0 |
+
+- detachは、各slotで生成された1つのWorker target（`worker-4`〜`worker-8`、キャンセル要求より前にattach）について、runのsettle後にdriverが観測した（revision 3）。
+  5試験とも `detached` で、観測はdetachの直後に終わった（10 sの期限まで待っていない）。page loss・別Worker・未観測は0件
+- 再実行 `pc.rerun.2` は `completed`（integrity issue無し）で、fingerprintは同じセットのNode reference（`3cdc8927…`）と一致した
+- 共通ゲートの判定: `cancel.trial-passed`、`cancel.settle`（0〜0.2 ms ≤ 100 ms）、`cancel.worker-gone`（2,004.6〜2,013.7 ms ≤ 3,000 ms）、`cancel.no-result`、
+  `cancel.rerun`、`cancel.rerun-identical` の6基準すべて合格（`passed`）。この結果が4セットすべての cancel / lifecycle 軸に入る
+- r1の計画外の診断（約2,014〜2,016 ms）と同じ水準であり、stageや計算の進み具合に依らずほぼ一定だった
+
+### 8.6 `pr5b-r1` との差
+
+| 項目 | `pr5b-r1`（`e0c176b`） | `pr5b-r2`（`b4d4ce8`） |
+| --- | --- | --- |
+| キャンセル → Worker detach | 5試験とも未測定（slotを約1 s後に締めた） | 5試験とも観測、2,004.6〜2,013.7 ms |
+| 基準 | ≤ 2,000 ms | ≤ 3,000 ms（Owner決定 2026-10-15） |
+| 共通キャンセルゲート | `not_comparable` | `passed` |
+| `w0-research` / `w0-candidates-3` 全基準 | 判定不能 / 判定不能 | **合格 / 合格** |
+| `w-half` / `w-wide` 全基準 | 不合格（not_found）/ 不合格（112,099 ms） | 不合格（not_found）/ 不合格（126,446 ms） |
+| semantic fingerprint（4セット） | `3cdc8927` / `3cdc8927` / `f0f50282` / `0289aab8` | 同じ（計算codeは両HEADで同一） |
+| `w0-research` request → 結果 median | 26,631 ms | 27,121 ms（+1.8%） |
+| `w0-research` Worker heap / renderer private | 約547 MiB / 1.43 GiB | 約554 MiB / 1.54 GiB |
+| `w-wide` renderer private | 約1.83 GiB（92%） | 約1.87 GiB（93%） |
+| memory slotの時間（母集団外） | 26.7〜27.0 s（w0系） | 33.0〜35.6 s（w0系。slot前CPU 30〜70%） |
+
+- 計算・結果は両seriesで一致した（4セットのfingerprintが同じ）。変わったのはキャンセル → Worker detachの観測と基準だけである
+- memory slotはr2のほうが遅かった。memory slot前のCPU負荷が高く（最大70%）、原因は特定していない。timing母集団（非isolated session）の時間はr1とほぼ同じである
+
+### 8.7 `w0-research` と `w0-candidates-3` の違い（Ownerの選択のために）
+
+| 項目 | `w0-research` | `w0-candidates-3` |
+| --- | --- | --- |
+| window・規模gate・実行budget・node budget・lookahead | 通常 350 / 復元ボーナス 500 / スキル 1500、他も同じ | 同じ |
+| structural candidate数 / Planner検証回数 | 1 / 1 | 3 / 3 |
+| 代表ケースの結果・時間・memory | `optimized`、27,121 ms（median）、約554 MiB / 1.54 GiB | 同じ結果（同一fingerprint）、27,030 ms、約535 MiB / 1.44 GiB |
+| 最初の候補が棄却される入力 | 2件目以降を試さずに終わる（その場合の結果分類は本計測で観測していない） | 次のstructural candidateを探し、最大3回まで検証する |
+| その場合の追加コスト | — | **未測定**。2件目の候補が見つかるまでの割当探索（node budget 2,000まで）、Route生成、Planner検証（代表ケースで1回約1.1 s + 約3.5 s）が加わる。基準（60 s）を超えるかは分からない |
+
+- 代表ケースでは最初のstructural candidate（node 44）が採用されるので、候補数・検証回数の3は使われなかった。両セットの違いは、この入力では観測できない
+- `w0-candidates-3` は棄却後にも計画を作れる可能性を残す代わりに、そのときの時間・memoryが未測定である。`w0-research` はその場合に計画を作らずに終わる
+  （利用者には通常Plannerの補助導線が出る、[PLANNER_SPEC.md](PLANNER_SPEC.md) 17.2 / 17.8）
+- どちらを採るかはOwnerが決める。本計測はどちらも全基準に合格したことだけを示す
+
+### 8.8 未確認範囲と残るリスク
+
+- 入力は代表Export 1件（43目標武器）だけである。他のExport・他の利用者の入力での成立、時間、memoryは未確認
+- 計測PCは1台。より遅いPC・memoryの少ないPC、Android（任意）は計測していない。iPhoneは未検証（非対応ではない）
+- 2件目以降のstructural candidate（棄却後の再探索・再検証）のコストは測れていない（§8.7）
+- renderer privateは `w0-research` で基準の77%、`w-wide` で93%であり、memoryの少ない端末では余裕が小さい可能性がある
+- キャンセル → Worker detachは約2.0 sで一定だった。Browserが計算中のWorkerを止めるまでの待ち時間と考えられるが、原因は特定していない
+  （Production Workerは計算中にevent loopへ戻らない）。基準 3,000 msまでの余裕は約1 sである
+- memory slotの時間はr1より長く、slot前のCPU負荷も高かった（原因不明）。memoryの値自体はr1と同じ水準である
+- memoryはsamplingの最大値（max sampled）であり、連続的な真のpeakではない。Production Workerの最大同期区間は測っていない
+- `w-wide` はwindowの違いで代表ケースのRouteが変わる（fingerprintが異なる）。最短性は主張しない
+
+### 8.9 Ownerの判断事項と残作業（計測の時点）
+
+1. 採用する探索上限セット: `w0-research` と `w0-candidates-3` のどちらか（どちらも全基準・mechanicsに合格。違いは §8.7）→ **`w0-candidates-3` に決定（§9）**
+2. 決定の後、別commitで `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` を確定し、PR-4のisolation testの `null` 固定を同時に更新する（本Draft PRへ追加）→ **対応済み（§9）**
+3. 長時間化の案内の時間閾値（17.19のU3）はUI公開PRで決める（代表ケースで約27 s）
+
+## 9. Production探索上限の採用（17.19のU2）
+
+**決定**: Ownerは2026-10-15に、series `pr5b-r2` で全基準に合格した探索上限セットのうち **`w0-candidates-3`** をProduction定数として採用した。
+`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS`（`src/workers/buildListOptimization.worker.production.ts`）は、登録済み計画（series `pr5b-r2`）の
+`w0-candidates-3` のboundsの全項目であり、値を補完・推測・丸めしていない（テストが計画blockとの完全一致と、その計画が `pr5b-r2` の公開RESULTの
+計画と同じbytesであることを固定する）。正式仕様は [PLANNER_SPEC.md](PLANNER_SPEC.md) 17.13 / 17.19。
+
+| 項目 | 値 |
+| --- | --- |
+| 到達表のwindow | 通常アーティア 350 / 復元ボーナス 500 / スキル 1500 |
+| 割当探索 | node budget 2,000、MRV lookahead 8 |
+| structural candidate数 / 最終検証の回数 | 3 / 3 |
+| 射影起点の規模gate | 変換位置 32、復元ボーナス幅 500、スキル幅 1,501、通常forge数 350 |
+| 形状制約の規模gate | 深さ上界 2,000、復元ボーナス生成状態上界 502,000,000、通常forge数 350、変換walk位置 1,501 |
+| 形状制約の実行budget | 復元ボーナス生成状態 50,000,000、スキル状態 2,250,000、settled work 100,000、予測回数 通常 350 / スキル 1,501 / 復元ボーナスReset 500 / Keep 500 |
+
+根拠:
+
+- `pr5b-r2` で計画のすべての基準（semantic一致、`optimized`・全計画対象Target完成、request → 結果 median ≤ 40 s・max ≤ 60 s、long task ≤ 1 s、
+  Worker heap ≤ 1 GiB、renderer private ≤ 2 GiB、結果保持 ≤ 256 MiB、Worker解放後0、共通キャンセルゲート）に合格し、同じHEADの機能確認にも合格した（§8）
+- `w0-research` も全基準に合格し、代表ケースの結果（同一fingerprint）・時間（27,121 / 27,030 ms）・memoryは同等だった。違いはstructural candidate数と
+  最終検証の回数（1 / 1 と 3 / 3）だけである
+- 採用理由: 最初のstructural candidateがPlannerで棄却された場合でも、次の候補を検証できる余地を残すため（`w0-research` ではその場合に計画を作らずに終わる）
+
+未確認範囲（採用時点）:
+
+- **2件目以降の候補が必要なケースの追加コストは未測定である**。代表ケースでは最初の候補が採用されたので、2件目・3件目のstructural candidateを探す割当探索の続き
+  （node budget 2,000まで）、そのRoute生成、Planner検証（最大3回）にかかる時間・memoryは観測していない。その場合の計算時間が代表ケース（約27 s）以内に
+  終わるとも、計画の基準（median ≤ 40 s、max ≤ 60 s）に収まるとも主張しない
+- 入力は代表Export 1件、計測PCは1台だけである。他のExport・他のPC・Android・iPhone（未検証、非対応ではない）は未確認（§8.8）
+- 全体最適化は通常UIからまだ使えない（UI公開PRで「生産計画を作成」へ接続する）。採用した値で利用者の環境での時間を観測するのはその後である

@@ -1,20 +1,26 @@
-# 作成リスト全体最適化 Production Browser計測 測定計画案（PR-5B用）
+# 作成リスト全体最適化 Production Browser計測 測定計画（PR-5B）
 
-Refs #260（PR-5A）。**提案（`proposed`）・Owner承認待ち（`owner_approval_pending`）**。本書は、作成リスト全体最適化
+Refs #260（PR-5A で案、PR-5B で登録）。**登録済み（`registered`）・Owner承認済み（`owner_approved`、2026-10-15）、現在の series は `pr5b-r2`**。本書は、作成リスト全体最適化
 （[PLANNER_SPEC.md](PLANNER_SPEC.md) 17章）の探索範囲・探索上限のProduction定数（17.13、17.19のU2）を決めるPC Browser計測の
-**測定計画案** である。本書の基準・run数・比較条件はまだ正式な合格基準ではない。計測基盤は
-[BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md) を参照する。
+**測定計画** である。本書の計画blockの基準・run数・比較条件が正式な合格基準であり、計測開始後に変更しない。計測基盤は
+[BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md) を参照する。登録の履歴は §13。
+`pr5b-r1` の登録条件は、そのmeasurement HEAD（`e0c176b`）の本書から `git show` で読める（analyzerもそのHEADの計画を使う）。
 
 ## 1. 位置づけと進め方
 
-- PR-5A（本PR）は計測基盤と本計画案だけを置く。正式な実Export計測とProduction定数の確定は行わない
+- PR-5Aは計測基盤と本計画の案だけを置いた。正式な実Export計測とProduction定数の確定は行っていない
   （`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` のまま）
 - PR-5Bの手順:
-  1. Ownerが §9 の判断事項を決める
-  2. 決定を計画blockへ反映し、`status: registered`、`criteria.status: registered`、`approval.state: owner_approved`（承認者・日付）としてcommitする。
-     このcommitが **measurement HEAD** である（計画blockは自分のcommit SHAを書けないので、`baseCommit` には直前のcommitを書く）
-  3. measurement HEAD（clean）でbenchmark build・Node reference・driverを実行し、analyzerで公開RESULTを導出・再検証する
-  4. 結果と未確認範囲を記録し、別commitで `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` を確定する
+  1. Ownerが §9 の判断事項を決める（**2026-10-15に決定済み**。§9）
+  2. 正式計測の前に必要な判定規則の修正（共通キャンセルゲート、§3）をcommitする（`c501a85`）
+  3. 決定を計画blockへ反映し、`status: registered`、`criteria.status: registered`、`approval.state: owner_approved`（承認者・日付）としてcommitする。
+     このcommitが **measurement HEAD** である（計画blockは自分のcommit SHAを書けないので、`baseCommit` には直前のcommit `c501a85` を書く）
+  4. measurement HEAD（clean）でbenchmark build・機能確認計画（mechanics）の再実行・Node reference・driverを実行し、analyzerで公開RESULTを導出・再検証する
+  5. 結果と未確認範囲を記録する。採用する探索上限セットは計測結果をOwnerが確認して決め、その後の別commitで
+     `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` を確定する（計測結果のレビューまでは `null` のまま）
+  6. （`pr5b-r2`）`pr5b-r1` ではキャンセル → Worker detachが未測定だった（driverの観測窓）。driverの観測を直し（`ae21b9a`、driver記録 revision 3）、
+     Ownerが2026-10-15にこの基準だけを2,000 msから3,000 msへ変えた。計画を series `pr5b-r2`・`baseCommit` `ae21b9a` で登録し直し、
+     そのcommitを新しいmeasurement HEADとして16 slot全体を測り直す。`pr5b-r1` の記録とは混在させない
 - analyzerは計画blockを常に measurement HEAD から `git show` で読む。計測後に本書を書き換えても、そのHEADの計画が使われる。
   `proposed` の計画では観測だけを導出し、全軸の判定を `not_yet_registered` とする（承認前の基準で合否を出さない）
 - driverは `registered` かつ `owner_approved` の計画でしか実Exportの計測を始めない
@@ -24,8 +30,8 @@ Refs #260（PR-5A）。**提案（`proposed`）・Owner承認待ち（`owner_app
 
 | 項目 | 値 |
 | --- | --- |
-| measurement HEAD | PR-5Bで登録した計画をcommitしたcommit（本書には書けない。記録に残す） |
-| baseCommit（計画案） | `181963d`（PR-4のmerge。PR-5Bの登録時に直前のcommitへ更新する） |
+| measurement HEAD | 計画を登録したcommit（本書には書けない。計測の記録に残す。`pr5b-r1` は `e0c176b`） |
+| baseCommit | `ae21b9a8878fe146d01891aac100f01d9d517f00`（`pr5b-r2` の登録直前のcommit。キャンセル後のWorker detach観測。`pr5b-r1` は `c501a85`、PR-5Aの案では `181963d`） |
 | 計算 | Production Worker Client + 計測Worker（Production controller、Production adapter `createBuildListOptimizationCalculation(bounds)`、`ProductionRngEngine`、Production ID factory / Clock）。boundsはbenchmark専用の設定messageで渡し、`blo_run` には含めない |
 | protocol / version | Worker `build-list-optimization:1`、計測設定 `build-list-optimization-benchmark:1`、記録 `build-list-optimization-browser-record:1`。`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、`DATABASE_SCHEMA_VERSION` 10、`ExportRoot.schemaVersion` 13、`production-rng:c5-e7`、Master `dataVersion` 4 |
 | 入力 | `gogma-artian-planner-backup_20260927015837.json`、19,424,064 bytes、SHA-256 `cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b`（D-0B-2 / D-1C / P-2と同じ。PR-5A時点でローカルに存在することを確認済み。Repositoryへ置かない・外部へ送らない） |
@@ -45,7 +51,17 @@ Refs #260（PR-5A）。**提案（`proposed`）・Owner承認待ち（`owner_app
 3. **性能とmemory**: 区間ごとの時間、main threadのlong task、Worker heap、renderer memory、main threadが保持する結果
 4. **cancel / lifecycle**: キャンセルの即時性、結果の不採用、Worker終了、再実行、storage件数の不変、中断
 
-基準は探索上限セットごとに判定する（基準の対象を特定のセットに限るもの以外）。Ownerはすべての基準を満たすセットから定数を選ぶ。
+基準は探索上限セットごとに判定する。各基準は計画blockの `application` で適用方法を明示する:
+
+- `per_bounds_set`: 各セットの自分のrunで判定する（`scope.boundsId` はnull）
+- `common_gate`（**共通ゲート**、PR-5Bで追加）: `scope.boundsId` が名指すセットのrunで1回だけ判定し、その1つの結果を **すべてのセットの必須条件**
+  とする。キャンセル試験（`cancel.*`）がこれにあたる。キャンセル経路はboundsに依存しない同じClient / Workerのcodeなので、試験はbaseline
+  （`w0-research`）だけで行い、比較セットごとに追加のキャンセルrunは置かない。共通ゲートが失敗・未測定・未成立（`cancel_not_exercised` を含む）なら、
+  どのセットも cancel / lifecycle 軸が `passed` にならず、正式採用可能と判定されない。比較セットがstorage件数の不変だけでこの軸を通ることはない
+- 1つのセットを名指す基準は必ず共通ゲートである（計画の検証が拒否する）。特定のセットだけに黙って適用され、他のセットが判定されない基準は置けない
+
+公開RESULTは共通ゲートの結果と判定を `commonGate`（適用先のセット、証拠のセット、各基準の結果、判定）に、各セットの全基準の判定を
+`verdicts.allCriteriaPerBoundsSet` に明示する。Ownerはすべての基準を満たすセットから定数を選ぶ。
 
 ## 4. 比較する探索上限の候補
 
@@ -132,11 +148,12 @@ taskであり、Workerを変更せずに区間を分けて測れない。本計�
 - 比較group: 各探索上限セットのcomparison slot（baselineは4 run、比較セットは2 run）がすべて完了して1つのfingerprintになり、同じHEADのNode referenceと一致する
 - 欠けたrun・完了しなかったrunは比較できないものとして扱い、一致とは数えない（`incomplete`）
 
-## 8. 合格基準案（Owner判断待ち）
+## 8. 合格基準（Owner承認済み、2026-10-15）
 
-計画blockの `criteria.items` が機械可読な定義である。値はすべて **提案** であり、Owner承認前は合否に使わない。
+計画blockの `criteria.items` が機械可読な定義である。PR-5Aでは提案であったが、Ownerが2026-10-15に推奨値を承認し（§9）、本計画とともに
+登録した（`criteria.status: registered`）。計測開始後に変更しない。
 
-| 基準 | 対象 | 提案値 | 根拠 |
+| 基準 | 対象 | 基準値 | 根拠 |
 | --- | --- | --- | --- |
 | semantic一致 | 各セットのcomparison run | 全run同一 + Node一致 | 同じ入力から同じsemantic（17.6 / 17.21） |
 | 計算成立 | 各セットのcomparison run | すべて `optimized`、全計画対象Target完成 | 採用するセットは代表ケースを成立させる |
@@ -147,15 +164,37 @@ taskであり、Workerを変更せずに区間を分けて測れない。本計�
 | renderer private（max sampled） | memory | ≤ 2 GiB | tab全体 |
 | main threadの結果保持 | memory | ≤ 256 MiB | Previewがartifactを保持する分 |
 | Worker memoryの解放 | memory | 解放後に0 | settle時にterminateする（17.16） |
-| キャンセル → `cancelled` | cancel（w0-research） | ≤ 100 ms | Clientは同期的にキャンセルする |
-| キャンセル → Worker detach | cancel（w0-research） | ≤ 2 s | 画面は既に `cancelled`（上の基準）で、Workerの終了はCPUとmemoryを返すだけである。PR-5Aの機能確認ではCPU負荷85〜90%のheadless環境でCDPのdetachがキャンセルの0.8 s / 1.2 s後だった（§9の3） |
-| キャンセル後の結果不採用 / 再実行の完了 | cancel（w0-research） | すべて | 17.16 |
+| キャンセル試験の成立 | cancel（w0-research、共通ゲート） | すべて `cancel_passed` | 試験自身のキャンセル要求で `cancelled` になり、結果を採用せず、integrity issueが無い。キャンセルが実行されなかった試験（`cancel_not_exercised`）・未記録は未測定であり合格としない |
+| キャンセル → `cancelled` | cancel（w0-research、共通ゲート） | ≤ 100 ms | Clientは同期的にキャンセルする |
+| キャンセル → Worker detach | cancel（w0-research、共通ゲート） | ≤ 3 s（`pr5b-r2`。`pr5b-r1` は ≤ 2 s） | Owner決定（2026-10-15）。画面上のキャンセルは0.2 ms以内に成立し（上の基準）、結果は採用されない。この時間はBrowserが計算中のWorkerのCPUとmemoryを返すまでの時間であり、利用者がキャンセルの完了を待つ時間ではない。`pr5b-r1` の計画外の診断では約2,015 msで一定だったので、余裕を持たせて3 sとした。driverはrunのsettle後もslotのWorkerのdetachを観測する（detachするか、キャンセル要求から10 sまで）。観測できなければ未測定であり、合格としない |
+| キャンセル後の結果不採用 / 再実行の完了 | cancel（w0-research、共通ゲート） | すべて | 17.16。再実行の完了は `completed` かつintegrity issue無し |
+| 再実行のsemantic一致 | cancel（w0-research、共通ゲート） | Node referenceと一致 | キャンセルは何も残さず、次のrunはキャンセルされなかったrunと同じsemanticになる。完了しなかった再実行は不一致、Node referenceが無ければ未測定 |
 | storage件数の不変 | 全run | すべて | Preview・計算は何も書かない（17.9）。database・キー・cacheの件数だけを比べ、内容の不変は証明しない |
 
 Research P-2の計測値（同じExportでResearch harnessのfirst Workerが約28 s、Worker heap max sampled約431 MB）は参考であり、上の値は
 そこから機械的に決めたものではない。
 
-## 9. Ownerが判断する事項
+## 9. Ownerの判断（2026-10-15に決定）
+
+**決定**: Ownerは2026-10-15に、下記1〜8の推奨値で進めることを承認した（承認者 Owner、計画blockの `approval`）。追加のOwner承認待ちは無い。
+決定の要点:
+
+| # | 決定 |
+| ---: | --- |
+| 1 | 計算時間（43目標武器の代表Export）: request → 結果のmedian ≤ 40,000 ms、各run ≤ 60,000 ms、main threadのlong task最大 ≤ 1,000 ms（母集団は §5） |
+| 2 | memory: Worker heap used max sampled ≤ 1 GiB、renderer private max sampled ≤ 2 GiB、main threadの結果保持 ≤ 256 MiB、Worker解放後のattributed memory 0。取得できない値を0や成功に置き換えない |
+| 3 | キャンセル: `cancelled` まで ≤ 100 ms、Worker detachまで ≤ 2,000 ms（**2026-10-15のOwner決定で ≤ 3,000 msへ変更。`pr5b-r2` から適用**）、キャンセル後の結果不採用と再実行の成功を必須とする |
+| 4 | semantic parity: `w0-research` はBrowser 4 run + Node reference 1 run、他の3セットはBrowser各2 run + Node reference各1 run。すべて同じfingerprint。未完了・欠損・不一致は成功としない |
+| 5 | 計算成立: 採用可能なセットは代表ケースで `optimized` かつ計画対象Targetがすべて完成。`not_found` / `search_bound_reached` / `unsupported` は観測として記録し、そのセットは正式採用不可 |
+| 6 | 採用可能条件: semantic parity、計算成立、performance、memory、cancel / lifecycleのすべてを満たし、同じmeasurement HEADのsynthetic mechanics検証が成功していること。他のExport・他のPC・Android・iPhone・2件目以降の候補などの未確認範囲を記録する |
+| 7 | 比較セット: §4 の4セット（`w0-research`、`w0-candidates-3`、`w-half`、`w-wide`）を変更しない。window・gate・budget・候補数・検証回数を計測開始後に変更しない |
+| 8 | 計測環境: Windows PC、headed Chrome、計測専用profile、計測中はゲーム・動画エンコード等の重い処理を並行させない、各slot前のCPU負荷を記録、cancel triggerの値と16 slotの実行順は §5 のとおり。Androidは任意（正式ゲートに含めない）、iPhone実機検証は行わない（非対応扱いにはしない） |
+
+判定規則の補足（PR-5B、登録前）: 3のキャンセル試験は `w0-research` だけで行い、その合格を全セットの共通必須ゲートとする（§3、計画blockの
+`application: common_gate`）。比較セットごとに追加のキャンセルrunは置かない。キャンセル試験が失敗・未測定・未成立の場合は、どのセットも正式採用可能と
+判定しない。`cancel_not_exercised` を成功扱いせず、再実行の完了とsemantic一致を評価する。cancel stage・trigger・slot数は計測結果を見て変更しない。
+
+以下はPR-5Aで提示した判断事項と推奨の記録である（上の決定はこの推奨値を承認したもの）。
 
 1. **43目標武器の代表ケースで許容する計算時間**: 推奨は request → 結果のmedian ≤ 40 s、各run ≤ 60 s（計測PC）。より遅いPCでの体感（約2〜3分）を上限と
    みなす考え方を採るか、長時間化の案内（U3）を前提にもっと長く許すかを決める
@@ -198,7 +237,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
 {
   "kind": "build-list-optimization-browser-plan",
   "revision": 1,
-  "baseCommit": "181963d7ec7934f455e3195c86179972b36728b3",
+  "baseCommit": "ae21b9a8878fe146d01891aac100f01d9d517f00",
   "protocols": {
     "worker": "build-list-optimization:1",
     "benchmarkConfig": "build-list-optimization-benchmark:1",
@@ -218,13 +257,13 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
     "appSchemaVersion": 17
   },
   "planKind": "measurement",
-  "series": "pr5b-r1",
-  "status": "proposed",
+  "series": "pr5b-r2",
+  "status": "registered",
   "approval": {
-    "state": "owner_approval_pending",
-    "approvedBy": null,
-    "approvedOn": null,
-    "note": "Issue #260 PR-5A proposal. PR-5B commits the Owner-approved plan (status registered) and measures at that commit."
+    "state": "owner_approved",
+    "approvedBy": "Owner",
+    "approvedOn": "2026-10-15",
+    "note": "Owner-approved on 2026-10-15: the recommended values of the PR-5A proposal (section 9 items 1-8). 1 time: request to result median <= 40,000 ms and every run <= 60,000 ms, main-thread long task <= 1,000 ms (43 Targets, the representative Export). 2 memory: Worker heap used max sampled <= 1 GiB, renderer private max sampled <= 2 GiB, main-thread result retention <= 256 MiB, Worker memory 0 after release; an unread value is never 0 or a pass. 3 cancel: to cancelled <= 100 ms, to Worker detach <= 2,000 ms, no result adopted, the re-run completes. 4 semantic: w0-research 4 Browser runs + 1 Node reference, every other set 2 Browser runs + 1 Node reference, one fingerprint; an incomplete, missing or differing run is no match. 5 an adopted set is optimized with every planning Target completed on the representative case; not_found / search_bound_reached / unsupported are recorded and make the set not adoptable. 6 adoption needs every axis passed (semantic, computation, performance, memory, cancel / lifecycle), the mechanics plan passed at the same measurement HEAD, and the unconfirmed ranges recorded. 7 the four bounds sets of section 4, unchanged after the measurement starts. 8 Windows PC, headed Chrome, a dedicated profile, no other heavy work, the CPU load before each slot recorded, the cancel triggers and the 16-slot order of section 5; Android optional, iPhone not verified (never unsupported). The common cancel gate (section 3, application common_gate) was added before this registration (PR-5B required change). Re-registered for series pr5b-r2: on 2026-10-15 the Owner changed only the cancel → Worker detach bound from 2,000 ms to 3,000 ms (series pr5b-r1 left it unmeasured: the driver closed a cancel slot about 1 s after the cancel; an out-of-plan diagnostic saw about 2,015 ms). Every other criterion, slot, trigger, bounds set and environment is unchanged; the driver now observes the Worker release after the run settled (driver record revision 3)."
   },
   "inputs": [
     {
@@ -788,11 +827,12 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
     ]
   },
   "criteria": {
-    "status": "proposed",
+    "status": "registered",
     "items": [
       {
         "criterionId": "semantic.identical",
         "axis": "semantic",
+        "application": "per_bounds_set",
         "description": "Every listed Browser run of the set completed with one semantic fingerprint, equal to the Node reference at the same HEAD.",
         "metric": "semantic_group_identical",
         "scope": {
@@ -814,6 +854,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "computation.optimized",
         "axis": "computation",
+        "application": "per_bounds_set",
         "description": "Every comparison run of the set is optimized (search_bound_reached and not_found are not accepted for an adopted set on the representative case).",
         "metric": "result_status",
         "scope": {
@@ -835,6 +876,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "computation.all-targets",
         "axis": "computation",
+        "application": "per_bounds_set",
         "description": "Every planning Target is completed in every comparison run.",
         "metric": "all_planning_targets_completed",
         "scope": {
@@ -856,6 +898,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "performance.request-to-result.median",
         "axis": "performance",
+        "application": "per_bounds_set",
         "description": "Median of request → result over the timing population of the set.",
         "metric": "request_to_terminal_ms",
         "scope": {
@@ -876,6 +919,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "performance.request-to-result.max",
         "axis": "performance",
+        "application": "per_bounds_set",
         "description": "Every run of the timing population.",
         "metric": "request_to_terminal_ms",
         "scope": {
@@ -896,6 +940,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "performance.main-long-task",
         "axis": "performance",
+        "application": "per_bounds_set",
         "description": "The longest main-thread long task between the run start and the outcome (the Client's result check included).",
         "metric": "main_long_task_max_ms",
         "scope": {
@@ -916,6 +961,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "memory.worker-heap",
         "axis": "memory",
+        "application": "per_bounds_set",
         "description": "Max sampled Worker V8 used heap (CDP Runtime.getHeapUsage every 0.5 s).",
         "metric": "worker_heap_used_max_bytes",
         "scope": {
@@ -934,6 +980,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "memory.renderer-private",
         "axis": "memory",
+        "application": "per_bounds_set",
         "description": "Max sampled private bytes of the renderer process (OS, every 1 s).",
         "metric": "renderer_private_max_bytes",
         "scope": {
@@ -952,6 +999,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "memory.main-retained",
         "axis": "memory",
+        "application": "per_bounds_set",
         "description": "Main-thread heap held after the outcome (after_outcome − before_run, performance.memory).",
         "metric": "main_heap_retained_bytes",
         "scope": {
@@ -970,6 +1018,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "memory.worker-released",
         "axis": "memory",
+        "application": "per_bounds_set",
         "description": "No Worker memory is attributed after the run and the release wait (measureUserAgentSpecificMemory).",
         "metric": "worker_memory_released",
         "scope": {
@@ -986,9 +1035,29 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
         "rationale": "The Client terminates the Worker at settle (PLANNER_SPEC 17.16)."
       },
       {
+        "criterionId": "cancel.trial-passed",
+        "axis": "cancel_lifecycle",
+        "application": "common_gate",
+        "description": "Every cancel trial passed: the run ended cancelled by the trial's own cancel request, adopted no result and has no integrity issue. A trial whose cancel never ran (cancel_not_exercised) or that was not recorded is unmeasured, never a pass. A common gate: judged once on the baseline's cancel trials and required of every bounds set.",
+        "metric": "cancel_trial_passed",
+        "scope": {
+          "inputId": "real-export",
+          "boundsId": "w0-research",
+          "purposes": [
+            "cancel"
+          ]
+        },
+        "aggregate": "each",
+        "comparator": "equals",
+        "threshold": true,
+        "unit": null,
+        "rationale": "PLANNER_SPEC 17.16. The cancel path is the same Client / Worker code for every bounds set, so the trials run on the baseline only and gate every set (no set is adoptable while they failed or went unmeasured)."
+      },
+      {
         "criterionId": "cancel.settle",
         "axis": "cancel_lifecycle",
-        "description": "From the cancel request to the cancelled outcome on the main thread.",
+        "application": "common_gate",
+        "description": "From the cancel request to the cancelled outcome on the main thread. A common gate: judged once on the baseline's cancel trials and required of every bounds set.",
         "metric": "cancel_settle_ms",
         "scope": {
           "inputId": "real-export",
@@ -1006,7 +1075,8 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "cancel.worker-gone",
         "axis": "cancel_lifecycle",
-        "description": "From the cancel request to the Worker target being detached (CDP; same machine wall clock).",
+        "application": "common_gate",
+        "description": "From the cancel request to the run's Worker target being detached (CDP; same machine wall clock), observed by the driver after the run settled until the detach or 10 s after the cancel request. A common gate: judged once on the baseline's cancel trials and required of every bounds set.",
         "metric": "cancel_worker_gone_ms",
         "scope": {
           "inputId": "real-export",
@@ -1017,14 +1087,15 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
         },
         "aggregate": "each",
         "comparator": "at_most",
-        "threshold": 2000,
+        "threshold": 3000,
         "unit": "ms",
-        "rationale": "The screen is already cancelled (cancel.settle); the Worker's release only returns CPU and memory. The PR-5A mechanics check saw the CDP detach 0.8 / 1.2 s after the cancel under 85 - 90 % CPU load (headless), so 1 s would also measure the machine load; 2 s keeps this a check of the release itself."
+        "rationale": "Owner decision 2026-10-15 (series pr5b-r2): the screen is cancelled at once (cancel.settle; 0.2 ms or less in pr5b-r1) and no result is adopted; this is the time the Browser takes to release the busy Worker's CPU and memory, never a time the user waits for the cancel. An out-of-plan diagnostic of pr5b-r1 saw a steady release of about 2,015 ms; 3,000 ms leaves a margin over it."
       },
       {
         "criterionId": "cancel.no-result",
         "axis": "cancel_lifecycle",
-        "description": "A cancelled run adopts no result.",
+        "application": "common_gate",
+        "description": "A cancelled run adopts no result. A common gate: judged once on the baseline's cancel trials and required of every bounds set.",
         "metric": "cancel_no_result_adopted",
         "scope": {
           "inputId": "real-export",
@@ -1042,7 +1113,8 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
       {
         "criterionId": "cancel.rerun",
         "axis": "cancel_lifecycle",
-        "description": "The re-run slot after the cancel trials completes.",
+        "application": "common_gate",
+        "description": "The re-run slot after the cancel trials completes (outcome completed, no integrity issue). A common gate: judged once on the baseline and required of every bounds set.",
         "metric": "cancel_rerun_completed",
         "scope": {
           "inputId": "real-export",
@@ -1058,8 +1130,28 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
         "rationale": "A new run starts from scratch after a cancel (PLANNER_SPEC 17.16)."
       },
       {
+        "criterionId": "cancel.rerun-identical",
+        "axis": "cancel_lifecycle",
+        "application": "common_gate",
+        "description": "The re-run after the cancel trials has the semantic fingerprint of the Node reference of the same input and bounds set. A re-run that did not complete is not identical; a missing Node reference leaves it unmeasured. A common gate: judged once on the baseline and required of every bounds set.",
+        "metric": "cancel_rerun_semantic_identical",
+        "scope": {
+          "inputId": "real-export",
+          "boundsId": "w0-research",
+          "purposes": [
+            "cancel"
+          ]
+        },
+        "aggregate": "each",
+        "comparator": "equals",
+        "threshold": true,
+        "unit": null,
+        "rationale": "A cancel leaves nothing behind: the next run starts from scratch and yields the same semantics as an uncancelled run (PLANNER_SPEC 17.6 / 17.16)."
+      },
+      {
         "criterionId": "lifecycle.storage-counts",
         "axis": "cancel_lifecycle",
+        "application": "per_bounds_set",
         "description": "The storage counts are unchanged by each run: the IndexedDB database count, the localStorage / sessionStorage key counts, the Cache Storage cache count and the Service Worker registration count. Counts only: a same-count content change is not detected, and an unread count is unmeasured, never unchanged.",
         "metric": "storage_counts_unchanged",
         "scope": {
@@ -1099,3 +1191,14 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
 }
 ```
 <!-- blo-browser-plan:end -->
+
+## 13. 登録の履歴
+
+| series | measurement HEAD | baseCommit | 本計画からの差 | 結果 |
+| --- | --- | --- | --- | --- |
+| `pr5b-r1` | `e0c176bcd49adc0035408d94e13339766b02000b` | `c501a85`（共通キャンセルゲート） | キャンセル → Worker detach ≤ 2,000 ms | 全基準合格のセット0件。`w0-research` / `w0-candidates-3` は detach が未測定（driverがキャンセルの約1 s後にslotを締めた）で判定不能、`w-half` / `w-wide` は不合格（[MEASUREMENT](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md) §6）。記録・公開RESULTはそのまま保持する |
+| `pr5b-r2` | 本計画を登録したcommit（計測の記録に残す） | `ae21b9a`（キャンセル後のWorker detach観測、driver記録 revision 3） | — | 計測の記録（[MEASUREMENT](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md) §8） |
+
+`pr5b-r2` で変えたのは、series、baseCommit、承認のnote、`cancel.worker-gone` の閾値（2,000 → 3,000 ms）と説明・根拠だけである。他の基準、
+16 slotの順序、cancel triggerの値、4つの探索上限セット、Node referenceとsemantic比較、環境（Windows PC、headed Chrome）は `pr5b-r1` と同じである。
+計測用Chrome profileはRepository外の専用ディレクトリに置く（driverがRepository内を拒否する）。

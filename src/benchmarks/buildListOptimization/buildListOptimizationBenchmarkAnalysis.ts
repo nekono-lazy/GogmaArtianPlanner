@@ -1,6 +1,14 @@
 import { stableStringify } from '../../domain/models/publicTypes'
 import type { BuildListOptimizationStage } from '../../domain/planner/buildListOptimization'
-import { bloObservedBrowserMode, type BloDriverPageRestart, type BloDriverSlotOutcome } from './buildListOptimizationBenchmarkDriverControl'
+import {
+  bloCancelDetachObservationIssue,
+  bloCancelRequestEpochMs,
+  bloObservedBrowserMode,
+  type BloCancelDetachObservation,
+  type BloCancelDetachOutcome,
+  type BloDriverPageRestart,
+  type BloDriverSlotOutcome,
+} from './buildListOptimizationBenchmarkDriverControl'
 import {
   BLO_PLAN_KIND,
   bindBloRecordsToPlan,
@@ -19,8 +27,11 @@ import { readBloRecordExport, type BloRunRecord, type BloStorageSnapshot } from 
  *
  * It reads the plan taken from the measured commit, the page's raw record exports, the driver record and the Node reference records,
  * and derives one public RESULT. Four axes are kept apart and none reads another: semantic parity, the computation and its bounds,
- * performance and memory, and cancel / lifecycle. A plan whose criteria are only proposed (Owner approval pending) yields
- * observations and the verdict `not_yet_registered` on every axis; a mechanics plan yields the mechanics checks only.
+ * performance and memory, and cancel / lifecycle. Each axis is judged per bounds set; a common gate (the cancel trials, run on the
+ * baseline only; Issue #260 PR-5B) is judged once and is part of every set's judgement (`commonGate` in the RESULT), so a set never
+ * passes its cancel / lifecycle axis on its own storage counts while the shared cancel trials failed or went unmeasured. A plan whose
+ * criteria are only proposed (Owner approval pending) yields observations and the verdict `not_yet_registered` on every axis; a
+ * mechanics plan yields the mechanics checks only.
  *
  * It refuses (derives nothing) when a source was recorded with other code: every Browser record must carry the benchmark build of the
  * measurement HEAD with no uncommitted benchmark code, and the driver and Node references must name the same HEAD. It never fills in
@@ -66,11 +77,13 @@ export interface BloDriverSlot {
   external: { kind: 'page_lost' | 'out_of_memory'; evidence: string } | null
   cdpWorkerHeap: { intervalMs: number; samples: BloDriverHeapSample[]; errors: number; workerTargets: { target: string; attachedAtEpochMs: number; detachedAtEpochMs: number | null }[] } | null
   osRendererMemory: { intervalMs: number; samples: BloDriverOsSample[] } | null
+  /** Revision 3 (PR-5B): the observation of a cancelled run's Worker release after the run settled; null for a run without a cancel request. */
+  cancelDetachObservation: BloCancelDetachObservation | null
 }
 
 export interface BloDriverRecord {
   kind: typeof BLO_DRIVER_RECORD_KIND
-  revision: 2
+  revision: 3
   measurementHead: string
   plan: { path: string; sha256: string }
   driverSha256: string
@@ -183,21 +196,33 @@ function storageCountsChanged(before: BloStorageSnapshot | null, after: BloStora
   return keys.some(key => before[key] !== after[key])
 }
 
-function epochOf(iso: string): number {
-  return Date.parse(iso)
+/**
+ * How a cancelled run's Worker release reads: `detached` (with a time) only when the driver observed the detach of the slot's own Worker
+ * for exactly this record's cancel request; otherwise the driver's own outcome, `not_recorded` (no observation) or `record_mismatch`
+ * (the observation names another cancel request or a target the slot did not list). Null for a run without a cancel request.
+ */
+export type BloWorkerDetachReading = BloCancelDetachOutcome | 'not_recorded' | 'record_mismatch'
+
+/** The release time of a cancelled run's Worker: derived from the record's own cancel request and the driver's observation alone. */
+function workerDetachOf(slot: BloDriverSlot, record: BloRunRecord | undefined): { reading: BloWorkerDetachReading | null; afterCancelMs: number | null } {
+  if (record === undefined || record.timeline.cancelRequestedAtMs === null) return { reading: null, afterCancelMs: null }
+  const observation = slot.cancelDetachObservation ?? null
+  const cancelEpoch = bloCancelRequestEpochMs(record)
+  if (observation === null) return { reading: 'not_recorded', afterCancelMs: null }
+  if (cancelEpoch === null || observation.cancelRequestedAtEpochMs !== cancelEpoch) return { reading: 'record_mismatch', afterCancelMs: null }
+  if (observation.outcome !== 'detached') return { reading: observation.outcome, afterCancelMs: null }
+  const listed = slot.cdpWorkerHeap?.workerTargets.some(target => target.target === observation.target && target.detachedAtEpochMs === observation.detachedAtEpochMs) ?? false
+  if (!listed || observation.detachedAtEpochMs === null) return { reading: 'record_mismatch', afterCancelMs: null }
+  return { reading: 'detached', afterCancelMs: observation.detachedAtEpochMs - cancelEpoch }
 }
 
-/** The slot's driver memory, reduced to max sampled values (never called a continuous peak). */
+/** The slot's driver memory, reduced to max sampled values (never called a continuous peak), and a cancelled run's Worker release. */
 function driverMemoryView(slot: BloDriverSlot | undefined, record: BloRunRecord | undefined) {
-  if (slot === undefined) return { workerHeapUsedMaxSampled: null, workerHeapTotalMaxSampled: null, heapSamples: 0, heapErrors: null, rendererPrivateMaxSampled: null, rendererWorkingSetMaxSampled: null, osSamples: 0, workerGoneAfterCancelMs: null }
+  if (slot === undefined) return { workerHeapUsedMaxSampled: null, workerHeapTotalMaxSampled: null, heapSamples: 0, heapErrors: null, rendererPrivateMaxSampled: null, rendererWorkingSetMaxSampled: null, osSamples: 0, workerDetachObservation: null, workerGoneAfterCancelMs: null }
   const heap = slot.cdpWorkerHeap
   const os = slot.osRendererMemory
-  let workerGoneAfterCancelMs: number | null = null
-  if (heap !== null && record !== undefined && record.timeline.cancelRequestedAtMs !== null) {
-    const cancelEpoch = epochOf(record.startedAt) + record.timeline.cancelRequestedAtMs
-    const detached = heap.workerTargets.map(target => target.detachedAtEpochMs).filter((value): value is number => value !== null && value >= cancelEpoch - 1_000)
-    if (detached.length > 0) workerGoneAfterCancelMs = Math.max(0, Math.min(...detached) - cancelEpoch)
-  }
+  const detach = workerDetachOf(slot, record)
+  const workerGoneAfterCancelMs = detach.afterCancelMs
   return {
     workerHeapUsedMaxSampled: heap === null || heap.samples.length === 0 ? null : Math.max(...heap.samples.map(sample => sample.usedSize)),
     workerHeapTotalMaxSampled: heap === null || heap.samples.length === 0 ? null : Math.max(...heap.samples.map(sample => sample.totalSize)),
@@ -206,6 +231,7 @@ function driverMemoryView(slot: BloDriverSlot | undefined, record: BloRunRecord 
     rendererPrivateMaxSampled: os === null || os.samples.length === 0 ? null : Math.max(...os.samples.map(sample => sample.privateBytes)),
     rendererWorkingSetMaxSampled: os === null || os.samples.length === 0 ? null : Math.max(...os.samples.map(sample => sample.workingSetBytes)),
     osSamples: os?.samples.length ?? 0,
+    workerDetachObservation: detach.reading,
     workerGoneAfterCancelMs,
   }
 }
@@ -306,8 +332,8 @@ function readDriver(file: BloSourceFile | null, head: string, plan: BloSourceFil
   } catch {
     return { record: null, issues: [`${file.file}: the driver record is not JSON.`] }
   }
-  if (!isRecord(value) || value.kind !== BLO_DRIVER_RECORD_KIND || value.revision !== 2 || !Array.isArray(value.slots) || !Array.isArray(value.sessions) || !Array.isArray(value.pageRestarts)) {
-    return { record: null, issues: [`${file.file}: not a Build List optimization driver record (revision 2).`] }
+  if (!isRecord(value) || value.kind !== BLO_DRIVER_RECORD_KIND || value.revision !== 3 || !Array.isArray(value.slots) || !Array.isArray(value.sessions) || !Array.isArray(value.pageRestarts)) {
+    return { record: null, issues: [`${file.file}: not a Build List optimization driver record (revision 3).`] }
   }
   const issues: string[] = []
   if (value.measurementHead !== head) issues.push(`${file.file}: the driver ran at ${String(value.measurementHead)}, not at the measurement HEAD.`)
@@ -321,6 +347,16 @@ function readDriver(file: BloSourceFile | null, head: string, plan: BloSourceFil
   if (!value.slots.every(slot => isRecord(slot) && typeof slot.slotId === 'string' && outcomes.includes(slot.outcome as string) && (slot.pageIndex === null || Number.isSafeInteger(slot.pageIndex))
     && (slot.outcome === 'record_saved') === (typeof slot.rawFile === 'string'))) {
     issues.push(`${file.file}: a driver slot entry is malformed (a raw file goes exactly with a saved record).`)
+  }
+  // Revision 3: every slot the driver ran names its cancel detach observation (null without a cancel request); a slot never run may omit it.
+  for (const slot of value.slots) {
+    if (!isRecord(slot)) continue
+    if (!('cancelDetachObservation' in slot)) {
+      if (slot.outcome !== 'not_run') issues.push(`${file.file}: the driver slot ${String(slot.slotId)} names no cancel detach observation.`)
+      continue
+    }
+    const issue = bloCancelDetachObservationIssue(slot.cancelDetachObservation)
+    if (issue !== null) issues.push(`${file.file}: the driver slot ${String(slot.slotId)} has a malformed cancel detach observation (${issue}).`)
   }
   return { record: issues.length === 0 ? (value as unknown as BloDriverRecord) : null, issues }
 }
@@ -368,6 +404,10 @@ interface CriterionResult {
   criterionId: string
   axis: BloCriterion['axis']
   metric: string
+  /** `common_gate`: one result, read from `evidenceBoundsId`'s runs, shared by every bounds set (see `BloCriterionApplication`). */
+  application: BloCriterion['application']
+  /** The bounds set whose runs gave the value (the judged set itself, or a common gate's evidence set). */
+  evidenceBoundsId: string
   status: 'passed' | 'failed' | 'unmeasured' | 'not_yet_registered'
   observed: unknown
 }
@@ -418,15 +458,24 @@ function semanticGroups(plan: BloMeasurementPlan, slots: Map<string, BloSlotView
   })
 }
 
-/** The cancel trials: each cancel slot judged on its own (the re-run slot's completion is read from its own view). */
-function cancelTrials(plan: BloMeasurementPlan, slots: Map<string, BloSlotView>, groups: BloSemanticGroupView[]) {
+/**
+ * The cancel trials: each cancel slot judged on its own (the re-run slot is read from its own view). The re-run after the cancels
+ * completes when it ended `completed` with no integrity issue; its semantics are compared with the Node reference of the same input
+ * and bounds set (an uncancelled run in a fresh process): a re-run that did not complete is not identical, and a missing Node
+ * reference leaves the comparison unmeasured (null), never identical.
+ */
+function cancelTrials(plan: BloMeasurementPlan, slots: Map<string, BloSlotView>, groups: BloSemanticGroupView[], nodes: readonly BloNodeReferenceRecord[]) {
   return plan.environments.flatMap(environment => environment.slots).filter(slot => slot.purpose === 'cancel').map(slot => {
     const view = slots.get(slot.slotId)
     const run = view?.run ?? null
     const rerun = slot.rerunSlotId === null ? null : slots.get(slot.rerunSlotId)?.run ?? null
     const group = groups.find(entry => entry.inputId === slot.inputId && entry.boundsId === slot.boundsId)
-    const rerunCompleted = rerun === null ? null : rerun.outcome.status === 'completed'
+    const rerunCompleted = rerun === null ? null : rerun.outcome.status === 'completed' && rerun.integrityIssues.length === 0
     const rerunIdentical = rerun?.result === null || rerun === null || group?.fingerprint === null || group === undefined ? null : rerun.result.semanticSha256 === group.fingerprint
+    const reference = nodes.find(record => record.inputId === slot.inputId && record.boundsId === slot.boundsId && record.outcome.status === 'completed' && record.semantic !== null)
+    const rerunIdenticalToNodeReference = rerun === null ? null
+      : rerunCompleted !== true || rerun.result === null ? false
+        : reference === undefined ? null : rerun.result.semanticSha256 === reference.semantic!.sha256
     let status: 'cancel_passed' | 'cancel_failed' | 'cancel_not_exercised' | 'not_recorded'
     if (run === null) status = 'not_recorded'
     // Only the trial's own cancel passes: a run ended by pagehide or a dispose is an interruption, never a passed trial.
@@ -435,9 +484,10 @@ function cancelTrials(plan: BloMeasurementPlan, slots: Map<string, BloSlotView>,
     else status = 'cancel_failed'
     return {
       slotId: slot.slotId, trigger: slot.cancelTrigger, status, stageAtCancel: run?.cancel?.lastStage ?? null,
-      cancelSettleMs: run?.intervals.cancelSettleMs ?? null, workerGoneAfterCancelMs: run?.memory.driver.workerGoneAfterCancelMs ?? null,
+      cancelSettleMs: run?.intervals.cancelSettleMs ?? null, workerDetachObservation: run?.memory.driver.workerDetachObservation ?? null,
+      workerGoneAfterCancelMs: run?.memory.driver.workerGoneAfterCancelMs ?? null,
       resultAdopted: run === null ? null : run.result !== null, lateMessages: run?.lateMessages ?? null,
-      rerunSlotId: slot.rerunSlotId, rerunCompleted, rerunIdenticalToGroup: rerunIdentical,
+      rerunSlotId: slot.rerunSlotId, rerunCompleted, rerunIdenticalToGroup: rerunIdentical, rerunIdenticalToNodeReference,
     }
   })
 }
@@ -495,6 +545,10 @@ function metricValues(criterion: BloCriterion, slots: Map<string, BloSlotView>, 
       return scoped.map(view => runOf(view)?.memory.page.mainHeapRetainedBytes ?? null)
     case 'worker_memory_released':
       return scoped.map(view => { const bytes = runOf(view)?.memory.page.workerBytesAfterRelease; return bytes === null || bytes === undefined ? null : bytes === 0 })
+    case 'cancel_trial_passed':
+      // A trial whose cancel never ran (`cancel_not_exercised`) or that was not recorded is unmeasured, never a pass.
+      return trials.filter(trial => scoped.some(view => view.slotId === trial.slotId))
+        .map(trial => (trial.status === 'cancel_passed' ? true : trial.status === 'cancel_failed' ? false : null))
     case 'cancel_settle_ms':
       return trials.filter(trial => scoped.some(view => view.slotId === trial.slotId)).map(trial => trial.status === 'cancel_passed' ? trial.cancelSettleMs : null)
     case 'cancel_worker_gone_ms':
@@ -503,6 +557,8 @@ function metricValues(criterion: BloCriterion, slots: Map<string, BloSlotView>, 
       return trials.filter(trial => scoped.some(view => view.slotId === trial.slotId)).map(trial => trial.status === 'not_recorded' || trial.status === 'cancel_not_exercised' ? null : trial.resultAdopted === false)
     case 'cancel_rerun_completed':
       return trials.filter(trial => scoped.some(view => view.slotId === trial.slotId)).map(trial => trial.rerunCompleted)
+    case 'cancel_rerun_semantic_identical':
+      return trials.filter(trial => scoped.some(view => view.slotId === trial.slotId)).map(trial => trial.rerunIdenticalToNodeReference)
     case 'storage_counts_unchanged':
       return scoped.map(view => { const changed = runOf(view)?.storageCountsChanged; return changed === null || changed === undefined ? null : !changed })
     case 'no_interruption':
@@ -510,8 +566,8 @@ function metricValues(criterion: BloCriterion, slots: Map<string, BloSlotView>, 
   }
 }
 
-function evaluateCriterion(criterion: BloCriterion, values: (number | string | boolean | null)[], registered: boolean): CriterionResult {
-  const base = { criterionId: criterion.criterionId, axis: criterion.axis, metric: criterion.metric }
+function evaluateCriterion(criterion: BloCriterion, values: (number | string | boolean | null)[], registered: boolean, evidenceBoundsId: string): CriterionResult {
+  const base = { criterionId: criterion.criterionId, axis: criterion.axis, metric: criterion.metric, application: criterion.application, evidenceBoundsId }
   const measured = values.filter((value): value is number | string | boolean => value !== null)
   const observed = criterion.aggregate === 'median' ? median(measured.filter((value): value is number => typeof value === 'number'))
     : criterion.aggregate === 'max' ? (measured.length === 0 ? null : Math.max(...measured.filter((value): value is number => typeof value === 'number')))
@@ -525,13 +581,30 @@ function evaluateCriterion(criterion: BloCriterion, values: (number | string | b
   return { ...base, status: passed ? 'passed' : 'failed', observed }
 }
 
-function axisVerdict(results: CriterionResult[], axis: BloCriterion['axis'], registered: boolean): BloAxisVerdict {
-  const own = results.filter(result => result.axis === axis)
+/** The verdict of a group of criterion results: any failure fails it, any unmeasured value leaves it not comparable. */
+function verdictOf(results: CriterionResult[], registered: boolean): BloAxisVerdict {
   if (!registered) return 'not_yet_registered'
-  if (own.length === 0) return 'not_applicable'
-  if (own.some(result => result.status === 'failed')) return 'failed'
-  if (own.some(result => result.status === 'unmeasured')) return 'not_comparable'
+  if (results.length === 0) return 'not_applicable'
+  if (results.some(result => result.status === 'failed')) return 'failed'
+  if (results.some(result => result.status === 'unmeasured')) return 'not_comparable'
   return 'passed'
+}
+
+function axisVerdict(results: CriterionResult[], axis: BloCriterion['axis'], registered: boolean): BloAxisVerdict {
+  return verdictOf(results.filter(result => result.axis === axis), registered)
+}
+
+const AXES = { semantic: 'semantic', computation: 'computation', performance: 'performance', memory: 'memory', cancelLifecycle: 'cancel_lifecycle' } as const satisfies Record<string, BloCriterion['axis']>
+
+/**
+ * Every criterion of the plan for one bounds set: `passed` only when every axis passed (an axis without criteria is not a pass),
+ * `failed` when any axis failed, otherwise `not_comparable`. The mechanics prerequisite of an adoption is the mechanics RESULT's.
+ */
+function allCriteriaVerdict(axes: Record<keyof typeof AXES, BloAxisVerdict>, registered: boolean): 'passed' | 'failed' | 'not_comparable' | 'not_yet_registered' {
+  if (!registered) return 'not_yet_registered'
+  const values = Object.values(axes)
+  if (values.includes('failed')) return 'failed'
+  return values.every(value => value === 'passed') ? 'passed' : 'not_comparable'
 }
 
 function mechanicsChecks(plan: BloMeasurementPlan, slots: Map<string, BloSlotView>) {
@@ -571,16 +644,26 @@ export function deriveBloPublicResult(sources: BloAnalysisSources): BloPublicRes
   const views = new Map<string, BloSlotView>()
   for (const environment of plan.environments) for (const slot of environment.slots) views.set(slot.slotId, slotView(slot, binding.bound.get(slot.slotId), driverSlots.get(slot.slotId)))
   const groups = semanticGroups(plan, views, nodes.records)
-  const trials = cancelTrials(plan, views, groups)
+  const trials = cancelTrials(plan, views, groups, nodes.records)
   const registered = plan.planKind === 'measurement' && plan.status === 'registered' && plan.approval.state === 'owner_approved' && plan.criteria.status === 'registered'
-  // Criteria are judged per measured bounds set: a criterion scoped to one set applies to it alone, an unscoped one to every set, so
-  // the Owner reads which candidate set meets every criterion (never one verdict mixing the sets).
-  const criteria = plan.planKind !== 'measurement' ? [] : plan.boundsSets.filter(set => set.role !== 'synthetic').map(set => ({
+  // Criteria are judged per measured bounds set, so the Owner reads which candidate set meets every criterion (never one verdict
+  // mixing the sets). A per-set criterion reads each set's own runs; a common gate (e.g. the cancel trials, run on the baseline only)
+  // is judged once on its evidence set and that one result is part of every set's judgement, so no set passes without it.
+  const measuredSets = plan.planKind !== 'measurement' ? [] : plan.boundsSets.filter(set => set.role !== 'synthetic')
+  const commonGateResults = new Map(plan.criteria.items.filter(item => item.application === 'common_gate')
+    .map(item => [item.criterionId, evaluateCriterion(item, metricValues(item, views, groups, trials), registered, item.scope.boundsId!)]))
+  const criteria = measuredSets.map(set => ({
     boundsId: set.boundsId,
     role: set.role,
-    results: plan.criteria.items.filter(item => item.scope.boundsId === null || item.scope.boundsId === set.boundsId)
-      .map(item => evaluateCriterion(item, metricValues({ ...item, scope: { ...item.scope, boundsId: set.boundsId } }, views, groups, trials), registered)),
+    results: plan.criteria.items.map(item => commonGateResults.get(item.criterionId)
+      ?? evaluateCriterion(item, metricValues({ ...item, scope: { ...item.scope, boundsId: set.boundsId } }, views, groups, trials), registered, set.boundsId)),
   }))
+  const commonGate = plan.planKind !== 'measurement' ? null : {
+    appliesToBoundsSets: measuredSets.map(set => set.boundsId),
+    evidenceBoundsSets: [...new Set([...commonGateResults.values()].map(result => result.evidenceBoundsId))],
+    results: [...commonGateResults.values()],
+    verdict: verdictOf([...commonGateResults.values()], registered),
+  }
   const mechanics = plan.planKind === 'mechanics' ? mechanicsChecks(plan, views) : null
   const missingSlots = [...views.values()].filter(view => !view.recorded && plan.environments.find(environment => environment.slots.some(slot => slot.slotId === view.slotId))?.status === 'planned').map(view => view.slotId)
   const unmeasured = [...new Set([...views.values()].flatMap(view => {
@@ -594,17 +677,14 @@ export function deriveBloPublicResult(sources: BloAnalysisSources): BloPublicRes
     if (view.purpose === 'cancel' && view.run.cancel !== null && view.run.memory.driver.workerGoneAfterCancelMs === null) names.push('cancel_worker_gone_cdp')
     return names
   }))].sort()
+  const perBoundsSet = Object.fromEntries(criteria.map(({ boundsId, results }) => [boundsId,
+    Object.fromEntries(Object.entries(AXES).map(([name, axis]) => [name, axisVerdict(results, axis, registered)])) as Record<keyof typeof AXES, BloAxisVerdict>]))
   const verdicts = plan.planKind === 'mechanics'
-    ? { mechanics: mechanics!.every(check => check.met) ? 'passed' : 'failed', perBoundsSet: {} }
+    ? { mechanics: mechanics!.every(check => check.met) ? 'passed' : 'failed', perBoundsSet: {}, allCriteriaPerBoundsSet: {} }
     : {
         mechanics: 'not_applicable',
-        perBoundsSet: Object.fromEntries(criteria.map(({ boundsId, results }) => [boundsId, {
-          semantic: axisVerdict(results, 'semantic', registered),
-          computation: axisVerdict(results, 'computation', registered),
-          performance: axisVerdict(results, 'performance', registered),
-          memory: axisVerdict(results, 'memory', registered),
-          cancelLifecycle: axisVerdict(results, 'cancel_lifecycle', registered),
-        }])),
+        perBoundsSet,
+        allCriteriaPerBoundsSet: Object.fromEntries(Object.entries(perBoundsSet).map(([boundsId, axes]) => [boundsId, allCriteriaVerdict(axes, registered)])),
       }
   const result = {
     kind: BLO_PUBLIC_RESULT_KIND,
@@ -646,6 +726,7 @@ export function deriveBloPublicResult(sources: BloAnalysisSources): BloPublicRes
       observed: [...new Set([...binding.bound.values()].filter(run => environment.slots.some(slot => slot.slotId === run.record.slot.slotId)).map(run => bloObservedBrowserMode(run.record.environment.userAgent)))],
     })),
     criteria,
+    commonGate,
     mechanics,
     verdicts,
     unmeasured,

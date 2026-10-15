@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import mechanicsPlanText from '../../../docs/BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_PLAN.md?raw'
 import measurementPlanText from '../../../docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md?raw'
+import r1ResultText from '../../../docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_RESULT.json?raw'
 import { runBuildListOptimization } from '../../domain/planner/buildListOptimization'
 import { createProductionBuildListOptimizationWorkerDependencies } from '../../workers/buildListOptimization.worker.production'
 import { loadMasterData } from '../../domain/master/loadMasterData'
@@ -114,7 +115,8 @@ describe('Build List optimization measurement analysis: the mechanics plan end t
     const derived = deriveBloPublicResult(value)
     if (!derived.ok) throw new Error(derived.issues.join(' / '))
     const result = derived.result as Record<string, never>
-    expect(result.verdicts).toEqual({ mechanics: 'passed', perBoundsSet: {} })
+    expect(result.verdicts).toEqual({ mechanics: 'passed', perBoundsSet: {}, allCriteriaPerBoundsSet: {} })
+    expect(result.commonGate).toBeNull()
     expect(result.binding).toMatchObject({ bound: 10, missingSlots: [], unplanned: [] })
     expect((result.mechanics as { slotId: string; met: boolean }[]).every(check => check.met)).toBe(true)
     expect((result.semanticGroups as { groupId: string; status: string; nodeReference: string }[]).map(group => [group.groupId, group.status, group.nodeReference]))
@@ -122,7 +124,7 @@ describe('Build List optimization measurement analysis: the mechanics plan end t
     expect((result.cancelTrials as { slotId: string; status: string; rerunCompleted: boolean; rerunIdenticalToGroup: boolean }[]).map(trial => [trial.slotId, trial.status, trial.rerunCompleted, trial.rerunIdenticalToGroup]))
       .toEqual([['mech.cancel.input-check', 'cancel_passed', true, true], ['mech.cancel.reach-table', 'cancel_passed', true, true]])
     expect(bloPublicResultIssues(derived.result, value)).toEqual([])
-    expect(bloPublicResultIssues({ ...derived.result, verdicts: { mechanics: 'failed', perBoundsSet: {} } }, value)).toEqual(['The public RESULT is not the one the sources derive.'])
+    expect(bloPublicResultIssues({ ...derived.result, verdicts: { mechanics: 'failed', perBoundsSet: {}, allCriteriaPerBoundsSet: {} } }, value)).toEqual(['The public RESULT is not the one the sources derive.'])
     // No identity, Seed / Counter value or path of the measured data reaches the RESULT.
     const text = JSON.stringify(derived.result)
     expect(text).not.toMatch(/target\.issue103|build-list\.fnv1a32|owned\.issue103|51231782|"baseSeed"|"targetWeaponId"/)
@@ -135,12 +137,12 @@ describe('Build List optimization measurement analysis: the mechanics plan end t
     expect(deriveBloPublicResult(await sources({ browserRaw: await rawFiles(dirty) }))).toMatchObject({ ok: false })
     const missing = deriveBloPublicResult(await sources({ browserRaw: await rawFiles(records.filter(record => record.slot.slotId !== 'mech.bound')) }))
     if (!missing.ok) throw new Error(missing.issues.join(' / '))
-    expect(missing.result.verdicts).toEqual({ mechanics: 'failed', perBoundsSet: {} })
+    expect(missing.result.verdicts).toEqual({ mechanics: 'failed', perBoundsSet: {}, allCriteriaPerBoundsSet: {} })
     expect((missing.result.binding as { missingSlots: string[] }).missingSlots).toEqual(['mech.bound'])
     const extra = { ...records[0]!, recordId: 'extra', slot: { ...records[0]!.slot, slotId: 'manual.1', planned: false } }
     const withExtra = deriveBloPublicResult(await sources({ browserRaw: await rawFiles([...records, extra]) }))
     if (!withExtra.ok) throw new Error(withExtra.issues.join(' / '))
-    expect(withExtra.result.verdicts).toEqual({ mechanics: 'passed', perBoundsSet: {} })
+    expect(withExtra.result.verdicts).toEqual({ mechanics: 'passed', perBoundsSet: {}, allCriteriaPerBoundsSet: {} })
     expect((withExtra.result.binding as { unplanned: unknown[] }).unplanned).toEqual([{ slotId: 'manual.1', purpose: 'mechanics', reason: 'not_planned' }])
     // A Node reference that disagrees is a mismatch, never a pass.
     const wrongNode = await nodeFiles([await nodeReference(plan, planFile, 'sanity-3', 'synthetic.open', { sha256: '0'.repeat(64), components: {} })])
@@ -152,8 +154,13 @@ describe('Build List optimization measurement analysis: the mechanics plan end t
   }, 120_000)
 })
 
-describe('Build List optimization measurement analysis: the measurement plan (Issue #260 PR-5A)', async () => {
-  const proposed = planOf(measurementPlanText)
+describe('Build List optimization measurement analysis: the measurement plan (Issue #260 PR-5A / PR-5B)', async () => {
+  // The variants are built from the committed plan whatever its status (proposed in PR-5A, registered in PR-5B), never committed.
+  const committed = planOf(measurementPlanText)
+  const proposed = structuredClone(committed)
+  proposed.status = 'proposed'
+  proposed.criteria.status = 'proposed'
+  proposed.approval = { state: 'owner_approval_pending', approvedBy: null, approvedOn: null, note: 'test variant' }
   /** One fingerprint per bounds set (the runs of one set agree; the sets differ). */
   const shaOf = (boundsId: string) => [...boundsId].map(character => character.charCodeAt(0).toString(16)).join('').padEnd(64, '0').slice(0, 64)
   const input = proposed.inputs[0]!
@@ -181,6 +188,8 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
 
   interface DriverOptions {
     mode?: 'headed' | 'headless'
+    /** The release of each cancelled run's Worker after its cancel request (default 20 ms), as the driver observed it. */
+    detachAfterCancelMs?: number
     /** Edits the driver's slot entries (index-aligned with the records). */
     slots?: (slots: BloDriverRecord['slots']) => void
     pageRestarts?: BloDriverRecord['pageRestarts']
@@ -190,6 +199,8 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
     const mode = options.mode ?? 'headed'
     const slots: BloDriverRecord['slots'] = records.map((record, index) => {
       const start = Date.parse(record.startedAt)
+      const cancelEpoch = record.timeline.cancelRequestedAtMs === null ? null : start + record.timeline.cancelRequestedAtMs
+      const detachedAt = cancelEpoch === null ? start + 21300 : cancelEpoch + (options.detachAfterCancelMs ?? 20)
       return {
         slotId: record.slot.slotId, sessionId: record.slot.purpose === 'memory' ? 's2-isolated' : 's1-non_isolated', pageIndex: record.slot.purpose === 'memory' ? 2 : 1,
         startedAt: record.startedAt, endedAt: record.endedAt, outcome: 'record_saved', rawFile: `${String(index + 1).padStart(2, '0')}-${record.slot.slotId}.json`, note: null,
@@ -197,14 +208,16 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
         cdpWorkerHeap: {
           intervalMs: 500, errors: 0,
           samples: record.slot.purpose === 'memory' ? [{ atEpochMs: start + 2000, target: 'worker-1', usedSize: 400_000_000, totalSize: 450_000_000 }, { atEpochMs: start + 9000, target: 'worker-1', usedSize: 430_000_000, totalSize: 470_000_000 }] : [],
-          workerTargets: [{ target: 'worker-1', attachedAtEpochMs: start + 950, detachedAtEpochMs: record.timeline.cancelRequestedAtMs === null ? start + 21300 : start + record.timeline.cancelRequestedAtMs + 20 }],
+          workerTargets: [{ target: 'worker-1', attachedAtEpochMs: start + 950, detachedAtEpochMs: detachedAt }],
         },
         osRendererMemory: record.slot.purpose === 'memory' ? { intervalMs: 1000, samples: [{ atEpochMs: start + 3000, privateBytes: 1_200_000_000, workingSetBytes: 1_300_000_000, processCount: 2 }] } : null,
+        cancelDetachObservation: cancelEpoch === null ? null
+          : { outcome: 'detached', target: 'worker-1', cancelRequestedAtEpochMs: cancelEpoch, detachedAtEpochMs: detachedAt, windowMs: 10_000, observedUntilEpochMs: detachedAt + 50 },
       }
     })
     options.slots?.(slots)
     return {
-      kind: 'build-list-optimization-browser-driver-record', revision: 2, measurementHead: TEST_MEASUREMENT_HEAD, plan: { path: 'docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md', sha256: planFile.sha256 },
+      kind: 'build-list-optimization-browser-driver-record', revision: 3, measurementHead: TEST_MEASUREMENT_HEAD, plan: { path: 'docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md', sha256: planFile.sha256 },
       driverSha256: 'e'.repeat(64), launcher: { browser: 'chrome', version: 'Chrome/154.0', headless: mode === 'headless', mode, planBrowserMode: 'headed', flags: [] }, slotDeadlineMs: 1_800_000,
       machine: { cpuModel: 'test', logicalCpuCount: 16, totalMemoryBytes: 1, os: 'test' },
       sessions: [
@@ -216,18 +229,20 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
     }
   }
 
-  async function sourcesOf(plan: BloMeasurementPlan, records: BloRunRecord[], driver: DriverOptions | null = {}): Promise<BloAnalysisSources> {
+  /** The Node reference of each bounds set carries the set's fingerprint (`shaOf`); `nodeEdit` changes or drops references. */
+  type NodeEdit = (records: BloNodeReferenceRecord[]) => BloNodeReferenceRecord[]
+
+  async function sourcesOf(plan: BloMeasurementPlan, records: BloRunRecord[], driver: DriverOptions | null = {}, nodeEdit: NodeEdit = value => value): Promise<BloAnalysisSources> {
     const planFile = await source(`${TEST_MEASUREMENT_HEAD}:docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md`, documentWith(measurementPlanText, plan))
-    const semanticOf = (boundsId: string) => records.find(record => record.slot.boundsId === boundsId && record.result !== null)?.result?.semantic ?? { sha256: '0'.repeat(64), components: {} }
-    const nodes = await nodeFiles(await Promise.all(plan.nodeReference!.runs.map(run => nodeReference(plan, planFile, run.inputId, run.boundsId, semanticOf(run.boundsId)))))
+    const nodes = await nodeFiles(nodeEdit(await Promise.all(plan.nodeReference!.runs.map(run => nodeReference(plan, planFile, run.inputId, run.boundsId, { sha256: shaOf(run.boundsId), components: {} })))))
     return {
       measurementHead: TEST_MEASUREMENT_HEAD, plan: planFile, browserRaw: await rawFiles(records),
       driver: driver === null ? null : await source('driver.json', JSON.stringify(driverOf(planFile, records, driver))), nodeReferences: nodes,
     }
   }
 
-  async function analyze(plan: BloMeasurementPlan, records: BloRunRecord[], driver: DriverOptions | null = {}) {
-    const value = await sourcesOf(plan, records, driver)
+  async function analyze(plan: BloMeasurementPlan, records: BloRunRecord[], driver: DriverOptions | null = {}, nodeEdit?: NodeEdit) {
+    const value = await sourcesOf(plan, records, driver, nodeEdit)
     const derived = deriveBloPublicResult(value)
     if (!derived.ok) throw new Error(derived.issues.join(' / '))
     return { result: derived.result as Record<string, never>, sources: value }
@@ -251,7 +266,155 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
     expect(criteria.flatMap(set => set.results.map(entry => entry.status))).toEqual(expect.arrayContaining(['not_yet_registered']))
     expect(new Set(criteria.flatMap(set => set.results.map(entry => entry.status)))).toEqual(new Set(['not_yet_registered']))
     expect(criteria.find(set => set.boundsId === 'w0-research')!.results.find(entry => entry.criterionId === 'performance.request-to-result.median')!.observed).toBe(20000)
+    // The common cancel gate is observed but not judged either.
+    expect(result.commonGate).toMatchObject({ verdict: 'not_yet_registered', evidenceBoundsSets: ['w0-research'], appliesToBoundsSets: ['w0-research', 'w0-candidates-3', 'w-half', 'w-wide'] })
+    expect(new Set((result.commonGate as { results: { status: string }[] }).results.map(entry => entry.status))).toEqual(new Set(['not_yet_registered']))
+    expect(result.verdicts).toMatchObject({ allCriteriaPerBoundsSet: { 'w0-research': 'not_yet_registered', 'w0-candidates-3': 'not_yet_registered', 'w-half': 'not_yet_registered', 'w-wide': 'not_yet_registered' } })
     expect(bloPublicResultIssues(result, sources)).toEqual([])
+  })
+
+  const gateOf = (result: Record<string, never>) => result.commonGate as { verdict: string; evidenceBoundsSets: string[]; appliesToBoundsSets: string[]; results: { criterionId: string; status: string; evidenceBoundsId: string; application: string; observed: unknown }[] }
+  const allCriteriaOf = (result: Record<string, never>) => (result.verdicts as { allCriteriaPerBoundsSet: Record<string, string> }).allCriteriaPerBoundsSet
+  const cancelLifecycleOf = (result: Record<string, never>) => Object.fromEntries(Object.entries(perSetOf(result)).map(([boundsId, verdicts]) => [boundsId, verdicts.cancelLifecycle]))
+  const everySet = (verdict: string) => ({ 'w0-research': verdict, 'w0-candidates-3': verdict, 'w-half': verdict, 'w-wide': verdict })
+  const COMMON_GATE_IDS = ['cancel.trial-passed', 'cancel.settle', 'cancel.worker-gone', 'cancel.no-result', 'cancel.rerun', 'cancel.rerun-identical']
+
+  it('applies the passed cancel trials of the baseline to every bounds set as one common gate (PR-5B)', async () => {
+    const { result, sources } = await analyze(registered, recordsOf(registered))
+    const gate = gateOf(result)
+    expect(gate).toMatchObject({ verdict: 'passed', evidenceBoundsSets: ['w0-research'], appliesToBoundsSets: ['w0-research', 'w0-candidates-3', 'w-half', 'w-wide'] })
+    expect(gate.results.map(entry => [entry.criterionId, entry.status])).toEqual(COMMON_GATE_IDS.map(id => [id, 'passed']))
+    // Each comparison set is judged on the baseline's cancel evidence (no cancel run of its own) next to its own storage counts.
+    for (const set of result.criteria as { boundsId: string; results: { criterionId: string; application: string; evidenceBoundsId: string; status: string }[] }[]) {
+      const cancel = set.results.filter(entry => entry.criterionId.startsWith('cancel.'))
+      expect(cancel.map(entry => [entry.criterionId, entry.application, entry.evidenceBoundsId, entry.status]), set.boundsId).toEqual(COMMON_GATE_IDS.map(id => [id, 'common_gate', 'w0-research', 'passed']))
+      expect(set.results.find(entry => entry.criterionId === 'lifecycle.storage-counts'), set.boundsId).toMatchObject({ application: 'per_bounds_set', evidenceBoundsId: set.boundsId, status: 'passed' })
+    }
+    expect(cancelLifecycleOf(result)).toEqual(everySet('passed'))
+    expect(allCriteriaOf(result)).toEqual(everySet('passed'))
+    const trials = result.cancelTrials as { rerunCompleted: boolean | null; rerunIdenticalToNodeReference: boolean | null }[]
+    expect(trials.every(trial => trial.rerunCompleted === true && trial.rerunIdenticalToNodeReference === true)).toBe(true)
+    expect(bloPublicResultIssues(result, sources)).toEqual([])
+  })
+
+  it('leaves no bounds set adoptable when the common cancel trials failed (PR-5B)', async () => {
+    // A cancel trial whose run still completed and adopted its result after the cancel request.
+    const adopted = await analyze(registered, recordsOf(registered, record => (record.slot.slotId === 'pc.cancel.assignment'
+      ? { ...fabricatedRecord(bloSlotSpecOfPlan(registered, 'pc.cancel.assignment'), { recordId: record.recordId, sequence: record.sequence, startedAt: record.startedAt, input: record.input }),
+          timeline: { ...fabricatedRecord(bloSlotSpecOfPlan(registered, 'pc.cancel.assignment')).timeline, cancelRequestedAtMs: 20500 } } : record)))
+    expect(gateOf(adopted.result).verdict).toBe('failed')
+    expect(gateOf(adopted.result).results.filter(entry => entry.status === 'failed').map(entry => entry.criterionId)).toEqual(['cancel.trial-passed', 'cancel.no-result'])
+    expect(cancelLifecycleOf(adopted.result)).toEqual(everySet('failed'))
+    expect(allCriteriaOf(adopted.result)).toEqual(everySet('failed'))
+    // A cancel trial that ended with a Worker failure instead of the cancel: failed, never merely unmeasured.
+    const errored = await analyze(registered, recordsOf(registered, record => (record.slot.slotId === 'pc.cancel.reach-table'
+      ? { ...record, outcome: { status: 'failed', failure: { kind: 'worker_error' }, cancelReason: null, lastStage: 'reach_table' } } as BloRunRecord : record)))
+    expect(gateOf(errored.result).results.find(entry => entry.criterionId === 'cancel.trial-passed')).toMatchObject({ status: 'failed' })
+    expect(cancelLifecycleOf(errored.result)).toEqual(everySet('failed'))
+    // A slow cancel settle fails the gate for every set (the comparison sets have no cancel runs to pass on their own).
+    const slow = await analyze(registered, recordsOf(registered, record => (record.slot.slotId === 'pc.cancel.input-check' ? { ...record, timeline: { ...record.timeline, outcomeAtMs: 5300 } } : record)))
+    expect(gateOf(slow.result).results.find(entry => entry.criterionId === 'cancel.settle')).toMatchObject({ status: 'failed' })
+    expect(allCriteriaOf(slow.result)).toEqual(everySet('failed'))
+  })
+
+  it('never passes a bounds set whose common cancel evidence is missing or was not exercised (PR-5B)', async () => {
+    // Every cancel trial missing: the gate is not comparable, and no set passes on its storage counts alone.
+    const missing = await analyze(registered, recordsOf(registered).filter(record => record.slot.purpose !== 'cancel'))
+    expect(gateOf(missing.result).verdict).toBe('not_comparable')
+    expect(cancelLifecycleOf(missing.result)).toEqual(everySet('not_comparable'))
+    expect(allCriteriaOf(missing.result)).toEqual(everySet('not_comparable'))
+    for (const set of ['w0-candidates-3', 'w-half', 'w-wide']) expect(perSetOf(missing.result)[set]).toMatchObject({ semantic: 'passed', computation: 'passed', performance: 'passed', memory: 'passed' })
+    // One trial missing is enough.
+    const oneMissing = await analyze(registered, recordsOf(registered).filter(record => record.slot.slotId !== 'pc.cancel.plan-verification'))
+    expect(cancelLifecycleOf(oneMissing.result)).toEqual(everySet('not_comparable'))
+    // A trial whose cancel never ran (the calculation finished before the trigger): cancel_not_exercised, never a pass.
+    const notExercised = await analyze(registered, recordsOf(registered, record => (record.slot.slotId === 'pc.cancel.plan-verification'
+      ? { ...fabricatedRecord(bloSlotSpecOfPlan(registered, 'pc.cancel.plan-verification'), { recordId: record.recordId, sequence: record.sequence, startedAt: record.startedAt, input: record.input }),
+          result: { ...fabricatedRecord(bloSlotSpecOfPlan(registered, 'pc.timing.1')).result!, semantic: { sha256: shaOf('w0-research'), components: {} } } } : record)))
+    expect((notExercised.result.cancelTrials as { slotId: string; status: string }[]).find(trial => trial.slotId === 'pc.cancel.plan-verification')!.status).toBe('cancel_not_exercised')
+    expect(gateOf(notExercised.result).results.find(entry => entry.criterionId === 'cancel.trial-passed')).toMatchObject({ status: 'unmeasured' })
+    expect(gateOf(notExercised.result).verdict).toBe('not_comparable')
+    expect(allCriteriaOf(notExercised.result)).toEqual(everySet('not_comparable'))
+    // The re-run after the cancels without its Node reference: its semantics are unmeasured, never identical.
+    const noNode = await analyze(registered, recordsOf(registered), {}, records => records.filter(record => record.boundsId !== 'w0-research'))
+    expect(gateOf(noNode.result).results.find(entry => entry.criterionId === 'cancel.rerun-identical')).toMatchObject({ status: 'unmeasured' })
+    expect(cancelLifecycleOf(noNode.result)).toEqual(everySet('not_comparable'))
+  })
+
+  /** The registered variant with the Owner's 2026-10-15 cancel → Worker detach bound (3,000 ms), whatever the committed plan says. */
+  const registered3000 = structuredClone(registered)
+  registered3000.criteria.items.find(item => item.criterionId === 'cancel.worker-gone')!.threshold = 3000
+  const detachOf = (result: Record<string, never>) => (result.cancelTrials as { workerDetachObservation: string | null; workerGoneAfterCancelMs: number | null; cancelSettleMs: number | null }[])
+  const workerGoneOf = (result: Record<string, never>) => gateOf(result).results.find(entry => entry.criterionId === 'cancel.worker-gone')!
+
+  it('times the Worker release from the driver observation alone and judges it against 3,000 ms on every set (PR-5B r2)', async () => {
+    // About 2,015 ms (the out-of-plan diagnostic of r1): within 3,000 ms, so the common gate passes for every set.
+    const usual = await analyze(registered3000, recordsOf(registered3000), { detachAfterCancelMs: 2015 })
+    expect(detachOf(usual.result).map(trial => [trial.workerDetachObservation, trial.workerGoneAfterCancelMs])).toEqual(Array.from({ length: 5 }, () => ['detached', 2015]))
+    expect(workerGoneOf(usual.result)).toMatchObject({ status: 'passed', observed: [2015, 2015, 2015, 2015, 2015] })
+    expect(gateOf(usual.result).verdict).toBe('passed')
+    expect(cancelLifecycleOf(usual.result)).toEqual(everySet('passed'))
+    expect(allCriteriaOf(usual.result)).toEqual(everySet('passed'))
+    // Waiting for the release never moves the Client's cancel: the cancel settle is the page's own record.
+    expect(detachOf(usual.result).every(trial => trial.cancelSettleMs === 1)).toBe(true)
+    expect(bloPublicResultIssues(usual.result, usual.sources)).toEqual([])
+    // The bound itself passes; anything beyond it fails the gate, and with it every set.
+    expect(workerGoneOf((await analyze(registered3000, recordsOf(registered3000), { detachAfterCancelMs: 3000 })).result).status).toBe('passed')
+    const late = await analyze(registered3000, recordsOf(registered3000), { detachAfterCancelMs: 3001 })
+    expect(workerGoneOf(late.result)).toMatchObject({ status: 'failed', observed: [3001, 3001, 3001, 3001, 3001] })
+    expect(cancelLifecycleOf(late.result)).toEqual(everySet('failed'))
+    expect(allCriteriaOf(late.result)).toEqual(everySet('failed'))
+  })
+
+  it('never makes up a release time: no observation, a lost page, another Worker or another cancel request is unmeasured (PR-5B r2)', async () => {
+    const records = recordsOf(registered3000)
+    const cancelAt = records.findIndex(record => record.slot.slotId === 'pc.cancel.reach-table')
+    const variants: [string, (slot: BloDriverRecord['slots'][number]) => BloDriverRecord['slots'][number], string][] = [
+      ['not observed within the window', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, outcome: 'not_observed', detachedAtEpochMs: null } }), 'not_observed'],
+      ['the page was lost', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, outcome: 'page_lost', detachedAtEpochMs: null } }), 'page_lost'],
+      ['the Worker could not be identified', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, outcome: 'worker_not_identified', target: null, detachedAtEpochMs: null } }), 'worker_not_identified'],
+      ['no observation was recorded', slot => ({ ...slot, cancelDetachObservation: null }), 'not_recorded'],
+      ['another cancel request', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, cancelRequestedAtEpochMs: slot.cancelDetachObservation!.cancelRequestedAtEpochMs - 1000 } }), 'record_mismatch'],
+      ['a Worker the slot did not list', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, target: 'worker-9' } }), 'record_mismatch'],
+      ['another detach than the listed one', slot => ({ ...slot, cancelDetachObservation: { ...slot.cancelDetachObservation!, detachedAtEpochMs: slot.cancelDetachObservation!.detachedAtEpochMs! - 500 } }), 'record_mismatch'],
+    ]
+    for (const [label, edit, reading] of variants) {
+      const { result } = await analyze(registered3000, records, { detachAfterCancelMs: 2015, slots: slots => { slots[cancelAt] = edit(slots[cancelAt]!) } })
+      expect(detachOf(result)[1], label).toMatchObject({ workerDetachObservation: reading, workerGoneAfterCancelMs: null })
+      expect(workerGoneOf(result).status, label).toBe('unmeasured')
+      expect(allCriteriaOf(result), label).toEqual(everySet('not_comparable'))
+      expect((result.unmeasured as string[]), label).toContain('cancel_worker_gone_cdp')
+    }
+    // A malformed observation refuses the driver record as a source.
+    const sources = await sourcesOf(registered3000, records, { detachAfterCancelMs: 2015 })
+    const driver = JSON.parse(sources.driver!.text) as BloDriverRecord
+    driver.slots[cancelAt] = { ...driver.slots[cancelAt]!, cancelDetachObservation: { ...driver.slots[cancelAt]!.cancelDetachObservation!, outcome: 'detached', detachedAtEpochMs: null } }
+    expect(deriveBloPublicResult({ ...sources, driver: await source('driver.json', JSON.stringify(driver)) })).toEqual({ ok: false, issues: [expect.stringMatching(/malformed cancel detach observation \(a detach time goes exactly with a detached outcome\)/)] })
+    const withoutKey = JSON.parse(sources.driver!.text) as Record<string, unknown> & { slots: Record<string, unknown>[] }
+    delete withoutKey.slots[cancelAt]!.cancelDetachObservation
+    expect(deriveBloPublicResult({ ...sources, driver: await source('driver.json', JSON.stringify(withoutKey)) })).toEqual({ ok: false, issues: [expect.stringMatching(/names no cancel detach observation/)] })
+    // A revision 2 driver record (PR-5B r1) is no source of this code.
+    expect(deriveBloPublicResult({ ...sources, driver: await source('driver.json', JSON.stringify({ ...driver, revision: 2 })) })).toEqual({ ok: false, issues: ['driver.json: not a Build List optimization driver record (revision 3).'] })
+  })
+
+  it('never overlooks a failed re-run or a re-run whose semantics differ (PR-5B)', async () => {
+    // The re-run after the cancels failed: it did not complete, and its semantics are not identical.
+    const failed = await analyze(registered, recordsOf(registered, record => (record.slot.slotId === 'pc.rerun.2'
+      ? { ...record, outcome: { status: 'failed', failure: { kind: 'worker_error' }, cancelReason: null, lastStage: 'route_generation' }, result: null } as BloRunRecord : record)))
+    expect(gateOf(failed.result).results.filter(entry => entry.status === 'failed').map(entry => entry.criterionId)).toEqual(['cancel.rerun', 'cancel.rerun-identical'])
+    expect(cancelLifecycleOf(failed.result)).toEqual(everySet('failed'))
+    expect(allCriteriaOf(failed.result)).toEqual(everySet('failed'))
+    // The re-run completed with an integrity issue: not a completed re-run.
+    const broken = await analyze(registered, recordsOf(registered, record => (record.slot.slotId === 'pc.rerun.2' ? { ...record, integrityIssues: ['A completed run without a received blo_result.'] } : record)))
+    expect(gateOf(broken.result).results.find(entry => entry.criterionId === 'cancel.rerun')).toMatchObject({ status: 'failed' })
+    // The re-run completed with other semantics than the Node reference: the gate fails for every set (and the baseline's semantics).
+    const differs = await analyze(registered, recordsOf(registered, record => (record.slot.slotId === 'pc.rerun.2' && record.result !== null
+      ? { ...record, result: { ...record.result, semantic: { sha256: 'f'.repeat(64), components: {} } } } : record)))
+    expect(gateOf(differs.result).results.filter(entry => entry.status === 'failed').map(entry => entry.criterionId)).toEqual(['cancel.rerun-identical'])
+    expect(cancelLifecycleOf(differs.result)).toEqual(everySet('failed'))
+    expect(perSetOf(differs.result)['w0-research']!.semantic).toBe('failed')
+    expect(perSetOf(differs.result)['w-half']!.semantic).toBe('passed')
+    expect(allCriteriaOf(differs.result)).toEqual(everySet('failed'))
   })
 
   it('judges a registered plan per bounds set, and never counts an unmeasured value as a pass', async () => {
@@ -335,6 +498,16 @@ describe('Build List optimization measurement analysis: the measurement plan (Is
     // A record read from another raw file than the one the driver saved for its slot is refused.
     const swapped = await analyze(registered, records, { slots: slots => { slots[0] = { ...slots[0]!, rawFile: '99-other.json' } } })
     expect(unplannedOf(swapped.result)).toEqual([expect.objectContaining({ slotId: 'pc.pilot.1', reason: 'driver_source_mismatch' })])
+  })
+
+  it('keeps the published PR-5B r1 RESULT as it was measured (series pr5b-r1, measurement HEAD e0c176b)', async () => {
+    // Re-derivable only with the code of its own measurement HEAD; this code never rewrites it.
+    expect(await testSha256(r1ResultText)).toBe('1e93438f7aba644d2389ce189b318356223a4d4d188f7b11fdb90c12a05f9b9c')
+    const r1 = JSON.parse(r1ResultText) as Record<string, never>
+    expect(r1.derivation).toMatchObject({ measurementHead: 'e0c176bcd49adc0035408d94e13339766b02000b' })
+    expect(r1.plan).toMatchObject({ series: 'pr5b-r1', status: 'registered', judged: true })
+    expect(allCriteriaOf(r1)).toEqual({ 'w0-research': 'not_comparable', 'w0-candidates-3': 'not_comparable', 'w-half': 'failed', 'w-wide': 'failed' })
+    expect(gateOf(r1).verdict).toBe('not_comparable')
   })
 
   it('names every interval apart and never mixes them into one total', () => {

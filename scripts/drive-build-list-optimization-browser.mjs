@@ -11,6 +11,11 @@
 // its page is closed - and its Worker with it - and the next slot runs on a new, re-verified page; the slot that ended so is recorded
 // with its end and never run again (runBloDriverSessions(), buildListOptimizationBenchmarkDriverControl.ts).
 //
+// Issue #260 PR-5B (driver record revision 3): a run with a cancel request is followed, after it settled, by the observation of its
+// Worker's release - until the slot's one Worker target detaches or 10 s after the cancel request, whichever comes first
+// (observeBloCancelWorkerDetach()). It never delays the cancel itself. The scratch profile must be outside the Repository (a Chrome
+// profile holds extension files a test runner of the checkout would pick up).
+//
 //   node scripts/drive-build-list-optimization-browser.mjs --mode mechanics|measurement --measurement-head <40 hex> --plan <docs/...md>
 //     --chrome <chrome executable> --profile <new dir> --out <new dir> [--export <file>] [--headless]
 //     [--non-isolated-origin http://127.0.0.1:4181] [--isolated-origin http://127.0.0.1:4182] [--slot-deadline-ms <ms> (mechanics only)]
@@ -58,6 +63,9 @@ const driverSha256 = sha256(readFileSync(fileURLToPath(import.meta.url)))
 // ------------------------------------------------------------------ the committed plan, the checkout and the shared modules
 const git = (...values) => execFileSync('git', values, { encoding: 'utf8', maxBuffer: 1 << 28 }).trim()
 if (git('rev-parse', 'HEAD') !== head) throw new Error(`The checkout is not at the measurement HEAD ${head}.`)
+const repositoryRoot = resolve(git('rev-parse', '--show-toplevel'))
+const inRepository = path => { const relative = resolve(path).toLowerCase(); const root = repositoryRoot.toLowerCase(); return relative === root || relative.startsWith(`${root}\\`) || relative.startsWith(`${root}/`) }
+if (inRepository(profile)) throw new Error('--profile must be outside the Repository (a Chrome profile holds files a test runner of the checkout would pick up).')
 if (git('status', '--porcelain', '--', 'src', 'scripts', 'docs', 'package.json', 'package-lock.json', 'vite.config.ts', 'vite.benchmark.config.ts') !== '') throw new Error('The checkout has uncommitted changes.')
 const planBytes = execFileSync('git', ['show', `${head}:${planPath}`], { maxBuffer: 1 << 28 })
 const server = await createServer({ configFile: false, server: { middlewareMode: true, watch: null, hmr: false, ws: false }, appType: 'custom', logLevel: 'error' })
@@ -166,7 +174,7 @@ const oomEvidence = name => {
 }
 
 const record = {
-  kind: 'build-list-optimization-browser-driver-record', revision: 2, measurementHead: head, plan: { path: planPath, sha256: sha256(planBytes) }, driverSha256,
+  kind: 'build-list-optimization-browser-driver-record', revision: 3, measurementHead: head, plan: { path: planPath, sha256: sha256(planBytes) }, driverSha256,
   launcher: { browser: 'chrome', version: version.Browser, headless, mode: launchMode, planBrowserMode: environment.browserMode, flags: flags.filter(flag => !flag.startsWith('--user-data-dir') && !flag.startsWith('--remote-debugging-port')) },
   slotDeadlineMs,
   machine: { cpuModel: cpus()[0]?.model?.trim() ?? null, logicalCpuCount: cpus().length, totalMemoryBytes: totalmem(), os: `${platform()} ${release()} ${arch()}` },
@@ -293,6 +301,7 @@ async function runSlot(state, slot, entry) {
   entry.cpuLoadPercentBefore = cpuLoad()
   entry.cdpWorkerHeap = null
   entry.osRendererMemory = null
+  entry.cancelDetachObservation = null
   await sleep(RUN_INTERVAL_MS)
   if (!headless) await state.page.send('Page.bringToFront').catch(() => undefined)
   const input = plan.inputs.find(candidate => candidate.inputId === slot.inputId)
@@ -336,6 +345,25 @@ async function runSlot(state, slot, entry) {
   if (result === null) return { outcome: 'driver_deadline', rawFile: null, external: null, note: `The run did not settle within ${slotDeadlineMs} ms.` }
   if (!result.ok) return { outcome: 'driver_error', rawFile: null, external: null, note: `The page refused the slot: ${result.error}` }
   const text = await state.evaluate('globalThis.buildListOptimizationBenchmark.exportJson()', 300_000)
+  // Issue #260 PR-5B: a run with a cancel request has settled already (the Client cancelled and terminated its Worker at once); the
+  // release of its Worker is observed now, after the settle, until the Worker detaches or the window ends (control.observeBloCancelWorkerDetach()).
+  const saved = JSON.parse(text).records?.find(candidate => candidate.recordId === result.recordId) ?? null
+  const cancelEpoch = saved === null ? null : control.bloCancelRequestEpochMs(saved)
+  if (cancelEpoch !== null) {
+    const slotWorkers = () => state.workers.slice(firstWorker).map(worker => ({ target: worker.target, attachedAtEpochMs: worker.attachedAtEpochMs, detachedAtEpochMs: worker.detachedAtEpochMs }))
+    const observation = await control.observeBloCancelWorkerDetach(cancelEpoch, {
+      now: () => Date.now(),
+      sleep,
+      slotWorkers,
+      pageResponds: async () => !state.crashed && !state.page.closed && await state.evaluate('1', 5_000).then(value => value === 1, () => false),
+    })
+    entry.cancelDetachObservation = observation
+    entry.cdpWorkerHeap.workerTargets = slotWorkers()
+    log('SLOT', slot.slotId, 'cancel detach', observation.outcome, observation.detachedAtEpochMs === null ? '-' : `${observation.detachedAtEpochMs - cancelEpoch} ms after the cancel`)
+    if (observation.outcome === 'page_lost') {
+      return { outcome: 'page_lost', rawFile: null, external: { kind: 'page_lost', evidence: 'The page stopped responding during the cancel detach observation.' }, note: null }
+    }
+  }
   rawIndex += 1
   const rawFile = `${String(rawIndex).padStart(2, '0')}-${slot.slotId}.json`
   writeFileSync(join(out, 'raw', rawFile), text, { flag: 'wx' })

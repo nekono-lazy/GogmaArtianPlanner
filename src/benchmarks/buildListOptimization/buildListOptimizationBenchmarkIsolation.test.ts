@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import measurementPlanText from '../../../docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_PLAN.md?raw'
+import r2ResultText from '../../../docs/BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT_RESULT_R2.json?raw'
+import { stableStringify } from '../../domain/models/publicTypes'
 import { PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS } from '../../workers/buildListOptimization.worker.production'
+import { extractBloMeasurementPlan, type BloMeasurementPlan } from './buildListOptimizationBenchmarkPlan'
+import { testSha256 } from './buildListOptimizationBenchmarkTestFixture'
 
 /*
  * Issue #260 PR-5A: the Production Build List optimization measurement harness is benchmark only and measures the Production
@@ -9,7 +14,7 @@ import { PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS } from '../../workers/buildLi
  * - Its modules reach the Production Client, the Production input path and the benchmark measurement Worker, never persistence
  *   directly, the Research harness or the Research Export reader; the synthetic cases alone read a Repository test fixture.
  * - The measured run is the Client's: the harness constructs no run request, and the bounds reach the Worker only through the
- *   benchmark configuration message. The Production bounds stay undecided (`null`).
+ *   benchmark configuration message. The Production bounds (PR-5B) are the measured plan set `w0-candidates-3`, field by field.
  * - The committed plan and the analysis are post-hoc: no page / runner module imports them.
  * - The scripts read the plan from the measured commit, refuse other code, and write exclusively.
  */
@@ -75,9 +80,23 @@ describe('Build List optimization measurement harness isolation (Issue #260 PR-5
     const ports = codeOf(harness['./buildListOptimizationBenchmarkBrowserPorts.ts']!)
     expect(ports).toMatch(/new Worker\(new URL\('\.\.\/\.\.\/workers\/buildListOptimization\.worker\.benchmark\.entry\.ts', import\.meta\.url\), \{ type: 'module' \}\)/)
     expect(ports).not.toMatch(/buildListOptimization\.worker\.entry\.ts/)
-    // No harness module carries or fills in a Production bound; the Production adapter still has none (U2 is PR-5B's).
+    // No harness module carries or fills in a Production bound: the measurement runs the plan's bounds, never the Production constant.
     for (const [path, source] of Object.entries(harness)) expect(codeOf(source), path).not.toMatch(/PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS|recommendedCandidateSearchDefaults|candidateSearchDefaults/)
-    expect(PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS).toBeNull()
+  })
+
+  it('adopts as the Production bounds the measured set w0-candidates-3 of the registered plan, field by field (Issue #260 PR-5B)', async () => {
+    // The committed plan is the one series pr5b-r2 measured: the RESULT names its bytes.
+    const r2 = JSON.parse(r2ResultText) as { derivation: { measurementHead: string; plan: { sha256: string } }; plan: { series: string; judged: boolean }; verdicts: { allCriteriaPerBoundsSet: Record<string, string> } }
+    expect(r2.derivation.measurementHead).toBe('b4d4ce8b44ccf7eef5c1154552a6f6b002d603a6')
+    expect(await testSha256(measurementPlanText)).toBe(r2.derivation.plan.sha256)
+    expect(r2.plan).toMatchObject({ series: 'pr5b-r2', judged: true })
+    // The adopted set passed every criterion of that measurement (so did w0-research; the Owner chose w0-candidates-3).
+    expect(r2.verdicts.allCriteriaPerBoundsSet).toEqual({ 'w0-research': 'passed', 'w0-candidates-3': 'passed', 'w-half': 'failed', 'w-wide': 'failed' })
+    const plan = extractBloMeasurementPlan(measurementPlanText).plan as BloMeasurementPlan
+    expect(plan.series).toBe('pr5b-r2')
+    // Every field, nothing completed or guessed: the constant is the plan's bounds set exactly.
+    expect(PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS).toEqual(plan.boundsSets.find(set => set.boundsId === 'w0-candidates-3')!.bounds)
+    expect(stableStringify(PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS)).not.toBe(stableStringify(plan.boundsSets.find(set => set.boundsId === 'w0-research')!.bounds))
   })
 
   it('keeps the committed plan and the analysis post-hoc: no page or runner module imports them', () => {
@@ -107,7 +126,13 @@ describe('Build List optimization measurement harness isolation (Issue #260 PR-5
     expect(driver).toMatch(/control\.bloPageBrowserModeIssue\(environmentValue\.userAgent \?\? null, launchMode\)/)
     expect(driver).toMatch(/control\.runBloDriverSessions\(sessions, \{ openPage, runSlot, closePage, readStorage \}/)
     expect(driver).toMatch(/deadlineOption !== undefined && \(mode !== 'mechanics'/)
-    expect(driver).toMatch(/revision: 2/)
+    expect(driver).toMatch(/revision: 3/)
+    // PR-5B r2: a cancelled run's Worker release is observed by the shared observation, after the run settled, from the saved
+    // record's cancel request; the scratch profile must lie outside the Repository.
+    expect(driver).toMatch(/control\.bloCancelRequestEpochMs\(saved\)/)
+    expect(driver).toMatch(/control\.observeBloCancelWorkerDetach\(cancelEpoch, \{/)
+    expect(driver.indexOf("exportJson()', 300_000)")).toBeLessThan(driver.indexOf('control.observeBloCancelWorkerDetach('))
+    expect(driver).toMatch(/if \(inRepository\(profile\)\) throw new Error/)
     expect(driver).toMatch(/DOM\.setFileInputFiles/)
     expect(driver).toMatch(/build\?\.commit !== head \|\| build\?\.uncommittedBenchmarkCode !== false/)
     expect(driver).toMatch(/flag: 'wx'/)

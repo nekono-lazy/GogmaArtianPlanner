@@ -1,0 +1,1731 @@
+{
+  "kind": "build-list-optimization-browser-result",
+  "revision": 1,
+  "derivation": {
+    "measurementHead": "e0c176bcd49adc0035408d94e13339766b02000b",
+    "analyzer": "scripts/analyze-build-list-optimization-browser.mjs",
+    "plan": {
+      "file": "e0c176bcd49adc0035408d94e13339766b02000b:docs/BUILD_LIST_OPTIMIZATION_BROWSER_MECHANICS_PLAN.md",
+      "bytes": 19679,
+      "sha256": "4136bde47c773ccb8c36a948bdca37b0dcd4c03a680539707a43f329a1060d86"
+    },
+    "sources": [
+      {
+        "role": "browser_raw",
+        "file": "01-mech.optimized.json",
+        "bytes": 9759,
+        "sha256": "0eb4660d82d33285ec699c5ebd346b9a4c4e11d7037c45de2207785bf323cc20"
+      },
+      {
+        "role": "browser_raw",
+        "file": "02-mech.rerun.json",
+        "bytes": 9809,
+        "sha256": "128f24cef542844aa46059dbcde74ad4008fab2a8ed82520e0c4338de411f811"
+      },
+      {
+        "role": "browser_raw",
+        "file": "03-mech.unsupported.json",
+        "bytes": 6504,
+        "sha256": "fe4081156d5369215877c45224881bed6ccc20a82c0eb486356d1a67e79cdacb"
+      },
+      {
+        "role": "browser_raw",
+        "file": "04-mech.bound.json",
+        "bytes": 7843,
+        "sha256": "d9d695105b67bfc963779922f837d1ff27fe1209c64154b75f0145ac8a09ff1d"
+      },
+      {
+        "role": "browser_raw",
+        "file": "05-mech.cancel.input-check.json",
+        "bytes": 5503,
+        "sha256": "e8bf6a57dd89183cc4b995915683123cdff90916157a8d9e3250fb00d3fcddee"
+      },
+      {
+        "role": "browser_raw",
+        "file": "06-mech.cancel.reach-table.json",
+        "bytes": 5644,
+        "sha256": "1c074d71c0c05e42a3aff8556ee19051d4207f8142102e01a2f8b670f22f042d"
+      },
+      {
+        "role": "browser_raw",
+        "file": "07-mech.rerun.after-cancel.json",
+        "bytes": 9852,
+        "sha256": "a7131924be3cf0732e12b48f1e5bb2e47c323e5f771fff54947e22cb04f992b3"
+      },
+      {
+        "role": "browser_raw",
+        "file": "08-mech.worker-error.json",
+        "bytes": 5367,
+        "sha256": "2750c525643cb4a7b20525cf6cf02261bc7ceabb276fb14bca94762f994a7d6e"
+      },
+      {
+        "role": "browser_raw",
+        "file": "09-mech.invalid-result.json",
+        "bytes": 6019,
+        "sha256": "45c4375b8b3539b43ea9701ad6935e9b791aa899043892d60365d746318601e3"
+      },
+      {
+        "role": "browser_raw",
+        "file": "10-mech.memory.json",
+        "bytes": 11810,
+        "sha256": "15bbfa5f133c5ec8d26d38ee7cfca6e828a6e0cfb34772d8aa5b92dd90d49efa"
+      },
+      {
+        "role": "driver",
+        "file": "driver.json",
+        "bytes": 24795,
+        "sha256": "d6afd5fbe6479610aa810bdfb839806092a50bb07a7d4825882dfa7352179dac"
+      },
+      {
+        "role": "node_reference",
+        "file": "node-synthetic.open.json",
+        "bytes": 3596,
+        "sha256": "35d42b1265f61827bed54eb000bc1bcbba788f3342d80ee255e98d44ca9fc3bc"
+      },
+      {
+        "role": "node_reference",
+        "file": "node-synthetic.wide-window.json",
+        "bytes": 3611,
+        "sha256": "76addcfdc633fa2ccb9eac0354f127d0d6908f0d8ce6d71d7f8f896032bebd10"
+      }
+    ]
+  },
+  "plan": {
+    "kind": "build-list-optimization-browser-plan",
+    "planKind": "mechanics",
+    "series": "pr5a-mech-r2",
+    "status": "registered",
+    "approval": "not_required",
+    "criteriaStatus": "registered",
+    "judged": false
+  },
+  "machine": {
+    "cpuModel": "AMD Ryzen 7 9700X 8-Core Processor",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 33377591296,
+    "os": "win32 10.0.26200 x64",
+    "browser": "Chrome/154.0.8037.98",
+    "headless": false
+  },
+  "binding": {
+    "bound": 10,
+    "missingSlots": [],
+    "unplanned": [],
+    "order": {
+      "pc-windows-chrome": {
+        "followed": true,
+        "outOfOrderSlots": []
+      }
+    }
+  },
+  "slots": [
+    {
+      "slotId": "mech.optimized",
+      "order": 1,
+      "purpose": "mechanics",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.open",
+      "origin": "non_isolated",
+      "recorded": true,
+      "driverOutcome": "record_saved",
+      "external": null,
+      "run": {
+        "source": "01-mech.optimized.json",
+        "startedAt": "2026-10-15T05:52:07.554Z",
+        "outcome": {
+          "status": "completed",
+          "failure": null,
+          "cancelReason": null,
+          "lastStage": "plan_verification"
+        },
+        "inputPreparation": {
+          "status": "ready",
+          "refusal": null,
+          "counts": {
+            "targetWeapons": 3,
+            "buildListEntries": 3,
+            "ownedWeapons": 3,
+            "normalCounters": 3
+          }
+        },
+        "result": {
+          "status": "optimized",
+          "planningTargetCount": 3,
+          "completedTargetCount": 3,
+          "physicalOperationCount": 7,
+          "planStepCount": 7,
+          "nonPhysicalStepCount": 0,
+          "structuralObjective": 7,
+          "maxPlanSteps": 1000,
+          "conflictCount": 0,
+          "rejectedEntryCount": 0,
+          "warningCount": 0,
+          "generatedEntryCount": 2,
+          "unchangedTargetCount": 1,
+          "inputExclusionCount": 0,
+          "outOfScopeTargetCounts": {
+            "noEntry": 0,
+            "excludedEntryOnly": 0,
+            "disabled": 0,
+            "completed": 0
+          },
+          "boundKinds": [],
+          "notFoundReason": null,
+          "unsupportedReasonKinds": [],
+          "structuralSearch": {
+            "completeness": "running",
+            "expandedNodes": 4,
+            "coverageRejections": 0,
+            "structuralCandidates": 1,
+            "noStructuralCandidateReason": null
+          },
+          "reachTable": {
+            "predictions": {
+              "skill": 27,
+              "gogmaReset": 24,
+              "gogmaKeep": 40,
+              "normal": 6
+            },
+            "supportQueries": 22
+          },
+          "plannerVerifications": 1,
+          "routeGenerationMethods": [
+            {
+              "candidate_search_projected": 3,
+              "shape_constrained": 0
+            }
+          ],
+          "candidateVerifications": [
+            {
+              "outcome": "optimized",
+              "fullPlannerRuns": 1,
+              "rejectionCodes": []
+            }
+          ],
+          "semanticSha256": "e5a5fd8cb8b49fad83757849f3d1a765ea8d7284f1bf47835896d07dbc0c626c"
+        },
+        "intervals": {
+          "inputPreparationMs": 2.5,
+          "workerCreateToRequestPostedMs": 0.3,
+          "requestPostMs": 0.1,
+          "requestToFirstProgressMs": 16.5,
+          "requestToTerminalMs": 62.3,
+          "terminalDataReadMs": 0.3,
+          "clientHandlingMs": 1,
+          "workerStageMs": {
+            "input_check": 10.2,
+            "reach_table": 5.3,
+            "assignment_search": 3.5,
+            "route_generation": 11,
+            "plan_verification": 15.6
+          },
+          "workerStageTotalMs": 45.6,
+          "mainObservedStageMs": {
+            "input_check": 10.2,
+            "reach_table": 5.2,
+            "assignment_search": 3.5,
+            "route_generation": 11,
+            "plan_verification": 15.9
+          },
+          "workerCreateToOutcomeMs": 63.9,
+          "endToEndMs": 68.1,
+          "cancelSettleMs": null
+        },
+        "progressStages": [
+          "input_check",
+          "reach_table",
+          "assignment_search",
+          "route_generation",
+          "plan_verification"
+        ],
+        "cancel": null,
+        "lateMessages": 0,
+        "mainThread": {
+          "longTaskObserved": true,
+          "longTaskCount": 0,
+          "longTaskMaxMs": 0,
+          "longTaskTotalMs": 0
+        },
+        "memory": {
+          "page": {
+            "mainHeapUsedBeforeRun": null,
+            "mainHeapUsedAfterOutcome": null,
+            "mainHeapUsedAfterRelease": null,
+            "mainHeapRetainedBytes": null,
+            "userAgentSpecificBytes": {},
+            "workerBytesAfterRelease": null,
+            "readingErrors": []
+          },
+          "driver": {
+            "workerHeapUsedMaxSampled": null,
+            "workerHeapTotalMaxSampled": null,
+            "heapSamples": 0,
+            "heapErrors": 0,
+            "rendererPrivateMaxSampled": null,
+            "rendererWorkingSetMaxSampled": null,
+            "osSamples": 0,
+            "workerGoneAfterCancelMs": null
+          }
+        },
+        "interruptions": [],
+        "storageCountsChanged": false,
+        "integrityIssues": [],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "crossOriginIsolated": false,
+          "hardwareConcurrency": 16
+        }
+      }
+    },
+    {
+      "slotId": "mech.rerun",
+      "order": 2,
+      "purpose": "mechanics",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.open",
+      "origin": "non_isolated",
+      "recorded": true,
+      "driverOutcome": "record_saved",
+      "external": null,
+      "run": {
+        "source": "02-mech.rerun.json",
+        "startedAt": "2026-10-15T05:52:15.943Z",
+        "outcome": {
+          "status": "completed",
+          "failure": null,
+          "cancelReason": null,
+          "lastStage": "plan_verification"
+        },
+        "inputPreparation": {
+          "status": "ready",
+          "refusal": null,
+          "counts": {
+            "targetWeapons": 3,
+            "buildListEntries": 3,
+            "ownedWeapons": 3,
+            "normalCounters": 3
+          }
+        },
+        "result": {
+          "status": "optimized",
+          "planningTargetCount": 3,
+          "completedTargetCount": 3,
+          "physicalOperationCount": 7,
+          "planStepCount": 7,
+          "nonPhysicalStepCount": 0,
+          "structuralObjective": 7,
+          "maxPlanSteps": 1000,
+          "conflictCount": 0,
+          "rejectedEntryCount": 0,
+          "warningCount": 0,
+          "generatedEntryCount": 2,
+          "unchangedTargetCount": 1,
+          "inputExclusionCount": 0,
+          "outOfScopeTargetCounts": {
+            "noEntry": 0,
+            "excludedEntryOnly": 0,
+            "disabled": 0,
+            "completed": 0
+          },
+          "boundKinds": [],
+          "notFoundReason": null,
+          "unsupportedReasonKinds": [],
+          "structuralSearch": {
+            "completeness": "running",
+            "expandedNodes": 4,
+            "coverageRejections": 0,
+            "structuralCandidates": 1,
+            "noStructuralCandidateReason": null
+          },
+          "reachTable": {
+            "predictions": {
+              "skill": 27,
+              "gogmaReset": 24,
+              "gogmaKeep": 40,
+              "normal": 6
+            },
+            "supportQueries": 22
+          },
+          "plannerVerifications": 1,
+          "routeGenerationMethods": [
+            {
+              "candidate_search_projected": 3,
+              "shape_constrained": 0
+            }
+          ],
+          "candidateVerifications": [
+            {
+              "outcome": "optimized",
+              "fullPlannerRuns": 1,
+              "rejectionCodes": []
+            }
+          ],
+          "semanticSha256": "e5a5fd8cb8b49fad83757849f3d1a765ea8d7284f1bf47835896d07dbc0c626c"
+        },
+        "intervals": {
+          "inputPreparationMs": 0.4,
+          "workerCreateToRequestPostedMs": 0.2,
+          "requestPostMs": 0.2,
+          "requestToFirstProgressMs": 9.7,
+          "requestToTerminalMs": 49.4,
+          "terminalDataReadMs": 0.1,
+          "clientHandlingMs": 0.3,
+          "workerStageMs": {
+            "input_check": 5.8,
+            "reach_table": 4,
+            "assignment_search": 3.2,
+            "route_generation": 10.5,
+            "plan_verification": 15.8
+          },
+          "workerStageTotalMs": 39.3,
+          "mainObservedStageMs": {
+            "input_check": 5.8,
+            "reach_table": 4.1,
+            "assignment_search": 3.2,
+            "route_generation": 10.4,
+            "plan_verification": 16.2
+          },
+          "workerCreateToOutcomeMs": 50,
+          "endToEndMs": 51.4,
+          "cancelSettleMs": null
+        },
+        "progressStages": [
+          "input_check",
+          "reach_table",
+          "assignment_search",
+          "route_generation",
+          "plan_verification"
+        ],
+        "cancel": null,
+        "lateMessages": 0,
+        "mainThread": {
+          "longTaskObserved": true,
+          "longTaskCount": 0,
+          "longTaskMaxMs": 0,
+          "longTaskTotalMs": 0
+        },
+        "memory": {
+          "page": {
+            "mainHeapUsedBeforeRun": null,
+            "mainHeapUsedAfterOutcome": null,
+            "mainHeapUsedAfterRelease": null,
+            "mainHeapRetainedBytes": null,
+            "userAgentSpecificBytes": {},
+            "workerBytesAfterRelease": null,
+            "readingErrors": []
+          },
+          "driver": {
+            "workerHeapUsedMaxSampled": null,
+            "workerHeapTotalMaxSampled": null,
+            "heapSamples": 0,
+            "heapErrors": 0,
+            "rendererPrivateMaxSampled": null,
+            "rendererWorkingSetMaxSampled": null,
+            "osSamples": 0,
+            "workerGoneAfterCancelMs": null
+          }
+        },
+        "interruptions": [],
+        "storageCountsChanged": false,
+        "integrityIssues": [],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "crossOriginIsolated": false,
+          "hardwareConcurrency": 16
+        }
+      }
+    },
+    {
+      "slotId": "mech.unsupported",
+      "order": 3,
+      "purpose": "mechanics",
+      "inputId": "sanity-3-duplicate",
+      "boundsId": "synthetic.open",
+      "origin": "non_isolated",
+      "recorded": true,
+      "driverOutcome": "record_saved",
+      "external": null,
+      "run": {
+        "source": "03-mech.unsupported.json",
+        "startedAt": "2026-10-15T05:52:24.320Z",
+        "outcome": {
+          "status": "completed",
+          "failure": null,
+          "cancelReason": null,
+          "lastStage": "input_check"
+        },
+        "inputPreparation": {
+          "status": "ready",
+          "refusal": null,
+          "counts": {
+            "targetWeapons": 3,
+            "buildListEntries": 4,
+            "ownedWeapons": 3,
+            "normalCounters": 3
+          }
+        },
+        "result": {
+          "status": "unsupported",
+          "planningTargetCount": null,
+          "completedTargetCount": null,
+          "physicalOperationCount": null,
+          "planStepCount": null,
+          "nonPhysicalStepCount": null,
+          "structuralObjective": null,
+          "maxPlanSteps": null,
+          "conflictCount": null,
+          "rejectedEntryCount": null,
+          "warningCount": null,
+          "generatedEntryCount": null,
+          "unchangedTargetCount": null,
+          "inputExclusionCount": null,
+          "outOfScopeTargetCounts": null,
+          "boundKinds": [],
+          "notFoundReason": null,
+          "unsupportedReasonKinds": [
+            "invalid_planner_input"
+          ],
+          "structuralSearch": null,
+          "reachTable": null,
+          "plannerVerifications": null,
+          "routeGenerationMethods": [],
+          "candidateVerifications": [],
+          "semanticSha256": "0881f920bd499c58593784e41f1cd4736c1d3d27051d3695042a8d99f1e87065"
+        },
+        "intervals": {
+          "inputPreparationMs": 0.5,
+          "workerCreateToRequestPostedMs": 0.2,
+          "requestPostMs": 0.1,
+          "requestToFirstProgressMs": 10.6,
+          "requestToTerminalMs": 18.7,
+          "terminalDataReadMs": 0.1,
+          "clientHandlingMs": 0,
+          "workerStageMs": null,
+          "workerStageTotalMs": null,
+          "mainObservedStageMs": {
+            "input_check": 8.1
+          },
+          "workerCreateToOutcomeMs": 19,
+          "endToEndMs": 20.5,
+          "cancelSettleMs": null
+        },
+        "progressStages": [
+          "input_check"
+        ],
+        "cancel": null,
+        "lateMessages": 0,
+        "mainThread": {
+          "longTaskObserved": true,
+          "longTaskCount": 0,
+          "longTaskMaxMs": 0,
+          "longTaskTotalMs": 0
+        },
+        "memory": {
+          "page": {
+            "mainHeapUsedBeforeRun": null,
+            "mainHeapUsedAfterOutcome": null,
+            "mainHeapUsedAfterRelease": null,
+            "mainHeapRetainedBytes": null,
+            "userAgentSpecificBytes": {},
+            "workerBytesAfterRelease": null,
+            "readingErrors": []
+          },
+          "driver": {
+            "workerHeapUsedMaxSampled": null,
+            "workerHeapTotalMaxSampled": null,
+            "heapSamples": 0,
+            "heapErrors": 0,
+            "rendererPrivateMaxSampled": null,
+            "rendererWorkingSetMaxSampled": null,
+            "osSamples": 0,
+            "workerGoneAfterCancelMs": null
+          }
+        },
+        "interruptions": [],
+        "storageCountsChanged": false,
+        "integrityIssues": [],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "crossOriginIsolated": false,
+          "hardwareConcurrency": 16
+        }
+      }
+    },
+    {
+      "slotId": "mech.bound",
+      "order": 4,
+      "purpose": "mechanics",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.node-budget-1",
+      "origin": "non_isolated",
+      "recorded": true,
+      "driverOutcome": "record_saved",
+      "external": null,
+      "run": {
+        "source": "04-mech.bound.json",
+        "startedAt": "2026-10-15T05:52:32.704Z",
+        "outcome": {
+          "status": "completed",
+          "failure": null,
+          "cancelReason": null,
+          "lastStage": "assignment_search"
+        },
+        "inputPreparation": {
+          "status": "ready",
+          "refusal": null,
+          "counts": {
+            "targetWeapons": 3,
+            "buildListEntries": 3,
+            "ownedWeapons": 3,
+            "normalCounters": 3
+          }
+        },
+        "result": {
+          "status": "search_bound_reached",
+          "planningTargetCount": null,
+          "completedTargetCount": null,
+          "physicalOperationCount": null,
+          "planStepCount": null,
+          "nonPhysicalStepCount": null,
+          "structuralObjective": null,
+          "maxPlanSteps": null,
+          "conflictCount": null,
+          "rejectedEntryCount": null,
+          "warningCount": null,
+          "generatedEntryCount": null,
+          "unchangedTargetCount": null,
+          "inputExclusionCount": null,
+          "outOfScopeTargetCounts": null,
+          "boundKinds": [
+            "structural_search_node_budget"
+          ],
+          "notFoundReason": null,
+          "unsupportedReasonKinds": [],
+          "structuralSearch": {
+            "completeness": "node_budget_reached",
+            "expandedNodes": 1,
+            "coverageRejections": 0,
+            "structuralCandidates": 0,
+            "noStructuralCandidateReason": null
+          },
+          "reachTable": {
+            "predictions": {
+              "skill": 27,
+              "gogmaReset": 24,
+              "gogmaKeep": 40,
+              "normal": 6
+            },
+            "supportQueries": 22
+          },
+          "plannerVerifications": 0,
+          "routeGenerationMethods": [],
+          "candidateVerifications": [],
+          "semanticSha256": "4e279e9d412a05f3135f789cdb0be221b622c7e2cb416352dc64183a9f8fdd05"
+        },
+        "intervals": {
+          "inputPreparationMs": 0.4,
+          "workerCreateToRequestPostedMs": 0.3,
+          "requestPostMs": 0.1,
+          "requestToFirstProgressMs": 10,
+          "requestToTerminalMs": 22.2,
+          "terminalDataReadMs": 0,
+          "clientHandlingMs": 0,
+          "workerStageMs": {
+            "input_check": 5.9,
+            "reach_table": 4.7,
+            "assignment_search": 1.6
+          },
+          "workerStageTotalMs": 12.2,
+          "mainObservedStageMs": {
+            "input_check": 5.8,
+            "reach_table": 4.8,
+            "assignment_search": 1.6
+          },
+          "workerCreateToOutcomeMs": 22.5,
+          "endToEndMs": 23.8,
+          "cancelSettleMs": null
+        },
+        "progressStages": [
+          "input_check",
+          "reach_table",
+          "assignment_search"
+        ],
+        "cancel": null,
+        "lateMessages": 0,
+        "mainThread": {
+          "longTaskObserved": true,
+          "longTaskCount": 0,
+          "longTaskMaxMs": 0,
+          "longTaskTotalMs": 0
+        },
+        "memory": {
+          "page": {
+            "mainHeapUsedBeforeRun": null,
+            "mainHeapUsedAfterOutcome": null,
+            "mainHeapUsedAfterRelease": null,
+            "mainHeapRetainedBytes": null,
+            "userAgentSpecificBytes": {},
+            "workerBytesAfterRelease": null,
+            "readingErrors": []
+          },
+          "driver": {
+            "workerHeapUsedMaxSampled": null,
+            "workerHeapTotalMaxSampled": null,
+            "heapSamples": 0,
+            "heapErrors": 0,
+            "rendererPrivateMaxSampled": null,
+            "rendererWorkingSetMaxSampled": null,
+            "osSamples": 0,
+            "workerGoneAfterCancelMs": null
+          }
+        },
+        "interruptions": [],
+        "storageCountsChanged": false,
+        "integrityIssues": [],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "crossOriginIsolated": false,
+          "hardwareConcurrency": 16
+        }
+      }
+    },
+    {
+      "slotId": "mech.cancel.input-check",
+      "order": 5,
+      "purpose": "cancel",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.wide-window",
+      "origin": "non_isolated",
+      "recorded": true,
+      "driverOutcome": "record_saved",
+      "external": null,
+      "run": {
+        "source": "05-mech.cancel.input-check.json",
+        "startedAt": "2026-10-15T05:52:41.070Z",
+        "outcome": {
+          "status": "cancelled",
+          "failure": null,
+          "cancelReason": "cancelled",
+          "lastStage": "input_check"
+        },
+        "inputPreparation": {
+          "status": "ready",
+          "refusal": null,
+          "counts": {
+            "targetWeapons": 3,
+            "buildListEntries": 3,
+            "ownedWeapons": 3,
+            "normalCounters": 3
+          }
+        },
+        "result": null,
+        "intervals": {
+          "inputPreparationMs": 0.5,
+          "workerCreateToRequestPostedMs": 0.2,
+          "requestPostMs": 0,
+          "requestToFirstProgressMs": 9.2,
+          "requestToTerminalMs": null,
+          "terminalDataReadMs": null,
+          "clientHandlingMs": null,
+          "workerStageMs": null,
+          "workerStageTotalMs": null,
+          "mainObservedStageMs": {},
+          "workerCreateToOutcomeMs": 9.5,
+          "endToEndMs": 10.9,
+          "cancelSettleMs": 0.1
+        },
+        "progressStages": [
+          "input_check"
+        ],
+        "cancel": {
+          "requestedAtMs": 10.8,
+          "lastStage": "input_check"
+        },
+        "lateMessages": 0,
+        "mainThread": {
+          "longTaskObserved": true,
+          "longTaskCount": 0,
+          "longTaskMaxMs": 0,
+          "longTaskTotalMs": 0
+        },
+        "memory": {
+          "page": {
+            "mainHeapUsedBeforeRun": null,
+            "mainHeapUsedAfterOutcome": null,
+            "mainHeapUsedAfterRelease": null,
+            "mainHeapRetainedBytes": null,
+            "userAgentSpecificBytes": {},
+            "workerBytesAfterRelease": null,
+            "readingErrors": []
+          },
+          "driver": {
+            "workerHeapUsedMaxSampled": null,
+            "workerHeapTotalMaxSampled": null,
+            "heapSamples": 0,
+            "heapErrors": 0,
+            "rendererPrivateMaxSampled": null,
+            "rendererWorkingSetMaxSampled": null,
+            "osSamples": 0,
+            "workerGoneAfterCancelMs": 675.199951171875
+          }
+        },
+        "interruptions": [],
+        "storageCountsChanged": false,
+        "integrityIssues": [],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "crossOriginIsolated": false,
+          "hardwareConcurrency": 16
+        }
+      }
+    },
+    {
+      "slotId": "mech.cancel.reach-table",
+      "order": 6,
+      "purpose": "cancel",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.wide-window",
+      "origin": "non_isolated",
+      "recorded": true,
+      "driverOutcome": "record_saved",
+      "external": null,
+      "run": {
+        "source": "06-mech.cancel.reach-table.json",
+        "startedAt": "2026-10-15T05:52:49.459Z",
+        "outcome": {
+          "status": "cancelled",
+          "failure": null,
+          "cancelReason": "cancelled",
+          "lastStage": "reach_table"
+        },
+        "inputPreparation": {
+          "status": "ready",
+          "refusal": null,
+          "counts": {
+            "targetWeapons": 3,
+            "buildListEntries": 3,
+            "ownedWeapons": 3,
+            "normalCounters": 3
+          }
+        },
+        "result": null,
+        "intervals": {
+          "inputPreparationMs": 0.4,
+          "workerCreateToRequestPostedMs": 0.2,
+          "requestPostMs": 0.2,
+          "requestToFirstProgressMs": 9.3,
+          "requestToTerminalMs": null,
+          "terminalDataReadMs": null,
+          "clientHandlingMs": null,
+          "workerStageMs": null,
+          "workerStageTotalMs": null,
+          "mainObservedStageMs": {
+            "input_check": 6.1
+          },
+          "workerCreateToOutcomeMs": 317.2,
+          "endToEndMs": 318.6,
+          "cancelSettleMs": 0.1
+        },
+        "progressStages": [
+          "input_check",
+          "reach_table"
+        ],
+        "cancel": {
+          "requestedAtMs": 318.5,
+          "lastStage": "reach_table"
+        },
+        "lateMessages": 0,
+        "mainThread": {
+          "longTaskObserved": true,
+          "longTaskCount": 0,
+          "longTaskMaxMs": 0,
+          "longTaskTotalMs": 0
+        },
+        "memory": {
+          "page": {
+            "mainHeapUsedBeforeRun": null,
+            "mainHeapUsedAfterOutcome": null,
+            "mainHeapUsedAfterRelease": null,
+            "mainHeapRetainedBytes": null,
+            "userAgentSpecificBytes": {},
+            "workerBytesAfterRelease": null,
+            "readingErrors": []
+          },
+          "driver": {
+            "workerHeapUsedMaxSampled": null,
+            "workerHeapTotalMaxSampled": null,
+            "heapSamples": 0,
+            "heapErrors": 0,
+            "rendererPrivateMaxSampled": null,
+            "rendererWorkingSetMaxSampled": null,
+            "osSamples": 0,
+            "workerGoneAfterCancelMs": 364.5
+          }
+        },
+        "interruptions": [],
+        "storageCountsChanged": false,
+        "integrityIssues": [],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "crossOriginIsolated": false,
+          "hardwareConcurrency": 16
+        }
+      }
+    },
+    {
+      "slotId": "mech.rerun.after-cancel",
+      "order": 7,
+      "purpose": "mechanics",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.wide-window",
+      "origin": "non_isolated",
+      "recorded": true,
+      "driverOutcome": "record_saved",
+      "external": null,
+      "run": {
+        "source": "07-mech.rerun.after-cancel.json",
+        "startedAt": "2026-10-15T05:52:57.843Z",
+        "outcome": {
+          "status": "completed",
+          "failure": null,
+          "cancelReason": null,
+          "lastStage": "plan_verification"
+        },
+        "inputPreparation": {
+          "status": "ready",
+          "refusal": null,
+          "counts": {
+            "targetWeapons": 3,
+            "buildListEntries": 3,
+            "ownedWeapons": 3,
+            "normalCounters": 3
+          }
+        },
+        "result": {
+          "status": "optimized",
+          "planningTargetCount": 3,
+          "completedTargetCount": 3,
+          "physicalOperationCount": 7,
+          "planStepCount": 7,
+          "nonPhysicalStepCount": 0,
+          "structuralObjective": 7,
+          "maxPlanSteps": 1000,
+          "conflictCount": 0,
+          "rejectedEntryCount": 0,
+          "warningCount": 0,
+          "generatedEntryCount": 2,
+          "unchangedTargetCount": 1,
+          "inputExclusionCount": 0,
+          "outOfScopeTargetCounts": {
+            "noEntry": 0,
+            "excludedEntryOnly": 0,
+            "disabled": 0,
+            "completed": 0
+          },
+          "boundKinds": [],
+          "notFoundReason": null,
+          "unsupportedReasonKinds": [],
+          "structuralSearch": {
+            "completeness": "running",
+            "expandedNodes": 4,
+            "coverageRejections": 0,
+            "structuralCandidates": 1,
+            "noStructuralCandidateReason": null
+          },
+          "reachTable": {
+            "predictions": {
+              "skill": 3603,
+              "gogmaReset": 1200,
+              "gogmaKeep": 14000,
+              "normal": 900
+            },
+            "supportQueries": 1007
+          },
+          "plannerVerifications": 1,
+          "routeGenerationMethods": [
+            {
+              "candidate_search_projected": 3,
+              "shape_constrained": 0
+            }
+          ],
+          "candidateVerifications": [
+            {
+              "outcome": "optimized",
+              "fullPlannerRuns": 1,
+              "rejectionCodes": []
+            }
+          ],
+          "semanticSha256": "ce4dee4fb5286f04ca6043599fd9a44b1f655a9c4f30bcb6ad928a57e61bd010"
+        },
+        "intervals": {
+          "inputPreparationMs": 0.4,
+          "workerCreateToRequestPostedMs": 0.2,
+          "requestPostMs": 0.1,
+          "requestToFirstProgressMs": 9.8,
+          "requestToTerminalMs": 693.9,
+          "terminalDataReadMs": 0,
+          "clientHandlingMs": 0.3,
+          "workerStageMs": {
+            "input_check": 6,
+            "reach_table": 648.2,
+            "assignment_search": 6.6,
+            "route_generation": 9.3,
+            "plan_verification": 13.8
+          },
+          "workerStageTotalMs": 683.9,
+          "mainObservedStageMs": {
+            "input_check": 6,
+            "reach_table": 648.3,
+            "assignment_search": 6.6,
+            "route_generation": 9.3,
+            "plan_verification": 13.9
+          },
+          "workerCreateToOutcomeMs": 694.4,
+          "endToEndMs": 695.6,
+          "cancelSettleMs": null
+        },
+        "progressStages": [
+          "input_check",
+          "reach_table",
+          "assignment_search",
+          "route_generation",
+          "plan_verification"
+        ],
+        "cancel": null,
+        "lateMessages": 0,
+        "mainThread": {
+          "longTaskObserved": true,
+          "longTaskCount": 0,
+          "longTaskMaxMs": 0,
+          "longTaskTotalMs": 0
+        },
+        "memory": {
+          "page": {
+            "mainHeapUsedBeforeRun": null,
+            "mainHeapUsedAfterOutcome": null,
+            "mainHeapUsedAfterRelease": null,
+            "mainHeapRetainedBytes": null,
+            "userAgentSpecificBytes": {},
+            "workerBytesAfterRelease": null,
+            "readingErrors": []
+          },
+          "driver": {
+            "workerHeapUsedMaxSampled": null,
+            "workerHeapTotalMaxSampled": null,
+            "heapSamples": 0,
+            "heapErrors": 0,
+            "rendererPrivateMaxSampled": null,
+            "rendererWorkingSetMaxSampled": null,
+            "osSamples": 0,
+            "workerGoneAfterCancelMs": null
+          }
+        },
+        "interruptions": [],
+        "storageCountsChanged": false,
+        "integrityIssues": [],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "crossOriginIsolated": false,
+          "hardwareConcurrency": 16
+        }
+      }
+    },
+    {
+      "slotId": "mech.worker-error",
+      "order": 8,
+      "purpose": "lifecycle",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.open",
+      "origin": "non_isolated",
+      "recorded": true,
+      "driverOutcome": "record_saved",
+      "external": null,
+      "run": {
+        "source": "08-mech.worker-error.json",
+        "startedAt": "2026-10-15T05:53:06.219Z",
+        "outcome": {
+          "status": "failed",
+          "failure": {
+            "kind": "worker_error"
+          },
+          "cancelReason": null,
+          "lastStage": null
+        },
+        "inputPreparation": {
+          "status": "ready",
+          "refusal": null,
+          "counts": {
+            "targetWeapons": 3,
+            "buildListEntries": 3,
+            "ownedWeapons": 3,
+            "normalCounters": 3
+          }
+        },
+        "result": null,
+        "intervals": {
+          "inputPreparationMs": 0.4,
+          "workerCreateToRequestPostedMs": 0,
+          "requestPostMs": 0,
+          "requestToFirstProgressMs": null,
+          "requestToTerminalMs": null,
+          "terminalDataReadMs": null,
+          "clientHandlingMs": null,
+          "workerStageMs": null,
+          "workerStageTotalMs": null,
+          "mainObservedStageMs": {},
+          "workerCreateToOutcomeMs": 9.7,
+          "endToEndMs": 11,
+          "cancelSettleMs": null
+        },
+        "progressStages": [],
+        "cancel": null,
+        "lateMessages": 0,
+        "mainThread": {
+          "longTaskObserved": true,
+          "longTaskCount": 0,
+          "longTaskMaxMs": 0,
+          "longTaskTotalMs": 0
+        },
+        "memory": {
+          "page": {
+            "mainHeapUsedBeforeRun": null,
+            "mainHeapUsedAfterOutcome": null,
+            "mainHeapUsedAfterRelease": null,
+            "mainHeapRetainedBytes": null,
+            "userAgentSpecificBytes": {},
+            "workerBytesAfterRelease": null,
+            "readingErrors": []
+          },
+          "driver": {
+            "workerHeapUsedMaxSampled": null,
+            "workerHeapTotalMaxSampled": null,
+            "heapSamples": 0,
+            "heapErrors": 0,
+            "rendererPrivateMaxSampled": null,
+            "rendererWorkingSetMaxSampled": null,
+            "osSamples": 0,
+            "workerGoneAfterCancelMs": null
+          }
+        },
+        "interruptions": [],
+        "storageCountsChanged": false,
+        "integrityIssues": [],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "crossOriginIsolated": false,
+          "hardwareConcurrency": 16
+        }
+      }
+    },
+    {
+      "slotId": "mech.invalid-result",
+      "order": 9,
+      "purpose": "lifecycle",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.open",
+      "origin": "non_isolated",
+      "recorded": true,
+      "driverOutcome": "record_saved",
+      "external": null,
+      "run": {
+        "source": "09-mech.invalid-result.json",
+        "startedAt": "2026-10-15T05:53:14.594Z",
+        "outcome": {
+          "status": "failed",
+          "failure": {
+            "kind": "invalid_result",
+            "issueCount": 1
+          },
+          "cancelReason": null,
+          "lastStage": "plan_verification"
+        },
+        "inputPreparation": {
+          "status": "ready",
+          "refusal": null,
+          "counts": {
+            "targetWeapons": 3,
+            "buildListEntries": 3,
+            "ownedWeapons": 3,
+            "normalCounters": 3
+          }
+        },
+        "result": null,
+        "intervals": {
+          "inputPreparationMs": 0.4,
+          "workerCreateToRequestPostedMs": 0.2,
+          "requestPostMs": 0.1,
+          "requestToFirstProgressMs": 9.7,
+          "requestToTerminalMs": 47,
+          "terminalDataReadMs": 0.1,
+          "clientHandlingMs": 0.1,
+          "workerStageMs": null,
+          "workerStageTotalMs": null,
+          "mainObservedStageMs": {
+            "input_check": 5.9,
+            "reach_table": 4.5,
+            "assignment_search": 3.2,
+            "route_generation": 9.9,
+            "plan_verification": 13.8
+          },
+          "workerCreateToOutcomeMs": 47.4,
+          "endToEndMs": 48.7,
+          "cancelSettleMs": null
+        },
+        "progressStages": [
+          "input_check",
+          "reach_table",
+          "assignment_search",
+          "route_generation",
+          "plan_verification"
+        ],
+        "cancel": null,
+        "lateMessages": 0,
+        "mainThread": {
+          "longTaskObserved": true,
+          "longTaskCount": 0,
+          "longTaskMaxMs": 0,
+          "longTaskTotalMs": 0
+        },
+        "memory": {
+          "page": {
+            "mainHeapUsedBeforeRun": null,
+            "mainHeapUsedAfterOutcome": null,
+            "mainHeapUsedAfterRelease": null,
+            "mainHeapRetainedBytes": null,
+            "userAgentSpecificBytes": {},
+            "workerBytesAfterRelease": null,
+            "readingErrors": []
+          },
+          "driver": {
+            "workerHeapUsedMaxSampled": null,
+            "workerHeapTotalMaxSampled": null,
+            "heapSamples": 0,
+            "heapErrors": 0,
+            "rendererPrivateMaxSampled": null,
+            "rendererWorkingSetMaxSampled": null,
+            "osSamples": 0,
+            "workerGoneAfterCancelMs": null
+          }
+        },
+        "interruptions": [],
+        "storageCountsChanged": false,
+        "integrityIssues": [],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "crossOriginIsolated": false,
+          "hardwareConcurrency": 16
+        }
+      }
+    },
+    {
+      "slotId": "mech.memory",
+      "order": 10,
+      "purpose": "memory",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.wide-window",
+      "origin": "isolated",
+      "recorded": true,
+      "driverOutcome": "record_saved",
+      "external": null,
+      "run": {
+        "source": "10-mech.memory.json",
+        "startedAt": "2026-10-15T05:53:28.183Z",
+        "outcome": {
+          "status": "completed",
+          "failure": null,
+          "cancelReason": null,
+          "lastStage": "plan_verification"
+        },
+        "inputPreparation": {
+          "status": "ready",
+          "refusal": null,
+          "counts": {
+            "targetWeapons": 3,
+            "buildListEntries": 3,
+            "ownedWeapons": 3,
+            "normalCounters": 3
+          }
+        },
+        "result": {
+          "status": "optimized",
+          "planningTargetCount": 3,
+          "completedTargetCount": 3,
+          "physicalOperationCount": 7,
+          "planStepCount": 7,
+          "nonPhysicalStepCount": 0,
+          "structuralObjective": 7,
+          "maxPlanSteps": 1000,
+          "conflictCount": 0,
+          "rejectedEntryCount": 0,
+          "warningCount": 0,
+          "generatedEntryCount": 2,
+          "unchangedTargetCount": 1,
+          "inputExclusionCount": 0,
+          "outOfScopeTargetCounts": {
+            "noEntry": 0,
+            "excludedEntryOnly": 0,
+            "disabled": 0,
+            "completed": 0
+          },
+          "boundKinds": [],
+          "notFoundReason": null,
+          "unsupportedReasonKinds": [],
+          "structuralSearch": {
+            "completeness": "running",
+            "expandedNodes": 4,
+            "coverageRejections": 0,
+            "structuralCandidates": 1,
+            "noStructuralCandidateReason": null
+          },
+          "reachTable": {
+            "predictions": {
+              "skill": 3603,
+              "gogmaReset": 1200,
+              "gogmaKeep": 14000,
+              "normal": 900
+            },
+            "supportQueries": 1007
+          },
+          "plannerVerifications": 1,
+          "routeGenerationMethods": [
+            {
+              "candidate_search_projected": 3,
+              "shape_constrained": 0
+            }
+          ],
+          "candidateVerifications": [
+            {
+              "outcome": "optimized",
+              "fullPlannerRuns": 1,
+              "rejectionCodes": []
+            }
+          ],
+          "semanticSha256": "ce4dee4fb5286f04ca6043599fd9a44b1f655a9c4f30bcb6ad928a57e61bd010"
+        },
+        "intervals": {
+          "inputPreparationMs": 1.7,
+          "workerCreateToRequestPostedMs": 0.5,
+          "requestPostMs": 0.2,
+          "requestToFirstProgressMs": 14.3,
+          "requestToTerminalMs": 676,
+          "terminalDataReadMs": 0.2,
+          "clientHandlingMs": 1,
+          "workerStageMs": {
+            "input_check": 9,
+            "reach_table": 624.1,
+            "assignment_search": 6.5,
+            "route_generation": 9.3,
+            "plan_verification": 12.6
+          },
+          "workerStageTotalMs": 661.4,
+          "mainObservedStageMs": {
+            "input_check": 9,
+            "reach_table": 624.1,
+            "assignment_search": 6.5,
+            "route_generation": 9.3,
+            "plan_verification": 12.9
+          },
+          "workerCreateToOutcomeMs": 677.7,
+          "endToEndMs": 20824.9,
+          "cancelSettleMs": null
+        },
+        "progressStages": [
+          "input_check",
+          "reach_table",
+          "assignment_search",
+          "route_generation",
+          "plan_verification"
+        ],
+        "cancel": null,
+        "lateMessages": 0,
+        "mainThread": {
+          "longTaskObserved": true,
+          "longTaskCount": 0,
+          "longTaskMaxMs": 0,
+          "longTaskTotalMs": 0
+        },
+        "memory": {
+          "page": {
+            "mainHeapUsedBeforeRun": 6649519,
+            "mainHeapUsedAfterOutcome": 6803905,
+            "mainHeapUsedAfterRelease": 8172613,
+            "mainHeapRetainedBytes": 154386,
+            "userAgentSpecificBytes": {
+              "before_input": {
+                "bytes": 7282479,
+                "workerBytes": 0,
+                "windowBytes": 6585680,
+                "otherBytes": 696799
+              },
+              "before_run": {
+                "bytes": 7140887,
+                "workerBytes": 0,
+                "windowBytes": 6682742,
+                "otherBytes": 458145
+              },
+              "after_outcome": {
+                "bytes": 7358244,
+                "workerBytes": 0,
+                "windowBytes": 6851040,
+                "otherBytes": 507204
+              },
+              "after_release": {
+                "bytes": 7719308,
+                "workerBytes": 0,
+                "windowBytes": 4976046,
+                "otherBytes": 2743262
+              }
+            },
+            "workerBytesAfterRelease": 0,
+            "readingErrors": []
+          },
+          "driver": {
+            "workerHeapUsedMaxSampled": 6630756,
+            "workerHeapTotalMaxSampled": 24875008,
+            "heapSamples": 2,
+            "heapErrors": 0,
+            "rendererPrivateMaxSampled": 75517952,
+            "rendererWorkingSetMaxSampled": 134852608,
+            "osSamples": 88,
+            "workerGoneAfterCancelMs": null
+          }
+        },
+        "interruptions": [],
+        "storageCountsChanged": false,
+        "integrityIssues": [],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "crossOriginIsolated": true,
+          "hardwareConcurrency": 16
+        }
+      }
+    }
+  ],
+  "semanticGroups": [
+    {
+      "groupId": "mech.sanity-3.open",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.open",
+      "requiredBrowserRuns": 2,
+      "completedRuns": 2,
+      "missingOrIncompleteSlots": [],
+      "distinctFingerprints": 1,
+      "fingerprint": "e5a5fd8cb8b49fad83757849f3d1a765ea8d7284f1bf47835896d07dbc0c626c",
+      "nodeReference": "match",
+      "status": "identical"
+    },
+    {
+      "groupId": "mech.sanity-3.wide",
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.wide-window",
+      "requiredBrowserRuns": 2,
+      "completedRuns": 2,
+      "missingOrIncompleteSlots": [],
+      "distinctFingerprints": 1,
+      "fingerprint": "ce4dee4fb5286f04ca6043599fd9a44b1f655a9c4f30bcb6ad928a57e61bd010",
+      "nodeReference": "match",
+      "status": "identical"
+    }
+  ],
+  "nodeReferences": [
+    {
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.open",
+      "status": "completed",
+      "resultStatus": "optimized",
+      "semanticSha256": "e5a5fd8cb8b49fad83757849f3d1a765ea8d7284f1bf47835896d07dbc0c626c",
+      "elapsedMs": 50
+    },
+    {
+      "inputId": "sanity-3",
+      "boundsId": "synthetic.wide-window",
+      "status": "completed",
+      "resultStatus": "optimized",
+      "semanticSha256": "ce4dee4fb5286f04ca6043599fd9a44b1f655a9c4f30bcb6ad928a57e61bd010",
+      "elapsedMs": 805
+    }
+  ],
+  "timings": [],
+  "cancelTrials": [
+    {
+      "slotId": "mech.cancel.input-check",
+      "trigger": {
+        "stage": "input_check",
+        "delayMs": 0
+      },
+      "status": "cancel_passed",
+      "stageAtCancel": "input_check",
+      "cancelSettleMs": 0.1,
+      "workerGoneAfterCancelMs": 675.199951171875,
+      "resultAdopted": false,
+      "lateMessages": 0,
+      "rerunSlotId": "mech.rerun.after-cancel",
+      "rerunCompleted": true,
+      "rerunIdenticalToGroup": true,
+      "rerunIdenticalToNodeReference": true
+    },
+    {
+      "slotId": "mech.cancel.reach-table",
+      "trigger": {
+        "stage": "reach_table",
+        "delayMs": 300
+      },
+      "status": "cancel_passed",
+      "stageAtCancel": "reach_table",
+      "cancelSettleMs": 0.1,
+      "workerGoneAfterCancelMs": 364.5,
+      "resultAdopted": false,
+      "lateMessages": 0,
+      "rerunSlotId": "mech.rerun.after-cancel",
+      "rerunCompleted": true,
+      "rerunIdenticalToGroup": true,
+      "rerunIdenticalToNodeReference": true
+    }
+  ],
+  "sessions": [
+    {
+      "sessionId": "s1-non_isolated",
+      "origin": "non_isolated",
+      "storageCountsChanged": false,
+      "pageLost": false,
+      "pagesOpened": 1,
+      "pageOpenFailures": 0
+    },
+    {
+      "sessionId": "s2-isolated",
+      "origin": "isolated",
+      "storageCountsChanged": false,
+      "pageLost": false,
+      "pagesOpened": 1,
+      "pageOpenFailures": 0
+    }
+  ],
+  "driver": {
+    "browserMode": "headed",
+    "planBrowserMode": "either",
+    "slotDeadlineMs": 1800000,
+    "slotOutcomes": [
+      {
+        "slotId": "mech.optimized",
+        "pageIndex": 1,
+        "outcome": "record_saved"
+      },
+      {
+        "slotId": "mech.rerun",
+        "pageIndex": 1,
+        "outcome": "record_saved"
+      },
+      {
+        "slotId": "mech.unsupported",
+        "pageIndex": 1,
+        "outcome": "record_saved"
+      },
+      {
+        "slotId": "mech.bound",
+        "pageIndex": 1,
+        "outcome": "record_saved"
+      },
+      {
+        "slotId": "mech.cancel.input-check",
+        "pageIndex": 1,
+        "outcome": "record_saved"
+      },
+      {
+        "slotId": "mech.cancel.reach-table",
+        "pageIndex": 1,
+        "outcome": "record_saved"
+      },
+      {
+        "slotId": "mech.rerun.after-cancel",
+        "pageIndex": 1,
+        "outcome": "record_saved"
+      },
+      {
+        "slotId": "mech.worker-error",
+        "pageIndex": 1,
+        "outcome": "record_saved"
+      },
+      {
+        "slotId": "mech.invalid-result",
+        "pageIndex": 1,
+        "outcome": "record_saved"
+      },
+      {
+        "slotId": "mech.memory",
+        "pageIndex": 2,
+        "outcome": "record_saved"
+      }
+    ],
+    "pageRestarts": []
+  },
+  "browserModes": [
+    {
+      "environmentId": "pc-windows-chrome",
+      "required": "either",
+      "driver": "headed",
+      "observed": [
+        "headed"
+      ]
+    }
+  ],
+  "criteria": [],
+  "commonGate": null,
+  "mechanics": [
+    {
+      "slotId": "mech.optimized",
+      "purpose": "mechanics",
+      "expected": {
+        "outcome": "completed",
+        "resultStatus": "optimized",
+        "failureKind": null
+      },
+      "observed": {
+        "outcome": "completed",
+        "resultStatus": "optimized",
+        "failureKind": null
+      },
+      "met": true
+    },
+    {
+      "slotId": "mech.rerun",
+      "purpose": "mechanics",
+      "expected": {
+        "outcome": "completed",
+        "resultStatus": "optimized",
+        "failureKind": null
+      },
+      "observed": {
+        "outcome": "completed",
+        "resultStatus": "optimized",
+        "failureKind": null
+      },
+      "met": true
+    },
+    {
+      "slotId": "mech.unsupported",
+      "purpose": "mechanics",
+      "expected": {
+        "outcome": "completed",
+        "resultStatus": "unsupported",
+        "failureKind": null
+      },
+      "observed": {
+        "outcome": "completed",
+        "resultStatus": "unsupported",
+        "failureKind": null
+      },
+      "met": true
+    },
+    {
+      "slotId": "mech.bound",
+      "purpose": "mechanics",
+      "expected": {
+        "outcome": "completed",
+        "resultStatus": "search_bound_reached",
+        "failureKind": null
+      },
+      "observed": {
+        "outcome": "completed",
+        "resultStatus": "search_bound_reached",
+        "failureKind": null
+      },
+      "met": true
+    },
+    {
+      "slotId": "mech.cancel.input-check",
+      "purpose": "cancel",
+      "expected": {
+        "outcome": "cancelled",
+        "resultStatus": null,
+        "failureKind": null
+      },
+      "observed": {
+        "outcome": "cancelled",
+        "resultStatus": null,
+        "failureKind": null
+      },
+      "met": true
+    },
+    {
+      "slotId": "mech.cancel.reach-table",
+      "purpose": "cancel",
+      "expected": {
+        "outcome": "cancelled",
+        "resultStatus": null,
+        "failureKind": null
+      },
+      "observed": {
+        "outcome": "cancelled",
+        "resultStatus": null,
+        "failureKind": null
+      },
+      "met": true
+    },
+    {
+      "slotId": "mech.rerun.after-cancel",
+      "purpose": "mechanics",
+      "expected": {
+        "outcome": "completed",
+        "resultStatus": "optimized",
+        "failureKind": null
+      },
+      "observed": {
+        "outcome": "completed",
+        "resultStatus": "optimized",
+        "failureKind": null
+      },
+      "met": true
+    },
+    {
+      "slotId": "mech.worker-error",
+      "purpose": "lifecycle",
+      "expected": {
+        "outcome": "failed",
+        "resultStatus": null,
+        "failureKind": "worker_error"
+      },
+      "observed": {
+        "outcome": "failed",
+        "resultStatus": null,
+        "failureKind": "worker_error"
+      },
+      "met": true
+    },
+    {
+      "slotId": "mech.invalid-result",
+      "purpose": "lifecycle",
+      "expected": {
+        "outcome": "failed",
+        "resultStatus": null,
+        "failureKind": "invalid_result"
+      },
+      "observed": {
+        "outcome": "failed",
+        "resultStatus": null,
+        "failureKind": "invalid_result"
+      },
+      "met": true
+    },
+    {
+      "slotId": "mech.memory",
+      "purpose": "memory",
+      "expected": {
+        "outcome": "completed",
+        "resultStatus": "optimized",
+        "failureKind": null
+      },
+      "observed": {
+        "outcome": "completed",
+        "resultStatus": "optimized",
+        "failureKind": null
+      },
+      "met": true
+    }
+  ],
+  "verdicts": {
+    "mechanics": "passed",
+    "perBoundsSet": {},
+    "allCriteriaPerBoundsSet": {}
+  },
+  "unmeasured": []
+}
