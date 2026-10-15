@@ -190,8 +190,9 @@ function optimizedArtifactIssues(artifact: unknown): string[] {
 
   // The excluded Entries of Stage 0 and the Worker-side input token items.
   if (!Array.isArray(artifact.inputExclusions) || !artifact.inputExclusions.every(value => isRecord(value)
-    && isNonEmptyString(value.buildListEntryId) && isNonEmptyString(value.targetWeaponId) && isNonEmptyString(value.warningKind))) {
-    issues.push('result.artifact.inputExclusions must list the excluded Entries with their Target and warning kind.')
+    && isNonEmptyString(value.buildListEntryId) && isNonEmptyString(value.targetWeaponId) && isNonEmptyString(value.warningKind)
+    && isNonEmptyString(value.warningMessage))) {
+    issues.push('result.artifact.inputExclusions must list the excluded Entries with their Target, warning kind and warning message.')
   }
   const token = artifact.inputToken
   if (!isRecord(token)) {

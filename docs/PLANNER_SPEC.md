@@ -8315,12 +8315,20 @@ Worker、UI、Persistence、version定数を変更していない。
     （`checkPersistablePlannerResultShape()`、`checkPersistableOrdinaryPlannerResultShape()`。契約は変えない）、全体最適化固有の検査
     （`src/domain/planner/buildListOptimization/buildListOptimizationAdoption.ts` の `checkPersistableBuildListOptimizationArtifact()`: `completed`、
     完成数 = 総数 = 計画対象Target数、Conflict 0・rejected 0、選択Entryが計画対象Targetごとに1件でgenerated Entryを含み置換対象を含まない、
-    置換 / 変更なしが計画対象Targetをちょうど分割する、除外Entryが計画対象Target・Route・置換・選択に現れない、warningが除外warningの
-    kindの多重集合に収まる（messageを読まない）、物理操作数（Step数 − `confirm_owned_ideal`）= stream前進の和 = structural objective =
-    summaryの値、入力tokenの `initialExecutionState`・`targetWeaponsHash`・CalculationContextが最終Plan自身のものと一致）の順に行う
+    置換 / 変更なしが計画対象Targetをちょうど分割する、除外記録が除外Entryごとにちょうど1件でwarningのmessageを持つ、除外Entryが
+    計画対象Target・Route・置換・選択に現れない、Planner結果のwarningがStage 0の除外記録のwarning（kindとmessageの組）の多重集合に
+    収まる（17.7の3。Stage D'と同じ純粋helper `unexplainedBuildListOptimizationWarnings()` で照合し、messageを解析しない）、物理操作数
+    （Step数 − `confirm_owned_ideal`）= stream前進の和 = structural objective = summaryの値、入力tokenの `initialExecutionState`・
+    `targetWeaponsHash`・CalculationContextが最終Plan自身のものと一致）の順に行う
+  - 除外記録（artifactの `inputExclusions`、`BuildListOptimizationInputExclusion`）は、Entry・Target・warningのkindに加えてwarningの
+    message（`warningMessage`）を持つ。どれもStage 0の `validatePlannerInput().excludedBuildListEntryWarnings` の値をそのまま写した
+    runtime-onlyの値で、永続化しない。Stage D'の除外Entry集合の比較（Entry・Target・kindの組）とwarningの照合規則は変えていない
+    （照合を共有helperへ切り出しただけ）。最終入力は除外Entryと状態をStage 0と共有するので、その検証はStage 0と同じkindとmessageを
+    返し、Stage D'で成立した結果を[P1]が新たに拒否することはない（実計算fixtureのtestで固定）
   - transaction内は既存の保存mutationとPlanBreakingChangeGuardを共有し、inspectも同じmutationをread-only transactionで実行する。
     T2（実行中Planが無い、Draftが0件または1件でobserved Draft IDと一致、現在状態が入力tokenの4項目と一致）を共有のT3〜T6の前に行い、
-    T6の参照検査の後で選択Entryが置換後Build Listで計画対象Targetをちょうど1件ずつ指すことを確認する（`checkBuildListOptimizationFinalSelection()`）。
+    T6の参照検査の後で選択Entryが置換後Build Listで計画対象Targetをちょうど1件ずつ指すこと（`checkBuildListOptimizationFinalSelection()`）と、
+    除外記録の各EntryがBuild Listにあり記録どおりのTargetに属すること（`checkBuildListOptimizationExclusionsInBuildList()`）を確認する。
     T7は共有の書込み（guardによる `O` 削除・`G` 追加、新Plan IDの非衝突確認、旧Draft削除、新Draft追加）である
   - 承認（`PlanBreakingChangeApproval`）を渡した保存は、何も読む前に `plan_breaking_change_approval_not_required` で拒否する。既存guardは
     `active` Planが無いときの承認を `plan_breaking_change_state_changed` とするので、この拒否は保存APIが行う。拒否のcodeは既存のもの
@@ -9009,7 +9017,12 @@ Issue #130、[UI_FLOW.md](./UI_FLOW.md) 10.0）の画面上の配置をUI公開P
 - PR-6A（採用・Persistence）の確認: 前提1〜4は成り立ち、versionを変更しない。保存するのは既存shapeの `BuildListEntry` と `ProductionPlan`
   （`conflictRepairLineage = null`）だけで、table・index・field・provenance・Export shapeを追加していない。既存の保存API
   （`savePlannerResult()` / `savePlannerAlternativeRepair()`）の挙動と、共通保存検証helperの契約を変えていない（既存の保存Serviceの
-  内部は、全体最適化の前提確認を差し込めるように共有部分を切り出しただけである）。Domain計算・Worker protocol・探索上限・UIは変えていない
+  内部は、全体最適化の前提確認を差し込めるように共有部分を切り出しただけである）。Domain計算・Worker protocol・探索上限・UIは変えていない。
+  レビュー修正で、runtime-onlyのartifactの除外記録にwarningのmessage（`warningMessage`）を加えた。永続shape・Export shapeには入らず、
+  Workerとmain threadは同じbuildの同じ構造検査を使うのでWorker protocol versionも変えない。Stage D'の成立条件（除外Entry集合の比較key、
+  warningの照合規則）・計画・Routeは変わらない。benchmark計測のsemantic fingerprint（PR-5A）の `inputExclusions` componentは、除外Entryを
+  持つ結果ではmessageを含むので、それより前のHEADで計算した値と一致しない。PR-5Bの記録はそのmeasurement HEADのcodeで導出したものであり、
+  書き換えない
 - 標準操作の切替は、作成リストを置き換えたうえで内部Plannerを実行するものであり、内部Plannerの同じ `PlannerInput` に
   対する出力を変えない。この点で、同じ `PlannerInput` に対する内部の計算結果が変わったIssue #136 / #101 Phase 6-A
   （version 17）とは異なる。採用したDraftは採用後の作成リストに対する内部PlannerのPlanと同じ意味を持ち、既存Planの

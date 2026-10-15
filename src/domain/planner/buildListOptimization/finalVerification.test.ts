@@ -7,6 +7,7 @@ import { validatePlannerInput } from '../plannerValidation'
 import { BuildListOptimizationInvariantError } from './buildListOptimizationTypes'
 import {
   BUILD_LIST_OPTIMIZATION_MAX_PLAN_STEPS_MARGIN, buildBuildListOptimizationFinalInput, buildListOptimizationInputExclusionsOf, deriveBuildListOptimizationMaxPlanSteps,
+  unexplainedBuildListOptimizationWarnings,
 } from './finalVerification'
 import { countBuildListOptimizationOutOfScopeTargets } from './optimizationInputScope'
 import { createBuildListOptimizationContext } from './planningContext'
@@ -149,7 +150,7 @@ describe('Stage 0 scope: the out-of-scope Targets and the typed exclusions', () 
     expect(countBuildListOptimizationOutOfScopeTargets(scoped, new Set([...planning, targets.c.id]))).toEqual({ noEntry: 1, excludedEntryOnly: 1, disabled: 1, completed: 2 })
   })
 
-  it('reports each excluded Entry with the very warning its exclusion added, without reading a message', () => {
+  it('reports each excluded Entry with the very warning its exclusion added (kind and message copied as values, never parsed)', () => {
     const { input, dependencies, targets, entries } = scene()
     // c's Target completed; a's Entry stale.
     input.targetWeapons = input.targetWeapons.map(value => (value.id === targets.c.id ? { ...value, lifecycleStatus: 'completed', completedAt: '2026-08-01T00:00:00.000Z', completedByProductionPlanId: null } : value))
@@ -162,10 +163,36 @@ describe('Stage 0 scope: the out-of-scope Targets and the typed exclusions', () 
     // The same values the validation added to its warnings, one per excluded Entry, in the excluded Entries' order.
     expect(validation.excludedBuildListEntryWarnings.map(({ buildListEntryId }) => buildListEntryId)).toEqual(validation.excludedBuildListEntries.map(({ entry }) => entry.id))
     for (const { warning } of validation.excludedBuildListEntryWarnings) expect(validation.warnings).toContainEqual(warning)
+    const messageOf = (id: string) => validation.excludedBuildListEntryWarnings.find(({ buildListEntryId }) => buildListEntryId === id)!.warning.message
     expect(buildListOptimizationInputExclusionsOf(validation)).toEqual(validation.excludedBuildListEntries.map(({ entry }) => ({
       buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId,
       warningKind: entry.id === entries[0]!.id ? 'build_list_entry_stale' : 'completed_target_excluded',
+      warningMessage: messageOf(entry.id),
     })))
+  })
+})
+
+describe("the exclusion warning rule Stage D' and the adoption share (PLANNER_SPEC 17.7 item 3)", () => {
+  const stale = (id: string) => ({ kind: 'build_list_entry_stale' as const, message: `BuildListEntry '${id}' is stale (rng_state_changed).` })
+  const completed = { kind: 'completed_target_excluded' as const, message: "BuildListEntry 'entry.c' references a completed TargetWeapon." }
+
+  it('explains each warning by one allowed warning of the same kind and message, multiplicity counted, and leaves no allowed warning required', () => {
+    const allowed = [stale('entry.a'), stale('entry.b'), completed]
+    expect(unexplainedBuildListOptimizationWarnings([stale('entry.b'), completed, stale('entry.a')], allowed)).toEqual([])
+    // An allowed warning that does not occur is no issue (containment, not equality).
+    expect(unexplainedBuildListOptimizationWarnings([completed], allowed)).toEqual([])
+    expect(unexplainedBuildListOptimizationWarnings([], allowed)).toEqual([])
+    // A repeated allowed value explains as many warnings as it occurs.
+    expect(unexplainedBuildListOptimizationWarnings([stale('entry.a'), stale('entry.a')], [stale('entry.a'), stale('entry.a')])).toEqual([])
+  })
+
+  it('leaves unexplained a warning of the same kind with another message, a new kind, and a warning beyond its multiplicity', () => {
+    const allowed = [stale('entry.a'), stale('entry.b')]
+    expect(unexplainedBuildListOptimizationWarnings([stale('entry.a'), { ...stale('entry.b'), message: 'rewritten' }], allowed))
+      .toEqual([{ ...stale('entry.b'), message: 'rewritten' }])
+    expect(unexplainedBuildListOptimizationWarnings([stale('entry.a'), stale('entry.a')], allowed)).toEqual([stale('entry.a')])
+    expect(unexplainedBuildListOptimizationWarnings([stale('entry.a'), completed], allowed)).toEqual([completed])
+    expect(unexplainedBuildListOptimizationWarnings([stale('entry.a')], [])).toEqual([stale('entry.a')])
   })
 })
 

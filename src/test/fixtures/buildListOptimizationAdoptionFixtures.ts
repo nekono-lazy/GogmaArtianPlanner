@@ -24,25 +24,29 @@ import {
  * The `scoped` input is the `sanity-3` scheduler workload (three planning Targets on owned Gogma sources) plus the out-of-scope
  * Targets and excluded Entries a real Build List holds:
  *
- * - `target.scope.stale-only` with only a stale Entry (`build_list_entry_stale`)
+ * - `target.scope.stale-only` and `target.scope.stale-only-second`, each with only a stale Entry (`build_list_entry_stale` twice: one
+ *   kind, two messages)
  * - `target.scope.completed`, completed, with its Entry (`completed_target_excluded`)
  * - `target.scope.no-entry` with no Entry
  *
  * and non-default improvement preferences: `bonus_first` on the bonus-only Entry (replaced by the optimization) and `skill_first` on
  * the skill-only Entry (kept unchanged). The optimization replaces the mixed-keep and the bonus-only Entries and keeps the skill-only
- * one. The `unchanged` input is the `scoped` Build List after that adoption: optimizing it again replaces nothing.
+ * one. The `unchanged` input is the `scoped` Build List after that adoption: optimizing it again replaces nothing. The `plain` input is
+ * the `sanity-3` workload as it is: no excluded Entry, no out-of-scope Target, no warning.
  */
 
 export const BONUS_ONLY_TARGET_ID = 'target.issue103.bonus-only' as TargetWeaponId
 export const SKILL_ONLY_TARGET_ID = 'target.issue103.skill-only' as TargetWeaponId
 export const MIXED_KEEP_TARGET_ID = 'target.issue103.mixed-keep' as TargetWeaponId
 export const STALE_ONLY_TARGET_ID = 'target.scope.stale-only' as TargetWeaponId
+export const STALE_ONLY_SECOND_TARGET_ID = 'target.scope.stale-only-second' as TargetWeaponId
 export const COMPLETED_TARGET_ID = 'target.scope.completed' as TargetWeaponId
 export const NO_ENTRY_TARGET_ID = 'target.scope.no-entry' as TargetWeaponId
 export const STALE_ENTRY_ID = 'build-list.scope.stale' as BuildListEntryId
+export const STALE_SECOND_ENTRY_ID = 'build-list.scope.stale-second' as BuildListEntryId
 export const COMPLETED_ENTRY_ID = 'build-list.scope.completed' as BuildListEntryId
 
-export type BuildListOptimizationAdoptionVariant = 'scoped' | 'unchanged'
+export type BuildListOptimizationAdoptionVariant = 'scoped' | 'unchanged' | 'plain'
 
 export interface BuildListOptimizationAdoptionFixture {
   /** The input the artifact was calculated from: exactly the persisted state the adoption expects. */
@@ -65,6 +69,7 @@ function scopedInput(): { input: PlannerInput; engine: ProductionRngEngine } {
   const skillOnly = input.targetWeapons.find(({ id }) => id === SKILL_ONLY_TARGET_ID) as TargetWeapon
   const skillEntry = input.buildListEntries.find(({ targetWeaponId }) => targetWeaponId === SKILL_ONLY_TARGET_ID) as BuildListEntry
   const staleOnly: TargetWeapon = { ...structuredClone(skillOnly), id: STALE_ONLY_TARGET_ID, preferredOwnedWeaponId: null }
+  const staleOnlySecond: TargetWeapon = { ...structuredClone(skillOnly), id: STALE_ONLY_SECOND_TARGET_ID, preferredOwnedWeaponId: null }
   const completed: TargetWeapon = {
     ...structuredClone(skillOnly),
     id: COMPLETED_TARGET_ID,
@@ -76,6 +81,7 @@ function scopedInput(): { input: PlannerInput; engine: ProductionRngEngine } {
   const noEntry: TargetWeapon = { ...structuredClone(skillOnly), id: NO_ENTRY_TARGET_ID, preferredOwnedWeaponId: null }
   // A Target definition hash no Target has: the Entry is stale against every current state.
   const staleEntry: BuildListEntry = { ...copyEntryFor(skillEntry, STALE_ENTRY_ID, staleOnly), targetDefinitionHash: 'fnv1a32:00000000' }
+  const staleSecondEntry: BuildListEntry = { ...copyEntryFor(skillEntry, STALE_SECOND_ENTRY_ID, staleOnlySecond), targetDefinitionHash: 'fnv1a32:00000000' }
   const completedEntry = copyEntryFor(skillEntry, COMPLETED_ENTRY_ID, completed)
   const withPreference = (entry: BuildListEntry): BuildListEntry => {
     const preference = entry.targetWeaponId === BONUS_ONLY_TARGET_ID ? 'bonus_first'
@@ -89,8 +95,8 @@ function scopedInput(): { input: PlannerInput; engine: ProductionRngEngine } {
     engine,
     input: {
       ...input,
-      targetWeapons: [...input.targetWeapons, staleOnly, completed, noEntry],
-      buildListEntries: [...input.buildListEntries.map(withPreference), staleEntry, completedEntry],
+      targetWeapons: [...input.targetWeapons, staleOnly, staleOnlySecond, completed, noEntry],
+      buildListEntries: [...input.buildListEntries.map(withPreference), staleEntry, staleSecondEntry, completedEntry],
     },
   }
 }
@@ -119,6 +125,10 @@ export function replacedBuildList(input: PlannerInput, artifact: BuildListOptimi
 export async function createBuildListOptimizationAdoptionFixture(
   variant: BuildListOptimizationAdoptionVariant = 'scoped',
 ): Promise<BuildListOptimizationAdoptionFixture> {
+  if (variant === 'plain') {
+    const { input, engine } = createPlannerSchedulerWorkloadInput('sanity-3')
+    return { input, engine, artifact: await optimize(input, engine) }
+  }
   const { input, engine } = scopedInput()
   const artifact = await optimize(input, engine)
   if (variant === 'scoped') return { input, engine, artifact }

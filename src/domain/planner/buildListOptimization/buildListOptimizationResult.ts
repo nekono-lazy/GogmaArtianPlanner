@@ -42,11 +42,17 @@ export type BuildListOptimizationBound =
   | { kind: 'shape_search_scale_gate'; targetWeaponId: TargetWeaponId; exceeded: ShapeSearchScaleComponent[] }
   | { kind: 'shape_search_budget'; targetWeaponId: TargetWeaponId; exceeded: ShapeSearchBudgetComponent[] }
 
-/** One Entry the Stage 0 input validation excluded, with the kind of the warning its exclusion added (`docs/PLANNER_SPEC.md` 17.7 item 3). */
+/**
+ * One Entry the Stage 0 input validation excluded, with the warning its exclusion added (`docs/PLANNER_SPEC.md` 17.7 item 3): the
+ * Entry and its Target, and the warning's kind and message exactly as `validatePlannerInput().excludedBuildListEntryWarnings` recorded
+ * them. The exclusion set is compared by Entry, Target and kind; the adoption matches the final warnings against the kind and message
+ * pairs. Neither reads the message for an Entry or a Target.
+ */
 export interface BuildListOptimizationInputExclusion {
   buildListEntryId: BuildListEntryId
   targetWeaponId: TargetWeaponId
   warningKind: PlannerWarningKind
+  warningMessage: string
 }
 
 /**
@@ -163,7 +169,7 @@ export interface BuildListOptimizationArtifact {
   unchangedTargetWeaponIds: TargetWeaponId[]
   /** Stage 0's planning Targets, in Target ID order. */
   planningTargetWeaponIds: TargetWeaponId[]
-  /** Stage 0's excluded Entries with their warning kinds; the final input excluded exactly these. */
+  /** Stage 0's excluded Entries with their warnings (kind and message); the final input excluded exactly these Entries for these kinds. */
   inputExclusions: BuildListOptimizationInputExclusion[]
   inputToken: BuildListOptimizationInputToken
   summary: BuildListOptimizationSummary

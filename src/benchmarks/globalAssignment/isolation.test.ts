@@ -547,14 +547,21 @@ describe('Global Assignment Research isolation', () => {
       expect(source, path).not.toMatch(/createProductionPlan[A-Za-z]*\(|runPlanner|replayPlannerSearchTrace|validatePlannerInput\(|runBuildListOptimization|verifyBuildListOptimizationCandidate|summarizePlanPhysicalOperations/)
       expect(source, path).not.toMatch(/\.predict[A-Z]|searchCandidates\(|visitShapeConstrainedRouteCandidates|visitPlannerAlternativeCandidates/)
       expect(source, path).not.toMatch(/Repository|Dexie|indexedDB|from '[^']*\/services\/|PlannerConflictResolution|savePlanner/)
-      // Typed fields only: no warning message, no diagnostics.
-      expect(source, path).not.toMatch(/\.message\b|\.diagnostics\b|elapsedMs|plannerVerifications/)
+      // Typed fields only: a warning is compared as a whole value through the shared rule, never parsed; no diagnostics.
+      expect(source, path).not.toMatch(/\.message\b|[mM]essage\??\.(?:match|matchAll|split|includes|indexOf|slice|substring|replace|startsWith|endsWith|search)\(|new RegExp|\.diagnostics\b|elapsedMs|plannerVerifications/)
     }
-    // The shared save-time helpers come first, with their contracts unchanged.
+    // The shared save-time helpers come first, with their contracts unchanged; the exclusion warnings are matched by the one rule
+    // Stage D' applies (kind and message, multiplicity counted), over Stage 0's record.
     const adoption = codeOnly(optimization['./buildListOptimizationAdoption.ts']!)
-    for (const call of ['checkPersistablePlannerResultShape(plan, generatedEntries, plannerResult.termination, replacements)', 'checkPersistableOrdinaryPlannerResultShape(plan, plannerResult.termination)']) {
+    for (const call of [
+      'checkPersistablePlannerResultShape(plan, generatedEntries, plannerResult.termination, replacements)', 'checkPersistableOrdinaryPlannerResultShape(plan, plannerResult.termination)',
+      'unexplainedBuildListOptimizationWarnings(\n    plannerResult.warnings,\n    artifact.inputExclusions.map(({ warningKind, warningMessage }) => ({ kind: warningKind, message: warningMessage })),\n  )',
+    ]) {
       expect(adoption, call).toContain(call)
     }
+    const final = codeOnly(optimization['./finalVerification.ts']!)
+    expect(final).toContain('unexplainedBuildListOptimizationWarnings(result.warnings, validation.excludedBuildListEntryWarnings.map(({ warning }) => warning))')
+    expect(final).not.toMatch(/[mM]essage\??\.(?:match|matchAll|split|includes|indexOf|slice|substring|replace|startsWith|endsWith|search)\(|new RegExp/)
   })
 
   it('keeps Phase D-1B a registration: plain data and pure checks, no Planner, Search, Trace Replay, file or formal run', () => {

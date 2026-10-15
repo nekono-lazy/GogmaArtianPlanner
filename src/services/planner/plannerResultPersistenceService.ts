@@ -57,10 +57,14 @@ import {
   type PlannerResultPersistenceIssue,
 } from '../../domain/planner'
 import {
+  checkBuildListOptimizationExclusionsInBuildList,
   checkBuildListOptimizationFinalSelection,
   checkPersistableBuildListOptimizationArtifact,
 } from '../../domain/planner/buildListOptimization/buildListOptimizationAdoption'
-import type { BuildListOptimizationInputToken } from '../../domain/planner/buildListOptimization/buildListOptimizationResult'
+import type {
+  BuildListOptimizationInputExclusion,
+  BuildListOptimizationInputToken,
+} from '../../domain/planner/buildListOptimization/buildListOptimizationResult'
 import { PlanBreakingChangeGuard } from '../execution/planBreakingChangeGuard'
 import { buildListOptimizationResultIssues } from './buildListOptimizationResultCheck'
 import type { BuildListOptimizationAdoptionSource } from './buildListOptimizationService'
@@ -321,6 +325,8 @@ interface BuildListOptimizationAdoptionPremises {
   inputToken: BuildListOptimizationInputToken
   planningTargetWeaponIds: readonly TargetWeaponId[]
   unchangedTargetWeaponIds: readonly TargetWeaponId[]
+  /** Stage 0's excluded Entries with their Targets, re-checked against the Build List they were taken from. */
+  inputExclusions: readonly BuildListOptimizationInputExclusion[]
 }
 
 /** Receives the post-validation view of one adoption (the inspection only). */
@@ -619,6 +625,7 @@ export class PlannerResultPersistenceService {
         inputToken: artifact.inputToken,
         planningTargetWeaponIds: artifact.planningTargetWeaponIds,
         unchangedTargetWeaponIds: artifact.unchangedTargetWeaponIds,
+        inputExclusions: artifact.inputExclusions,
       },
     }
   }
@@ -667,6 +674,7 @@ export class PlannerResultPersistenceService {
       this.assertPlanReferences(persistable, finalEntries)
       if (buildListOptimization !== null) {
         throwIssue(checkBuildListOptimizationFinalSelection(plan, finalEntries, buildListOptimization.planningTargetWeaponIds))
+        throwIssue(checkBuildListOptimizationExclusionsInBuildList(buildListOptimization.inputExclusions, finalEntries))
         observe?.(this.buildListOptimizationInspection(persistable, buildListOptimization, current))
       }
       return {

@@ -28,6 +28,7 @@ import {
   SKILL_ONLY_TARGET_ID,
   STALE_ENTRY_ID,
   STALE_ONLY_TARGET_ID,
+  STALE_SECOND_ENTRY_ID,
   createBuildListOptimizationAdoptionFixture,
   replacedBuildList,
   type BuildListOptimizationAdoptionFixture,
@@ -58,6 +59,7 @@ const fixtures = new Map<BuildListOptimizationAdoptionVariant, BuildListOptimiza
 beforeAll(async () => {
   fixtures.set('scoped', await createBuildListOptimizationAdoptionFixture('scoped'))
   fixtures.set('unchanged', await createBuildListOptimizationAdoptionFixture('unchanged'))
+  fixtures.set('plain', await createBuildListOptimizationAdoptionFixture('plain'))
 })
 
 interface Scenario {
@@ -192,7 +194,7 @@ describe('Build List optimization adoption: saving (PLANNER_SPEC 17.11)', () => 
       expect(unchanged).toEqual(entryOf(input.buildListEntries, SKILL_ONLY_TARGET_ID))
       expect(unchanged.intermediateStateSelection?.improvementPreference).toBe('skill_first')
       // Stage 0's excluded Entries and the out-of-scope Targets are untouched.
-      for (const id of [STALE_ENTRY_ID, COMPLETED_ENTRY_ID]) {
+      for (const id of [STALE_ENTRY_ID, STALE_SECOND_ENTRY_ID, COMPLETED_ENTRY_ID]) {
         expect(await database.buildListEntries.get(id)).toEqual(input.buildListEntries.find((entry) => entry.id === id))
       }
       expect(after.targetWeapons).toEqual(before.targetWeapons)
@@ -207,6 +209,14 @@ describe('Build List optimization adoption: saving (PLANNER_SPEC 17.11)', () => 
       expect(checkProductionPlanBuildListEntryReferences(plan, after.buildListEntries)).toBeNull()
       expect(plan.selectedBuildListEntryIds.every((id) => after.buildListEntries.some((entry) => entry.id === id))).toBe(true)
     }))
+
+  it('saves an artifact over a Build List without any excluded Entry or warning', () =>
+    withScenario(async ({ database, service, fixture, context, plan, source }) => {
+      expect(fixture.artifact.inputExclusions).toEqual([])
+      expect(fixture.artifact.plannerResult.warnings).toEqual([])
+      expect(await service.saveBuildListOptimizationAdoption(source(), context)).toEqual({ kind: 'saved', plan })
+      expect(await database.buildListEntries.toArray()).toEqual(byId(replacedBuildList(fixture.input, fixture.artifact)))
+    }, { variant: 'plain' }))
 
   it('saves the new Draft when no Draft existed when the calculation started', () =>
     withScenario(async ({ database, service, context, plan, source }) => {
@@ -657,6 +667,65 @@ describe('Build List optimization adoption: the artifact itself ([P1])', () => {
           throw new Error(`${label}: ${String(error)}`)
         })
       }
+    }))
+})
+
+describe('Build List optimization adoption: the exclusion warnings, kind and message (17.7 item 3)', () => {
+  type Artifact = BuildListOptimizationAdoptionSource['artifact']
+  /** The Planner warning of one excluded Entry, found by the record's typed Entry ID (never by reading a message). */
+  const warningIndexOf = (artifact: Artifact, buildListEntryId: string) => {
+    const recorded = artifact.inputExclusions.find((exclusion) => exclusion.buildListEntryId === buildListEntryId)!
+    return artifact.plannerResult.warnings.findIndex(({ kind, message }) => kind === recorded.warningKind && message === recorded.warningMessage)
+  }
+  const recordIndexOf = (artifact: Artifact, buildListEntryId: string) =>
+    artifact.inputExclusions.findIndex((exclusion) => exclusion.buildListEntryId === buildListEntryId)
+  const variants: [string, (artifact: Artifact) => void, string | RegExp][] = [
+    ['1. the same kind with another message', (artifact) => {
+      const index = warningIndexOf(artifact, STALE_ENTRY_ID)
+      artifact.plannerResult.warnings[index] = { ...artifact.plannerResult.warnings[index]!, message: 'rewritten' }
+    }, 'no Stage 0 exclusion explains: [build_list_entry_stale]'],
+    ['2. a kind no exclusion recorded', (artifact) => {
+      artifact.plannerResult.warnings.push({ kind: 'rng_prediction_unsupported', message: "BuildListEntry 'x' requires unsupported RNG input." })
+    }, 'no Stage 0 exclusion explains: [rng_prediction_unsupported]'],
+    ["3. one stale Entry's warning swapped for the other's (same kinds)", (artifact) => {
+      artifact.plannerResult.warnings[warningIndexOf(artifact, STALE_ENTRY_ID)] = structuredClone(artifact.plannerResult.warnings[warningIndexOf(artifact, STALE_SECOND_ENTRY_ID)]!)
+    }, 'no Stage 0 exclusion explains: [build_list_entry_stale]'],
+    ['4. a recorded warning beyond its multiplicity', (artifact) => {
+      artifact.plannerResult.warnings.push(structuredClone(artifact.plannerResult.warnings[warningIndexOf(artifact, COMPLETED_ENTRY_ID)]!))
+    }, 'no Stage 0 exclusion explains: [completed_target_excluded]'],
+    ['5a. a record without its message', (artifact) => {
+      artifact.inputExclusions[0] = { ...artifact.inputExclusions[0]!, warningMessage: '' }
+    }, 'warning kind and warning message'],
+    ['5b. a record whose message is not the warning the run reported', (artifact) => {
+      const index = recordIndexOf(artifact, COMPLETED_ENTRY_ID)
+      artifact.inputExclusions[index] = { ...artifact.inputExclusions[index]!, warningMessage: 'another message' }
+    }, 'no Stage 0 exclusion explains: [completed_target_excluded]'],
+    ['6a. one excluded Entry recorded twice', (artifact) => {
+      const completed = artifact.inputExclusions[recordIndexOf(artifact, COMPLETED_ENTRY_ID)]!
+      artifact.inputExclusions.push({ ...completed, warningKind: 'build_list_entry_stale', warningMessage: 'a second exclusion warning' })
+      artifact.plannerResult.warnings.push({ kind: 'build_list_entry_stale', message: 'a second exclusion warning' })
+    }, 'is recorded with more than one exclusion warning'],
+    ['6b. a record naming another Target than its Entry\'s', (artifact) => {
+      const index = recordIndexOf(artifact, STALE_ENTRY_ID)
+      artifact.inputExclusions[index] = { ...artifact.inputExclusions[index]!, targetWeaponId: NO_ENTRY_TARGET_ID }
+    }, `is not an Entry of that Target in the Build List the optimization was calculated over`],
+    ['6c. a record naming an Entry outside the Build List', (artifact) => {
+      const index = recordIndexOf(artifact, STALE_ENTRY_ID)
+      artifact.inputExclusions[index] = { ...artifact.inputExclusions[index]!, buildListEntryId: 'build-list.scope.ghost' as BuildListEntryId }
+    }, "'build-list.scope.ghost'"],
+  ]
+
+  it.each(ATTEMPTS)('%s: refuses every inconsistent exclusion warning record as planner_result_invalid and changes nothing', (kind) =>
+    withScenario(async (scenario) => {
+      for (const [label, patch, message] of variants) {
+        const source = scenario.source()
+        patch(source.artifact)
+        await expectRefused(scenario, () => attempt(scenario, kind, source), 'planner_result_invalid', message).catch((error: unknown) => {
+          throw new Error(`${label}: ${String(error)}`)
+        })
+      }
+      // The untouched artifact is still adoptable: every refusal above was the warning record's.
+      await expect(attempt(scenario, kind)).resolves.toBeDefined()
     }))
 })
 

@@ -4197,12 +4197,16 @@ artifact fails the structural check, `planner_result_invalid`; nothing is conver
 (`buildListOptimizationResultIssues()`), the unchanged shared helpers (`checkPersistablePlannerResultShape()`,
 `checkPersistableOrdinaryPlannerResultShape()`) and the pure Domain `checkPersistableBuildListOptimizationArtifact()`
 (`src/domain/planner/buildListOptimization/buildListOptimizationAdoption.ts`: completed, every planning Target counted, no Conflict / rejected
-Entry, one selected Entry per planning Target with every generated one, the replaced / unchanged partition, excluded Entries untouched, warnings
-inside the exclusion warning kinds by multiplicity - no message read -, the physical identity from the Plan's own Steps, and the input token items
-equal to the final Plan's). Inside the transaction it shares the existing save mutation and `PlanBreakingChangeGuard` (inspect runs the same
+Entry, one selected Entry per planning Target with every generated one, the replaced / unchanged partition, one exclusion record with its warning
+message per excluded Entry, excluded Entries untouched, warnings inside Stage 0's recorded exclusion warnings as kind and message pairs by
+multiplicity - the rule Stage D' applies, shared as `unexplainedBuildListOptimizationWarnings()`; no message is parsed -, the physical identity
+from the Plan's own Steps, and the input token items equal to the final Plan's). `BuildListOptimizationInputExclusion` carries the runtime-only
+`warningMessage` copied from `validatePlannerInput().excludedBuildListEntryWarnings` (Stage D' still compares the exclusion set by Entry, Target
+and kind). Inside the transaction it shares the existing save mutation and `PlanBreakingChangeGuard` (inspect runs the same
 mutation read-only): T2 (no running Plan, Draft 0 / 1 and equal to the observed Draft ID, the current state against the four token items - the
 whole input Build List included) before the shared T3 - T6 (`prepareFinalReplacementBuildList()`, `checkGeneratedBuildListEntriesFresh()` recomputed
-from the current state, the Plan snapshot, `checkProductionPlanBuildListEntryReferences()`), then `checkBuildListOptimizationFinalSelection()`, and
+from the current state, the Plan snapshot, `checkProductionPlanBuildListEntryReferences()`), then `checkBuildListOptimizationFinalSelection()` and
+`checkBuildListOptimizationExclusionsInBuildList()`, and
 the shared T7 write (each `O` deleted, each `G` added, the new Plan ID checked, every Draft deleted, the new Draft added). An approval is refused
 before anything is read (`plan_breaking_change_approval_not_required`; the guard would say `plan_breaking_change_state_changed` with no active
 Plan). The inspection returns the replaced Draft ID, each replaced Entry's lost improvement preference and the unchanged Targets. The UI is not

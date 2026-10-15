@@ -5,8 +5,9 @@
  * The existing shared save-time helpers come first with their contracts unchanged (`checkPersistablePlannerResultShape()`: the
  * termination, a draft Plan, unique generated Entry IDs, one replacement per generated Entry naming its own Target, Domain-valid Plan
  * and Entries; `checkPersistableOrdinaryPlannerResultShape()`: a draft Plan of a new chain, Domain-valid). The optimization's own
- * conditions follow, read from the typed artifact only: never a warning message, never the diagnostics, never a Planner run, a
- * prediction or the persisted state. Each check returns the first issue it finds, mapped onto the caller's error boundary.
+ * conditions follow, read from the typed artifact only: a warning is compared with Stage 0's recorded exclusion warnings as a whole
+ * kind and message value, never parsed for an Entry or a Target; never the diagnostics, never a Planner run, a prediction or the
+ * persisted state. Each check returns the first issue it finds, mapped onto the caller's error boundary.
  */
 import type { BuildListEntryReplacement } from '../../buildList/buildListEntryReplacement'
 import type { BuildListEntry, BuildListEntryId, ExpectedPlanState, ProductionPlan, TargetWeaponId } from '../../models/publicTypes'
@@ -15,7 +16,7 @@ import {
   checkPersistableOrdinaryPlannerResultShape, checkPersistablePlannerResultShape, type PlannerResultPersistenceIssue,
 } from '../plannerResultPersistenceValidation'
 import type { BuildListOptimizationArtifact } from './buildListOptimizationResult'
-import { BUILD_LIST_OPTIMIZATION_NON_PHYSICAL_STEP_TYPE } from './finalVerification'
+import { BUILD_LIST_OPTIMIZATION_NON_PHYSICAL_STEP_TYPE, unexplainedBuildListOptimizationWarnings } from './finalVerification'
 
 /** One optimization artifact whose shape the adoption may persist: the final Plan, its generated Entries and their replacements. */
 export interface PersistableBuildListOptimizationAdoption {
@@ -93,8 +94,20 @@ function optimizationIssue(artifact: BuildListOptimizationArtifact, plan: Produc
     return resultInvalid(`The optimized Plan selects the replaced BuildListEntry '${selectedReplaced[0]!.replacedBuildListEntryId}'.`)
   }
 
+  // Stage 0's exclusion record: one warning per excluded Entry (`validatePlannerInput()` records one per Entry), with its kind and its
+  // message as the validation produced them.
+  const recordedIds = artifact.inputExclusions.map(({ buildListEntryId }) => buildListEntryId as string)
+  const repeatedExclusion = duplicatesOf(recordedIds)
+  if (repeatedExclusion.length > 0) {
+    return resultInvalid(`The excluded BuildListEntry '${repeatedExclusion[0]}' is recorded with more than one exclusion warning.`)
+  }
+  const unrecordedMessage = artifact.inputExclusions.find(({ warningMessage }) => typeof warningMessage !== 'string' || warningMessage.length === 0)
+  if (unrecordedMessage !== undefined) {
+    return resultInvalid(`The excluded BuildListEntry '${unrecordedMessage.buildListEntryId}' is recorded without the message of its exclusion warning.`)
+  }
+
   // Stage 0's excluded Entries stay outside the plan (17.3 / 17.7 item 4): no planning Target, no Route, no replacement, no selection.
-  const excludedIds = new Set<string>(artifact.inputExclusions.map(({ buildListEntryId }) => buildListEntryId))
+  const excludedIds = new Set<string>(recordedIds)
   const excludedPlanningTarget = artifact.inputExclusions.find(({ targetWeaponId }) => planningSet.has(targetWeaponId))
   if (excludedPlanningTarget !== undefined) {
     return resultInvalid(`The excluded BuildListEntry '${excludedPlanningTarget.buildListEntryId}' belongs to the planning Target '${excludedPlanningTarget.targetWeaponId}'.`)
@@ -108,15 +121,12 @@ function optimizationIssue(artifact: BuildListOptimizationArtifact, plan: Produc
     return resultInvalid(`The excluded BuildListEntry '${touchedExcluded}' is generated, replaced or selected by the optimization.`)
   }
 
-  // 17.7 item 3: every warning is one of Stage 0's exclusion warnings, matched by its typed kind with multiplicity (no message read).
-  const exclusionKinds = new Map<string, number>()
-  for (const { warningKind } of artifact.inputExclusions) exclusionKinds.set(warningKind, (exclusionKinds.get(warningKind) ?? 0) + 1)
-  const unexpectedWarnings = plannerResult.warnings.filter(({ kind }) => {
-    const left = exclusionKinds.get(kind) ?? 0
-    if (left === 0) return true
-    exclusionKinds.set(kind, left - 1)
-    return false
-  })
+  // 17.7 item 3: every warning is one of Stage 0's exclusion warnings - the same kind and the same message, multiplicity counted - by
+  // the rule Stage D' applies. The allowed values are Stage 0's record, never the result's own warnings; no message is parsed.
+  const unexpectedWarnings = unexplainedBuildListOptimizationWarnings(
+    plannerResult.warnings,
+    artifact.inputExclusions.map(({ warningKind, warningMessage }) => ({ kind: warningKind, message: warningMessage })),
+  )
   if (unexpectedWarnings.length > 0) {
     return resultInvalid(
       `The optimized Planner result carries warnings that no Stage 0 exclusion explains: [${unexpectedWarnings.map(({ kind }) => kind).sort(compareCodeUnits).join(', ')}].`,
@@ -194,6 +204,27 @@ export function checkBuildListOptimizationFinalSelection(
   const actual = [...selectedTargets].sort(compareCodeUnits)
   if (actual.length !== planning.length || actual.some((id, index) => id !== planning[index])) {
     return resultInvalid(`The optimized Plan selects the Entries of [${actual.join(', ')}], not exactly one Entry of each planning Target [${planning.join(', ')}].`)
+  }
+  return null
+}
+
+/**
+ * Stage 0's exclusion record against the Build List it was taken from (inside the adoption transaction, once the current Build List
+ * is the input's by the input token and the replaced Build List is built): every recorded Entry is in it, untouched by the
+ * replacements, and belongs to the recorded Target. The record's Entry and Target IDs are its typed fields; no message is read.
+ */
+export function checkBuildListOptimizationExclusionsInBuildList(
+  inputExclusions: readonly Pick<BuildListOptimizationArtifact['inputExclusions'][number], 'buildListEntryId' | 'targetWeaponId'>[],
+  finalEntries: readonly BuildListEntry[],
+): PlannerResultPersistenceIssue | null {
+  const entryById = new Map<string, BuildListEntry>(finalEntries.map((entry) => [entry.id, entry]))
+  for (const { buildListEntryId, targetWeaponId } of inputExclusions) {
+    const entry = entryById.get(buildListEntryId)
+    if (entry === undefined || entry.targetWeaponId !== targetWeaponId) {
+      return resultInvalid(
+        `The excluded BuildListEntry '${buildListEntryId}' of TargetWeapon '${targetWeaponId}' is not an Entry of that Target in the Build List the optimization was calculated over.`,
+      )
+    }
   }
   return null
 }

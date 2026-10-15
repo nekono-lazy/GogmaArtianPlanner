@@ -28,7 +28,7 @@ import { stableStringify } from '../../models/publicTypes'
 import type { BuildListEntry, BuildListEntryId, TargetWeaponId } from '../../models/publicTypes'
 import { derivePlannerPlanningTargets } from '../plannerPlanningTargets'
 import { roundUpPlannerMaxPlanSteps } from '../plannerStepBound'
-import type { PlannerDependencies, PlannerInput, PlannerResult } from '../plannerTypes'
+import type { PlannerDependencies, PlannerInput, PlannerResult, PlannerWarning } from '../plannerTypes'
 import { validatePlannerInput } from '../plannerValidation'
 import { createProductionPlanWithObserver } from '../productionPlanGeneration'
 import type { BuildListOptimizationInputExclusion, BuildListOptimizationVerificationRejection } from './buildListOptimizationResult'
@@ -128,15 +128,41 @@ export function buildBuildListOptimizationFinalInput(original: PlannerInput, rou
   }
 }
 
-/** The excluded Entries of one validation with their warning kinds (typed: no warning message is read). */
+/**
+ * The excluded Entries of one validation with the warning each exclusion added, copied from the validation's typed record (no warning
+ * message is read or parsed: the message is kept as the value the validation produced).
+ */
 export function buildListOptimizationInputExclusionsOf(validation: ReturnType<typeof validatePlannerInput>): BuildListOptimizationInputExclusion[] {
   const targetOf = new Map(validation.excludedBuildListEntries.map(({ entry }) => [entry.id as string, entry.targetWeaponId]))
   return validation.excludedBuildListEntryWarnings.map(({ buildListEntryId, warning }) => ({
-    buildListEntryId, targetWeaponId: targetOf.get(buildListEntryId)!, warningKind: warning.kind,
+    buildListEntryId, targetWeaponId: targetOf.get(buildListEntryId)!, warningKind: warning.kind, warningMessage: warning.message,
   }))
 }
 
+/** The exclusion set identity (`docs/PLANNER_SPEC.md` 17.7 item 3): Entry, Target and warning kind. */
 const exclusionKey = (value: BuildListOptimizationInputExclusion) => `${value.buildListEntryId}\u0000${value.targetWeaponId}\u0000${value.warningKind}`
+
+/**
+ * The warnings no allowed warning explains (`docs/PLANNER_SPEC.md` 17.7 item 3): each warning is matched, value by value, to one equal
+ * allowed warning - the same kind and the same message - and an allowed warning explains at most as many warnings as it occurs
+ * (multiplicity counted). Allowed warnings left unmatched are no issue. Nothing is parsed: the message is compared as a whole value.
+ * Stage D' and the adoption's [P1] share this one rule.
+ */
+export function unexplainedBuildListOptimizationWarnings(
+  warnings: readonly PlannerWarning[],
+  allowed: readonly Pick<PlannerWarning, 'kind' | 'message'>[],
+): PlannerWarning[] {
+  const key = (warning: Pick<PlannerWarning, 'kind' | 'message'>) => stableStringify({ kind: warning.kind, message: warning.message })
+  const remaining = new Map<string, number>()
+  for (const warning of allowed) remaining.set(key(warning), (remaining.get(key(warning)) ?? 0) + 1)
+  return warnings.filter(warning => {
+    const left = remaining.get(key(warning)) ?? 0
+    if (left === 0) return true
+    remaining.set(key(warning), left - 1)
+    return false
+  })
+}
+
 const compareCodeUnits = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0)
 
 export interface FinalVerificationInputs {
@@ -236,18 +262,7 @@ export async function verifyBuildListOptimizationCandidate(inputs: FinalVerifica
   }
   if (result.conflicts.length > 0 || (plan?.conflicts.length ?? 0) > 0) rejections.push({ code: 'conflicts', count: Math.max(result.conflicts.length, plan?.conflicts.length ?? 0) })
   // Only the exclusion warnings of the final input's validation may stay: matched value by value, never by parsing a message.
-  const exclusionWarnings = new Map<string, number>()
-  for (const { warning } of validation.excludedBuildListEntryWarnings) {
-    const key = stableStringify({ kind: warning.kind, message: warning.message })
-    exclusionWarnings.set(key, (exclusionWarnings.get(key) ?? 0) + 1)
-  }
-  const unexpectedWarnings = result.warnings.filter(warning => {
-    const key = stableStringify({ kind: warning.kind, message: warning.message })
-    const left = exclusionWarnings.get(key) ?? 0
-    if (left === 0) return true
-    exclusionWarnings.set(key, left - 1)
-    return false
-  })
+  const unexpectedWarnings = unexplainedBuildListOptimizationWarnings(result.warnings, validation.excludedBuildListEntryWarnings.map(({ warning }) => warning))
   if (unexpectedWarnings.length > 0) rejections.push({ code: 'unexpected_warnings', warnings: structuredClone(unexpectedWarnings) })
   if (rejections.length > 0 || plan === null) return rejected(rejections, fullPlannerRuns)
 
