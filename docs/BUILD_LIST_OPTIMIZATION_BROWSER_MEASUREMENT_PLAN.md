@@ -1,20 +1,22 @@
-# 作成リスト全体最適化 Production Browser計測 測定計画案（PR-5B用）
+# 作成リスト全体最適化 Production Browser計測 測定計画（PR-5B）
 
-Refs #260（PR-5A）。**提案（`proposed`）・Owner承認待ち（`owner_approval_pending`）**。本書は、作成リスト全体最適化
+Refs #260（PR-5A で案、PR-5B で登録）。**登録済み（`registered`）・Owner承認済み（`owner_approved`、2026-10-15）**。本書は、作成リスト全体最適化
 （[PLANNER_SPEC.md](PLANNER_SPEC.md) 17章）の探索範囲・探索上限のProduction定数（17.13、17.19のU2）を決めるPC Browser計測の
-**測定計画案** である。本書の基準・run数・比較条件はまだ正式な合格基準ではない。計測基盤は
+**測定計画** である。本書の計画blockの基準・run数・比較条件が正式な合格基準であり、計測開始後に変更しない。計測基盤は
 [BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md](BUILD_LIST_OPTIMIZATION_BROWSER_MEASUREMENT.md) を参照する。
 
 ## 1. 位置づけと進め方
 
-- PR-5A（本PR）は計測基盤と本計画案だけを置く。正式な実Export計測とProduction定数の確定は行わない
+- PR-5Aは計測基盤と本計画の案だけを置いた。正式な実Export計測とProduction定数の確定は行っていない
   （`PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS = null` のまま）
 - PR-5Bの手順:
-  1. Ownerが §9 の判断事項を決める
-  2. 決定を計画blockへ反映し、`status: registered`、`criteria.status: registered`、`approval.state: owner_approved`（承認者・日付）としてcommitする。
-     このcommitが **measurement HEAD** である（計画blockは自分のcommit SHAを書けないので、`baseCommit` には直前のcommitを書く）
-  3. measurement HEAD（clean）でbenchmark build・Node reference・driverを実行し、analyzerで公開RESULTを導出・再検証する
-  4. 結果と未確認範囲を記録し、別commitで `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` を確定する
+  1. Ownerが §9 の判断事項を決める（**2026-10-15に決定済み**。§9）
+  2. 正式計測の前に必要な判定規則の修正（共通キャンセルゲート、§3）をcommitする（`c501a85`）
+  3. 決定を計画blockへ反映し、`status: registered`、`criteria.status: registered`、`approval.state: owner_approved`（承認者・日付）としてcommitする。
+     このcommitが **measurement HEAD** である（計画blockは自分のcommit SHAを書けないので、`baseCommit` には直前のcommit `c501a85` を書く）
+  4. measurement HEAD（clean）でbenchmark build・機能確認計画（mechanics）の再実行・Node reference・driverを実行し、analyzerで公開RESULTを導出・再検証する
+  5. 結果と未確認範囲を記録する。採用する探索上限セットは計測結果をOwnerが確認して決め、その後の別commitで
+     `PRODUCTION_BUILD_LIST_OPTIMIZATION_BOUNDS` を確定する（計測結果のレビューまでは `null` のまま）
 - analyzerは計画blockを常に measurement HEAD から `git show` で読む。計測後に本書を書き換えても、そのHEADの計画が使われる。
   `proposed` の計画では観測だけを導出し、全軸の判定を `not_yet_registered` とする（承認前の基準で合否を出さない）
 - driverは `registered` かつ `owner_approved` の計画でしか実Exportの計測を始めない
@@ -24,8 +26,8 @@ Refs #260（PR-5A）。**提案（`proposed`）・Owner承認待ち（`owner_app
 
 | 項目 | 値 |
 | --- | --- |
-| measurement HEAD | PR-5Bで登録した計画をcommitしたcommit（本書には書けない。記録に残す） |
-| baseCommit（計画案） | `181963d`（PR-4のmerge。PR-5Bの登録時に直前のcommitへ更新する） |
+| measurement HEAD | PR-5Bで登録した計画をcommitしたcommit（本書には書けない。計測の記録に残す） |
+| baseCommit | `c501a85ef8c7b02d8bf852a3337d2a0f1fb2014f`（登録直前のcommit。共通キャンセルゲートの判定規則。PR-5Aの案では `181963d`） |
 | 計算 | Production Worker Client + 計測Worker（Production controller、Production adapter `createBuildListOptimizationCalculation(bounds)`、`ProductionRngEngine`、Production ID factory / Clock）。boundsはbenchmark専用の設定messageで渡し、`blo_run` には含めない |
 | protocol / version | Worker `build-list-optimization:1`、計測設定 `build-list-optimization-benchmark:1`、記録 `build-list-optimization-browser-record:1`。`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、`DATABASE_SCHEMA_VERSION` 10、`ExportRoot.schemaVersion` 13、`production-rng:c5-e7`、Master `dataVersion` 4 |
 | 入力 | `gogma-artian-planner-backup_20260927015837.json`、19,424,064 bytes、SHA-256 `cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b`（D-0B-2 / D-1C / P-2と同じ。PR-5A時点でローカルに存在することを確認済み。Repositoryへ置かない・外部へ送らない） |
@@ -142,11 +144,12 @@ taskであり、Workerを変更せずに区間を分けて測れない。本計�
 - 比較group: 各探索上限セットのcomparison slot（baselineは4 run、比較セットは2 run）がすべて完了して1つのfingerprintになり、同じHEADのNode referenceと一致する
 - 欠けたrun・完了しなかったrunは比較できないものとして扱い、一致とは数えない（`incomplete`）
 
-## 8. 合格基準案（Owner判断待ち）
+## 8. 合格基準（Owner承認済み、2026-10-15）
 
-計画blockの `criteria.items` が機械可読な定義である。値はすべて **提案** であり、Owner承認前は合否に使わない。
+計画blockの `criteria.items` が機械可読な定義である。PR-5Aでは提案であったが、Ownerが2026-10-15に推奨値を承認し（§9）、本計画とともに
+登録した（`criteria.status: registered`）。計測開始後に変更しない。
 
-| 基準 | 対象 | 提案値 | 根拠 |
+| 基準 | 対象 | 基準値 | 根拠 |
 | --- | --- | --- | --- |
 | semantic一致 | 各セットのcomparison run | 全run同一 + Node一致 | 同じ入力から同じsemantic（17.6 / 17.21） |
 | 計算成立 | 各セットのcomparison run | すべて `optimized`、全計画対象Target完成 | 採用するセットは代表ケースを成立させる |
@@ -167,7 +170,27 @@ taskであり、Workerを変更せずに区間を分けて測れない。本計�
 Research P-2の計測値（同じExportでResearch harnessのfirst Workerが約28 s、Worker heap max sampled約431 MB）は参考であり、上の値は
 そこから機械的に決めたものではない。
 
-## 9. Ownerが判断する事項
+## 9. Ownerの判断（2026-10-15に決定）
+
+**決定**: Ownerは2026-10-15に、下記1〜8の推奨値で進めることを承認した（承認者 Owner、計画blockの `approval`）。追加のOwner承認待ちは無い。
+決定の要点:
+
+| # | 決定 |
+| ---: | --- |
+| 1 | 計算時間（43目標武器の代表Export）: request → 結果のmedian ≤ 40,000 ms、各run ≤ 60,000 ms、main threadのlong task最大 ≤ 1,000 ms（母集団は §5） |
+| 2 | memory: Worker heap used max sampled ≤ 1 GiB、renderer private max sampled ≤ 2 GiB、main threadの結果保持 ≤ 256 MiB、Worker解放後のattributed memory 0。取得できない値を0や成功に置き換えない |
+| 3 | キャンセル: `cancelled` まで ≤ 100 ms、Worker detachまで ≤ 2,000 ms、キャンセル後の結果不採用と再実行の成功を必須とする |
+| 4 | semantic parity: `w0-research` はBrowser 4 run + Node reference 1 run、他の3セットはBrowser各2 run + Node reference各1 run。すべて同じfingerprint。未完了・欠損・不一致は成功としない |
+| 5 | 計算成立: 採用可能なセットは代表ケースで `optimized` かつ計画対象Targetがすべて完成。`not_found` / `search_bound_reached` / `unsupported` は観測として記録し、そのセットは正式採用不可 |
+| 6 | 採用可能条件: semantic parity、計算成立、performance、memory、cancel / lifecycleのすべてを満たし、同じmeasurement HEADのsynthetic mechanics検証が成功していること。他のExport・他のPC・Android・iPhone・2件目以降の候補などの未確認範囲を記録する |
+| 7 | 比較セット: §4 の4セット（`w0-research`、`w0-candidates-3`、`w-half`、`w-wide`）を変更しない。window・gate・budget・候補数・検証回数を計測開始後に変更しない |
+| 8 | 計測環境: Windows PC、headed Chrome、計測専用profile、計測中はゲーム・動画エンコード等の重い処理を並行させない、各slot前のCPU負荷を記録、cancel triggerの値と16 slotの実行順は §5 のとおり。Androidは任意（正式ゲートに含めない）、iPhone実機検証は行わない（非対応扱いにはしない） |
+
+判定規則の補足（PR-5B、登録前）: 3のキャンセル試験は `w0-research` だけで行い、その合格を全セットの共通必須ゲートとする（§3、計画blockの
+`application: common_gate`）。比較セットごとに追加のキャンセルrunは置かない。キャンセル試験が失敗・未測定・未成立の場合は、どのセットも正式採用可能と
+判定しない。`cancel_not_exercised` を成功扱いせず、再実行の完了とsemantic一致を評価する。cancel stage・trigger・slot数は計測結果を見て変更しない。
+
+以下はPR-5Aで提示した判断事項と推奨の記録である（上の決定はこの推奨値を承認したもの）。
 
 1. **43目標武器の代表ケースで許容する計算時間**: 推奨は request → 結果のmedian ≤ 40 s、各run ≤ 60 s（計測PC）。より遅いPCでの体感（約2〜3分）を上限と
    みなす考え方を採るか、長時間化の案内（U3）を前提にもっと長く許すかを決める
@@ -210,7 +233,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
 {
   "kind": "build-list-optimization-browser-plan",
   "revision": 1,
-  "baseCommit": "181963d7ec7934f455e3195c86179972b36728b3",
+  "baseCommit": "c501a85ef8c7b02d8bf852a3337d2a0f1fb2014f",
   "protocols": {
     "worker": "build-list-optimization:1",
     "benchmarkConfig": "build-list-optimization-benchmark:1",
@@ -231,12 +254,12 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
   },
   "planKind": "measurement",
   "series": "pr5b-r1",
-  "status": "proposed",
+  "status": "registered",
   "approval": {
-    "state": "owner_approval_pending",
-    "approvedBy": null,
-    "approvedOn": null,
-    "note": "Issue #260 PR-5A proposal. PR-5B commits the Owner-approved plan (status registered) and measures at that commit."
+    "state": "owner_approved",
+    "approvedBy": "Owner",
+    "approvedOn": "2026-10-15",
+    "note": "Owner-approved on 2026-10-15: the recommended values of the PR-5A proposal (section 9 items 1-8). 1 time: request to result median <= 40,000 ms and every run <= 60,000 ms, main-thread long task <= 1,000 ms (43 Targets, the representative Export). 2 memory: Worker heap used max sampled <= 1 GiB, renderer private max sampled <= 2 GiB, main-thread result retention <= 256 MiB, Worker memory 0 after release; an unread value is never 0 or a pass. 3 cancel: to cancelled <= 100 ms, to Worker detach <= 2,000 ms, no result adopted, the re-run completes. 4 semantic: w0-research 4 Browser runs + 1 Node reference, every other set 2 Browser runs + 1 Node reference, one fingerprint; an incomplete, missing or differing run is no match. 5 an adopted set is optimized with every planning Target completed on the representative case; not_found / search_bound_reached / unsupported are recorded and make the set not adoptable. 6 adoption needs every axis passed (semantic, computation, performance, memory, cancel / lifecycle), the mechanics plan passed at the same measurement HEAD, and the unconfirmed ranges recorded. 7 the four bounds sets of section 4, unchanged after the measurement starts. 8 Windows PC, headed Chrome, a dedicated profile, no other heavy work, the CPU load before each slot recorded, the cancel triggers and the 16-slot order of section 5; Android optional, iPhone not verified (never unsupported). The common cancel gate (section 3, application common_gate) was added before this registration (PR-5B required change)."
   },
   "inputs": [
     {
@@ -800,7 +823,7 @@ Export本体とそのrecord、Target / Entry / OwnedWeapon / Plan / Step / Candi
     ]
   },
   "criteria": {
-    "status": "proposed",
+    "status": "registered",
     "items": [
       {
         "criterionId": "semantic.identical",

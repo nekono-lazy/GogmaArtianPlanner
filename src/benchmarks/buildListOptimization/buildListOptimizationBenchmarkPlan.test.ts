@@ -49,8 +49,11 @@ describe('Build List optimization measurement plans (Issue #260 PR-5A)', () => {
     expect(mechanics.inputs.every(input => input.kind === 'synthetic')).toBe(true)
   })
 
-  it('commits the PR-5B measurement plan as a proposal: Owner approval pending, criteria proposed, the Research baseline verbatim', () => {
-    expect(measurement).toMatchObject({ planKind: 'measurement', status: 'proposed', approval: { state: 'owner_approval_pending', approvedBy: null, approvedOn: null }, criteria: { status: 'proposed' } })
+  it('commits the PR-5B measurement plan registered: Owner-approved on 2026-10-15, criteria registered, the Research baseline verbatim', () => {
+    expect(measurement).toMatchObject({
+      planKind: 'measurement', series: 'pr5b-r1', status: 'registered', approval: { state: 'owner_approved', approvedBy: 'Owner', approvedOn: '2026-10-15' },
+      criteria: { status: 'registered' }, baseCommit: 'c501a85ef8c7b02d8bf852a3337d2a0f1fb2014f',
+    })
     expect(measurement.inputs).toEqual([expect.objectContaining({ kind: 'export', fileName: 'gogma-artian-planner-backup_20260927015837.json', bytes: 19424064, sha256: 'cc35fb5bd85acb417b2ce0229cd79441b48c642ac8af70bbc2dfdfc8c89e1e6b' })])
     // The baseline is the Research D-0C registration verbatim (a comparison reference, never adopted by being the baseline).
     const baseline = measurement.boundsSets.find(set => set.role === 'baseline')!
