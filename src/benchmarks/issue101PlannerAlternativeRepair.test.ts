@@ -140,11 +140,15 @@ describe('Issue #101 Planner Alternative actual repair (Phase 5-A)', () => {
     expect(artifact.plannerResult.plan.steps).toHaveLength(209)
     expect(artifact.generatedBuildListEntries).toEqual([])
     expect(artifact.generatedBuildListEntryReplacements).toEqual([])
-    // Every Fire vs Dragon conflict - the decided Normal one and Dragon's own
-    // Skill / Gogma ones the decision expands to - is saved as decided for Fire.
+    // Every Fire vs Dragon conflict the final run reports is saved as decided
+    // for Fire. Since calculation schema 18 (Issue #278, `docs/PLANNER_SPEC.md`
+    // 9.6.5) the ordinary run under the scenario no longer reports Dragon's other
+    // conflicts with Fire - Dragon is excluded by the decision, so one
+    // participant is left - and only the decided Normal conflict remains for the
+    // decision expansion to record.
     const fireDragon = artifact.plannerResult.conflicts.filter(({ buildListEntryIds }) =>
       buildListEntryIds.includes(fixture.fireEntry.id) && buildListEntryIds.includes(fixture.dragonEntry.id))
-    expect(fireDragon.length).toBeGreaterThan(1)
+    expect(fireDragon.map(({ kind }) => kind)).toEqual(['same_normal_counter'])
     expect(fireDragon.every(({ selectedBuildListEntryId }) => selectedBuildListEntryId === fixture.fireEntry.id)).toBe(true)
     expect(artifact.plannerResult.plan.conflicts).toEqual(artifact.plannerResult.conflicts)
     expect(artifact.conflictRepairLineage.decisions).toEqual([{

@@ -696,7 +696,7 @@ describe('Phase 2-C2.5-D2-b isolation', () => {
       expect(production[path], path).not.toMatch(/pg2c25d2b|Phase2C25D2B/)
     }
     expect(production['../pages/BenchmarkApp.tsx']).toMatch(/PlannerGlobalPhase2C25D2BBenchmarkPage/)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')

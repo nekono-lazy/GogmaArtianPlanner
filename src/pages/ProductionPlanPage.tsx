@@ -16,19 +16,28 @@ import {
   ProductionPlanCalculationContextDetails,
   ProductionPlanContent,
 } from '../components/planner/ProductionPlanContent'
-import { ProductionPlanAlternativeComparison } from '../components/planner/ProductionPlanAlternativeComparison'
+import { ProductionPlanConflictPreferenceDialog } from '../components/planner/ProductionPlanConflictPreferenceDialog'
+import {
+  UNRESOLVED_CONFLICT_PARTICIPANT_NAME,
+  conflictPreferenceExplanation,
+  conflictPreferenceIncompleteRunMessage,
+  conflictPreferenceInvalidResolutionMessage,
+  conflictPreferenceNoPlanMessage,
+  conflictPreferenceOutcomeMissingNotice,
+  presentConflictDecisionConfirmation,
+  presentConflictDecisionRefusal,
+  presentConflictPreferenceSaveRefusal,
+  presentPreferredEntriesIncomplete,
+  type ConflictPreferenceConfirmation,
+  type ConflictPreferenceEntryName,
+  type ConflictPreferenceNotice,
+} from '../components/planner/productionPlanConflictPreferencePresentation'
 import { productionPlannerRunningTitles } from '../components/planner/productionPlannerSettingsPresentation'
 import { PlanExecutionEntry, type PlanStartPreviewState } from '../components/execution/PlanExecutionEntry'
-import { executionErrorMessage, savePointPositionLabel } from '../components/execution/executionStepPresentation'
-import { PlanBreakingChangeDialog } from '../components/execution/PlanBreakingChangeDialog'
-import { usePlanBreakingChangeApproval } from '../components/execution/usePlanBreakingChangeApproval'
+import { executionErrorMessage } from '../components/execution/executionStepPresentation'
 import { ProductionPlanReplanPreviewPanel } from '../components/execution/ProductionPlanReplanPreviewPanel'
 import { useProductionPlanReplanPreview } from '../components/execution/useProductionPlanReplanPreview'
-import {
-  ExecutionRuntimeError,
-  type PlanBreakingChangeApproval,
-  type PlanBreakingChangeInspection,
-} from '../domain/execution'
+import { ExecutionRuntimeError } from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type {
@@ -39,13 +48,10 @@ import type {
   ProductionPlanId,
   TargetWeapon,
 } from '../domain/models/publicTypes'
-import {
-  derivePlannerConflictRepairLineageContext,
-  type PlannerAlternativeComparison as PlannerAlternativeComparisonResult,
-  type PlannerAlternativeRepairArtifact,
-  type PlannerAlternativeRepairNotPersistableReason,
-  type PlannerAlternativeWhatIfCalculationResult,
-  type PlannerInput,
+import type {
+  PlannerConflictResolution,
+  PlannerInput,
+  PlannerResult,
 } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import { appDatabase } from '../db/AppDatabase'
@@ -61,6 +67,7 @@ import {
   CHECKPOINT_CONFLICT_MESSAGE,
   createProductionPlanInteractionViewModel,
   evaluateProductionPlanCalculationCompatibility,
+  prepareProductionPlanConflictDecision,
   restorePersistedExplicitResolutions,
   type ProductionPlanInteractionViewModel,
 } from '../services/planner/prepareProductionPlanInteraction'
@@ -71,9 +78,8 @@ import {
 } from '../services/planner/plannerWorkerClient'
 import {
   plannerResultPersistenceService,
-  type PlannerAlternativeRepairSaveOutcome,
+  type PlannerResultSaveOutcome,
 } from '../services/planner/plannerResultPersistenceService'
-import { presentPlannerAlternativeRepairNotSaved } from '../services/planner/presentProductionPlanAlternative'
 import {
   createProductionPlanExecutionService,
   type ProductionPlanStartInspection,
@@ -103,32 +109,21 @@ export interface ProductionPlanPageDependencies {
   createInput(calculationContext: CalculationContext): Promise<PlannerInput>
   createWorkerClient(): PlannerWorkerClient
   /**
-   * Whether saving a Planner Alternative actual repair needs the Plan-breaking
-   * approval: an accepted replacement deletes an Entry an `active` Plan depends
-   * on (`docs/PLANNER_SPEC.md` 9.2.19.8 / 16.6). Read-only; the save re-derives it.
-   * `expectedSourceDraftId` is the displayed Draft the repair was calculated
-   * from, never an ID read again at save time.
+   * Saves the ordinary Planner result of 「この候補を優先」 as the new Draft
+   * (`docs/PLANNER_SPEC.md` 9.6.6): the decisions it was calculated from must
+   * be honoured, recorded and every preferred Entry completed, and the current
+   * Draft must still be `expectedSourceDraftId` - the displayed Draft, never an
+   * ID read again at save time. The Build List is never written, so no
+   * Plan-breaking approval or save point choice applies.
    */
-  inspectPlannerAlternativeRepairSave(
-    artifact: PlannerAlternativeRepairArtifact,
+  savePlannerConflictPreferenceResult(
+    result: PlannerResult,
+    context: {
+      conflictResolutions: readonly PlannerConflictResolution[]
+      expectedSourceDraftId: ProductionPlanId
+    },
     currentCalculationContext: CalculationContext,
-    expectedSourceDraftId: ProductionPlanId,
-  ): Promise<PlanBreakingChangeInspection>
-  /**
-   * Saves a Planner Alternative actual repair: the Entry replacements, the new
-   * Draft and its repair lineage in one transaction. With an approval whose
-   * 16.10 decision restores the game save point, only the restore happens and
-   * the artifact is dropped (`docs/PLANNER_SPEC.md` 9.2.18): the outcome then
-   * asks for a new calculation from the restored state. The save refuses with
-   * `planner_state_changed` unless the current Draft is still
-   * `expectedSourceDraftId` (the source Draft CAS, `docs/PLANNER_SPEC.md` 9.2.15).
-   */
-  savePlannerAlternativeRepair(
-    artifact: PlannerAlternativeRepairArtifact,
-    currentCalculationContext: CalculationContext,
-    expectedSourceDraftId: ProductionPlanId,
-    approval?: PlanBreakingChangeApproval | null,
-  ): Promise<PlannerAlternativeRepairSaveOutcome>
+  ): Promise<Exclude<PlannerResultSaveOutcome, { kind: 'save_point_restored_recalculation_required' }>>
   /**
    * The read-only preview of the Target links a draft's start makes
    * (`docs/UI_FLOW.md` 11). Never write authority: the start re-verifies.
@@ -164,18 +159,11 @@ function createDefaultDependencies(
     createInput: (calculationContext) =>
       createPlannerInput(master, calculationContext),
     createWorkerClient: createProductionPlannerWorkerClient,
-    inspectPlannerAlternativeRepairSave: (artifact, currentCalculationContext, expectedSourceDraftId) =>
-      plannerResultPersistenceService.inspectPlannerAlternativeRepairSave(
-        artifact,
+    savePlannerConflictPreferenceResult: (result, context, currentCalculationContext) =>
+      plannerResultPersistenceService.savePlannerConflictPreferenceResult(
+        result,
+        context,
         currentCalculationContext,
-        expectedSourceDraftId,
-      ),
-    savePlannerAlternativeRepair: (artifact, currentCalculationContext, expectedSourceDraftId, approval) =>
-      plannerResultPersistenceService.savePlannerAlternativeRepair(
-        artifact,
-        currentCalculationContext,
-        expectedSourceDraftId,
-        approval ?? null,
       ),
     inspectProductionPlanStart: (planId) => executionService.inspectProductionPlanStart(planId),
     startProductionPlan: (planId) => executionService.startProductionPlan(planId),
@@ -210,61 +198,24 @@ type ProductionPlanPageState =
     }
   | { status: 'error'; message: string; plan: ProductionPlan | null }
 
-const SAVE_POINT_RESTORED_RECALCULATION_MESSAGE =
-  '最後のゲーム内セーブ地点へ戻しました。復元前の計算結果は保存していません。復元後の状態から、もう一度再計算してください。'
-
-interface WhatIfTargetIdentity {
-  conflictId: string
-  buildListEntryId: BuildListEntryId
-}
-
 /**
- * The Planner Alternative what-if of one participant (「比較する」,
- * `docs/PLANNER_SPEC.md` 9.2.19.7). Transient: nothing of it is persisted, and
- * the actual repair never reuses it.
- */
-type WhatIfUiState =
-  | { status: 'idle' }
-  | (WhatIfTargetIdentity & { status: 'loading' })
-  | (WhatIfTargetIdentity & {
-      status: 'completed'
-      result: Extract<PlannerAlternativeWhatIfCalculationResult, { status: 'completed' }>
-      targetWeapons: PlannerInput['targetWeapons']
-    })
-  | (WhatIfTargetIdentity & {
-      status: 'failure'
-      failure:
-        | {
-            kind: 'typed'
-            result: Exclude<PlannerAlternativeWhatIfCalculationResult, { status: 'completed' }>
-          }
-        | { kind: 'unexpected'; message: string }
-    })
-
-/**
- * The Planner Alternative actual repair of 「この候補を優先」
- * (`docs/PLANNER_SPEC.md` 9.2.19.8). Every state but a successful save keeps
- * the displayed Draft and the Build List as they are.
+ * 「この候補を優先」 (Issue #278, `docs/PLANNER_SPEC.md` 9.6.3 - 9.6.6,
+ * `docs/UI_FLOW.md` 11.6.6): the explicit decision set, an optional
+ * confirmation of the earlier decisions it drops, the ordinary `createPlan()`
+ * over a fresh input, and the conflict preference save. Every state but a
+ * successful save keeps the displayed Draft and the Build List as they are.
  */
 type ReplanUiState =
   | { status: 'idle' }
   | { status: 'loading' }
+  /** Rule 7: the earlier decisions this press drops wait for the user's confirmation. */
+  | { status: 'confirming'; confirmation: ConflictPreferenceConfirmation }
   | { status: 'saving' }
   | { status: 'failure'; message: string }
   | { status: 'notice'; message: string }
   | { status: 'invalid_resolution' }
-  | {
-      /** The repair calculated but has no savable final Plan; its typed comparison explains why. */
-      status: 'not_saved'
-      reason: Exclude<PlannerAlternativeRepairNotPersistableReason, 'invalid_conflict_resolution'>
-      comparison: PlannerAlternativeComparisonResult
-      targetWeapons: PlannerInput['targetWeapons']
-    }
-  | {
-      /** A typed preparation failure of the repair: nothing was calculated or saved. */
-      status: 'preparation_failure'
-      result: Exclude<PlannerAlternativeWhatIfCalculationResult, { status: 'completed' }>
-    }
+  /** A typed refusal or an incomplete preferred Entry: nothing was saved. */
+  | { status: 'not_saved'; notice: ConflictPreferenceNotice }
 
 let fallbackRequestSequence = 0
 
@@ -285,6 +236,21 @@ const unavailableReplanDependencies: ProductionPlanReplanDependencies = {
   },
   inspectProductionPlanReplanAdoption: () => Promise.reject(new Error('マスターデータを読み込めません。')),
   adoptProductionPlanReplanPreview: () => Promise.reject(new Error('マスターデータを読み込めません。')),
+}
+
+/**
+ * Names a conflict participant by its current Target (`docs/UI_FLOW.md`
+ * 11.6.3): the Entry of the fresh input, then its Target's name. An Entry or a
+ * Target that cannot be read is never shown by ID.
+ */
+function createConflictParticipantNameResolver(input: PlannerInput): ConflictPreferenceEntryName {
+  const entriesById = new Map(input.buildListEntries.map((entry) => [entry.id, entry]))
+  const targetsById = new Map(input.targetWeapons.map((target) => [target.id, target]))
+  return (buildListEntryId) => {
+    const entry = entriesById.get(buildListEntryId)
+    const target = entry ? targetsById.get(entry.targetWeaponId) : undefined
+    return target?.name ?? UNRESOLVED_CONFLICT_PARTICIPANT_NAME
+  }
 }
 
 function caughtMessage(caught: unknown): string {
@@ -457,27 +423,27 @@ function ConflictItem({
  * One participant card. Every state is readable as text: the badges say
  * Planner推奨 / 現在選択中 / 利用可能 / 利用不可, and an unavailable
  * participant keeps its reason beside its disabled controls instead of
- * disappearing (`docs/UI_FLOW.md` 11.1).
+ * disappearing (`docs/UI_FLOW.md` 11.1). An available participant says what
+ * preferring it means before it is pressed (11.6.6): the other participants
+ * are not made in this Plan, and their Build List Entries stay.
  */
 function ConflictParticipantCard({
   participant,
   index,
-  compareDisabled,
+  otherParticipantNames,
   selectDisabled,
-  onCompare,
   onSelect,
-  children,
 }: {
   participant: ParticipantDisplay
   /** 1-based display number used only when no Target name resolves. */
   index: number
-  compareDisabled: boolean
+  /** The other participants' current Target names, for the static explanation. */
+  otherParticipantNames: readonly string[]
   selectDisabled: boolean
-  onCompare(): void
   onSelect(): void
-  children?: ReactNode
 }) {
   const headingId = useId()
+  const explanationId = useId()
   return (
     <Paper
       component="li"
@@ -520,27 +486,22 @@ function ConflictParticipantCard({
             {participant.unavailableMessage}
           </Alert>
         )}
+        {participant.isAvailable && (
+          <Typography id={explanationId} variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+            {conflictPreferenceExplanation(otherParticipantNames)}
+          </Typography>
+        )}
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          <Button
-            variant="outlined"
-            disabled={compareDisabled}
-            onClick={onCompare}
-            aria-describedby={headingId}
-            sx={{ minHeight: 44 }}
-          >
-            比較する
-          </Button>
           <Button
             variant="contained"
             disabled={selectDisabled}
             onClick={onSelect}
-            aria-describedby={headingId}
+            aria-describedby={participant.isAvailable ? `${headingId} ${explanationId}` : headingId}
             sx={{ minHeight: 44 }}
           >
             この候補を優先
           </Button>
         </Stack>
-        {children}
       </Stack>
     </Paper>
   )
@@ -558,7 +519,9 @@ export function ProductionPlanPage({
   const selectionActiveRef = useRef(false)
   const selectionSavingRef = useRef(false)
   const lifecycleIdentityRef = useRef(0)
-  const whatIfActionIdentityRef = useRef(0)
+  // Resolves the pending rule 7 confirmation of the current press; `false`
+  // (cancel, a route change, an unmount) runs nothing.
+  const confirmationResolverRef = useRef<((confirmed: boolean) => void) | null>(null)
   const clientRef = useRef<PlannerWorkerClient | null>(null)
   const activeWorkerRequestRef = useRef<string | null>(null)
   const [state, setState] = useState<ProductionPlanPageState>(
@@ -571,16 +534,8 @@ export function ProductionPlanPage({
         },
   )
   const [targetWeapons, setTargetWeapons] = useState<readonly TargetWeapon[]>([])
-  const [whatIfState, setWhatIfState] = useState<WhatIfUiState>({
-    status: 'idle',
-  })
-  const [whatIfNotice, setWhatIfNotice] = useState<string | null>(null)
 
   const [replanState, setReplanState] = useState<ReplanUiState>({ status: 'idle' })
-  // A recalculated Draft whose generated Entry replaces an Entry the `active`
-  // Plan depends on goes through the shared breaking-change warning
-  // (`docs/PLANNER_SPEC.md` 9.2.18 / 16.6); every other save needs none.
-  const planGuard = usePlanBreakingChangeApproval()
   const [startState, setStartState] = useState<
     { status: 'idle' } | { status: 'starting' } | { status: 'failure'; message: string }
   >({ status: 'idle' })
@@ -601,7 +556,10 @@ export function ProductionPlanPage({
       mountedRef.current = false
     }
   }, [])
-  const replanBusy = replanState.status === 'loading' || replanState.status === 'saving'
+  const replanBusy =
+    replanState.status === 'loading' ||
+    replanState.status === 'confirming' ||
+    replanState.status === 'saving'
   // A runtime change against the running Plan (a save point restore, a refused
   // adoption) re-reads the exact persisted Plan through the ordinary lifecycle.
   const [planReloadSequence, setPlanReloadSequence] = useState(0)
@@ -708,8 +666,6 @@ export function ProductionPlanPage({
     setCurrentState({ status: 'loading_plan' })
     queueMicrotask(() => {
       if (!isCurrent()) return
-      setWhatIfState({ status: 'idle' })
-      setWhatIfNotice(null)
       setReplanState({ status: 'idle' })
       setStartState({ status: 'idle' })
     })
@@ -789,10 +745,12 @@ export function ProductionPlanPage({
 
     return () => {
       active = false
-      whatIfActionIdentityRef.current += 1
       selectionActionIdentityRef.current += 1
       selectionActiveRef.current = false
       selectionSavingRef.current = false
+      const resolveConfirmation = confirmationResolverRef.current
+      confirmationResolverRef.current = null
+      resolveConfirmation?.(false)
       const activeRequestId = activeWorkerRequestRef.current
       activeWorkerRequestRef.current = null
       // `client` stays null when this lifecycle never reached Worker creation:
@@ -806,164 +764,16 @@ export function ProductionPlanPage({
     }
   }, [dependencies, planId, planReloadSequence])
 
-  const startWhatIfComparison = async (
-    conflictId: string,
-    buildListEntryId: BuildListEntryId,
-  ) => {
-    if (!dependencies || state.status !== 'ready' || selectionActiveRef.current) return
-    const displayedPlan = state.plan
-    const displayedParticipant = state.viewModel.conflicts
-      .find(({ id }) => id === conflictId)
-      ?.participants.find(
-        (participant) => participant.buildListEntryId === buildListEntryId,
-      )
-    const client = clientRef.current
-    if (!client || !displayedParticipant?.isAvailable) return
-
-    const previousRequestId = activeWorkerRequestRef.current
-    activeWorkerRequestRef.current = null
-    if (previousRequestId !== null) client.cancelPlan(previousRequestId)
-    const actionIdentity = whatIfActionIdentityRef.current + 1
-    whatIfActionIdentityRef.current = actionIdentity
-    const lifecycleIdentity = lifecycleIdentityRef.current
-    const isCurrentAction = () =>
-      whatIfActionIdentityRef.current === actionIdentity &&
-      lifecycleIdentityRef.current === lifecycleIdentity &&
-      clientRef.current === client
-
-    setWhatIfNotice(null)
-    setWhatIfState({
-      status: 'loading',
-      conflictId,
-      buildListEntryId,
-    })
-
-    try {
-      const calculationContext = createPlannerCalculationContext(
-        dependencies.master,
-        client.engineVersion,
-      )
-      const freshInput = await dependencies.createInput(calculationContext)
-      if (!isCurrentAction()) return
-      const plannerInput = restorePersistedExplicitResolutions(
-        freshInput,
-        displayedPlan,
-      )
-
-      const preparationRequestId = createRequestId()
-      activeWorkerRequestRef.current = preparationRequestId
-      const preparation = await client.prepareInteraction(
-        preparationRequestId,
-        plannerInput,
-      )
-      if (
-        !isCurrentAction() ||
-        activeWorkerRequestRef.current !== preparationRequestId
-      ) return
-      activeWorkerRequestRef.current = null
-
-      const viewModel = createProductionPlanInteractionViewModel(
-        displayedPlan,
-        plannerInput,
-        preparation,
-      )
-      setState({
-        status: 'ready',
-        plan: displayedPlan,
-        input: plannerInput,
-        preparation,
-        viewModel,
-      })
-      const currentParticipant = viewModel.conflicts
-        .find(({ id }) => id === conflictId)
-        ?.participants.find(
-          (participant) => participant.buildListEntryId === buildListEntryId,
-        )
-      if (!currentParticipant?.isAvailable) {
-        setWhatIfState({ status: 'idle' })
-        setWhatIfNotice(
-          '現在の状態が変化したため比較を開始できませんでした。',
-        )
-        return
-      }
-
-      // The Planner Alternative what-if (PLANNER_SPEC 9.2.19.7): its trial and
-      // scenario runs use the same Conflict resolution Planner options the
-      // actual repair saves with (Issue #130), and it reads - never updates -
-      // the displayed Draft's still valid repair lineage (9.2.19.10 /
-      // 9.2.19.11). The lineage expiry is the Domain's, never re-derived here.
-      const whatIfInput: PlannerInput = {
-        ...plannerInput,
-        options: conflictResolutionPlannerOptions(displayedPlan),
-      }
-      const lineage = derivePlannerConflictRepairLineageContext(
-        displayedPlan.conflictRepairLineage,
-        whatIfInput.buildListEntries,
-      )
-      const whatIfRequestId = createRequestId()
-      activeWorkerRequestRef.current = whatIfRequestId
-      const result = await client.createPlannerAlternativeComparison(
-        whatIfRequestId,
-        {
-          plannerInput: whatIfInput,
-          scenarioResolution: {
-            conflictKey: conflictId,
-            selectedBuildListEntryId: currentParticipant.buildListEntryId,
-          },
-          priorFixedBuildListEntryIds: lineage.priorFixedBuildListEntryIds,
-          priorExcludedRoutes: lineage.priorExcludedRoutes,
-        },
-        // No progress callback: the comparison is shown as indeterminate
-        // (UI_FLOW 10.0, Issue #103 Phase D-1).
-      )
-      if (
-        !isCurrentAction() ||
-        activeWorkerRequestRef.current !== whatIfRequestId
-      ) return
-      activeWorkerRequestRef.current = null
-      if (result.status === 'completed') {
-        setWhatIfState({
-          status: 'completed',
-          conflictId,
-          buildListEntryId,
-          result,
-          targetWeapons: plannerInput.targetWeapons,
-        })
-      } else {
-        setWhatIfState({
-          status: 'failure',
-          conflictId,
-          buildListEntryId,
-          failure: { kind: 'typed', result },
-        })
-      }
-    } catch (caught: unknown) {
-      if (!isCurrentAction() || caught instanceof PlannerCancelledError) return
-      activeWorkerRequestRef.current = null
-      setWhatIfState({
-        status: 'failure',
-        conflictId,
-        buildListEntryId,
-        failure: {
-          kind: 'unexpected',
-          message: caught instanceof Error
-            ? `比較処理に失敗しました。${caught.message}`
-            : '比較処理に失敗しました。',
-        },
-      })
-    }
-  }
-
-  const cancelWhatIfComparison = () => {
-    whatIfActionIdentityRef.current += 1
-    const requestId = activeWorkerRequestRef.current
-    activeWorkerRequestRef.current = null
-    if (requestId !== null) clientRef.current?.cancelPlan(requestId)
-    setWhatIfState({ status: 'idle' })
-    setWhatIfNotice(null)
-  }
-
-  const startReplanning = async (
+  /**
+   * 「この候補を優先」 (Issue #278, `docs/PLANNER_SPEC.md` 9.6.3 - 9.6.6,
+   * `docs/UI_FLOW.md` 11.6.6). It re-reads the current persisted state into a
+   * fresh input and preparation, builds the explicit decision set through the
+   * one Domain authority, asks the user to confirm when an earlier decision is
+   * dropped, runs the ordinary `createPlan()` - never a Planner Alternative
+   * search, generated Entry, replacement or repair lineage - and saves only a
+   * result whose every preferred Entry is completed. Nothing else is written.
+   */
+  const startPreferring = async (
     conflictId: string,
     buildListEntryId: BuildListEntryId,
   ) => {
@@ -975,13 +785,9 @@ export function ProductionPlanPage({
     const client = clientRef.current
     if (!client || !participant?.isAvailable) return
 
-    // Invalidate even a what-if still awaiting createInput, before cancelling its Worker.
-    whatIfActionIdentityRef.current += 1
     const previousRequestId = activeWorkerRequestRef.current
     activeWorkerRequestRef.current = null
     if (previousRequestId !== null) client.cancelPlan(previousRequestId)
-    setWhatIfState({ status: 'idle' })
-    setWhatIfNotice(null)
 
     const actionIdentity = ++selectionActionIdentityRef.current
     const lifecycleIdentity = lifecycleIdentityRef.current
@@ -1000,7 +806,6 @@ export function ProductionPlanPage({
       const freshInput = await dependencies.createInput(calculationContext)
       if (!isCurrentAction()) return
       const plannerInput = restorePersistedExplicitResolutions(freshInput, displayedPlan)
-      // Check availability before merging this click: a resolution can change conflicts.
       const preparationRequestId = createRequestId()
       activeWorkerRequestRef.current = preparationRequestId
       const preparation = await client.prepareInteraction(preparationRequestId, plannerInput)
@@ -1018,117 +823,132 @@ export function ProductionPlanPage({
       if (preparation.status === 'invalid' || !currentParticipant?.isAvailable) {
         setReplanState({
           status: 'notice',
-          message: '現在の状態が変化したため再計算を開始できませんでした。',
+          message: '現在の状態が変化したため、この候補を優先できませんでした。',
         })
         return
       }
 
-      // The Planner Alternative actual repair (PLANNER_SPEC 9.2.19.8) runs from
-      // this fresh input - never from a what-if result - with the decision
-      // merged in by the Domain (same conflictKey replaced) and the displayed
-      // Draft's repair lineage. The Application caller is the Planner bound
-      // authority (7.2.1): the fresh input's `defaultPlannerOptions` is
-      // replaced by a bound derived from the Plan this page shows, never from
-      // the Build List page's temporary input (Issue #130).
-      const repairInput: PlannerInput = {
-        ...plannerInput,
+      const nameOf = createConflictParticipantNameResolver(plannerInput)
+      const decisionSet = prepareProductionPlanConflictDecision(
+        displayedPlan,
+        plannerInput,
+        preparation,
+        { conflictKey: conflictId, selectedBuildListEntryId: buildListEntryId },
+      )
+      if (decisionSet === null) return
+      if (decisionSet.status === 'refused') {
+        setReplanState({
+          status: 'not_saved',
+          notice: presentConflictDecisionRefusal(decisionSet.refusal, nameOf),
+        })
+        return
+      }
+      if (decisionSet.requiresConfirmation) {
+        const confirmed = await new Promise<boolean>((resolve) => {
+          confirmationResolverRef.current = resolve
+          setReplanState({
+            status: 'confirming',
+            confirmation: presentConflictDecisionConfirmation(decisionSet, nameOf),
+          })
+        })
+        if (!isCurrentAction()) return
+        if (!confirmed) {
+          setReplanState({ status: 'idle' })
+          return
+        }
+        setReplanState({ status: 'loading' })
+      }
+
+      // The ordinary Planner over the fresh input and the decision set alone
+      // (9.6.4). The Application caller is the Planner bound authority (7.2.1):
+      // the bound comes from the Plan this page shows, never from the Build
+      // List page's temporary input (Issue #130).
+      const conflictResolutions = decisionSet.resolutions
+      const runInput: PlannerInput = {
+        ...freshInput,
+        conflictResolutions: conflictResolutions.map((resolution) => ({ ...resolution })),
         options: conflictResolutionPlannerOptions(displayedPlan),
       }
       const requestId = createRequestId()
       activeWorkerRequestRef.current = requestId
-      const calculated = await client.createPlannerAlternativeRepair(
-        requestId,
-        {
-          plannerInput: repairInput,
-          decision: { conflictKey: conflictId, selectedBuildListEntryId: buildListEntryId },
-          lineage: displayedPlan.conflictRepairLineage,
-        },
-        // No progress callback: the recalculation is shown as indeterminate
-        // (UI_FLOW 10.0, Issue #103 Phase D-1).
-      )
+      const result = await client.createPlan(requestId, runInput)
       if (!isCurrentAction() || activeWorkerRequestRef.current !== requestId) return
       activeWorkerRequestRef.current = null
 
-      // Every branch below is decided by a typed status, never a message.
-      if (calculated.status !== 'completed') {
-        setReplanState({ status: 'preparation_failure', result: calculated })
+      // Every branch below is decided by a typed field, never a message.
+      if (result.termination.status === 'incomplete') {
+        setReplanState({
+          status: 'failure',
+          message: conflictPreferenceIncompleteRunMessage(result.termination.limits.maxPlanSteps),
+        })
         return
       }
-      if (calculated.persistence.status === 'not_persistable') {
-        const { reason } = calculated.persistence
-        // Application fail-closed boundary: a Plan that could not honour an
-        // explicit resolution is never saved, and no other participant or the
-        // Planner recommendation is tried instead.
-        setReplanState(reason === 'invalid_conflict_resolution'
-          ? { status: 'invalid_resolution' }
-          : {
-              status: 'not_saved',
-              reason,
-              comparison: calculated.comparison,
-              targetWeapons: repairInput.targetWeapons,
-            })
+      if (result.warnings.some(({ kind }) => kind === 'invalid_conflict_resolution')) {
+        // A Plan that could not honour an explicit decision is never saved,
+        // and no other participant or the Planner recommendation is tried.
+        setReplanState({ status: 'invalid_resolution' })
         return
       }
-      const { artifact } = calculated.persistence
+      if (result.plan === null) {
+        setReplanState({ status: 'notice', message: conflictPreferenceNoPlanMessage })
+        return
+      }
+      const outcome = result.conflictResolutionOutcome
+      if (outcome === undefined) {
+        setReplanState({ status: 'not_saved', notice: conflictPreferenceOutcomeMissingNotice })
+        return
+      }
+      if (!outcome.allPreferredEntriesCompleted) {
+        setReplanState({ status: 'not_saved', notice: presentPreferredEntriesIncomplete(outcome, nameOf) })
+        return
+      }
+
       if (!isCurrentAction()) return
       selectionSavingRef.current = true
       setReplanState({ status: 'saving' })
-      const saveCalculationContext = createPlannerCalculationContext(
-        dependencies.master,
-        client.engineVersion,
-      )
-      if (!isCurrentAction()) return
-      // Persistence owns the artifact invariants, the current-state
-      // re-validation, the Entry replacement, the lineage and the single atomic
-      // transaction. The runtime's inspection alone decides whether the
-      // breaking-change warning is shown; nothing is judged here.
-      // The Draft the user acted on is the source authority of this artifact:
-      // its lineage is what the artifact continues, so the save refuses unless
-      // it is still the current Draft (PLANNER_SPEC 9.2.15).
-      const sourceDraftId = displayedPlan.id
-      const saved = await planGuard.run({
-        inspect: () =>
-          dependencies.inspectPlannerAlternativeRepairSave(artifact, saveCalculationContext, sourceDraftId),
-        apply: (approval) =>
-          dependencies.savePlannerAlternativeRepair(artifact, saveCalculationContext, sourceDraftId, approval),
-        note: 'この再計算では作成リストの候補が置き換わり、実行中の生産計画が参照している候補が削除されます。',
-        // This result was calculated before any restore, so restoring drops it
-        // instead of saving it over the restored state (PLANNER_SPEC 9.2.18).
-        savePointRestore: 'drop_change',
-      })
-      if (!isCurrentAction()) return
-      if (saved.status === 'cancelled') {
-        setReplanState({ status: 'notice', message: '保存を取り消しました。生産計画と作成リストは変更されていません。' })
-        return
+      try {
+        // Persistence re-checks every condition inside its one transaction,
+        // the displayed Draft as the source authority included (9.6.6).
+        const saved = await dependencies.savePlannerConflictPreferenceResult(
+          result,
+          { conflictResolutions, expectedSourceDraftId: displayedPlan.id },
+          createPlannerCalculationContext(dependencies.master, client.engineVersion),
+        )
+        if (!isCurrentAction()) return
+        if (saved.kind === 'no_plan') {
+          setReplanState({ status: 'notice', message: conflictPreferenceNoPlanMessage })
+          return
+        }
+        setReplanState({ status: 'idle' })
+        void navigate(`/plans/${saved.plan.id}`)
+      } catch (caught: unknown) {
+        if (!isCurrentAction()) return
+        setReplanState({ status: 'failure', message: presentConflictPreferenceSaveRefusal(caught) })
       }
-      if (saved.status === 'refused') {
-        setReplanState({ status: 'failure', message: saved.message })
-        return
-      }
-      if (saved.result.kind === 'save_point_restored_recalculation_required') {
-        // The restore succeeded and the pre-restore result was dropped, never
-        // saved over the restored state: no Draft to open, a new calculation is
-        // required (`docs/PLANNER_SPEC.md` 9.2.18).
-        setReplanState({ status: 'notice', message: SAVE_POINT_RESTORED_RECALCULATION_MESSAGE })
-        return
-      }
-      setReplanState({ status: 'idle' })
-      void navigate(`/plans/${saved.result.plan.id}`)
     } catch (caught: unknown) {
       if (!isCurrentAction()) return
       setReplanState(caught instanceof PlannerCancelledError
         ? { status: 'idle' }
         : {
             status: 'failure',
-            message: caught instanceof Error ? caught.message : '生産計画の再計算・保存に失敗しました。',
+            message: caught instanceof Error
+              ? `生産計画の再計算に失敗しました。表示中の生産計画は変更していません。${caught.message}`
+              : '生産計画の再計算に失敗しました。表示中の生産計画は変更していません。',
           })
     } finally {
       if (isCurrentAction()) {
         activeWorkerRequestRef.current = null
         selectionActiveRef.current = false
         selectionSavingRef.current = false
+        confirmationResolverRef.current = null
       }
     }
+  }
+
+  const resolveConfirmation = (confirmed: boolean) => {
+    const resolve = confirmationResolverRef.current
+    confirmationResolverRef.current = null
+    resolve?.(confirmed)
   }
 
   const cancelReplanning = () => {
@@ -1289,37 +1109,20 @@ export function ProductionPlanPage({
               {replanState.status === 'failure' && <Alert severity="error">{replanState.message}</Alert>}
               {replanState.status === 'notice' && <Alert severity="info">{replanState.message}</Alert>}
               {replanState.status === 'invalid_resolution' && (
-                <Alert severity="warning">
-                  ユーザーが選択した競合候補を現在の状態では固定できませんでした。
-                  再選択またはビルドリストから再計算してください。
-                </Alert>
+                <Alert severity="warning">{conflictPreferenceInvalidResolutionMessage}</Alert>
               )}
               {replanState.status === 'not_saved' && (
-                <Stack spacing={1.5}>
-                  <Alert severity="info">
-                    {presentPlannerAlternativeRepairNotSaved(
-                      replanState.reason,
-                      replanState.comparison.scenario.status === 'stopped_by_plan_step_bound'
-                        ? replanState.comparison.scenario.maxPlanSteps
-                        : null,
-                    )}
-                  </Alert>
-                  <ProductionPlanAlternativeComparison
-                    result={{ status: 'completed', comparison: replanState.comparison }}
-                    targetWeapons={replanState.targetWeapons}
-                    headingLevel="h3"
-                    title="この候補を優先した結果（保存していません）"
-                  />
-                </Stack>
+                <Alert severity="warning">
+                  <AlertTitle>{replanState.notice.title}</AlertTitle>
+                  <Stack spacing={0.5}>
+                    {replanState.notice.messages.map((message) => (
+                      <Typography key={message} variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                        {message}
+                      </Typography>
+                    ))}
+                  </Stack>
+                </Alert>
               )}
-              {replanState.status === 'preparation_failure' && (
-                <ProductionPlanAlternativeComparison
-                  result={replanState.result}
-                  targetWeapons={[]}
-                  headingLevel="h3"
-                />
-              )}
-              {whatIfNotice && <Alert severity="info">{whatIfNotice}</Alert>}
               {state.viewModel.planStatusMessage && (
                 <Alert
                   severity={state.viewModel.planStatus === 'stale' ? 'warning' : 'info'}
@@ -1356,79 +1159,21 @@ export function ProductionPlanPage({
             <Stack component="ul" spacing={2} sx={{ m: 0, p: 0, listStyle: 'none' }}>
               {conflictDisplays.map((conflict, conflictIndex) => (
                 <ConflictItem key={conflict.id} conflict={conflict} index={conflictIndex}>
-                  {conflict.participants.map((participant, participantIndex) => {
-                    // A what-if belongs to the interactive state only; a
-                    // read-only projection never shows one.
-                    const showsWhatIf =
-                      state.status === 'ready' &&
-                      whatIfState.status !== 'idle' &&
-                      whatIfState.conflictId === conflict.id &&
-                      whatIfState.buildListEntryId === participant.buildListEntryId
-                    return (
-                      <ConflictParticipantCard
-                        key={participant.buildListEntryId}
-                        participant={participant}
-                        index={participantIndex}
-                        compareDisabled={
-                          !participant.isAvailable ||
-                          replanBusy ||
-                          (whatIfState.status === 'loading' &&
-                            whatIfState.conflictId === conflict.id &&
-                            whatIfState.buildListEntryId ===
-                              participant.buildListEntryId)
-                        }
-                        selectDisabled={!participant.isAvailable || replanBusy}
-                        onCompare={() => void startWhatIfComparison(
-                          conflict.id,
-                          participant.buildListEntryId,
-                        )}
-                        onSelect={() => void startReplanning(
-                          conflict.id,
-                          participant.buildListEntryId,
-                        )}
-                      >
-                        {showsWhatIf && whatIfState.status === 'loading' && (
-                          <Stack
-                            spacing={1}
-                            role="status"
-                            aria-live="polite"
-                            sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}
-                          >
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {productionPlannerRunningTitles.whatIf}
-                            </Typography>
-                            <LinearProgress aria-label="what-if比較中" variant="indeterminate" />
-                            <Button
-                              variant="outlined"
-                              onClick={cancelWhatIfComparison}
-                              sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
-                            >
-                              比較をキャンセル
-                            </Button>
-                          </Stack>
-                        )}
-                        {showsWhatIf && whatIfState.status === 'completed' && (
-                          <ProductionPlanAlternativeComparison
-                            result={whatIfState.result}
-                            targetWeapons={whatIfState.targetWeapons}
-                            headingLevel="h5"
-                          />
-                        )}
-                        {showsWhatIf && whatIfState.status === 'failure' &&
-                          (whatIfState.failure.kind === 'typed' ? (
-                            <ProductionPlanAlternativeComparison
-                              result={whatIfState.failure.result}
-                              targetWeapons={[]}
-                              headingLevel="h5"
-                            />
-                          ) : (
-                            <Alert severity="error">
-                              {whatIfState.failure.message}
-                            </Alert>
-                          ))}
-                      </ConflictParticipantCard>
-                    )
-                  })}
+                  {conflict.participants.map((participant, participantIndex) => (
+                    <ConflictParticipantCard
+                      key={participant.buildListEntryId}
+                      participant={participant}
+                      index={participantIndex}
+                      otherParticipantNames={conflict.participants
+                        .filter(({ buildListEntryId }) => buildListEntryId !== participant.buildListEntryId)
+                        .map(({ targetName }) => targetName ?? UNRESOLVED_CONFLICT_PARTICIPANT_NAME)}
+                      selectDisabled={!participant.isAvailable || replanBusy}
+                      onSelect={() => void startPreferring(
+                        conflict.id,
+                        participant.buildListEntryId,
+                      )}
+                    />
+                  ))}
                 </ConflictItem>
               ))}
             </Stack>
@@ -1546,16 +1291,10 @@ export function ProductionPlanPage({
           />
         )}
       </Stack>
-      <PlanBreakingChangeDialog
-        controller={planGuard}
-        // The Plan this page shows resolves the save point's Step only when it
-        // is the running Plan the warning names; display only.
-        savePointPositionLabel={(inspection) =>
-          (state.status === 'ready' || state.status === 'stale' || state.status === 'preparing') &&
-          state.plan.id === inspection.observedPlan.planId
-            ? savePointPositionLabel(state.plan, inspection.savePointCurrentStepId)
-            : null
-        }
+      <ProductionPlanConflictPreferenceDialog
+        confirmation={replanState.status === 'confirming' ? replanState.confirmation : null}
+        onCancel={() => resolveConfirmation(false)}
+        onConfirm={() => resolveConfirmation(true)}
       />
     </PageShell>
   )

@@ -97,7 +97,10 @@ describe('Planner Alternative search identity: pinned value (Phase 6-B2a)', () =
   it('keeps the identity the pre-Phase 6-B2a implementation derived', () => {
     // Moving the origin normalization into the shared Planner Domain module
     // must not change the identity, and so no Candidate ID derived from it.
+    // The identity folds in the CalculationContext, so the origin is pinned to
+    // the calculation schema the value was recorded under (17).
     const origin = createConstrainedSearchOrigin()
+    origin.calculationContext = { ...origin.calculationContext, appSchemaVersion: 17 }
     expect(createPlannerAlternativeSearchIdentity({
       origin,
       targetWeaponId: origin.targetWeapons[0].id,

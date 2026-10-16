@@ -109,7 +109,7 @@ describe('conditions', () => {
     expect(defaultPlannerAlternativeSearchExtent).toEqual({ maxNormalAdvance: 4, maxGogmaAdvance: 235, maxSkillAdvance: 4 })
     expect(defaultPlannerAlternativeTrialBounds).toEqual({ maxCandidateTrialsPerTarget: 2, maxPlannerReruns: 8 })
     expect(defaultPlannerOptions).toEqual({ maxPlanSteps: 1000 })
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')

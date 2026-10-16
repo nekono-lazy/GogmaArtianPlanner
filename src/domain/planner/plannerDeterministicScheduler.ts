@@ -8,20 +8,22 @@ import type {
 import { isBlindCreateNormalArtianOperation } from '../models/publicTypes'
 import {
   isUnitBlockedByConflictResolution,
+  plannerConflictResolutionRefusalWarnings,
   plannerRouteUnitKey,
 } from './plannerConflictDetection'
 import {
   entryIsRelevantForState,
   isPlannerSearchStateComplete,
 } from './plannerEntryRelevance'
-import { comparePlannerEntryPriority } from './plannerEntryPriority'
 import {
   preparePlannerInitialContext,
   type PlannerInitialContext,
 } from './plannerInitialContext'
 import {
   canCommitPlannerRoute,
+  comparePlannerCommitmentPriority,
   createPlannerRouteCommitment,
+  explicitlyPreferredBuildListEntryIds,
   type PlannerRouteCommitmentContext,
   type PlannerRouteCommitmentRecord,
   type PlannerRouteCommitmentStatus,
@@ -61,7 +63,6 @@ import {
   detectCurrentPlannerConflicts,
   pendingPlannerReserveEntries,
   plannerConflictCountByEntryId,
-  plannerConflictResolutionWarnings,
   plannerRejectionKey,
   sortPlannerRejections,
 } from './plannerSearchShared'
@@ -190,6 +191,8 @@ export class PlannerDeterministicScheduleRun {
   private readonly rejections: PlannerSearchRejection[]
   private readonly rejectionKeys: Set<string>
   private readonly conflictsById = new Map<string, PlanConflict>()
+  /** The Entries the applied explicit resolutions prefer (`explicitlyPreferredBuildListEntryIds()`). */
+  private readonly preferredEntryIds: ReadonlySet<BuildListEntryId>
   private readonly commitmentContext: PlannerRouteCommitmentContext
   private readonly routeActionContext: PlannerRouteActionContext
   private readonly reserveActionContext: PlannerReserveActionContext
@@ -214,6 +217,7 @@ export class PlannerDeterministicScheduleRun {
     context.initialConflictDetection.conflicts.forEach((conflict) =>
       this.conflictsById.set(conflict.id, conflict),
     )
+    this.preferredEntryIds = explicitlyPreferredBuildListEntryIds(context.initialConflictDetection)
     // The preferred source is not a scheduler input (6.7): no Entry counts as
     // preferred, so `preferredSourceProgressCount` never moves.
     const preferredSourceEntryIds = new Set<BuildListEntryId>()
@@ -356,14 +360,21 @@ export class PlannerDeterministicScheduleRun {
     return lanes === undefined ? [] : remainingPlannerLaneUnits(lanes, this.progressOf(entry))
   }
 
-  /** The dynamic conflicts of this state, deduplicated by conflict ID (8.5). */
+  /**
+   * The dynamic conflicts of this state, deduplicated by conflict ID (8.5).
+   *
+   * An explicit resolution applies only to the initial conflicts route
+   * commitment acted on (`docs/PLANNER_SPEC.md` 9.6.4), so a dynamic conflict
+   * is detected without any: it is never reported as decided when nothing
+   * enforced that decision.
+   */
   private collectDynamicConflicts() {
     detectCurrentPlannerConflicts(
       this.state,
       this.context.allSearchEntries,
       this.context.allLanePlans,
       this.context.planningTargets,
-      this.context.validConflictResolutions,
+      [],
       this.context.checkpointRequirements,
     ).conflicts.forEach((conflict) => {
       if (!this.conflictsById.has(conflict.id)) this.conflictsById.set(conflict.id, conflict)
@@ -781,14 +792,17 @@ export class PlannerDeterministicScheduleRun {
   }
 
   /**
-   * Drops the committed Entry ranked last by `R` when no safe action remains
-   * while committed Routes are pending: a deadlock or a stall (7.8).
+   * Drops the committed Entry ranked last when no safe action remains while
+   * committed Routes are pending: a deadlock or a stall (7.8). The ranking is
+   * `R` with every explicitly preferred Entry before the rest
+   * (`docs/PLANNER_SPEC.md` 9.6.4), which is exactly `R` without resolutions.
    */
   private dropStuckEntry(pending: readonly BuildListEntry[]) {
     const rank = (left: BuildListEntry, right: BuildListEntry) =>
-      comparePlannerEntryPriority(
+      comparePlannerCommitmentPriority(
         left,
         right,
+        this.preferredEntryIds,
         this.context.planningTargetsById,
         this.context.initialRelevantEntries,
       )
@@ -916,6 +930,32 @@ export class PlannerDeterministicScheduleRun {
     return sortPlannerRejections(rejections)
   }
 
+  /**
+   * The conflicts this run reports (`docs/PLANNER_SPEC.md` 9.6.5), in stable ID
+   * order: every initial and dynamic conflict, except one no explicit
+   * resolution decided whose participants that this run did not exclude are one
+   * or none. "Excluded" is route commitment's own record - an Entry dropped
+   * with `conflict_resolution_not_selected` because an applied resolution
+   * selected another participant - never re-derived from participant lists.
+   * Such a conflict no longer needs a decision, checkpoint participants or not:
+   * an excluded Entry runs no unit, its checkpoint endpoint included. A decided
+   * conflict stays as the record of the decision. Without resolutions nothing is
+   * excluded and every conflict is reported.
+   */
+  private reportedConflicts(): PlanConflict[] {
+    const excluded = new Set(
+      this.commitmentRecords()
+        .filter(({ status, rejection }) =>
+          status === 'dropped' && rejection?.reason === 'conflict_resolution_not_selected')
+        .map(({ buildListEntryId }) => buildListEntryId),
+    )
+    return [...this.conflictsById.values()]
+      .filter(({ buildListEntryIds, selectedBuildListEntryId }) =>
+        selectedBuildListEntryId !== null ||
+        buildListEntryIds.filter((entryId) => !excluded.has(entryId)).length > 1)
+      .sort((left, right) => compareStableStrings(left.id, right.id))
+  }
+
   /** The Production run result of the schedule so far. */
   finish(cancelled: boolean): PlannerRunResult {
     const result = this.buildResult(cancelled)
@@ -939,13 +979,13 @@ export class PlannerDeterministicScheduleRun {
         'One or more destructive branches require a protected weapon and were not generated.',
       )
     }
-    plannerConflictResolutionWarnings(
-      this.context.validConflictResolutions,
-      this.conflictsById,
+    // A resolution is judged against the initial conflicts only: one that
+    // matches only a dynamic conflict, or none, was never applied and is
+    // reported here (`docs/PLANNER_SPEC.md` 9.6.4).
+    plannerConflictResolutionRefusalWarnings(
+      this.context.initialConflictDetection.resolutionRefusals,
     ).forEach(({ kind, message }) => addPlannerWarning(warnings, kind, message))
-    const conflicts = [...this.conflictsById.values()].sort((left, right) =>
-      compareStableStrings(left.id, right.id),
-    )
+    const conflicts = this.reportedConflicts()
     const rejections = this.finalRejections()
     // Diagnostics only (11): computed once, after every decision was taken.
     this.state.evaluationScore = evaluatePlannerSearchState(this.state, {

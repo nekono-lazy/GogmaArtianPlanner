@@ -495,7 +495,7 @@ describe('Phase 2-C2.5-A isolation', () => {
     expect(PHASE2C25A_CHILD_HEAP_MB).toBe(8192)
     expect(PHASE2C25A_CONCURRENCY).toBe(1)
     expect(PHASE2C25A_CANDIDATE_STOP_BOUND).toBe(1)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')

@@ -24,7 +24,15 @@ import {
 } from '../models/publicTypes'
 import type { DomainValidationResult } from '../models/validation'
 import type { PlannerAlternativeRepairArtifact } from './alternative'
-import type { PlannerRunTermination } from './plannerTypes'
+import {
+  plannerPlanCompletionRecord,
+  plannerPreferredBuildListEntryIds,
+} from './plannerConflictPreferenceOutcome'
+import type {
+  PlannerConflictResolution,
+  PlannerResult,
+  PlannerRunTermination,
+} from './plannerTypes'
 
 /**
  * The pure save-time checks a Planner result must pass before it is persisted
@@ -150,6 +158,85 @@ export function checkPersistableOrdinaryPlannerResultShape(
   const planValidation = validateProductionPlan(plan)
   if (!planValidation.isValid) {
     return { kind: 'entity_invalid', entityName: 'ProductionPlan', validation: planValidation }
+  }
+  return null
+}
+
+/**
+ * The result-shape invariants of an ordinary Planner result calculated for
+ * 「この候補を優先」 (`docs/PLANNER_SPEC.md` 9.6.6) that do not depend on
+ * current persisted state, beside the ordinary ones
+ * (`checkPersistableOrdinaryPlannerResultShape()`): the run honoured every
+ * explicit decision (no `invalid_conflict_resolution`), `conflicts` and
+ * `plan.conflicts` are the same list PlanConflict by PlanConflict, and the
+ * Plan's Conflicts record exactly the decisions the run was given as their
+ * selections - every one of them, and no other selection. Whether each
+ * preferred Entry is completed reads its Target from the current Build List,
+ * so the save checks it inside its transaction
+ * (`checkPreferredBuildListEntriesCompleted()`).
+ *
+ * `plan` is the result's non-null Plan; a result without one is `no_plan` and
+ * never reaches this check.
+ */
+export function checkPersistableConflictPreferenceResultShape(
+  plan: ProductionPlan,
+  result: Pick<PlannerResult, 'conflicts' | 'warnings' | 'termination'>,
+  conflictResolutions: readonly PlannerConflictResolution[],
+): PlannerResultPersistenceIssue | null {
+  if (conflictResolutions.length === 0) {
+    return resultInvalid('A conflict preference result is saved with the explicit decisions it was calculated from; an ordinary result without any is saved as an ordinary result.')
+  }
+  const ordinary = checkPersistableOrdinaryPlannerResultShape(plan, result.termination)
+  if (ordinary !== null) return ordinary
+  if (result.warnings.some(({ kind }) => kind === 'invalid_conflict_resolution')) {
+    return resultInvalid(
+      'The Planner could not honour an explicit conflict resolution (invalid_conflict_resolution); a Plan that ignored a decision must not be saved.',
+    )
+  }
+  if (!sameStructure(plan.conflicts, result.conflicts)) {
+    return resultInvalid('The Planner result reports different Conflicts for its result and its Plan.')
+  }
+  const expected = conflictResolutions
+    .map(({ conflictKey, selectedBuildListEntryId }) => JSON.stringify([conflictKey, selectedBuildListEntryId]))
+    .sort()
+  const recorded = plan.conflicts
+    .filter(({ selectedBuildListEntryId }) => selectedBuildListEntryId !== null)
+    .map(({ id, selectedBuildListEntryId }) => JSON.stringify([id, selectedBuildListEntryId]))
+    .sort()
+  if (expected.join('\n') !== recorded.join('\n')) {
+    return resultInvalid(
+      'The Plan does not record exactly the explicit conflict decisions it was calculated from as its selected Conflicts.',
+    )
+  }
+  return null
+}
+
+/**
+ * Every Entry the decisions prefer must be completed by the Plan
+ * (`docs/PLANNER_SPEC.md` 9.6.6): the Plan's `selectedBuildListEntryIds` holds
+ * it and a `targetCompletions` record names its Target, read from `entries`
+ * (the Build List the Plan is saved over). One record without the other is an
+ * inconsistent Plan and is refused the same way.
+ */
+export function checkPreferredBuildListEntriesCompleted(
+  plan: ProductionPlan,
+  conflictResolutions: readonly PlannerConflictResolution[],
+  entries: readonly BuildListEntry[],
+): PlannerResultPersistenceIssue | null {
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]))
+  for (const entryId of plannerPreferredBuildListEntryIds(conflictResolutions)) {
+    const entry = entriesById.get(entryId)
+    if (entry === undefined) {
+      return { kind: 'state_changed', message: `The preferred BuildListEntry '${entryId}' is no longer in the Build List.` }
+    }
+    const record = plannerPlanCompletionRecord(plan, entryId, entry.targetWeaponId)
+    if (record !== 'completed') {
+      return resultInvalid(
+        record === 'inconsistent'
+          ? `The Plan records the preferred BuildListEntry '${entryId}' as secured or as completing its Target, but not both.`
+          : `The Plan does not complete the preferred BuildListEntry '${entryId}'; a preference that is not completed is never saved.`,
+      )
+    }
   }
   return null
 }

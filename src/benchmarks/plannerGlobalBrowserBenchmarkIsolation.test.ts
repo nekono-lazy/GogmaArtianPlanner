@@ -72,7 +72,7 @@ describe('Phase 2-A benchmark isolation', () => {
   })
 
   it('changes no Production default, schema or version', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')

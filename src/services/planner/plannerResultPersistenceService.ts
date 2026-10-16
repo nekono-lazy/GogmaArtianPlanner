@@ -43,9 +43,11 @@ import {
 } from '../../domain/models/publicTypes'
 import {
   checkGeneratedBuildListEntriesFresh,
+  checkPersistableConflictPreferenceResultShape,
   checkPersistableOrdinaryPlannerResultShape,
   checkPersistablePlannerAlternativeRepairShape,
   checkPlannerRunTerminationPersistable,
+  checkPreferredBuildListEntriesCompleted,
   checkProductionPlanBuildListEntryReferences,
   collectProductionPlanDependentTargetWeaponIds,
   createPlanningBuildListEntriesHash,
@@ -53,6 +55,7 @@ import {
   entryImprovementPreference,
   prepareFinalReplacementBuildList,
   type PlannerAlternativeRepairArtifact,
+  type PlannerConflictResolution,
   type PlannerResult,
   type PlannerResultPersistenceIssue,
 } from '../../domain/planner'
@@ -70,17 +73,24 @@ import { buildListOptimizationResultIssues } from './buildListOptimizationResult
 import type { BuildListOptimizationAdoptionSource } from './buildListOptimizationService'
 
 /**
- * The save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18. Three Planner results
- * are saved, each through its own entry points (Phase 6 complete, 9.2.19.16;
- * the third since Issue #260 PR-6A):
+ * The save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18 / 9.6.6. Four Planner
+ * results are saved, each through its own entry points (Phase 6 complete,
+ * 9.2.19.16; the optimization since Issue #260 PR-6A, the conflict preference
+ * since Issue #278 PR-2):
  *
  * - The ordinary Planner result (`createPlan()`, Phase 6-A) is saved through
  *   `savePlannerResult()`: it carries no generated BuildListEntry and no
  *   replacement, so the save re-validates the Plan against the current Build
  *   List exactly as it is, replaces the previous Draft with the new one, and
  *   never writes a BuildListEntry.
- * - The Planner Alternative actual repair (「この候補を優先」,
- *   `docs/PLANNER_SPEC.md` 9.2.19.8 / 9.2.19.11) is saved through
+ * - The ordinary Planner result of the Production Plan screen's 「この候補を
+ *   優先」 (Issue #278, `docs/PLANNER_SPEC.md` 9.6.6) is saved through
+ *   `savePlannerConflictPreferenceResult()`: the ordinary boundary plus the
+ *   explicit decisions it was calculated from (honoured, recorded, every
+ *   preferred Entry completed) and the source Draft CAS. It writes no
+ *   BuildListEntry either.
+ * - The Planner Alternative actual repair (`docs/PLANNER_SPEC.md` 9.2.19.8 /
+ *   9.2.19.11; no Production caller since Issue #278 PR-2) is saved through
  *   `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`.
  *   Its accepted replacement set is the authority, so a generated Entry the
  *   final Plan does not select is still saved, and the Draft is stored with
@@ -94,7 +104,7 @@ import type { BuildListOptimizationAdoptionSource } from './buildListOptimizatio
  *   calculation (no running Plan, the observed Draft) and the whole input token
  *   (the input Build List included), and its Draft starts a new chain.
  *
- * All three are pure calculations over the snapshot their Worker was handed.
+ * All of them are pure calculations over the snapshot their Worker was handed.
  * Persisting one therefore re-reads the current state *inside* the same Dexie
  * read-write transaction that writes, re-validates the Plan against that state
  * with the existing snapshot authorities, and only then deletes the previous
@@ -303,12 +313,19 @@ interface PersistablePlannerResult {
   generatedEntries: readonly BuildListEntry[]
   replacements: readonly BuildListEntryReplacement[]
   /**
-   * The Draft a Planner Alternative repair was calculated from: the one Draft
-   * the save must still find current (`docs/PLANNER_SPEC.md` 9.2.15). `null`
-   * for an ordinary result, which starts a new chain and inherits nothing from
-   * the displayed Draft.
+   * The Draft a Planner Alternative repair or a conflict preference result was
+   * calculated from: the one Draft the save must still find current
+   * (`docs/PLANNER_SPEC.md` 9.2.15 / 9.6.6). `null` for an ordinary result of
+   * the Build List, which starts a new chain and inherits nothing from the
+   * displayed Draft.
    */
   expectedSourceDraftId: ProductionPlanId | null
+  /**
+   * The explicit decisions a conflict preference result was calculated from;
+   * empty for every other result. The save requires each preferred Entry to be
+   * completed by the Plan over the current Build List (9.6.6).
+   */
+  conflictResolutions: readonly PlannerConflictResolution[]
   /**
    * The start state and the input token a Build List optimization adoption
    * re-checks (`docs/PLANNER_SPEC.md` 17.10 / 17.11 T2); `null` for the
@@ -374,6 +391,53 @@ export class PlannerResultPersistenceService {
     const persistable = this.persistableOrdinaryResult(result)
     if (persistable === null) return { kind: 'no_plan' }
     return this.saveGuarded(persistable, currentCalculationContext, approval)
+  }
+
+  /**
+   * Saves the ordinary Planner result of 「この候補を優先」
+   * (`docs/PLANNER_SPEC.md` 9.6.6) as the new Draft, replacing the Draft it was
+   * calculated from in the same transaction.
+   *
+   * Beside every check of `savePlannerResult()` it refuses a result that did
+   * not honour an explicit decision (`invalid_conflict_resolution`), whose
+   * `conflicts` and `plan.conflicts` differ, whose Conflicts do not record
+   * exactly `context.conflictResolutions` as their selections, or whose Plan
+   * does not complete every Entry those decisions prefer (its
+   * `selectedBuildListEntryIds` and a `targetCompletions` record of its Target,
+   * read from the current Build List). Inside the transaction the one current
+   * Draft must still be `context.expectedSourceDraftId` - the Draft the user
+   * acted on - or nothing is written (`planner_state_changed`; two Drafts:
+   * `draft_plan_conflict`). An `incomplete` run is `planner_result_invalid` and
+   * a finished run without a Plan is `no_plan`; both keep the previous Draft.
+   *
+   * The Build List is read, never written, so no running Plan is broken and no
+   * Plan-breaking approval or save point choice ever applies. The saved Draft
+   * carries no repair lineage.
+   */
+  async savePlannerConflictPreferenceResult(
+    result: PlannerResult,
+    context: {
+      conflictResolutions: readonly PlannerConflictResolution[]
+      expectedSourceDraftId: ProductionPlanId
+    },
+    currentCalculationContext: CalculationContext,
+  ): Promise<Exclude<PlannerResultSaveOutcome, { kind: 'save_point_restored_recalculation_required' }>> {
+    throwIssue(checkPlannerRunTerminationPersistable(result.termination))
+    const { plan } = result
+    if (plan === null) return { kind: 'no_plan' }
+    throwIssue(checkPersistableConflictPreferenceResultShape(plan, result, context.conflictResolutions))
+    return this.applyGuarded(
+      {
+        plan,
+        generatedEntries: [],
+        replacements: [],
+        expectedSourceDraftId: context.expectedSourceDraftId,
+        conflictResolutions: context.conflictResolutions.map((resolution) => ({ ...resolution })),
+        buildListOptimization: null,
+      },
+      currentCalculationContext,
+      null,
+    )
   }
 
   /**
@@ -571,7 +635,14 @@ export class PlannerResultPersistenceService {
     const { plan } = result
     if (plan === null) return null
     throwIssue(checkPersistableOrdinaryPlannerResultShape(plan, result.termination))
-    return { plan, generatedEntries: [], replacements: [], expectedSourceDraftId: null, buildListOptimization: null }
+    return {
+      plan,
+      generatedEntries: [],
+      replacements: [],
+      expectedSourceDraftId: null,
+      conflictResolutions: [],
+      buildListOptimization: null,
+    }
   }
 
   /** The artifact-shape invariants of a Planner Alternative repair; the Plan carries its lineage. */
@@ -584,7 +655,7 @@ export class PlannerResultPersistenceService {
       throwIssue(checked.issue)
       throw resultInvalid('The Planner Alternative repair artifact is not persistable.')
     }
-    return { ...checked.repair, expectedSourceDraftId, buildListOptimization: null }
+    return { ...checked.repair, expectedSourceDraftId, conflictResolutions: [], buildListOptimization: null }
   }
 
   /**
@@ -620,6 +691,7 @@ export class PlannerResultPersistenceService {
     return {
       ...checked.adoption,
       expectedSourceDraftId: null,
+      conflictResolutions: [],
       buildListOptimization: {
         observedDraftPlanId: startSnapshot.observedDraftPlanId,
         inputToken: artifact.inputToken,
@@ -672,6 +744,9 @@ export class PlannerResultPersistenceService {
         currentCalculationContext,
       )
       this.assertPlanReferences(persistable, finalEntries)
+      if (persistable.conflictResolutions.length > 0) {
+        throwIssue(checkPreferredBuildListEntriesCompleted(plan, persistable.conflictResolutions, finalEntries))
+      }
       if (buildListOptimization !== null) {
         throwIssue(checkBuildListOptimizationFinalSelection(plan, finalEntries, buildListOptimization.planningTargetWeaponIds))
         throwIssue(checkBuildListOptimizationExclusionsInBuildList(buildListOptimization.inputExclusions, finalEntries))
@@ -780,17 +855,18 @@ export class PlannerResultPersistenceService {
   }
 
   /**
-   * The source Draft CAS of a Planner Alternative repair (`docs/PLANNER_SPEC.md`
-   * 9.2.15): the artifact continues the lineage of the Draft it was calculated
-   * from, so the one current Draft must still be that Draft. Its ID is the
-   * authority - never a body comparison; the rest of the state is re-validated
-   * by the snapshot authorities below. Two Drafts break the Draft invariant.
+   * The source Draft CAS of a Planner Alternative repair and of a conflict
+   * preference result (`docs/PLANNER_SPEC.md` 9.2.15 / 9.6.6): the result
+   * continues the decisions of the Draft it was calculated from, so the one
+   * current Draft must still be that Draft. Its ID is the authority - never a
+   * body comparison; the rest of the state is re-validated by the snapshot
+   * authorities below. Two Drafts break the Draft invariant.
    */
   private assertSourceDraftCurrent(base: PlanGuardedMutationBase, expectedSourceDraftId: ProductionPlanId) {
     const drafts = this.currentDrafts(base)
     if (drafts.length === 0 || drafts[0].id !== expectedSourceDraftId) {
       throw stateChanged(
-        `The repair was calculated from Draft '${expectedSourceDraftId}', but the current Draft is ${drafts.length === 0 ? 'missing' : `'${drafts[0].id}'`}; another change moved the repair chain on after the calculation.`,
+        `The result was calculated from Draft '${expectedSourceDraftId}', but the current Draft is ${drafts.length === 0 ? 'missing' : `'${drafts[0].id}'`}; another change replaced, started or deleted that Draft after the calculation.`,
       )
     }
   }

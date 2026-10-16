@@ -1,5 +1,5 @@
 import {
-  isCalculationContextCompatible,
+  isProductionPlanCalculationCompatible,
   type BuildListEntry,
   type BuildListEntryId,
   type CalculationContext,
@@ -9,9 +9,12 @@ import {
   type ProductionPlanStatus,
   type TargetWeapon,
 } from '../../domain/models/publicTypes'
-import type {
-  PlannerConflictResolution,
-  PlannerInput,
+import {
+  derivePlannerConflictDecisionSet,
+  plannerConflictEffectiveCheckpointParticipants,
+  type PlannerConflictDecisionSetResult,
+  type PlannerConflictResolution,
+  type PlannerInput,
 } from '../../domain/planner'
 import type {
   PlannerInteractionPreparationResult,
@@ -25,10 +28,11 @@ export type ProductionPlanParticipantUnavailableReason =
   | 'planner_validation_excluded'
   | 'plan_not_draft'
   /**
-   * The current conflict involves a selected compromise checkpoint. Neither
-   * 「比較する」 nor 「この候補を優先」 can settle it: the Domain refuses such a
-   * resolution, and the Build List checkpoint selection is the only way out
-   * (`docs/PLANNER_SPEC.md` 9.5).
+   * The current conflict keeps an effective selected compromise checkpoint
+   * (`docs/PLANNER_SPEC.md` 9.5.1 / 9.6.2): 「この候補を優先」 cannot settle it -
+   * the Domain refuses such a resolution - and the Build List checkpoint
+   * selection is the only way out. A conflict whose checkpoint participants
+   * another decision of the displayed Draft already excludes is not one.
    */
   | 'checkpoint_conflict'
 
@@ -58,9 +62,11 @@ export interface ProductionPlanConflictViewModel {
   id: string
   reason: string
   /**
-   * True when the current conflict involves a selected compromise checkpoint.
-   * Every participant is then unavailable with `checkpoint_conflict`, and the
-   * page sends the user to the Build List instead of offering a winner.
+   * True when the current conflict keeps an effective selected compromise
+   * checkpoint: a checkpoint participant the displayed Draft's earlier
+   * decisions do not exclude (`docs/PLANNER_SPEC.md` 9.6.2). Every participant
+   * is then unavailable with `checkpoint_conflict`, and the page sends the user
+   * to the Build List instead of offering a winner.
    */
   involvesSelectedCheckpoint: boolean
   participants: ProductionPlanParticipantViewModel[]
@@ -82,20 +88,17 @@ export type ProductionPlanCalculationCompatibility =
 
 /**
  * Evaluates whether a persisted Plan may enter the current interaction or
- * execution preparation path. Both the Plan and its audit snapshot must match
- * exactly. Build-result compatibility exceptions never apply to a Plan.
+ * execution preparation path, through the one Domain authority
+ * `isProductionPlanCalculationCompatible()` (`docs/PLANNER_SPEC.md` 9.6.10):
+ * the Plan and its audit snapshot are judged by the same rule, and the only
+ * Plan exception is the explicit, resolution-free `18 -> 17` one. Build-result
+ * compatibility exceptions never apply to a Plan.
  */
 export function evaluateProductionPlanCalculationCompatibility(
   plan: ProductionPlan,
   current: CalculationContext,
 ): ProductionPlanCalculationCompatibility {
-  const isCompatible =
-    isCalculationContextCompatible(plan.calculationContext, current) &&
-    isCalculationContextCompatible(
-      plan.baseSnapshot.calculationContext,
-      current,
-    )
-  return isCompatible
+  return isProductionPlanCalculationCompatible(plan, current)
     ? { isCompatible: true, recalculationReasons: [] }
     : {
         isCompatible: false,
@@ -177,15 +180,45 @@ function unavailable(
   }
 }
 
+const AVAILABLE: Pick<
+  ProductionPlanParticipantViewModel,
+  'isAvailable' | 'unavailableReason' | 'unavailableMessage'
+> = { isAvailable: true, unavailableReason: null, unavailableMessage: null }
+
+/**
+ * The Entries the displayed Draft's earlier decisions still exclude over the
+ * current preparation (`derivePlannerConflictDecisionSet()` with no new
+ * decision). A refused reading - a non-draft or an inconsistent Draft - excludes
+ * nothing, so every checkpoint participant counts as effective: the
+ * conservative reading.
+ */
+function carriedExcludedEntryIds(
+  plan: ProductionPlan,
+  input: PlannerInput,
+  preparation: PlannerInteractionPreparationResult,
+): BuildListEntryId[] {
+  if (preparation.status !== 'ready') return []
+  const carried = derivePlannerConflictDecisionSet({
+    displayedPlan: plan,
+    currentCalculationContext: input.calculationContext,
+    preparation,
+    decision: null,
+  })
+  return carried.status === 'ready' ? carried.excludedBuildListEntryIds : []
+}
+
 function participantAvailability(
-  planStatus: ProductionPlanStatus,
+  plan: ProductionPlan,
+  input: PlannerInput,
   conflict: PlanConflict,
   entry: BuildListEntry | undefined,
   preparation: PlannerInteractionPreparationResult,
+  carriedExcluded: readonly BuildListEntryId[],
 ): Pick<
   ProductionPlanParticipantViewModel,
   'isAvailable' | 'unavailableReason' | 'unavailableMessage'
 > {
+  const planStatus = plan.status
   if (!entry) {
     return unavailable(
       'entry_not_found',
@@ -222,9 +255,10 @@ function participantAvailability(
       'この候補は現在の競合参加者ではありません。',
     )
   }
-  if (currentConflict.checkpointParticipants.length > 0) {
-    // Conservative by contract: any conflict a selected checkpoint takes part
-    // in is out of scope for winner selection, whichever side it sits on.
+  if (plannerConflictEffectiveCheckpointParticipants(currentConflict, carriedExcluded).length > 0) {
+    // Conservative by contract: a conflict an effective selected checkpoint
+    // takes part in is out of scope for winner selection, whichever side it
+    // sits on (`docs/PLANNER_SPEC.md` 9.5.1 / 9.6.2).
     return unavailable(
       'checkpoint_conflict',
       CHECKPOINT_CONFLICT_MESSAGE,
@@ -236,11 +270,54 @@ function participantAvailability(
       planStatusMessage(planStatus) ?? 'この生産計画は編集できません。',
     )
   }
-  return {
-    isAvailable: true,
-    unavailableReason: null,
-    unavailableMessage: null,
+  // The same Domain authority the press runs (9.6.3 rule 1). The set-level
+  // refusals (an inconsistent set, two preferred Entries in an undecided
+  // conflict) are explained when the user presses, so they stay available.
+  const decisionSet = derivePlannerConflictDecisionSet({
+    displayedPlan: plan,
+    currentCalculationContext: input.calculationContext,
+    preparation,
+    decision: { conflictKey: conflict.id, selectedBuildListEntryId: entry.id },
+  })
+  if (decisionSet.status === 'refused') {
+    switch (decisionSet.refusal.reason) {
+      case 'checkpoint_conflict':
+        return unavailable('checkpoint_conflict', CHECKPOINT_CONFLICT_MESSAGE)
+      case 'plan_not_editable':
+        return unavailable('plan_not_draft', 'この生産計画は編集できません。')
+      case 'conflict_not_current':
+        return unavailable('current_conflict_not_found', '現在のPlanner入力ではこの競合を再現できません。')
+      case 'entry_not_participant':
+        return unavailable('not_current_conflict_participant', 'この候補は現在の競合参加者ではありません。')
+      case 'entry_not_valid':
+        return unavailable('planner_validation_excluded', 'Planner validationにより現在の候補から除外されました。')
+      case 'inconsistent_decision_set':
+      case 'preferred_entries_conflict':
+        return AVAILABLE
+    }
   }
+  return AVAILABLE
+}
+
+/**
+ * The explicit decision set of one 「この候補を優先」 over the current
+ * preparation (`docs/PLANNER_SPEC.md` 9.6.3): the Domain function the press and
+ * the availability share, with the displayed Draft and the fresh input's
+ * CalculationContext. `null` while no `ready` preparation exists.
+ */
+export function prepareProductionPlanConflictDecision(
+  plan: ProductionPlan,
+  input: PlannerInput,
+  preparation: PlannerInteractionPreparationResult,
+  decision: PlannerConflictResolution,
+): PlannerConflictDecisionSetResult | null {
+  if (preparation.status !== 'ready') return null
+  return derivePlannerConflictDecisionSet({
+    displayedPlan: plan,
+    currentCalculationContext: input.calculationContext,
+    preparation,
+    decision,
+  })
 }
 
 /** Builds presentation state without adding a new Domain validity rule. */
@@ -255,6 +332,7 @@ export function createProductionPlanInteractionViewModel(
   const targetsById = new Map(
     input.targetWeapons.map((target) => [target.id, target]),
   )
+  const carriedExcluded = carriedExcludedEntryIds(plan, input, preparation)
 
   return {
     planStatus: plan.status,
@@ -262,13 +340,15 @@ export function createProductionPlanInteractionViewModel(
     planStatusMessage: planStatusMessage(plan.status),
     conflicts: plan.conflicts.map((conflict) => {
       // The current preparation is the authority for checkpoint involvement:
-      // the persisted Plan's own metadata may predate a Build List change.
+      // the persisted Plan's own metadata may predate a Build List change. A
+      // checkpoint participant an earlier decision excludes is not effective.
       const currentConflict =
         preparation.status === 'ready'
           ? preparation.currentConflicts.find(({ id }) => id === conflict.id)
           : undefined
-      const currentCheckpointParticipants =
-        currentConflict?.checkpointParticipants ?? []
+      const currentCheckpointParticipants = currentConflict
+        ? plannerConflictEffectiveCheckpointParticipants(currentConflict, carriedExcluded)
+        : []
       return {
         id: conflict.id,
         reason: conflict.reason,
@@ -293,10 +373,12 @@ export function createProductionPlanInteractionViewModel(
               conflict.recommendedBuildListEntryId === buildListEntryId,
             isSelected: conflict.selectedBuildListEntryId === buildListEntryId,
             ...participantAvailability(
-              plan.status,
+              plan,
+              input,
               conflict,
               entry,
               preparation,
+              carriedExcluded,
             ),
           }
         }),

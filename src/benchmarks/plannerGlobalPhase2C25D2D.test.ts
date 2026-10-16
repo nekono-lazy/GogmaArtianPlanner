@@ -46,7 +46,7 @@ describe('conditions', () => {
 
   it('changes no Production default or version', () => {
     expect(defaultPlannerAlternativeSearchExtent).toEqual({ maxNormalAdvance: 4, maxGogmaAdvance: 235, maxSkillAdvance: 4 })
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
   })
 })

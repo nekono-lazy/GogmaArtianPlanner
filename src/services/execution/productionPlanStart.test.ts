@@ -137,7 +137,7 @@ describe('Plan start effect', () => {
       expect((await currentPlan(database, fixture.plan)).status).toBe('draft')
     }))
 
-  it.each([12, 13, 14, 15, 16])('never starts or executes a calculation schema %i Plan under the current schema 17', (appSchemaVersion) =>
+  it.each([12, 13, 14, 15, 16])('never starts or executes a calculation schema %i Plan under the current schema 18', (appSchemaVersion) =>
     withDatabase(async (database) => {
       const fixture = await existingGogmaFixture()
       const legacy = structuredClone(fixture.plan)
@@ -145,7 +145,7 @@ describe('Plan start effect', () => {
       legacy.baseSnapshot.calculationContext.appSchemaVersion = appSchemaVersion
       await seed(database, { ...fixture, plan: legacy })
       const service = executionService(database, fixture.built)
-      expect(fixture.built.input.calculationContext.appSchemaVersion).toBe(17)
+      expect(fixture.built.input.calculationContext.appSchemaVersion).toBe(18)
 
       await expectRefusal(() => service.startProductionPlan(legacy.id), database, 'calculation_context_changed')
       expect((await currentPlan(database, legacy)).status).toBe('draft')
@@ -159,7 +159,7 @@ describe('Plan start effect', () => {
       )
     }))
 
-  it.each([13, 14, 15, 16])('keeps an active schema %i Plan with ExecutionHistory non-executable and exactly as persisted under schema 17', (appSchemaVersion) =>
+  it.each([13, 14, 15, 16])('keeps an active schema %i Plan with ExecutionHistory non-executable and exactly as persisted under schema 18', (appSchemaVersion) =>
     withDatabase(async (database) => {
       // A Plan the user started and advanced under schema 13 (Issue #103 Phase
       // C), 14 (Issue #129), 15 (before Phase 5-B) or 16 (before Phase 6-A):
@@ -178,7 +178,7 @@ describe('Plan start effect', () => {
       schema13.calculationContext.appSchemaVersion = appSchemaVersion
       schema13.baseSnapshot.calculationContext.appSchemaVersion = appSchemaVersion
       await database.productionPlans.put(schema13)
-      expect(fixture.built.input.calculationContext.appSchemaVersion).toBe(17)
+      expect(fixture.built.input.calculationContext.appSchemaVersion).toBe(18)
       const stepId = schema13.currentStepId as PlanStep['id']
 
       await expectRefusal(

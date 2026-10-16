@@ -232,12 +232,15 @@ describe('Phase D-0B-2 pre-registration of the D-0C conditions', () => {
     expect(envelope).toEqual({ childWallMs: 30 * 60_000, childHeapMb: 4_096, repeat: 2 })
   })
 
-  it('records the CalculationContext and the Engine version the D-0B-2 children ran with, equal to the current authorities', () => {
+  it('records the CalculationContext and the Engine version the D-0B-2 children ran with: the current Master and Engine, calculation schema 17', () => {
     const master = loadMasterData()
     if (!master.ok) throw new Error('Master data failed to load.')
+    // The children ran under calculation schema 17. Issue #278 PR-2 moved the Production schema to 18 without touching the
+    // registration, so the registered value stays 17 and a formal re-run would ask for a new registration.
     expect(MATERIALIZATION_D0C_PREREGISTRATION.calculationContext.value).toEqual({
-      gameVersion: master.data.manifest.gameVersion, masterDataVersion: master.data.manifest.dataVersion, rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
+      gameVersion: master.data.manifest.gameVersion, masterDataVersion: master.data.manifest.dataVersion, rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION, appSchemaVersion: 17,
     })
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
   })
 
   it('D-0C: enables the formal mode without changing a registered value, and keeps the d0a-v1 smoke defaults apart from the registration', () => {

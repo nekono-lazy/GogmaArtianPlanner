@@ -3,6 +3,7 @@ import type {
   RestorationBonusSet,
 } from './common'
 import type { OwnedWeapon, SkillCondition, TargetWeapon } from './entities'
+import type { ProductionPlan } from './planning'
 
 /**
  * Unordered multiset equality with duplicate counts preserved.
@@ -132,11 +133,19 @@ export function isCalculationContextCompatible(
  * Version 1..11 stay incompatible, and the exception never reaches a
  * ProductionPlan: every version 1..16 Plan fails closed under 17.
  *
+ * App schema 18 changes only how a Planner input carrying explicit conflict
+ * resolutions is planned and how the Production Plan screen's 「この候補を優先」
+ * is calculated and saved (Issue #278, `docs/PLANNER_SPEC.md` 9.6.10).
+ * Candidate Search, BuildCandidate and BuildListEntry snapshot semantics and
+ * staleness are untouched, so a version 12..17 BuildCandidate or
+ * BuildListEntry stays usable under version 18. Version 1..11 stay
+ * incompatible. ProductionPlans have their own narrow exception
+ * (`isProductionPlanCalculationCompatible()`), never this map.
+ *
  * Each exception is directional and deliberately narrow: version 1 stays
  * incompatible, it is never a general forward compatibility for future
- * versions, every other CalculationContext field must still be equal, the
- * ordinary staleness checks still apply, and ProductionPlan compatibility
- * continues to require exact four-field equality.
+ * versions, every other CalculationContext field must still be equal, and the
+ * ordinary staleness checks still apply.
  */
 const COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS: ReadonlyMap<number, readonly number[]> =
   new Map([
@@ -148,6 +157,7 @@ const COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS: ReadonlyMap<number, readonly 
     [15, [12, 13, 14]],
     [16, [12, 13, 14, 15]],
     [17, [12, 13, 14, 15, 16]],
+    [18, [12, 13, 14, 15, 16, 17]],
   ])
 
 export function isBuildResultCalculationContextCompatible(
@@ -162,6 +172,53 @@ export function isBuildResultCalculationContextCompatible(
       (
         COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS.get(current.appSchemaVersion) ?? []
       ).includes(result.appSchemaVersion))
+  )
+}
+
+/**
+ * The one explicit ProductionPlan exception: a Plan calculated under app
+ * schema 17 stays compatible with a schema 18 runtime only when nothing in it
+ * came from an explicit conflict resolution (`docs/PLANNER_SPEC.md` 9.6.10) -
+ * no repair lineage and no Conflict with a selection. Those Plans were
+ * calculated from an input without resolutions, whose output schema 18 keeps.
+ * It is a directional map entry, never a range: no other version and no future
+ * version inherits it.
+ */
+const COMPATIBLE_RESOLUTION_FREE_PRODUCTION_PLAN_APP_SCHEMA_VERSIONS: ReadonlyMap<number, readonly number[]> =
+  new Map([[18, [17]]])
+
+/**
+ * Whether a persisted ProductionPlan may be used as a current Plan under the
+ * current CalculationContext (`docs/PLANNER_SPEC.md` 9.6.10): every caller that
+ * decides whether a Plan is current - the Production Plan screen, the Plan
+ * start, the Execution runtime and Navigator, the Dashboard, the save point
+ * restore and Undo - reads this one function.
+ *
+ * Both `plan.calculationContext` and `plan.baseSnapshot.calculationContext`
+ * are judged by the same rule. Either they equal `current` exactly in all four
+ * fields, or `current.appSchemaVersion` has an explicit exception for their
+ * `appSchemaVersion` (`18 -> 17`), the other three fields are equal, the Plan
+ * carries no `conflictRepairLineage` and no Conflict records a
+ * `selectedBuildListEntryId`. The status is not read. The Plan / snapshot
+ * consistency check of `validateProductionPlan()` stays exact equality.
+ */
+export function isProductionPlanCalculationCompatible(
+  plan: Pick<ProductionPlan, 'calculationContext' | 'baseSnapshot' | 'conflictRepairLineage' | 'conflicts'>,
+  current: CalculationContext,
+): boolean {
+  const contexts = [plan.calculationContext, plan.baseSnapshot.calculationContext]
+  if (contexts.every((context) => isCalculationContextCompatible(context, current))) return true
+  const exceptions =
+    COMPATIBLE_RESOLUTION_FREE_PRODUCTION_PLAN_APP_SCHEMA_VERSIONS.get(current.appSchemaVersion) ?? []
+  return (
+    contexts.every((context) =>
+      context.gameVersion === current.gameVersion &&
+      context.masterDataVersion === current.masterDataVersion &&
+      context.rngEngineVersion === current.rngEngineVersion &&
+      exceptions.includes(context.appSchemaVersion),
+    ) &&
+    (plan.conflictRepairLineage ?? null) === null &&
+    plan.conflicts.every(({ selectedBuildListEntryId }) => selectedBuildListEntryId === null)
   )
 }
 

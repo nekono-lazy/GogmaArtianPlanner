@@ -9,7 +9,9 @@ import { completedPlannerTermination } from '../../test/fixtures/plannerTerminat
 import type { BuildListEntryReplacement } from '../buildList'
 import {
   checkBuildListEntryReplacementsCurrent,
+  checkPersistableConflictPreferenceResultShape,
   checkPersistablePlannerResultShape,
+  checkPreferredBuildListEntriesCompleted,
   checkProductionPlanBuildListEntryReferences,
   prepareFinalReplacementBuildList,
 } from './plannerResultPersistenceValidation'
@@ -144,5 +146,94 @@ describe('checkPersistablePlannerResultShape replacement pairing', () => {
       expect(checkPersistablePlannerResultShape(plan, [G], termination, replacements))
         .toMatchObject({ kind: 'result_invalid' })
     }
+  })
+})
+
+/**
+ * Issue #278 (`docs/PLANNER_SPEC.md` 9.6.6): the conflict preference result
+ * checks - the decisions honoured and recorded exactly, and every preferred
+ * Entry completed by both of the Plan's records.
+ */
+describe('conflict preference result checks', () => {
+  const preferred = entry('build-list.preferred', 'target.preferred')
+  const decision = { conflictKey: 'conflict.preference', selectedBuildListEntryId: preferred.id }
+
+  function preferencePlan(selected: boolean, completes: boolean, recorded = true): ProductionPlan {
+    const plan = createValidProductionPlan()
+    plan.selectedBuildListEntryIds = selected ? [preferred.id] : []
+    plan.conflicts = [{
+      id: decision.conflictKey,
+      kind: 'same_gogma_counter',
+      buildListEntryIds: [preferred.id, A.id],
+      reason: 'fixture',
+      recommendedBuildListEntryId: A.id,
+      selectedBuildListEntryId: recorded ? preferred.id : null,
+      resolutionNote: null,
+      checkpointParticipants: [],
+    }]
+    plan.steps = plan.steps.map((step) => ({
+      ...step,
+      executionEffects: {
+        trackedOwnedWeaponId: step.ownedWeaponId,
+        normalCreationRole: null,
+        registersTrackedWeapon: false,
+        observationBinding: null,
+        targetLinks: [],
+        compromiseLabels: [],
+        targetCompletions: completes
+          ? [{ buildListEntryId: preferred.id, targetWeaponId: preferred.targetWeaponId, ownedWeaponId: step.ownedWeaponId as never }]
+          : [],
+      },
+    }))
+    return plan
+  }
+
+  const resultOf = (plan: ProductionPlan) => ({ conflicts: plan.conflicts, warnings: [], termination: completedPlannerTermination() })
+  /** A Domain-valid Plan whose only Conflict records (or not) the decision: the shape checks read nothing else. */
+  function recordingPlan(recorded = true): ProductionPlan {
+    const plan = createValidProductionPlan()
+    plan.conflicts = preferencePlan(true, true, recorded).conflicts
+    return plan
+  }
+
+  it('accepts a Plan completing the preferred Entry by both records', () => {
+    expect(checkPreferredBuildListEntriesCompleted(preferencePlan(true, true), [decision], [preferred, A])).toBeNull()
+  })
+
+  it.each([
+    ['not secured, not completing', false, false],
+    ['secured only', true, false],
+    ['completing only', false, true],
+  ])('refuses a preferred Entry %s', (_, selected, completes) => {
+    expect(checkPreferredBuildListEntriesCompleted(preferencePlan(selected, completes), [decision], [preferred, A]))
+      .toMatchObject({ kind: 'result_invalid' })
+  })
+
+  it('reads a preferred Entry missing from the Build List as a state change', () => {
+    expect(checkPreferredBuildListEntriesCompleted(preferencePlan(true, true), [decision], [A]))
+      .toMatchObject({ kind: 'state_changed' })
+  })
+
+  it('refuses decisions the Plan does not record as its selections', () => {
+    expect(checkPersistableConflictPreferenceResultShape(recordingPlan(), resultOf(recordingPlan()), [decision])).toBeNull()
+    const plan = recordingPlan(false)
+    expect(checkPersistableConflictPreferenceResultShape(plan, resultOf(plan), [decision]))
+      .toMatchObject({ kind: 'result_invalid' })
+  })
+
+  it('refuses an invalid_conflict_resolution warning even with a matching record', () => {
+    const plan = recordingPlan()
+    expect(checkPersistableConflictPreferenceResultShape(plan, {
+      ...resultOf(plan),
+      warnings: [{ kind: 'invalid_conflict_resolution', message: 'refused' }],
+    }, [decision])).toMatchObject({ kind: 'result_invalid' })
+  })
+
+  it('refuses result Conflicts that differ from the Plan Conflicts field by field', () => {
+    const plan = recordingPlan()
+    expect(checkPersistableConflictPreferenceResultShape(plan, {
+      ...resultOf(plan),
+      conflicts: plan.conflicts.map((conflict) => ({ ...conflict, recommendedBuildListEntryId: preferred.id })),
+    }, [decision])).toMatchObject({ kind: 'result_invalid' })
   })
 })

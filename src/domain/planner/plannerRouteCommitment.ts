@@ -127,6 +127,42 @@ function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
+/**
+ * The Entries the applied explicit resolutions of this run prefer: the selected
+ * Entry of every initial conflict an explicit `PlannerConflictResolution` was
+ * applied to (`docs/PLANNER_SPEC.md` 9.6.4). Empty for an input without
+ * resolutions, so nothing below changes for it.
+ */
+export function explicitlyPreferredBuildListEntryIds(
+  detection: PlannerConflictDetectionResult,
+): ReadonlySet<BuildListEntryId> {
+  return new Set(
+    detection.conflicts.flatMap(({ selectedBuildListEntryId }) =>
+      selectedBuildListEntryId === null ? [] : [selectedBuildListEntryId],
+    ),
+  )
+}
+
+/**
+ * The ranking route commitment's provisional outcomes and the scheduler's
+ * deadlock / stall drop use (`docs/PLANNER_SPEC.md` 9.6.4): an Entry an applied
+ * explicit resolution prefers ranks before every Entry none prefers, and inside
+ * each group the unchanged `R` (`comparePlannerEntryPriority()`) decides. With
+ * no applied resolution every Entry is in the same group, so this is exactly
+ * `R`. It never changes `recommendedBuildListEntryId`, which `R` alone derives.
+ */
+export function comparePlannerCommitmentPriority(
+  left: BuildListEntry,
+  right: BuildListEntry,
+  preferred: ReadonlySet<BuildListEntryId>,
+  planningTargetsById: ReadonlyMap<TargetWeaponId, TargetWeapon>,
+  initialRelevantEntries: readonly BuildListEntry[],
+): number {
+  const leftPreferred = preferred.has(left.id)
+  if (leftPreferred !== preferred.has(right.id)) return leftPreferred ? -1 : 1
+  return comparePlannerEntryPriority(left, right, planningTargetsById, initialRelevantEntries)
+}
+
 function remainingUnits(
   state: PlannerSearchState,
   entry: BuildListEntry,
@@ -169,7 +205,12 @@ function remainingHoldingUnits(
  * same source weapon, so the source check still covers the whole Route:
  *
  * - an applied explicit resolution blocks one of them
- *   (`isUnitBlockedByConflictResolution()`, the existing semantics)
+ *   (`isUnitBlockedByConflictResolution()`, the existing semantics), or the
+ *   Entry is a non-selected participant of a conflict an applied explicit
+ *   resolution decided: a decision is Route-level, so a participant the
+ *   resolution did not select runs no unit of its Route even where one of its
+ *   units is the selected Entry's shareable action (`docs/PLANNER_SPEC.md`
+ *   9.6.2)
  * - the Counter already passed one of them
  * - its source weapon is gone, protected, or superseded
  *   (`plannerRouteUnitSourceRejection()`, the precondition the unit meets
@@ -183,6 +224,13 @@ export function plannerRouteCommitmentRejection(
   const detection = context.initialConflictDetection
   const conflictsById = new Map(detection.conflicts.map((conflict) => [conflict.id, conflict]))
   const holdingUnits = remainingHoldingUnits(state, entry, context.allLanePlans)
+  const isSelectedEntryStillRelevant = (entryId: BuildListEntryId) => {
+    const selected = context.entriesById.get(entryId)
+    return (
+      selected !== undefined &&
+      entryIsRelevantForState(state, selected, context.checkpointRequirements)
+    )
+  }
   for (const unit of holdingUnits) {
     if (
       isUnitBlockedByConflictResolution(
@@ -190,13 +238,7 @@ export function plannerRouteCommitmentRejection(
         conflictsById,
         detection.conflictIdsByUnitKey,
         detection.selectedPhysicalActionKeysByConflictId,
-        (entryId) => {
-          const selected = context.entriesById.get(entryId)
-          return (
-            selected !== undefined &&
-            entryIsRelevantForState(state, selected, context.checkpointRequirements)
-          )
-        },
+        isSelectedEntryStillRelevant,
       )
     ) {
       return createPlannerSearchRejection(
@@ -206,6 +248,28 @@ export function plannerRouteCommitmentRejection(
         'A valid local conflict resolution selected another BuildListEntry.',
       )
     }
+  }
+  const excludingConflict = detection.conflicts.find(
+    ({ buildListEntryIds, selectedBuildListEntryId }) =>
+      selectedBuildListEntryId !== null &&
+      selectedBuildListEntryId !== entry.id &&
+      buildListEntryIds.includes(entry.id) &&
+      isSelectedEntryStillRelevant(selectedBuildListEntryId),
+  )
+  if (excludingConflict !== undefined) {
+    const unitInConflict = holdingUnits.find((unit) =>
+      (detection.conflictIdsByUnitKey.get(plannerRouteUnitKey(unit)) ?? []).includes(excludingConflict.id),
+    )
+    const actionType =
+      unitInConflict?.operation.type ??
+      remainingUnits(state, entry, context.allLanePlans)[0]?.operation.type ??
+      'reserve_weapon'
+    return createPlannerSearchRejection(
+      entry.id,
+      actionType,
+      'conflict_resolution_not_selected',
+      'A valid local conflict resolution selected another BuildListEntry.',
+    )
   }
   for (const unit of holdingUnits) {
     if (unit.counterStream === null || unit.counterBefore === null) continue
@@ -359,6 +423,24 @@ export function createPlannerRouteCommitment(
       message: `Conflict resolutions select different BuildListEntries (${[...contradictory[1]].sort(compareStableStrings).join(', ')}) of TargetWeapon '${contradictory[0]}'.`,
     }
   }
+  // An Entry one applied resolution prefers while another applied resolution
+  // excludes it makes the whole set inconsistent (`docs/PLANNER_SPEC.md` 9.6.3
+  // rule 5 / 9.6.4): the run never picks one of the two decisions.
+  const preferred = explicitlyPreferredBuildListEntryIds(context.initialConflictDetection)
+  const inconsistent = context.initialConflictDetection.conflicts
+    .filter(({ selectedBuildListEntryId }) => selectedBuildListEntryId !== null)
+    .flatMap(({ id, buildListEntryIds, selectedBuildListEntryId }) =>
+      buildListEntryIds
+        .filter((entryId) => entryId !== selectedBuildListEntryId && preferred.has(entryId))
+        .map((entryId) => ({ entryId, conflictId: id })),
+    )
+    .sort((left, right) => compareStableStrings(left.entryId, right.entryId))[0]
+  if (inconsistent) {
+    return {
+      status: 'invalid',
+      message: `Conflict resolutions are inconsistent: BuildListEntry '${inconsistent.entryId}' is preferred by one resolution and not selected by the resolution of conflict '${inconsistent.conflictId}'.`,
+    }
+  }
 
   const records = new Map<BuildListEntryId, PlannerRouteCommitmentRecord>()
   const rejections: PlannerSearchRejection[] = []
@@ -384,10 +466,14 @@ export function createPlannerRouteCommitment(
     candidates.push(entry)
   }
 
+  // An explicitly preferred Entry is kept before every Entry no resolution
+  // prefers, so preferring A never lets an undecided conflict drop A while B
+  // is dropped too (`docs/PLANNER_SPEC.md` 9.6.4). Without resolutions this is R.
   const rank = (left: BuildListEntry, right: BuildListEntry) =>
-    comparePlannerEntryPriority(
+    comparePlannerCommitmentPriority(
       left,
       right,
+      preferred,
       context.planningTargetsById,
       context.initialRelevantEntries,
     )

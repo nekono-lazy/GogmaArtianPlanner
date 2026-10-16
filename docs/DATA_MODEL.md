@@ -378,14 +378,14 @@ Dexie `DATABASE_SCHEMA_VERSION` を10（14.2）、`ExportRoot.schemaVersion` を
 `AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、
 Master dataVersion（4）は変更しない。
 
-現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` **17** は、作成リストの通常「生産計画を作成」と実行中Planの再計画Previewを
+version 17（Issue #136 / #101 Phase 6-A）の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` **17** は、作成リストの通常「生産計画を作成」と実行中Planの再計画Previewを
 legacy B8 `createConstrainedPlan()` からordinary `createPlan()` へ切り替えた（Issue #136 / #101 Phase 6-A、PLANNER_SPEC 9.2.7 /
 9.2.19.15）。両経路の入力は `conflictResolutions = []` なので通常は同じordinary resultになるが、B8固有の
 `maxPlannerReruns`（4）は最初のrun内のruntime-unsupported retryも数えていた。ordinary Plannerにはこのbudgetが無いため、
 4 full runを超えるretryが必要な入力では、旧経路は `plan = null` + `max_planner_reruns_reached` で止まり、新経路はPlanを
 生成し得る。永続ProductionPlanは生成経路を記録しないため、version 16以前のPlanを区別できない。
 
-| artifact | version 17 runtimeでの扱い |
+| artifact | version 17 runtimeでの扱い（履歴） |
 | --- | --- |
 | ProductionPlan version 1..16（draft / activeを問わない） | 非互換。`calculation_context_changed` でfail closedする。exact persisted内容の表示は維持し、read migrationやversion書き換えはしない。Planの互換判定は4 field完全一致で、Plan向けの例外は無い |
 | BuildCandidate / BuildListEntry version 12 / 13 / 14 / 15 / 16 | 明示的なbuild-result例外 `17 -> [12, 13, 14, 15, 16]` により互換。gameVersion、masterDataVersion、rngEngineVersionの一致と通常のstaleness判定は引き続き必要 |
@@ -396,13 +396,13 @@ legacy B8 `createConstrainedPlan()` からordinary `createPlan()` へ切り替�
 `RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、Master dataVersion（4）は変更せず、
 migrationも追加しない。
 
-Issue #278（通常Plannerの競合解決の簡素化、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.10）の正式仕様化（PR-1）はversionを変えない。
-生産計画画面の「この候補を優先」を通常Plannerの再計算へ切り替えるPR-2で、明示決定を持つPlannerInputから保存されるPlan（代替Routeに
-よる置換が無いこと、明示的に優先されたEntryの保護と完成条件、判断不要になった競合を残さないこと、lineage `null`）が変わるため、
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **18** へ上げる予定である。明示決定を持たない入力（`conflictResolutions = []`）の出力は
-変わらない（PR-2のparity testで固定する）。
+現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` は **18** である。Issue #278（通常Plannerの競合解決の簡素化、[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+9.6.10）の正式仕様化（PR-1）はversionを変えず、生産計画画面の「この候補を優先」を通常Plannerの再計算へ切り替えたPR-2で、明示決定を
+持つPlannerInputから保存されるPlan（代替Routeによる置換が無いこと、明示的に優先されたEntryの保護と完成条件、判断不要になった競合を
+残さないこと、lineage `null`）が変わるため18へ上げた。明示決定を持たない入力（`conflictResolutions = []`）の出力は変わらないことを
+PR-2のparity test（schema 17のcodeで記録したdigestとの比較）で固定した。
 
-| artifact | version 18 runtimeでの扱い（予定） |
+| artifact | version 18 runtimeでの扱い |
 | --- | --- |
 | ProductionPlan version 17で、`conflictRepairLineage === null` かつ全 `conflicts[].selectedBuildListEntryId === null`（Plan本体と `baseSnapshot` の両方がversion 17、他の3 fieldは現在と一致） | ProductionPlanで初めての限定互換例外 `18 -> 17` により互換。status（draft / active / stale / completed / abandoned）を問わない。version 17のcodeでこの形を保存するのは明示決定を持たない入力（作成リスト画面の通常作成・補助導線、全体最適化の採用、再計画の採用）だけである |
 | ProductionPlan version 17で、上記を満たさないもの（Planner Alternative actual repairで保存したDraftとそれを開始したPlan、およびversion 17のcodeが保存しない形） | 非互換。`calculation_context_changed` でfail closedし、exact persisted内容の表示を維持する。read migration・version書き換え・lineageの削除はしない |
@@ -410,8 +410,8 @@ Issue #278（通常Plannerの競合解決の簡素化、[PLANNER_SPEC.md](./PLAN
 | BuildCandidate / BuildListEntry version 12..17 | 明示的なbuild-result例外 `18 -> [12, 13, 14, 15, 16, 17]` により互換（version 1..11は非互換のまま） |
 
 Planの例外は明示的な `18 -> 17` だけであり、範囲判定や将来versionへの推移的適用はしない。判定は既存の永続field
-（`conflictRepairLineage`、`conflicts[].selectedBuildListEntryId`）だけを読み、生成経路を推測しない。判定は1つのDomain関数に集約し、
-Plan互換性を判定するすべての箇所がそれを使う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.10）。永続形状は変えないので、Dexie 10 /
+（`conflictRepairLineage`、`conflicts[].selectedBuildListEntryId`）だけを読み、生成経路を推測しない。判定は1つのDomain関数
+`isProductionPlanCalculationCompatible()` に集約し、Plan互換性を判定するすべての箇所がそれを使う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.10）。永続形状は変えないので、Dexie 10 /
 Export 13のままmigrationを追加しない。
 
 ---

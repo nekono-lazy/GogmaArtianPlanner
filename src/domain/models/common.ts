@@ -351,7 +351,31 @@ export interface KnownValue<T> {
 // 10, `ExportRoot.schemaVersion` stays 13, and `AppSettings.schemaVersion`,
 // `RngState.schemaVersion`, `PRODUCTION_RNG_ENGINE_VERSION` and the Master
 // `dataVersion` are unchanged.
-export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 17
+//
+// Version 18 switches the Production Plan screen's conflict resolution from the
+// Planner Alternative repair to the ordinary Planner (Issue #278,
+// `docs/PLANNER_SPEC.md` 9.6): 「この候補を優先」 re-runs `createPlan()` over a
+// fresh input with the explicit decision set, route commitment keeps an
+// explicitly preferred Entry before the others, a decision is Route-level and
+// applies to initial conflicts only, a conflict whose remaining participants
+// are one or none is no longer reported, and a preferred Entry that is not
+// completed is never saved. For an input with explicit resolutions the Plan
+// can therefore differ, so version 1..16 Plans and every version 17 Plan that
+// carries a repair lineage or a selected Conflict fail closed with
+// `calculation_context_changed`. An input without resolutions - the Build
+// List's ordinary run, the Build List optimization's final verification and
+// the replan Preview - plans exactly as under 17, so a version 17 Plan with
+// `conflictRepairLineage === null` and no selected Conflict stays compatible
+// through the one explicit ProductionPlan exception `18 -> 17`
+// (`isProductionPlanCalculationCompatible()`), in every status. Candidate
+// Search and the BuildCandidate / BuildListEntry snapshot semantics do not
+// change, so the explicit build-result exception `18 -> [12, 13, 14, 15, 16,
+// 17]` keeps version 12..17 Candidates and Build List Entries usable; version
+// 1..11 stay incompatible. No persisted shape changes, so
+// `DATABASE_SCHEMA_VERSION` stays 10, `ExportRoot.schemaVersion` stays 13, and
+// `AppSettings.schemaVersion`, `RngState.schemaVersion`,
+// `PRODUCTION_RNG_ENGINE_VERSION` and the Master `dataVersion` are unchanged.
+export const CURRENT_CALCULATION_APP_SCHEMA_VERSION = 18
 
 export interface CalculationContext {
   gameVersion: string
