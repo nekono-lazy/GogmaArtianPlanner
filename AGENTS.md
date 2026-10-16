@@ -1000,6 +1000,10 @@ required materials can differ for the same PlannerInput. That observable Planner
 never a Plan exception). No persisted shape changed, so `DATABASE_SCHEMA_VERSION` stays 10 and `ExportRoot.schemaVersion` 13
 with no migration, and `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2, `PRODUCTION_RNG_ENGINE_VERSION`
 `production-rng:c5-e7` and Master `dataVersion` 4 are unchanged.
+Issue #278 PR-1 (docs-only; `docs/PLANNER_SPEC.md` 9.6.10) moved no version. It fixed that the PR-2 switching the conflict
+resolution to the ordinary Planner (no Route replacement, explicitly preferred Entries protected, unneeded conflicts dropped,
+lineage `null`) moves `CURRENT_CALCULATION_APP_SCHEMA_VERSION` to 18 with the build-result exception `18 -> [12..17]`; until
+that PR, 17 stays current.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -4273,8 +4277,9 @@ non-normative design record; where it differs, the formal specification wins.
   adoption replace the Entries and save the Draft in one transaction. No second 「全体最適化を試す」
   button. Shortest is never claimed
 - The internal Planner contract (Route commitment + deterministic scheduling), Planner Alternative,
-  replan, Execution and history semantics are unchanged and not removed. Never add an automatic
-  fallback to the ordinary Planner
+  replan, Execution and history semantics are unchanged and not removed by Issue #260. Never add an automatic
+  fallback to the ordinary Planner. (Issue #278 later takes the Planner Alternative out of the conflict UI while
+  keeping what the GA shares; see "Ordinary Planner Conflict Resolution")
 - Planning method selection (U1, decided; `docs/PLANNER_SPEC.md` 17.2, implemented in PR-6B1 / PR-6C): one primary
   「生産計画を作成」. The method follows the valid Entry count of `validatePlannerInput()` over the fresh
   `createPlannerInput()` input - never the raw / filtered / display counts or the `maxPlanSteps`
@@ -4478,6 +4483,58 @@ Active Plan existence is not a pure Planner input. Planner calculates a new
 Draft without merging an existing Active Plan into search state. Active Plan
 replacement, abandonment, recalculation, and the single-active constraint are
 Application / Persistence responsibilities.
+
+---
+
+## Ordinary Planner Conflict Resolution (Issue #278)
+
+`docs/PLANNER_SPEC.md` 9.6 (with `docs/REQUIREMENTS.md` 23.2, `docs/UI_FLOW.md` 11.6, `docs/DATA_MODEL.md` 11.1.1 /
+11.8) is the formal **target** contract fixed by Issue #278 PR-1 (docs-only). It is **not implemented**: the
+Production Plan screen still runs the Planner Alternative (`docs/PLANNER_SPEC.md` 9.2.19: 「比較する」 what-if,
+「この候補を優先」 actual repair) until PR-2 switches it. Do not implement the target piecemeal, and do not read the
+Planner Alternative sections as the target.
+
+- Responsibilities: rebuilding several Targets' Routes to avoid conflicts belongs to the Build List global
+  optimization (17章), which is unchanged. The ordinary Planner's conflict resolution only lets the user pick which
+  registered Route this Plan prefers. It never searches an alternative Route for the non-selected Entry, never
+  composes scenarios, never generates or replaces a BuildListEntry, never writes repair lineage, and 「比較する」 is
+  abolished. Conflict detection (physical action sharing, skippable units, Issue #129, checkpoint pins) is unchanged
+- A decision `(X, A)` is Route-level: `A` stays a creation target, every other participant of `X` is not executed in
+  this Plan (route commitment `conflict_resolution_not_selected`) and stays in the Build List untouched. Only the
+  user's explicit decisions are recorded as `PlanConflict.selectedBuildListEntryId`; the recommendation, the
+  provisional outcome and derived selections never are. Checkpoint conflicts keep 9.5.1 (never resolved by picking)
+- The explicit set (9.6.3, one pure Domain authority): carry over the displayed Draft's earlier decisions only when
+  they still match a current initial conflict with a valid participant (never re-mapped or guessed); the same
+  `conflictKey` is replaced; an earlier decision whose selected Entry the new decision excludes, or that excluded the
+  newly preferred Entry, is superseded (latest wins); an inconsistent set fails closed; anything dropped or
+  superseded is shown and confirmed before the run, never silent
+- Recalculation (9.6.4): fresh `createPlannerInput()` + the explicit set, `conflictResolutionPlannerOptions(表示中Plan)`,
+  ordinary `createPlan()` only. PR-2 adds to route commitment that an explicitly preferred Entry outranks
+  non-preferred ones in provisional outcomes and stall drops (recommendation stays `R`), and that a resolution
+  applies only to an initial conflict. With `conflictResolutions = []` (Build List creation, GA final verification,
+  replan Preview) nothing changes - pin it by parity tests
+- Result conflicts (9.6.5): a conflict without an explicit decision, without checkpoint participants, that has at
+  most one participant not excluded by an explicit decision is dropped as no longer needed; others stay pending.
+  Never "remove the resolved ones from the old list"
+- Save (9.6.6): the ordinary save boundary plus refusing `invalid_conflict_resolution`, checking the decisions are
+  recorded and `PlannerResult.conflicts` equals `plan.conflicts`, and the source Draft CAS (`expectedSourceDraftId`).
+  No Build List write, so no Plan-breaking approval and no save point choice; lineage is always `null`
+- Display (UI_FLOW 11.6): Japanese reasons from `PlanConflict.kind` only (復元ボーナス / スキル / 通常アーティア / 所持武器),
+  never `reason` / `resolutionNote` text, BuildListEntry IDs, Conflict IDs or absolute Counter values in normal UI
+  (Debug Mode may show them separately); participants by Target name with no ID fallback; created / not-created
+  Targets and pending conflicts counted separately. Use `ui-ux-pro-max` for the Presentation design
+- `ProductionPlan.conflictRepairLineage` stays a persisted field (validator, migrations, Export / Import unchanged);
+  no new writer after PR-2
+- Version: PR-1 moves nothing. PR-2 moves `CURRENT_CALCULATION_APP_SCHEMA_VERSION` to **18** (build-result exception
+  `18 -> [12, 13, 14, 15, 16, 17]`, no Plan exception; every version 1..17 Plan, GA-adopted Drafts and active Plans
+  included, fails closed with `calculation_context_changed`); Dexie 10 / Export 13 unchanged, no migration
+- Shared code (9.6.11): never delete what the GA uses because of an `alternative` name - the Search Domain Planner
+  Alternative frontier / Candidate factory / validation, `derivePlannerAlternativeReservation()`, the replacement
+  deterministic materializer / materialization errors / search origin, `BuildListEntryReplacement`, the shared
+  persistence helpers and the source Draft CAS. Cleanup (PR-4+) re-audits the import graph and updates the GA /
+  shape-constrained isolation tests without weakening them
+- PR split (9.6.12): PR-2 switches calculation, save, routing and removes 「比較する」 in one PR (never one without the
+  other); PR-3 the conflict display; PR-4+ the dead Planner Alternative paths
 
 ---
 

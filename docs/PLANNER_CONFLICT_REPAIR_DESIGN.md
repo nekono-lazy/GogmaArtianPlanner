@@ -45,6 +45,11 @@ Production behavior:     Phase 5-Bで切替済み（生産計画画面の「比�
                          inspectPlannerAlternativeRepairSave() / savePlannerAlternativeRepair() だけである
 schema / version:        Phase 5-Bで更新（calculation 16、Dexie 10、Export 13。10章）。Phase 6-Aでcalculationだけ17へ更新
                          （Dexie 10、Export 13は不変）。Phase 6-B1 / 6-B2a / 6-B2bはどのversionも変えない
+Issue #278:              通常Plannerの競合解決を、登録済みRouteの優先選択と通常Plannerの再計算だけへ簡素化する正式仕様を
+                         PLANNER_SPEC 9.6で確定した（2026-10-16、PR-1 docs-only）。切替後、生産計画画面は本設計の
+                         「比較する」what-ifとactual repair（代替Route探索、scenario composition、generated Entryによる置換、
+                         repair lineage）を使わず、Phase 7（#122 Presentation）は行わない。Planner Alternative Searchの基盤の
+                         うち全体最適化と共有する部分は残す（PLANNER_SPEC 9.6.11）。本文書は設計の記録として残す
 ```
 
 この文書はtask-specificな **設計記録** である。背景、方式選定の理由、後続PRの分割を記録する。

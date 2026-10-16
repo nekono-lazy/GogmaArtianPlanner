@@ -396,6 +396,14 @@ legacy B8 `createConstrainedPlan()` からordinary `createPlan()` へ切り替�
 `RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、Master dataVersion（4）は変更せず、
 migrationも追加しない。
 
+Issue #278（通常Plannerの競合解決の簡素化、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.10）の正式仕様化（PR-1）はversionを変えない。
+生産計画画面の「この候補を優先」を通常Plannerの再計算へ切り替えるPR-2で、同じPlannerInputと決定から保存されるPlan（代替Routeに
+よる置換が無いこと、明示的に優先されたEntryの保護、判断不要になった競合を残さないこと、lineage `null`）が変わるため、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **18** へ上げる予定である。version 1..17のProductionPlanは下書き・実行中を問わず
+`calculation_context_changed` でfail closedし、BuildCandidate / BuildListEntryは明示的なbuild-result例外 `18 -> [12, 13, 14, 15, 16, 17]`
+で互換とする（version 1..11は非互換のまま、ProductionPlanへは適用しない）。永続形状は変えないので、Dexie 10 / Export 13のまま
+migrationを追加しない。
+
 ---
 
 ## 4. Enum
@@ -1847,6 +1855,17 @@ export type PlannerConflictRepairOutcomeStatus =
   そのまま持つ。what-ifは読むだけで保存しない。`draft -> active`、Execution中のPlan更新、ゲーム内セーブ地点 / Undo snapshot、
   Undoはこの値をそのまま保持する
 
+**Issue #278（通常Plannerの競合解決の簡素化、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.8、目標仕様）。**
+
+- 切替（PLANNER_SPEC 9.6.12のPR-2）以降、「この候補を優先」は代替Routeを探索せず、lineageを生成・継続しない。保存する新Draftは
+  常に `conflictRepairLineage = null` であり、表示中Draftのlineageを読まない。以前の決定の引き継ぎは
+  `PlanConflict.selectedBuildListEntryId`（11.8）だけで行う。切替後、非nullのlineageを書く経路は無くなる
+- fieldは永続shapeに残す。型、`validatePlannerConflictRepairLineage()` による構造validation、Dexie v9 -> v10とExport schema
+  12 -> 13の `null` 補完、Export / Importでの保持を変えない。過去のPlanのlineageを削除・変換・推測で補完しない。fieldの削除は
+  Dexie / Exportのversionとmigrationを伴う別の判断であり、Issue #278では行わない
+- lineageを持つ過去のPlan（version 17以前）は、PR-2のcalculation version 18により他のversion 17以前のPlanと同じく
+  `calculation_context_changed` となり、内容の表示だけができる（PLANNER_SPEC 9.6.10）。lineageを通常UIの判断材料にしない
+
 ## 11.2 PlanningInputSnapshot
 
 ```ts
@@ -2287,12 +2306,24 @@ initial conflict preflightで `PlannerConflictResolution.conflictKey` を現在�
 再構築し、1件でも対応付けできない場合はfail closedとする。他のユーザー明示
 resolutionを黙って捨ててはならない。
 
-Issue #136 / #101の正式仕様（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19。Search Domain APIだけPhase 1まで
-実装済みで、本段落のConflict保存規則は未実装）では、
+Issue #136 / #101の正式仕様（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19。Phase 5-Bで実装済み）では、
 「この候補を優先」はRoute単位の決定になる。保存するPlanの `conflicts` は最終full runが最新状態から検出したもの
 だけであり、旧Planの一覧から解決済みを消す方式をauthorityにしない。代替を採用できなかった無効化Entryが残る場合、
 participantがfixed Entryと今回の無効化Entryだけからなる全Conflictに `selectedBuildListEntryId = fixed Entry` を
 記録する（決定の展開）。`PlanConflict` の型と `id` の生成規則は変えない。
+
+Issue #278の目標仕様（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、切替はPR-2）では、`PlanConflict` の型と `id` の生成規則を
+変えずに、意味を次のとおりにする。
+
+- `selectedBuildListEntryId` はユーザーの明示決定（今回の選択と、表示中Draftから引き継いだ有効な以前の選択）だけを表す。
+  推奨、暫定帰結、上記の「決定の展開」のような導出した選択を記録しない
+- 明示決定で実行しなかったEntryが参加するだけで判断不要になった競合（選択済みcheckpointが関係せず、明示決定で除外されて
+  いない参加者が1件以下のもの）は、保存するPlanの `conflicts` に含めない。判断待ち（`selectedBuildListEntryId = null`）は、
+  まだ2件以上の参加者が作成候補として残る競合だけである
+- `reason` と `resolutionNote` は内部向けの診断文字列（英文。Counter位置・NormalArtianCounter ID・OwnedWeapon IDを含み得る）
+  であり、通常UIに表示せず、文字列を解析して意味を推測しない。通常UIの説明は `kind` から作る（[UI_FLOW.md](./UI_FLOW.md) 11.6）
+- 永続 `PlanConflict` はCounter位置、NormalArtianCounter ID、排他使用するOwnedWeapon ID、participantごとの操作種別を
+  typed fieldとして持たない。これらを永続shapeへ追加しない（必要な具体説明はcurrent interaction preparationのprojectionで扱う）
 
 同じ論理競合は再Plannerでも同じID、位置・参加Entry・対象資源が変われば別IDになる。
 第9の競合適用時はconflictKeyが再検出した競合と一致し、selectedBuildListEntryIdがその
@@ -2781,8 +2812,14 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   （`savePlannerResult()`）には適用しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）
 - `plannerResult.conflicts` と `plan.conflicts` は順序を含めたPlanConflict全体の構造一致を要求し、IDだけの比較にしない。
   不一致のartifactは `planner_result_invalid` で何も保存しない
+- Issue #278の目標仕様（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.6、切替はPR-2）では、「この候補を優先」の結果は通常Planner resultで
+  あり、上記の通常保存の境界（BuildListEntryを書き換えない、`conflictRepairLineage === null`、承認不要）に、
+  `invalid_conflict_resolution` warningの拒否、今回の決定と引き継いだ決定が選択済みとして記録されていることの確認、
+  `plannerResult.conflicts` と `plan.conflicts` の構造一致、上記と同じsource DraftのCAS（`expectedSourceDraftId`）を加えて
+  1 transactionで保存する。作成リスト画面からの通常作成の `savePlannerResult()` の契約は変えない。切替後、generated Entryを
+  含む「この候補を優先」の保存（上記のPlanner Alternative actual repair）は使われない
 - 作成リストの全体最適化の採用（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.11、Issue #260。PersistenceはPR-6Aで実装済み、
-  画面からはまだ呼ばれない）は、全体最適化専用の保存API（`PlannerResultPersistenceService.inspectBuildListOptimizationAdoptionSave()` /
+  作成リスト画面へはPR-6Cで接続済み）は、全体最適化専用の保存API（`PlannerResultPersistenceService.inspectBuildListOptimizationAdoptionSave()` /
   `saveBuildListOptimizationAdoption()`）で同じtransaction境界を使う。artifactを通常の `PlannerResult` 保存やrepair
   artifactへ変換しない。既存の共通保存検証（termination、Plan / Entryのvalidation、`conflictRepairLineage === null`、
   置換後Build Listの構築とcardinality、generated Entry freshnessの再計算、Plan参照）の契約を変えずに呼び、全体最適化固有の

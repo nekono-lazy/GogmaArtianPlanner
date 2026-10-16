@@ -1025,9 +1025,13 @@ B8-AでPlanner-driven constrained re-searchの正式契約を確定した。Plan
 定義する。実装はB8-B1以降で行う。
 
 Issue #136 / #101で、代替Ideal Routeの生成器を5.6.8のPlanner Alternative Search（resource-aware
-alternative Ideal search）へ段階的に置き換える契約を確定した（仕様確定・未実装）。「Planner制約を受け取って
+alternative Ideal search）へ段階的に置き換える契約を確定した（Phase 5-Bで生産計画画面の競合操作へ接続済み）。「Planner制約を受け取って
 候補を順次提示できる形」は、fixed Routeのresource reservationと除外Route keyを受け取る5.6.8のAPIで具体化する。
 上記4項目の禁止事項は変わらない。
+
+Issue #278（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、目標仕様）で、通常Plannerの競合解決は代替Routeの再検索を行わず、
+登録済みRouteのどれを優先するかの選択だけにする。複数TargetのRouteを組み直して競合を避ける仕事は作成リストの全体最適化
+（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章）が担う。Candidate Searchの意味と本節の禁止事項は変わらない。
 
 ### 5.6.6 `resultFilter` の廃止
 
@@ -1393,6 +1397,13 @@ Plannerからの呼び出しはPlanner Domainのkernel（[PLANNER_SPEC.md](./PLA
 
 Plannerが競合を解決するための代替Ideal Routeを求める、Planner専用のSearch Domain APIである。5.6.7の
 constrained enumerationを段階的に置き換える（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19.14）。
+
+**Issue #278（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、目標仕様）。** 通常Plannerの競合解決は代替Routeを探索しない方式へ
+切り替える。切替後、本節のentry point `visitPlannerAlternativeCandidates()` のProduction consumer（Planner Alternative kernel）は
+無くなるが、本節のfrontier・section・route registration・Candidate factory・型・input validation・reservationの正規化は
+形状制約付きRoute探索（5.6.9、作成リストの全体最適化のStage D）が共有するので残す。本節の探索semanticsは変えない。
+entry pointの扱いは、Global Assignment Research（Issue #154）とisolation testのconsumerを含めて、PLANNER_SPEC 9.6.11 / 9.6.12の
+削除PRで再監査して決める。
 
 #### 境界
 
