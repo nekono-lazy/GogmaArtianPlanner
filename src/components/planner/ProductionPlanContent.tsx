@@ -279,7 +279,9 @@ export function ProductionPlanContent({
                   <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
                     {rejected.detail}
                   </Typography>
-                  {(!preview || debugMode) && (
+                  {/* An internal ID is Debug Mode only, in the persisted view
+                      too (`docs/UI_FLOW.md` 11.6.4). */}
+                  {debugMode && (
                     <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
                       BuildListEntry ID: {rejected.buildListEntryId}
                     </Typography>

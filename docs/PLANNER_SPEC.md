@@ -2084,7 +2084,7 @@ RouteOperation別のRNG位置は実際に消費するstreamで判定する。`co
 
 ### 9.6 通常Plannerの競合解決（優先候補の選択、Issue #278）
 
-実装状態: **計算・保存経路は実装済み（Issue #278 PR-2）。競合画面の表示（[UI_FLOW.md](./UI_FLOW.md) 11.6）はPR-3で行う**。
+実装状態: **計算・保存経路は実装済み（Issue #278 PR-2）。競合画面の表示（[UI_FLOW.md](./UI_FLOW.md) 11.6）も実装済み（PR-3）**。
 本節はIssue #278のPR-1（docs-only）で確定した正式契約であり、PR-2で生産計画画面の「この候補を優先」を本節の方式
 （fresh input + 明示決定集合 + 通常Planner `createPlan()` + 追加検査を持つ保存）へ切り替え、「比較する」を撤去した。
 Phase 5-B以降のPlanner Alternative（9.2.19。「比較する」what-if、「この候補を優先」actual repair）はProductionの
@@ -2416,7 +2416,7 @@ current initial Conflictには現れない。
 | 競合の参加者 | `PlanConflict.buildListEntryIds` → current persisted BuildListEntryの `targetWeaponId` → current TargetWeaponの表示名 |
 | 推奨 / 選択 | `recommendedBuildListEntryId`（参考表示）/ `selectedBuildListEntryId`（明示決定） |
 | checkpoint関与 | current preparationの `checkpointParticipants` と、表示中Draftの以前の決定から9.6.3の関数で求めた除外Entry（有効なcheckpoint参加者の判定）。保存済みの値は表示だけに使う |
-| 選択可否と理由 | current preparation（9.2.4.14）と9.6.3の関数。除外理由はtypedな理由code（validationのwarning kind等）で示す。現在のprojectionの英文 `reason` は通常表示に出さない（PR-3でtyped化する） |
+| 選択可否と理由 | current preparation（9.2.4.14）と9.6.3の関数。除外理由はtypedな理由code（validationのwarning kind等）で示す。projectionの英文 `reason` は通常表示に出さない（PR-3で除外Entryごとのwarning kindを `PlannerInteractionExcludedEntry.kind` としてtyped化した。英文 `reason` はDebug Modeの診断用に残る） |
 | 動的Conflictか、入力が変わったか | current initial Conflictに無い保存済みConflictについて、表示中Planの `baseSnapshot`（`initialExecutionState`・`targetWeaponsHash`・`buildListEntriesHash`）とCalculationContextが現在の永続状態と一致するか（9.6.7） |
 | 優先したEntryの未完成の原因 | 9.6.6のPlanner Domainのtypedな原因（runtime-only） |
 | このPlanで作成する目標武器 | `steps[].executionEffects.targetCompletions`（[UI_FLOW.md](./UI_FLOW.md) 11.0の完成予定と同じ） |
@@ -2612,6 +2612,13 @@ Global Assignment Researchの凍結記録・golden・parity hashも、Research�
 を読んでいたfixtureだけを固定した。Researchの記録・semantic値・formal registrationは変更していない。formal runの開始gateは
 現在のruntime（schema 18）を新しい登録が必要なversion変更として拒否する）。Planner Alternativeのtestで期待が変わったのは、
 9.6.5により決定で不要になった競合が結果に残らなくなったことによる「決定の展開」の対象件数だけであり、現行の意味へ直した。
+
+**PR-3の実施記録。** PR-3は上記のPR-3の項目を実装した（表示の構成は[UI_FLOW.md](./UI_FLOW.md) 11.6の実装状態を参照）。計算・保存の
+意味は変えていない。Domain側の変更は、`validatePlannerInput()` が既に記録している除外Entryごとのwarningを `PlannerInitialContext` /
+その `invalid` 結果へ読み取り専用で通す `excludedBuildListEntryWarnings` の追加だけであり（どの計算も読まない）、Worker projectionは
+それを除外Entryの `kind` として返す。動的Conflictと入力変更の区別（9.6.7）は、作成開始・保存と同じauthorityを読み取り専用で使う
+Application関数で行い、新しい永続fieldやhashの実装を追加していない。任意事項の「各参加者に必要な操作・排他使用する所持武器の名前」
+（9.6.9）は実装せず、`kind` だけの説明とした。versionは動かしていない（18 / 10 / 13）。
 
 #### 9.6.13 test観点
 

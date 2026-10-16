@@ -10,6 +10,7 @@ import type {
   PlannerAlternativeWhatIfInput,
   PlannerInput,
   PlannerWarning,
+  PlannerWarningKind,
   PlannerWorkerRequest,
   PlannerWorkerResponse,
 } from '../domain/planner'
@@ -61,9 +62,16 @@ export interface PlannerTaskGeneration {
   generation: number
 }
 
-/** Display diagnostics only; never parse reason to decide availability. */
+/**
+ * One Entry the current Planner input validation excluded. `kind` is the typed
+ * exclusion code - the warning kind `validatePlannerInput()` recorded for it -
+ * and the only field a screen may read to explain the exclusion in its own
+ * words (`docs/UI_FLOW.md` 11.6.4). `reason` is the internal English detail,
+ * kept for Debug Mode only; never parse it, and never show it in the normal UI.
+ */
 export interface PlannerInteractionExcludedEntry {
   buildListEntryId: BuildListEntryId
+  kind: PlannerWarningKind
   reason: string
 }
 

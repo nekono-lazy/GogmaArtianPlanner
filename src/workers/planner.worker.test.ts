@@ -701,6 +701,7 @@ describe('Planner Worker interaction preparation (B10-B1)', () => {
       warnings: [{ kind: 'build_list_entry_stale', message: 'fixture warning' }],
       excludedBuildListEntries: [{
         buildListEntryId: createValidBuildListEntry().id,
+        kind: 'build_list_entry_stale',
         reason: 'fixture diagnostic',
       }],
     },

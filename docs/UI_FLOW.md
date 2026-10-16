@@ -2302,14 +2302,41 @@ Persistenceは Phase 5-B）で実装済みであり、11.2〜11.4の画面はこ
 
 ### 11.6 通常Plannerの競合画面（優先候補の選択、Issue #278）
 
-実装状態: **操作の切替は実装済み（PR-2）、本節の表示はPR-3で行う**。Issue #278のPR-1（docs-only）で表示の意味と操作の契約を
+実装状態: **操作の切替（PR-2）と本節の表示（PR-3）は実装済み**。Issue #278のPR-1（docs-only）で表示の意味と操作の契約を
 確定し、PR-2で計算・保存を切り替えて「比較する」を撤去した（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.12）。PR-2の画面は11.6.6の操作
 （押す前の静的な説明、押した時点の再判定、以前の選択を取り消す・引き継がない場合の確認Dialog、優先候補どうしが両立しない場合の
 開始前の拒否、計算中表示とキャンセル、優先した候補が完成しない場合・無効な選択・計画なし・上限到達・保存拒否のtypedな日本語）
-だけを最小限に実装しており、11.6.2〜11.6.5の表示（kind基準の説明、内部IDの非表示、今回作成する / しない目標武器と件数、動的
-Conflictと入力変更の区別と案内）はPR-3で行う。それまでの競合一覧の表示は11.1の形のままである。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 23.2にある。
-具体的なlayoutとcomponent構成はPR-3で決め、Presentation設計に `ui-ux-pro-max` を使う（既存のMUIとPC・375px・ダークテーマの
+を実装し、PR-3で11.6.2〜11.6.5の表示（kind基準の説明、内部IDの非表示とDebug Modeでの診断情報、今回作成する / しない目標武器と
+件数、動的Conflictと入力変更の区別と案内、選択できない理由のtypedな日本語）を実装した。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、
+要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 23.2にある。Presentation設計には `ui-ux-pro-max` を使った（既存のMUIとPC・375px・ダークテーマの
 表示を優先する）。
+
+PR-3の実装の要点（表示の意味は以下の各項のとおりで、計算・選択可否・保存の意味は変えていない）。
+
+- 構成: 競合と解決セクション（11.0の位置のまま）を、表示用の純粋関数 `createProductionPlanConflictSectionDisplay()`
+  （`src/components/planner/productionPlanConflictPresentation.ts`）とComponent `ProductionPlanConflictSection` に分けた。ページは
+  preparationと「この候補を優先」のstate machineを持ち続け、Componentは表示とボタンの呼び出しだけを行う。表示は上から、計算中・保存中・
+  結果の表示、件数（競合の記録件数と判断待ち / 選択済み、今回作成する / しない目標武器の本数）、「まだ判断が必要な競合があります（N件）」、
+  セクション全体で選べない理由、競合ごとのカード（見出し「競合 N：種類」、状態の文字ラベル、種類の説明、状態ごとの案内、参加候補）、
+  今回作成する / しない目標武器の一覧の順である
+- 参加候補の名前: preparationが `ready` の間はそのfresh input、それ以外（preparation中・失敗後・stale）はページが独立に読む現在の
+  作成リストと目標武器（`ProductionPlanPageDependencies.getBuildListEntries()` / `getTargetWeapons()`）から解決し、名前の下にMasterの
+  武器種 / 属性を併記する。読込中は「確認中」、解決できない場合は「目標武器を確認できない候補」と11.6.3の案内を示し、IDへfallbackしない
+- 選択可否の理由: interaction preparationのprojectionに、除外したEntryごとのtypedな除外理由（`validatePlannerInput()` が記録した
+  warning kind）を `PlannerInteractionExcludedEntry.kind` として加えた（`PlannerInitialContext.excludedBuildListEntryWarnings` の
+  読み取り専用の受け渡し。英文 `reason` はDebug Modeの診断用に残す）。view modelの理由code（`entry_not_found` / `target_not_found` /
+  `plan_not_draft` / `preparation_invalid` / `planner_validation_excluded` / `current_conflict_not_found` /
+  `not_current_conflict_participant` / `checkpoint_conflict`）から日本語を選び、セクション全体・競合全体に当てはまる理由はそれぞれ1回だけ
+  示す。選択可能な参加者（選択済みの参加者を含む。押すと同じ選択のまま現在の状態から計算し直す）にだけ「この候補を優先」を置き、
+  選択できない参加者にはボタンを置かず理由を示す
+- 動的Conflictと入力変更: `compareProductionPlanInputWithCurrentState()`（`src/services/planner/prepareProductionPlanInteraction.ts`）
+  が、表示中のDraftについて、作成開始の前提検証・保存時の再検証と同じauthority（`isProductionPlanCalculationCompatible()`、
+  `createActualExecutionState()` / `executionStateMatches()` と `baseSnapshot.initialExecutionState`、`createPlanningTargetWeaponsHash()`、
+  `createPlanningBuildListEntriesHash()`）を読み取り専用で比較する。current initial Conflictに同じIDが無い保存済みConflictは、一致すれば
+  「計画の途中で生じた競合」、一致しなければ「現在の入力では再現できない」とし、比較が安全に成立しない場合（Draft以外、比較の失敗）は
+  どちらとも断定せず選択不可として示す
+- 内部情報: 「採用されなかった候補」のBuildListEntry IDもDebug Modeだけで表示する。Worker preparation・Plan読込の想定外のエラーは
+  通常表示では固定の日本語とし、内部のエラー文はDebug Modeだけで示す
 
 #### 11.6.1 範囲
 

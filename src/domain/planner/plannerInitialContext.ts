@@ -40,7 +40,7 @@ import type {
   ValidatedBuildListEntry,
 } from './plannerTypes'
 import { PERSISTED_PLANNER_BUILD_LIST_CONTEXT } from './plannerTypes'
-import { validatePlannerInput } from './plannerValidation'
+import { validatePlannerInput, type PlannerExcludedEntryWarning } from './plannerValidation'
 
 function compareStableStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
@@ -55,6 +55,13 @@ function compareStableStrings(left: string, right: string): number {
 export interface PlannerInitialContext {
   validBuildListEntries: readonly ValidatedBuildListEntry[]
   excludedBuildListEntries: ExcludedBuildListEntry[]
+  /**
+   * The typed exclusion warning of every excluded Entry, exactly as
+   * `validatePlannerInput().excludedBuildListEntryWarnings` recorded it. A
+   * read-only pass-through for display (the Production Plan screen's
+   * interaction preparation, `docs/UI_FLOW.md` 11.6.4): no calculation reads it.
+   */
+  excludedBuildListEntryWarnings: readonly PlannerExcludedEntryWarning[]
   validConflictResolutions: readonly PlannerConflictResolution[]
   /** Caller-owned; validation and initial-state warnings in discovery order. */
   warnings: PlannerWarning[]
@@ -104,6 +111,8 @@ export type PlannerInitialContextResult =
       warnings: PlannerWarning[]
       issues: DomainValidationIssue[]
       excludedBuildListEntries: ExcludedBuildListEntry[]
+      /** The same read-only pass-through as `PlannerInitialContext.excludedBuildListEntryWarnings`. */
+      excludedBuildListEntryWarnings: readonly PlannerExcludedEntryWarning[]
       /** The same planning Target authority, for the unsearched termination. */
       planningTargetIds: TargetWeaponId[]
     }
@@ -139,6 +148,7 @@ export function preparePlannerInitialContext(
       warnings,
       issues: validation.issues,
       excludedBuildListEntries: validation.excludedBuildListEntries,
+      excludedBuildListEntryWarnings: validation.excludedBuildListEntryWarnings,
       planningTargetIds: derivePlannerPlanningTargets(
         input.targetWeapons,
         validation.validBuildListEntries,
@@ -158,6 +168,7 @@ export function preparePlannerInitialContext(
       warnings,
       issues: initial.issues,
       excludedBuildListEntries: validation.excludedBuildListEntries,
+      excludedBuildListEntryWarnings: validation.excludedBuildListEntryWarnings,
       planningTargetIds,
     }
   }
@@ -246,6 +257,7 @@ export function preparePlannerInitialContext(
     context: {
       validBuildListEntries: validation.validBuildListEntries,
       excludedBuildListEntries: validation.excludedBuildListEntries,
+      excludedBuildListEntryWarnings: validation.excludedBuildListEntryWarnings,
       validConflictResolutions: validation.validConflictResolutions,
       warnings,
       routePlanRejections: [...routePlans.rejections],

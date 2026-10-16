@@ -10,7 +10,13 @@ import {
   CURRENT_CALCULATION_APP_SCHEMA_VERSION,
   isBuildResultCalculationContextCompatible,
 } from '../../domain/models/publicTypes'
-import { defaultPlannerOptions, type PlannerInput } from '../../domain/planner'
+import { createActualExecutionState } from '../../domain/execution'
+import {
+  createPlanningBuildListEntriesHash,
+  createPlanningTargetWeaponsHash,
+  defaultPlannerOptions,
+  type PlannerInput,
+} from '../../domain/planner'
 import {
   buildListEntryId,
   createValidBuildListEntry,
@@ -22,6 +28,7 @@ import {
 } from '../../test/fixtures/domainData'
 import type { PlannerInteractionPreparationResult } from '../../workers/plannerWorkerContracts'
 import {
+  compareProductionPlanInputWithCurrentState,
   createProductionPlanInteractionViewModel,
   evaluateProductionPlanCalculationCompatibility,
   mergeExplicitConflictResolution,
@@ -320,16 +327,38 @@ describe('createProductionPlanInteractionViewModel', () => {
         ...ready(persistedConflict, [entries[1].id]),
         excludedBuildListEntries: [{
           buildListEntryId: entries[0].id,
+          kind: 'protected_weapon_required',
           reason: excludedReason,
         }],
         currentConflicts: [],
       },
     )
+    // The typed exclusion code is carried; the English diagnostic is not a
+    // view model field at all.
     expect(excluded.conflicts[0].participants[0]).toMatchObject({
       isAvailable: false,
       unavailableReason: 'planner_validation_excluded',
-      unavailableMessage: excludedReason,
+      exclusionKind: 'protected_weapon_required',
     })
+    expect(JSON.stringify(excluded)).not.toContain(excludedReason)
+  })
+
+  it('names an Entry whose Target is gone as unresolved, never by ID, and makes it unavailable', () => {
+    const { entries, targets } = fixtureEntries()
+    const persistedConflict = conflict(entries)
+    const result = createProductionPlanInteractionViewModel(
+      plan([persistedConflict]),
+      plannerInput(entries, [targets[1]]),
+      ready(persistedConflict),
+    )
+    expect(result.conflicts[0].participants[0]).toMatchObject({
+      buildListEntryId: entries[0].id,
+      target: null,
+      targetName: null,
+      isAvailable: false,
+      unavailableReason: 'target_not_found',
+    })
+    expect(result.conflicts[0].participants[1]).toMatchObject({ targetName: 'Second fixture target' })
   })
 
   it('retains a missing persisted participant without guessing its Target', () => {
@@ -350,7 +379,7 @@ describe('createProductionPlanInteractionViewModel', () => {
       buildListEntryId: missingId,
       entry: null,
       target: null,
-      targetName: '削除済みまたは現在存在しない候補',
+      targetName: null,
       isRecommended: true,
       isAvailable: false,
       unavailableReason: 'entry_not_found',
@@ -392,7 +421,7 @@ describe('createProductionPlanInteractionViewModel', () => {
         ready(persistedConflict),
       )
       expect(result.isDraft).toBe(false)
-      expect(result.planStatusMessage).not.toBeNull()
+      expect(result.inputComparison).toBe('not_compared')
       expect(result.conflicts[0].participants[0]).toMatchObject({
         isAvailable: false,
         unavailableReason: 'plan_not_draft',
@@ -458,7 +487,6 @@ describe('mergeExplicitConflictResolution', () => {
       expect(participant).toMatchObject({
         isAvailable: false,
         unavailableReason: 'checkpoint_conflict',
-        unavailableMessage: expect.stringContaining('作成リストで途中採用する状態を変更または解除'),
       })
     }
     expect(result.conflicts[0].participants.map(({ checkpointOpportunityId }) => checkpointOpportunityId))
@@ -554,6 +582,18 @@ describe('Issue #278 interaction availability', () => {
     ])
   })
 
+  it('marks an earlier decision the current input cannot carry over, and only that one', () => {
+    const { entries, targets } = fixtureEntries()
+    const carried = conflict(entries, { id: 'conflict.carried', selectedBuildListEntryId: entries[0].id })
+    const lost = conflict(entries, { id: 'conflict.lost', selectedBuildListEntryId: entries[1].id })
+    const persistedPlan = plan([carried, lost])
+    const viewModel = createProductionPlanInteractionViewModel(persistedPlan, plannerInput(entries, targets), ready(carried))
+    expect(viewModel.conflicts.map(({ id, currency, decisionNotCarriedReason }) => [id, currency, decisionNotCarriedReason])).toEqual([
+      ['conflict.carried', 'current', null],
+      ['conflict.lost', 'input_changed', 'conflict_not_current'],
+    ])
+  })
+
   it('judges Plan compatibility through the one Domain function (18 -> 17 for resolution-free Plans)', () => {
     const persistedPlan = createValidProductionPlan()
     const current = { ...persistedPlan.calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
@@ -563,5 +603,87 @@ describe('Issue #278 interaction availability', () => {
     expect(evaluateProductionPlanCalculationCompatibility(persistedPlan, current)).toEqual({ isCompatible: true, recalculationReasons: [] })
     persistedPlan.conflicts = [conflict(fixtureEntries().entries, { selectedBuildListEntryId: fixtureEntries().entries[0].id })]
     expect(evaluateProductionPlanCalculationCompatibility(persistedPlan, current).isCompatible).toBe(false)
+  })
+})
+
+/**
+ * Issue #278 PR-3 (`docs/PLANNER_SPEC.md` 9.6.7): a persisted Conflict that is
+ * no current initial Conflict is "found while planning" only when the displayed
+ * Draft's calculation input equals the current persisted state, judged by the
+ * start / save snapshot authorities read-only; otherwise the input changed.
+ */
+describe('Issue #278 PR-3 dynamic versus input-changed Conflicts', () => {
+  function matchingDraft(entries: BuildListEntry[], targets: TargetWeapon[], conflicts: PlanConflict[]) {
+    const input = plannerInput(entries, targets)
+    const draft = plan(conflicts)
+    draft.selectedBuildListEntryIds = [entries[0].id]
+    draft.baseSnapshot = {
+      ...draft.baseSnapshot,
+      initialExecutionState: createActualExecutionState(draft, input, []),
+      targetWeaponsHash: createPlanningTargetWeaponsHash(input.targetWeapons),
+      buildListEntriesHash: createPlanningBuildListEntriesHash(input.buildListEntries),
+    }
+    return { input, draft }
+  }
+
+  it('reads the same input as same_input and any planning-input change as input_changed', () => {
+    const { entries, targets } = fixtureEntries()
+    const { input, draft } = matchingDraft(entries, targets, [])
+    expect(compareProductionPlanInputWithCurrentState(draft, input)).toBe('same_input')
+
+    // Each authority on its own moves the judgement.
+    const targetChanged = structuredClone(input)
+    targetChanged.targetWeapons[1].priority = 5
+    expect(compareProductionPlanInputWithCurrentState(draft, targetChanged)).toBe('input_changed')
+    const entryRemoved = structuredClone(input)
+    entryRemoved.buildListEntries.pop()
+    expect(compareProductionPlanInputWithCurrentState(draft, entryRemoved)).toBe('input_changed')
+    const rngChanged = structuredClone(input)
+    rngChanged.rngState.gogmaCounter = { ...rngChanged.rngState.gogmaCounter, value: (rngChanged.rngState.gogmaCounter.value ?? 0) + 1, isConfirmed: true }
+    expect(compareProductionPlanInputWithCurrentState(draft, rngChanged)).toBe('input_changed')
+    const contextChanged = structuredClone(input)
+    contextChanged.calculationContext = { ...contextChanged.calculationContext, rngEngineVersion: 'another-engine' }
+    expect(compareProductionPlanInputWithCurrentState(draft, contextChanged)).toBe('input_changed')
+
+    // Name / memo are no planning input.
+    const renamed = structuredClone(input)
+    renamed.targetWeapons[1].name = 'Renamed fixture target'
+    expect(compareProductionPlanInputWithCurrentState(draft, renamed)).toBe('same_input')
+  })
+
+  it('never compares a Plan that is not a draft', () => {
+    const { entries, targets } = fixtureEntries()
+    const { input, draft } = matchingDraft(entries, targets, [])
+    expect(compareProductionPlanInputWithCurrentState({ ...draft, status: 'active' }, input)).toBe('not_compared')
+  })
+
+  it('classifies a missing Conflict ID as dynamic only over the same input', () => {
+    const { entries, targets } = fixtureEntries()
+    const initial = conflict(entries, { id: 'conflict.initial' })
+    const dynamic = conflict(entries, { id: 'conflict.dynamic', recommendedBuildListEntryId: entries[1].id })
+    const { input, draft } = matchingDraft(entries, targets, [initial, dynamic])
+    const preparation = ready(initial)
+
+    const same = createProductionPlanInteractionViewModel(draft, input, preparation)
+    expect(same.inputComparison).toBe('same_input')
+    expect(same.conflicts.map(({ id, currency }) => [id, currency])).toEqual([
+      ['conflict.initial', 'current'],
+      ['conflict.dynamic', 'dynamic'],
+    ])
+    // A dynamic Conflict is never choosable.
+    expect(same.conflicts[1].participants.every(({ isAvailable, unavailableReason }) =>
+      !isAvailable && unavailableReason === 'current_conflict_not_found')).toBe(true)
+
+    const changedInput = structuredClone(input)
+    changedInput.targetWeapons[0].isEnabled = false
+    const changed = createProductionPlanInteractionViewModel(draft, changedInput, preparation)
+    expect(changed.inputComparison).toBe('input_changed')
+    expect(changed.conflicts[1].currency).toBe('input_changed')
+
+    // No safe judgement without a ready preparation.
+    const invalid = createProductionPlanInteractionViewModel(draft, input, {
+      status: 'invalid', issues: [], warnings: [], excludedBuildListEntries: [],
+    })
+    expect(invalid.conflicts.map(({ currency }) => currency)).toEqual(['not_compared', 'not_compared'])
   })
 })

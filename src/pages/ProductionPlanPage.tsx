@@ -2,7 +2,6 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   Alert,
   AlertTitle,
-  Box,
   Button,
   LinearProgress,
   Paper,
@@ -11,15 +10,19 @@ import {
 } from '@mui/material'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import { PageShell } from '../components/PageShell'
-import { StatusChip } from '../components/StatusChip'
 import {
   ProductionPlanCalculationContextDetails,
   ProductionPlanContent,
 } from '../components/planner/ProductionPlanContent'
 import { ProductionPlanConflictPreferenceDialog } from '../components/planner/ProductionPlanConflictPreferenceDialog'
+import { ProductionPlanConflictSection } from '../components/planner/ProductionPlanConflictSection'
+import {
+  createProductionPlanConflictSectionDisplay,
+  type ConflictNameSource,
+  type ConflictSectionSource,
+} from '../components/planner/productionPlanConflictPresentation'
 import {
   UNRESOLVED_CONFLICT_PARTICIPANT_NAME,
-  conflictPreferenceExplanation,
   conflictPreferenceIncompleteRunMessage,
   conflictPreferenceInvalidResolutionMessage,
   conflictPreferenceNoPlanMessage,
@@ -41,9 +44,9 @@ import { ExecutionRuntimeError } from '../domain/execution'
 import { loadMasterData } from '../domain/master/loadMasterData'
 import type { MasterDataRoot } from '../domain/master/masterTypes'
 import type {
+  BuildListEntry,
   BuildListEntryId,
   CalculationContext,
-  ConflictKind,
   ProductionPlan,
   ProductionPlanId,
   TargetWeapon,
@@ -55,16 +58,15 @@ import type {
 } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import { appDatabase } from '../db/AppDatabase'
+import { buildListEntryRepository } from '../db/repositories/buildListEntryRepository'
 import { productionPlanRepository } from '../db/repositories/productionPlanRepository'
 import { targetWeaponRepository } from '../db/repositories/targetWeaponRepository'
-import { conflictKindLabels } from '../presentation/labels'
 import {
   createPlannerCalculationContext,
   createPlannerInput,
 } from '../services/planner/createPlannerInput'
 import { conflictResolutionPlannerOptions } from '../services/planner/plannerRuntimeOptions'
 import {
-  CHECKPOINT_CONFLICT_MESSAGE,
   createProductionPlanInteractionViewModel,
   evaluateProductionPlanCalculationCompatibility,
   prepareProductionPlanConflictDecision,
@@ -106,6 +108,13 @@ export interface ProductionPlanPageDependencies {
    * instead of hiding the persisted Plan.
    */
   getTargetWeapons(): Promise<TargetWeapon[]>
+  /**
+   * Current persisted Build List Entries, read beside the Targets only to name
+   * a Conflict participant (Entry -> Target) while no current Worker
+   * preparation exists - preparing, after a failure, or for a stale Plan
+   * (`docs/UI_FLOW.md` 11.6.3). Never an availability or write authority.
+   */
+  getBuildListEntries(): Promise<BuildListEntry[]>
   createInput(calculationContext: CalculationContext): Promise<PlannerInput>
   createWorkerClient(): PlannerWorkerClient
   /**
@@ -156,6 +165,7 @@ function createDefaultDependencies(
     ),
     getPlan: (planId) => productionPlanRepository.getProductionPlan(planId),
     getTargetWeapons: () => targetWeaponRepository.getAllTargetWeapons(),
+    getBuildListEntries: () => buildListEntryRepository.getAllBuildListEntries(),
     createInput: (calculationContext) =>
       createPlannerInput(master, calculationContext),
     createWorkerClient: createProductionPlannerWorkerClient,
@@ -196,7 +206,13 @@ type ProductionPlanPageState =
       preparation: PlannerInteractionPreparationResult
       viewModel: ProductionPlanInteractionViewModel
     }
-  | { status: 'error'; message: string; plan: ProductionPlan | null }
+  | {
+      status: 'error'
+      message: string
+      plan: ProductionPlan | null
+      /** The raw internal message of an unexpected failure, shown in Debug Mode only. */
+      detail?: string
+    }
 
 /**
  * 「この候補を優先」 (Issue #278, `docs/PLANNER_SPEC.md` 9.6.3 - 9.6.6,
@@ -253,80 +269,19 @@ function createConflictParticipantNameResolver(input: PlannerInput): ConflictPre
   }
 }
 
-function caughtMessage(caught: unknown): string {
-  return caught instanceof Error
-    ? caught.message
-    : '生産計画の現在状態を準備できませんでした。'
-}
-
 /**
- * One Conflict participant as the page shows it, for both the interactive and
- * the read-only case.
- *
- * `isRecommended` mirrors the persisted `recommendedBuildListEntryId` and is a
- * badge only; `isSelected` mirrors the persisted `selectedBuildListEntryId`;
- * `isAvailable` comes from the current Worker preparation (`ready`) or is
- * always `false` (`stale`). None of the three is inferred from another.
+ * What an unexpected failure says in the normal UI: a fixed Japanese sentence,
+ * never the internal (often English) error text, which Debug Mode shows apart
+ * (`docs/UI_FLOW.md` 11.6.4).
  */
-interface ParticipantDisplay {
-  buildListEntryId: BuildListEntryId
-  /** Current persisted Target name, or `null` when the page has no current input. */
-  targetName: string | null
-  isRecommended: boolean
-  isSelected: boolean
-  isAvailable: boolean
-  unavailableMessage: string | null
-  /** This participant needs the position for its own selected checkpoint. */
-  competesForCheckpoint: boolean
-}
+const PREPARATION_FAILURE_MESSAGE =
+  '生産計画の現在状態を確認できませんでした。画面を再読み込みしてください。'
+const PLAN_LOAD_FAILURE_MESSAGE =
+  '生産計画を読み込めませんでした。画面を再読み込みしてください。'
 
-interface ConflictDisplay {
-  id: string
-  kind: ConflictKind | null
-  reason: string
-  involvesSelectedCheckpoint: boolean
-  participants: ParticipantDisplay[]
+function caughtDetail(caught: unknown): string | undefined {
+  return caught instanceof Error ? caught.message : undefined
 }
-
-/**
- * The persisted Conflicts of a Plan as a read-only projection.
- *
- * `ProductionPlan.conflicts` is the display authority whenever the page has
- * the exact persisted Plan but no *current* Worker preparation to judge
- * participants with: while the preparation is still running, after it failed,
- * and for a stale Plan (UI_FLOW 11.0 / 11.1). Every participant is therefore
- * unavailable with the caller's reason, and nothing that only the current
- * preparation can know - Target names, checkpoint involvement, current
- * conflict membership - is inferred from persisted data. The persisted
- * recommendation and selection badges keep their display contract.
- */
-function createReadOnlyConflictDisplays(
-  plan: ProductionPlan,
-  unavailableMessage: string,
-): ConflictDisplay[] {
-  return plan.conflicts.map((conflict) => ({
-    id: conflict.id,
-    kind: conflict.kind,
-    reason: conflict.reason,
-    involvesSelectedCheckpoint: false,
-    participants: conflict.buildListEntryIds.map((buildListEntryId) => ({
-      buildListEntryId,
-      targetName: null,
-      isRecommended: conflict.recommendedBuildListEntryId === buildListEntryId,
-      isSelected: conflict.selectedBuildListEntryId === buildListEntryId,
-      isAvailable: false,
-      unavailableMessage,
-      competesForCheckpoint: false,
-    })),
-  }))
-}
-
-/** Why a participant cannot be acted on in each read-only page state. */
-const readOnlyConflictMessages = {
-  preparing: '現在の操作可否を確認しています。',
-  preparationFailed: '現在の操作可否を確認できないため、この候補は操作できません。',
-  stale: 'この生産計画は再計算が必要なため、この候補は操作できません。',
-} as const
 
 /** A titled, border-based page section. */
 function PlanPageSection({ title, children }: { title: string; children: ReactNode }) {
@@ -343,165 +298,6 @@ function PlanPageSection({ title, children }: { title: string; children: ReactNo
           {title}
         </Typography>
         {children}
-      </Stack>
-    </Paper>
-  )
-}
-
-/**
- * One persisted Conflict. The participants are rendered by the page so the
- * what-if / replan state stays where it is managed; this item only frames
- * them with the Conflict's own heading, kind and reason.
- */
-function ConflictItem({
-  conflict,
-  index,
-  children,
-}: {
-  conflict: ConflictDisplay
-  /** 1-based display number; presentation only, never an identity. */
-  index: number
-  children: ReactNode
-}) {
-  const headingId = useId()
-  return (
-    <Box
-      component="li"
-      aria-labelledby={headingId}
-      sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: { xs: 1.5, md: 2 }, minWidth: 0 }}
-    >
-      <Stack spacing={1.5}>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography id={headingId} component="h3" variant="h3">
-            競合 {index + 1}
-          </Typography>
-          {conflict.kind && <StatusChip label={conflictKindLabels[conflict.kind]} tone="info" />}
-          {conflict.involvesSelectedCheckpoint && (
-            <StatusChip label="チェックポイント関与" tone="caution" />
-          )}
-        </Stack>
-        <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{conflict.reason}</Typography>
-        {conflict.involvesSelectedCheckpoint && (
-          // A conflict a selected checkpoint takes part in has no winner: the
-          // Domain refuses such a resolution, so the only way forward is the
-          // Build List selection (`docs/UI_FLOW.md` 11.1).
-          <Alert severity="warning">
-            <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-              <Typography variant="body2">{CHECKPOINT_CONFLICT_MESSAGE}</Typography>
-              <Button
-                component={RouterLink}
-                to="/build-list"
-                variant="outlined"
-                color="inherit"
-                sx={{ minHeight: 44 }}
-              >
-                ビルドリストで途中採用する状態を変更
-              </Button>
-            </Stack>
-          </Alert>
-        )}
-        <Box
-          component="ul"
-          aria-label={`競合 ${index + 1} の参加候補`}
-          sx={{
-            m: 0,
-            p: 0,
-            display: 'grid',
-            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' },
-            gap: 1.5,
-            alignItems: 'start',
-          }}
-        >
-          {children}
-        </Box>
-      </Stack>
-    </Box>
-  )
-}
-
-/**
- * One participant card. Every state is readable as text: the badges say
- * Planner推奨 / 現在選択中 / 利用可能 / 利用不可, and an unavailable
- * participant keeps its reason beside its disabled controls instead of
- * disappearing (`docs/UI_FLOW.md` 11.1). An available participant says what
- * preferring it means before it is pressed (11.6.6): the other participants
- * are not made in this Plan, and their Build List Entries stay.
- */
-function ConflictParticipantCard({
-  participant,
-  index,
-  otherParticipantNames,
-  selectDisabled,
-  onSelect,
-}: {
-  participant: ParticipantDisplay
-  /** 1-based display number used only when no Target name resolves. */
-  index: number
-  /** The other participants' current Target names, for the static explanation. */
-  otherParticipantNames: readonly string[]
-  selectDisabled: boolean
-  onSelect(): void
-}) {
-  const headingId = useId()
-  const explanationId = useId()
-  return (
-    <Paper
-      component="li"
-      variant="outlined"
-      aria-labelledby={headingId}
-      sx={{
-        listStyle: 'none',
-        p: { xs: 1.5, md: 2 },
-        minWidth: 0,
-        borderColor: participant.isSelected ? 'primary.main' : 'divider',
-      }}
-    >
-      <Stack spacing={1.25}>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography
-            id={headingId}
-            component="h4"
-            variant="subtitle1"
-            sx={{ overflowWrap: 'anywhere', minWidth: 0 }}
-          >
-            {participant.targetName ?? `候補 ${index + 1}`}
-          </Typography>
-          {participant.isRecommended && <StatusChip label="Planner推奨" tone="info" />}
-          {participant.isSelected && <StatusChip label="現在選択中" tone="positive" />}
-          <StatusChip
-            label={participant.isAvailable ? '利用可能' : '利用不可'}
-            tone={participant.isAvailable ? 'positive' : 'caution'}
-          />
-        </Stack>
-        <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-          BuildListEntry ID: {participant.buildListEntryId}
-        </Typography>
-        {participant.competesForCheckpoint && (
-          <Alert severity="info">
-            この候補は選択済みチェックポイントのためにこの位置を必要としています。
-          </Alert>
-        )}
-        {participant.unavailableMessage && (
-          <Alert severity="warning">
-            {participant.unavailableMessage}
-          </Alert>
-        )}
-        {participant.isAvailable && (
-          <Typography id={explanationId} variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-            {conflictPreferenceExplanation(otherParticipantNames)}
-          </Typography>
-        )}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          <Button
-            variant="contained"
-            disabled={selectDisabled}
-            onClick={onSelect}
-            aria-describedby={participant.isAvailable ? `${headingId} ${explanationId}` : headingId}
-            sx={{ minHeight: 44 }}
-          >
-            この候補を優先
-          </Button>
-        </Stack>
       </Stack>
     </Paper>
   )
@@ -616,22 +412,38 @@ export function ProductionPlanPage({
 
   // Target display names load on their own, so neither a slow nor a failed
   // Target read can delay or hide the persisted Plan contents; an unresolved
-  // Target simply falls back to its ID.
+  // Target simply falls back to its ID in the read-only Plan view.
+  //
+  // The Conflict section also names participants (Entry -> Target) from this
+  // read and the current Build List while no ready preparation exists
+  // (`docs/UI_FLOW.md` 11.6.3). A failed read is a state of its own there: the
+  // section says it cannot confirm the names, and never shows an ID instead.
+  const [persistedNames, setPersistedNames] = useState<ConflictNameSource>({ status: 'loading' })
   useEffect(() => {
     if (!dependencies) return
     let active = true
-    void dependencies
-      .getTargetWeapons()
+    queueMicrotask(() => {
+      if (active) setPersistedNames({ status: 'loading' })
+    })
+    const targets = dependencies.getTargetWeapons()
+    void targets
       .then((weapons) => {
         if (active) setTargetWeapons(weapons)
       })
       .catch(() => {
         if (active) setTargetWeapons([])
       })
+    void Promise.all([dependencies.getBuildListEntries(), targets])
+      .then(([buildListEntries, weapons]) => {
+        if (active) setPersistedNames({ status: 'loaded', buildListEntries, targetWeapons: weapons })
+      })
+      .catch(() => {
+        if (active) setPersistedNames({ status: 'failed' })
+      })
     return () => {
       active = false
     }
-  }, [dependencies])
+  }, [dependencies, planId])
 
   useEffect(() => {
     const lifecycleIdentity = lifecycleIdentityRef.current + 1
@@ -736,8 +548,9 @@ export function ProductionPlanPage({
         activeWorkerRequestRef.current = null
         setState({
           status: 'error',
-          message: caughtMessage(caught),
+          message: loadedPlan === null ? PLAN_LOAD_FAILURE_MESSAGE : PREPARATION_FAILURE_MESSAGE,
           plan: loadedPlan,
+          detail: caughtDetail(caught),
         })
       }
     }
@@ -1004,44 +817,113 @@ export function ProductionPlanPage({
   // every state that holds the exact persisted Plan (UI_FLOW 11.0): the list
   // never disappears because the Worker preparation is still running or has
   // failed. Only `ready` carries the current preparation, which is the sole
-  // authority for whether a participant can be acted on; every other state is
-  // a read-only projection whose participants are all unavailable.
-  const conflictDisplays: ConflictDisplay[] | null =
+  // authority for whether a participant can be preferred; every other state
+  // shows the persisted decisions read-only (UI_FLOW 11.6).
+  const conflictSource: ConflictSectionSource | null =
     state.status === 'ready'
-      ? state.viewModel.conflicts.map((conflict) => ({
-          id: conflict.id,
-          kind: state.plan.conflicts.find(({ id }) => id === conflict.id)?.kind ?? null,
-          reason: conflict.reason,
-          involvesSelectedCheckpoint: conflict.involvesSelectedCheckpoint,
-          participants: conflict.participants.map((participant) => ({
-            buildListEntryId: participant.buildListEntryId,
-            targetName: participant.targetName,
-            isRecommended: participant.isRecommended,
-            isSelected: participant.isSelected,
-            isAvailable: participant.isAvailable,
-            unavailableMessage: participant.unavailableMessage,
-            competesForCheckpoint: participant.checkpointOpportunityId !== null,
-          })),
-        }))
+      ? { status: 'ready', viewModel: state.viewModel, preparation: state.preparation }
       : state.status === 'preparing'
-        ? createReadOnlyConflictDisplays(state.plan, readOnlyConflictMessages.preparing)
+        ? { status: 'preparing' }
         : state.status === 'error' && state.plan !== null
-          ? createReadOnlyConflictDisplays(state.plan, readOnlyConflictMessages.preparationFailed)
+          ? { status: 'preparation_failed' }
           : state.status === 'stale'
-            ? createReadOnlyConflictDisplays(state.plan, readOnlyConflictMessages.stale)
+            ? { status: 'stale' }
             : null
+  // A ready preparation names participants from its own fresh input - the
+  // state its availability was judged on; every other state from the page's
+  // independent read of the current Build List and Targets.
+  const conflictNames: ConflictNameSource =
+    state.status === 'ready'
+      ? { status: 'loaded', buildListEntries: state.input.buildListEntries, targetWeapons: state.input.targetWeapons }
+      : persistedNames
+  const conflictDisplay =
+    dependencies && loadedPlan && conflictSource !== null
+      ? createProductionPlanConflictSectionDisplay({
+          plan: loadedPlan,
+          source: conflictSource,
+          names: conflictNames,
+          master: dependencies.master,
+        })
+      : null
+  const debugPreparationMessages =
+    state.status === 'ready' && state.preparation.status === 'invalid'
+      ? [
+          ...state.preparation.issues.map(({ path, message }) => `${path}: ${message}`),
+          ...state.preparation.warnings.map(({ kind, message }) => `${kind}: ${message}`),
+        ]
+      : []
 
-  const showBuildListLink =
-    state.status === 'stale' ||
-    (state.status === 'ready' &&
-      (state.preparation.status === 'invalid' ||
-        !state.viewModel.isDraft ||
-        state.viewModel.conflicts.some((conflict) =>
-          conflict.participants.some(({ isAvailable }) => !isAvailable),
-        )))
+  // The page's own running / saving / result notices of 「この候補を優先」,
+  // placed at the top of the Conflict section.
+  const preferenceStatus = state.status === 'ready' && (
+    <>
+      {replanState.status === 'loading' && (
+        <Paper
+          component="section"
+          variant="outlined"
+          role="status"
+          aria-live="polite"
+          aria-labelledby={replanHeadingId}
+          sx={{ p: { xs: 1.5, md: 2 } }}
+        >
+          <Stack spacing={1.5}>
+            <Typography id={replanHeadingId} component="h3" variant="h3">
+              {productionPlannerRunningTitles.recalculation}
+            </Typography>
+            <LinearProgress aria-label="Planner再計算中" variant="indeterminate" />
+            <Button
+              variant="outlined"
+              onClick={cancelReplanning}
+              sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+            >
+              再計算をキャンセル
+            </Button>
+          </Stack>
+        </Paper>
+      )}
+      {replanState.status === 'saving' && (
+        // Atomic persistence has started: no cancel is offered.
+        <Paper
+          component="section"
+          variant="outlined"
+          role="status"
+          aria-live="polite"
+          aria-labelledby={savingHeadingId}
+          sx={{ p: { xs: 1.5, md: 2 } }}
+        >
+          <Stack spacing={1.5}>
+            <Typography id={savingHeadingId} component="h3" variant="h3">
+              生産計画を保存しています。
+            </Typography>
+            <LinearProgress aria-label="生産計画を保存中" />
+            <Typography variant="caption" color="text.secondary">
+              保存中はキャンセルできません。
+            </Typography>
+          </Stack>
+        </Paper>
+      )}
+      {replanState.status === 'failure' && <Alert severity="error">{replanState.message}</Alert>}
+      {replanState.status === 'notice' && <Alert severity="info">{replanState.message}</Alert>}
+      {replanState.status === 'invalid_resolution' && (
+        <Alert severity="warning">{conflictPreferenceInvalidResolutionMessage}</Alert>
+      )}
+      {replanState.status === 'not_saved' && (
+        <Alert severity="warning">
+          <AlertTitle>{replanState.notice.title}</AlertTitle>
+          <Stack spacing={0.5}>
+            {replanState.notice.messages.map((message) => (
+              <Typography key={message} variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                {message}
+              </Typography>
+            ))}
+          </Stack>
+        </Alert>
+      )}
+    </>
+  )
 
   // The Worker preparation indicator and the Conflict section. The page keeps
-  // building and owning them - every what-if / repair / preparation state and
+  // building and owning them - every preparation / preference state and
   // handler stays here - and only hands the node to the read-only Plan view,
   // which places it after the material sections and before the Target routes
   // (UI_FLOW 11.0, Issue #121). Presentation order only.
@@ -1054,140 +936,17 @@ export function ProductionPlanPage({
         </Stack>
       )}
 
-      {conflictDisplays !== null && (
+      {conflictDisplay !== null && (
         <PlanPageSection title="競合と解決">
-          <Typography variant="body2" color="text.secondary">
-            保存された生産計画の競合と、その解決状態です。操作できるかどうかは現在の保存状態から判定します。
-          </Typography>
-          {state.status === 'ready' && (
-            <>
-              {replanState.status === 'loading' && (
-                <Paper
-                  component="section"
-                  variant="outlined"
-                  role="status"
-                  aria-live="polite"
-                  aria-labelledby={replanHeadingId}
-                  sx={{ p: { xs: 1.5, md: 2 } }}
-                >
-                  <Stack spacing={1.5}>
-                    <Typography id={replanHeadingId} component="h3" variant="h3">
-                      {productionPlannerRunningTitles.recalculation}
-                    </Typography>
-                    <LinearProgress aria-label="Planner再計算中" variant="indeterminate" />
-                    <Button
-                      variant="outlined"
-                      onClick={cancelReplanning}
-                      sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
-                    >
-                      再計算をキャンセル
-                    </Button>
-                  </Stack>
-                </Paper>
-              )}
-              {replanState.status === 'saving' && (
-                // Atomic persistence has started: no cancel is offered.
-                <Paper
-                  component="section"
-                  variant="outlined"
-                  role="status"
-                  aria-live="polite"
-                  aria-labelledby={savingHeadingId}
-                  sx={{ p: { xs: 1.5, md: 2 } }}
-                >
-                  <Stack spacing={1.5}>
-                    <Typography id={savingHeadingId} component="h3" variant="h3">
-                      生産計画を保存しています。
-                    </Typography>
-                    <LinearProgress aria-label="生産計画を保存中" />
-                    <Typography variant="caption" color="text.secondary">
-                      保存中はキャンセルできません。
-                    </Typography>
-                  </Stack>
-                </Paper>
-              )}
-              {replanState.status === 'failure' && <Alert severity="error">{replanState.message}</Alert>}
-              {replanState.status === 'notice' && <Alert severity="info">{replanState.message}</Alert>}
-              {replanState.status === 'invalid_resolution' && (
-                <Alert severity="warning">{conflictPreferenceInvalidResolutionMessage}</Alert>
-              )}
-              {replanState.status === 'not_saved' && (
-                <Alert severity="warning">
-                  <AlertTitle>{replanState.notice.title}</AlertTitle>
-                  <Stack spacing={0.5}>
-                    {replanState.notice.messages.map((message) => (
-                      <Typography key={message} variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-                        {message}
-                      </Typography>
-                    ))}
-                  </Stack>
-                </Alert>
-              )}
-              {state.viewModel.planStatusMessage && (
-                <Alert
-                  severity={state.viewModel.planStatus === 'stale' ? 'warning' : 'info'}
-                >
-                  {state.viewModel.planStatusMessage}
-                </Alert>
-              )}
-              {state.preparation.status === 'invalid' && (
-                <Alert severity="warning">
-                  <AlertTitle>現在の入力では競合を準備できません。再計算が必要です。</AlertTitle>
-                  {state.preparation.issues.map((issue, index) => (
-                    <Typography
-                      variant="body2"
-                      key={`issue:${issue.path}:${issue.code}:${index}`}
-                    >
-                      {issue.message}
-                    </Typography>
-                  ))}
-                  {state.preparation.warnings.map((warning, index) => (
-                    <Typography
-                      variant="body2"
-                      key={`warning:${warning.kind}:${index}`}
-                    >
-                      {warning.message}
-                    </Typography>
-                  ))}
-                </Alert>
-              )}
-            </>
-          )}
-          {conflictDisplays.length === 0 ? (
-            <Alert severity="info">この生産計画に表示する競合はありません。</Alert>
-          ) : (
-            <Stack component="ul" spacing={2} sx={{ m: 0, p: 0, listStyle: 'none' }}>
-              {conflictDisplays.map((conflict, conflictIndex) => (
-                <ConflictItem key={conflict.id} conflict={conflict} index={conflictIndex}>
-                  {conflict.participants.map((participant, participantIndex) => (
-                    <ConflictParticipantCard
-                      key={participant.buildListEntryId}
-                      participant={participant}
-                      index={participantIndex}
-                      otherParticipantNames={conflict.participants
-                        .filter(({ buildListEntryId }) => buildListEntryId !== participant.buildListEntryId)
-                        .map(({ targetName }) => targetName ?? UNRESOLVED_CONFLICT_PARTICIPANT_NAME)}
-                      selectDisabled={!participant.isAvailable || replanBusy}
-                      onSelect={() => void startPreferring(
-                        conflict.id,
-                        participant.buildListEntryId,
-                      )}
-                    />
-                  ))}
-                </ConflictItem>
-              ))}
-            </Stack>
-          )}
-          {showBuildListLink && state.status === 'ready' && (
-            <Button
-              component={RouterLink}
-              to="/build-list"
-              variant="outlined"
-              sx={{ minHeight: 44, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
-            >
-              ビルドリストへ戻る
-            </Button>
-          )}
+          <ProductionPlanConflictSection
+            display={conflictDisplay}
+            debugMode={debugMode}
+            busy={replanBusy}
+            onPrefer={(conflictId, buildListEntryId) =>
+              void startPreferring(conflictId, buildListEntryId as BuildListEntryId)}
+            statusSlot={preferenceStatus}
+            debugPreparationMessages={debugPreparationMessages}
+          />
         </PlanPageSection>
       )}
     </>
@@ -1217,7 +976,18 @@ export function ProductionPlanPage({
           <Alert severity="warning">指定された生産計画が見つかりません。</Alert>
         )}
         {state.status === 'error' && (
-          <Alert severity="error">{state.message}</Alert>
+          <Alert severity="error">
+            {state.message}
+            {debugMode && state.detail !== undefined && (
+              <Typography
+                component="span"
+                variant="caption"
+                sx={{ display: 'block', mt: 0.5, overflowWrap: 'anywhere', fontFamily: 'monospace' }}
+              >
+                {state.detail}
+              </Typography>
+            )}
+          </Alert>
         )}
         {state.status === 'stale' && (
           // The link sits inside the message instead of in the Alert action

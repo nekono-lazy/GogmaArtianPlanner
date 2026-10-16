@@ -4515,7 +4515,15 @@ Application / Persistence responsibilities.
 
 `docs/PLANNER_SPEC.md` 9.6 (with `docs/REQUIREMENTS.md` 23.2, `docs/UI_FLOW.md` 11.6, `docs/DATA_MODEL.md` 11.1.1 /
 11.8) is the formal contract fixed by Issue #278 PR-1 (docs-only). **PR-2 implemented the calculation, save, routing and
-version parts**; the conflict display of `docs/UI_FLOW.md` 11.6.2 - 11.6.5 is PR-3 and the Planner Alternative cleanup PR-4+.
+version parts, and PR-3 the conflict display of `docs/UI_FLOW.md` 11.6.2 - 11.6.5**; the Planner Alternative cleanup is PR-4+.
+PR-3 is Presentation plus read-only projection only: `createProductionPlanConflictSectionDisplay()` /
+`ProductionPlanConflictSection` (`src/components/planner/`) build every Japanese text from typed data (`PlanConflict.kind`, the persisted
+selection / recommendation, `rejectedBuildListEntries.reason`, `targetCompletions`, the preparation's typed codes); the interaction
+projection's excluded Entries gained the typed `kind` (the validation warning kind, passed through
+`PlannerInitialContext.excludedBuildListEntryWarnings`, which no calculation reads); `compareProductionPlanInputWithCurrentState()`
+tells a dynamic Conflict from an input change through the start / save authorities read-only; participant names come from the current
+Build List and Targets (`getBuildListEntries()` / `getTargetWeapons()` while no preparation is ready) and never fall back to an ID;
+internal IDs, English reasons and raw error texts are Debug Mode only. No calculation, availability, save semantics or version moved.
 The Production Plan screen no longer runs the Planner Alternative (`docs/PLANNER_SPEC.md` 9.2.19 is a routing record): 「比較する」
 is gone, and 「この候補を優先」 is `derivePlannerConflictDecisionSet()` (`src/domain/planner/plannerConflictDecisionSet.ts`, the 9.6.3
 authority the availability shares) -> an optional confirmation of dropped earlier decisions -> the ordinary
