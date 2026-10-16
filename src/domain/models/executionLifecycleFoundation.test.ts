@@ -145,7 +145,7 @@ describe('Execution lifecycle version boundaries', () => {
     // (the ordinary Planner routing of the Build List and the replan Preview)
     // moved it to 17 alone.
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
   })
 })
 

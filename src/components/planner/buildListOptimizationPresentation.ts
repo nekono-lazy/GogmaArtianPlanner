@@ -1,6 +1,6 @@
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import {
-  isCalculationContextCompatible,
+  isProductionPlanCalculationCompatible,
   type BuildListEntry,
   type ExpectedPlanState,
   type ImprovementPreference,
@@ -567,14 +567,14 @@ function sameExpectedPlanState(left: ExpectedPlanState, right: ExpectedPlanState
  * Whether the current Draft was made from the same input state as the optimization (`docs/PLANNER_SPEC.md` 17.9): a `draft` Plan whose
  * CalculationContext (its own and its snapshot's) is compatible with the optimization input's, and whose `baseSnapshot`
  * `initialExecutionState`, `targetWeaponsHash` and `buildListEntriesHash` equal the input token's `initialExecutionState`,
- * `targetWeaponsHash` and `inputBuildListEntriesHash`. CalculationContext compatibility is the exact four-field
- * `isCalculationContextCompatible()`.
+ * `targetWeaponsHash` and `inputBuildListEntriesHash`. CalculationContext compatibility is the one Plan authority
+ * `isProductionPlanCalculationCompatible()` against the input's CalculationContext (`docs/PLANNER_SPEC.md` 9.6.10): exact
+ * four-field equality, or the explicit resolution-free `18 -> 17` Plan exception.
  */
 export function isDraftComparableWithBuildListOptimization(draft: ProductionPlan, artifact: BuildListOptimizationArtifact): boolean {
   const token = artifact.inputToken
   return draft.status === 'draft'
-    && isCalculationContextCompatible(draft.calculationContext, token.calculationContext)
-    && isCalculationContextCompatible(draft.baseSnapshot.calculationContext, token.calculationContext)
+    && isProductionPlanCalculationCompatible(draft, token.calculationContext)
     && sameExpectedPlanState(draft.baseSnapshot.initialExecutionState, token.initialExecutionState)
     && draft.baseSnapshot.targetWeaponsHash === token.targetWeaponsHash
     && draft.baseSnapshot.buildListEntriesHash === token.inputBuildListEntriesHash

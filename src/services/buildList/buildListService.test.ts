@@ -106,7 +106,7 @@ describe('BuildListService', () => {
     memory.entries.push(original)
 
     const refreshed = await new BuildListService(memory.repositories).refreshStaleness(current)
-    expect(current.appSchemaVersion).toBe(17)
+    expect(current.appSchemaVersion).toBe(18)
     expect(refreshed.entries[0].isStale).toBe(true)
     expect(refreshed.entries[0].staleReasons).toEqual(['calculation_context_changed'])
     expect(refreshed.entries[0].candidateSnapshot).toEqual(snapshot)
@@ -145,7 +145,7 @@ describe('BuildListService', () => {
   it.each([12, 13, 14, 15, 16])('keeps a schema %i BuildListEntry usable under schema 17 when nothing else changed', async (appSchemaVersion) => {
     const memory = memoryRepositories()
     const current = createBuildListCalculationContext(createValidMasterDataFixture())
-    expect(current.appSchemaVersion).toBe(17)
+    expect(current.appSchemaVersion).toBe(18)
     const candidate = createValidBuildCandidate()
     candidate.calculationContext = { ...current, appSchemaVersion }
     candidate.searchStateHash = createSearchStateHash(candidate.route, memory.rngState, memory.normalCounters)

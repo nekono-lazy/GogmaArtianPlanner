@@ -6,7 +6,7 @@
  * valid Entry Routes).
  */
 import { createBuildListEntry } from '../../domain/buildList'
-import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../../domain/models/publicTypes'
+import { GLOBAL_RESEARCH_RECORDED_CALCULATION_APP_SCHEMA_VERSION } from '../plannerGlobalOptimizationTestFixture'
 import type { OwnedWeapon, RestorationBonusSet, TargetWeapon } from '../../domain/models/publicTypes'
 import type { PlannerInput } from '../../domain/planner/plannerTypes'
 import { FakeRngEngine, type FakeRngFixtures } from '../../domain/rng/fakeRngEngine'
@@ -175,7 +175,7 @@ export async function createGlobalAssignmentFixture(options: GlobalAssignmentFix
   // Two Gogma positions, so a fixture whose Ideal Reset sits at 11 alone still finds its canonical Ideal.
   search.settings = { ...search.settings, maxGogmaAdvance: 2 }
   if (options.normalCounterConfirmed === false) search.normalCounters = search.normalCounters.map(counter => ({ ...counter, isConfirmed: false }))
-  search.calculationContext.appSchemaVersion = CURRENT_CALCULATION_APP_SCHEMA_VERSION
+  search.calculationContext.appSchemaVersion = GLOBAL_RESEARCH_RECORDED_CALCULATION_APP_SCHEMA_VERSION
   const a = search.targetWeapons[0]!
   const b: TargetWeapon = { ...structuredClone(a), id: targetWeaponId('target.fixture.b'), elementId: 'element.fixture.b' }
   search.targetWeapons.push(b)

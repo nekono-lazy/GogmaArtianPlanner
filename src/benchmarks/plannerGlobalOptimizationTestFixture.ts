@@ -2,17 +2,25 @@
 import { createCandidateSearchInput } from '../test/fixtures/candidateSearch'
 import { createRestorationBonusSet, targetWeaponId } from '../test/fixtures/domainData'
 import { FakeRngEngine, type FakeRngFixtures } from '../domain/rng/fakeRngEngine'
-import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import { createBuildListEntry } from '../domain/buildList'
 import { searchCandidates } from '../domain/search/candidateSearch'
 import type { PlannerInput } from '../domain/planner/plannerTypes'
 import { GLOBAL_RESEARCH_TIME } from './plannerGlobalOptimizationResearch'
 
+/**
+ * The calculation schema the Global Research (Issue #154) synthetic fixtures were recorded under. Their frozen records, golden
+ * values and parity hashes fold the CalculationContext in, and the research records are never re-recorded for a later Production
+ * schema (`docs/PLANNER_SPEC.md` 9.6.11), so the fixtures keep it explicitly instead of following
+ * `CURRENT_CALCULATION_APP_SCHEMA_VERSION`. Every input built from them carries it consistently (Candidates, Entries and the
+ * PlannerInput alike); a Production schema guard still reads the current value.
+ */
+export const GLOBAL_RESEARCH_RECORDED_CALCULATION_APP_SCHEMA_VERSION = 17
+
 /** `extraTargets` (Phase 1-E tests) adds Targets c, d, ... of the same weapon type; the default fixture is unchanged. */
 export async function globalResearchFixture(options: { extraTargets?: number } = {}) {
   const search = createCandidateSearchInput()
   search.ownedWeapons = []
-  search.calculationContext.appSchemaVersion = CURRENT_CALCULATION_APP_SCHEMA_VERSION
+  search.calculationContext.appSchemaVersion = GLOBAL_RESEARCH_RECORDED_CALCULATION_APP_SCHEMA_VERSION
   const first = search.targetWeapons[0]
   search.targetWeapons.push({ ...structuredClone(first), id: targetWeaponId('target.fixture.b'), elementId: 'element.fixture.b' })
   for (let i = 0; i < (options.extraTargets ?? 0); i++) {

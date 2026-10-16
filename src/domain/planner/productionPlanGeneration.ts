@@ -27,6 +27,10 @@ import {
   type PlannerTraceReplayIssue,
 } from './plannerTraceReplay'
 import { PlannerPlanGenerationError } from './plannerPlanGenerationError'
+import {
+  evaluatePlannerConflictResolutionOutcome,
+  type PlannerConflictResolutionOutcome,
+} from './plannerConflictPreferenceOutcome'
 import { projectProductionPlanExecution } from './productionPlanExecutionProjection'
 import type {
   CreateProductionPlanCalculation,
@@ -590,6 +594,30 @@ export interface PlannerPlanGenerationOf<T extends PlannerAnyRunTermination> {
   conflicts: PlannerResult['conflicts']
   warnings: PlannerWarning[]
   termination: T
+  /** Present only for an input with explicit conflict resolutions (`PlannerResult.conflictResolutionOutcome`). */
+  conflictResolutionOutcome?: PlannerConflictResolutionOutcome
+}
+
+/**
+ * The preferred Entry completion of one run (`docs/PLANNER_SPEC.md` 9.6.6),
+ * spread into the generated result only for an input with explicit
+ * resolutions: an input without any carries no such field at all, so its
+ * result is unchanged.
+ */
+function conflictResolutionOutcomeOf(
+  input: PlannerInput,
+  plan: ProductionPlan | null,
+  runResult: PlannerRunOutcome,
+): { conflictResolutionOutcome?: PlannerConflictResolutionOutcome } {
+  if (input.conflictResolutions.length === 0) return {}
+  return {
+    conflictResolutionOutcome: evaluatePlannerConflictResolutionOutcome({
+      resolutions: input.conflictResolutions,
+      plan,
+      buildListEntries: input.buildListEntries,
+      routeCommitment: runResult.routeCommitment ?? null,
+    }),
+  }
 }
 
 /** The observer of the shared tail, typed by the run result it observes. */
@@ -747,6 +775,7 @@ export async function generatePlanFromFullRun<T extends PlannerAnyRunTermination
       conflicts: structuredClone(runResult.conflicts),
       warnings: structuredClone(warnings),
       termination: structuredClone(runResult.termination),
+      ...conflictResolutionOutcomeOf(input, null, runResult),
     }
   }
   if (replay === null || !replay.isValid) {
@@ -828,6 +857,7 @@ export async function generatePlanFromFullRun<T extends PlannerAnyRunTermination
     // from a truncated run is identifiable without reading a warning message
     // (PLANNER_SPEC 7.2.1).
     termination: structuredClone(runResult.termination),
+    ...conflictResolutionOutcomeOf(input, plan, runResult),
   }
   observer?.onPlanGenerationPhase?.('completed')
   return generated

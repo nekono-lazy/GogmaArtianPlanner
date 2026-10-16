@@ -31,10 +31,15 @@ const REGISTERED = readD0cRegisteredExportIdentity(d0b2Document).identity!
 const HEAD = 'a'.repeat(40)
 const OTHER_HEAD = 'f'.repeat(40)
 
-function currentContext() {
+/**
+ * The CalculationContext the D-0C formal runs were registered and run with: the Master and Engine authorities of this checkout and
+ * the calculation schema 17 the registration records. Issue #278 PR-2 moved the Production schema to 18, so a formal run under the
+ * current runtime asks for a new registration (tested below); the registered runs themselves are unchanged.
+ */
+function registeredContext() {
   const master = loadMasterData()
   if (!master.ok) throw new Error('Master data failed to load.')
-  return { gameVersion: master.data.manifest.gameVersion, masterDataVersion: master.data.manifest.dataVersion, rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
+  return { gameVersion: master.data.manifest.gameVersion, masterDataVersion: master.data.manifest.dataVersion, rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION, appSchemaVersion: 17 }
 }
 
 const AUDIT_OK: CalculationCodeAudit = {
@@ -49,7 +54,7 @@ function startInput(edit: Partial<D0cFormalStartInput> = {}): D0cFormalStartInpu
     registration: d0cRegistrationGate(), repository: { workingTreeClean: true, uncommittedBenchmarkCode: false, calculationAudit: AUDIT_OK }, allowUncommitted: false, overrideOptions: [],
     cliExpectedSha256: REGISTERED.sha256, registeredExport: { identity: REGISTERED, issues: [] }, actualExport: { ...REGISTERED },
     outputPaths: [{ option: '--run-dir', path: '.local/d0c.run', gitIgnored: true }, { option: '--output', path: '.local/d0c.json', gitIgnored: true }],
-    currentAuthorities: { calculationContext: currentContext() },
+    currentAuthorities: { calculationContext: registeredContext() },
     ...edit,
   }
 }
@@ -150,8 +155,13 @@ describe('Phase D-0C start gate (parent)', () => {
     expect(d0cFormalStartIssues(startInput({ outputPaths: outputs }))).toEqual(['--run-dir tmp/run is not git-ignored; a formal run writes only into ignored paths (for example under .local/).'])
     const changed = { ...AUDIT_OK, changedFiles: [...AUDIT_OK.changedFiles, 'src/benchmarks/globalAssignment/shapeMaterializationRun.ts'] }
     expect(d0cFormalStartIssues(startInput({ repository: { ...startInput().repository, calculationAudit: changed } }))[0]).toMatch(/shapeMaterializationRun\.ts\. Audit them/)
-    const context = { ...currentContext(), rngEngineVersion: 'production-rng:next' }
+    const context = { ...registeredContext(), rngEngineVersion: 'production-rng:next' }
     expect(d0cFormalStartIssues(startInput({ currentAuthorities: { calculationContext: context } }))[0]).toMatch(/^The current CalculationContext .* is not the registered .*a version change asks for a new registration\.$/)
+    // The current Production runtime (calculation schema 18) is such a version change: the registered D-0C runs cannot be repeated
+    // formally without a new registration.
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
+    const runtime = { ...registeredContext(), appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
+    expect(d0cFormalStartIssues(startInput({ currentAuthorities: { calculationContext: runtime } }))[0]).toMatch(/a version change asks for a new registration\.$/)
   })
 })
 
@@ -192,7 +202,7 @@ describe('Phase D-0C child gate (a hand-written formal task cannot bypass the pa
 
   it('refuses another CalculationContext or Engine before any calculation', () => {
     const registered = MATERIALIZATION_D0C_PREREGISTRATION.calculationContext.value
-    expect(d0cFormalChildCalculationIssues({ calculationContext: currentContext(), rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION })).toEqual([])
+    expect(d0cFormalChildCalculationIssues({ calculationContext: registeredContext(), rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION })).toEqual([])
     expect(d0cFormalChildCalculationIssues({ calculationContext: { ...registered, masterDataVersion: 5 }, rngEngineVersion: registered.rngEngineVersion })[0]).toMatch(/^The input CalculationContext/)
     expect(d0cFormalChildCalculationIssues({ calculationContext: registered, rngEngineVersion: 'production-rng:other' })).toEqual([`The Production RNG Engine production-rng:other is not the registered ${registered.rngEngineVersion}.`])
   })
@@ -202,7 +212,7 @@ describe('Phase D-0C child record reading', () => {
   const expectation = { mode: 'formal' as const, protocolVersion: MATERIALIZATION_D0A2B_PROTOCOL_VERSION, actualExport: REGISTERED, repositoryHeadSha: HEAD }
   const record = (edit: Record<string, unknown> = {}) => ({
     mode: 'formal', protocolVersion: MATERIALIZATION_D0A2B_PROTOCOL_VERSION, exportVerification: { actual: { ...REGISTERED }, taskMatched: true },
-    rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION, calculationContext: currentContext(), repositoryHeadSha: HEAD, formalChildGate: { issues: [] },
+    rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION, calculationContext: registeredContext(), repositoryHeadSha: HEAD, formalChildGate: { issues: [] },
     semantic: { outcome: { kind: 'structural_candidates_materialized', classifications: [] }, input: {}, candidates: [], integrityIssues: [] }, observed: {}, memory: {},
     ...edit,
   })

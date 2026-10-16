@@ -16,11 +16,8 @@ import type {
 import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../domain/models/publicTypes'
 import {
   defaultPlannerOptions,
-  type PlannerAlternativeComparison,
-  type PlannerAlternativeRepairArtifact,
-  type PlannerAlternativeRepairCalculationResult,
-  type PlannerAlternativeWhatIfCalculationResult,
   type PlannerInput,
+  type PlannerResult,
 } from '../domain/planner'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import {
@@ -53,7 +50,8 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { ExecutionRuntimeError } from '../domain/execution'
 import type { ProductionPlanStartInspection } from '../services/execution/productionPlanExecutionService'
 import type { ProductionPlanReplanDependencies } from '../services/execution/productionPlanReplanDependencies'
-import type { PlannerAlternativeRepairSaveOutcome } from '../services/planner/plannerResultPersistenceService'
+import { conflictResolutionPlannerOptions } from '../services/planner/plannerRuntimeOptions'
+import { RepositoryError } from '../db/repositoryError'
 
 /** These cases never start a replan Preview, so the replan runtime is never reached. */
 function unusedReplanDependencies(): ProductionPlanReplanDependencies {
@@ -160,42 +158,18 @@ function pageFixture(suffix = 'a'): {
   }
 }
 
-function evaluatedScenario(
-  overrides: Partial<Extract<PlannerAlternativeComparison['scenario'], { status: 'evaluated' }>> = {},
-): PlannerAlternativeComparison['scenario'] {
-  return {
-    status: 'evaluated',
-    scenarioOperationCount: 30,
-    unplannedTargetWeaponIds: [],
-    introducedConflicts: [],
-    remainingConflicts: [],
-    ...overrides,
-  }
-}
-
 /**
- * The Production Plan screen's Conflict controls run the Planner Alternative
- * what-if and actual repair since Phase 5-B; the legacy B8 / B9 Client methods
- * stay on the Client until Phase 6 and must never be reached from this page.
+ * The Production Plan screen's 「この候補を優先」 runs the ordinary `createPlan()`
+ * since Issue #278 PR-2. The Planner Alternative Client methods stay on the
+ * Client until a later cleanup and must never be reached from this page.
  */
 function plannerClient(
   prepareInteraction: PlannerWorkerClient['prepareInteraction'],
-  createPlannerAlternativeComparison: PlannerWorkerClient['createPlannerAlternativeComparison'] =
-    async () => ({
-      status: 'completed',
-      comparison: {
-        conflictKey: 'conflict.fixture',
-        fixedBuildListEntryId: buildListEntryId('build-list.fixture'),
-        fixedTargetWeaponId: targetWeaponId('target.fixture'),
-        alternatives: [],
-        scenario: evaluatedScenario(),
-      },
-    }),
 ): PlannerWorkerClient {
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     createPlan: vi.fn(),
-    createPlannerAlternativeComparison: vi.fn(createPlannerAlternativeComparison),
+    createPlannerAlternativeComparison: vi.fn(),
     createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(prepareInteraction),
     cancelPlan: vi.fn(),
@@ -228,50 +202,6 @@ function multiParticipantFixture() {
   return { ...fixture, secondEntry, secondTarget }
 }
 
-function completedWhatIf(
-  fixedBuildListEntryId: BuildListEntry['id'],
-  alternativeTarget: TargetWeapon,
-  operationCount: number,
-  adoptedInScenario: boolean | null = true,
-): Extract<PlannerAlternativeWhatIfCalculationResult, { status: 'completed' }> {
-  const route = createValidBuildListEntry().candidateSnapshot.route
-  return {
-    status: 'completed',
-    comparison: {
-      conflictKey: 'conflict.completed',
-      fixedBuildListEntryId,
-      fixedTargetWeaponId: targetWeaponId('target.fixed'),
-      alternatives: [{
-        fixedBuildListEntryId,
-        fixedTargetWeaponId: targetWeaponId('target.fixed'),
-        alternativeTargetWeaponId: alternativeTarget.id,
-        excludedByRepairLineageCount: 0,
-        outcome: {
-          status: 'found',
-          alternative: {
-            route,
-            finalBonuses: createValidBuildListEntry().candidateSnapshot.finalBonuses,
-            restorationBonusScope: 'gogma_artian',
-            seriesSkillId: null,
-            groupSkillId: null,
-            bonusAmendmentTrace: [],
-            skillAmendmentTrace: [],
-            conversionSkillTrace: null,
-          },
-          distance: {
-            estimatedOperationCount: operationCount,
-            estimatedGogmaAdvance: 2,
-            estimatedSkillAdvance: 1,
-            estimatedNormalAdvance: null,
-          },
-          adoptedInScenario,
-        },
-      }],
-      scenario: adoptedInScenario === null ? { status: 'stopped_by_planner_rerun_bound' } : evaluatedScenario(),
-    },
-  }
-}
-
 function dependencies(
   fixture = pageFixture(),
   client = plannerClient(async () => fixture.preparation),
@@ -283,8 +213,7 @@ function dependencies(
     getTargetWeapons: vi.fn(async () => [fixture.target]),
     createInput: vi.fn(async () => fixture.input),
     createWorkerClient: vi.fn(() => client),
-    inspectPlannerAlternativeRepairSave: vi.fn(async () => ({ approvalRequired: false as const })),
-    savePlannerAlternativeRepair: vi.fn(async (artifact) => ({ kind: 'saved' as const, plan: artifact.plannerResult.plan })),
+    savePlannerConflictPreferenceResult: vi.fn(async (result) => ({ kind: 'saved' as const, plan: result.plan as ProductionPlan })),
     inspectProductionPlanStart: vi.fn(async (planId) => ({
       planId,
       changes: [],
@@ -336,7 +265,7 @@ describe('ProductionPlanPage', () => {
     await user.click(link)
     expect(router.state.location.pathname).toBe('/plans')
     expect(await screen.findByText('Production plan list destination')).toBeInTheDocument()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
     expect(deps.startProductionPlan).not.toHaveBeenCalled()
   })
 
@@ -557,490 +486,42 @@ describe('ProductionPlanPage', () => {
     expect(deps.createInput).not.toHaveBeenCalled()
   })
 
-  it('rebuilds fresh input at click time and sends the Planner Alternative what-if with explicit resolutions and no bounds', async () => {
-    const user = userEvent.setup()
-    const fixture = pageFixture('fresh-click')
-    const actionInput = structuredClone(fixture.input)
-    const result = completedWhatIf(
-      fixture.entry.id,
-      fixture.target,
-      12,
-    )
-    const pending = deferred<PlannerAlternativeWhatIfCalculationResult>()
-    const client = plannerClient(
-      async () => fixture.preparation,
-      // The Production Worker reports no progress (Issue #103 Phase D-2a).
-      async () => pending.promise,
-    )
+  it('offers no 比較する and says what preferring a participant means before it is pressed', async () => {
+    const fixture = multiParticipantFixture()
+    const client = plannerClient(async () => fixture.preparation)
     const deps = dependencies(fixture, client)
-    vi.mocked(deps.createInput)
-      .mockResolvedValueOnce(fixture.input)
-      .mockResolvedValueOnce(actionInput)
-
     renderPage(deps, fixture.plan.id)
-    const compare = await screen.findByRole('button', { name: '比較する' })
-    const initialPreparedInput =
-      vi.mocked(client.prepareInteraction).mock.calls[0][1]
-    await user.click(compare)
 
-    await waitFor(() => expect(client.createPlannerAlternativeComparison).toHaveBeenCalledOnce())
-    // Phase 5-B: 「比較する」 runs the Planner Alternative what-if only (the
-    // legacy B9 Client method was removed in Phase 6-B1).
-    expect(client.createPlan).not.toHaveBeenCalled()
-    expect(deps.createInput).toHaveBeenCalledTimes(2)
-    expect(deps.createWorkerClient).toHaveBeenCalledOnce()
-    expect(client.prepareInteraction).toHaveBeenCalledTimes(2)
-    const actionPreparationRequestId =
-      vi.mocked(client.prepareInteraction).mock.calls[1][0]
-    const [, request] = vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0]
-    expect(vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0][0])
-      .not.toBe(actionPreparationRequestId)
-    expect(request.plannerInput).not.toBe(initialPreparedInput)
-    expect(request.plannerInput).not.toBe(fixture.input)
-    expect(request.plannerInput.conflictResolutions).toEqual([{
-      conflictKey: fixture.plan.conflicts[0].id,
-      selectedBuildListEntryId: fixture.entry.id,
-    }])
-    expect(request.scenarioResolution).toEqual({
-      conflictKey: fixture.plan.conflicts[0].id,
-      selectedBuildListEntryId: fixture.entry.id,
-    })
-    // The extent and the trial bounds are supplied inside the Worker; the
-    // request carries the caller input only. A Plan without a repair chain
-    // contributes no prior fixed Entry and no prior Route exclusion.
-    expect(Object.keys(request).sort()).toEqual([
-      'plannerInput',
-      'priorExcludedRoutes',
-      'priorFixedBuildListEntryIds',
-      'scenarioResolution',
-    ])
-    expect(request.priorFixedBuildListEntryIds).toEqual([])
-    expect(request.priorExcludedRoutes).toEqual([])
-    // The scenario runs with the options the actual repair saves with (9.2.19.7).
-    expect(request.plannerInput.options).toEqual({ maxPlanSteps: 1000 })
-    // Indeterminate (Issue #103 Phase D-1): the Worker progress never
-    // becomes a ratio.
-    expect(screen.getByText('比較しています…')).toBeInTheDocument()
-    expect(screen.getByRole('progressbar', { name: 'what-if比較中' })).not.toHaveAttribute('aria-valuenow')
-    expect(screen.queryByText(/比較中 3 \/ 8/)).not.toBeInTheDocument()
-
-    pending.resolve(result)
-    expect(await screen.findByText('必要操作数: 12')).toBeInTheDocument()
+    const buttons = await screen.findAllByRole('button', { name: 'この候補を優先' })
+    expect(buttons).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: '比較する' })).not.toBeInTheDocument()
+    expect(screen.getByText(
+      `この候補を優先すると、「${fixture.secondTarget.name}」は今回の生産計画では作成しません。作成リストの候補は残ります。`,
+    )).toBeInTheDocument()
+    expect(screen.getByText(
+      `この候補を優先すると、「${fixture.target.name}」は今回の生産計画では作成しません。作成リストの候補は残ります。`,
+    )).toBeInTheDocument()
+    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
     expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(client.createPlan).not.toHaveBeenCalled()
-    // Nothing of a what-if is persisted.
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
-  })
-
-  it('reads the displayed Draft repair lineage into the what-if request through the Domain context', async () => {
-    const user = userEvent.setup()
-    const fixture = multiParticipantFixture()
-    // An earlier repair fixed the second Entry and invalidated a Route of this
-    // Target, which still holds exactly the Entry the lineage last recorded.
-    fixture.plan.conflictRepairLineage = {
-      decisions: [{
-        conflictKind: 'same_skill_counter',
-        fixedBuildListEntryId: fixture.secondEntry.id,
-        fixedTargetWeaponId: fixture.secondTarget.id,
-        invalidatedRoutes: [{
-          targetWeaponId: fixture.target.id,
-          invalidatedBuildListEntryId: fixture.entry.id,
-          invalidatedRouteKey: 'route.key.earlier',
-          replacementBuildListEntryId: null,
-          outcome: 'not_found_within_search_extent',
-        }],
-      }, {
-        // Expired: this fixed Entry is not in the current Build List.
-        conflictKind: 'same_gogma_counter',
-        fixedBuildListEntryId: buildListEntryId('build-list.removed'),
-        fixedTargetWeaponId: targetWeaponId('target.removed'),
-        invalidatedRoutes: [],
-      }],
-    }
-    const client = plannerClient(async () => fixture.preparation)
-    const deps = dependencies(fixture, client)
-    renderPage(deps, fixture.plan.id)
-    await user.click((await screen.findAllByRole('button', { name: '比較する' }))[1])
-
-    await waitFor(() => expect(client.createPlannerAlternativeComparison).toHaveBeenCalledOnce())
-    const [, request] = vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0]
-    expect(request.priorFixedBuildListEntryIds).toEqual([fixture.secondEntry.id])
-    expect(request.priorExcludedRoutes).toEqual([
-      { targetWeaponId: fixture.target.id, routeKeys: ['route.key.earlier'] },
-    ])
-    // The what-if reads the lineage and never updates or saves it.
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(fixture.plan.conflictRepairLineage?.decisions).toHaveLength(2)
-  })
-
-  it('tells adopted, rejected and unevaluated alternatives and every no-result status apart', async () => {
-    const user = userEvent.setup()
-    const fixture = multiParticipantFixture()
-    const found = (adoptedInScenario: boolean | null) =>
-      completedWhatIf(fixture.entry.id, fixture.secondTarget, 9, adoptedInScenario)
-    const results: PlannerAlternativeWhatIfCalculationResult[] = [found(true), found(false), found(null)]
-    const client = plannerClient(async () => fixture.preparation, vi.fn()
-      .mockImplementationOnce(async () => results[0])
-      .mockImplementationOnce(async () => results[1])
-      .mockImplementationOnce(async () => results[2]))
-    renderPage(dependencies(fixture, client), fixture.plan.id)
-
-    await user.click((await screen.findAllByRole('button', { name: '比較する' }))[0])
-    expect(await screen.findByText('計画全体: 採用')).toBeInTheDocument()
-    expect(screen.getByText('この候補を優先した場合の計画手数（暫定）: 30')).toBeInTheDocument()
-    expect(screen.getByText('この計画で作成しない目標武器: なし')).toBeInTheDocument()
-    expect(screen.getByText('新しく発生する競合: なし')).toBeInTheDocument()
-
-    await user.click(screen.getAllByRole('button', { name: '比較する' })[0])
-    expect(await screen.findByText('計画全体: 不採用（他の代替と合わせると成立しません）')).toBeInTheDocument()
-
-    await user.click(screen.getAllByRole('button', { name: '比較する' })[0])
-    // Unevaluated is never shown as rejected, and a stopped scenario has no count.
-    expect(await screen.findByText('計画全体: 未評価（Planner再計算上限のため採否を確認できませんでした）')).toBeInTheDocument()
-    expect(screen.queryByText(/不採用/)).not.toBeInTheDocument()
-    expect(screen.getByText('Planner再計算上限のため、計画全体の手数は未確認です。')).toBeInTheDocument()
-    expect(screen.queryByText(/計画手数（暫定）/)).not.toBeInTheDocument()
-  })
-
-  it.each([
-    ['not_found_within_search_extent', '探索範囲内に実行可能な候補なし'],
-    ['stopped_by_search_extent_bound', '探索範囲上限のため未確認'],
-    ['stopped_by_candidate_trial_bound', '候補試行上限のため未確認'],
-    ['stopped_by_planner_rerun_bound', 'Planner再計算上限のため未確認'],
-    ['blocked_by_selected_checkpoint', /途中採用する状態が選択されているため代替ルートを探索しません/],
-  ] as const)('shows the %s outcome as its own meaning, never as a generic no candidate', async (status, text) => {
-    const user = userEvent.setup()
-    const fixture = multiParticipantFixture()
-    const result = completedWhatIf(fixture.entry.id, fixture.secondTarget, 9)
-    result.comparison.alternatives[0].outcome = { status }
-    result.comparison.alternatives[0].excludedByRepairLineageCount = status === 'not_found_within_search_extent' ? 2 : 0
-    const client = plannerClient(async () => fixture.preparation, async () => result)
-    renderPage(dependencies(fixture, client), fixture.plan.id)
-    await user.click((await screen.findAllByRole('button', { name: '比較する' }))[0])
-
-    expect(await screen.findByText(text)).toBeInTheDocument()
-    expect(screen.queryByText('候補なし')).not.toBeInTheDocument()
-    if (status === 'not_found_within_search_extent') {
-      expect(screen.getByText('以前の競合解決で外したルートを除外: 2件')).toBeInTheDocument()
-    }
-  })
-
-  it('shows introduced and remaining Conflicts and the unplanned Targets of an evaluated scenario', async () => {
-    const user = userEvent.setup()
-    const fixture = multiParticipantFixture()
-    const result = completedWhatIf(fixture.entry.id, fixture.secondTarget, 9)
-    result.comparison.scenario = evaluatedScenario({
-      scenarioOperationCount: 1234,
-      unplannedTargetWeaponIds: [fixture.target.id],
-      introducedConflicts: [{ kind: 'same_skill_counter', participantTargetWeaponIds: [fixture.target.id, fixture.secondTarget.id], resolved: false }],
-      remainingConflicts: [{ kind: 'same_gogma_counter', participantTargetWeaponIds: [fixture.secondTarget.id], resolved: false }],
-    })
-    const client = plannerClient(async () => fixture.preparation, async () => result)
-    renderPage(dependencies(fixture, client), fixture.plan.id)
-    await user.click((await screen.findAllByRole('button', { name: '比較する' }))[0])
-
-    expect(await screen.findByText('この候補を優先した場合の計画手数（暫定）: 1,234')).toBeInTheDocument()
-    expect(screen.getByText(`この計画で作成しない目標武器: ${fixture.target.name}`)).toBeInTheDocument()
-    expect(screen.getByText('新しく発生する競合: 1件')).toBeInTheDocument()
-    expect(screen.getByText('残る競合: 1件')).toBeInTheDocument()
-    expect(screen.getByText(`同じスキルカウンター位置（${fixture.target.name}・${fixture.secondTarget.name}） 未解決`)).toBeInTheDocument()
-  })
-
-  it('fails closed and refreshes availability when the current conflict disappears', async () => {
-    const user = userEvent.setup()
-    const fixture = pageFixture('availability')
-    const unavailable: PlannerInteractionPreparationResult = {
-      status: 'ready',
-      validBuildListEntryIds: [fixture.entry.id],
-      excludedBuildListEntries: [],
-      currentConflicts: [],
-    }
-    const client = plannerClient(
-      vi.fn()
-        .mockResolvedValueOnce(fixture.preparation)
-        .mockResolvedValueOnce(unavailable),
-    )
-    const deps = dependencies(fixture, client)
-
-    renderPage(deps, fixture.plan.id)
-    await user.click(await screen.findByRole('button', { name: '比較する' }))
-
-    expect(await screen.findByText(
-      '現在の状態が変化したため比較を開始できませんでした。',
-    )).toBeInTheDocument()
-    expect(screen.getByText('現在のPlanner入力ではこの競合を再現できません。'))
-      .toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '比較する' })).toBeDisabled()
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-  })
-
-  it('fails closed with the typed invalid preparation at action time', async () => {
-    const user = userEvent.setup()
-    const fixture = pageFixture('action-invalid')
-    const invalid: PlannerInteractionPreparationResult = {
-      status: 'invalid',
-      issues: [{
-        path: 'action.input',
-        code: 'invalid_integer',
-        message: 'Action-time typed issue',
-      }],
-      warnings: [],
-      excludedBuildListEntries: [],
-    }
-    const client = plannerClient(
-      vi.fn()
-        .mockResolvedValueOnce(fixture.preparation)
-        .mockResolvedValueOnce(invalid),
-    )
-    const deps = dependencies(fixture, client)
-
-    renderPage(deps, fixture.plan.id)
-    await user.click(await screen.findByRole('button', { name: '比較する' }))
-
-    expect(await screen.findByText('Action-time typed issue')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '比較する' })).toBeDisabled()
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-  })
-
-  it('cancels participant A and ignores its late result after switching to B', async () => {
-    const user = userEvent.setup()
-    const fixture = multiParticipantFixture()
-    const firstPending = deferred<PlannerAlternativeWhatIfCalculationResult>()
-    const secondPending = deferred<PlannerAlternativeWhatIfCalculationResult>()
-    const client = plannerClient(
-      async () => fixture.preparation,
-      vi.fn()
-        .mockImplementationOnce(() => firstPending.promise)
-        .mockImplementationOnce(() => secondPending.promise),
-    )
-    const deps = dependencies(fixture, client)
-
-    renderPage(deps, fixture.plan.id)
-    const buttons = await screen.findAllByRole('button', { name: '比較する' })
-    await user.click(buttons[0])
-    await waitFor(() => expect(client.createPlannerAlternativeComparison).toHaveBeenCalledTimes(1))
-    const firstRequestId =
-      vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0][0]
-    await user.click(screen.getAllByRole('button', { name: '比較する' })[1])
-    await waitFor(() => expect(client.createPlannerAlternativeComparison).toHaveBeenCalledTimes(2))
-    expect(deps.createInput).toHaveBeenCalledTimes(3)
-    expect(deps.createWorkerClient).toHaveBeenCalledOnce()
-    expect(client.cancelPlan).toHaveBeenCalledWith(firstRequestId)
-
-    secondPending.resolve(
-      completedWhatIf(fixture.secondEntry.id, fixture.target, 22),
-    )
-    expect(await screen.findByText('必要操作数: 22')).toBeInTheDocument()
-    const [, secondRequest] =
-      vi.mocked(client.createPlannerAlternativeComparison).mock.calls[1]
-    expect(secondRequest.plannerInput.conflictResolutions).toEqual([{
-      conflictKey: fixture.plan.conflicts[0].id,
-      selectedBuildListEntryId: fixture.entry.id,
-    }])
-    expect(secondRequest.scenarioResolution).toEqual({
-      conflictKey: fixture.plan.conflicts[0].id,
-      selectedBuildListEntryId: fixture.secondEntry.id,
-    })
-    firstPending.resolve(
-      completedWhatIf(fixture.entry.id, fixture.secondTarget, 11),
-    )
-    await waitFor(() => {
-      expect(screen.queryByText('必要操作数: 11')).not.toBeInTheDocument()
-    })
-    expect(screen.getByText('必要操作数: 22')).toBeInTheDocument()
-  })
-
-  it('cancels a loading comparison without showing a failure or late result', async () => {
-    const user = userEvent.setup()
-    const fixture = pageFixture('cancel')
-    const pending = deferred<PlannerAlternativeWhatIfCalculationResult>()
-    const client = plannerClient(
-      async () => fixture.preparation,
-      async () => pending.promise,
-    )
-    const deps = dependencies(fixture, client)
-
-    renderPage(deps, fixture.plan.id)
-    await user.click(await screen.findByRole('button', { name: '比較する' }))
-    const cancel = await screen.findByRole('button', {
-      name: '比較をキャンセル',
-    })
-    const requestId = vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0][0]
-    await user.click(cancel)
-
-    expect(client.cancelPlan).toHaveBeenCalledWith(requestId)
-    expect(screen.queryByRole('button', { name: '比較をキャンセル' }))
-      .not.toBeInTheDocument()
-    expect(screen.queryByText(/比較処理に失敗しました/)).not.toBeInTheDocument()
-    pending.resolve(completedWhatIf(fixture.entry.id, fixture.target, 99))
-    await waitFor(() => {
-      expect(screen.queryByText('必要操作数: 99')).not.toBeInTheDocument()
-    })
-  })
-
-  it('does not start stale A Worker work when A createInput resolves after B starts', async () => {
-    const user = userEvent.setup()
-    const fixture = multiParticipantFixture()
-    const firstActionInput = deferred<PlannerInput>()
-    const client = plannerClient(async () => fixture.preparation)
-    const deps = dependencies(fixture, client)
-    vi.mocked(deps.createInput)
-      .mockResolvedValueOnce(fixture.input)
-      .mockImplementationOnce(() => firstActionInput.promise)
-      .mockResolvedValueOnce(structuredClone(fixture.input))
-
-    renderPage(deps, fixture.plan.id)
-    const buttons = await screen.findAllByRole('button', { name: '比較する' })
-    await user.click(buttons[0])
-    await waitFor(() => expect(deps.createInput).toHaveBeenCalledTimes(2))
-    await user.click(screen.getAllByRole('button', { name: '比較する' })[1])
-    await waitFor(() => expect(client.createPlannerAlternativeComparison).toHaveBeenCalledOnce())
-    firstActionInput.resolve(structuredClone(fixture.input))
-
-    await waitFor(() => {
-      expect(client.prepareInteraction).toHaveBeenCalledTimes(2)
-    })
-    expect(client.createPlannerAlternativeComparison).toHaveBeenCalledOnce()
-    const [, request] = vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0]
-    expect(request.scenarioResolution.selectedBuildListEntryId)
-      .toBe(fixture.secondEntry.id)
-  })
-
-  it('cancels and disposes an active what-if request on unmount', async () => {
-    const user = userEvent.setup()
-    const fixture = pageFixture('what-if-unmount')
-    const pending = deferred<PlannerAlternativeWhatIfCalculationResult>()
-    const client = plannerClient(
-      async () => fixture.preparation,
-      async () => pending.promise,
-    )
-    const deps = dependencies(fixture, client)
-    const view = renderPage(deps, fixture.plan.id)
-
-    await user.click(await screen.findByRole('button', { name: '比較する' }))
-    await waitFor(() => expect(client.createPlannerAlternativeComparison).toHaveBeenCalledOnce())
-    const requestId = vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0][0]
-    view.unmount()
-
-    expect(client.cancelPlan).toHaveBeenCalledWith(requestId)
-    expect(client.dispose).toHaveBeenCalledOnce()
-    pending.resolve(completedWhatIf(fixture.entry.id, fixture.target, 44))
-  })
-
-  it('cancels an active what-if and ignores its late result after planId changes', async () => {
-    const user = userEvent.setup()
-    const first = pageFixture('what-if-route-first')
-    const second = pageFixture('what-if-route-second')
-    const pending = deferred<PlannerAlternativeWhatIfCalculationResult>()
-    const firstClient = plannerClient(
-      async () => first.preparation,
-      async () => pending.promise,
-    )
-    const secondClient = plannerClient(async () => second.preparation)
-    const deps = dependencies(first, firstClient)
-    vi.mocked(deps.getPlan).mockImplementation(async (id) =>
-      id === first.plan.id ? first.plan : second.plan)
-    vi.mocked(deps.createInput).mockImplementation(async () =>
-      structuredClone(
-        vi.mocked(deps.getPlan).mock.calls.at(-1)?.[0] === first.plan.id
-          ? first.input
-          : second.input,
-      ))
-    vi.mocked(deps.createWorkerClient)
-      .mockReturnValueOnce(firstClient)
-      .mockReturnValueOnce(secondClient)
-    const view = renderPage(deps, first.plan.id)
-
-    await user.click(await screen.findByRole('button', { name: '比較する' }))
-    await waitFor(() => expect(firstClient.createPlannerAlternativeComparison).toHaveBeenCalledOnce())
-    const requestId =
-      vi.mocked(firstClient.createPlannerAlternativeComparison).mock.calls[0][0]
-    await view.router.navigate(`/plans/${second.plan.id}`)
-
-    expect(await screen.findByText(second.target.name)).toBeInTheDocument()
-    expect(firstClient.cancelPlan).toHaveBeenCalledWith(requestId)
-    expect(firstClient.dispose).toHaveBeenCalledOnce()
-    pending.resolve(completedWhatIf(first.entry.id, first.target, 55))
-    await waitFor(() => {
-      expect(screen.queryByText('必要操作数: 55')).not.toBeInTheDocument()
-    })
-  })
-
-  it('shows an unexpected action error separately from typed what-if failures', async () => {
-    const user = userEvent.setup()
-    const fixture = pageFixture('action-error')
-    const client = plannerClient(async () => fixture.preparation)
-    const deps = dependencies(fixture, client)
-    vi.mocked(deps.createInput)
-      .mockResolvedValueOnce(fixture.input)
-      .mockRejectedValueOnce(new Error('Fresh input failed'))
-
-    renderPage(deps, fixture.plan.id)
-    await user.click(await screen.findByRole('button', { name: '比較する' }))
-
-    expect(await screen.findByText(
-      '比較処理に失敗しました。Fresh input failed',
-    )).toBeInTheDocument()
-    expect(screen.queryByText('Planner入力を準備できませんでした'))
-      .not.toBeInTheDocument()
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
   })
 })
 
-
-function repairComparison(
-  scenario: PlannerAlternativeComparison['scenario'] = evaluatedScenario(),
-): PlannerAlternativeComparison {
-  return {
-    conflictKey: 'conflict.repair',
-    fixedBuildListEntryId: buildListEntryId('build-list.fixed'),
-    fixedTargetWeaponId: targetWeaponId('target.fixed'),
-    alternatives: [],
-    scenario,
-  }
-}
-
-/** A persistable repair artifact of `plan` with a one-decision lineage. */
-function repairArtifact(plan: ProductionPlan): PlannerAlternativeRepairArtifact {
-  return {
-    plannerResult: { plan, conflicts: plan.conflicts, warnings: [], termination: completedPlannerTermination() },
-    generatedBuildListEntries: [],
-    generatedBuildListEntryReplacements: [],
-    conflictRepairLineage: {
-      decisions: [{
-        conflictKind: 'same_gogma_counter',
-        fixedBuildListEntryId: buildListEntryId('build-list.fixed'),
-        fixedTargetWeaponId: targetWeaponId('target.fixed'),
-        invalidatedRoutes: [],
-      }],
-    },
-  }
-}
-
 /**
- * One actual repair calculation: `null` is a scenario with no final Plan
- * (`no_plan`, nothing savable), a Plan a persistable artifact of it.
+ * A conflict-resolution result of `plan`: an ordinary `createPlan()` result
+ * whose preferred Entries all completed unless `outcome` says otherwise.
  */
-function repairResult(plan: ProductionPlan | null = null): PlannerAlternativeRepairCalculationResult {
-  return plan === null
-    ? {
-        status: 'completed',
-        comparison: repairComparison({ status: 'no_plan' }),
-        persistence: { status: 'not_persistable', reason: 'no_plan' },
-      }
-    : {
-        status: 'completed',
-        comparison: repairComparison(),
-        persistence: { status: 'persistable', artifact: repairArtifact(plan) },
-      }
-}
-
-/** The artifact a persistable repair result carries. */
-function artifactOf(result: PlannerAlternativeRepairCalculationResult): PlannerAlternativeRepairArtifact {
-  if (result.status !== 'completed' || result.persistence.status !== 'persistable') {
-    throw new Error('The fixture repair result is not persistable.')
+function preferenceResult(
+  plan: ProductionPlan | null,
+  overrides: Partial<PlannerResult> = {},
+): PlannerResult {
+  return {
+    plan,
+    conflicts: plan?.conflicts ?? [],
+    warnings: [],
+    termination: completedPlannerTermination(),
+    conflictResolutionOutcome: { preferredEntries: [], allPreferredEntriesCompleted: true },
+    ...overrides,
   }
-  return result.persistence.artifact
 }
 
 async function clickSelection(user: ReturnType<typeof userEvent.setup>, index = 0) {
@@ -1049,362 +530,253 @@ async function clickSelection(user: ReturnType<typeof userEvent.setup>, index = 
   await user.click(buttons[index])
 }
 
-describe('ProductionPlanPage explicit selection', () => {
-  it('selects without comparison and sends the Planner Alternative repair from fresh input, the decision and the lineage', async () => {
+/**
+ * Three participants and two persisted decisions of the displayed Draft:
+ * conflict X = {first, second} preferring first, conflict Y = {first, third}
+ * preferring first. Preferring second on X supersedes Y (its preferred Entry is
+ * one X no longer selects).
+ */
+function supersedingFixture() {
+  const fixture = multiParticipantFixture()
+  const thirdEntry = structuredClone(fixture.entry)
+  const thirdTarget = structuredClone(fixture.target)
+  thirdEntry.id = buildListEntryId('build-list.page.multi.third')
+  thirdEntry.targetWeaponId = targetWeaponId('target.page.multi.third')
+  thirdEntry.candidateSnapshot.targetWeaponId = thirdEntry.targetWeaponId
+  thirdTarget.id = thirdEntry.targetWeaponId
+  thirdTarget.name = 'Page fixture target multi third'
+  fixture.input.buildListEntries.push(thirdEntry)
+  fixture.input.targetWeapons.push(thirdTarget)
+  const conflictY: PlanConflict = {
+    id: 'conflict.page.y',
+    kind: 'same_skill_counter',
+    buildListEntryIds: [fixture.entry.id, thirdEntry.id],
+    reason: 'Persisted fixture conflict Y',
+    recommendedBuildListEntryId: fixture.entry.id,
+    selectedBuildListEntryId: fixture.entry.id,
+    resolutionNote: null,
+    checkpointParticipants: [],
+  }
+  fixture.plan.conflicts.push(conflictY)
+  fixture.preparation = {
+    status: 'ready',
+    validBuildListEntryIds: [fixture.entry.id, fixture.secondEntry.id, thirdEntry.id],
+    excludedBuildListEntries: [],
+    currentConflicts: [
+      { id: fixture.plan.conflicts[0].id, buildListEntryIds: [fixture.entry.id, fixture.secondEntry.id], checkpointParticipants: [] },
+      { id: conflictY.id, buildListEntryIds: [fixture.entry.id, thirdEntry.id], checkpointParticipants: [] },
+    ],
+  }
+  return { ...fixture, thirdEntry, thirdTarget, conflictY }
+}
+
+describe('ProductionPlanPage explicit selection (Issue #278 ordinary Planner)', () => {
+  it('prefers from a fresh input with the Domain decision set, runs only createPlan with the derived options, and saves against the displayed Draft', async () => {
     const user = userEvent.setup()
     const fixture = multiParticipantFixture()
-    const other = { ...fixture.plan.conflicts[0], id: 'conflict.other' }
-    const recommendationOnly = { ...other, id: 'conflict.recommendation', selectedBuildListEntryId: null }
-    fixture.plan.conflicts.push(other, recommendationOnly)
-    fixture.plan.conflictRepairLineage = {
-      decisions: [{
-        conflictKind: 'same_gogma_counter',
-        fixedBuildListEntryId: fixture.entry.id,
-        fixedTargetWeaponId: fixture.target.id,
-        invalidatedRoutes: [],
-      }],
-    }
     const fresh = structuredClone(fixture.input)
     fresh.rngState.notes = 'selection-time state'
     const beforePlan = structuredClone(fixture.plan)
-    const beforeInput = structuredClone(fresh)
     const client = plannerClient(async () => fixture.preparation)
-    // Saved under the displayed ID, so the page reloads nothing after the save.
-    const result = repairResult(structuredClone(fixture.plan))
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue(result)
+    const saved = { ...pageFixture('saved').plan }
+    const result = preferenceResult({ ...structuredClone(fixture.plan), id: productionPlanId('plan.worker-only') })
+    vi.mocked(client.createPlan).mockResolvedValue(result)
     const deps = dependencies(fixture, client)
     vi.mocked(deps.createInput).mockResolvedValueOnce(fixture.input).mockResolvedValueOnce(fresh)
-    renderPage(deps, fixture.plan.id)
+    vi.mocked(deps.getPlan).mockImplementation(async (id) => id === saved.id ? saved : fixture.plan)
+    vi.mocked(deps.savePlannerConflictPreferenceResult).mockResolvedValue({ kind: 'saved', plan: saved })
+    const view = renderPage(deps, fixture.plan.id)
+
     await clickSelection(user, 1)
-    await waitFor(() => expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce())
-    expect(deps.createInput).toHaveBeenCalledTimes(2)
-    const prepared = vi.mocked(client.prepareInteraction).mock.calls[1][1]
-    expect(prepared.rngState).toBe(fresh.rngState)
-    expect(prepared).not.toBe(vi.mocked(client.prepareInteraction).mock.calls[0][1])
-    expect(prepared.conflictResolutions).toEqual([
-      { conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.entry.id },
-      { conflictKey: other.id, selectedBuildListEntryId: fixture.entry.id },
+    await waitFor(() => expect(view.router.state.location.pathname).toBe('/plans/' + saved.id))
+    // The page load, the press (and the saved Draft's own load afterwards).
+    expect(vi.mocked(deps.createInput).mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(client.createPlan).toHaveBeenCalledOnce()
+    const [, runInput] = vi.mocked(client.createPlan).mock.calls[0]
+    expect(runInput.rngState).toBe(fresh.rngState)
+    // The earlier decision of the same conflict is replaced by this one.
+    expect(runInput.conflictResolutions).toEqual([
+      { conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.secondEntry.id },
     ])
-    const calls = vi.mocked(client.createPlannerAlternativeRepair).mock.calls[0]
-    // The wire input is the caller input only: no extent, no trial bounds.
-    expect(calls).toHaveLength(2)
-    const [, request] = calls
-    expect(Object.keys(request).sort()).toEqual(['decision', 'lineage', 'plannerInput'])
-    // The restored explicit resolutions are sent as they are; the Domain
-    // merges the decision (same conflictKey replaced).
-    expect(request.plannerInput).not.toBe(prepared)
-    expect(request.plannerInput.rngState).toBe(fresh.rngState)
-    expect(request.plannerInput.conflictResolutions).toEqual(prepared.conflictResolutions)
-    expect(request.decision).toEqual({
-      conflictKey: fixture.plan.conflicts[0].id,
-      selectedBuildListEntryId: fixture.secondEntry.id,
-    })
-    expect(request.lineage).toEqual(fixture.plan.conflictRepairLineage)
-    // Neither the ordinary Planner nor the what-if is run (the legacy B8 / B9
-    // Client methods were removed in Phase 6-B1).
+    expect(runInput.options).toEqual(conflictResolutionPlannerOptions(fixture.plan))
+    // No Planner Alternative search, scenario or repair is started.
     expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(client.createPlan).not.toHaveBeenCalled()
-    expect(fresh).toEqual(beforeInput)
+    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).toHaveBeenCalledOnce()
+    const [savedResult, context, saveContext] = vi.mocked(deps.savePlannerConflictPreferenceResult).mock.calls[0]
+    expect(savedResult).toBe(result)
+    // The source Draft is the Draft the user acted on, never the calculated
+    // Plan's ID nor the Draft opened after the save.
+    expect(context).toEqual({
+      conflictResolutions: runInput.conflictResolutions,
+      expectedSourceDraftId: fixture.plan.id,
+    })
+    expect(saveContext.rngEngineVersion).toBe(client.engineVersion)
     expect(fixture.plan).toEqual(beforePlan)
-    expect(vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0][0]).toBe(artifactOf(result))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('never reuses a what-if result for the repair: the repair starts from its own fresh input', async () => {
+  it('asks before dropping an earlier decision: キャンセル runs nothing, the confirmation runs the reduced set', async () => {
+    const user = userEvent.setup()
+    const fixture = supersedingFixture()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(null))
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+
+    // The second participant of conflict X.
+    await clickSelection(user, 1)
+    let dialog = await screen.findByRole('dialog', { name: '以前の選択を変更して再計算しますか？' })
+    expect(within(dialog).getByText(
+      `以前の選択「${fixture.target.name}を優先」を取り消します（今回の選択で、その候補は作成しない候補になります）。`,
+    )).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(client.createPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
+
+    await clickSelection(user, 1)
+    dialog = await screen.findByRole('dialog', { name: '以前の選択を変更して再計算しますか？' })
+    await user.click(within(dialog).getByRole('button', { name: 'この候補を優先して再計算' }))
+    await waitFor(() => expect(client.createPlan).toHaveBeenCalledOnce())
+    expect(vi.mocked(client.createPlan).mock.calls[0][1].conflictResolutions).toEqual([
+      { conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.secondEntry.id },
+    ])
+    expect(await screen.findByText('この選択では生産計画を作成できませんでした。表示中の生産計画は変更していません。')).toBeInTheDocument()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
+  })
+
+  it('lists an earlier decision the current input cannot reproduce before running', async () => {
     const user = userEvent.setup()
     const fixture = multiParticipantFixture()
-    const whatIf = completedWhatIf(fixture.entry.id, fixture.secondTarget, 9)
-    const client = plannerClient(async () => fixture.preparation, async () => whatIf)
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue(repairResult())
+    fixture.plan.conflicts.push({ ...fixture.plan.conflicts[0], id: 'conflict.page.gone' })
+    const client = plannerClient(async () => fixture.preparation)
     const deps = dependencies(fixture, client)
-    const repairInput = structuredClone(fixture.input)
-    vi.mocked(deps.createInput)
-      .mockResolvedValueOnce(fixture.input)
-      .mockResolvedValueOnce(structuredClone(fixture.input))
-      .mockResolvedValueOnce(repairInput)
     renderPage(deps, fixture.plan.id)
-    await user.click((await screen.findAllByRole('button', { name: '比較する' }))[0])
-    expect(await screen.findByText('必要操作数: 9')).toBeInTheDocument()
-    await clickSelection(user, 0)
 
-    await waitFor(() => expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce())
-    expect(deps.createInput).toHaveBeenCalledTimes(3)
-    const [, request] = vi.mocked(client.createPlannerAlternativeRepair).mock.calls[0]
-    expect(request.plannerInput.rngState).toBe(repairInput.rngState)
-    expect(JSON.stringify(request)).not.toContain('alternativeTargetWeaponId')
+    await clickSelection(user, 1)
+    const dialog = await screen.findByRole('dialog', { name: '以前の選択を変更して再計算しますか？' })
+    expect(within(dialog).getByText('以前の選択のうち次のものは、現在の作成リストでは再現できないため引き継ぎません。')).toBeInTheDocument()
+    expect(within(dialog).getByText(
+      `以前の選択「${fixture.target.name}を優先」は引き継ぎません（現在の入力にその競合がありません）。`,
+    )).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'キャンセル' }))
+    expect(client.createPlan).not.toHaveBeenCalled()
   })
 
-  it('CRITICAL: an invalid_conflict_resolution repair saves nothing and tries no other participant', async () => {
+  it('refuses before calculating when two preferred Entries meet in an undecided conflict', async () => {
+    const user = userEvent.setup()
+    const fixture = supersedingFixture()
+    // Y now prefers third; W = {second, third} is undecided.
+    fixture.plan.conflicts[1].selectedBuildListEntryId = fixture.thirdEntry.id
+    if (fixture.preparation.status !== 'ready') throw new Error('fixture')
+    fixture.preparation.currentConflicts.push({
+      id: 'conflict.page.w',
+      buildListEntryIds: [fixture.secondEntry.id, fixture.thirdEntry.id],
+      checkpointParticipants: [],
+    })
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+
+    await clickSelection(user, 1)
+    expect(await screen.findByText('優先した候補どうしが両立しないため、計算を開始しませんでした')).toBeInTheDocument()
+    expect(screen.getByText(
+      `優先した「${fixture.secondTarget.name}」、「${fixture.thirdTarget.name}」は、まだ選んでいない競合で両立しません。先にその競合でどちらを優先するか選んでください。`,
+    )).toBeInTheDocument()
+    expect(client.createPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
+  })
+
+  it('CRITICAL: an invalid_conflict_resolution result saves nothing and tries no other participant', async () => {
     const user = userEvent.setup()
     const fixture = pageFixture()
     const before = structuredClone(fixture.plan)
     const client = plannerClient(async () => fixture.preparation)
-    const result: PlannerAlternativeRepairCalculationResult = {
-      status: 'completed',
-      comparison: repairComparison(),
-      persistence: { status: 'not_persistable', reason: 'invalid_conflict_resolution' },
-    }
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue(result)
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(structuredClone(fixture.plan), {
+      warnings: [{ kind: 'invalid_conflict_resolution', message: 'refused' }],
+    }))
     const deps = dependencies(fixture, client)
     const view = renderPage(deps, fixture.plan.id)
     const navigate = vi.spyOn(view.router, 'navigate')
     await clickSelection(user)
-    expect(await screen.findByText(/ユーザーが選択した競合候補を現在の状態では固定できませんでした/)).toBeInTheDocument()
-    expect(deps.inspectPlannerAlternativeRepairSave).not.toHaveBeenCalled()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(await screen.findByText(/選択した競合候補を現在の状態では優先できませんでした/)).toBeInTheDocument()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
-    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
     expect(summaryValue('計画ID')).toBe(fixture.plan.id)
     expect(fixture.plan).toEqual(before)
-    expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce()
-    expect(client.createPlan).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
+    expect(client.createPlan).toHaveBeenCalledOnce()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
   })
 
-  it.each([
-    ['no_plan', { status: 'no_plan' }, 'この候補を優先すると、現在の入力から生産計画を作成できませんでした。生産計画と作成リストは変更されていません。'],
-    ['stopped_by_plan_step_bound', { status: 'stopped_by_plan_step_bound', maxPlanSteps: 2000 },
-      '競合解決の再計算が最大計画ステップ数 2,000 に到達したため、完成した生産計画を作成できませんでした。この上限は表示中の生産計画のステップ数から自動で決まります。ビルドリスト画面から生産計画を作り直してください。'],
-    ['stopped_by_planner_rerun_bound', { status: 'stopped_by_planner_rerun_bound' },
-      'Planner再計算上限に到達したため、この候補を優先した生産計画を確定できませんでした。生産計画と作成リストは変更されていません。'],
-  ] as const)('saves nothing for a %s repair and explains it with its typed comparison', async (reason, scenario, message) => {
+  it('a message resembling an invalid warning is not the typed kind: the result is saved', async () => {
     const user = userEvent.setup()
     const fixture = pageFixture()
     const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue({
-      status: 'completed',
-      comparison: repairComparison(scenario),
-      persistence: { status: 'not_persistable', reason },
-    })
-    const deps = dependencies(fixture, client)
-    const view = renderPage(deps, fixture.plan.id)
-    await clickSelection(user)
-
-    expect(await screen.findByText(message)).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'この候補を優先した結果（保存していません）' })).toBeInTheDocument()
-    expect(deps.inspectPlannerAlternativeRepairSave).not.toHaveBeenCalled()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
-    expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
-  })
-
-  it.each([
-    ['planner_input_not_ready', { status: 'planner_input_not_ready', issues: [{ path: 'x', code: 'invalid_integer', message: 'Typed repair issue' }], warnings: [], excludedBuildListEntries: [] }, 'Typed repair issue'],
-    ['invalid_fixed_resolution', { status: 'invalid_fixed_resolution', reason: 'fixed_constraints_unresolved', resolution: null, detail: 'fixture detail' }, '既存の明示選択を含む固定条件を解決できません。'],
-    ['invalid_prior_fixed_entry', { status: 'invalid_prior_fixed_entry', buildListEntryId: buildListEntryId('build-list.prior'), detail: 'fixture detail' }, /以前の競合解決で優先した候補を、現在のPlanner入力では固定できません/],
-  ] as const)('reports a typed %s preparation failure without saving or falling back', async (_status, failure, text) => {
-    const user = userEvent.setup()
-    const fixture = pageFixture()
-    const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue(failure as PlannerAlternativeRepairCalculationResult)
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(structuredClone(fixture.plan), {
+      warnings: [{ kind: 'max_steps_reached', message: 'invalid_conflict_resolution' }],
+    }))
     const deps = dependencies(fixture, client)
     renderPage(deps, fixture.plan.id)
     await clickSelection(user)
-
-    expect(await screen.findByText(text)).toBeInTheDocument()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce()
-    expect(client.createPlan).not.toHaveBeenCalled()
+    await waitFor(() => expect(deps.savePlannerConflictPreferenceResult).toHaveBeenCalledOnce())
   })
 
-  it('saves the full result with a rebuilt current context and navigates only to the saved Plan, then reloads', async () => {
-    const user = userEvent.setup()
-    const fixture = pageFixture()
-    const next = pageFixture('saved')
-    const pending = deferred<PlannerAlternativeRepairCalculationResult>()
-    const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair).mockReturnValue(pending.promise)
-    const deps = dependencies(fixture, client)
-    vi.mocked(deps.getPlan).mockImplementation(async id => id === next.plan.id ? next.plan : fixture.plan)
-    vi.mocked(deps.savePlannerAlternativeRepair).mockResolvedValue({ kind: 'saved', plan: next.plan })
-    const view = renderPage(deps, fixture.plan.id)
-    await clickSelection(user)
-    await waitFor(() => expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce())
-    const startContext = vi.mocked(deps.createInput).mock.calls[1][0]
-    deps.master.manifest.dataVersion += 1
-    const result = repairResult({ ...fixture.plan, id: productionPlanId('plan.worker-only') })
-    // A message resembling an invalid warning is not an invalid typed kind.
-    artifactOf(result).plannerResult.warnings = [{ kind: 'max_steps_reached', message: 'invalid_conflict_resolution' }]
-    await act(async () => pending.resolve(result))
-    await waitFor(() => expect(view.router.state.location.pathname).toBe('/plans/' + next.plan.id))
-    expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce()
-    const [savedResult, saveContext, sourceDraftId] = vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0]
-    expect(savedResult).toBe(artifactOf(result))
-    // The source Draft authority is the Draft the user acted on - never the
-    // calculated Plan's ID, nor the Draft the page opens after the save.
-    expect(sourceDraftId).toBe(fixture.plan.id)
-    expect(sourceDraftId).not.toBe(artifactOf(result).plannerResult.plan.id)
-    expect(sourceDraftId).not.toBe(next.plan.id)
-    expect(vi.mocked(deps.inspectPlannerAlternativeRepairSave).mock.calls[0][2]).toBe(fixture.plan.id)
-    expect(saveContext).not.toBe(startContext)
-    expect(saveContext.masterDataVersion).toBe(startContext.masterDataVersion + 1)
-    expect(saveContext.rngEngineVersion).toBe(client.engineVersion)
-    expect(deps.getPlan).toHaveBeenCalledWith(next.plan.id)
-    await waitFor(() => expect(summaryValue('計画ID')).toBe(next.plan.id))
-  })
-
-  it('sends a replacement that breaks the active Plan through the shared warning, saving only with the approval', async () => {
-    // A generated Entry replacing an Entry the active Plan depends on
-    // (`docs/PLANNER_SPEC.md` 9.2.18 / 16.6): the runtime's inspection alone
-    // asks for the warning, and the save is re-run with the approval it built.
-    const user = userEvent.setup()
-    const fixture = pageFixture()
-    const next = pageFixture('saved')
-    const client = plannerClient(async () => fixture.preparation)
-    const result = repairResult({ ...fixture.plan, id: productionPlanId('plan.worker-only') })
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue(result)
-    const deps = dependencies(fixture, client)
-    vi.mocked(deps.getPlan).mockImplementation(async id => id === next.plan.id ? next.plan : fixture.plan)
-    const observedPlan = {
-      planId: productionPlanId('plan.active.elsewhere'),
-      status: 'active' as const,
-      currentStepId: null,
-      updatedAt: '2026-09-20T00:00:00.000Z',
-    }
-    vi.mocked(deps.inspectPlannerAlternativeRepairSave).mockResolvedValue({
-      approvalRequired: true,
-      reasons: ['build_list_changed'],
-      observedPlan,
-      savePointChoiceRequired: false,
-    })
-    vi.mocked(deps.savePlannerAlternativeRepair).mockResolvedValue({ kind: 'saved', plan: next.plan })
-    const view = renderPage(deps, fixture.plan.id)
-
-    // Cancel: nothing is saved.
-    await clickSelection(user)
-    let warning = await screen.findByRole('dialog', { name: '実行中の生産計画があります' })
-    expect(within(warning).getByText('生産計画が使用する作成リスト項目が変わります')).toBeInTheDocument()
-    await user.click(within(warning).getByRole('button', { name: 'キャンセル' }))
-    expect(await screen.findByText('保存を取り消しました。生産計画と作成リストは変更されていません。')).toBeInTheDocument()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
-
-    // Approve: the same result is saved with the inspection's own token.
-    await clickSelection(user)
-    warning = await screen.findByRole('dialog', { name: '実行中の生産計画があります' })
-    await user.click(within(warning).getByRole('button', { name: '生産計画を破棄して保存' }))
-    await waitFor(() => expect(view.router.state.location.pathname).toBe('/plans/' + next.plan.id))
-    expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce()
-    const [savedResult, , sourceDraftId, approval] = vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0]
-    expect(savedResult).toBe(artifactOf(result))
-    expect(sourceDraftId).toBe(fixture.plan.id)
-    expect(approval).toEqual({ observedPlan, savePointDecision: null })
-  })
-
-  it('restores the save point instead of saving a pre-restore result, and asks for a new calculation', async () => {
-    // 「最後のゲーム内セーブ地点へ戻す」 for a Planner result save: the runtime
-    // restores and drops the result (`docs/PLANNER_SPEC.md` 9.2.18 / 16.10).
-    // The page reports a finished restore, never an error, and opens no Draft.
-    const user = userEvent.setup()
-    const fixture = pageFixture()
-    const client = plannerClient(async () => fixture.preparation)
-    const result = repairResult({ ...fixture.plan, id: productionPlanId('plan.worker-only') })
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue(result)
-    const deps = dependencies(fixture, client)
-    const observedPlan = {
-      planId: productionPlanId('plan.active.elsewhere'),
-      status: 'active' as const,
-      currentStepId: null,
-      updatedAt: '2026-09-20T00:00:00.000Z',
-    }
-    const recordedAt = '2026-09-19T00:00:00.000Z'
-    vi.mocked(deps.inspectPlannerAlternativeRepairSave).mockResolvedValue({
-      approvalRequired: true,
-      reasons: ['build_list_changed'],
-      observedPlan,
-      savePointChoiceRequired: true,
-      savePointRecordedAt: recordedAt,
-      savePointLastExecutionHistoryId: null,
-      savePointCurrentStepId: null,
-    })
-    vi.mocked(deps.savePlannerAlternativeRepair).mockResolvedValue({
-      kind: 'save_point_restored_recalculation_required',
-      restoredPlan: { ...fixture.plan, id: observedPlan.planId, status: 'active' },
-      savePoint: {} as never,
-      deletedExecutionHistoryIds: [],
-    })
-    const view = renderPage(deps, fixture.plan.id)
-
-    await clickSelection(user)
-    let warning = await screen.findByRole('dialog', { name: '実行中の生産計画があります' })
-    await user.click(within(warning).getByRole('button', { name: '生産計画を破棄して保存' }))
-    warning = await screen.findByRole('dialog', { name: '実行中の生産計画があります' })
-    // The choice tells the user a restore drops this result and ends no Plan.
-    expect(within(warning).getByText(/この変更は保存しません。生産計画は破棄されず/)).toBeInTheDocument()
-    await user.click(within(warning).getByRole('button', { name: '最後のゲーム内セーブ地点へ戻す' }))
-    const restore = await screen.findByRole('dialog', { name: '最後のゲーム内セーブ地点へ戻す' })
-    expect(within(restore).getByText(/この変更（戻す前の状態で計算した結果）は保存しません/)).toBeInTheDocument()
-    await user.click(within(restore).getByRole('checkbox', { name: 'ゲーム側を最後のゲーム内セーブ地点まで戻しました' }))
-    await user.click(within(restore).getByRole('button', { name: 'アプリ側もセーブ地点へ戻す' }))
-
-    expect(await screen.findByText(
-      '最後のゲーム内セーブ地点へ戻しました。復元前の計算結果は保存していません。復元後の状態から、もう一度再計算してください。',
-    )).toBeInTheDocument()
-    expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce()
-    const [savedResult, , sourceDraftId, approval] = vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0]
-    expect(savedResult).toBe(artifactOf(result))
-    expect(sourceDraftId).toBe(fixture.plan.id)
-    expect(approval).toEqual({ observedPlan, savePointDecision: { kind: 'restore_save_point', recordedAt } })
-    // No Draft is opened, and nothing is reported as a failure.
-    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
-    expect(screen.queryByText('生産計画の再計算・保存に失敗しました。')).not.toBeInTheDocument()
-    expect(vi.mocked(deps.getPlan).mock.calls.every(([id]) => id === fixture.plan.id)).toBe(true)
-  })
-
-  it('continues the repair chain: the saved Draft lineage feeds the next comparison and repair', async () => {
-    // Issue #136 / #101 chain semantics at the Application / Worker boundary:
-    // the first repair's artifact carries the lineage, the saved Draft holds
-    // it, and the next 「比較する」 / 「この候補を優先」 on that Draft read it.
+  it('never saves a result whose preferred Entry is not completed, and names the typed cause', async () => {
     const user = userEvent.setup()
     const fixture = multiParticipantFixture()
-    const lineage = {
-      decisions: [{
-        conflictKind: 'same_skill_counter' as const,
-        fixedBuildListEntryId: fixture.entry.id,
-        fixedTargetWeaponId: fixture.target.id,
-        invalidatedRoutes: [{
-          targetWeaponId: fixture.secondTarget.id,
-          invalidatedBuildListEntryId: fixture.secondEntry.id,
-          invalidatedRouteKey: 'route.second.invalidated',
-          replacementBuildListEntryId: null,
-          outcome: 'not_found_within_search_extent' as const,
-        }],
-      }],
-    }
-    const repairedPlan: ProductionPlan = { ...structuredClone(fixture.plan), id: productionPlanId('plan.page.repaired') }
-    const first = repairResult(repairedPlan)
-    artifactOf(first).conflictRepairLineage = lineage
     const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair)
-      .mockResolvedValueOnce(first)
-      .mockResolvedValueOnce(repairResult())
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(structuredClone(fixture.plan), {
+      conflictResolutionOutcome: {
+        allPreferredEntriesCompleted: false,
+        preferredEntries: [{
+          buildListEntryId: fixture.secondEntry.id,
+          targetWeaponId: fixture.secondTarget.id,
+          status: 'incomplete',
+          cause: { kind: 'deadlock_or_stall' },
+        }],
+      },
+    }))
     const deps = dependencies(fixture, client)
-    // Persistence stores the artifact lineage on the Draft it saves.
-    vi.mocked(deps.getPlan).mockImplementation(async (id) =>
-      id === repairedPlan.id ? { ...repairedPlan, conflictRepairLineage: lineage } : fixture.plan)
     const view = renderPage(deps, fixture.plan.id)
-
-    await clickSelection(user, 0)
-    await waitFor(() => expect(view.router.state.location.pathname).toBe('/plans/' + repairedPlan.id))
-    expect(vi.mocked(client.createPlannerAlternativeRepair).mock.calls[0][1].lineage).toBeNull()
-    expect(vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0][0].conflictRepairLineage).toEqual(lineage)
-
-    // Wait until the repaired Draft itself is loaded and prepared: its Conflict
-    // controls are enabled only in its own ready state.
-    await waitFor(() => expect(summaryValue('計画ID')).toBe(repairedPlan.id))
-    await waitFor(() => expect(client.prepareInteraction).toHaveBeenCalledTimes(3))
-    await waitFor(() => expect(screen.getAllByRole('button', { name: '比較する' })[0]).toBeEnabled())
-    await user.click(screen.getAllByRole('button', { name: '比較する' })[0])
-    await waitFor(() => expect(client.createPlannerAlternativeComparison).toHaveBeenCalledOnce())
-    const [, comparison] = vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0]
-    expect(comparison.priorFixedBuildListEntryIds).toEqual([fixture.entry.id])
-    expect(comparison.priorExcludedRoutes).toEqual([
-      { targetWeaponId: fixture.secondTarget.id, routeKeys: ['route.second.invalidated'] },
-    ])
-
     await clickSelection(user, 1)
-    await waitFor(() => expect(client.createPlannerAlternativeRepair).toHaveBeenCalledTimes(2))
-    expect(vi.mocked(client.createPlannerAlternativeRepair).mock.calls[1][1].lineage).toEqual(lineage)
+
+    expect(await screen.findByText(
+      `優先した「${fixture.secondTarget.name}」は、この選択では完成できないため、生産計画を保存していません`,
+    )).toBeInTheDocument()
+    expect(screen.getByText(`${fixture.secondTarget.name}: 計画の途中で手順が行き詰まり、作成を続けられませんでした。`)).toBeInTheDocument()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+  })
+
+  it('fails closed when the result carries no completion judgement', async () => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const client = plannerClient(async () => fixture.preparation)
+    const result = preferenceResult(structuredClone(fixture.plan))
+    delete result.conflictResolutionOutcome
+    vi.mocked(client.createPlan).mockResolvedValue(result)
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+    await clickSelection(user)
+    expect(await screen.findByText('優先した候補が完成するか確認できないため、生産計画を保存していません')).toBeInTheDocument()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
+  })
+
+  it('reports a typed save refusal and keeps the displayed Draft', async () => {
+    const user = userEvent.setup()
+    const fixture = pageFixture()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(structuredClone(fixture.plan)))
+    const deps = dependencies(fixture, client)
+    vi.mocked(deps.savePlannerConflictPreferenceResult).mockRejectedValue(
+      new RepositoryError('planner_state_changed', 'The current Draft was replaced.'),
+    )
+    const view = renderPage(deps, fixture.plan.id)
+    await clickSelection(user)
+    expect(await screen.findByText(/計算した後に、表示していた生産計画（下書き）・作成リスト・目標武器・所持武器・RNG状態のいずれかが変わったため、保存しませんでした/)).toBeInTheDocument()
+    expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
+    expect(screen.queryByText('The current Draft was replaced.')).not.toBeInTheDocument()
   })
 
   it.each(['planner', 'save'] as const)('keeps the old Plan on %s failure and allows explicit retry', async (failure) => {
@@ -1412,21 +784,20 @@ describe('ProductionPlanPage explicit selection', () => {
     const fixture = pageFixture()
     const before = structuredClone(fixture.plan)
     const client = plannerClient(async () => fixture.preparation)
-    const result = repairResult(createValidProductionPlan())
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue(result)
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(createValidProductionPlan()))
     const deps = dependencies(fixture, client)
-    if (failure === 'planner') vi.mocked(client.createPlannerAlternativeRepair).mockRejectedValueOnce(new Error('Planner failed'))
-    else vi.mocked(deps.savePlannerAlternativeRepair).mockRejectedValueOnce(new Error('Atomic save rejected'))
+    if (failure === 'planner') vi.mocked(client.createPlan).mockRejectedValueOnce(new Error('Planner failed'))
+    else vi.mocked(deps.savePlannerConflictPreferenceResult).mockRejectedValueOnce(new Error('Atomic save rejected'))
     const view = renderPage(deps, fixture.plan.id)
     await clickSelection(user)
-    expect(await screen.findByText(failure === 'planner' ? 'Planner failed' : 'Atomic save rejected')).toBeInTheDocument()
+    expect(await screen.findByText(failure === 'planner'
+      ? '生産計画の再計算に失敗しました。表示中の生産計画は変更していません。Planner failed'
+      : '生産計画の保存に失敗しました。生産計画一覧で現在の状態を確認してください。')).toBeInTheDocument()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
     expect(summaryValue('計画ID')).toBe(fixture.plan.id)
     expect(fixture.plan).toEqual(before)
-    expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce()
-    if (failure !== 'planner') expect(vi.mocked(deps.savePlannerAlternativeRepair).mock.calls[0][0]).toBe(artifactOf(result))
     await clickSelection(user)
-    await waitFor(() => expect(client.createPlannerAlternativeRepair).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(client.createPlan).toHaveBeenCalledTimes(2))
   })
 
   it.each(['unavailable', 'invalid'] as const)('refreshes action-time %s availability without starting Planner or save', async (status) => {
@@ -1439,38 +810,33 @@ describe('ProductionPlanPage explicit selection', () => {
     const deps = dependencies(fixture, client)
     renderPage(deps, fixture.plan.id)
     await clickSelection(user)
-    expect(await screen.findByText('現在の状態が変化したため再計算を開始できませんでした。')).toBeInTheDocument()
+    expect(await screen.findByText('現在の状態が変化したため、この候補を優先できませんでした。')).toBeInTheDocument()
     expect(screen.getByText(status === 'invalid' ? 'Typed action invalid' : '現在のPlanner入力ではこの競合を再現できません。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '比較する' })).toBeDisabled()
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
   })
 
-  it('shows an indeterminate running state, blocks comparisons and selections during rerun, and ignores results after cancel', async () => {
+  it('shows an indeterminate running state, blocks selections during the run, and ignores results after cancel', async () => {
     const user = userEvent.setup()
     const fixture = pageFixture()
-    const pending = deferred<PlannerAlternativeRepairCalculationResult>()
+    const pending = deferred<PlannerResult>()
     const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair).mockImplementation(async () => pending.promise)
+    vi.mocked(client.createPlan).mockImplementation(async () => pending.promise)
     const deps = dependencies(fixture, client)
     const view = renderPage(deps, fixture.plan.id)
     await clickSelection(user)
     expect(await screen.findByText('再計算しています…')).toBeInTheDocument()
     expect(screen.getByRole('progressbar', { name: 'Planner再計算中' })).not.toHaveAttribute('aria-valuenow')
-    expect(screen.getByRole('button', { name: '比較する' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: '比較する' }))
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    const [requestId] = vi.mocked(client.createPlannerAlternativeRepair).mock.calls[0]
-    // No progress callback reaches the Client (Issue #103 Phase D-2a).
-    expect(vi.mocked(client.createPlannerAlternativeRepair).mock.calls[0]).toHaveLength(2)
+    const [requestId] = vi.mocked(client.createPlan).mock.calls[0]
+    expect(vi.mocked(client.createPlan).mock.calls[0]).toHaveLength(2)
     await user.click(screen.getByRole('button', { name: '再計算をキャンセル' }))
     expect(client.cancelPlan).toHaveBeenCalledWith(requestId)
     await act(async () => {
-      pending.resolve(repairResult(createValidProductionPlan()))
+      pending.resolve(preferenceResult(createValidProductionPlan()))
     })
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
     expect(screen.queryByText('再計算しています…')).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -1481,45 +847,13 @@ describe('ProductionPlanPage explicit selection', () => {
     const user = userEvent.setup()
     const fixture = pageFixture()
     const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair).mockRejectedValue(new PlannerCancelledError())
+    vi.mocked(client.createPlan).mockRejectedValue(new PlannerCancelledError())
     const deps = dependencies(fixture, client)
     renderPage(deps, fixture.plan.id)
     await clickSelection(user)
     await waitFor(() => expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled())
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
-  })
-
-  it.each(['pending', 'failure', 'no-result', 'completed', 'input-pending'] as const)('selection is independent of what-if %s and starts from fresh input', async (mode) => {
-    const user = userEvent.setup()
-    const fixture = pageFixture()
-    const pending = deferred<PlannerAlternativeWhatIfCalculationResult>()
-    const inputPending = deferred<PlannerInput>()
-    const client = plannerClient(async () => fixture.preparation, () => pending.promise)
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue(repairResult(fixture.plan))
-    const deps = dependencies(fixture, client)
-    if (mode === 'input-pending') vi.mocked(deps.createInput).mockResolvedValueOnce(fixture.input).mockReturnValueOnce(inputPending.promise).mockResolvedValue(fixture.input)
-    renderPage(deps, fixture.plan.id)
-    await user.click(await screen.findByRole('button', { name: '比較する' }))
-    if (mode !== 'input-pending') await waitFor(() => expect(client.createPlannerAlternativeComparison).toHaveBeenCalledOnce())
-    if (mode === 'failure') await act(async () => pending.resolve({ status: 'planner_input_not_ready', issues: [], warnings: [], excludedBuildListEntries: [] }))
-    if (mode === 'completed' || mode === 'no-result') {
-      const result = completedWhatIf(fixture.entry.id, fixture.target, 99)
-      if (mode === 'no-result') result.comparison.alternatives[0].outcome = { status: 'not_found_within_search_extent' }
-      await act(async () => pending.resolve(result))
-    }
-    await clickSelection(user)
-    await waitFor(() => expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce())
-    expect(deps.createInput).toHaveBeenCalledTimes(3)
-    if (mode === 'pending') expect(client.cancelPlan).toHaveBeenCalledWith(vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0][0])
-    await act(async () => {
-      inputPending.resolve(fixture.input)
-      pending.resolve(completedWhatIf(fixture.entry.id, fixture.target, 99))
-    })
-    expect(client.prepareInteraction).toHaveBeenCalledTimes(mode === 'input-pending' ? 2 : 3)
-    expect(screen.queryByText('必要操作数: 99')).not.toBeInTheDocument()
-    expect(screen.queryByText('比較しています…')).not.toBeInTheDocument()
-    expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
   })
 
   it.each(['input', 'preparation', 'planner'] as const)('cancel during %s prevents all later UI effects and unstarted work', async (phase) => {
@@ -1527,9 +861,9 @@ describe('ProductionPlanPage explicit selection', () => {
     const fixture = pageFixture()
     const inputPending = deferred<PlannerInput>()
     const preparationPending = deferred<PlannerInteractionPreparationResult>()
-    const plannerPending = deferred<PlannerAlternativeRepairCalculationResult>()
+    const plannerPending = deferred<PlannerResult>()
     const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair).mockReturnValue(phase === 'planner' ? plannerPending.promise : Promise.resolve(repairResult(createValidProductionPlan())))
+    vi.mocked(client.createPlan).mockReturnValue(phase === 'planner' ? plannerPending.promise : Promise.resolve(preferenceResult(createValidProductionPlan())))
     const deps = dependencies(fixture, client)
     if (phase === 'input') vi.mocked(deps.createInput).mockResolvedValueOnce(fixture.input).mockReturnValueOnce(inputPending.promise)
     if (phase === 'preparation') vi.mocked(client.prepareInteraction).mockResolvedValueOnce(fixture.preparation).mockReturnValueOnce(preparationPending.promise)
@@ -1539,11 +873,11 @@ describe('ProductionPlanPage explicit selection', () => {
     await act(async () => {
       inputPending.resolve(fixture.input)
       preparationPending.resolve(fixture.preparation)
-      plannerPending.resolve(repairResult(createValidProductionPlan()))
+      plannerPending.resolve(preferenceResult(createValidProductionPlan()))
     })
     if (phase === 'input') expect(client.prepareInteraction).toHaveBeenCalledOnce()
-    if (phase === 'input' || phase === 'preparation') expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
+    if (phase === 'input' || phase === 'preparation') expect(client.createPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
@@ -1562,8 +896,8 @@ describe('ProductionPlanPage explicit selection', () => {
       expect(deps.createInput).not.toHaveBeenCalled()
       expect(client.prepareInteraction).not.toHaveBeenCalled()
     }
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
     expect(screen.getByRole('link', { name: 'ビルドリストへ戻る' })).toHaveAttribute('href', '/build-list')
   })
 })
@@ -1580,14 +914,14 @@ describe('ProductionPlanPage selection lifecycle races', () => {
     const next = pageFixture('next')
     const inputPending = deferred<PlannerInput>()
     const preparationPending = deferred<PlannerInteractionPreparationResult>()
-    const plannerPending = deferred<PlannerAlternativeRepairCalculationResult>()
-    const savePending = deferred<PlannerAlternativeRepairSaveOutcome>()
+    const plannerPending = deferred<PlannerResult>()
+    const savePending = deferred<Awaited<ReturnType<ProductionPlanPageDependencies['savePlannerConflictPreferenceResult']>>>()
     const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair).mockReturnValue(phase === 'planner' ? plannerPending.promise : Promise.resolve(repairResult(createValidProductionPlan())))
+    vi.mocked(client.createPlan).mockReturnValue(phase === 'planner' ? plannerPending.promise : Promise.resolve(preferenceResult(createValidProductionPlan())))
     const deps = dependencies(fixture, client)
     if (phase === 'input') vi.mocked(deps.createInput).mockResolvedValueOnce(fixture.input).mockReturnValueOnce(inputPending.promise)
     if (phase === 'preparation') vi.mocked(client.prepareInteraction).mockResolvedValueOnce(fixture.preparation).mockReturnValueOnce(preparationPending.promise)
-    if (phase === 'save') vi.mocked(deps.savePlannerAlternativeRepair).mockReturnValue(savePending.promise)
+    if (phase === 'save') vi.mocked(deps.savePlannerConflictPreferenceResult).mockReturnValue(savePending.promise)
     const nextClient = plannerClient(async () => next.preparation)
     const nextDeps = dependencies(next, nextClient)
     const router = createMemoryRouter([
@@ -1596,12 +930,12 @@ describe('ProductionPlanPage selection lifecycle races', () => {
     const view = render(<RouterProvider router={router} />)
     const navigate = vi.spyOn(router, 'navigate')
     await clickSelection(user)
-    if (phase === 'save') await waitFor(() => expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce())
-    if (phase === 'planner') await waitFor(() => expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce())
+    if (phase === 'save') await waitFor(() => expect(deps.savePlannerConflictPreferenceResult).toHaveBeenCalledOnce())
+    if (phase === 'planner') await waitFor(() => expect(client.createPlan).toHaveBeenCalledOnce())
     if (phase === 'preparation') await waitFor(() => expect(client.prepareInteraction).toHaveBeenCalledTimes(2))
     const requestId = phase === 'preparation'
       ? vi.mocked(client.prepareInteraction).mock.calls[1][0]
-      : phase === 'planner' ? vi.mocked(client.createPlannerAlternativeRepair).mock.calls[0][0] : null
+      : phase === 'planner' ? vi.mocked(client.createPlan).mock.calls[0][0] : null
     if (change === 'unmount') view.unmount()
     else if (change === 'route') {
       vi.mocked(deps.getPlan).mockResolvedValue(next.plan)
@@ -1617,24 +951,38 @@ describe('ProductionPlanPage selection lifecycle races', () => {
     }
     const navigationCount = navigate.mock.calls.length
     const preparationCount = vi.mocked(client.prepareInteraction).mock.calls.length
-    const plannerCount = vi.mocked(client.createPlannerAlternativeRepair).mock.calls.length
+    const plannerCount = vi.mocked(client.createPlan).mock.calls.length
     await act(async () => {
       inputPending.resolve(fixture.input)
       preparationPending.resolve(fixture.preparation)
-      plannerPending.resolve(repairResult(createValidProductionPlan()))
+      plannerPending.resolve(preferenceResult(createValidProductionPlan()))
       savePending.resolve({ kind: 'saved', plan: { ...fixture.plan, id: productionPlanId('plan.late-save') } })
     })
     expect(client.dispose).toHaveBeenCalledOnce()
     if (requestId !== null) expect(client.cancelPlan).toHaveBeenCalledWith(requestId)
     expect(client.prepareInteraction).toHaveBeenCalledTimes(preparationCount)
-    expect(client.createPlannerAlternativeRepair).toHaveBeenCalledTimes(plannerCount)
-    expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledTimes(phase === 'save' ? 1 : 0)
+    expect(client.createPlan).toHaveBeenCalledTimes(plannerCount)
+    expect(deps.savePlannerConflictPreferenceResult).toHaveBeenCalledTimes(phase === 'save' ? 1 : 0)
     expect(navigate).toHaveBeenCalledTimes(navigationCount)
     if (change !== 'unmount') {
       expect(summaryValue('計画ID')).toBe(next.plan.id)
       expect(summaryValue('計画ID')).not.toBe(fixture.plan.id)
       expect(screen.queryByText('再計算しています…')).not.toBeInTheDocument()
     }
+  })
+
+  it('runs nothing when the page leaves while the confirmation is open', async () => {
+    const user = userEvent.setup()
+    const fixture = supersedingFixture()
+    const client = plannerClient(async () => fixture.preparation)
+    const deps = dependencies(fixture, client)
+    const view = renderPage(deps, fixture.plan.id)
+    await clickSelection(user, 1)
+    await screen.findByRole('dialog', { name: '以前の選択を変更して再計算しますか？' })
+    view.unmount()
+    await act(async () => undefined)
+    expect(client.createPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
   })
 })
 
@@ -1643,29 +991,25 @@ describe('ProductionPlanPage atomic save phase', () => {
   it('does not allow cancellation or another action once atomic save has started', async () => {
     const user = userEvent.setup()
     const fixture = pageFixture()
-    const savePending = deferred<PlannerAlternativeRepairSaveOutcome>()
+    const savePending = deferred<Awaited<ReturnType<ProductionPlanPageDependencies['savePlannerConflictPreferenceResult']>>>()
     const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue(repairResult(createValidProductionPlan()))
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(createValidProductionPlan()))
     const deps = dependencies(fixture, client)
-    vi.mocked(deps.savePlannerAlternativeRepair).mockReturnValue(savePending.promise)
+    vi.mocked(deps.savePlannerConflictPreferenceResult).mockReturnValue(savePending.promise)
     renderPage(deps, fixture.plan.id)
     await clickSelection(user)
-    await waitFor(() => expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce())
+    await waitFor(() => expect(deps.savePlannerConflictPreferenceResult).toHaveBeenCalledOnce())
     expect(screen.getByText('生産計画を保存しています。')).toBeInTheDocument()
     expect(screen.getByRole('progressbar', { name: '生産計画を保存中' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '再計算をキャンセル' })).not.toBeInTheDocument()
-    const compare = screen.getByRole('button', { name: '比較する' })
     const select = screen.getByRole('button', { name: 'この候補を優先' })
-    expect(compare).toBeDisabled()
     expect(select).toBeDisabled()
-    fireEvent.click(compare)
     fireEvent.click(select)
-    expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce()
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
+    expect(client.createPlan).toHaveBeenCalledOnce()
     expect(deps.createInput).toHaveBeenCalledTimes(2)
     expect(client.cancelPlan).not.toHaveBeenCalled()
     await act(async () => savePending.reject(new Error('Atomic save rejected')))
-    expect(await screen.findByText('Atomic save rejected')).toBeInTheDocument()
+    expect(await screen.findByText('生産計画の保存に失敗しました。生産計画一覧で現在の状態を確認してください。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
     expect(screen.queryByText('生産計画を保存しています。')).not.toBeInTheDocument()
   })
@@ -1694,7 +1038,7 @@ describe('ProductionPlanPage stale persisted badges', () => {
       const card = within(participant)
       expect(card.queryByText('Planner推奨') !== null).toBe(index === 0)
       expect(card.queryByText('現在選択中') !== null).toBe(index === 1)
-      for (const name of ['比較する', 'この候補を優先']) {
+      for (const name of ['この候補を優先']) {
         const button = card.getByRole('button', { name })
         expect(button).toBeDisabled()
         fireEvent.click(button)
@@ -1705,7 +1049,7 @@ describe('ProductionPlanPage stale persisted badges', () => {
     expect(client.prepareInteraction).not.toHaveBeenCalled()
     expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
     expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
   })
@@ -1986,7 +1330,7 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(screen.getByText('計画の概要')).toBeInTheDocument()
     await openPanel('全4ステップを表示')
     expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
-    for (const name of ['比較する', 'この候補を優先']) {
+    for (const name of ['この候補を優先']) {
       expect(screen.getByRole('button', { name })).toBeDisabled()
     }
     expect(deps.createInput).not.toHaveBeenCalled()
@@ -2021,7 +1365,7 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(screen.getByText('計画の概要')).toBeInTheDocument()
     await openPanel('全4ステップを表示')
     expect(screen.getAllByText(/^ステップ \d+$/)).toHaveLength(4)
-    for (const name of ['比較する', 'この候補を優先']) {
+    for (const name of ['この候補を優先']) {
       expect(screen.getByRole('button', { name })).toBeDisabled()
     }
     expect(deps.createWorkerClient).not.toHaveBeenCalled()
@@ -2222,7 +1566,7 @@ describe('ProductionPlanPage read-only Plan content', () => {
     expect(await screen.findAllByText(
       'この競合には途中採用する状態の選択が関係しています。作成リストで途中採用する状態を変更または解除してください。',
     )).toHaveLength(3)
-    for (const name of ['比較する', 'この候補を優先']) {
+    for (const name of ['この候補を優先']) {
       for (const button of screen.getAllByRole('button', { name })) {
         expect(button).toBeDisabled()
       }
@@ -2422,7 +1766,7 @@ describe('ProductionPlanPage supplementary persisted content', () => {
     expect(within(participants[1]).queryByText('Planner推奨')).not.toBeInTheDocument()
     expect(screen.getAllByText('利用可能')).toHaveLength(2)
     for (const participant of participants) {
-      expect(within(participant).getByRole('button', { name: '比較する' })).toBeEnabled()
+      expect(within(participant).getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
       expect(within(participant).getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
     }
     // No Alert is shown while nothing is wrong.
@@ -2447,7 +1791,7 @@ describe('ProductionPlanPage read-only persisted Conflicts', () => {
       expect(within(card).getByText('利用不可')).toBeInTheDocument()
       expect(within(card).getByText(reason)).toBeInTheDocument()
       expect(within(card).queryByText('利用可能')).not.toBeInTheDocument()
-      for (const name of ['比較する', 'この候補を優先']) {
+      for (const name of ['この候補を優先']) {
         const button = within(card).getByRole('button', { name })
         expect(button).toBeDisabled()
         fireEvent.click(button)
@@ -2503,7 +1847,7 @@ describe('ProductionPlanPage read-only persisted Conflicts', () => {
     expect(screen.queryByText('現在の操作可否を確認しています。')).not.toBeInTheDocument()
     expect(screen.queryByText('現在の保存状態から操作可否を確認しています。')).not.toBeInTheDocument()
     for (const card of participantCards()) {
-      expect(within(card).getByRole('button', { name: '比較する' })).toBeEnabled()
+      expect(within(card).getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
       expect(within(card).getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
     }
     expect(screen.getByText(fixture.target.name)).toBeInTheDocument()
@@ -2527,7 +1871,7 @@ describe('ProductionPlanPage read-only persisted Conflicts', () => {
     expectReadOnlyParticipants('現在の操作可否を確認できないため、この候補は操作できません。')
     expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
     expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
   })
 
   it('gives every stale participant its unavailable reason beside the persisted badges', async () => {
@@ -2649,27 +1993,21 @@ describe('ProductionPlanPage checkpoint milestones and heading depth', () => {
     expect(screen.queryByText('チェックポイント到達')).not.toBeInTheDocument()
   })
 
-  it('nests the what-if comparison below its participant heading', async () => {
-    const user = userEvent.setup()
+  it('nests each participant and its explanation below the conflict heading', async () => {
     const fixture = multiParticipantFixture()
-    const client = plannerClient(
-      async () => fixture.preparation,
-      async () => completedWhatIf(fixture.entry.id, fixture.secondTarget, 7),
-    )
+    const client = plannerClient(async () => fixture.preparation)
     renderPage(dependencies(fixture, client), fixture.plan.id)
-    const buttons = await screen.findAllByRole('button', { name: '比較する' })
-    await user.click(buttons[0])
+    await screen.findAllByRole('button', { name: 'この候補を優先' })
 
-    expect(await screen.findByText('必要操作数: 7')).toBeInTheDocument()
     const participant = screen.getByRole('heading', { level: 4, name: fixture.target.name })
-    const comparison = screen.getByRole('heading', { level: 5, name: '比較結果' })
-    const targetResult = screen.getByRole('heading', { level: 6, name: fixture.secondTarget.name })
-    expect(participant.closest('li')).toContainElement(comparison)
-    expect(participant.closest('li')).toContainElement(targetResult)
-    // The participant heading, the comparison and the Target result descend
-    // one level each; no two nested levels coincide.
+    const explanation = screen.getByText(
+      `この候補を優先すると、「${fixture.secondTarget.name}」は今回の生産計画では作成しません。作成リストの候補は残ります。`,
+    )
+    expect(participant.closest('li')).toContainElement(explanation)
     expect(screen.getByRole('heading', { level: 3, name: '競合 1' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { level: 4, name: '比較結果' })).not.toBeInTheDocument()
+    // The button is described by its participant heading and the explanation.
+    const button = within(participant.closest('li') as HTMLElement).getByRole('button', { name: 'この候補を優先' })
+    expect(button).toHaveAccessibleDescription(new RegExp(fixture.target.name))
   })
 })
 
@@ -2730,7 +2068,7 @@ describe('ProductionPlanPage Execution entry', () => {
     ['draft', 16],
     ['active', 16],
   ] as const)(
-    'fails a %s schema %i Plan closed under the current schema 17, keeping its persisted content readable',
+    'fails a %s schema %i Plan closed under the current schema 18, keeping its persisted content readable',
     async (status, appSchemaVersion) => {
       // Issue #103 Phase C: a version 13 Plan was calculated by the Beam Search,
       // and Issue #129: a version 14 Plan turned every Counter-advance Normal
@@ -2750,7 +2088,7 @@ describe('ProductionPlanPage Execution entry', () => {
         ...fixture.plan.calculationContext,
         appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
       }
-      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+      expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
       renderPage(deps, fixture.plan.id)
 
       expect(await screen.findByText(
@@ -2761,7 +2099,7 @@ describe('ProductionPlanPage Execution entry', () => {
       expect(screen.queryByRole('button', { name: '作成開始' })).not.toBeInTheDocument()
       expect(screen.queryByRole('link', { name: '実行ナビを再開する' })).not.toBeInTheDocument()
       // Conflict / what-if controls stay disabled: no preparation ever runs.
-      screen.queryAllByRole('button', { name: '比較する' }).forEach((button) => {
+      screen.queryAllByRole('button', { name: 'この候補を優先' }).forEach((button) => {
         expect(button).toBeDisabled()
       })
       expect(deps.createWorkerClient).not.toHaveBeenCalled()
@@ -2773,6 +2111,50 @@ describe('ProductionPlanPage Execution entry', () => {
       } else {
         expect(screen.queryByRole('heading', { name: '現在地点からの再計画' })).not.toBeInTheDocument()
       }
+    },
+  )
+
+  /** The fixture Plan at calculation schema 17 under a schema 18 runtime. */
+  function schema17(status: 'draft' | 'active', resolutionFree: boolean) {
+    const fixture = withStatus({ status })
+    fixture.plan.calculationContext = { ...fixture.plan.calculationContext, appSchemaVersion: 17 }
+    fixture.plan.baseSnapshot = {
+      ...fixture.plan.baseSnapshot,
+      calculationContext: { ...fixture.plan.baseSnapshot.calculationContext, appSchemaVersion: 17 },
+    }
+    if (resolutionFree) {
+      fixture.plan.conflicts = fixture.plan.conflicts.map((conflict) => ({ ...conflict, selectedBuildListEntryId: null }))
+    }
+    const deps = dependencies(fixture)
+    deps.currentCalculationContext = { ...fixture.plan.calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
+    return { fixture, deps }
+  }
+
+  it('keeps a resolution-free schema 17 draft startable and its conflicts preparable under schema 18 (Issue #278, 18 -> 17)', async () => {
+    const { fixture, deps } = schema17('draft', true)
+    renderPage(deps, fixture.plan.id)
+    expect(await readyStartButton()).toBeEnabled()
+    expect(screen.queryByText('この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。')).not.toBeInTheDocument()
+    await waitFor(() => expect(deps.createWorkerClient).toHaveBeenCalledOnce())
+  })
+
+  it('keeps a resolution-free schema 17 active Plan resumable under schema 18', async () => {
+    const { fixture, deps } = schema17('active', true)
+    renderPage(deps, fixture.plan.id)
+    expect(await screen.findByRole('link', { name: '実行ナビを再開する' }))
+      .toHaveAttribute('href', `/plans/${fixture.plan.id}/run`)
+  })
+
+  it.each(['draft', 'active'] as const)(
+    'fails a schema 17 %s Plan with a selected Conflict closed under schema 18',
+    async (status) => {
+      const { fixture, deps } = schema17(status, false)
+      renderPage(deps, fixture.plan.id)
+      expect(await screen.findByText(
+        'この生産計画は現在の計算契約と互換性がありません。ビルドリストから再計算してください。',
+      )).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '作成開始' })).not.toBeInTheDocument()
+      expect(deps.createWorkerClient).not.toHaveBeenCalled()
     },
   )
 
@@ -3079,13 +2461,11 @@ describe('ProductionPlanPage PlanStep Debug', () => {
  * page derives it from the Plan it shows -
  * `max(1000, ceilTo500(plan.steps.length) + 500)` - and writes it over the
  * fresh input's `defaultPlannerOptions`. It never reads the Build List page's
- * temporary input. Since Phase 5-B the Planner Alternative what-if runs its
- * trial and scenario Planner runs with the same derived options
- * (`docs/PLANNER_SPEC.md` 9.2.19.7), so a preview and the repair it previews
- * are calculated under the same bound.
+ * temporary input. Since Issue #278 PR-2 the bound is given to the ordinary
+ * `createPlan()` together with the explicit decision set.
  */
 describe('ProductionPlanPage conflict resolution maxPlanSteps', () => {
-  function withStepCount(fixture: ReturnType<typeof multiParticipantFixture>, stepCount: number) {
+  function withStepCount<T extends ReturnType<typeof multiParticipantFixture>>(fixture: T, stepCount: number): T {
     const [step] = fixture.plan.steps
     fixture.plan.steps = Array.from({ length: stepCount }, (_, index) => ({
       ...step,
@@ -3103,42 +2483,45 @@ describe('ProductionPlanPage conflict resolution maxPlanSteps', () => {
     [1470, 2000],
     [1500, 2000],
     [1600, 2500],
-  ])('recalculates a %i-Step Plan with maxPlanSteps %i and keeps every explicit resolution', async (stepCount, expected) => {
+  ])('recalculates a %i-Step Plan with maxPlanSteps %i and carries every compatible earlier decision', async (stepCount, expected) => {
     const user = userEvent.setup()
-    const fixture = withStepCount(multiParticipantFixture(), stepCount)
-    const other = { ...fixture.plan.conflicts[0], id: 'conflict.other' }
-    fixture.plan.conflicts.push(other)
+    const fixture = withStepCount(supersedingFixture(), stepCount)
+    // Y prefers third: compatible with preferring second on X, so it is carried.
+    fixture.plan.conflicts[1].selectedBuildListEntryId = fixture.thirdEntry.id
     const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue(repairResult(createValidProductionPlan()))
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(createValidProductionPlan()))
     const deps = dependencies(fixture, client)
     renderPage(deps, fixture.plan.id)
     await clickSelection(user, 1)
-    await waitFor(() => expect(deps.savePlannerAlternativeRepair).toHaveBeenCalledOnce())
+    await waitFor(() => expect(deps.savePlannerConflictPreferenceResult).toHaveBeenCalledOnce())
 
     // The fresh input still carries the fallback default...
     const prepared = vi.mocked(client.prepareInteraction).mock.calls[1][1]
     expect(prepared.options).toEqual(defaultPlannerOptions)
     expect(fixture.input.options).toEqual({ maxPlanSteps: 1000 })
-    // ...and only the repair request is given the derived bound, with every
-    // restored explicit resolution and the decision beside it.
-    const [, request] = vi.mocked(client.createPlannerAlternativeRepair).mock.calls[0]
-    expect(request.plannerInput.options).toEqual({ maxPlanSteps: expected })
-    expect(request.plannerInput.conflictResolutions).toEqual([
-      { conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.entry.id },
-      { conflictKey: other.id, selectedBuildListEntryId: fixture.entry.id },
-    ])
-    expect(request.decision).toEqual({ conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.secondEntry.id })
+    // ...and only the run is given the derived bound, with the carried decision
+    // and this one (conflict ID order).
+    const [, runInput] = vi.mocked(client.createPlan).mock.calls[0]
+    expect(runInput.options).toEqual({ maxPlanSteps: expected })
+    expect(runInput.conflictResolutions).toEqual([
+      { conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.secondEntry.id },
+      { conflictKey: fixture.conflictY.id, selectedBuildListEntryId: fixture.thirdEntry.id },
+    ].sort((left, right) => (left.conflictKey < right.conflictKey ? -1 : 1)))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('saves nothing when the derived bound truncates the recalculation, and never points at the Build List input', async () => {
     const user = userEvent.setup()
     const fixture = withStepCount(multiParticipantFixture(), 1470)
     const client = plannerClient(async () => fixture.preparation)
-    vi.mocked(client.createPlannerAlternativeRepair).mockResolvedValue({
-      status: 'completed',
-      comparison: repairComparison({ status: 'stopped_by_plan_step_bound', maxPlanSteps: 2000 }),
-      persistence: { status: 'not_persistable', reason: 'stopped_by_plan_step_bound' },
-    })
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(createValidProductionPlan(), {
+      termination: {
+        ...completedPlannerTermination(),
+        status: 'incomplete',
+        reachedLimits: ['max_plan_steps'],
+        limits: { maxPlanSteps: 2000 },
+      },
+    }))
     const deps = dependencies(fixture, client)
     const view = renderPage(deps, fixture.plan.id)
     await clickSelection(user, 1)
@@ -3147,27 +2530,9 @@ describe('ProductionPlanPage conflict resolution maxPlanSteps', () => {
       '競合解決の再計算が最大計画ステップ数 2,000 に到達したため、完成した生産計画を作成できませんでした。この上限は表示中の生産計画のステップ数から自動で決まります。ビルドリスト画面から生産計画を作り直してください。',
     )).toBeInTheDocument()
     expect(screen.queryByText(/「詳細設定」で探索上限を引き上げてから/)).not.toBeInTheDocument()
-    expect(vi.mocked(client.createPlannerAlternativeRepair).mock.calls[0][1].plannerInput.options).toEqual({ maxPlanSteps: 2000 })
-    expect(deps.inspectPlannerAlternativeRepairSave).not.toHaveBeenCalled()
-    expect(deps.savePlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(vi.mocked(client.createPlan).mock.calls[0][1].options).toEqual({ maxPlanSteps: 2000 })
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
-  })
-
-  it('gives the what-if the same derived options as the repair and no bounds on the wire', async () => {
-    const user = userEvent.setup()
-    const fixture = withStepCount(multiParticipantFixture(), 1470)
-    const client = plannerClient(async () => fixture.preparation)
-    const deps = dependencies(fixture, client)
-    renderPage(deps, fixture.plan.id)
-    const [compare] = await screen.findAllByRole('button', { name: '比較する' })
-    await user.click(compare)
-
-    await waitFor(() => expect(client.createPlannerAlternativeComparison).toHaveBeenCalledOnce())
-    const [, request] = vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0]
-    expect('bounds' in request).toBe(false)
-    expect(request.plannerInput.options).toEqual({ maxPlanSteps: 2000 })
-    expect(fixture.input.options).toEqual(defaultPlannerOptions)
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
   })
 })
 
@@ -3268,7 +2633,7 @@ describe('ProductionPlanPage section order and overview Conflicts (Issue #121)',
     renderPage(contentDependencies(fixture), fixture.plan.id)
     expect(await screen.findByText('再計算が必要な生産計画です')).toBeInTheDocument()
     expectDocumentOrder(sectionHeadings())
-    for (const name of ['比較する', 'この候補を優先']) {
+    for (const name of ['この候補を優先']) {
       expect(screen.getByRole('button', { name })).toBeDisabled()
     }
   })
@@ -3326,22 +2691,21 @@ describe('ProductionPlanPage section order and overview Conflicts (Issue #121)',
     expect(await screen.findByText('この生産計画に表示する競合はありません。')).toBeInTheDocument()
   })
 
-  it('keeps comparing, cancelling and selecting a Conflict participant in the new place', async () => {
+  it('keeps selecting, cancelling and selecting again a Conflict participant in the new place', async () => {
     const user = userEvent.setup()
     const fixture = pageFixture('order')
-    const pending = deferred<PlannerAlternativeWhatIfCalculationResult>()
-    const client = plannerClient(
-      async () => fixture.preparation,
-      async () => pending.promise,
-    )
+    const pending = deferred<PlannerResult>()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createPlan).mockReturnValueOnce(pending.promise).mockResolvedValue(preferenceResult(null))
     renderPage(dependencies(fixture, client), fixture.plan.id)
 
-    await user.click(await screen.findByRole('button', { name: '比較する' }))
-    const cancel = await screen.findByRole('button', { name: '比較をキャンセル' })
-    const requestId = vi.mocked(client.createPlannerAlternativeComparison).mock.calls[0][0]
+    await user.click(await screen.findByRole('button', { name: 'この候補を優先' }))
+    const cancel = await screen.findByRole('button', { name: '再計算をキャンセル' })
+    await waitFor(() => expect(client.createPlan).toHaveBeenCalledOnce())
+    const requestId = vi.mocked(client.createPlan).mock.calls[0][0]
     await user.click(cancel)
     expect(client.cancelPlan).toHaveBeenCalledWith(requestId)
-    expect(screen.queryByRole('button', { name: '比較をキャンセル' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '再計算をキャンセル' })).not.toBeInTheDocument()
 
     expectDocumentOrder([
       screen.getByRole('heading', { level: 2, name: '必要素材・費用の目安' }),
@@ -3350,6 +2714,7 @@ describe('ProductionPlanPage section order and overview Conflicts (Issue #121)',
     ])
 
     await user.click(screen.getByRole('button', { name: 'この候補を優先' }))
-    await waitFor(() => expect(client.createPlannerAlternativeRepair).toHaveBeenCalledOnce())
+    await waitFor(() => expect(client.createPlan).toHaveBeenCalledTimes(2))
+    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
   })
 })

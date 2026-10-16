@@ -2025,7 +2025,7 @@ Plannerが落とすことになるためである。保守的に、参加者の�
 同じ武器の同じ操作が複数Entryのcheckpointへ同時に到達する場合は、従来どおり
 1つの共有physical actionであり競合ではない(7.5.2)。
 
-**Issue #278による限定（9.6.2 / 9.6.4、目標仕様。PR-2で実装）。** 上記の拒否の理由は「優先選択によってPlannerが選択済み
+**Issue #278による限定（9.6.2 / 9.6.4、PR-2で実装済み）。** 上記の拒否の理由は「優先選択によってPlannerが選択済み
 checkpointを落とす」ことである。同じ入力の別の明示決定によってcheckpoint参加者のEntryがすでに今回実行されない（除外Entry）
 場合、そのcheckpointは今回のrunで課されないので、この理由は当てはまらない。そこでIssue #278の切替後は、拒否の対象を
 「除外されていないcheckpoint参加者（有効なcheckpoint参加者）が1件以上ある競合」に限る。checkpoint参加者がすべて除外Entryの
@@ -2084,12 +2084,33 @@ RouteOperation別のRNG位置は実際に消費するstreamで判定する。`co
 
 ### 9.6 通常Plannerの競合解決（優先候補の選択、Issue #278）
 
-実装状態: **目標仕様（未実装）**。本節はIssue #278のPR-1（docs-only）で確定した正式契約である。現在のProductionの
-生産計画画面は、Phase 5-B以降のPlanner Alternative（9.2.19。「比較する」what-if、「この候補を優先」actual repair）で
-競合を扱っており、本節の方式へは9.6.12の段階分割に従って切り替える。切替が完了するまで9.2.19は現行実装の契約として
-有効であり、9.2.19の記述のうち本節と矛盾するもの（「比較する」、非選択Targetの代替Route探索、scenario composition、
-generated BuildListEntryによる置換、repair lineageの生成と継続）は、切替後はProductionの通常Plannerの競合解決に
-適用しない（Production routingの記録として残る）。
+実装状態: **計算・保存経路は実装済み（Issue #278 PR-2）。競合画面の表示（[UI_FLOW.md](./UI_FLOW.md) 11.6）はPR-3で行う**。
+本節はIssue #278のPR-1（docs-only）で確定した正式契約であり、PR-2で生産計画画面の「この候補を優先」を本節の方式
+（fresh input + 明示決定集合 + 通常Planner `createPlan()` + 追加検査を持つ保存）へ切り替え、「比較する」を撤去した。
+Phase 5-B以降のPlanner Alternative（9.2.19。「比較する」what-if、「この候補を優先」actual repair）はProductionの
+生産計画画面から呼ばれなくなり、9.2.19の記述のうち本節と矛盾するもの（「比較する」、非選択Targetの代替Route探索、
+scenario composition、generated BuildListEntryによる置換、repair lineageの生成と継続）はProduction routingの記録として
+残る。Planner AlternativeのDomain・Worker request kind・Client method・保存APIの削除はPR-4以降である（9.6.11 / 9.6.12）。
+
+PR-2で確定した名前と形（本節の「PR-2で確定」の解決）:
+
+- 9.6.3の明示決定集合の純粋関数は `derivePlannerConflictDecisionSet()`（`src/domain/planner/plannerConflictDecisionSet.ts`）。
+  入力は表示中Plan、現在のCalculationContext、current preparation（valid Entry IDとcurrent initial Conflict）、今回の決定
+  （表示用に以前の決定だけを読むときは `null`）。結果は `ready`（`resolutions`・`carriedOver`・`notCarriedOver`・`superseded`・
+  `replaced`・`excludedBuildListEntryIds`・`requiresConfirmation`）または `refused`（`plan_not_editable` /
+  `conflict_not_current` / `entry_not_participant` / `entry_not_valid` / `checkpoint_conflict` /
+  `inconsistent_decision_set` / `preferred_entries_conflict`）。各決定の適用可否はPlanner側と同じ単調な不動点
+  `applyPlannerConflictResolutions()`（`conflictResolutionRefusalReason()` に除外Entryの集合を渡す）で判定する
+- 9.6.6の完成判定は `evaluatePlannerConflictResolutionOutcome()`（`plannerConflictPreferenceOutcome.ts`）。明示決定を持つ
+  入力の `PlannerResult` にだけruntime-onlyの `conflictResolutionOutcome` として付き（明示決定が無い入力には付かない）、
+  原因は `preferred_entries_conflict`（Conflict IDと相手のEntry）/ `deadlock_or_stall` / `execution_precondition_failed` /
+  `checkpoint_not_reached` / `satisfied_by_other_entry` / `inconsistent_completion_record` / `unknown`
+- 9.6.6の保存APIは専用の `PlannerResultPersistenceService.savePlannerConflictPreferenceResult(result, { conflictResolutions,
+  expectedSourceDraftId }, currentCalculationContext)`。通常保存（`savePlannerResult()`）と保存mutationを共有し、作成リスト
+  画面の通常作成・全体最適化の採用の保存契約は変えない。承認を受け取らない（作成リストを書かないので不要）
+- 9.6.10のPlan互換判定は `isProductionPlanCalculationCompatible(plan, current)`（`src/domain/models/domainRules.ts`）
+- 非選択Entryの除外はRoute単位である（9.6.2）。非選択Entryのunitが選択Entryと共有可能な同一physical actionであっても、
+  そのEntryはroute commitmentで `conflict_resolution_not_selected` として除外し、Routeを実行しない
 
 #### 9.6.1 位置づけと役割分担
 
@@ -2448,7 +2469,7 @@ PR-1（本節を追加したdocs-only PR）はどのversionも変更しない（
    code）がExport / Import経由で新方式のPlanを自分の計算結果として扱う。内容による区別は可能だが、versionが計算の意味を
    表すという原則（[REQUIREMENTS.md](./REQUIREMENTS.md) 32）に反するので採らない
 
-**PR-2で実装するversion対応（確定）。**
+**PR-2で実装したversion対応（確定、PR-2で実装済み）。**
 
 - `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **18** へ上げる。version 18は「明示決定を持つ入力の競合解決が9.6の方式である」
   ことを表す
@@ -2582,6 +2603,15 @@ PR-4以降  不要になった経路の整理（import graphの再監査のう�
 ```
 
 PR-2とPR-3を1つにまとめることは妨げないが、PR-2より前に「比較する」だけ、または「この候補を優先」だけを切り替えない。
+
+**PR-2の実施記録。** PR-2は上記のPR-2の項目をすべて実装した。明示決定が無い入力のparity testは、受け入れcatalogue
+（明示決定を持たない全scenario）と代表workload（sanity-3 / representative-12 / representative-35）の `PlannerResult` 全体を
+calculation schema 17のcode（`origin/main` f5e4811）で記録したdigestと比較し、すべて一致した。全体最適化の最終検証と
+Global Assignment Researchの凍結記録・golden・parity hashも、Researchのtest fixtureを記録時のcalculation schema 17に
+明示的に固定したうえで、記録値を変えずにすべて再現した（Production schemaに追随する `CURRENT_CALCULATION_APP_SCHEMA_VERSION`
+を読んでいたfixtureだけを固定した。Researchの記録・semantic値・formal registrationは変更していない。formal runの開始gateは
+現在のruntime（schema 18）を新しい登録が必要なversion変更として拒否する）。Planner Alternativeのtestで期待が変わったのは、
+9.6.5により決定で不要になった競合が結果に残らなくなったことによる「決定の展開」の対象件数だけであり、現行の意味へ直した。
 
 #### 9.6.13 test観点
 

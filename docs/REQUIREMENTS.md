@@ -975,7 +975,7 @@ Plannerが提示する推奨候補は表示用であり、制約付き再検索�
 作成リスト全体の作成ルートを組み直す全体最適化（19.1、Issue #260の目標仕様）は、競合を解決するための再検索では
 なく、ユーザーが「生産計画を作成」で明示的に実行し、試算を確認して採用する操作である。全体最適化は成立した結果だけを
 採用対象とし（競合のない計画）、競合の選択・競合repair履歴を作らず、読み込まない。全体最適化は、保存済みの生産計画に競合が
-ある場合の操作（現在は23.1の「比較する」「この候補を優先」、Issue #278の切替後は23.2の優先候補の選択）を変更しない。
+ある場合の操作（Issue #278 PR-2以降は23.2の優先候補の選択。それ以前は23.1の「比較する」「この候補を優先」）を変更しない。
 
 以下の制約付き再検索・what-ifの記述（本章の残りの段落）は、現在の競合repair（23.1）までの契約である。Issue #278の
 切替（23.2）以降、通常Plannerの競合解決は代替ルートの再検索もwhat-ifも行わないので、これらを適用しない。保存済みPlanの
@@ -1020,7 +1020,7 @@ Targetごとに次に実行可能な理想品候補を比較するwhat-ifとし�
 
 ### 23.1 競合repair（Issue #136 / #101、Phase 5まで実装済み）
 
-> Issue #278で置き換える（23.2）。本節は現在の生産計画画面の競合操作の要求であり、実装されて動作している。23.2への切替後、
+> Issue #278で置き換えた（23.2、PR-2で切替済み）。本節はPhase 5-BからIssue #278 PR-2までの生産計画画面の競合操作の要求である。23.2への切替後、
 > 生産計画画面は「比較する」と相手側の代替ルート探索・作成リスト項目の置換・競合repair履歴の作成を行わない。本節の記述は
 > 切替までの要求と経緯の記録として残す。代替探索の部品のうち全体最適化（19.1）が共有するものは削除しない。
 
@@ -1099,8 +1099,9 @@ Phase 6-B2bで、旧計算の実装本体（制約付き再検索とwhat-ifの�
 
 ### 23.2 通常Plannerの競合解決（優先候補の選択、Issue #278）
 
-実装状態: **目標仕様（未実装）**。Issue #278のPR-1（docs-only）で確定した。現在の生産計画画面は23.1の競合repairで動作しており、
-後続の実装PRで本節へ切り替える。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、画面は[UI_FLOW.md](./UI_FLOW.md) 11.6で定める。
+実装状態: **計算・保存の切替は実装済み（Issue #278 PR-2）、競合画面の表示の整理はPR-3で行う**。Issue #278のPR-1（docs-only）で
+確定し、PR-2で生産計画画面の「この候補を優先」を本節の方式へ切り替え、「比較する」を撤去した。23.1の競合repairは生産計画画面から
+呼ばれなくなった。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、画面は[UI_FLOW.md](./UI_FLOW.md) 11.6で定める。
 
 役割分担。
 
@@ -1532,15 +1533,15 @@ Production v1 adapterがpersisted exact Gateを要求せずactive representative
 
 生産計画画面の競合操作（「比較する」「この候補を優先」）を新しい競合repair（23.1、Issue #136 / #101 Phase 5-B）へ切り替えた変更では、同じ入力と決定に対して保存する計画（採用する代替、競合、決定の展開、作成しない目標武器）が変わり、保存済みの作成プランは生成方式を記録しないため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を16へ更新した。version 15以前の作成プランは下書き・実行中を問わず実行・比較・競合操作ができず（`calculation_context_changed`）、読み取り時の変換や保存済みversionの書き換えはしない。候補検索と作成リストの意味は変えていないため、version 12 / 13 / 14 / 15の候補と作成リスト項目は明示的な互換例外（`16 -> [12, 13, 14, 15]`、範囲指定ではない）によりそのまま利用できる（version 11以前は非互換のまま、作成プランへは適用しない）。競合repair履歴 `ProductionPlan.conflictRepairLineage` を永続形状へ追加したため、Dexie `DATABASE_SCHEMA_VERSION` を10、`ExportRoot.schemaVersion` を13へ更新した。Dexie v9 -> v10 upgradeとExport schema 12 -> 13 migrationは、すべての作成プラン本体（ゲーム内セーブ地点とUndo snapshot内の作成プランを含む）へ `conflictRepairLineage = null` だけを補い、選択済みの競合や作成リスト項目から過去の決定を推測しない。`AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、Master dataVersion（4）は変更しない。
 
-作成リストの通常「生産計画を作成」と実行中の生産計画の「現在地点から再計画を試算」を、旧計算の経路（legacy B8の `createConstrainedPlan()`）から通常のPlanner実行（`createPlan()`）へ切り替えた変更（Issue #136 / #101 Phase 6-A）は、現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **17** へ更新した。どちらの入力も保存済みの競合選択を持たないため、通常のケースでは計算結果は旧経路と同じである。ただし旧経路固有の再実行上限（`maxPlannerReruns = 4`）は、実行時に予測非対応と判明した作成リスト項目を除外して計画をやり直す計算も数えていた。通常のPlanner実行にはこの上限が無いため、やり直しが4回の計算を超える入力では、旧経路は計画なし（`max_planner_reruns_reached`）で止まり、新経路は計画を作成し得る。同じ入力で計画の有無・採用する作成リスト項目・警告・操作手順・完成する目標武器・必要素材が変わり得て、保存済みの作成プランは生成経路を記録しないため、version 16以前の作成プランは下書き・実行中を問わず `calculation_context_changed` で実行・比較・競合操作ができず、読み取り時の変換や保存済みversionの書き換えはしない。候補検索、作成リスト、RNG予測の意味は変えていないため、version 12 / 13 / 14 / 15 / 16の候補と作成リスト項目は明示的な互換例外（`17 -> [12, 13, 14, 15, 16]`、範囲指定ではない）によりそのまま利用できる（version 11以前は非互換のまま、作成プランへは適用しない）。永続形状は変えないため、Dexie `DATABASE_SCHEMA_VERSION`（10）、`ExportRoot.schemaVersion`（13）、`AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、Master dataVersion（4）は変更せず、migrationも追加しない。
+作成リストの通常「生産計画を作成」と実行中の生産計画の「現在地点から再計画を試算」を、旧計算の経路（legacy B8の `createConstrainedPlan()`）から通常のPlanner実行（`createPlan()`）へ切り替えた変更（Issue #136 / #101 Phase 6-A）は、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **17** へ更新した（現行は下記のIssue #278 PR-2による18）。どちらの入力も保存済みの競合選択を持たないため、通常のケースでは計算結果は旧経路と同じである。ただし旧経路固有の再実行上限（`maxPlannerReruns = 4`）は、実行時に予測非対応と判明した作成リスト項目を除外して計画をやり直す計算も数えていた。通常のPlanner実行にはこの上限が無いため、やり直しが4回の計算を超える入力では、旧経路は計画なし（`max_planner_reruns_reached`）で止まり、新経路は計画を作成し得る。同じ入力で計画の有無・採用する作成リスト項目・警告・操作手順・完成する目標武器・必要素材が変わり得て、保存済みの作成プランは生成経路を記録しないため、version 16以前の作成プランは下書き・実行中を問わず `calculation_context_changed` で実行・比較・競合操作ができず、読み取り時の変換や保存済みversionの書き換えはしない。候補検索、作成リスト、RNG予測の意味は変えていないため、version 12 / 13 / 14 / 15 / 16の候補と作成リスト項目は明示的な互換例外（`17 -> [12, 13, 14, 15, 16]`、範囲指定ではない）によりそのまま利用できる（version 11以前は非互換のまま、作成プランへは適用しない）。永続形状は変えないため、Dexie `DATABASE_SCHEMA_VERSION`（10）、`ExportRoot.schemaVersion`（13）、`AppSettings.schemaVersion`（2）、`RngState.schemaVersion`（2）、`PRODUCTION_RNG_ENGINE_VERSION`（`production-rng:c5-e7`）、Master dataVersion（4）は変更せず、migrationも追加しない。
 
 作成リストの全体最適化（19.1、Issue #260）の正式仕様化はdocs-onlyであり、いずれのversionも変更しない。実装の目標状態でも、内部Planner・候補検索・競合repairの同じ入力に対する計算と保存の意味を変えず、形状制約付きルート探索のProduction化が無指定時の候補検索の結果を変えず、永続形状を増やさず、途中採用できる状態の抽出規則を変えない限り、versionの変更を要しないと判断する。標準操作の切り替えは作成リストを置き換えたうえで内部Plannerを実行するものであり、同じ入力に対する内部Plannerの計算結果は変わらない（同じ入力の計算結果が変わったPhase 6-Aとは異なる）。有効な候補の件数による作成方式の選択と通常Plannerの代替経路（19.1、U1）は、作成リスト画面からどの操作で通常Plannerを呼ぶかを決めるだけであり、通常Plannerの同じ入力に対する計算・保存の意味と永続形状を変えない。各実装PRはこの前提を確認して記録し、崩れる場合は仕様へ戻ってversionを判断する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.18）。
 
 通常Plannerの競合解決の簡素化（23.2、Issue #278）の正式仕様化（PR-1）はdocs-onlyであり、いずれのversionも変更しない。
-生産計画画面の「この候補を優先」を通常Plannerの再計算へ切り替える実装（PR-2）は、競合の選択を伴う入力から保存する計画（代替ルートに
+生産計画画面の「この候補を優先」を通常Plannerの再計算へ切り替えた実装（PR-2）は、競合の選択を伴う入力から保存する計画（代替ルートに
 よる置き換えが無いこと、優先した候補の扱いと完成の条件、判断不要になった競合を残さないこと、競合repair履歴が `null` であること）を
-変えるため、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を18へ更新する。競合の選択を伴わない入力（作成リスト画面の通常作成、全体最適化、
-再計画の試算）の計算結果は変えない。このためversion 18では、作成プランについて初めての限定的な互換例外 `18 -> 17` を置く:
+変えるため、現行の `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **18** へ更新した。競合の選択を伴わない入力（作成リスト画面の通常作成、
+全体最適化、再計画の試算）の計算結果は変えないことを、version 17のcodeで記録した計算結果との一致で確認した。このためversion 18では、作成プランについて初めての限定的な互換例外 `18 -> 17` を置く:
 version 17の作成プランのうち、競合repair履歴が `null` で、選択済みの競合を1件も持たないもの（競合の選択を伴わない入力から作られた
 ことが保存データだけで分かるもの）は、下書き・実行中・完了・終了を問わず互換とする。競合repairで保存した下書きとそれを開始した
 作成プランは `calculation_context_changed` で実行・競合操作ができない。いずれも読み取り時の変換や保存済みversionの書き換えはしない。

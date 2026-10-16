@@ -2028,7 +2028,7 @@ checkpoint関与の判定はcurrent preparationの `checkpointParticipants` か�
 
 ### 11.2 「比較する」とwhat-if preview
 
-> Issue #278の切替（PR-2）で撤去する（11.6.1）。本節は撤去までの現行実装の契約である。
+> Issue #278の切替（PR-2）で撤去した（11.6.1）。本節はPhase 5-BからPR-2までの実装の記録である。
 
 各有効participantに「比較する」を置く。クリックしたparticipantだけを
 `scenarioResolution` とし、fresh PlannerInputへ表示中Planの既存explicit resolutionを
@@ -2076,7 +2076,7 @@ participant cardへ表示しない。
 
 ### 11.3 comparison card
 
-> Issue #278の切替（PR-2）で「比較する」とともに撤去する（11.6.1）。本節は撤去までの現行実装の契約である。
+> Issue #278の切替（PR-2）で「比較する」とともに撤去した（11.6.1）。本節はPhase 5-BからPR-2までの実装の記録である。
 
 `PlannerAlternativeComparison.alternatives` のstable orderをそのまま使い、UI独自のTarget sortを
 追加しない。各non-fixed Targetについて理想品候補1件の結果を表示する。
@@ -2120,11 +2120,11 @@ failureとして表示する。`invalid_fixed_resolution.reason` を分岐author
 
 ### 11.4 「この候補を優先」とPlanner再計算
 
-> Issue #278の切替（PR-2）後、「この候補を優先」はPlanner Alternative actual repairではなく、明示選択の集合を加えたfresh inputの
-> 通常Planner `createPlan()` と、追加検査を持つ通常保存になる（11.6.6、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.4 / 9.6.6）。
+> Issue #278の切替（PR-2、実装済み）で、「この候補を優先」はPlanner Alternative actual repairではなく、明示選択の集合を加えたfresh inputの
+> 通常Planner `createPlan()` と、追加検査を持つ保存（`savePlannerConflictPreferenceResult()`）になった（11.6.6、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.4 / 9.6.6）。
 > 本節のうち `conflictResolutionPlannerOptions(表示中Plan)` による上限、incompleteの案内文、`invalid_conflict_resolution` のfail closed、
 > `draft` だけを操作対象とする規則は維持し、Planner Alternativeの呼び出し・専用保存・generated Entryによる置換・lineage・
-> Planを壊す変更の警告の部分は切替後に使わない。
+> Planを壊す変更の警告の部分は切替後に使わない（以下はPhase 5-BからPR-2までの記録を含む）。
 
 「比較する」と「この候補を優先」は別操作とする。what-if成功を選択のgateにせず、比較せずに
 有効participantを優先できる。11.1でdisabledのparticipantはwhat-if成否にかかわらず選択できない。
@@ -2302,9 +2302,12 @@ Persistenceは Phase 5-B）で実装済みであり、11.2〜11.4の画面はこ
 
 ### 11.6 通常Plannerの競合画面（優先候補の選択、Issue #278）
 
-実装状態: **目標仕様（未実装）**。Issue #278のPR-1（docs-only）で表示の意味と操作の契約を確定した。計算・保存の切替と
-「比較する」の撤去はPR-2、本節の表示はPR-3で行う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.12）。それまでの現行画面は
-11.1〜11.4.1である。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 23.2にある。
+実装状態: **操作の切替は実装済み（PR-2）、本節の表示はPR-3で行う**。Issue #278のPR-1（docs-only）で表示の意味と操作の契約を
+確定し、PR-2で計算・保存を切り替えて「比較する」を撤去した（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.12）。PR-2の画面は11.6.6の操作
+（押す前の静的な説明、押した時点の再判定、以前の選択を取り消す・引き継がない場合の確認Dialog、優先候補どうしが両立しない場合の
+開始前の拒否、計算中表示とキャンセル、優先した候補が完成しない場合・無効な選択・計画なし・上限到達・保存拒否のtypedな日本語）
+だけを最小限に実装しており、11.6.2〜11.6.5の表示（kind基準の説明、内部IDの非表示、今回作成する / しない目標武器と件数、動的
+Conflictと入力変更の区別と案内）はPR-3で行う。それまでの競合一覧の表示は11.1の形のままである。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 23.2にある。
 具体的なlayoutとcomponent構成はPR-3で決め、Presentation設計に `ui-ux-pro-max` を使う（既存のMUIとPC・375px・ダークテーマの
 表示を優先する）。
 

@@ -116,8 +116,8 @@ export type PlannerOrdinaryWorkerRequest = Extract<
 
 /**
  * The Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md` 9.2.19.7):
- * the Production Plan screen's 「比較する」 since Phase 5-B, and its only
- * comparison request since Phase 6-B1 removed the legacy B9 what-if kind. The
+ * the Production Plan screen's 「比較する」 from Phase 5-B until Issue #278 PR-2
+ * removed that operation; no Production caller sends it any more. The
  * extent and the trial bounds do not cross the wire: the Production Worker
  * adapter supplies the Domain defaults inside the Worker boundary (9.2.19.12).
  */
@@ -129,8 +129,9 @@ export type PlannerAlternativeComparisonWorkerRequest = WorkerTaskRequest<
 
 /**
  * The Planner Alternative actual repair (Phase 5-B, `docs/PLANNER_SPEC.md`
- * 9.2.19.8): the Production Plan screen's 「この候補を優先」 (the legacy B8
- * constrained re-search kind was removed in Phase 6-B1). The wire input is the
+ * 9.2.19.8): the Production Plan screen's 「この候補を優先」 from Phase 5-B until
+ * Issue #278 PR-2 moved it to the ordinary `create_plan`; no Production caller
+ * sends it any more. The wire input is the
  * caller input only - fresh PlannerInput, this decision, the displayed Draft's
  * lineage; the extent and the trial bounds are supplied inside the Worker by
  * the Production adapter. It only calculates: saving the artifact is the

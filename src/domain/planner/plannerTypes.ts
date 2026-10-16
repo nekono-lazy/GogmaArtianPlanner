@@ -28,6 +28,7 @@ import type {
 import type { RngEngine } from '../rng/rngEngine'
 import type { BuildListEntryReplacement } from '../buildList/buildListEntryReplacement'
 import type { PlannerLaneProgress } from './plannerRouteLanes'
+import type { PlannerConflictResolutionOutcome } from './plannerConflictPreferenceOutcome'
 
 /**
  * The Production Planner bounds (Issue #103 Phase D-2a, PLANNER_SPEC 7.2).
@@ -562,6 +563,15 @@ export interface PlannerResult {
    * is the one whose result was actually used.
    */
   termination: PlannerRunTermination
+  /**
+   * For an input carrying explicit conflict resolutions only: whether the
+   * Plan completes every Entry they prefer, and why not
+   * (`docs/PLANNER_SPEC.md` 9.6.6). Runtime-only Worker result data, never
+   * persisted. Absent for an input without resolutions - the Build List's
+   * ordinary run, the Build List optimization's final verification and the
+   * replan Preview - which no completion condition applies to.
+   */
+  conflictResolutionOutcome?: PlannerConflictResolutionOutcome
 }
 
 export interface PlannerIdFactory {

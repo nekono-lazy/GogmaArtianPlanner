@@ -490,3 +490,78 @@ describe('mergeExplicitConflictResolution', () => {
     )).toBe(true)
   })
 })
+
+/**
+ * Issue #278 PR-2 (`docs/PLANNER_SPEC.md` 9.6.2 / 9.6.3 / 9.6.10): availability
+ * reads the same Domain decision set the press runs, so a checkpoint
+ * participant an earlier decision of the displayed Draft excludes is not
+ * effective; and Plan compatibility is the one Domain authority.
+ */
+describe('Issue #278 interaction availability', () => {
+  function threeEntries() {
+    const { entries, targets } = fixtureEntries()
+    const third = structuredClone(entries[1])
+    const thirdTarget = structuredClone(targets[1])
+    third.id = buildListEntryId('build-list.fixture.c')
+    third.targetWeaponId = targetWeaponId('target.fixture.c')
+    third.candidateSnapshot.targetWeaponId = third.targetWeaponId
+    thirdTarget.id = third.targetWeaponId
+    thirdTarget.name = 'Third fixture target'
+    return { entries: [...entries, third], targets: [...targets, thirdTarget] }
+  }
+
+  function scenario(earlierDecision: boolean) {
+    const { entries, targets } = threeEntries()
+    const [a, b, c] = entries
+    // conflict 1 = {A, B}; conflict 2 = {B (checkpoint), C}.
+    const conflict1 = conflict([a, b], { id: 'conflict.1', selectedBuildListEntryId: earlierDecision ? a.id : null })
+    const conflict2 = conflict([b, c], { id: 'conflict.2' })
+    const preparation: ReadyPreparation = {
+      status: 'ready',
+      validBuildListEntryIds: entries.map(({ id }) => id),
+      excludedBuildListEntries: [],
+      currentConflicts: [
+        { id: conflict1.id, buildListEntryIds: [a.id, b.id], checkpointParticipants: [] },
+        {
+          id: conflict2.id,
+          buildListEntryIds: [b.id, c.id],
+          checkpointParticipants: [{ buildListEntryId: b.id, axis: 'bonus', opportunityId: 'opportunity.b' as never }],
+        },
+      ],
+    }
+    const persistedPlan = plan([conflict1, conflict2])
+    return { persistedPlan, preparation, input: plannerInput(entries, targets) }
+  }
+
+  it('keeps a conflict with an effective checkpoint participant unavailable', () => {
+    const { persistedPlan, preparation, input } = scenario(false)
+    const viewModel = createProductionPlanInteractionViewModel(persistedPlan, input, preparation)
+    const second = viewModel.conflicts.find(({ id }) => id === 'conflict.2')!
+    expect(second.involvesSelectedCheckpoint).toBe(true)
+    expect(second.participants.map(({ unavailableReason }) => unavailableReason)).toEqual(['checkpoint_conflict', 'checkpoint_conflict'])
+  })
+
+  it('treats a checkpoint participant the displayed Draft already excludes as not effective', () => {
+    const { persistedPlan, preparation, input } = scenario(true)
+    const viewModel = createProductionPlanInteractionViewModel(persistedPlan, input, preparation)
+    const second = viewModel.conflicts.find(({ id }) => id === 'conflict.2')!
+    expect(second.involvesSelectedCheckpoint).toBe(false)
+    expect(second.participants.map(({ checkpointOpportunityId }) => checkpointOpportunityId)).toEqual([null, null])
+    // Only C can be preferred: preferring the checkpoint participant B itself stays refused.
+    expect(second.participants.map(({ isAvailable, unavailableReason }) => [isAvailable, unavailableReason])).toEqual([
+      [false, 'checkpoint_conflict'],
+      [true, null],
+    ])
+  })
+
+  it('judges Plan compatibility through the one Domain function (18 -> 17 for resolution-free Plans)', () => {
+    const persistedPlan = createValidProductionPlan()
+    const current = { ...persistedPlan.calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
+    persistedPlan.calculationContext = { ...current, appSchemaVersion: 17 }
+    persistedPlan.baseSnapshot.calculationContext = { ...current, appSchemaVersion: 17 }
+    persistedPlan.conflicts = []
+    expect(evaluateProductionPlanCalculationCompatibility(persistedPlan, current)).toEqual({ isCompatible: true, recalculationReasons: [] })
+    persistedPlan.conflicts = [conflict(fixtureEntries().entries, { selectedBuildListEntryId: fixtureEntries().entries[0].id })]
+    expect(evaluateProductionPlanCalculationCompatibility(persistedPlan, current).isCompatible).toBe(false)
+  })
+})

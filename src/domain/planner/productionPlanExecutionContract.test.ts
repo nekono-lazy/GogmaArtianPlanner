@@ -117,7 +117,7 @@ function completionsOf(step: PlanStep | undefined) {
 }
 
 describe('calculation schema version boundaries', () => {
-  it('moves the calculation schema to 17 for the Phase 6-A ordinary Planner routing; Export and Dexie move only with persisted shapes', () => {
+  it('moves the calculation schema to 18 for the Issue #278 ordinary conflict resolution; Export and Dexie move only with persisted shapes', () => {
     // The Execution Plan contract moved the calculation schema to 12 and Export
     // to 8 without a Dexie upgrade; the Execution runtime lifecycle metadata then
     // moved Export to 9 and Dexie to 6 without touching calculation semantics.
@@ -133,8 +133,10 @@ describe('calculation schema version boundaries', () => {
     // scenario (16) together with the persisted repair lineage (Dexie 10 /
     // Export 13). Phase 6-A moved the Build List and the replan Preview to the
     // ordinary Planner, dropping the legacy B8 retry budget: a Planner-only
-    // calculation change (17), with no persisted shape change.
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    // calculation change (17), with no persisted shape change. Issue #278 PR-2
+    // moved the Production Plan screen's conflict resolution to the ordinary
+    // Planner (18), again with no persisted shape change.
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
   })

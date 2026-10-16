@@ -289,7 +289,7 @@ describe('Phase 2-C1 isolation', () => {
     const paths = Object.keys(production).filter(path => !/\.test\.tsx?$|\.worker\.benchmark|BenchmarkPage|\/pages\/BenchmarkApp/.test(path))
     expect(paths.length).toBeGreaterThan(100)
     expect(paths.filter(path => /plannerGlobalPhase2C1|PHASE2C1|planner_start|searchOrigin/.test(production[path]))).toEqual([])
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')

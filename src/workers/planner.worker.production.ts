@@ -37,8 +37,9 @@ export function createProductionPlannerWorkerDependencies(): PlannerDependencies
  * authority rather than restated. Scenario composition, Route summaries and
  * the typed result all stay in the Domain.
  *
- * Since Phase 5-B it is the Production Plan screen's 「比較する」; Phase 6-B1
- * removed the legacy B9 what-if adapter, so it is the only comparison adapter.
+ * It was the Production Plan screen's 「比較する」 from Phase 5-B until Issue
+ * #278 PR-2 removed that operation (`docs/PLANNER_SPEC.md` 9.6.12); no
+ * Production caller sends it any more, and its removal is a later cleanup.
  */
 export const createProductionPlannerAlternativeComparison: CreatePlannerAlternativeComparisonCalculation =
   (input, dependencies, executionOptions) =>
@@ -54,7 +55,9 @@ export const createProductionPlannerAlternativeComparison: CreatePlannerAlternat
 
 /**
  * The Production Planner Alternative actual repair (Phase 5-B,
- * `docs/PLANNER_SPEC.md` 9.2.19.8 / 9.2.19.12): 「この候補を優先」. Exactly the
+ * `docs/PLANNER_SPEC.md` 9.2.19.8 / 9.2.19.12). It was 「この候補を優先」 until
+ * Issue #278 PR-2 moved that operation to the ordinary `createPlan()`; no
+ * Production caller sends it any more. Exactly the
  * what-if's Production caller contract - the Phase 3-C extent and trial
  * bounds, each imported from its Domain authority and passed explicitly - so a
  * preview and the repair it previews run the same scenario semantics. Saving

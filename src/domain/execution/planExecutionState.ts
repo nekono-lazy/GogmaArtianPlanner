@@ -16,8 +16,8 @@ import type {
 import {
   compareExecutionHistoryOrder,
   createExpectedPlanState,
-  isCalculationContextCompatible,
   isExecutionContractProductionPlan,
+  isProductionPlanCalculationCompatible,
   resolveObservationBindingTokens,
   validateProductionPlan,
 } from '../models/publicTypes'
@@ -62,17 +62,15 @@ function sameExpectedPlanState(left: ExpectedPlanState, right: ExpectedPlanState
 
 /**
  * The Plan is an executable Plan of the current calculation schema under the current
- * CalculationContext. A legacy Plan keeps its exact persisted contents and is
- * refused here; it is never executed as a current Plan.
+ * CalculationContext (`isProductionPlanCalculationCompatible()`, which also keeps
+ * a resolution-free version 17 Plan executable under 18). A legacy Plan keeps its
+ * exact persisted contents and is refused here; it is never executed as a current Plan.
  */
 export function assertExecutableProductionPlan(
   plan: ProductionPlan,
   currentCalculationContext: CalculationContext,
 ): void {
-  if (
-    !isCalculationContextCompatible(currentCalculationContext, plan.calculationContext) ||
-    !isCalculationContextCompatible(currentCalculationContext, plan.baseSnapshot.calculationContext)
-  ) {
+  if (!isProductionPlanCalculationCompatible(plan, currentCalculationContext)) {
     executionFailure(
       'calculation_context_changed',
       `ProductionPlan '${plan.id}' was calculated under an incompatible CalculationContext.`,

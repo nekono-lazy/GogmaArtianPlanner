@@ -59,7 +59,7 @@ const PINNED_CONFLICT_IDS = [
 
 describe('Issue #101 fixture versions', () => {
   it('does not move any version authority', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
   })
 })

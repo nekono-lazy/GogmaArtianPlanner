@@ -98,11 +98,11 @@ describe('applyProductionPlanStartTargetLinks / inspectProductionPlanStartTarget
   })
 })
 
-describe('calculation schema 13 compatibility boundary, carried into the current schema 17', () => {
+describe('calculation schema 13 compatibility boundary, carried into the current schema 18', () => {
   const current = { ...createValidBuildCandidate().calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION }
 
   it('keeps a schema 12 BuildCandidate / BuildListEntry result compatible under the current schema', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(isBuildResultCalculationContextCompatible({ ...current, appSchemaVersion: 12 }, current)).toBe(true)
   })
 

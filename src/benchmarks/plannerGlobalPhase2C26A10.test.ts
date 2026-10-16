@@ -15,6 +15,7 @@ import { defaultPlannerAlternativeTrialBounds } from '../domain/planner/alternat
 import { defaultPlannerOptions } from '../domain/planner/plannerTypes'
 import { PRODUCTION_RNG_ENGINE_VERSION } from '../domain/rng/production/productionRngEngine'
 import { defaultPlannerAlternativeSearchExtent } from '../domain/search'
+import { GLOBAL_RESEARCH_RECORDED_CALCULATION_APP_SCHEMA_VERSION } from './plannerGlobalOptimizationTestFixture'
 import { phase2c2KernelRequest, phase2c2ProductionDefaultConditions, type Phase2C2ChildOutcome, type Phase2C2Orientation } from './plannerGlobalPhase2C2'
 import { PHASE2C26A_CHILD_HEAP_MB, PHASE2C26A_CONCURRENCY, PHASE2C26A_MEMORY_SAMPLE_INTERVAL_MS, PHASE2C26A_NODE_YIELD, PHASE2C26A_ORIENTATION_BUDGET_MS } from './plannerGlobalPhase2C26A'
 import type { Phase2C26AKernelTarget, Phase2C26ARawKernel } from './plannerGlobalPhase2C26AAnalysis'
@@ -150,13 +151,14 @@ describe('conditions', () => {
     expect(defaultPlannerAlternativeSearchExtent).toEqual({ maxNormalAdvance: 4, maxGogmaAdvance: 235, maxSkillAdvance: 4 })
     expect(defaultPlannerAlternativeTrialBounds).toEqual({ maxCandidateTrialsPerTarget: 2, maxPlannerReruns: 8 })
     expect(defaultPlannerOptions).toEqual({ maxPlanSteps: 1000 })
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
     expect(authority.conditions.extent).toEqual(defaultPlannerAlternativeSearchExtent)
     expect(authority.conditions.bounds).toEqual(defaultPlannerAlternativeTrialBounds)
-    expect(authority.conditions.calculationContext).toMatchObject({ appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION, rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION })
+    // The committed C2.6-A authority is a frozen research record of calculation schema 17; it is never re-recorded.
+    expect(authority.conditions.calculationContext).toMatchObject({ appSchemaVersion: GLOBAL_RESEARCH_RECORDED_CALCULATION_APP_SCHEMA_VERSION, rngEngineVersion: PRODUCTION_RNG_ENGINE_VERSION })
     expect(authority.conditions.lineage).toEqual({ priorFixedBuildListEntryIds: [], priorExcludedRoutes: [] })
   })
 })

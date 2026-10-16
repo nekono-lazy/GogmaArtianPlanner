@@ -572,7 +572,7 @@ describe('Phase 2-C2.5-D2-c isolation', () => {
     expect(PHASE2C25D2C_CANDIDATE_STOP_BOUND).toBe(1)
     expect([...PHASE2C25D2C_PROFILE_THRESHOLDS_MIB]).toEqual([512, 1024, 2048, 4096, 6144, 7168])
     expect(PHASE2C25D2C_SAMPLING_OPTIONS).toMatchObject({ samplingInterval: 256 * 1024, stackDepth: 64, includeObjectsCollectedByMajorGC: false, includeObjectsCollectedByMinorGC: false })
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
     expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')

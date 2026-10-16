@@ -59,7 +59,10 @@ export interface PlannerWorkerClient {
   /**
    * The ordinary Production Planner run. Like every entry point below it takes
    * no progress callback (Issue #103 Phase D-2a): the Promise settles with the
-   * result, an error, or `PlannerCancelledError` from `cancelPlan()`.
+   * result, an error, or `PlannerCancelledError` from `cancelPlan()`. Since
+   * Issue #278 PR-2 it is also the Production Plan screen's 「この候補を優先」,
+   * with the explicit decision set in `PlannerInput.conflictResolutions`
+   * (`docs/PLANNER_SPEC.md` 9.6.4).
    */
   createPlan(
     requestId: string,
@@ -67,10 +70,10 @@ export interface PlannerWorkerClient {
   ): Promise<PlannerResult>
   /**
    * The Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md`
-   * 9.2.19.7): a transient calculation, the Production Plan screen's
-   * 「比較する」 since Phase 5-B; the legacy B8 constrained re-search and B9
-   * what-if entries were removed in Phase 6-B1 (`docs/PLANNER_SPEC.md`
-   * 9.2.19.16). The extent and the trial bounds are not
+   * 9.2.19.7): a transient calculation. It was the Production Plan screen's
+   * 「比較する」 from Phase 5-B until Issue #278 PR-2 removed that operation; no
+   * Production caller sends it any more (its removal is a later cleanup,
+   * 9.6.12). The extent and the trial bounds are not
    * parameters: the Production Worker adapter supplies them inside the Worker
    * boundary.
    */
@@ -80,7 +83,8 @@ export interface PlannerWorkerClient {
   ): Promise<PlannerAlternativeWhatIfCalculationResult>
   /**
    * The Planner Alternative actual repair (Phase 5-B, `docs/PLANNER_SPEC.md`
-   * 9.2.19.8): 「この候補を優先」. The input is the fresh PlannerInput, this
+   * 9.2.19.8; no Production caller since Issue #278 PR-2 moved 「この候補を優先」
+   * to `createPlan()`). The input is the fresh PlannerInput, this
    * decision and the displayed Draft's lineage; the extent and the trial
    * bounds are not parameters. It only calculates: the persistable artifact is
    * saved by `PlannerResultPersistenceService.savePlannerAlternativeRepair()`.

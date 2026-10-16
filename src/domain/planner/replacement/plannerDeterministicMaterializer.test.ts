@@ -234,18 +234,35 @@ describe('deterministic materialization core: generated BuildListEntry', () => {
 
 describe('deterministic materialization core: pinned IDs (Phase 6-B2a)', () => {
   // Pinned from the pre-Phase 6-B2a implementation over this fixture: moving
-  // the core must change no generated Entry ID and no Candidate ID.
+  // the core must change no generated Entry ID and no Candidate ID. The IDs
+  // fold in the CalculationContext, so the fixture is pinned to the calculation
+  // schema the values were recorded under (17); a later schema derives other
+  // IDs by design, never by a change of the core.
+  const schema17Origin = createConstrainedSearchOrigin()
+  schema17Origin.calculationContext = { ...schema17Origin.calculationContext, appSchemaVersion: 17 }
+  let schema17Candidates: ConstrainedCandidate[] = []
+
+  beforeAll(async () => {
+    schema17Candidates = (await enumerateConstrainedCandidates(
+      constrainedInput(schema17Origin),
+      createConstrainedEngine(schema17Origin),
+    )).candidates
+  })
+
   it('keeps the generated Entry ID and the B8-prefixed Candidate ID', () => {
-    const { entry, candidate } = materializer().materializeBuildListEntry(candidates[0], [])
+    const { entry, candidate } = materializer({ origin: schema17Origin, target: schema17Origin.targetWeapons[0] })
+      .materializeBuildListEntry(schema17Candidates[0], [])
     expect(entry.id).toBe('build-list.constrained.fnv1a32-db54f4cd')
     expect(candidate.id).toBe('candidate.constrained.fnv1a32-46a2a19b')
   })
 
   it('keeps the Planner Alternative-prefixed Candidate ID and the same Entry ID', () => {
     const { entry, candidate } = materializer({
+      origin: schema17Origin,
+      target: schema17Origin.targetWeapons[0],
       searchIdentity: ALTERNATIVE_SEARCH_IDENTITY,
       candidateIdPrefix: 'candidate.planner-alternative.',
-    }).materializeBuildListEntry(candidates[0], [])
+    }).materializeBuildListEntry(schema17Candidates[0], [])
     expect(entry.id).toBe('build-list.constrained.fnv1a32-db54f4cd')
     expect(candidate.id).toBe('candidate.planner-alternative.fnv1a32-0e8ff2a0')
   })

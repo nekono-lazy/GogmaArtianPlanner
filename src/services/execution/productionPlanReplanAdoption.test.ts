@@ -470,10 +470,10 @@ describe('replan adoption', () => {
       ].sort((a, b) => a.id.localeCompare(b.id)))
     }))
 
-  it.each([13, 14, 15, 16])('replans a running schema %i Plan from the current state through the schema 17 ordinary Planner', (appSchemaVersion) =>
+  it.each([13, 14, 15, 16])('replans a running schema %i Plan from the current state through the current ordinary Planner', (appSchemaVersion) =>
     withDatabase(async (database) => {
       // Issue #103 Phase C / Issue #129 / Phase 5-B / Phase 6-A: the running Plan
-      // was calculated under an older schema and is never executed under 17; the
+      // was calculated under an older schema and is never executed under 18; the
       // way on is a new ordinary calculation from the current persisted state,
       // never its baseSnapshot.
       const harness = await running(database, { confirmedSteps: 1 })
@@ -497,7 +497,7 @@ describe('replan adoption', () => {
       expect(fullRuns.scheduler).toBeGreaterThan(0)
       expect(fullRuns.beam).toBe(0)
       const draft = previewPlan(preview)
-      expect(draft.calculationContext.appSchemaVersion).toBe(17)
+      expect(draft.calculationContext.appSchemaVersion).toBe(18)
 
       const result = await adopt(harness, preview)
 
@@ -509,7 +509,7 @@ describe('replan adoption', () => {
       })
       expect(await database.productionPlans.get(draft.id)).toMatchObject({
         status: 'active',
-        calculationContext: { appSchemaVersion: 17 },
+        calculationContext: { appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION },
       })
     }))
 
@@ -566,7 +566,7 @@ describe('replan adoption', () => {
     }))
 
   it('pins the current version authorities: calculation 17 (Phase 6-A), Dexie 10, Export 13', () => {
-    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(17)
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
     expect(DATABASE_SCHEMA_VERSION).toBe(10)
     expect(EXPORT_SCHEMA_VERSION).toBe(13)
   })

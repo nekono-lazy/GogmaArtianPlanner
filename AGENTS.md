@@ -1008,7 +1008,22 @@ exception `18 -> [12..17]` and the **first ProductionPlan exception**, the narro
 persisted shape only inputs without explicit conflict resolutions produce under 17 (Build List creation and auxiliary path,
 GA adoption, replan adoption), whose output 18 keeps - stays compatible in every status; a version 17 Plan carrying lineage
 (Planner Alternative repair Drafts and the Plans started from them) or any selection fails closed, and version 1..16 Plans stay
-incompatible. Never widen it to a range or a later version. Until that PR, 17 stays current.
+incompatible. Never widen it to a range or a later version.
+Issue #278 PR-2 implemented exactly that (`docs/PLANNER_SPEC.md` 9.6.10): `CURRENT_CALCULATION_APP_SCHEMA_VERSION` is **18**,
+`COMPATIBLE_BUILD_RESULT_APP_SCHEMA_VERSIONS` has `18 -> [12, 13, 14, 15, 16, 17]`, and the one Domain function
+`isProductionPlanCalculationCompatible(plan, current)` (`src/domain/models/domainRules.ts`, map
+`18 -> [17]` applied to the body and `baseSnapshot` contexts alike, plus `conflictRepairLineage === null` and no selected Conflict)
+is what every Plan-compatibility caller reads - `assertExecutableProductionPlan()` (start, Step confirmation, save point record /
+restore, recovery), `evaluateProductionPlanCalculationCompatibility()` (Production Plan page, Dashboard, Execution Navigator), the
+decision set and the Build List optimization's Draft comparison. Newly generated Plans (the save boundaries, replan adoption, the
+GA adoption) still require exact equality with the current context, and `validateProductionPlan()` keeps the exact Plan /
+snapshot equality. The `conflictResolutions = []` parity premise was verified by a digest test recorded on the schema 17 code
+(`src/domain/planner/plannerConflictResolutionParity.test.ts`). The Global Assignment Research test fixtures that folded
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` into their frozen records now pin the recorded schema 17
+(`GLOBAL_RESEARCH_RECORDED_CALCULATION_APP_SCHEMA_VERSION`); the research records, golden values and formal registration are
+unchanged, and a formal research run under the schema 18 runtime is refused by its own start gate as a version change.
+`DATABASE_SCHEMA_VERSION` 10, `ExportRoot.schemaVersion` 13, `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2,
+`PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7` and Master `dataVersion` 4 are unchanged, with no migration.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -1042,7 +1057,8 @@ strategy switch from the Beam Search to the deterministic scheduler (Issue #103 
 moved it to 14, the Normal Counter-advance fast-forward (Issue #129) moved it to 15, and
 the Planner Alternative Production routing (Issue #136 / #101 Phase 5-B) moved it to 16, and
 the ordinary Planner routing of the Build List and the replan Preview (Issue #136 / #101 Phase 6-A,
-dropping the legacy B8 retry budget) moved it to the current **17**, defined
+dropping the legacy B8 retry budget) moved it to 17, and the ordinary Planner conflict resolution (Issue #278 PR-2) moved it
+to the current **18**, defined
 only by `CURRENT_CALCULATION_APP_SCHEMA_VERSION` in `src/domain/models/common.ts`.
 A version 10 `checkpointGroups` / `selectedCheckpointOpportunityIds` cannot be
 mapped onto lane pins, and reading such a selection as empty would silently
@@ -1086,7 +1102,7 @@ current Candidates by searching again.
 Do not delete historical results or add a migration or Export/Import semantic
 validation change as a substitute for CalculationContext compatibility.
 
-All version 1..16 ProductionPlans are incompatible with version 17, Draft or active alike, while version 12, 13, 14, 15 and 16 Candidates and BuildListEntries stay usable under 17 through the explicit build-result exception `17 -> [12, 13, 14, 15, 16]` (the version 17 change is the Build List / replan Preview routing to the ordinary Planner without the legacy B8 retry budget only; version 1..11 stay incompatible; never a range check, never a Plan exception, never a read migration or an in-place version rewrite of a version 16 Plan). Historically, all version 1..15 ProductionPlans are incompatible with version 16, Draft or active alike, while version 12, 13, 14 and 15 Candidates and BuildListEntries stay usable under 16 through the explicit build-result exception `16 -> [12, 13, 14, 15]` (the version 16 change is the Production Plan screen's Conflict what-if / actual repair routing to the Planner Alternative scenario only; version 1..11 stay incompatible; never a range check, never a Plan exception, never a read migration or an in-place version rewrite of a version 15 Plan). Historically, all version 1..14 ProductionPlans are incompatible with version 15, Draft or active alike, while version 12, 13 and 14 Candidates and BuildListEntries stay usable under 15 through the explicit build-result exception `15 -> [12, 13, 14]` (the version 15 change is the Planner's Normal Counter-advance fast-forward only; version 1..11 stay incompatible; never a range check, never a Plan exception, never a read migration or an in-place version rewrite of a version 14 Plan). Historically, all version 1..13 ProductionPlans are incompatible with version 14, Draft or active alike, while version 12 and 13 Candidates and BuildListEntries stay usable under 14 through the explicit build-result exception `14 -> [12, 13]` (the version 14 change is the Production Planner strategy only; version 1..11 stay incompatible; never a range check such as "12 or later", never a Plan exception, never a read migration or an in-place version rewrite of a version 13 Plan). Historically, all version 1..12 ProductionPlans are incompatible with version 13, and all version 1..11 Candidates and BuildListEntries are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. The only build-result exception at this boundary is the explicit `13 -> [12]` one: the version 13 change is ProductionPlan execution only (the Plan start effect), so a version 12 Candidate or BuildListEntry stays usable under 13 when gameVersion, masterDataVersion and rngEngineVersion are equal and no ordinary stale reason applies. Never widen it to version 1..11, never apply it to a ProductionPlan, and never extend the historical 2..5 exception. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
+Under the current version 18, version 1..16 ProductionPlans and every version 17 ProductionPlan carrying a `conflictRepairLineage` or a selected Conflict are incompatible (`calculation_context_changed`, contents kept, no read migration, no in-place version rewrite), a version 17 ProductionPlan with `conflictRepairLineage === null` and no selected Conflict stays compatible in every status through the one explicit Plan exception `18 -> 17` (never a range, never inherited by a later version), and version 12..17 Candidates and BuildListEntries stay usable through the explicit build-result exception `18 -> [12, 13, 14, 15, 16, 17]` (version 1..11 stay incompatible). Historically, all version 1..16 ProductionPlans are incompatible with version 17, Draft or active alike, while version 12, 13, 14, 15 and 16 Candidates and BuildListEntries stay usable under 17 through the explicit build-result exception `17 -> [12, 13, 14, 15, 16]` (the version 17 change is the Build List / replan Preview routing to the ordinary Planner without the legacy B8 retry budget only; version 1..11 stay incompatible; never a range check, never a Plan exception, never a read migration or an in-place version rewrite of a version 16 Plan). Historically, all version 1..15 ProductionPlans are incompatible with version 16, Draft or active alike, while version 12, 13, 14 and 15 Candidates and BuildListEntries stay usable under 16 through the explicit build-result exception `16 -> [12, 13, 14, 15]` (the version 16 change is the Production Plan screen's Conflict what-if / actual repair routing to the Planner Alternative scenario only; version 1..11 stay incompatible; never a range check, never a Plan exception, never a read migration or an in-place version rewrite of a version 15 Plan). Historically, all version 1..14 ProductionPlans are incompatible with version 15, Draft or active alike, while version 12, 13 and 14 Candidates and BuildListEntries stay usable under 15 through the explicit build-result exception `15 -> [12, 13, 14]` (the version 15 change is the Planner's Normal Counter-advance fast-forward only; version 1..11 stay incompatible; never a range check, never a Plan exception, never a read migration or an in-place version rewrite of a version 14 Plan). Historically, all version 1..13 ProductionPlans are incompatible with version 14, Draft or active alike, while version 12 and 13 Candidates and BuildListEntries stay usable under 14 through the explicit build-result exception `14 -> [12, 13]` (the version 14 change is the Production Planner strategy only; version 1..11 stay incompatible; never a range check such as "12 or later", never a Plan exception, never a read migration or an in-place version rewrite of a version 13 Plan). Historically, all version 1..12 ProductionPlans are incompatible with version 13, and all version 1..11 Candidates and BuildListEntries are incompatible with version 13 (version 1..11 were already incompatible with version 12). Preserve their contents and fail closed with calculation_context_changed. The only build-result exception at this boundary is the explicit `13 -> [12]` one: the version 13 change is ProductionPlan execution only (the Plan start effect), so a version 12 Candidate or BuildListEntry stays usable under 13 when gameVersion, masterDataVersion and rngEngineVersion are equal and no ordinary stale reason applies. Never widen it to version 1..11, never apply it to a ProductionPlan, and never extend the historical 2..5 exception. Never execute a version 12 Plan under the Plan start effect: its first Step expects the pre-start state. Never convert a version 11 Plan into the version 12 PlanStep contract: no inferred `executionEffects`, no `reserve_weapon` merged into a physical Step, no inferred tracked OwnedWeapon or observation binding.
 
 The v3 -> v4 Dexie migration converts only `OwnedGogma.status === 'material'` to
 `'unclassified'`. `practical` and `ideal` keep their values, a Normal Artian
@@ -3866,6 +3882,10 @@ benchmark records. The only Production routing is Build List / replan Preview ->
 `savePlannerAlternativeRepair()`; no other legacy Planner path exists. No semantics, ID, hash, Worker protocol, UI or version moved
 (17 / 10 / 13, `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2, `production-rng:c5-e7`, Master `dataVersion` 4), and no
 migration was added.
+Since Issue #278 PR-2 that routing is superseded for the Production Plan screen: there is no 「比較する」, and 「この候補を優先」 ->
+`createPlan()` with the explicit decision set, saved by `savePlannerConflictPreferenceResult()` (see "Ordinary Planner Conflict
+Resolution (Issue #278)"). `createPlannerAlternativeComparison()` / `createPlannerAlternativeRepair()`, their Worker kinds, Production
+adapters and the repair save API stay without a Production caller until the PR-4+ cleanup.
 
 ---
 
@@ -4494,10 +4514,22 @@ Application / Persistence responsibilities.
 ## Ordinary Planner Conflict Resolution (Issue #278)
 
 `docs/PLANNER_SPEC.md` 9.6 (with `docs/REQUIREMENTS.md` 23.2, `docs/UI_FLOW.md` 11.6, `docs/DATA_MODEL.md` 11.1.1 /
-11.8) is the formal **target** contract fixed by Issue #278 PR-1 (docs-only). It is **not implemented**: the
-Production Plan screen still runs the Planner Alternative (`docs/PLANNER_SPEC.md` 9.2.19: 「比較する」 what-if,
-「この候補を優先」 actual repair) until PR-2 switches it. Do not implement the target piecemeal, and do not read the
-Planner Alternative sections as the target.
+11.8) is the formal contract fixed by Issue #278 PR-1 (docs-only). **PR-2 implemented the calculation, save, routing and
+version parts**; the conflict display of `docs/UI_FLOW.md` 11.6.2 - 11.6.5 is PR-3 and the Planner Alternative cleanup PR-4+.
+The Production Plan screen no longer runs the Planner Alternative (`docs/PLANNER_SPEC.md` 9.2.19 is a routing record): 「比較する」
+is gone, and 「この候補を優先」 is `derivePlannerConflictDecisionSet()` (`src/domain/planner/plannerConflictDecisionSet.ts`, the 9.6.3
+authority the availability shares) -> an optional confirmation of dropped earlier decisions -> the ordinary
+`PlannerWorkerClient.createPlan()` over a fresh input with the decision set and `conflictResolutionPlannerOptions(displayedPlan)`
+-> `PlannerResult.conflictResolutionOutcome` (`evaluatePlannerConflictResolutionOutcome()`, runtime-only, present only for an input
+with explicit resolutions) -> `PlannerResultPersistenceService.savePlannerConflictPreferenceResult()` (the ordinary save boundary
+plus the 9.6.6 checks and the source Draft CAS; no approval). The Planner side: `applyPlannerConflictResolutions()` (the monotone
+fixpoint over `conflictResolutionRefusalReason(resolution, conflict, excluded)`) decides which resolutions apply to the initial
+conflicts; route commitment refuses an inconsistent applied set, excludes every non-selected participant Route-level (also one
+whose unit is the selected Entry's shareable action), and ranks preferred Entries first in provisional outcomes and stall drops
+(`comparePlannerCommitmentPriority()`, `R` inside each group); dynamic conflicts are detected without resolutions; the run reports
+refusals against the initial conflicts and drops a conflict whose non-excluded participants are one or none
+(`reportedConflicts()`). With `conflictResolutions = []` every one of these is a no-op (parity test above). Do not read the Planner
+Alternative sections as the current contract.
 
 - Responsibilities: rebuilding several Targets' Routes to avoid conflicts belongs to the Build List global
   optimization (17章), which is unchanged. The ordinary Planner's conflict resolution only lets the user pick which
@@ -4522,7 +4554,7 @@ Planner Alternative sections as the target.
   before it starts; an inconsistent set fails closed; anything dropped or superseded is shown and confirmed before
   the run, never silent
 - Recalculation (9.6.4): fresh `createPlannerInput()` + the explicit set, `conflictResolutionPlannerOptions(表示中Plan)`,
-  ordinary `createPlan()` only. PR-2 adds to route commitment that an explicitly preferred Entry outranks
+  ordinary `createPlan()` only. PR-2 added to route commitment that an explicitly preferred Entry outranks
   non-preferred ones in provisional outcomes and stall drops (recommendation stays `R`), and that a resolution
   applies only to an initial conflict. With `conflictResolutions = []` (Build List creation, GA final verification,
   replan Preview) nothing changes - pin it by parity tests; the Plan exception below depends on it
@@ -4547,7 +4579,7 @@ Planner Alternative sections as the target.
   Targets and pending conflicts counted separately. Use `ui-ux-pro-max` for the Presentation design
 - `ProductionPlan.conflictRepairLineage` stays a persisted field (validator, migrations, Export / Import unchanged);
   no new writer after PR-2
-- Version (9.6.10): PR-1 moves nothing. PR-2 moves `CURRENT_CALCULATION_APP_SCHEMA_VERSION` to **18** with the
+- Version (9.6.10): PR-1 moved nothing. PR-2 moved `CURRENT_CALCULATION_APP_SCHEMA_VERSION` to **18** with the
   build-result exception `18 -> [12, 13, 14, 15, 16, 17]` and the narrow ProductionPlan exception `18 -> 17` for
   version 17 Plans with `conflictRepairLineage === null` and no selected conflict (GA-adopted, Build List, replan Plans
   keep running in every status). Version 17 Plans with lineage or a selection (Planner Alternative repair) and
