@@ -1424,7 +1424,7 @@ Accordionの見出し「詳細設定」と上の説明文はIssue #260 PR-6Cよ�
   fast-forward、動的なrelease / recommit、deadlock / stallによるdropにより、Route unit数や
   Candidateの `estimatedOperationCount` は実際のStep総数ではなく、単一のauthorityが無いためである
 - 同じ表示方針を現在地点からの再計画Preview（16.4、「再計画を試算しています…」）、
-  Production Plan画面の再計算（「再計算しています…」）、what-if比較（「比較しています…」）にも適用する
+  Production Plan画面の再計算（「再計算しています…」）、what-if比較（「比較しています…」。Issue #278の切替で撤去、11.6）にも適用する
 - キャンセルはprogress受信に依存せず、`cancelPlan()` とWorker側の `shouldCancel` で応答する
 - 全体最適化（10.4）の計算中も、完了率・残り時間・件数の分母を推定して表示しない。表示できるのは
   現在の段階名（文字）、indeterminateな進捗表示、キャンセルである。段階名は全体最適化に固有の表示であり、
@@ -1826,7 +1826,7 @@ Plan概要
 計画全体の実行順
 必要素材・費用の目安（計画全体）
 必要素材（アイテム）合計（記録がある場合だけ）
-競合と解決（既存のConflict / what-if UI）
+競合と解決（既存のConflict / what-if UI。Issue #278の切替後は11.6）
 目標武器ごとの作成ルート
 採用されなかった候補（補足情報）
 ```
@@ -1959,7 +1959,8 @@ rank順並び替えを行わない。同一bonusが複数slotにあっても欠�
 
 TargetWeapon表示名はcurrent persisted TargetWeaponから解決する。生成時のTarget名snapshotを
 Domainへ追加しない。取得失敗またはTarget欠損でPlan内容全体を壊さず、解決できない場合は
-TargetWeapon IDへfallbackする。
+TargetWeapon IDへfallbackする。ただしIssue #278の競合画面（11.6）の競合セクションと「今回作成しない目標武器」では
+IDへfallbackせず、11.6.3の案内を示す。
 
 #### 長いPlanへの対応
 
@@ -1968,6 +1969,15 @@ TargetWeapon IDへfallbackする。
 RNG再計算を行わない。
 
 ### 11.1 競合候補の表示と選択可否
+
+> **Issue #278（11.6）。** 11.1〜11.4.1は現在の生産計画画面（Planner Alternative。Phase 5-B以降）の契約である。目標仕様は11.6であり、
+> 切替（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.12のPR-2 / PR-3）後は「比較する」（11.2 / 11.3）と、代替ルートを探して作成リスト項目を
+> 置き換えるactual repair（11.4のうちPlanner Alternativeを呼ぶ部分、11.4.1）を使わない。本節（11.1）の表示authority、participantの
+> 全件表示、interaction preparationによる選択可否、checkpoint競合の扱いと、11.4のうち明示選択の作り方・
+> `conflictResolutionPlannerOptions(表示中Plan)`・incompleteの案内文・`draft` だけを操作対象とする規則は11.6でも維持する。
+> ただし11.6では、checkpoint競合の判定を「有効なcheckpoint参加者（別の選択で今回作成しない候補を除く）」で行い、current initial
+> Conflictに同じIDが無い保存済みConflictを「計画の途中で生じた競合」と「入力が変わったため再現できない競合」に分けて案内する
+> （11.6.5、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.2 / 9.6.7）。
 
 各Conflictでは `buildListEntryIds` のparticipantを原則すべて表示する。current stateで
 利用不能なparticipantも一覧から消さず、disabled表示と理由を併記する。
@@ -2018,6 +2028,8 @@ checkpoint関与の判定はcurrent preparationの `checkpointParticipants` か�
 
 ### 11.2 「比較する」とwhat-if preview
 
+> Issue #278の切替（PR-2）で撤去する（11.6.1）。本節は撤去までの現行実装の契約である。
+
 各有効participantに「比較する」を置く。クリックしたparticipantだけを
 `scenarioResolution` とし、fresh PlannerInputへ表示中Planの既存explicit resolutionを
 復元して、Planner Alternative what-if（`PlannerWorkerClient.createPlannerAlternativeComparison()`、
@@ -2064,6 +2076,8 @@ participant cardへ表示しない。
 
 ### 11.3 comparison card
 
+> Issue #278の切替（PR-2）で「比較する」とともに撤去する（11.6.1）。本節は撤去までの現行実装の契約である。
+
 `PlannerAlternativeComparison.alternatives` のstable orderをそのまま使い、UI独自のTarget sortを
 追加しない。各non-fixed Targetについて理想品候補1件の結果を表示する。
 Practical枠 / Ideal枠という2枠構造は存在しない。Phase 5-Bの表示は既存のcard構成を保った最小限の対応であり、
@@ -2105,6 +2119,12 @@ failureとして表示する。`invalid_fixed_resolution.reason` を分岐author
 解析しない。自動的に別participantまたはPlanner推奨へfallbackせず、再選択または再計算を促す。
 
 ### 11.4 「この候補を優先」とPlanner再計算
+
+> Issue #278の切替（PR-2）後、「この候補を優先」はPlanner Alternative actual repairではなく、明示選択の集合を加えたfresh inputの
+> 通常Planner `createPlan()` と、追加検査を持つ通常保存になる（11.6.6、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.4 / 9.6.6）。
+> 本節のうち `conflictResolutionPlannerOptions(表示中Plan)` による上限、incompleteの案内文、`invalid_conflict_resolution` のfail closed、
+> `draft` だけを操作対象とする規則は維持し、Planner Alternativeの呼び出し・専用保存・generated Entryによる置換・lineage・
+> Planを壊す変更の警告の部分は切替後に使わない。
 
 「比較する」と「この候補を優先」は別操作とする。what-if成功を選択のgateにせず、比較せずに
 有効participantを優先できる。11.1でdisabledのparticipantはwhat-if成否にかかわらず選択できない。
@@ -2191,6 +2211,9 @@ PlanStep表示。
 
 ### 11.4.1 競合repairの表示契約（Issue #136 / #101、Phase 5-Bでrouting接続済み）
 
+> Issue #278で置き換える（11.6）。Phase 7（Issue #122）の作り込みは行わず、競合理由・優先候補・作成対象 / 対象外の明確化は11.6へ
+> 引き継ぐ。本節は切替までの現行実装の契約である。
+
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.19で、「比較する」を1段previewとし、「この候補を優先」をRoute単位の
 決定と1段repairにする正式契約を確定した。Phase 5（Domain計算はPhase 5-A、Production routingの切替・lineage永続化・
 Persistenceは Phase 5-B）で実装済みであり、11.2〜11.4の画面はこの新しい計算を使う。Phase 5-Bの表示は既存UIの構造を保った
@@ -2276,6 +2299,140 @@ Persistenceは Phase 5-B）で実装済みであり、11.2〜11.4の画面はこ
   カードlayoutとし、操作はxsで縦並び、sm以上で横並び、ボタンのminHeightは44pxとする
 - 到達経路: 固定ナビゲーションの「生産計画」（2.1）、Dashboardの「生産計画一覧を見る」（4）、
   Build Listの「生産計画一覧を見る」（10.3）、Production Plan詳細の「生産計画一覧へ」（11）
+
+### 11.6 通常Plannerの競合画面（優先候補の選択、Issue #278）
+
+実装状態: **目標仕様（未実装）**。Issue #278のPR-1（docs-only）で表示の意味と操作の契約を確定した。計算・保存の切替と
+「比較する」の撤去はPR-2、本節の表示はPR-3で行う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.12）。それまでの現行画面は
+11.1〜11.4.1である。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 23.2にある。
+具体的なlayoutとcomponent構成はPR-3で決め、Presentation設計に `ui-ux-pro-max` を使う（既存のMUIとPC・375px・ダークテーマの
+表示を優先する）。
+
+#### 11.6.1 範囲
+
+- 対象は11.0の「競合と解決」セクション（配置は11.0の順のまま）と、そこで示す「今回作成する / 作成しない目標武器」である。
+  生産計画画面全体の構成変更・全面的な刷新（Issue #121）は行わない
+- 「比較する」（11.2 / 11.3）は撤去する。what-ifの比較カード、代替Routeの説明、探索範囲上限・試行上限・再計算上限の
+  no-result表示、計画全体の暫定手数の比較表示は出さない
+- 「この候補を優先」は、登録済みRouteのどれを今回の計画で優先するかの選択である（11.6.6）
+- 競合の検出・判定、participantの選択可否のauthority（11.1のinteraction preparation）、`status === 'draft'` だけを
+  操作対象とする規則、CalculationContext非互換のPlanを操作へ進めない規則（11.0）は変えない
+
+#### 11.6.2 競合の説明（種類別の日本語）
+
+競合の見出しと説明は、保存済み `PlanConflict.kind`（typed）だけから作る。`PlanConflict.reason`（例:
+「BuildListEntries require incompatible physical operations at Gogma Counter 107.」）・`resolutionNote` の英文、Conflict IDの
+hash、warning / issueのmessageを通常表示に出さず、文字列解析や正規表現でCounter位置・資源を推測しない
+（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.9）。
+
+| `kind` | 見出し（例） | 説明（例） |
+| --- | --- | --- |
+| `same_gogma_counter` | 復元ボーナスの抽選位置の競合 | 復元ボーナスの抽選はすべての武器で共通の順番で進みます。同じ抽選位置を、それぞれの武器の復元ボーナスの再抽選で別々に使う必要があるため、同時には作成できません。 |
+| `same_skill_counter` | スキルの抽選位置の競合 | スキルの抽選はすべての武器で共通の順番で進みます。同じ抽選位置を、それぞれの武器の巨戟化またはスキル再付与で使う必要があるため、同時には作成できません。 |
+| `same_normal_counter` | 通常アーティアの作成位置の競合 | 同じ武器種の通常アーティアは共通の順番で作成されるため、同じ作成位置をそれぞれの作成手順で同時には使えません。 |
+| `same_owned_weapon_consumed` | 所持武器の競合 | 同じ所持武器を、それぞれの作成手順で使う必要があるため、同時には作成できません。 |
+| 上記以外・安全に説明できない場合 | 作成手順の競合 | この2件の作成手順は同時に実行できません。（3件以上なら「これらの作成手順は同時に実行できません。」） |
+
+- 文言はPR-3で調整してよいが、意味を変えない: 競合する資源を既存の用語（復元ボーナス / スキル / 通常アーティア / 所持武器）で
+  示し、「Gogma Counter」「Skill Counter」「Normal Counter」「巨戟カウンター」「BuildListEntries」等の実装用語と絶対Counter値を
+  通常表示の主な説明にしない。`kind` から言えないこと（どちらの武器がどの操作を必要とするか、どの所持武器か）を断定しない
+- 参加者が3件以上の場合も同じ意味の複数形の文言にする
+- 具体的な補足（各参加者に必要な操作、排他使用する所持武器の名前）は、current interaction preparationのtyped projectionが
+  その値を返す場合だけ加えてよい（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.9。PR-3の任意事項）。値が無い状態
+  （preparation中・失敗・stale・動的に検出したConflict）では種類だけの説明にする
+- 種類を安全に説明できない場合（未知のkind、壊れた記録、古いPlan）も、競合を隠さず、解決済みとして扱わず、選択の安全性
+  （11.1の選択可否、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.3の検証）を下げない
+- 有効なcheckpoint参加者（今回作成する候補の途中採用状態の終端）が関係する競合は、従来の案内（11.1: 「この競合には途中採用する
+  状態の選択が関係しています。作成リストで途中採用する状態を変更または解除してください。」と作成リストへの導線）を表示し、
+  優先選択を出さない。checkpoint参加者がすべて別の選択で今回作成しない候補である競合はこの案内を出さず、残りの候補の
+  通常の競合として扱う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.2 / 9.6.5）
+
+#### 11.6.3 参加者の識別
+
+- 参加者は目標武器の表示名で示す。authorityはcurrent persisted BuildListEntryの `targetWeaponId` → current TargetWeaponの
+  `name` であり（11.0「TargetWeapon名の解決」と同じ）、生成時のTarget名snapshotを追加しない。同名の区別のため、Masterの
+  武器種・属性の表示名を併記してよい（例: `名前（双剣 / 火）`。全体最適化のPreviewと同じ形）。名前を組み立てて新しい表示名を作らない
+- 判断材料として、その候補の登録済みRouteの概要（作成ルートの種類、`candidateSnapshot.estimatedOperationCount` による操作数の目安）
+  を示してよい。絶対Counter値は示さない
+- BuildListEntryまたはTargetWeaponを確認できない場合は、BuildListEntry ID・TargetWeapon IDを本文に出さず、
+  「この候補の目標武器を確認できません。」と、作成リストの確認・画面の再読み込みへの導線を示す。その参加者は選択不可とする。
+  11.0の「解決できない場合はTargetWeapon IDへfallbackする」は、競合セクションと「今回作成しない目標武器」には適用しない
+- preparation中・preparation失敗後・staleでも、読み込めた永続状態から名前を解決できるなら名前で示す。解決できない間は
+  「確認中」または上記の案内とし、「候補 1」のような番号やIDだけで示さない
+
+#### 11.6.4 内部情報の非表示とDebug Mode
+
+- 通常表示では、BuildListEntry ID、Conflict ID、`PlanConflict.reason` / `resolutionNote` の英文、絶対Counter値、validationの
+  英文reason（現在のinteraction preparationが返す除外理由の文字列を含む）を表示しない。選択できない理由はtypedな理由codeから
+  日本語で示す（11.1の理由区分を日本語化する。必要ならpreparationのprojectionにtypedな理由codeを加える。PR-3）
+- 同じ画面の「採用されなかった候補」（11.0）の「BuildListEntry ID: …」も、未保存Previewの表示と同じくDebug Modeだけで表示する
+- 調査用にDebug ModeがONのときだけ、競合ごとに折りたたみの診断情報（Conflict ID、`kind` のliteral、参加者のBuildListEntry ID、
+  `reason` / `resolutionNote` の原文）を通常の説明と分けて表示してよい。通常の操作に内部IDの理解を要求しない。Debug Modeは
+  計算・選択・保存の意味を変えない（15章）
+
+#### 11.6.5 競合の状態と、今回作成する / しない目標武器
+
+各Conflictは次のいずれかとして示す。状態は色だけでなく文字で示す。
+
+| 状態 | 根拠 | 表示 |
+| --- | --- | --- |
+| 判断待ち | `selectedBuildListEntryId === null`、current initial Conflictにあり、有効なcheckpoint参加者が無い（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.2） | どの候補を優先するかの選択を求める。各参加者に、この計画で作成するか（下記）と「Planner推奨」（参考）を示す。checkpoint参加者がすべて別の選択で今回作成しない候補なら、その候補を「今回は作成しない（別の競合で〇〇を優先）」と示し、残りの候補から選べる |
+| 選択済み | `selectedBuildListEntryId !== null` | 優先した候補（「優先（選択済み）」）と、優先しなかった候補（「今回は作成しない」）を示す。選び直しは11.6.6のとおり |
+| 途中採用状態の変更が必要 | 有効なcheckpoint参加者がある（今回作成する候補の途中採用状態が関係する。11.1） | 11.6.2の案内。優先選択を出さない |
+| 計画の途中で生じた競合 | current initial Conflictに同じIDが無く、表示中Planの計算入力と現在の永続状態が一致する（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.7） | 表示を維持し、優先選択を出さない。「この競合は、計画を立てる途中（候補を外した後など）で生じたもので、ここでは優先する候補を選べません。」と示し、次にできること（開始時点からある競合での選択、作成リストで候補を見直す、作成リスト画面から生産計画を作り直す）を示す。同じ入力では同じ結果になるので「再計算」は案内しない |
+| 現在の入力では再現できない | current initial Conflictに同じIDが無く、表示中Planの計算入力と現在の永続状態が一致しない（作成リスト・目標武器・状態が変わった） | 表示を維持し、優先選択を無効にして作成リスト画面からの作り直しの導線を示す（既存の再計算導線） |
+
+- 「Planner推奨」（`recommendedBuildListEntryId`）は判断材料の参考表示であり、ユーザーの選択と区別して示す。推奨を
+  自動選択しない。選択が無い競合は、計画上は暫定的にどちらかを優先して計算されているが（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+  7章の暫定帰結）、それをユーザーの選択として表示しない
+- **今回作成する目標武器** は `steps[].executionEffects.targetCompletions` に現れる目標武器（11.0の完成予定と同じauthority）である
+- **今回作成しない目標武器** は、保存済みConflictの参加者と `rejectedBuildListEntries` のEntryの目標武器のうち、
+  `targetCompletions` に現れないものである。理由は次の順にtyped情報から示す
+  1. 選択済みConflictの優先しなかった候補: 「〇〇を優先したため、今回は作成しません。」
+  2. 判断待ちConflictの参加者: 「競合の選択待ちのため、今回は作成しません。」
+  3. `rejectedBuildListEntries.reason` の既存の日本語label
+  4. それ以外: 「この計画では作成しません。」
+- 作成リスト項目は残ることを示す（「作成リストの候補は残っています。」）
+- 件数を混同しない。競合の件数（Conflictレコードの件数。判断待ち / 選択済みを分けて示す）と、今回作成しない目標武器の件数は
+  別の数として示す。計画対象の総数は保存されていないので、「N本中M本」の比率を推測して表示しない（11.0）
+- 判断待ちの競合が残る場合は「まだ判断が必要な競合があります（N件）」として示す
+
+#### 11.6.6 「この候補を優先」の操作
+
+- 選択可能な参加者（11.1の利用可否）にだけ「この候補を優先」を置く。押す前に、その意味を静的な文言で示す
+  （例: 「この候補を優先すると、〇〇は今回の生産計画では作成しません。作成リストの候補は残ります。」）
+- 押した時点で、現在の永続状態からPlanner入力とinteraction preparationを作り直し、選択の有効性と、以前の選択の引き継ぎ・
+  置換・取り消し（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.3）を確かめる。条件を満たさなくなっていれば開始せず、
+  「現在の状態が変化したため、この候補を優先できませんでした。」等を示す
+- 引き継がない以前の選択（現在の入力では再現できない）、または取り消す以前の選択（今回の選択と両立しない）がある場合は、
+  計算を始める前に確認Dialogで示す。例: 「この選択により、以前の選択『（目標武器名）を優先』を取り消します。」
+  「以前の選択のうち次のものは、現在の作成リストでは再現できないため引き継ぎません。」。操作は「キャンセル」と
+  「この候補を優先して再計算」で、キャンセルなら何も実行しない
+- 優先した候補どうし（今回の選択と引き継ぐ以前の選択）が、まだ選んでいない同じ競合に参加している場合は、計算を始めずに
+  「優先した〇〇と△△は、まだ選んでいない競合で両立しません。先にその競合でどちらを優先するか選んでください。」と示し、
+  その競合へ移動できるようにする（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.3の6）
+- 計算中は10.0と同じ計算中表示（数値の進捗率なし）とキャンセルを表示し、他の競合操作を無効にする。画面を離れる、別の操作を
+  始める場合は計算をキャンセルする。キャンセルは失敗として表示しない
+- 結果
+  - 保存成功: 保存された新しい下書きの `/plans/:planId` へ遷移する。遷移先は最新の計算結果（判断不要になった競合を含まない
+    競合一覧、今回作成する / しない目標武器）を表示する
+  - 探索未完了（最大計画ステップ数に到達）: 11.4の案内文のまま。保存しない
+  - 計画なし: 「この選択では生産計画を作成できませんでした。表示中の生産計画は変更していません。」
+  - 優先した候補が完成しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.6）: 保存せず、表示中の下書きを維持する。
+    「優先した〇〇は、この選択では完成できないため、生産計画を保存していません。」と、完成できない優先候補ごとのtypedな原因
+    （別の優先候補との競合、計画の行き詰まり、実行の前提の崩れ、途中採用状態に届かない、別の武器で条件を満たす等。原因を
+    特定できない場合は「完成できません」だけ）を示す。導線は選び直し、作成リストでの候補の見直し、作成リスト画面からの
+    作り直しであり、同じ選択での再計算は出さない
+  - 無効な選択（`invalid_conflict_resolution`）、計算失敗、保存の拒否（状態の変化、表示していた下書きの置き換え、複数の下書き等）:
+    typed codeに基づく日本語で示し、表示中の下書きを維持する。自動で再実行しない。Planner推奨や別の参加者へ切り替えない
+- 作成リストを変更しないので、Planを壊す変更の警告（16.3）とゲーム内セーブ地点の選択（16.2）は出さない
+- 選択済みの競合でも、選択可能な別の参加者の「この候補を優先」で選び直せる（同じ競合の選択を置き換える）
+
+#### 11.6.7 表示の確認
+
+- PC、375px程度のスマートフォン、ダークテーマで、見出し・説明・目標武器名・状態・操作が横にはみ出さず、長い名前は折り返す
+- 操作ボタンは誤タップしにくい間隔と44px以上の高さにする。確認Dialogは「キャンセル」と実行操作を区別する
+- 情報を色だけで伝えない
 
 ---
 
@@ -2918,7 +3075,8 @@ Plan破棄、再計画の採用（16.4）、Planを壊す変更の承認（16.3�
   採用を中止して再試算を求める。生産計画画面の競合解消（この候補を優先）による再計算結果の保存も、復元後に
   保存を中止し、「最後のゲーム内セーブ地点へ戻しました。復元前の計算結果は保存していません。復元後の状態から、
   もう一度再計算してください。」と示して再計算を求める（計算結果は復元前の状態のものであるため。
-  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 / 16.10）。このときPlanは破棄せず、新しい下書きを開かない
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 / 16.10）。このときPlanは破棄せず、新しい下書きを開かない。
+  Issue #278の切替（11.6）以降の「この候補を優先」は作成リストを変更しないので、この選択を出さない
 - キャンセル: 何も変更しない
 - セーブ地点が無い、またはセーブ地点と現在位置が同じ場合はこの選択を出さない
 - アプリ側でゲームの保存状態を推測しない
@@ -2976,7 +3134,9 @@ RNG状態を変更すると現在の生産計画は続行できなくなりま�
 - 生産計画画面の競合解消による再計算結果の保存（作成リストの候補置換、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）では、
   警告に「この再計算では作成リストの候補が置き換わり、実行中の生産計画が参照している候補が削除されます。」を添え、
   三択の説明とゲーム側復元ダイアログの説明を「セーブ地点へ戻すだけで、この変更（戻す前の状態で計算した結果）は保存しません。
-  生産計画は破棄しません。」の趣旨に差し替える（共通Dialogの操作別説明。新しいDialogは追加しない）
+  生産計画は破棄しません。」の趣旨に差し替える（共通Dialogの操作別説明。新しいDialogは追加しない）。これは現在のPlanner Alternative
+  actual repairの保存の扱いであり、Issue #278の切替（11.6、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.6）以降の競合解決の保存は
+  作成リストを変更せずPlanを壊さないので、この警告を出さない
 
 ### 16.4 現在地点から再計画を試算
 
@@ -3210,6 +3370,25 @@ export interface SearchUiState {
 - 新Plan・accepted replacementのgenerated BuildListEntry・lineageをPlanner Alternative専用のatomic persistence境界で
   保存して新Planへ遷移し、保存失敗時に旧Planを置換・削除しない
 - Conflict編集をDraft Planに限定し、stale / active / completed / abandonedをB10操作で書き換えない
+- Issue #278の通常Plannerの競合画面（11.6、目標仕様。切替後は上記の「比較する」・Planner Alternative・lineage・置換に関する
+  観点を下記で置き換える）
+  - 「比較する」が表示されず、Planner Alternativeのwhat-if / repairのrequestが一度も送られない
+  - 「この候補を優先」がfresh input、引き継いだ以前の選択と今回の選択で通常Plannerの `createPlan()` だけを呼び、
+    作成リスト項目を追加・置換・削除せず、Planを壊す変更の警告とセーブ地点の選択を出さない
+  - 引き継がない / 取り消す以前の選択があるときだけ確認Dialogを出し、キャンセルで何も実行しない
+  - 保存成功時だけ新しい下書きへ遷移し、キャンセル・探索未完了・計画なし・無効な選択・保存の拒否では表示中の下書きを維持する
+  - 競合の見出しと説明が `kind` に基づく日本語で、`PlanConflict.reason` の英文・BuildListEntry ID・Conflict ID・絶対Counter値が
+    通常表示に無い。Debug Mode ONのときだけ診断情報に出る
+  - 未知のkind・解決できない目標武器でも、IDを本文に出さず汎用の説明と案内を出し、競合を隠さない
+  - 参加者を目標武器名で示し、Planner推奨・優先（選択済み）・判断待ち・今回作成する / しない目標武器と理由・残る競合を
+    文字で区別し、競合の件数と作成しない目標武器の件数を混同しない
+  - 有効なcheckpoint参加者が関係する競合で優先選択を出さず、作成リストへの導線を示す。checkpoint参加者がすべて別の選択で
+    作成しない候補になった競合は、残りの候補の通常の競合として選べる
+  - 計画の途中で生じた競合（動的Conflict）で優先選択を出さず、理由と次にできることを示し、再計算を案内しない。入力が
+    変わって再現できない競合とは別の表示になる
+  - 優先した候補が完成しない結果で保存せず、完成できない候補と原因、選び直し・候補の見直し・作り直しの導線を示す。
+    優先した候補どうしが未選択の競合に参加する場合は計算を始めない
+  - PC・375px・ダークテーマで横にはみ出さない
 - exact persisted Planが取得できていれば、Worker preparation中・preparation失敗後・staleでも
   Plan概要、目標武器ごとの作成ルート、計画全体の実行順、予測結果を表示する
 - stale PlanでもPlan内容を表示したうえで、既存のConflict操作はdisabledのままにする
@@ -3220,7 +3399,8 @@ export interface SearchUiState {
 - legacy Planでwarningを表示し、`undefined` からshared Targetを推測しない
 - `expectedResult.restorationBonuses` の5枠がstored slot orderで表示され、同一bonusの重複が欠落しない
 - `expectedResult === null` でも表示が壊れず、`executionEffects.targetCompletions` だけを完成予定として示す
-- TargetWeapon名をcurrent persisted Targetから解決し、欠損時はTargetWeapon IDへfallbackする
+- TargetWeapon名をcurrent persisted Targetから解決し、欠損時はTargetWeapon IDへfallbackする（Issue #278の競合画面では
+  IDへfallbackせず11.6.3の案内を示す）
 - Planner保存成功時に、Persistenceが返したPlanの `/plans/:planId` だけへ遷移する
 
 全体最適化（10.4、Issue #260 PR-6Cで追加した観点）。
