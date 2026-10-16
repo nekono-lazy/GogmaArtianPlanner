@@ -1001,9 +1001,14 @@ never a Plan exception). No persisted shape changed, so `DATABASE_SCHEMA_VERSION
 with no migration, and `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2, `PRODUCTION_RNG_ENGINE_VERSION`
 `production-rng:c5-e7` and Master `dataVersion` 4 are unchanged.
 Issue #278 PR-1 (docs-only; `docs/PLANNER_SPEC.md` 9.6.10) moved no version. It fixed that the PR-2 switching the conflict
-resolution to the ordinary Planner (no Route replacement, explicitly preferred Entries protected, unneeded conflicts dropped,
-lineage `null`) moves `CURRENT_CALCULATION_APP_SCHEMA_VERSION` to 18 with the build-result exception `18 -> [12..17]`; until
-that PR, 17 stays current.
+resolution to the ordinary Planner (no Route replacement, explicitly preferred Entries protected and required to complete,
+unneeded conflicts dropped, lineage `null`) moves `CURRENT_CALCULATION_APP_SCHEMA_VERSION` to 18 with the build-result
+exception `18 -> [12..17]` and the **first ProductionPlan exception**, the narrow `18 -> 17`: a version 17 Plan (body and
+`baseSnapshot`) whose `conflictRepairLineage === null` and whose every `conflicts[].selectedBuildListEntryId === null` - the
+persisted shape only inputs without explicit conflict resolutions produce under 17 (Build List creation and auxiliary path,
+GA adoption, replan adoption), whose output 18 keeps - stays compatible in every status; a version 17 Plan carrying lineage
+(Planner Alternative repair Drafts and the Plans started from them) or any selection fails closed, and version 1..16 Plans stay
+incompatible. Never widen it to a range or a later version. Until that PR, 17 stays current.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
@@ -4499,35 +4504,55 @@ Planner Alternative sections as the target.
   registered Route this Plan prefers. It never searches an alternative Route for the non-selected Entry, never
   composes scenarios, never generates or replaces a BuildListEntry, never writes repair lineage, and 「比較する」 is
   abolished. Conflict detection (physical action sharing, skippable units, Issue #129, checkpoint pins) is unchanged
-- A decision `(X, A)` is Route-level: `A` stays a creation target, every other participant of `X` is not executed in
-  this Plan (route commitment `conflict_resolution_not_selected`) and stays in the Build List untouched. Only the
-  user's explicit decisions are recorded as `PlanConflict.selectedBuildListEntryId`; the recommendation, the
-  provisional outcome and derived selections never are. Checkpoint conflicts keep 9.5.1 (never resolved by picking)
-- The explicit set (9.6.3, one pure Domain authority): carry over the displayed Draft's earlier decisions only when
-  they still match a current initial conflict with a valid participant (never re-mapped or guessed); the same
-  `conflictKey` is replaced; an earlier decision whose selected Entry the new decision excludes, or that excluded the
-  newly preferred Entry, is superseded (latest wins); an inconsistent set fails closed; anything dropped or
-  superseded is shown and confirmed before the run, never silent
+- A decision `(X, A)` is Route-level and means "complete `A` in this Plan": every other participant of `X` is not
+  executed in this Plan (route commitment `conflict_resolution_not_selected`) and stays in the Build List untouched.
+  Only the user's explicit decisions are recorded as `PlanConflict.selectedBuildListEntryId`; the recommendation, the
+  provisional outcome and derived selections never are
+- Checkpoints (9.6.2): an excluded Entry's whole Route, its checkpoint endpoint included, is not executed, so its
+  checkpoint imposes nothing in this run (not "ignored"; its Build List selection is untouched). A checkpoint
+  participant counts only while not excluded ("effective"). A conflict with an effective checkpoint participant keeps
+  9.5.1 (never resolved by picking); one whose checkpoint participants are all excluded is an ordinary conflict among
+  the rest, and `conflictResolutionRefusalReason()` accepts it (monotone fixpoint; a decision selecting a checkpoint
+  participant itself stays refused). Remaining Entries' checkpoints stay hard constraints
+- The explicit set (9.6.3, one pure Domain authority, also used by the availability): carry over the displayed Draft's
+  earlier decisions only when they still match a current initial conflict with a valid participant (never re-mapped
+  or guessed); the same `conflictKey` is replaced; an earlier decision whose selected Entry the new decision excludes,
+  or that excluded the newly preferred Entry, is superseded (latest wins), re-judged until stable when lifting an
+  exclusion revives an effective checkpoint; two preferred Entries in one undecided initial conflict refuse the run
+  before it starts; an inconsistent set fails closed; anything dropped or superseded is shown and confirmed before
+  the run, never silent
 - Recalculation (9.6.4): fresh `createPlannerInput()` + the explicit set, `conflictResolutionPlannerOptions(表示中Plan)`,
   ordinary `createPlan()` only. PR-2 adds to route commitment that an explicitly preferred Entry outranks
   non-preferred ones in provisional outcomes and stall drops (recommendation stays `R`), and that a resolution
   applies only to an initial conflict. With `conflictResolutions = []` (Build List creation, GA final verification,
-  replan Preview) nothing changes - pin it by parity tests
-- Result conflicts (9.6.5): a conflict without an explicit decision, without checkpoint participants, that has at
-  most one participant not excluded by an explicit decision is dropped as no longer needed; others stay pending.
-  Never "remove the resolved ones from the old list"
-- Save (9.6.6): the ordinary save boundary plus refusing `invalid_conflict_resolution`, checking the decisions are
-  recorded and `PlannerResult.conflicts` equals `plan.conflicts`, and the source Draft CAS (`expectedSourceDraftId`).
-  No Build List write, so no Plan-breaking approval and no save point choice; lineage is always `null`
+  replan Preview) nothing changes - pin it by parity tests; the Plan exception below depends on it
+- Result conflicts (9.6.5): a conflict without an explicit decision that has at most one participant not excluded by
+  an explicit decision is dropped as no longer needed, checkpoint participants or not; with two or more it stays
+  pending, as a checkpoint conflict only while an effective checkpoint participant remains. Never "remove the
+  resolved ones from the old list"
+- Completion (9.6.6): every preferred Entry of the run's explicit set (carried ones included, superseded ones not)
+  must be in the Plan's `selectedBuildListEntryIds` with its Target in `targetCompletions`; otherwise nothing is
+  saved, the old Draft stays, and a typed runtime-only cause is shown. Never imposed on `conflictResolutions = []`
+- Dynamic conflicts (9.6.7): conflicts the scheduler adds after drops / releases / recommits are never choosable
+  (no anchor at Route commitment, no re-detection guarantee, a persisted decision would need a new shape). Tell them
+  apart from "input changed" conflicts by comparing the Plan's `baseSnapshot` with the current state, explain them,
+  and never send the user into the same recalculation again
+- Save (9.6.6): the ordinary save boundary plus refusing `invalid_conflict_resolution` and an uncompleted preferred
+  Entry, checking the decisions are recorded and `PlannerResult.conflicts` equals `plan.conflicts`, and the source
+  Draft CAS (`expectedSourceDraftId`). No Build List write, so no Plan-breaking approval and no save point choice;
+  lineage is always `null`
 - Display (UI_FLOW 11.6): Japanese reasons from `PlanConflict.kind` only (復元ボーナス / スキル / 通常アーティア / 所持武器),
   never `reason` / `resolutionNote` text, BuildListEntry IDs, Conflict IDs or absolute Counter values in normal UI
   (Debug Mode may show them separately); participants by Target name with no ID fallback; created / not-created
   Targets and pending conflicts counted separately. Use `ui-ux-pro-max` for the Presentation design
 - `ProductionPlan.conflictRepairLineage` stays a persisted field (validator, migrations, Export / Import unchanged);
   no new writer after PR-2
-- Version: PR-1 moves nothing. PR-2 moves `CURRENT_CALCULATION_APP_SCHEMA_VERSION` to **18** (build-result exception
-  `18 -> [12, 13, 14, 15, 16, 17]`, no Plan exception; every version 1..17 Plan, GA-adopted Drafts and active Plans
-  included, fails closed with `calculation_context_changed`); Dexie 10 / Export 13 unchanged, no migration
+- Version (9.6.10): PR-1 moves nothing. PR-2 moves `CURRENT_CALCULATION_APP_SCHEMA_VERSION` to **18** with the
+  build-result exception `18 -> [12, 13, 14, 15, 16, 17]` and the narrow ProductionPlan exception `18 -> 17` for
+  version 17 Plans with `conflictRepairLineage === null` and no selected conflict (GA-adopted, Build List, replan Plans
+  keep running in every status). Version 17 Plans with lineage or a selection (Planner Alternative repair) and
+  version 1..16 Plans fail closed. One Domain function decides Plan compatibility for every caller; Dexie 10 /
+  Export 13 unchanged, no migration
 - Shared code (9.6.11): never delete what the GA uses because of an `alternative` name - the Search Domain Planner
   Alternative frontier / Candidate factory / validation, `derivePlannerAlternativeReservation()`, the replacement
   deterministic materializer / materialization errors / search origin, `BuildListEntryReplacement`, the shared

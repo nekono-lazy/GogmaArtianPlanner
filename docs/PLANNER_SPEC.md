@@ -2025,6 +2025,13 @@ Plannerが落とすことになるためである。保守的に、参加者の�
 同じ武器の同じ操作が複数Entryのcheckpointへ同時に到達する場合は、従来どおり
 1つの共有physical actionであり競合ではない(7.5.2)。
 
+**Issue #278による限定（9.6.2 / 9.6.4、目標仕様。PR-2で実装）。** 上記の拒否の理由は「優先選択によってPlannerが選択済み
+checkpointを落とす」ことである。同じ入力の別の明示決定によってcheckpoint参加者のEntryがすでに今回実行されない（除外Entry）
+場合、そのcheckpointは今回のrunで課されないので、この理由は当てはまらない。そこでIssue #278の切替後は、拒否の対象を
+「除外されていないcheckpoint参加者（有効なcheckpoint参加者）が1件以上ある競合」に限る。checkpoint参加者がすべて除外Entryの
+競合は残りのparticipantの通常の競合として決められる。有効なcheckpoint参加者がある競合と、選択Entry自身がcheckpoint参加者の
+決定は従来どおり拒否し、checkpointを自動で解除・変更しない。判定は引き続き `conflictResolutionRefusalReason()` の1箇所に置く。
+
 #### 9.5.2 選択済みcheckpointを持つTargetは再検索対象外
 
 constrained re-search(9.2)とwhat-if(9.2.4)は、required checkpoint Entry（7.5.6）を
@@ -2130,11 +2137,30 @@ action sharing、7.0.2のskip可能unit、Issue #129のNormal作成、7.5のchec
   （`recommendedBuildListEntryId`、順位関数 `R`）と暫定帰結（provisional outcome）は、明示決定として保存しない
   （7章の手順2、9.2.7）。本節は「決定の展開」（9.2.19.9）のような導出した選択も記録しない。決定によって不要になった
   競合は、選択済みとして記録するのではなく結果から除く（9.6.5）
-- 選択済みcheckpointが関係する競合（`checkpointParticipants` が1件以上）は、従来どおり汎用の優先選択では解決できない
-  （9.5.1）。required checkpoint Entryを勝手に除外せず、推奨や暫定帰結でhard constraintを緩めず、作成リストでの
-  checkpointの変更・解除へ案内する。checkpointを持つEntryが、checkpointの関係しない別の競合で非選択Entryになることは
-  ユーザーの明示決定として妨げない（そのTargetはこのPlanで完成しない。checkpointの選択は作成リストに残り、変更しない）
+- **優先の意味は、優先したEntryをこのPlanで完成させることである**（9.6.6）。route commitmentの候補として残すだけでは
+  足りない。優先したEntryがこのPlanで完成しない計算結果は、優先選択の成功として保存しない
 - 決定はConflictごとの局所的な入力であり、Plan全体の作成順固定ではない（9章）
+
+**checkpointの扱い（9.5との関係）。** checkpoint制約を無視することと、checkpointを必要とするEntry自体を今回作成しない
+ことを区別する。
+
+```text
+有効なcheckpoint参加者  Conflictのcheckpoint参加者（checkpointParticipants）のうち、明示決定で除外されていないEntry
+                        （このrunで実行され得るEntryのcheckpoint終端unit）
+```
+
+- 実行対象として残るEntryのcheckpointは、従来どおりhard constraintである（7.5）。有効なcheckpoint参加者を持つConflictは、
+  汎用の優先選択では解決できない（9.5.1。推奨・暫定帰結・導出した選択でも解決しない）。作成リストでのcheckpointの
+  変更・解除へ案内する
+- checkpointを持つEntry `B` が、`B` のcheckpointが関係しない別の競合でユーザーの明示決定により非選択Entryになることは
+  妨げない。そのとき `B` のRoute全体（checkpoint終端unitを含む）はこのPlanの実行対象ではなくなるので、`B` のcheckpoint
+  制約もこのrunでは課されない。これはcheckpointの無視ではなく、`B` を今回作成しないことの帰結である。`B` のTargetは
+  このPlanで完成せず、作成リストの `B` のcheckpoint選択は変更しない
+- その結果、`B` のcheckpointが関係していたConflictは、`B` を除いた残りのparticipantで判断する（9.6.5）。残りが1件以下なら
+  判断不要として結果から除き、残りが2件以上で有効なcheckpoint参加者が無ければ通常の判断待ちConflictとして選択できる
+  （9.6.3の1）。有効なcheckpoint参加者が残るConflictは従来どおり選択できない
+- 例: A・B（checkpointあり）・C、競合1 = AとBの通常競合、競合2 = Bのcheckpoint終端とCの必須操作の競合。競合1でAを
+  優先するとBは今回作成しないので、Bのcheckpointを達成する必要も無くなり、競合2は判断不要として残らない
 
 #### 9.6.3 明示決定の集合（引き継ぎ・置換・失効）
 
@@ -2148,11 +2174,18 @@ current preparation       操作開始時点のcurrent persisted stateから作�
 今回の決定                (X, A)
 ```
 
-1. **今回の決定の有効性。** `X.id` がcurrent initial Conflictにあり、`A` がそのparticipantで、valid Entryであり、
-   `X` に選択済みcheckpointが関係せず、表示中Planが `draft` でCalculationContextが互換であること（[UI_FLOW.md](./UI_FLOW.md)
-   11.1の利用可否と同じauthority）。満たさなければ計算を開始しない
+以下で、ある決定集合に対して **除外Entry** とは、集合内のいずれかの決定の非選択Entryをいう。**有効なcheckpoint参加者**
+（9.6.2）は、その集合の除外Entryに含まれないcheckpoint参加者である。
+
+1. **今回の決定の有効性。** 次をすべて満たすこと（[UI_FLOW.md](./UI_FLOW.md) 11.1の利用可否と同じauthority）。満たさなければ
+   計算を開始しない
+   - 表示中Planが `draft` で、CalculationContextが互換である（9.6.10の互換規則）
+   - `X.id` がcurrent initial Conflictにある（動的に検出したConflictは対象外。9.6.7）
+   - `A` が `X` のparticipantで、valid Entryである
+   - 今回の決定を加えた集合（2〜5を適用した後のもの）で、`X` に有効なcheckpoint参加者が無い。checkpoint参加者がすべて
+     他の明示決定の除外Entryであれば、`X` は残りのparticipantの通常の競合として決められる（9.6.2）
 2. **以前の決定の引き継ぎ。** 以前の決定は、同じ条件（conflictKeyがcurrent initial Conflictにあり、選択Entryがその
-   participantかつvalid Entryで、選択済みcheckpointが関係しない）を満たす場合だけ引き継ぐ。満たさないものは
+   participantかつvalid Entryで、引き継ぐ集合の中で有効なcheckpoint参加者が無い）を満たす場合だけ引き継ぐ。満たさないものは
    **現在の入力では再現できない以前の決定** として引き継がない。別のConflictや別のEntryへ推測で付け替えない。
    通常Plannerの競合解決はgenerated Entryを追加しないので、9.2.3.1の競合資源identityによる再対応付けは行わない
    （同じ入力でConflict IDは変わらない。IDが変わったのは作成リスト・目標武器・状態の変更でparticipant集合や位置が
@@ -2164,15 +2197,21 @@ current preparation       操作開始時点のcurrent persisted stateから作�
    - `A` が `d` の非選択Entryである（以前に優先されなかったEntryを、今回優先する）
 
    9.2.19.11の「supersededされるprior fixed resolution」と同じ考え方である。selectedが一致するというだけで広く
-   削除しない
+   削除しない。取り消しによって除外Entryが減ると、checkpoint参加者がすべて除外されていたために決められた以前の決定に
+   有効なcheckpoint参加者が戻ることがある。その決定も今回のrunへ渡さず、取り消す決定に含める。この再判定は、取り消す
+   決定が無くなるまで繰り返す（集合は有限で、取り消しは単調なので必ず止まる）
 5. **集合の整合。** 渡す集合では、あるEntryがある決定の選択Entryであり、同時に別の決定の非選択Entryであってはならない。
    1〜4を適用しても整合しない集合（本節の契約で保存されたPlanからは生じない）は、推測で選ばず計算を開始しない。
    作成リスト画面からの作成し直しへ案内する
-6. **事前の明示。** 2で引き継がない以前の決定、または4で取り消す以前の決定がある場合、計算を始める前にそれを
+6. **優先したEntryどうしの両立。** 渡す集合の選択Entry（優先したEntry）のうち2件以上が、明示決定の無い同じcurrent
+   initial Conflictのparticipantである場合、そのConflictでは高々1件しか実行されず、9.6.6の完成条件を満たせないことが
+   計算前に確定する。計算を開始せず、そのConflict（どちらを優先するか）を先に決めるよう示す
+7. **事前の明示。** 2で引き継がない以前の決定、または4で取り消す以前の決定がある場合、計算を始める前にそれを
    ユーザーへ示し、確認を得てから開始する（キャンセルなら何も実行しない）。黙って破棄しない
    （[REQUIREMENTS.md](./REQUIREMENTS.md) 23.2、[UI_FLOW.md](./UI_FLOW.md) 11.6）
-7. 1〜5の判定は純粋なDomain関数1つをauthorityとし（名前と返却形はPR-2で確定）、ApplicationとUIはその型付きの結果
-   （渡す集合、引き継いだ決定、引き継がない決定、取り消す決定）だけを使う。UIで規則を再実装しない
+8. 1〜6の判定は純粋なDomain関数1つをauthorityとし（名前と返却形はPR-2で確定）、ApplicationとUIはその型付きの結果
+   （渡す集合、引き継いだ決定、引き継がない決定、取り消す決定、開始できない理由）だけを使う。UIで規則を再実装しない。
+   interaction preparationの選択可否（[UI_FLOW.md](./UI_FLOW.md) 11.1）も、表示中Draftの以前の決定に対して同じ関数を使う
 
 優先選択を複数回行う場合も、決定はこの規則で累積する。累積の記録は保存したPlanの `selectedBuildListEntryId` だけであり、
 repair lineageや新しい永続fieldを使わない。
@@ -2194,13 +2233,20 @@ repair lineageや新しい永続fieldを使わない。
   - `recommendedBuildListEntryId` の導出（`R`）は変えない。推奨はユーザーの決定から独立した参考情報である
     （7章の「`detectPlannerConflicts()` の推奨と共有」は、明示決定が無い入力では従来どおり成立する）
   - 保護は作成の保証ではない。source / preconditionの崩れ、Counterの通過、checkpoint requirement、`maxPlanSteps`、
-    明示的に優先されたEntryどうしの未解決競合（`R` で暫定帰結を決める）では、優先されたEntryも作成されない場合がある
+    deadlock / stall、明示的に優先されたEntryどうしの競合では、優先されたEntryも作成されない場合がある。そのような結果は
+    9.6.6の完成条件で保存しない（優先選択の成功として扱わない）
 - **明示決定の有効性（PR-2でPlanner側にも置く防御）。** 明示決定はinitial conflict detectionのConflictにだけ適用する。
   動的に検出されたConflictにだけ一致する決定、どのConflictにも一致しない決定、9.6.3の5を満たさない集合は、適用せずに
   `invalid_conflict_resolution` を返す（集合の不整合は入力全体のfail closed）。現在は動的Conflictにだけ一致する決定が
   選択済みとして表示されながら強制されない場合があり、これを残さない
+- **checkpoint参加者を持つConflictへの決定（PR-2で `conflictResolutionRefusalReason()` を改める）。** 9.5.1の拒否は、
+  同じ入力の明示決定集合に対して有効なcheckpoint参加者（9.6.2）が残るConflictにだけ適用する。checkpoint参加者がすべて
+  他の明示決定の除外Entryであれば、そのConflictへの決定を適用してよい。判定はcheckpoint参加者の無い決定から除外Entryを
+  求め、新たに適用できる決定が無くなるまで繰り返す（9.6.3の4と同じ単調な不動点）。選択Entry自身がcheckpoint参加者である
+  決定は、そのcheckpoint参加者が除外されないので従来どおり拒否する
 - 明示決定が無い入力（`conflictResolutions = []`。作成リスト画面の通常Planner、全体最適化の最終検証、再計画の試算）では、
-  保護も9.6.5の除外も何もしない。それらの結果は本節によって変わらない（PR-2でparity testにより固定する）
+  保護も9.6.5の除外も9.6.6の完成条件も何もしない。それらの結果は本節によって変わらない（PR-2でparity testにより固定する。
+  9.6.10の互換性の前提である）
 
 #### 9.6.5 結果のConflict
 
@@ -2212,18 +2258,28 @@ E = このrunで、適用された明示決定が別のparticipantを選択し�
     （route commitmentの記録 conflict_resolution_not_selected。participant一覧から再計算しない）
 ```
 
+各Conflict `Y` について、`N(Y)` = `E` に含まれないparticipant、`K(Y)` = `N(Y)` に含まれるcheckpoint参加者（有効な
+checkpoint参加者、9.6.2）とする。新しいrunの結果は常に `checkpointParticipants` を定義済みで返すので、`K(Y)` は求まる。
+
 | Conflict | 結果での扱い |
 | --- | --- |
 | 明示決定が適用されたConflict | `selectedBuildListEntryId = 選択Entry` として残す（次回の引き継ぎの記録） |
-| 明示決定が無く、選択済みcheckpointが関係せず（`checkpointParticipants` が定義済みで空）、`E` に含まれないparticipantが1件以下のもの | **決定で不要になった競合** として結果から除く。判断待ちとしても選択済みとしても記録しない |
-| 明示決定が無く、`E` に含まれないparticipantが2件以上のもの | `selectedBuildListEntryId = null` の判断待ちとして残す（暫定帰結は記録しない） |
-| 選択済みcheckpointが関係するもの、`checkpointParticipants === undefined` のもの | 除かず、選択も記録しない（9.5.1への例外を作らない。checkpointの案内を表示する） |
+| 明示決定が無く、`N(Y)` が1件以下のもの（checkpoint参加者の有無を問わない） | **決定で不要になった競合** として結果から除く。判断待ちとしても選択済みとしても記録しない。除外Entryのcheckpoint終端unitはこのrunで実行されないので、そのcheckpointのために残す競合は無い |
+| 明示決定が無く、`N(Y)` が2件以上で、`K(Y)` が空のもの | `selectedBuildListEntryId = null` の判断待ちとして残す（暫定帰結は記録しない）。checkpoint参加者がすべて除外Entryなら、残りのparticipantの通常の競合として選択できる（9.6.3の1） |
+| 明示決定が無く、`N(Y)` が2件以上で、`K(Y)` が1件以上のもの | 除かず、選択も記録しない。有効なcheckpoint参加者が残るので9.5.1のとおり作成リストでのcheckpoint変更・解除の案内を表示する |
 
-- 例: Aを優先してBが非選択になった場合、AとBの別の位置での競合、BとCの競合は不要になり残らない。AとCの競合のように、
-  まだ両方が作成候補として残る競合は判断待ちとして残る
+- 例: Aを優先してBが非選択になった場合、AとBの別の位置での競合、BとCの競合は不要になり残らない（Bのcheckpointが
+  関係していても同じ）。AとCの競合のように、まだ両方が作成候補として残る競合は判断待ちとして残る
+- 例（多数のparticipant）: `Y = {B（checkpoint）, C, D}` でBだけが除外Entryなら、`N(Y) = {C, D}`、`K(Y)` は空なので、
+  CとDの通常の判断待ち競合として残り、CかDを選べる。`Y = {B, C（checkpoint）, D}` でBが除外Entryなら、`K(Y) = {C}`
+  なのでcheckpointの案内のまま選択できない
+- 例（複数回の選択）: 以前の決定でBを除外していた場合も同じ `E` で判定する。後の決定でBの除外が取り消されれば
+  （9.6.3の4）、Bが参加する競合は次の計算で通常どおり再検出され、Bのcheckpointは再びhard constraintになる
 - initial conflictと動的に検出したconflict（7章の手順5の後に検出したものを含む）の両方に同じ規則を適用する
 - `E` が空（明示決定が無い）なら何も除かない
-- 除いた競合は、後で決定が変わり非選択Entryが作成候補へ戻れば、次の計算で通常どおり再検出される
+- 結果のConflictを除いても、作成リストの各Entryのcheckpoint選択は変更しない。実行対象として残るEntryのcheckpointは、
+  このrunでも従来どおりhard constraintとして扱われている（除くのは、除外Entryがparticipantであるために判断不要になった
+  記録だけである）
 
 #### 9.6.6 保存
 
@@ -2237,6 +2293,31 @@ E = このrunで、適用された明示決定が別のparticipantを選択し�
 - warningに `invalid_conflict_resolution` が1件でもある: Applicationは保存を呼ばず、保存APIも拒否する（invalidな
   決定を無視したordinary Planを保存しない。現在の `savePlannerResult()` はこのwarningを見ないので、PR-2で競合解決の
   保存に追加する）
+- **優先したEntryの完成（完成条件）。** 今回のrunへ渡した明示決定集合（今回の決定と引き継いだ以前の決定。取り消した・
+  引き継がなかった決定は含めない）の選択Entryを **優先したEntry** とする。優先したEntryがすべてこのPlanで完成する場合だけ
+  保存する。1件でも完成しなければ、優先選択の成功として保存せず、旧Draftを維持して理由を示す
+  - 完成のauthorityはPlanner Domainの記録である。優先したEntryが保存するPlanの `selectedBuildListEntryIds`（そのrunで
+    secureしたEntry。7.2.1の完成判定と同じ記録）に含まれ、かつそのTargetが同じPlanの
+    `steps[].executionEffects.targetCompletions`（16.3 / 16.13。完成予定の表示と同じauthority）に現れること。どちらか
+    一方だけを満たす結果は不整合としてfail closedする（`targetCompletions` だけ、`selectedBuildListEntryIds` だけでは判定しない）
+  - 優先したEntryは、決定時にcurrent initial Conflictのparticipantであり、計算開始時にrelevant（そのTargetは未完成）で
+    ある。操作0の `existing_gogma_current` Entryは競合しないので優先したEntryにならない。したがって完成は必ずそのrunの
+    Stepのtarget completion（`confirm_owned_ideal` を含む既存の完成効果）で表され、Plan開始前から理想品を所持していることを
+    完成とみなす特別扱いは無い。別Entryの武器でTargetが満たされてreleaseされた場合（cross satisfaction）は、そのEntryの
+    完成効果が無いので完成とみなさない（保守的に保存しない）
+  - 判定する層: Planner Domainの純粋関数（競合解決の結果判定。名前はPR-2で確定）が、run結果と明示決定集合から
+    優先したEntryごとの結果（完成 / 未完成とtypedな原因）を返し、Applicationは未完成があれば保存を呼ばない。保存APIも
+    同じ条件（保存するPlanの `selectedBuildListEntryIds` と `targetCompletions`）を再確認して拒否する（防御）
+  - typedな原因（PR-2で名前を確定。Planner Domainのroute commitment・rejectionの記録から作るruntime-onlyの値で、Worker
+    resultとして返し、永続化しない）: 優先したEntryどうしの競合（Conflict IDを伴う）、deadlock / stall、
+    Counterの通過・source / preconditionの崩れ・保護、checkpoint未到達、別Entryによる充足（release）、その他。原因を
+    特定できない場合は「完成できない」とだけ示し、推測した原因を示さない
+  - `termination.status === "incomplete"`（`maxPlanSteps` 到達）は従来どおり先に `planner_result_invalid` として扱う
+  - 未完成で保存しない場合の導線: 優先する候補を選び直す（優先したEntryどうしの競合ならそのConflictで選ぶ）、作成リストで
+    候補を見直す（候補検索からの置換、途中採用状態の変更）、作成リスト画面の「生産計画を作成」（有効な候補が2件以上で
+    実行中Planが無ければ全体最適化がRouteを組み直す、17章）。同じ選択での再計算は同じ結果になるので案内しない
+  - この完成条件は明示決定を持つ競合解決の計算だけに課す。`conflictResolutions = []` の通常Planner、全体最適化の
+    最終検証、再計画の試算には新たな完成条件を持ち込まない
 - 保存するPlanの `conflicts` が、今回の決定（同じconflictKey、同じ選択Entry）と引き継いだ全決定を選択済みとして含む。
   `PlannerResult.conflicts` と `plan.conflicts` がPlanConflict単位の構造として一致する（Planner Alternative保存の
   検査と同じexact structural equality）
@@ -2254,11 +2335,37 @@ E = このrunで、適用された明示決定が別のparticipantを選択し�
 - 保存APIの形（`savePlannerResult()` に競合解決用の保存文脈を加えるか、保存mutationを共有する専用APIにするか）は
   PR-2で決める。どちらでも上記の検査を省かず、作成リスト画面の通常作成・全体最適化の採用の保存契約を変えない
 
-#### 9.6.7 編集対象のPlan
+#### 9.6.7 編集対象のPlanと選択できる競合
 
-従来どおり、競合の優先選択の対象は `status === "draft"` かつCalculationContextが互換なPlanだけである（9.2.4.14）。
+従来どおり、競合の優先選択の対象は `status === "draft"` かつCalculationContextが互換（9.6.10）なPlanだけである（9.2.4.14）。
 `stale` は既存の再計算・再計画へ誘導し、`active` / `completed` / `abandoned` を書き換えない。
 `calculation_context_changed` のPlanは内容を表示するが、preparation・優先選択へ進めない（[UI_FLOW.md](./UI_FLOW.md) 11.0）。
+
+**動的に検出したConflict（計画の途中で生じた競合）。** 決定的schedulerは、初期のroute commitmentの後、動的commitment更新
+（7章の手順5のdeadlock / stall drop、actionの拒否によるdrop、Targetの充足によるrelease、Idealを失ったTargetのrecommit。
+[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 6.8 / 8.5）のたびに、その時点で
+relevantなEntryの残りunitに対して `detectCurrentPlannerConflicts()` で競合を検出し、IDでdedupして結果に加える。これは
+途中まで進んだ状態での検出なので、participant集合（したがってConflict ID）が初期検出と異なり、計算開始時の状態から作る
+current initial Conflictには現れない。
+
+- 動的Conflictは優先選択の対象にしない。理由: (1) 決定はroute commitment（計算開始時）でRoute単位に適用されるが、
+  動的Conflictは計算開始時の状態に存在しないので、同じresolutionを渡しても適用先が無い（初期Conflictと同じresolutionを
+  無条件に渡すことは禁止する）。(2) Route単位の除外を開始時に反映するとそのrunの途中経過が変わり、同じ動的Conflictが
+  再検出される保証が無い。再検出されなければ決定を記録する `PlanConflict` が無く、次の計算で決定が失われる。(3) 動的
+  Conflictのparticipantはdrop前に一部のunitを実行していることがあり、開始時の除外はその実行済み部分も消すので、表示した
+  競合の意味と一致しない
+- 動的Conflictへ選択を可能にするには、Conflictに依存しない決定の永続表現（Plan単位の除外 / 優先Entryの記録）と
+  その識別・失効規則が必要であり、永続shape（`ProductionPlan`）とDexie / Export versionの変更を伴う。本Issueでは行わず、
+  必要なら別Issueで扱う
+- 表示では、動的Conflictを隠さず、解決済みとしても扱わず、選択できない理由と次にできることを示す
+  （[UI_FLOW.md](./UI_FLOW.md) 11.6.5）。再計算を案内しない（入力が同じなら同じ計算で同じ動的Conflictが再び現れるため）
+- 表示中のConflictが動的Conflictか、入力が変わったためにcurrent initial Conflictに無いのかは、表示中Planの計算入力と
+  現在の永続状態の一致で区別する: 表示中Planの `baseSnapshot` の `initialExecutionState`・`targetWeaponsHash`・
+  `buildListEntriesHash` が、現在の永続状態から同じ規則で作る値と一致し、CalculationContextが互換であれば、同じ入力から
+  同じ初期検出が得られるので、current initial Conflictに無い保存済みConflictはそのrunの動的Conflictである。一致しなければ
+  「現在の入力では再現できない競合」として既存どおり作成し直しを案内する（作成開始の前提検証・保存時の再検証と同じauthority
+  を読み取り専用で使う。新しい永続fieldを追加しない）
+- 動的Conflictにも9.6.5の除外規則を適用する。優先したEntryがdeadlock / stall等で落ちた結果は9.6.6の完成条件で保存しない
 
 #### 9.6.8 過去のPlanとrepair lineage
 
@@ -2267,10 +2374,11 @@ E = このrunで、適用された明示決定が別のparticipantを選択し�
 - 本節の競合解決で保存するDraftは常に `conflictRepairLineage = null` である。新しいlineageを生成せず、表示中Draftの
   lineageを読まない（以前の決定はlineageではなく `selectedBuildListEntryId` から引き継ぐ。除外Route keyや以前の
   fixed Entryは、代替Route探索が無いので使い道が無い）
-- Planner Alternative actual repairで保存した過去のDraft（lineageを持つもの、generated Entryで置換した作成リストを
-  前提とするもの）と、そのPlanから開始したactive / stale / completed / abandoned Planは、9.6.10のversion境界により
-  `calculation_context_changed` として扱う。内容は表示できるが、優先選択・作成開始・実行へ進めず、作成リスト画面からの
-  作成し直し（実行中なら現在地点からの再計画）へ案内する
+- 過去のPlanの扱いは9.6.10の互換規則による。version 17のPlanのうち、Planner Alternative actual repairで保存したDraft
+  （lineageを持つもの）と、それを開始したactive / stale / completed / abandoned Plan（開始後もlineageを保持する）だけを
+  `calculation_context_changed` とする。内容は表示できるが、優先選択・作成開始・実行へ進めず、作成リスト画面からの
+  作成し直し（実行中なら現在地点からの再計画、16.8）へ案内する。明示決定を持たないversion 17のPlan（作成リスト画面の
+  通常作成、全体最適化の採用、補助導線、再計画の採用で作ったもの）は互換のまま継続できる
 - 過去の置換で作成リストに入ったgenerated Entry（`build-list.constrained.` 等のID）は通常のBuildListEntryであり、
   本節で削除・変換しない（build-resultの互換例外の範囲で引き続き使える）
 - lineageの通常UI表示は行わない（Debug Modeでの表示を残すかはPR-3 / cleanupで決める）。lineage fieldの削除は永続shapeの
@@ -2286,8 +2394,10 @@ E = このrunで、適用された明示決定が別のparticipantを選択し�
 | 競合の種類 | 保存済み `PlanConflict.kind`（4 literal）。`same_gogma_counter` = 復元ボーナス（Reset Bonuses / Keep Bonuses）、`same_skill_counter` = スキル（巨戟化 / Reset Skills）、`same_normal_counter` = 通常アーティアの作成、`same_owned_weapon_consumed` = 所持武器の排他使用 |
 | 競合の参加者 | `PlanConflict.buildListEntryIds` → current persisted BuildListEntryの `targetWeaponId` → current TargetWeaponの表示名 |
 | 推奨 / 選択 | `recommendedBuildListEntryId`（参考表示）/ `selectedBuildListEntryId`（明示決定） |
-| checkpoint関与 | current preparationの `checkpointParticipants`（判定）、保存済みの値（表示） |
-| 選択可否と理由 | current preparation（9.2.4.14）。除外理由はtypedな理由code（validationのwarning kind等）で示す。現在のprojectionの英文 `reason` は通常表示に出さない（PR-3でtyped化する） |
+| checkpoint関与 | current preparationの `checkpointParticipants` と、表示中Draftの以前の決定から9.6.3の関数で求めた除外Entry（有効なcheckpoint参加者の判定）。保存済みの値は表示だけに使う |
+| 選択可否と理由 | current preparation（9.2.4.14）と9.6.3の関数。除外理由はtypedな理由code（validationのwarning kind等）で示す。現在のprojectionの英文 `reason` は通常表示に出さない（PR-3でtyped化する） |
+| 動的Conflictか、入力が変わったか | current initial Conflictに無い保存済みConflictについて、表示中Planの `baseSnapshot`（`initialExecutionState`・`targetWeaponsHash`・`buildListEntriesHash`）とCalculationContextが現在の永続状態と一致するか（9.6.7） |
+| 優先したEntryの未完成の原因 | 9.6.6のPlanner Domainのtypedな原因（runtime-only） |
 | このPlanで作成する目標武器 | `steps[].executionEffects.targetCompletions`（[UI_FLOW.md](./UI_FLOW.md) 11.0の完成予定と同じ） |
 | このPlanで作成しない目標武器と理由 | 保存済みのConflict（明示決定の非選択Entry、判断待ちConflictのparticipant）と `rejectedBuildListEntries.reason` |
 
@@ -2300,20 +2410,86 @@ E = このrunで、適用された明示決定が別のparticipantを選択し�
 - 種類を安全に説明できない場合（未知のkind、壊れた記録）は、誤った具体的理由を作らず汎用の説明にする。競合を隠さず、
   解決済みとして扱わない
 
-#### 9.6.10 version
+#### 9.6.10 versionと既存Planの互換性
 
-- PR-1（本節を追加したdocs-only PR）はどのversionも変更しない（`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、
-  `DATABASE_SCHEMA_VERSION` 10、`ExportRoot.schemaVersion` 13、`AppSettings.schemaVersion` 2、`RngState.schemaVersion` 2、
-  `PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7`、Master `dataVersion` 4）
-- **PR-2（競合解決の計算・保存経路の切替）は `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を18へ上げる。** 同じPlannerInputと
-  決定から保存されるPlanが変わり（代替Routeによる置換が無い、明示的に優先されたEntryの保護、9.6.5の結果Conflict、
-  repair lineageが `null`）、保存済みPlanは生成方式を記録しないためである（9.2.19.15のPhase 5-B、Phase 6-Aと同じ判断）。
-  version 1..17のProductionPlanは下書き・実行中を問わず `calculation_context_changed` でfail closedし、read migrationや
-  保存済みversionの書き換えをしない。Plan向けの互換例外を作らない。実行中のversion 17 Planは現在地点からの再計画が必要になる
+PR-1（本節を追加したdocs-only PR）はどのversionも変更しない（`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 17、
+`DATABASE_SCHEMA_VERSION` 10、`ExportRoot.schemaVersion` 13、`AppSettings.schemaVersion` 2、`RngState.schemaVersion` 2、
+`PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7`、Master `dataVersion` 4）。PR-2のversion境界を次のとおり確定する。
+
+**調査結果（PR #279のレビュー修正で確認）。**
+
+1. 保存済みPlanの実行意味論は変わらない。PR-2が変えるのは、明示決定（空でない `conflictResolutions`）を持つ入力に対する
+   Planの生成（9.6.4の保護、9.6.5の結果Conflict、9.6.6の完成条件）と、生産計画画面の競合操作の経路だけである。Step、
+   `expectedStateBefore` / `expectedStateAfter`、`executionEffects`、作成開始の効果（16.2 / 16.11）、Execution runtime、
+   Undo、ゲーム内セーブ地点、再計画（16.8）は変えない
+2. 明示決定を持たない入力（`conflictResolutions = []`）に対する通常Plannerの出力は変わらない（9.6.4。PR-2がparity testで
+   固定する）。全体最適化の最終検証、作成リスト画面の通常作成・補助導線、再計画の試算はすべてこの入力である
+3. `CalculationContext` は生成方式を持たず、Planの互換判定は4 fieldの完全一致（`isCalculationContextCompatible()`）である。
+   一方、version 17のcodeでProductionPlanを保存する経路と、各経路が永続Planに残す事実は次のとおりであり、永続fieldだけで
+   「明示決定を持つ入力から生成されたPlanか」を推測なしに判別できる
+
+   | version 17の保存経路 | 入力の `conflictResolutions` | 永続Planの `conflictRepairLineage` | `conflicts[].selectedBuildListEntryId` |
+   | --- | --- | --- | --- |
+   | 作成リスト画面の通常作成・補助導線（`savePlannerResult()`） | 空（`createPlannerInput()`） | `null`（保存検査で必須） | すべて `null`（選択は明示resolutionからだけ記録される） |
+   | 全体最適化の採用（17.11） | 空（Stage D'の最終検証） | `null`（保存検査で必須） | Conflict 0（採用条件） |
+   | 再計画の採用（16.8） | 空 | `null` | すべて `null` |
+   | Planner Alternative actual repair（9.2.19.8） | 空でない（明示決定） | 非null（artifactのlineage、決定1件以上） | 明示決定と「決定の展開」（9.2.19.9）の選択を含む |
+
+   `draft -> active`、Execution中の更新、ゲーム内セーブ地点 / Undo snapshotはlineageと `conflicts` をそのまま保持する
+   （[DATA_MODEL.md](./DATA_MODEL.md) 11.1.1）。したがってrepairで保存したDraftを開始した実行中Planもlineageを持つ
+4. Planner Alternativeで生成したPlanと全体最適化で生成したPlanは、lineageの有無で安全に区別できる（全体最適化の採用は
+   lineage `null` とConflict 0を保存条件にしている）。repairのPlanが持つ選択済みConflictには導出した選択（決定の展開）が
+   含まれるが、明示決定と型で区別できない（`resolutionNote` は自由文字列であり解析しない）
+5. 識別に使うのは既存の永続field（`conflictRepairLineage`、`conflicts[].selectedBuildListEntryId`）だけであり、過去の決定・
+   生成経路・lineageを推測で補わない。判別できないもの（lineageが `null` なのに選択済みConflictを持つversion 17 Planなど、
+   version 17のcodeが保存しない形）は互換としない（fail closed）
+6. versionを17のまま据え置くと、(a) repairで保存したPlanが現在の結果として扱われ続け、導出した選択を新方式の明示決定として
+   引き継ぐ（9.6.3）おそれがある、(b) 新方式で保存するPlanと旧方式のrepair Planが同じversionを持ち、旧build（version 17の
+   code）がExport / Import経由で新方式のPlanを自分の計算結果として扱う。内容による区別は可能だが、versionが計算の意味を
+   表すという原則（[REQUIREMENTS.md](./REQUIREMENTS.md) 32）に反するので採らない
+
+**PR-2で実装するversion対応（確定）。**
+
+- `CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **18** へ上げる。version 18は「明示決定を持つ入力の競合解決が9.6の方式である」
+  ことを表す
+- **ProductionPlanの限定互換例外 `18 -> 17`（明示決定を持たないPlanだけ）。** version 18のruntimeは、次をすべて満たす
+  ProductionPlanを互換とする
+  - `plan.calculationContext` と `plan.baseSnapshot.calculationContext` の `appSchemaVersion` が17で、他の3 field
+    （`gameVersion`、`masterDataVersion`、`rngEngineVersion`）が現在と一致する
+  - `plan.conflictRepairLineage === null`
+  - `plan.conflicts` のすべてで `selectedBuildListEntryId === null`
+
+  根拠は上記の2と3である: これらのPlanは明示決定を持たない入力から生成されており、その入力に対するversion 18の出力は
+  version 17と同じなので、version 18で同じ入力から作るPlanと意味が一致する。statusを問わない（draft、active、stale、
+  completed、abandoned）。staleなPlanは、それ自身の記録済み再計算理由のままであり、本例外で新たに
+  `calculation_context_changed` を付けない
+- 上記を満たさないversion 17のProductionPlan（repairで保存したDraftと、それを開始したPlan）は、statusを問わず
+  `calculation_context_changed` でfail closedする。内容の表示は維持し、read migration・version書き換え・lineageの削除を
+  しない。実行中なら現在地点からの再計画（16.8）または破棄（16.10）へ案内する。これらは廃止したPlanner Alternativeの
+  計算結果であり、選択済みConflictに導出した選択が混ざるため、新方式の引き継ぎに使えないからである
+- version 1..16のProductionPlanは従来どおり非互換である。例外は明示的な `18 -> 17` だけであり、range checkにしない。
+  将来のversionへ推移的に適用しない（version 19以降の判断はその時点で行う）
+- Planの互換判定は1つのDomain関数（例: `isProductionPlanCalculationCompatible(plan, current)`。名前はPR-2で確定）に集約し、
+  Plan互換性を判定するすべての箇所（Execution runtimeの `assertExecutableProductionPlan()`、作成開始、生産計画画面の
+  `evaluateProductionPlanCalculationCompatibility()`、Dashboard、Execution Navigator、ゲーム内セーブ地点の復元、再計画の採用等）が
+  それを使う。`validateProductionPlan()` のPlanと `baseSnapshot` の間の一致検査は従来どおり完全一致である
 - 候補検索とCandidate / BuildListEntry snapshotの意味は変えないので、build-resultの明示互換例外を `18 -> [12, 13, 14, 15, 16, 17]`
   とする（明示map。range checkにしない。ProductionPlanへ適用しない。version 1..11は非互換のまま）
 - 永続shapeを変えない（`PlanConflict`・`ProductionPlan`・`conflictRepairLineage` のshapeは不変）ので、`DATABASE_SCHEMA_VERSION`
   10、`ExportRoot.schemaVersion` 13のままでmigrationを追加しない。RNG・Masterの意味も変えない
+- 前提（明示決定を持たない入力の出力が変わらないこと）がPR-2のparity testで成り立たない場合は、この例外を実装せず仕様へ戻る
+
+**影響と比較した案。**
+
+- 全体最適化で採用したPlan、作成リスト画面の通常作成・補助導線のPlan、再計画で採用したPlanは、draftもactiveも継続できる。
+  Issue #276（現在地点からの再計画でstaleなEntryが対象外になり、未完成のTargetが抜け得る）の影響を、本Issueのversion更新で
+  強制的に受けることはない
+- 「この候補を優先」で保存したDraftと、それを開始した実行中Planだけが再計画・作成し直しの対象になる。実行中なら再計画で
+  Issue #276の影響を受け得るので、PR-2の画面文言で理由と影響を示す（Issue #276自体の修正は本Issueに含めない）
+- 採らなかった案: (1) version 17のまま据え置く（上記6）。(2) version 1..17の全Planを無効化する（明示決定を持たないPlanまで
+  理由なく止め、実行中の全体最適化Planに再計画を強いる）。(3) repairで保存したPlanのうち開始済み（draft以外）だけを互換とする
+  （実行の意味は変わらないが、statusに依存する互換判定は前例が無く、対象もrepairのDraftを開始したPlanに限られるので採らない。
+  Ownerが継続を望む場合は、PR-2の前に本節を改めて判断する）
 - PR-3（表示）とPR-4以降（不要経路の削除）は計算・保存の意味と永続shapeを変えない限りversionを動かさない。interaction
   preparationのprojectionを広げることはWorker contractの変更であり、versionの対象ではない
 - 実装時に前提（例: 永続shapeを増やす必要が出る、明示決定の無い入力の結果が変わる）が崩れた場合は、推測でversionを決めず
@@ -2379,21 +2555,24 @@ semantic値は本Issueで変更しない。Search Domain側の型名・API名の
 ```text
 PR-1  正式仕様の確定（本節、docs-only）
 PR-2  競合解決の計算・保存経路の切替（1つのPRで行う）
-      - Domain: 9.6.3の明示決定集合の純粋関数、route commitmentの明示優先Entryの保護、明示決定の有効性の防御、
-        9.6.5の結果Conflict
+      - Domain: 9.6.3の明示決定集合の純粋関数（引き継ぎ・置換・supersedeとcheckpointの再判定・優先Entryどうしの
+        事前判定）、route commitmentの明示優先Entryの保護、明示決定の有効性の防御、checkpoint参加者がすべて除外された
+        Conflictへの決定（9.6.4）、9.6.5の結果Conflict、9.6.6の優先Entryの完成判定とtypedな原因
       - Application / Worker: 「この候補を優先」をfresh input + 明示決定集合 + createPlan() へ切替。
-        9.6.3の6の事前確認（最小限の表示）
-      - Persistence: 9.6.6の追加検査（invalid_conflict_resolution拒否、決定の記録、source Draft CAS）
+        9.6.3の7の事前確認（最小限の表示）、優先Entryの未完成・開始できない理由の最小限の表示
+      - Persistence: 9.6.6の追加検査（invalid_conflict_resolution拒否、決定の記録、優先Entryの完成、source Draft CAS）
       - 「比較する」を生産計画画面から外す（何も起動しない。what-ifが置換付きscenarioを見せ、実際の操作が置換しない
         期間を作らないため、Phase 5-Bと同じく同じPRで行う）
-      - CURRENT_CALCULATION_APP_SCHEMA_VERSION 18、build-result例外 18 -> [12..17]（9.6.10）
+      - CURRENT_CALCULATION_APP_SCHEMA_VERSION 18、ProductionPlanの限定互換例外 18 -> 17（明示決定を持たないPlanだけ）と
+        その判定を集約したDomain関数・全caller、build-result例外 18 -> [12..17]（9.6.10）
       - 明示決定が無い入力の結果が変わらないことのparity test（全体最適化の最終検証、作成リスト画面の通常作成、
-        再計画の試算）
+        再計画の試算）。これは限定互換例外の前提でもある
       - 通常Plannerの変更がPlanner Alternativeのtestの期待を変える場合は、そのtestを現行の意味へ直すか、PR-4の削除を
         前倒しする。全体最適化のtestと期待値は変えない
 PR-3  競合画面の変更（UI_FLOW 11.6）
       - 競合理由の日本語化（kind基準）、BuildListEntry ID・英文reason・Counter値の通常表示の廃止（Debug Modeへ分離）
       - 優先した候補、今回作成する武器・作成しない武器と理由、残る競合、件数の区別
+      - 動的Conflict（計画の途中で生じた競合）と「入力が変わったため再現できない競合」の区別（9.6.7）と、それぞれの案内
       - 選択可否の理由のtyped化（preparationの除外理由code）、任意で具体的な操作・所持武器名
       - ui-ux-pro-maxによるPresentation設計、PC・375px・ダークテーマの確認
 PR-4以降  不要になった経路の整理（import graphの再監査のうえで段階的に）
@@ -2406,20 +2585,48 @@ PR-2とPR-3を1つにまとめることは妨げないが、PR-2より前に「�
 
 #### 9.6.13 test観点
 
-- 優先したEntryは実行され、非選択Entryは実行されず作成リストに残る。非選択Entryの代替Route探索、generated Entry、
-  置換が1回も開始されない
-- 非選択Entry由来の競合（同じpairの別位置、非選択EntryとCの競合）が結果に残らず、両方が作成候補として残る競合は
-  判断待ちとして残る。checkpoint競合は除かれず選択されない
-- 優先したEntryが別の未解決競合の暫定帰結・stall dropで、明示的に優先されていないEntryより先に外れない
-- 以前の決定の引き継ぎ、同じconflictKeyの置換、supersede（2方向）、再現できない決定の不引き継ぎと事前の明示、
-  不整合な集合のfail closed
-- 動的Conflictにだけ一致する決定、一致しない決定は `invalid_conflict_resolution` になり保存されない
-- incomplete、`plan === null`、`invalid_conflict_resolution`、キャンセル、source Draftの置換（別タブ）、current stateの
-  変化で何も保存されず旧Draftが残る。成功時だけ旧Draftがatomicに置換され、lineageは `null`
+PR-2 / PR-3で必要なregression testの観点。
+
+- 決定の意味: 優先したEntryは実行され完成し、非選択Entryは実行されず作成リストに残る。非選択Entryの代替Route探索、
+  generated Entry、置換が1回も開始されない
+- 結果のConflict: 非選択Entry由来の競合（同じpairの別位置、非選択EntryとCの競合）が結果に残らず、両方が作成候補として
+  残る競合は判断待ちとして残る
+- checkpointの混在（R2）
+  - A・B（checkpoint）・Cで競合1 = A/B（通常）、競合2 = Bのcheckpoint終端/Cの必須操作のとき、競合1でAを優先すると競合2が
+    結果に残らず、Bのcheckpoint選択は作成リストで不変、Cは作成される
+  - `{B（checkpoint）, C, D}` でBだけ除外ならC/Dの通常の判断待ちとして選べ、`{B, C（checkpoint）, D}` でBが除外でも
+    Cのcheckpointのため選べない
+  - checkpoint参加者がすべて除外されたConflictへの決定をDomainが受け付け、有効なcheckpoint参加者が残る決定と、選択Entry
+    自身がcheckpoint参加者の決定は従来どおり拒否する
+  - 以前の決定の取り消しでcheckpoint参加者の除外が解けると、それに依存していた決定も取り消され、事前に明示される
+  - 実行対象として残るEntryのcheckpointは従来どおりhard constraintとして守られ、checkpoint未到達のreserveは拒否される
+- 優先したEntryの完成（R3）
+  - 優先したEntryが別の未解決競合の暫定帰結・stall dropで、明示的に優先されていないEntryより先に外れない
+  - 優先したEntryが完成しない結果（優先Entryどうしの競合、deadlock / stall、Counter通過・source・保護、checkpoint未到達、
+    別Entryによる充足）は保存されず、旧Draftが残り、typedな原因が返る。`selectedBuildListEntryIds` と `targetCompletions`
+    の一方だけを満たす結果もfail closedする
+  - 優先したEntryどうしが同じ未決定のcurrent initial Conflictに参加する集合は、計算を開始せずにそのConflictを示す
+  - 引き継いだ以前の決定の優先Entryも完成を検証され、取り消した決定のEntryは検証されない
+  - `conflictResolutions = []` の入力に完成条件が課されない（全体最適化の最終検証、作成リスト画面の通常作成、再計画の試算）
+- 動的Conflict（R4）
+  - 動的Conflictにだけ一致する決定、一致しない決定は `invalid_conflict_resolution` になり保存されない
+  - deadlock / stall / release / recommitで結果に加わった動的Conflictは、入力が同じなら「計画の途中で生じた競合」として
+    選択できず、再計算を案内しない。入力が変わっていれば「現在の入力では再現できない」として作成し直しを案内する
+  - 動的Conflictにも結果Conflictの除外規則が適用される
+- 引き継ぎと保存: 以前の決定の引き継ぎ、同じconflictKeyの置換、supersede（2方向）、再現できない決定の不引き継ぎと
+  事前の明示、不整合な集合のfail closed。incomplete、`plan === null`、`invalid_conflict_resolution`、優先Entryの未完成、
+  キャンセル、source Draftの置換（別タブ）、current stateの変化で何も保存されず旧Draftが残る。成功時だけ旧Draftがatomicに
+  置換され、lineageは `null`、`PlannerResult.conflicts` と `plan.conflicts` が一致する
 - 実行中Planがある場合も実行中Planを変更しない。承認を求めない
-- `conflictResolutions = []` の通常Planner結果（全体最適化の最終検証、作成リスト画面の通常作成、再計画の試算）が変わらない
-- version 17以前のPlan（lineageを持つDraftを含む）が `calculation_context_changed` になり、内容は表示できる。
-  version 12..17のCandidate / BuildListEntryは引き続き使える
+- 既存Planの互換性（R1）
+  - lineage `null` かつ選択済みConflictの無いversion 17のPlan（全体最適化で採用したDraft、作成リスト画面の通常作成・補助導線の
+    Draft、再計画で採用したPlan）は、version 18でdraft / active / stale / completed / abandonedのいずれも互換であり、作成開始・
+    Step確定・Undo・セーブ地点の復元・再計画を継続できる。staleなPlanは記録済みの理由のまま
+  - lineageを持つversion 17のPlan（repairのDraftとそれを開始したPlan）、lineageが `null` でも選択済みConflictを持つ
+    version 17のPlan、version 1..16のPlanは `calculation_context_changed` になり、内容は表示できる
+  - 互換判定がすべてのcallerで同じDomain関数を通り、`baseSnapshot.calculationContext` も同じ規則で判定される。version 19などの
+    将来versionへ例外が推移しない
+  - version 12..17のCandidate / BuildListEntryは引き続き使える。Export / Importは過去のPlanとlineageをそのまま保持する
 
 ## 9.1 Candidate SearchとPlannerの責務分離
 
@@ -9545,8 +9752,9 @@ Accordionを通常Planner用であることを明示して使い、全体最適�
 - Issue #278（通常Plannerの競合解決の簡素化、9.6）は本章の変更ではなく、それ自身のversion境界を持つ。PR-2が明示決定を持つ
   入力に対する内部Plannerの計算と競合解決の保存の意味を変え、`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を18へ上げる（9.6.10）。
   全体最適化の最終検証の入力は `conflictResolutions = []` なので、全体最適化の計算・判定・採用は変わらない（PR-2のparity testで
-  固定する）。ただしversion 17以前のProductionPlan（全体最適化で採用したDraftを含む）は他のPlanと同じく
-  `calculation_context_changed` になり、作成リスト画面から作成し直す。これは上記の前提1の崩れではなく、Issue #278の境界である
+  固定する）。全体最適化で採用したversion 17のPlan（lineage `null`、Conflict 0）は、9.6.10のProductionPlanの限定互換例外
+  `18 -> 17`（明示決定を持たないPlanだけ）によりdraftもactiveも互換のまま継続できる。これは上記の前提1の崩れではなく、
+  Issue #278の境界である
 
 ### 17.19 後続判断（未決事項）
 

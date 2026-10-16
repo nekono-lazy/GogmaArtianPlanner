@@ -397,12 +397,22 @@ legacy B8 `createConstrainedPlan()` からordinary `createPlan()` へ切り替�
 migrationも追加しない。
 
 Issue #278（通常Plannerの競合解決の簡素化、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.10）の正式仕様化（PR-1）はversionを変えない。
-生産計画画面の「この候補を優先」を通常Plannerの再計算へ切り替えるPR-2で、同じPlannerInputと決定から保存されるPlan（代替Routeに
-よる置換が無いこと、明示的に優先されたEntryの保護、判断不要になった競合を残さないこと、lineage `null`）が変わるため、
-`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **18** へ上げる予定である。version 1..17のProductionPlanは下書き・実行中を問わず
-`calculation_context_changed` でfail closedし、BuildCandidate / BuildListEntryは明示的なbuild-result例外 `18 -> [12, 13, 14, 15, 16, 17]`
-で互換とする（version 1..11は非互換のまま、ProductionPlanへは適用しない）。永続形状は変えないので、Dexie 10 / Export 13のまま
-migrationを追加しない。
+生産計画画面の「この候補を優先」を通常Plannerの再計算へ切り替えるPR-2で、明示決定を持つPlannerInputから保存されるPlan（代替Routeに
+よる置換が無いこと、明示的に優先されたEntryの保護と完成条件、判断不要になった競合を残さないこと、lineage `null`）が変わるため、
+`CURRENT_CALCULATION_APP_SCHEMA_VERSION` を **18** へ上げる予定である。明示決定を持たない入力（`conflictResolutions = []`）の出力は
+変わらない（PR-2のparity testで固定する）。
+
+| artifact | version 18 runtimeでの扱い（予定） |
+| --- | --- |
+| ProductionPlan version 17で、`conflictRepairLineage === null` かつ全 `conflicts[].selectedBuildListEntryId === null`（Plan本体と `baseSnapshot` の両方がversion 17、他の3 fieldは現在と一致） | ProductionPlanで初めての限定互換例外 `18 -> 17` により互換。status（draft / active / stale / completed / abandoned）を問わない。version 17のcodeでこの形を保存するのは明示決定を持たない入力（作成リスト画面の通常作成・補助導線、全体最適化の採用、再計画の採用）だけである |
+| ProductionPlan version 17で、上記を満たさないもの（Planner Alternative actual repairで保存したDraftとそれを開始したPlan、およびversion 17のcodeが保存しない形） | 非互換。`calculation_context_changed` でfail closedし、exact persisted内容の表示を維持する。read migration・version書き換え・lineageの削除はしない |
+| ProductionPlan version 1..16 | 従来どおり非互換 |
+| BuildCandidate / BuildListEntry version 12..17 | 明示的なbuild-result例外 `18 -> [12, 13, 14, 15, 16, 17]` により互換（version 1..11は非互換のまま） |
+
+Planの例外は明示的な `18 -> 17` だけであり、範囲判定や将来versionへの推移的適用はしない。判定は既存の永続field
+（`conflictRepairLineage`、`conflicts[].selectedBuildListEntryId`）だけを読み、生成経路を推測しない。判定は1つのDomain関数に集約し、
+Plan互換性を判定するすべての箇所がそれを使う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.10）。永続形状は変えないので、Dexie 10 /
+Export 13のままmigrationを追加しない。
 
 ---
 
@@ -1863,8 +1873,10 @@ export type PlannerConflictRepairOutcomeStatus =
 - fieldは永続shapeに残す。型、`validatePlannerConflictRepairLineage()` による構造validation、Dexie v9 -> v10とExport schema
   12 -> 13の `null` 補完、Export / Importでの保持を変えない。過去のPlanのlineageを削除・変換・推測で補完しない。fieldの削除は
   Dexie / Exportのversionとmigrationを伴う別の判断であり、Issue #278では行わない
-- lineageを持つ過去のPlan（version 17以前）は、PR-2のcalculation version 18により他のversion 17以前のPlanと同じく
-  `calculation_context_changed` となり、内容の表示だけができる（PLANNER_SPEC 9.6.10）。lineageを通常UIの判断材料にしない
+- lineageを持つversion 17のPlan（repairで保存したDraftと、それを開始したPlan）は、PR-2のcalculation version 18で
+  `calculation_context_changed` となり、内容の表示だけができる。lineageが `null` で選択済みConflictを持たないversion 17の
+  Planは限定互換例外 `18 -> 17` で互換のままである（PLANNER_SPEC 9.6.10、3.5の版数表）。lineageの有無は、この互換判定と
+  Planner Alternativeで保存したPlanの識別にだけ使い、通常UIの判断材料にしない
 
 ## 11.2 PlanningInputSnapshot
 
@@ -2271,7 +2283,9 @@ Domainは `selectedBuildListEntryId` を `null` のままにして
 preflight再対応付けも `checkpoint_conflict` で失敗する。解決は作成リストでの
 checkpoint変更または解除だけである([PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.5.1)。
 また、選択済みcheckpointを持つTargetのRouteはconstrained re-searchで置き換えない
-(同 9.5.2)。
+(同 9.5.2)。Issue #278の目標仕様（同 9.5.1末尾 / 9.6.2）では、この拒否を、同じ入力の別の明示決定で除外されていない
+checkpoint参加者が残る競合に限る（checkpoint参加者がすべて除外されたEntryなら、そのcheckpointは今回実行されないため）。
+`checkpointParticipants` の記録内容とID生成規則は変えない。
 
 `PlanConflict.id` はPlannerIdFactoryで生成せず、次のsemantic dataをstable serialize / hashして
 決定的に生成する。BuildListEntry IDは重複排除してsortし、Candidate IDは使用しない。
@@ -2317,9 +2331,13 @@ Issue #278の目標仕様（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、切替は
 
 - `selectedBuildListEntryId` はユーザーの明示決定（今回の選択と、表示中Draftから引き継いだ有効な以前の選択）だけを表す。
   推奨、暫定帰結、上記の「決定の展開」のような導出した選択を記録しない
-- 明示決定で実行しなかったEntryが参加するだけで判断不要になった競合（選択済みcheckpointが関係せず、明示決定で除外されて
-  いない参加者が1件以下のもの）は、保存するPlanの `conflicts` に含めない。判断待ち（`selectedBuildListEntryId = null`）は、
-  まだ2件以上の参加者が作成候補として残る競合だけである
+- 明示決定で実行しなかったEntryが参加するだけで判断不要になった競合（明示決定で除外されていない参加者が1件以下のもの。
+  除外されたEntryのcheckpoint終端unitは実行されないので、checkpoint参加者の有無を問わない）は、保存するPlanの `conflicts` に
+  含めない。判断待ち（`selectedBuildListEntryId = null`）は、まだ2件以上の参加者が作成候補として残る競合だけである。
+  `checkpointParticipants` の値は検出結果のまま記録し、除外Entryを取り除いて書き換えない（有効なcheckpoint参加者は
+  PLANNER_SPEC 9.6.2 / 9.6.5のとおり除外Entryと合わせて判定する）
+- 保存するPlanでは、明示決定の選択Entry（優先したEntry）はすべて `selectedBuildListEntryIds` に含まれ、そのTargetは
+  `steps[].executionEffects.targetCompletions` に現れる（PLANNER_SPEC 9.6.6の完成条件）
 - `reason` と `resolutionNote` は内部向けの診断文字列（英文。Counter位置・NormalArtianCounter ID・OwnedWeapon IDを含み得る）
   であり、通常UIに表示せず、文字列を解析して意味を推測しない。通常UIの説明は `kind` から作る（[UI_FLOW.md](./UI_FLOW.md) 11.6）
 - 永続 `PlanConflict` はCounter位置、NormalArtianCounter ID、排他使用するOwnedWeapon ID、participantごとの操作種別を
