@@ -4649,6 +4649,21 @@ Alternative sections as the current contract.
   other); PR-3 the conflict display; PR-4 the dead Worker / Client / UI path (done); PR-5 the repair save API and its
   checks and the guard's restore-instead-of-change branch (done); PR-6+ the Planner Alternative Domain calculations, their
   defaults and `PlannerBuildListContext`'s `temporary_*`, re-audited together with the research benchmarks and tests that use them
+- PR-6 (done, docs-only) re-audited the remaining code on `db29f22` and recorded it in
+  `docs/ISSUE_278_ALTERNATIVE_DOMAIN_CLEANUP_AUDIT.md` (an audit record, not a specification; 9.6.11 / 9.6.12 point to it). A
+  (Production shared, keep): `derivePlannerAlternativeReservation()`, `replacement/` deterministic materializer / materialization errors /
+  search origin, the Planner Alternative Search frontier / sections / registrations / Candidate factory / types / validation, the
+  constrained Candidate factory / types / origin validation, the shape-constrained search, `buildListEntryReplacement.ts`. B (Research /
+  benchmark / contract tests need it, keep): kernel, full run, trial and `defaultPlannerAlternativeTrialBounds`, the Alternative
+  materializer (search identity in the GA `d0a-v1` golden), `replacement/` preflight / conflict context / conflict scenario / conflict
+  work, `visitPlannerAlternativeCandidates()`, `defaultPlannerAlternativeSearchExtent`, the constrained enumerator. C (reached from no
+  Production, Research runner or benchmark entry and in no build chunk; only their own tests and the Issue #101 repair / what-if tests
+  use them): `plannerAlternativeWhatIf.ts`, `plannerAlternativeRepair.ts`, `plannerAlternativeScenario.ts`,
+  `plannerAlternativeComparison.ts`, `plannerConflictRepairLineage.ts`; their removal is the proposed PR-7. D (needs a decision):
+  `temporary_augmented` / `temporary_replacement` (no Production caller creates them, but the branches sit in shared Planner modules and
+  the B code, the D-series research, scheduler parity Scenario M and the PR-2 parity digest use them), an Issue #101 regression on the
+  current paths, where Research-only code lives, and the wording of the two defaults. Never delete A or B because of an
+  `alternative` name, and moving B is outside Issue #278
 
 ---
 

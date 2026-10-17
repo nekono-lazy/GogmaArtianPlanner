@@ -2660,6 +2660,31 @@ benchmark・Researchに分けて再監査し、Planner Alternative actual repair
   全体最適化の計算と採用、形状制約付き探索、`BuildListEntryReplacement`、実行ナビ、通常の保存・競合解決の保存・全体最適化の採用の
   意味論、version（18 / 10 / 13）、Master Data。境界test（`isolation.test.ts` 等）はコメントの文言だけを現行に合わせ、検査内容は変えていない
 
+**PR-6の再監査結果（Domain・Search・Research。docs-only）。** PR-6はPR-5のmerge後のmain（`db29f22`）で、残存する
+Planner AlternativeのDomain・Replacement Domain・Search Domain・`PlannerBuildListContext` の利用関係を、Production app・benchmark build・
+Node Research runner・testの各entrypointからのimport graph（barrelをsymbol単位で解決）と、非圧縮buildでの宣言の照合で再監査した。
+module / API別の依存関係、分類の根拠、testの扱い、後続PRの案は
+[ISSUE_278_ALTERNATIVE_DOMAIN_CLEANUP_AUDIT.md](./ISSUE_278_ALTERNATIVE_DOMAIN_CLEANUP_AUDIT.md)（監査記録。正式仕様ではない）にある。
+結果の要約は次のとおりであり、本節の上の表と削除候補の記述を上書きしない（削除は後続PRでimport graphを再確認して行う）。
+
+- Productionが使う共有基盤（分類A）: 上の「残すもの」の表のとおり。Planner Alternative系で実際にProduction bundleへ入るのは、
+  全体最適化Workerの `derivePlannerAlternativeReservation()`、`src/domain/planner/replacement/` の `plannerDeterministicMaterializer.ts`・
+  `plannerMaterializationErrors.ts`・`plannerSearchOrigin.ts`、Planner Alternative Searchのfrontier・section・route registration・Candidate
+  factory・型・validation・reservationの正規化（形状制約付き探索が共有）、`src/domain/search/constrained/` のCandidate factory・型・origin
+  validationだけである
+- Research / Benchmarkが使うため残すもの（分類B）: kernel・full run・trial（`defaultPlannerAlternativeTrialBounds` を含む）・Alternative用
+  materializer（search identity）、`replacement/` のaugmented / replacement preflight・conflict context・conflict scenario・conflict work、
+  `visitPlannerAlternativeCandidates()` と `defaultPlannerAlternativeSearchExtent`、constrained enumerator。Global Assignment Research
+  （Issue #154）の `d0a-v1` 規則とgolden、Phase 2-C* / D系のResearch、Planner Alternative benchmark、Issue #101のPhase 2 acceptance、
+  checkpoint conflict・Issue #129・status-only identityの契約testが使う
+- どの経路からも到達しないもの（分類C）: what-if（`plannerAlternativeWhatIf.ts`）、actual repair（`plannerAlternativeRepair.ts`）、scenario
+  （`plannerAlternativeScenario.ts`）、comparison（`plannerAlternativeComparison.ts`）、lineageの導出・追記（`plannerConflictRepairLineage.ts`）。
+  Production・全体最適化・Research runner・benchmarkのどれからも到達せず、どのbuild chunkにも無い。利用者はそれら自身のtestと
+  Issue #101のrepair / what-if testだけである。永続field `conflictRepairLineage` の型・validator・migration・Export / Importはこれらを使わない
+- 追加判断が必要なもの（分類D）: `PlannerBuildListContext` の `temporary_augmented` / `temporary_replacement`（Productionは生成せず
+  全体最適化も使わないが、分岐は共有moduleとProduction bundleにあり、分類Bのkernel・preflight・D系Research・scheduler parityの
+  Scenario M・PR-2のparity digestが使う）、Issue #101実ケースの現行経路でのregression、Research専用codeの配置、2つの既定値の呼称
+
 #### 9.6.12 段階分割
 
 依存関係（通常Plannerのroute commitmentはPlanner Alternativeのscenario runとも共有される、「比較する」は「この候補を優先」と
@@ -2696,8 +2721,12 @@ PR-4以降  不要になった経路の整理（import graphの再監査のう�
         参照の無いPresentationと、それらだけを検証するtest
       - PR-5（実施済み）: 保存API（inspectPlannerAlternativeRepairSave() / savePlannerAlternativeRepair()）とその検証、
         Plan-breaking guardの「セーブ地点復元だけを書く」分岐とUI controllerのdrop_change
-      - PR-6以降: Planner AlternativeのDomain計算・試行上限のdefault・PlannerBuildListContextのtemporary_*。
-        研究用benchmark・Issue #101の実ケースtest・境界testの扱いと合わせて再監査する
+      - PR-6（実施済み、docs-only）: Planner AlternativeのDomain計算・試行上限のdefault・PlannerBuildListContextの
+        temporary_*を、研究用benchmark・Issue #101の実ケースtest・境界testの扱いと合わせて再監査し、A / B / C / Dに分類した
+        （ISSUE_278_ALTERNATIVE_DOMAIN_CLEANUP_AUDIT.md）。codeは変えていない
+      - PR-7以降（監査文書の提案。実施前にimport graphを再確認する）: 分類C（what-if、actual repair、scenario、comparison、
+        lineageの導出・追記と、それだけを検証するtest）の削除。分類A・Bは残す。分類Dは監査文書の選択肢の判断を経てから扱い、
+        Research専用codeの移設・退役はIssue #278の目的外として別Issueで扱う案とする
 ```
 
 PR-2とPR-3を1つにまとめることは妨げないが、PR-2より前に「比較する」だけ、または「この候補を優先」だけを切り替えない。
@@ -2740,6 +2769,13 @@ cancel、別種requestのresponseの取り違え防止、Workerのerror）は `c
 壊さない（承認を渡せば既存guardが拒否する）。Planを壊す変更の承認で「最後のゲーム内セーブ地点へ戻す」を選んだ場合は、例外なく
 「戻す -> 変更 -> 破棄」である（16.10）。過去に保存したlineage付きPlanの読込・validation・version 17の互換判定・Export / Importは
 変えていない。計算の意味、永続shape、versionは変えていない（18 / 10 / 13）。
+
+**PR-6の実施記録。** PR-6はdocs-onlyの監査であり、PR-5のmerge後のmainで残存code（Planner AlternativeのDomain、Replacement Domain、
+Search Domainのalternative / constrained / shapeConstrained、`PlannerBuildListContext`、Research / Benchmark）の依存関係を再監査して、
+[ISSUE_278_ALTERNATIVE_DOMAIN_CLEANUP_AUDIT.md](./ISSUE_278_ALTERNATIVE_DOMAIN_CLEANUP_AUDIT.md) に分類（9.6.11の「PR-6の再監査結果」）、
+削除・移設時のtestの扱い、後続PRの分割案、Issue #278の完了条件の提案を記録した。Production実装、Domainの型・API、Worker protocol、
+Persistence、test・fixture・期待値、Researchの記録、versionは変えていない（18 / 10 / 13）。分類Cの削除（PR-7の案）、分類Dの判断、
+Research専用codeの扱いは本節の段階分割の後続であり、本PRでは行っていない。
 
 #### 9.6.13 test観点
 
