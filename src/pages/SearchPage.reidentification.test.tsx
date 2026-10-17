@@ -11,6 +11,7 @@ import type { PersistentReidentificationReminder } from '../services/execution/p
 import { createValidMasterDataFixture } from '../test/fixtures/masterData'
 import { createValidBuildCandidate, createValidTargetWeapon } from '../test/fixtures/domainData'
 import { createCandidateSearchInput as createFixtureInput } from '../test/fixtures/candidateSearch'
+import { preparedFixtureInput } from '../test/fixtures/preparedCandidateSearchInput'
 import type { SearchWorkerClient } from '../services/search/searchWorkerClient'
 import { recommendedCandidateSearchDefaults } from '../domain/models/publicTypes'
 import { SearchPage, type SearchPageDependencies } from './SearchPage'
@@ -54,7 +55,7 @@ function dependencies(
     getReidentificationReminder: vi.fn(reminder),
     getCandidateSearchDefaults: async () => ({ ...recommendedCandidateSearchDefaults }),
     createWorkerClient: () => client,
-    createInput: async (options) => ({
+    prepareInput: async ({ excludeOtherTargetSources, ...options }) => preparedFixtureInput({
       ...createFixtureInput(),
       ...options,
       targetWeapons: targets,
@@ -68,7 +69,7 @@ function dependencies(
         artianBonusTypeMappings: master.artianBonusTypeMappings,
         materialCosts: master.materialCosts,
       },
-    }),
+    }, excludeOtherTargetSources),
     saveCandidates: vi.fn(async () => undefined),
     addCandidate: vi.fn(async () => { throw new Error('not expected') }),
     inspectCandidateReplacement: vi.fn(async () => { throw new Error('not expected') }),

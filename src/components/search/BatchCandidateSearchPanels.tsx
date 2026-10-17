@@ -9,6 +9,7 @@ import type {
   BatchCandidateSearchTargetOutcome,
 } from '../../services/search/batchCandidateSearch'
 import { candidateSearchProgressPhaseLabels } from '../../presentation/labels'
+import { batchSourceExclusionCountNote, sourceExclusionConditionLabel } from './sourceExclusionPresentation'
 
 type NotAddedReason = Extract<BatchCandidateSearchTargetOutcome, { status: 'not_added' }>['reason']
 
@@ -64,6 +65,10 @@ export function BatchCandidateSearchProgressPanel({
             探索ステップ: {progress.search.processedWorkItems}
           </Typography>
         </Stack>
+        {/* The condition the whole batch started with, not the Checkbox now (`docs/UI_FLOW.md` 9.1 / 9.2). */}
+        <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+          {sourceExclusionConditionLabel(progress.excludeOtherTargetSources)}
+        </Typography>
         <Typography variant="caption" color="text.secondary">
           目標武器ごとに探索量が異なり、探索ステップの総数も検索中に増えるため、全体の進捗率は表示しません。
         </Typography>
@@ -80,7 +85,15 @@ export function BatchCandidateSearchProgressPanel({
   )
 }
 
-function TargetList({ items }: { items: readonly { key: string; name: string; detail?: string }[] }) {
+/** One Target of a summary group; `note` sits beside the name (e.g. how many weapons its search excluded). */
+interface TargetListItem {
+  key: string
+  name: string
+  note?: string
+  detail?: string
+}
+
+function TargetList({ items }: { items: readonly TargetListItem[] }) {
   return (
     <Box component="ul" sx={{ m: 0, p: 0, listStyle: 'none', display: 'grid', gap: 1 }}>
       {items.map((item, index) => (
@@ -91,6 +104,11 @@ function TargetList({ items }: { items: readonly { key: string; name: string; de
         >
           <Typography variant="body2" sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>
             {item.name}
+            {item.note && (
+              <Box component="span" sx={{ fontWeight: 400 }}>
+                {item.note}
+              </Box>
+            )}
           </Typography>
           {item.detail && (
             <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
@@ -122,9 +140,14 @@ export function BatchCandidateSearchSummaryPanel({ summary }: { summary: BatchCa
     {
       key: 'no_candidate',
       label: '候補なし',
-      items: noCandidate.map(({ target }) => ({
+      // Only a search that ran with the exclusion and really excluded weapons
+      // says so; an added Target lists no exclusion detail (`docs/UI_FLOW.md` 9.2).
+      items: noCandidate.map(({ target, excludedSourceOwnedWeaponIds }): TargetListItem => ({
         key: target.id,
         name: target.name,
+        ...(summary.excludeOtherTargetSources && excludedSourceOwnedWeaponIds.length > 0
+          ? { note: batchSourceExclusionCountNote(excludedSourceOwnedWeaponIds.length) }
+          : {}),
         detail: '現在の探索範囲では理想品が見つかりませんでした。',
       })),
     },
@@ -157,9 +180,15 @@ export function BatchCandidateSearchSummaryPanel({ summary }: { summary: BatchCa
       sx={{ p: { xs: 2, md: 2.5 }, minWidth: 0 }}
     >
       <Stack spacing={2}>
-        <Typography id={headingId} component="h2" variant="h2">
-          一括検索・追加の結果
-        </Typography>
+        <Box>
+          <Typography id={headingId} component="h2" variant="h2">
+            一括検索・追加の結果
+          </Typography>
+          {/* The condition this batch ran with; a later Checkbox change never relabels it. */}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
+            {sourceExclusionConditionLabel(summary.excludeOtherTargetSources)}
+          </Typography>
+        </Box>
         {termination.status === 'completed' && (
           <Alert severity="success">{summary.total}件の目標武器を検索しました。</Alert>
         )}

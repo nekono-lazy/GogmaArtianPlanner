@@ -16,9 +16,11 @@ import {
   createValidOwnedWeapon,
   createValidTargetWeapon,
   ownedWeaponId,
+  targetWeaponId,
 } from '../../test/fixtures/domainData'
 import { createValidMasterDataFixture } from '../../test/fixtures/masterData'
 import { CandidateCard } from './CandidateCard'
+import type { SearchSourceExclusionDisplay } from './sourceExclusionPresentation'
 
 const ATTACK = 'bonus_type.fixture.attack'
 const UNUSED = 'bonus_type.fixture.unused'
@@ -882,5 +884,85 @@ describe('CandidateCard preferred owned weapon notice', () => {
     await userEvent.click(screen.getByRole('button', { name: 'ビルドリストへ追加' }))
     expect(added).toEqual([before])
     expect(added[0]).toBe(candidate)
+  })
+
+  // Issue #157 (`docs/UI_FLOW.md` 9 / 9.2): the Search screen passes what its search excluded.
+  describe('when the search excluded the preferred weapon', () => {
+    const exclusionNote = /この検索では、優先する所持武器を起点から除外しました/
+    const excludedPreferred = (
+      excludeOtherTargetSources: boolean,
+      reasons: SearchSourceExclusionDisplay['excludedWeapons'][number]['reasons'],
+    ): SearchSourceExclusionDisplay => ({
+      excludeOtherTargetSources,
+      excludedWeapons: [{ ownedWeaponId: weaponA, weaponName: '武器A', reasons }],
+    })
+    const buildListReason = (name: string, id: string) => ({
+      kind: 'build_list_entry_source' as const,
+      targetWeaponId: targetWeaponId(id),
+      targetName: name,
+      buildListEntryIds: [],
+    })
+
+    function renderWithExclusion(candidate: BuildCandidate, display: SearchSourceExclusionDisplay | null) {
+      return render(
+        <CandidateCard
+          candidate={candidate}
+          target={preferring(weaponA)}
+          master={createValidMasterDataFixture()}
+          ownedWeapons={ownedWeapons}
+          showPreferredOwnedWeaponNotice
+          searchSourceExclusion={display}
+        />,
+      )
+    }
+
+    it('adds why the preferred weapon was not a starting point of this search', () => {
+      renderWithExclusion(routeFrom(weaponB), excludedPreferred(true, [buildListReason('目標X', 'target.x')]))
+      expect(within(noticeAlert()).getByText(
+        'この検索では、優先する所持武器を起点から除外しました（目標武器「目標X」の作成リストの候補が起点に使用しているため）。',
+      )).toBeInTheDocument()
+    })
+
+    it('names every recorded Build List reason', () => {
+      renderWithExclusion(routeFrom(null), excludedPreferred(true, [
+        buildListReason('目標X', 'target.x'),
+        buildListReason('目標Y', 'target.y'),
+      ]))
+      expect(within(noticeAlert()).getByText(
+        'この検索では、優先する所持武器を起点から除外しました（目標武器「目標X」、「目標Y」の作成リストの候補が起点に使用しているため）。',
+      )).toBeInTheDocument()
+    })
+
+    it('keeps the plain notice when the search did not exclude the preferred weapon or ran with the exclusion off', () => {
+      const otherWeapon: SearchSourceExclusionDisplay = {
+        excludeOtherTargetSources: true,
+        excludedWeapons: [{ ownedWeaponId: weaponB, weaponName: '武器B', reasons: [buildListReason('目標X', 'target.x')] }],
+      }
+      const { unmount } = renderWithExclusion(routeFrom(null), otherWeapon)
+      expect(within(noticeAlert()).queryByText(exclusionNote)).not.toBeInTheDocument()
+      unmount()
+      const off = renderWithExclusion(routeFrom(null), excludedPreferred(false, [buildListReason('目標X', 'target.x')]))
+      expect(within(noticeAlert()).queryByText(exclusionNote)).not.toBeInTheDocument()
+      off.unmount()
+      // The Build List passes no exclusion at all.
+      renderWithExclusion(routeFrom(null), null)
+      expect(within(noticeAlert()).queryByText(exclusionNote)).not.toBeInTheDocument()
+    })
+
+    it('adds nothing without a Build List reason, and nothing when the notice itself is not shown', () => {
+      const preferenceOnly = excludedPreferred(true, [{
+        kind: 'preferred_owned_weapon',
+        targetWeaponId: targetWeaponId('target.y'),
+        targetName: '目標Y',
+        buildListEntryIds: [],
+      }])
+      const { unmount } = renderWithExclusion(routeFrom(null), preferenceOnly)
+      expect(within(noticeAlert()).queryByText(exclusionNote)).not.toBeInTheDocument()
+      unmount()
+      // A Route from the preferred weapon gets no notice, hence no addition.
+      renderWithExclusion(routeFrom(weaponA), excludedPreferred(true, [buildListReason('目標X', 'target.x')]))
+      expect(screen.queryByText(title)).not.toBeInTheDocument()
+      expect(screen.queryByText(exclusionNote)).not.toBeInTheDocument()
+    })
   })
 })
