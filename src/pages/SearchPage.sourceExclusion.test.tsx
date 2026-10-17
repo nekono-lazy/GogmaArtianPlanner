@@ -31,17 +31,17 @@ import { preparedFixtureInput } from '../test/fixtures/preparedCandidateSearchIn
 import { SearchPage, type SearchPageDependencies } from './SearchPage'
 
 /*
- * 「他の目標武器で使用する所持武器を除外する」 on the Search screen (Issue #157 PR-4, `docs/UI_FLOW.md` 9 / 9.1 / 9.2 /
- * 19). The derivation and the Search are faked here: the screen decides neither, it only passes the condition fixed at
- * each start, shows what the Search really excluded, and names it from that search's own snapshot.
+ * 「他の目標武器で使用する所持武器を除外する」 on the Search screen (Issue #157 PR-4 and Issue #290, `docs/UI_FLOW.md`
+ * 9 / 9.1 / 9.2 / 19). The derivation and the Search are faked here: the screen decides neither, it only passes the
+ * condition fixed at each start (the single search's Checkbox, always on for the batch), shows what the Search really
+ * excluded, and names it from that search's own snapshot.
  */
 
-const HEADING = '他の目標武器で使用する所持武器を除外する'
-const SINGLE = '検索開始（単体検索）'
-const BATCH_CHECKBOX = '未登録を一括検索・追加'
+const LABEL = '他の目標武器で使用する所持武器を除外する'
 const ON = '他の目標武器で使用する所持武器: 除外する'
 const OFF = '他の目標武器で使用する所持武器: 除外しない'
-const DESCRIPTION = /ほかの目標武器の「優先する所持武器」と、作成リストに登録済みのほかの目標武器の候補が起点に使う所持武器を/
+const DESCRIPTION_TEXT = 'ほかの目標武器の「優先する所持武器」と、作成リストに登録済みのほかの目標武器の候補が起点に使う所持武器を、作成ルートの起点にしません。新しく作成する通常アーティアと、ほかで使われていない所持武器は引き続き検索します。この目標武器の「優先する所持武器」だけを使う設定ではありません。'
+const NOTE = '※ このチェックは単体検索にのみ適用されます。一括検索・追加では、チェック状態に関係なく自動的に除外します。'
 const NOT_FOUND = '現在の探索範囲では理想品が見つかりませんでした。探索量の上限を上げると見つかる場合があります。詳細設定の「通常アーティア最大進行量」「復元ボーナス最大進行量」「スキル最大進行量」を見直してください。'
 
 /** A client answering each request by its `searchRunId`, as the real one does. */
@@ -158,9 +158,8 @@ function setup({ targets, ownedWeapons = [], snapshotFor, prepare }: Setup) {
   return { client, deps, prepareInput }
 }
 
-const conditions = () => screen.getByRole('group', { name: HEADING })
-const singleCheckbox = () => within(conditions()).getByRole('checkbox', { name: SINGLE })
-const batchCheckbox = () => within(conditions()).getByRole('checkbox', { name: BATCH_CHECKBOX })
+const conditions = () => screen.getByRole('region', { name: '検索条件' })
+const exclusionCheckbox = () => within(conditions()).getByRole('checkbox', { name: LABEL })
 const resultRegion = () => screen.getByRole('region', { name: '検索結果' })
 
 async function startSingleSearch(user: ReturnType<typeof userEvent.setup>) {
@@ -171,64 +170,68 @@ async function startSingleSearch(user: ReturnType<typeof userEvent.setup>) {
 const summaryRow = (text: string) => (_content: string, element: Element | null) =>
   element?.tagName === 'P' && element.textContent === text
 
-describe('SearchPage source exclusion conditions', () => {
-  it('starts single OFF and batch ON, keeps them independent of each other and of the other conditions, and starts over on a new visit', async () => {
+describe('SearchPage source exclusion condition', () => {
+  it('shows one Checkbox starting OFF, keeps it independent of the other conditions, and starts over on a new visit', async () => {
     const user = userEvent.setup()
     const a = target('target.a', '目標A', '2026-01-01T00:00:00.000Z')
     const b = target('target.b', '目標B', '2026-01-02T00:00:00.000Z')
     const { deps } = setup({ targets: [a, b] })
     const view = render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
 
-    await screen.findByRole('group', { name: HEADING })
-    expect(singleCheckbox()).not.toBeChecked()
-    expect(batchCheckbox()).toBeChecked()
-    // The always-visible description is what each Checkbox refers to.
-    expect(within(conditions()).getByText(DESCRIPTION)).toBeVisible()
-    expect(singleCheckbox()).toHaveAccessibleDescription(DESCRIPTION)
-    expect(batchCheckbox()).toHaveAccessibleDescription(DESCRIPTION)
+    await within(await screen.findByRole('region', { name: '検索条件' })).findByRole('checkbox', { name: LABEL })
+    // One Checkbox only: no batch-specific setting exists (Issue #290).
+    expect(within(conditions()).getAllByRole('checkbox')).toEqual([exclusionCheckbox()])
+    expect(screen.queryByRole('checkbox', { name: /一括/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('検索開始（単体検索）')).not.toBeInTheDocument()
+    expect(exclusionCheckbox()).not.toBeChecked()
 
-    await user.click(singleCheckbox())
-    expect(singleCheckbox()).toBeChecked()
-    expect(batchCheckbox()).toBeChecked()
-    await user.click(batchCheckbox())
-    expect(singleCheckbox()).toBeChecked()
-    expect(batchCheckbox()).not.toBeChecked()
+    // The description and, apart from it, the single-search-only note stay visible; the Checkbox refers to both.
+    const description = within(conditions()).getByText(DESCRIPTION_TEXT)
+    const note = within(conditions()).getByText(NOTE)
+    expect(description).toBeVisible()
+    expect(note).toBeVisible()
+    expect(description).not.toContainElement(note)
+    expect(note).not.toContainElement(description)
+    expect(exclusionCheckbox()).toHaveAccessibleDescription(`${DESCRIPTION_TEXT} ${NOTE}`)
+    // The note is set apart by a rule, not by colour alone.
+    expect(getComputedStyle(note.parentElement!).borderLeftStyle).toBe('solid')
+
+    await user.click(exclusionCheckbox())
+    expect(exclusionCheckbox()).toBeChecked()
     // The label clicks the box too.
-    await user.click(within(conditions()).getByText(SINGLE))
-    expect(singleCheckbox()).not.toBeChecked()
-    await user.click(singleCheckbox())
+    await user.click(within(conditions()).getByText(LABEL))
+    expect(exclusionCheckbox()).not.toBeChecked()
+    await user.click(exclusionCheckbox())
 
-    // Another Target and another route filter leave both values alone.
+    // Another Target and another route filter leave the value alone.
     await user.click(screen.getByRole('combobox', { name: '検索対象の目標武器' }))
     await user.click(await screen.findByRole('option', { name: '目標B' }))
     await user.click(screen.getByRole('combobox', { name: '作成ルート' }))
     await user.click(await screen.findByRole('option', { name: '所持巨戟アーティア経由' }))
-    expect(singleCheckbox()).toBeChecked()
-    expect(batchCheckbox()).not.toBeChecked()
+    expect(exclusionCheckbox()).toBeChecked()
 
-    // Nothing is saved anywhere: a new visit starts from single OFF / batch ON again.
+    // Nothing is saved anywhere: a new visit starts from OFF again.
     view.unmount()
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
-    await screen.findByRole('group', { name: HEADING })
-    expect(singleCheckbox()).not.toBeChecked()
-    expect(batchCheckbox()).toBeChecked()
+    await within(await screen.findByRole('region', { name: '検索条件' })).findByRole('checkbox', { name: LABEL })
+    expect(exclusionCheckbox()).not.toBeChecked()
     expect(window.localStorage.length).toBe(0)
   })
 
-  it('reaches both Checkboxes and the buttons with the keyboard', async () => {
+  it('toggles the Checkbox with Space and moves on to the buttons with Tab', async () => {
     const user = userEvent.setup()
     const { deps } = setup({ targets: [target('target.a', '目標A', '2026-01-01T00:00:00.000Z')] })
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
-    await screen.findByRole('group', { name: HEADING })
-    singleCheckbox().focus()
+    await within(await screen.findByRole('region', { name: '検索条件' })).findByRole('checkbox', { name: LABEL })
+    exclusionCheckbox().focus()
     await user.keyboard(' ')
-    expect(singleCheckbox()).toBeChecked()
-    await user.tab()
-    expect(batchCheckbox()).toHaveFocus()
+    expect(exclusionCheckbox()).toBeChecked()
     await user.keyboard(' ')
-    expect(batchCheckbox()).not.toBeChecked()
+    expect(exclusionCheckbox()).not.toBeChecked()
     await user.tab()
     expect(screen.getByRole('button', { name: '検索開始' })).toHaveFocus()
+    await user.tab({ shift: true })
+    expect(exclusionCheckbox()).toHaveFocus()
   })
 })
 
@@ -253,7 +256,7 @@ describe('SearchPage single search with the source exclusion', () => {
     client.resolveLast(null)
     expect(await within(await screen.findByRole('region', { name: '検索結果' })).findByText(OFF)).toBeInTheDocument()
 
-    await user.click(singleCheckbox())
+    await user.click(exclusionCheckbox())
     await startSingleSearch(user)
     await waitFor(() => expect(client.requests).toHaveLength(2))
     expect(prepareInput.mock.calls[1][0]).toMatchObject({ targetWeaponId: searched.id, excludeOtherTargetSources: true })
@@ -272,7 +275,7 @@ describe('SearchPage single search with the source exclusion', () => {
       },
     })
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
-    await user.click(await screen.findByRole('checkbox', { name: SINGLE }))
+    await user.click(await screen.findByRole('checkbox', { name: LABEL }))
     await startSingleSearch(user)
     expect(await screen.findByText(/検索条件（他の目標武器で使用する所持武器の除外）を検索入力へ反映できなかったため、検索を開始しませんでした。/)).toBeInTheDocument()
     expect(client.requests).toHaveLength(0)
@@ -287,15 +290,15 @@ describe('SearchPage single search with the source exclusion', () => {
       snapshotFor: () => snapshotOf(searched, [{ weapon: usedWeapon, reasons: [{ kind: 'preferred_owned_weapon', targetWeaponId: other.id }] }], [other]),
     })
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
-    await user.click(await screen.findByRole('checkbox', { name: SINGLE }))
+    await user.click(await screen.findByRole('checkbox', { name: LABEL }))
     await startSingleSearch(user)
     const progress = await screen.findByRole('status')
     expect(within(progress).getByText(ON)).toBeInTheDocument()
     await waitFor(() => expect(client.requests).toHaveLength(1))
 
     // Unticked while it runs: neither the request nor the progress changes.
-    await user.click(singleCheckbox())
-    expect(singleCheckbox()).not.toBeChecked()
+    await user.click(exclusionCheckbox())
+    expect(exclusionCheckbox()).not.toBeChecked()
     expect(within(screen.getByRole('status')).getByText(ON)).toBeInTheDocument()
     expect(client.requests).toHaveLength(1)
     expect(client.last.input.excludedSourceOwnedWeaponIds).toEqual([usedWeapon.id])
@@ -306,8 +309,8 @@ describe('SearchPage single search with the source exclusion', () => {
     expect(within(result).getByText('他の目標武器で使用する所持武器（1本）を起点から除外して検索しました。')).toBeInTheDocument()
 
     // Ticked and unticked again after the result: the shown result keeps its own condition.
-    await user.click(singleCheckbox())
-    await user.click(singleCheckbox())
+    await user.click(exclusionCheckbox())
+    await user.click(exclusionCheckbox())
     expect(within(resultRegion()).getByText(ON)).toBeInTheDocument()
 
     // The next search uses the box as it is now.
@@ -330,13 +333,13 @@ describe('SearchPage single search with the source exclusion', () => {
       releaseFirst = () => resolve(ordinary(options))
     }))
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
-    await user.click(await screen.findByRole('checkbox', { name: SINGLE }))
+    await user.click(await screen.findByRole('checkbox', { name: LABEL }))
     await startSingleSearch(user)
     await waitFor(() => expect(releaseFirst).not.toBeNull())
     await user.click(screen.getByRole('button', { name: 'キャンセル' }))
 
     // The second search runs with the box off.
-    await user.click(singleCheckbox())
+    await user.click(exclusionCheckbox())
     await startSingleSearch(user)
     await waitFor(() => expect(client.requests).toHaveLength(1))
     releaseFirst!()
@@ -379,7 +382,7 @@ describe('SearchPage source exclusion result', () => {
       snapshotFor: () => snapshotOf(searched, usages, [first, second]),
     })
     const view = render(<SearchPage dependencies={harness.deps} />, { wrapper: MemoryRouter })
-    await user.click(await screen.findByRole('checkbox', { name: SINGLE }))
+    await user.click(await screen.findByRole('checkbox', { name: LABEL }))
     await startSingleSearch(user)
     await waitFor(() => expect(harness.client.requests).toHaveLength(1))
     harness.client.resolveLast(candidate, excluded)
@@ -410,7 +413,7 @@ describe('SearchPage source exclusion result', () => {
     expect(view.container.textContent).not.toMatch(/owned\.|target\.|entry\./)
 
     // A Checkbox change after the result never relabels it.
-    await user.click(singleCheckbox())
+    await user.click(exclusionCheckbox())
     expect(within(resultRegion()).getByText(ON)).toBeInTheDocument()
     expect(within(resultRegion()).getByText('他の目標武器で使用する所持武器（2本）を起点から除外して検索しました。')).toBeInTheDocument()
   })
@@ -456,7 +459,7 @@ describe('SearchPage source exclusion result', () => {
       snapshotFor: () => snapshotOf(preferringSearched, usages.slice(0, 2), [first, second]),
     })
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
-    await user.click(await screen.findByRole('checkbox', { name: SINGLE }))
+    await user.click(await screen.findByRole('checkbox', { name: LABEL }))
     await startSingleSearch(user)
     await waitFor(() => expect(client.requests).toHaveLength(1))
     client.resolveLast(candidate, [weaponSecond.id])
@@ -481,18 +484,19 @@ describe('SearchPage batch search with the source exclusion', () => {
   const candidateFor = (value: TargetWeapon): BuildCandidate =>
     ({ ...createValidBuildCandidate(), id: candidateId(`candidate.${value.id}`), targetWeaponId: value.id })
 
-  it('runs the whole batch with the exclusion on by default, whatever the box says later', async () => {
+  it('runs the whole batch with the exclusion on while the Checkbox is OFF, whatever the box says later', async () => {
     const user = userEvent.setup()
     const { client, deps, prepareInput } = setup({ targets: [a, b, c] })
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
     await user.click(await screen.findByRole('button', { name: '未登録を一括検索・追加（3件）' }))
+    expect(exclusionCheckbox()).not.toBeChecked()
     const progress = await screen.findByRole('status')
     expect(within(progress).getByText(ON)).toBeInTheDocument()
     await waitFor(() => expect(client.requests).toHaveLength(1))
 
-    // Unticked while the batch runs: the batch keeps its condition.
-    await user.click(batchCheckbox())
-    expect(batchCheckbox()).not.toBeChecked()
+    // Ticked while the batch runs: the batch keeps its condition.
+    await user.click(exclusionCheckbox())
+    expect(exclusionCheckbox()).toBeChecked()
     expect(within(screen.getByRole('status')).getByText(ON)).toBeInTheDocument()
     client.resolveLast(candidateFor(a))
     await waitFor(() => expect(client.requests).toHaveLength(2))
@@ -514,44 +518,51 @@ describe('SearchPage batch search with the source exclusion', () => {
     expect(await within(summary).findByText('目標A')).toBeInTheDocument()
 
     // A later change of the box never relabels the summary shown.
-    await user.click(batchCheckbox())
+    await user.click(exclusionCheckbox())
+    expect(exclusionCheckbox()).not.toBeChecked()
     expect(within(screen.getByRole('region', { name: '一括検索・追加の結果' })).getByText(ON)).toBeInTheDocument()
   })
 
-  it('runs the batch with the exclusion off once the user unticks it', async () => {
+  it('runs the whole batch with the exclusion on while the Checkbox is ON too, and an untick never turns it off', async () => {
     const user = userEvent.setup()
     const { client, deps, prepareInput } = setup({ targets: [a, b] })
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
-    await user.click(await screen.findByRole('checkbox', { name: BATCH_CHECKBOX }))
+    await user.click(await screen.findByRole('checkbox', { name: LABEL }))
     await user.click(screen.getByRole('button', { name: '未登録を一括検索・追加（2件）' }))
-    expect(within(await screen.findByRole('status')).getByText(OFF)).toBeInTheDocument()
+    expect(within(await screen.findByRole('status')).getByText(ON)).toBeInTheDocument()
     await waitFor(() => expect(client.requests).toHaveLength(1))
+    // Unticked while the batch runs: still on, for this Target and the next one.
+    await user.click(exclusionCheckbox())
+    expect(within(screen.getByRole('status')).getByText(ON)).toBeInTheDocument()
     client.resolveLast(null)
     await waitFor(() => expect(client.requests).toHaveLength(2))
     client.resolveLast(null)
     const summary = await screen.findByRole('region', { name: '一括検索・追加の結果' })
-    expect(prepareInput.mock.calls.map(([options]) => options.excludeOtherTargetSources)).toEqual([false, false])
-    expect(client.requests.every(({ input }) => !('excludedSourceOwnedWeaponIds' in input))).toBe(true)
-    expect(within(summary).getByText(OFF)).toBeInTheDocument()
-    await user.click(within(summary).getByText('候補なし（2件）'))
-    expect(await within(summary).findByText('目標A')).toBeInTheDocument()
-    expect(within(summary).queryByText(/除外した所持武器/)).not.toBeInTheDocument()
+    expect(prepareInput.mock.calls.map(([options]) => options.excludeOtherTargetSources)).toEqual([true, true])
+    expect(client.requests.every(({ input }) => Array.isArray(input.excludedSourceOwnedWeaponIds))).toBe(true)
+    expect(within(summary).getByText(ON)).toBeInTheDocument()
+    expect(within(summary).queryByText(OFF)).not.toBeInTheDocument()
   })
 
-  it('never uses the single-search box for the batch, nor the batch box for a single search', async () => {
+  it('never reads the Checkbox for the batch, while the single searches around it do', async () => {
     const user = userEvent.setup()
     const { client, deps, prepareInput } = setup({ targets: [a] })
     render(<SearchPage dependencies={deps} />, { wrapper: MemoryRouter })
-    await user.click(await screen.findByRole('checkbox', { name: SINGLE }))
-    await user.click(batchCheckbox())
-    // Single ON / batch OFF now.
-    await user.click(screen.getByRole('button', { name: '未登録を一括検索・追加（1件）' }))
+    // The Checkbox is OFF: the batch excludes all the same.
+    await user.click(await screen.findByRole('button', { name: '未登録を一括検索・追加（1件）' }))
     await waitFor(() => expect(client.requests).toHaveLength(1))
     client.resolveLast(null)
     await screen.findByRole('region', { name: '一括検索・追加の結果' })
+    // The batch left the Checkbox alone, and the single search uses it as it is.
+    expect(exclusionCheckbox()).not.toBeChecked()
     await waitFor(() => expect(screen.getByRole('button', { name: '検索開始' })).toBeEnabled())
     await startSingleSearch(user)
     await waitFor(() => expect(client.requests).toHaveLength(2))
-    expect(prepareInput.mock.calls.map(([options]) => options.excludeOtherTargetSources)).toEqual([false, true])
+    client.resolveLast(null)
+    expect(await within(await screen.findByRole('region', { name: '検索結果' })).findByText(OFF)).toBeInTheDocument()
+    await user.click(exclusionCheckbox())
+    await startSingleSearch(user)
+    await waitFor(() => expect(client.requests).toHaveLength(3))
+    expect(prepareInput.mock.calls.map(([options]) => options.excludeOtherTargetSources)).toEqual([true, false, true])
   })
 })

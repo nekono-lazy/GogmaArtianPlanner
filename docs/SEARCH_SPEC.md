@@ -251,10 +251,10 @@ Candidate Searchの入力状態（`rngState`、`normalCounters`、`ownedWeapons`
 `prepareCandidateSearchInput()`（`src/services/search/prepareCandidateSearchInput.ts`。導出結果と、それが指す所持武器・目標武器の
 読み取り時点の記録を入力と並べて返す）、`runBatchCandidateSearch()` の開始時点の条件（`excludeOtherTargetSources`）・Targetごとの
 永続状態からの導出・`no_candidate` の結果の除外ID（`excludedSourceOwnedWeaponIds`）が動作する。3（Search UI）をPR-4で実装し、
-候補検索画面が単体検索・一括検索それぞれのチェックボックスの開始時点の値を `prepareCandidateSearchInput()` /
-`runBatchCandidateSearch()` へ渡し、検索結果の除外IDと入力作成時点の記録から条件・除外した所持武器・理由を表示する（[UI_FLOW.md](./UI_FLOW.md)
-9.2）。OFFの検索は従来どおりである）。要求は
-[REQUIREMENTS.md](./REQUIREMENTS.md) 14.2、画面は[UI_FLOW.md](./UI_FLOW.md) 9.2 / 9.1である。
+候補検索画面が検索結果の除外IDと入力作成時点の記録から条件・除外した所持武器・理由を表示する（[UI_FLOW.md](./UI_FLOW.md)
+9.2）。Issue #290で画面の設定を単体検索用の1つのチェックボックスへ整理し、候補検索画面は単体検索ではそのチェックボックスの
+開始時点の値を `prepareCandidateSearchInput()` へ、一括検索・追加では常にONを `runBatchCandidateSearch()` へ渡す。OFFの検索は
+従来どおりである）。要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 14.2、画面は[UI_FLOW.md](./UI_FLOW.md) 9.2 / 9.1である。
 
 候補検索に「他の目標武器で使用する所持武器を除外する」というON/OFF条件を置く。検索対象TargetをTとすると、ONでは
 **T以外の目標武器が使用する所持武器をTのRoute起点にしない**。目的は、複数の目標武器を別々に検索して作成リストへ
@@ -265,8 +265,11 @@ Candidate Searchの入力状態（`rngState`、`normalCounters`、`ownedWeapons`
   ONでもOFFでもTのRouteを優先起点へ限定しない。ほかで使われていない適合する所持武器と、新しく作成する通常アーティア
   （6.1 / 6.1.1、`sourceOwnedWeaponId = null`）は、既存のRoute eligibilityの範囲で引き続き検索する
 - OFFでは従来のCandidate Searchと完全に同じ動作である（下記「Search Domainでの適用」）
-- 初期値は単体検索がOFF、作成リスト未登録の一括検索・追加（[UI_FLOW.md](./UI_FLOW.md) 9.1）がON。どちらも利用者が明示的に
-  変更でき、検索・一括処理の開始時点の値を固定して使う。設定は画面内の一時状態であり永続化しない（[UI_FLOW.md](./UI_FLOW.md) 9.2）
+- 単体検索の条件は、利用者が候補検索画面のチェックボックスで選ぶ。初期値はOFFで、検索の開始時点の値を固定して使う。設定は
+  画面内の一時状態であり永続化しない（[UI_FLOW.md](./UI_FLOW.md) 9.2）
+- 作成リスト未登録の一括検索・追加（[UI_FLOW.md](./UI_FLOW.md) 9.1）は、候補検索画面から常にONで開始する。単体検索の
+  チェックボックスの状態は使わず、画面に一括検索・追加のOFFを選ぶ設定を置かない（Issue #290）。これは画面の契約であり、
+  `prepareCandidateSearchInput()` と `runBatchCandidateSearch()` はON / OFFのどちらも受け付ける入力を保つ（下記「一括検索・追加」）
 - 除外は検索条件であり、Candidateの意味、作成リスト項目、Plannerの制約ではない（下記「identity・staleness・version」と
   「通常Planner・全体最適化との境界」）
 
@@ -420,7 +423,10 @@ interface OtherTargetSourceExclusion {
 一括検索・追加（[UI_FLOW.md](./UI_FLOW.md) 9.1）は、1 Targetずつ単体Candidate Searchを実行し、成功候補を順に追加する構造を
 変えない。複数Targetの同時最適化にしない。
 
-- 一括開始時点の除外ON / OFFを、その一括処理のすべてのTargetへ使う。途中で画面の設定を変えても、実行中の一括処理には影響しない
+- 一括開始時点の除外の条件を、その一括処理のすべてのTargetへ使う。候補検索画面は常にONで開始し（Issue #290）、単体検索の
+  チェックボックスの状態を使わない。実行中にチェックボックスを変えても、実行中の一括処理には影響しない。`runBatchCandidateSearch()`
+  のrequestは開始時点の条件（`excludeOtherTargetSources`）を受け取り、ON / OFFのどちらでも動作する（Application APIの入力の
+  汎用性は保ち、画面からOFFを選べなくするのは画面の契約である）
 - ONの場合、各Targetの検索requestを作る直前に、その時点の永続状態から除外集合を導出する（上記の1つのtransaction）。先行Targetの
   候補が `addCandidate()` で `added` になった場合、そのEntryは永続化済みなので、後続Targetの導出で2の理由として除外される
 - 候補なし、検索失敗、Candidate保存失敗、作成リスト追加の失敗、`duplicate` / `replacement_required` / `legacy_duplicate` による
@@ -430,7 +436,7 @@ interface OtherTargetSourceExclusion {
 - 対象Targetの選定、処理順、結果サマリ、キャンセル、Worker異常時の中断の契約は変えない。処理順は本機能のために変えない。
   特定の目標武器に特定の所持武器を使わせたい場合は、その目標武器の優先起点を設定する（1の理由により、処理順にかかわらず
   他のTargetから除外される）
-- OFFの一括処理は従来の一括処理と同じである
+- OFFを渡した一括処理（Application API。候補検索画面はOFFを渡さない）は従来の一括処理と同じである
 
 #### 通常Planner・全体最適化との境界
 
@@ -458,6 +464,10 @@ interface OtherTargetSourceExclusion {
    導出、`no_candidate` の結果への除外情報。画面はまだOFFだけを渡し、表示は変えない。検証は13.7の導出と一括処理の観点
 3. **Search UI**（PR-4で実装） — [UI_FLOW.md](./UI_FLOW.md) 9.2のチェックボックス、開始時点の値の固定、検索中・結果・一括サマリの表示、
    Issue #128の注意への追記、結合テスト、PCと375px幅、ダークテーマでの確認。検証は13.7のUI観点と[UI_FLOW.md](./UI_FLOW.md) 19
+
+その後、Issue #290で候補検索画面の設定を単体検索用の1つのチェックボックスへ整理し、一括検索・追加を常にONにした（実装済み）。
+変更は画面の設定と表示・仕様・テストだけであり、除外集合の導出、`prepareCandidateSearchInput()` / `runBatchCandidateSearch()` の
+ON / OFFの入力、Search Domain、通常Planner / 全体最適化の意味論、版数を変えていない。
 
 ---
 
@@ -2925,7 +2935,7 @@ createBuildListEntry(
 1 Target 1 requestが返すCandidateはcanonical Ideal 1件以下なので、1回の検索結果からの追加は
 個別追加である。作成リスト未登録の目標武器をまとめて検索・追加する操作（[UI_FLOW.md](./UI_FLOW.md) 9.1）は、
 この1 Target 1 requestの検索と上記の追加をTargetごとに順に繰り返すUI / Application orchestrationであり、
-Search requestの契約を変えない。一括検索・追加の初期状態では3.3の除外条件がONであり、Targetごとの入力作成時に
+Search requestの契約を変えない。候補検索画面の一括検索・追加では3.3の除外条件が常にONであり、Targetごとの入力作成時に
 永続状態から除外集合を導出する（3.3「一括検索・追加」）。追加・置換の判定（10.1）は除外条件を再評価しない。
 
 追加時には、そのCandidateについてユーザーがlaneごとに選択したopportunityのIDと
@@ -3410,17 +3420,23 @@ Search Domain / Worker（PR-2）。
 - `createCandidateSearchInput()` のON指定で、除外集合と入力の `targetWeapons` / `ownedWeapons` / `rngState` / `normalCounters` が
   同じ読み取りから作られる。OFF指定の入力はfieldを持たず、従来の入力と同じである
 
-一括検索・追加（PR-3）。
+一括検索・追加（PR-3。`runBatchCandidateSearch()` の観点）。
 
-- 開始時点のON / OFFが全Targetへ使われ、途中で画面の値を変えても影響しない
+- requestの開始時点のON / OFFが全Targetへ使われ、途中で画面の値を変えても影響しない（Application APIはON / OFFの両方を受け付ける）
 - 先行Targetの候補を `added` で追加した後、後続Targetの検索がその起点の所持武器を使わず、別の使える所持武器または
   新規通常アーティアから探す
 - 候補なし、検索失敗、Candidate保存失敗、追加失敗、`duplicate` / `replacement_required` / `legacy_duplicate` の後で、
   後続Targetの除外集合が増えない
 - キャンセル前に追加したEntryが保持され、以後の検索でも数えられる。キャンセル後に届いた結果を保存しない
 - 一括処理がメモリ上の確保集合を持たず、各Targetの導出が永続状態から行われる（途中で永続状態が変わった場合はその時点の状態に従う）
-- 対象選定・処理順・結果サマリの件数区分・Worker異常時の中断が従来どおりであり、OFFの一括処理が従来と同じ結果になる
+- 対象選定・処理順・結果サマリの件数区分・Worker異常時の中断が従来どおりであり、OFFを渡した一括処理が従来と同じ結果になる
 - 除外ONで候補なしになったTargetに、除外した所持武器の情報が結果として残る
+
+候補検索画面の一括検索・追加（Issue #290）。
+
+- 単体検索のチェックボックスがON / OFFのどちらでも、`runBatchCandidateSearch()` へ常にONのrequestを渡し、各Targetの入力作成
+  （`prepareCandidateSearchInput()`）もすべてONで行われる。各Targetの除外集合は従来どおりその時点の永続状態から導出する
+- 一括処理の実行中にチェックボックスを変えても、実行中の一括処理の条件・進捗・サマリの表示は変わらない
 
 境界（PR-2 / PR-3）。
 
