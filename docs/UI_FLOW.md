@@ -1994,7 +1994,7 @@ authorityとし、Target件数や `selectedBuildListEntryIds.length` を武器�
 
 #### 完成予定数と、競合のため今回作成しない目標武器（Issue #121）
 
-実装状態: **仕様確定（Issue #121のPR-1、docs-only）。保存データ（不採用記録の2つのfield）はPR-2で実装済み、集計と画面は未実装**。集計のauthority・保存データ・判定できる条件は
+実装状態: **仕様確定（Issue #121のPR-1、docs-only）。保存データ（不採用記録の2つのfield）はPR-2で、集計と画面はPR-3で実装済み**。集計のauthority・保存データ・判定できる条件は
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.9.1、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 24.2にある。概要は引き続き表示中の
 exact persisted Planだけから作り、現在の作成リスト・目標武器を読まない。
 
@@ -2027,6 +2027,25 @@ exact persisted Planだけから作り、現在の作成リスト・目標武器
 - 375px幅で値と補足行が横にはみ出さない（3桁 / 3桁の値でも折り返して収まる）。ダークテーマでも補足行・説明文の色だけに意味を持たせない
 - 全体最適化で採用したPlanは常に `N / N本` になる（競合と不採用が無いことが採用条件。PLANNER_SPEC 17.11）。再計画の試算（16.4）で
   同じ概要や比較表を示す場合も、同じ集計関数を使う（比較表への追加は任意）
+
+PR-3の実装の要点（表示の意味は上記のとおり）。
+
+- 概要の項目は `ProductionPlanSummary`（`src/components/planner/ProductionPlanSummary.tsx`）が、`createProductionPlanSummary().completion`
+  （= `summarizeProductionPlanCompletion()`）から表示用の純粋関数（`src/components/planner/productionPlanCompletionPresentation.ts` の
+  `planCompletionFigure()` / `planCompletionExplanation()` / `planConflictNote()`）で文言を作る。値・補足行・説明・案内は上の表と文言の
+  とおりで、比率の説明と判定できない理由は概要の項目一覧の直後に置く
+- 「/」の値は画面上の表示だけとし（`aria-hidden`）、読み上げには「完成予定 N本、競合のため今回作成しない M本を含めて合計 N + M本」
+  （`M = 0` なら「完成予定 N本、合計 N本」）の文を視覚的に隠した文字で与える（`SummaryFigure` の `accessibleValue`）。数値は桁区切りで示し、
+  値・補足行は折り返す
+- 競合がある場合の案内（`role="note"`）は、記録件数の文（「件数は競合の記録数で、作成できない目標武器の数ではありません。」）、比率を
+  判定できる場合の「競合のため、この計画では M本の目標武器を作成しません（競合の件数と同じ数になるとは限りません）。」（`M = 0` なら
+  「競合のため作成しない目標武器はありません。」）、判定できない場合の「競合の扱いによっては、この計画では完成しない目標武器がある場合が
+  あります。」、`暫定` の文、確認を促す文の順である。`暫定` の文は完成予定数を判定できる場合（legacy以外）だけ示す
+- `暫定` の文言の切り替え（優先選択ができるDraftか）は、ページが表示中Planの `status === 'draft'` と
+  `evaluateProductionPlanCalculationCompatibility()` の互換性から渡す（`ProductionPlanContent` の `conflictPreferenceAvailable`）。
+  preparationの状態には依存しない。再計画の試算の概要は渡さない（選択できないので「それ以外」の文言）
+- 「採用されなかった候補」は、原因が記録された `resource_conflict` の行を原因別のlabel（`rejectedBuildListEntryResourceConflictCauseLabels`）で、
+  それ以外を従来の `reason` のlabelで示す（`rejectedBuildListEntryLabel()`。未知のliteralは「採用されなかった理由を確認できません」）
 
 #### 目標武器ごとの作成ルート
 
@@ -2603,7 +2622,7 @@ hash、warning / issueのmessageを通常表示に出さず、文字列解析や
   別の数として示す。作成リストの登録数を分母にした比率は表示しない（11.0）
 - 判断待ちの競合が残る場合は「まだ判断が必要な競合があります（N件）」として示す
 
-**競合のため今回作成しない目標武器との共通化（Issue #121、未実装）。** 概要の比率（11.0）と本節の数が食い違わないように、
+**競合のため今回作成しない目標武器との共通化（Issue #121、PR-3で実装済み）。** 概要の比率（11.0）と本節の数が食い違わないように、
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.9.1の集計関数を共有する。本節の「今回作成しない目標武器」の件数・一覧を、競合のため
 今回作成しない目標武器の数として流用しない（競合以外の不採用理由を含み、名前を解決できた行だけを数え、Conflictへの参加を
 永続の不採用理由より優先して分類しているため）。また `resource_conflict` の全件を競合として扱わない（計画の途中の行き詰まりを
@@ -2634,6 +2653,21 @@ hash、warning / issueのmessageを通常表示に出さず、文字列解析や
 - 原因まで記録されていないPlan（legacy、9.6.9.1の条件2〜4を満たさない）では、一覧・件数・理由の順序を従来どおりとし、
   「うち競合のため」と区分を示さない
 - Conflictカードの参加者ごとの表示（「暫定：この計画では作成しない」等）は変えない
+
+PR-3の実装の要点（表示の意味は上記のとおり）。
+
+- 表示用の純粋関数 `createProductionPlanConflictSectionDisplay()` が `summarizeProductionPlanCompletion()` を呼び、その
+  `causeBreakdown` があるPlan（条件1〜4）だけ、`ConflictTargetOutcome.causeGroups`（`conflictCount` = `M`、`unestablishedCount` = `K`、
+  比率を判定できるか、3区分の行）を返す。件数は関数の値であり、行の数や名前の解決結果から数えない（名前の読込中・失敗中も同じ値）。
+  区分の行は名前を読み込めた後だけ作る
+- 区分の見出しは「競合のため今回作成しない（M本）」「競合によるものか確認できない（K本）」「その他の理由で今回作成しない（X本）」
+  （「今回作成しない目標武器（N本）」の下の見出し）で、空の区分は出さない。同じ目標武器は1行で、区分の間で重複しない
+- 「競合のため今回作成しない」の理由は、そのTargetの原因付きの不採用記録のEntryが参加するConflictから1 → 2の順に選び、どちらにも
+  当たらなければ `resource_conflict` の既存label。その他の区分は、記録のlabel（`stuck_drop_without_other_routes` は上記の文言）を
+  記録の無い参加者の「この計画では作成しません。」より優先する
+- 行・優先した相手の目標武器IDは、Planの記録（不採用記録の `targetWeaponId`、完成効果の `buildListEntryId` と `targetWeaponId` の組）に
+  あればそれを使い、無ければ現在のBuildListEntryから求める（Entryが削除・置換されていても、Planから目標武器IDが分かる行は数える）。
+  現在のTargetWeaponが無い行は「名前を確認できない目標武器」と示し、どちらからも目標武器IDが分からない候補だけを件数で示す
 
 #### 11.6.6 「この候補を優先」の操作
 

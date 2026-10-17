@@ -2453,7 +2453,8 @@ current initial Conflictには現れない。
 
 実装状態: **仕様確定（Issue #121のPR-1、docs-only）。下記「保存データ」の記録・検証（不採用記録の2つのfield、schedulerの
 runtime evidence、Plan生成での記録、`validateProductionPlan()`、保存境界の必須化と一致検査、Importの一致検査、parity digestの射影）は
-Issue #121のPR-2で実装済み。集計関数と画面（概要の比率、競合セクションの件数と分類）は未実装**。PR #217で生産計画画面の表示順と
+Issue #121のPR-2で、集計関数と画面（概要の比率、競合セクションの件数と分類、「採用されなかった候補」の原因別の文言）はPR-3で実装済み**
+（下記「集計の実装位置」）。PR #217で生産計画画面の表示順と
 概要の競合件数は対応済みであり、本節は残件である「完成予定数 /（完成予定数＋競合のため今回作成しない目標武器数）」の集計authority、
 保存データ、既存Planの扱いを定める。画面は[UI_FLOW.md](./UI_FLOW.md) 11.0 / 11.6.5、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 24.2に
 ある。Planner、競合検出、route commitment、deadlock / stallの判定とdrop、RNGの意味論は変えない。
@@ -2638,6 +2639,23 @@ M = |R \ C|          競合のため今回作成しない目標武器数
 競合セクション（11.6.5）、再計画Previewの比較表（任意）がこの関数を共有し、それぞれで数え直さない。React、Dexie、現在の作成リスト・
 目標武器を読まない。
 
+PR-3で次のとおり実装した（意味は上記のとおりで、Planner、競合解決、RNG、Search、永続shape、versionは変えていない）。
+
+- 関数は `summarizeProductionPlanCompletion(plan)`（`src/domain/planner/productionPlanCompletionSummary.ts`）。引数は表示中Plan
+  だけで、戻り値は3つのtyped状態である: `completion_unknown`（条件1を満たさない。`N` も不明）、`ratio_determined`（`N` =
+  `completedCount`、`C` = `completedTargetWeaponIds`、`M` = `conflictNotCreatedCount`、`causeBreakdown`）、`ratio_undeterminable`
+  （`N`、`C`、`reason` = 条件2〜5のうち最初に満たさないもの（2、3、4、5の順）、`causeBreakdown` は条件5だけを満たさない場合
+  （`conflict_cause_not_established`）だけ非null）。どの状態も `isProvisional`（`暫定`）を持つ。`causeBreakdown` は
+  `conflictNotCreatedTargetWeaponIds`（`R \ C`）と `unestablishedNotCreatedTargetWeaponIds`（`stuck_drop_with_other_routes` の
+  Targetのうち `C` にも `R` にも無いもの）で、どちらも記録順・重複なし
+- 条件2の明示集合は `PLAN_COMPLETION_RATIO_CALCULATION_APP_SCHEMA_VERSIONS`（`{14, 15, 16, 17, 18}`）。range checkにせず、
+  current versionが含まれることと将来のversionが含まれないことをtestで固定した
+- 条件3の「壊れた記録」として、`reason !== "resource_conflict"` の記録が `resourceConflictCause` を持つ場合（`validateProductionPlan()`
+  が拒否する形）も既知のliteralとして読まない（`unknown_rejection_reason`）
+- 完成予定のauthority（`hasProductionPlanTargetCompletionAuthority()`）もこのmoduleに置き、画面側の `hasPlanTargetCompletionAuthority()`
+  と `createProductionPlanSummary().plannedCompletionTargetCount` はこれを読む（`N` の意味は変わらない）
+- 再計画Previewの比較表（任意）には比率を加えていない（Previewの計画内容表示の概要は同じ関数で比率を示す）
+
 **test観点（実装PR）。**
 
 - 記録（Plan生成）
@@ -2676,7 +2694,7 @@ M = |R \ C|          競合のため今回作成しない目標武器数
    Entryとの一致検査は `checkRejectedBuildListEntryTargets()`（Draftを保存する3経路の保存mutationと再計画の採用）で行う。
    PlannerResultの不採用記録を丸ごとhashする既存のdigest（PR-2のparity digestとresearchのgolden）は、2つのfieldを除いた射影で
    記録値と比べ、fieldは入力Entryとの一致を別に確かめる（記録値は書き換えない）
-2. **集計と表示のPR。** 上記の集計関数、概要の比率と説明（UI_FLOW 11.0）、競合セクションの件数と一覧の分類（11.6.5）、test、
+2. **集計と表示のPR（PR-3、実装済み）。** 上記の集計関数、概要の比率と説明（UI_FLOW 11.0）、競合セクションの件数と一覧の分類（11.6.5）、test、
    PC・375px幅・ダークテーマでの確認。概要と競合セクションの数が食い違う中間状態を作らないため、両方を同じPRで変える。Presentation
    設計には `ui-ux-pro-max` を使う（既存のMUIとPC・375px・ダークテーマの表示を優先する）。versionは変えない
 

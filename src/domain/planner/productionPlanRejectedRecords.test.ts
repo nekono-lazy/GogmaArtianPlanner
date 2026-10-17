@@ -11,7 +11,9 @@ import {
 import type { OrchestrationScenario } from '../../test/fixtures/plannerConstrainedOrchestration'
 import { plannerSchedulerCatalogue } from '../../test/fixtures/plannerSchedulerScenarios'
 import { runPlannerBeamSearchOracle } from '../../test/fixtures/plannerBeamOracle'
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../models/common'
 import { runPlannerDeterministicSchedule } from './plannerDeterministicScheduler'
+import { summarizeProductionPlanCompletion } from './productionPlanCompletionSummary'
 import { PlannerPlanGenerationError } from './plannerPlanGenerationError'
 import {
   createProductionPlanWithObserver,
@@ -332,6 +334,84 @@ describe('the Beam Search oracle result through the same record (Issue #121)', (
       expect(rejected.reason === 'resource_conflict'
         ? rejected.resourceConflictCause === 'explicit_resolution_not_selected'
         : !('resourceConflictCause' in rejected)).toBe(true)
+    })
+  })
+})
+
+/**
+ * Issue #121 PR-3 (`docs/PLANNER_SPEC.md` 9.6.9.1): the completion summary
+ * over the Plans the Planner really generates for each cause. The fixtures run
+ * under a historical calculation schema, so each Plan is read as one of the
+ * current schema - the summary reads the records, which are the same.
+ */
+describe('the completion summary of generated Plans (Issue #121)', () => {
+  async function summaryOf(scenario: OrchestrationScenario) {
+    const plan = await planOf(scenario)
+    return summarizeProductionPlanCompletion({
+      ...plan,
+      calculationContext: { ...plan.calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION },
+    })
+  }
+
+  it('counts the explicit decision loser: 1 / 2', async () => {
+    const probe = gogmaConflictScenario()
+    const unresolved = await runPlannerDeterministicSchedule(probe.builder.build().input, probe.builder.build().dependencies)
+    const { builder, entryA, entryB } = gogmaConflictScenario()
+    builder.conflictResolutions = [{ conflictKey: unresolved.conflicts[0].id, selectedBuildListEntryId: entryA.id }]
+    expect(await summaryOf(builder.build())).toMatchObject({
+      status: 'ratio_determined',
+      completedTargetWeaponIds: [entryA.targetWeaponId],
+      causeBreakdown: { conflictNotCreatedTargetWeaponIds: [entryB.targetWeaponId] },
+      conflictNotCreatedCount: 1,
+      isProvisional: false,
+    })
+  })
+
+  it('counts the provisional outcome loser and is provisional: 1 / 2', async () => {
+    const { builder, entryA, entryB } = gogmaConflictScenario()
+    expect(await summaryOf(builder.build())).toMatchObject({
+      status: 'ratio_determined',
+      completedTargetWeaponIds: [entryB.targetWeaponId],
+      causeBreakdown: { conflictNotCreatedTargetWeaponIds: [entryA.targetWeaponId] },
+      conflictNotCreatedCount: 1,
+      isProvisional: true,
+    })
+  })
+
+  it('counts the provisional loser but not its winner that later stalled alone: 0 / 1', async () => {
+    const { builder, entryA } = gogmaConflictScenario({ stallWinner: true })
+    expect(await summaryOf(builder.build())).toMatchObject({
+      status: 'ratio_determined',
+      completedCount: 0,
+      causeBreakdown: { conflictNotCreatedTargetWeaponIds: [entryA.targetWeaponId], unestablishedNotCreatedTargetWeaponIds: [] },
+      conflictNotCreatedCount: 1,
+    })
+  })
+
+  it('never counts the stall of a lone Route: 1 / 1', async () => {
+    const { builder } = loneStallScenario()
+    expect(await summaryOf(builder.build())).toMatchObject({
+      status: 'ratio_determined',
+      completedCount: 1,
+      conflictNotCreatedCount: 0,
+      isProvisional: false,
+    })
+  })
+
+  it('cannot tell the ratio of a true deadlock among several pending Routes', async () => {
+    const scenario = catalogueScenario('true-deadlock')
+    const entryY = scenario.input.buildListEntries.find(({ id }) => id === 'entry.y')!
+    expect(await summaryOf(scenario)).toMatchObject({
+      status: 'ratio_undeterminable',
+      reason: 'conflict_cause_not_established',
+      causeBreakdown: { conflictNotCreatedTargetWeaponIds: [], unestablishedNotCreatedTargetWeaponIds: [entryY.targetWeaponId] },
+    })
+  })
+
+  it('never counts a Target another weapon satisfied', async () => {
+    expect(await summaryOf(catalogueScenario('cross-satisfaction'))).toMatchObject({
+      status: 'ratio_determined',
+      conflictNotCreatedCount: 0,
     })
   })
 })

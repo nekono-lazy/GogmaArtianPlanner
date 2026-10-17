@@ -17,7 +17,6 @@ import type {
   ProductionPlan,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
-import { rejectedBuildListEntryReasonLabels } from '../../presentation/labels'
 import { DisclosureAccordion } from '../DisclosureAccordion'
 import { materialLabel } from '../search/searchPresentation'
 import {
@@ -26,6 +25,7 @@ import {
   isLegacyProductionPlan,
   orderPlanSteps,
 } from './productionPlanPresentation'
+import { rejectedBuildListEntryLabel } from './productionPlanCompletionPresentation'
 import { ProductionPlanCostEstimate } from './ProductionPlanCostEstimate'
 import { ProductionPlanSummary } from './ProductionPlanSummary'
 import { ProductionPlanStepList } from './ProductionPlanStepList'
@@ -59,10 +59,13 @@ interface ProductionPlanContentProps {
    */
   conflictSection?: ReactNode
   variant?: ProductionPlanContentVariant
+  /**
+   * The persisted overview's provisional wording only (`docs/UI_FLOW.md`
+   * 11.0): a draft whose CalculationContext is compatible, where a Conflict
+   * participant can still be preferred. Absent everywhere else.
+   */
+  conflictPreferenceAvailable?: boolean
 }
-
-/** A rejected Entry whose persisted `reason` has no label: said as unknown, never guessed. */
-const UNKNOWN_REJECTED_REASON_LABEL = '採用されなかった理由を確認できません'
 
 /** A titled, border-based section of the read-only Plan view. */
 function PlanSection({
@@ -118,6 +121,7 @@ export function ProductionPlanContent({
   debugMode = false,
   conflictSection,
   variant = 'persisted',
+  conflictPreferenceAvailable = false,
 }: ProductionPlanContentProps) {
   const orderedSteps = useMemo(() => orderPlanSteps(plan), [plan])
   const targetGroups = useMemo(() => groupPlanStepsByTargetWeapon(plan), [plan])
@@ -133,7 +137,9 @@ export function ProductionPlanContent({
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      {!preview && <ProductionPlanSummary plan={plan} />}
+      {!preview && (
+        <ProductionPlanSummary plan={plan} conflictPreferenceAvailable={conflictPreferenceAvailable} />
+      )}
 
       <PlanSection title="計画全体の実行順" headingLevel={sectionHeadingLevel}>
         <Typography variant="body2" color="text.secondary">
@@ -276,10 +282,12 @@ export function ProductionPlanContent({
                 sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, minWidth: 0 }}
               >
                 <Stack spacing={0.5}>
-                  {/* The typed reason's label only; an unknown reason (an old or
-                      broken record) is not explained by a guess. */}
-                  <Typography component="p" variant="subtitle2">
-                    {rejectedBuildListEntryReasonLabels[rejected.reason] ?? UNKNOWN_REJECTED_REASON_LABEL}
+                  {/* The typed reason's label only - by its recorded cause for a
+                      `resource_conflict` record, so a stuck drop is never called
+                      a conflict; an unknown reason or cause (an old or broken
+                      record) is not explained by a guess. */}
+                  <Typography component="p" variant="subtitle2" sx={{ overflowWrap: 'anywhere' }}>
+                    {rejectedBuildListEntryLabel(rejected)}
                   </Typography>
                   {/* The internal detail (it names BuildListEntry and other
                       implementation terms) and the internal ID are Debug Mode

@@ -9,6 +9,11 @@ import type {
 } from '../../domain/models/publicTypes'
 import type { PlannerWarningKind } from '../../domain/planner'
 import {
+  productionPlanRejectionCauseBreakdownOf,
+  summarizeProductionPlanCompletion,
+  type ProductionPlanRejectionCauseBreakdown,
+} from '../../domain/planner/productionPlanCompletionSummary'
+import {
   plannerWarningLabels,
   rejectedBuildListEntryReasonLabels,
   routeKindLabels,
@@ -155,12 +160,35 @@ export interface ConflictCardDisplay {
 
 export interface ConflictTargetDisplay {
   key: string
+  /** The Target's name, or 「名前を確認できない目標武器」 - never an ID. */
   name: string
   weaponLabel: string | null
+  /** `false` for a Target the Plan names but the current Targets no longer hold. */
+  nameResolved: boolean
 }
 
 export interface ConflictNotCreatedTargetDisplay extends ConflictTargetDisplay {
   reason: string
+}
+
+/**
+ * The not-made Targets by cause (Issue #121, `docs/UI_FLOW.md` 11.6.5), when
+ * every rejection is recorded with its cause (`docs/PLANNER_SPEC.md` 9.6.9.1
+ * conditions 1 - 4). The counts come from the shared Domain summary, never
+ * from the rows, so they stay the same while the names load or fail and agree
+ * with the overview.
+ */
+export interface ConflictTargetCauseGroups {
+  /** `M`: the Targets a conflict with another Target leaves out (`R \ C`). */
+  conflictCount: number
+  /** `K`: the Targets of a stuck drop beside other pending Routes. */
+  unestablishedCount: number
+  /** Condition 5 holds: the overview shows the ratio. */
+  ratioDetermined: boolean
+  /** The rows of each group, disjoint, one per Target; empty until the names are loaded. */
+  conflict: ConflictNotCreatedTargetDisplay[]
+  unestablished: ConflictNotCreatedTargetDisplay[]
+  other: ConflictNotCreatedTargetDisplay[]
 }
 
 export interface ConflictTargetOutcome {
@@ -176,9 +204,15 @@ export interface ConflictTargetOutcome {
   created: ConflictTargetDisplay[]
   /** Completed Targets whose name cannot be read now (never shown as IDs). */
   createdUnresolvedCount: number
+  /** Every not-made Target row; in the cause form, the three groups together. */
   notCreated: ConflictNotCreatedTargetDisplay[]
-  /** Participants or rejected Entries whose Entry or Target cannot be read now. */
+  /**
+   * Participants or rejected Entries whose Target cannot be read now (in the
+   * cause form: whose Target ID neither the Plan nor the current Entries name).
+   */
   notCreatedUnresolvedCount: number
+  /** The cause groups; `null` keeps the former single list (a Plan whose rejections are not recorded with causes). */
+  causeGroups: ConflictTargetCauseGroups | null
 }
 
 export interface ConflictSectionDisplay {
@@ -379,6 +413,7 @@ function createNameLookup(names: ConflictNameSource, master: MasterDataRoot): Na
         key: target.id,
         name: target.name,
         weaponLabel: `${weaponTypeNames.get(target.weaponTypeId) ?? '不明な武器種'} / ${elementNames.get(target.elementId) ?? '不明な属性'}`,
+        nameResolved: true,
       }
     },
   }
@@ -465,15 +500,143 @@ function completedTargetIds(plan: ProductionPlan): Set<TargetWeaponId> {
     (step.executionEffects?.targetCompletions ?? []).map(({ targetWeaponId }) => targetWeaponId)))
 }
 
+/** A Target the Plan names whose current record is gone: a row of its own, never its ID. */
+export const UNNAMED_TARGET_NAME = '名前を確認できない目標武器'
+
+export const UNESTABLISHED_NOT_CREATED_TEXT =
+  '計画の途中で作成手順が行き詰まったため、今回は作成しません。ほかの目標武器との競合によるものかは確認できません。'
+
+export const STUCK_ALONE_NOT_CREATED_TEXT =
+  '計画の途中で、この候補の作成手順を先へ進められなくなったため、今回は作成しません。'
+
+const GENERIC_NOT_CREATED_TEXT = 'この計画では作成しません。'
+
+/**
+ * The cause form of 「今回作成しない目標武器」 (`docs/UI_FLOW.md` 11.6.5): rows by
+ * Target ID, in three disjoint groups, from the shared Domain summary.
+ *
+ * - 競合のため: `R \ C`, with the reason of the decided / undecided Conflicts
+ *   the Target's own rejected Entries took part in, else the
+ *   `resource_conflict` label
+ * - 確認できない: the `stuck_drop_with_other_routes` Targets outside `C` and `R`
+ * - その他: every other rejected or participating Target outside `C` and the
+ *   two groups - by its record's own label (a lone stuck drop said as such),
+ *   or 「この計画では作成しません。」 when it has none. Taking part in a Conflict
+ *   is never a reason by itself here
+ *
+ * A Target ID comes from the Plan's own records first (a rejection's
+ * `targetWeaponId`, a completion's Entry), then the current Entry; a Target
+ * that is known but gone reads as unnamed and still counts, and only an Entry
+ * whose Target nobody names is counted apart.
+ */
+function causeGroupsOf(
+  plan: ProductionPlan,
+  breakdown: ProductionPlanRejectionCauseBreakdown,
+  ratioDetermined: boolean,
+  completed: ReadonlySet<TargetWeaponId>,
+  lookup: NameLookup,
+  isDraft: boolean,
+  statusByConflictId: ReadonlyMap<string, ConflictDisplayStatus>,
+): { groups: ConflictTargetCauseGroups; unresolvedCount: number } {
+  const groups: ConflictTargetCauseGroups = {
+    conflictCount: breakdown.conflictNotCreatedTargetWeaponIds.length,
+    unestablishedCount: breakdown.unestablishedNotCreatedTargetWeaponIds.length,
+    ratioDetermined,
+    conflict: [],
+    unestablished: [],
+    other: [],
+  }
+  if (lookup.status !== 'loaded') return { groups, unresolvedCount: 0 }
+
+  const recordedTargetByEntry = new Map<BuildListEntryId, TargetWeaponId>()
+  for (const step of plan.steps) {
+    for (const { buildListEntryId, targetWeaponId } of step.executionEffects?.targetCompletions ?? []) {
+      recordedTargetByEntry.set(buildListEntryId, targetWeaponId)
+    }
+  }
+  for (const { buildListEntryId, targetWeaponId } of plan.rejectedBuildListEntries) {
+    if (targetWeaponId !== undefined) recordedTargetByEntry.set(buildListEntryId, targetWeaponId)
+  }
+  const targetOfEntry = (buildListEntryId: BuildListEntryId): TargetWeaponId | null =>
+    recordedTargetByEntry.get(buildListEntryId) ?? lookup.entry(buildListEntryId)?.targetWeaponId ?? null
+  const rowOf = (targetWeaponId: TargetWeaponId): ConflictTargetDisplay =>
+    lookup.target(targetWeaponId) ?? { key: targetWeaponId, name: UNNAMED_TARGET_NAME, weaponLabel: null, nameResolved: false }
+  const winnerName = (buildListEntryId: BuildListEntryId): string | null => {
+    const targetWeaponId = targetOfEntry(buildListEntryId)
+    return targetWeaponId === null ? null : lookup.target(targetWeaponId)?.name ?? null
+  }
+
+  const conflictIds = new Set(breakdown.conflictNotCreatedTargetWeaponIds)
+  const unestablishedIds = new Set(breakdown.unestablishedNotCreatedTargetWeaponIds)
+  for (const targetWeaponId of breakdown.conflictNotCreatedTargetWeaponIds) {
+    let reason: EntryNotCreatedReason | undefined
+    for (const record of plan.rejectedBuildListEntries) {
+      if (record.targetWeaponId !== targetWeaponId || record.reason !== 'resource_conflict') continue
+      if (record.resourceConflictCause !== 'explicit_resolution_not_selected' &&
+        record.resourceConflictCause !== 'provisional_outcome_not_committed') continue
+      reason = bestReason(reason, entryNotCreatedReason(plan, record.buildListEntryId, isDraft, statusByConflictId, winnerName))
+    }
+    const text = reason === undefined
+      ? GENERIC_NOT_CREATED_TEXT
+      : reason.rank === 1 ? reasonOneText(reason.winners) : reason.text
+    groups.conflict.push({ ...rowOf(targetWeaponId), reason: text })
+  }
+  for (const targetWeaponId of breakdown.unestablishedNotCreatedTargetWeaponIds) {
+    groups.unestablished.push({ ...rowOf(targetWeaponId), reason: UNESTABLISHED_NOT_CREATED_TEXT })
+  }
+
+  // その他: a record's own label (rank 3) outranks taking part with no record (rank 4).
+  const others = new Map<TargetWeaponId, { rank: 3 | 4; text: string }>()
+  const unresolved = new Set<BuildListEntryId>()
+  const addOther = (buildListEntryId: BuildListEntryId, rank: 3 | 4, text: string) => {
+    const targetWeaponId = targetOfEntry(buildListEntryId)
+    if (targetWeaponId === null) {
+      unresolved.add(buildListEntryId)
+      return
+    }
+    if (completed.has(targetWeaponId) || conflictIds.has(targetWeaponId) || unestablishedIds.has(targetWeaponId)) return
+    const existing = others.get(targetWeaponId)
+    if (existing === undefined || rank < existing.rank) others.set(targetWeaponId, { rank, text })
+  }
+  for (const buildListEntryId of new Set(plan.conflicts.flatMap(({ buildListEntryIds }) => buildListEntryIds))) {
+    addOther(buildListEntryId, 4, GENERIC_NOT_CREATED_TEXT)
+  }
+  for (const record of plan.rejectedBuildListEntries) {
+    const cause = record.resourceConflictCause
+    // Its Target (always recorded, condition 4) is in `C` or one of the two
+    // groups above by construction.
+    if (cause === 'explicit_resolution_not_selected' || cause === 'provisional_outcome_not_committed' ||
+      cause === 'stuck_drop_with_other_routes') continue
+    const label = rejectedBuildListEntryReasonLabels[record.reason]
+    addOther(
+      record.buildListEntryId,
+      3,
+      cause === 'stuck_drop_without_other_routes'
+        ? STUCK_ALONE_NOT_CREATED_TEXT
+        : label === undefined ? GENERIC_NOT_CREATED_TEXT : `${label}。`,
+    )
+  }
+  for (const [targetWeaponId, { text }] of others) {
+    groups.other.push({ ...rowOf(targetWeaponId), reason: text })
+  }
+  return { groups, unresolvedCount: unresolved.size }
+}
+
 function createTargetOutcome(
   plan: ProductionPlan,
   lookup: NameLookup,
   isDraft: boolean,
   statusByConflictId: ReadonlyMap<string, ConflictDisplayStatus>,
 ): ConflictTargetOutcome {
-  const hasCompletionAuthority = hasPlanTargetCompletionAuthority(plan)
+  // The one Domain authority the overview reads too (PLANNER_SPEC 9.6.9.1).
+  const summary = summarizeProductionPlanCompletion(plan)
+  const hasCompletionAuthority = summary.status !== 'completion_unknown'
   const completed = completedTargetIds(plan)
-  const createdCount = hasCompletionAuthority ? completed.size : null
+  const createdCount = summary.status === 'completion_unknown' ? null : summary.completedCount
+  const breakdown = productionPlanRejectionCauseBreakdownOf(summary)
+  const cause = breakdown === null
+    ? null
+    : causeGroupsOf(plan, breakdown, summary.status === 'ratio_determined', completed, lookup, isDraft, statusByConflictId)
   if (!hasCompletionAuthority || lookup.status !== 'loaded') {
     return {
       hasCompletionAuthority,
@@ -483,6 +646,7 @@ function createTargetOutcome(
       createdUnresolvedCount: 0,
       notCreated: [],
       notCreatedUnresolvedCount: 0,
+      causeGroups: cause?.groups ?? null,
     }
   }
 
@@ -494,6 +658,22 @@ function createTargetOutcome(
     else created.push(target)
   }
 
+  if (cause !== null) {
+    const { groups, unresolvedCount } = cause
+    return {
+      hasCompletionAuthority,
+      namesStatus: 'loaded',
+      createdCount,
+      created,
+      createdUnresolvedCount,
+      notCreated: [...groups.conflict, ...groups.unestablished, ...groups.other],
+      notCreatedUnresolvedCount: unresolvedCount,
+      causeGroups: groups,
+    }
+  }
+
+  // A Plan whose rejections are not recorded with their causes keeps the
+  // former single list, its order and reasons (11.6.5).
   const candidateEntryIds = [
     ...new Set([
       ...plan.conflicts.flatMap(({ buildListEntryIds }) => buildListEntryIds),
@@ -536,6 +716,7 @@ function createTargetOutcome(
     createdUnresolvedCount,
     notCreated: [...reasonsByTarget.values()].map(({ target, reason }) => ({ ...target, reason: reason.text })),
     notCreatedUnresolvedCount: unresolved.size,
+    causeGroups: null,
   }
 }
 

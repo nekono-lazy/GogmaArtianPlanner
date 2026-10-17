@@ -1075,6 +1075,13 @@ export function ProductionPlanPage({
             master={dependencies.master}
             debugMode={debugMode}
             conflictSection={conflictSection}
+            // The overview's provisional wording only: a draft whose
+            // CalculationContext is compatible can still have a participant
+            // preferred (UI_FLOW 11.0).
+            conflictPreferenceAvailable={
+              loadedPlan.status === 'draft' &&
+              evaluateProductionPlanCalculationCompatibility(loadedPlan, dependencies.currentCalculationContext).isCompatible
+            }
           />
         ) : (
           conflictSection

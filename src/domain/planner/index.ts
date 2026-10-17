@@ -41,6 +41,7 @@ export {
 export * from './plannerTraceReplay'
 export * from './plannerPlanGenerationError'
 export * from './planStepPresentation'
+export * from './productionPlanCompletionSummary'
 export * from './productionPlanExecutionProjection'
 export * from './productionPlanGeneration'
 export * from './replacement'
