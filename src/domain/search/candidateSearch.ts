@@ -1,9 +1,10 @@
 import { isTargetWeaponPlanningEligible } from '../models/domainRules'
 import { TargetSearchScheduler } from './targetSearchScheduler'
-import type { BuildCandidate, RestorationBonusSet, RouteKind, TargetWeapon } from '../models/publicTypes'
+import type { BuildCandidate, OwnedWeaponId, RestorationBonusSet, RouteKind, TargetWeapon } from '../models/publicTypes'
 import type { RngEngine } from '../rng/rngEngine'
 import { validateTargetIdealImpliesPractical } from '../target'
 import { selectCanonicalIdealCandidate } from './candidateRetention'
+import { compareStableKeys } from './semanticKeys'
 import { searchExistingGogmaRoutes } from './existingGogmaRouteSearch'
 import { searchNormalArtianRoutes } from './normalArtianRouteSearch'
 import { searchOwnedNormalArtianRoutes } from './ownedNormalArtianRouteSearch'
@@ -144,6 +145,8 @@ async function searchTarget(
         candidate: null,
         searchedRoutes: [],
         skippedRoutes: contextSkippedRoutes(input),
+        // No Route base was enumerated, so no source was excluded from one.
+        excludedSourceOwnedWeaponIds: [],
       },
       warnings,
     }
@@ -154,6 +157,8 @@ async function searchTarget(
     target,
     input: routeSearchInputForSearch(input),
     searchInput: input,
+    // The ordinary request alone carries a source exclusion (SEARCH_SPEC 3.3).
+    excludedSourceOwnedWeaponIds: new Set(input.excludedSourceOwnedWeaponIds ?? []),
     engine,
     execution,
     predictionSupport,
@@ -199,11 +204,13 @@ async function searchTarget(
   const routeResults = []
   for (const search of searchers) routeResults.push(await search(routeContext, scheduler))
   await scheduler.run()
+  const excludedSourceOwnedWeaponIds = new Set<OwnedWeaponId>()
   for (const found of routeResults) {
     found.finalize?.()
     candidates.push(...found.candidates)
     searchedRoutes.push(...found.searchedRoutes)
     skippedRoutes.push(...found.skippedRoutes)
+    for (const id of found.excludedSourceOwnedWeaponIds ?? []) excludedSourceOwnedWeaponIds.add(id)
     for (const warning of found.warnings) {
       if (!warnings.some((existing) => existing.message === warning.message)) warnings.push(warning)
     }
@@ -229,6 +236,8 @@ async function searchTarget(
       skippedRoutes: uniqueSkippedRoutes(skippedRoutes).filter(
         ({ route }) => !searchedRouteSet.has(route),
       ),
+      // Code unit order, never `localeCompare` (SEARCH_SPEC 3.3).
+      excludedSourceOwnedWeaponIds: [...excludedSourceOwnedWeaponIds].sort(compareStableKeys),
     },
     warnings,
   }
@@ -255,6 +264,7 @@ export async function searchCandidates(
         candidate: null,
         searchedRoutes: [],
         skippedRoutes: [],
+        excludedSourceOwnedWeaponIds: [],
       },
       warnings: selection.warnings,
       elapsedMs: Math.max(0, execution.nowMs() - startedAt),

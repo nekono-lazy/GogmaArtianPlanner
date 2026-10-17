@@ -10,6 +10,7 @@ import {
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
   isAvailableRouteSource,
+  partitionExcludedRouteSources,
   type RouteSearchContext,
   type RouteSearchResult,
 } from './routeSearchShared'
@@ -63,12 +64,38 @@ function zeroBonusSolution(source: OwnedGogmaArtianWeapon): RouteBonusSolution {
   }
 }
 
+const amendmentKinds = ['existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_reset_skills', 'existing_gogma_mixed'] as const
+
+/**
+ * Why the amendment RouteKinds have no unprotected source left: the request's
+ * source exclusion (SEARCH_SPEC 3.3) when it removed an unprotected source,
+ * otherwise the ordinary protection reason, exactly as without the exclusion.
+ */
+function noUnprotectedSource(
+  excluded: readonly OwnedGogmaArtianWeapon[],
+  detail: string,
+): { reason: 'source_excluded_for_other_targets' | 'no_unprotected_source_weapon'; detail: string } {
+  return excluded.some((weapon) => !weapon.isProtected)
+    ? { reason: 'source_excluded_for_other_targets', detail: 'Every unprotected owned Gogma source is excluded for use by other Target weapons.' }
+    : { reason: 'no_unprotected_source_weapon', detail }
+}
+
 export async function searchExistingGogmaRoutes(context: RouteSearchContext, scheduler: TargetSearchScheduler): Promise<RouteSearchResult> {
   const { engine, input } = context
   const result: RouteSearchResult = { candidates: [], searchedRoutes: [], skippedRoutes: [], warnings: [] }
-  const all = compatibleSources(context)
+  // The request's source exclusion (SEARCH_SPEC 3.3) applies on top of every
+  // source rule, before any base or prediction exists for the weapon; the
+  // zero-operation current Route of a protected weapon is excluded too.
+  const { kept: all, excluded } = partitionExcludedRouteSources(context, compatibleSources(context))
+  if (excluded.length > 0) result.excludedSourceOwnedWeaponIds = excluded.map(({ id }) => id)
   if (all.length === 0) {
-    pushAll(result, ['existing_gogma_current', 'existing_gogma_reset_bonuses', 'existing_gogma_keep_bonuses', 'existing_gogma_reset_skills', 'existing_gogma_mixed'], 'no_owned_weapon_available', 'No compatible owned Gogma weapon is available.')
+    if (excluded.length === 0) {
+      pushAll(result, ['existing_gogma_current', ...amendmentKinds], 'no_owned_weapon_available', 'No compatible owned Gogma weapon is available.')
+      return result
+    }
+    result.skippedRoutes.push({ route: 'existing_gogma_current', reason: 'source_excluded_for_other_targets', detail: 'Every compatible owned Gogma source is excluded for use by other Target weapons.' })
+    const shortage = noUnprotectedSource(excluded, 'Only protected sources are available for performance-amendment routes.')
+    pushAll(result, amendmentKinds, shortage.reason, shortage.detail)
     return result
   }
   result.searchedRoutes.push('existing_gogma_current')
@@ -94,17 +121,18 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
 
   if (canSkill) {
     result.searchedRoutes.push('existing_gogma_reset_skills')
+  } else if (mutableSources.length === 0) {
+    result.skippedRoutes.push({
+      route: 'existing_gogma_reset_skills',
+      ...noUnprotectedSource(excluded, 'Only protected sources are available for Reset Skills routes.'),
+    })
   } else {
     result.skippedRoutes.push({
       route: 'existing_gogma_reset_skills',
-      reason: mutableSources.length === 0
-        ? 'no_unprotected_source_weapon'
-        : hasSkillInputs
-          ? 'skill_prediction_unsupported'
-          : 'rng_state_unconfirmed',
-      detail: mutableSources.length === 0
-        ? 'Only protected sources are available for Reset Skills routes.'
-        : !hasSkillInputs
+      reason: hasSkillInputs
+        ? 'skill_prediction_unsupported'
+        : 'rng_state_unconfirmed',
+      detail: !hasSkillInputs
         ? 'Confirmed Base Seed and Skill Counter are required.'
         : skillInputUnsupportedReason
           ? `The active RNG Engine does not support this Skill input (${skillInputUnsupportedReason}).`
@@ -155,7 +183,8 @@ export async function searchExistingGogmaRoutes(context: RouteSearchContext, sch
   }
 
   if (mutableSources.length === 0) {
-    pushAll(result, bonusAmendmentKinds, 'no_unprotected_source_weapon', 'Only protected sources are available for performance-amendment routes.')
+    const shortage = noUnprotectedSource(excluded, 'Only protected sources are available for performance-amendment routes.')
+    pushAll(result, bonusAmendmentKinds, shortage.reason, shortage.detail)
     return result
   }
   if (!gogmaInputsConfirmed || !engine.capabilities.supportsGogmaPrediction) {

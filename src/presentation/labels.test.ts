@@ -87,6 +87,11 @@ describe('presentation labels', () => {
     expect(label).not.toContain('通常')
   })
 
+  it('explains a RouteKind the source exclusion emptied (Issue #157)', () => {
+    expect(skippedRouteReasonLabels.source_excluded_for_other_targets)
+      .toBe('使える所持武器が、他の目標武器で使用するため除外したものだけでした')
+  })
+
   it('translates fixed and counter-specific RNG requirements', () => {
     expect(getRngMissingRequirementLabel('base_seed')).toContain('基準シード')
     expect(getRngMissingRequirementLabel('normal_artian_counter:weapon.dual_blades:8')).toContain('通常アーティアカウンター')

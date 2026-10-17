@@ -32,7 +32,7 @@ class ImmediateClient implements SearchWorkerClient {
   readonly startSearch = vi.fn(async (input: CandidateSearchInput): Promise<CandidateSearchResult> => ({
     searchRunId: input.searchRunId,
     calculationContext: input.calculationContext,
-    targetResult: { targetWeaponId: input.targetWeaponId, candidate: this.candidate, searchedRoutes: ['normal_artian_to_gogma'], skippedRoutes: [] },
+    targetResult: { targetWeaponId: input.targetWeaponId, candidate: this.candidate, searchedRoutes: ['normal_artian_to_gogma'], skippedRoutes: [], excludedSourceOwnedWeaponIds: [] },
     warnings: [],
     elapsedMs: 1,
   }))

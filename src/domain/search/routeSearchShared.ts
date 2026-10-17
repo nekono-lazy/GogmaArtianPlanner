@@ -65,6 +65,12 @@ export interface RouteSearchResult {
   searchedRoutes: BuildRoute['kind'][]
   skippedRoutes: SkippedRoute[]
   warnings: CandidateSearchWarning[]
+  /**
+   * The sources the context's `excludedSourceOwnedWeaponIds` removed from this
+   * primitive's Route base enumeration (`docs/SEARCH_SPEC.md` 3.3). Absent
+   * when nothing was removed.
+   */
+  excludedSourceOwnedWeaponIds?: OwnedWeaponId[]
   /** Finalize reporting after scheduled work has settled. */
   finalize?(): void
 }
@@ -165,6 +171,19 @@ export interface RouteSearchContext {
    * lane-start Ideal rule exactly as before.
    */
   routeShapeFilter?: ScheduledRouteShapeFilter
+  /**
+   * Ordinary Candidate Search only (`docs/SEARCH_SPEC.md` 3.3): the request's
+   * `excludedSourceOwnedWeaponIds`. Absent in every Planner Alternative Search,
+   * shape-constrained Route search and constrained enumeration context, where
+   * every source is enumerated exactly as before; an empty set is the same.
+   *
+   * It is not a reservation: it carries none of the reservation's held or
+   * conversion position rules, and the Route search primitives apply it on top
+   * of the source rules (reservation, shape, compatibility, protection) so
+   * they can tell the RouteKinds it emptied apart from the ones that had no
+   * source anyway.
+   */
+  excludedSourceOwnedWeaponIds?: ReadonlySet<OwnedWeaponId>
   /** Normal predictions shared across counter records. */
   normalPredictions?: Map<number, RestorationBonusSet>
   target: TargetWeapon
@@ -340,6 +359,25 @@ export function isAvailableRouteSource(
   ownedWeaponId: OwnedWeaponId,
 ): boolean {
   return !(context.reservation?.exclusiveOwnedWeaponIds.has(ownedWeaponId) ?? false)
+}
+
+/**
+ * Splits the sources the existing rules admit into the ones the ordinary
+ * Candidate Search request keeps and the ones its source exclusion removes
+ * (`docs/SEARCH_SPEC.md` 3.3). Order is preserved on both sides. Without an
+ * exclusion every source is kept, so a context of any other consumer is
+ * unaffected.
+ */
+export function partitionExcludedRouteSources<T extends { id: OwnedWeaponId }>(
+  context: RouteSearchContext,
+  sources: readonly T[],
+): { kept: T[]; excluded: T[] } {
+  const exclusion = context.excludedSourceOwnedWeaponIds
+  if (exclusion === undefined || exclusion.size === 0) return { kept: [...sources], excluded: [] }
+  const kept: T[] = []
+  const excluded: T[] = []
+  for (const source of sources) (exclusion.has(source.id) ? excluded : kept).push(source)
+  return { kept, excluded }
 }
 
 /**

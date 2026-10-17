@@ -6,6 +6,7 @@ import {
   hasConfirmedGogmaInputs,
   hasConfirmedSkillInputs,
   isAvailableRouteSource,
+  partitionExcludedRouteSources,
   type RouteSearchContext,
   type RouteSearchResult,
 } from './routeSearchShared'
@@ -31,15 +32,25 @@ export async function searchOwnedNormalArtianRoutes(
   // (SEARCH_SPEC 5.6.8); the ordinary Search has no reservation.
   const compatible = selectCompatibleOwnedNormalArtianWeapons(target, input.ownedWeapons)
     .filter((weapon) => isAvailableRouteSource(context, weapon.id) && shapeSource(weapon))
-  const sources = selectConvertibleOwnedNormalArtianWeapons(target, input.ownedWeapons)
+  const admitted = selectConvertibleOwnedNormalArtianWeapons(target, input.ownedWeapons)
     .filter((weapon) => isAvailableRouteSource(context, weapon.id) && shapeSource(weapon))
+  // The request's source exclusion (SEARCH_SPEC 3.3) applies on top of every
+  // source rule above, before any base or prediction exists for the weapon.
+  const { kept: sources, excluded } = partitionExcludedRouteSources(context, admitted)
+  if (excluded.length > 0) result.excludedSourceOwnedWeaponIds = excluded.map(({ id }) => id)
 
   if (sources.length === 0) {
-    result.skippedRoutes.push({
-      route: 'owned_normal_artian_to_gogma',
-      reason: compatible.length > 0 ? 'no_unprotected_source_weapon' : 'no_owned_weapon_available',
-      detail: compatible.length > 0 ? 'Only protected owned Normal Artian sources are available.' : 'No compatible owned Normal Artian weapon is available.',
-    })
+    result.skippedRoutes.push(excluded.length > 0
+      ? {
+          route: 'owned_normal_artian_to_gogma',
+          reason: 'source_excluded_for_other_targets',
+          detail: 'Every convertible owned Normal Artian source is excluded for use by other Target weapons.',
+        }
+      : {
+          route: 'owned_normal_artian_to_gogma',
+          reason: compatible.length > 0 ? 'no_unprotected_source_weapon' : 'no_owned_weapon_available',
+          detail: compatible.length > 0 ? 'Only protected owned Normal Artian sources are available.' : 'No compatible owned Normal Artian weapon is available.',
+        })
     return result
   }
   if (!hasConfirmedSkillInputs(input)) {

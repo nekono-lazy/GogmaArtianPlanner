@@ -244,9 +244,11 @@ Candidate Searchの入力状態（`rngState`、`normalCounters`、`ownedWeapons`
 
 ### 3.3 他の目標武器で使用する所持武器の除外（Issue #157）
 
-実装状態: **未実装**（Issue #157 PR-1で本契約を確定した。実装は本節末尾の分割計画に従う後続PRで行い、それまで
-Production Searchは除外条件を持たない）。要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 14.2、画面は
-[UI_FLOW.md](./UI_FLOW.md) 9.2 / 9.1である。
+実装状態: **一部実装**（Issue #157 PR-1で本契約を確定した。本節末尾の分割計画の1（Search Domain / Worker）をPR-2で実装し、
+`CandidateSearchInput.excludedSourceOwnedWeaponIds`、Route base列挙での適用、skip理由 `source_excluded_for_other_targets` と
+その日本語ラベル、`TargetCandidateSearchResult.excludedSourceOwnedWeaponIds` が動作する。2（Application / 一括検索）と3（Search UI）は
+未実装であり、Productionの呼び出し側はまだ除外条件を設定しないため、Production Searchの動作は従来どおりである）。要求は
+[REQUIREMENTS.md](./REQUIREMENTS.md) 14.2、画面は[UI_FLOW.md](./UI_FLOW.md) 9.2 / 9.1である。
 
 候補検索に「他の目標武器で使用する所持武器を除外する」というON/OFF条件を置く。検索対象TargetをTとすると、ONでは
 **T以外の目標武器が使用する所持武器をTのRoute起点にしない**。目的は、複数の目標武器を別々に検索して作成リストへ
@@ -468,7 +470,7 @@ export interface TargetCandidateSearchResult {
   /**
    * 3.3。除外条件のためRoute baseとして登録しなかった所持武器のID（code unit順）。
    * 除外が無ければ空配列。観測用のruntime情報でありBuildCandidateへ入れない。
-   * 実装はIssue #157 PR-2で追加する（3.3の分割計画）。
+   * Issue #157 PR-2で実装した（3.3の分割計画）。
    */
   excludedSourceOwnedWeaponIds: OwnedWeaponId[];
 }
@@ -489,7 +491,7 @@ export interface SkippedRoute {
     | "master_data_unavailable"
     | "calculation_context_incompatible"
     | "disabled_by_filter"
-    | "source_excluded_for_other_targets"; // 3.3。Issue #157 PR-2で追加する
+    | "source_excluded_for_other_targets"; // 3.3。Issue #157 PR-2で実装した
   detail: string;
 }
 

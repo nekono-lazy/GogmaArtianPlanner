@@ -200,7 +200,12 @@ const plain = (value: unknown): unknown => JSON.parse(JSON.stringify(value))
 async function recordCandidateSearch(testCase: PredictKeepCacheCase) {
   const fixture = predictKeepCacheFixture(testCase)
   const result = await searchCandidates(fixture.input, fixture.engine, { now: () => SEARCH_FIXTURE_TIME, nowMs: () => 100 })
-  return { result: plain(result), calls: [...fixture.calls] }
+  // The frozen pre-B2I record predates `excludedSourceOwnedWeaponIds` (Issue #157,
+  // SEARCH_SPEC 3.3). The fixture excludes no source, so the field must be empty;
+  // it is checked here and left out, keeping the frozen record byte-identical.
+  const { excludedSourceOwnedWeaponIds, ...targetResult } = result.targetResult
+  if (excludedSourceOwnedWeaponIds.length !== 0) throw new Error('The predictKeep cache fixture excludes no source weapon.')
+  return { result: plain({ ...result, targetResult }), calls: [...fixture.calls] }
 }
 
 /** The bounded Planner Alternative Search (the held-aware stream, with and without a reservation) over the fixture. */

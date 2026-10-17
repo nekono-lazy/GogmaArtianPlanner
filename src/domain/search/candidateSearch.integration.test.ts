@@ -1300,6 +1300,7 @@ describe('Candidate Search routes', () => {
       candidate: null,
       searchedRoutes: [],
       skippedRoutes: [],
+      excludedSourceOwnedWeaponIds: [],
     })
     // A genuine capability / definition problem keeps `warning`.
     expect(result.warnings).toEqual([
@@ -1333,6 +1334,7 @@ describe('Candidate Search routes', () => {
       candidate: null,
       searchedRoutes: [],
       skippedRoutes: [],
+      excludedSourceOwnedWeaponIds: [],
     })
     expect(result.warnings).toEqual([
       {

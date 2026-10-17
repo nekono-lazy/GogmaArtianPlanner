@@ -52,7 +52,7 @@ function emptyResult(requestId: string): CandidateSearchResult {
   return {
     searchRunId: requestId,
     calculationContext: input.calculationContext,
-    targetResult: { targetWeaponId: 'target.fixture.a' as never, candidate: null, searchedRoutes: [], skippedRoutes: [] },
+    targetResult: { targetWeaponId: 'target.fixture.a' as never, candidate: null, searchedRoutes: [], skippedRoutes: [], excludedSourceOwnedWeaponIds: [] },
     warnings: [],
     elapsedMs: 1,
   }

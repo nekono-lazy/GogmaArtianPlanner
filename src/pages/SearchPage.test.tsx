@@ -68,7 +68,7 @@ function resultFor(
   return {
     searchRunId: 'ui-run',
     calculationContext: createFixtureInput().calculationContext,
-    targetResult: { targetWeaponId: target.id, candidate, searchedRoutes: ['normal_artian_to_gogma'], skippedRoutes },
+    targetResult: { targetWeaponId: target.id, candidate, searchedRoutes: ['normal_artian_to_gogma'], skippedRoutes, excludedSourceOwnedWeaponIds: [] },
     warnings: [],
     elapsedMs: 1,
   }

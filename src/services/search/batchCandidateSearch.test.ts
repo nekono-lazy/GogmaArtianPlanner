@@ -55,7 +55,7 @@ class QueueClient implements SearchWorkerClient {
     this.pending.get(input.searchRunId)?.resolve({
       searchRunId: input.searchRunId,
       calculationContext: input.calculationContext,
-      targetResult: { targetWeaponId: input.targetWeaponId, candidate, searchedRoutes: [], skippedRoutes: [] },
+      targetResult: { targetWeaponId: input.targetWeaponId, candidate, searchedRoutes: [], skippedRoutes: [], excludedSourceOwnedWeaponIds: [] },
       warnings: [],
       elapsedMs: 1,
     })
