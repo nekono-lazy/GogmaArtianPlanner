@@ -292,6 +292,31 @@ export function derivePlannerConflictDecisionSet(
 }
 
 /**
+ * Which decisions of a decision set exclude each Entry from the run
+ * (`docs/PLANNER_SPEC.md` 9.6.2 / 9.6.3): for every decision, each participant
+ * of its current initial Conflict other than the selected Entry, attributed to
+ * that decision, in conflict ID order. Over the `resolutions` of a `ready`
+ * result - every one of which applies - the keys are exactly its
+ * `excludedBuildListEntryIds`. Read-only attribution: it decides nothing, and a
+ * decision naming no current initial Conflict excludes nothing.
+ */
+export function plannerConflictDecisionExclusions(
+  currentConflicts: readonly PlannerResolvableConflict[],
+  resolutions: readonly PlannerConflictResolution[],
+): Map<BuildListEntryId, PlannerConflictResolution[]> {
+  const conflictsById = new Map(currentConflicts.map((conflict) => [conflict.id, conflict]))
+  const exclusions = new Map<BuildListEntryId, PlannerConflictResolution[]>()
+  ;[...resolutions]
+    .sort((left, right) => compareStableStrings(left.conflictKey, right.conflictKey))
+    .forEach((resolution) => {
+      nonSelectedParticipants(resolution, conflictsById).forEach((entryId) => {
+        exclusions.set(entryId, [...(exclusions.get(entryId) ?? []), { ...resolution }])
+      })
+    })
+  return exclusions
+}
+
+/**
  * The checkpoint participants of a current initial Conflict that still run
  * once the given decision set applies (`docs/PLANNER_SPEC.md` 9.6.2), read
  * from this module's result: the screen's "this conflict needs a Build List

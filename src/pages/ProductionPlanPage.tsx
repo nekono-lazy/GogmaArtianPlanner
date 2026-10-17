@@ -227,7 +227,12 @@ type ReplanUiState =
   /** Rule 7: the earlier decisions this press drops wait for the user's confirmation. */
   | { status: 'confirming'; confirmation: ConflictPreferenceConfirmation }
   | { status: 'saving' }
-  | { status: 'failure'; message: string }
+  | {
+      status: 'failure'
+      message: string
+      /** The raw internal message of an unexpected failure, shown in Debug Mode only. */
+      detail?: string
+    }
   | { status: 'notice'; message: string }
   | { status: 'invalid_resolution' }
   /** A typed refusal or an incomplete preferred Entry: nothing was saved. */
@@ -278,6 +283,9 @@ const PREPARATION_FAILURE_MESSAGE =
   '生産計画の現在状態を確認できませんでした。画面を再読み込みしてください。'
 const PLAN_LOAD_FAILURE_MESSAGE =
   '生産計画を読み込めませんでした。画面を再読み込みしてください。'
+/** An unexpected failure of 「この候補を優先」 before the save (preparation or the Planner run). */
+const PREFERENCE_RECALCULATION_FAILURE_MESSAGE =
+  '生産計画の再計算に失敗しました。表示中の生産計画は変更していません。もう一度確認してください。'
 
 function caughtDetail(caught: unknown): string | undefined {
   return caught instanceof Error ? caught.message : undefined
@@ -736,17 +744,22 @@ export function ProductionPlanPage({
         void navigate(`/plans/${saved.plan.id}`)
       } catch (caught: unknown) {
         if (!isCurrentAction()) return
-        setReplanState({ status: 'failure', message: presentConflictPreferenceSaveRefusal(caught) })
+        setReplanState({
+          status: 'failure',
+          message: presentConflictPreferenceSaveRefusal(caught),
+          detail: caughtDetail(caught),
+        })
       }
     } catch (caught: unknown) {
       if (!isCurrentAction()) return
+      // A fixed Japanese sentence; the internal (often English) error text is
+      // Debug Mode only (`docs/UI_FLOW.md` 11.6.4).
       setReplanState(caught instanceof PlannerCancelledError
         ? { status: 'idle' }
         : {
             status: 'failure',
-            message: caught instanceof Error
-              ? `生産計画の再計算に失敗しました。表示中の生産計画は変更していません。${caught.message}`
-              : '生産計画の再計算に失敗しました。表示中の生産計画は変更していません。',
+            message: PREFERENCE_RECALCULATION_FAILURE_MESSAGE,
+            detail: caughtDetail(caught),
           })
     } finally {
       if (isCurrentAction()) {
@@ -902,7 +915,20 @@ export function ProductionPlanPage({
           </Stack>
         </Paper>
       )}
-      {replanState.status === 'failure' && <Alert severity="error">{replanState.message}</Alert>}
+      {replanState.status === 'failure' && (
+        <Alert severity="error">
+          {replanState.message}
+          {debugMode && replanState.detail !== undefined && (
+            <Typography
+              component="span"
+              variant="caption"
+              sx={{ display: 'block', mt: 0.5, overflowWrap: 'anywhere', fontFamily: 'monospace' }}
+            >
+              {replanState.detail}
+            </Typography>
+          )}
+        </Alert>
+      )}
       {replanState.status === 'notice' && <Alert severity="info">{replanState.message}</Alert>}
       {replanState.status === 'invalid_resolution' && (
         <Alert severity="warning">{conflictPreferenceInvalidResolutionMessage}</Alert>

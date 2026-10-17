@@ -17,6 +17,7 @@ import {
   createPlanningBuildListEntriesHash,
   createPlanningTargetWeaponsHash,
   derivePlannerConflictDecisionSet,
+  plannerConflictDecisionExclusions,
   plannerConflictEffectiveCheckpointParticipants,
   type PlannerConflictDecisionNotCarriedReason,
   type PlannerConflictDecisionSetResult,
@@ -54,6 +55,18 @@ export type ProductionPlanParticipantUnavailableReason =
    * another decision of the displayed Draft already excludes is not one.
    */
   | 'checkpoint_conflict'
+  /**
+   * An effective explicit decision of the displayed Draft in *another*
+   * Conflict leaves this participant out of the run (`docs/PLANNER_SPEC.md`
+   * 9.6.3 rule 9, `docs/UI_FLOW.md` 11.6.6). The Domain would supersede that
+   * decision (rule 4), but the screen does not offer it here: the user changes
+   * the other Conflict's choice first (`excludingDecisions` names it). Only
+   * effective decisions count - not the Planner's provisional outcome, the
+   * recommendation, or an earlier decision the current input cannot carry over -
+   * and re-choosing it in a Conflict whose own effective decision excludes it is
+   * not this case.
+   */
+  | 'excluded_by_other_decision'
 
 export interface ProductionPlanParticipantViewModel {
   buildListEntryId: BuildListEntryId
@@ -85,6 +98,12 @@ export interface ProductionPlanParticipantViewModel {
    * when the exclusion came from the decision set and names no kind.
    */
   exclusionKind: PlannerWarningKind | null
+  /**
+   * The displayed Draft's effective explicit decisions of other Conflicts that
+   * leave this participant out of the run, in conflict ID order, when
+   * `unavailableReason` is `excluded_by_other_decision`; empty otherwise.
+   */
+  excludingDecisions: PlannerConflictResolution[]
 }
 
 /**
@@ -248,20 +267,27 @@ export function compareProductionPlanInputWithCurrentState(
   }
 }
 
+type ParticipantAvailability = Pick<
+  ProductionPlanParticipantViewModel,
+  'isAvailable' | 'unavailableReason' | 'exclusionKind' | 'excludingDecisions'
+>
+
 function unavailable(
   reason: ProductionPlanParticipantUnavailableReason,
   exclusionKind: PlannerWarningKind | null = null,
-): Pick<
-  ProductionPlanParticipantViewModel,
-  'isAvailable' | 'unavailableReason' | 'exclusionKind'
-> {
-  return { isAvailable: false, unavailableReason: reason, exclusionKind }
+  excludingDecisions: readonly PlannerConflictResolution[] = [],
+): ParticipantAvailability {
+  return {
+    isAvailable: false,
+    unavailableReason: reason,
+    exclusionKind,
+    excludingDecisions: excludingDecisions.map((resolution) => ({ ...resolution })),
+  }
 }
 
-const AVAILABLE: Pick<
-  ProductionPlanParticipantViewModel,
-  'isAvailable' | 'unavailableReason' | 'exclusionKind'
-> = { isAvailable: true, unavailableReason: null, exclusionKind: null }
+function available(): ParticipantAvailability {
+  return { isAvailable: true, unavailableReason: null, exclusionKind: null, excludingDecisions: [] }
+}
 
 /**
  * What the displayed Draft's earlier decisions still mean over the current
@@ -292,10 +318,8 @@ function participantAvailability(
   target: TargetWeapon | null,
   preparation: PlannerInteractionPreparationResult,
   carriedExcluded: readonly BuildListEntryId[],
-): Pick<
-  ProductionPlanParticipantViewModel,
-  'isAvailable' | 'unavailableReason' | 'exclusionKind'
-> {
+  carriedExclusions: ReadonlyMap<BuildListEntryId, readonly PlannerConflictResolution[]>,
+): ParticipantAvailability {
   if (!entry) return unavailable('entry_not_found')
   // An Entry whose Target is gone is excluded by validation anyway; it is
   // named first so the screen says the Target cannot be confirmed.
@@ -323,7 +347,10 @@ function participantAvailability(
   }
   // The same Domain authority the press runs (9.6.3 rule 1). The set-level
   // refusals (an inconsistent set, two preferred Entries in an undecided
-  // conflict) are explained when the user presses, so they stay available.
+  // conflict) are explained when the user presses, so they do not make the
+  // participant unavailable here. A refusal that holds whatever the other
+  // Conflicts decided (preferring a checkpoint participant itself) is named
+  // before the exclusion below, which changing another choice would lift.
   const decisionSet = derivePlannerConflictDecisionSet({
     displayedPlan: plan,
     currentCalculationContext: input.calculationContext,
@@ -344,10 +371,21 @@ function participantAvailability(
         return unavailable('planner_validation_excluded')
       case 'inconsistent_decision_set':
       case 'preferred_entries_conflict':
-        return AVAILABLE
+        break
     }
   }
-  return AVAILABLE
+  // 9.6.3 rule 9: an effective decision of another Conflict leaves this
+  // participant out of the run, so it is not offered here even though the
+  // Domain would supersede that decision. Re-choosing it where this
+  // Conflict's own effective decision excludes it stays a re-choice, even when
+  // other decisions exclude it too: otherwise an Entry several decisions
+  // exclude could be chosen in no Conflict at all.
+  const excluders = carriedExclusions.get(entry.id) ?? []
+  const otherExcluders = excluders.filter(({ conflictKey }) => conflictKey !== conflict.id)
+  if (otherExcluders.length > 0 && otherExcluders.length === excluders.length) {
+    return unavailable('excluded_by_other_decision', null, otherExcluders)
+  }
+  return available()
 }
 
 /**
@@ -404,6 +442,12 @@ export function createProductionPlanInteractionViewModel(
   )
   const carried = carriedDecisions(plan, input, preparation)
   const carriedExcluded = carried?.status === 'ready' ? carried.excludedBuildListEntryIds : []
+  // Which effective earlier decision leaves each Entry out: the Domain's own
+  // attribution of the same carried set, never the persisted selections.
+  const carriedExclusions =
+    carried?.status === 'ready' && preparation.status === 'ready'
+      ? plannerConflictDecisionExclusions(preparation.currentConflicts, carried.resolutions)
+      : new Map<BuildListEntryId, PlannerConflictResolution[]>()
   const notCarriedByConflictId = new Map(
     (carried?.notCarriedOver ?? []).map(({ resolution, reason }) => [resolution.conflictKey, reason]),
   )
@@ -457,6 +501,7 @@ export function createProductionPlanInteractionViewModel(
               target,
               preparation,
               carriedExcluded,
+              carriedExclusions,
             ),
           }
         }),

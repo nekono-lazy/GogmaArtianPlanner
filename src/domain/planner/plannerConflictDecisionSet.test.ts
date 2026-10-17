@@ -7,6 +7,7 @@ import type {
 } from '../models/publicTypes'
 import {
   derivePlannerConflictDecisionSet,
+  plannerConflictDecisionExclusions,
   plannerConflictEffectiveCheckpointParticipants,
   plannerPersistedConflictDecisions,
   type PlannerConflictDecisionPreparation,
@@ -330,5 +331,26 @@ describe('derivePlannerConflictDecisionSet', () => {
     const reversed = structuredClone(plan)
     reversed.conflicts.reverse()
     expect(run(plan, [X, Z], decide(X.id, A))).toEqual(run(reversed, [Z, X], decide(X.id, A)))
+  })
+})
+
+describe('plannerConflictDecisionExclusions', () => {
+  it('attributes exactly the excluded Entries of a ready set to the decisions that exclude them, in conflict ID order', () => {
+    // X = {A, B} prefers A, W = {D, B} prefers D, Y = {A, C} undecided.
+    const W = conflict('conflict.w', [D, B])
+    const current = [X, Y, W]
+    const result = run(draft(current, [decide(X.id, A), decide(W.id, D)]), current, null)
+    if (result.status !== 'ready') throw new Error('expected a ready set')
+    const exclusions = plannerConflictDecisionExclusions(current, result.resolutions)
+    expect([...exclusions.keys()].sort()).toEqual(result.excludedBuildListEntryIds)
+    expect(exclusions.get(B)).toEqual([decide(W.id, D), decide(X.id, A)])
+    expect(exclusions.has(A)).toBe(false)
+    expect(exclusions.has(C)).toBe(false)
+  })
+
+  it('excludes nothing for a decision naming no current initial Conflict, and decides nothing', () => {
+    const resolutions = [decide('conflict.gone', A)]
+    expect(plannerConflictDecisionExclusions([X], resolutions).size).toBe(0)
+    expect(resolutions).toEqual([decide('conflict.gone', A)])
   })
 })

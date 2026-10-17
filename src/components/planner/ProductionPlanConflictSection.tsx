@@ -218,6 +218,7 @@ function ParticipantCard({
 }) {
   const headingId = useId()
   const explanationId = useId()
+  const disabledReasonId = useId()
   return (
     <Paper
       component="li"
@@ -283,6 +284,24 @@ function ParticipantCard({
               disabled={busy}
               onClick={onPrefer}
               aria-describedby={`${headingId} ${explanationId}`}
+              sx={{ minHeight: 44, mt: 'auto', alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+            >
+              この候補を優先
+            </Button>
+          </>
+        )}
+        {!participant.canPrefer && participant.preferDisabledReason !== null && (
+          // Another Conflict's decision leaves this participant out: the
+          // action stays visible but disabled, and the reason is written
+          // beside it rather than in a tooltip (11.6.6).
+          <>
+            <Typography id={disabledReasonId} variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+              {participant.preferDisabledReason}
+            </Typography>
+            <Button
+              variant="contained"
+              disabled
+              aria-describedby={`${headingId} ${disabledReasonId}`}
               sx={{ minHeight: 44, mt: 'auto', alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
             >
               この候補を優先

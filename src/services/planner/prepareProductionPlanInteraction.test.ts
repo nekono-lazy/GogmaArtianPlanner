@@ -687,3 +687,197 @@ describe('Issue #278 PR-3 dynamic versus input-changed Conflicts', () => {
     expect(invalid.conflicts.map(({ currency }) => currency)).toEqual(['not_compared', 'not_compared'])
   })
 })
+
+/**
+ * PR #281 review (`docs/PLANNER_SPEC.md` 9.6.3 rule 9, `docs/UI_FLOW.md`
+ * 11.6.6): a participant an effective explicit decision of *another* Conflict
+ * leaves out is not offered there, while re-choosing it in the Conflict whose
+ * own decision excluded it stays possible. The Domain decision set and its
+ * supersede rule are unchanged; only what the screen offers narrows.
+ */
+describe('participants another Conflict\'s effective decision excludes', () => {
+  /** A, B, C, D: conflict.1 = {A, B}, conflict.2 = {D, B}, conflict.4 = {C, B}. */
+  function crossFixture() {
+    const { entries, targets } = fixtureEntries()
+    const extra = (suffix: string, name: string) => {
+      const entry = structuredClone(entries[1])
+      const target = structuredClone(targets[1])
+      entry.id = buildListEntryId(`build-list.fixture.${suffix}`)
+      entry.targetWeaponId = targetWeaponId(`target.fixture.${suffix}`)
+      entry.candidateSnapshot.targetWeaponId = entry.targetWeaponId
+      target.id = entry.targetWeaponId
+      target.name = name
+      return { entry, target }
+    }
+    const c = extra('c', 'Third fixture target')
+    const d = extra('d', 'Fourth fixture target')
+    const [a, b] = entries
+    return {
+      a, b, c: c.entry, d: d.entry,
+      entries: [a, b, c.entry, d.entry],
+      targets: [...targets, c.target, d.target],
+    }
+  }
+
+  type EntryKey = 'a' | 'b' | 'c' | 'd'
+
+  function crossScenario(options: {
+    conflict1?: EntryKey
+    /** Adds conflict.2 = {D, B} with this decision (`null` = undecided). */
+    conflict2?: EntryKey | null
+    conflict4?: EntryKey
+    /** Conflict IDs the current preparation does not detect. */
+    notCurrent?: string[]
+    /** Entries the current validation excludes. */
+    invalid?: EntryKey[]
+  } = {}) {
+    const fixture = crossFixture()
+    const { a, b, c, d } = fixture
+    const byKey = { a, b, c, d }
+    const pick = (key: EntryKey | null | undefined) => (key == null ? null : byKey[key].id)
+    const conflicts = [
+      conflict([a, b], { id: 'conflict.1', selectedBuildListEntryId: pick(options.conflict1) }),
+      ...(options.conflict2 === undefined
+        ? []
+        : [conflict([d, b], { id: 'conflict.2', selectedBuildListEntryId: pick(options.conflict2) })]),
+      conflict([c, b], { id: 'conflict.4', selectedBuildListEntryId: pick(options.conflict4) }),
+    ]
+    const invalidIds = new Set((options.invalid ?? []).map((key) => byKey[key].id))
+    const preparation: ReadyPreparation = {
+      status: 'ready',
+      validBuildListEntryIds: fixture.entries.map(({ id }) => id).filter((id) => !invalidIds.has(id)),
+      excludedBuildListEntries: [...invalidIds].map((id) => ({
+        buildListEntryId: id,
+        kind: 'build_list_entry_stale' as const,
+        reason: 'Fixture stale entry',
+      })),
+      currentConflicts: conflicts
+        .filter(({ id }) => !(options.notCurrent ?? []).includes(id))
+        .map(({ id, buildListEntryIds }) => ({ id, buildListEntryIds: [...buildListEntryIds], checkpointParticipants: [] })),
+    }
+    const viewModel = createProductionPlanInteractionViewModel(
+      plan(conflicts),
+      plannerInput(fixture.entries, fixture.targets),
+      preparation,
+    )
+    const availability = (conflictId: string, entry: BuildListEntry) => {
+      const { isAvailable, unavailableReason, excludingDecisions } = viewModel.conflicts
+        .find(({ id }) => id === conflictId)!
+        .participants.find(({ buildListEntryId }) => buildListEntryId === entry.id)!
+      return { isAvailable, unavailableReason, excludingDecisions }
+    }
+    return { ...fixture, viewModel, availability }
+  }
+
+  const AVAILABLE = { isAvailable: true, unavailableReason: null, excludingDecisions: [] }
+
+  it('offers every participant as before while nothing is decided', () => {
+    const { a, b, c, availability } = crossScenario()
+    expect(availability('conflict.1', a)).toEqual(AVAILABLE)
+    expect(availability('conflict.1', b)).toEqual(AVAILABLE)
+    expect(availability('conflict.4', c)).toEqual(AVAILABLE)
+    expect(availability('conflict.4', b)).toEqual(AVAILABLE)
+  })
+
+  it('does not offer B in conflict 4 once conflict 1 prefers A, names that decision, and keeps C choosable', () => {
+    const { a, b, c, availability } = crossScenario({ conflict1: 'a' })
+    expect(availability('conflict.4', b)).toEqual({
+      isAvailable: false,
+      unavailableReason: 'excluded_by_other_decision',
+      excludingDecisions: [{ conflictKey: 'conflict.1', selectedBuildListEntryId: a.id }],
+    })
+    expect(availability('conflict.4', c)).toEqual(AVAILABLE)
+  })
+
+  it('keeps re-choosing B in conflict 1 itself, the Conflict whose own decision excluded it', () => {
+    const { a, b, availability } = crossScenario({ conflict1: 'a' })
+    expect(availability('conflict.1', b)).toEqual(AVAILABLE)
+    expect(availability('conflict.1', a)).toEqual(AVAILABLE)
+  })
+
+  it('offers B in conflict 4 again once conflict 1 prefers B instead', () => {
+    const { a, b, c, availability } = crossScenario({ conflict1: 'b' })
+    expect(availability('conflict.4', b)).toEqual(AVAILABLE)
+    expect(availability('conflict.4', c)).toEqual(AVAILABLE)
+    // A is now the one conflict 1 leaves out, and stays re-choosable there.
+    expect(availability('conflict.1', a)).toEqual(AVAILABLE)
+  })
+
+  it('never treats the Planner\'s provisional outcome or recommendation as an exclusion', () => {
+    const fixture = crossFixture()
+    const { a, b, c } = fixture
+    // Undecided, recommending A and C: the Plan leaves B out only provisionally.
+    const conflicts = [
+      conflict([a, b], { id: 'conflict.1', recommendedBuildListEntryId: a.id }),
+      conflict([c, b], { id: 'conflict.4', recommendedBuildListEntryId: c.id }),
+    ]
+    const persisted = { ...plan(conflicts), selectedBuildListEntryIds: [a.id, c.id] }
+    const viewModel = createProductionPlanInteractionViewModel(
+      persisted,
+      plannerInput(fixture.entries, fixture.targets),
+      {
+        status: 'ready',
+        validBuildListEntryIds: fixture.entries.map(({ id }) => id),
+        excludedBuildListEntries: [],
+        currentConflicts: conflicts.map(({ id, buildListEntryIds }) => ({ id, buildListEntryIds: [...buildListEntryIds], checkpointParticipants: [] })),
+      },
+    )
+    const bInFour = viewModel.conflicts[1].participants.find(({ buildListEntryId }) => buildListEntryId === b.id)!
+    expect([bInFour.isAvailable, bInFour.unavailableReason, bInFour.excludingDecisions]).toEqual([true, null, []])
+  })
+
+  it('names every effective decision that excludes B, and still lets each excluding Conflict re-choose it', () => {
+    const { a, b, d, availability } = crossScenario({ conflict1: 'a', conflict2: 'd' })
+    expect(availability('conflict.4', b)).toEqual({
+      isAvailable: false,
+      unavailableReason: 'excluded_by_other_decision',
+      excludingDecisions: [
+        { conflictKey: 'conflict.1', selectedBuildListEntryId: a.id },
+        { conflictKey: 'conflict.2', selectedBuildListEntryId: d.id },
+      ],
+    })
+    // B is excluded by its own Conflict's decision there too, so re-choosing it
+    // stays possible; otherwise B could be preferred nowhere.
+    expect(availability('conflict.1', b)).toEqual(AVAILABLE)
+    expect(availability('conflict.2', b)).toEqual(AVAILABLE)
+  })
+
+  it('never uses an earlier decision the current input cannot carry over', () => {
+    // Conflict 1 is no current initial Conflict any more.
+    const notCurrent = crossScenario({ conflict1: 'a', notCurrent: ['conflict.1'] })
+    expect(notCurrent.availability('conflict.4', notCurrent.b)).toEqual(AVAILABLE)
+    // The Entry conflict 1 preferred is no valid Entry now.
+    const invalidWinner = crossScenario({ conflict1: 'a', invalid: ['a'] })
+    expect(invalidWinner.availability('conflict.4', invalidWinner.b)).toEqual(AVAILABLE)
+  })
+
+  it('names a refusal that holds whatever the other Conflicts decided before the exclusion', () => {
+    const fixture = crossFixture()
+    const { a, b, c } = fixture
+    // Conflict 4 = {C, B (checkpoint)}: preferring B there is refused even if
+    // conflict 1 changed, so its checkpoint reason stays.
+    const conflicts = [
+      conflict([a, b], { id: 'conflict.1', selectedBuildListEntryId: a.id }),
+      conflict([c, b], { id: 'conflict.4' }),
+    ]
+    const viewModel = createProductionPlanInteractionViewModel(
+      plan(conflicts),
+      plannerInput(fixture.entries, fixture.targets),
+      {
+        status: 'ready',
+        validBuildListEntryIds: fixture.entries.map(({ id }) => id),
+        excludedBuildListEntries: [],
+        currentConflicts: [
+          { id: 'conflict.1', buildListEntryIds: [a.id, b.id], checkpointParticipants: [] },
+          {
+            id: 'conflict.4',
+            buildListEntryIds: [c.id, b.id],
+            checkpointParticipants: [{ buildListEntryId: b.id, axis: 'bonus', opportunityId: 'opportunity.b' as never }],
+          },
+        ],
+      },
+    )
+    const bInFour = viewModel.conflicts[1].participants.find(({ buildListEntryId }) => buildListEntryId === b.id)!
+    expect([bInFour.isAvailable, bInFour.unavailableReason]).toEqual([false, 'checkpoint_conflict'])
+  })
+})

@@ -841,8 +841,10 @@ describe('ProductionPlanPage explicit selection (Issue #278 ordinary Planner)', 
     const view = renderPage(deps, fixture.plan.id)
     await clickSelection(user)
     expect(await screen.findByText(failure === 'planner'
-      ? '生産計画の再計算に失敗しました。表示中の生産計画は変更していません。Planner failed'
+      ? '生産計画の再計算に失敗しました。表示中の生産計画は変更していません。もう一度確認してください。'
       : '生産計画の保存に失敗しました。生産計画一覧で現在の状態を確認してください。')).toBeInTheDocument()
+    // The internal error text never reaches the normal display (UI_FLOW 11.6.4).
+    expect(screen.queryByText(/Planner failed|Atomic save rejected/)).not.toBeInTheDocument()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
     expect(summaryValue('計画ID')).toBe(fixture.plan.id)
     expect(fixture.plan).toEqual(before)
@@ -1682,7 +1684,7 @@ describe('ProductionPlanPage supplementary persisted content', () => {
     expect(screen.queryByText('記録されている必要素材（アイテム）はありません。')).not.toBeInTheDocument()
   })
 
-  it('discloses the persisted rejected Entries with a reason label, detail and ID', async () => {
+  it('discloses the persisted rejected Entries by their typed reason label only', async () => {
     const fixture = contentFixture()
     fixture.plan.rejectedBuildListEntries = [
       {
@@ -1707,13 +1709,13 @@ describe('ProductionPlanPage supplementary persisted content', () => {
     const items = within(list).getAllByRole('listitem')
     expect(items).toHaveLength(2)
     expect(within(items[0]).getByText('他の候補と資源（RNG位置または所持武器）が競合しました')).toBeInTheDocument()
-    expect(within(items[0]).getByText('Persisted rejection detail')).toBeInTheDocument()
-    // The internal Entry ID is Debug Mode only (UI_FLOW 11.6.4).
+    // The internal detail and Entry ID are Debug Mode only (UI_FLOW 11.6.4).
+    expect(within(list).queryByText(/Persisted rejection detail|Second detail/)).not.toBeInTheDocument()
     expect(within(list).queryByText(/BuildListEntry ID/)).not.toBeInTheDocument()
     expect(within(items[1]).getByText('より短い作成ルートの候補を優先しました')).toBeInTheDocument()
   })
 
-  it('shows the rejected Entry ID only in Debug Mode', async () => {
+  it('shows the rejected Entry detail and ID only in Debug Mode', async () => {
     const fixture = contentFixture()
     fixture.plan.rejectedBuildListEntries = [{
       buildListEntryId: buildListEntryId('build-list.rejected.debug'),
@@ -1725,9 +1727,24 @@ describe('ProductionPlanPage supplementary persisted content', () => {
       renderPage(contentDependencies(fixture), fixture.plan.id)
       await userEvent.click(await screen.findByRole('button', { name: '採用されなかった候補（1件）' }))
       expect(await screen.findByText('BuildListEntry ID: build-list.rejected.debug')).toBeInTheDocument()
+      expect(screen.getByText('detail: Persisted rejection detail')).toBeInTheDocument()
     } finally {
       useSettingsStore.setState({ debugMode: false })
     }
+  })
+
+  it('says an unknown rejected reason is unknown instead of guessing, with no internal detail', async () => {
+    const fixture = contentFixture()
+    fixture.plan.rejectedBuildListEntries = [{
+      buildListEntryId: buildListEntryId('build-list.rejected.unknown'),
+      reason: 'future_reason' as never,
+      detail: 'Plannerの最終結果でこのBuildListEntryは採用されませんでした。',
+    }]
+    renderPage(contentDependencies(fixture), fixture.plan.id)
+    await userEvent.click(await screen.findByRole('button', { name: '採用されなかった候補（1件）' }))
+    const list = await screen.findByRole('list', { name: '採用されなかった候補' })
+    expect(within(list).getByText('採用されなかった理由を確認できません')).toBeInTheDocument()
+    expect(list.textContent).not.toMatch(/BuildListEntry|future_reason/)
   })
 
   it('states when no Entry was rejected', async () => {
@@ -2909,5 +2926,134 @@ describe('ProductionPlanPage conflict presentation (Issue #278 PR-3)', () => {
     const counts = screen.getByLabelText('競合と作成予定の件数')
     expect(within(counts).getByText('競合（記録件数）').nextElementSibling)
       .toHaveTextContent('2件判断待ち 1件・選択済み 0件・ここでは選べない 1件')
+  })
+})
+
+/**
+ * PR #281 review (`docs/PLANNER_SPEC.md` 9.6.3 rule 9, `docs/UI_FLOW.md`
+ * 11.6.6): conflict 1 = {A, B} preferring A, conflict 2 = {C, B} undecided.
+ * B is not offered in conflict 2, C is, and the press re-checks the same rule
+ * over its fresh preparation.
+ */
+describe('ProductionPlanPage participants another Conflict excludes', () => {
+  function crossConflictFixture() {
+    const fixture = multiParticipantFixture()
+    const thirdEntry = structuredClone(fixture.entry)
+    const thirdTarget = structuredClone(fixture.target)
+    thirdEntry.id = buildListEntryId('build-list.page.multi.third')
+    thirdEntry.targetWeaponId = targetWeaponId('target.page.multi.third')
+    thirdEntry.candidateSnapshot.targetWeaponId = thirdEntry.targetWeaponId
+    thirdTarget.id = thirdEntry.targetWeaponId
+    thirdTarget.name = 'Page fixture target multi third'
+    fixture.input.buildListEntries.push(thirdEntry)
+    fixture.input.targetWeapons.push(thirdTarget)
+    fixture.plan.conflicts[0].selectedBuildListEntryId = fixture.entry.id
+    const second: PlanConflict = {
+      id: 'conflict.page.second',
+      kind: 'same_skill_counter',
+      buildListEntryIds: [thirdEntry.id, fixture.secondEntry.id],
+      reason: 'Persisted fixture conflict second',
+      recommendedBuildListEntryId: thirdEntry.id,
+      selectedBuildListEntryId: null,
+      resolutionNote: null,
+      checkpointParticipants: [],
+    }
+    fixture.plan.conflicts.push(second)
+    const currentConflicts = fixture.plan.conflicts.map(({ id, buildListEntryIds }) => ({
+      id, buildListEntryIds: [...buildListEntryIds], checkpointParticipants: [],
+    }))
+    fixture.preparation = {
+      status: 'ready',
+      validBuildListEntryIds: [fixture.entry.id, fixture.secondEntry.id, thirdEntry.id],
+      excludedBuildListEntries: [],
+      currentConflicts,
+    }
+    return { ...fixture, thirdEntry, thirdTarget, second }
+  }
+
+  function participantCards(conflictNumber: number) {
+    return within(screen.getByRole('list', { name: `競合 ${conflictNumber} の参加候補` })).getAllByRole('listitem')
+  }
+
+  it('disables B in conflict 2 with its reason, keeps C there and the re-choice in conflict 1', async () => {
+    const fixture = crossConflictFixture()
+    renderPage(dependencies(fixture, plannerClient(async () => fixture.preparation)), fixture.plan.id)
+
+    await screen.findByRole('heading', { level: 3, name: '競合 2：スキルの抽選位置の競合' })
+    const [cCard, bCard] = participantCards(2)
+    expect(within(cCard).getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
+    const disabled = within(bCard).getByRole('button', { name: 'この候補を優先' })
+    expect(disabled).toBeDisabled()
+    expect(within(bCard).getByText(
+      '「Page fixture target multi second」は、競合1で「Page fixture target multi」を優先したため、今回は作成しません。'
+      + 'この競合では優先できません。「Page fixture target multi second」を優先したい場合は、先に競合1の選択を変更してください。',
+    )).toBeInTheDocument()
+    expect(within(bCard).getByText('今回は作成しない')).toBeInTheDocument()
+    // Conflict 1 re-chooses B itself.
+    const conflictOneButtons = participantCards(1).map((card) => within(card).getByRole('button', { name: 'この候補を優先' }))
+    expect(conflictOneButtons.map((button) => (button as HTMLButtonElement).disabled)).toEqual([false, false])
+    expect(document.body.textContent).not.toContain(fixture.secondEntry.id)
+    expect(document.body.textContent).not.toContain(fixture.second.id)
+  })
+
+  it('refuses B when the fresh preparation at press time finds conflict 1 decided, and starts nothing', async () => {
+    const user = userEvent.setup()
+    const fixture = crossConflictFixture()
+    // At display time conflict 1 is no current initial Conflict, so its
+    // decision is not carried and excludes nothing: B is offered.
+    const displayTime: PlannerInteractionPreparationResult = {
+      status: 'ready',
+      validBuildListEntryIds: [fixture.entry.id, fixture.secondEntry.id, fixture.thirdEntry.id],
+      excludedBuildListEntries: [],
+      currentConflicts: [{ id: fixture.second.id, buildListEntryIds: [fixture.thirdEntry.id, fixture.secondEntry.id], checkpointParticipants: [] }],
+    }
+    const client = plannerClient(vi.fn()
+      .mockResolvedValueOnce(displayTime)
+      .mockResolvedValueOnce(fixture.preparation))
+    const deps = dependencies(fixture, client)
+    renderPage(deps, fixture.plan.id)
+
+    await screen.findByRole('heading', { level: 3, name: '競合 2：スキルの抽選位置の競合' })
+    const bButton = within(participantCards(2)[1]).getByRole('button', { name: 'この候補を優先' })
+    expect(bButton).toBeEnabled()
+    await user.click(bButton)
+
+    expect(await screen.findByText('現在の状態が変化したため、この候補を優先できませんでした。')).toBeInTheDocument()
+    expect(client.createPlan).not.toHaveBeenCalled()
+    expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
+    // The refreshed display now disables B with its reason.
+    expect(within(participantCards(2)[1]).getByRole('button', { name: 'この候補を優先' })).toBeDisabled()
+  })
+
+  it('still lets the user re-choose B in conflict 1 and runs the ordinary Planner', async () => {
+    const user = userEvent.setup()
+    const fixture = crossConflictFixture()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(null))
+    renderPage(dependencies(fixture, client), fixture.plan.id)
+
+    await screen.findByRole('heading', { level: 3, name: '競合 1：復元ボーナスの抽選位置の競合' })
+    await user.click(within(participantCards(1)[1]).getByRole('button', { name: 'この候補を優先' }))
+    await waitFor(() => expect(client.createPlan).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(client.createPlan).mock.calls[0][1].conflictResolutions).toEqual([
+      { conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.secondEntry.id },
+    ])
+  })
+
+  it('shows the internal error text of an unexpected recalculation failure only in Debug Mode', async () => {
+    const user = userEvent.setup()
+    const fixture = crossConflictFixture()
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createPlan).mockRejectedValue(new Error('Worker exploded at Gogma Counter 107'))
+    useSettingsStore.setState({ debugMode: true })
+    try {
+      renderPage(dependencies(fixture, client), fixture.plan.id)
+      await screen.findByRole('heading', { level: 3, name: '競合 1：復元ボーナスの抽選位置の競合' })
+      await user.click(within(participantCards(2)[0]).getByRole('button', { name: 'この候補を優先' }))
+      expect(await screen.findByText('生産計画の再計算に失敗しました。表示中の生産計画は変更していません。もう一度確認してください。')).toBeInTheDocument()
+      expect(screen.getByText('Worker exploded at Gogma Counter 107')).toBeInTheDocument()
+    } finally {
+      useSettingsStore.setState({ debugMode: false })
+    }
   })
 })

@@ -119,6 +119,13 @@ export interface ConflictParticipantDisplay {
   canPrefer: boolean
   /** The static meaning of preferring it (11.6.6), only when `canPrefer`. */
   preferExplanation: string | null
+  /**
+   * 「この候補を優先」 is shown disabled with this reason beside it (11.6.6): an
+   * effective explicit decision of another Conflict leaves the participant
+   * out, and the user changes that choice first. `null` when the action is
+   * offered, or absent for a reason that offers no action at all.
+   */
+  preferDisabledReason: string | null
 }
 
 export interface ConflictDebugDetails {
@@ -283,11 +290,14 @@ export function participantUnavailableText(
   exclusionKind: PlannerWarningKind | null,
   conflictInvolvesCheckpoint: boolean,
 ): string | null {
+  // `excluded_by_other_decision` is said with the other Conflict's number and
+  // preferred name instead (`excludedByOtherDecisionText()`).
   switch (reason) {
     case null:
     case 'plan_not_draft':
     case 'preparation_invalid':
     case 'current_conflict_not_found':
+    case 'excluded_by_other_decision':
       return null
     case 'entry_not_found':
     case 'target_not_found':
@@ -301,6 +311,39 @@ export function participantUnavailableText(
         ? null
         : 'この候補を優先すると、この候補の途中採用する状態の選択がこの競合に関係するため、ここでは優先できません。作成リストで途中採用する状態を変更または解除してください。'
   }
+}
+
+/** One effective decision of another Conflict that leaves a participant out, as the screen names it. */
+export interface ConflictExcludingDecisionDisplay {
+  /** The other Conflict's display number (`競合 N`), or `null` when it is not listed. */
+  conflictNumber: number | null
+  /** The Target name of the Entry that Conflict prefers, or `null` when it cannot be read. */
+  preferredName: string | null
+}
+
+/**
+ * Why a participant another Conflict's effective decision leaves out cannot
+ * be preferred here, and what to do instead (`docs/UI_FLOW.md` 11.6.6): which
+ * Conflict preferred which Target, and that the choice there changes first.
+ * A name or number that cannot be read is never guessed; the sentence falls
+ * back to 「別の競合」 / 「別の候補」.
+ */
+export function excludedByOtherDecisionText(
+  participantName: string | null,
+  decisions: readonly ConflictExcludingDecisionDisplay[],
+): string {
+  const subject = participantName === null ? 'この候補' : `「${participantName}」`
+  const causes = decisions.map(({ conflictNumber, preferredName }) =>
+    `${conflictNumber === null ? '別の競合' : `競合${conflictNumber}`}で${preferredName === null ? '別の候補' : `「${preferredName}」`}`)
+  const numbers = decisions.map(({ conflictNumber }) => conflictNumber)
+  const where =
+    numbers.length === 0 || numbers.some((number) => number === null)
+      ? 'その競合の選択'
+      : numbers.length === 1
+        ? `競合${numbers[0]}の選択`
+        : `${numbers.map((number) => `競合${number}`).join('・')}のいずれかの選択`
+  return `${subject}は、${causes.length === 0 ? '別の競合で別の候補' : causes.join('を、')}を優先したため、今回は作成しません。` +
+    `この競合では優先できません。${subject}を優先したい場合は、先に${where}を変更してください。`
 }
 
 // ------------------------------------------------------------------------------------------------ names
@@ -618,6 +661,7 @@ function participantDisplays(
   completed: ReadonlySet<TargetWeaponId>,
   hasCompletionAuthority: boolean,
   excludedBy: ReadonlyMap<BuildListEntryId, string[]>,
+  conflictNumbers: ReadonlyMap<string, number>,
 ): ConflictParticipantDisplay[] {
   // The Entries another Conflict of this Plan explicitly prefers: their
   // completion is a decision, not the Planner's provisional outcome.
@@ -644,6 +688,10 @@ function participantDisplays(
   return resolved.map(({ source, entry, target }, index) => {
     const chips: ConflictStatusChip[] = []
     const notes: string[] = []
+    // Another Conflict's effective decision leaves it out (the Application's
+    // typed attribution): said once, with that Conflict's number, below.
+    const excludedByOther =
+      source.current !== null && source.current.unavailableReason === 'excluded_by_other_decision'
     if (decided) {
       chips.push(source.isSelected
         ? { label: '優先（選択済み）', tone: 'positive' }
@@ -655,9 +703,13 @@ function participantDisplays(
       const winners = excludedBy.get(source.buildListEntryId)
       if (winners !== undefined) {
         chips.push({ label: '今回は作成しない', tone: 'neutral' })
-        notes.push(winners.length === 0
-          ? '別の競合で別の候補を優先したため、今回は作成しません。'
-          : `別の競合で${joinNames(winners)}を優先したため、今回は作成しません。`)
+        if (!excludedByOther) {
+          notes.push(winners.length === 0
+            ? '別の競合で別の候補を優先したため、今回は作成しません。'
+            : `別の競合で${joinNames(winners)}を優先したため、今回は作成しません。`)
+        }
+      } else if (excludedByOther) {
+        chips.push({ label: '今回は作成しない', tone: 'neutral' })
       } else if (hasCompletionAuthority && preferredElsewhere.has(source.buildListEntryId) && completed.has(entry.targetWeaponId)) {
         chips.push({ label: 'この計画で作成予定（別の競合で優先）', tone: 'positive' })
       } else if (hasCompletionAuthority) {
@@ -690,12 +742,29 @@ function participantDisplays(
     }
 
     // Only a participant the current preparation allows gets the action
-    // (11.6.6); an unavailable one keeps its reason instead of a button.
+    // (11.6.6); an unavailable one keeps its reason instead of a button. One
+    // another Conflict's decision leaves out keeps the button, disabled, with
+    // its reason beside it: the way on is that other Conflict's choice.
     const canPrefer =
       interactive &&
       source.current !== null &&
       source.current.isAvailable &&
       target !== null
+    let preferDisabledReason: string | null = null
+    if (excludedByOther && target !== null && source.current !== null) {
+      const reason = excludedByOtherDecisionText(
+        target.name,
+        source.current.excludingDecisions.map(({ conflictKey, selectedBuildListEntryId }) => {
+          const preferredEntry = lookup.entry(selectedBuildListEntryId)
+          return {
+            conflictNumber: conflictNumbers.get(conflictKey) ?? null,
+            preferredName: preferredEntry === null ? null : lookup.target(preferredEntry.targetWeaponId)?.name ?? null,
+          }
+        }),
+      )
+      if (interactive) preferDisabledReason = reason
+      else notes.push(reason)
+    }
     return {
       buildListEntryId: source.buildListEntryId,
       name: nameOf(index),
@@ -712,6 +781,7 @@ function participantDisplays(
         : source.isSelected
           ? 'この候補を優先しています。押すと、同じ選択のまま、現在の作成リストと状態から生産計画を計算し直します。'
           : conflictPreferenceExplanation(resolved.flatMap((_, otherIndex) => (otherIndex === index ? [] : [nameOf(otherIndex)]))),
+      preferDisabledReason,
     }
   })
 }
@@ -786,6 +856,7 @@ export function createProductionPlanConflictSectionDisplay(input: {
   const completed = completedTargetIds(plan)
   const hasCompletionAuthority = hasPlanTargetCompletionAuthority(plan)
   const excludedBy = excludedByDecisions(plan, lookup)
+  const conflictNumbers = new Map(plan.conflicts.map(({ id }, index) => [id, index + 1]))
 
   const statusByConflictId = new Map<string, ConflictDisplayStatus>()
   const conflicts = plan.conflicts.map((conflict, index): ConflictCardDisplay => {
@@ -794,7 +865,9 @@ export function createProductionPlanConflictSectionDisplay(input: {
       ? conflict.selectedBuildListEntryId === null ? 'undecided' : 'selected'
       : readyConflictStatus(conflict, current, isDraft, preparationReady)
     statusByConflictId.set(conflict.id, status)
-    const participants = participantDisplays(plan, conflict, status, current, lookup, completed, hasCompletionAuthority, excludedBy)
+    const participants = participantDisplays(
+      plan, conflict, status, current, lookup, completed, hasCompletionAuthority, excludedBy, conflictNumbers,
+    )
     const selectedIndex = conflict.buildListEntryIds.findIndex((id) => id === conflict.selectedBuildListEntryId)
     const selected = selectedIndex < 0 ? null : participants[selectedIndex]
     const kind = conflictKindPresentation(conflict.kind, conflict.buildListEntryIds.length)

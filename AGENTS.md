@@ -4524,6 +4524,14 @@ projection's excluded Entries gained the typed `kind` (the validation warning ki
 tells a dynamic Conflict from an input change through the start / save authorities read-only; participant names come from the current
 Build List and Targets (`getBuildListEntries()` / `getTargetWeapons()` while no preparation is ready) and never fall back to an ID;
 internal IDs, English reasons and raw error texts are Debug Mode only. No calculation, availability, save semantics or version moved.
+The PR #281 review then narrowed only what the screen offers (`docs/PLANNER_SPEC.md` 9.6.3 rule 9, `docs/UI_FLOW.md` 11.6.6): a
+participant an effective explicit decision of the displayed Draft excludes in *another* Conflict is unavailable there
+(`excluded_by_other_decision`, a disabled 「この候補を優先」 with that Conflict's display number and preferred Target name), re-choosing it
+in a Conflict whose own effective decision excludes it stays available (even when other decisions exclude it too, so it is choosable
+somewhere), provisional outcomes / recommendations / not-carried decisions never count, and the press re-checks it over its fresh
+preparation. The Domain decision set and its supersede rule are unchanged; `plannerConflictDecisionExclusions()` only attributes the
+ready set's exclusions to their decisions. The unexpected recalculation / save error text and `RejectedBuildListEntry.detail` are Debug
+Mode only too.
 The Production Plan screen no longer runs the Planner Alternative (`docs/PLANNER_SPEC.md` 9.2.19 is a routing record): 「比較する」
 is gone, and 「この候補を優先」 is `derivePlannerConflictDecisionSet()` (`src/domain/planner/plannerConflictDecisionSet.ts`, the 9.6.3
 authority the availability shares) -> an optional confirmation of dropped earlier decisions -> the ordinary

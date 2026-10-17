@@ -171,6 +171,30 @@ describe('ProductionPlanConflictSection', () => {
     expect(within(cards[1]).getByText('理由の文')).toBeInTheDocument()
   })
 
+  it('keeps a disabled 「この候補を優先」 with its written reason for a participant another Conflict excludes', async () => {
+    const { a, b, conflict, display } = scenario()
+    const user = userEvent.setup()
+    const reason = '「B側の目標武器」は、競合2で「別の武器」を優先したため、今回は作成しません。この競合では優先できません。'
+    const excluded = structuredClone(display)
+    excluded.conflicts[0].participants[1].canPrefer = false
+    excluded.conflicts[0].participants[1].preferExplanation = null
+    excluded.conflicts[0].participants[1].preferDisabledReason = reason
+    const { onPrefer } = renderSection(excluded)
+    const cards = within(screen.getByRole('list', { name: '競合 1 の参加候補' })).getAllByRole('listitem')
+    const disabled = within(cards[1]).getByRole('button', { name: 'この候補を優先' })
+    expect(disabled).toBeDisabled()
+    // The reason is visible text beside the button, not only a tooltip.
+    expect(within(cards[1]).getByText(reason)).toBeVisible()
+    expect(disabled).toHaveAccessibleDescription(new RegExp(reason.slice(0, 20)))
+    expect(disabled).toHaveStyle({ minHeight: '44px' })
+    // The other participant stays choosable.
+    const enabled = within(cards[0]).getByRole('button', { name: 'この候補を優先' })
+    expect(enabled).toBeEnabled()
+    await user.click(enabled)
+    expect(onPrefer).toHaveBeenCalledExactlyOnceWith(conflict.id, a.entry.id)
+    expect(onPrefer).not.toHaveBeenCalledWith(conflict.id, b.entry.id)
+  })
+
   it('says a Plan without Conflicts has none and lists no outcome', () => {
     const { display } = scenario()
     renderSection({ ...display, conflictCount: 0, undecidedCount: 0, conflicts: [], pendingDecisionNotice: null, targets: { ...display.targets, notCreated: [] } })

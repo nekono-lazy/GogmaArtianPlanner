@@ -22,6 +22,7 @@ import type { PlannerInteractionPreparationResult } from '../../workers/plannerW
 import {
   conflictKindPresentation,
   createProductionPlanConflictSectionDisplay,
+  excludedByOtherDecisionText,
   participantUnavailableText,
   plannerExclusionText,
   type ConflictNameSource,
@@ -517,5 +518,94 @@ describe('createProductionPlanConflictSectionDisplay', () => {
     expect(display.invalidPreparationReasons).toEqual(['同じ目標武器に複数の作成リスト候補が登録されています。使用する候補を1件にしてください'])
     expect(normalTexts(display)).not.toContain('English duplicate warning')
     expect(display.conflicts[0].participants[0].canPrefer).toBe(false)
+  })
+})
+
+/**
+ * PR #281 review (`docs/UI_FLOW.md` 11.6.6): a participant another Conflict's
+ * effective decision leaves out keeps a disabled 「この候補を優先」 and says which
+ * Conflict preferred which Target, while the other participants keep theirs.
+ */
+describe('participants another Conflict excludes (UI_FLOW 11.6.6)', () => {
+  function crossDisplay(options: { conflict1: 'a' | 'b'; withConflict2?: boolean }) {
+    const a = entryAndTarget('a')
+    const b = entryAndTarget('b')
+    const c = entryAndTarget('c')
+    const d = entryAndTarget('d')
+    const byKey = { a, b, c, d }
+    const conflicts = [
+      conflictOf('conflict.1', [a.entry, b.entry], { selectedBuildListEntryId: byKey[options.conflict1].entry.id }),
+      ...(options.withConflict2
+        ? [conflictOf('conflict.2', [d.entry, b.entry], { selectedBuildListEntryId: d.entry.id })]
+        : []),
+      conflictOf('conflict.4', [c.entry, b.entry], { recommendedBuildListEntryId: c.entry.id }),
+    ]
+    const entries = [a.entry, b.entry, c.entry, d.entry]
+    const input = inputOf(entries, [a.target, b.target, c.target, d.target])
+    const plan = planCompleting(options.conflict1 === 'a' ? [a, c, ...(options.withConflict2 ? [d] : [])] : [b], conflicts)
+    return createProductionPlanConflictSectionDisplay({
+      plan,
+      source: readySource(plan, input, currentReady(plan, entries)),
+      names: loaded(input.buildListEntries, input.targetWeapons),
+      master,
+    })
+  }
+
+  it('disables B with the other Conflict\'s number and preferred name, and keeps C choosable', () => {
+    const display = crossDisplay({ conflict1: 'a' })
+    const four = display.conflicts[1]
+    expect(four.number).toBe(2)
+    expect(four.status).toBe('pending')
+    const [c, b] = four.participants
+    expect([c.canPrefer, c.preferDisabledReason]).toEqual([true, null])
+    expect(b.canPrefer).toBe(false)
+    expect(b.preferExplanation).toBeNull()
+    expect(b.preferDisabledReason).toBe(
+      '「Target b」は、競合1で「Target a」を優先したため、今回は作成しません。この競合では優先できません。'
+      + '「Target b」を優先したい場合は、先に競合1の選択を変更してください。',
+    )
+    expect(b.chips.map(({ label }) => label)).toEqual(['今回は作成しない'])
+    // Said once: the persisted "another Conflict preferred" note gives way to the reason.
+    expect(b.notes).toEqual([])
+    expect(b.needsBuildListReview).toBe(false)
+    // The re-choice in conflict 1 itself stays offered.
+    expect(display.conflicts[0].participants.map(({ canPrefer, preferDisabledReason }) => [canPrefer, preferDisabledReason])).toEqual([
+      [true, null],
+      [true, null],
+    ])
+    expect(display.pendingCount).toBe(1)
+    expect(normalTexts(display)).not.toMatch(/build-list\.|conflict\.|target\.conflict/)
+  })
+
+  it('offers B again once conflict 1 prefers B', () => {
+    const display = crossDisplay({ conflict1: 'b' })
+    expect(display.conflicts[1].participants.map(({ canPrefer, preferDisabledReason }) => [canPrefer, preferDisabledReason])).toEqual([
+      [true, null],
+      [true, null],
+    ])
+  })
+
+  it('names every excluding Conflict and asks to change either one', () => {
+    const display = crossDisplay({ conflict1: 'a', withConflict2: true })
+    const b = display.conflicts[2].participants[1]
+    expect(b.preferDisabledReason).toBe(
+      '「Target b」は、競合1で「Target a」を、競合2で「Target d」を優先したため、今回は作成しません。この競合では優先できません。'
+      + '「Target b」を優先したい場合は、先に競合1・競合2のいずれかの選択を変更してください。',
+    )
+    // Each excluding Conflict re-chooses B itself.
+    expect(display.conflicts[0].participants[1].canPrefer).toBe(true)
+    expect(display.conflicts[1].participants[1].canPrefer).toBe(true)
+  })
+
+  it('never guesses a name or a Conflict number it cannot read', () => {
+    expect(excludedByOtherDecisionText(null, [{ conflictNumber: null, preferredName: null }])).toBe(
+      'この候補は、別の競合で別の候補を優先したため、今回は作成しません。この競合では優先できません。'
+      + 'この候補を優先したい場合は、先にその競合の選択を変更してください。',
+    )
+    expect(excludedByOtherDecisionText('B', [{ conflictNumber: 3, preferredName: null }])).toBe(
+      '「B」は、競合3で別の候補を優先したため、今回は作成しません。この競合では優先できません。'
+      + '「B」を優先したい場合は、先に競合3の選択を変更してください。',
+    )
+    expect(participantUnavailableText('excluded_by_other_decision', null, false)).toBeNull()
   })
 })
