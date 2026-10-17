@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { BuildListEntry, PlanConflict, PlanStep, ProductionPlan, TargetWeapon } from '../../domain/models/publicTypes'
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../../domain/models/common'
 import { defaultPlannerOptions, type PlannerInput } from '../../domain/planner'
 import { createProductionPlanInteractionViewModel } from '../../services/planner/prepareProductionPlanInteraction'
 import {
@@ -200,5 +201,94 @@ describe('ProductionPlanConflictSection', () => {
     renderSection({ ...display, conflictCount: 0, undecidedCount: 0, conflicts: [], pendingDecisionNotice: null, targets: { ...display.targets, notCreated: [] } })
     expect(screen.getByText('この生産計画に表示する競合はありません。')).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '今回作成する / 作成しない目標武器' })).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * Issue #121 (`docs/UI_FLOW.md` 11.6.5): a Plan whose rejections carry their
+ * causes groups the not-made Targets by cause, with each group's count in its
+ * heading, and says how many a conflict leaves out under the count figure.
+ */
+describe('ProductionPlanConflictSection cause groups (Issue #121)', () => {
+  function causeDisplay(names: 'loaded' | 'loading' | 'failed' = 'loaded'): ConflictSectionDisplay {
+    const { a, b, conflict } = scenario()
+    const c = entryAndTarget('c', 'C側の目標武器')
+    const base = createValidProductionPlan()
+    const plan: ProductionPlan = {
+      ...base,
+      calculationContext: { ...base.calculationContext, appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION },
+      steps: [{
+        ...structuredClone(base.steps[0]),
+        progressedTargetWeaponIds: [a.target.id],
+        executionEffects: {
+          trackedOwnedWeaponId: null,
+          normalCreationRole: null,
+          registersTrackedWeapon: false,
+          observationBinding: null,
+          targetLinks: [],
+          compromiseLabels: [],
+          targetCompletions: [{ buildListEntryId: a.entry.id, targetWeaponId: a.target.id, ownedWeaponId: 'owned.section' as never }],
+        },
+      }],
+      conflicts: [conflict],
+      selectedBuildListEntryIds: [a.entry.id],
+      rejectedBuildListEntries: [
+        { buildListEntryId: b.entry.id, targetWeaponId: b.target.id, reason: 'resource_conflict', resourceConflictCause: 'provisional_outcome_not_committed', detail: '' },
+        { buildListEntryId: c.entry.id, targetWeaponId: c.target.id, reason: 'already_satisfied', detail: '' },
+      ],
+    }
+    return createProductionPlanConflictSectionDisplay({
+      plan,
+      source: { status: 'stale' },
+      names: names === 'loaded'
+        ? { status: 'loaded', buildListEntries: [a.entry, b.entry, c.entry], targetWeapons: [a.target, b.target, c.target] }
+        : { status: names },
+      master,
+    })
+  }
+
+  it('heads each non-empty group with its count and leaves an empty group out', () => {
+    renderSection(causeDisplay())
+    const counts = screen.getByLabelText('競合と作成予定の件数')
+    const notCreated = within(counts).getByText('今回作成しない目標武器').nextElementSibling
+    expect(notCreated).toHaveTextContent('2本うち競合のため 1本')
+
+    const outcome = screen.getByRole('region', { name: '今回作成する / 作成しない目標武器' })
+    expect(within(outcome).getByRole('heading', { level: 4, name: '今回作成しない目標武器（2本）' })).toBeInTheDocument()
+    const conflictGroup = within(outcome).getByRole('list', { name: '競合のため今回作成しない（1本）' })
+    expect(within(conflictGroup).getByText('B側の目標武器')).toBeInTheDocument()
+    expect(within(conflictGroup).getByText('競合の選択待ちのため、今回は作成しません。')).toBeInTheDocument()
+    const otherGroup = within(outcome).getByRole('list', { name: 'その他の理由で今回作成しない（1本）' })
+    expect(within(otherGroup).getByText('C側の目標武器')).toBeInTheDocument()
+    expect(within(otherGroup).getByText('目標武器はすでに満たされています。')).toBeInTheDocument()
+    expect(within(outcome).queryByRole('heading', { name: /競合によるものか確認できない/ })).not.toBeInTheDocument()
+  })
+
+  it('says the established and the undetermined counts apart when a stuck drop cannot be told', () => {
+    const display = causeDisplay()
+    const groups = display.targets.causeGroups!
+    groups.ratioDetermined = false
+    groups.unestablishedCount = 1
+    groups.unestablished = [{
+      key: 'target.section.d',
+      name: '名前を確認できない目標武器',
+      nameResolved: false,
+      weaponLabel: null,
+      reason: '計画の途中で作成手順が行き詰まったため、今回は作成しません。ほかの目標武器との競合によるものかは確認できません。',
+    }]
+    display.targets.notCreated = [...groups.conflict, ...groups.unestablished, ...groups.other]
+    renderSection(display)
+    const counts = screen.getByLabelText('競合と作成予定の件数')
+    expect(within(counts).getByText('今回作成しない目標武器').nextElementSibling)
+      .toHaveTextContent('3本うち競合を確認できたもの 1本・確認できないもの 1本')
+    const group = screen.getByRole('list', { name: '競合によるものか確認できない（1本）' })
+    expect(within(group).getByText('名前を確認できない目標武器')).toBeInTheDocument()
+  })
+
+  it.each(['loading', 'failed'] as const)('keeps the conflict count while the names are %s', (names) => {
+    renderSection(causeDisplay(names))
+    const counts = screen.getByLabelText('競合と作成予定の件数')
+    const value = within(counts).getByText('今回作成しない目標武器').nextElementSibling
+    expect(value).toHaveTextContent(`${names === 'loading' ? '確認中' : '確認できません'}うち競合のため 1本`)
   })
 })

@@ -1027,7 +1027,7 @@ unchanged, and a formal research run under the schema 18 runtime is refused by i
 `DATABASE_SCHEMA_VERSION` 10, `ExportRoot.schemaVersion` 13, `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2,
 `PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7` and Master `dataVersion` 4 are unchanged, with no migration.
 Issue #121 PR-1 (docs-only; `docs/PLANNER_SPEC.md` 9.6.9.1, `docs/UI_FLOW.md` 11.0 / 11.6.5, `docs/DATA_MODEL.md` 11.9,
-`docs/REQUIREMENTS.md` 24.2) moved no version and is not implemented yet. It fixed the Production Plan overview figure
+`docs/REQUIREMENTS.md` 24.2) moved no version; PR-2 and PR-3 below implemented it. It fixed the Production Plan overview figure
 「完成予定 N / (N + M)本」: `N` is the distinct `executionEffects.targetCompletions` Targets (the existing authority), `M` the
 distinct Targets of the rejected Entries whose competition with another Target is established - explicit decision losers and
 provisional outcome losers - minus the `N` Targets, and the figure is provisional while any
@@ -1046,8 +1046,8 @@ current foreign key or a ReferenceFinder reference; `reason`'s union and mapping
 records lack them reads as not determinable; only calculation schemas in the explicit set `{14, 15, 16, 17, 18}` (the scheduler
 mapping) are read this way. The Planner's decisions do not change, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 18, Dexie 10
 and Export 13, with no migration; the Issue #278 PR-2 parity digest compares the result with both fields projected out.
-Issue #121 PR-2 implemented the record and its validation; the aggregation function and the overview / conflict section display are
-still not implemented (the next PR). `RejectedBuildListEntry` gained the optional `targetWeaponId` and `resourceConflictCause`
+Issue #121 PR-2 implemented the record and its validation; the aggregation function and the overview / conflict section display
+followed in PR-3 (below). `RejectedBuildListEntry` gained the optional `targetWeaponId` and `resourceConflictCause`
 (`RejectedBuildListEntryResourceConflictCause`, the literal list `rejectedBuildListEntryResourceConflictCauses`). The scheduler's
 runtime-only `PlannerRouteCommitmentEntryEvidence` gained `stuckDrop: { otherPendingRoutes } | null`, set by `dropStuckEntry()` from
 the `pending` it already drops from (another committed Entry with remaining units or not) and non-null only while the Entry's final
@@ -1067,6 +1067,30 @@ top-level `active` Plan only (`inconsistent_snapshot`); the Target's existence i
 it. Digests recorded before the fields existed (the Issue #278 PR-2 parity digest, the research golden of
 `plannerGlobalOptimizationExtentProbe.test.ts`) hash a projection without them (`withoutIssue121RejectedRecordFields()`) and check
 the fields against the input Entries separately; no recorded value changed. No version moved (18 / 10 / 13, `production-rng:c5-e7`).
+Issue #121 PR-3 implemented the aggregation and the display (`docs/PLANNER_SPEC.md` 9.6.9.1, `docs/UI_FLOW.md` 11.0 / 11.6.5), so Issue
+#121 is complete. The one authority is the pure Planner Domain projection `summarizeProductionPlanCompletion(plan)`
+(`src/domain/planner/productionPlanCompletionSummary.ts`), which takes the exact persisted Plan alone - never the current Build List,
+Targets, names or a message - and returns `completion_unknown` (a Step without `executionEffects`: `N` unknown too),
+`ratio_determined` (`C` / `N`, `M = |R \ C|`, the cause breakdown) or `ratio_undeterminable` (`N`, the first failing condition of
+2 - 5 as the typed `reason`, the breakdown only for `conflict_cause_not_established`), each with `isProvisional` (a persisted Conflict
+without `selectedBuildListEntryId`). `R` is the Targets of the `resource_conflict` records caused by `explicit_resolution_not_selected` /
+`provisional_outcome_not_committed`; never every `resource_conflict`, a Conflict participation or a stuck drop. Condition 2 is the
+explicit set `PLAN_COMPLETION_RATIO_CALCULATION_APP_SCHEMA_VERSIONS` `{14, 15, 16, 17, 18}` (no range; a test pins the current version
+in it and a future one out - adding a version needs a deliberate decision that its rejection records keep their meaning); a cause on
+a non-`resource_conflict` record is a broken record (`unknown_rejection_reason`); with no `resource_conflict` record `M = 0` without
+the fields. `hasProductionPlanTargetCompletionAuthority()` moved there, and the overview's `createProductionPlanSummary()` reads
+`completion` from it, so `plannedCompletionTargetCount` is its `N`. The overview shows `N / (N + M)本` / `0本` / `N本` with
+「競合による未完成数：確認できません」 / 「不明（旧形式の計画）」, a `暫定・` prefix in text, the denominator explanation or the typed
+reason under the figures, the ratio in words for a screen reader (`SummaryFigure.accessibleValue`, the `/` value `aria-hidden`), and a
+Conflict note whose provisional wording depends on a compatible Draft (`conflictPreferenceAvailable`, from the page's
+`evaluateProductionPlanCalculationCompatibility()`). The Conflict section's `createProductionPlanConflictSectionDisplay()` calls the
+same function and, only for a Plan meeting conditions 1 - 4, returns `targets.causeGroups` (`M`, `K`, the three disjoint groups
+競合のため / 競合によるものか確認できない / その他の理由, rows by Target ID from the Plan's own records first - a rejection's
+`targetWeaponId`, a completion's Entry - then the current Entry; a known but gone Target is a 「名前を確認できない目標武器」 row, only an
+Entry no record or current Entry names is counted apart); the counts never depend on the names being loaded. Every other Plan keeps
+the former single list. 「採用されなかった候補」 says a recorded cause by `rejectedBuildListEntryResourceConflictCauseLabels`, so a
+stuck drop is never called a resource conflict. Planner, conflict resolution, RNG, Search, persisted shapes and every version are
+unchanged (18 / 10 / 13, `production-rng:c5-e7`), with no migration.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation

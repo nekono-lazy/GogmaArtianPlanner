@@ -10,6 +10,7 @@ import type {
   ProductionPlanStatus,
   ProductionPlanAbandonmentReason,
   RejectedBuildListEntry,
+  RejectedBuildListEntryResourceConflictCause,
   RngStateSource,
   RouteKind,
   RouteOperation,
@@ -172,6 +173,24 @@ export const rejectedBuildListEntryReasonLabels: Record<
   already_satisfied: '目標武器はすでに満たされています',
   requires_protected_weapon: '保護中の武器を変更する必要があるため使用できません',
   dominated_by_better_candidate: 'より良い候補があるため採用されませんでした',
+}
+
+/**
+ * Why a `resource_conflict` rejection is one, when the Plan recorded its cause
+ * (Issue #121, `docs/DATA_MODEL.md` 11.9, `docs/UI_FLOW.md` 11.6.5). A stuck
+ * drop (deadlock / stall) is never said to be a resource conflict: only the
+ * explicit decision and the provisional outcome establish a competition with
+ * another Target. A record without a cause keeps the reason label above.
+ */
+export const rejectedBuildListEntryResourceConflictCauseLabels: Record<
+  RejectedBuildListEntryResourceConflictCause,
+  string
+> = {
+  explicit_resolution_not_selected: '競合で別の候補を優先したため、採用されませんでした',
+  provisional_outcome_not_committed: '未選択の競合で、Plannerが暫定的に別の候補を作成予定にしたため、採用されませんでした',
+  stuck_drop_without_other_routes: '計画の途中で、この候補の作成手順を先へ進められなくなったため、採用されませんでした',
+  stuck_drop_with_other_routes:
+    '計画の途中で作成手順が行き詰まったため、採用されませんでした。ほかの目標武器との競合によるものかは確認できません',
 }
 
 /** The shared resource a persisted `PlanConflict` competes for (`docs/DATA_MODEL.md` 11.8). */

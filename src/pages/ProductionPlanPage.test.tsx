@@ -692,6 +692,76 @@ describe('ProductionPlanPage explicit selection (Issue #278 ordinary Planner)', 
     expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
   })
 
+  it('shows the saved Draft\'s own completion numbers after 「この候補を優先」 (Issue #121)', async () => {
+    const user = userEvent.setup()
+    const fixture = multiParticipantFixture()
+    for (const context of [
+      fixture.plan.calculationContext,
+      fixture.plan.baseSnapshot.calculationContext,
+      fixture.input.calculationContext,
+    ]) {
+      context.appSchemaVersion = CURRENT_CALCULATION_APP_SCHEMA_VERSION
+    }
+    const [conflictX] = fixture.plan.conflicts
+    // The new Draft prefers the second participant and leaves the first out.
+    const saved: ProductionPlan = {
+      ...structuredClone(fixture.plan),
+      id: productionPlanId('plan.page.preferred'),
+      steps: fixture.plan.steps.map((planStep) => ({
+        ...structuredClone(planStep),
+        progressedTargetWeaponIds: [fixture.secondTarget.id],
+        executionEffects: {
+          trackedOwnedWeaponId: null,
+          normalCreationRole: null,
+          registersTrackedWeapon: false,
+          observationBinding: null,
+          targetLinks: [],
+          compromiseLabels: [],
+          targetCompletions: [{
+            buildListEntryId: fixture.secondEntry.id,
+            targetWeaponId: fixture.secondTarget.id,
+            ownedWeaponId: 'owned.page.preferred' as never,
+          }],
+        },
+      })),
+      conflicts: [{ ...conflictX, selectedBuildListEntryId: fixture.secondEntry.id }],
+      selectedBuildListEntryIds: [fixture.secondEntry.id],
+      rejectedBuildListEntries: [{
+        buildListEntryId: fixture.entry.id,
+        targetWeaponId: fixture.target.id,
+        reason: 'resource_conflict',
+        resourceConflictCause: 'explicit_resolution_not_selected',
+        detail: 'Persisted rejection detail',
+      }],
+    }
+    const client = plannerClient(async () => fixture.preparation)
+    vi.mocked(client.createPlan).mockResolvedValue(preferenceResult(saved))
+    const deps = dependencies(fixture, client)
+    vi.mocked(deps.getPlan).mockImplementation(async (id) => id === saved.id ? saved : fixture.plan)
+    vi.mocked(deps.savePlannerConflictPreferenceResult).mockResolvedValue({ kind: 'saved', plan: saved })
+    const view = renderPage(deps, fixture.plan.id)
+
+    // The displayed legacy-form Draft knows no completion count.
+    const before = await screen.findByRole('region', { name: '計画の概要' })
+    expect(within(before).getByText('完成予定の目標武器数').nextElementSibling).toHaveTextContent('不明（旧形式の計画）')
+    await clickSelection(user, 1)
+    await waitFor(() => expect(view.router.state.location.pathname).toBe('/plans/' + saved.id))
+
+    const overview = await screen.findByRole('region', { name: '計画の概要' })
+    await within(overview).findByText('1 / 2本')
+    expect(within(overview).getByText('完成予定1本、競合のため今回作成しない1本を含めて合計2本')).toBeInTheDocument()
+    expect(within(overview).getByText('競合のため今回作成しない1本を含む')).toBeInTheDocument()
+    expect(within(overview).getByRole('note')).toHaveTextContent('競合のため、この計画では1本の目標武器を作成しません')
+
+    // The Conflict section reads the same numbers.
+    const counts = await screen.findByLabelText('競合と作成予定の件数')
+    expect(within(counts).getByText('今回作成しない目標武器').nextElementSibling).toHaveTextContent('1本うち競合のため 1本')
+    const group = await screen.findByRole('list', { name: '競合のため今回作成しない（1本）' })
+    expect(within(group).getByText(fixture.target.name)).toBeInTheDocument()
+    expect(within(group).getByText(`「${fixture.secondTarget.name}」を優先したため、今回は作成しません。`)).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('Persisted rejection detail')
+  })
+
   it('lists an earlier decision the current input cannot reproduce before running', async () => {
     const user = userEvent.setup()
     const fixture = multiParticipantFixture()
@@ -1294,8 +1364,11 @@ describe('ProductionPlanPage read-only Plan content', () => {
     renderPage(contentDependencies(fixture), fixture.plan.id)
 
     expect(await screen.findByText('計画の概要')).toBeInTheDocument()
-    // One shared Step completes both Targets: two planned completions.
-    expect(summaryValue('完成予定の目標武器数')).toBe('2')
+    // One shared Step completes both Targets: two planned completions. The
+    // fixture's historical calculation schema leaves the conflict count unknown.
+    expect(summaryValue('完成予定の目標武器数')).toBe('2本競合による未完成数：確認できません')
+    expect(screen.getByText('この計画は以前の計算方式で作成されたため、競合のため作成しない目標武器の数を確認できません。'))
+      .toBeInTheDocument()
     await openPanel('全4ステップを表示')
     const list = within(stepCard(1)).getByRole('list', { name: 'ステップ 1 で完成する目標武器' })
     expect(within(list).getAllByRole('listitem').map(({ textContent }) => textContent))

@@ -6,8 +6,10 @@ import { StatusChip } from '../StatusChip'
 import { SummaryFigure } from './ProductionPlanSummary'
 import type {
   ConflictCardDisplay,
+  ConflictNotCreatedTargetDisplay,
   ConflictParticipantDisplay,
   ConflictSectionDisplay,
+  ConflictTargetCauseGroups,
   ConflictTargetOutcome,
 } from './productionPlanConflictPresentation'
 
@@ -41,6 +43,29 @@ function figureCount(count: number): string {
   return `${count.toLocaleString('ja-JP')}件`
 }
 
+function weaponCount(count: number): string {
+  return `${count.toLocaleString('ja-JP')}本`
+}
+
+/**
+ * The line under 「今回作成しない目標武器」: how many of them a conflict leaves
+ * out - the shared Domain numbers, known while the names load or fail too
+ * (11.6.5) - and the candidates whose Target cannot be read.
+ */
+function notCreatedDetail(targets: ConflictTargetOutcome): string | undefined {
+  const lines: string[] = []
+  const groups = targets.causeGroups
+  if (groups !== null) {
+    lines.push(groups.ratioDetermined
+      ? `うち競合のため ${weaponCount(groups.conflictCount)}`
+      : `うち競合を確認できたもの ${weaponCount(groups.conflictCount)}・確認できないもの ${weaponCount(groups.unestablishedCount)}`)
+  }
+  if (targets.namesStatus === 'loaded' && targets.notCreatedUnresolvedCount > 0) {
+    lines.push(`ほかに目標武器を確認できない候補 ${figureCount(targets.notCreatedUnresolvedCount)}`)
+  }
+  return lines.length === 0 ? undefined : lines.join('、')
+}
+
 function ConflictSummary({ display }: { display: ConflictSectionDisplay }) {
   const { targets } = display
   const notCreatedValue =
@@ -50,7 +75,7 @@ function ConflictSummary({ display }: { display: ConflictSectionDisplay }) {
         ? '確認中'
         : targets.namesStatus === 'failed'
           ? '確認できません'
-          : `${targets.notCreated.length}本`
+          : weaponCount(targets.notCreated.length)
   return (
     <Box
       component="dl"
@@ -84,20 +109,20 @@ function ConflictSummary({ display }: { display: ConflictSectionDisplay }) {
         label="今回作成しない目標武器"
         value={notCreatedValue}
         numeric={targets.hasCompletionAuthority && targets.namesStatus === 'loaded'}
-        detail={
-          targets.notCreatedUnresolvedCount > 0
-            ? `ほかに目標武器を確認できない候補 ${figureCount(targets.notCreatedUnresolvedCount)}`
-            : undefined
-        }
+        detail={notCreatedDetail(targets)}
       />
     </Box>
   )
 }
 
-function TargetName({ name, weaponLabel }: { name: string; weaponLabel: string | null }) {
+function TargetName({ name, weaponLabel, nameResolved = true }: { name: string; weaponLabel: string | null; nameResolved?: boolean }) {
   return (
     <>
-      <Typography component="span" variant="body2" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
+      <Typography
+        component="span"
+        variant="body2"
+        sx={{ fontWeight: 600, overflowWrap: 'anywhere', color: nameResolved ? 'text.primary' : 'text.secondary' }}
+      >
         {name}
       </Typography>
       {weaponLabel !== null && (
@@ -106,6 +131,81 @@ function TargetName({ name, weaponLabel }: { name: string; weaponLabel: string |
         </Typography>
       )}
     </>
+  )
+}
+
+/** The not-made Target rows, each with its reason, and the candidates whose Target cannot be read. */
+function NotCreatedList({
+  rows,
+  unresolvedCount,
+  labelledBy,
+}: {
+  rows: readonly ConflictNotCreatedTargetDisplay[]
+  unresolvedCount: number
+  labelledBy: string
+}) {
+  return (
+    <Box component="ul" aria-labelledby={labelledBy} sx={{ m: 0, p: 0, listStyle: 'none', display: 'grid', gap: 1 }}>
+      {rows.map((target) => (
+        <Box
+          component="li"
+          key={target.key}
+          sx={{ border: 1, borderColor: 'divider', borderRadius: 1, px: 1.5, py: 1, minWidth: 0 }}
+        >
+          <Typography component="p" variant="body2" sx={{ m: 0 }}>
+            <TargetName name={target.name} weaponLabel={target.weaponLabel} nameResolved={target.nameResolved} />
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>
+            {target.reason}
+          </Typography>
+        </Box>
+      ))}
+      {unresolvedCount > 0 && (
+        <Box component="li" sx={{ border: 1, borderColor: 'divider', borderRadius: 1, px: 1.5, py: 1 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>
+            目標武器を確認できない候補が{unresolvedCount}件あります。作成リストを確認するか、画面を再読み込みしてください。
+          </Typography>
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+/** One cause group (11.6.5): its heading carries the number of Targets. */
+function NotCreatedGroup({ title, rows }: { title: string; rows: readonly ConflictNotCreatedTargetDisplay[] }) {
+  const headingId = useId()
+  return (
+    <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+      <Typography id={headingId} component="h5" variant="body2" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
+        {title}（{weaponCount(rows.length)}）
+      </Typography>
+      <NotCreatedList rows={rows} unresolvedCount={0} labelledBy={headingId} />
+    </Stack>
+  )
+}
+
+/**
+ * 「今回作成しない目標武器」 by cause (Issue #121, 11.6.5), when the Plan
+ * recorded every rejection with its cause: 競合のため / 競合によるものか確認
+ * できない / その他の理由, an empty group left out. The candidates whose Target
+ * cannot be read are said once, after the groups.
+ */
+function NotCreatedGroups({ groups, unresolvedCount }: { groups: ConflictTargetCauseGroups; unresolvedCount: number }) {
+  return (
+    // The groups sit visibly under 「今回作成しない目標武器」: a left rule and
+    // an indent, not colour, carry the nesting.
+    <Stack spacing={1.5} sx={{ pl: { xs: 1, sm: 1.5 }, borderLeft: 2, borderColor: 'divider', minWidth: 0 }}>
+      {groups.conflict.length > 0 && <NotCreatedGroup title="競合のため今回作成しない" rows={groups.conflict} />}
+      {groups.unestablished.length > 0 && (
+        <NotCreatedGroup title="競合によるものか確認できない" rows={groups.unestablished} />
+      )}
+      {groups.other.length > 0 && <NotCreatedGroup title="その他の理由で今回作成しない" rows={groups.other} />}
+      {unresolvedCount > 0 && (
+        <Typography variant="body2" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>
+          ほかに、目標武器を確認できない候補が{unresolvedCount}件あります。作成リストを確認するか、画面を再読み込みしてください。
+        </Typography>
+      )}
+    </Stack>
   )
 }
 
@@ -163,30 +263,14 @@ function TargetOutcomeBlock({ targets }: { targets: ConflictTargetOutcome }) {
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               競合や不採用のために作成しない目標武器はありません。
             </Typography>
+          ) : targets.causeGroups !== null ? (
+            <NotCreatedGroups groups={targets.causeGroups} unresolvedCount={targets.notCreatedUnresolvedCount} />
           ) : (
-            <Box component="ul" aria-labelledby={notCreatedHeadingId} sx={{ m: 0, p: 0, listStyle: 'none', display: 'grid', gap: 1 }}>
-              {targets.notCreated.map((target) => (
-                <Box
-                  component="li"
-                  key={target.key}
-                  sx={{ border: 1, borderColor: 'divider', borderRadius: 1, px: 1.5, py: 1, minWidth: 0 }}
-                >
-                  <Typography component="p" variant="body2" sx={{ m: 0 }}>
-                    <TargetName name={target.name} weaponLabel={target.weaponLabel} />
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>
-                    {target.reason}
-                  </Typography>
-                </Box>
-              ))}
-              {targets.notCreatedUnresolvedCount > 0 && (
-                <Box component="li" sx={{ border: 1, borderColor: 'divider', borderRadius: 1, px: 1.5, py: 1 }}>
-                  <Typography variant="body2" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>
-                    目標武器を確認できない候補が{targets.notCreatedUnresolvedCount}件あります。作成リストを確認するか、画面を再読み込みしてください。
-                  </Typography>
-                </Box>
-              )}
-            </Box>
+            <NotCreatedList
+              rows={targets.notCreated}
+              unresolvedCount={targets.notCreatedUnresolvedCount}
+              labelledBy={notCreatedHeadingId}
+            />
           )}
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             「作成しない」は、この計画では作らないという意味です。作成リストの候補と目標武器は削除されず、残っています。
@@ -444,9 +528,11 @@ export function ProductionPlanConflictSection({
   statusSlot,
   debugPreparationMessages = [],
 }: ProductionPlanConflictSectionProps) {
+  const groups = display.targets.causeGroups
   const hasOutcome =
     display.conflictCount > 0 ||
-    (display.targets.namesStatus === 'loaded' && display.targets.notCreated.length > 0)
+    (display.targets.namesStatus === 'loaded' && display.targets.notCreated.length > 0) ||
+    (groups !== null && groups.conflictCount + groups.unestablishedCount > 0)
   return (
     <Stack spacing={2}>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>

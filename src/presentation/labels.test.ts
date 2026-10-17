@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { rejectedBuildListEntryResourceConflictCauses } from '../domain/models/publicTypes'
 import { plannerWarningKinds } from '../domain/planner/plannerTypes'
 import {
   compromiseCheckpointBadgeLabel,
   candidateSearchProgressPhaseLabels,
   conflictKindLabels,
   rejectedBuildListEntryReasonLabels,
+  rejectedBuildListEntryResourceConflictCauseLabels,
   getRngMissingRequirementLabel,
   getRouteOperationLabel,
   ownedWeaponStatusLabels,
@@ -52,6 +54,12 @@ describe('presentation labels', () => {
       'resource_conflict',
     ])
     expect(rejectedBuildListEntryReasonLabels.resource_conflict).toContain('競合')
+    // Every recorded resource_conflict cause (Issue #121); a stuck drop is never a resource conflict.
+    expect(Object.keys(rejectedBuildListEntryResourceConflictCauseLabels).sort()).toEqual(
+      [...rejectedBuildListEntryResourceConflictCauses].sort(),
+    )
+    expect(rejectedBuildListEntryResourceConflictCauseLabels.stuck_drop_without_other_routes).not.toContain('資源')
+    expect(rejectedBuildListEntryResourceConflictCauseLabels.stuck_drop_with_other_routes).not.toContain('資源')
     expect(Object.keys(conflictKindLabels).sort()).toEqual([
       'same_gogma_counter',
       'same_normal_counter',

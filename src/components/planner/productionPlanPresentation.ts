@@ -5,6 +5,11 @@ import type {
   TargetWeapon,
   TargetWeaponId,
 } from '../../domain/models/publicTypes'
+import {
+  hasProductionPlanTargetCompletionAuthority,
+  summarizeProductionPlanCompletion,
+  type ProductionPlanCompletionSummary,
+} from '../../domain/planner/productionPlanCompletionSummary'
 
 /**
  * Read-only presentation helpers over an already persisted `ProductionPlan`.
@@ -32,6 +37,13 @@ export interface ProductionPlanSummary {
    * of the legacy form without `executionEffects` and the count is unknown.
    */
   plannedCompletionTargetCount: number | null
+  /**
+   * The shared Domain completion summary (Issue #121, `docs/PLANNER_SPEC.md`
+   * 9.6.9.1): `N`, the Targets left out by a conflict, whether the ratio can
+   * be told, and whether it is provisional. `plannedCompletionTargetCount` is
+   * its `N`, so the two never disagree.
+   */
+  completion: ProductionPlanCompletionSummary
   /**
    * The number of persisted `ProductionPlan.conflicts` records. A Conflict
    * record count - never a Target or weapon count, and never re-derived from
@@ -120,7 +132,7 @@ export function groupPlanStepsByTargetWeapon(
  * form, and its completions are never reconstructed from `shouldSecure`.
  */
 export function hasPlanTargetCompletionAuthority(plan: ProductionPlan): boolean {
-  return plan.steps.every((step) => step.executionEffects !== undefined)
+  return hasProductionPlanTargetCompletionAuthority(plan)
 }
 
 /**
@@ -128,10 +140,11 @@ export function hasPlanTargetCompletionAuthority(plan: ProductionPlan): boolean 
  *
  * `plannedCompletionTargetCount` is the number of distinct TargetWeapon IDs in
  * `steps[].executionEffects.targetCompletions`, the only authority (UI_FLOW
- * 11.0). A shared Step completing two Targets counts two, and a Target named
- * twice counts once. Neither `expectedResult.shouldSecure`, the number of
- * completing or reserve Steps, the Target count, nor
- * `selectedBuildListEntryIds.length` is used; a legacy Plan reports `null`.
+ * 11.0), read from the shared Domain completion summary. A shared Step
+ * completing two Targets counts two, and a Target named twice counts once.
+ * Neither `expectedResult.shouldSecure`, the number of completing or reserve
+ * Steps, the Target count, nor `selectedBuildListEntryIds.length` is used; a
+ * legacy Plan reports `null`.
  *
  * `conflictCount` is `plan.conflicts.length` of this exact persisted Plan
  * (UI_FLOW 11.0): neither recalculated from the current input nor added to
@@ -141,24 +154,21 @@ export function createProductionPlanSummary(
   plan: ProductionPlan,
 ): ProductionPlanSummary {
   const targetWeaponIds = new Set<TargetWeaponId>()
-  const completedTargetWeaponIds = new Set<TargetWeaponId>()
   for (const step of plan.steps) {
     for (const id of getPlanStepRelatedTargetWeaponIds(step)) {
       targetWeaponIds.add(id)
     }
-    for (const { targetWeaponId } of step.executionEffects?.targetCompletions ?? []) {
-      completedTargetWeaponIds.add(targetWeaponId)
-    }
   }
+  const completion = summarizeProductionPlanCompletion(plan)
   return {
     planId: plan.id,
     status: plan.status,
     createdAt: plan.createdAt,
     totalStepCount: plan.steps.length,
     targetWeaponCount: targetWeaponIds.size,
-    plannedCompletionTargetCount: hasPlanTargetCompletionAuthority(plan)
-      ? completedTargetWeaponIds.size
-      : null,
+    plannedCompletionTargetCount:
+      completion.status === 'completion_unknown' ? null : completion.completedCount,
+    completion,
     conflictCount: plan.conflicts.length,
     selectedConflictCount: plan.conflicts.filter(
       ({ selectedBuildListEntryId }) => selectedBuildListEntryId !== null,

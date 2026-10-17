@@ -6,6 +6,7 @@ import type {
   ProductionPlan,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION } from '../../domain/models/common'
 import { defaultPlannerOptions, type PlannerInput } from '../../domain/planner'
 import { createProductionPlanInteractionViewModel } from '../../services/planner/prepareProductionPlanInteraction'
 import {
@@ -28,6 +29,7 @@ import {
   type ConflictNameSource,
   type ConflictSectionSource,
 } from './productionPlanConflictPresentation'
+import { createProductionPlanSummary } from './productionPlanPresentation'
 
 const master = createValidMasterDataFixture()
 
@@ -607,5 +609,173 @@ describe('participants another Conflict excludes (UI_FLOW 11.6.6)', () => {
       + '「B」を優先したい場合は、先に競合3の選択を変更してください。',
     )
     expect(participantUnavailableText('excluded_by_other_decision', null, false)).toBeNull()
+  })
+})
+
+/**
+ * Issue #121 (`docs/UI_FLOW.md` 11.6.5, `docs/PLANNER_SPEC.md` 9.6.9.1): a
+ * Plan whose rejections are recorded with their causes lists the Targets it
+ * does not make in three disjoint groups, counted from the shared Domain
+ * summary - the same numbers as the overview - whatever the current Build
+ * List and Targets hold.
+ */
+describe('the not-made Targets by cause (Issue #121)', () => {
+  function causeScenario() {
+    const [a, b, c, d, e, f, g, h] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((suffix) => entryAndTarget(suffix))
+    const aDuplicate = entryAndTarget('a-duplicate')
+    aDuplicate.entry.targetWeaponId = a.target.id
+    const conflicts = [
+      // B loses X to A's explicit decision and also takes part in the undecided Z.
+      conflictOf('conflict.x', [a.entry, b.entry], { selectedBuildListEntryId: a.entry.id }),
+      conflictOf('conflict.y', [c.entry, d.entry], { recommendedBuildListEntryId: d.entry.id }),
+      conflictOf('conflict.z', [b.entry, e.entry]),
+      // H takes part with no rejection record (a Conflict found while planning).
+      conflictOf('conflict.w', [h.entry, d.entry]),
+    ]
+    const plan = planCompleting([a, d, e], conflicts)
+    plan.calculationContext.appSchemaVersion = CURRENT_CALCULATION_APP_SCHEMA_VERSION
+    plan.rejectedBuildListEntries = [
+      {
+        buildListEntryId: b.entry.id,
+        targetWeaponId: b.target.id,
+        reason: 'resource_conflict',
+        resourceConflictCause: 'explicit_resolution_not_selected',
+        detail: 'English detail never shown',
+      },
+      {
+        buildListEntryId: c.entry.id,
+        targetWeaponId: c.target.id,
+        reason: 'resource_conflict',
+        resourceConflictCause: 'provisional_outcome_not_committed',
+        detail: '',
+      },
+      // A Target the Plan completes through another Entry is never left out (R ∩ C).
+      {
+        buildListEntryId: aDuplicate.entry.id,
+        targetWeaponId: a.target.id,
+        reason: 'resource_conflict',
+        resourceConflictCause: 'provisional_outcome_not_committed',
+        detail: '',
+      },
+      {
+        buildListEntryId: f.entry.id,
+        targetWeaponId: f.target.id,
+        reason: 'resource_conflict',
+        resourceConflictCause: 'stuck_drop_without_other_routes',
+        detail: '',
+      },
+      { buildListEntryId: g.entry.id, targetWeaponId: g.target.id, reason: 'requires_protected_weapon', detail: '' },
+    ]
+    return { plan, all: { a, b, c, d, e, f, g, h, aDuplicate } }
+  }
+
+  function allLoaded(all: ReturnType<typeof causeScenario>['all']): ConflictNameSource {
+    const pairs = Object.values(all)
+    return loaded(
+      pairs.map(({ entry }) => entry),
+      pairs.map(({ target }) => target).filter((target, index, list) => list.findIndex(({ id }) => id === target.id) === index),
+    )
+  }
+
+  it('lists 競合のため / その他 apart, each Target once, with typed reasons and the shared counts', () => {
+    const { plan, all } = causeScenario()
+    const display = createProductionPlanConflictSectionDisplay({ plan, source: { status: 'preparing' }, names: allLoaded(all), master })
+    const groups = display.targets.causeGroups!
+    expect(groups).not.toBeNull()
+    expect([groups.conflictCount, groups.unestablishedCount, groups.ratioDetermined]).toEqual([2, 0, true])
+    expect(groups.conflict.map(({ name, reason }) => [name, reason])).toEqual([
+      ['Target b', '「Target a」を優先したため、今回は作成しません。'],
+      ['Target c', '競合の選択待ちのため、今回は作成しません。'],
+    ])
+    expect(groups.unestablished).toEqual([])
+    // Taking part in a Conflict alone never reads as "because of a conflict".
+    expect(groups.other.map(({ name, reason }) => [name, reason])).toEqual([
+      ['Target h', 'この計画では作成しません。'],
+      ['Target f', '計画の途中で、この候補の作成手順を先へ進められなくなったため、今回は作成しません。'],
+      ['Target g', '保護中の武器を変更する必要があるため使用できません。'],
+    ])
+    expect(display.targets.notCreated.map(({ name }) => name)).toEqual(['Target b', 'Target c', 'Target h', 'Target f', 'Target g'])
+    expect(display.targets.created.map(({ name }) => name)).toEqual(['Target a', 'Target d', 'Target e'])
+    expect(display.targets.notCreatedUnresolvedCount).toBe(0)
+    expect(normalTexts(display)).not.toContain('English detail never shown')
+    // The overview reads the very same numbers.
+    expect(createProductionPlanSummary(plan).completion).toMatchObject({
+      status: 'ratio_determined',
+      completedCount: 3,
+      conflictNotCreatedCount: groups.conflictCount,
+    })
+    expect(groups.conflict).toHaveLength(groups.conflictCount)
+  })
+
+  it('keeps the counts whether the names are loading, failed or loaded', () => {
+    const { plan, all } = causeScenario()
+    const sources: ConflictNameSource[] = [{ status: 'loading' }, { status: 'failed' }, allLoaded(all)]
+    for (const names of sources) {
+      const { targets } = createProductionPlanConflictSectionDisplay({ plan, source: { status: 'preparing' }, names, master })
+      expect(targets.createdCount).toBe(3)
+      expect(targets.causeGroups).toMatchObject({ conflictCount: 2, unestablishedCount: 0, ratioDetermined: true })
+    }
+  })
+
+  it('still counts a Target whose Entry or Target is gone, names nobody by ID, and counts only an unknown Target apart', () => {
+    const { plan, all } = causeScenario()
+    // B's Entry and Target, A's, C's and H's Entries are gone from the current data.
+    const entries = [all.d.entry, all.e.entry, all.f.entry, all.g.entry]
+    const targets = [all.a.target, all.c.target, all.d.target, all.e.target, all.f.target, all.g.target, all.h.target]
+    const display = createProductionPlanConflictSectionDisplay({ plan, source: { status: 'stale' }, names: loaded(entries, targets), master })
+    const groups = display.targets.causeGroups!
+    expect(groups.conflict.map(({ name, nameResolved, reason }) => [name, nameResolved, reason])).toEqual([
+      // B is still a row from its record, and its winner is named by the Plan's own completion record.
+      ['名前を確認できない目標武器', false, '「Target a」を優先したため、今回は作成しません。'],
+      ['Target c', true, '競合の選択待ちのため、今回は作成しません。'],
+    ])
+    expect(groups.conflictCount).toBe(2)
+    // H's Target is named by nothing the Plan or the current Entries hold.
+    expect(groups.other.map(({ name }) => name)).toEqual(['Target f', 'Target g'])
+    expect(display.targets.notCreatedUnresolvedCount).toBe(1)
+    expect(normalTexts(display)).not.toMatch(/target\.conflict\.|build-list\.conflict\./)
+  })
+
+  it('lists a stuck drop beside other pending Routes as undetermined and leaves the ratio undetermined', () => {
+    const { plan, all } = causeScenario()
+    plan.rejectedBuildListEntries.push({
+      buildListEntryId: all.h.entry.id,
+      targetWeaponId: all.h.target.id,
+      reason: 'resource_conflict',
+      resourceConflictCause: 'stuck_drop_with_other_routes',
+      detail: '',
+    })
+    const display = createProductionPlanConflictSectionDisplay({ plan, source: { status: 'preparing' }, names: allLoaded(all), master })
+    const groups = display.targets.causeGroups!
+    expect([groups.conflictCount, groups.unestablishedCount, groups.ratioDetermined]).toEqual([2, 1, false])
+    expect(groups.unestablished.map(({ name, reason }) => [name, reason])).toEqual([
+      ['Target h', '計画の途中で作成手順が行き詰まったため、今回は作成しません。ほかの目標武器との競合によるものかは確認できません。'],
+    ])
+    // H no longer reads as 「この計画では作成しません。」 among the other reasons.
+    expect(groups.other.map(({ name }) => name)).toEqual(['Target f', 'Target g'])
+    expect(createProductionPlanSummary(plan).completion).toMatchObject({
+      status: 'ratio_undeterminable',
+      reason: 'conflict_cause_not_established',
+    })
+  })
+
+  it('keeps the former single list for a Plan whose rejections are not recorded with causes', () => {
+    const { plan, all } = causeScenario()
+    const withoutCause = structuredClone(plan)
+    delete withoutCause.rejectedBuildListEntries[0].resourceConflictCause
+    const oldVersion = structuredClone(plan)
+    oldVersion.calculationContext.appSchemaVersion = 13
+    for (const legacy of [withoutCause, oldVersion]) {
+      const display = createProductionPlanConflictSectionDisplay({ plan: legacy, source: { status: 'preparing' }, names: allLoaded(all), master })
+      expect(display.targets.causeGroups).toBeNull()
+      // The former order and reasons: Conflict participation first.
+      expect(display.targets.notCreated.map(({ name, reason }) => [name, reason])).toEqual([
+        ['Target b', '「Target a」を優先したため、今回は作成しません。'],
+        ['Target c', '競合の選択待ちのため、今回は作成しません。'],
+        ['Target h', '競合の選択待ちのため、今回は作成しません。'],
+        ['Target f', '他の候補と資源（RNG位置または所持武器）が競合しました。'],
+        ['Target g', '保護中の武器を変更する必要があるため使用できません。'],
+      ])
+    }
   })
 })
