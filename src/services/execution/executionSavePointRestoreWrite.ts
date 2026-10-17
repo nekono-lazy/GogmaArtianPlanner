@@ -4,10 +4,11 @@ import type { ExecutionSavePointRestoreWrite } from '../../domain/execution'
 /**
  * Writes one decided game save point restore (`docs/PLANNER_SPEC.md` 16.9),
  * inside the caller's read-write transaction: the restore of
- * `restoreExecutionSavePoint()`, of the replan adoption's restore choice, and
- * of a Planner result save that restores instead of saving (9.2.18). The save
- * point itself is kept. It decides nothing: `prepareExecutionSavePointRestore()`
- * already validated every body it writes.
+ * `restoreExecutionSavePoint()` and of the replan adoption's restore choice.
+ * The save point itself is kept. It decides nothing:
+ * `prepareExecutionSavePointRestore()` already validated every body it writes.
+ * (The Planner Alternative repair save, which wrote a restore instead of its
+ * result, was removed in Issue #278 PR-5.)
  */
 export async function writeExecutionSavePointRestore(
   database: AppDatabase,

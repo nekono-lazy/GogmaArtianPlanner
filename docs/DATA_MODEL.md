@@ -1490,7 +1490,9 @@ deriveBuildListEntryStaleReasons(
   （runtime-only、永続化しない）が「置換対象の元Entry → generated Entry」の対応をWorkerから保存transactionまで運ぶ。
   保存（`PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`）は、
   transaction内で元Entryが今もそのTargetの唯一の永続Entryであることを確認してから置換する（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
-  9.2.15 / 9.2.18）。ordinary Plannerの保存（`savePlannerResult()`）と再計画採用はPhase 6-A以降generated Entryを持たず、
+  9.2.15 / 9.2.18）。このactual repairの保存はIssue #278 PR-2でcallerを失い、PR-5で削除した（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+  9.6.11）。現在generated Entryで元Entryを置換するのは作成リストの全体最適化の採用（下記14.5、Issue #260）だけであり、同じ
+  置換authorityと保存時の確認を使う。ordinary Plannerの保存（`savePlannerResult()`）と再計画採用はPhase 6-A以降generated Entryを持たず、
   置換しない。Phase 6-B2b以前のhistorical contractでは旧B8の `PlannerOrchestrationResult.generatedBuildListEntryReplacements`
   が同じ役割を持ち、再計画採用も置換していた（同型と旧B8保存APIはPhase 6-B2bで削除した）。Phase 0-3以前の採用で元Entryの横に保存された
   generated Entryは、下記のlegacy duplicateとして扱う（自動整理しない）
@@ -1877,6 +1879,11 @@ export type PlannerConflictRepairOutcomeStatus =
   `calculation_context_changed` となり、内容の表示だけができる。lineageが `null` で選択済みConflictを持たないversion 17の
   Planは限定互換例外 `18 -> 17` で互換のままである（PLANNER_SPEC 9.6.10、3.5の版数表）。lineageの有無は、この互換判定と
   Planner Alternativeで保存したPlanの識別にだけ使い、通常UIの判断材料にしない
+- PR-5で、lineageを書く唯一の経路だったactual repairの保存API（`inspectPlannerAlternativeRepairSave()` /
+  `savePlannerAlternativeRepair()`）とその保存検証（`checkPersistablePlannerAlternativeRepairShape()`）を削除した。上の「生成経路ごとの値」の
+  actual repairの行はhistoricalであり、現在lineageを非nullにする書き込みは無い（通常保存・競合解決の保存・全体最適化の採用は
+  `null` だけを保存し、非nullのPlanを受け取れば拒否する）。永続field、型、`validatePlannerConflictRepairLineage()`、Dexie / Exportの
+  migration、Export / Importでの保持、過去のlineage付きPlanの読込と互換判定は変えていない
 
 ## 11.2 PlanningInputSnapshot
 
@@ -2784,8 +2791,10 @@ Planner resultのDraft保存は原子的に行う。契約本文は
 - 以下のgenerated Entryを含む保存は「この候補を優先」（Planner Alternative actual repair）の契約である。legacy B8
   orchestrationも同じ保存境界を使っていたが、B8の保存API（`savePlannerOrchestrationResult()` /
   `inspectPlannerOrchestrationResultSave()`）はPhase 6-B2bで削除した（B8のWorker / Client経路はPhase 6-B1で削除済み）。
-  現在の保存APIは上記のordinary `savePlannerResult()` と、下記のactual repair用
-  `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`、および下記の作成リストの全体最適化の採用用
+  actual repair用の `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` もIssue #278 PR-2でcallerを失い、
+  PR-5で削除した（以下のactual repair固有の記述はPhase 5-BからPR-5までのhistorical contractである。共通の保存境界・置換の確認・
+  source DraftのCASは現行で、全体最適化の採用と競合解決の保存が使う）。現在の保存APIは上記のordinary `savePlannerResult()`、
+  下記の競合解決の保存 `savePlannerConflictPreferenceResult()`（Issue #278 PR-2）、作成リストの全体最適化の採用用
   `inspectBuildListOptimizationAdoptionSave()` / `saveBuildListOptimizationAdoption()`（Issue #260 PR-6A）だけである
 
 - Planner-generated BuildListEntry群と `ProductionPlan` を1つのDexie
@@ -2814,8 +2823,11 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   新Draft追加・active Planの `abandoned`（`breaking_change_approved`）を同一transactionで行う。承認で
   「最後のゲーム内セーブ地点へ戻す」を選んだ場合はセーブ地点復元だけを行い、復元前に計算したPlanner resultは
   保存しない（Entry・Draft・Planを変更せず、復元後の状態からの再計算を求める。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.10）。元Entryを参照するのがDraft / stale /
-  終了済みPlanだけならguard対象にしない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）
-- 「この候補を優先」のPlanner Alternative actual repair（Issue #136 / #101 Phase 5-B）は専用の
+  終了済みPlanだけならguard対象にしない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）。承認と「戻す」で復元だけを書く扱いは
+  repair保存だけのものであり、Issue #278 PR-5でrepair保存とともに削除した。現在generated Entryを保存する全体最適化の採用は
+  実行中Planがあれば保存前に拒否するので、承認・16.10の選択に到達しない（終了済みPlanが元Entryを参照していても承認不要で保存し、
+  そのPlanを変えない）
+- （historical、Issue #278 PR-5で削除）「この候補を優先」のPlanner Alternative actual repair（Issue #136 / #101 Phase 5-B）は専用の
   `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` で同じtransaction境界（再読込・再validation、
   `O` がTargetのちょうど1件の現在Entryであることの確認、generated ID衝突の拒否、cardinality、Plan参照、旧Draftの置換、
   Plan-breaking guardとセーブ地点復元時の不保存）を使う。違いは2点だけである: accepted replacement集合がauthorityなので、
@@ -2827,7 +2839,8 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   計算元のsource Draft ID（`expectedSourceDraftId`、画面が操作開始時に表示していたDraftのID）と一致することを再確認する。
   一致しなければ（Draftが削除・開始済み、または別repairで置換済み）`planner_state_changed` で何も保存しない（Draftが2件以上なら
   `draft_plan_conflict`）。inspection成功後でもapply時に再確認し、replacementが0件でも確認する。ordinary Planner結果の保存
-  （`savePlannerResult()`）には適用しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）
+  （`savePlannerResult()`）には適用しない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.15）。このCASは下記の競合解決の保存が
+  同じ意味で使い続ける（repair保存の削除後も残る）
 - `plannerResult.conflicts` と `plan.conflicts` は順序を含めたPlanConflict全体の構造一致を要求し、IDだけの比較にしない。
   不一致のartifactは `planner_result_invalid` で何も保存しない
 - Issue #278の目標仕様（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.6、切替はPR-2）では、「この候補を優先」の結果は通常Planner resultで
@@ -2835,7 +2848,8 @@ Planner resultのDraft保存は原子的に行う。契約本文は
   `invalid_conflict_resolution` warningの拒否、今回の決定と引き継いだ決定が選択済みとして記録されていることの確認、
   `plannerResult.conflicts` と `plan.conflicts` の構造一致、上記と同じsource DraftのCAS（`expectedSourceDraftId`）を加えて
   1 transactionで保存する。作成リスト画面からの通常作成の `savePlannerResult()` の契約は変えない。切替後、generated Entryを
-  含む「この候補を優先」の保存（上記のPlanner Alternative actual repair）は使われない
+  含む「この候補を優先」の保存（上記のPlanner Alternative actual repair）は使われず、PR-5で削除した（PR-2で実装済み:
+  `savePlannerConflictPreferenceResult()`）
 - 作成リストの全体最適化の採用（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.11、Issue #260。PersistenceはPR-6Aで実装済み、
   作成リスト画面へはPR-6Cで接続済み）は、全体最適化専用の保存API（`PlannerResultPersistenceService.inspectBuildListOptimizationAdoptionSave()` /
   `saveBuildListOptimizationAdoption()`）で同じtransaction境界を使う。artifactを通常の `PlannerResult` 保存やrepair

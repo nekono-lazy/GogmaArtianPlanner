@@ -16,15 +16,12 @@ import {
   ExecutionRuntimeError,
   unchangedMutableState,
   type PlanBreakingChangeApproval,
-  type PlanBreakingChangeInspection,
   type PlanGuardedMutation,
   type PlanGuardedMutationBase,
 } from '../../domain/execution'
 import type {
   BuildListEntry,
   CalculationContext,
-  ExecutionHistoryId,
-  ExecutionSavePoint,
   ExpectedPlanState,
   ImprovementPreference,
   ISODateTimeString,
@@ -45,7 +42,6 @@ import {
   checkGeneratedBuildListEntriesFresh,
   checkPersistableConflictPreferenceResultShape,
   checkPersistableOrdinaryPlannerResultShape,
-  checkPersistablePlannerAlternativeRepairShape,
   checkPlannerRunTerminationPersistable,
   checkPreferredBuildListEntriesCompleted,
   checkProductionPlanBuildListEntryReferences,
@@ -54,7 +50,6 @@ import {
   createPlanningTargetWeaponsHash,
   entryImprovementPreference,
   prepareFinalReplacementBuildList,
-  type PlannerAlternativeRepairArtifact,
   type PlannerConflictResolution,
   type PlannerResult,
   type PlannerResultPersistenceIssue,
@@ -73,10 +68,10 @@ import { buildListOptimizationResultIssues } from './buildListOptimizationResult
 import type { BuildListOptimizationAdoptionSource } from './buildListOptimizationService'
 
 /**
- * The save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18 / 9.6.6. Four Planner
- * results are saved, each through its own entry points (Phase 6 complete,
- * 9.2.19.16; the optimization since Issue #260 PR-6A, the conflict preference
- * since Issue #278 PR-2):
+ * The save-time boundary of PLANNER_SPEC 9.2.15 / 9.2.18 / 9.6.6 / 17.11. Three
+ * Planner results are saved, each through its own entry points (the
+ * optimization since Issue #260 PR-6A, the conflict preference since Issue #278
+ * PR-2):
  *
  * - The ordinary Planner result (`createPlan()`, Phase 6-A) is saved through
  *   `savePlannerResult()`: it carries no generated BuildListEntry and no
@@ -89,26 +84,20 @@ import type { BuildListOptimizationAdoptionSource } from './buildListOptimizatio
  *   explicit decisions it was calculated from (honoured, recorded, every
  *   preferred Entry completed) and the source Draft CAS. It writes no
  *   BuildListEntry either.
- * - The Planner Alternative actual repair (`docs/PLANNER_SPEC.md` 9.2.19.8 /
- *   9.2.19.11; no Production caller since Issue #278 PR-2) is saved through
- *   `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`.
- *   Its accepted replacement set is the authority, so a generated Entry the
- *   final Plan does not select is still saved, and the Draft is stored with
- *   `conflictRepairLineage` set exactly to the artifact's lineage.
  * - The Build List global optimization (`docs/PLANNER_SPEC.md` 17.11, Issue
  *   #260 PR-6A) is adopted through `inspectBuildListOptimizationAdoptionSave()`
  *   / `saveBuildListOptimizationAdoption()`. Its artifact replaces the Entry of
  *   every planning Target whose Route changed in one all-or-nothing save; the
- *   artifact is never converted into an ordinary result or a repair artifact.
- *   On top of the shared boundary it re-checks the start state of its
- *   calculation (no running Plan, the observed Draft) and the whole input token
- *   (the input Build List included), and its Draft starts a new chain.
+ *   artifact is never converted into an ordinary result. On top of the shared
+ *   boundary it re-checks the start state of its calculation (no running Plan,
+ *   the observed Draft) and the whole input token (the input Build List
+ *   included), and its Draft starts a new chain.
  *
  * All of them are pure calculations over the snapshot their Worker was handed.
  * Persisting one therefore re-reads the current state *inside* the same Dexie
  * read-write transaction that writes, re-validates the Plan against that state
  * with the existing snapshot authorities, and only then deletes the previous
- * Draft, replaces each Entry the repair or the optimization replaced with its generated
+ * Draft, replaces each Entry the optimization replaced with its generated
  * BuildListEntry and adds the new Draft together. There is no window between
  * the check and the write, and no partial save: either the previous Draft is
  * gone, every replaced Entry is gone, every generated Entry and the new Plan
@@ -117,21 +106,17 @@ import type { BuildListOptimizationAdoptionSource } from './buildListOptimizatio
  * A generated Entry replaces the persisted Entry `O` of its Target
  * (`docs/PLANNER_SPEC.md` 9.2.18). The transaction deletes that `O` only after
  * confirming it is still the Target's one persisted Entry, never whatever Entry
- * the Target holds now. Deleting `O` is a Build List change, so the whole save
- * is one guarded mutation of the existing Plan-breaking guard (16.6): when `O`
- * is a dependency of the `active` Plan the save is refused without the user's
- * approval, and with it ends that Plan (`breaking_change_approved`) in the same
- * transaction. A Draft, stale or ended Plan referencing `O` never needs one.
- * Without any replacement the save never breaks a Plan. A Build List
- * optimization is adopted only while no Plan runs, so it never needs one.
+ * the Target holds now. Every save is one guarded mutation of the existing
+ * Plan-breaking guard (16.6), but none of them breaks a running Plan: the
+ * ordinary and conflict preference results replace no Entry, and a Build List
+ * optimization is adopted only while no Plan runs. An approval given anyway is
+ * refused as not required before anything is written.
  *
- * The result was calculated from the state before any save point restore, so
- * choosing 「最後のゲーム内セーブ地点へ戻す」 in that approval never saves it over
- * the restored state (`docs/PLANNER_SPEC.md` 9.2.18 / 16.10): the restore alone
- * is written, the result is dropped with its generated Entries, replacements and
- * Draft, the running Plan is not abandoned, and the outcome asks for a new
- * calculation from the restored state. The snapshot checks are never weakened to
- * fit the old result onto it.
+ * The Planner Alternative actual repair save (`inspectPlannerAlternativeRepairSave()`
+ * / `savePlannerAlternativeRepair()`), which could replace an Entry the `active`
+ * Plan depends on and therefore needed the approval and the guard's
+ * restore-instead-of-change branch, lost its last caller with Issue #278 PR-2
+ * and was removed in Issue #278 PR-5 (`docs/PLANNER_SPEC.md` 9.6.11).
  *
  * The Draft replacement (`docs/DATA_MODEL.md` 11.1, `docs/PLANNER_SPEC.md`
  * 9.2.15) deletes only `draft` ProductionPlan records - never an `active` /
@@ -143,9 +128,9 @@ import type { BuildListOptimizationAdoptionSource } from './buildListOptimizatio
  * whole collection in the same transaction before any Draft is deleted
  * (`production_plan_id_conflict`).
  *
- * It re-runs nothing. The full Planner run, Trace Replay, Planner Alternative
- * Search, Candidate trials and the Build List optimization's Stage 0 - D' stay
- * the Workers' authority, so no `RngEngine` is created on the main thread. Save time only compares the finished Plan against
+ * It re-runs nothing. The full Planner run, Trace Replay and the Build List
+ * optimization's Stage 0 - D' stay the Workers' authority, so no `RngEngine` is
+ * created on the main thread. Save time only compares the finished Plan against
  * current persisted state.
  *
  * The legacy B8 orchestration save shared this boundary until Phase 6-B2b
@@ -183,40 +168,22 @@ export interface PlannerResultPersistenceOptions {
 const systemClock = { now: (): ISODateTimeString => new Date().toISOString() }
 
 /**
- * How one Planner result save ended (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18).
+ * How one ordinary or conflict preference Planner result save ended
+ * (`docs/PLANNER_SPEC.md` 9.2.15 / 9.6.6). Every refusal throws and writes
+ * nothing.
  *
- * - `saved`: the new Draft, any generated Entries and their replacements are
- *   stored, and any running Plan the user approved breaking is abandoned
+ * - `saved`: the new Draft is stored and the previous Draft is gone
  * - `no_plan`: the calculation produced no Plan; nothing was written and the
  *   previous Draft is kept
- * - `save_point_restored_recalculation_required`: the user approved breaking
- *   the `active` Plan and chose 「最後のゲーム内セーブ地点へ戻す」. Only the save
- *   point restore was written; this result - calculated before the restore - was
- *   dropped with its generated Entries, replacements and Draft, the previous
- *   Draft and Build List are untouched, the running Plan is the restored one
- *   (not abandoned), and a new calculation from the restored state is required
+ *
+ * Neither save writes the Build List, so no Plan-breaking approval - and no
+ * save point restore - ever applies. (The outcome
+ * `save_point_restored_recalculation_required` of the Planner Alternative repair
+ * save went with that save in Issue #278 PR-5.)
  */
 export type PlannerResultSaveOutcome =
   | { kind: 'saved'; plan: ProductionPlan }
   | { kind: 'no_plan' }
-  | {
-      kind: 'save_point_restored_recalculation_required'
-      /** The running Plan as the save point restored it. */
-      restoredPlan: ProductionPlan
-      /** The save point that was restored; it is kept. */
-      savePoint: ExecutionSavePoint
-      deletedExecutionHistoryIds: ExecutionHistoryId[]
-    }
-
-/**
- * How one Planner Alternative actual repair save ended. A repair artifact
- * always carries its final scenario Plan, so there is no `no_plan`: an
- * unsavable repair never reaches Persistence.
- */
-export type PlannerAlternativeRepairSaveOutcome = Exclude<
-  PlannerResultSaveOutcome,
-  { kind: 'no_plan' }
->
 
 /**
  * How one Build List optimization adoption ended (`docs/PLANNER_SPEC.md`
@@ -313,11 +280,11 @@ interface PersistablePlannerResult {
   generatedEntries: readonly BuildListEntry[]
   replacements: readonly BuildListEntryReplacement[]
   /**
-   * The Draft a Planner Alternative repair or a conflict preference result was
-   * calculated from: the one Draft the save must still find current
-   * (`docs/PLANNER_SPEC.md` 9.2.15 / 9.6.6). `null` for an ordinary result of
-   * the Build List, which starts a new chain and inherits nothing from the
-   * displayed Draft.
+   * The Draft a conflict preference result was calculated from: the one Draft
+   * the save must still find current (`docs/PLANNER_SPEC.md` 9.6.6). `null`
+   * for an ordinary result of the Build List and for a Build List optimization
+   * adoption, which start a new chain and inherit nothing from the displayed
+   * Draft (the adoption checks its own observed Draft instead).
    */
   expectedSourceDraftId: ProductionPlanId | null
   /**
@@ -329,7 +296,7 @@ interface PersistablePlannerResult {
   /**
    * The start state and the input token a Build List optimization adoption
    * re-checks (`docs/PLANNER_SPEC.md` 17.10 / 17.11 T2); `null` for the
-   * ordinary result and the repair.
+   * ordinary and conflict preference results.
    */
   buildListOptimization: BuildListOptimizationAdoptionPremises | null
 }
@@ -390,7 +357,7 @@ export class PlannerResultPersistenceService {
   ): Promise<PlannerResultSaveOutcome> {
     const persistable = this.persistableOrdinaryResult(result)
     if (persistable === null) return { kind: 'no_plan' }
-    return this.saveGuarded(persistable, currentCalculationContext, approval)
+    return this.applyGuarded(persistable, currentCalculationContext, approval)
   }
 
   /**
@@ -421,7 +388,7 @@ export class PlannerResultPersistenceService {
       expectedSourceDraftId: ProductionPlanId
     },
     currentCalculationContext: CalculationContext,
-  ): Promise<Exclude<PlannerResultSaveOutcome, { kind: 'save_point_restored_recalculation_required' }>> {
+  ): Promise<PlannerResultSaveOutcome> {
     throwIssue(checkPlannerRunTerminationPersistable(result.termination))
     const { plan } = result
     if (plan === null) return { kind: 'no_plan' }
@@ -437,67 +404,6 @@ export class PlannerResultPersistenceService {
       },
       currentCalculationContext,
       null,
-    )
-  }
-
-  /**
-   * Reads whether saving a Planner Alternative actual repair needs the
-   * Plan-breaking approval (`docs/PLANNER_SPEC.md` 9.2.19.8 step 9 / 16.6) and
-   * what the warning and the 16.10 save point choice must show. It writes
-   * nothing, and refuses an artifact the save would refuse - a source Draft
-   * that is no longer the current Draft included. Its success is no write
-   * authority: the save checks everything again inside its own transaction.
-   */
-  async inspectPlannerAlternativeRepairSave(
-    artifact: PlannerAlternativeRepairArtifact,
-    currentCalculationContext: CalculationContext,
-    expectedSourceDraftId: ProductionPlanId,
-  ): Promise<PlanBreakingChangeInspection> {
-    const persistable = this.persistableRepair(artifact, expectedSourceDraftId)
-    return this.guard(currentCalculationContext).inspect(
-      this.saveMutation(persistable, currentCalculationContext),
-    )
-  }
-
-  /**
-   * Saves one Planner Alternative actual repair (「この候補を優先」,
-   * `docs/PLANNER_SPEC.md` 9.2.19.8 / 9.2.19.11, `docs/DATA_MODEL.md` 11.1.1)
-   * in one transaction: every accepted replacement deletes its Target's `O` and
-   * adds its generated `G` - whether or not the final Plan selects `G` - the
-   * previous Draft is deleted, and the new Draft is added with
-   * `conflictRepairLineage` set exactly to the artifact's lineage.
-   *
-   * Every failure throws and writes nothing - the previous Draft, the Build
-   * List, the running Plan and every other table stay as they were:
-   * `planner_state_changed` means the current state moved under the
-   * calculation (a replaced Entry that is no longer its Target's one persisted
-   * Entry, or a source Draft that is no longer current, included),
-   * `planner_result_invalid` means the artifact violates an invariant it must
-   * satisfy to be persisted, `validation_failed` means Domain validation
-   * rejected the Plan, an Entry or the lineage, and
-   * `plan_breaking_change_approval_required` means a replacement breaks the
-   * `active` Plan and `approval` was not given. An approval that restores the
-   * game save point writes the restore alone and returns
-   * `save_point_restored_recalculation_required` (no Entry, Draft or lineage of
-   * this artifact is saved).
-   *
-   * `expectedSourceDraftId` is the Draft the artifact was calculated from - the
-   * Draft the user acted on, whose lineage the artifact continues. Inside the
-   * transaction the one current Draft must still be exactly that Draft,
-   * whether or not the repair replaces any Entry; otherwise another repair (or
-   * a start, or a deletion) moved the chain on and `planner_state_changed`
-   * writes nothing, so a stale artifact never overwrites a newer lineage.
-   */
-  async savePlannerAlternativeRepair(
-    artifact: PlannerAlternativeRepairArtifact,
-    currentCalculationContext: CalculationContext,
-    expectedSourceDraftId: ProductionPlanId,
-    approval: PlanBreakingChangeApproval | null = null,
-  ): Promise<PlannerAlternativeRepairSaveOutcome> {
-    return this.saveGuarded(
-      this.persistableRepair(artifact, expectedSourceDraftId),
-      currentCalculationContext,
-      approval,
     )
   }
 
@@ -565,33 +471,14 @@ export class PlannerResultPersistenceService {
     return this.applyGuarded(persistable, currentCalculationContext, null)
   }
 
-  /** The one guarded save both Planner result kinds go through. */
-  private async saveGuarded(
-    persistable: PersistablePlannerResult,
-    currentCalculationContext: CalculationContext,
-    approval: PlanBreakingChangeApproval | null,
-  ): Promise<PlannerAlternativeRepairSaveOutcome> {
-    if (approval?.savePointDecision?.kind === 'restore_save_point') {
-      const guard = this.guard(currentCalculationContext)
-      const mutation = this.saveMutation(persistable, currentCalculationContext)
-      // The restore makes this pre-restore result stale by construction: the
-      // guard re-derives the approval and the 16.10 choice, restores, and
-      // writes nothing of the result (`docs/PLANNER_SPEC.md` 9.2.18).
-      const restore = await guard.restoreSavePointInsteadOfChange(mutation, approval)
-      return {
-        kind: 'save_point_restored_recalculation_required',
-        restoredPlan: restore.plan,
-        savePoint: restore.savePoint,
-        deletedExecutionHistoryIds: restore.deletedExecutionHistoryIds,
-      }
-    }
-    return this.applyGuarded(persistable, currentCalculationContext, approval)
-  }
-
   /**
    * The guarded write every Planner result kind shares: the save mutation's
    * Build List post-state (each `O` deleted, each `G` added), then the new
-   * Plan ID check and the Draft replacement, in one transaction.
+   * Plan ID check and the Draft replacement, in one transaction. None of the
+   * saves breaks a running Plan, so the guard refuses any approval it is given
+   * (`plan_breaking_change_approval_not_required`, or
+   * `plan_breaking_change_state_changed` without an `active` Plan) before
+   * anything is written, whatever save point decision it carries.
    */
   private async applyGuarded(
     persistable: PersistablePlannerResult,
@@ -643,19 +530,6 @@ export class PlannerResultPersistenceService {
       conflictResolutions: [],
       buildListOptimization: null,
     }
-  }
-
-  /** The artifact-shape invariants of a Planner Alternative repair; the Plan carries its lineage. */
-  private persistableRepair(
-    artifact: PlannerAlternativeRepairArtifact,
-    expectedSourceDraftId: ProductionPlanId,
-  ): PersistablePlannerResult {
-    const checked = checkPersistablePlannerAlternativeRepairShape(artifact)
-    if (checked.issue !== null) {
-      throwIssue(checked.issue)
-      throw resultInvalid('The Planner Alternative repair artifact is not persistable.')
-    }
-    return { ...checked.repair, expectedSourceDraftId, conflictResolutions: [], buildListOptimization: null }
   }
 
   /**
@@ -712,9 +586,10 @@ export class PlannerResultPersistenceService {
 
   /**
    * The whole save as one pure guarded mutation: from the persisted state it
-   * is given - the current one, or a restored one after 「最後のゲーム内セーブ
-   * 地点へ戻す」 - it re-validates the Plan and returns the final Build List
-   * (the replacement set) as the post-state the Plan-breaking guard judges.
+   * is given it re-validates the Plan and returns the final Build List (the
+   * replacement set) as the post-state the Plan-breaking guard judges. No
+   * Planner result save breaks a running Plan, so the guard never applies it
+   * to a restored state.
    *
    * A Build List optimization adoption adds its own premises around the shared
    * checks: the start state and the input token before them (17.11 T2), the
@@ -801,7 +676,7 @@ export class PlannerResultPersistenceService {
    * 17.11): the current state is the input the calculation assigned every
    * planning Target over - the whole Build List before any replacement, every
    * Target, the RNG state, Normal Counters, OwnedWeapons and Plan-dependent
-   * Targets, and the CalculationContext. This is stricter than a repair's
+   * Targets, and the CalculationContext. This is stricter than the shared
    * replaced-Entry check and never stands in for the generated Entries'
    * freshness, which the shared checks recompute afterwards (T5).
    */
@@ -855,11 +730,12 @@ export class PlannerResultPersistenceService {
   }
 
   /**
-   * The source Draft CAS of a Planner Alternative repair and of a conflict
-   * preference result (`docs/PLANNER_SPEC.md` 9.2.15 / 9.6.6): the result
-   * continues the decisions of the Draft it was calculated from, so the one
-   * current Draft must still be that Draft. Its ID is the authority - never a
-   * body comparison; the rest of the state is re-validated by the snapshot
+   * The source Draft CAS of a conflict preference result
+   * (`docs/PLANNER_SPEC.md` 9.6.6; the same meaning the removed Planner
+   * Alternative repair save gave it, 9.2.15): the result continues the
+   * decisions of the Draft it was calculated from, so the one current Draft
+   * must still be that Draft. Its ID is the authority - never a body
+   * comparison; the rest of the state is re-validated by the snapshot
    * authorities below. Two Drafts break the Draft invariant.
    */
   private assertSourceDraftCurrent(base: PlanGuardedMutationBase, expectedSourceDraftId: ProductionPlanId) {
@@ -991,9 +867,10 @@ export class PlannerResultPersistenceService {
 
   /**
    * Every BuildListEntry the Plan references must exist in the final set - for
-   * an ordinary result, the current Build List itself; for a repair, the
-   * replacement set. A repair's generated Entry need not be selected by the
-   * final Plan: the accepted replacement set is the authority (9.2.19.6).
+   * an ordinary or conflict preference result, the current Build List itself;
+   * for a Build List optimization adoption, the replacement set. Whether every
+   * generated Entry is selected is the adoption's own check
+   * (`checkBuildListOptimizationFinalSelection()`), not this one.
    */
   private assertPlanReferences(
     persistable: PersistablePlannerResult,

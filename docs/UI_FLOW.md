@@ -2127,8 +2127,9 @@ failureとして表示する。`invalid_fixed_resolution.reason` を分岐author
 > 本節のうち `conflictResolutionPlannerOptions(表示中Plan)` による上限、incompleteの案内文、`invalid_conflict_resolution` のfail closed、
 > `draft` だけを操作対象とする規則は維持し、Planner Alternativeの呼び出し・専用保存・generated Entryによる置換・lineage・
 > Planを壊す変更の警告の部分は切替後に使わない（以下はPhase 5-BからPR-2までの記録を含む。以下で述べる
-> `PlannerWorkerClient.createPlannerAlternativeRepair()` とWorker request kindはPR-4で削除し、Planner Alternative専用の保存APIは
-> PR-5以降で扱う。11.6）。
+> `PlannerWorkerClient.createPlannerAlternativeRepair()` とWorker request kindはPR-4で削除し、Planner Alternative専用の保存API
+> （`inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`）と、そのための「セーブ地点へ戻すだけで保存しない」
+> 警告の差し替えはPR-5で削除した。11.6）。
 
 「比較する」と「この候補を優先」は別操作とする。what-if成功を選択のgateにせず、比較せずに
 有効participantを優先できる。11.1でdisabledのparticipantはwhat-if成否にかかわらず選択できない。
@@ -2175,6 +2176,7 @@ generated BuildListEntryも保存せず、新Planへ遷移しない。表示中�
 再計算を促す。warning.messageを解析せず、Planner推奨または別participantへfallbackせず、invalid
 resolutionを無視したordinary Planを保存しない。
 
+（historical、Issue #278 PR-5で削除。以下の段落の保存APIは現在存在しない）
 `persistence.status === "persistable"` の結果だけ、Planner Alternative専用の
 `plannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` で、
 accepted replacementによる元Entryの置換（final Planで非選択のreplacementも含む）、新Draft、その
@@ -2316,7 +2318,9 @@ Persistenceは Phase 5-B）で実装済みであり、11.2〜11.4の画面はこ
 表示を優先する）。PR-4では、PR-2以降参照されなくなった「比較する」の比較表示（`ProductionPlanAlternativeComparison` /
 `presentProductionPlanAlternative`）と、`PlannerWorkerClient` のPlanner Alternative method（`createPlannerAlternativeComparison()` /
 `createPlannerAlternativeRepair()`）・Worker request kindを削除した。生産計画画面の表示・操作は変えていない（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
-9.6.12）。
+9.6.12）。PR-5では、Planner Alternative専用の保存API（`inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`）と、
+破壊的変更の警告（16.3）でその保存だけが使っていた「セーブ地点へ戻すだけで、この変更は保存しない」説明の差し替え（UI controllerの
+`drop_change`）を削除した。どの画面からも使われておらず、警告・三択・ゲーム側復元ダイアログの表示と操作は変えていない。
 
 PR-3の実装の要点（表示の意味は以下の各項のとおりで、計算・選択可否・保存の意味は変えていない）。
 
@@ -3134,11 +3138,10 @@ Plan破棄、再計画の採用（16.4）、Planを壊す変更の承認（16.3�
 
 - 現在地点を維持: 現在のアプリ状態のまま操作を続ける
 - 最後のゲーム内セーブ地点へ戻す: 12.8の復元を行ってから操作を続ける。再計画の採用だけは、復元後に
-  採用を中止して再試算を求める。生産計画画面の競合解消（この候補を優先）による再計算結果の保存も、復元後に
-  保存を中止し、「最後のゲーム内セーブ地点へ戻しました。復元前の計算結果は保存していません。復元後の状態から、
-  もう一度再計算してください。」と示して再計算を求める（計算結果は復元前の状態のものであるため。
-  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 / 16.10）。このときPlanは破棄せず、新しい下書きを開かない。
-  Issue #278の切替（11.6）以降の「この候補を優先」は作成リストを変更しないので、この選択を出さない
+  採用を中止して再試算を求める。Issue #278の切替（11.6）以降の「この候補を優先」は作成リストを変更しないので、この選択を出さない
+  （historical: Phase 5-BからIssue #278 PR-5までは、生産計画画面の競合解消による再計算結果（Planner Alternative actual repair）の
+  保存も、復元後に保存を中止し、「最後のゲーム内セーブ地点へ戻しました。復元前の計算結果は保存していません。復元後の状態から、
+  もう一度再計算してください。」と示して再計算を求めていた。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18 / 16.10。その保存はPR-5で削除した）
 - キャンセル: 何も変更しない
 - セーブ地点が無い、またはセーブ地点と現在位置が同じ場合はこの選択を出さない
 - アプリ側でゲームの保存状態を推測しない
@@ -3193,12 +3196,14 @@ RNG状態を変更すると現在の生産計画は続行できなくなりま�
   保存失敗）は「…変更を保存していません。もう一度保存してください。」等の日本語で示し、自動再実行しない
 - 承認付き保存の成功は各画面の通常の成功表示に「実行中の生産計画を破棄しました。」を組み合わせて示す
   （例: 「RNG状態を保存し、実行中の生産計画を破棄しました。」）
-- 生産計画画面の競合解消による再計算結果の保存（作成リストの候補置換、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）では、
-  警告に「この再計算では作成リストの候補が置き換わり、実行中の生産計画が参照している候補が削除されます。」を添え、
-  三択の説明とゲーム側復元ダイアログの説明を「セーブ地点へ戻すだけで、この変更（戻す前の状態で計算した結果）は保存しません。
-  生産計画は破棄しません。」の趣旨に差し替える（共通Dialogの操作別説明。新しいDialogは追加しない）。これは現在のPlanner Alternative
-  actual repairの保存の扱いであり、Issue #278の切替（11.6、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.6）以降の競合解決の保存は
-  作成リストを変更せずPlanを壊さないので、この警告を出さない
+- 三択の説明とゲーム側復元ダイアログの説明は、すべての警告で「戻した後、この変更を保存し、生産計画を破棄する」趣旨の共通文言である。
+  Issue #278の切替（11.6、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.6）以降の競合解決の保存は作成リストを変更せずPlanを壊さないので、
+  この警告を出さない
+  （historical: Phase 5-BからIssue #278 PR-5までは、生産計画画面の競合解消による再計算結果の保存（作成リストの候補置換、
+  [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.2.18）だけ、警告に「この再計算では作成リストの候補が置き換わり、実行中の生産計画が参照している
+  候補が削除されます。」を添え、三択とゲーム側復元ダイアログの説明を「セーブ地点へ戻すだけで、この変更（戻す前の状態で計算した結果）は
+  保存しません。生産計画は破棄しません。」の趣旨に差し替える仕様だった（UI controllerの `drop_change`）。その保存がPR-2でcallerを
+  失ったため、PR-5で差し替えの経路と文言を削除した）
 
 ### 16.4 現在地点から再計画を試算
 

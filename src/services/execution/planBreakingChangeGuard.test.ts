@@ -6,9 +6,12 @@ import { RngStateRepository } from '../../db/repositories/rngStateRepository'
 import {
   ExecutionRuntimeError,
   PlanBreakingChangeApprovalRequiredError,
+  unchangedMutableState,
   type PlanAbandonSavePointDecision,
   type PlanBreakingChangeApproval,
   type PlanBreakingChangeInspection,
+  type PlanBreakingChangeTermination,
+  type PlanGuardedMutation,
 } from '../../domain/execution'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import { EXPORT_SCHEMA_VERSION } from '../../domain/models/exportModel'
@@ -869,6 +872,46 @@ describe('Atomicity of an approved breaking change', () => {
       expect(failure).toMatchObject({ code: 'transaction_failed' })
       expect(await dump(database)).toEqual(before)
     }))
+
+  // Moved from the removed Planner Alternative repair save tests (Issue #278 PR-5), the only caller that ever combined an
+  // `afterWrite` with a Plan termination: the extra writes stay inside the one transaction for every guarded save.
+  it.each(['keep_current', 'restore_save_point'] as const)(
+    'rolls the change, the restore and the Plan abandonment back when an afterWrite write fails (%s)',
+    (decision) =>
+      withDatabase(async (database) => {
+        const fixture = await newNormalFixture(3)
+        const { execution, services } = await started(database, fixture)
+        await confirmCurrent(execution, database, fixture.plan)
+        await execution.recordExecutionSavePoint({ planId: fixture.plan.id })
+        await confirmCurrent(execution, database, fixture.plan)
+        const mutation: PlanGuardedMutation<null> = (base) => {
+          const rngState = base.rngState as RngState
+          return {
+            state: { ...unchangedMutableState(base), rngState: { ...rngState, gogmaCounter: { ...rngState.gogmaCounter, value: 50 } } },
+            result: null,
+          }
+        }
+        const approval = approvalOf(await services.guard.inspect(mutation), decision)
+        const before = await dump(database)
+        const terminations: (PlanBreakingChangeTermination | null)[] = []
+
+        const failure = await services.guard.apply(mutation, approval, {
+          afterWrite: async ({ planTermination }) => {
+            terminations.push(planTermination)
+            throw new Error('storage failure after the guarded writes')
+          },
+        }).catch((error: unknown) => error)
+
+        // The guard had written the change and ended the Plan before the extra write failed.
+        expect(terminations).toEqual([expect.objectContaining({
+          plan: expect.objectContaining({ status: 'abandoned', abandonmentReason: 'breaking_change_approved' }),
+          savePointHandling: decision,
+        })])
+        expect(failure).toBeInstanceOf(RepositoryError)
+        expect(failure).toMatchObject({ code: 'transaction_failed' })
+        expect(await dump(database)).toEqual(before)
+      }),
+  )
 })
 
 describe('NormalArtianCounter basis', () => {

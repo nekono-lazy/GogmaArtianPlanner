@@ -321,6 +321,42 @@ describe('Build List optimization adoption: saving (PLANNER_SPEC 17.11)', () => 
 
       expect(await service.saveBuildListOptimizationAdoption(source(), context)).toEqual({ kind: 'saved', plan })
     }))
+
+  it.each(['completed', 'abandoned'] as const)(
+    'replaces an Entry a %s Plan still references without any approval, keeping that Plan exactly as persisted',
+    (status) =>
+      withScenario(async ({ database, service, fixture, context, plan, source }) => {
+        // Moved from the removed Planner Alternative repair save tests (Issue #278 PR-5): an ended Plan is never a
+        // running Plan, so the guard judges nothing for it and its reference to a replaced `O` never blocks the save.
+        const [{ replacedBuildListEntryId }] = fixture.artifact.replacements
+        const base = createValidProductionPlan()
+        const ended: ProductionPlan = {
+          ...base,
+          id: productionPlanId(`plan.ended.${status}`),
+          status,
+          selectedBuildListEntryIds: [replacedBuildListEntryId],
+          steps: base.steps.map((step) => ({
+            ...step,
+            buildListEntryId: replacedBuildListEntryId,
+            isCompleted: status === 'completed',
+            completedAt: status === 'completed' ? DOMAIN_FIXTURE_TIME : null,
+          })),
+          currentStepId: status === 'completed' ? null : base.currentStepId,
+          completedAt: status === 'completed' ? DOMAIN_FIXTURE_TIME : null,
+          abandonmentReason: status === 'abandoned' ? 'user_abandoned' : null,
+          abandonedAt: status === 'abandoned' ? DOMAIN_FIXTURE_TIME : null,
+        }
+        await database.productionPlans.put(ended)
+
+        // The inspection succeeds only when no approval applies.
+        await service.inspectBuildListOptimizationAdoptionSave(source(), context)
+        expect(await service.saveBuildListOptimizationAdoption(source(), context)).toEqual({ kind: 'saved', plan })
+        expect(await database.buildListEntries.get(replacedBuildListEntryId)).toBeUndefined()
+        // The ended Plan keeps its now-deleted reference as persisted; only the Draft was replaced.
+        expect(await database.productionPlans.get(ended.id)).toEqual(ended)
+        expect(byId(await database.productionPlans.toArray())).toEqual(byId([ended, plan]))
+      }),
+  )
 })
 
 describe('Build List optimization adoption: inspection', () => {

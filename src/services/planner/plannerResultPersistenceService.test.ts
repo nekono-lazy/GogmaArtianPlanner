@@ -29,6 +29,7 @@ import {
   planStepId,
   productionPlanId,
 } from '../../test/fixtures/domainData'
+import { dump } from '../../test/fixtures/executionRuntime'
 import { fixture, routeEntry, sourceWeapon, target } from '../../test/fixtures/plannerBeam'
 import {
   PlannerResultPersistenceService,
@@ -46,10 +47,12 @@ import {
  * The ordinary Planner result save (`savePlannerResult()`, `docs/PLANNER_SPEC.md`
  * 9.2.15, Phase 6-A): the Plan is re-validated against the current state inside
  * the write transaction and replaces the previous Draft; the Build List is read,
- * never written. The replacement-bearing Planner Alternative repair save is
- * covered by `plannerResultPersistenceService.alternative.test.ts` and
- * `plannerResultPersistenceService.savePoint.test.ts`. The legacy B8
- * orchestration save these cases once ran through was removed in Phase 6-B2b.
+ * never written. The replacement-bearing save - the Build List optimization
+ * adoption - is covered by `plannerResultPersistenceService.buildListOptimization.test.ts`,
+ * and the conflict preference save by
+ * `plannerResultPersistenceService.conflictPreference.test.ts`. The legacy B8
+ * orchestration save these cases once ran through was removed in Phase 6-B2b,
+ * and the Planner Alternative repair save in Issue #278 PR-5.
  */
 
 function normalRoute(): BuildRoute {
@@ -375,6 +378,27 @@ describe('PlannerResultPersistenceService ordinary Planner result (Phase 6-A, PL
         savePointDecision: null,
       })).rejects.toMatchObject({ code: 'plan_breaking_change_approval_not_required' })
       expect(await database.productionPlans.get(active.id)).toEqual(active)
+    }))
+
+  it('refuses an approval choosing the save point restore exactly like any other approval, restoring and writing nothing', () =>
+    withScenario(async ({ service, result, context, database, plan, persisted }) => {
+      const active: ProductionPlan = {
+        ...buildPlan(plan.baseSnapshot, plan.calculationContext, persisted),
+        id: productionPlanId('plan.running.p1'),
+        status: 'active',
+      }
+      await database.productionPlans.put(active)
+      await database.productionPlans.put(previousDraft())
+      const before = await dump(database)
+
+      // No Planner result save restores a save point instead of saving (the
+      // Planner Alternative repair save that did was removed in Issue #278
+      // PR-5): the guard refuses the approval before any restore or write.
+      await expect(service.savePlannerResult(result, context, {
+        observedPlan: { planId: active.id, status: 'active', currentStepId: active.currentStepId, updatedAt: active.updatedAt },
+        savePointDecision: { kind: 'restore_save_point', recordedAt: DOMAIN_FIXTURE_TIME },
+      })).rejects.toMatchObject({ code: 'plan_breaking_change_approval_not_required' })
+      expect(await dump(database)).toEqual(before)
     }))
 })
 

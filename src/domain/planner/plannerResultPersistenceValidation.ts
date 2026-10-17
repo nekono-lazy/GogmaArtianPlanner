@@ -19,11 +19,9 @@ import type {
 } from '../models/publicTypes'
 import {
   validateBuildListEntry,
-  validatePlannerConflictRepairLineage,
   validateProductionPlan,
 } from '../models/publicTypes'
 import type { DomainValidationResult } from '../models/validation'
-import type { PlannerAlternativeRepairArtifact } from './alternative'
 import {
   plannerPlanCompletionRecord,
   plannerPreferredBuildListEntryIds,
@@ -37,7 +35,8 @@ import type {
 /**
  * The pure save-time checks a Planner result must pass before it is persisted
  * (`docs/PLANNER_SPEC.md` 9.2.15), shared by the ordinary Planner result save,
- * the Planner Alternative repair save and the replan adoption (16.8).
+ * the conflict preference save (9.6.6), the Build List optimization adoption
+ * (17.11) and the replan adoption (16.8).
  *
  * Each check returns the first issue it finds, or `null`. It never throws, so
  * each caller maps an issue onto its own error boundary: the ordinary save onto
@@ -78,8 +77,9 @@ export function checkPlannerRunTerminationPersistable(
 
 /**
  * The result-shape invariants of a replacement-bearing Planner result - the
- * Planner Alternative actual repair (`checkPersistablePlannerAlternativeRepairShape()`)
- * - that do not depend on current persisted state:
+ * Build List global optimization adoption (`docs/PLANNER_SPEC.md` 17.11), whose
+ * artifact checks call this first - that do not depend on current persisted
+ * state:
  * a completed / exhausted search, a draft Plan, unique generated Entry IDs,
  * exactly one replacement per generated Entry naming its own Target
  * (`docs/PLANNER_SPEC.md` 9.2.18), and Domain-valid Plan and Entries. A
@@ -135,9 +135,10 @@ export function checkPersistablePlannerResultShape(
  * checks applies; its Plan is saved over - or, for a replan, started against -
  * the current Build List exactly as it is.
  *
- * Only the Planner Alternative actual repair ever stores a lineage
- * (`docs/DATA_MODEL.md` 11.1.1), so an ordinary Plan carrying one is refused
- * rather than stored or cleared.
+ * No current save writes a lineage: only the Planner Alternative actual repair
+ * save ever stored one, and it was removed in Issue #278 PR-5 (a lineage stored
+ * earlier stays readable, `docs/DATA_MODEL.md` 11.1.1). An ordinary Plan
+ * carrying one is refused rather than stored or cleared.
  */
 export function checkPersistableOrdinaryPlannerResultShape(
   plan: ProductionPlan,
@@ -152,7 +153,7 @@ export function checkPersistableOrdinaryPlannerResultShape(
   }
   if (plan.conflictRepairLineage !== null) {
     return resultInvalid(
-      'An ordinary Planner result must not carry a conflict repair lineage; only a Planner Alternative actual repair records one.',
+      'An ordinary Planner result must not carry a conflict repair lineage; no current save records one.',
     )
   }
   const planValidation = validateProductionPlan(plan)
@@ -292,8 +293,9 @@ export type FinalReplacementBuildListResult =
  * The **final replacement set** a Planner result is persisted into
  * (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18): the current persisted Entries,
  * minus each replaced `O`, plus each generated `G`. Used by the shared Draft
- * save boundary (the ordinary result, with no replacement, and the Planner
- * Alternative repair), it refuses - before any write - a
+ * save boundary (the ordinary and conflict preference results, with no
+ * replacement, and the Build List optimization adoption), it refuses - before
+ * any write - a
  * generated ID that is already persisted (never overwritten), a Target whose
  * persisted Entry is no longer exactly the expected `O`, and a final set in
  * which a replaced Target does not hold exactly its `G`
@@ -363,11 +365,13 @@ export function checkGeneratedBuildListEntriesFresh(
  * conflict participant, recommendation or selection, a rejection - exists in
  * the final replacement set, and each Candidate-derived Step carries its Entry
  * Snapshot's Candidate ID. A replaced Entry `O` is not part of that set, so a
- * Plan still naming it anywhere is refused. A generated Entry need not be
- * selected: a Planner Alternative repair saves its accepted replacement set
- * whether or not the final Plan selects each `G` (9.2.19.6). (The legacy B8
- * save additionally required every generated Entry to be selected; that check
- * was removed with it in Phase 6-B2b.)
+ * Plan still naming it anywhere is refused. This check does not require a
+ * generated Entry to be selected: the Build List global optimization adoption
+ * checks its own final selection separately (`docs/PLANNER_SPEC.md` 17.11).
+ * (The Planner Alternative repair save, removed in Issue #278 PR-5, relied on
+ * this to save an accepted but unselected `G`, 9.2.19.6; the legacy B8 save
+ * additionally required every generated Entry to be selected, a check removed
+ * with it in Phase 6-B2b.)
  */
 export function checkProductionPlanBuildListEntryReferences(
   plan: ProductionPlan,
@@ -444,94 +448,4 @@ function sameStructure(left: unknown, right: unknown): boolean {
   const rightRecord = right as Record<string, unknown>
   const keys = new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)])
   return [...keys].every((key) => sameStructure(leftRecord[key], rightRecord[key]))
-}
-
-/** One Planner Alternative actual repair, its shape checked and its Draft carrying the lineage. */
-export interface PersistablePlannerAlternativeRepair {
-  /** The final scenario Plan with `conflictRepairLineage` set exactly to the artifact's lineage. */
-  plan: ProductionPlan
-  generatedEntries: readonly BuildListEntry[]
-  replacements: readonly BuildListEntryReplacement[]
-}
-
-export type PlannerAlternativeRepairShapeResult =
-  | { issue: null; repair: PersistablePlannerAlternativeRepair }
-  | { issue: PlannerResultPersistenceIssue; repair: null }
-
-function replacementIdentity(targetWeaponId: string, replaced: string, generated: string | null): string {
-  return JSON.stringify([targetWeaponId, replaced, generated])
-}
-
-/**
- * The result-shape invariants of a Planner Alternative actual repair artifact
- * that do not depend on current persisted state (`docs/PLANNER_SPEC.md`
- * 9.2.19.8 / 9.2.19.11): a final scenario Plan exists, its run is not
- * `incomplete` and honoured every explicit resolution (no
- * `invalid_conflict_resolution`), `conflicts` and `plan.conflicts` are the one
- * expanded list - every PlanConflict equal field by field in the same order,
- * never only by ID - the generated Entries and their `O -> G` replacements pair up
- * (`checkPersistablePlannerResultShape()`: draft Plan, unique IDs, Domain-valid
- * Plan and Entries), and the lineage is structurally valid and its last
- * decision records exactly these replacements as `replaced`.
- *
- * It returns the Plan to persist: the artifact's Plan with
- * `conflictRepairLineage` set exactly to the artifact's lineage - never a
- * lineage rebuilt from persisted state or the Plan's Conflicts. It does not
- * require a generated Entry to be selected by the Plan: the accepted
- * replacement set is the authority (9.2.19.6).
- */
-export function checkPersistablePlannerAlternativeRepairShape(
-  artifact: PlannerAlternativeRepairArtifact,
-): PlannerAlternativeRepairShapeResult {
-  const fail = (issue: PlannerResultPersistenceIssue): PlannerAlternativeRepairShapeResult =>
-    ({ issue, repair: null })
-  const { plannerResult, conflictRepairLineage } = artifact
-  const generatedEntries = artifact.generatedBuildListEntries
-  const replacements = artifact.generatedBuildListEntryReplacements
-  const artifactPlan = plannerResult.plan as ProductionPlan | null
-  if (artifactPlan === null || artifactPlan === undefined) {
-    return fail(resultInvalid('A Planner Alternative repair artifact must carry the final scenario Plan.'))
-  }
-  if (plannerResult.warnings.some(({ kind }) => kind === 'invalid_conflict_resolution')) {
-    return fail(resultInvalid(
-      'The final scenario Plan could not honour an explicit conflict resolution (invalid_conflict_resolution) and must not be saved.',
-    ))
-  }
-  // The Domain returns one canonical expanded list for both (9.2.19.9); a
-  // Worker artifact whose two lists differ in any field - a selection, a
-  // participant, a kind - is malformed, not re-sorted or partially compared.
-  if (!sameStructure(artifactPlan.conflicts, plannerResult.conflicts)) {
-    return fail(resultInvalid('The repair artifact reports different Conflicts for its result and its Plan.'))
-  }
-  if (conflictRepairLineage === null || conflictRepairLineage === undefined) {
-    return fail(resultInvalid('A Planner Alternative repair artifact must carry the repair lineage of the Draft it saves.'))
-  }
-  const lineageValidation = validatePlannerConflictRepairLineage(conflictRepairLineage)
-  if (!lineageValidation.isValid) {
-    return fail({ kind: 'entity_invalid', entityName: 'ProductionPlan', validation: lineageValidation })
-  }
-  const decision = conflictRepairLineage.decisions.at(-1)
-  if (decision === undefined) {
-    return fail(resultInvalid('The repair lineage must record this decision as its last decision.'))
-  }
-  const plan: ProductionPlan = { ...artifactPlan, conflictRepairLineage: structuredClone(conflictRepairLineage) }
-  const shape = checkPersistablePlannerResultShape(plan, generatedEntries, plannerResult.termination, replacements)
-  if (shape !== null) return fail(shape)
-  const recorded = decision.invalidatedRoutes
-    .filter(({ outcome }) => outcome === 'replaced')
-    .map((record) => replacementIdentity(record.targetWeaponId, record.invalidatedBuildListEntryId, record.replacementBuildListEntryId))
-    .sort()
-  const replaced = replacements
-    .map((replacement) => replacementIdentity(
-      replacement.targetWeaponId,
-      replacement.replacedBuildListEntryId,
-      replacement.generatedBuildListEntryId,
-    ))
-    .sort()
-  if (recorded.join('\n') !== replaced.join('\n')) {
-    return fail(resultInvalid(
-      'The last repair decision of the lineage does not record exactly the replacements this repair saves.',
-    ))
-  }
-  return { issue: null, repair: { plan, generatedEntries, replacements } }
 }

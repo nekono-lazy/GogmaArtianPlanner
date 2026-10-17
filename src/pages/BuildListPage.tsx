@@ -186,16 +186,13 @@ function createDefaultDependencies(master: MasterDataRoot): BuildListPageDepende
     // No approval: an adoption never runs beside a running Plan (17.11).
     saveBuildListOptimizationAdoption: async (source, currentCalculationContext) =>
       (await plannerResultPersistenceService.saveBuildListOptimizationAdoption(source, currentCalculationContext)).plan,
-    // The ordinary Draft creation passes no approval, so a save point restore
-    // (which only an approval can choose) never happens here.
+    // The ordinary Draft creation writes no Build List, so it passes no
+    // approval and never breaks a running Plan.
     savePlannerResult: async (result, currentCalculationContext) => {
       const outcome = await plannerResultPersistenceService.savePlannerResult(
         result,
         currentCalculationContext,
       )
-      if (outcome.kind === 'save_point_restored_recalculation_required') {
-        throw new Error('An unapproved Planner result save never restores a save point.')
-      }
       return outcome.kind === 'saved' ? outcome.plan : null
     },
     deleteEntry: (id, approval) => buildListService.deleteEntry(id, approval ?? null),
