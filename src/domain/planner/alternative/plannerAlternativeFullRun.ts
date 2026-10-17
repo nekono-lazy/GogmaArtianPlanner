@@ -15,11 +15,13 @@ import {
 
 /**
  * The one full Planner run path of a Planner Alternative request
- * (`docs/PLANNER_SPEC.md` 9.2.19.6 / 9.2.19.8.1 / 9.2.19.12): the kernel's
- * individual trials and the what-if scenario composition's adoption and final
- * runs all go through it, so every run - and every runtime-unsupported retry
- * inside `createProductionPlanWithObserver()` - consumes the one
- * request-global `PlannerAlternativeFullRunBudget` it was created with.
+ * (`docs/PLANNER_SPEC.md` 9.2.19.6 / 9.2.19.12): the kernel's individual
+ * trials and a research caller's own full runs go through it, so every run -
+ * and every runtime-unsupported retry inside
+ * `createProductionPlanWithObserver()` - consumes the one request-global
+ * `PlannerAlternativeFullRunBudget` it was created with. (The scenario
+ * composition's adoption and final runs of 9.2.19.8.1 did too, until Issue
+ * #278 PR-7 removed the what-if and the actual repair.)
  */
 
 /** A cancelled Planner Alternative request. It is never an outcome. */

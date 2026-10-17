@@ -33,8 +33,9 @@ import { createPlannerStartSearchOrigin } from './plannerSearchOrigin'
  *
  * Introduced by B9-B1a as the what-if preparation, and a shared Planner Domain
  * primitive since Phase 6-B2a (PLANNER_SPEC 9.2.19.16): the Planner
- * Alternative kernel prepares every what-if and actual repair request with it.
- * The legacy B9 what-if wrapper that also used it was removed in Phase 6-B2b.
+ * Alternative kernel prepares every request with it. The legacy B9 what-if
+ * wrapper that also used it was removed in Phase 6-B2b, and the Planner
+ * Alternative what-if and actual repair above the kernel in Issue #278 PR-7.
  *
  * It reuses the existing Planner authority end to end -
  * `preparePlannerInitialContext()`, `createPlannerConflictContexts()`,

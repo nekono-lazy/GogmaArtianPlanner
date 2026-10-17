@@ -52,9 +52,11 @@ export interface ProductionPlan {
   completedAt: ISODateTimeString | null
   /**
    * The Conflict repair chain this Draft continues (`docs/DATA_MODEL.md`
-   * 11.1.1, `docs/PLANNER_SPEC.md` 9.2.19.11). `null` for every Plan that no
-   * 「この候補を優先」 actual repair saved: the ordinary Planner and the replan
-   * adoption start a new chain. It is audit / chain-continuation data only: its
+   * 11.1.1, `docs/PLANNER_SPEC.md` 9.2.19.11 / 9.6.8). `null` for every Plan
+   * that no 「この候補を優先」 actual repair of an earlier version saved: no
+   * current Plan generation or save writes one (Issue #278 removed that repair
+   * and its lineage derivation), and a stored value stays readable and
+   * exported as it is. It is audit / chain-continuation data only: its
    * Entry and Target IDs are never current foreign keys, and it enters no
    * hash, snapshot, staleness or Execution semantics. Every later transition
    * (start, Execution, Undo, save point snapshots) keeps it exactly.

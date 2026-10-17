@@ -14,6 +14,7 @@ Refs #278。**docs-only**。本書はIssue #278のPR-6として、Productionか�
   前のProduction経路の記録である。本書はそれらを現在のProduction仕様として扱わない。現在の競合解決は9.6である
 - 分類は監査時点（下記の基準commit）のimport graphに基づく。削除・移設を行うPRは、その時点で同じ確認をやり直してから
   実施する（9.6.11）
+- 13章はPR-7（分類Cの削除）の実施記録であり、PR-7で追記した。1〜12章はPR-6時点の記録のまま変えていない
 
 **基準。** `origin/main` = `db29f228558cc76ca2e5d1b70267782283cc262c`（PR #283「不要になったPlanner Alternative専用保存経路を削除する」の
 merge）。作業開始時に local `main`・`origin/main`・HEADの一致、Working Tree clean（未commit・staged変更なし）、worktreeが本checkoutの
@@ -718,3 +719,72 @@ Ownerがこの状態を選ぶ場合は、PR-6（本書）とD-1〜D-4の判断�
 Production実装、RNG / Counter / Search / Plannerの意味論、全体最適化の計算、Domainの型・API、Worker protocol、Persistence、
 Database / Export / Calculation schema（18 / 10 / 13）、test・fixture・期待値、研究用の計算条件・測定結果、実行ナビ、UI / UX。
 本PRの変更は本書の追加と、PLANNER_SPEC 9.6.11 / 9.6.12・AGENTS.mdへの監査結果の参照の追記だけである。
+
+## 13. PR-7の実施記録（分類Cの削除）
+
+**基準。** `origin/main` = `6965da07f5542d228fb6ee98ad56f937275bd2a7`（PR #284、本書のmerge）。作業開始時に local `main`・`origin/main`・
+HEADの一致、Working Tree clean、worktreeが本checkoutの1つだけであることを確認し、作業branch
+`refactor/issue278-remove-dead-alternative-domain` を作成した。
+
+### 13.1 再確認
+
+- 1.4の名前による横断確認を基準commitで再実行し、分類C 5 module自身を除く利用者が7章・9章の記載どおり（削除対象test、
+  `planner.worker.production.test.ts` のbarrel固定、`plannerNormalCounterFastForward.test.ts` の1件、全体最適化の採用testの型cast、
+  否定のregexだけを持つIssue #154 Research test 15本と `plannerWorkerClient.test.ts`、commentだけの2 file）であることを確かめた。
+  `scripts/`・`vitest.config.ts`・`vite*.ts` には参照が無い
+- **新たに見つけたもの。** `src/domain/planner/alternative/plannerAlternativeKernel.instrumentation.test.ts` が、`import.meta.glob` の
+  `?raw` で読んだsourceを `production['./plannerAlternativeScenario.ts']` というfile名の文字列で引き、「kernelを呼ぶ唯一のProduction
+  module（scenario）はexecution optionsと共有budgetだけを渡す」ことを固定していた。1.4の確認はsymbol名を探すのでfile名だけの参照を
+  拾わず、9章の表にも無かった。削除後は「走査範囲でkernelの関数を呼ぶのはkernel自身だけ」を固定する形に直した（範囲は同じglob。
+  callerが無くなった事実を固定するので、検査は弱めていない）
+- 削除後に型検査（`tsc -b`）が通り、Planner barrel（`domain/planner`）のruntime exportに削除した12関数が残らないことをtestで固定した
+  （名前ではなく形で照合。削除前のmainで同じ照合が12件すべてを検出することを確かめてから削除した）
+
+### 13.2 削除・変更したもの
+
+| 区分 | 内容 |
+| --- | --- |
+| 削除したmodule | 7章の5 module（合計1,046行）と、`alternative/index.ts` のそれらのre-export 5行 |
+| 削除したtest | 7章の8本 |
+| kernel testへ移したもの | `plannerAlternativeRepairChain.test.ts` のうちkernelだけを検証する部分（7章の候補3件と2件のkernel部分）。lineageの導出を使わず、`priorFixedBuildListEntryIds` / `priorExcludedRoutes` を値で与える。`derivePlannerConflictRepairLineageContext()` が元のtestで返していた値（有効なlineage: prior fixed = D / E、prior除外 = F / Zの現在Route。失効したlineage: prior fixed = A / E、prior除外 = D / F / Zの現在Route）をそのまま書いた |
+| 変更したtest | `planner.worker.production.test.ts`（barrelに削除したcalculationが無いことと、kernel・試行上限・reservation・共有primitiveが残ること）、`plannerNormalCounterFastForward.test.ts`（what-ifの1件を外す。conflict contextの2件と明示決定の1件は残る）、`plannerResultPersistenceService.buildListOptimization.test.ts`（repair artifactの型castを構造的なobjectへ。拒否の条件は同じ）、`plannerAlternativeKernel.instrumentation.test.ts`（13.1） |
+| 追加したtest | `src/benchmarks/issue101OrdinaryConflictResolution.test.ts`（13.4のD-2） |
+| commentを直したProduction module | `plannerAlternativeKernel.ts`・`plannerAlternativeFullRun.ts`・`plannerAlternativeTrial.ts`（削除したscenario / what-if / repairを現在の利用者として書いていた記述）、`replacement/plannerConflictScenario.ts`、`productionPlanGeneration.ts`（lineage初期値）、`buildList/buildListEntryReplacement.ts`（repair artifactを現在の利用者としていた記述）、`models/planning.ts`（`conflictRepairLineage` のdoc）。動作は変えていない |
+
+kernelへ移した検証で、元のtestのcommentが述べていた「D2 = Reset 11 / Reset 12 / Reset Skills 7」というRouteの形は、実際のkernelの
+found Candidate（Fの所持武器を起点にSkill 7でReset Skillsする1操作のRoute）と一致しなかった。元のtestはRouteの形を固定して
+いなかったので、移した検証でも固定せず、commentからその記述を外した。kernelの意味と期待値は変えていない。
+
+### 13.3 Production bundle・benchmark build
+
+基準commitと変更後で、同じ環境（Node 24.19.0、npm 11.17.0、Vite 8.3.0、`VITE_APP_BUILD_ID` 未設定、同じ `vite.config.ts`）の
+`vite build` を比較した。
+
+- 通常のProduction build（既定のminify）: 7つのJS chunk、CSS、`index.html` のSHA-256がすべて一致した（chunk名は3章の基準値と同じ）
+- `--minify false` のProduction build: `index` と `buildListOptimization.worker.entry` だけが異なり、差分は
+  `applyBuildListEntryReplacements()` のJSDoc commentの2行（13.2で直したcomment）と、それによるchunk名の違いだけだった
+- benchmark build（`vite.benchmark.config.ts`）: 成功した。異なるのは、build provenance（`__PLANNER_GLOBAL_BENCHMARK_BUILD__` の
+  `commit`・`uncommittedBenchmarkCode`・`benchmarkCodeSha256`。`src` 全体のhashを含むので、testやcommentの変更でも変わる）を埋め込む
+  chunkだけであり、provenanceとchunk名を正規化すると全fileが一致した
+
+### 13.4 分類Dの判断
+
+PLANNER_SPEC 9.6.12の「分類Dの判断（PR-7で確定）」に記録した。
+
+- D-1 `temporary_*`: 維持（8章の選択肢1）
+- D-2 Issue #101の現行経路のregression: 通常CIへ追加（8章の選択肢2）。fixture構築（Candidate Search 2回）が約1.5秒、各Planner実行が
+  約30ms、test file全体で約3秒であり、timeout延長・skipは無い。明示決定の無いDraftの3つの競合（Gogma / Skill / Normal、参加者は火・龍）、
+  3つのどの競合で龍・火のどちらを優先しても決定がその競合だけに記録され残る2つが結果から外れること、優先した登録済みRouteだけが
+  実行されてその目標武器が完成すること、他方のEntryが `resource_conflict` で今回作成されず作成リストに残ること、generated Entry・置換・
+  lineageが無いこと、`conflictResolutionOutcome` と保存時の形・完成の検査が通ること、計算が `incomplete` でないこと（`exhausted`、
+  完成1 / 2）を固定した。期待値は現行codeでfixtureから再現した値である。旧repairのPlanの値を流用せず、競合の解消や全Target完成を
+  前提にしていない。全体最適化での検証（8章の選択肢3）は加えていない
+- D-3 Research専用codeの配置: Issue #278では移設しない（10.2は別Issueの範囲案として残す）
+- D-4 2つの既定値: 名前・値・定義場所を維持し、PLANNER_SPEC 9.2.19.12とSEARCH_SPEC 5.6.8へ「現在はResearch / benchmark / testの
+  計算条件で、Productionからは使われない」ことを注記した
+
+### 13.5 Issue #278の完了条件（11章）の状況
+
+1〜5はすべて、本PRのmergeで満たされる見込みである（3: 分類Cの削除。Production bundle・Worker protocol・Persistence・versionは
+変わらず、境界test 4本の検査内容は変えていない。4: D-1〜D-4の記録。5: 分類A・Bを意図的に残すものとして記録）。Issue #278の範囲で
+残る実装作業は無い。分類Bの移設・退役などは10.2のとおり別Issueの候補である。

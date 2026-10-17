@@ -72,13 +72,13 @@ import {
  *   -> found (9.2.19.6), or the next Candidate
  * ```
  *
- * It is the shared calculation the Phase 4 what-if and the Phase 5 actual
- * repair both stand on; it composes no scenario Plan, persists nothing, and
- * has no Production routing, Worker message or default of its own. The
- * scenario composition (9.2.19.8.1) belongs to the shared scenario core above
- * it (`runPlannerAlternativeScenario()`, under both the what-if and the actual
- * repair), which shares its request's
- * one rerun budget with this kernel through `PlannerAlternativeKernelOptions`.
+ * The Phase 4 what-if and the Phase 5 actual repair stood on it until Issue
+ * #278 removed them (the scenario composition of 9.2.19.8.1 went with them in
+ * PR-7); it now serves the research benchmarks and tests only. It composes no
+ * scenario Plan, persists nothing, and has no Production routing, Worker
+ * message or default of its own. A caller that runs further full Planner runs
+ * of its own shares one rerun budget with this kernel through
+ * `PlannerAlternativeKernelOptions`.
  */
 
 /** Earlier decisions' Route exclusions of one Target (the repair lineage, Phase 5). */

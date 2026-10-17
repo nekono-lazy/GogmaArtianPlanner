@@ -364,8 +364,12 @@ describe('Planner Alternative kernel instrumentation: Production isolation', () 
       .filter(([, source]) => /PlannerAlternativeKernelInstrumentation|searchInstrumentationForTarget|onEvent\s*:/.test(source))
       .map(([path]) => path)
     expect(users).toEqual(['./plannerAlternativeKernel.ts'])
-    // The one Production kernel caller passes execution options and the shared budget only.
-    const scenarioSource = production['./plannerAlternativeScenario.ts']
-    expect(scenarioSource).toMatch(/runPreparedPlannerAlternativeKernel\(prepared, request, dependencies, \{\s*executionOptions: options\.executionOptions,\s*fullRunBudget: budget,\s*\}\)/)
+    // No module of this tree calls the kernel but the kernel itself: the
+    // scenario core that did was removed with the what-if and the actual
+    // repair (Issue #278 PR-7), so only research benchmarks and tests run it.
+    const kernelCallers = Object.entries(production)
+      .filter(([, source]) => /\b(runPreparedPlannerAlternativeKernel|runPlannerAlternativeKernel|preparePlannerAlternativeKernel)\(/.test(source))
+      .map(([path]) => path)
+    expect(kernelCallers).toEqual(['./plannerAlternativeKernel.ts'])
   })
 })

@@ -3906,9 +3906,14 @@ calculation types, the Production adapters `createProductionPlannerAlternativeCo
 `prepare_interaction` / `cancel` / `error` only, and the Client exposes `createPlan()` / `prepareInteraction()` / `cancelPlan()` /
 `dispose()`. Issue #278 PR-5 removed the repair save API (`inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`,
 `checkPersistablePlannerAlternativeRepairShape()`) and the Plan-breaking guard's restore-instead-of-change branch; the current saves
-are `savePlannerResult()`, `savePlannerConflictPreferenceResult()` and the Build List optimization adoption. The Planner Alternative
-Domain calculations and their defaults stay without a Production caller until the PR-6+ cleanup (`docs/PLANNER_SPEC.md` 9.6.11 /
-9.6.12).
+are `savePlannerResult()`, `savePlannerConflictPreferenceResult()` and the Build List optimization adoption. Issue #278 PR-7 removed
+the Planner Alternative what-if (`createPlannerAlternativeWhatIfComparison()`), actual repair (`createPlannerAlternativeRepair()`,
+`PlannerAlternativeRepairArtifact`), scenario core (`runPlannerAlternativeScenario()`, `expandPlannerAlternativeDecision()`), typed
+comparison (`plannerAlternativeComparison.ts`) and repair lineage derivation (`plannerConflictRepairLineage.ts`), so the Phase 4-B /
+5-A / 5-B paragraphs above are an implementation record; the kernel, full run, trial bounds (`defaultPlannerAlternativeTrialBounds`),
+Alternative materializer and `defaultPlannerAlternativeSearchExtent` stay as research / benchmark calculation conditions with no
+Production caller, and `derivePlannerAlternativeReservation()` stays for the Build List global optimization (`docs/PLANNER_SPEC.md`
+9.6.11 / 9.6.12).
 
 ---
 
@@ -4540,7 +4545,8 @@ Application / Persistence responsibilities.
 11.8) is the formal contract fixed by Issue #278 PR-1 (docs-only). **PR-2 implemented the calculation, save, routing and
 version parts, and PR-3 the conflict display of `docs/UI_FLOW.md` 11.6.2 - 11.6.5**; the Planner Alternative cleanup is PR-4+
 (PR-4 removed its Worker / Client / Production adapter / presentation path, PR-5 the repair save API and the guard's
-restore-instead-of-change branch; the Domain calculations are PR-6+).
+restore-instead-of-change branch, PR-6 audited what was left, and PR-7 removed the dead what-if / repair / scenario / comparison /
+lineage-derivation Domain calculations).
 PR-3 is Presentation plus read-only projection only: `createProductionPlanConflictSectionDisplay()` /
 `ProductionPlanConflictSection` (`src/components/planner/`) build every Japanese text from typed data (`PlanConflict.kind`, the persisted
 selection / recommendation, `rejectedBuildListEntries.reason`, `targetCompletions`, the preparation's typed codes); the interaction
@@ -4647,8 +4653,10 @@ Alternative sections as the current contract.
   exactly as before (`plan_breaking_change_approval_not_required`, nothing written), whatever its save point decision
 - PR split (9.6.12): PR-2 switches calculation, save, routing and removes 「比較する」 in one PR (never one without the
   other); PR-3 the conflict display; PR-4 the dead Worker / Client / UI path (done); PR-5 the repair save API and its
-  checks and the guard's restore-instead-of-change branch (done); PR-6+ the Planner Alternative Domain calculations, their
-  defaults and `PlannerBuildListContext`'s `temporary_*`, re-audited together with the research benchmarks and tests that use them
+  checks and the guard's restore-instead-of-change branch (done); PR-6 the docs-only audit of the remaining Planner Alternative
+  Domain calculations, their defaults and `PlannerBuildListContext`'s `temporary_*` together with the research benchmarks and tests
+  that use them (done); PR-7 the removal of its class C and the Issue #101 current-path regression (done). Nothing else of Issue
+  #278 is left; moving or retiring class B is a separate Issue
 - PR-6 (done, docs-only) re-audited the remaining code on `db29f22` and recorded it in
   `docs/ISSUE_278_ALTERNATIVE_DOMAIN_CLEANUP_AUDIT.md` (an audit record, not a specification; 9.6.11 / 9.6.12 point to it). A
   (Production shared, keep): `derivePlannerAlternativeReservation()`, `replacement/` deterministic materializer / materialization errors /
@@ -4664,6 +4672,24 @@ Alternative sections as the current contract.
   the B code, the D-series research, scheduler parity Scenario M and the PR-2 parity digest use them), an Issue #101 regression on the
   current paths, where Research-only code lives, and the wording of the two defaults. Never delete A or B because of an
   `alternative` name, and moving B is outside Issue #278
+- PR-7 (done) re-checked class C on `6965da0` and removed exactly those five modules, their `alternative/index.ts` re-exports and their
+  eight dedicated tests (`plannerAlternativeWhatIf*.test.ts`, `plannerAlternativeRepair*.test.ts`, `plannerAlternativeRepairChain.test.ts`,
+  `plannerConflictRepairLineage.test.ts`, `issue101PlannerAlternativeRepair.test.ts`, `issue101PlannerAlternativeWhatIf.test.ts`). The
+  repair chain's kernel-only supersede cases moved to `plannerAlternativeKernel.test.ts`, given as the kernel's typed
+  `priorFixedBuildListEntryIds` / `priorExcludedRoutes` values (no lineage helper re-implemented, no kernel meaning or expected value
+  changed). The kernel instrumentation test, which pinned the removed scenario as the one kernel caller by source text, now pins the
+  kernel as its only caller in the scanned tree; `planner.worker.production.test.ts` pins by shape that the Planner barrel exports none
+  of the removed calculations and still exports the kernel, the trial bounds, the reservation and the shared primitives; the GA adoption
+  test refuses a structurally built repair-shaped object instead of a `PlannerAlternativeRepairArtifact` cast. Decisions: D-1 keep
+  `temporary_*`; D-2 the Issue #101 real case runs in ordinary CI on the current path
+  (`src/benchmarks/issue101OrdinaryConflictResolution.test.ts`: interaction preparation, `derivePlannerConflictDecisionSet()`,
+  `conflictResolutionPlannerOptions()`, `createProductionPlan()` and the save-time shape / completion checks; preferring Dragon or Fire on
+  any of the three Fire / Dragon conflicts runs only that registered Route, records the decision on that conflict alone, drops the other
+  two, leaves the other Entry in the Build List as `resource_conflict`, generates and replaces nothing, completes the preferred Target,
+  and never finishes `incomplete`; about 3 s, no timeout raised); D-3 no relocation in Issue #278; D-4 keep both defaults' names, values
+  and locations, documented as research calculation conditions. The lineage field, type, validator, migrations, Export / Import and the
+  version 17 Plan exception are unchanged, the Production build's seven JS chunks are byte-identical before and after, and no version
+  moved (18 / 10 / 13)
 
 ---
 
@@ -5784,16 +5810,22 @@ Relevant test areas include:
   re-validation, generated Entry freshness, write-failure atomicity, the guard's rollback and the 16.10 save point choice (since
   Issue #278 PR-5 the Planner Alternative half lives in the Build List optimization adoption, conflict preference and guard tests);
   an accepted but unselected `G` saved by the repair save (until Issue #278 PR-5 removed that save); the materialization error runtime
-  contract through the Planner barrel; the Normal Counter production-target conflict compared through
-  `createPlannerAlternativeWhatIfComparison()`; and the Issue #101 real-case fixture keeping its pinned Candidate / BuildListEntry /
-  Conflict IDs
+  contract through the Planner barrel; the Normal Counter production-target conflict compared through the Planner Alternative what-if
+  (until Issue #278 PR-7 removed it; the explicit resolution selecting the other Route and the conflict contexts stay tested); and the
+  Issue #101 real-case fixture keeping its pinned Candidate / BuildListEntry / Conflict IDs
 - Issue #278 PR-5: no `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` /
   `checkPersistablePlannerAlternativeRepairShape()` / `restoreSavePointInsteadOfChange()` /
   `preparePlanGuardedSavePointRestoreInsteadOfChange()` / `drop_change` left in `src`; an approval choosing the save point restore
   passed to `savePlannerResult()` refused with `plan_breaking_change_approval_not_required` and nothing written; the guard rolling
   back the change, the restore and the Plan abandonment together when an `afterWrite` write fails; the Build List optimization
   adoption replacing an Entry a completed / abandoned Plan still references with no approval and that Plan kept as persisted; and the
-  Issue #101 Domain repair / Route / lineage regression unchanged
+  Issue #101 Domain repair / Route / lineage regression unchanged (until Issue #278 PR-7 removed that repair)
+- Issue #278 PR-7: no Planner Alternative what-if, actual repair, scenario composition, typed comparison or repair lineage
+  derivation left in `src` or exported by the Planner barrel (pinned by shape); the kernel's restored-resolution supersede through
+  prior fixed Entries, the decision's own conflict key, no supersede without prior fixed Entries and none through an Entry no
+  longer prior fixed; the kernel as its own only caller in the scanned Production tree; and the Issue #101 real case on the current
+  ordinary conflict resolution path (decision set, recorded decision, dropped moot conflicts, only the preferred registered Route,
+  no generated Entry or replacement, the other Entry kept, the preferred Target completed, `exhausted` not `incomplete`)
 - `ProductionPlan.conflictRepairLineage` validated structurally only (literals, IDs, the
   `replaced` iff replacement rule, never a current foreign key), Dexie v9 -> v10 and Export
   12 -> 13 filling `null` into every Plan body (table, save point, Undo snapshot, Undo

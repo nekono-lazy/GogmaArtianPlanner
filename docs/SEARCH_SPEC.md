@@ -1403,7 +1403,11 @@ constrained enumerationを段階的に置き換える（[PLANNER_SPEC.md](./PLAN
 無くなるが、本節のfrontier・section・route registration・Candidate factory・型・input validation・reservationの正規化は
 形状制約付きRoute探索（5.6.9、作成リストの全体最適化のStage D）が共有するので残す。本節の探索semanticsは変えない。
 entry pointの扱いは、Global Assignment Research（Issue #154）とisolation testのconsumerを含めて、PLANNER_SPEC 9.6.11 / 9.6.12の
-削除PRで再監査して決める。
+削除PRで再監査して決める。PR-6の監査（[ISSUE_278_ALTERNATIVE_DOMAIN_CLEANUP_AUDIT.md](./ISSUE_278_ALTERNATIVE_DOMAIN_CLEANUP_AUDIT.md)
+4.3.1）とPR-7の再確認の結論は**維持**である: Global Assignment Researchの `d0a-v1` 規則とそのgolden、Issue #154のD系 / Phase 2-C*
+のResearch、Planner Alternative benchmark、形状制約付き探索のisolation test（無指定時の探索が変わらないことの比較対象）が使う。
+Issue #278のPR-7はPlanner側のwhat-if・actual repair・scenario composition・repair lineageの導出を削除したが、本節のSearch Domain
+APIと探索semantics、entry point、`defaultPlannerAlternativeSearchExtent` は変えていない。
 
 #### 境界
 
@@ -1644,6 +1648,11 @@ Production Worker adapterも同じ定数を渡すよう配線して、Production
 定数とDomain APIの契約は残り、Global Assignment Researchとbenchmark / testが使う。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.11 / 9.6.12）。
 benchmarkの `BENCHMARK_ONLY_*` gridとsanity値はPhase 3-Bのhistorical
 measurement conditionとして維持し、このdefaultを読まない。
+
+**現在の位置づけ（Issue #278 PR-7、PLANNER_SPEC 9.6.12の判断D-4）。** この定数は上記のPhase 3-Cの「Production default」の決定記録を
+残したまま、現在はIssue #154 Research（Phase 2-C*のResearch moduleが計算条件として読む、Phase 2-C2.5-B / D2B / D2EのBrowser Worker）と
+test（`globalAssignment/isolation.test.ts` が値 `4 / 235 / 4` を固定する）が使う計算条件であり、Productionのどのcode・Worker・画面も
+使わない。名前・値・定義場所は変えない。
 
 #### 出力とidentity
 

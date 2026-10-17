@@ -2685,6 +2685,31 @@ module / API別の依存関係、分類の根拠、testの扱い、後続PRの�
   全体最適化も使わないが、分岐は共有moduleとProduction bundleにあり、分類Bのkernel・preflight・D系Research・scheduler parityの
   Scenario M・PR-2のparity digestが使う）、Issue #101実ケースの現行経路でのregression、Research専用codeの配置、2つの既定値の呼称
 
+**PR-7の再監査結果（分類Cの削除）。** PR-7はPR-6のmerge後のmain（`6965da0`）で、分類Cの5 moduleの利用者を監査文書の方法
+（symbol名による横断確認、型検査、Production / benchmark buildの照合）で再確認し、PR-6の結論どおりであることを確かめてから削除した。
+
+- 削除した: `src/domain/planner/alternative/` の `plannerAlternativeWhatIf.ts`（`createPlannerAlternativeWhatIfComparison()`）、
+  `plannerAlternativeRepair.ts`（`createPlannerAlternativeRepair()`、`PlannerAlternativeRepairArtifact` ほか）、
+  `plannerAlternativeScenario.ts`（`runPlannerAlternativeScenario()`、`expandPlannerAlternativeDecision()`、
+  `derivePlannerAlternativeDecisionExpansion()`、`isPlannerAlternativeConflictExpandedToFixed()`）、`plannerAlternativeComparison.ts`
+  （`PlannerAlternativeComparison` ほかの比較結果の型、`createPlannerAlternativeRouteSummary()`・`createPlannerAlternativeDistance()`・
+  `countPlannerAlternativeLineageExclusions()`）、`plannerConflictRepairLineage.ts`（`derivePlannerConflictRepairLineageContext()`・
+  `plannerConflictRepairOutcomeOf()`・`appendPlannerConflictRepairDecision()`）と、`alternative/index.ts` のそれらのre-export。
+  利用者は削除したtest（9.6.12のPR-7の実施記録）と、Planner barrelにwhat-if / repairがあることを固定していたtestだけであり、
+  Production・全体最適化・Node Research runner・3つのbenchmark page・`scripts/` のどれからも参照されていなかった
+- 再監査で新たに見つけたこと: `plannerAlternativeKernel.instrumentation.test.ts` が、kernelを呼ぶ唯一のmoduleとしてscenarioのsourceを
+  文字列で固定していた（PR-6の名前による横断確認はfile名の文字列だけの参照を拾わない）。削除後は「走査範囲でkernelを呼ぶのは
+  kernel自身だけ」を固定する形へ直し、検査を弱めていない
+- 残した（分類A・B、9.6.12の判断D-1〜D-4）: 上の「残すもの」の表のすべて、`plannerAlternativeReservation.ts`、kernel・full run・
+  trial（`defaultPlannerAlternativeTrialBounds`）・Alternative用materializer、`replacement/` の7 module、Search Domainの
+  `alternative/`・`constrained/`・`shapeConstrained/`（`visitPlannerAlternativeCandidates()`・`defaultPlannerAlternativeSearchExtent`
+  を含む）、`buildListEntryReplacement.ts`、`PlannerBuildListContext` の `temporary_*`、lineageの永続field・型
+  （`PlannerConflictRepairLineage` 等、`src/domain/models/planning.ts`）・validator（`validatePlannerConflictRepairLineage()`）・
+  Dexie / Export migration（`fillProductionPlanConflictRepairLineage()`）・Export / Import・version 17の限定互換判定
+- 変えていない: RNG / Counter、通常Plannerの計算・明示決定集合・route commitment、Planner Search、全体最適化Stage D / D'、
+  `BuildListEntryReplacement` の意味、kernel / trialのAPI・入力・判定の意味、Persistence、Worker protocol、実行ナビ・再計画、UI、
+  永続shape、version（18 / 10 / 13）。Production buildのJS chunkはPR-7の前後でbyte単位で一致した（9.6.12のPR-7の実施記録）
+
 #### 9.6.12 段階分割
 
 依存関係（通常Plannerのroute commitmentはPlanner Alternativeのscenario runとも共有される、「比較する」は「この候補を優先」と
@@ -2724,9 +2749,9 @@ PR-4以降  不要になった経路の整理（import graphの再監査のう�
       - PR-6（実施済み、docs-only）: Planner AlternativeのDomain計算・試行上限のdefault・PlannerBuildListContextの
         temporary_*を、研究用benchmark・Issue #101の実ケースtest・境界testの扱いと合わせて再監査し、A / B / C / Dに分類した
         （ISSUE_278_ALTERNATIVE_DOMAIN_CLEANUP_AUDIT.md）。codeは変えていない
-      - PR-7以降（監査文書の提案。実施前にimport graphを再確認する）: 分類C（what-if、actual repair、scenario、comparison、
-        lineageの導出・追記と、それだけを検証するtest）の削除。分類A・Bは残す。分類Dは監査文書の選択肢の判断を経てから扱い、
-        Research専用codeの移設・退役はIssue #278の目的外として別Issueで扱う案とする
+      - PR-7（実施済み）: 分類C（what-if、actual repair、scenario、comparison、lineageの導出・追記と、それだけを検証する
+        test）の削除と、Issue #101実ケースの現行経路でのregression testの追加。分類A・Bは残し、分類Dは下記の判断D-1〜D-4の
+        とおり扱う。Research専用codeの移設・退役はIssue #278の目的外として別Issueで扱う
 ```
 
 PR-2とPR-3を1つにまとめることは妨げないが、PR-2より前に「比較する」だけ、または「この候補を優先」だけを切り替えない。
@@ -2776,6 +2801,50 @@ Search Domainのalternative / constrained / shapeConstrained、`PlannerBuildList
 削除・移設時のtestの扱い、後続PRの分割案、Issue #278の完了条件の提案を記録した。Production実装、Domainの型・API、Worker protocol、
 Persistence、test・fixture・期待値、Researchの記録、versionは変えていない（18 / 10 / 13）。分類Cの削除（PR-7の案）、分類Dの判断、
 Research専用codeの扱いは本節の段階分割の後続であり、本PRでは行っていない。
+
+**PR-7の実施記録。** PR-7は分類Cの5 moduleを削除した（再監査の結果と削除・維持の内訳は9.6.11の「PR-7の再監査結果」）。
+
+- testの扱い: what-if・actual repair・scenario・lineageの導出だけを検証していた8本（`plannerAlternativeWhatIf.test.ts`・
+  `.composition.test.ts`、`plannerAlternativeRepair.test.ts`・`.composition.test.ts`、`plannerAlternativeRepairChain.test.ts`、
+  `plannerConflictRepairLineage.test.ts`、`benchmarks/issue101PlannerAlternativeRepair.test.ts`・`…WhatIf.test.ts`）を削除した。
+  `plannerAlternativeRepairChain.test.ts` のうちkernel自身のsupersede契約を検証していた部分（prior fixed Entryで無効化される
+  restored resolutionだけを有効入力から外すこと、決定自身のconflict keyは通常のmergeで置き換わりsupersedeされないこと、prior fixed
+  Entryの無い要求ではsupersedeしないこと、もうprior fixedでないEntryの古いresolutionではsupersedeせず代替をfoundにしないこと、
+  他Targetのprior除外Routeが混ざらないこと）は、lineageの導出を使わずkernelのtyped入力（`priorFixedBuildListEntryIds` /
+  `priorExcludedRoutes`）を値で与える形で `plannerAlternativeKernel.test.ts` へ移した。kernelの意味・期待値は変えていない
+  （元のtestが固定していなかったRouteの形は新たに固定していない）。`plannerNormalCounterFastForward.test.ts` はwhat-ifの1件だけを外し
+  （明示決定で他方のRouteを選ぶ既存の1件がProduction側を検証している）、`planner.worker.production.test.ts` はPlanner barrelから
+  削除したcalculationがexportされないこと（名前でなく形で照合）と、kernel・試行上限・reservation・共有primitiveが残ることを固定する
+  形へ、全体最適化の採用testはrepair artifactの型castを構造的なobjectへ置き換えて同じ拒否を検証する形へ直した
+- Production bundle: 基準commitと同じ条件（Node 24.19.0、npm 11.17.0、Vite 8.3.0、`VITE_APP_BUILD_ID` 未設定、既定のminify）で
+  `vite build` した7つのJS chunkは、名前もSHA-256も前後で一致した。benchmark build（`vite.benchmark.config.ts`）も成功した
+- Issue #101: `benchmarks/issue101OrdinaryConflictResolution.test.ts` を追加した（判断D-2）
+
+**分類Dの判断（PR-7で確定）。**
+
+- D-1 `PlannerBuildListContext` の `temporary_augmented` / `temporary_replacement`: **維持する**。分類Bのkernel・replacement
+  preflight・Issue #154 D系Research・scheduler parityのScenario Mが使い、Production callerは常に `persisted` を渡すので通常Plannerの
+  意味は変わらない。削除する場合は分類Bの移設・退役と同じ別Issueで、parity testと合わせて扱う
+- D-2 Issue #101実ケースの現行経路でのregression: **通常CIへ追加した**。`createIssue101RealFixture()` の入力に対し、
+  Production Planner Workerのinteraction preparation、`derivePlannerConflictDecisionSet()`、`conflictResolutionPlannerOptions()`、
+  `createProductionPlan()`、保存時の形・完成の検査で、明示決定の無いDraftが火・龍の3つの競合（Gogma / Skill / Normal、参加者は
+  火・龍の2つ）を判断待ちとして持つこと、3つのどの競合で龍・火のどちらを優先しても、決定がその競合だけに記録され（残る2つは
+  参加者が1つになり結果に残らない、9.6.5）、優先した登録済みRouteだけが実行されてその目標武器が完成し、他方のEntryは
+  `resource_conflict` で今回作成されず、generated Entry・置換・lineageが無く、入力の作成リストが変わらず、
+  `conflictResolutionOutcome` が完成を示し、計算が `incomplete` でない（`exhausted`、完成1 / 2）ことを固定した。期待値はfixtureから
+  現行codeで再現した値であり、旧repairのPlan（代替Route探索・置換）を流用せず、競合の解消や全Target完成を前提にしない。
+  実行時間は約3秒（Candidate Searchを2回行うfixture構築が約1.5秒、各Planner実行が約30ms）で、timeout延長・skipは無い
+- D-3 Research専用codeの配置: **Issue #278では移設しない**。行う場合は別Issue（Research基盤の整理）で、監査文書10.2の範囲案を
+  起点に扱う。本PRでは新しいIssueを作らない
+- D-4 2つの既定値の呼称: **名前・値・定義場所を維持する**。`defaultPlannerAlternativeSearchExtent`（[SEARCH_SPEC.md](./SEARCH_SPEC.md)
+  5.6.8）と `defaultPlannerAlternativeTrialBounds`（9.2.19.12）はPhase 3-Cの「Production default」の決定記録を残したまま、現在は
+  Research / benchmark / testの計算条件であり、Productionからは使われないことを両節に注記した
+
+**Issue #278の完了条件と残課題（PR-7時点）。** 監査文書11章の提案のうち、1（PR-1〜PR-5）、2（PR-6と分類の参照）、3（分類Cの削除。
+本PR）、4（D-1〜D-4の記録。本節）、5（分類A・Bを意図的に残すものとして記録）は、本PRのmergeで満たされる。Issue #278の範囲で
+残る実装作業は無い。範囲外として別Issueで扱い得るものは、分類Bの移設・退役と `temporary_*` の扱い、`visitPlannerAlternativeCandidates()`
+と2つの既定値の整理、constrained enumeration benchmarkと `benchmarkWorkerYield()` の分離、Search Domainの名称中立化
+（監査文書10.2）、lineage fieldそのものの削除（永続shapeの変更を伴う。9.6.8）である。PR-7はversionを動かしていない（18 / 10 / 13）。
 
 #### 9.6.13 test観点
 
@@ -5181,7 +5250,13 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 > Searchの基盤（Search Domainのfrontier、`derivePlannerAlternativeReservation()` 等）のうち、全体最適化と共有するものは削除しない
 > （9.6.11）。Issue #278のPR-4で、本節が定めるWorker request kind（`create_planner_alternative_comparison` /
 > `create_planner_alternative_repair`）、Production Worker adapter、`PlannerWorkerClient` のmethodと最小限の比較表示を削除した。
-> 本節のDomain計算と専用保存APIはProductionから呼ばれないまま残り、PR-5以降で再監査して扱う（9.6.12）。
+> PR-5で専用保存API（`inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`）を削除し、PR-7で本節のwhat-if
+> （`createPlannerAlternativeWhatIfComparison()`）、actual repair（`createPlannerAlternativeRepair()`）、scenario composition
+> （`runPlannerAlternativeScenario()`・`expandPlannerAlternativeDecision()`）、typed comparison（`plannerAlternativeComparison.ts`）、
+> repair lineageの導出・追記（`plannerConflictRepairLineage.ts`）のDomain計算を削除した（9.6.11の「PR-7の再監査結果」）。
+> kernel・full run・trial（`defaultPlannerAlternativeTrialBounds` を含む）・Alternative用materializerはIssue #154のResearchと
+> benchmarkのために、`derivePlannerAlternativeReservation()` は全体最適化と共有するために残る。以下の本文は、これらの関数名を含めて
+> 実装時の記録であり、現在のcodeを表さない箇所がある。
 
 実装状態: **Phase 6まで実装済み（Phase 6完了）**（Phase 5-A: Pure Domain、Phase 5-B: Production routing /
 Persistence / migration、Phase 6-A: 残るProduction consumerのlegacy B8からの切り離し、Phase 6-B1: legacy B8 / B9のWorker / Client /
@@ -5928,6 +6003,11 @@ interface PlannerAlternativeSearchExtent {
     Phase 5-Bで、actual repairのProduction Worker adapter `createProductionPlannerAlternativeRepair()` も同じ2定数を
     Worker境界内で明示的に渡すよう配線した。Issue #278のPR-4でこの2つのadapterを削除したため、2定数を渡すProduction
     callerは無い。定数とDomain APIの契約は残り、Global Assignment Researchとbenchmark / testが値を使い続ける。9.6.11）
+  - **現在の位置づけ（Issue #278 PR-7、9.6.12の判断D-4）。** 2定数はPhase 3-Cで「Production default」として決めた記録を
+    本節に残したまま、現在はIssue #154 Research（Phase 2-C2・2-C2.7-Bの計算条件、Phase 2-C2.5-B / D2B / D2EのBrowser Worker）と
+    test（`globalAssignment/isolation.test.ts` が値を固定する）が読む計算条件である。Productionのどのcode・Worker・画面も渡さない。
+    名前・値・定義場所は変えない（変えるとResearchの再現性と境界testの固定を壊す）。Planner Alternative benchmarkは引き続き
+    2定数を読まず `BENCHMARK_ONLY_*` の条件を使う
 - 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
 - extentは探索範囲の上限であり、探索の進め方はoperation cost層単位のlazy探索である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8
   「cost層単位のlazy性」）。代替探索はextent全体をupfront solveせず、最初のCandidateまでにsettle / solveするworkはそのCandidateのcost層までに
@@ -7493,6 +7573,16 @@ Plan-breaking guard）/ actual repair Worker・Client / 生産計画画面のrou
 `conflictRepairLineageExportMigration.test.ts`、`conflictRepairLineageValidation.test.ts`、`calculationSchema16Boundary.test.ts`、
 `ProductionPlanPage.test.tsx`、`issue101PlannerAlternativeRepair.test.ts`）。
 held位置のcost層単位の処理（same-cost closure）は9.2.19冒頭の実装状態と [SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8を参照。
+
+**Issue #278での実装状態（記録）。** 上の項目のうちwhat-if・actual repair・scenario composition・typed comparison・repair lineageの
+導出・追記と、それらのWorker / Client / 保存APIを検証していたtestは、対象の実装とともにIssue #278のPR-4 / PR-5 / PR-7で削除した
+（9.6.12）。PR-7で削除したtestは `plannerAlternativeWhatIf.test.ts`・`.composition.test.ts`、`plannerAlternativeRepair.test.ts`・
+`.composition.test.ts`、`plannerAlternativeRepairChain.test.ts`、`plannerConflictRepairLineage.test.ts`、
+`issue101PlannerAlternativeRepair.test.ts`、`issue101PlannerAlternativeWhatIf.test.ts` であり、repair chainのうちkernel自身の
+supersede契約（restored resolutionの除外、決定自身のconflict keyの保持、prior fixed Entryの無い要求、もうprior fixedでない
+Entryでsupersedeしないこと）は `plannerAlternativeKernel.test.ts` へ移した。reservation・Search・kernel・materializer・
+trial・Issue #101のPhase 2 acceptanceの項目は残る。lineageの永続化・migration・validation（`conflictRepairLineageMigration.test.ts`、
+`conflictRepairLineageExportMigration.test.ts`、`conflictRepairLineageValidation.test.ts`）とversion境界のtestも残る。
 
 - reservationのheld / blocked / 排他OwnedWeaponが、fixed Route集合の既存Route unit（`canSkipWhenCounterPassed`、
   `physicalActionKey`、`arePlannerRouteUnitsShareable()`）と既存の所持武器参照authorityだけから導出され、

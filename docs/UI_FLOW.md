@@ -2029,7 +2029,8 @@ checkpoint関与の判定はcurrent preparationの `checkpointParticipants` か�
 ### 11.2 「比較する」とwhat-if preview
 
 > Issue #278の切替（PR-2）で撤去した（11.6.1）。本節はPhase 5-BからPR-2までの実装の記録である。本節が使う
-> `PlannerWorkerClient.createPlannerAlternativeComparison()` とWorker request kindはPR-4で削除した（11.6）。
+> `PlannerWorkerClient.createPlannerAlternativeComparison()` とWorker request kindはPR-4で、what-ifのDomain計算と
+> `derivePlannerConflictRepairLineageContext()` はPR-7で削除した（11.6）。
 
 各有効participantに「比較する」を置く。クリックしたparticipantだけを
 `scenarioResolution` とし、fresh PlannerInputへ表示中Planの既存explicit resolutionを
@@ -2321,6 +2322,8 @@ Persistenceは Phase 5-B）で実装済みであり、11.2〜11.4の画面はこ
 9.6.12）。PR-5では、Planner Alternative専用の保存API（`inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`）と、
 破壊的変更の警告（16.3）でその保存だけが使っていた「セーブ地点へ戻すだけで、この変更は保存しない」説明の差し替え（UI controllerの
 `drop_change`）を削除した。どの画面からも使われておらず、警告・三択・ゲーム側復元ダイアログの表示と操作は変えていない。
+PR-7では、どの画面からも呼ばれなくなっていたPlanner AlternativeのDomain計算（what-if、actual repair、scenario composition、比較結果の型、
+repair lineageの導出・追記）を削除した。生産計画画面の表示・操作は変えていない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.12）。
 
 PR-3の実装の要点（表示の意味は以下の各項のとおりで、計算・選択可否・保存の意味は変えていない）。
 

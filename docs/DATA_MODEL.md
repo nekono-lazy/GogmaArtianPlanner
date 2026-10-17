@@ -1884,6 +1884,13 @@ export type PlannerConflictRepairOutcomeStatus =
   actual repairの行はhistoricalであり、現在lineageを非nullにする書き込みは無い（通常保存・競合解決の保存・全体最適化の採用は
   `null` だけを保存し、非nullのPlanを受け取れば拒否する）。永続field、型、`validatePlannerConflictRepairLineage()`、Dexie / Exportの
   migration、Export / Importでの保持、過去のlineage付きPlanの読込と互換判定は変えていない
+- PR-7で、lineageのPure Domain計算（有効なlineageの導出 `derivePlannerConflictRepairLineageContext()`、outcome写像
+  `plannerConflictRepairOutcomeOf()`、決定の追記 `appendPlannerConflictRepairDecision()`。`src/domain/planner/alternative/plannerConflictRepairLineage.ts`）
+  を、それを使うwhat-if・actual repairのDomain計算とともに削除した。上の「Phase 5-Aで…lineageのPure Domain計算…を実装した」と、
+  有効性・失効・outcomeの表の記述は、過去のPlanが持つ値の意味の記録として残る（値を読み直して再計算するcodeは無い）。
+  永続field `ProductionPlan.conflictRepairLineage`、型（`src/domain/models/planning.ts`）、`validatePlannerConflictRepairLineage()`、
+  Dexie / Exportのmigration（`fillProductionPlanConflictRepairLineage()`）、Export / Importでの保持、version 17の限定互換判定
+  （`isProductionPlanCalculationCompatible()`）は変えていない
 
 ## 11.2 PlanningInputSnapshot
 

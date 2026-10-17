@@ -18,14 +18,15 @@ function compareStableStrings(left: string, right: string): number {
  * BuildListEntry `G`.
  *
  * It is runtime metadata only - never a `BuildListEntry` field, never a
- * `PlannerInput` field, never persisted. Inside a Planner Alternative trial it
- * names which Entry of an augmented input is temporary and which persisted
- * Entry it stands in for; on a Planner Alternative repair artifact it carries
- * each accepted `O -> G` replacement from the Planner Worker to the save-time
- * transaction, which must see that very `O` - and nothing else - still
- * persisted for the Target before it deletes it. Plain serializable data, so
- * it survives the Worker boundary. (The legacy B8 orchestration result carried
- * it the same way until Phase 6-B2b removed that path.)
+ * `PlannerInput` field, never persisted. In the Build List global optimization
+ * it carries each `O -> G` replacement of the adopted result from its Worker
+ * to the save-time transaction, which must see that very `O` - and nothing
+ * else - still persisted for the Target before it deletes it. Inside a
+ * research Planner Alternative trial it names which Entry of an augmented
+ * input is temporary and which persisted Entry it stands in for. Plain
+ * serializable data, so it survives the Worker boundary. (The legacy B8
+ * orchestration result and the Planner Alternative repair artifact carried it
+ * the same way until Phase 6-B2b and Issue #278 PR-7 removed those paths.)
  */
 export interface BuildListEntryReplacement {
   targetWeaponId: TargetWeaponId
@@ -115,7 +116,8 @@ export function sortBuildListEntryReplacements(
  * `entries` is either a persisted collection (the generated Entries are then
  * added) or an augmented collection already holding them (they are then kept
  * where they are, never duplicated). It decides nothing and validates nothing
- * on its own: the Planner Alternative trial and the repair save call
+ * on its own: its callers - the Build List global optimization and its
+ * adoption save, and the research Planner Alternative trial - call
  * `validateBuildListEntryReplacements()` on the side of it they hold.
  */
 export function applyBuildListEntryReplacements<T extends Pick<BuildListEntry, 'id'>>(
