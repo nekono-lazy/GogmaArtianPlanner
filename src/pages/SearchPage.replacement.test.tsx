@@ -13,6 +13,7 @@ import {
 } from '../services/buildList/buildListService'
 import type { SearchWorkerClient, SearchWorkerClientCallbacks } from '../services/search/searchWorkerClient'
 import { createCandidateSearchInput as createFixtureInput } from '../test/fixtures/candidateSearch'
+import { preparedFixtureInput } from '../test/fixtures/preparedCandidateSearchInput'
 import {
   checkpointCandidate,
   checkpointIdealBonuses,
@@ -102,7 +103,8 @@ function harness(initialEntries: BuildListEntry[], addResult: AddBuildListCandid
     getReidentificationReminder: vi.fn(async () => ({ kind: 'none' as const })),
     getCandidateSearchDefaults: async () => ({ ...recommendedCandidateSearchDefaults }),
     createWorkerClient: () => client,
-    createInput: vi.fn(async () => createFixtureInput()),
+    prepareInput: vi.fn(async ({ excludeOtherTargetSources }) =>
+      preparedFixtureInput(createFixtureInput(), excludeOtherTargetSources)),
     saveCandidates: vi.fn(async () => undefined),
     addCandidate: vi.fn(async () => addResult),
     inspectCandidateReplacement: vi.fn<(request: BuildListCandidateReplacementRequest) => Promise<PlanBreakingChangeInspection>>(

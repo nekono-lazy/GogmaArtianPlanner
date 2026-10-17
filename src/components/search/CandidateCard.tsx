@@ -25,6 +25,10 @@ import {
   preferredOwnedWeaponNoticeExplanation,
   preferredOwnedWeaponNoticeTitle,
 } from './preferredOwnedWeaponNotice'
+import {
+  describePreferredOwnedWeaponExclusion,
+  type SearchSourceExclusionDisplay,
+} from './sourceExclusionPresentation'
 import { CostEstimateSummary } from '../cost/CostEstimateSummary'
 import { estimateCandidateCost } from '../../domain/cost'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
@@ -104,6 +108,12 @@ interface CandidateCardProps {
    * longer describe the choice the Search made.
    */
   showPreferredOwnedWeaponNotice?: boolean
+  /**
+   * What the search that produced this Candidate excluded with 「他の目標武器で使用する所持武器を除外する」
+   * (Issue #157, `docs/UI_FLOW.md` 9 / 9.2). Only the Search screen passes it, and only to add to the Issue #128
+   * notice why the preferred owned weapon was not a starting point of that search. Display-only.
+   */
+  searchSourceExclusion?: SearchSourceExclusionDisplay | null
 }
 
 /** One figure of the operation summary. */
@@ -140,6 +150,7 @@ export function CandidateCard({
   intermediateStateSelectionContext = 'search',
   headingLevel = 'h3',
   showPreferredOwnedWeaponNotice = false,
+  searchSourceExclusion = null,
 }: CandidateCardProps) {
   const headingId = useId()
   const sectionLevel = nextHeadingLevel(headingLevel)
@@ -182,6 +193,9 @@ export function CandidateCard({
       '参照元の所持武器が見つかりません'
   const preferredOwnedWeaponNotice = showPreferredOwnedWeaponNotice
     ? describePreferredOwnedWeaponNotice(candidate, target, ownedWeapons)
+    : null
+  const preferredOwnedWeaponExclusion = preferredOwnedWeaponNotice
+    ? describePreferredOwnedWeaponExclusion(candidate, target, searchSourceExclusion)
     : null
   const scope = candidate.restorationBonusScope
   // Display-only, derived from the saved Route at render time: never persisted,
@@ -256,6 +270,11 @@ export function CandidateCard({
                   このルートの起点: {candidateRouteOriginLabel(preferredOwnedWeaponNotice.routeOrigin)}
                 </Typography>
                 <Typography variant="body2">{preferredOwnedWeaponNoticeExplanation}</Typography>
+                {preferredOwnedWeaponExclusion && (
+                  <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                    {preferredOwnedWeaponExclusion}
+                  </Typography>
+                )}
               </Stack>
             </Alert>
           ) : sourceName && (

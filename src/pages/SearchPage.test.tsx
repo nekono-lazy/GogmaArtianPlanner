@@ -31,6 +31,7 @@ import {
   targetWeaponId,
 } from '../test/fixtures/domainData'
 import { createCandidateSearchInput as createFixtureInput } from '../test/fixtures/candidateSearch'
+import { preparedFixtureInput } from '../test/fixtures/preparedCandidateSearchInput'
 import {
   SearchWorkerRuntimeError,
   type SearchWorkerClient,
@@ -95,9 +96,9 @@ function dependencies(
     getReidentificationReminder: async () => ({ kind: 'none' as const }),
     getCandidateSearchDefaults: async () => ({ ...recommendedCandidateSearchDefaults }),
     createWorkerClient: () => client,
-    createInput: async (options) => {
+    prepareInput: async ({ excludeOtherTargetSources, ...options }) => {
       const fixture = createFixtureInput()
-      return {
+      return preparedFixtureInput({
         ...fixture,
         ...options,
         targetWeapons: targets,
@@ -111,7 +112,7 @@ function dependencies(
           artianBonusTypeMappings: master.artianBonusTypeMappings,
           materialCosts: master.materialCosts,
         },
-      }
+      }, excludeOtherTargetSources)
     },
     saveCandidates: vi.fn(async () => undefined),
     addCandidate: vi.fn(async (candidate, target, intermediateStateSelection) => ({

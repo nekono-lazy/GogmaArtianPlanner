@@ -61,7 +61,6 @@ import type {
 import { findOwnedIdealWeaponsForTarget } from '../domain/target'
 import type {
   CandidateRouteFilter,
-  CandidateSearchInput,
   CandidateSearchNoticeSeverity,
   CandidateSearchProgress,
   CandidateSearchResult,
@@ -101,7 +100,23 @@ import {
   type BatchCandidateSearchRun,
   type BatchCandidateSearchSummary,
 } from '../services/search/batchCandidateSearch'
-import { createCandidateSearchInput } from '../services/search/createCandidateSearchInput'
+import {
+  prepareCandidateSearchInput,
+  preparedCandidateSearchInputIssue,
+  type CandidateSearchSourceExclusionSnapshot,
+  type PrepareCandidateSearchInputOptions,
+  type PreparedCandidateSearchInput,
+} from '../services/search/prepareCandidateSearchInput'
+import {
+  SourceExclusionConditionFieldset,
+  SourceExclusionResultAlert,
+} from '../components/search/SearchSourceExclusion'
+import {
+  createSearchSourceExclusionDisplay,
+  SOURCE_EXCLUSION_NOTHING_EXCLUDED_NOTE,
+  sourceExclusionConditionLabel,
+  sourceExclusionNotFoundNote,
+} from '../components/search/sourceExclusionPresentation'
 import {
   createProductionSearchWorkerClient,
   SearchCancelledError,
@@ -148,14 +163,14 @@ export interface SearchPageDependencies extends OwnedIdealCompletionApi, BuildLi
    */
   getCandidateSearchDefaults(): Promise<CandidateSearchDefaults>
   createWorkerClient(): SearchWorkerClient
-  createInput(options: {
-    searchRunId: string
-    targetWeaponId: TargetWeapon['id']
-    routeFilter: CandidateRouteFilter
-    settings: CandidateSearchSettings
-    master: MasterDataRoot
-    calculationContext: CalculationContext
-  }): Promise<CandidateSearchInput>
+  /**
+   * One Candidate Search input, built from the persisted state when the search
+   * (or a batch Target's search) starts, with 「他の目標武器で使用する所持武器を
+   * 除外する」 on or off (`prepareCandidateSearchInput()`, `docs/SEARCH_SPEC.md`
+   * 3.3). With it on, the derived exclusion and the records it names come back
+   * beside the input, from the same read.
+   */
+  prepareInput(options: PrepareCandidateSearchInputOptions): Promise<PreparedCandidateSearchInput>
   saveCandidates(targetId: TargetWeapon['id'], candidates: BuildCandidate[]): Promise<unknown>
   /**
    * 「作成リストに追加」 (`docs/DATA_MODEL.md` 9.4.1): only `added` wrote
@@ -186,7 +201,7 @@ const defaultDependencies: SearchPageDependencies | null = defaultMaster && defa
       getCandidateSearchDefaults: () =>
         settingsRepository.ensureSettings().then((settings) => settings.candidateSearchDefaults),
       createWorkerClient: createProductionSearchWorkerClient,
-      createInput: (options) => createCandidateSearchInput(options),
+      prepareInput: (options) => prepareCandidateSearchInput(options),
       saveCandidates: (targetId, candidates) =>
         buildCandidateRepository.replaceBuildCandidatesForTarget(targetId, candidates),
       // The Service result is passed through unchanged: the Build List
@@ -211,6 +226,19 @@ interface AddFeedback {
   severity: 'info' | 'warning' | 'error'
   message: string
   buildListLinkLabel?: string
+}
+
+/**
+ * A finished single search as the screen shows it: the Worker result together
+ * with the exclusion condition it ran with and the derivation recorded when its
+ * input was prepared (`docs/UI_FLOW.md` 9.2). The three are fixed when the
+ * search starts and land together, so a later Checkbox change, a later search
+ * or a later read never relabels a result already shown.
+ */
+interface DisplayedSearchResult {
+  result: CandidateSearchResult
+  excludeOtherTargetSources: boolean
+  sourceExclusion: CandidateSearchSourceExclusionSnapshot | null
 }
 
 /**
@@ -264,7 +292,15 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   // searches only - it is never written back (`docs/UI_FLOW.md` 9).
   const [settings, setSettings] = useState<CandidateSearchSettings>({ ...defaultCandidateSearchSettings })
   const [defaultsLoadFailed, setDefaultsLoadFailed] = useState(false)
-  const [result, setResult] = useState<CandidateSearchResult | null>(null)
+  // 「他の目標武器で使用する所持武器を除外する」 (`docs/UI_FLOW.md` 9.2): one value
+  // per operation, independent of each other and of every other condition,
+  // starting single OFF / batch ON on every visit and never persisted. Each
+  // operation reads its own value once, when it starts.
+  const [singleExcludeOtherTargetSources, setSingleExcludeOtherTargetSources] = useState(false)
+  const [batchExcludeOtherTargetSources, setBatchExcludeOtherTargetSources] = useState(true)
+  // The condition of the single search running now, for its progress display.
+  const [searchingExcludeOtherTargetSources, setSearchingExcludeOtherTargetSources] = useState(false)
+  const [result, setResult] = useState<DisplayedSearchResult | null>(null)
   // Read once on mount from the persisted provenance; a search changes no
   // provenance, so the reminder stays whatever the search returns (16.15).
   const loadReminder = useMemo(
@@ -469,7 +505,11 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
     if (!dependencies || !clientRef.current || targetWeaponId === '' || batchRunning) return
     const requestId = createSearchRunId()
     const client = clientRef.current
+    // Fixed at the press: a Checkbox change while this search runs, or after
+    // its result is shown, applies to the next search only.
+    const excludeOtherTargetSources = singleExcludeOtherTargetSources
     activeRequestRef.current = requestId
+    setSearchingExcludeOtherTargetSources(excludeOtherTargetSources)
     setSearching(true)
     setBatchSummary(null)
     setSearchError(null)
@@ -489,16 +529,23 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
         rngEngineVersion: client.engineVersion,
         appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
       }
-      const input = await dependencies.createInput({
+      const prepared = await dependencies.prepareInput({
         searchRunId: requestId,
         targetWeaponId,
         routeFilter,
         settings,
         master: dependencies.master,
         calculationContext,
+        excludeOtherTargetSources,
       })
       if (activeRequestRef.current !== requestId) return
-      const completed = await client.startSearch(input, {
+      // An input that does not say what the condition asks for is never
+      // searched as if it did (`preparedCandidateSearchInputIssue()`).
+      if (preparedCandidateSearchInputIssue(prepared, excludeOtherTargetSources) !== null) {
+        setSearchError('検索条件（他の目標武器で使用する所持武器の除外）を検索入力へ反映できなかったため、検索を開始しませんでした。もう一度検索してください。')
+        return
+      }
+      const completed = await client.startSearch(prepared.input, {
         onProgress: (nextProgress) => {
           if (activeRequestRef.current === requestId) setProgress(nextProgress)
         },
@@ -509,7 +556,9 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
         completed.targetResult.candidate === null ? [] : [completed.targetResult.candidate],
       )
       if (activeRequestRef.current !== requestId) return
-      setResult(completed)
+      // The names and reasons stay those of the read this input was built
+      // from; nothing is re-derived from a later read (`docs/UI_FLOW.md` 9.2).
+      setResult({ result: completed, excludeOtherTargetSources, sourceExclusion: prepared.sourceExclusion })
     } catch (caught: unknown) {
       if (activeRequestRef.current !== requestId || caught instanceof SearchCancelledError) return
       setSearchError(caught instanceof Error ? caught.message : '検索に失敗しました。')
@@ -561,26 +610,17 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
           rngEngineVersion: client.engineVersion,
           appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
         },
-        // Issue #157 PR-3: this screen still starts every batch with the
-        // exclusion off; its Checkbox is PR-4 (`docs/UI_FLOW.md` 9.2).
-        excludeOtherTargetSources: false,
+        // The batch Checkbox as it is now (`docs/UI_FLOW.md` 9.1 / 9.2): the
+        // batch fixes it for every Target, whatever the screen shows later.
+        excludeOtherTargetSources: batchExcludeOtherTargetSources,
       },
       {
         client,
         createSearchRunId,
-        // The exclusion-off input is this screen's ordinary `createInput()`; the
-        // batch refuses a Target whose input does not match the condition.
-        prepareInput: async (options) => ({
-          input: await dependencies.createInput({
-            searchRunId: options.searchRunId,
-            targetWeaponId: options.targetWeaponId,
-            routeFilter: options.routeFilter,
-            settings: options.settings,
-            master: options.master,
-            calculationContext: options.calculationContext,
-          }),
-          sourceExclusion: null,
-        }),
+        // Each Target's input and exclusion are read from the persisted state
+        // right before its search, so an Entry an earlier Target really added
+        // is counted; the batch refuses an input that ignores the condition.
+        prepareInput: (options) => dependencies.prepareInput(options),
         saveCandidates: (targetId, candidates) => dependencies.saveCandidates(targetId, candidates),
         addCandidate: (candidate, target, selection) => dependencies.addCandidate(candidate, target, selection),
       },
@@ -803,6 +843,15 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   </Box>
                 </Stack>
               </DisclosureAccordion>
+              {/* Between the search bounds and the buttons whose next start
+                  uses each value (`docs/UI_FLOW.md` 9.2). Never disabled: a
+                  change while a search or a batch runs applies to the next one. */}
+              <SourceExclusionConditionFieldset
+                singleExcludeOtherTargetSources={singleExcludeOtherTargetSources}
+                batchExcludeOtherTargetSources={batchExcludeOtherTargetSources}
+                onSingleChange={setSingleExcludeOtherTargetSources}
+                onBatchChange={setBatchExcludeOtherTargetSources}
+              />
               <Stack spacing={1}>
                 <Stack
                   direction={{ xs: 'column', sm: 'row' }}
@@ -879,6 +928,10 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   探索ステップ: {progress.processedWorkItems}
                 </Typography>
               </Stack>
+              {/* The condition this search started with, not the Checkbox now. */}
+              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                {sourceExclusionConditionLabel(searchingExcludeOtherTargetSources)}
+              </Typography>
               <Typography variant="caption" color="text.secondary">
                 探索ステップの総数は検索中に増えるため、進捗率は表示しません。
               </Typography>
@@ -893,7 +946,15 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
           </Paper>
         )}
         {result && masterForDisplay && (() => {
-          const targetResult = result.targetResult
+          const targetResult = result.result.targetResult
+          // Only the weapons the Search Domain really excluded, named from the
+          // snapshot of this search (`docs/UI_FLOW.md` 9.2).
+          const sourceExclusion = createSearchSourceExclusionDisplay(
+            result.excludeOtherTargetSources,
+            targetResult.excludedSourceOwnedWeaponIds,
+            result.sourceExclusion,
+          )
+          const excludedCount = sourceExclusion.excludedWeapons.length
           const target = targetById.get(targetResult.targetWeaponId) ?? null
           const displayedCandidate = targetResult.candidate
           // The Build List Domain authority decides equivalence; a Candidate
@@ -913,11 +974,16 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
                   目標武器: {target?.name ?? '不明な目標武器'}
                 </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
+                  {sourceExclusionConditionLabel(result.excludeOtherTargetSources)}
+                  {result.excludeOtherTargetSources && excludedCount === 0 && SOURCE_EXCLUSION_NOTHING_EXCLUDED_NOTE}
+                </Typography>
               </Box>
+              <SourceExclusionResultAlert display={sourceExclusion} debugMode={debugMode} headingLevel="h3" />
               {noticeSeverities.map((severity) => {
                 // Grouped by severity so a search that merely used a narrower
                 // method is never read as a failed search.
-                const notices = result.warnings.filter((warning) => warning.severity === severity)
+                const notices = result.result.warnings.filter((warning) => warning.severity === severity)
                 if (notices.length === 0) return null
                 return (
                   <Alert severity={severity} key={severity}>
@@ -940,7 +1006,16 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   Route can be an intermediate state (`docs/SEARCH_SPEC.md` 5.7). */}
               {targetResult.candidate === null && (
                 <Alert severity="info">
-                  現在の探索範囲では理想品が見つかりませんでした。探索量の上限を上げると見つかる場合があります。詳細設定の「通常アーティア最大進行量」「復元ボーナス最大進行量」「スキル最大進行量」を見直してください。
+                  <Stack spacing={1}>
+                    <Typography variant="body2">
+                      現在の探索範囲では理想品が見つかりませんでした。探索量の上限を上げると見つかる場合があります。詳細設定の「通常アーティア最大進行量」「復元ボーナス最大進行量」「スキル最大進行量」を見直してください。
+                    </Typography>
+                    {/* Said only when this search really excluded a weapon;
+                        the excluded weapons are never searched again on their own. */}
+                    {excludedCount > 0 && (
+                      <Typography variant="body2">{sourceExclusionNotFoundNote(excludedCount)}</Typography>
+                    )}
+                  </Stack>
                 </Alert>
               )}
               {targetResult.candidate && (
@@ -950,6 +1025,7 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   master={masterForDisplay}
                   ownedWeapons={ownedWeapons}
                   showPreferredOwnedWeaponNotice
+                  searchSourceExclusion={sourceExclusion}
                   debugMode={debugMode}
                   buildListStatus={buildListStatus}
                   intermediateStateSelection={intermediateSelection}

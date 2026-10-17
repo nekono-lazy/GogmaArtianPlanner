@@ -12,6 +12,7 @@ import {
   type SearchWorkerClientCallbacks,
 } from '../services/search/searchWorkerClient'
 import { createCandidateSearchInput as createFixtureInput } from '../test/fixtures/candidateSearch'
+import { preparedFixtureInput } from '../test/fixtures/preparedCandidateSearchInput'
 import {
   candidateId,
   createValidBuildCandidate,
@@ -90,7 +91,8 @@ function dependencies(
     getReidentificationReminder: async () => ({ kind: 'none' as const }),
     getCandidateSearchDefaults: async () => ({ ...recommendedCandidateSearchDefaults }),
     createWorkerClient: () => client,
-    createInput: vi.fn(async (options) => ({ ...createFixtureInput(), ...options, targetWeapons: targets })),
+    prepareInput: vi.fn(async ({ excludeOtherTargetSources, ...options }) =>
+      preparedFixtureInput({ ...createFixtureInput(), ...options, targetWeapons: targets }, excludeOtherTargetSources)),
     saveCandidates: vi.fn(async () => undefined),
     addCandidate: vi.fn(async (candidate: BuildCandidate, t: TargetWeapon, intermediateStateSelection) => {
       const forced = addResult?.(candidate, t)

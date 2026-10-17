@@ -9,6 +9,7 @@ import { createBuildListEntry } from '../domain/buildList'
 import { type SearchWorkerClient, type SearchWorkerClientCallbacks } from '../services/search/searchWorkerClient'
 import type { TargetOwnedIdealCompletion } from '../services/crud/targetWeaponLifecycleService'
 import { createCandidateSearchInput as createFixtureInput } from '../test/fixtures/candidateSearch'
+import { preparedFixtureInput } from '../test/fixtures/preparedCandidateSearchInput'
 import {
   createValidBuildCandidate,
   createValidOwnedWeapon,
@@ -81,7 +82,7 @@ function dependencies(client: ControlledClient, targets: TargetWeapon[], ownedWe
     getReidentificationReminder: async () => ({ kind: 'none' as const }),
     getCandidateSearchDefaults: async () => ({ ...recommendedCandidateSearchDefaults }),
     createWorkerClient: () => client,
-    createInput: async (options: Parameters<SearchPageDependencies['createInput']>[0]) => ({
+    prepareInput: async ({ excludeOtherTargetSources, ...options }: Parameters<SearchPageDependencies['prepareInput']>[0]) => preparedFixtureInput({
       ...createFixtureInput(),
       ...options,
       targetWeapons: storedTargets,
@@ -95,7 +96,7 @@ function dependencies(client: ControlledClient, targets: TargetWeapon[], ownedWe
         artianBonusTypeMappings: master.artianBonusTypeMappings,
         materialCosts: master.materialCosts,
       },
-    }),
+    }, excludeOtherTargetSources),
     saveCandidates: vi.fn(async () => undefined),
     addCandidate: vi.fn(async (candidate: BuildCandidate, target: TargetWeapon, intermediateStateSelection: Parameters<SearchPageDependencies['addCandidate']>[2]) => ({
       status: 'added' as const,

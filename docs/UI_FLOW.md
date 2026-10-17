@@ -1166,8 +1166,9 @@ semantics / Planner semanticsは変わらない。
 
 ### 9.2 他の目標武器で使用する所持武器の除外（Issue #157）
 
-実装状態: **未実装**（Issue #157 PR-1で仕様を確定した。画面はPR-4で実装する。[SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.3の
-分割計画）。意味論は[SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.3、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 14.2である。
+実装状態: **実装済み**（Issue #157 PR-1で仕様を確定し、画面はPR-4で実装した。[SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.3の
+分割計画。検索起点の選択（9章「実行中の生産計画の完了後（予測）」）は現在の候補検索画面に無いため、その起点での単体用チェックボックスの
+無効化は、検索起点の選択を実装する時に合わせて行う）。意味論は[SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.3、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 14.2である。
 Presentationは `ui-ux-pro-max` の観点（次の操作の条件はSwitchではなくCheckbox、関連する選択肢のfieldsetによるgrouping、
 説明文の常時表示と `aria-describedby`、色だけに頼らない状態表示、44px以上の操作領域）を既存のMUI部品・themeへ合わせて
 次のとおり確定した。

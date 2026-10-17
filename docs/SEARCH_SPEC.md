@@ -244,14 +244,16 @@ Candidate Searchの入力状態（`rngState`、`normalCounters`、`ownedWeapons`
 
 ### 3.3 他の目標武器で使用する所持武器の除外（Issue #157）
 
-実装状態: **一部実装**（Issue #157 PR-1で本契約を確定した。本節末尾の分割計画の1（Search Domain / Worker）をPR-2で実装し、
+実装状態: **実装済み**（Issue #157 PR-1で本契約を確定した。本節末尾の分割計画の1（Search Domain / Worker）をPR-2で実装し、
 `CandidateSearchInput.excludedSourceOwnedWeaponIds`、Route base列挙での適用、skip理由 `source_excluded_for_other_targets` と
 その日本語ラベル、`TargetCandidateSearchResult.excludedSourceOwnedWeaponIds` が動作する。2（Application / 一括検索）をPR-3で実装し、
 除外集合の導出 `deriveOtherTargetSourceExclusion()`（`src/domain/buildList/otherTargetSourceExclusion.ts`）、ON / OFFを指定する
 `prepareCandidateSearchInput()`（`src/services/search/prepareCandidateSearchInput.ts`。導出結果と、それが指す所持武器・目標武器の
 読み取り時点の記録を入力と並べて返す）、`runBatchCandidateSearch()` の開始時点の条件（`excludeOtherTargetSources`）・Targetごとの
-永続状態からの導出・`no_candidate` の結果の除外ID（`excludedSourceOwnedWeaponIds`）が動作する。3（Search UI）は未実装であり、
-候補検索画面はまだ単体検索・一括検索ともOFFだけを渡すため、Production Searchの動作は従来どおりである）。要求は
+永続状態からの導出・`no_candidate` の結果の除外ID（`excludedSourceOwnedWeaponIds`）が動作する。3（Search UI）をPR-4で実装し、
+候補検索画面が単体検索・一括検索それぞれのチェックボックスの開始時点の値を `prepareCandidateSearchInput()` /
+`runBatchCandidateSearch()` へ渡し、検索結果の除外IDと入力作成時点の記録から条件・除外した所持武器・理由を表示する（[UI_FLOW.md](./UI_FLOW.md)
+9.2）。OFFの検索は従来どおりである）。要求は
 [REQUIREMENTS.md](./REQUIREMENTS.md) 14.2、画面は[UI_FLOW.md](./UI_FLOW.md) 9.2 / 9.1である。
 
 候補検索に「他の目標武器で使用する所持武器を除外する」というON/OFF条件を置く。検索対象TargetをTとすると、ONでは
@@ -454,7 +456,7 @@ interface OtherTargetSourceExclusion {
 2. **Application / 一括検索**（PR-3で実装） — 除外集合の導出authority、`createCandidateSearchInput()` のON指定と1つのtransactionでの
    読み取り（導出結果を表示用に入力と並べて返す）、`runBatchCandidateSearch()` の開始時点の条件と、Targetごとの永続状態からの
    導出、`no_candidate` の結果への除外情報。画面はまだOFFだけを渡し、表示は変えない。検証は13.7の導出と一括処理の観点
-3. **Search UI**（PR-4） — [UI_FLOW.md](./UI_FLOW.md) 9.2のチェックボックス、開始時点の値の固定、検索中・結果・一括サマリの表示、
+3. **Search UI**（PR-4で実装） — [UI_FLOW.md](./UI_FLOW.md) 9.2のチェックボックス、開始時点の値の固定、検索中・結果・一括サマリの表示、
    Issue #128の注意への追記、結合テスト、PCと375px幅、ダークテーマでの確認。検証は13.7のUI観点と[UI_FLOW.md](./UI_FLOW.md) 19
 
 ---
