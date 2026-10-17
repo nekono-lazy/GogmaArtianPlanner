@@ -11,7 +11,7 @@ import { createBuildCandidateMeaningFingerprint } from '../buildList'
 import { candidateDeduplicationKey, candidateStableKey } from './candidateProcessing'
 import { searchCandidates } from './candidateSearch'
 import { assertCandidateSearchInput } from './searchValidation'
-import type { CandidateRouteFilter, CandidateSearchInput } from './searchTypes'
+import { CandidateSearchError, type CandidateRouteFilter, type CandidateSearchInput } from './searchTypes'
 import { TargetSearchScheduler } from './targetSearchScheduler'
 import {
   belowPracticalBonuses,
@@ -511,6 +511,33 @@ describe('excludedSourceOwnedWeaponIds validation', () => {
     await expect(searchCandidates(input, engine, deterministicExecution)).rejects.toMatchObject({
       name: 'CandidateSearchError',
       code: 'invalid_input',
+    })
+    expect(calls).toEqual([])
+  })
+
+  it.each([
+    ['every slot is empty', () => new Array(1) as unknown[], 0],
+    ['a slot after an existing ID is empty', () => {
+      const ids: unknown[] = [source, source]
+      delete ids[1]
+      return ids
+    }, 1],
+  ] as const)('fails closed on a sparse array where %s', async (_, makeIds, emptyIndex) => {
+    const ids = makeIds()
+    expect(emptyIndex in ids).toBe(false)
+    const input = createCandidateSearchInput()
+    ;(input as { excludedSourceOwnedWeaponIds?: unknown }).excludedSourceOwnedWeaponIds = ids
+    const error = thrownBy(() => assertCandidateSearchInput(input))
+    expect(error).toBeInstanceOf(CandidateSearchError)
+    expect(error).toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringContaining(`excludedSourceOwnedWeaponIds[${emptyIndex}] is an empty slot`),
+    })
+    const { engine, calls } = logged(createCandidateSearchEngine(input))
+    await expect(searchCandidates(input, engine, deterministicExecution)).rejects.toMatchObject({
+      name: 'CandidateSearchError',
+      code: 'invalid_input',
+      message: expect.stringContaining(`excludedSourceOwnedWeaponIds[${emptyIndex}]`),
     })
     expect(calls).toEqual([])
   })

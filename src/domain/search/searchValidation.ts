@@ -44,21 +44,28 @@ export function validateExcludedSourceOwnedWeaponIds(
   const issues: CandidateSearchValidationIssue[] = []
   const ownedWeaponIds = new Set<string>(input.ownedWeapons.map(({ id }) => id))
   const seen = new Set<string>()
-  value.forEach((id: unknown, index) => {
+  // Every index, holes included: `forEach()` would skip the empty slots of a
+  // sparse array and let them through.
+  for (let index = 0; index < value.length; index += 1) {
     const itemPath = `${path}[${index}]`
+    if (!(index in value)) {
+      issues.push({ path: itemPath, message: `${itemPath} is an empty slot; it must be a non-empty OwnedWeapon ID string.` })
+      continue
+    }
+    const id: unknown = value[index]
     if (typeof id !== 'string' || id.trim().length === 0) {
       issues.push({ path: itemPath, message: `${itemPath} must be a non-empty OwnedWeapon ID string.` })
-      return
+      continue
     }
     if (seen.has(id)) {
       issues.push({ path: itemPath, message: `${itemPath} repeats OwnedWeapon '${id}'.` })
-      return
+      continue
     }
     seen.add(id)
     if (!ownedWeaponIds.has(id)) {
       issues.push({ path: itemPath, message: `${itemPath} names OwnedWeapon '${id}', which is not in ownedWeapons.` })
     }
-  })
+  }
   return issues
 }
 
