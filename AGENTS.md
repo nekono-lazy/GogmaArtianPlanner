@@ -1029,16 +1029,23 @@ unchanged, and a formal research run under the schema 18 runtime is refused by i
 Issue #121 PR-1 (docs-only; `docs/PLANNER_SPEC.md` 9.6.9.1, `docs/UI_FLOW.md` 11.0 / 11.6.5, `docs/DATA_MODEL.md` 11.9,
 `docs/REQUIREMENTS.md` 24.2) moved no version and is not implemented yet. It fixed the Production Plan overview figure
 「完成予定 N / (N + M)本」: `N` is the distinct `executionEffects.targetCompletions` Targets (the existing authority), `M` the
-distinct Targets of `rejectedBuildListEntries` with `reason === 'resource_conflict'` (explicit decision losers, provisional
-outcome losers and deadlock / stall drops; every other reason is not conflict-caused) minus the `N` Targets, and the figure is
-provisional while any `PlanConflict.selectedBuildListEntryId === null`. Conflict participation and the conflict section's
-「今回作成しない目標武器」 count are never the authority, and the denominator is never the Build List size. No persisted field maps
-a rejected Entry to its Target, so the implementation adds the optional `RejectedBuildListEntry.targetWeaponId` - a copy of the
-input Entry's `targetWeaponId`, never inferred or backfilled from the current Build List, never a current foreign key or a
-ReferenceFinder reference. An absent value means a Plan saved before it, and the ratio then reads as not determinable unless the
-Plan has no `resource_conflict` record; only calculation schemas in the explicit set `{14, 15, 16, 17, 18}` (the scheduler
+distinct Targets of the rejected Entries whose competition with another Target is established - explicit decision losers and
+provisional outcome losers - minus the `N` Targets, and the figure is provisional while any
+`PlanConflict.selectedBuildListEntryId === null`. A persisted `reason === 'resource_conflict'` alone is never that authority:
+`rejectedReason()` also gives it to the scheduler's deadlock / stall drops (`conflict_not_committed` from `dropStuckEntry()`, the
+lowest-ranked pending Entry, never shown to be part of a cross-Target wait, and possible for a lone Route whose held-position gaps
+nobody fills). Conflict participation, the conflict section's 「今回作成しない目標武器」 count and the Build List size are never the
+authority either. No persisted field tells the causes apart or maps a rejected Entry to its Target, so the implementation adds two
+optional fields: `RejectedBuildListEntry.targetWeaponId` (a copy of the input Entry's `targetWeaponId`) and, on `resource_conflict`
+records only, `resourceConflictCause` (`explicit_resolution_not_selected` / `provisional_outcome_not_committed` /
+`stuck_drop_without_other_routes` / `stuck_drop_with_other_routes`, derived in `rejectedReason()`'s branch order from the runtime
+records; the scheduler only records whether other committed Entries were pending at the drop and never changes which Entry it drops
+or when). The first two count; a lone stuck drop is not a conflict; a stuck drop with other pending Routes makes the ratio not
+determinable (only `N` is shown, so an unknown cause never shrinks the denominator). Neither field is inferred or backfilled, a
+current foreign key or a ReferenceFinder reference; `reason`'s union and mapping are unchanged. A Plan whose `resource_conflict`
+records lack them reads as not determinable; only calculation schemas in the explicit set `{14, 15, 16, 17, 18}` (the scheduler
 mapping) are read this way. The Planner's decisions do not change, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 18, Dexie 10
-and Export 13, with no migration; the Issue #278 PR-2 parity digest compares the result with that field projected out.
+and Export 13, with no migration; the Issue #278 PR-2 parity digest compares the result with both fields projected out.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation
