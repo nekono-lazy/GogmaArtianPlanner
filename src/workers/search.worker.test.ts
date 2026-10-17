@@ -4,10 +4,12 @@ import type {
   SearchWorkerRequest,
   SearchWorkerResponse,
 } from '../domain/search'
+import { searchCandidates } from '../domain/search/candidateSearch'
 import {
   createCandidateSearchEngine,
   createCandidateSearchInput,
 } from '../test/fixtures/candidateSearch'
+import { ownedWeaponId } from '../test/fixtures/domainData'
 
 describe('Candidate Search Worker', () => {
   it('keeps RngEngine outside the structured-clone Worker request', () => {
@@ -120,6 +122,62 @@ describe('Candidate Search Worker', () => {
       workerYield().then(() => settled.push(3)),
     ])
     expect(settled).toEqual([1, 2, 3])
+  })
+
+  it('applies the source exclusion carried by the structured-clone input', async () => {
+    // `docs/SEARCH_SPEC.md` 3.3: the exclusion rides in the existing request's
+    // `input`; the Worker gains no message kind and validates it itself.
+    const input = createCandidateSearchInput()
+    input.routeFilter = 'existing_gogma'
+    const excluded = input.ownedWeapons[0].id
+    input.excludedSourceOwnedWeaponIds = [excluded]
+    const request: SearchWorkerRequest = {
+      type: 'candidate_search',
+      requestId: 'request.fixture.exclusion',
+      input,
+    }
+    const cloned = structuredClone(request)
+    expect(cloned).toEqual(request)
+
+    const responses: SearchWorkerResponse[] = []
+    const controller = createSearchWorkerController(
+      createCandidateSearchEngine(input),
+      (response) => responses.push(structuredClone(response)),
+    )
+    await controller.handleMessage(cloned)
+
+    const final = responses.at(-1)
+    if (final?.type !== 'candidate_search_result') throw new Error('Expected a Candidate Search result.')
+    const direct = await searchCandidates(structuredClone(input), createCandidateSearchEngine(input))
+    expect(final.result.targetResult).toEqual(direct.targetResult)
+    expect(final.result.targetResult.excludedSourceOwnedWeaponIds).toEqual([excluded])
+    expect(final.result.targetResult.candidate).toBeNull()
+    expect(final.result.targetResult.skippedRoutes).toContainEqual(expect.objectContaining({
+      route: 'existing_gogma_current',
+      reason: 'source_excluded_for_other_targets',
+    }))
+  })
+
+  it('rejects an invalid source exclusion as an error response', async () => {
+    const input = createCandidateSearchInput()
+    input.excludedSourceOwnedWeaponIds = [ownedWeaponId('owned.missing')]
+    const responses: SearchWorkerResponse[] = []
+    const controller = createSearchWorkerController(
+      createCandidateSearchEngine(input),
+      (response) => responses.push(response),
+    )
+    await controller.handleMessage({
+      type: 'candidate_search',
+      requestId: 'request.fixture.exclusion.invalid',
+      input: structuredClone(input),
+    })
+    expect(responses).toEqual([
+      {
+        type: 'error',
+        requestId: 'request.fixture.exclusion.invalid',
+        message: expect.stringContaining('excludedSourceOwnedWeaponIds[0]'),
+      },
+    ])
   })
 
   it('converts search failures into an error response', async () => {

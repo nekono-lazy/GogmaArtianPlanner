@@ -60,7 +60,7 @@ function resultFor(target: TargetWeapon, candidate: BuildCandidate): CandidateSe
   return {
     searchRunId: 'ui-run',
     calculationContext: createFixtureInput().calculationContext,
-    targetResult: { targetWeaponId: target.id, candidate, searchedRoutes: ['existing_gogma_mixed'], skippedRoutes: [] },
+    targetResult: { targetWeaponId: target.id, candidate, searchedRoutes: ['existing_gogma_mixed'], skippedRoutes: [], excludedSourceOwnedWeaponIds: [] },
     warnings: [],
     elapsedMs: 1,
   }

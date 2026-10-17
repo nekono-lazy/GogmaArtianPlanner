@@ -257,6 +257,7 @@ export const skippedRouteReasonLabels: Record<SkippedRouteReason, string> = {
   normal_prediction_unsupported: '通常アーティア予測は現在のRNGエンジンで未対応です',
   skill_prediction_unsupported: 'スキル予測は現在のRNGエンジンで未対応です',
   gogma_prediction_unsupported: '巨戟アーティア予測は現在のRNGエンジンで未対応です',
+  source_excluded_for_other_targets: '使える所持武器が、他の目標武器で使用するため除外したものだけでした',
 }
 
 export const staleReasonLabels: Record<BuildListEntryStaleReason, string> = {

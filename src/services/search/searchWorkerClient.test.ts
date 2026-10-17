@@ -52,7 +52,7 @@ class FakeWorker implements WorkerLike {
 }
 
 function fixtureResult(searchRunId: string, calculationContext: ReturnType<typeof createCandidateSearchInput>['calculationContext']) {
-  return { searchRunId, calculationContext, targetResult: { targetWeaponId: 'target.fixture.a' as never, candidate: null, searchedRoutes: [], skippedRoutes: [] }, warnings: [], elapsedMs: 1 }
+  return { searchRunId, calculationContext, targetResult: { targetWeaponId: 'target.fixture.a' as never, candidate: null, searchedRoutes: [], skippedRoutes: [], excludedSourceOwnedWeaponIds: [] }, warnings: [], elapsedMs: 1 }
 }
 
 describe('SearchWorkerClient', () => {

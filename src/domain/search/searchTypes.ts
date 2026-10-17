@@ -3,6 +3,7 @@ import type {
   CalculationContext,
   NormalArtianCounter,
   OwnedWeapon,
+  OwnedWeaponId,
   RngState,
   RouteKind,
   TargetWeapon,
@@ -87,6 +88,21 @@ export interface CandidateSearchInput {
   settings: CandidateSearchSettings
   master: SearchMasterSubset
   calculationContext: CalculationContext
+  /**
+   * The owned weapons this request never uses as a Route source
+   * (`docs/SEARCH_SPEC.md` 3.3). Absent and `[]` mean the same thing: nothing
+   * is excluded and the Search behaves exactly as before. The order carries no
+   * meaning. Each ID is non-empty, unique, and names a weapon of `ownedWeapons`;
+   * anything else fails closed as `invalid_input`.
+   *
+   * The Search knows only this set, never why a weapon is in it or whether the
+   * screen's exclusion option was on. Only the ordinary Candidate Search reads
+   * it: constrained enumeration, Planner Alternative Search, the
+   * shape-constrained Route search and the Build List optimization's Stage D
+   * never set it. It is runtime request data only and enters no Candidate
+   * identity, hash or persisted record.
+   */
+  excludedSourceOwnedWeaponIds?: OwnedWeaponId[]
 }
 
 export type SkippedRouteReason =
@@ -103,6 +119,13 @@ export type SkippedRouteReason =
   | 'gogma_prediction_unsupported'
   | 'calculation_context_incompatible'
   | 'disabled_by_filter'
+  /**
+   * `docs/SEARCH_SPEC.md` 3.3: the RouteKind had at least one owned source
+   * under the existing source rules, and the request's source exclusion removed
+   * every one of them. A RouteKind that had no source even without the
+   * exclusion keeps its ordinary reason.
+   */
+  | 'source_excluded_for_other_targets'
 
 export interface SkippedRoute {
   route: RouteKind
@@ -138,6 +161,19 @@ export interface TargetCandidateSearchResult {
   candidate: BuildCandidate | null
   searchedRoutes: RouteKind[]
   skippedRoutes: SkippedRoute[]
+  /**
+   * `docs/SEARCH_SPEC.md` 3.3: the owned weapons this search did not register
+   * as a Route base because the request excluded them, in code unit order with
+   * no duplicate. Only a weapon the searched RouteKinds of `routeFilter` would
+   * have taken as a source under the existing source rules is listed (weapon
+   * type and element, rarity 8 and unprotected for an owned Normal's
+   * conversion, any compatible owned Gogma); an excluded weapon that could
+   * never have been a source here is not. Empty when nothing was excluded.
+   *
+   * Runtime observation only: never part of a BuildCandidate, a Candidate
+   * identity, a hash or any persisted record.
+   */
+  excludedSourceOwnedWeaponIds: OwnedWeaponId[]
 }
 
 export interface CandidateSearchResult {

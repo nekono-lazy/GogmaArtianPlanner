@@ -26,6 +26,42 @@ export function validateCandidateSearchSettings(
   ].filter((issue): issue is CandidateSearchValidationIssue => issue !== null)
 }
 
+/**
+ * `docs/SEARCH_SPEC.md` 3.3: absent and `[]` are no exclusion; otherwise every
+ * element is a non-empty string, unique, and names a weapon of the same input's
+ * `ownedWeapons`. The derivation reads the same state as the input, so a
+ * violation is a caller inconsistency and is reported, never repaired.
+ */
+export function validateExcludedSourceOwnedWeaponIds(
+  input: CandidateSearchInput,
+): CandidateSearchValidationIssue[] {
+  const path = 'excludedSourceOwnedWeaponIds'
+  const value: unknown = input.excludedSourceOwnedWeaponIds
+  if (value === undefined) return []
+  if (!Array.isArray(value)) {
+    return [{ path, message: `${path} must be an array of OwnedWeapon IDs when present.` }]
+  }
+  const issues: CandidateSearchValidationIssue[] = []
+  const ownedWeaponIds = new Set<string>(input.ownedWeapons.map(({ id }) => id))
+  const seen = new Set<string>()
+  value.forEach((id: unknown, index) => {
+    const itemPath = `${path}[${index}]`
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      issues.push({ path: itemPath, message: `${itemPath} must be a non-empty OwnedWeapon ID string.` })
+      return
+    }
+    if (seen.has(id)) {
+      issues.push({ path: itemPath, message: `${itemPath} repeats OwnedWeapon '${id}'.` })
+      return
+    }
+    seen.add(id)
+    if (!ownedWeaponIds.has(id)) {
+      issues.push({ path: itemPath, message: `${itemPath} names OwnedWeapon '${id}', which is not in ownedWeapons.` })
+    }
+  })
+  return issues
+}
+
 export function assertCandidateSearchInput(input: CandidateSearchInput): void {
   const issues = validateCandidateSearchSettings(input.settings)
   if (input.searchRunId.trim().length === 0) {
@@ -34,6 +70,7 @@ export function assertCandidateSearchInput(input: CandidateSearchInput): void {
   if (input.targetWeaponId.trim().length === 0) {
     issues.push({ path: 'targetWeaponId', message: 'targetWeaponId cannot be empty.' })
   }
+  issues.push(...validateExcludedSourceOwnedWeaponIds(input))
   // The same collection-level authority the save Service and the Planner use.
   // A preference pointing at a missing, incompatible, protected, or
   // double-claimed weapon fails closed here rather than quietly ordering
