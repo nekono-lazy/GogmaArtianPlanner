@@ -214,7 +214,7 @@ describe('SearchPage source exclusion over the persisted state (Issue #157 PR-4)
       const client = new InProcessSearchClient()
       const view = render(<SearchPage dependencies={dependenciesOf(database, client)} />, { wrapper: MemoryRouter })
 
-      await user.click(await screen.findByRole('checkbox', { name: '検索開始（単体検索）' }))
+      await user.click(await screen.findByRole('checkbox', { name: '他の目標武器で使用する所持武器を除外する' }))
       await user.click(screen.getByRole('button', { name: '検索開始' }))
       const result = await screen.findByRole('region', { name: '検索結果' }, { timeout: 10_000 })
 
@@ -247,13 +247,13 @@ describe('SearchPage source exclusion over the persisted state (Issue #157 PR-4)
       // The persisted state and the Checkbox change after the search: the shown reasons stay those of that search.
       await database.targetWeapons.put({ ...u, name: '改名した目標', preferredOwnedWeaponId: null })
       await database.buildListEntries.clear()
-      await user.click(screen.getByRole('checkbox', { name: '検索開始（単体検索）' }))
+      await user.click(screen.getByRole('checkbox', { name: '他の目標武器で使用する所持武器を除外する' }))
       expect(await readRows()).toEqual(before)
       expect(within(resultRegion()).getByText('他の目標武器で使用する所持武器: 除外する')).toBeInTheDocument()
       expect(view.container.textContent).not.toMatch(/owned\.|target\.|entry\./)
 
       // The next search reads the persisted state again: nothing is excluded now.
-      await user.click(screen.getByRole('checkbox', { name: '検索開始（単体検索）' }))
+      await user.click(screen.getByRole('checkbox', { name: '他の目標武器で使用する所持武器を除外する' }))
       await user.click(screen.getByRole('button', { name: '検索開始' }))
       await waitFor(() => expect(client.inputs).toHaveLength(2))
       expect(client.inputs[1].excludedSourceOwnedWeaponIds).toEqual([])

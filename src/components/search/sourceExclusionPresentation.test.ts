@@ -13,6 +13,9 @@ import {
   batchSourceExclusionCountNote,
   createSearchSourceExclusionDisplay,
   describePreferredOwnedWeaponExclusion,
+  SOURCE_EXCLUSION_CHECKBOX_LABEL,
+  SOURCE_EXCLUSION_DESCRIPTION,
+  SOURCE_EXCLUSION_SINGLE_SEARCH_ONLY_NOTE,
   sourceExclusionConditionLabel,
   sourceExclusionNotFoundNote,
   sourceExclusionReasonLabel,
@@ -147,6 +150,16 @@ describe('source exclusion texts', () => {
   it('states the condition in words', () => {
     expect(sourceExclusionConditionLabel(true)).toBe('他の目標武器で使用する所持武器: 除外する')
     expect(sourceExclusionConditionLabel(false)).toBe('他の目標武器で使用する所持武器: 除外しない')
+  })
+
+  it('names the one Checkbox and keeps the single-search-only note apart from the description (Issue #290)', () => {
+    expect(SOURCE_EXCLUSION_CHECKBOX_LABEL).toBe('他の目標武器で使用する所持武器を除外する')
+    expect(SOURCE_EXCLUSION_SINGLE_SEARCH_ONLY_NOTE).toBe(
+      '※ このチェックは単体検索にのみ適用されます。一括検索・追加では、チェック状態に関係なく自動的に除外します。',
+    )
+    expect(SOURCE_EXCLUSION_DESCRIPTION).not.toContain('一括')
+    // Never reads as pinning a weapon.
+    expect(`${SOURCE_EXCLUSION_DESCRIPTION}${SOURCE_EXCLUSION_SINGLE_SEARCH_ONLY_NOTE}`).not.toMatch(/指定した武器に固定/)
   })
 
   it('never says an Ideal does not exist or names an internal ID', () => {

@@ -108,7 +108,7 @@ import {
   type PreparedCandidateSearchInput,
 } from '../services/search/prepareCandidateSearchInput'
 import {
-  SourceExclusionConditionFieldset,
+  SourceExclusionConditionCheckbox,
   SourceExclusionResultAlert,
 } from '../components/search/SearchSourceExclusion'
 import {
@@ -292,12 +292,11 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
   // searches only - it is never written back (`docs/UI_FLOW.md` 9).
   const [settings, setSettings] = useState<CandidateSearchSettings>({ ...defaultCandidateSearchSettings })
   const [defaultsLoadFailed, setDefaultsLoadFailed] = useState(false)
-  // 「他の目標武器で使用する所持武器を除外する」 (`docs/UI_FLOW.md` 9.2): one value
-  // per operation, independent of each other and of every other condition,
-  // starting single OFF / batch ON on every visit and never persisted. Each
-  // operation reads its own value once, when it starts.
+  // 「他の目標武器で使用する所持武器を除外する」 (`docs/UI_FLOW.md` 9.2): the
+  // single search's condition only, independent of every other condition,
+  // starting OFF on every visit and never persisted. The single search reads
+  // it once, when it starts; the batch never reads it (Issue #290).
   const [singleExcludeOtherTargetSources, setSingleExcludeOtherTargetSources] = useState(false)
-  const [batchExcludeOtherTargetSources, setBatchExcludeOtherTargetSources] = useState(true)
   // The condition of the single search running now, for its progress display.
   const [searchingExcludeOtherTargetSources, setSearchingExcludeOtherTargetSources] = useState(false)
   const [result, setResult] = useState<DisplayedSearchResult | null>(null)
@@ -610,9 +609,9 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
           rngEngineVersion: client.engineVersion,
           appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
         },
-        // The batch Checkbox as it is now (`docs/UI_FLOW.md` 9.1 / 9.2): the
-        // batch fixes it for every Target, whatever the screen shows later.
-        excludeOtherTargetSources: batchExcludeOtherTargetSources,
+        // Always on for the batch from this screen, whatever the single
+        // search's Checkbox says (Issue #290, `docs/UI_FLOW.md` 9.1 / 9.2).
+        excludeOtherTargetSources: true,
       },
       {
         client,
@@ -843,14 +842,12 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
                   </Box>
                 </Stack>
               </DisclosureAccordion>
-              {/* Between the search bounds and the buttons whose next start
-                  uses each value (`docs/UI_FLOW.md` 9.2). Never disabled: a
-                  change while a search or a batch runs applies to the next one. */}
-              <SourceExclusionConditionFieldset
-                singleExcludeOtherTargetSources={singleExcludeOtherTargetSources}
-                batchExcludeOtherTargetSources={batchExcludeOtherTargetSources}
-                onSingleChange={setSingleExcludeOtherTargetSources}
-                onBatchChange={setBatchExcludeOtherTargetSources}
+              {/* Between the search bounds and the buttons (`docs/UI_FLOW.md`
+                  9.2). Never disabled: a change while a search or a batch runs
+                  applies to the next single search only. */}
+              <SourceExclusionConditionCheckbox
+                checked={singleExcludeOtherTargetSources}
+                onChange={setSingleExcludeOtherTargetSources}
               />
               <Stack spacing={1}>
                 <Stack

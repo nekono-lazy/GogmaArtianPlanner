@@ -17,14 +17,15 @@ import type { CandidateSearchSourceExclusionSnapshot } from '../../services/sear
  * screen state, or is persisted.
  */
 
-export const SOURCE_EXCLUSION_HEADING = '他の目標武器で使用する所持武器を除外する'
+/** The one Checkbox, used by the single search only (Issue #290, `docs/UI_FLOW.md` 9.2). */
+export const SOURCE_EXCLUSION_CHECKBOX_LABEL = '他の目標武器で使用する所持武器を除外する'
 
 export const SOURCE_EXCLUSION_DESCRIPTION =
   'ほかの目標武器の「優先する所持武器」と、作成リストに登録済みのほかの目標武器の候補が起点に使う所持武器を、作成ルートの起点にしません。新しく作成する通常アーティアと、ほかで使われていない所持武器は引き続き検索します。この目標武器の「優先する所持武器」だけを使う設定ではありません。'
 
-/** Named after the button each value is used by (`docs/UI_FLOW.md` 9.2). */
-export const SOURCE_EXCLUSION_SINGLE_LABEL = '検索開始（単体検索）'
-export const SOURCE_EXCLUSION_BATCH_LABEL = '未登録を一括検索・追加'
+/** Shown apart from the description: the batch never reads the Checkbox and always excludes. */
+export const SOURCE_EXCLUSION_SINGLE_SEARCH_ONLY_NOTE =
+  '※ このチェックは単体検索にのみ適用されます。一括検索・追加では、チェック状態に関係なく自動的に除外します。'
 
 /** The condition a search or a batch ran with, in text so it never depends on colour. */
 export function sourceExclusionConditionLabel(excludeOtherTargetSources: boolean): string {

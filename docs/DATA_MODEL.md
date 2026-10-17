@@ -2585,8 +2585,8 @@ const defaultSettings: AppSettings = {
 - `defaultSearchLimit` は通常アーティアCounter特定の初期検索範囲の終了値であり、`candidateSearchDefaults` とは
   別の設定である。相互に流用・再定義しない
 - 候補検索の「他の目標武器で使用する所持武器を除外する」（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.3、Issue #157）の
-  単体検索・一括検索・追加それぞれのON / OFFはAppSettingsに保存しない（fieldを追加しない）。候補検索画面の一時UI状態であり
-  （[UI_FLOW.md](./UI_FLOW.md) 9.2）、`AppSettings.schemaVersion` は変わらない
+  単体検索のON / OFFはAppSettingsに保存しない（fieldを追加しない。一括検索・追加は常にONでON / OFFの設定を持たない、Issue #290）。
+  候補検索画面の一時UI状態であり（[UI_FLOW.md](./UI_FLOW.md) 9.2）、`AppSettings.schemaVersion` は変わらない
 
 AppSettings v1（`schemaVersion = 1`、`candidateSearchDefaults` なし）はDexie v8 -> v9 upgradeとExport
 schema 11 -> 12 migrationで共通の `upgradeAppSettingsToV2()` によりv2へ変換する。旧候補検索画面の固定値

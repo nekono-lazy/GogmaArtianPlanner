@@ -187,6 +187,10 @@ describe('SearchPage batch search and registration', () => {
     expect(await within(summary).findByText(empty.name)).toBeInTheDocument()
     expect(client.requests.map(({ input }) => input.targetWeaponId)).toEqual([found.id, empty.id, broken.id])
     expect(new Set(client.requests.map(({ input }) => input.searchRunId)).size).toBe(3)
+    // The batch always excludes other Targets' sources, with the single search's Checkbox left OFF (Issue #290).
+    expect(screen.getByRole('checkbox', { name: '他の目標武器で使用する所持武器を除外する' })).not.toBeChecked()
+    expect(vi.mocked(deps.prepareInput).mock.calls.map(([options]) => options.excludeOtherTargetSources)).toEqual([true, true, true])
+    expect(within(summary).getByText('他の目標武器で使用する所持武器: 除外する')).toBeInTheDocument()
     expect(deps.replaceCandidate).not.toHaveBeenCalled()
 
     // The persisted Build List is read again: the added Target is now registered.
