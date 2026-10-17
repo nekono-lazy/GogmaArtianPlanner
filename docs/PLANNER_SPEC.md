@@ -2437,7 +2437,8 @@ current initial Conflictには現れない。
 | 動的Conflictか、入力が変わったか | current initial Conflictに無い保存済みConflictについて、表示中Planの `baseSnapshot`（`initialExecutionState`・`targetWeaponsHash`・`buildListEntriesHash`）とCalculationContextが現在の永続状態と一致するか（9.6.7） |
 | 優先したEntryの未完成の原因 | 9.6.6のPlanner Domainのtypedな原因（runtime-only） |
 | このPlanで作成する目標武器 | `steps[].executionEffects.targetCompletions`（[UI_FLOW.md](./UI_FLOW.md) 11.0の完成予定と同じ） |
-| このPlanで作成しない目標武器と理由 | 保存済みのConflict（明示決定の非選択Entry、判断待ちConflictのparticipant）と `rejectedBuildListEntries.reason` |
+| このPlanで作成しない目標武器と理由 | 保存済みのConflict（明示決定の非選択Entry、判断待ちConflictのparticipant）と `rejectedBuildListEntries.reason`。競合由来かどうかの分類は9.6.9.1（Issue #121） |
+| 競合のため今回作成しない目標武器の数（概要の比率の分母に加える数） | `rejectedBuildListEntries` のうち `reason === "resource_conflict"` の記録の `targetWeaponId`（Issue #121で記録を追加）から、完成予定のTargetを除いたdistinct数（9.6.9.1）。Conflictへの参加や、上の「作成しない目標武器」の一覧の件数を流用しない |
 
 - 保存済み `PlanConflict` は、Counter位置、NormalArtianCounter ID、排他使用するOwnedWeapon ID、participantごとの操作種別を
   typed fieldとして持たない（英文 `reason` とhash入力にだけある）。種類ごとの説明は `kind` だけで成り立つ文言にする
@@ -2447,6 +2448,164 @@ current initial Conflictには現れない。
   `kind` だけの説明にする。永続shapeへ追加しない
 - 種類を安全に説明できない場合（未知のkind、壊れた記録）は、誤った具体的理由を作らず汎用の説明にする。競合を隠さず、
   解決済みとして扱わない
+
+#### 9.6.9.1 完成予定数と、競合のため今回作成しない目標武器数（Issue #121）
+
+実装状態: **仕様確定（Issue #121のPR-1、docs-only）。未実装**。PR #217で生産計画画面の表示順と概要の競合件数は対応済みであり、
+本節は残件である「完成予定数 /（完成予定数＋競合のため今回作成しない目標武器数）」の集計authority、保存データ、既存Planの扱いを
+定める。画面は[UI_FLOW.md](./UI_FLOW.md) 11.0 / 11.6.5、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 24.2にある。Planner、競合検出、
+route commitment、RNGの意味論は変えない。
+
+**集計の定義。** 表示中のexact persisted ProductionPlanだけから求める。
+
+```text
+C = { c.targetWeaponId | s ∈ plan.steps, c ∈ s.executionEffects.targetCompletions }               完成予定のTarget（重複なし）
+R = { r.targetWeaponId | r ∈ plan.rejectedBuildListEntries, r.reason === "resource_conflict" }      競合で不採用のEntryのTarget（重複なし）
+N = |C|              完成予定数（UI_FLOW 11.0の既存authority）
+M = |R \ C|          競合のため今回作成しない目標武器数
+表示 = N / (N + M)   例: 完成予定 17 / 35本（N = 17、M = 18）
+暫定 = plan.conflicts に selectedBuildListEntryId === null のConflictが1件以上ある
+```
+
+- 分母 `N + M` は作成リストの登録数ではない。Plan生成時の作成リスト全体の件数はPlanに保存されておらず、現在の作成リストの
+  件数を生成時の件数として扱わない
+- 同じTargetが複数のConflictに参加していても、`R` はTarget単位の集合なので1本と数える
+- `R` のTargetが同じPlanの `C` にも現れる場合（別のEntryで完成予定になっているTarget。現在の作成リストの件数制約
+  （[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）では生じないが、件数制約より前のlegacy Planや壊れた記録を想定する）は `M` に数えない
+- `N` と `M` はTarget IDの集合だけから数え、目標武器名、現在のBuildListEntry、現在のTargetWeaponを読まない。Plan作成後の
+  作成リストの変更（Entryの削除・置換）、目標武器の名前変更・完了・無効化・削除、現在の永続データの読込失敗で変わらない
+- `暫定` は保存済みConflictの記録だけから決める。Plannerの推奨（`recommendedBuildListEntryId`）や暫定帰結を、ユーザーが選んだ
+  ものとして扱わない
+
+**競合由来の不採用を識別するtyped authority。** 永続 `RejectedBuildListEntry.reason === "resource_conflict"` だけを使う。
+決定的scheduler（Issue #103 Phase C以降、calculation schema 14以降）のPlan生成は、不採用Entryの理由を次のとおり記録する
+（`createRejectedBuildListEntries()`、[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 8.4）。
+
+| `reason` | 記録される状況（runtimeの記録） | 分母に加えるか |
+| --- | --- | --- |
+| `resource_conflict` | 明示決定（`PlannerConflictResolution`）で別のparticipantが選ばれて実行しなかったEntry（`conflict_resolution_not_selected`。選択Entryは採用済み）。判断待ちConflictの暫定帰結で実行しなかったEntryと、deadlock / stallで落としたEntry（`conflict_not_committed`） | **加える** |
+| `requires_protected_weapon` | 保護中の武器を破壊的に使う必要がある（`protected_destructive_use`）。Conflictにも参加している場合も、保護の記録が優先して記録される | 加えない（保護による不採用） |
+| `already_satisfied` | 別の武器がTargetを満たしたため不要になった（release、`candidate_already_satisfied`） | 加えない |
+| `longer_route` | 同じTargetのより短い採用Routeがある（作成リストの件数制約より前のlegacy入力でだけ生じる） | 加えない |
+| `dominated_by_better_candidate` | 上記のどれも証明できない場合の既定 | 加えない |
+| `lower_priority` | 型にだけあり、現在のPlan生成は記録しない | 加えない |
+| 上記以外（未知のliteral、壊れた記録） | — | 判定不能（下記の条件3） |
+
+- 判断待ちConflictの暫定帰結で実行しなかったEntryも `resource_conflict` である。したがって `M` は、ユーザーの明示決定による
+  未作成と、Plannerの暫定帰結による未作成の両方を含む。後者を含み得る間（判断待ちのConflictがある間）は `暫定` として示す
+- deadlock / stallで落としたEntryは、保存済みConflictに名前が無い場合でも `resource_conflict` として記録され、既存の表示ラベルも
+  「他の候補と資源（RNG位置または所持武器）が競合しました」である。この記録をそのまま競合由来として数える（9.6.6のruntime-onlyの
+  原因区別は永続しないので、保存済みPlanから分け直さない）
+- `completed` でないrunで不採用の記録に残るのは `requires_protected_weapon` と `resource_conflict` だけであり、競合以外の理由で
+  落ちたEntry（Counterの通過、source / preconditionの崩れ等）は記録されない（11.0-Bの「ProductionPlanの集約値」）。これらは
+  競合由来ではないので分母に入らない。`completed` のrunでは通常 `M = 0` だが、競合で不採用になったEntryのTargetを別の武器が
+  満たした（cross satisfaction）場合は、そのTargetにこのPlanの完成効果が無く完成予定に数えない（9.6.6と同じ）ので `M` に数える
+- 入力validationで対象外になったEntry（staleな候補、完了済み・無効な目標武器の候補、CalculationContext非互換、RNG不足・予測非対応等）は、
+  `requires_protected_weapon` の例外を除いて `rejectedBuildListEntries` にも `conflicts` にも現れない。したがって分母に入らず、
+  画面側でこれらを除外し直す必要も無い
+
+**採らない根拠。**
+
+- **Conflictへの参加。** 保存済みConflictの参加者のうち完成しないTargetを数えると、別の理由（保護、別の武器による充足、
+  暫定帰結で残った後に前提が崩れて落ちたEntry等）で完成しないTargetまで競合由来として数え、Conflictに名前の無いdeadlock / stallの
+  不採用を落とす。また `PlanConflict` はEntry IDだけを持つので、参加者のTargetは現在のBuildListEntryからしか分からない
+- **競合セクションの「今回作成しない目標武器」の件数（[UI_FLOW.md](./UI_FLOW.md) 11.6.5）。** 競合以外の不採用理由を含み、現在の
+  作成リスト・目標武器の読込（解決できた行だけ）に依存し、Conflictへの参加を永続の不採用理由より優先して分類するので、そのまま
+  競合由来の数として流用しない。両者の共通化は11.6.5に定める
+- **表示文言の解析。** 日本語の表示文言、`RejectedBuildListEntry.detail`、`PlanConflict.reason` / `resolutionNote` の英文、
+  warning messageを解析しない
+
+**保存データ: 不採用記録への目標武器IDの記録。** 現在の永続Planは不採用EntryのTargetを持たない（`RejectedBuildListEntry` と
+`PlanConflict` はEntry IDだけを持ち、`PlanningInputSnapshot` はhashだけを持つ）。不採用Entryは実行されないのでStepにも現れない。
+したがって `R` は現在の保存データだけでは求まらない。実装では次を追加する（[DATA_MODEL.md](./DATA_MODEL.md) 11.9）。
+
+- `RejectedBuildListEntry.targetWeaponId?: TargetWeaponId`。Plan生成（`createRejectedBuildListEntries()`）が、そのrunの
+  PlannerInputのBuildListEntryの `targetWeaponId` をそのままcopyする。すべての `reason` の記録に付ける。推測・再導出はしない
+- Plannerの決定（採用Entry、不採用Entryとreason、Conflict、Step、完成効果）は変えない。決定的schedulerとBeam Search oracleは
+  同じ関数を通るので、どちらの結果にも付く
+- 意味は「Plan生成時のEntryの目標武器」の記録であり、current foreign keyではない。そのTargetの存在を要求せず、TargetWeapon削除の
+  参照保護（ReferenceFinder）の対象にしない（参照にすると、作成しないと決めた目標武器を削除できなくなる）。Entryの識別は
+  従来どおりBuildListEntry IDであり、Candidate IDを使わない
+- 検証: `validateProductionPlan()` は値がある場合だけID形式を検証する。保存境界（`savePlannerResult()`、
+  `savePlannerConflictPreferenceResult()`、全体最適化の採用）は、値があればそのEntryの `targetWeaponId` と一致することを確かめる
+  （防御。全体最適化の採用は不採用0件が採用条件なので対象が無い）。Import / Exportでは、top-level `active` Planについて既存の
+  「Entryと組で名指しされるTargetはそのEntryの `targetWeaponId` と一致する」検証（[DATA_MODEL.md](./DATA_MODEL.md) 15.2）を
+  この記録にも適用する。Targetの存在は要求しない
+- 既存の記録: 値の無い記録は、このfieldを追加する前に保存されたPlanを意味する。現在の作成リストや `PlanConflict` から補完せず、
+  migrationもしない（Plan非依存のEntryは実行中Planのまま削除・置換され得るので、現在の作成リストは生成時の記録ではない）
+- version: Plannerの計算意味、CalculationContextの意味、Plan互換判定は変わらない。Dexieのtable / indexも変わらず、optional
+  fieldの追加なので既存のrecordとExportはそのまま有効である（`PlanStep.progressedTargetWeaponIds` の追加と同じ扱い、
+  [DATA_MODEL.md](./DATA_MODEL.md) 11.3）。したがって `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 18、`DATABASE_SCHEMA_VERSION` 10、
+  `ExportRoot.schemaVersion` 13、`AppSettings.schemaVersion` 2、`RngState.schemaVersion` 2、`PRODUCTION_RNG_ENGINE_VERSION`
+  `production-rng:c5-e7`、Master `dataVersion` 4を変えず、migrationを追加しない。このfieldを知らない旧buildは未知のfieldとして
+  読み飛ばす（`validateProductionPlan()` は不採用記録の他のfieldを検証しない）
+- `18 -> 17` のPlan互換例外とその前提（明示決定の無い入力ではversion 17と同じPlanになる、9.6.10）は変えない。version 18のcodeが
+  生成するPlanは不採用記録にこのfieldを持つが、それ以外のPlan内容は同じである。PR-2のparity digest
+  （`plannerConflictResolutionParity.test.ts`。PlannerResult全体をhashする）は、このfieldを除いた射影でversion 17の記録値と比べ、
+  fieldの値がPlannerInputのEntryの `targetWeaponId` と一致することを別に確かめる（記録値を書き換えない）。PlannerResult・Planの
+  不採用記録を丸ごとhashする他のgolden / digest testも同じく監査する
+
+**判定できる条件。** 次をすべて満たす場合だけ比率を表示する。満たさない場合は推測した比率を表示せず、typedな理由とともに
+確認できないことを示す（文言は[UI_FLOW.md](./UI_FLOW.md) 11.0）。
+
+1. **完成予定のauthorityがある。** すべてのStepが `executionEffects` を持つ（既存の `hasPlanTargetCompletionAuthority()`）。
+   持たないlegacy Planは `N` も不明であり、既存の「不明（旧形式の計画）」のままとする
+2. **不採用記録が決定的schedulerの記録方式である。** `plan.calculationContext.appSchemaVersion` が明示集合 `{14, 15, 16, 17, 18}`
+   に含まれる（`calculation_version_unsupported`）。version 13以前（Beam SearchがProduction Planner）は暫定帰結を持たず、
+   `resource_conflict` を明示選択のある場合だけに付けていたため、`M` を同じ意味で数えられない。range checkにしない。将来の
+   versionは、不採用記録の意味を変えない場合だけこの集合へ明示的に加える。current versionが集合に含まれることをtestで固定し、
+   version更新の際に判断を漏らさない
+3. **すべての不採用記録の `reason` が既知のliteralである**（`unknown_rejection_reason`）。未知のliteralを競合以外とみなさない
+4. **すべての `resource_conflict` の記録が `targetWeaponId` を持つ**（`target_not_recorded`）。持たない記録が1件でもあれば判定しない。
+   `resource_conflict` の記録が0件なら、このfieldが無くても `R` は空であり `M = 0` と確定する（条件2を満たす場合）。したがって
+   field追加前に保存したversion 14〜18のPlanでも、競合で不採用になったEntryが無ければ比率を表示できる
+
+条件1を満たし、条件2〜4のいずれかを満たさない場合は、`N` だけを表示し、`M` と比率は確認できないとする。
+
+**Planの種類とstatus。** 同じ定義をすべてのProductionPlanに適用する。
+
+- 作成リスト画面の通常作成・補助導線、競合の優先選択による再計算（9.6.4）、再計画の採用（16.8）のPlanは上記のとおり
+- 全体最適化の採用（17.11）のPlanは、採用条件（完成、Conflict 0件、不採用0件）により常に `M = 0` かつ `暫定` でなく、`N` は計画対象
+  Target数なので `N / N本` となる
+- 未保存のPreview（再計画の試算、16.8 / [UI_FLOW.md](./UI_FLOW.md) 16.4）にも同じ関数を使ってよい（現在のcodeが生成するので条件2〜4を
+  満たす）。全体最適化のPreviewは独自の概要（17.9）を変えない
+- statusを問わず、比率はPlanの記録が表す計画内容であり、実行の進捗ではない。`暫定` の説明の文言だけをstatusで変える（UI_FLOW 11.0）
+
+**変えないもの。** 競合の検出、明示決定・暫定帰結・route commitment・deadlock / stallの扱い、`RejectedBuildListEntry.reason` の
+mapping、`PlanConflict` の形とID、完成予定数のauthority、競合（記録件数）のauthority（`plan.conflicts.length`）、Execution、Undo、
+ゲーム内セーブ地点、再計画、全体最適化の採用条件。
+
+**集計の実装位置。** 1つの純粋関数（Planner Domainの読み取り専用projection。名前は実装PRで確定）が表示中Planだけを引数に取り、
+「完成予定を判定できない（legacy）」か、`完成予定のTarget集合`・`競合のため今回作成しないTarget集合`（または判定できない理由
+`calculation_version_unsupported` / `unknown_rejection_reason` / `target_not_recorded`）・`暫定` を返す。概要（UI_FLOW 11.0）、
+競合セクション（11.6.5）、再計画Previewの比較表（任意）がこの関数を共有し、それぞれで数え直さない。React、Dexie、現在の作成リスト・
+目標武器を読まない。
+
+**test観点（実装PR）。**
+
+- 記録: 明示決定の非選択Entry、暫定帰結で実行しなかったEntry、deadlock / stallで落としたEntryがそれぞれ `resource_conflict` と、
+  入力Entryと同じ `targetWeaponId` を持つ。他のreasonの記録も `targetWeaponId` を持つ。Beam Search oracleの結果も同じ。parity
+  digestがfieldを除いた射影で記録値と一致する
+- 検証: 値の無い記録（旧Plan）を受理し、ID形式の壊れた値を拒否する。保存境界がEntryと一致しない値を拒否する。fieldの無い旧Export、
+  fieldのある新Exportの双方をImportでき、`active` Planの不一致は拒否し、Targetが存在しないことでは拒否しない。ReferenceFinderが
+  この記録を参照として扱わない（Entryを削除した後に、その目標武器を削除できる）。version定数が変わらない
+- 集計: 競合なし（`N / N`）、明示決定、暫定帰結、同じTargetの複数Conflict（1本）、Conflictに参加して完成予定のTarget（数えない）、
+  Conflictに名前の無いdeadlock / stallの不採用（数える）、非競合の各reason（数えない）、`R ∩ C`（数えない）、legacy（`N` も不明）、
+  version 12 / 13（`calculation_version_unsupported`）、version 14〜18でfieldが無く `resource_conflict` がある（`target_not_recorded`）、
+  fieldが無く `resource_conflict` が0件（`M = 0`）、未知のreason（`unknown_rejection_reason`）、`N + M = 0`、全体最適化のPlan
+  （`N / N`）、関数が現在の作成リスト・目標武器を受け取らないこと、current versionが明示集合に含まれること
+- 表示: [UI_FLOW.md](./UI_FLOW.md) 11.0 / 11.6.5の各状態
+
+**実装の分割（後続PR）。**
+
+1. **記録のPR。** `RejectedBuildListEntry.targetWeaponId` の型、Plan生成でのcopy、`validateProductionPlan()`、保存境界とImportの
+   一致検査、parity digestの射影、test。UIは変えない。versionは変えない
+2. **集計と表示のPR。** 上記の集計関数、概要の比率と説明（UI_FLOW 11.0）、競合セクションの件数と一覧の分類（11.6.5）、test、
+   PC・375px幅・ダークテーマでの確認。概要と競合セクションの数が食い違う中間状態を作らないため、両方を同じPRで変える。Presentation
+   設計には `ui-ux-pro-max` を使う（既存のMUIとPC・375px・ダークテーマの表示を優先する）。versionは変えない
+
+実装中に前提（例: Plannerの決定が変わる、永続shapeの変更がoptional fieldでは済まない、不採用記録の意味がversionで異なる範囲が
+上記と違う）が崩れた場合は、推測で進めず仕様へ戻る。
 
 #### 9.6.10 versionと既存Planの互換性
 
@@ -6742,6 +6901,12 @@ rejectionだけをEntry IDごとに1件作る。理由は証明できる順に
 ある`longer_route`を使う。これらを証明できない場合だけ
 `dominated_by_better_candidate`を使う。stale / CalculationContext / capability等のvalidation除外は
 このunionへ押し込まず、既存warning/validation結果の責務とする。
+
+決定的scheduler（Issue #103 Phase C以降）では、暫定帰結とdeadlock / stallで実行しなかったEntry（runtimeの
+`conflict_not_committed`）も `resource_conflict` として記録する（[ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md)
+8.4）。Issue #121の実装では、各 `RejectedBuildListEntry` に、そのrunのPlannerInputのBuildListEntryの `targetWeaponId` を
+`targetWeaponId` としてcopyして記録する（すべてのreason。推測・再導出をしない。Plannerの決定とreasonのmappingは変えない）。
+意味、検証、既存Planとの互換、versionは9.6.9.1と[DATA_MODEL.md](./DATA_MODEL.md) 11.9に従う。
 
 `requiredMaterials`はselected BuildListEntryの`candidateSnapshot.requiredMaterials`だけを
 materialIdごとに合算し、materialId辞書順で返す。master materialCostsからの再推測はしない。

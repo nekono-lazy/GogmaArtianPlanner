@@ -1026,6 +1026,19 @@ snapshot equality. The `conflictResolutions = []` parity premise was verified by
 unchanged, and a formal research run under the schema 18 runtime is refused by its own start gate as a version change.
 `DATABASE_SCHEMA_VERSION` 10, `ExportRoot.schemaVersion` 13, `AppSettings.schemaVersion` 2, `RngState.schemaVersion` 2,
 `PRODUCTION_RNG_ENGINE_VERSION` `production-rng:c5-e7` and Master `dataVersion` 4 are unchanged, with no migration.
+Issue #121 PR-1 (docs-only; `docs/PLANNER_SPEC.md` 9.6.9.1, `docs/UI_FLOW.md` 11.0 / 11.6.5, `docs/DATA_MODEL.md` 11.9,
+`docs/REQUIREMENTS.md` 24.2) moved no version and is not implemented yet. It fixed the Production Plan overview figure
+「完成予定 N / (N + M)本」: `N` is the distinct `executionEffects.targetCompletions` Targets (the existing authority), `M` the
+distinct Targets of `rejectedBuildListEntries` with `reason === 'resource_conflict'` (explicit decision losers, provisional
+outcome losers and deadlock / stall drops; every other reason is not conflict-caused) minus the `N` Targets, and the figure is
+provisional while any `PlanConflict.selectedBuildListEntryId === null`. Conflict participation and the conflict section's
+「今回作成しない目標武器」 count are never the authority, and the denominator is never the Build List size. No persisted field maps
+a rejected Entry to its Target, so the implementation adds the optional `RejectedBuildListEntry.targetWeaponId` - a copy of the
+input Entry's `targetWeaponId`, never inferred or backfilled from the current Build List, never a current foreign key or a
+ReferenceFinder reference. An absent value means a Plan saved before it, and the ratio then reads as not determinable unless the
+Plan has no `resource_conflict` record; only calculation schemas in the explicit set `{14, 15, 16, 17, 18}` (the scheduler
+mapping) are read this way. The Planner's decisions do not change, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 18, Dexie 10
+and Export 13, with no migration; the Issue #278 PR-2 parity digest compares the result with that field projected out.
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation

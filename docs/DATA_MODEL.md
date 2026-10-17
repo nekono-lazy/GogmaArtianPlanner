@@ -2381,6 +2381,8 @@ maxPlanSteps到達時だけ使用し、途中のbest Planとwarningを同時に�
 ```ts
 export interface RejectedBuildListEntry {
   buildListEntryId: BuildListEntryId;
+  // Issue #121で追加する（仕様確定、実装は後続PR）。Plan生成時のそのEntryの目標武器の記録
+  targetWeaponId?: TargetWeaponId;
   reason:
     | "lower_priority"
     | "resource_conflict"
@@ -2391,6 +2393,27 @@ export interface RejectedBuildListEntry {
   detail: string;
 }
 ```
+
+- `reason` の記録方式は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 11.0-Bの「ProductionPlanの集約値」と
+  [ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 8.4に従う。決定的scheduler（calculation
+  schema 14以降）では、明示決定の非選択Entry、判断待ちConflictの暫定帰結で実行しなかったEntry、deadlock / stallで落としたEntryが
+  `resource_conflict` であり、これが生産計画の概要で「競合のため今回作成しない目標武器」を数える唯一のtyped authorityである
+  （PLANNER_SPEC 9.6.9.1）。`detail` は内部向けの診断文字列であり、解析しない
+- `targetWeaponId`（Issue #121）は、Plan生成（`createRejectedBuildListEntries()`）がそのrunのPlannerInputのBuildListEntryの
+  `targetWeaponId` をそのままcopyした値である。すべての `reason` の記録に付ける。推測・再導出をせず、Plannerの決定とreasonの
+  mappingを変えない
+- `targetWeaponId` は記録であり、current foreign keyではない。そのTargetWeaponの存在を要求せず、TargetWeapon削除の参照保護
+  （ReferenceFinder）の対象にしない。Entryの識別は従来どおり `buildListEntryId` であり、Candidate IDを使わない
+- `targetWeaponId === undefined` は、このfieldの追加前に保存されたPlanの記録を意味する。現在の作成リストや `PlanConflict` から
+  補完せず、Dexie / Exportのmigrationで補完もしない（Plan非依存のEntryは実行中Planのまま削除・置換され得るため、現在の作成リストは
+  生成時の記録ではない）。概要の比率はこの記録が必要な場合に「確認できません」とする（PLANNER_SPEC 9.6.9.1の条件4）
+- 検証: `validateProductionPlan()` は値がある場合だけID形式を検証する。Plannerの保存境界は、値があればそのEntryの `targetWeaponId`
+  と一致することを確かめる（防御）。Import / Exportの検証（15.2）は、top-level `active` Planについて、既存の「Entryと組で名指し
+  されるTargetはそのEntryの `targetWeaponId` と一致する」規則をこの記録にも適用する。Targetの存在は要求しない
+- version: optional fieldの追加であり、既存のrecordとExportはそのまま有効である。Dexieのtable / indexは変わらない
+  （`PlanStep.progressedTargetWeaponIds` の追加と同じ扱い、11.3）。Plannerの計算意味とPlan互換判定も変わらないので、
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 18、`DATABASE_SCHEMA_VERSION` 10、`ExportRoot.schemaVersion` 13を変えず、
+  migrationを追加しない。このfieldを知らない旧buildは未知のfieldを読み飛ばす
 
 ---
 
@@ -3072,7 +3095,8 @@ hydrateし、`getOrCreateDefault()` で上書きしない。
   targetLinks / compromiseLabels / targetCompletions、conflictの参加者・推奨・選択・checkpointParticipants、
   `rejectedBuildListEntries`）と、`collectProductionPlanDependentTargetWeaponIds()` が定義するPlan依存Target
   およびmilestoneのTarget、Entryと組で名指しされるTargetがそのEntryの `targetWeaponId` と一致すること
-  （Plan生成 / Plan開始効果と同じ導出。`draft` / `stale` / `completed` / `abandoned` のPlan bodyはこれらを
+  （Issue #121の `rejectedBuildListEntries[].targetWeaponId` を含む。その記録のTargetの存在は要求しない、11.9。
+  Plan生成 / Plan開始効果と同じ導出。`draft` / `stale` / `completed` / `abandoned` のPlan bodyはこれらを
   current foreign keyとして要求しない、15.2）、ExecutionHistoryの `planId` / `planStepId`、
   `executionInProgress.productionPlanId` が実行中（active / stale）Planであること、
   `completedByProductionPlanId`、ゲーム内セーブ地点参照とそのPlanが実行中であること、セーブ地点のsnapshot Planが
@@ -3204,7 +3228,10 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - Step実行前または実行後の期待Hashが不一致ならPlanがstaleになる
 - ExecutionHistoryで想定外結果が入った場合にPlanがstaleになる
 - 所持武器のstatusだけを変更してもPlanがstaleにならない
-- PlanConflictとRejectedBuildListEntryがBuildListEntry IDだけを判断基準として保持する
+- PlanConflictとRejectedBuildListEntryがBuildListEntry IDだけを判断基準として保持する（Candidate IDを使わない。Issue #121の
+  `RejectedBuildListEntry.targetWeaponId` はEntryの目標武器の記録であり、判断基準・current foreign keyではない）
+- RejectedBuildListEntryの `targetWeaponId` がPlannerInputのEntryの値と一致し、値の無い旧Planの記録とfieldの無い旧Exportを
+  受理し、補完しない（Issue #121、11.9）
 
 ## 17.2 Repository / Persistence Test
 
