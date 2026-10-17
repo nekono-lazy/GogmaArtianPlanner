@@ -6,6 +6,7 @@ import type {
   WeaponTypeId,
 } from '../domain/models/publicTypes'
 import {
+  createProductionPlan,
   defaultPlannerOptions,
   preparePlannerInitialContext,
   type PlannerInput,
@@ -214,7 +215,7 @@ describe('Production Planner Worker composition', () => {
 })
 
 describe('Production Planner Worker posts no progress (Issue #103 Phase D-2a)', () => {
-  it('answers the ordinary and Planner Alternative requests with their result alone', async () => {
+  it('answers the ordinary, preference and preparation requests with their result alone', async () => {
     const scenario = () => {
       const found = plannerSchedulerCatalogue().find(({ id }) => id === 'J-same-owned-weapon')
       if (!found) throw new Error('Missing catalogue scenario.')
@@ -243,26 +244,68 @@ describe('Production Planner Worker posts no progress (Issue #103 Phase D-2a)', 
       selectedBuildListEntryId: planResult!.conflicts[0].buildListEntryIds[1],
     }
 
-    const comparison = await run({
-      type: 'create_planner_alternative_comparison',
-      requestId: 'd2a.alternative-comparison',
+    // 「この候補を優先」 since Issue #278 PR-2: the ordinary `create_plan` with
+    // the explicit decision in `conflictResolutions` (`docs/PLANNER_SPEC.md` 9.6.4).
+    const preference = await run({
+      type: 'create_plan',
+      requestId: 'd2a.preference',
       generation: 1,
-      input: {
-        plannerInput: input,
-        scenarioResolution: decision,
-        priorFixedBuildListEntryIds: [],
-        priorExcludedRoutes: [],
-      },
+      input: { ...input, conflictResolutions: [decision] },
     })
-    expect(comparison.map(({ type }) => type)).toEqual(['create_planner_alternative_comparison_result'])
+    expect(preference.map(({ type }) => type)).toEqual(['create_plan_result'])
+    const preferenceResult = preference[0].type === 'create_plan_result' ? preference[0].result : null
+    expect(preferenceResult?.plan?.selectedBuildListEntryIds).toContain(decision.selectedBuildListEntryId)
+    expect(preferenceResult?.conflictResolutionOutcome?.allPreferredEntriesCompleted).toBe(true)
 
-    const repair = await run({
-      type: 'create_planner_alternative_repair',
-      requestId: 'd2a.alternative-repair',
-      generation: 1,
-      input: { plannerInput: input, decision, lineage: null },
-    })
-    expect(repair.map(({ type }) => type)).toEqual(['create_planner_alternative_repair_result'])
+    const preparation = await run({ type: 'prepare_interaction', requestId: 'd2a.preparation', generation: 1, input })
+    expect(preparation.map(({ type }) => type)).toEqual(['prepare_interaction_result'])
+  })
+})
+
+describe('Production Planner Worker calculations (Issue #278 PR-4)', () => {
+  it('wires exactly the two current calculations to their Production authorities', () => {
+    const calculations = createProductionPlannerWorkerCalculations()
+    expect(Object.keys(calculations).sort()).toEqual(['createPlan', 'prepareInteraction'])
+    expect(calculations.createPlan).toBe(createProductionPlan)
+    expect(calculations).not.toHaveProperty('createConstrainedPlan')
+    expect(calculations).not.toHaveProperty('createWhatIfComparison')
+    expect(calculations).not.toHaveProperty('createPlannerAlternativeComparison')
+    expect(calculations).not.toHaveProperty('createPlannerAlternativeRepair')
+  })
+
+  it('exports no legacy or Planner Alternative adapter and no search default of its own', async () => {
+    const productionModule = await import('./planner.worker.production')
+    expect(Object.keys(productionModule).sort()).toEqual([
+      'createProductionPlannerRngEngine',
+      'createProductionPlannerWorkerCalculations',
+      'createProductionPlannerWorkerDependencies',
+    ])
+    expect(productionModule).not.toHaveProperty('defaultConstrainedEnumerationBounds')
+    expect(productionModule).not.toHaveProperty('defaultPlannerAlternativeSearchExtent')
+    expect(productionModule).not.toHaveProperty('defaultPlannerAlternativeTrialBounds')
+  })
+
+  it('leaves the Planner Domain calculations the Worker no longer routes to in place (Phase 6-B2b, Issue #278 PR-4)', async () => {
+    const plannerDomain = await import('../domain/planner')
+    // Matched by shape, so the removed names appear nowhere in the source tree.
+    const legacy = Object.keys(plannerDomain).filter((name) =>
+      /Orchestration|PlannerWhatIf|^createConstrained|ConstrainedSearchIdentity|CONSTRAINED_ROUTE_POLICY/.test(name))
+    expect(legacy).toEqual([])
+    // The Planner Alternative Domain calculations and their defaults stay for
+    // the research benchmarks and tests until the PR-5+ cleanup re-audits them
+    // (`docs/PLANNER_SPEC.md` 9.6.11), and the neutral replacement primitives
+    // stay for the Build List global optimization.
+    expect(plannerDomain).toHaveProperty('createPlannerAlternativeWhatIfComparison')
+    expect(plannerDomain).toHaveProperty('createPlannerAlternativeRepair')
+    expect(plannerDomain).toHaveProperty('defaultPlannerAlternativeTrialBounds')
+    expect(plannerDomain).toHaveProperty('createDeterministicMaterializer')
+    expect(plannerDomain).toHaveProperty('ConstrainedMaterializationError')
+  })
+
+  it('keeps the Production RNG Engine unchanged', () => {
+    const dependencies = createProductionPlannerWorkerDependencies()
+    expect(dependencies.rngEngine).toBeInstanceOf(ProductionRngEngine)
+    expect(dependencies.rngEngine.version).toBe(PRODUCTION_RNG_ENGINE_VERSION)
   })
 })
 

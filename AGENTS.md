@@ -3753,7 +3753,8 @@ the displayed lineage), then the repair save through `usePlanBreakingChangeAppro
 until Phase 6-B1 removed them (the replan Preview and the Build List kept their own paths until Phase 6-A). A `not_persistable` repair or a typed preparation
 failure saves nothing and shows its typed comparison; the minimal presentation (`ProductionPlanAlternativeComparison`,
 `presentProductionPlanAlternative.ts`) tells the five no-result statuses, `adoptedInScenario` true / false / null and the four
-scenario statuses apart, in text. The Phase 7 / Issue #122 redesign is not done.
+scenario statuses apart, in text (both files were removed in Issue #278 PR-4, once nothing imported them). The Phase 7 /
+Issue #122 redesign is not done.
 Phase 6 is split into 6-A, 6-B1, 6-B2a and 6-B2b (`docs/PLANNER_SPEC.md` 9.2.19.14 / 9.2.19.16). Phase 6-A (the Production consumers'
 separation from the legacy B8 path), Phase 6-B1 (the dead public runtime surface removal), Phase 6-B2a (the shared primitive
 neutralization) and Phase 6-B2b (the legacy Domain removal) are complete, so **Phase 6 is complete**; Phase 7 (Issue #122
@@ -3884,8 +3885,14 @@ benchmark records. The only Production routing is Build List / replan Preview ->
 migration was added.
 Since Issue #278 PR-2 that routing is superseded for the Production Plan screen: there is no 「比較する」, and 「この候補を優先」 ->
 `createPlan()` with the explicit decision set, saved by `savePlannerConflictPreferenceResult()` (see "Ordinary Planner Conflict
-Resolution (Issue #278)"). `createPlannerAlternativeComparison()` / `createPlannerAlternativeRepair()`, their Worker kinds, Production
-adapters and the repair save API stay without a Production caller until the PR-4+ cleanup.
+Resolution (Issue #278)"). Issue #278 PR-4 then removed the Planner Alternative's Production connection: the Worker kinds
+`create_planner_alternative_comparison` / `create_planner_alternative_repair` and their results, the controller branches and
+calculation types, the Production adapters `createProductionPlannerAlternativeComparison()` / `createProductionPlannerAlternativeRepair()`,
+`PlannerWorkerClient.createPlannerAlternativeComparison()` / `createPlannerAlternativeRepair()` and the dead comparison presentation
+(`ProductionPlanAlternativeComparison` / `presentProductionPlanAlternative`). The Production Planner Worker now carries `create_plan` /
+`prepare_interaction` / `cancel` / `error` only, and the Client exposes `createPlan()` / `prepareInteraction()` / `cancelPlan()` /
+`dispose()`. The Planner Alternative Domain calculations, their defaults and the repair save API stay without a Production caller until
+the PR-5+ cleanup (`docs/PLANNER_SPEC.md` 9.6.11 / 9.6.12).
 
 ---
 
@@ -4515,7 +4522,8 @@ Application / Persistence responsibilities.
 
 `docs/PLANNER_SPEC.md` 9.6 (with `docs/REQUIREMENTS.md` 23.2, `docs/UI_FLOW.md` 11.6, `docs/DATA_MODEL.md` 11.1.1 /
 11.8) is the formal contract fixed by Issue #278 PR-1 (docs-only). **PR-2 implemented the calculation, save, routing and
-version parts, and PR-3 the conflict display of `docs/UI_FLOW.md` 11.6.2 - 11.6.5**; the Planner Alternative cleanup is PR-4+.
+version parts, and PR-3 the conflict display of `docs/UI_FLOW.md` 11.6.2 - 11.6.5**; the Planner Alternative cleanup is PR-4+
+(PR-4 removed its Worker / Client / Production adapter / presentation path; the Domain calculations and the repair save API are PR-5+).
 PR-3 is Presentation plus read-only projection only: `createProductionPlanConflictSectionDisplay()` /
 `ProductionPlanConflictSection` (`src/components/planner/`) build every Japanese text from typed data (`PlanConflict.kind`, the persisted
 selection / recommendation, `rejectedBuildListEntries.reason`, `targetCompletions`, the preparation's typed codes); the interaction
@@ -4605,9 +4613,14 @@ Alternative sections as the current contract.
   Alternative frontier / Candidate factory / validation, `derivePlannerAlternativeReservation()`, the replacement
   deterministic materializer / materialization errors / search origin, `BuildListEntryReplacement`, the shared
   persistence helpers and the source Draft CAS. Cleanup (PR-4+) re-audits the import graph and updates the GA /
-  shape-constrained isolation tests without weakening them
+  shape-constrained isolation tests without weakening them. PR-4 removed only the Worker request kinds, the controller
+  branches, the Production adapters, the Client methods and the zero-import comparison presentation; the research
+  Planner Alternative Worker / page (`plannerAlternative.worker.benchmark*`, `PlannerAlternativeBenchmarkPage`), which import
+  only `createProductionPlannerWorkerDependencies()`, stay, and no isolation test changed
 - PR split (9.6.12): PR-2 switches calculation, save, routing and removes 「比較する」 in one PR (never one without the
-  other); PR-3 the conflict display; PR-4+ the dead Planner Alternative paths
+  other); PR-3 the conflict display; PR-4 the dead Worker / Client / UI path (done); PR-5+ the Planner Alternative
+  Domain calculations, their defaults, the repair save API and its checks, the guard's restore-instead-of-change branch and
+  `PlannerBuildListContext`'s `temporary_*`, re-audited together with the research benchmarks and tests that use them
 
 ---
 
@@ -5713,11 +5726,12 @@ Relevant test areas include:
   `conflictResolutions = []` the legacy B8 orchestration and the ordinary Planner returned the same
   result in the representative ordinary cases, and a runtime-unsupported retry needing a fifth full
   run gave legacy `plan = null` + `max_planner_reruns_reached` but an ordinary Plan
-- Phase 6-B1: the Planner Worker protocol, controller, Production adapter and `PlannerWorkerClient` carrying exactly the
-  four current calculations (`create_plan`, `create_planner_alternative_comparison`, `create_planner_alternative_repair`,
-  `prepare_interaction`) plus `cancel` / `error`, no legacy B8 / B9 kind, method or adapter, and the Build List / replan
-  Preview / 「比較する」 / 「この候補を優先」 routing reaching only `createPlan()` / `createPlannerAlternativeComparison()` /
-  `createPlannerAlternativeRepair()`
+- Phase 6-B1 / Issue #278 PR-4: the Planner Worker protocol, controller, Production adapter and `PlannerWorkerClient`
+  carrying exactly the two current calculations (`create_plan`, `prepare_interaction`) plus `cancel` / `error`, no legacy
+  B8 / B9 or Planner Alternative kind, method or adapter, a removed or unknown result discriminant rejected with
+  `PlannerWorkerProtocolError` instead of resolving an ordinary or preparation request, and the Build List / replan Preview /
+  「この候補を優先」 routing reaching only `createPlan()` (Phase 6-B1 itself left four calculations, the two Planner
+  Alternative ones included, which PR-4 removed)
 - Phase 6-B2a: `src/domain/planner/alternative/*.ts` importing nothing from `../constrained/`, the shared primitives tested in
   `src/domain/planner/replacement/`, the legacy B8 / B9 adapters tested only for what they add, and the generated BuildListEntry ID,
   the B8 / Planner Alternative Candidate IDs and both search identities pinned to their pre-Phase 6-B2a values
@@ -5735,7 +5749,8 @@ Relevant test areas include:
   refused, the Planner Alternative repair save replacing `O` with an accepted but unselected
   `G` atomically with the Draft and its artifact lineage while the B8 save still refuses an
   unselected generated Entry, and `ProductionPlanPage` calling only
-  `createPlannerAlternativeComparison()` / `createPlannerAlternativeRepair()`
+  `createPlannerAlternativeComparison()` / `createPlannerAlternativeRepair()` (historical: since Issue #278
+  PR-2 the page calls only `createPlan()` / `prepareInteraction()`, and PR-4 removed both Client methods)
 - Predicted Normal creation units reading `[false]` for `count = 1`, `[true, false]` for 2
   and `[true, true, false]` for 3, a blind creation `[false]`, a Normal creation never
   shareable, Counter-advance vs Counter-advance and production target vs Counter-advance

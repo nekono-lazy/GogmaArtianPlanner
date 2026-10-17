@@ -109,8 +109,6 @@ function fakePlannerClient() {
       calls.push({ requestId, input, resolve: pending.resolve, reject: pending.reject })
       return pending.promise
     }),
-    createPlannerAlternativeComparison: vi.fn(unused),
-    createPlannerAlternativeRepair: vi.fn(unused),
     prepareInteraction: vi.fn(unused),
     cancelPlan: vi.fn((requestId: string) => {
       calls.find(call => call.requestId === requestId)?.reject(new PlannerCancelledError())

@@ -1,19 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   CreateProductionPlanCalculation,
-  PlannerAlternativeRepairCalculationResult,
-  PlannerAlternativeRepairInput,
-  PlannerAlternativeWhatIfCalculationResult,
-  PlannerAlternativeWhatIfInput,
   PlannerDependencies,
   PlannerExecutionOptions,
   PlannerInput,
   PlannerResult,
 } from '../domain/planner'
-import {
-  defaultPlannerOptions,
-  PlannerAlternativeCancelledError,
-} from '../domain/planner'
+import { defaultPlannerOptions } from '../domain/planner'
 import {
   createCandidateSearchEngine,
   createCandidateSearchInput,
@@ -24,8 +17,6 @@ import {
 } from '../test/fixtures/domainData'
 import {
   attachPlannerWorker,
-  type CreatePlannerAlternativeComparisonCalculation,
-  type CreatePlannerAlternativeRepairCalculation,
   type PlannerWorkerCalculations,
 } from './planner.worker'
 import type {
@@ -73,22 +64,11 @@ function fixture(): { input: PlannerInput; dependencies: PlannerDependencies } {
   }
 }
 
-function fixturePlannerAlternativeInput(input = fixture().input): PlannerAlternativeWhatIfInput {
-  return {
-    plannerInput: input,
-    scenarioResolution: {
-      conflictKey: 'conflict.planner-alternative.fixture',
-      selectedBuildListEntryId: input.buildListEntries[0].id,
-    },
-    priorFixedBuildListEntryIds: [],
-    priorExcludedRoutes: [],
-  }
-}
-
-const fixturePlannerAlternativeResult: PlannerAlternativeWhatIfCalculationResult = {
-  status: 'invalid_prior_fixed_entry',
-  buildListEntryId: createValidBuildListEntry().id,
-  detail: 'fixture result',
+const interactionResult: PlannerInteractionPreparationResult = {
+  status: 'ready',
+  validBuildListEntryIds: [createValidBuildListEntry().id],
+  excludedBuildListEntries: [],
+  currentConflicts: [],
 }
 
 interface Deferred<T> {
@@ -114,18 +94,6 @@ function failingOrdinaryCalculation(): CreateProductionPlanCalculation {
   })
 }
 
-function failingPlannerAlternativeComparisonCalculation(): CreatePlannerAlternativeComparisonCalculation {
-  return vi.fn(async () => {
-    throw new Error('Planner Alternative what-if calculation must not run for this request.')
-  })
-}
-
-function failingPlannerAlternativeRepairCalculation(): CreatePlannerAlternativeRepairCalculation {
-  return vi.fn(async () => {
-    throw new Error('Planner Alternative repair calculation must not run for this request.')
-  })
-}
-
 function failingPreparationCalculation() {
   return vi.fn((): PlannerInteractionPreparationResult => {
     throw new Error('Interaction preparation must not run for this request.')
@@ -148,20 +116,16 @@ function attach(
 }
 
 describe('Planner Worker contract', () => {
-  it('accepts exactly the four current calculation request kinds and cancel (Phase 6-B1)', () => {
+  it('accepts exactly the two current calculation request kinds and cancel (Issue #278 PR-4)', () => {
     type RequestKind = PlannerWorkerProtocolRequest['type']
     type ResponseKind = PlannerWorkerProtocolResponse['type']
     const requestKinds = [
       'create_plan',
-      'create_planner_alternative_comparison',
-      'create_planner_alternative_repair',
       'prepare_interaction',
       'cancel',
     ] as const satisfies readonly RequestKind[]
     const responseKinds = [
       'create_plan_result',
-      'create_planner_alternative_comparison_result',
-      'create_planner_alternative_repair_result',
       'prepare_interaction_result',
       'error',
     ] as const satisfies readonly ResponseKind[]
@@ -172,11 +136,23 @@ describe('Planner Worker contract', () => {
     const legacyConstrained: RequestKind = 'create_constrained_plan'
     // @ts-expect-error the legacy B9 what-if request kind was removed in Phase 6-B1
     const legacyWhatIf: RequestKind = 'create_what_if_comparison'
+    // @ts-expect-error the Planner Alternative what-if request kind was removed in Issue #278 PR-4
+    const alternativeComparison: RequestKind = 'create_planner_alternative_comparison'
+    // @ts-expect-error the Planner Alternative actual repair request kind was removed in Issue #278 PR-4
+    const alternativeRepair: RequestKind = 'create_planner_alternative_repair'
+    // @ts-expect-error the Planner Alternative what-if result was removed in Issue #278 PR-4
+    const alternativeComparisonResult: ResponseKind = 'create_planner_alternative_comparison_result'
+    // @ts-expect-error the Planner Alternative actual repair result was removed in Issue #278 PR-4
+    const alternativeRepairResult: ResponseKind = 'create_planner_alternative_repair_result'
     expect([noOtherRequestKind, noOtherResponseKind]).toEqual([true, true])
     expect(requestKinds).not.toContain(legacyConstrained)
     expect(requestKinds).not.toContain(legacyWhatIf)
+    expect(requestKinds).not.toContain(alternativeComparison)
+    expect(requestKinds).not.toContain(alternativeRepair)
     expect(responseKinds).not.toContain('create_constrained_plan_result')
     expect(responseKinds).not.toContain('create_what_if_comparison_result')
+    expect(responseKinds).not.toContain(alternativeComparisonResult)
+    expect(responseKinds).not.toContain(alternativeRepairResult)
   })
 
   it('structured-clones only PlannerInput and creates dependencies inside the Worker boundary', async () => {
@@ -220,8 +196,6 @@ describe('Planner Worker contract', () => {
     }, createDependencies, {
       createPlan: calculate,
       prepareInteraction: failingPreparationCalculation(),
-      createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
     })
 
     listener({ data: request })
@@ -251,8 +225,6 @@ describe('Planner Worker contract', () => {
       {
         createPlan: calculate,
         prepareInteraction: failingPreparationCalculation(),
-        createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -299,8 +271,6 @@ describe('Planner Worker task generation and cancellation', () => {
           termination,
         }),
         prepareInteraction: failingPreparationCalculation(),
-        createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -342,8 +312,6 @@ describe('Planner Worker task generation and cancellation', () => {
       {
         createPlan,
         prepareInteraction: failingPreparationCalculation(),
-        createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -421,8 +389,6 @@ describe('Planner Worker task generation and cancellation', () => {
       {
         createPlan,
         prepareInteraction: failingPreparationCalculation(),
-        createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -482,9 +448,7 @@ describe('Planner Worker task generation and cancellation', () => {
     const controller = attach(
       {
         createPlan,
-        prepareInteraction: failingPreparationCalculation(),
-        createPlannerAlternativeComparison: async () => fixturePlannerAlternativeResult,
-        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
+        prepareInteraction: () => interactionResult,
       },
       dependencies,
       responses,
@@ -496,21 +460,22 @@ describe('Planner Worker task generation and cancellation', () => {
       generation: 1,
       input,
     })
+    // The new task is of the other kind and shares the logical request id.
     await controller.handleMessage({
-      type: 'create_planner_alternative_comparison',
+      type: 'prepare_interaction',
       requestId: 'planner.retired.error',
       generation: 2,
-      input: fixturePlannerAlternativeInput(input),
+      input,
     })
     first.reject(new Error('retired ordinary failure'))
     await running
 
     expect(responses).toEqual([
       {
-        type: 'create_planner_alternative_comparison_result',
+        type: 'prepare_interaction_result',
         requestId: 'planner.retired.error',
         generation: 2,
-        result: fixturePlannerAlternativeResult,
+        result: interactionResult,
       },
     ])
   })
@@ -532,8 +497,6 @@ describe('Planner Worker task generation and cancellation', () => {
       {
         createPlan,
         prepareInteraction: failingPreparationCalculation(),
-        createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -599,8 +562,6 @@ describe('Planner Worker task generation and cancellation', () => {
       {
         createPlan,
         prepareInteraction: failingPreparationCalculation(),
-        createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -665,8 +626,6 @@ describe('Planner Worker task generation and cancellation', () => {
           }
         },
         prepareInteraction: failingPreparationCalculation(),
-        createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-        createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       },
       dependencies,
       responses,
@@ -684,13 +643,6 @@ describe('Planner Worker task generation and cancellation', () => {
     expect(responses).toEqual([])
   })
 })
-
-const interactionResult: PlannerInteractionPreparationResult = {
-  status: 'ready',
-  validBuildListEntryIds: [createValidBuildListEntry().id],
-  excludedBuildListEntries: [],
-  currentConflicts: [],
-}
 
 describe('Planner Worker interaction preparation (B10-B1)', () => {
   it.each<PlannerInteractionPreparationResult>([
@@ -710,8 +662,6 @@ describe('Planner Worker interaction preparation (B10-B1)', () => {
     const responses: PlannerWorkerProtocolResponse[] = []
     const calculations = {
       createPlan: failingOrdinaryCalculation(),
-      createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction: vi.fn(() => result),
     }
     const controller = attach(calculations, dependencies, responses)
@@ -726,8 +676,6 @@ describe('Planner Worker interaction preparation (B10-B1)', () => {
     await controller.handleMessage(request)
     expect(calculations.prepareInteraction).toHaveBeenCalledExactlyOnceWith(input, dependencies)
     expect(calculations.createPlan).not.toHaveBeenCalled()
-    expect(calculations.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(calculations.createPlannerAlternativeRepair).not.toHaveBeenCalled()
     expect(responses).toEqual([{
       type: 'prepare_interaction_result',
       requestId: request.requestId,
@@ -742,8 +690,6 @@ describe('Planner Worker interaction preparation (B10-B1)', () => {
     const responses: PlannerWorkerProtocolResponse[] = []
     const controller = attach({
       createPlan: failingOrdinaryCalculation(),
-      createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction: () => { throw new Error('preparation prediction failure') },
     }, dependencies, responses)
     await controller.handleMessage({
@@ -755,31 +701,28 @@ describe('Planner Worker interaction preparation (B10-B1)', () => {
     }])
   })
 
-  it('supersedes in-flight Planner Alternative work and ignores older preparation tasks and cancels', async () => {
+  it('supersedes in-flight ordinary work and ignores older preparation tasks and cancels', async () => {
     const { input, dependencies } = fixture()
     const responses: PlannerWorkerProtocolResponse[] = []
-    const pending = deferred<PlannerAlternativeWhatIfCalculationResult>()
+    const pending = deferred<PlannerResult>()
     let options: PlannerExecutionOptions | undefined
     const prepareInteraction = vi.fn(() => interactionResult)
     const controller = attach({
-      createPlan: failingOrdinaryCalculation(),
-      createPlannerAlternativeComparison: async (_input, _runtime, executionOptions) => {
+      createPlan: async (_input, _runtime, executionOptions) => {
         options = executionOptions
         return pending.promise
       },
-      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
       prepareInteraction,
     }, dependencies, responses)
     const requestId = 'planner.interaction.shared'
     const oldRun = controller.handleMessage({
-      type: 'create_planner_alternative_comparison', requestId, generation: 1,
-      input: fixturePlannerAlternativeInput(input),
+      type: 'create_plan', requestId, generation: 1, input,
     })
     await controller.handleMessage({
       type: 'prepare_interaction', requestId, generation: 2, input,
     })
     expect(options?.shouldCancel?.()).toBe(true)
-    pending.reject(new Error('retired Planner Alternative failure'))
+    pending.reject(new Error('retired ordinary failure'))
     await oldRun
     await controller.handleMessage({
       type: 'prepare_interaction', requestId, generation: 1, input,
@@ -793,236 +736,40 @@ describe('Planner Worker interaction preparation (B10-B1)', () => {
       type: 'prepare_interaction_result', requestId, generation: 2, result: interactionResult,
     }])
   })
-})
-
-describe('Planner Worker Planner Alternative what-if routing (Phase 4-B)', () => {
-  it('routes only the new request kind, verbatim, with no extent or bounds on the wire', async () => {
-    const { input, dependencies } = fixture()
-    const alternativeInput = fixturePlannerAlternativeInput(input)
-    const request: PlannerWorkerProtocolRequest = {
-      type: 'create_planner_alternative_comparison',
-      requestId: 'planner.alternative.routing',
-      generation: 1,
-      input: alternativeInput,
-    }
-    expect(structuredClone(request)).toEqual(request)
-    expect(Object.keys(request.input).sort()).toEqual([
-      'plannerInput',
-      'priorExcludedRoutes',
-      'priorFixedBuildListEntryIds',
-      'scenarioResolution',
-    ])
-    const responses: PlannerWorkerProtocolResponse[] = []
-    const createPlan = failingOrdinaryCalculation()
-    const createPlannerAlternativeRepair = failingPlannerAlternativeRepairCalculation()
-    const createPlannerAlternativeComparison: CreatePlannerAlternativeComparisonCalculation = vi.fn(
-      async (received, runtime, executionOptions) => {
-        expect(received).toBe(alternativeInput)
-        expect(runtime).toBe(dependencies)
-        expect(Object.keys(executionOptions ?? {}).sort()).toEqual(['shouldCancel', 'yieldControl'])
-        return fixturePlannerAlternativeResult
-      },
-    )
-    const controller = attach({
-      createPlan,
-      createPlannerAlternativeComparison,
-      createPlannerAlternativeRepair,
-      prepareInteraction: failingPreparationCalculation(),
-    }, dependencies, responses)
-
-    await controller.handleMessage(request)
-
-    expect(createPlan).not.toHaveBeenCalled()
-    expect(createPlannerAlternativeRepair).not.toHaveBeenCalled()
-    expect(createPlannerAlternativeComparison).toHaveBeenCalledOnce()
-    expect(responses).toEqual([{
-      type: 'create_planner_alternative_comparison_result',
-      requestId: 'planner.alternative.routing',
-      generation: 1,
-      result: fixturePlannerAlternativeResult,
-    }])
-    expect(structuredClone(responses[0])).toEqual(responses[0])
-  })
-
-  it('reports an unexpected failure through the shared error response', async () => {
-    const { dependencies } = fixture()
-    const responses: PlannerWorkerProtocolResponse[] = []
-    const controller = attach({
-      createPlan: failingOrdinaryCalculation(),
-      createPlannerAlternativeComparison: async () => { throw new Error('alternative prediction failed') },
-      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
-      prepareInteraction: failingPreparationCalculation(),
-    }, dependencies, responses)
-    await controller.handleMessage({
-      type: 'create_planner_alternative_comparison', requestId: 'planner.alternative.error', generation: 1,
-      input: fixturePlannerAlternativeInput(),
-    })
-    expect(responses).toEqual([{
-      type: 'error', requestId: 'planner.alternative.error', generation: 1, message: 'alternative prediction failed',
-    }])
-  })
-
-  it('cancels by generation and posts nothing for the cancelled task', async () => {
-    const { dependencies } = fixture()
-    const responses: PlannerWorkerProtocolResponse[] = []
-    let cancelledDuringCalculation = false
-    const controller = attach({
-      createPlan: failingOrdinaryCalculation(),
-      createPlannerAlternativeComparison: async (_input, _runtime, executionOptions) => {
-        expect(executionOptions?.shouldCancel?.()).toBe(false)
-        await controller.handleMessage({ type: 'cancel', requestId: 'planner.alternative.cancel', generation: 1 })
-        cancelledDuringCalculation = executionOptions?.shouldCancel?.() ?? false
-        throw new PlannerAlternativeCancelledError()
-      },
-      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
-      prepareInteraction: failingPreparationCalculation(),
-    }, dependencies, responses)
-    await controller.handleMessage({
-      type: 'create_planner_alternative_comparison', requestId: 'planner.alternative.cancel', generation: 1,
-      input: fixturePlannerAlternativeInput(),
-    })
-    expect(cancelledDuringCalculation).toBe(true)
-    expect(controller.isCancelled('planner.alternative.cancel')).toBe(true)
-    expect(responses).toEqual([])
-  })
-
-  it('reports a Domain cancellation signal when the current generation was not cancelled', async () => {
-    const { dependencies } = fixture()
-    const responses: PlannerWorkerProtocolResponse[] = []
-    const controller = attach({
-      createPlan: failingOrdinaryCalculation(),
-      createPlannerAlternativeComparison: async () => {
-        throw new PlannerAlternativeCancelledError('unexpected current signal')
-      },
-      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
-      prepareInteraction: failingPreparationCalculation(),
-    }, dependencies, responses)
-    await controller.handleMessage({
-      type: 'create_planner_alternative_comparison', requestId: 'planner.alternative.current-signal', generation: 1,
-      input: fixturePlannerAlternativeInput(),
-    })
-    expect(responses).toEqual([{
-      type: 'error', requestId: 'planner.alternative.current-signal', generation: 1, message: 'unexpected current signal',
-    }])
-  })
 
   it('retires an older generation of the same logical request id, of another kind or its own', async () => {
     const { input, dependencies } = fixture()
     const responses: PlannerWorkerProtocolResponse[] = []
     const ordinary = deferred<PlannerResult>()
     let ordinaryOptions: PlannerExecutionOptions | undefined
-    const controller = attach({
-      createPlan: async (_input, _runtime, executionOptions) => {
-        ordinaryOptions = executionOptions
-        return ordinary.promise
-      },
-      createPlannerAlternativeComparison: async () => fixturePlannerAlternativeResult,
-      createPlannerAlternativeRepair: failingPlannerAlternativeRepairCalculation(),
-      prepareInteraction: failingPreparationCalculation(),
-    }, dependencies, responses)
-    const requestId = 'planner.alternative.generation'
+    const createPlan: CreateProductionPlanCalculation = vi.fn(async (_input, _runtime, executionOptions) => {
+      ordinaryOptions = executionOptions
+      return ordinary.promise
+    })
+    const prepareInteraction = vi.fn(() => interactionResult)
+    const controller = attach({ createPlan, prepareInteraction }, dependencies, responses)
+    const requestId = 'planner.interaction.generation'
     const oldRun = controller.handleMessage({
       type: 'create_plan', requestId, generation: 1, input,
     })
     await controller.handleMessage({
-      type: 'create_planner_alternative_comparison', requestId, generation: 2, input: fixturePlannerAlternativeInput(input),
+      type: 'prepare_interaction', requestId, generation: 2, input,
     })
     expect(ordinaryOptions?.shouldCancel?.()).toBe(true)
+    // The retired ordinary calculation's result is dropped, not posted.
     ordinary.resolve({ plan: null, conflicts: [], warnings: [], termination: exhaustedPlannerTermination() })
     await oldRun
-    // An older generation arriving late is dropped outright.
+    // An older generation arriving late is dropped outright, of either kind.
     await controller.handleMessage({
-      type: 'create_planner_alternative_comparison', requestId, generation: 1, input: fixturePlannerAlternativeInput(input),
+      type: 'create_plan', requestId, generation: 1, input,
     })
+    await controller.handleMessage({
+      type: 'prepare_interaction', requestId, generation: 1, input,
+    })
+    expect(createPlan).toHaveBeenCalledOnce()
+    expect(prepareInteraction).toHaveBeenCalledOnce()
     expect(responses).toEqual([{
-      type: 'create_planner_alternative_comparison_result', requestId, generation: 2, result: fixturePlannerAlternativeResult,
+      type: 'prepare_interaction_result', requestId, generation: 2, result: interactionResult,
     }])
-  })
-})
-
-describe('Planner Worker Planner Alternative actual repair routing (Phase 5-B)', () => {
-  function repairInput(input = fixture().input): PlannerAlternativeRepairInput {
-    return {
-      plannerInput: input,
-      decision: { conflictKey: 'conflict.planner-alternative.repair', selectedBuildListEntryId: input.buildListEntries[0].id },
-      lineage: null,
-    }
-  }
-
-  const repairResult: PlannerAlternativeRepairCalculationResult = {
-    status: 'invalid_prior_fixed_entry',
-    buildListEntryId: createValidBuildListEntry().id,
-    detail: 'fixture repair result',
-  }
-
-  it('routes only the repair request kind, verbatim, with no extent or bounds on the wire', async () => {
-    const { input, dependencies } = fixture()
-    const wire = repairInput(input)
-    const request: PlannerWorkerProtocolRequest = {
-      type: 'create_planner_alternative_repair', requestId: 'planner.repair.routing', generation: 1, input: wire,
-    }
-    expect(structuredClone(request)).toEqual(request)
-    expect(Object.keys(request.input).sort()).toEqual(['decision', 'lineage', 'plannerInput'])
-    const responses: PlannerWorkerProtocolResponse[] = []
-    const createPlan = failingOrdinaryCalculation()
-    const createPlannerAlternativeComparison = failingPlannerAlternativeComparisonCalculation()
-    const createPlannerAlternativeRepair: CreatePlannerAlternativeRepairCalculation = vi.fn(
-      async (received, runtime, executionOptions) => {
-        expect(received).toBe(wire)
-        expect(runtime).toBe(dependencies)
-        expect(Object.keys(executionOptions ?? {}).sort()).toEqual(['shouldCancel', 'yieldControl'])
-        return repairResult
-      },
-    )
-    const controller = attach({
-      createPlan,
-      createPlannerAlternativeComparison,
-      createPlannerAlternativeRepair,
-      prepareInteraction: failingPreparationCalculation(),
-    }, dependencies, responses)
-
-    await controller.handleMessage(request)
-
-    expect(createPlan).not.toHaveBeenCalled()
-    expect(createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(createPlannerAlternativeRepair).toHaveBeenCalledOnce()
-    expect(responses).toEqual([{
-      type: 'create_planner_alternative_repair_result', requestId: 'planner.repair.routing', generation: 1, result: repairResult,
-    }])
-    expect(structuredClone(responses[0])).toEqual(responses[0])
-  })
-
-  it('cancels by generation and posts nothing for the cancelled repair', async () => {
-    const { dependencies } = fixture()
-    const responses: PlannerWorkerProtocolResponse[] = []
-    const controller = attach({
-      createPlan: failingOrdinaryCalculation(),
-      createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-      createPlannerAlternativeRepair: async (_input, _runtime, executionOptions) => {
-        await controller.handleMessage({ type: 'cancel', requestId: 'planner.repair.cancel', generation: 1 })
-        expect(executionOptions?.shouldCancel?.()).toBe(true)
-        throw new PlannerAlternativeCancelledError()
-      },
-      prepareInteraction: failingPreparationCalculation(),
-    }, dependencies, responses)
-    await controller.handleMessage({
-      type: 'create_planner_alternative_repair', requestId: 'planner.repair.cancel', generation: 1, input: repairInput(),
-    })
-    expect(responses).toEqual([])
-  })
-
-  it('reports an unexpected repair failure through the shared error response', async () => {
-    const { dependencies } = fixture()
-    const responses: PlannerWorkerProtocolResponse[] = []
-    const controller = attach({
-      createPlan: failingOrdinaryCalculation(),
-      createPlannerAlternativeComparison: failingPlannerAlternativeComparisonCalculation(),
-      createPlannerAlternativeRepair: async () => { throw new Error('repair prediction failed') },
-      prepareInteraction: failingPreparationCalculation(),
-    }, dependencies, responses)
-    await controller.handleMessage({
-      type: 'create_planner_alternative_repair', requestId: 'planner.repair.error', generation: 1, input: repairInput(),
-    })
-    expect(responses).toEqual([{ type: 'error', requestId: 'planner.repair.error', generation: 1, message: 'repair prediction failed' }])
   })
 })

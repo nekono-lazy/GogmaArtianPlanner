@@ -1,9 +1,5 @@
 import type {
   CreateProductionPlanCalculation,
-  PlannerAlternativeRepairCalculationResult,
-  PlannerAlternativeRepairInput,
-  PlannerAlternativeWhatIfCalculationResult,
-  PlannerAlternativeWhatIfInput,
   PlannerDependencies,
   PlannerExecutionOptions,
   PlannerInput,
@@ -20,42 +16,20 @@ export type PlannerWorkerPostMessage = (
 export type PlannerDependenciesFactory = () => PlannerDependencies
 
 /**
- * The four Planner calculations this Worker routes to.
+ * The two Planner calculations this Worker routes to.
  *
- * All four are injected, so the controller performs no full Planner run, no
- * Candidate search, no preflight, no Trace Replay, and no adoption of its own:
- * the ordinary Planner and the Planner Alternative Domain own all of that, and
- * the Production adapter composes it. The legacy B8 constrained re-search and
- * B9 what-if calculations are no longer Worker calculations (Phase 6-B1,
- * `docs/PLANNER_SPEC.md` 9.2.19.16).
+ * Both are injected, so the controller performs no full Planner run, no
+ * Candidate search, no Trace Replay, and no conflict preparation of its own:
+ * the ordinary Planner Domain owns all of that, and the Production adapter
+ * composes it. The legacy B8 constrained re-search and B9 what-if calculations
+ * are no longer Worker calculations (Phase 6-B1, `docs/PLANNER_SPEC.md`
+ * 9.2.19.16), and neither are the Planner Alternative what-if and actual
+ * repair (Issue #278 PR-4, 9.6.12).
  */
 export interface PlannerWorkerCalculations {
   createPlan: CreateProductionPlanCalculation
-  createPlannerAlternativeComparison: CreatePlannerAlternativeComparisonCalculation
-  createPlannerAlternativeRepair: CreatePlannerAlternativeRepairCalculation
   prepareInteraction: PreparePlannerInteractionCalculation
 }
-
-/**
- * Worker-facing Planner Alternative what-if calculation shape (Phase 4-B). The
- * wire input carries no extent and no trial bounds; the Production adapter
- * supplies them.
- */
-export type CreatePlannerAlternativeComparisonCalculation = (
-  input: PlannerAlternativeWhatIfInput,
-  dependencies: PlannerDependencies,
-  executionOptions?: PlannerExecutionOptions,
-) => Promise<PlannerAlternativeWhatIfCalculationResult>
-
-/**
- * Worker-facing Planner Alternative actual repair calculation shape (Phase
- * 5-B). Like the what-if, the wire input carries no extent and no trial bounds.
- */
-export type CreatePlannerAlternativeRepairCalculation = (
-  input: PlannerAlternativeRepairInput,
-  dependencies: PlannerDependencies,
-  executionOptions?: PlannerExecutionOptions,
-) => Promise<PlannerAlternativeRepairCalculationResult>
 
 /** Synchronous initial preparation needs no cancellation hooks. */
 export type PreparePlannerInteractionCalculation = (
@@ -141,8 +115,8 @@ export function createPlannerWorkerController(
       if (owning !== undefined && generation <= owning) return
       generationByRequestId.set(requestId, generation)
       try {
-        // Every calculation has an explicit branch. In particular, what-if is
-        // never treated as the ordinary fallback.
+        // Every calculation has an explicit branch. In particular, preparation
+        // is never treated as the ordinary fallback.
         let response: PlannerWorkerProtocolResponse
         switch (request.type) {
           case 'prepare_interaction':
@@ -159,30 +133,6 @@ export function createPlannerWorkerController(
               requestId,
               generation,
               result: await calculations.createPlan(
-                request.input,
-                dependencies,
-                executionOptions(requestId, generation),
-              ),
-            }
-            break
-          case 'create_planner_alternative_comparison':
-            response = {
-              type: 'create_planner_alternative_comparison_result',
-              requestId,
-              generation,
-              result: await calculations.createPlannerAlternativeComparison(
-                request.input,
-                dependencies,
-                executionOptions(requestId, generation),
-              ),
-            }
-            break
-          case 'create_planner_alternative_repair':
-            response = {
-              type: 'create_planner_alternative_repair_result',
-              requestId,
-              generation,
-              result: await calculations.createPlannerAlternativeRepair(
                 request.input,
                 dependencies,
                 executionOptions(requestId, generation),
