@@ -941,11 +941,16 @@ OwnedWeapon  0..1 <- TargetWeapon
 soft preferenceである。
 
 - 必須Route指定ではない。Searchは従来どおり新規Normal / 所持Normal / 所持Gogmaの実行可能Route
-  をすべて探索し、preferred以外のRouteを除外しない
+  をすべて探索し、preferred以外のRouteを除外しない（他の目標武器で使用する所持武器を除外する検索条件は
+  優先起点とは別の入力である。下記と[SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.3）
 - より短い、より低コスト、または既存評価で明確に優れたRouteがある場合はそちらを優先する
 - Search / constrained enumerationでの位置づけは[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1に従う。
   通常Planner（決定的scheduler）は優先起点を判断に使わない（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7.4、
   Issue #103 Phase C）
+- 候補検索の「他の目標武器で使用する所持武器を除外する」（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.3、Issue #157）は、
+  検索・Planner対象になれる**他の**Targetの優先起点を、検索対象Targetの起点から除外する検索条件である。優先起点を
+  そのTarget自身の必須Routeにするものではなく、本節の関係・選択可否・soft preference・staleness・collection validationを
+  変更しない。除外条件はTargetWeaponにもBuildListEntryにも保存しない
 - Target Satisfactionを制限しない。あるTargetがWeapon Xを優先起点にしていても、性能を満たす
   別のWeapon YがそのTargetを満たしてよい。1対1制約は優先起点の関係にだけ適用する
 - Planner計算（Beam Search、Trace Replay、constrained re-search、what-if）、Candidate Search、
@@ -2579,6 +2584,9 @@ const defaultSettings: AppSettings = {
 - 計算意味を持たない。CalculationContext、`searchStateHash`、Candidate / Entry / Plan identity、stalenessに入らない
 - `defaultSearchLimit` は通常アーティアCounter特定の初期検索範囲の終了値であり、`candidateSearchDefaults` とは
   別の設定である。相互に流用・再定義しない
+- 候補検索の「他の目標武器で使用する所持武器を除外する」（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.3、Issue #157）の
+  単体検索・一括検索・追加それぞれのON / OFFはAppSettingsに保存しない（fieldを追加しない）。候補検索画面の一時UI状態であり
+  （[UI_FLOW.md](./UI_FLOW.md) 9.2）、`AppSettings.schemaVersion` は変わらない
 
 AppSettings v1（`schemaVersion = 1`、`candidateSearchDefaults` なし）はDexie v8 -> v9 upgradeとExport
 schema 11 -> 12 migrationで共通の `upgradeAppSettingsToV2()` によりv2へ変換する。旧候補検索画面の固定値

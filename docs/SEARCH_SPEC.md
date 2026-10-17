@@ -22,6 +22,7 @@ Candidate Search再設計の背景、実測値、採用しなかった案、受�
 - 初期版では実用ラインを満たさない候補を原則表示しない
 - Candidateは常に理想品であり、実用品のcategoryや理想への近さを表す属性は持たない
 - 通常アーティア経由と既存巨戟アーティア経由を比較する
+- 「他の目標武器で使用する所持武器を除外する」（3.3）を指定した検索だけ、他の目標武器が使用する所持武器をRoute起点にしない。指定しない検索は従来どおりである
 - 対象武器種のレア8通常アーティアCounterが未確定なら、Normal Predictionを使う新規通常アーティア経由のpredicted variant(6.1)は検索しない。ただし条件を満たす場合は6.1.1のblind Reset variantで新規通常アーティア経由を検索できるため、RouteKind全体が検索不可になるわけではない
 - Target条件を自動変更しない。条件緩和案も提示しない（9章）
 - 重い検索はWeb Workerで行う
@@ -241,6 +242,211 @@ Candidate Searchの入力状態（`rngState`、`normalCounters`、`ownedWeapons`
 - どちらの起点でも `lifecycleStatus = "completed"` のTargetは検索しない。仮想状態で完了予定のTargetを
   選んだ場合は検索せず、その旨を通知する
 
+### 3.3 他の目標武器で使用する所持武器の除外（Issue #157）
+
+実装状態: **未実装**（Issue #157 PR-1で本契約を確定した。実装は本節末尾の分割計画に従う後続PRで行い、それまで
+Production Searchは除外条件を持たない）。要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 14.2、画面は
+[UI_FLOW.md](./UI_FLOW.md) 9.2 / 9.1である。
+
+候補検索に「他の目標武器で使用する所持武器を除外する」というON/OFF条件を置く。検索対象TargetをTとすると、ONでは
+**T以外の目標武器が使用する所持武器をTのRoute起点にしない**。目的は、複数の目標武器を別々に検索して作成リストへ
+登録したときに、同じ所持武器を起点にするRouteが並び、登録済みRouteをそのまま使う通常Planner（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+7章）で `same_owned_weapon_consumed` の競合になることを、検索の段階で避けやすくすることである。
+
+- これは「指定した所持武器へ起点を固定する」機能ではない。Tの `preferredOwnedWeaponId`（8.1）はsoft preferenceのままであり、
+  ONでもOFFでもTのRouteを優先起点へ限定しない。ほかで使われていない適合する所持武器と、新しく作成する通常アーティア
+  （6.1 / 6.1.1、`sourceOwnedWeaponId = null`）は、既存のRoute eligibilityの範囲で引き続き検索する
+- OFFでは従来のCandidate Searchと完全に同じ動作である（下記「Search Domainでの適用」）
+- 初期値は単体検索がOFF、作成リスト未登録の一括検索・追加（[UI_FLOW.md](./UI_FLOW.md) 9.1）がON。どちらも利用者が明示的に
+  変更でき、検索・一括処理の開始時点の値を固定して使う。設定は画面内の一時状態であり永続化しない（[UI_FLOW.md](./UI_FLOW.md) 9.2）
+- 除外は検索条件であり、Candidateの意味、作成リスト項目、Plannerの制約ではない（下記「identity・staleness・version」と
+  「通常Planner・全体最適化との境界」）
+
+#### 入力（Search Domain）
+
+```ts
+export interface CandidateSearchInput {
+  // ...3章の既存field
+  /**
+   * 3.3。この検索でRoute起点にしない所持武器のID。
+   * 省略と空配列は同じ意味であり、従来どおり除外しない。
+   */
+  excludedSourceOwnedWeaponIds?: OwnedWeaponId[];
+}
+```
+
+- Search Domainが知るのは除外するIDの集合だけであり、ON / OFFの区別、除外理由、作成リスト、他Targetの紐付けを知らない。
+  ONで除外対象が0本の場合の入力（空配列）はOFFの入力と同じ意味である
+- 検証（`assertCandidateSearchInput()`）: 各要素は空でない文字列、重複なし、かつ同じ入力の `ownedWeapons` に存在するIDとする。
+  違反は `CandidateSearchError("invalid_input")` としてfail closedにする。下記の導出は同じ読み取りの所持武器だけを返すので、
+  違反は呼び出し側の不整合を示す
+- 配列の順序は意味を持たない。同じ集合なら順序が違っても検索結果は同じである
+- Workerへはstructured clone可能な文字列配列として既存の `candidate_search` requestの `input` で渡す。Worker protocolに
+  message種別を追加しない。検証はWorker内の `searchCandidates()` が行う（11章）
+
+#### 除外集合の導出（Application側のDomain authority）
+
+除外するIDの集合は、検索対象Tと、その検索の入力と**同じ永続状態の読み取り**から、1つのpure function（React / Dexie非依存。
+仮称 `deriveOtherTargetSourceExclusion()`、配置は `src/domain/buildList/` を想定し名称と配置は実装PRで確定する）で導出する。
+単体検索と一括検索・追加は同じ関数を使い、画面で同じ判定を再実装しない。
+
+```ts
+type OtherTargetSourceUsageReason =
+  | { kind: "preferred_owned_weapon"; targetWeaponId: TargetWeaponId }
+  | {
+      kind: "build_list_entry_source";
+      targetWeaponId: TargetWeaponId;
+      buildListEntryId: BuildListEntryId;
+    };
+
+interface OtherTargetSourceUsage {
+  ownedWeaponId: OwnedWeaponId;
+  reasons: OtherTargetSourceUsageReason[]; // 1件以上
+}
+
+interface OtherTargetSourceExclusion {
+  targetWeaponId: TargetWeaponId;           // 検索対象T
+  excludedOwnedWeaponIds: OwnedWeaponId[];  // usagesのID。重複なし、code unit順
+  usages: OtherTargetSourceUsage[];         // ownedWeaponId のcode unit順
+}
+```
+
+入力は検索対象のTarget ID、永続状態の `targetWeapons` / `ownedWeapons` / `buildListEntries` / `rngState` /
+`normalCounters`、その検索の `calculationContext` である。次の2つの理由を集める。
+
+1. **他Targetの優先起点** — `id !== T` かつ検索・Planner対象になれる（`isEnabled = true` かつ `lifecycleStatus = "active"`、
+   `isTargetWeaponPlanningEligible()`）Target Uの非nullの `preferredOwnedWeaponId`。理由 `preferred_owned_weapon`
+2. **他Targetの作成リスト候補の起点** — `targetWeaponId !== T` の永続BuildListEntry eのうち、そのTarget Uが存在して
+   検索・Planner対象になれ、かつ現在状態から再計算したstaleness（`evaluateBuildListEntryStaleness()`。永続の `isStale` /
+   `staleReasons` は信用しない、[DATA_MODEL.md](./DATA_MODEL.md) 9.4）がstaleでないもの。そのRouteが参照する所持武器
+   （`collectReferencedOwnedWeaponIds(e.candidateSnapshot.route)`。`route.sourceOwnedWeaponId` と、Reset / Keep / Reset Skillsの
+   非null source）を集める。理由 `build_list_entry_source`。新規通常アーティアのRouteは所持武器を参照しないので何も加えない
+
+一括検索・追加の途中で先行Targetの候補を正常に追加した場合の反映（Issue #157の3つ目の除外理由）は、上記2をTargetごとの
+入力作成時に永続状態から導出することで成り立つ。一括処理はメモリ上に「確保した所持武器」の集合を持たない（下記「一括検索・追加」）。
+
+各ケースの扱い。
+
+| ケース | 扱い |
+| --- | --- |
+| T自身の `preferredOwnedWeaponId` | 1では加えない。ほかに理由が無ければTの起点として使える。ただし別Targetのstaleでない作成リスト候補がその武器を起点に使う場合は2で除外し、理由とともに示す（[UI_FLOW.md](./UI_FLOW.md) 9.2）。優先起点は1対1なので、1の理由でT自身の優先起点が除外されることはない |
+| T自身の作成リスト候補（legacy duplicateを含む） | 数えない。再検索の結果は追加時に置換の確認を経る（10.1）ので、T自身の現在の起点を自分から除外しない |
+| `preferredOwnedWeaponId = null` のTarget | 1では何も加えない。そのTargetの作成リスト候補は2で数える。T自身が `null` でも除外条件は使える |
+| staleなEntry（理由を問わず、再計算で判定） | 数えない。staleなEntryはPlanner入力に使われず（[DATA_MODEL.md](./DATA_MODEL.md) 9.4）、再検索で置き換わるため、Entryが残っているだけで所持武器を確保し続けない。永続の `isStale = false` でも再計算でstaleなら数えず、永続の `isStale = true` でも再計算でstaleでなければ数える |
+| 検索対象OFF（`isEnabled = false`）または `completed` のTargetの優先起点・Entry | 数えない。どちらも候補検索とPlanner入力の対象外であり、その計画で所持武器を使わない。検索対象をONに戻せば再び数える |
+| 存在しないTargetを指すEntry | Targetが無いのでstale（`target_definition_changed`）であり、数えない |
+| 同じTargetに2件以上のEntry（legacy duplicate） | 各Entryを個別に判定し、staleでない全Entryの起点を合わせて除外する。どのEntryを残すかを推測しない（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）。整理されるまでの一時的な安全側の扱いである |
+| 途中採用状態の選択が壊れているEntry、RNG capability / prediction supportの不足でPlannerが実行時に除外し得るEntry | staleでなければ数える。導出はRNG Engineに依存させず、そのTargetが現在採用しているRouteの起点として扱う |
+| 保護、武器種・属性の互換性、所持通常アーティアのレア8・非保護などの既存Route eligibility | 導出では判定しない。Search Domainが既存規則を従来どおり適用したうえで除外を重ねる。保護中の巨戟を起点にする他Targetの操作0候補（`existing_gogma_current`）がstaleでなければ、その武器も除外する。起点武器の保護を変更したEntryは `referencedOwnedWeaponsHash` が変わりstaleになるので数えない |
+| 作成中（`executionInProgress`） | 除外の判定に使わない。作成中の武器も通常どおり起点候補であり（3.2）、作成中状態をRoute eligibilityに使わない。実行中の生産計画が既存武器を起点に使う目標武器は作成開始時、新規作成の作成対象Normalは登録Stepで優先起点が自動設定されるので（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 16.11）、通常は1で除外される。利用者がその紐付けを解除した場合は除外しない |
+| 同じIDが複数の理由に該当する | IDは1件として除外し、該当するすべての理由を `reasons` に残す |
+| 優先起点と作成リストの情報が食い違う（Uが武器Xを優先起点にしているがUの候補は武器Yを使う、別のTarget Vの候補がXを使う、など） | 和集合をとる。X・Yとも除外し、どちらが「本当の使用」かを推測しない |
+| Tと武器種・属性が一致しないなど、Tの起点候補にならない所持武器 | 集合に含まれてよい。Search Domainで効果を持たない。画面はTの検索で実際に起点から外れた武器だけを示す（下記の結果field） |
+
+決定性。同じ入力から同じ集合と同じ理由列を返す。順序はcode unit比較で決め、`localeCompare` に依存させない。
+
+#### Search Domainでの適用
+
+- 所持武器を起点にするRoute（6.2の所持通常アーティア経由、6.3〜6.6の既存巨戟経由、操作0の `existing_gogma_current`）の
+  Route baseを列挙する段階で除外し、除外した所持武器のbaseを登録しない。そのbaseのstream登録、Prediction、Candidate生成は
+  起こらない。最終Candidateを表示上で取り除く方式にしない。既存の `isAvailableRouteSource()`（Planner Alternative Searchの
+  reservationによる起点除外、5.6.8）と同じ判定位置に合流させてよいが、reservationのheld位置・conversion位置の規則は持ち込まない
+- 新規通常アーティア経由（6.1 / 6.1.1）は起点が `null` なので影響を受けない。6.1.2のNormal Route base削減も変わらない
+- 武器種・属性の互換性、保護、所持通常アーティアのレア8・非保護、capability、prediction supportの既存規則は変更せず、
+  除外はそれらに重ねて適用する
+- canonical Ideal（5.6.3）は、除外後に残るRoute baseからのIdeal候補のうち8章の標準順で最小のものとする。順位のキー、
+  重複排除（7章）、`candidateStableKey` は変えない。preferred sourceのtie-break（8.1）も変えない。Tの優先起点が除外された
+  場合は、それを起点にするCandidateが存在しないだけである
+- 除外した所持武器へ暗黙にfallbackしない。残る起点と探索範囲でIdealが見つからなければ `candidate = null`（4.2）であり、
+  除外した武器から再検索しない
+- 除外集合が空（OFF、またはONで対象0本）なら、Candidate、canonical選択、`candidateStableKey`、`searchedRoutes`、
+  `skippedRoutes`、warnings、Prediction呼び出し回数が従来と完全に一致する
+- skip理由。あるRouteKindについて、除外を適用しなければ既存規則で起点になれる所持武器が1本以上あり、除外を適用すると
+  0本になる場合だけ、新しい理由 `source_excluded_for_other_targets` で `skippedRoutes` へ記録する。それ以外は既存の理由
+  （`no_owned_weapon_available`、`no_unprotected_source_weapon` など）を従来どおり残りの起点で判定する。例: 互換な巨戟が
+  非保護1本（除外）と保護1本の場合、`existing_gogma_current` は保護武器で検索し、amendment系RouteKindは
+  `source_excluded_for_other_targets` になる
+- 結果。`TargetCandidateSearchResult.excludedSourceOwnedWeaponIds`（4章）に、この検索の `routeFilter` と既存規則の下で
+  Route baseになるはずだったが除外したため登録しなかった所持武器のIDをcode unit順で返す。除外が無ければ空配列である。
+  観測用のruntime情報であり、BuildCandidate、Candidate identity、hash、BuildListEntryへ入れない
+- 除外のためにCandidateSearchWarningを生成しない。画面は上記の型付き情報と導出の理由から日本語の表示を組み立てる
+  （[UI_FLOW.md](./UI_FLOW.md) 9.2）
+- 除外条件を設定するのは候補検索画面の単体検索と一括検索・追加の入力だけである。constrained enumeration（5.6.7）、
+  Planner Alternative Search（5.6.8）、形状制約付きRoute探索（5.6.9）、全体最適化のStage Dが組み立てる射影起点の
+  Candidate Search入力（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17.6）はこのfieldを持たず、動作は変わらない
+- 3.2の「実行中Plan完了後（予測）」起点では除外条件を適用しない（常にOFFとして扱い、画面でも選ばせない）。同起点の結果は
+  作成リストへ追加できず、本条件の目的に当たらないためである。変更する場合は本節を改訂する
+
+#### identity・staleness・version
+
+- `CandidateSearchInput` は永続化しない。除外条件とその導出結果を、BuildCandidate、BuildListEntry、TargetWeapon、
+  ProductionPlan、AppSettings、IndexedDB、Export / Importのいずれにも保存しない。BuildListEntryに恒久的な起点固定・除外の
+  制約を持たせない
+- Candidate ID（`searchRunId` を含むsemanticHash）の生成規則、`candidateStableKey`、重複排除key、`BuildCandidateMeaning`
+  fingerprint、`searchStateHash`、`referencedOwnedWeaponsHash` に除外集合を入れない。同じRouteのCandidateはONで見つけても
+  OFFで見つけても同じ意味である
+- 他Targetの優先起点や作成リストの変更は、既存のBuildCandidate / BuildListEntryをstaleにしない。ONで見つけた候補から作った
+  Entryも通常のEntryであり、除外条件を再評価しない
+- CalculationContextに入れず、版数を動かさない。`CURRENT_CALCULATION_APP_SCHEMA_VERSION` 18、`DATABASE_SCHEMA_VERSION` 10、
+  `ExportRoot.schemaVersion` 13、`AppSettings.schemaVersion` 2、`RngState.schemaVersion` 2、`PRODUCTION_RNG_ENGINE_VERSION`
+  `production-rng:c5-e7`、Master `dataVersion` 4 は変わらない。OFFは従来と同一であり、ONは検索に使う起点を絞るだけで、
+  保存済みの成果物の意味を変えないためである。実装でこの前提が崩れる場合は実装を止めて本節へ戻る
+
+#### 検索中・追加時の状態変化（再評価の境界）
+
+- 除外集合は1回の検索requestにつき、入力を作る時点で1回だけ導出する。除外集合と入力の `targetWeapons` / `ownedWeapons` /
+  `rngState` / `normalCounters` は同じ永続状態から作り、途中に別の書き込みが入らないよう1つのDexie transactionで読む
+  （RngStateが無い場合の初期作成の扱いは既存の `createCandidateSearchInput()` の契約を変えない）
+- 検索中に他Targetの紐付け・作成リスト・所持武器が変わっても、その検索の除外集合は変えず、結果も破棄しない。除外は検索条件で
+  あり、Candidateの有効性ではないためである
+- 作成リストへの追加・置換（`BuildListService.addCandidate()` / `replaceCandidate()`、10.1）は除外条件を再評価しない。除外条件は
+  作成リストの不変条件ではない。別タブ等で同じ所持武器を使う候補が並んだ場合は、通常Plannerが従来どおり
+  `same_owned_weapon_consumed` として扱う
+
+#### 一括検索・追加
+
+一括検索・追加（[UI_FLOW.md](./UI_FLOW.md) 9.1）は、1 Targetずつ単体Candidate Searchを実行し、成功候補を順に追加する構造を
+変えない。複数Targetの同時最適化にしない。
+
+- 一括開始時点の除外ON / OFFを、その一括処理のすべてのTargetへ使う。途中で画面の設定を変えても、実行中の一括処理には影響しない
+- ONの場合、各Targetの検索requestを作る直前に、その時点の永続状態から除外集合を導出する（上記の1つのtransaction）。先行Targetの
+  候補が `addCandidate()` で `added` になった場合、そのEntryは永続化済みなので、後続Targetの導出で2の理由として除外される
+- 候補なし、検索失敗、Candidate保存失敗、作成リスト追加の失敗、`duplicate` / `replacement_required` / `legacy_duplicate` による
+  未追加では、一括処理は何も確保しない。検索で見つかっただけの候補、保存しただけのBuildCandidateは除外の理由にならない。
+  `not_added` の原因になった既存Entryは永続状態にあるので、それ自体の規則（上記2）で数える
+- キャンセルの前に追加したEntryは従来どおり保持し、永続状態として以後の検索でも数える
+- 対象Targetの選定、処理順、結果サマリ、キャンセル、Worker異常時の中断の契約は変えない。処理順は本機能のために変えない。
+  特定の目標武器に特定の所持武器を使わせたい場合は、その目標武器の優先起点を設定する（1の理由により、処理順にかかわらず
+  他のTargetから除外される）
+- OFFの一括処理は従来の一括処理と同じである
+
+#### 通常Planner・全体最適化との境界
+
+- 本条件はCandidate SearchのRoute起点の除外条件だけである。作成リストには選んだRouteを従来どおり登録し、通常Plannerは
+  登録済みRouteをそのまま使う（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 7章）。Issue #278で確定した、優先候補の選択だけによる
+  通常Plannerの競合解決（同 9.6）を変更しない
+- 全体最適化（[PLANNER_SPEC.md](./PLANNER_SPEC.md) 17章）へhard constraintとして渡さない。全体最適化の入力（`createPlannerInput()`）は
+  本条件を持たず、Target横断のRoute・起点の組み直しを制限しない。本条件で検索・追加した候補が作成リストに含まれることによる
+  間接的な影響だけがある（同 17.14）
+- `same_owned_weapon_consumed` の発生を減らすことを目的とするが、競合0は保証しない。OFFで検索した候補、本機能より前に登録した
+  候補、別タブでの変更、作成リストの全体最適化の採用前の状態などから所持武器の重複は残り得る。通常アーティア・スキル・
+  復元ボーナスのCounter競合と、途中採用状態などに起因する計画の不成立は本条件の対象外である
+- Planner、RNG、Counter、Global Assignment、Executionの意味論を変更しない
+
+#### 実装の分割計画
+
+意味論とPresentationを混ぜず、次の順に分ける。各PRは前のPRに依存し、本節と[UI_FLOW.md](./UI_FLOW.md) 9.2を正本とする。
+
+1. **Search Domain / Worker**（PR-2） — `CandidateSearchInput.excludedSourceOwnedWeaponIds` とその検証、Route base列挙での適用、
+   skip理由 `source_excluded_for_other_targets`（既存のskip理由の日本語ラベルへ1件追加する最小のPresentation変更を含む）、
+   `TargetCandidateSearchResult.excludedSourceOwnedWeaponIds`。Productionの呼び出し側はまだ設定しない。検証は13.7の
+   Search Domain / Workerの観点（空集合での完全一致、Prediction呼び出し回数、他consumerの不変）
+2. **Application / 一括検索**（PR-3） — 除外集合の導出authority、`createCandidateSearchInput()` のON指定と1つのtransactionでの
+   読み取り（導出結果を表示用に入力と並べて返す）、`runBatchCandidateSearch()` の開始時点の条件と、Targetごとの永続状態からの
+   導出、`no_candidate` の結果への除外情報。画面はまだOFFだけを渡し、表示は変えない。検証は13.7の導出と一括処理の観点
+3. **Search UI**（PR-4） — [UI_FLOW.md](./UI_FLOW.md) 9.2のチェックボックス、開始時点の値の固定、検索中・結果・一括サマリの表示、
+   Issue #128の注意への追記、結合テスト、PCと375px幅、ダークテーマでの確認。検証は13.7のUI観点と[UI_FLOW.md](./UI_FLOW.md) 19
+
 ---
 
 ## 4. 出力
@@ -259,6 +465,12 @@ export interface TargetCandidateSearchResult {
   candidate: BuildCandidate | null;
   searchedRoutes: RouteKind[];
   skippedRoutes: SkippedRoute[];
+  /**
+   * 3.3。除外条件のためRoute baseとして登録しなかった所持武器のID（code unit順）。
+   * 除外が無ければ空配列。観測用のruntime情報でありBuildCandidateへ入れない。
+   * 実装はIssue #157 PR-2で追加する（3.3の分割計画）。
+   */
+  excludedSourceOwnedWeaponIds: OwnedWeaponId[];
 }
 
 export interface SkippedRoute {
@@ -276,7 +488,8 @@ export interface SkippedRoute {
     | "keep_prediction_unsupported"
     | "master_data_unavailable"
     | "calculation_context_incompatible"
-    | "disabled_by_filter";
+    | "disabled_by_filter"
+    | "source_excluded_for_other_targets"; // 3.3。Issue #157 PR-2で追加する
   detail: string;
 }
 
@@ -297,7 +510,7 @@ export interface CandidateSearchWarning {
 
 通常UIへ内部reason enum（`normal_counter_unconfirmed` など）や英語Domain用語をそのまま表示しない。reasonはどの文言を選ぶかの判定にだけ使う。UIでのseverity別表示は `docs/UI_FLOW.md` 9が正本である。
 
-未確定RNG値は `*_unconfirmed`、Engine機能不足は `*_prediction_unsupported`、所持source不足は `no_owned_weapon_available` / `no_unprotected_source_weapon` として区別する。`no_owned_weapon_available` は `owned_normal_artian_to_gogma` と `existing_gogma_*` の両方で使うため、UI文言は武器種を限定しない汎用表現にする。武器種はRouteKind labelが示す。値が確定していてもEngineが未対応なら予測可能とみなさず、逆にEngineが対応していても必要値が未確定なら該当RNG値のreasonを返す。
+未確定RNG値は `*_unconfirmed`、Engine機能不足は `*_prediction_unsupported`、所持source不足は `no_owned_weapon_available` / `no_unprotected_source_weapon`、3.3の除外条件で起点が無くなった場合は `source_excluded_for_other_targets` として区別する。`no_owned_weapon_available` は `owned_normal_artian_to_gogma` と `existing_gogma_*` の両方で使うため、UI文言は武器種を限定しない汎用表現にする。武器種はRouteKind labelが示す。値が確定していてもEngineが未対応なら予測可能とみなさず、逆にEngineが対応していても必要値が未確定なら該当RNG値のreasonを返す。
 
 Production Searchはroute-local / operation-local supportを維持し、RngState全体のall-or-nothing availabilityを設けない。Skill-dependent routeはBase SeedまたはSkill Counter不足、Skill Prediction / concrete semantic input unsupportedでskipする。Gogma amendment routeはBase SeedまたはGogma Counter不足、Gogma Prediction / concrete semantic input / Master unsupportedでskipする。persisted Counter Gateの未設定・未確定はskip reasonにしない。Normal Counter不足は `create_normal_artian` を含むrouteだけに適用する。
 `master_data_unavailable` は、Route実行に必要なWeaponBonusDefinition、BonusRank等、Predictionが実際に依存するsemantic Master Dataが存在しない、無効、または利用不能な場合に使用する。Production RNG poolはEngineのreference-verified tableであり、disabled LotteryMasterだけを理由にこのreasonを返さない。MaterialCostMasterはPredictionの依存ではないため、その未検証・無効もこのreasonにならない（3章）。reference-verifiedは参照repositoryとの一致を表し、全実ゲーム条件でのgame-verifiedを意味しない。
@@ -314,8 +527,8 @@ Production Searchはroute-local / operation-local supportを維持し、RngState
 
 `targetWeaponId` が指すTargetWeaponだけを検索する。存在しない、`isEnabled = false`、
 またはIdeal implies Practical不変条件を満たさないTargetは、
-`targetResult.candidate = null`、`searchedRoutes = []`、`skippedRoutes = []` の
-空結果と `severity: "warning"` の通知として返す。request自体は成立しているため
+`targetResult.candidate = null`、`searchedRoutes = []`、`skippedRoutes = []`、
+`excludedSourceOwnedWeaponIds = []`（3.3）の空結果と `severity: "warning"` の通知として返す。request自体は成立しているため
 errorにはせず、UIは理由を表示する。
 
 ### 4.2 出力上限の不在
@@ -2122,6 +2335,10 @@ normal-scope current bonusesからのKeep結果の実機fixtureは未取得で�
 
 ## 6. Route検索
 
+所持武器を起点にするRoute（6.2〜6.6と操作0の `existing_gogma_current`）は、3.3の除外条件で指定された所持武器を
+起点にしない。以下の各Routeの必要条件・制約は、除外の対象でない所持武器についてそのまま適用する。新規通常アーティアを
+起点にするRoute（6.1 / 6.1.1）は除外条件の影響を受けない。
+
 ## 6.1 通常アーティア経由
 
 RouteKind。
@@ -2543,6 +2760,12 @@ run間で安定しない。**Candidateの最終出力順にrun依存値を使っ
 ではない。Searchは従来どおり新規Normal / 所持Normal / 所持Gogmaの実行可能Routeをすべて
 探索し、preferred以外のRouteを除外しない。
 
+3.3の「他の目標武器で使用する所持武器を除外する」は、優先起点とは別の検索条件である。ONでは他の目標武器の
+優先起点と、他の目標武器の作成リスト候補が起点に使う所持武器を、検索対象Targetの起点から除外する。検索対象Target
+自身の優先起点を必須の起点にはせず、本節のtie-breakの位置と意味も変えない。除外された所持武器を起点にする
+Candidateは生成されないので、その武器が検索対象Targetの優先起点ならpreferred source matchになるCandidateが
+無いだけである。
+
 概念的な優先順序。
 
 ```text
@@ -2690,7 +2913,8 @@ createBuildListEntry(
 1 Target 1 requestが返すCandidateはcanonical Ideal 1件以下なので、1回の検索結果からの追加は
 個別追加である。作成リスト未登録の目標武器をまとめて検索・追加する操作（[UI_FLOW.md](./UI_FLOW.md) 9.1）は、
 この1 Target 1 requestの検索と上記の追加をTargetごとに順に繰り返すUI / Application orchestrationであり、
-Search requestの契約を変えない。
+Search requestの契約を変えない。一括検索・追加の初期状態では3.3の除外条件がONであり、Targetごとの入力作成時に
+永続状態から除外集合を導出する（3.3「一括検索・追加」）。追加・置換の判定（10.1）は除外条件を再評価しない。
 
 追加時には、そのCandidateについてユーザーがlaneごとに選択したopportunityのIDと
 「理想品までの改善優先」を `BuildListEntry.intermediateStateSelection` として保存する。
@@ -2824,7 +3048,7 @@ Worker error契約(B6)。
 - UI側は最新requestId以外の結果を破棄する
 - cancel後の結果は反映しない
 - Worker内ではDexieに直接アクセスしない。必要な入力をmessageで受け取る
-- Worker messageはstructured clone可能な `requestId` と `CandidateSearchInput` だけを保持し、メソッドを持つ `RngEngine` instanceを含めない
+- Worker messageはstructured clone可能な `requestId` と `CandidateSearchInput` だけを保持し、メソッドを持つ `RngEngine` instanceを含めない。3.3の除外条件は `input.excludedSourceOwnedWeaponIds`（文字列配列）として運び、除外理由や他Targetの作成リストはWorkerへ渡さない
 - Worker module内でEngineまたはEngine Factoryを取得し、Worker Handlerのdependencyとして注入する
 - Production Search Worker entryはWorker内部factoryから `ProductionRngEngine` を生成する
 - Search Worker ClientとBuildListのcurrent CalculationContextは `PRODUCTION_RNG_ENGINE_VERSION` を共通のRNG Engine version authorityとして使用する
@@ -3129,6 +3353,72 @@ Phase 3-Cで、`defaultPlannerAlternativeSearchExtent` が 4 / 235 / 4 であり
 - `completed` Targetを検索せずwarningを返し、仮想状態で完了予定のTargetも検索しない
 - 所持巨戟が理想条件を満たすactive Targetで操作0 Idealの通知を返し、Predictionを呼ばない
 - `preferredOwnedWeaponId`、`priority`、`isEnabled` だけの変更でBuildListEntryがstaleにならない
+
+## 13.7 他の目標武器で使用する所持武器の除外Test（3.3、Issue #157）
+
+後続の実装PR（3.3の分割計画）で確認するAcceptanceと代表的なテストケースである。
+
+Search Domain / Worker（PR-2）。
+
+- `excludedSourceOwnedWeaponIds` が省略・空配列のとき、Candidate、canonical Idealの選択、`candidateStableKey`、
+  `searchedRoutes`、`skippedRoutes`、warnings、Prediction呼び出し回数が、fieldの導入前のfixture結果と一致する（OFFで従来の候補と
+  rankingを維持する）。省略と空配列の結果が一致する
+- 除外した所持通常アーティア / 所持巨戟（保護中の操作0候補を含む）を起点にするRoute baseが登録されず、その起点からの
+  Prediction呼び出しも行われない。表示用の事後削除ではない
+- 除外しなかった適合する所持武器と、新規通常アーティア経由（predicted / blind）は従来どおり検索される
+- 除外で起点の候補が無くなったRouteKindだけが `source_excluded_for_other_targets` になり、除外が無くても起点が無い場合は
+  従来の `no_owned_weapon_available` / `no_unprotected_source_weapon` のままになる。非保護1本（除外）と保護1本の巨戟では、
+  `existing_gogma_current` が検索され、amendment系RouteKindが `source_excluded_for_other_targets` になる
+- 除外後に残る起点でIdealが見つからない場合は `candidate = null` であり、除外した武器を起点にするCandidateを返さない
+  （fallbackしない）
+- `excludedSourceOwnedWeaponIds` の結果が、`routeFilter` と既存規則の下で実際に起点から外れた所持武器だけを示す（Tと武器種・属性が
+  合わない武器や、`routeFilter` で検索しないRouteKindの起点は含まない）
+- 検索対象Tの優先起点が除外された場合も検索でき、preferred source matchのCandidateが無いだけで他のtie-breakは変わらない
+- 重複ID、`ownedWeapons` に無いIDを `invalid_input` として拒否する。配列の順序だけが違う入力で結果が一致する
+- 同じRouteのCandidateは、除外の有無にかかわらず同じ `candidateStableKey`、重複排除key、meaning fingerprint、
+  `searchStateHash`、`referencedOwnedWeaponsHash` を持つ
+- constrained enumeration、Planner Alternative Search、形状制約付きRoute探索、全体最適化のStage Dの射影起点の入力が
+  除外fieldを持たず、それらの結果が変わらない
+- Workerがfieldを含む入力をstructured cloneで受け取り、同じ結果を返す
+
+除外集合の導出（PR-3）。
+
+- 他Targetの `preferredOwnedWeaponId` を除外する（Normal / Gogmaの両方）。T自身の優先起点は加えない
+- 他Targetのstaleでない作成リスト候補が参照する所持武器（所持通常の変換元、既存巨戟の起点、保護中の操作0候補の武器）を除外する。
+  新規通常アーティアの候補は何も加えない
+- T自身の作成リスト候補（legacy duplicateを含む）の起点を除外しない
+- 他Targetのstaleでない作成リスト候補がTの優先起点を使う場合、その武器を除外し、理由が `build_list_entry_source` として残る
+- `preferredOwnedWeaponId = null` のTarget（Tを含む）で動作する
+- staleなEntry（各stale理由）を数えない。永続の `isStale` が現在状態と食い違う場合は再計算の結果に従う
+- 検索対象OFF・`completed` のTargetの優先起点とEntry、存在しないTargetを指すEntryを数えない
+- legacy duplicateでは、staleでない全Entryの起点を合わせて除外する
+- 同じIDの複数の理由を1件のIDにまとめ、理由をすべて残す。食い違う優先起点と作成リスト情報は和集合になる
+- 作成中（`executionInProgress`）だけを理由に除外しない
+- 同じ入力から同じ結果（ID順・理由順）を返し、`localeCompare` に依存しない
+- `createCandidateSearchInput()` のON指定で、除外集合と入力の `targetWeapons` / `ownedWeapons` / `rngState` / `normalCounters` が
+  同じ読み取りから作られる。OFF指定の入力はfieldを持たず、従来の入力と同じである
+
+一括検索・追加（PR-3）。
+
+- 開始時点のON / OFFが全Targetへ使われ、途中で画面の値を変えても影響しない
+- 先行Targetの候補を `added` で追加した後、後続Targetの検索がその起点の所持武器を使わず、別の使える所持武器または
+  新規通常アーティアから探す
+- 候補なし、検索失敗、Candidate保存失敗、追加失敗、`duplicate` / `replacement_required` / `legacy_duplicate` の後で、
+  後続Targetの除外集合が増えない
+- キャンセル前に追加したEntryが保持され、以後の検索でも数えられる。キャンセル後に届いた結果を保存しない
+- 一括処理がメモリ上の確保集合を持たず、各Targetの導出が永続状態から行われる（途中で永続状態が変わった場合はその時点の状態に従う）
+- 対象選定・処理順・結果サマリの件数区分・Worker異常時の中断が従来どおりであり、OFFの一括処理が従来と同じ結果になる
+- 除外ONで候補なしになったTargetに、除外した所持武器の情報が結果として残る
+
+境界（PR-2 / PR-3）。
+
+- 作成リストの追加・置換が除外条件を再評価しない。除外条件がBuildListEntry、TargetWeapon、AppSettings、IndexedDB、
+  Export / Importへ保存されない
+- 全体最適化の入力・計算・採用に除外条件が伝わらない（同じ作成リストから同じ結果になる）。通常Plannerの計算と競合解決が
+  変わらない
+- 版数（3.3「identity・staleness・version」）が変わらない
+
+UIの観点は[UI_FLOW.md](./UI_FLOW.md) 19.2 / 19.4に置く。
 
 
 ### 妥協条件version 6の判定理由と監査記録
