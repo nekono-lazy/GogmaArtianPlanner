@@ -1418,7 +1418,7 @@ Route commitment、canonical action ordering（7.3）、scheduler rankingのい�
 
 | 層 | 優先起点の扱い |
 | --- | --- |
-| Candidate Search | canonical Idealのtie-breakとして **維持**（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1）。ユーザーが採用するRouteはここで決まる |
+| Candidate Search | canonical Idealのtie-breakとして **維持**（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 8.1）。ユーザーが採用するRouteはここで決まる。別に、他Targetの優先起点を検索対象Targetの起点から除外する検索条件（同 3.3、Issue #157）があるが、Planner入力には入らない |
 | constrained enumeration（B8 / B9） | streaming delivery順のtie-breakとして **維持**（SEARCH_SPEC 8.1）。生成する代替Routeの選び方に働く |
 | 通常Planner（決定的scheduler） | **使わない** |
 | Planning input hash | `targetWeaponsHash` の一部として **維持**（4章、16.11） |
@@ -9941,6 +9941,11 @@ Accordionを通常Planner用であることを明示して使い、全体最適�
 - その場合はPreviewで、起点武器の変化とともに優先起点と異なることを説明する
 - 全体最適化の計算・採用は `preferredOwnedWeaponId` を変更しない。既存武器の紐付けは従来どおり作成開始時の効果
   （16.2 / 16.11）である
+- 候補検索の「他の目標武器で使用する所持武器を除外する」（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 3.3、Issue #157）も全体最適化の
+  固定制約にしない。全体最適化の入力（`createPlannerInput()`、17.6）とStage Dの射影起点のCandidate Search入力はこの条件を持たず、
+  Target横断の起点・Routeの組み直しを制限しない。この条件で検索・追加した候補が作成リストに含まれることによる、入力を通じた
+  間接的な影響だけがある。通常Plannerも登録済みRouteをそのまま使い、所持武器の重複は従来どおり `same_owned_weapon_consumed`
+  として扱う（9.6の競合解決を変更しない）
 
 ### 17.15 継続Routeの `match = "ideal"` 途中状態（O15）
 
