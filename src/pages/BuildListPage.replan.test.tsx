@@ -108,8 +108,6 @@ function workerClient(result: PlannerResult = plannerResult()): PlannerWorkerCli
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     // Phase 6-A: the replan Preview is an ordinary Planner run.
     createPlan: vi.fn(async () => result),
-    createPlannerAlternativeComparison: vi.fn(),
-    createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(),
     cancelPlan: vi.fn(),
     dispose: vi.fn(),
@@ -268,8 +266,6 @@ describe('BuildListPage replan entry', () => {
     expect(replan.prepareProductionPlanReplanPreview).toHaveBeenCalledExactlyOnceWith({ runningPlanId: plan.id })
     expect(client.createPlan).toHaveBeenCalledOnce()
     // The ordinary Planner is the only calculation this path reaches.
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
     const call = vi.mocked(client.createPlan).mock.calls[0]
     // The ordinary run: no orchestration bounds reach the Client.
     expect(call).toHaveLength(2)

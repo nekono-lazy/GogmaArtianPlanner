@@ -1,8 +1,4 @@
 import type {
-  PlannerAlternativeRepairCalculationResult,
-  PlannerAlternativeRepairInput,
-  PlannerAlternativeWhatIfCalculationResult,
-  PlannerAlternativeWhatIfInput,
   PlannerInput,
   PlannerResult,
 } from '../../domain/planner'
@@ -32,9 +28,10 @@ export class ProductionPlannerWorkerUnavailableError extends Error {
  * expected result type, for the pending request's own task generation.
  *
  * Every request kind shares one pending id namespace, so a `create_plan_result`
- * must never resolve a `createPlannerAlternativeRepair()` Promise and vice
- * versa: the result shapes differ and a caller would silently read the wrong
- * one. This fails closed instead.
+ * must never resolve a `prepareInteraction()` Promise and vice versa: the
+ * result shapes differ and a caller would silently read the wrong one. A
+ * discriminant this Client does not know is never read as one it does. This
+ * fails closed instead.
  *
  * A response carrying a *different* generation is a stale message from a
  * superseded task instance, not a protocol violation, and is ignored silently
@@ -68,31 +65,6 @@ export interface PlannerWorkerClient {
     requestId: string,
     input: PlannerInput,
   ): Promise<PlannerResult>
-  /**
-   * The Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md`
-   * 9.2.19.7): a transient calculation. It was the Production Plan screen's
-   * 「比較する」 from Phase 5-B until Issue #278 PR-2 removed that operation; no
-   * Production caller sends it any more (its removal is a later cleanup,
-   * 9.6.12). The extent and the trial bounds are not
-   * parameters: the Production Worker adapter supplies them inside the Worker
-   * boundary.
-   */
-  createPlannerAlternativeComparison(
-    requestId: string,
-    input: PlannerAlternativeWhatIfInput,
-  ): Promise<PlannerAlternativeWhatIfCalculationResult>
-  /**
-   * The Planner Alternative actual repair (Phase 5-B, `docs/PLANNER_SPEC.md`
-   * 9.2.19.8; no Production caller since Issue #278 PR-2 moved 「この候補を優先」
-   * to `createPlan()`). The input is the fresh PlannerInput, this
-   * decision and the displayed Draft's lineage; the extent and the trial
-   * bounds are not parameters. It only calculates: the persistable artifact is
-   * saved by `PlannerResultPersistenceService.savePlannerAlternativeRepair()`.
-   */
-  createPlannerAlternativeRepair(
-    requestId: string,
-    input: PlannerAlternativeRepairInput,
-  ): Promise<PlannerAlternativeRepairCalculationResult>
   /** B10 current initial availability; calculation only, with no search bounds. */
   prepareInteraction(
     requestId: string,
@@ -141,14 +113,6 @@ type PendingPlan =
       expectedResultType: 'create_plan_result'
       resolve: (result: PlannerResult) => void
     })
-  | (PendingPlanIdentity & {
-      expectedResultType: 'create_planner_alternative_comparison_result'
-      resolve: (result: PlannerAlternativeWhatIfCalculationResult) => void
-    })
-  | (PendingPlanIdentity & {
-      expectedResultType: 'create_planner_alternative_repair_result'
-      resolve: (result: PlannerAlternativeRepairCalculationResult) => void
-    })
 
 export function createPlannerWorkerClient(
   worker: PlannerWorkerLike,
@@ -174,20 +138,6 @@ export function createPlannerWorkerClient(
     if (
       data.type === 'create_plan_result' &&
       current.expectedResultType === 'create_plan_result'
-    ) {
-      current.resolve(data.result)
-      return
-    }
-    if (
-      data.type === 'create_planner_alternative_comparison_result' &&
-      current.expectedResultType === 'create_planner_alternative_comparison_result'
-    ) {
-      current.resolve(data.result)
-      return
-    }
-    if (
-      data.type === 'create_planner_alternative_repair_result' &&
-      current.expectedResultType === 'create_planner_alternative_repair_result'
     ) {
       current.resolve(data.result)
       return
@@ -230,48 +180,6 @@ export function createPlannerWorkerClient(
           reject,
         })
         worker.postMessage({ type: 'create_plan', requestId, generation, input })
-      })
-    },
-    createPlannerAlternativeComparison: (requestId, input) => {
-      if (disposed) {
-        return Promise.reject(new Error('Planner Worker Client is disposed.'))
-      }
-      const generation = claimRequestId(requestId)
-      return new Promise<PlannerAlternativeWhatIfCalculationResult>((resolve, reject) => {
-        pending.set(requestId, {
-          requestId,
-          generation,
-          expectedResultType: 'create_planner_alternative_comparison_result',
-          resolve,
-          reject,
-        })
-        worker.postMessage({
-          type: 'create_planner_alternative_comparison',
-          requestId,
-          generation,
-          input,
-        })
-      })
-    },
-    createPlannerAlternativeRepair: (requestId, input) => {
-      if (disposed) {
-        return Promise.reject(new Error('Planner Worker Client is disposed.'))
-      }
-      const generation = claimRequestId(requestId)
-      return new Promise<PlannerAlternativeRepairCalculationResult>((resolve, reject) => {
-        pending.set(requestId, {
-          requestId,
-          generation,
-          expectedResultType: 'create_planner_alternative_repair_result',
-          resolve,
-          reject,
-        })
-        worker.postMessage({
-          type: 'create_planner_alternative_repair',
-          requestId,
-          generation,
-          input,
-        })
       })
     },
     prepareInteraction: (requestId, input) => {
@@ -324,10 +232,6 @@ export function createUnavailablePlannerWorkerClient(): PlannerWorkerClient {
     createPlan: () => Promise.reject(new ProductionPlannerWorkerUnavailableError()),
     // The same explicit unavailable error, never a main-thread fallback
     // calculation.
-    createPlannerAlternativeComparison: () =>
-      Promise.reject(new ProductionPlannerWorkerUnavailableError()),
-    createPlannerAlternativeRepair: () =>
-      Promise.reject(new ProductionPlannerWorkerUnavailableError()),
     prepareInteraction: () =>
       Promise.reject(new ProductionPlannerWorkerUnavailableError()),
     cancelPlan: () => undefined,

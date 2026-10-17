@@ -171,8 +171,6 @@ function plannerClient(
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     createPlan: vi.fn(),
-    createPlannerAlternativeComparison: vi.fn(),
-    createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(prepareInteraction),
     cancelPlan: vi.fn(),
     dispose: vi.fn(),
@@ -300,8 +298,7 @@ describe('ProductionPlanPage', () => {
     expect(screen.getByText('優先（選択済み）')).toBeInTheDocument()
     expect(screen.getByText('選択済み')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'この候補を優先' })).toBeEnabled()
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
   })
 
   it('shows not-found without preparing another or inferred Plan', async () => {
@@ -551,8 +548,7 @@ describe('ProductionPlanPage', () => {
     expect(screen.getByText(
       `この候補を優先すると、「${fixture.target.name}」は今回の生産計画では作成しません。作成リストの候補は残ります。`,
     )).toBeInTheDocument()
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
   })
 })
 
@@ -649,9 +645,9 @@ describe('ProductionPlanPage explicit selection (Issue #278 ordinary Planner)', 
       { conflictKey: fixture.plan.conflicts[0].id, selectedBuildListEntryId: fixture.secondEntry.id },
     ])
     expect(runInput.options).toEqual(conflictResolutionPlannerOptions(fixture.plan))
-    // No Planner Alternative search, scenario or repair is started.
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
+    // No Planner Alternative search, scenario or repair can start: the one
+    // calculation is the `createPlan` above, and since Issue #278 PR-4 the
+    // Client has no Planner Alternative entry point at all.
     expect(deps.savePlannerConflictPreferenceResult).toHaveBeenCalledOnce()
     const [savedResult, context, saveContext] = vi.mocked(deps.savePlannerConflictPreferenceResult).mock.calls[0]
     expect(savedResult).toBe(result)
@@ -1108,8 +1104,7 @@ describe('ProductionPlanPage stale persisted badges', () => {
     expect(deps.getPlan).toHaveBeenCalledExactlyOnceWith(fixture.plan.id)
     expect(deps.createInput).not.toHaveBeenCalled()
     expect(client.prepareInteraction).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
     expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
     expect(view.router.state.location.pathname).toBe('/plans/' + fixture.plan.id)
@@ -1636,8 +1631,7 @@ describe('ProductionPlanPage read-only Plan content', () => {
     const link = screen.getByRole('link', { name: 'ビルドリストで途中採用する状態を変更' })
     expect(link).toHaveAttribute('href', '/build-list')
     expect(screen.queryByRole('link', { name: 'ビルドリストへ戻る' })).not.toBeInTheDocument()
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
   })
 })
 
@@ -1934,8 +1928,7 @@ describe('ProductionPlanPage read-only persisted Conflicts', () => {
     expect(screen.getByRole('heading', { level: 2, name: '競合と解決' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 3, name: '競合 1：復元ボーナスの抽選位置の競合' })).toBeInTheDocument()
     await expectReadOnlyParticipants('優先する候補を選べるかどうか、現在の保存状態から確認しています。')
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
 
     await act(async () => {
       pending.resolve(fixture.preparation)
@@ -1967,8 +1960,7 @@ describe('ProductionPlanPage read-only persisted Conflicts', () => {
     expect(summaryValue('計画ID')).toBe(fixture.plan.id)
     expect(screen.getByRole('heading', { level: 2, name: '競合と解決' })).toBeInTheDocument()
     await expectReadOnlyParticipants('現在の保存状態を確認できなかったため、優先する候補を選べません。画面を再読み込みしてください。')
-    expect(client.createPlannerAlternativeComparison).not.toHaveBeenCalled()
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
+    expect(client.createPlan).not.toHaveBeenCalled()
     expect(deps.savePlannerConflictPreferenceResult).not.toHaveBeenCalled()
   })
 
@@ -2812,7 +2804,6 @@ describe('ProductionPlanPage section order and overview Conflicts (Issue #121)',
 
     await user.click(screen.getByRole('button', { name: 'この候補を優先' }))
     await waitFor(() => expect(client.createPlan).toHaveBeenCalledTimes(2))
-    expect(client.createPlannerAlternativeRepair).not.toHaveBeenCalled()
   })
 })
 

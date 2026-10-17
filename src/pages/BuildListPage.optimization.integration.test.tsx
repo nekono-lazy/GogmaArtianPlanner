@@ -63,8 +63,6 @@ function unusedPlannerClient(): PlannerWorkerClient {
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     createPlan: notExpected,
-    createPlannerAlternativeComparison: notExpected,
-    createPlannerAlternativeRepair: notExpected,
     prepareInteraction: notExpected,
     cancelPlan: vi.fn(),
     dispose: vi.fn(),

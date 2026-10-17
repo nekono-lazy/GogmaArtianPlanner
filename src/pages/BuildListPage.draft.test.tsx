@@ -40,8 +40,6 @@ function unusedClient(): PlannerWorkerClient {
   return {
     engineVersion: PRODUCTION_RNG_ENGINE_VERSION,
     createPlan: vi.fn(),
-    createPlannerAlternativeComparison: vi.fn(),
-    createPlannerAlternativeRepair: vi.fn(),
     prepareInteraction: vi.fn(),
     cancelPlan: vi.fn(),
     dispose: vi.fn(),

@@ -49,7 +49,12 @@ Issue #278:              通常Plannerの競合解決を、登録済みRouteの�
                          PLANNER_SPEC 9.6で確定した（2026-10-16、PR-1 docs-only）。切替後、生産計画画面は本設計の
                          「比較する」what-ifとactual repair（代替Route探索、scenario composition、generated Entryによる置換、
                          repair lineage）を使わず、Phase 7（#122 Presentation）は行わない。Planner Alternative Searchの基盤の
-                         うち全体最適化と共有する部分は残す（PLANNER_SPEC 9.6.11）。本文書は設計の記録として残す
+                         うち全体最適化と共有する部分は残す（PLANNER_SPEC 9.6.11）。本文書は設計の記録として残す。
+                         PR-2で切り替え、PR-4で本設計のWorker request kind（create_planner_alternative_comparison /
+                         create_planner_alternative_repair）・PlannerWorkerClient method・Production Worker adapter・
+                         最小限の比較表示を削除した。上の「Production behavior」の「比較する」/「この候補を優先」の
+                         routingは記録であり、現在のProduction routingはcreatePlan() / prepareInteraction() だけである。
+                         Domain計算と専用保存APIの整理はPR-5以降（PLANNER_SPEC 9.6.12）
 ```
 
 この文書はtask-specificな **設計記録** である。背景、方式選定の理由、後続PRの分割を記録する。

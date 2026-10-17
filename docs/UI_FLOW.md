@@ -2028,7 +2028,8 @@ checkpoint関与の判定はcurrent preparationの `checkpointParticipants` か�
 
 ### 11.2 「比較する」とwhat-if preview
 
-> Issue #278の切替（PR-2）で撤去した（11.6.1）。本節はPhase 5-BからPR-2までの実装の記録である。
+> Issue #278の切替（PR-2）で撤去した（11.6.1）。本節はPhase 5-BからPR-2までの実装の記録である。本節が使う
+> `PlannerWorkerClient.createPlannerAlternativeComparison()` とWorker request kindはPR-4で削除した（11.6）。
 
 各有効participantに「比較する」を置く。クリックしたparticipantだけを
 `scenarioResolution` とし、fresh PlannerInputへ表示中Planの既存explicit resolutionを
@@ -2077,6 +2078,7 @@ participant cardへ表示しない。
 ### 11.3 comparison card
 
 > Issue #278の切替（PR-2）で「比較する」とともに撤去した（11.6.1）。本節はPhase 5-BからPR-2までの実装の記録である。
+> 本節の表示を実装していた `ProductionPlanAlternativeComparison` / `presentProductionPlanAlternative` はPR-4で削除した（11.6）。
 
 `PlannerAlternativeComparison.alternatives` のstable orderをそのまま使い、UI独自のTarget sortを
 追加しない。各non-fixed Targetについて理想品候補1件の結果を表示する。
@@ -2124,7 +2126,9 @@ failureとして表示する。`invalid_fixed_resolution.reason` を分岐author
 > 通常Planner `createPlan()` と、追加検査を持つ保存（`savePlannerConflictPreferenceResult()`）になった（11.6.6、[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.4 / 9.6.6）。
 > 本節のうち `conflictResolutionPlannerOptions(表示中Plan)` による上限、incompleteの案内文、`invalid_conflict_resolution` のfail closed、
 > `draft` だけを操作対象とする規則は維持し、Planner Alternativeの呼び出し・専用保存・generated Entryによる置換・lineage・
-> Planを壊す変更の警告の部分は切替後に使わない（以下はPhase 5-BからPR-2までの記録を含む）。
+> Planを壊す変更の警告の部分は切替後に使わない（以下はPhase 5-BからPR-2までの記録を含む。以下で述べる
+> `PlannerWorkerClient.createPlannerAlternativeRepair()` とWorker request kindはPR-4で削除し、Planner Alternative専用の保存APIは
+> PR-5以降で扱う。11.6）。
 
 「比較する」と「この候補を優先」は別操作とする。what-if成功を選択のgateにせず、比較せずに
 有効participantを優先できる。11.1でdisabledのparticipantはwhat-if成否にかかわらず選択できない。
@@ -2309,7 +2313,10 @@ Persistenceは Phase 5-B）で実装済みであり、11.2〜11.4の画面はこ
 を実装し、PR-3で11.6.2〜11.6.5の表示（kind基準の説明、内部IDの非表示とDebug Modeでの診断情報、今回作成する / しない目標武器と
 件数、動的Conflictと入力変更の区別と案内、選択できない理由のtypedな日本語）を実装した。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、
 要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 23.2にある。Presentation設計には `ui-ux-pro-max` を使った（既存のMUIとPC・375px・ダークテーマの
-表示を優先する）。
+表示を優先する）。PR-4では、PR-2以降参照されなくなった「比較する」の比較表示（`ProductionPlanAlternativeComparison` /
+`presentProductionPlanAlternative`）と、`PlannerWorkerClient` のPlanner Alternative method（`createPlannerAlternativeComparison()` /
+`createPlannerAlternativeRepair()`）・Worker request kindを削除した。生産計画画面の表示・操作は変えていない（[PLANNER_SPEC.md](./PLANNER_SPEC.md)
+9.6.12）。
 
 PR-3の実装の要点（表示の意味は以下の各項のとおりで、計算・選択可否・保存の意味は変えていない）。
 

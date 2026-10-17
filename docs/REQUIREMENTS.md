@@ -1101,7 +1101,8 @@ Phase 6-B2bで、旧計算の実装本体（制約付き再検索とwhat-ifの�
 
 実装状態: **計算・保存の切替（Issue #278 PR-2）と競合画面の表示の整理（PR-3）は実装済み**。Issue #278のPR-1（docs-only）で
 確定し、PR-2で生産計画画面の「この候補を優先」を本節の方式へ切り替え、「比較する」を撤去した。23.1の競合repairは生産計画画面から
-呼ばれなくなった。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、画面は[UI_FLOW.md](./UI_FLOW.md) 11.6で定める。
+呼ばれなくなり、PR-4でその計算をWorkerから呼ぶ経路（Workerの要求種別・Clientの呼び出し口）と、使われなくなった比較表示を削除した
+（23.1の計算本体と保存処理の整理はPR-5以降）。意味論は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6、画面は[UI_FLOW.md](./UI_FLOW.md) 11.6で定める。
 
 役割分担。
 

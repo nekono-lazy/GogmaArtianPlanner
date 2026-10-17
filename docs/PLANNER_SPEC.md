@@ -959,7 +959,8 @@ pure helper（`src/services/planner/plannerRuntimeOptions.ts`）で導出し、`
   `plannerInput.options` 自体は上記の競合解決の導出（`conflictResolutionPlannerOptions(表示中Plan)`）を使う
   （[UI_FLOW.md](./UI_FLOW.md) 11.2 / 11.4）。旧B9 what-ifの `defaultPlannerWhatIfBounds` はPhase 6-B2bで削除した。
   Issue #278の目標仕様（9.6.4）では、競合解決の再計算は通常Planner `createPlan()` に同じ `conflictResolutionPlannerOptions(表示中Plan)`
-  を渡すだけであり、Planner Alternativeの探索範囲・試行上限を使わない
+  を渡すだけであり、Planner Alternativeの探索範囲・試行上限を使わない（PR-2で実装。2つの既定値を渡していたProduction Worker
+  adapterはPR-4で削除した。9.6.12）
 - Worker Client、Worker、Domainはこれらを適用しない（Application callerがauthority）
 - 全体最適化（17章）の最終検証の `maxPlanSteps` は、この導出の対象外である。全体最適化Domainが
   structural candidateごとに `roundUpPlannerMaxPlanSteps(structuralObjective + planningTargetCount) + 500` で導出し、
@@ -2090,7 +2091,8 @@ RouteOperation別のRNG位置は実際に消費するstreamで判定する。`co
 Phase 5-B以降のPlanner Alternative（9.2.19。「比較する」what-if、「この候補を優先」actual repair）はProductionの
 生産計画画面から呼ばれなくなり、9.2.19の記述のうち本節と矛盾するもの（「比較する」、非選択Targetの代替Route探索、
 scenario composition、generated BuildListEntryによる置換、repair lineageの生成と継続）はProduction routingの記録として
-残る。Planner AlternativeのDomain・Worker request kind・Client method・保存APIの削除はPR-4以降である（9.6.11 / 9.6.12）。
+残る。PR-4でPlanner AlternativeのWorker request kind・Client method・Production Worker adapterと、参照の無くなった比較表示を
+削除した。Planner AlternativeのDomain計算と保存APIの削除はPR-5以降である（9.6.11 / 9.6.12）。
 
 PR-2で確定した名前と形（本節の「PR-2で確定」の解決）:
 
@@ -2583,6 +2585,36 @@ PR-1（本節を追加したdocs-only PR）はどのversionも変更しない（
 semantic値は本Issueで変更しない。Search Domain側の型名・API名の整理（`Constrained*` / `PlannerAlternative*` の中立化）は
 本Issueの範囲外である。
 
+**PR-4の再監査結果（Worker・Client・UI経路）。** PR-4は最新mainのimport graphとProduction callerを再監査し、上の削除候補のうち
+Production接続だけを削除した。
+
+- 削除した: Worker request kind `create_planner_alternative_comparison` / `create_planner_alternative_repair` とそのresult、
+  Worker controllerの対応branchと `CreatePlannerAlternativeComparisonCalculation` / `CreatePlannerAlternativeRepairCalculation`、
+  Production Worker adapter `createProductionPlannerAlternativeComparison()` / `createProductionPlannerAlternativeRepair()`、
+  `PlannerWorkerClient.createPlannerAlternativeComparison()` / `createPlannerAlternativeRepair()`（unavailable clientを含む）、
+  比較表示 `ProductionPlanAlternativeComparison` / `presentProductionPlanAlternative`（PR-2で生産計画画面から外れ、importが0件
+  だった）、それらだけを検証していたtest。Production Planner Worker protocolは14章の表のとおり `create_plan` /
+  `prepare_interaction` / `cancel` / `error` だけになった
+- 調査で確認したこと: 生産計画画面・作成リスト画面・Application serviceのどれも削除したClient methodを呼んでいなかった
+  （page / service testのmockが空のmemberを持っていただけである）。benchmark用のPlanner Alternative Worker
+  （`plannerAlternative.worker.benchmark.ts` / `.entry.ts`、`PlannerAlternativeBenchmarkPage`）はProduction Planner Workerの
+  protocolを使わず、PR-4後も残る `createProductionPlannerWorkerDependencies()` だけをimportする。全体最適化のWorker
+  （`buildListOptimization.worker.*`）はProduction Planner Workerと独立しており、全体最適化の最終検証は通常Plannerの
+  `createProductionPlanWithObserver()` をDomain内で直接使う
+- 残した（共有、またはPR-5以降で扱う）もの: 上の「残すもの」の表のすべて。加えて、Planner AlternativeのDomain計算
+  （`src/domain/planner/alternative/` のcomparison、full run、kernel、materializer、repair、scenario、trial、what-if、
+  `plannerConflictRepairLineage.ts`）、`defaultPlannerAlternativeTrialBounds` / `defaultPlannerAlternativeSearchExtent`、
+  `src/domain/planner/replacement/` の削除候補4 module、`visitPlannerAlternativeCandidates()`、保存API
+  `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` とその検証、Plan-breaking guardの
+  `restoreSavePointInsteadOfChange()` 分岐、`PlannerBuildListContext` の `temporary_*`。これらはProductionから呼ばれないが、
+  Global Assignment Research（`src/benchmarks/plannerGlobal*`・`src/benchmarks/globalAssignment/` と研究用benchmark Worker /
+  page。2つの既定値・Domain計算・`visitPlannerAlternativeCandidates()` を使う）、Planner Alternativeのbenchmark
+  （`plannerAlternativeBenchmark*`）、Issue #101の実ケースtest、Domain / Persistenceのtest、上の境界testが使っているので、
+  PR-5以降でそれらの扱いと合わせて再監査する
+- 変えていない: RNG / Counter、通常Plannerの計算・Conflict決定集合・route commitment、Planner Search、全体最適化、
+  形状制約付き探索、source Draft CAS、Persistenceの保存処理、再計画、実行ナビ、version（18 / 10 / 13）、Master Data。
+  上の境界test（`isolation.test.ts` 等）はPR-4で変更していない
+
 #### 9.6.12 段階分割
 
 依存関係（通常Plannerのroute commitmentはPlanner Alternativeのscenario runとも共有される、「比較する」は「この候補を優先」と
@@ -2615,6 +2647,12 @@ PR-4以降  不要になった経路の整理（import graphの再監査のう�
       - Planner Alternative what-if / actual repairのDomain（scenario、composition、repair、lineageの導出・追記）、
         Worker request kind、Client method、Production adapter、試行上限のdefault、保存API、Presentation、専用test
       - 9.6.11で共有と確認したものは残す。永続field conflictRepairLineageとそのvalidator / migrationは残す
+      - PR-4（実施済み）: Worker request kind・Worker controllerのbranch・Production adapter・Client method・
+        参照の無いPresentationと、それらだけを検証するtest
+      - PR-5以降: 保存API（inspectPlannerAlternativeRepairSave() / savePlannerAlternativeRepair()）とその検証、
+        Plan-breaking guardの「セーブ地点復元だけを書く」分岐、Planner AlternativeのDomain計算・試行上限のdefault・
+        PlannerBuildListContextのtemporary_*。研究用benchmark・Issue #101の実ケースtest・境界testの扱いと合わせて
+        再監査する
 ```
 
 PR-2とPR-3を1つにまとめることは妨げないが、PR-2より前に「比較する」だけ、または「この候補を優先」だけを切り替えない。
@@ -2640,6 +2678,15 @@ Application関数で行い、新しい永続fieldやhashの実装を追加して
 明示決定集合の計算・supersede・Conflict検出・route commitment・保存は変えず、Domainへは9.6.3の関数の結果を決定ごとに帰属させる
 読み取り専用の `plannerConflictDecisionExclusions()` だけを加えた。あわせて、「この候補を優先」の想定外の再計算・保存エラーと
 「採用されなかった候補」の内部向け `detail` を通常表示から外した（Debug Modeだけで表示）。versionは動かしていない（18 / 10 / 13）。
+
+**PR-4の実施記録。** PR-4はPR-2以降Productionから呼ばれなくなったPlanner AlternativeのProduction接続だけを削除した
+（再監査の結果と削除・維持の内訳は9.6.11の「PR-4の再監査結果」）。Production Planner Workerのcalculationは `createPlan` と
+`prepareInteraction` の2つだけになり、`PlannerWorkerClient` のpublic APIは `createPlan()`・`prepareInteraction()`・
+`cancelPlan()`・`dispose()` である（14章）。requestIdの共有namespace、generation、stale responseの無視、wrong discriminant
+（削除したresult種別を含む、Clientが知らない種別）の `PlannerWorkerProtocolError`、cancel、Worker非対応時の明示的unavailable
+errorは変えていない。testは、削除した経路だけを検証していたものを削除し、Worker / Clientの共通の振る舞い（generation、
+cancel、別種requestのresponseの取り違え防止、Workerのerror）は `create_plan` と `prepare_interaction` の組み合わせへ移した。
+計算・保存・表示の意味、永続shape、versionは変えていない（18 / 10 / 13）。
 
 #### 9.6.13 test観点
 
@@ -3653,6 +3700,8 @@ B9 request（`defaultPlannerWhatIfBounds`）とB8 `createConstrainedPlan()` / `d
 fresh `PlannerInput`）、`baseSnapshot` から入力を復元しないこと、explicit resolutionの復元（ただし引き継ぎ・置換・supersedeは
 9.6.3）、participantのcurrent availabilityとinteraction preparation、`conflictResolutionPlannerOptions(表示中Plan)`、
 `status === 'draft'` だけを編集対象とする規則、`invalid_conflict_resolution` と `incomplete` のfail closedは切替後も維持する。
+上の `PlannerWorkerClient.createPlannerAlternativeComparison()` / `createPlannerAlternativeRepair()` は、PR-4でClientから削除した
+（9.6.12）。
 
 B10-Aで、B9のwhat-if計算をProduction Plan画面へ接続するApplication / UI契約を確定した。
 B9で確定したDomain what-if semantics、`create_what_if_comparison` request / result shape、
@@ -5022,7 +5071,9 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
 > PR-2）以降、本節はProductionの通常Plannerの競合解決に適用せず、記録として残る。Phase 7（Issue #122のPresentation改善）は行わず、
 > 競合理由・優先候補・作成対象 / 対象外の明確化はIssue #278（[UI_FLOW.md](./UI_FLOW.md) 11.6）へ引き継ぐ。Planner Alternative
 > Searchの基盤（Search Domainのfrontier、`derivePlannerAlternativeReservation()` 等）のうち、全体最適化と共有するものは削除しない
-> （9.6.11）。
+> （9.6.11）。Issue #278のPR-4で、本節が定めるWorker request kind（`create_planner_alternative_comparison` /
+> `create_planner_alternative_repair`）、Production Worker adapter、`PlannerWorkerClient` のmethodと最小限の比較表示を削除した。
+> 本節のDomain計算と専用保存APIはProductionから呼ばれないまま残り、PR-5以降で再監査して扱う（9.6.12）。
 
 実装状態: **Phase 6まで実装済み（Phase 6完了）**（Phase 5-A: Pure Domain、Phase 5-B: Production routing /
 Persistence / migration、Phase 6-A: 残るProduction consumerのlegacy B8からの切り離し、Phase 6-B1: legacy B8 / B9のWorker / Client /
@@ -5692,7 +5743,7 @@ interface PlannerAlternativeSearchExtent {
   windowの位置として数える（代替Routeのown operation数ではなく、Counterがどこまで進むかを束ねる）
 - 各値は1以上の整数でcaller必須。Domainはdefault substitution、fallback、clamp、field-wise completionを
   行わない。Production defaultはApplication callerではなくProduction Worker adapterがWorker境界内で
-  明示的に渡す（9.2.4.5 / 9.2.4.10と同じ責務分離）
+  明示的に渡す（9.2.4.5 / 9.2.4.10と同じ責務分離。そのadapterはIssue #278のPR-4で削除した。下記の試行上限の項を参照）
 - Production default値はPhase 3-Cで、Phase 3-Bの実Browser Worker測定から
   `defaultPlannerAlternativeSearchExtent = { maxNormalAdvance: 4, maxGogmaAdvance: 235, maxSkillAdvance: 4 }`
   （Search Domain、`src/domain/search/alternative/plannerAlternativeTypes.ts`）に確定した。根拠は
@@ -5766,7 +5817,8 @@ interface PlannerAlternativeSearchExtent {
     importして渡すよう配線した。Worker request・Client・Application callerはどちらも持たない。Phase 5-Aのactual repair
     `createPlannerAlternativeRepair()` もextent / boundsをcaller必須で受け取り、Domain内でdefaultへfallbackしない。
     Phase 5-Bで、actual repairのProduction Worker adapter `createProductionPlannerAlternativeRepair()` も同じ2定数を
-    Worker境界内で明示的に渡すよう配線した）
+    Worker境界内で明示的に渡すよう配線した。Issue #278のPR-4でこの2つのadapterを削除したため、2定数を渡すProduction
+    callerは無い。定数とDomain APIの契約は残り、Global Assignment Researchとbenchmark / testが値を使い続ける。9.6.11）
 - 上限到達はexhaustionとして報告しない。typed statusで区別する（9.2.19.13）
 - extentは探索範囲の上限であり、探索の進め方はoperation cost層単位のlazy探索である（[SEARCH_SPEC.md](./SEARCH_SPEC.md) 5.6.8
   「cost層単位のlazy性」）。代替探索はextent全体をupfront solveせず、最初のCandidateまでにsettle / solveするworkはそのCandidateのcost層までに
@@ -6005,7 +6057,8 @@ interface PlannerAlternativeRouteSummary {
   Browser benchmark runtime / page（Benchmark shellの2つのharnessを含む）、non-test consumerが0件だった旧B9 Presentation
   （`ProductionPlanWhatIfComparison` / `presentProductionPlanWhatIf`）である。Production Planner Worker calculationは
   `createPlan` / `createPlannerAlternativeComparison` / `createPlannerAlternativeRepair` / `prepareInteraction` の4つだけに
-  なった。requestId / generation / stale response / cancel / errorの共通semanticsは変えていない
+  なった。requestId / generation / stale response / cancel / errorの共通semanticsは変えていない（その後、Issue #278のPR-4で
+  Planner Alternativeの2つも削除し、`createPlan` / `prepareInteraction` の2つになった。9.6.12）
 - Phase 6-B2は6-B2a / 6-B2bに分ける。Planner Alternativeの現役runtime authorityをlegacy moduleから切り離す責務・配置の
   整理と、legacy本体の削除を同じPRで行わないためである。Phase 6全体は6-B2bの完了まで完了しない
 - **Phase 6-B2a**（実装済み）: 最新mainのlocal import graphを再監査し、Planner Alternativeが `constrained/` 配下から直接
@@ -6286,7 +6339,9 @@ Issue #101実ケースfixtureは残した。versionは動かしていない（9.
 作成リスト・再計画Previewが `createPlan()`、「比較する」が `createPlannerAlternativeComparison()`、「この候補を優先」が
 `createPlannerAlternativeRepair()`、競合操作の可否が `prepareInteraction()`、保存がordinaryの `savePlannerResult()` と
 repairの `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` だけであり、これ以外のlegacy Planner経路は
-存在しない。次は**Phase 7**（Issue #122 Presentation改善）である。
+存在しない。次は**Phase 7**（Issue #122 Presentation改善）である（Phase 7は行わず、Issue #278（9.6）が引き継いだ。PR-2以降は
+「比較する」が無く「この候補を優先」も `createPlan()` であり、PR-4でPlanner AlternativeのWorker request kind・Client method・
+Production adapterを削除した。repairの保存APIの削除はPR-5以降である。9.6.12）。
 `maxPlannerReruns` は複数Targetが1つのbudgetを共有するrerun-pressure workloadで実測する。`maxCandidateTrialsPerTarget` は、
 現行semanticsで「Candidate 1がtrialでreject、後続Candidateがfound」となるProduction workloadを確認できていないため、
 semantic thresholdをPhase 3-Bの実測対象とせず、1 trialあたりの実コストと安全弁としての役割からPhase 3-Cで設計判断する
@@ -6881,20 +6936,22 @@ Issue #136 / #101 Phase 6-B1（9.2.19.14 / 9.2.19.16）で、上に記録したB
 `create_constrained_plan_result` とB9-Cの `create_what_if_comparison` / `create_what_if_comparison_result`、
 `PlannerWorkerClient.createConstrainedPlan()` / `createWhatIfComparison()`、Production Worker adapterの
 `createProductionConstrainedPlan()` / `createProductionPlannerWhatIfComparison()` を削除した。これらはPhase 6-A以降、
-通常のApplication runtimeから呼ばれていなかった。現在のProduction Planner Worker protocolは次だけである。
+通常のApplication runtimeから呼ばれていなかった。Phase 6-B1の時点では、Planner Alternativeの
+`create_planner_alternative_comparison` / `create_planner_alternative_repair`（とそのresult）が「比較する」と「この候補を優先」の
+request kindとして残っていた。Issue #278のPR-2で「比較する」を撤去し「この候補を優先」を通常の `create_plan` へ移したため、
+PR-4（9.6.12）でこの2つのrequest kindとresult、`PlannerWorkerClient.createPlannerAlternativeComparison()` /
+`createPlannerAlternativeRepair()`、Production Worker adapterの `createProductionPlannerAlternativeComparison()` /
+`createProductionPlannerAlternativeRepair()` も削除した。現在のProduction Planner Worker protocolは次だけである。
 
 ```text
-create_plan                              / create_plan_result                              ordinary Planner
-create_planner_alternative_comparison    / create_planner_alternative_comparison_result    「比較する」
-create_planner_alternative_repair        / create_planner_alternative_repair_result        「この候補を優先」
-prepare_interaction                      / prepare_interaction_result                      競合操作の可否
-cancel                                   / error                                           共通
+create_plan              / create_plan_result              ordinary Planner（作成リスト・再計画Preview・「この候補を優先」）
+prepare_interaction      / prepare_interaction_result      競合操作の可否
+cancel                   / error                           共通
 ```
 
-`PlannerWorkerClient` のpublic APIは `createPlan()`、`createPlannerAlternativeComparison()`、
-`createPlannerAlternativeRepair()`、`prepareInteraction()`、`cancelPlan()`、`dispose()` である。requestIdの共有namespace、
-generation、stale responseの無視、wrong discriminantの `PlannerWorkerProtocolError`、Worker非対応時の明示的unavailable
-error（main-thread fallbackなし）は変えていない。
+`PlannerWorkerClient` のpublic APIは `createPlan()`、`prepareInteraction()`、`cancelPlan()`、`dispose()` である。requestIdの
+共有namespace、generation、stale responseの無視、wrong discriminant（Clientが知らない種別を含む）の
+`PlannerWorkerProtocolError`、Worker非対応時の明示的unavailable error（main-thread fallbackなし）は変えていない。
 
 作成リストの全体最適化（17章）はこのProduction Planner Workerを使わない。Issue #260 PR-4で、1 runごとの専用Worker
 （`buildListOptimization.worker.entry.ts`）と専用protocol（`build-list-optimization:1`。`blo_run` / `blo_progress` /

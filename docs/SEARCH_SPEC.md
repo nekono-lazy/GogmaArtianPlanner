@@ -1639,7 +1639,9 @@ export const defaultPlannerAlternativeSearchExtent: PlannerAlternativeSearchExte
 Domain API（`visitPlannerAlternativeCandidates()` の `PlannerAlternativeSearchInput.extent`）はcaller必須指定の
 ままであり、default値でのfallback、欠けたfieldの補完、clampをしない。Production callerがこの定数を明示的に渡す
 （Phase 4-Bで、what-ifのProduction Worker adapterがWorker境界内でこの定数をimportして渡すよう配線し、Phase 5-Bでactual repairの
-Production Worker adapterも同じ定数を渡すよう配線して、Production UI routingを切り替えた）。
+Production Worker adapterも同じ定数を渡すよう配線して、Production UI routingを切り替えた。Issue #278のPR-2で生産計画画面の
+競合操作がPlanner Alternativeを使わなくなり、PR-4でこの2つのadapterを削除したため、現在この定数を渡すProduction callerは無い。
+定数とDomain APIの契約は残り、Global Assignment Researchとbenchmark / testが使う。[PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.11 / 9.6.12）。
 benchmarkの `BENCHMARK_ONLY_*` gridとsanity値はPhase 3-Bのhistorical
 measurement conditionとして維持し、このdefaultを読まない。
 

@@ -1,9 +1,6 @@
 import {
-  createPlannerAlternativeRepair,
-  createPlannerAlternativeWhatIfComparison,
   createProductionPlan,
   createProductionPlannerDependencies,
-  defaultPlannerAlternativeTrialBounds,
   preparePlannerInitialContext,
   type ExcludedBuildListEntry,
   type PlannerDependencies,
@@ -13,10 +10,7 @@ import {
   ProductionRngEngine,
 } from '../domain/rng/production/productionRngEngine'
 import type { RngEngine } from '../domain/rng/rngEngine'
-import { defaultPlannerAlternativeSearchExtent } from '../domain/search'
 import type {
-  CreatePlannerAlternativeComparisonCalculation,
-  CreatePlannerAlternativeRepairCalculation,
   PlannerWorkerCalculations,
   PreparePlannerInteractionCalculation,
 } from './planner.worker'
@@ -31,52 +25,6 @@ export function createProductionPlannerRngEngine(): RngEngine {
 export function createProductionPlannerWorkerDependencies(): PlannerDependencies {
   return createProductionPlannerDependencies(createProductionPlannerRngEngine())
 }
-
-/**
- * The Production Planner Alternative what-if (Phase 4-B, `docs/PLANNER_SPEC.md`
- * 9.2.19.7 / 9.2.19.12). The Domain calculation keeps extent and trial bounds
- * caller-required; this adapter is that caller inside the Worker boundary and
- * passes the Phase 3-C Production defaults, each imported from its own Domain
- * authority rather than restated. Scenario composition, Route summaries and
- * the typed result all stay in the Domain.
- *
- * It was the Production Plan screen's 「比較する」 from Phase 5-B until Issue
- * #278 PR-2 removed that operation (`docs/PLANNER_SPEC.md` 9.6.12); no
- * Production caller sends it any more, and its removal is a later cleanup.
- */
-export const createProductionPlannerAlternativeComparison: CreatePlannerAlternativeComparisonCalculation =
-  (input, dependencies, executionOptions) =>
-    createPlannerAlternativeWhatIfComparison(
-      {
-        ...input,
-        extent: { ...defaultPlannerAlternativeSearchExtent },
-        bounds: { ...defaultPlannerAlternativeTrialBounds },
-      },
-      dependencies,
-      { executionOptions },
-    )
-
-/**
- * The Production Planner Alternative actual repair (Phase 5-B,
- * `docs/PLANNER_SPEC.md` 9.2.19.8 / 9.2.19.12). It was 「この候補を優先」 until
- * Issue #278 PR-2 moved that operation to the ordinary `createPlan()`; no
- * Production caller sends it any more. Exactly the
- * what-if's Production caller contract - the Phase 3-C extent and trial
- * bounds, each imported from its Domain authority and passed explicitly - so a
- * preview and the repair it previews run the same scenario semantics. Saving
- * the artifact stays the Application / Persistence boundary.
- */
-export const createProductionPlannerAlternativeRepair: CreatePlannerAlternativeRepairCalculation =
-  (input, dependencies, executionOptions) =>
-    createPlannerAlternativeRepair(
-      {
-        ...input,
-        extent: { ...defaultPlannerAlternativeSearchExtent },
-        bounds: { ...defaultPlannerAlternativeTrialBounds },
-      },
-      dependencies,
-      { executionOptions },
-    )
 
 /**
  * The excluded Entries with the typed warning kind validation recorded for
@@ -140,7 +88,5 @@ export function createProductionPlannerWorkerCalculations(): PlannerWorkerCalcul
   return {
     prepareInteraction: prepareProductionPlannerInteraction,
     createPlan: createProductionPlan,
-    createPlannerAlternativeComparison: createProductionPlannerAlternativeComparison,
-    createPlannerAlternativeRepair: createProductionPlannerAlternativeRepair,
   }
 }
