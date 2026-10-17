@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { hashStableValue, stableStringify } from '../models/publicTypes'
 import type { CalculationContext } from '../models/publicTypes'
+import {
+  expectRejectedRecordsCopyTheInput,
+  withoutIssue121RejectedRecordFields,
+} from '../../test/fixtures/rejectedRecordProjection'
 import { plannerSchedulerCatalogue } from '../../test/fixtures/plannerSchedulerScenarios'
 import {
   createDeterministicPlannerDependencies,
@@ -26,7 +30,8 @@ import type {
  * against the current code. Every CalculationContext of the input is pinned to
  * schema 17 on both sides, so the two runs read one identical input; the
  * digest covers the whole `PlannerResult` - Plan, Steps, Conflicts, rejected
- * Entries, warnings and termination.
+ * Entries, warnings and termination - except the two rejected-record fields
+ * Issue #121 added later, which schema 17 never wrote (`schema17Projection()`).
  */
 
 const RECORDED_DIGESTS: Record<string, { hash: string; length: number }> = {
@@ -110,6 +115,13 @@ function parityCases(): ParityCase[] {
   return [...catalogue, ...workloads]
 }
 
+/**
+ * The digest is taken over the result as calculation schema 17 recorded it:
+ * the Issue #121 fields of the rejected Build List record (`targetWeaponId`,
+ * `resourceConflictCause`, `docs/PLANNER_SPEC.md` 9.6.9.1) did not exist then
+ * and are projected out, so the recorded digests stay the authority; the
+ * fields are checked on their own (`expectRejectedRecordsCopyTheInput()`).
+ */
 async function plannerConflictResolutionParityDigest(item: ParityCase) {
   const result: PlannerResult = await createProductionPlanWithObserver(
     schema17Input(item.input),
@@ -118,8 +130,9 @@ async function plannerConflictResolutionParityDigest(item: ParityCase) {
     undefined,
     item.buildListContext,
   )
-  const serialized = stableStringify(result)
-  return { hash: hashStableValue(result), length: serialized.length, result }
+  const projected = withoutIssue121RejectedRecordFields(result)
+  const serialized = stableStringify(projected)
+  return { hash: hashStableValue(projected), length: serialized.length, result }
 }
 
 describe('ordinary Planner parity for conflictResolutions = [] (schema 17 -> 18)', () => {
@@ -132,5 +145,6 @@ describe('ordinary Planner parity for conflictResolutions = [] (schema 17 -> 18)
     const digest = await plannerConflictResolutionParityDigest(item)
     expect({ hash: digest.hash, length: digest.length }).toEqual(RECORDED_DIGESTS[id])
     expect('conflictResolutionOutcome' in digest.result).toBe(false)
+    expectRejectedRecordsCopyTheInput(digest.result.plan?.rejectedBuildListEntries ?? [], item.input.buildListEntries)
   }, 120_000)
 })

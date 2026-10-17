@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  BuildListEntryId,
   CalculationContext,
   CandidateSearchDefaults,
   KnownValue,
@@ -43,7 +44,10 @@ import type {
   PlannerConflictRepairLineage,
   ProductionPlan,
 } from './planning'
-import { executionSavePointIdForPlan } from './planning'
+import {
+  executionSavePointIdForPlan,
+  rejectedBuildListEntryResourceConflictCauses,
+} from './planning'
 import {
   areRestorationBonusSetsEqual,
   areRestorationBonusSlotsEqual,
@@ -1992,10 +1996,57 @@ export function validateProductionPlan(
       validateId(id, `conflicts[${index}].buildListEntryIds[${idIndex}]`, issues),
     )
   })
-  plan.rejectedBuildListEntries.forEach((entry, index) =>
-    validateId(entry.buildListEntryId, `rejectedBuildListEntries[${index}].buildListEntryId`, issues),
-  )
+  validateRejectedBuildListEntries(plan, issues)
   return result(issues)
+}
+
+/**
+ * The rejected Build List records (`docs/DATA_MODEL.md` 11.9). The Issue #121
+ * fields are checked only where present - a record without them is one saved
+ * before they existed, accepted as it is and never completed here: a
+ * `targetWeaponId` has the ID form (it is a record, never a current foreign
+ * key), a `resourceConflictCause` is a known literal on a `resource_conflict`
+ * record only, and `explicit_resolution_not_selected` matches the Plan's own
+ * decided Conflicts both ways - a Conflict naming the Entry as a participant
+ * selected another participant the Plan selects. The provisional and stuck
+ * drop causes leave no runtime evidence in the Plan, so only their structure
+ * is checked.
+ */
+function validateRejectedBuildListEntries(
+  plan: ProductionPlan,
+  issues: DomainValidationIssue[],
+) {
+  const selected = new Set<BuildListEntryId>(plan.selectedBuildListEntryIds)
+  const explicitlyNotSelected = (entryId: BuildListEntryId) =>
+    plan.conflicts.some((conflict) =>
+      conflict.buildListEntryIds.includes(entryId) &&
+      conflict.selectedBuildListEntryId !== null &&
+      conflict.selectedBuildListEntryId !== entryId &&
+      selected.has(conflict.selectedBuildListEntryId),
+    )
+  plan.rejectedBuildListEntries.forEach((entry, index) => {
+    const path = `rejectedBuildListEntries[${index}]`
+    validateId(entry.buildListEntryId, `${path}.buildListEntryId`, issues)
+    if (entry.targetWeaponId !== undefined) {
+      validateId(entry.targetWeaponId, `${path}.targetWeaponId`, issues)
+    }
+    const cause: unknown = entry.resourceConflictCause
+    if (cause === undefined) return
+    if (!(rejectedBuildListEntryResourceConflictCauses as readonly unknown[]).includes(cause)) {
+      addIssue(issues, `${path}.resourceConflictCause`, 'invalid_literal', 'resourceConflictCause is invalid.')
+      return
+    }
+    if (entry.reason !== 'resource_conflict') {
+      addIssue(issues, `${path}.resourceConflictCause`, 'invalid_state', 'Only a resource_conflict record carries a resourceConflictCause.')
+      return
+    }
+    const explicit = explicitlyNotSelected(entry.buildListEntryId)
+    if (cause === 'explicit_resolution_not_selected' && !explicit) {
+      addIssue(issues, `${path}.resourceConflictCause`, 'invalid_state', 'explicit_resolution_not_selected needs a Conflict of this Entry that selected another participant the Plan selects.')
+    } else if (cause !== 'explicit_resolution_not_selected' && explicit) {
+      addIssue(issues, `${path}.resourceConflictCause`, 'invalid_state', 'A resource_conflict record of an Entry another selected participant of its decided Conflict won is explicit_resolution_not_selected.')
+    }
+  })
 }
 
 function validateActualResult(

@@ -11,6 +11,7 @@ import { globalResearchDependencies, GLOBAL_RESEARCH_TIME, materializeGlobalRese
   type GlobalResearchNoMatchCapture, type SearchMeasurement } from './plannerGlobalOptimizationResearch'
 import { classifyAttempt, collectRetrySignals, discoverySignature, runDiscoveryRetries, type AttemptSummary, type DiscoveryState, type RetrySignals } from './plannerGlobalOptimizationRetry'
 import { globalResearchFixture } from './plannerGlobalOptimizationTestFixture'
+import { expectRejectedRecordsCopyTheInput, withoutIssue121RejectedRecordFields } from '../test/fixtures/rejectedRecordProjection'
 
 const sha = async (value: unknown) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(stableStringify(value))))]
   .map(b => b.toString(16).padStart(2, '0')).join('')
@@ -65,7 +66,11 @@ describe('Phase 1-D default parity', () => {
     vi.spyOn(engine, 'predictGogmaBonus').mockImplementation(value => value.gogmaCounter === 11 ? utility() : predict(value))
     const noMatch = await run()
     expect(noMatch.report.searches.map(s => s.status)).toEqual(['not_found_within_extent'])
-    expect(await sha(noMatch)).toBe('8617186360bf0c426cef083b5f525815172227c0493979ceb63b0814a82f4a2b')
+    // The digest was recorded before Issue #121 added two fields to the rejected Build List record; they are
+    // projected out of it and checked against the run's Entries on their own.
+    expect(await sha(withoutIssue121RejectedRecordFields(noMatch))).toBe('8617186360bf0c426cef083b5f525815172227c0493979ceb63b0814a82f4a2b')
+    expect(noMatch.finalResult?.plan?.rejectedBuildListEntries.length).toBeGreaterThan(0)
+    expectRejectedRecordsCopyTheInput(noMatch.finalResult!.plan!.rejectedBuildListEntries, [...input.buildListEntries, ...noMatch.generatedEntries])
     expect(noMatch.report.extentFallback).toBeUndefined()
     expect(noMatch.report.searches[0].fallback).toBeUndefined()
   })

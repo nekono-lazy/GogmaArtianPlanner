@@ -565,6 +565,24 @@ describe('ReferenceFinder', () => {
         },
       ])
     }))
+
+  it('never reads the Target of a rejected Build List record as a reference (Issue #121)', () =>
+    withDatabase(async (database) => {
+      // The Plan decided not to make this Target; its record must not keep the
+      // user from deleting the Target once its Entry is gone.
+      const rejectedTargetId = targetWeaponId('target.fixture.rejected')
+      const plan = planWithIdentity('plan.fixture.rejected', 'step.fixture.rejected')
+      plan.rejectedBuildListEntries = [{
+        buildListEntryId: buildListEntryId('build-list.fixture.rejected'),
+        targetWeaponId: rejectedTargetId,
+        reason: 'resource_conflict',
+        resourceConflictCause: 'provisional_outcome_not_committed',
+        detail: 'fixture',
+      }]
+      await new ProductionPlanRepository(database).putProductionPlan(plan)
+
+      expect(await new ReferenceFinder(database).findTargetWeaponReferences(rejectedTargetId)).toEqual([])
+    }))
 })
 
 describe('ProductionPlanRepository Draft invariant (DATA_MODEL 11.1)', () => {

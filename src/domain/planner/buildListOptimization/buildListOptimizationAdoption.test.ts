@@ -228,8 +228,19 @@ describe('checkPersistableBuildListOptimizationArtifact', () => {
       planOf(onPlan).conflicts = [conflict]
       expectInvalid(onPlan, /holds no Conflict/)
       const rejected = artifact()
-      planOf(rejected).rejectedBuildListEntries = [{ buildListEntryId: first!, reason: 'lower_priority' } as ProductionPlan['rejectedBuildListEntries'][number]]
+      // A record as a newly calculated Plan writes it (Issue #121: with its Entry's Target), so the shared completeness check passes
+      // and the optimization's own condition is what refuses it.
+      const firstTarget = planOf(rejected).steps
+        .flatMap((step) => step.executionEffects?.targetCompletions ?? [])
+        .find(({ buildListEntryId }) => buildListEntryId === first)!.targetWeaponId
+      planOf(rejected).rejectedBuildListEntries = [
+        { buildListEntryId: first!, targetWeaponId: firstTarget, reason: 'lower_priority', detail: 'fixture' },
+      ]
       expectInvalid(rejected, /rejects no BuildListEntry/)
+      // A record without the Issue #121 field is refused by the shared check first.
+      const unrecorded = artifact()
+      planOf(unrecorded).rejectedBuildListEntries = [{ buildListEntryId: first!, reason: 'lower_priority', detail: 'fixture' }]
+      expectInvalid(unrecorded, /does not record its targetWeaponId/)
     })
 
     it('refuses a selection that is not one Entry per planning Target with every generated Entry', () => {

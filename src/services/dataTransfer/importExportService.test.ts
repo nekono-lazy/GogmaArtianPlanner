@@ -1,7 +1,7 @@
 import Dexie from 'dexie'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { THEME_MODE_STORAGE_KEY } from '../../app/themeModePreference'
-import { AppDatabase } from '../../db/AppDatabase'
+import { AppDatabase, DATABASE_SCHEMA_VERSION } from '../../db/AppDatabase'
 import type {
   ExportRoot,
   ExportRootV6,
@@ -11,7 +11,9 @@ import type {
   OwnedWeapon,
   ProductionPlan,
 } from '../../domain/models/publicTypes'
-import { createDefaultAppSettings } from '../../domain/models/publicTypes'
+import { CURRENT_CALCULATION_APP_SCHEMA_VERSION, createDefaultAppSettings } from '../../domain/models/publicTypes'
+import { EXPORT_SCHEMA_VERSION } from '../../domain/models/exportModel'
+import { PRODUCTION_RNG_ENGINE_VERSION } from '../../domain/rng/production/productionRngEngine'
 import {
   DOMAIN_FIXTURE_TIME,
   buildListEntryId,
@@ -642,6 +644,68 @@ describe('ImportExportService round-trip', () => {
     await s.applyImport(prepared.root)
 
     expect(await fullDump(database)).toEqual(before)
+  }))
+
+  it('round-trips the rejected Build List record with its Target and cause, and an earlier record without them as it is (Issue #121)', () => withDatabase(async (source) => withDatabase(async (destination) => {
+    const root = dataTransferRoot()
+    const [entry] = root.buildListEntries
+    const recorded = {
+      buildListEntryId: entry.id,
+      targetWeaponId: entry.targetWeaponId,
+      reason: 'resource_conflict' as const,
+      resourceConflictCause: 'stuck_drop_with_other_routes' as const,
+      detail: 'recorded',
+    }
+    const legacy = { buildListEntryId: buildListEntryId('build-list.fixture.legacy'), reason: 'resource_conflict' as const, detail: 'legacy' }
+    const activeIndex = root.productionPlans.findIndex(({ status }) => status === 'active')
+    const abandonedIndex = root.productionPlans.findIndex(({ status }) => status === 'abandoned')
+    root.productionPlans[activeIndex].rejectedBuildListEntries = [recorded]
+    root.productionPlans[abandonedIndex].rejectedBuildListEntries = [legacy]
+    await service(source).applyImport(root)
+    const exported = await service(source).exportRoot()
+    expect(exported.productionPlans[activeIndex].rejectedBuildListEntries).toEqual([recorded])
+    expect(exported.productionPlans[abandonedIndex].rejectedBuildListEntries).toEqual([legacy])
+
+    const prepared = service(destination).prepareImportJson(JSON.stringify(exported))
+    expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
+    if (!prepared.ok) return
+    await service(destination).applyImport(prepared.root)
+
+    expect(await fullDump(destination)).toEqual(await fullDump(source))
+    // Nothing is completed from the current Build List: the earlier record keeps no field it never had.
+    const imported = await destination.productionPlans.get(root.productionPlans[abandonedIndex].id)
+    expect(imported?.rejectedBuildListEntries).toEqual([legacy])
+    expect(imported?.rejectedBuildListEntries[0]).not.toHaveProperty('targetWeaponId')
+    expect(imported?.rejectedBuildListEntries[0]).not.toHaveProperty('resourceConflictCause')
+  })))
+
+  it('moves no version for the two optional record fields (Issue #121, PLANNER_SPEC 9.6.9.1)', () => {
+    expect(CURRENT_CALCULATION_APP_SCHEMA_VERSION).toBe(18)
+    expect(DATABASE_SCHEMA_VERSION).toBe(10)
+    expect(EXPORT_SCHEMA_VERSION).toBe(13)
+    expect(PRODUCTION_RNG_ENGINE_VERSION).toBe('production-rng:c5-e7')
+  })
+
+  it('refuses an Import whose active Plan record names another Target than its Entry, writing nothing (Issue #121)', () => withDatabase(async (database) => {
+    await service(database).applyImport(otherRoot())
+    const root = dataTransferRoot()
+    const [entry] = root.buildListEntries
+    const activeIndex = root.productionPlans.findIndex(({ status }) => status === 'active')
+    root.productionPlans[activeIndex].rejectedBuildListEntries = [{
+      buildListEntryId: entry.id,
+      targetWeaponId: targetWeaponId('target.fixture.completed'),
+      reason: 'resource_conflict',
+      resourceConflictCause: 'provisional_outcome_not_committed',
+      detail: 'fixture',
+    }]
+    const prepared = service(database).prepareImportJson(JSON.stringify(root))
+    expect(prepared).toMatchObject({ ok: false, code: 'invalid_import' })
+    if (prepared.ok) return
+    expect(prepared.issues).toContainEqual(expect.objectContaining({
+      path: `productionPlans[${activeIndex}].rejectedBuildListEntries[0].buildListEntryId`,
+      code: 'inconsistent_snapshot',
+    }))
+    await expectUnchanged(database, () => service(database).applyImport(root), 'invalid_import')
   }))
 
   it('round-trips a Plan the real Planner produced and the Execution runtime advanced', () => withDatabase(async (source) => withDatabase(async (destination) => {

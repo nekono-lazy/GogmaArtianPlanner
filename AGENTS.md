@@ -1046,6 +1046,27 @@ current foreign key or a ReferenceFinder reference; `reason`'s union and mapping
 records lack them reads as not determinable; only calculation schemas in the explicit set `{14, 15, 16, 17, 18}` (the scheduler
 mapping) are read this way. The Planner's decisions do not change, so `CURRENT_CALCULATION_APP_SCHEMA_VERSION` stays 18, Dexie 10
 and Export 13, with no migration; the Issue #278 PR-2 parity digest compares the result with both fields projected out.
+Issue #121 PR-2 implemented the record and its validation; the aggregation function and the overview / conflict section display are
+still not implemented (the next PR). `RejectedBuildListEntry` gained the optional `targetWeaponId` and `resourceConflictCause`
+(`RejectedBuildListEntryResourceConflictCause`, the literal list `rejectedBuildListEntryResourceConflictCauses`). The scheduler's
+runtime-only `PlannerRouteCommitmentEntryEvidence` gained `stuckDrop: { otherPendingRoutes } | null`, set by `dropStuckEntry()` from
+the `pending` it already drops from (another committed Entry with remaining units or not) and non-null only while the Entry's final
+record is that very drop, exactly like `provisionalOutcome`; which Entry is dropped, when, `R`, the safe action choice, the deadlock /
+stall judgement and conflict detection / reporting are unchanged. `createRejectedBuildListEntries()` copies each input Entry's
+`targetWeaponId` into every record and decides the cause together with the reason in `rejectedReason()`'s branch order: the decided
+Conflict branch is `explicit_resolution_not_selected`; the `conflict_not_committed` branch reads the evidence (`provisionalOutcome`,
+else `stuckDrop`) and throws `PlannerPlanGenerationError` when it names neither (no guess); a Beam Search oracle result, which has no
+`routeCommitment` and no `conflict_not_committed`, only ever gets the explicit cause. `validateProductionPlan()` checks the fields only
+where present (ID form, known literal, a cause on `resource_conflict` only, `explicit_resolution_not_selected` matching the Plan's own
+decided Conflicts both ways), so a record of an earlier build stays valid and is never completed. Every Planner result save requires
+both fields through `checkRejectedBuildListEntryRecordsComplete()` inside `checkPersistableOrdinaryPlannerResultShape()` (ordinary,
+conflict preference, replan adoption, Build List optimization adoption), and the three Draft saves' mutation plus the replan adoption
+check each record's Target against its Entry (`checkRejectedBuildListEntryTargets()`), refusing with `planner_result_invalid` /
+`replan_result_invalid` and writing nothing. Import / Export applies the existing "Entry paired with a Target" rule to the record of a
+top-level `active` Plan only (`inconsistent_snapshot`); the Target's existence is never required and the ReferenceFinder never reads
+it. Digests recorded before the fields existed (the Issue #278 PR-2 parity digest, the research golden of
+`plannerGlobalOptimizationExtentProbe.test.ts`) hash a projection without them (`withoutIssue121RejectedRecordFields()`) and check
+the fields against the input Entries separately; no recorded value changed. No version moved (18 / 10 / 13, `production-rng:c5-e7`).
 
 B5-F1 changed Candidate classification and Search calculation semantics at version 2.
 The Planner physical-action sharing correction then changed ProductionPlan calculation

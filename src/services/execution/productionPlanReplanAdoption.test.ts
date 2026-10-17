@@ -22,6 +22,7 @@ import type {
   PlanStep,
   ProductionPlan,
   ProductionPlanId,
+  RejectedBuildListEntry,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
 import {
@@ -786,6 +787,38 @@ describe('replan adoption re-verification', () => {
       })
 
       await expectRefusal(() => adopt(harness, preview), database, 'running_plan_conflict')
+    }))
+
+  it('refuses a new Plan whose rejected record lacks its Target or names another one (Issue #121), and adopts it when it copies the Entry', () =>
+    withDatabase(async (database) => {
+      const harness = await running(database)
+      const preview = await previewOf(harness)
+      // The running Plan's own Entry, still in the Build List and not selected by the new Plan.
+      const [runningEntryId] = harness.fixture.plan.selectedBuildListEntryIds
+      const runningEntry = (await database.buildListEntries.get(runningEntryId))!
+      expect(previewPlan(preview).selectedBuildListEntryIds).not.toContain(runningEntryId)
+      const withRecord = (record: RejectedBuildListEntry): ProductionPlanReplanPreview => ({
+        ...structuredClone(preview),
+        result: {
+          ...structuredClone(preview.result),
+          plan: { ...previewPlan(preview), rejectedBuildListEntries: [...previewPlan(preview).rejectedBuildListEntries, record] },
+        },
+      })
+      const base = { buildListEntryId: runningEntryId, reason: 'already_satisfied' as const, detail: 'fixture' }
+
+      const unrecorded = withRecord(base)
+      expect(describeReplanPreviewAdoptability(unrecorded)).toMatchObject({ adoptable: false, reason: 'invalid_result' })
+      await expectRefusal(() => adopt(harness, unrecorded), database, 'replan_result_invalid')
+
+      const otherTarget = withRecord({ ...base, targetWeaponId: harness.goal.id })
+      expect(harness.goal.id).not.toBe(runningEntry.targetWeaponId)
+      expect(describeReplanPreviewAdoptability(otherTarget)).toMatchObject({ adoptable: true })
+      await expectRefusal(() => adopt(harness, otherTarget), database, 'replan_result_invalid')
+
+      const copied = withRecord({ ...base, targetWeaponId: runningEntry.targetWeaponId })
+      expect((await adopt(harness, copied)).kind).toBe('adopted')
+      expect((await database.productionPlans.get(previewPlan(preview).id))?.rejectedBuildListEntries)
+        .toContainEqual({ ...base, targetWeaponId: runningEntry.targetWeaponId })
     }))
 
   it('adopts after Plan-independent additions and changes', () =>

@@ -85,6 +85,7 @@ function entry(
     provisionalOutcome: provisionalWinner === null
       ? null
       : { conflictId: 'conflict.collision', selectedBuildListEntryId: provisionalWinner },
+    stuckDrop: null,
     rejectionReasons,
   }
 }

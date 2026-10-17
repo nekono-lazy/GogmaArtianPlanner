@@ -362,6 +362,14 @@ export interface PlannerConflictRepairLineage {
 
 export interface RejectedBuildListEntry {
   buildListEntryId: BuildListEntryId
+  /**
+   * The `targetWeaponId` of this Entry in the PlannerInput the Plan was
+   * generated from (Issue #121, `docs/DATA_MODEL.md` 11.9), copied for every
+   * `reason`. A record, never a current foreign key: the Target need not exist
+   * and the ReferenceFinder never reads it. Absent on a record saved before the
+   * field existed, and never backfilled.
+   */
+  targetWeaponId?: TargetWeaponId
   reason:
     | 'lower_priority'
     | 'resource_conflict'
@@ -369,8 +377,39 @@ export interface RejectedBuildListEntry {
     | 'already_satisfied'
     | 'requires_protected_weapon'
     | 'dominated_by_better_candidate'
+  /**
+   * Why a `resource_conflict` record is one (Issue #121,
+   * `docs/PLANNER_SPEC.md` 9.6.9.1): only `resource_conflict` records carry it,
+   * decided by Plan generation in `rejectedReason()`'s branch order from the
+   * Planner's runtime records. Absent on a record saved before the field
+   * existed, and never backfilled.
+   */
+  resourceConflictCause?: RejectedBuildListEntryResourceConflictCause
   detail: string
 }
+
+/**
+ * The cause of a `resource_conflict` rejection (`docs/DATA_MODEL.md` 11.9).
+ * The first two establish a competition with another Target; a stuck drop
+ * without other pending Routes is no conflict; a stuck drop with other pending
+ * Routes cannot tell.
+ */
+export type RejectedBuildListEntryResourceConflictCause =
+  /** An explicit resolution selected another participant, which the Plan selects. */
+  | 'explicit_resolution_not_selected'
+  /** The provisional outcome of an unresolved conflict did not commit this Entry. */
+  | 'provisional_outcome_not_committed'
+  /** A deadlock / stall drop while no other committed Entry had remaining units. */
+  | 'stuck_drop_without_other_routes'
+  /** A deadlock / stall drop while another committed Entry also had remaining units. */
+  | 'stuck_drop_with_other_routes'
+
+export const rejectedBuildListEntryResourceConflictCauses = [
+  'explicit_resolution_not_selected',
+  'provisional_outcome_not_committed',
+  'stuck_drop_without_other_routes',
+  'stuck_drop_with_other_routes',
+] as const satisfies readonly RejectedBuildListEntryResourceConflictCause[]
 
 export interface ExecutionHistory {
   id: ExecutionHistoryId

@@ -1,7 +1,7 @@
 import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
 import { AppDatabase } from '../../db/AppDatabase'
-import type { ProductionPlan } from '../../domain/models/publicTypes'
+import type { ProductionPlan, RejectedBuildListEntry } from '../../domain/models/publicTypes'
 import {
   createProductionPlanWithObserver,
   runPlannerDeterministicSchedule,
@@ -205,6 +205,59 @@ describe('PlannerResultPersistenceService.savePlannerConflictPreferenceResult (9
           built.input.calculationContext,
         )).rejects.toMatchObject({ code: 'planner_result_invalid' })
       }
+      expect(await dump(database)).toEqual(before)
+    }))
+
+  it('stores the rejected record with its Target and cause exactly as calculated (Issue #121)', () =>
+    withHarness(async ({ database, service, built, resolutions, result, sourceDraft }) => {
+      const records = result.plan!.rejectedBuildListEntries
+      const entryB = built.input.buildListEntries.find(({ id }) => id === 'entry.b')!
+      // B lost the explicit decision for A.
+      expect(records).toContainEqual(expect.objectContaining({
+        buildListEntryId: entryB.id,
+        targetWeaponId: entryB.targetWeaponId,
+        reason: 'resource_conflict',
+        resourceConflictCause: 'explicit_resolution_not_selected',
+      }))
+      await service.savePlannerConflictPreferenceResult(
+        result,
+        { conflictResolutions: resolutions, expectedSourceDraftId: sourceDraft.id },
+        built.input.calculationContext,
+      )
+      expect((await database.productionPlans.get(result.plan!.id))?.rejectedBuildListEntries).toEqual(records)
+    }))
+
+  it.each([
+    ['a record without its Target', (record: RejectedBuildListEntry) => {
+      const { targetWeaponId: _targetWeaponId, ...rest } = record
+      void _targetWeaponId
+      return rest
+    }, /does not record its targetWeaponId/],
+    ['a resource_conflict record without its cause', (record: RejectedBuildListEntry) => {
+      const { resourceConflictCause: _cause, ...rest } = record
+      void _cause
+      return rest
+    }, /without a resourceConflictCause/],
+    ['a record naming another Target than its Entry', (record: RejectedBuildListEntry) => ({
+      ...record, targetWeaponId: 'target.a' as RejectedBuildListEntry['targetWeaponId'],
+    }), /records TargetWeapon 'target.a' for BuildListEntry 'entry.b', whose TargetWeapon is 'target.b'/],
+  ] as const)('refuses a Plan with %s and writes nothing (Issue #121)', (_, edit, message) =>
+    withHarness(async ({ database, service, built, resolutions, result, sourceDraft }) => {
+      const plan = result.plan!
+      const edited: PlannerResult = {
+        ...result,
+        plan: {
+          ...plan,
+          rejectedBuildListEntries: plan.rejectedBuildListEntries.map((record) =>
+            record.buildListEntryId === 'entry.b' ? edit(record) : record),
+        },
+      }
+      const before = await dump(database)
+      await expect(service.savePlannerConflictPreferenceResult(
+        edited,
+        { conflictResolutions: resolutions, expectedSourceDraftId: sourceDraft.id },
+        built.input.calculationContext,
+      )).rejects.toMatchObject({ code: 'planner_result_invalid', message: expect.stringMatching(message) })
       expect(await dump(database)).toEqual(before)
     }))
 

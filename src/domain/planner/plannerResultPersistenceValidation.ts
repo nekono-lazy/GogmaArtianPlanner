@@ -130,7 +130,9 @@ export function checkPersistablePlannerResultShape(
  * The result-shape invariants of an **ordinary** Planner result
  * (`createPlan()`, `docs/PLANNER_SPEC.md` 9.2.15 / 16.8, Phase 6-A) that do not
  * depend on current persisted state: a completed / exhausted run, a draft Plan,
- * no repair lineage, and a Domain-valid Plan. An ordinary run carries no
+ * no repair lineage, a Domain-valid Plan, and the rejected Build List record a
+ * newly calculated Plan carries (`checkRejectedBuildListEntryRecordsComplete()`).
+ * An ordinary run carries no
  * generated BuildListEntry and no replacement, so none of the replacement
  * checks applies; its Plan is saved over - or, for a replan, started against -
  * the current Build List exactly as it is.
@@ -159,6 +161,66 @@ export function checkPersistableOrdinaryPlannerResultShape(
   const planValidation = validateProductionPlan(plan)
   if (!planValidation.isValid) {
     return { kind: 'entity_invalid', entityName: 'ProductionPlan', validation: planValidation }
+  }
+  return checkRejectedBuildListEntryRecordsComplete(plan)
+}
+
+/**
+ * A newly calculated Plan records the Issue #121 fields of its rejected
+ * Build List (`docs/PLANNER_SPEC.md` 9.6.9.1, `docs/DATA_MODEL.md` 11.9): every
+ * record its `targetWeaponId`, every `resource_conflict` record its
+ * `resourceConflictCause`. A record without them is accepted only as one an
+ * earlier build saved; a Plan about to be saved now is refused, never
+ * completed. Shared by every save through
+ * `checkPersistableOrdinaryPlannerResultShape()`: the ordinary and conflict
+ * preference saves, the replan adoption and the Build List optimization
+ * adoption (whose Plan rejects nothing).
+ */
+export function checkRejectedBuildListEntryRecordsComplete(
+  plan: ProductionPlan,
+): PlannerResultPersistenceIssue | null {
+  for (const [index, rejected] of plan.rejectedBuildListEntries.entries()) {
+    if (rejected.targetWeaponId === undefined) {
+      return resultInvalid(
+        `rejectedBuildListEntries[${index}] (BuildListEntry '${rejected.buildListEntryId}') does not record its targetWeaponId; a newly calculated Plan records it for every rejected Entry.`,
+      )
+    }
+    if (rejected.reason === 'resource_conflict' && rejected.resourceConflictCause === undefined) {
+      return resultInvalid(
+        `rejectedBuildListEntries[${index}] (BuildListEntry '${rejected.buildListEntryId}') is a resource_conflict without a resourceConflictCause; a newly calculated Plan records the cause of every resource_conflict.`,
+      )
+    }
+  }
+  return null
+}
+
+/**
+ * Every rejected record's `targetWeaponId` is the `targetWeaponId` of its
+ * Entry in `entries` - the Build List the Plan is saved over, which the save
+ * has already matched against the Plan's own input (`buildListEntriesHash`;
+ * the replan adoption against the dependent Entries and the references) - so
+ * the record is the copy Plan generation made, never another Target
+ * (`docs/DATA_MODEL.md` 11.9). A record without the field, or whose Entry is
+ * not there, is refused too. This reads the Entry's Target only through the
+ * Entry: the Target itself need not exist.
+ */
+export function checkRejectedBuildListEntryTargets(
+  plan: ProductionPlan,
+  entries: readonly BuildListEntry[],
+): PlannerResultPersistenceIssue | null {
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]))
+  for (const [index, rejected] of plan.rejectedBuildListEntries.entries()) {
+    const entry = entryById.get(rejected.buildListEntryId)
+    if (entry === undefined) {
+      return resultInvalid(
+        `rejectedBuildListEntries[${index}] references BuildListEntry '${rejected.buildListEntryId}', which is not part of the Build List the Plan is saved over.`,
+      )
+    }
+    if (rejected.targetWeaponId !== entry.targetWeaponId) {
+      return resultInvalid(
+        `rejectedBuildListEntries[${index}] records TargetWeapon '${String(rejected.targetWeaponId)}' for BuildListEntry '${entry.id}', whose TargetWeapon is '${entry.targetWeaponId}'.`,
+      )
+    }
   }
   return null
 }

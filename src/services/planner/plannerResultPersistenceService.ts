@@ -45,6 +45,7 @@ import {
   checkPlannerRunTerminationPersistable,
   checkPreferredBuildListEntriesCompleted,
   checkProductionPlanBuildListEntryReferences,
+  checkRejectedBuildListEntryTargets,
   collectProductionPlanDependentTargetWeaponIds,
   createPlanningBuildListEntriesHash,
   createPlanningTargetWeaponsHash,
@@ -877,6 +878,10 @@ export class PlannerResultPersistenceService {
     finalEntries: readonly BuildListEntry[],
   ) {
     throwIssue(checkProductionPlanBuildListEntryReferences(persistable.plan, finalEntries))
+    // The final set matches the Plan's own input Build List
+    // (`buildListEntriesHash`), so each rejected Entry's Target there is the
+    // one the calculation copied (`docs/DATA_MODEL.md` 11.9).
+    throwIssue(checkRejectedBuildListEntryTargets(persistable.plan, finalEntries))
   }
 }
 

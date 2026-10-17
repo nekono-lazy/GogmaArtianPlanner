@@ -2381,7 +2381,7 @@ maxPlanSteps到達時だけ使用し、途中のbest Planとwarningを同時に�
 ```ts
 export interface RejectedBuildListEntry {
   buildListEntryId: BuildListEntryId;
-  // Issue #121で追加する（仕様確定、実装は後続PR）。Plan生成時のそのEntryの目標武器の記録
+  // Issue #121で追加（PR-2で実装済み）。Plan生成時のそのEntryの目標武器の記録
   targetWeaponId?: TargetWeaponId;
   reason:
     | "lower_priority"
@@ -2390,7 +2390,7 @@ export interface RejectedBuildListEntry {
     | "already_satisfied"
     | "requires_protected_weapon"
     | "dominated_by_better_candidate";
-  // Issue #121で追加する（仕様確定、実装は後続PR）。reason === "resource_conflict" の記録だけが持つ
+  // Issue #121で追加（PR-2で実装済み）。reason === "resource_conflict" の記録だけが持つ
   resourceConflictCause?: RejectedBuildListEntryResourceConflictCause;
   detail: string;
 }

@@ -19,6 +19,7 @@ import type { PlannerInput, PlannerResult } from '../planner/plannerTypes'
 import {
   checkPersistableOrdinaryPlannerResultShape,
   checkProductionPlanBuildListEntryReferences,
+  checkRejectedBuildListEntryTargets,
   type PlannerResultPersistenceIssue,
 } from '../planner/plannerResultPersistenceValidation'
 import {
@@ -466,6 +467,10 @@ function assertPreviewStateHolds(
     )
   }
   throwAdoptionIssue(checkProductionPlanBuildListEntryReferences(newPlan, buildListEntries))
+  // No save changes the Target of an existing Entry (a replacement adds a new
+  // Entry), so each rejected Entry still in the Build List carries the Target
+  // the Preview's Plan generation copied (DATA_MODEL 11.9).
+  throwAdoptionIssue(checkRejectedBuildListEntryTargets(newPlan, buildListEntries))
   return buildListEntries
 }
 
