@@ -45,7 +45,7 @@ function evidence(
 ): PlannerRouteCommitmentEvidence {
   return {
     provisionalOutcomes: [],
-    entries: [{ buildListEntryId: entry.id, status, provisionalOutcome, rejectionReasons }],
+    entries: [{ buildListEntryId: entry.id, status, provisionalOutcome, stuckDrop: null, rejectionReasons }],
   }
 }
 

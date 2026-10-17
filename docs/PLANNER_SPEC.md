@@ -2451,10 +2451,12 @@ current initial Conflictには現れない。
 
 #### 9.6.9.1 完成予定数と、競合のため今回作成しない目標武器数（Issue #121）
 
-実装状態: **仕様確定（Issue #121のPR-1、docs-only）。未実装**。PR #217で生産計画画面の表示順と概要の競合件数は対応済みであり、
-本節は残件である「完成予定数 /（完成予定数＋競合のため今回作成しない目標武器数）」の集計authority、保存データ、既存Planの扱いを
-定める。画面は[UI_FLOW.md](./UI_FLOW.md) 11.0 / 11.6.5、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 24.2にある。Planner、競合検出、
-route commitment、deadlock / stallの判定とdrop、RNGの意味論は変えない。
+実装状態: **仕様確定（Issue #121のPR-1、docs-only）。下記「保存データ」の記録・検証（不採用記録の2つのfield、schedulerの
+runtime evidence、Plan生成での記録、`validateProductionPlan()`、保存境界の必須化と一致検査、Importの一致検査、parity digestの射影）は
+Issue #121のPR-2で実装済み。集計関数と画面（概要の比率、競合セクションの件数と分類）は未実装**。PR #217で生産計画画面の表示順と
+概要の競合件数は対応済みであり、本節は残件である「完成予定数 /（完成予定数＋競合のため今回作成しない目標武器数）」の集計authority、
+保存データ、既存Planの扱いを定める。画面は[UI_FLOW.md](./UI_FLOW.md) 11.0 / 11.6.5、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 24.2に
+ある。Planner、競合検出、route commitment、deadlock / stallの判定とdrop、RNGの意味論は変えない。
 
 **集計の定義。** 表示中のexact persisted ProductionPlanだけから求める。
 
@@ -2546,7 +2548,7 @@ M = |R \ C|          競合のため今回作成しない目標武器数
 - **表示文言の解析。** 日本語の表示文言、`RejectedBuildListEntry.detail`、`PlanConflict.reason` / `resolutionNote` の英文、
   warning messageを解析しない
 
-**保存データ（後続の実装で追加する。本PRでは実装しない）。** 不採用記録に次の2つのoptional fieldを加える
+**保存データ（Issue #121のPR-2で実装済み）。** 不採用記録に次の2つのoptional fieldを加える
 （[DATA_MODEL.md](./DATA_MODEL.md) 11.9）。`RejectedBuildListEntry.reason` のunionとmappingは変えない。
 
 1. `targetWeaponId?: TargetWeaponId` — そのrunのPlannerInputのBuildListEntryの `targetWeaponId` をそのままcopyする。すべての
@@ -2561,11 +2563,13 @@ M = |R \ C|          競合のため今回作成しない目標武器数
    | `stuck_drop_with_other_routes` | 同じく、drop時点で他にもremaining unitを持つcommitted Entry（別Targetのcommitted Route）があった | 競合かどうか確認できない |
 
 - 原因は、Plannerがその時点で既に判断に使っている事実だけから決める。drop時点の「他にpendingなcommitted Entryがあるか」は
-  `dropStuckEntry()` の `pending` そのものであり、schedulerはこれをruntime-onlyのtyped evidenceとして記録する（例:
-  `PlannerRouteCommitmentEntryEvidence` へのfield追加。名前は実装PRで確定）。どのEntryを・いつ落とすか、暫定帰結の勝者、
-  Conflictの検出、route commitmentの判断は変えない。deadlockとstallの区別は分類に使わないので記録しない
+  `dropStuckEntry()` の `pending` そのものであり、schedulerはこれをruntime-onlyのtyped evidenceとして記録する（PR-2で
+  `PlannerRouteCommitmentEntryEvidence.stuckDrop: { otherPendingRoutes: boolean } | null` とした。`provisionalOutcome` と同じく、
+  Entryの最終記録がそのdropそのものである場合だけ非null）。どのEntryを・いつ落とすか、暫定帰結の勝者、Conflictの検出、
+  route commitmentの判断は変えない。deadlockとstallの区別は分類に使わないので記録しない
 - 決められない `resource_conflict` の記録（runtimeの記録が欠けている）はPlan生成の不変条件違反としてfail closedし、推測した原因を
-  付けない（上の監査のとおり、現在の実装では必ずどれか1つに決まる）
+  付けない（上の監査のとおり、現在の実装では必ずどれか1つに決まる）。PR-2では `PlannerPlanGenerationError` を投げ、Plan生成の
+  既存のエラー伝播（Trace Replayの失敗と同じ）に従う。Planを生成しないだけで、保存済みの旧Planの読み取りやImportは拒否しない
 - どちらのfieldもcurrent foreign keyではない。`targetWeaponId` のTargetの存在を要求せず、TargetWeapon削除の参照保護（ReferenceFinder）の
   対象にしない（参照にすると、作成しないと決めた目標武器を削除できなくなる）。Entryの識別は従来どおりBuildListEntry IDであり、
   Candidate IDを使わない
@@ -2666,8 +2670,12 @@ M = |R \ C|          競合のため今回作成しない目標武器数
 
 **実装の分割（後続PR）。**
 
-1. **記録のPR。** 2つのfieldの型、schedulerのdrop時点のruntime evidence（判断は変えない）、Plan生成での記録、`validateProductionPlan()`、
-   保存境界の必須化と一致検査、Importの一致検査、parity digestの射影、test。UIは変えない。versionは変えない
+1. **記録のPR（PR-2、実装済み）。** 2つのfieldの型、schedulerのdrop時点のruntime evidence（判断は変えない）、Plan生成での記録、
+   `validateProductionPlan()`、保存境界の必須化と一致検査、Importの一致検査、parity digestの射影、test。UIは変えない。versionは変えない。
+   保存境界の必須化は `checkPersistableOrdinaryPlannerResultShape()`（通常・競合の優先選択・再計画の採用・全体最適化の採用が共有する）、
+   Entryとの一致検査は `checkRejectedBuildListEntryTargets()`（Draftを保存する3経路の保存mutationと再計画の採用）で行う。
+   PlannerResultの不採用記録を丸ごとhashする既存のdigest（PR-2のparity digestとresearchのgolden）は、2つのfieldを除いた射影で
+   記録値と比べ、fieldは入力Entryとの一致を別に確かめる（記録値は書き換えない）
 2. **集計と表示のPR。** 上記の集計関数、概要の比率と説明（UI_FLOW 11.0）、競合セクションの件数と一覧の分類（11.6.5）、test、
    PC・375px幅・ダークテーマでの確認。概要と競合セクションの数が食い違う中間状態を作らないため、両方を同じPRで変える。Presentation
    設計には `ui-ux-pro-max` を使う（既存のMUIとPC・375px・ダークテーマの表示を優先する）。versionは変えない

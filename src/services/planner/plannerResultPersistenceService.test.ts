@@ -14,6 +14,7 @@ import type {
   CalculationContext,
   PlanningInputSnapshot,
   ProductionPlan,
+  RejectedBuildListEntry,
 } from '../../domain/models/publicTypes'
 import type { PlannerInput, PlannerResult } from '../../domain/planner'
 import {
@@ -714,5 +715,76 @@ describe('PlannerResultPersistenceService Draft replacement (DATA_MODEL 11.1 / P
 
       expect(await storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
       expect(await database.buildListEntries.get(persisted[1].id)).toEqual(persisted[1])
+    }))
+})
+
+describe('PlannerResultPersistenceService the rejected Build List record of a new Plan (Issue #121, DATA_MODEL 11.9)', () => {
+  /**
+   * The scenario's Plan with Entry A selected alone and Entry B rejected by
+   * `records(B)`: its snapshot is taken over that selection, so only the
+   * rejected record decides the save.
+   */
+  function rejectingResult(
+    { input, persisted }: Scenario,
+    records: (rejected: BuildListEntry) => RejectedBuildListEntry[],
+  ): PlannerResult {
+    const [selected, rejected] = persisted
+    const dependentTargetWeaponIds = [selected.targetWeaponId]
+    const snapshot = createPlanningInputSnapshot(
+      input,
+      {
+        initialExecutionState: createExpectedPlanState(input.rngState, input.normalCounters, input.ownedWeapons, {
+          targetWeapons: input.targetWeapons,
+          dependentTargetWeaponIds,
+        }),
+        dependentTargetWeaponIds,
+        selectedBuildListEntryIds: [selected.id],
+      },
+      DOMAIN_FIXTURE_TIME,
+    )
+    const plan = {
+      ...buildPlan(snapshot, input.calculationContext, [selected]),
+      rejectedBuildListEntries: records(rejected),
+    }
+    return { plan, conflicts: [], warnings: [], termination: exhaustedPlannerTermination() }
+  }
+
+  it.each([
+    ['a resource_conflict record with its Target and cause', (entry: BuildListEntry): RejectedBuildListEntry[] => [{
+      buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId, reason: 'resource_conflict',
+      resourceConflictCause: 'stuck_drop_with_other_routes', detail: 'fixture',
+    }]],
+    ['a record of another reason with its Target and no cause', (entry: BuildListEntry): RejectedBuildListEntry[] => [{
+      buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId, reason: 'already_satisfied', detail: 'fixture',
+    }]],
+  ] as const)('saves %s exactly as calculated', (_, records) =>
+    withScenario(async (scenario) => {
+      const result = rejectingResult(scenario, records)
+      expect(await scenario.service.savePlannerResult(result, scenario.context)).toEqual({ kind: 'saved', plan: result.plan })
+      expect((await scenario.database.productionPlans.get(result.plan!.id))?.rejectedBuildListEntries)
+        .toEqual(result.plan!.rejectedBuildListEntries)
+    }))
+
+  it.each([
+    ['a record without its Target', (entry: BuildListEntry): RejectedBuildListEntry[] => [{
+      buildListEntryId: entry.id, reason: 'already_satisfied', detail: 'fixture',
+    }], /does not record its targetWeaponId/],
+    ['a resource_conflict record without its cause', (entry: BuildListEntry): RejectedBuildListEntry[] => [{
+      buildListEntryId: entry.id, targetWeaponId: entry.targetWeaponId, reason: 'resource_conflict', detail: 'fixture',
+    }], /without a resourceConflictCause/],
+    ['a record naming another Target than its Entry', (entry: BuildListEntry): RejectedBuildListEntry[] => [{
+      buildListEntryId: entry.id, targetWeaponId: 'target.fixture.a' as RejectedBuildListEntry['targetWeaponId'],
+      reason: 'resource_conflict', resourceConflictCause: 'provisional_outcome_not_committed', detail: 'fixture',
+    }], /records TargetWeapon 'target.fixture.a' for BuildListEntry 'build-list.persisted.b'/],
+  ] as const)('refuses a new Plan with %s and keeps the previous Draft and the Build List', (_, records, message) =>
+    withScenario(async (scenario) => {
+      const previous = previousDraft()
+      await scenario.database.productionPlans.put(previous)
+      const before = await dump(scenario.database)
+      await expect(scenario.service.savePlannerResult(rejectingResult(scenario, records), scenario.context))
+        .rejects.toMatchObject({ code: 'planner_result_invalid', message: expect.stringMatching(message) })
+      expect(await dump(scenario.database)).toEqual(before)
+      expect(await scenario.storedPlanIds()).toEqual([previous.id])
+      expect(await scenario.storedEntryIds()).toEqual(PERSISTED_ENTRY_IDS)
     }))
 })

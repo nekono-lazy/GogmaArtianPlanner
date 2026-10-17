@@ -582,6 +582,67 @@ describe('validateExportRootForFullReplacement', () => {
       root.targetWeapons.push({ ...createValidTargetWeapon(), id: targetWeaponId('target.independent') })
       expect(validate(root).issues).toEqual([])
     })
+
+    describe('the rejected Build List record (Issue #121, DATA_MODEL 11.9)', () => {
+      function record(fields: Partial<ExportRoot['productionPlans'][number]['rejectedBuildListEntries'][number]> = {}) {
+        return {
+          buildListEntryId: ENTRY,
+          targetWeaponId: TARGET,
+          reason: 'resource_conflict' as const,
+          resourceConflictCause: 'provisional_outcome_not_committed' as const,
+          detail: 'fixture',
+          ...fields,
+        }
+      }
+
+      it('accepts an active Plan record naming its Entry own Target, and a record of an earlier build without the fields', () => {
+        const root = planRoot()
+        root.productionPlans[0].rejectedBuildListEntries = [record()]
+        expect(validate(root).issues).toEqual([])
+        root.productionPlans[0].rejectedBuildListEntries = [{ buildListEntryId: ENTRY, reason: 'resource_conflict', detail: 'legacy' }]
+        expect(validate(root).issues).toEqual([])
+      })
+
+      it('rejects an active Plan record naming another Target than its Entry own, existing or not', () => {
+        for (const target of [OTHER_TARGET, MISSING_TARGET]) {
+          const root = planRoot()
+          root.productionPlans[0].rejectedBuildListEntries = [record({ targetWeaponId: target })]
+          const issues = validate(root).issues
+          expect(issues).toEqual([expect.objectContaining({
+            path: 'productionPlans[0].rejectedBuildListEntries[0].buildListEntryId',
+            code: 'inconsistent_snapshot',
+          })])
+        }
+      })
+
+      it('never requires the record Target to exist: the Entry own Target is the only authority', () => {
+        // A Target the record names is never a current reference by itself, so
+        // no invalid_reference is raised for it - only the existing Entry check.
+        const root = planRoot()
+        root.productionPlans[0].rejectedBuildListEntries = [record({ buildListEntryId: MISSING_ENTRY, targetWeaponId: MISSING_TARGET })]
+        expect(validate(root).issues).toEqual([expect.objectContaining({
+          path: 'productionPlans[0].rejectedBuildListEntries[0].buildListEntryId',
+          code: 'invalid_reference',
+        })])
+      })
+
+      it('reads no record of a non-active Plan as a current reference, whatever Entry or Target it names', () => {
+        const root = dataTransferRoot()
+        const abandonedIndex = root.productionPlans.findIndex(({ status }) => status === 'abandoned')
+        root.productionPlans[abandonedIndex].rejectedBuildListEntries = [
+          record({ buildListEntryId: MISSING_ENTRY, targetWeaponId: MISSING_TARGET }),
+          record({ buildListEntryId: ENTRY, targetWeaponId: OTHER_TARGET, resourceConflictCause: 'stuck_drop_with_other_routes' }),
+        ]
+        expect(validate(root).issues).toEqual([])
+      })
+
+      it('rejects a malformed record through the Plan Domain validation, whatever the lifecycle', () => {
+        const root = dataTransferRoot()
+        const abandonedIndex = root.productionPlans.findIndex(({ status }) => status === 'abandoned')
+        root.productionPlans[abandonedIndex].rejectedBuildListEntries = [record({ resourceConflictCause: 'deadlock' as never })]
+        expectRejected(root, new RegExp(`^productionPlans\\[${abandonedIndex}\\]`), 'invalid_literal')
+      })
+    })
   })
 
   describe('running Plan collection invariant', () => {

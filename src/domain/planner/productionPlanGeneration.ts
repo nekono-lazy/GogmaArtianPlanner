@@ -8,6 +8,7 @@ import type {
   PlanningInputSnapshot,
   ProductionPlan,
   RejectedBuildListEntry,
+  RejectedBuildListEntryResourceConflictCause,
   TargetWeapon,
   TargetWeaponId,
 } from '../models/publicTypes'
@@ -364,17 +365,52 @@ function replayErrorMessage(issues: readonly PlannerTraceReplayIssue[]): string 
  */
 export type PlannerRunOutcome = Omit<PlannerRunResultOf<unknown>, 'termination'>
 
+/**
+ * The persisted reason of one rejected Entry and, for a `resource_conflict`
+ * one, its cause (`docs/PLANNER_SPEC.md` 9.6.9.1), decided together in one
+ * branch order so the cause always names the branch that gave the reason.
+ */
+interface RejectedReasonDecision {
+  reason: RejectedBuildListEntry['reason']
+  resourceConflictCause: RejectedBuildListEntryResourceConflictCause | null
+}
+
+/**
+ * The cause of a `conflict_not_committed` rejection, read from the run's own
+ * route commitment evidence and never from a message: the provisional outcome
+ * that dropped the Entry, or the deadlock / stall drop with whether other
+ * committed Routes were pending. Evidence that names neither is an invariant
+ * violation of Plan generation, refused rather than guessed.
+ */
+function notCommittedCause(
+  entryId: BuildListEntryId,
+  runResult: PlannerRunOutcome,
+): RejectedBuildListEntryResourceConflictCause {
+  const evidence = runResult.routeCommitment?.entries.find(
+    ({ buildListEntryId }) => buildListEntryId === entryId,
+  )
+  if (evidence?.provisionalOutcome != null) return 'provisional_outcome_not_committed'
+  if (evidence?.stuckDrop != null) {
+    return evidence.stuckDrop.otherPendingRoutes
+      ? 'stuck_drop_with_other_routes'
+      : 'stuck_drop_without_other_routes'
+  }
+  throw new PlannerPlanGenerationError(
+    `BuildListEntry '${entryId}' was not committed, but the run records neither the provisional outcome nor the deadlock / stall drop that dropped it.`,
+  )
+}
+
 function rejectedReason(
   entry: BuildListEntry,
   selectedEntryIds: ReadonlySet<BuildListEntryId>,
   input: PlannerInput,
   runResult: PlannerRunOutcome,
-): RejectedBuildListEntry['reason'] {
+): RejectedReasonDecision {
   const rejections = runResult.rejections.filter(
     (rejection) => rejection.buildListEntryId === entry.id,
   )
   if (rejections.some(({ reason }) => reason === 'protected_destructive_use')) {
-    return 'requires_protected_weapon'
+    return { reason: 'requires_protected_weapon', resourceConflictCause: null }
   }
   if (runResult.conflicts.some((conflict) =>
     conflict.buildListEntryIds.includes(entry.id) &&
@@ -382,16 +418,16 @@ function rejectedReason(
     conflict.selectedBuildListEntryId !== entry.id &&
     selectedEntryIds.has(conflict.selectedBuildListEntryId),
   )) {
-    return 'resource_conflict'
+    return { reason: 'resource_conflict', resourceConflictCause: 'explicit_resolution_not_selected' }
   }
   // A deterministic scheduler reason only: a Beam Search oracle result never
   // carries it, so the mapping above and below is unchanged
   // (`docs/ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md` 8.4).
   if (rejections.some(({ reason }) => reason === 'conflict_not_committed')) {
-    return 'resource_conflict'
+    return { reason: 'resource_conflict', resourceConflictCause: notCommittedCause(entry.id, runResult) }
   }
   if (rejections.some(({ reason }) => reason === 'candidate_already_satisfied')) {
-    return 'already_satisfied'
+    return { reason: 'already_satisfied', resourceConflictCause: null }
   }
   const selectedComparable = input.buildListEntries.some((selected) =>
     selectedEntryIds.has(selected.id) &&
@@ -399,7 +435,31 @@ function rejectedReason(
     selected.candidateSnapshot.estimatedOperationCount <
       entry.candidateSnapshot.estimatedOperationCount,
   )
-  return selectedComparable ? 'longer_route' : 'dominated_by_better_candidate'
+  return {
+    reason: selectedComparable ? 'longer_route' : 'dominated_by_better_candidate',
+    resourceConflictCause: null,
+  }
+}
+
+/**
+ * One persisted record: the Entry, its Target as the PlannerInput named it
+ * (Issue #121, copied for every reason), the reason and - for
+ * `resource_conflict` only - its cause.
+ */
+function rejectedRecord(
+  entry: BuildListEntry,
+  decision: RejectedReasonDecision,
+  detail: string,
+): RejectedBuildListEntry {
+  return {
+    buildListEntryId: entry.id,
+    targetWeaponId: entry.targetWeaponId,
+    reason: decision.reason,
+    ...(decision.resourceConflictCause === null
+      ? {}
+      : { resourceConflictCause: decision.resourceConflictCause }),
+    detail,
+  }
 }
 
 function hasOnlyNonSearchRejections(rejections: readonly PlannerSearchRejection[]): boolean {
@@ -457,29 +517,29 @@ export function createRejectedBuildListEntries(
       .filter((entry) => !traceEntryIds.has(entry.id) || notCommittedIds.has(entry.id))
       .map((entry) => ({
         entry,
-        reason: rejectedReason(entry, selected, input, runResult),
+        decision: rejectedReason(entry, selected, input, runResult),
       }))
-      .filter(({ reason }) =>
-        reason === 'requires_protected_weapon' || reason === 'resource_conflict',
+      .filter(({ decision }) =>
+        decision.reason === 'requires_protected_weapon' || decision.reason === 'resource_conflict',
       )
-      .map(({ entry, reason }) => ({
-        buildListEntryId: entry.id,
-        reason,
-        detail: notCommittedIds.has(entry.id)
+      .map(({ entry, decision }) => rejectedRecord(
+        entry,
+        decision,
+        notCommittedIds.has(entry.id)
           ? NOT_COMMITTED_DETAIL
           : 'Plannerの計算途中で、このBuildListEntryは実行不能と確定しました。',
-      }))
+      ))
       .sort((left, right) => compareStableStrings(left.buildListEntryId, right.buildListEntryId))
   }
 
   return baseRejectedEntries
-    .map((entry) => ({
-      buildListEntryId: entry.id,
-      reason: rejectedReason(entry, selected, input, runResult),
-      detail: notCommittedIds.has(entry.id)
+    .map((entry) => rejectedRecord(
+      entry,
+      rejectedReason(entry, selected, input, runResult),
+      notCommittedIds.has(entry.id)
         ? NOT_COMMITTED_DETAIL
         : 'Plannerの最終結果でこのBuildListEntryは採用されませんでした。',
-    }))
+    ))
     .sort((left, right) => compareStableStrings(left.buildListEntryId, right.buildListEntryId))
 }
 

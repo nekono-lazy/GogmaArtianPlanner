@@ -186,8 +186,9 @@ interface PlanBuildListEntryReference {
  * Every BuildListEntry reference of a persisted ProductionPlan: the selected
  * Entries, each Step's Entry, milestone, Target link, compromise label and
  * Target completion, each conflict's participants / recommendation / selection
- * / checkpoint participants, and the rejected Entries. Fields a legacy Plan
- * does not carry are simply absent; every field is read defensively.
+ * / checkpoint participants, and the rejected Entries (with the Target their
+ * record names, Issue #121). Fields a legacy Plan does not carry are simply
+ * absent; every field is read defensively.
  */
 function planBuildListEntryReferences(plan: ProductionPlan, path: string): PlanBuildListEntryReference[] {
   const references: PlanBuildListEntryReference[] = []
@@ -244,8 +245,11 @@ function planBuildListEntryReferences(plan: ProductionPlan, path: string): PlanB
     })
   }
   if (Array.isArray(plan.rejectedBuildListEntries)) {
+    // The Issue #121 `targetWeaponId` (absent on a record saved before it) is
+    // the Target the Plan names this Entry with, so it must be the Entry's own;
+    // the Target itself is never required to exist (`docs/DATA_MODEL.md` 11.9).
     plan.rejectedBuildListEntries.forEach((rejected, index) => {
-      if (isRecord(rejected)) add(rejected.buildListEntryId, `${path}.rejectedBuildListEntries[${index}].buildListEntryId`)
+      if (isRecord(rejected)) add(rejected.buildListEntryId, `${path}.rejectedBuildListEntries[${index}].buildListEntryId`, rejected.targetWeaponId)
     })
   }
   return references

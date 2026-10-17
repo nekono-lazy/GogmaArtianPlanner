@@ -1994,7 +1994,7 @@ authorityとし、Target件数や `selectedBuildListEntryIds.length` を武器�
 
 #### 完成予定数と、競合のため今回作成しない目標武器（Issue #121）
 
-実装状態: **仕様確定（Issue #121のPR-1、docs-only）。未実装**。集計のauthority・保存データ・判定できる条件は
+実装状態: **仕様確定（Issue #121のPR-1、docs-only）。保存データ（不採用記録の2つのfield）はPR-2で実装済み、集計と画面は未実装**。集計のauthority・保存データ・判定できる条件は
 [PLANNER_SPEC.md](./PLANNER_SPEC.md) 9.6.9.1、要求は[REQUIREMENTS.md](./REQUIREMENTS.md) 24.2にある。概要は引き続き表示中の
 exact persisted Planだけから作り、現在の作成リスト・目標武器を読まない。
 

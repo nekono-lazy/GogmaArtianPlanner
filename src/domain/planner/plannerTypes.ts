@@ -451,6 +451,16 @@ export interface PlannerRouteCommitmentEntryEvidence {
    * precondition, a source, a stall / deadlock, a rejected action or reserve.
    */
   provisionalOutcome: { conflictId: string; selectedBuildListEntryId: BuildListEntryId } | null
+  /**
+   * Set only when the Entry's final state is the deadlock / stall drop of the
+   * scheduler (`dropStuckEntry()`, design 7.8) - also a terminal and only drop -
+   * recording one fact that drop already had (Issue #121,
+   * `docs/PLANNER_SPEC.md` 9.6.9.1): whether the `pending` it dropped from held
+   * another committed Entry with remaining units. Recording it changes no
+   * decision. `null` for every other status or drop cause, a provisional
+   * outcome included. Deadlock and stall are not told apart.
+   */
+  stuckDrop: { otherPendingRoutes: boolean } | null
   /** The typed rejection reasons the run recorded for this Entry, in order. */
   rejectionReasons: PlannerSearchRejectionReason[]
 }
@@ -458,9 +468,11 @@ export interface PlannerRouteCommitmentEntryEvidence {
 /**
  * Transient evidence of the route commitment decisions of one deterministic
  * scheduler run, for the Planner Alternative found judgement
- * (`docs/PLANNER_SPEC.md` 9.2.19.6), which must know why an Entry was not
- * selected: a Plan's own record cannot tell a provisional loser whose winner
- * later stalled from an Entry that won and then stalled itself.
+ * (`docs/PLANNER_SPEC.md` 9.2.19.6), the conflict preference outcome (9.6.6)
+ * and the `resourceConflictCause` of the rejected Build List record (9.6.9.1),
+ * which must know why an Entry was not selected: the persisted reason alone
+ * cannot tell a provisional loser whose winner later stalled from an Entry that
+ * won and then stalled itself.
  */
 export interface PlannerRouteCommitmentEvidence {
   provisionalOutcomes: PlannerConflictProvisionalOutcome[]

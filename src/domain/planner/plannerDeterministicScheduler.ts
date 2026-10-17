@@ -188,6 +188,15 @@ export class PlannerDeterministicScheduleRun {
     BuildListEntryId,
     { rejection: PlannerSearchRejection; conflictId: string; selectedBuildListEntryId: BuildListEntryId }
   >()
+  /**
+   * The very drop record each deadlock / stall drop gave its Entry, with
+   * whether its `pending` held another committed Entry with remaining units
+   * (runtime evidence only, Issue #121).
+   */
+  private readonly stuckDrops = new Map<
+    BuildListEntryId,
+    { rejection: PlannerSearchRejection; otherPendingRoutes: boolean }
+  >()
   private readonly rejections: PlannerSearchRejection[]
   private readonly rejectionKeys: Set<string>
   private readonly conflictsById = new Map<string, PlanConflict>()
@@ -796,6 +805,10 @@ export class PlannerDeterministicScheduleRun {
    * committed Routes are pending: a deadlock or a stall (7.8). The ranking is
    * `R` with every explicitly preferred Entry before the rest
    * (`docs/PLANNER_SPEC.md` 9.6.4), which is exactly `R` without resolutions.
+   *
+   * Beside the drop it records, as runtime evidence only, whether `pending`
+   * held another Entry than the one dropped (`stuckDrops`, Issue #121); which
+   * Entry is dropped, and when, does not read it.
    */
   private dropStuckEntry(pending: readonly BuildListEntry[]) {
     const rank = (left: BuildListEntry, right: BuildListEntry) =>
@@ -811,14 +824,19 @@ export class PlannerDeterministicScheduleRun {
     const stalled = this.hasStalledStream(pending)
     const unit = this.remainingUnitsOf(loser)[0]
     this.metrics?.expectDrop(stalled ? 'stall' : 'deadlock')
-    this.setStatus(loser.id, 'dropped', createPlannerSearchRejection(
+    const rejection = createPlannerSearchRejection(
       loser.id,
       unit?.operation.type ?? 'reserve_weapon',
       'conflict_not_committed',
       stalled
         ? `BuildListEntry '${loser.id}' was dropped: a Counter stream stalled with no committed operation at its current position.`
         : `BuildListEntry '${loser.id}' was dropped: the committed Routes wait on each other (deadlock).`,
-    ))
+    )
+    this.stuckDrops.set(loser.id, {
+      rejection,
+      otherPendingRoutes: pending.some(({ id }) => id !== loser.id),
+    })
+    this.setStatus(loser.id, 'dropped', rejection)
     this.collectDynamicConflicts()
   }
 
@@ -878,8 +896,9 @@ export class PlannerDeterministicScheduleRun {
    * The runtime evidence of this run's route commitment decisions
    * (`PlannerRouteCommitmentEvidence`). An Entry's `provisionalOutcome` is set
    * only when its final record is still the very drop a provisional outcome
-   * made: a dropped Entry never changes status again, so that drop is its only
-   * one. Read-only: it changes no decision and no other result field.
+   * made, and its `stuckDrop` only when it is the very deadlock / stall drop:
+   * a dropped Entry never changes status again, so that drop is its only one.
+   * Read-only: it changes no decision and no other result field.
    */
   private routeCommitmentEvidence(rejections: readonly PlannerSearchRejection[]): PlannerRouteCommitmentEvidence {
     return {
@@ -889,11 +908,15 @@ export class PlannerDeterministicScheduleRun {
       })),
       entries: this.commitmentRecords().map(({ buildListEntryId, status, rejection }) => {
         const drop = this.provisionalDrops.get(buildListEntryId)
+        const stuck = this.stuckDrops.get(buildListEntryId)
         return {
           buildListEntryId,
           status,
           provisionalOutcome: status === 'dropped' && drop !== undefined && rejection === drop.rejection
             ? { conflictId: drop.conflictId, selectedBuildListEntryId: drop.selectedBuildListEntryId }
+            : null,
+          stuckDrop: status === 'dropped' && stuck !== undefined && rejection === stuck.rejection
+            ? { otherPendingRoutes: stuck.otherPendingRoutes }
             : null,
           rejectionReasons: rejections
             .filter((entry) => entry.buildListEntryId === buildListEntryId)

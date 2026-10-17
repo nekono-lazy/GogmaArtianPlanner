@@ -667,6 +667,15 @@ describe('Production plan generation', () => {
       expect.objectContaining({ buildListEntryId: protectedEntry.id, reason: 'requires_protected_weapon' }),
       expect.objectContaining({ buildListEntryId: unprovenEntry.id, reason: 'dominated_by_better_candidate' }),
     ])
+    // Issue #121: every record copies its Entry's Target; only the explicit
+    // decision loser carries a cause, read from the decided Conflict.
+    expect(rejected.map(({ buildListEntryId, targetWeaponId, resourceConflictCause }) =>
+      [buildListEntryId, targetWeaponId, resourceConflictCause ?? null])).toEqual([
+      [fallbackEntry.id, fallbackEntry.targetWeaponId, 'explicit_resolution_not_selected'],
+      [protectedEntry.id, protectedEntry.targetWeaponId, null],
+      [unprovenEntry.id, unprovenEntry.targetWeaponId, null],
+    ])
+    expect(rejected.filter((record) => 'resourceConflictCause' in record)).toHaveLength(1)
   })
 
   it('records the progressed Target on every newly generated single-Target PlanStep', async () => {
