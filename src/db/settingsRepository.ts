@@ -5,7 +5,7 @@ import type {
 } from '../domain/models/publicTypes'
 import { createDefaultAppSettings } from '../domain/models/factories'
 import { validateAppSettings } from '../domain/models/validation'
-import { appDatabase } from './AppDatabase'
+import { appDatabase, type AppDatabase } from './AppDatabase'
 import {
   assertRepositoryValidation,
   RepositoryError,
@@ -131,9 +131,14 @@ export class SettingsRepository {
   }
 }
 
-export const settingsRepository = new SettingsRepository({
-  get: (id) => appDatabase.settings.get(id),
-  add: (settings) => appDatabase.settings.add(settings),
-  put: (settings) => appDatabase.settings.put(settings),
-  update: (id, changes) => appDatabase.settings.update(id, changes),
-})
+/** A SettingsRepository over the `settings` table of one AppDatabase. */
+export function createSettingsRepository(database: AppDatabase): SettingsRepository {
+  return new SettingsRepository({
+    get: (id) => database.settings.get(id),
+    add: (settings) => database.settings.add(settings),
+    put: (settings) => database.settings.put(settings),
+    update: (id, changes) => database.settings.update(id, changes),
+  })
+}
+
+export const settingsRepository = createSettingsRepository(appDatabase)

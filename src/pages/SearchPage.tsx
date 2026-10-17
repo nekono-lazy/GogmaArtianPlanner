@@ -561,11 +561,26 @@ export function SearchPage({ dependencies = defaultDependencies ?? undefined }: 
           rngEngineVersion: client.engineVersion,
           appSchemaVersion: CURRENT_CALCULATION_APP_SCHEMA_VERSION,
         },
+        // Issue #157 PR-3: this screen still starts every batch with the
+        // exclusion off; its Checkbox is PR-4 (`docs/UI_FLOW.md` 9.2).
+        excludeOtherTargetSources: false,
       },
       {
         client,
         createSearchRunId,
-        createInput: (options) => dependencies.createInput(options),
+        // The exclusion-off input is this screen's ordinary `createInput()`; the
+        // batch refuses a Target whose input does not match the condition.
+        prepareInput: async (options) => ({
+          input: await dependencies.createInput({
+            searchRunId: options.searchRunId,
+            targetWeaponId: options.targetWeaponId,
+            routeFilter: options.routeFilter,
+            settings: options.settings,
+            master: options.master,
+            calculationContext: options.calculationContext,
+          }),
+          sourceExclusion: null,
+        }),
         saveCandidates: (targetId, candidates) => dependencies.saveCandidates(targetId, candidates),
         addCandidate: (candidate, target, selection) => dependencies.addCandidate(candidate, target, selection),
       },

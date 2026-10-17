@@ -246,8 +246,12 @@ Candidate Searchの入力状態（`rngState`、`normalCounters`、`ownedWeapons`
 
 実装状態: **一部実装**（Issue #157 PR-1で本契約を確定した。本節末尾の分割計画の1（Search Domain / Worker）をPR-2で実装し、
 `CandidateSearchInput.excludedSourceOwnedWeaponIds`、Route base列挙での適用、skip理由 `source_excluded_for_other_targets` と
-その日本語ラベル、`TargetCandidateSearchResult.excludedSourceOwnedWeaponIds` が動作する。2（Application / 一括検索）と3（Search UI）は
-未実装であり、Productionの呼び出し側はまだ除外条件を設定しないため、Production Searchの動作は従来どおりである）。要求は
+その日本語ラベル、`TargetCandidateSearchResult.excludedSourceOwnedWeaponIds` が動作する。2（Application / 一括検索）をPR-3で実装し、
+除外集合の導出 `deriveOtherTargetSourceExclusion()`（`src/domain/buildList/otherTargetSourceExclusion.ts`）、ON / OFFを指定する
+`prepareCandidateSearchInput()`（`src/services/search/prepareCandidateSearchInput.ts`。導出結果と、それが指す所持武器・目標武器の
+読み取り時点の記録を入力と並べて返す）、`runBatchCandidateSearch()` の開始時点の条件（`excludeOtherTargetSources`）・Targetごとの
+永続状態からの導出・`no_candidate` の結果の除外ID（`excludedSourceOwnedWeaponIds`）が動作する。3（Search UI）は未実装であり、
+候補検索画面はまだ単体検索・一括検索ともOFFだけを渡すため、Production Searchの動作は従来どおりである）。要求は
 [REQUIREMENTS.md](./REQUIREMENTS.md) 14.2、画面は[UI_FLOW.md](./UI_FLOW.md) 9.2 / 9.1である。
 
 候補検索に「他の目標武器で使用する所持武器を除外する」というON/OFF条件を置く。検索対象TargetをTとすると、ONでは
@@ -289,7 +293,7 @@ export interface CandidateSearchInput {
 #### 除外集合の導出（Application側のDomain authority）
 
 除外するIDの集合は、検索対象Tと、その検索の入力と**同じ永続状態の読み取り**から、1つのpure function（React / Dexie非依存。
-仮称 `deriveOtherTargetSourceExclusion()`、配置は `src/domain/buildList/` を想定し名称と配置は実装PRで確定する）で導出する。
+`deriveOtherTargetSourceExclusion()`、`src/domain/buildList/otherTargetSourceExclusion.ts`。名称と配置はPR-3で確定した）で導出する。
 単体検索と一括検索・追加は同じ関数を使い、画面で同じ判定を再実装しない。
 
 ```ts
@@ -345,7 +349,9 @@ interface OtherTargetSourceExclusion {
 | 優先起点と作成リストの情報が食い違う（Uが武器Xを優先起点にしているがUの候補は武器Yを使う、別のTarget Vの候補がXを使う、など） | 和集合をとる。X・Yとも除外し、どちらが「本当の使用」かを推測しない |
 | Tと武器種・属性が一致しないなど、Tの起点候補にならない所持武器 | 集合に含まれてよい。Search Domainで効果を持たない。画面はTの検索で実際に起点から外れた武器だけを示す（下記の結果field） |
 
-決定性。同じ入力から同じ集合と同じ理由列を返す。順序はcode unit比較で決め、`localeCompare` に依存させない。
+決定性。同じ入力から同じ集合と同じ理由列を返す。順序はcode unit比較で決め、`localeCompare` に依存させない。1つの所持武器の
+理由は、目標武器ID、同じ目標武器では優先起点を作成リスト候補より先、作成リスト項目IDの順とする（画面の表示順は
+[UI_FLOW.md](./UI_FLOW.md) 9.2のとおり画面側で決める）。
 
 #### Search Domainでの適用
 
@@ -398,7 +404,9 @@ interface OtherTargetSourceExclusion {
 
 - 除外集合は1回の検索requestにつき、入力を作る時点で1回だけ導出する。除外集合と入力の `targetWeapons` / `ownedWeapons` /
   `rngState` / `normalCounters` は同じ永続状態から作り、途中に別の書き込みが入らないよう1つのDexie transactionで読む
-  （RngStateが無い場合の初期作成の扱いは既存の `createCandidateSearchInput()` の契約を変えない）
+  （RngStateが無い場合の初期作成の扱いは既存の `createCandidateSearchInput()` の契約を変えない。PR-3の実装は、RngState と
+  AppSettingsの初期作成をそれぞれ先に済ませてから、RngState・通常アーティアCounter・所持武器・目標武器・作成リストの5つを1つの
+  読み取り専用transactionで読む。その読み取りの中でRngStateが無ければ作成せずfail closedにする）
 - 検索中に他Targetの紐付け・作成リスト・所持武器が変わっても、その検索の除外集合は変えず、結果も破棄しない。除外は検索条件で
   あり、Candidateの有効性ではないためである
 - 作成リストへの追加・置換（`BuildListService.addCandidate()` / `replaceCandidate()`、10.1）は除外条件を再評価しない。除外条件は
@@ -439,11 +447,11 @@ interface OtherTargetSourceExclusion {
 
 意味論とPresentationを混ぜず、次の順に分ける。各PRは前のPRに依存し、本節と[UI_FLOW.md](./UI_FLOW.md) 9.2を正本とする。
 
-1. **Search Domain / Worker**（PR-2） — `CandidateSearchInput.excludedSourceOwnedWeaponIds` とその検証、Route base列挙での適用、
+1. **Search Domain / Worker**（PR-2で実装） — `CandidateSearchInput.excludedSourceOwnedWeaponIds` とその検証、Route base列挙での適用、
    skip理由 `source_excluded_for_other_targets`（既存のskip理由の日本語ラベルへ1件追加する最小のPresentation変更を含む）、
    `TargetCandidateSearchResult.excludedSourceOwnedWeaponIds`。Productionの呼び出し側はまだ設定しない。検証は13.7の
    Search Domain / Workerの観点（空集合での完全一致、Prediction呼び出し回数、他consumerの不変）
-2. **Application / 一括検索**（PR-3） — 除外集合の導出authority、`createCandidateSearchInput()` のON指定と1つのtransactionでの
+2. **Application / 一括検索**（PR-3で実装） — 除外集合の導出authority、`createCandidateSearchInput()` のON指定と1つのtransactionでの
    読み取り（導出結果を表示用に入力と並べて返す）、`runBatchCandidateSearch()` の開始時点の条件と、Targetごとの永続状態からの
    導出、`no_candidate` の結果への除外情報。画面はまだOFFだけを渡し、表示は変えない。検証は13.7の導出と一括処理の観点
 3. **Search UI**（PR-4） — [UI_FLOW.md](./UI_FLOW.md) 9.2のチェックボックス、開始時点の値の固定、検索中・結果・一括サマリの表示、
