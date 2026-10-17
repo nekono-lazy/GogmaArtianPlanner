@@ -66,8 +66,6 @@ const auditedNodeTestFiles = [
   'src/services/planner/buildListOptimizationService.test.ts',
   'src/services/planner/buildListOptimizationWorkerClient.test.ts',
   'src/services/planner/createPlannerInput.test.ts',
-  'src/services/planner/plannerResultPersistenceService.alternative.test.ts',
-  'src/services/planner/plannerResultPersistenceService.savePoint.test.ts',
   'src/services/planner/plannerResultPersistenceService.test.ts',
   'src/services/planner/plannerRuntimeOptions.test.ts',
   'src/services/planner/plannerWorkerClient.test.ts',

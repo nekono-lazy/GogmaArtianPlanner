@@ -16,10 +16,8 @@ import {
   PLAN_BREAKING_APPROVE_LABEL,
   PLAN_BREAKING_NOT_UNDOABLE_NOTE,
   PLAN_BREAKING_REASONS_HEADING,
-  PLAN_BREAKING_RESTORE_DROPS_CHANGE_NOTE,
   PLAN_BREAKING_RESTORE_NOTE,
   PLAN_BREAKING_SAVE_POINT_CHOICE_EXPLANATION,
-  PLAN_BREAKING_SAVE_POINT_CHOICE_EXPLANATION_DROPS_CHANGE,
   PLAN_BREAKING_SAVE_POINT_CHOICE_MESSAGE,
   PLAN_BREAKING_SAVE_POINT_FALLBACK_LABEL,
   PLAN_BREAKING_WARNING_LINES,
@@ -76,7 +74,7 @@ export function PlanBreakingChangeDialog({ controller, savePointPositionLabel }:
   if (state.status === 'idle') return null
   const submitting = state.status === 'submitting'
   const phase: PlanBreakingChangePhase = state.status === 'submitting' ? state.phase : state.status
-  const { inspection, note, restoreDropsChange } = state
+  const { inspection, note } = state
 
   if (phase === 'confirming_restore') {
     return (
@@ -84,7 +82,7 @@ export function PlanBreakingChangeDialog({ controller, savePointPositionLabel }:
         open
         submitting={submitting}
         positionLabel={inspection.savePointChoiceRequired ? savePointPositionText(inspection, savePointPositionLabel) : null}
-        note={restoreDropsChange ? PLAN_BREAKING_RESTORE_DROPS_CHANGE_NOTE : PLAN_BREAKING_RESTORE_NOTE}
+        note={PLAN_BREAKING_RESTORE_NOTE}
         // 「キャンセル」 ends the whole change, not only the restore step.
         onCancel={controller.cancel}
         onConfirm={controller.confirmRestore}
@@ -144,9 +142,7 @@ export function PlanBreakingChangeDialog({ controller, savePointPositionLabel }:
           </Typography>
         )}
         <Typography component="p" variant="body2" sx={{ mt: 1 }}>
-          {restoreDropsChange
-            ? PLAN_BREAKING_SAVE_POINT_CHOICE_EXPLANATION_DROPS_CHANGE
-            : PLAN_BREAKING_SAVE_POINT_CHOICE_EXPLANATION}
+          {PLAN_BREAKING_SAVE_POINT_CHOICE_EXPLANATION}
         </Typography>
       </>
     )

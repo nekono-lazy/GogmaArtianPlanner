@@ -2548,7 +2548,7 @@ PR-1（本節を追加したdocs-only PR）はどのversionも変更しない（
 | Planner Domain | `src/domain/planner/replacement/` の `plannerDeterministicMaterializer.ts`・`plannerMaterializationErrors.ts`・`plannerSearchOrigin.ts` | 全体最適化のStage D（射影起点のmaterialization、形状制約付き探索の実行） |
 | Build List | `src/domain/buildList/buildListEntryReplacement.ts`（置換の解決・適用・検証） | 全体最適化のStage D'と採用の保存、Planner validation、保存検証 |
 | Persistence | 保存mutation、`applyGuarded()`、current state再検証、`prepareFinalReplacementBuildList()`、`checkGeneratedBuildListEntriesFresh()`、`checkProductionPlanBuildListEntryReferences()`、`checkPersistablePlannerResultShape()`、`checkPersistableOrdinaryPlannerResultShape()` | 全体最適化の採用、通常保存、再計画の採用 |
-| Persistence | source DraftのCAS（`expectedSourceDraftId` / `assertSourceDraftCurrent()`。現在はPlanner Alternative保存だけが使う） | 9.6.6の競合解決の保存が再利用する |
+| Persistence | source DraftのCAS（`expectedSourceDraftId` / `assertSourceDraftCurrent()`。PR-1時点ではPlanner Alternative保存だけが使っていた。PR-2以降は競合解決の保存が使い、Planner Alternative保存はPR-5で削除した） | 9.6.6の競合解決の保存が再利用する |
 | Worker / Application | `prepare_interaction`（interaction preparation）、`restorePersistedExplicitResolutions()`、`conflictResolutionPlannerOptions()` | 9.6.3 / 9.6.4の競合解決 |
 | 永続data model | `PlannerConflictRepairLineage` 型、`ProductionPlan.conflictRepairLineage`、そのvalidator・Dexie / Export migration | 過去のPlanの読込・Export / Import（9.6.8） |
 
@@ -2615,6 +2615,51 @@ Production接続だけを削除した。
   形状制約付き探索、source Draft CAS、Persistenceの保存処理、再計画、実行ナビ、version（18 / 10 / 13）、Master Data。
   上の境界test（`isolation.test.ts` 等）はPR-4で変更していない
 
+**PR-5の再監査結果（Persistence・Plan-breaking guard）。** PR-5は最新mainのimport graphと呼び出し関係を、Production・test・
+benchmark・Researchに分けて再監査し、Planner Alternative actual repairの保存専用の経路だけを削除した。
+
+- 調査で確認したこと: `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` と
+  `checkPersistablePlannerAlternativeRepairShape()` のcallerはPersistenceのtest（`plannerResultPersistenceService.alternative.test.ts` /
+  `.savePoint.test.ts`）とIssue #101の実ケースtestの保存部分だけであり、ProductionのApplication / page / Worker、全体最適化、研究用
+  benchmarkは呼んでいなかった。Plan-breaking guardの `restoreSavePointInsteadOfChange()` /
+  `preparePlanGuardedSavePointRestoreInsteadOfChange()` の呼び出し元はrepair保存（と、承認付きで呼ばれた場合の通常保存。下記）だけで、
+  UI controllerへ `savePointRestore: 'drop_change'` を渡す画面は1つも無かった。全体最適化の採用は実行中Planがあれば保存前に拒否し、
+  通常保存と競合解決の保存は作成リストを書かないので、どの保存もPlanを壊さず、復元だけを書く分岐へは到達しない
+- 削除した: `PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` と内部の
+  `persistableRepair()`・`saveGuarded()`（承認の保存地点選択が「戻す」なら復元だけを書く分岐。残る保存は共通の `applyGuarded()` を
+  直接使う）、`PlannerAlternativeRepairSaveOutcome`、保存結果の `save_point_restored_recalculation_required`（`PlannerResultSaveOutcome`
+  は `saved` / `no_plan` だけになった）、保存検証moduleの `checkPersistablePlannerAlternativeRepairShape()`・
+  `PersistablePlannerAlternativeRepair`・`PlannerAlternativeRepairShapeResult`・補助関数と `alternative/` へのtype import、Domainの
+  `preparePlanGuardedSavePointRestoreInsteadOfChange()`、`PlanBreakingChangeGuard.restoreSavePointInsteadOfChange()`、UI controllerの
+  `savePointRestore`（`'save_change' | 'drop_change'`）と状態の `restoreDropsChange`、`PlanBreakingChangeDialog` の差し替え説明と
+  その文言定数（`PLAN_BREAKING_SAVE_POINT_CHOICE_EXPLANATION_DROPS_CHANGE` / `PLAN_BREAKING_RESTORE_DROPS_CHANGE_NOTE`）、
+  作成リスト画面の「承認の無い通常保存は復元しない」防御分岐
+- 通常保存へ承認が渡された場合: 以前は「戻す」を選んだ承認だけが復元専用の分岐へ進んだが、そこでも承認の再検証
+  （`evaluateApprovedMutation()`）が先に走り、Planを壊さない変更への承認は `plan_breaking_change_approval_not_required`（active Planが
+  無ければ `plan_breaking_change_state_changed`）で何も書かずに拒否されていた。削除後は全ての承認が共通の `apply()` で同じ判定を受けるので、
+  拒否codeと「何も書かない」結果は変わらない（regression testで固定した）
+- 残した（共有、または現在も使われる）もの: `savePlannerResult()`、`savePlannerConflictPreferenceResult()`、
+  `inspectBuildListOptimizationAdoptionSave()` / `saveBuildListOptimizationAdoption()`、共通の保存mutation・`applyGuarded()`・
+  current state再検証・source Draft CAS（`assertSourceDraftCurrent()`。競合解決の保存が使う）・Draftのatomic replacement、
+  `checkPersistablePlannerResultShape()`（全体最適化のartifact検査が使う）、`checkPersistableOrdinaryPlannerResultShape()`、
+  `checkPersistableConflictPreferenceResultShape()`、`prepareFinalReplacementBuildList()`、`checkGeneratedBuildListEntriesFresh()`、
+  `checkProductionPlanBuildListEntryReferences()`、Plan-breaking guardの `inspect()` / `apply()`（`afterWrite` を含む）と通常の
+  「戻す -> 変更 -> 破棄」、実行ナビ・Plan破棄・再計画採用のセーブ地点復元と共通の `writeExecutionSavePointRestore()`、
+  `ProductionPlan.conflictRepairLineage` とそのvalidator・Dexie / Export migration・Export / Import、version 17の限定互換例外。
+  Planner AlternativeのDomain計算（`PlannerAlternativeRepairArtifact` を含む）・2つの既定値・`PlannerBuildListContext` の
+  `temporary_*`・研究用benchmarkはPR-6以降で扱う
+- testの扱い: repair保存APIだけを検証していたtest（`plannerResultPersistenceService.alternative.test.ts` / `.savePoint.test.ts`）を
+  削除した。そこに含まれていた共通契約の検証は現行APIのtestへ残した、または移した: generated Entryのfreshnessの再計算・Plan IDの衝突・
+  Entry / Draft書き込み失敗時のrollback・BuildCandidateを書かないことは全体最適化の採用testが既に持ち、終了済み（completed /
+  abandoned）Planが置換対象Entryを参照していても承認不要で保存しそのPlanを変えないことは全体最適化の採用testへ移した。source Draft CASは
+  競合解決の保存testが、承認・「現在地点を維持」・「戻す -> 変更 -> 破棄」・古い承認の拒否・セーブ地点の不一致・復元の書き込み失敗時の
+  rollbackはguardのtestが持つ。Plan終了と `afterWrite` の失敗が同じtransactionでrollbackされること（以前はrepair保存だけが組み合わせて
+  いた）はguardのtestへ直接の検証として移した。Issue #101の実ケースtestは、Domainのrepair計算・Route・lineageの検証と期待値を変えずに
+  残し、保存APIを使っていたPhase 5-Bの2件だけを削除した（実ケースfixtureとDomain計算は残る）
+- 変えていない: RNG / Counter、通常Plannerの計算・Conflict決定集合・route commitment、Search、Planner AlternativeのDomain計算、
+  全体最適化の計算と採用、形状制約付き探索、`BuildListEntryReplacement`、実行ナビ、通常の保存・競合解決の保存・全体最適化の採用の
+  意味論、version（18 / 10 / 13）、Master Data。境界test（`isolation.test.ts` 等）はコメントの文言だけを現行に合わせ、検査内容は変えていない
+
 #### 9.6.12 段階分割
 
 依存関係（通常Plannerのroute commitmentはPlanner Alternativeのscenario runとも共有される、「比較する」は「この候補を優先」と
@@ -2649,10 +2694,10 @@ PR-4以降  不要になった経路の整理（import graphの再監査のう�
       - 9.6.11で共有と確認したものは残す。永続field conflictRepairLineageとそのvalidator / migrationは残す
       - PR-4（実施済み）: Worker request kind・Worker controllerのbranch・Production adapter・Client method・
         参照の無いPresentationと、それらだけを検証するtest
-      - PR-5以降: 保存API（inspectPlannerAlternativeRepairSave() / savePlannerAlternativeRepair()）とその検証、
-        Plan-breaking guardの「セーブ地点復元だけを書く」分岐、Planner AlternativeのDomain計算・試行上限のdefault・
-        PlannerBuildListContextのtemporary_*。研究用benchmark・Issue #101の実ケースtest・境界testの扱いと合わせて
-        再監査する
+      - PR-5（実施済み）: 保存API（inspectPlannerAlternativeRepairSave() / savePlannerAlternativeRepair()）とその検証、
+        Plan-breaking guardの「セーブ地点復元だけを書く」分岐とUI controllerのdrop_change
+      - PR-6以降: Planner AlternativeのDomain計算・試行上限のdefault・PlannerBuildListContextのtemporary_*。
+        研究用benchmark・Issue #101の実ケースtest・境界testの扱いと合わせて再監査する
 ```
 
 PR-2とPR-3を1つにまとめることは妨げないが、PR-2より前に「比較する」だけ、または「この候補を優先」だけを切り替えない。
@@ -2687,6 +2732,14 @@ Application関数で行い、新しい永続fieldやhashの実装を追加して
 errorは変えていない。testは、削除した経路だけを検証していたものを削除し、Worker / Clientの共通の振る舞い（generation、
 cancel、別種requestのresponseの取り違え防止、Workerのerror）は `create_plan` と `prepare_interaction` の組み合わせへ移した。
 計算・保存・表示の意味、永続shape、versionは変えていない（18 / 10 / 13）。
+
+**PR-5の実施記録。** PR-5はPR-2以降Productionから呼ばれなくなったPlanner Alternative actual repairの保存APIと、そのためだけに
+存在したPlan-breaking guardの「セーブ地点復元だけを書き、変更を保存しない」分岐を削除した（再監査の結果と削除・維持の内訳は9.6.11の
+「PR-5の再監査結果」）。現在の保存APIは通常保存の `savePlannerResult()`、競合解決の保存の `savePlannerConflictPreferenceResult()`、
+全体最適化の採用の `inspectBuildListOptimizationAdoptionSave()` / `saveBuildListOptimizationAdoption()` だけであり、どれも実行中Planを
+壊さない（承認を渡せば既存guardが拒否する）。Planを壊す変更の承認で「最後のゲーム内セーブ地点へ戻す」を選んだ場合は、例外なく
+「戻す -> 変更 -> 破棄」である（16.10）。過去に保存したlineage付きPlanの読込・validation・version 17の互換判定・Export / Importは
+変えていない。計算の意味、永続shape、versionは変えていない（18 / 10 / 13）。
 
 #### 9.6.13 test観点
 
@@ -4466,12 +4519,15 @@ Entryを重複追加せず、full Planner再実行も行わず、`generatedBuild
 
 > **現在のauthority（Phase 6完了後）。** 本節の保存境界（transaction内のcurrent state再読込・再validation、確認項目、
 > 旧Draftのatomic replacement、generated Entryによる元Entryの置換、partial save禁止）は現行契約であり、ordinary Planner
-> resultの `PlannerResultPersistenceService.savePlannerResult()` と、Planner Alternative actual repairの
-> `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`（本節末尾）がこれを共有する。本節が
+> resultの `PlannerResultPersistenceService.savePlannerResult()`、競合解決の保存の `savePlannerConflictPreferenceResult()`
+> （9.6.6）、作成リストの全体最適化の採用の `inspectBuildListOptimizationAdoptionSave()` / `saveBuildListOptimizationAdoption()`
+> （17.11）がこれを共有する。本節が
 > 「B8-D」「最終augmented PlannerInput」として述べる旧B8 orchestration resultの保存（`savePlannerOrchestrationResult()` /
 > `inspectPlannerOrchestrationResultSave()`）は **Phase 6-B2b以前のhistorical contract** であり、同APIはPhase 6-B2bで
-> 削除した。現在generated Entryを保存するのはactual repairだけであり、`PlanningInputSnapshot.buildListEntriesHash` は
-> repairのfinal scenario runの置換後集合を表す。
+> 削除した。本節末尾のPlanner Alternative actual repairの保存（`inspectPlannerAlternativeRepairSave()` /
+> `savePlannerAlternativeRepair()`）は **Phase 5-BからIssue #278 PR-5までのhistorical contract** であり、PR-2でcallerを失い、
+> PR-5で削除した（9.6.11）。現在generated Entryを保存するのは全体最適化の採用だけであり、その `PlanningInputSnapshot.buildListEntriesHash`
+> は採用後（置換後）の作成リストを表す。
 
 Planner Domain / WorkerはIndexedDBへ直接アクセスしない。保存はB8-DのApplication /
 Persistence serviceが行う。
@@ -4548,9 +4604,16 @@ approval?)` で保存する。ordinary resultはgenerated Entryもreplacementも
 - B8の `savePlannerOrchestrationResult()` / `inspectPlannerOrchestrationResultSave()` は、Phase 6-A以降通常のApplication
   runtimeから呼ばれず、Phase 6-B2bで削除した。保存APIはordinaryの `savePlannerResult()` と下記のPlanner Alternative
   actual repair用の2つだけである（Issue #260 PR-6Aで、作成リストの全体最適化の採用用の
-  `inspectBuildListOptimizationAdoptionSave()` / `saveBuildListOptimizationAdoption()` が本節の保存境界を共有して加わった。17.11）
+  `inspectBuildListOptimizationAdoptionSave()` / `saveBuildListOptimizationAdoption()` が本節の保存境界を共有して加わった。17.11。
+  Issue #278 PR-2で競合解決の保存 `savePlannerConflictPreferenceResult()` が加わり、PR-5でactual repair用の2つを削除した。
+  現在の保存APIは `savePlannerResult()`・`savePlannerConflictPreferenceResult()`・全体最適化の採用用の2つである）
 
-**Planner Alternative actual repairの保存（9.2.19.8、Phase 5-B）。** 「この候補を優先」のPure Domain artifact
+**Planner Alternative actual repairの保存（9.2.19.8、Phase 5-B。Issue #278 PR-5で削除）。** 以下は
+Phase 5-BからIssue #278 PR-5までのhistorical contractである。PR-2で生産計画画面の「この候補を優先」が通常Plannerへ切り替わって
+callerを失い、PR-5で `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`、
+`checkPersistablePlannerAlternativeRepairShape()`、「最後のゲーム内セーブ地点へ戻す」で復元だけを書く分岐を削除した（9.6.11）。
+ここで共有として述べる保存境界・source Draft CAS・`checkPersistablePlannerResultShape()` 等は、競合解決の保存と全体最適化の採用が
+引き続き使う。「この候補を優先」のPure Domain artifact
 （`PlannerAlternativeRepairArtifact`）は旧B8の `PlannerOrchestrationResult`（Phase 6-B2bで削除済み）へ変換せず、専用の
 `PlannerResultPersistenceService.inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` で保存する
 （Phase 5-Bでは並存したB8の `savePlannerOrchestrationResult()` の意味を変えなかった。B8保存APIはPhase 6-B2bで削除した）。
@@ -4594,10 +4657,11 @@ Planが置換後Build Listだけを参照すること、CalculationContext、旧
 
 を1つのDexie read-write transactionで行い、Entryだけ・Planだけ・lineageだけのpartial saveを残さない。
 
-**Issue #278の競合解決の保存（9.6.6、目標仕様）。** 切替（9.6.12のPR-2）以降、「この候補を優先」の結果はPlanner Alternative
+**Issue #278の競合解決の保存（9.6.6、PR-2で実装済み）。** 切替（9.6.12のPR-2）以降、「この候補を優先」の結果はPlanner Alternative
 専用保存ではなく、本節の通常保存の境界（`savePlannerResult()` と同じ検査、作成リストを書かない、承認不要）に、
 `invalid_conflict_resolution` の拒否、決定の記録の確認、`PlannerResult.conflicts` と `plan.conflicts` の一致、上記と同じ
-source DraftのCASを加えて保存する。作成リスト画面からの通常作成の `savePlannerResult()` の契約は変えない。
+source DraftのCASを加えて保存する（`savePlannerConflictPreferenceResult()`）。作成リスト画面からの通常作成の `savePlannerResult()` の
+契約は変えない。
 
 **作成リストの全体最適化の採用（17.11、Issue #260）。** 全体最適化のartifactは、通常の
 `savePlannerResult()` へもPlanner Alternative repairの保存へも変換せず、全体最適化専用の保存API（inspect / save）で
@@ -4948,7 +5012,9 @@ Targetの唯一の永続Entryである。生成Entryの途中採用状態・改�
   「この候補を優先」はこの確認を既存の `usePlanBreakingChangeApproval()` / `PlanBreakingChangeDialog` に接続する。
   作成リストの通常Planner（`createPlan()`）とその保存 `savePlannerResult()` は置換を生じない（Build Listを書かない）。
   Phase 6-B2b以前のhistorical contractでは、旧B8の `inspectPlannerOrchestrationResultSave()` /
-  `savePlannerOrchestrationResult(result, context, approval?)` がこの役割を持っていた（B10の再計算保存が接続していた）
+  `savePlannerOrchestrationResult(result, context, approval?)` がこの役割を持っていた（B10の再計算保存が接続していた）。
+  repair保存の2つのAPIもIssue #278 PR-2でcallerを失い、PR-5で削除した（9.6.11）。現在、置換を伴う保存は作成リストの全体最適化の
+  採用（17.11）だけであり、実行中Planがあれば保存前に拒否するのでPlan-breaking承認を要しない
 
 永続Build Listは1 Targetにつき最大1 Entryである（[DATA_MODEL.md](./DATA_MODEL.md) 9.4.1）。本節は
 constrained re-search（B8）、what-if（B9）、再計画Preview / 採用（16.8）がこのinvariantとどう
@@ -5027,6 +5093,8 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
   承認時は16.10の選択を経て、「現在地点を維持」（選択が出ない承認を含む）ではDraft保存・Entry置換・active Planの
   `abandoned`（`breaking_change_approved`）を同一transactionで行う。`O` を参照するのがDraft / stale / 終了済みPlanだけ
   なら、既存のEntry削除と同じくguard対象にしない
+  （Issue #278 PR-5以降、置換を伴うPlanner result保存は全体最適化の採用だけであり、実行中Planがあれば保存前に拒否するので、
+  この承認と次の2項目の復元時の扱いに到達する保存は無い。次の2項目はPhase 5-BからPR-5までのrepair保存のhistorical contractである）
 - この承認で「最後のゲーム内セーブ地点へ戻す」を選んだ場合は、16.9のセーブ地点復元 **だけ** を行い、Planner resultの
   保存は中止する（16.10）。Planner resultは復元前のRNG・Counter・OwnedWeapon・Target実行状態・Build Listから
   計算したprecomputed artifactであり、その `PlanningInputSnapshot` は復元後の状態のauthorityではないためである。
@@ -5045,7 +5113,11 @@ Stepが削除済みEntryを参照しない。表示中Planから復元するexpl
   `preparePlanGuardedSavePointRestoreInsteadOfChange()`（承認と選択の検証は `preparePlanGuardedMutation()` と共有、
   復元は `prepareExecutionSavePointRestore()`）と `PlanBreakingChangeGuard.restoreSavePointInsteadOfChange()`
   （書き込みは `restoreExecutionSavePoint()` と共通の `writeExecutionSavePointRestore()`）であり、復元を独自に
-  書き換える処理を持たない。通常のPlan-breaking変更（`PlanBreakingChangeGuard.apply()`）の意味は変えない
+  書き換える処理を持たない。通常のPlan-breaking変更（`PlanBreakingChangeGuard.apply()`）の意味は変えない。
+  Issue #278 PR-5で `savePlannerAlternativeRepair()`、`save_point_restored_recalculation_required`、
+  `preparePlanGuardedSavePointRestoreInsteadOfChange()`、`restoreSavePointInsteadOfChange()` を削除した。`savePlannerResult()` の
+  結果は `saved` / `no_plan` だけであり、承認を渡せば保存地点の選択にかかわらず既存guardが拒否する。
+  `writeExecutionSavePointRestore()` と通常のPlan-breaking変更の「戻す -> 変更 -> 破棄」は変えていない
 - 再計画採用（16.8）: Phase 6-A以降の再計画Previewはordinary Planner resultであり、generated Entryもreplacementも
   持たないので、採用はBuild Listを書き換えず置換しない。（Phase 6-A以前のhistorical contractでは、旧実行中Planを
   `abandoned`（`replan_adopted`）にするのと同じtransactionで置換し、旧実行中Planは採用で終了するため `O` がその
@@ -5451,7 +5523,8 @@ resolutionが選択するEntryである（既存9.2.4.7の「全fixed Entry」�
 9. Planner Alternative専用の savePlannerAlternativeRepair() で、generated Entryによる元Entry置換、新Draft、
    lineageを1 transactionで保存する（9.2.15末尾 / 9.2.18。Plan-breaking guardも既存どおり。Phase 5-Bで
    B8の savePlannerOrchestrationResult() へ載せない専用APIとした。accepted replacementがfinal Planで
-   非選択でも保存するためである。旧B8の保存APIはPhase 6-B2bで削除した）
+   非選択でも保存するためである。旧B8の保存APIはPhase 6-B2bで削除した。この専用APIもIssue #278 PR-5で
+   削除し、現在actual repairのartifactを保存する経路は無い。9.6.11）
 ```
 
 - replacementが別Target Cと新たに競合しても、その競合をこの操作内で再帰的に解決しない。保存された新Planで、
@@ -6126,7 +6199,8 @@ interface PlannerAlternativeRouteSummary {
     `inspectPlannerOrchestrationResultSave()`、その結果型、共有保存境界の `requireGeneratedEntriesSelected` 分岐と、generated
     Entryがfinal Planでselectedであることを要求するB8専用の `checkProductionPlanBuildListReferences()`。保存APIは
     `savePlannerResult()`（ordinary）と `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`（Planner
-    Alternative actual repair）だけになった。replacement付き保存の共通部（`checkPersistablePlannerResultShape()`、
+    Alternative actual repair）だけになった（Phase 6-B2b時点。その後に全体最適化の採用と競合解決の保存が加わり、actual repair用の
+    2つと `checkPersistablePlannerAlternativeRepairShape()` はIssue #278 PR-5で削除した。9.6.11）。replacement付き保存の共通部（`checkPersistablePlannerResultShape()`、
     `validateGeneratedBuildListEntryReplacements()`、`prepareFinalReplacementBuildList()`、
     `findPersistedGeneratedBuildListEntryCollision()`、`checkBuildListEntryReplacementsCurrent()`、
     `checkGeneratedBuildListEntriesFresh()`、`checkProductionPlanBuildListEntryReferences()`、
@@ -6341,7 +6415,7 @@ Issue #101実ケースfixtureは残した。versionは動かしていない（9.
 repairの `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` だけであり、これ以外のlegacy Planner経路は
 存在しない。次は**Phase 7**（Issue #122 Presentation改善）である（Phase 7は行わず、Issue #278（9.6）が引き継いだ。PR-2以降は
 「比較する」が無く「この候補を優先」も `createPlan()` であり、PR-4でPlanner AlternativeのWorker request kind・Client method・
-Production adapterを削除した。repairの保存APIの削除はPR-5以降である。9.6.12）。
+Production adapterを削除し、PR-5でrepairの保存APIとPlan-breaking guardの復元だけを書く分岐を削除した。9.6.12）。
 `maxPlannerReruns` は複数Targetが1つのbudgetを共有するrerun-pressure workloadで実測する。`maxCandidateTrialsPerTarget` は、
 現行semanticsで「Candidate 1がtrialでreject、後続Candidateがfound」となるProduction workloadを確認できていないため、
 semantic thresholdをPhase 3-Bの実測対象とせず、1 trialあたりの実コストと安全弁としての役割からPhase 3-Cで設計判断する
@@ -8228,15 +8302,17 @@ Planを壊す変更の承認）を行う場合、ゲーム側でユーザーが�
 - 「最後のゲーム内セーブ地点へ戻す」は16.9の復元を行ってから破棄操作を続ける。
   Planを壊す変更の承認では、復元 -> Plan破棄 -> 変更保存の順とする。
   再計画採用だけは16.8のとおり採用を中止する
-- 例外として、Planを壊す変更が **Planner result（Planner Alternative actual repairの `PlannerAlternativeRepairArtifact`）の
-  保存** である場合（9.2.18、generated Entryによる作成リスト置換、`savePlannerAlternativeRepair()`。Phase 6-B2b以前は旧B8の
-  `PlannerOrchestrationResult` の保存も同じ扱いだった）は、復元だけを行い変更を保存しない。Planner resultは復元前の
-  状態から計算したartifactであり、復元後の状態に対するauthorityではないため、変更を復元後の状態へ再適用しない。
-  generated Entry / Entry置換 / Draft置換を書かず、Planも破棄せず（復元されたPlanのまま）、復元後の状態からの
-  再計算を求める。snapshot検証は弱めない。RNG編集、Counter編集、所持武器・目標武器の編集、作成リストの手動変更
-  など通常の変更は従来どおり 復元 -> 変更 -> Plan破棄 である
-  - Issue #278の目標仕様（9.6.6）の競合解決の保存は作成リストを変更しないので、Planを壊す変更にならず、この例外も
-    16.10の選択も発生しない。切替（9.6.12のPR-2）以降、この例外の利用者は残らない（削除はPR-4以降で再監査して扱う。9.6.11）
+- Planを壊す変更の承認での「最後のゲーム内セーブ地点へ戻す」には例外が無い（Issue #278 PR-5以降）。RNG編集、Counter
+  編集、所持武器・目標武器の編集、作成リストの手動変更などはすべて 復元 -> 変更 -> Plan破棄 である。Planner resultの保存
+  （通常保存、競合解決の保存、全体最適化の採用）はどれもPlanを壊さないので、この選択自体が発生しない
+  - historical（Phase 5-BからIssue #278 PR-5まで）: Planを壊す変更が **Planner result（Planner Alternative actual repairの
+    `PlannerAlternativeRepairArtifact`）の保存** である場合（9.2.18、generated Entryによる作成リスト置換、
+    `savePlannerAlternativeRepair()`。Phase 6-B2b以前は旧B8の `PlannerOrchestrationResult` の保存も同じ扱いだった）は、復元だけを
+    行い変更を保存しない例外があった。Planner resultは復元前の状態から計算したartifactであり、復元後の状態に対するauthorityでは
+    ないため、generated Entry / Entry置換 / Draft置換を書かず、Planも破棄せず（復元されたPlanのまま）、復元後の状態からの再計算を
+    求めた（snapshot検証は弱めない）。Issue #278の競合解決の保存（9.6.6）は作成リストを変更しないので、PR-2の切替以降この例外の
+    利用者は残らず、PR-5で例外の実装（`restoreSavePointInsteadOfChange()` / `preparePlanGuardedSavePointRestoreInsteadOfChange()`、
+    UIの `drop_change`）を削除した（9.6.11）
 - セーブ地点が存在しない場合、またはセーブ地点の後にこのPlanのExecutionHistoryが無い
   （現在位置と同じ）場合は選択を出さない
 - 妥協品として確定して終了（16.12）は、現在の武器状態を確定する操作なので選択を出さない
@@ -9837,7 +9913,7 @@ Accordionを通常Planner用であることを明示して使い、全体最適�
   Production code・Worker protocol・Client・Application・永続shape・Export shape・探索上限（`null`）を変えていない
 - PR-6A（採用・Persistence）の確認: 前提1〜4は成り立ち、versionを変更しない。保存するのは既存shapeの `BuildListEntry` と `ProductionPlan`
   （`conflictRepairLineage = null`）だけで、table・index・field・provenance・Export shapeを追加していない。既存の保存API
-  （`savePlannerResult()` / `savePlannerAlternativeRepair()`）の挙動と、共通保存検証helperの契約を変えていない（既存の保存Serviceの
+  （`savePlannerResult()` / `savePlannerAlternativeRepair()`。後者はIssue #278 PR-5で削除した）の挙動と、共通保存検証helperの契約を変えていない（既存の保存Serviceの
   内部は、全体最適化の前提確認を差し込めるように共有部分を切り出しただけである）。Domain計算・Worker protocol・探索上限・UIは変えていない。
   レビュー修正で、runtime-onlyのartifactの除外記録にwarningのmessage（`warningMessage`）を加えた。永続shape・Export shapeには入らず、
   Workerとmain threadは同じbuildの同じ構造検査を使うのでWorker protocol versionも変えない。Stage D'の成立条件（除外Entry集合の比較key、
@@ -9996,7 +10072,7 @@ Accordionを通常Planner用であることを明示して使い、全体最適�
   RNG状態・通常アーティアCounter・参照OwnedWeapon・Target性能定義・CalculationContextの変化でstaleになったgenerated Entryの拒否、
   永続 `isStale` がfalseでも再計算でstaleなら拒否、tokenによる拒否とfreshnessによる拒否を別々に固定、status / 名称 / memo
   だけの変更では拒否しない、保存後のDraftが `prepareProductionPlanStart()` でそのまま開始できる、Export / Importで往復する、
-  既存の `savePlannerResult()` / `savePlannerAlternativeRepair()` の挙動が変わらない
+  既存の `savePlannerResult()`（PR-6A時点では `savePlannerAlternativeRepair()` も。同APIはIssue #278 PR-5で削除した）の挙動が変わらない
 - isolation: Productionが `src/benchmarks/**` と `src/domain/search/research/**` をimportしない、Worker bundleが
   `src/db/**` を含まない、Research専用symbolがProductionに無い、Production Planner Worker protocolを変えない
 - キャンセル: キャンセル後・settle後・古いrequestのmessageを適用しない、キャンセルしたrequestから採用される結果が0件

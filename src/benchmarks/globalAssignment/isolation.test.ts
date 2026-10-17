@@ -63,7 +63,7 @@ const BUILD_LIST_OPTIMIZATION_CALLERS = [
   '../../workers/buildListOptimizationWorkerContracts.ts', '../../workers/buildListOptimization.worker.ts', '../../workers/buildListOptimization.worker.production.ts',
   '../../workers/buildListOptimization.worker.entry.ts', '../../workers/buildListOptimization.worker.benchmark.ts', '../../workers/buildListOptimization.worker.benchmark.entry.ts',
   '../../services/planner/buildListOptimizationWorkerClient.ts', '../../services/planner/buildListOptimizationService.ts',
-  // Issue #260 PR-6A: the adoption save (inspect / save) beside the ordinary and repair saves.
+  // Issue #260 PR-6A: the adoption save (inspect / save) beside the ordinary and conflict preference saves.
   '../../services/planner/plannerResultPersistenceService.ts',
   // Issue #260 PR-6B1: the plan creation boundary (the method judgement at the press, the ordinary Planner or the optimization start).
   '../../services/planner/planCreationService.ts',

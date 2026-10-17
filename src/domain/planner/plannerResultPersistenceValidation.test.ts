@@ -18,8 +18,9 @@ import {
 
 /**
  * The shared save-time checks of a Planner result that replaces persisted
- * Entries (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18), used by the Planner
- * Alternative repair save.
+ * Entries (`docs/PLANNER_SPEC.md` 9.2.15 / 9.2.18), used by the Build List
+ * optimization adoption (17.11; the Planner Alternative repair save that also
+ * used them was removed in Issue #278 PR-5).
  */
 function entry(id: string, targetWeaponId: string): BuildListEntry {
   const base = createValidBuildListEntry()
@@ -92,9 +93,10 @@ describe('checkProductionPlanBuildListEntryReferences over the final replacement
     expect(checkProductionPlanBuildListEntryReferences(planOver(finalEntries), finalEntries)).toBeNull()
   })
 
-  it('accepts a Plan that does not select the generated Entry: the replacement set is the authority', () => {
-    // A Planner Alternative repair may save an accepted `G` its final Plan left
-    // unselected (9.2.19.6); no check requires every generated Entry to be selected.
+  it('accepts a Plan that does not select the generated Entry: the reference check requires no selection', () => {
+    // The reference check only requires every referenced Entry to exist; whether
+    // every generated Entry is selected is the Build List global optimization
+    // adoption's own check (PLANNER_SPEC 17.11).
     expect(checkProductionPlanBuildListEntryReferences(planOver([A]), finalEntries)).toBeNull()
   })
 

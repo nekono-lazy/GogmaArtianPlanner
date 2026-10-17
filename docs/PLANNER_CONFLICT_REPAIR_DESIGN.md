@@ -54,7 +54,10 @@ Issue #278:              通常Plannerの競合解決を、登録済みRouteの�
                          create_planner_alternative_repair）・PlannerWorkerClient method・Production Worker adapter・
                          最小限の比較表示を削除した。上の「Production behavior」の「比較する」/「この候補を優先」の
                          routingは記録であり、現在のProduction routingはcreatePlan() / prepareInteraction() だけである。
-                         Domain計算と専用保存APIの整理はPR-5以降（PLANNER_SPEC 9.6.12）
+                         PR-5で本設計の専用保存API（inspectPlannerAlternativeRepairSave() / savePlannerAlternativeRepair()、
+                         checkPersistablePlannerAlternativeRepairShape()）と、Plan-breaking guardの「セーブ地点へ戻すだけで
+                         保存しない」分岐（drop_change）を削除した。上の「Production behavior」の保存APIも記録である。
+                         Domain計算の整理はPR-6以降（PLANNER_SPEC 9.6.11 / 9.6.12）
 ```
 
 この文書はtask-specificな **設計記録** である。背景、方式選定の理由、後続PRの分割を記録する。
@@ -475,7 +478,8 @@ Master dataVersion                      4
    Build Listから消えた後に通常Plannerがstall dropしたときの表示（Phase 5または#122）。Domain上は既存の
    stall drop / `rejectedBuildListEntries` で扱い、新しいstale理由を作らない
 6. repair結果とlineageの保存の具体的な形（Phase 5。**Phase 5-Bで確定**: B8の `savePlannerOrchestrationResult()` へは載せず、
-   Planner Alternative専用の `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` でartifactを保存する）。
+   Planner Alternative専用の `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` でartifactを保存する。
+   この専用APIはIssue #278 PR-5で削除した）。
    **Phase 5-Aで決めたDomain側の形**: `createPlannerAlternativeRepair()` は `comparison`（what-ifと同じtyped comparison）と
    `persistence`（`persistable` のとき `PlannerAlternativeRepairArtifact`、そうでなければtypedな `not_persistable` 理由）を返す。
    artifactは決定を展開したfinal `PlannerResult`（`plan` 非null）、accepted replacementのgenerated Entryと

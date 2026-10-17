@@ -132,7 +132,7 @@ export interface ProductionPlanPageDependencies {
       expectedSourceDraftId: ProductionPlanId
     },
     currentCalculationContext: CalculationContext,
-  ): Promise<Exclude<PlannerResultSaveOutcome, { kind: 'save_point_restored_recalculation_required' }>>
+  ): Promise<PlannerResultSaveOutcome>
   /**
    * The read-only preview of the Target links a draft's start makes
    * (`docs/UI_FLOW.md` 11). Never write authority: the start re-verifies.

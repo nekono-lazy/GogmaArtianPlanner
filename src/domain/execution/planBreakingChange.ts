@@ -30,7 +30,6 @@ import {
 import {
   collectExecutionScopeOwnedWeaponIds,
   prepareExecutionSavePointRestore,
-  type ExecutionSavePointRestoreWrite,
 } from './executionSavePoint'
 import { ExecutionRuntimeError, executionFailure } from './executionRuntimeError'
 import {
@@ -454,58 +453,6 @@ export function preparePlanGuardedMutation<R>(input: PlanGuardedMutationInput<R>
     savePointHandling: approval.savePointDecision === null ? 'no_choice' : 'keep_current',
     deletedExecutionHistoryIds: [],
     deletesExecutionSavePoint: savePoint !== null,
-  })
-}
-
-/**
- * The approved 「最後のゲーム内セーブ地点へ戻す」 of a change that must NOT be
- * applied again to the restored state (`docs/PLANNER_SPEC.md` 9.2.18 / 16.10):
- * a Planner orchestration result, calculated before the restore from the
- * pre-restore RNG, Counters, weapons, Targets and Build List. Its snapshot is no
- * authority over the restored state, so re-applying it could only fail - or,
- * with a weakened check, save a stale result. Instead the save point restore is
- * the whole outcome: the change is dropped, nothing of it is written, the
- * running Plan is not abandoned, and the caller asks for a new calculation from
- * the restored state - the same reason the replan adoption stops at a restore.
- *
- * Everything else is exactly the ordinary approved path: the mutation is still
- * applied to the current state first (its own validation, and whether it still
- * breaks the Plan), the approval must name the Plan the user saw and a change
- * that still breaks it, the 16.10 choice is re-derived and the decision must be
- * the restore of the save point the user saw, and the restore is
- * `prepareExecutionSavePointRestore()` unchanged, every fail-closed check
- * included. It writes nothing itself; the caller writes the returned restore in
- * one transaction. Every other guarded change keeps restore -> change ->
- * abandonment (`preparePlanGuardedMutation()`).
- */
-export function preparePlanGuardedSavePointRestoreInsteadOfChange<R>(
-  input: PlanGuardedMutationInput<R>,
-): ExecutionSavePointRestoreWrite {
-  const { state, approval } = input
-  if (approval === null || approval.savePointDecision?.kind !== 'restore_save_point') {
-    throw new Error('A save point restore instead of the change needs an approval whose decision restores the save point.')
-  }
-  const { activePlan, breaking } = evaluateApprovedMutation(input)
-  if (activePlan === null || !breaking.breaksPlan) {
-    // Unreachable: an approval of a change that breaks no active Plan was
-    // refused by `evaluateApprovedMutation()` already.
-    throw new Error('A save point restore instead of the change needs an active Plan the change breaks.')
-  }
-  const history = planHistory(activePlan, state.executionHistory)
-  const savePoint = planSavePoint(activePlan, state.executionSavePoints)
-  const choice = deriveRunningPlanSavePointChoiceRequirement(activePlan, savePoint, history)
-  assertRunningPlanSavePointDecision(activePlan, choice, approval.savePointDecision)
-  return prepareExecutionSavePointRestore({
-    plan: activePlan,
-    recordedAt: approval.savePointDecision.recordedAt,
-    state: {
-      ownedWeapons: state.ownedWeapons,
-      targetWeapons: state.targetWeapons,
-      buildListEntries: state.buildListEntries,
-      planExecutionHistory: history,
-      executionSavePoint: savePoint,
-    },
-    currentCalculationContext: input.currentCalculationContext,
   })
 }
 

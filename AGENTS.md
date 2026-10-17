@@ -660,8 +660,10 @@ The Draft bound is an independent invariant: a Draft beside a running Plan is no
 not a second Draft), `getDraftProductionPlan()` fails closed on two, and
 `deleteDraftProductionPlans()` is the replacement step:
 `PlannerResultPersistenceService.savePlannerOrchestrationResult()` (historical - removed in Phase
-6-B2b; the same Draft replacement now runs in the ordinary `savePlannerResult()` and the Planner
-Alternative `savePlannerAlternativeRepair()`) now runs "delete every
+6-B2b; the same Draft replacement now runs in the ordinary `savePlannerResult()`, the conflict
+preference `savePlannerConflictPreferenceResult()` and the Build List optimization
+`saveBuildListOptimizationAdoption()`; the Planner Alternative `savePlannerAlternativeRepair()` that
+also ran it was removed in Issue #278 PR-5) now runs "delete every
 Draft + add the generated BuildListEntries + add the new Draft" in its one transaction after
 every existing save-time check, so only a fully successful save replaces the previous Draft,
 and a refused state, an invalid result, a generated Entry collision, an Entry write failure or
@@ -2389,6 +2391,17 @@ unselected `G` is still saved (the B8-only `checkProductionPlanBuildListReferenc
 `inspectPlannerOrchestrationResultSave()` / `savePlannerOrchestrationResult()` were removed in Phase
 6-B2b). The ordinary Planner save `savePlannerResult()` and the replan adoption carry no generated
 Entry since Phase 6-A and never replace an Entry. B8's `currentAugmentedInput` went with B8.
+Issue #278 PR-5 then removed that repair save (`inspectPlannerAlternativeRepairSave()` /
+`savePlannerAlternativeRepair()`, `checkPersistablePlannerAlternativeRepairShape()`) and with it the one
+exception to restore -> change -> abandonment (`preparePlanGuardedSavePointRestoreInsteadOfChange()`,
+`PlanBreakingChangeGuard.restoreSavePointInsteadOfChange()`, the outcome
+`save_point_restored_recalculation_required`, the UI controller's `savePointRestore: 'drop_change'`): it had
+no caller since PR-2. The only save that now persists a generated Entry replacing `O` is the Build List
+global optimization adoption (`saveBuildListOptimizationAdoption()`, `docs/PLANNER_SPEC.md` 17.11), which
+shares `prepareFinalReplacementBuildList()`, `checkPersistablePlannerResultShape()`,
+`checkGeneratedBuildListEntriesFresh()` and `checkProductionPlanBuildListEntryReferences()` and refuses any
+running Plan before the guard judges, so no Planner result save needs a Plan-breaking approval and every
+approved breaking change, without exception, is restore -> change -> abandonment.
 
 ---
 
@@ -3891,8 +3904,11 @@ calculation types, the Production adapters `createProductionPlannerAlternativeCo
 `PlannerWorkerClient.createPlannerAlternativeComparison()` / `createPlannerAlternativeRepair()` and the dead comparison presentation
 (`ProductionPlanAlternativeComparison` / `presentProductionPlanAlternative`). The Production Planner Worker now carries `create_plan` /
 `prepare_interaction` / `cancel` / `error` only, and the Client exposes `createPlan()` / `prepareInteraction()` / `cancelPlan()` /
-`dispose()`. The Planner Alternative Domain calculations, their defaults and the repair save API stay without a Production caller until
-the PR-5+ cleanup (`docs/PLANNER_SPEC.md` 9.6.11 / 9.6.12).
+`dispose()`. Issue #278 PR-5 removed the repair save API (`inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`,
+`checkPersistablePlannerAlternativeRepairShape()`) and the Plan-breaking guard's restore-instead-of-change branch; the current saves
+are `savePlannerResult()`, `savePlannerConflictPreferenceResult()` and the Build List optimization adoption. The Planner Alternative
+Domain calculations and their defaults stay without a Production caller until the PR-6+ cleanup (`docs/PLANNER_SPEC.md` 9.6.11 /
+9.6.12).
 
 ---
 
@@ -4523,7 +4539,8 @@ Application / Persistence responsibilities.
 `docs/PLANNER_SPEC.md` 9.6 (with `docs/REQUIREMENTS.md` 23.2, `docs/UI_FLOW.md` 11.6, `docs/DATA_MODEL.md` 11.1.1 /
 11.8) is the formal contract fixed by Issue #278 PR-1 (docs-only). **PR-2 implemented the calculation, save, routing and
 version parts, and PR-3 the conflict display of `docs/UI_FLOW.md` 11.6.2 - 11.6.5**; the Planner Alternative cleanup is PR-4+
-(PR-4 removed its Worker / Client / Production adapter / presentation path; the Domain calculations and the repair save API are PR-5+).
+(PR-4 removed its Worker / Client / Production adapter / presentation path, PR-5 the repair save API and the guard's
+restore-instead-of-change branch; the Domain calculations are PR-6+).
 PR-3 is Presentation plus read-only projection only: `createProductionPlanConflictSectionDisplay()` /
 `ProductionPlanConflictSection` (`src/components/planner/`) build every Japanese text from typed data (`PlanConflict.kind`, the persisted
 selection / recommendation, `rejectedBuildListEntries.reason`, `targetCompletions`, the preparation's typed codes); the interaction
@@ -4616,11 +4633,22 @@ Alternative sections as the current contract.
   shape-constrained isolation tests without weakening them. PR-4 removed only the Worker request kinds, the controller
   branches, the Production adapters, the Client methods and the zero-import comparison presentation; the research
   Planner Alternative Worker / page (`plannerAlternative.worker.benchmark*`, `PlannerAlternativeBenchmarkPage`), which import
-  only `createProductionPlannerWorkerDependencies()`, stay, and no isolation test changed
+  only `createProductionPlannerWorkerDependencies()`, stay, and no isolation test changed. PR-5 removed only the repair save
+  (`inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()`, `persistableRepair()`, `saveGuarded()`,
+  `PlannerAlternativeRepairSaveOutcome`, `checkPersistablePlannerAlternativeRepairShape()` and its helpers), the outcome
+  `save_point_restored_recalculation_required` (`PlannerResultSaveOutcome` is `saved` / `no_plan`), the guard's
+  `preparePlanGuardedSavePointRestoreInsteadOfChange()` / `restoreSavePointInsteadOfChange()`, the UI controller's
+  `savePointRestore` / `restoreDropsChange` and the dialog's drop-change texts, and the Build List page's defensive branch; it kept
+  `savePlannerResult()`, `savePlannerConflictPreferenceResult()`, the optimization adoption APIs, the save mutation,
+  `applyGuarded()`, `assertSourceDraftCurrent()`, every shared check and the guard's `inspect()` / `apply()` (`afterWrite`
+  included). The repair-only test files were deleted; their shared cases live in the optimization adoption, conflict preference
+  and guard tests (the ended-Plan case and the `afterWrite` + abandonment rollback were moved), and the Issue #101 test keeps its
+  Domain repair / Route / lineage regression without its two save cases. An approval passed to `savePlannerResult()` is refused
+  exactly as before (`plan_breaking_change_approval_not_required`, nothing written), whatever its save point decision
 - PR split (9.6.12): PR-2 switches calculation, save, routing and removes 「比較する」 in one PR (never one without the
-  other); PR-3 the conflict display; PR-4 the dead Worker / Client / UI path (done); PR-5+ the Planner Alternative
-  Domain calculations, their defaults, the repair save API and its checks, the guard's restore-instead-of-change branch and
-  `PlannerBuildListContext`'s `temporary_*`, re-audited together with the research benchmarks and tests that use them
+  other); PR-3 the conflict display; PR-4 the dead Worker / Client / UI path (done); PR-5 the repair save API and its
+  checks and the guard's restore-instead-of-change branch (done); PR-6+ the Planner Alternative Domain calculations, their
+  defaults and `PlannerBuildListContext`'s `temporary_*`, re-audited together with the research benchmarks and tests that use them
 
 ---
 
@@ -5738,17 +5766,27 @@ Relevant test areas include:
 - Phase 6-B2b: no `src/domain/planner/constrained/` folder and no legacy B8 / B9 Planner symbol, bound / default, B8-only warning
   kind or label, or B8 Persistence API left in `src`; the exact current `plannerWarningKinds` and one label per kind; the Planner
   Domain barrel exporting no legacy calculation; the ordinary and Planner Alternative save tests covering current state
-  re-validation, generated Entry freshness, write-failure atomicity, the guard's rollback and the 16.10 save point choice; an accepted
-  but unselected `G` saved by the repair save; the materialization error runtime contract through the Planner barrel; the Normal
-  Counter production-target conflict compared through `createPlannerAlternativeWhatIfComparison()`; and the Issue #101 real-case
-  fixture keeping its pinned Candidate / BuildListEntry / Conflict IDs
+  re-validation, generated Entry freshness, write-failure atomicity, the guard's rollback and the 16.10 save point choice (since
+  Issue #278 PR-5 the Planner Alternative half lives in the Build List optimization adoption, conflict preference and guard tests);
+  an accepted but unselected `G` saved by the repair save (until Issue #278 PR-5 removed that save); the materialization error runtime
+  contract through the Planner barrel; the Normal Counter production-target conflict compared through
+  `createPlannerAlternativeWhatIfComparison()`; and the Issue #101 real-case fixture keeping its pinned Candidate / BuildListEntry /
+  Conflict IDs
+- Issue #278 PR-5: no `inspectPlannerAlternativeRepairSave()` / `savePlannerAlternativeRepair()` /
+  `checkPersistablePlannerAlternativeRepairShape()` / `restoreSavePointInsteadOfChange()` /
+  `preparePlanGuardedSavePointRestoreInsteadOfChange()` / `drop_change` left in `src`; an approval choosing the save point restore
+  passed to `savePlannerResult()` refused with `plan_breaking_change_approval_not_required` and nothing written; the guard rolling
+  back the change, the restore and the Plan abandonment together when an `afterWrite` write fails; the Build List optimization
+  adoption replacing an Entry a completed / abandoned Plan still references with no approval and that Plan kept as persisted; and the
+  Issue #101 Domain repair / Route / lineage regression unchanged
 - `ProductionPlan.conflictRepairLineage` validated structurally only (literals, IDs, the
   `replaced` iff replacement rule, never a current foreign key), Dexie v9 -> v10 and Export
   12 -> 13 filling `null` into every Plan body (table, save point, Undo snapshot, Undo
   snapshot save point) without inferring a decision, a schema 12 body carrying the field
   refused, the Planner Alternative repair save replacing `O` with an accepted but unselected
   `G` atomically with the Draft and its artifact lineage while the B8 save still refuses an
-  unselected generated Entry, and `ProductionPlanPage` calling only
+  unselected generated Entry (historical: the repair save was removed in Issue #278 PR-5; the
+  lineage validation, migrations and Export / Import of a stored lineage stay), and `ProductionPlanPage` calling only
   `createPlannerAlternativeComparison()` / `createPlannerAlternativeRepair()` (historical: since Issue #278
   PR-2 the page calls only `createPlan()` / `prepareInteraction()`, and PR-4 removed both Client methods)
 - Predicted Normal creation units reading `[false]` for `count = 1`, `[true, false]` for 2
