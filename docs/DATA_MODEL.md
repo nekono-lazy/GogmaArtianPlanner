@@ -2381,6 +2381,8 @@ maxPlanSteps到達時だけ使用し、途中のbest Planとwarningを同時に�
 ```ts
 export interface RejectedBuildListEntry {
   buildListEntryId: BuildListEntryId;
+  // Issue #121で追加する（仕様確定、実装は後続PR）。Plan生成時のそのEntryの目標武器の記録
+  targetWeaponId?: TargetWeaponId;
   reason:
     | "lower_priority"
     | "resource_conflict"
@@ -2388,9 +2390,55 @@ export interface RejectedBuildListEntry {
     | "already_satisfied"
     | "requires_protected_weapon"
     | "dominated_by_better_candidate";
+  // Issue #121で追加する（仕様確定、実装は後続PR）。reason === "resource_conflict" の記録だけが持つ
+  resourceConflictCause?: RejectedBuildListEntryResourceConflictCause;
   detail: string;
 }
+
+export type RejectedBuildListEntryResourceConflictCause =
+  | "explicit_resolution_not_selected"   // 明示選択で別の候補が選ばれた（別Targetとの競合を確認できた）
+  | "provisional_outcome_not_committed"  // 未選択Conflictの暫定帰結で実行しなかった（別Targetとの競合を確認できた）
+  | "stuck_drop_without_other_routes"    // deadlock / stall drop。他にpendingなcommitted Routeが無かった（単独Routeの進行不能）
+  | "stuck_drop_with_other_routes";      // deadlock / stall drop。他のcommitted Routeもpendingだった（競合かどうか確認できない）
 ```
+
+- `reason` の記録方式は[PLANNER_SPEC.md](./PLANNER_SPEC.md) 11.0-Bの「ProductionPlanの集約値」と
+  [ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md](./ISSUE_103_DETERMINISTIC_PLANNER_DESIGN.md) 8.4に従い、本Issueで変えない。決定的
+  scheduler（calculation schema 14以降）では、明示決定の非選択Entry、未選択Conflictの暫定帰結で実行しなかったEntry、deadlock / stallで
+  落としたEntryがすべて `resource_conflict` になる。このうちdeadlock / stallは別Targetとの競合を証明できない（単独Routeのstallを含む）
+  ので、`resource_conflict` だけでは「競合のため今回作成しない目標武器」を数えられない（PLANNER_SPEC 9.6.9.1の監査）。`detail` は
+  内部向けの診断文字列であり、解析しない
+- `targetWeaponId`（Issue #121）は、Plan生成（`createRejectedBuildListEntries()`）がそのrunのPlannerInputのBuildListEntryの
+  `targetWeaponId` をそのままcopyした値である。すべての `reason` の記録に付ける
+- `resourceConflictCause`（Issue #121）は、`reason === "resource_conflict"` の記録にだけ付け、Plan生成が `rejectedReason()` と同じ分岐順で、
+  Plannerのruntimeの記録から決める: 選択済みConflictの分岐なら `explicit_resolution_not_selected`、`conflict_not_committed` の分岐で
+  route commitmentのruntime evidence `provisionalOutcome` が非nullなら `provisional_outcome_not_committed`、それ以外（schedulerの
+  deadlock / stall drop）は、drop時点で落としたEntry以外にremaining unitを持つcommitted Entryがあったかで
+  `stuck_drop_with_other_routes` / `stuck_drop_without_other_routes`。決められない記録はPlan生成の不変条件違反としてfail closedし、
+  推測した原因を付けない。生産計画の概要は前の2つだけを競合として数え、`stuck_drop_with_other_routes` があれば比率を判定しない
+  （PLANNER_SPEC 9.6.9.1）
+- どちらのfieldも推測・再導出をせず、Plannerの決定（採用Entry、reason、Conflict、Step、drop）を変えない。schedulerは、drop時点の
+  `pending`（他にremaining unitを持つcommitted Entry）をruntime-onlyのtyped evidenceとして記録するだけで、落とすEntryと時点は変えない
+- どちらのfieldも記録であり、current foreign keyではない。`targetWeaponId` のTargetWeaponの存在を要求せず、TargetWeapon削除の参照保護
+  （ReferenceFinder）の対象にしない。Entryの識別は従来どおり `buildListEntryId` であり、Candidate IDを使わない
+- 値が無い記録は、これらのfieldの追加前に保存されたPlanの記録を意味する。現在の作成リスト、`PlanConflict`、`detail` から補完せず、
+  Dexie / Exportのmigrationで補完もしない（原因はruntimeの記録からしか決まらず、Plan非依存のEntryは実行中Planのまま削除・置換され
+  得るので、現在の作成リストは生成時の記録ではない）。`resource_conflict` の記録がこれらを欠くPlanでは、概要の比率を
+  「確認できません」とする（PLANNER_SPEC 9.6.9.1の条件4）
+- 新しく保存するPlan: Plannerの保存境界（`savePlannerResult()`、`savePlannerConflictPreferenceResult()`、全体最適化の採用、再計画の採用）は、
+  すべての不採用記録の `targetWeaponId` と、すべての `resource_conflict` の記録の `resourceConflictCause` を要求し、欠けていれば
+  保存しない。加えて `targetWeaponId` がそのEntryの `targetWeaponId` と一致することを確かめる
+- 検証（`validateProductionPlan()`。保存とImportの両方で使う）: 値がある場合に、`targetWeaponId` のID形式、`resourceConflictCause` が
+  既知のliteralで `reason === "resource_conflict"` の記録だけにあること、`explicit_resolution_not_selected` の記録が「同じPlanの
+  `conflicts` に、そのEntryを参加者に含み別のEntryを選択したConflictがあり、その選択Entryが `selectedBuildListEntryIds` に含まれる」
+  ことと両方向で一致することを確かめる。暫定帰結・deadlock / stallの原因は、Plan本体にruntimeの証拠が残らないので構造の検証だけとする。
+  Import / Exportの参照検証（15.2）は、top-level `active` Planについて、既存の「Entryと組で名指しされるTargetはそのEntryの
+  `targetWeaponId` と一致する」規則を `targetWeaponId` にも適用する。Targetの存在は要求しない
+- version: optional fieldの追加であり、`reason` のunionとmappingは変えない。既存のrecordとExportはそのまま有効で、Dexieのtable / index
+  も変わらない（`PlanStep.progressedTargetWeaponIds` の追加と同じ扱い、11.3）。Plannerの計算意味とPlan互換判定も変わらないので、
+  `CURRENT_CALCULATION_APP_SCHEMA_VERSION` 18、`DATABASE_SCHEMA_VERSION` 10、`ExportRoot.schemaVersion` 13を変えず、migrationを
+  追加しない。これらのfieldを知らない旧buildは未知のfieldとして読み飛ばす（`validateProductionPlan()` は不採用記録の
+  `buildListEntryId` 以外を検証しない）
 
 ---
 
@@ -3072,7 +3120,8 @@ hydrateし、`getOrCreateDefault()` で上書きしない。
   targetLinks / compromiseLabels / targetCompletions、conflictの参加者・推奨・選択・checkpointParticipants、
   `rejectedBuildListEntries`）と、`collectProductionPlanDependentTargetWeaponIds()` が定義するPlan依存Target
   およびmilestoneのTarget、Entryと組で名指しされるTargetがそのEntryの `targetWeaponId` と一致すること
-  （Plan生成 / Plan開始効果と同じ導出。`draft` / `stale` / `completed` / `abandoned` のPlan bodyはこれらを
+  （Issue #121の `rejectedBuildListEntries[].targetWeaponId` を含む。その記録のTargetの存在は要求しない、11.9。
+  Plan生成 / Plan開始効果と同じ導出。`draft` / `stale` / `completed` / `abandoned` のPlan bodyはこれらを
   current foreign keyとして要求しない、15.2）、ExecutionHistoryの `planId` / `planStepId`、
   `executionInProgress.productionPlanId` が実行中（active / stale）Planであること、
   `completedByProductionPlanId`、ゲーム内セーブ地点参照とそのPlanが実行中であること、セーブ地点のsnapshot Planが
@@ -3204,7 +3253,11 @@ Production RNG契約切替時の互換性は次のとおりとする。
 - Step実行前または実行後の期待Hashが不一致ならPlanがstaleになる
 - ExecutionHistoryで想定外結果が入った場合にPlanがstaleになる
 - 所持武器のstatusだけを変更してもPlanがstaleにならない
-- PlanConflictとRejectedBuildListEntryがBuildListEntry IDだけを判断基準として保持する
+- PlanConflictとRejectedBuildListEntryがBuildListEntry IDだけを判断基準として保持する（Candidate IDを使わない。Issue #121の
+  `RejectedBuildListEntry.targetWeaponId` / `resourceConflictCause` は記録であり、Entryの判断基準・current foreign keyではない）
+- RejectedBuildListEntryの `targetWeaponId` がPlannerInputのEntryの値と一致し、`resource_conflict` の記録の `resourceConflictCause` が
+  明示選択 / 暫定帰結 / 他のRouteが無いdeadlock・stall / 他のRouteもあるdeadlock・stallを区別し、`explicit_resolution_not_selected` が
+  選択済みConflictと両方向で一致し、値の無い旧Planの記録とfieldの無い旧Exportを受理して補完しない（Issue #121、11.9）
 
 ## 17.2 Repository / Persistence Test
 
