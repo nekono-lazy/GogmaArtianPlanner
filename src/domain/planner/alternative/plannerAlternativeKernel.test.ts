@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   belowPracticalBonuses,
+  IDEAL_SERIES_SKILL_ID,
   idealBonuses,
   practicalBonuses,
 } from '../../../test/fixtures/constrainedEnumeration'
@@ -25,9 +26,11 @@ import type {
   RestorationBonusSet,
   RouteOperation,
   TargetWeapon,
+  TargetWeaponId,
 } from '../../models/publicTypes'
 import { candidateStableKey, PlannerAlternativeSearchError } from '../../search'
 import { preparePlannerInitialContext } from '../plannerInitialContext'
+import type { PlannerConflictResolution } from '../plannerTypes'
 import {
   preparePlannerAlternativeKernel,
   runPlannerAlternativeKernel,
@@ -560,5 +563,214 @@ describe('Planner Alternative kernel: fail closed and determinism', () => {
     expect(second.outcome.generated.candidate.id).toBe(first.outcome.generated.candidate.id)
     expect(second.outcome.generated.entry.createdAt).not.toBe(first.outcome.generated.entry.createdAt)
     expect(second.reservation).toEqual(first.reservation)
+  })
+})
+
+/*
+ * Restored resolutions and prior fixed Entries (PLANNER_SPEC 9.2.19.11, the
+ * latest decision wins). Moved from the removed repair chain test (Issue #278
+ * PR-7): the earlier decisions reach the kernel only through its own typed
+ * inputs, `priorFixedBuildListEntryIds` and `priorExcludedRoutes`, given here
+ * as plain values.
+ *
+ * ```text
+ * earlier decision 1   Conflict W (Skill 8):  E preferred over F   -> W -> E restored, E prior fixed
+ * earlier decision 2   Conflict X (Skill 7):  D preferred over Z   -> X -> D restored, D prior fixed
+ * this decision        Conflict Y (Gogma 10): A preferred over D   -> D's current Route loses
+ * ```
+ *
+ * D's alternative D2 exists only once the restored `X -> D` is superseded:
+ * kept, `X -> D` would still demand D's current Route.
+ * `W -> E` is unrelated to this decision and stays a fixed choice.
+ */
+const chainTarget = (id: string) => `target.chain.${id}` as TargetWeaponId
+const chainEntry = (id: string) => `build-list.chain.${id}` as BuildListEntryId
+const chainSource = (id: string) => `owned.chain.${id}`
+const CHAIN_OWN_SKILL = (id: string) => `series_skill.fixture.chain-${id}`
+/** E and F's own Ideal Series Skill, drawn at Skill 8, so no weapon of D or Z satisfies them. */
+const CHAIN_SKILL_8 = 'series_skill.fixture.chain-s8'
+
+const CHAIN_A = { target: chainTarget('a'), entry: chainEntry('a'), source: chainSource('a') }
+const CHAIN_D = { target: chainTarget('d'), entry: chainEntry('d'), source: chainSource('d') }
+const CHAIN_Z = { target: chainTarget('z'), entry: chainEntry('z'), source: chainSource('z') }
+const CHAIN_E = { target: chainTarget('e'), entry: chainEntry('e'), source: chainSource('e') }
+const CHAIN_F = { target: chainTarget('f'), entry: chainEntry('f'), source: chainSource('f') }
+
+function chainScenario(): OrchestrationScenario {
+  const a = ownSkillTarget(CHAIN_A.target, CHAIN_OWN_SKILL('a'), 5)
+  const d = skillConstrainedTarget(CHAIN_D.target, { priority: 3 })
+  const skill8 = { seriesSkillId: CHAIN_SKILL_8, groupSkillId: null, matchMode: 'all' as const }
+  const e = skillConstrainedTarget(CHAIN_E.target, { priority: 2, idealSkillCondition: skill8, practicalSkillCondition: skill8 })
+  const f = skillConstrainedTarget(CHAIN_F.target, { priority: 1, idealSkillCondition: skill8, practicalSkillCondition: skill8 })
+  const z = skillConstrainedTarget(CHAIN_Z.target, { priority: 1 })
+  return orchestrationScenario({
+    targets: [a, d, e, f, z],
+    ownedWeapons: [
+      orchestrationSource(CHAIN_A.source, { seriesSkillId: CHAIN_OWN_SKILL('a') }),
+      orchestrationSource(CHAIN_D.source, { restorationBonuses: belowPracticalBonuses(), seriesSkillId: CHAIN_OWN_SKILL('d') }),
+      orchestrationSource(CHAIN_Z.source, { restorationBonuses: idealBonuses(), seriesSkillId: CHAIN_OWN_SKILL('z') }),
+      orchestrationSource(CHAIN_E.source, { restorationBonuses: idealBonuses(), seriesSkillId: CHAIN_OWN_SKILL('e') }),
+      orchestrationSource(CHAIN_F.source, { restorationBonuses: idealBonuses(), seriesSkillId: CHAIN_OWN_SKILL('f') }),
+    ],
+    entries: [
+      orchestrationEntry(CHAIN_A.entry, a, resetRoute(CHAIN_A.source), { finalBonuses: idealBonuses(), seriesSkillId: CHAIN_OWN_SKILL('a') }),
+      // Y: A and D Reset at Gogma 10. X: D and Z Reset Skills at 7.
+      orchestrationEntry(CHAIN_D.entry, d, {
+        kind: 'existing_gogma_mixed',
+        sourceOwnedWeaponId: resetRoute(CHAIN_D.source).sourceOwnedWeaponId,
+        operations: [...resetRoute(CHAIN_D.source).operations, ...resetSkillsRoute(CHAIN_D.source).operations],
+      }),
+      orchestrationEntry(CHAIN_Z.entry, z, resetSkillsRoute(CHAIN_Z.source, 7)),
+      // W: E and F Reset Skills at 8.
+      orchestrationEntry(CHAIN_E.entry, e, resetSkillsRoute(CHAIN_E.source, 8), { seriesSkillId: CHAIN_SKILL_8 }),
+      orchestrationEntry(CHAIN_F.entry, f, resetSkillsRoute(CHAIN_F.source, 8), { seriesSkillId: CHAIN_SKILL_8 }),
+    ],
+    engine: {
+      resetResultAt: (gogma) => (gogma === 10 || gogma === 12 ? idealBonuses() : gogma === 11 ? practicalBonuses() : belowPracticalBonuses()),
+      skillResultAt: (skill) => ({
+        seriesSkillId: skill === 7 ? IDEAL_SERIES_SKILL_ID : skill === 8 ? CHAIN_SKILL_8 : `series_skill.fixture.s${skill}`,
+        groupSkillId: null,
+      }),
+    },
+  })
+}
+
+function chainConflictKey(built: OrchestrationScenario, kind: string, participants: readonly BuildListEntryId[]): string {
+  const prepared = preparePlannerInitialContext(built.input, built.dependencies)
+  if (prepared.status !== 'ready') throw new Error('fixture not ready')
+  const found = prepared.context.initialConflictDetection.conflicts.find((conflict) =>
+    conflict.kind === kind && participants.every((id) => conflict.buildListEntryIds.includes(id)))
+  if (!found) throw new Error(`no ${kind} conflict of ${participants.join(', ')}`)
+  return found.id
+}
+
+function chainRouteKey(built: OrchestrationScenario, id: BuildListEntryId): string {
+  return candidateStableKey(built.input.buildListEntries.find((candidate) => candidate.id === id)!.candidateSnapshot)
+}
+
+interface Chain {
+  built: OrchestrationScenario
+  w: PlannerConflictResolution
+  x: PlannerConflictResolution
+  decision: PlannerConflictResolution
+}
+
+/** The Draft after decisions 1 and 2: both resolutions restored. */
+function chain(): Chain {
+  const built = chainScenario()
+  const w = { conflictKey: chainConflictKey(built, 'same_skill_counter', [CHAIN_E.entry, CHAIN_F.entry]), selectedBuildListEntryId: CHAIN_E.entry }
+  const x = { conflictKey: chainConflictKey(built, 'same_skill_counter', [CHAIN_D.entry, CHAIN_Z.entry]), selectedBuildListEntryId: CHAIN_D.entry }
+  const decision = { conflictKey: chainConflictKey(built, 'same_gogma_counter', [CHAIN_A.entry, CHAIN_D.entry]), selectedBuildListEntryId: CHAIN_A.entry }
+  built.input.conflictResolutions = [w, x]
+  return { built, w, x, decision }
+}
+
+/**
+ * Both earlier decisions still in force: E and D are prior fixed, and the
+ * Routes they invalidated (F's and Z's current Routes) are prior excluded.
+ */
+function activeChainRequest(c: Chain): PlannerAlternativeKernelRequest {
+  return {
+    plannerInput: c.built.input,
+    decision: c.decision,
+    priorFixedBuildListEntryIds: [CHAIN_D.entry, CHAIN_E.entry],
+    priorExcludedRoutes: [
+      { targetWeaponId: CHAIN_F.target, routeKeys: [chainRouteKey(c.built, CHAIN_F.entry)] },
+      { targetWeaponId: CHAIN_Z.target, routeKeys: [chainRouteKey(c.built, CHAIN_Z.entry)] },
+    ],
+    extent: { maxNormalAdvance: 1, maxGogmaAdvance: 5, maxSkillAdvance: 3 },
+    bounds: { maxCandidateTrialsPerTarget: 4, maxPlannerReruns: 8 },
+  }
+}
+
+describe('Planner Alternative kernel: a prior fixed Entry the decision invalidates supersedes its restored resolution (PLANNER_SPEC 9.2.19.11)', () => {
+  it('drops the restored X -> D from the effective input, and nothing else', () => {
+    const c = chain()
+    const prepared = preparePlannerAlternativeKernel(activeChainRequest(c), c.built.dependencies)
+    if (prepared.status !== 'ready') throw new Error(`not ready: ${JSON.stringify(prepared)}`)
+    const { scenario: prepScenario } = prepared.prepared
+    expect(prepared.prepared.invalidatedBuildListEntryIds).toEqual([CHAIN_D.entry])
+    expect(prepared.prepared.supersededPriorFixedBuildListEntryIds).toEqual([CHAIN_D.entry])
+    expect(prepared.prepared.supersededConflictResolutions).toEqual([c.x])
+    // W -> E stays in place; the decision itself is merged as usual.
+    expect(prepScenario.mergedInput.conflictResolutions).toEqual([c.w, c.decision])
+    expect(prepScenario.fixedConstraints.map(({ fixedBuildListEntryId }) => fixedBuildListEntryId).sort())
+      .toEqual([CHAIN_A.entry, CHAIN_E.entry].sort())
+    expect(prepared.prepared.explicitDecisionBuildListEntryIds).toEqual([CHAIN_A.entry, CHAIN_E.entry].sort())
+    // The request input is not mutated.
+    expect(c.built.input.conflictResolutions).toEqual([c.w, c.x])
+  })
+
+  it('reserves neither D nor its old resolution: an alternative D2 is searched and found', async () => {
+    const c = chain()
+    const kernel = completed(await runPlannerAlternativeKernel(activeChainRequest(c), c.built.dependencies))
+    expect(kernel.explicitDecisionBuildListEntryIds).toEqual([CHAIN_A.entry, CHAIN_E.entry].sort())
+    expect(kernel.targets.map(({ targetWeaponId }) => targetWeaponId)).toEqual([CHAIN_D.target])
+    const [d] = kernel.targets
+    // D is in no fixed Route set; the unrelated prior fixed E still is.
+    expect(d.fixedRouteBuildListEntryIds).toEqual([CHAIN_A.entry, CHAIN_E.entry].sort())
+    // Only D's own invalidated Route is excluded for D: F's and Z's prior excluded Routes stay theirs.
+    expect(d.excludedRouteKeys).toEqual([chainRouteKey(c.built, CHAIN_D.entry)])
+    expect(d.outcome.status).toBe('found')
+    if (d.outcome.status !== 'found') return
+    expect(d.outcome.replacement).toEqual({
+      targetWeaponId: CHAIN_D.target,
+      replacedBuildListEntryId: CHAIN_D.entry,
+      generatedBuildListEntryId: d.outcome.generated.entry.id,
+    })
+  })
+
+  it('keeps the decision own conflict key under the ordinary merge and supersedes only the prior X -> D', () => {
+    const c = chain()
+    // The Draft also restored an earlier choice of D on the decided conflict itself.
+    const restoredY = { conflictKey: c.decision.conflictKey, selectedBuildListEntryId: CHAIN_D.entry }
+    c.built.input.conflictResolutions = [c.w, restoredY, c.x]
+    const prepared = preparePlannerAlternativeKernel(activeChainRequest(c), c.built.dependencies)
+    if (prepared.status !== 'ready') throw new Error('not ready')
+    expect(prepared.prepared.supersededConflictResolutions).toEqual([c.x])
+    // Y is replaced in place by the decision: it is never superseded away.
+    expect(prepared.prepared.scenario.mergedInput.conflictResolutions).toEqual([c.w, c.decision])
+  })
+})
+
+describe('Planner Alternative kernel: only a prior fixed Entry supersedes a restored resolution (PLANNER_SPEC 9.2.19.11)', () => {
+  it('keeps every restored resolution without prior fixed Entries', () => {
+    const c = chain()
+    const prepared = preparePlannerAlternativeKernel(
+      { ...activeChainRequest(c), priorFixedBuildListEntryIds: [], priorExcludedRoutes: [] },
+      c.built.dependencies,
+    )
+    if (prepared.status !== 'ready') throw new Error('not ready')
+    expect(prepared.prepared.supersededPriorFixedBuildListEntryIds).toEqual([])
+    expect(prepared.prepared.supersededConflictResolutions).toEqual([])
+    expect(prepared.prepared.scenario.mergedInput.conflictResolutions).toEqual([c.w, c.x, c.decision])
+    expect(prepared.prepared.explicitDecisionBuildListEntryIds).toEqual([CHAIN_A.entry, CHAIN_D.entry, CHAIN_E.entry].sort())
+  })
+
+  it('never supersedes through an Entry no longer prior fixed: X -> D stays and D2 is not found', async () => {
+    const c = chain()
+    // A still later decision already invalidated D without a replacement, so D
+    // is no longer prior fixed (the latest decision fixed A instead) and D's
+    // current Route is prior excluded, though D is still in the Build List and
+    // X -> D is still restored.
+    const request: PlannerAlternativeKernelRequest = {
+      ...activeChainRequest(c),
+      priorFixedBuildListEntryIds: [CHAIN_A.entry, CHAIN_E.entry],
+      priorExcludedRoutes: [
+        { targetWeaponId: CHAIN_D.target, routeKeys: [chainRouteKey(c.built, CHAIN_D.entry)] },
+        { targetWeaponId: CHAIN_F.target, routeKeys: [chainRouteKey(c.built, CHAIN_F.entry)] },
+        { targetWeaponId: CHAIN_Z.target, routeKeys: [chainRouteKey(c.built, CHAIN_Z.entry)] },
+      ],
+    }
+    const prepared = preparePlannerAlternativeKernel(request, c.built.dependencies)
+    if (prepared.status !== 'ready') throw new Error('not ready')
+    expect(prepared.prepared.supersededPriorFixedBuildListEntryIds).toEqual([])
+    expect(prepared.prepared.supersededConflictResolutions).toEqual([])
+    expect(prepared.prepared.explicitDecisionBuildListEntryIds).toContain(CHAIN_D.entry)
+
+    const kernel = completed(await runPlannerAlternativeKernel(request, c.built.dependencies))
+    const d = kernel.targets.find(({ targetWeaponId }) => targetWeaponId === CHAIN_D.target)
+    expect(d?.excludedRouteKeys).toContain(chainRouteKey(c.built, CHAIN_D.entry))
+    expect(d?.outcome.status).not.toBe('found')
   })
 })

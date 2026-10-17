@@ -285,19 +285,25 @@ describe('Production Planner Worker calculations (Issue #278 PR-4)', () => {
     expect(productionModule).not.toHaveProperty('defaultPlannerAlternativeTrialBounds')
   })
 
-  it('leaves the Planner Domain calculations the Worker no longer routes to in place (Phase 6-B2b, Issue #278 PR-4)', async () => {
+  it('exports no removed Planner Domain calculation and keeps the shared ones (Phase 6-B2b, Issue #278 PR-4 / PR-7)', async () => {
     const plannerDomain = await import('../domain/planner')
     // Matched by shape, so the removed names appear nowhere in the source tree.
     const legacy = Object.keys(plannerDomain).filter((name) =>
       /Orchestration|PlannerWhatIf|^createConstrained|ConstrainedSearchIdentity|CONSTRAINED_ROUTE_POLICY/.test(name))
     expect(legacy).toEqual([])
-    // The Planner Alternative Domain calculations and their defaults stay for
-    // the research benchmarks and tests until the PR-5+ cleanup re-audits them
-    // (`docs/PLANNER_SPEC.md` 9.6.11), and the neutral replacement primitives
-    // stay for the Build List global optimization.
-    expect(plannerDomain).toHaveProperty('createPlannerAlternativeWhatIfComparison')
-    expect(plannerDomain).toHaveProperty('createPlannerAlternativeRepair')
+    // The Planner Alternative what-if, actual repair, scenario composition,
+    // comparison and repair lineage calculations were removed in Issue #278 PR-7
+    // (`docs/PLANNER_SPEC.md` 9.6.11 / 9.6.12).
+    const removedAlternative = Object.keys(plannerDomain).filter((name) =>
+      /PlannerAlternative(WhatIf|Repair|Scenario|Decision|ConflictExpanded|RouteSummary|Distance|Lineage)|[Pp]lannerConflictRepair/.test(name))
+    expect(removedAlternative).toEqual([])
+    // The research kernel, its trial bounds and the neutral replacement
+    // primitives stay: the research benchmarks and tests read the former, and
+    // the Build List global optimization shares the latter.
+    expect(plannerDomain).toHaveProperty('preparePlannerAlternativeKernel')
+    expect(plannerDomain).toHaveProperty('runPlannerAlternativeKernel')
     expect(plannerDomain).toHaveProperty('defaultPlannerAlternativeTrialBounds')
+    expect(plannerDomain).toHaveProperty('derivePlannerAlternativeReservation')
     expect(plannerDomain).toHaveProperty('createDeterministicMaterializer')
     expect(plannerDomain).toHaveProperty('ConstrainedMaterializationError')
   })

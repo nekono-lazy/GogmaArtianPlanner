@@ -16,7 +16,6 @@ import type {
 import {
   checkProductionPlanBuildListEntryReferences,
   createPlanningBuildListEntriesHash,
-  type PlannerAlternativeRepairArtifact,
   type PlannerResult,
 } from '../../domain/planner'
 import {
@@ -607,16 +606,20 @@ describe('Build List optimization adoption: freshness, the Plan and the write (T
 })
 
 describe('Build List optimization adoption: the artifact itself ([P1])', () => {
-  it.each(ATTEMPTS)('%s: refuses an ordinary Planner result or a repair artifact in place of an optimization artifact', (kind) =>
+  it.each(ATTEMPTS)('%s: refuses an ordinary Planner result or a repair-shaped artifact in place of an optimization artifact', (kind) =>
     withScenario(async (scenario) => {
       const { fixture } = scenario
       const ordinary: PlannerResult = structuredClone(fixture.artifact.plannerResult)
+      // The fields of the removed Planner Alternative repair artifact (Issue #278
+      // PR-7), built structurally: a Plan, generated Entries, replacement pairs
+      // and a repair lineage, without the optimization artifact's input token,
+      // planning Targets, exclusions or summary.
       const repair = {
         plannerResult: structuredClone(fixture.artifact.plannerResult),
         generatedBuildListEntries: structuredClone(fixture.artifact.generatedBuildListEntries),
         generatedBuildListEntryReplacements: structuredClone(fixture.artifact.replacements),
         conflictRepairLineage: { decisions: [] },
-      } as unknown as PlannerAlternativeRepairArtifact
+      }
       const startSnapshot = { observedDraftPlanId: PREVIOUS_DRAFT_ID, runningPlanAbsent: true as const }
       for (const source of [
         ordinary,

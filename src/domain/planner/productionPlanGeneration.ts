@@ -841,10 +841,11 @@ export async function generatePlanFromFullRun<T extends PlannerAnyRunTermination
     abandonmentReason: null,
     abandonedAt: null,
     completedAt: null,
-    // Plan generation always starts a new chain (PLANNER_SPEC 9.2.19.11): the
-    // ordinary Planner, the replan Preview and every full run the Planner
-    // Alternative scenario starts. Only the actual repair's save sets the
-    // lineage of the Draft it stores, from the repair artifact itself.
+    // Plan generation never writes a repair lineage (PLANNER_SPEC 9.6.8): the
+    // ordinary Planner, the conflict preference, the replan Preview, the Build
+    // List global optimization and the research full runs alike. The field
+    // stays only for Plans an earlier version's actual repair saved; that
+    // repair and its lineage derivation were removed in Issue #278 PR-7.
     conflictRepairLineage: null,
     createdAt: now,
     updatedAt: now,

@@ -12,11 +12,12 @@ import type {
 /**
  * The caller-supplied trial bounds of one Planner Alternative kernel request
  * (`docs/PLANNER_SPEC.md` 9.2.19.12): the trial and rerun meanings of the
- * former B9 what-if bounds (removed in Phase 6-B2b), shared by the what-if and
- * the actual repair kernel. The Domain
- * never substitutes, clamps or completes a value;
- * `defaultPlannerAlternativeTrialBounds` is the value a Production caller
- * passes explicitly (Phase 3-C).
+ * former B9 what-if bounds (removed in Phase 6-B2b). The Domain never
+ * substitutes, clamps or completes a value;
+ * `defaultPlannerAlternativeTrialBounds` is the value Phase 3-C decided for the
+ * what-if and the actual repair. No Production caller passes it since Issue
+ * #278 removed both (PR-4 / PR-7); Issue #154 research reads it as a
+ * calculation condition, so its name and value stay.
  */
 export interface PlannerAlternativeTrialBounds {
   /** Candidate trials per non-fixed Target before that Target stops. */
