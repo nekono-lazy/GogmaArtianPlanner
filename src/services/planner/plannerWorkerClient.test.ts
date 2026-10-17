@@ -880,7 +880,7 @@ describe('PlannerWorkerClient interaction preparation (B10-B1)', () => {
       issues: [{ path: 'beamWidth', code: 'invalid_integer', message: 'fixture issue' }],
       warnings: [{ kind: 'build_list_entry_stale', message: 'fixture warning' }],
       excludedBuildListEntries: [{
-        buildListEntryId: createValidBuildListEntry().id, reason: 'fixture diagnostic',
+        buildListEntryId: createValidBuildListEntry().id, kind: 'build_list_entry_stale', reason: 'fixture diagnostic',
       }],
     },
   ])('posts only PlannerInput and resolves the typed $status result', async (result) => {

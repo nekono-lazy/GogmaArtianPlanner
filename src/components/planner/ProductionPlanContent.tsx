@@ -61,6 +61,9 @@ interface ProductionPlanContentProps {
   variant?: ProductionPlanContentVariant
 }
 
+/** A rejected Entry whose persisted `reason` has no label: said as unknown, never guessed. */
+const UNKNOWN_REJECTED_REASON_LABEL = '採用されなかった理由を確認できません'
+
 /** A titled, border-based section of the read-only Plan view. */
 function PlanSection({
   title,
@@ -273,16 +276,23 @@ export function ProductionPlanContent({
                 sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, minWidth: 0 }}
               >
                 <Stack spacing={0.5}>
+                  {/* The typed reason's label only; an unknown reason (an old or
+                      broken record) is not explained by a guess. */}
                   <Typography component="p" variant="subtitle2">
-                    {rejectedBuildListEntryReasonLabels[rejected.reason]}
+                    {rejectedBuildListEntryReasonLabels[rejected.reason] ?? UNKNOWN_REJECTED_REASON_LABEL}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                    {rejected.detail}
-                  </Typography>
-                  {(!preview || debugMode) && (
-                    <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                      BuildListEntry ID: {rejected.buildListEntryId}
-                    </Typography>
+                  {/* The internal detail (it names BuildListEntry and other
+                      implementation terms) and the internal ID are Debug Mode
+                      only, in the persisted view too (`docs/UI_FLOW.md` 11.6.4). */}
+                  {debugMode && (
+                    <>
+                      <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                        detail: {rejected.detail}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                        BuildListEntry ID: {rejected.buildListEntryId}
+                      </Typography>
+                    </>
                   )}
                 </Stack>
               </Box>

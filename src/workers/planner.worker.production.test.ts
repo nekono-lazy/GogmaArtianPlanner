@@ -346,8 +346,11 @@ describe('Production Worker interaction projection (B10-B1)', () => {
     expect(result).toEqual({
       status: 'ready',
       validBuildListEntryIds: [entries[0].id, entries[1].id],
+      // The typed exclusion code is the warning kind validation recorded for
+      // that Entry (a definition change stales it), never parsed from `reason`.
       excludedBuildListEntries: [{
         buildListEntryId: entries[2].id,
+        kind: 'build_list_entry_stale',
         reason: prepared.context.excludedBuildListEntries[0].reason,
       }],
       currentConflicts: [{
@@ -416,18 +419,24 @@ describe('Production Worker interaction projection (B10-B1)', () => {
         issues: expected.issues,
         warnings: expected.warnings,
         excludedBuildListEntries: expected.excludedBuildListEntries.map(
-          ({ entry, reason }) => ({ buildListEntryId: entry.id, reason }),
+          ({ entry, reason }) => ({ buildListEntryId: entry.id, kind: 'build_list_entry_stale', reason }),
         ),
       })
+      expect(expected.excludedBuildListEntryWarnings.map(({ buildListEntryId, warning }) => [buildListEntryId, warning.kind]))
+        .toEqual([[entries[2].id, 'build_list_entry_stale']])
       expect(structuredClone(result)).toEqual(result)
       expect(JSON.parse(JSON.stringify(result))).toEqual(result)
       expect(input).toEqual(before)
     },
   )
 
-  it.each(['protection', 'capability', 'prediction_support'] as const)(
-    'reflects the existing %s exclusion authority',
-    (failure) => {
+  it.each([
+    ['protection', 'protected_weapon_required'],
+    ['capability', 'rng_state_missing'],
+    ['prediction_support', 'rng_prediction_unsupported'],
+  ] as const)(
+    'reflects the existing %s exclusion authority with its typed kind',
+    (failure, expectedKind) => {
       const { input, dependencies } = interactionFixture()
       if (failure === 'protection') {
         input.ownedWeapons[0].isProtected = true
@@ -442,14 +451,21 @@ describe('Production Worker interaction projection (B10-B1)', () => {
       if (expected.status !== 'ready') throw new Error('Expected ready fixture')
       expect(expected.context.excludedBuildListEntries.length).toBeGreaterThan(1)
       const result = createProductionPlannerWorkerCalculations().prepareInteraction(input, dependencies)
+      const kindByEntryId = new Map(expected.context.excludedBuildListEntryWarnings.map(
+        ({ buildListEntryId, warning }) => [buildListEntryId, warning.kind],
+      ))
       expect(result).toEqual({
         status: 'ready',
         validBuildListEntryIds: expected.context.validBuildListEntries.map(({ entry }) => entry.id),
         excludedBuildListEntries: expected.context.excludedBuildListEntries.map(
-          ({ entry, reason }) => ({ buildListEntryId: entry.id, reason }),
+          ({ entry, reason }) => ({ buildListEntryId: entry.id, kind: kindByEntryId.get(entry.id), reason }),
         ),
         currentConflicts: [],
       })
+      // The Entries this failure itself excludes carry its typed kind; the
+      // definition-changed Entry keeps its own stale kind.
+      expect(result.status === 'ready' && result.excludedBuildListEntries.map(({ kind }) => kind))
+        .toContain(expectedKind)
     },
   )
 

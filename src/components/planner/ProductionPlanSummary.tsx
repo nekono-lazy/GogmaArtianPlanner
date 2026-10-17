@@ -24,6 +24,7 @@ export function SummaryFigure({
   span = false,
   numeric = false,
   detail,
+  gridColumn,
 }: {
   label: string
   value: string | number
@@ -31,6 +32,8 @@ export function SummaryFigure({
   numeric?: boolean
   /** A secondary line under the value, inside the same `dd`. */
   detail?: string
+  /** A responsive grid placement; `span` (the whole row everywhere) wins when both are given. */
+  gridColumn?: string | { xs?: string; sm?: string; md?: string }
 }) {
   return (
     <Box
@@ -41,7 +44,7 @@ export function SummaryFigure({
         px: 1.25,
         py: 1,
         minWidth: 0,
-        gridColumn: span ? '1 / -1' : undefined,
+        gridColumn: span ? '1 / -1' : gridColumn,
       }}
     >
       <Typography component="dt" variant="caption" color="text.secondary" sx={{ display: 'block' }}>

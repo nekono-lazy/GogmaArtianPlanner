@@ -139,6 +139,7 @@ async function running(database: AppDatabase, options: HarnessOptions = {}): Pro
     currentCalculationContext: structuredClone(fixture.built.input.calculationContext),
     getPlan: vi.fn((planId) => database.productionPlans.get(planId)),
     getTargetWeapons: vi.fn(() => database.targetWeapons.toArray()),
+    getBuildListEntries: vi.fn(() => database.buildListEntries.toArray()),
     createInput: vi.fn(async () => structuredClone(fixture.built.input)),
     createWorkerClient: vi.fn(() => client),
     savePlannerConflictPreferenceResult: vi.fn(async () => {

@@ -5,7 +5,9 @@ import {
   createProductionPlannerDependencies,
   defaultPlannerAlternativeTrialBounds,
   preparePlannerInitialContext,
+  type ExcludedBuildListEntry,
   type PlannerDependencies,
+  type PlannerExcludedEntryWarning,
 } from '../domain/planner'
 import {
   ProductionRngEngine,
@@ -18,6 +20,7 @@ import type {
   PlannerWorkerCalculations,
   PreparePlannerInteractionCalculation,
 } from './planner.worker'
+import type { PlannerInteractionExcludedEntry } from './plannerWorkerContracts'
 
 /** Creates the active Planner Engine inside the Worker boundary. */
 export function createProductionPlannerRngEngine(): RngEngine {
@@ -76,6 +79,27 @@ export const createProductionPlannerAlternativeRepair: CreatePlannerAlternativeR
     )
 
 /**
+ * The excluded Entries with the typed warning kind validation recorded for
+ * each (`excludedBuildListEntryWarnings`, matched by Entry ID, never by a
+ * message). Validation records exactly one warning per excluded Entry; one it
+ * did not would be a Domain invariant break, so it fails loudly instead of
+ * guessing a kind.
+ */
+function projectExcludedEntries(
+  excluded: readonly ExcludedBuildListEntry[],
+  warnings: readonly PlannerExcludedEntryWarning[],
+): PlannerInteractionExcludedEntry[] {
+  const kindByEntryId = new Map(warnings.map(({ buildListEntryId, warning }) => [buildListEntryId, warning.kind]))
+  return excluded.map(({ entry, reason }) => {
+    const kind = kindByEntryId.get(entry.id)
+    if (kind === undefined) {
+      throw new Error(`Excluded BuildListEntry '${entry.id}' carries no typed exclusion warning.`)
+    }
+    return { buildListEntryId: entry.id, kind, reason }
+  })
+}
+
+/**
  * Project only the shared Domain helper's validation and current initial
  * Conflicts. No retry, search, or availability rule belongs in this adapter.
  */
@@ -87,8 +111,9 @@ const prepareProductionPlannerInteraction: PreparePlannerInteractionCalculation 
         status: 'invalid',
         issues: prepared.issues,
         warnings: prepared.warnings,
-        excludedBuildListEntries: prepared.excludedBuildListEntries.map(
-          ({ entry, reason }) => ({ buildListEntryId: entry.id, reason }),
+        excludedBuildListEntries: projectExcludedEntries(
+          prepared.excludedBuildListEntries,
+          prepared.excludedBuildListEntryWarnings,
         ),
       }
     }
@@ -96,8 +121,9 @@ const prepareProductionPlannerInteraction: PreparePlannerInteractionCalculation 
     return {
       status: 'ready',
       validBuildListEntryIds: context.validBuildListEntries.map(({ entry }) => entry.id),
-      excludedBuildListEntries: context.excludedBuildListEntries.map(
-        ({ entry, reason }) => ({ buildListEntryId: entry.id, reason }),
+      excludedBuildListEntries: projectExcludedEntries(
+        context.excludedBuildListEntries,
+        context.excludedBuildListEntryWarnings,
       ),
       currentConflicts: context.initialConflictDetection.conflicts.map(
         ({ id, buildListEntryIds, checkpointParticipants }) => ({

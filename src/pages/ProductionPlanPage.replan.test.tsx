@@ -222,6 +222,7 @@ function dependencies(
     currentCalculationContext: { ...plan.calculationContext },
     getPlan: vi.fn(async () => plan),
     getTargetWeapons: vi.fn(async () => [target]),
+    getBuildListEntries: vi.fn(async () => [entry]),
     createInput: vi.fn(async () => fixtureInput(target, entry)),
     createWorkerClient: vi.fn(() => client),
     savePlannerConflictPreferenceResult: vi.fn(async () => {
