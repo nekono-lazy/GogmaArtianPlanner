@@ -1,5 +1,12 @@
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
-import type { CalculationContext, TargetWeaponId } from '../../domain/models/publicTypes'
+import type {
+  CalculationContext,
+  NormalArtianCounter,
+  OwnedWeapon,
+  RngState,
+  TargetWeapon,
+  TargetWeaponId,
+} from '../../domain/models/publicTypes'
 import type {
   CandidateRouteFilter,
   CandidateSearchInput,
@@ -39,26 +46,32 @@ export interface CreateCandidateSearchInputOptions {
   calculationContext: CalculationContext
 }
 
-export async function createCandidateSearchInput(
+/** The persisted state one Candidate Search input carries, as read. */
+export interface CandidateSearchInputState {
+  rngState: RngState
+  normalCounters: NormalArtianCounter[]
+  ownedWeapons: OwnedWeapon[]
+  targetWeapons: TargetWeapon[]
+}
+
+/**
+ * Builds the Candidate Search input from the caller's options and one read of
+ * the persisted state. Pure: it reads and writes nothing, and it never sets
+ * `excludedSourceOwnedWeaponIds` (`docs/SEARCH_SPEC.md` 3.3); only
+ * `prepareCandidateSearchInput()` with the exclusion on adds it.
+ */
+export function buildCandidateSearchInput(
   options: CreateCandidateSearchInputOptions,
-  repositories: SearchInputRepositories = defaultSearchInputRepositories,
-): Promise<CandidateSearchInput> {
-  const [rngState, normalCounters, ownedWeapons, targetWeapons] =
-    await Promise.all([
-      repositories.ensureInitialRngState(),
-      repositories.getAllNormalArtianCounters(),
-      repositories.getAllOwnedWeapons(),
-      repositories.getAllTargetWeapons(),
-      repositories.ensureSettings(),
-    ])
+  state: CandidateSearchInputState,
+): CandidateSearchInput {
   return {
     searchRunId: options.searchRunId,
     targetWeaponId: options.targetWeaponId,
     routeFilter: options.routeFilter,
-    rngState,
-    normalCounters,
-    ownedWeapons,
-    targetWeapons,
+    rngState: state.rngState,
+    normalCounters: state.normalCounters,
+    ownedWeapons: state.ownedWeapons,
+    targetWeapons: state.targetWeapons,
     settings: { ...options.settings },
     master: {
       weaponBonusDefinitions: options.master.weaponBonusDefinitions,
@@ -71,4 +84,24 @@ export async function createCandidateSearchInput(
     },
     calculationContext: { ...options.calculationContext },
   }
+}
+
+export async function createCandidateSearchInput(
+  options: CreateCandidateSearchInputOptions,
+  repositories: SearchInputRepositories = defaultSearchInputRepositories,
+): Promise<CandidateSearchInput> {
+  const [rngState, normalCounters, ownedWeapons, targetWeapons] =
+    await Promise.all([
+      repositories.ensureInitialRngState(),
+      repositories.getAllNormalArtianCounters(),
+      repositories.getAllOwnedWeapons(),
+      repositories.getAllTargetWeapons(),
+      repositories.ensureSettings(),
+    ])
+  return buildCandidateSearchInput(options, {
+    rngState,
+    normalCounters,
+    ownedWeapons,
+    targetWeapons,
+  })
 }

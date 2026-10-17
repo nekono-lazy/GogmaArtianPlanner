@@ -4,17 +4,22 @@ import type {
   BuildListEntry,
   CalculationContext,
   IntermediateStateSelection,
+  OwnedWeaponId,
   TargetWeapon,
 } from '../../domain/models/publicTypes'
 import type { MasterDataRoot } from '../../domain/master/masterTypes'
 import type {
   CandidateRouteFilter,
-  CandidateSearchInput,
   CandidateSearchProgress,
   CandidateSearchSettings,
 } from '../../domain/search'
 import { defaultIntermediateStateSelection, findBuildListRegisteredTargetIds } from '../../domain/buildList'
 import type { AddBuildListCandidateResult } from '../buildList/buildListService'
+import {
+  preparedCandidateSearchInputIssue,
+  type PrepareCandidateSearchInputOptions,
+  type PreparedCandidateSearchInput,
+} from './prepareCandidateSearchInput'
 import {
   SearchCancelledError,
   SearchWorkerRuntimeError,
@@ -38,21 +43,20 @@ export function selectBatchCandidateSearchTargets(
 
 /**
  * The existing single Candidate Search authorities a batch reuses unchanged:
- * one `createInput()` + `client.startSearch()` per Target, the ordinary
+ * one `prepareInput()` + `client.startSearch()` per Target, the ordinary
  * `saveCandidates()` of that Target's result, and the ordinary
  * `BuildListService.addCandidate()`.
  */
 export interface BatchCandidateSearchDependencies {
   client: SearchWorkerClient
   createSearchRunId(): string
-  createInput(options: {
-    searchRunId: string
-    targetWeaponId: TargetWeapon['id']
-    routeFilter: CandidateRouteFilter
-    settings: CandidateSearchSettings
-    master: MasterDataRoot
-    calculationContext: CalculationContext
-  }): Promise<CandidateSearchInput>
+  /**
+   * One Target's input, read from the persisted state right before its search
+   * (`prepareCandidateSearchInput()`). With the exclusion on, the excluded set
+   * is derived from that read, so an Entry an earlier Target of this batch
+   * added is already counted (`docs/SEARCH_SPEC.md` 3.3「一括検索・追加」).
+   */
+  prepareInput(options: PrepareCandidateSearchInputOptions): Promise<PreparedCandidateSearchInput>
   saveCandidates(targetId: TargetWeapon['id'], candidates: BuildCandidate[]): Promise<unknown>
   addCandidate(
     candidate: BuildCandidate,
@@ -71,7 +75,20 @@ export interface BatchCandidateSearchRequest {
   settings: CandidateSearchSettings
   master: MasterDataRoot
   calculationContext: CalculationContext
+  /**
+   * 「他の目標武器で使用する所持武器を除外する」 when the batch started
+   * (`docs/UI_FLOW.md` 9.1 / 9.2): every Target of the batch uses this value,
+   * whatever the screen shows later.
+   */
+  excludeOtherTargetSources: boolean
 }
+
+/**
+ * Where a `failed` Target stopped: reading its input (`prepare_input`, which
+ * includes deriving the exclusion), the Search itself, saving its Candidate, or
+ * adding it to the Build List. None of them added an Entry.
+ */
+export type BatchCandidateSearchFailureStage = 'prepare_input' | 'search' | 'save_candidates' | 'add_candidate'
 
 /**
  * The outcome of one Target. `not_added` carries the `addCandidate()` result
@@ -81,8 +98,17 @@ export interface BatchCandidateSearchRequest {
  */
 export type BatchCandidateSearchTargetOutcome =
   | { status: 'added'; target: TargetWeapon; entry: BuildListEntry }
-  | { status: 'no_candidate'; target: TargetWeapon }
-  | { status: 'failed'; target: TargetWeapon; message: string }
+  | {
+      status: 'no_candidate'
+      target: TargetWeapon
+      /**
+       * The OwnedWeapons this Target's search did not use as a Route base
+       * because of the exclusion (the result's `excludedSourceOwnedWeaponIds`,
+       * code unit order); empty when the exclusion was off or removed nothing.
+       */
+      excludedSourceOwnedWeaponIds: OwnedWeaponId[]
+    }
+  | { status: 'failed'; target: TargetWeapon; failedAt: BatchCandidateSearchFailureStage; message: string }
   | {
       status: 'not_added'
       target: TargetWeapon
@@ -102,6 +128,8 @@ export type BatchCandidateSearchTermination =
 
 export interface BatchCandidateSearchSummary {
   total: number
+  /** The exclusion condition the whole batch ran with (`BatchCandidateSearchRequest`). */
+  excludeOtherTargetSources: boolean
   outcomes: BatchCandidateSearchTargetOutcome[]
   /** The Targets never started because the batch stopped first. */
   notStarted: TargetWeapon[]
@@ -114,6 +142,8 @@ export interface BatchCandidateSearchSummary {
  * progress, never turned into a batch percentage.
  */
 export interface BatchCandidateSearchProgress {
+  /** The exclusion condition the whole batch runs with (`BatchCandidateSearchRequest`). */
+  excludeOtherTargetSources: boolean
   index: number
   total: number
   completed: number
@@ -156,9 +186,12 @@ export function runBatchCandidateSearch(
 
   const run = async (): Promise<BatchCandidateSearchSummary> => {
     const targets = [...request.targets]
+    // Fixed at the start: a later change on the screen never reaches this batch.
+    const excludeOtherTargetSources = request.excludeOtherTargetSources
     const outcomes: BatchCandidateSearchTargetOutcome[] = []
     const stop = (termination: BatchCandidateSearchTermination): BatchCandidateSearchSummary => ({
       total: targets.length,
+      excludeOtherTargetSources,
       outcomes,
       notStarted: targets.slice(outcomes.length),
       termination,
@@ -169,6 +202,7 @@ export function runBatchCandidateSearch(
       const searchRunId = dependencies.createSearchRunId()
       activeRequestId = searchRunId
       onProgress?.({
+        excludeOtherTargetSources,
         index,
         total: targets.length,
         completed: outcomes.length,
@@ -176,21 +210,31 @@ export function runBatchCandidateSearch(
         search: { targetWeaponId: target.id, phase: 'preparing', processedWorkItems: 0 },
       })
       let candidate: BuildCandidate | null
+      let excludedSourceOwnedWeaponIds: OwnedWeaponId[]
       let searchedTarget: TargetWeapon
+      let stage: BatchCandidateSearchFailureStage = 'prepare_input'
       try {
-        const input = await dependencies.createInput({
+        // Read from the persisted state now, never from an in-memory record of
+        // what earlier Targets of this batch used: only an Entry `addCandidate()`
+        // really added is counted by the exclusion (`docs/SEARCH_SPEC.md` 3.3).
+        const prepared = await dependencies.prepareInput({
           searchRunId,
           targetWeaponId: target.id,
           routeFilter: request.routeFilter,
           settings: request.settings,
           master: request.master,
           calculationContext: request.calculationContext,
+          excludeOtherTargetSources,
         })
+        const issue = preparedCandidateSearchInputIssue(prepared, excludeOtherTargetSources)
+        if (issue !== null) throw new Error('検索条件（他の目標武器で使用する所持武器の除外）を検索入力へ反映できませんでした。', { cause: issue })
+        const { input } = prepared
         if (cancelled) return stop({ status: 'cancelled' })
+        stage = 'search'
         const result = await dependencies.client.startSearch(input, {
           onProgress: (search) => {
             if (!cancelled && activeRequestId === searchRunId) {
-              onProgress?.({ index, total: targets.length, completed: outcomes.length, target, search })
+              onProgress?.({ excludeOtherTargetSources, index, total: targets.length, completed: outcomes.length, target, search })
             }
           },
         })
@@ -198,6 +242,8 @@ export function runBatchCandidateSearch(
         // Search drops a late result: nothing of it is saved.
         if (cancelled) return stop({ status: 'cancelled' })
         candidate = result.targetResult.candidate
+        excludedSourceOwnedWeaponIds = [...result.targetResult.excludedSourceOwnedWeaponIds]
+        stage = 'save_candidates'
         await dependencies.saveCandidates(target.id, candidate === null ? [] : [candidate])
         // The Target the Search actually ran with, so the new Entry's Target
         // definition hash describes the Candidate.
@@ -205,7 +251,7 @@ export function runBatchCandidateSearch(
       } catch (caught: unknown) {
         if (caught instanceof SearchCancelledError || cancelled) return stop({ status: 'cancelled' })
         const message = errorMessage(caught, '検索に失敗しました。')
-        outcomes.push({ status: 'failed', target, message })
+        outcomes.push({ status: 'failed', target, failedAt: stage, message })
         if (caught instanceof SearchWorkerRuntimeError) return stop({ status: 'aborted', message })
         continue
       } finally {
@@ -213,7 +259,7 @@ export function runBatchCandidateSearch(
       }
 
       if (candidate === null) {
-        outcomes.push({ status: 'no_candidate', target })
+        outcomes.push({ status: 'no_candidate', target, excludedSourceOwnedWeaponIds })
         continue
       }
       // A cancel during the Candidate save adds nothing further to the Build List.
@@ -231,7 +277,12 @@ export function runBatchCandidateSearch(
             : { status: 'not_added', target, reason: added.status },
         )
       } catch (caught: unknown) {
-        outcomes.push({ status: 'failed', target, message: errorMessage(caught, '作成リストへの追加に失敗しました。') })
+        outcomes.push({
+          status: 'failed',
+          target,
+          failedAt: 'add_candidate',
+          message: errorMessage(caught, '作成リストへの追加に失敗しました。'),
+        })
       }
     }
     return stop(cancelled ? { status: 'cancelled' } : { status: 'completed' })

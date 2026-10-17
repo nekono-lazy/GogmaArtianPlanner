@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BuildCandidate, BuildListEntry, TargetWeapon } from '../../domain/models/publicTypes'
+import type { BuildCandidate, BuildListEntry, OwnedWeaponId, TargetWeapon } from '../../domain/models/publicTypes'
 import { createBuildListEntry, defaultIntermediateStateSelection } from '../../domain/buildList'
 import type {
   CandidateSearchInput,
@@ -12,6 +12,7 @@ import {
   candidateId,
   createValidBuildCandidate,
   createValidTargetWeapon,
+  ownedWeaponId as ownedWeaponIdOf,
   targetWeaponId,
 } from '../../test/fixtures/domainData'
 import type { AddBuildListCandidateResult } from '../buildList/buildListService'
@@ -26,7 +27,9 @@ import {
   selectBatchCandidateSearchTargets,
   type BatchCandidateSearchDependencies,
   type BatchCandidateSearchProgress,
+  type BatchCandidateSearchRequest,
 } from './batchCandidateSearch'
+import type { PrepareCandidateSearchInputOptions, PreparedCandidateSearchInput } from './prepareCandidateSearchInput'
 
 /** A client that answers each request by its `searchRunId`, as the real one does. */
 class QueueClient implements SearchWorkerClient {
@@ -50,12 +53,12 @@ class QueueClient implements SearchWorkerClient {
     if (!request) throw new Error('no request')
     return request
   }
-  resolveLast(candidate: BuildCandidate | null) {
+  resolveLast(candidate: BuildCandidate | null, excludedSourceOwnedWeaponIds: OwnedWeaponId[] = []) {
     const { input } = this.last
     this.pending.get(input.searchRunId)?.resolve({
       searchRunId: input.searchRunId,
       calculationContext: input.calculationContext,
-      targetResult: { targetWeaponId: input.targetWeaponId, candidate, searchedRoutes: [], skippedRoutes: [], excludedSourceOwnedWeaponIds: [] },
+      targetResult: { targetWeaponId: input.targetWeaponId, candidate, searchedRoutes: [], skippedRoutes: [], excludedSourceOwnedWeaponIds },
       warnings: [],
       elapsedMs: 1,
     })
@@ -75,38 +78,65 @@ function candidateFor(targetValue: TargetWeapon, suffix = ''): BuildCandidate {
 
 const settings: CandidateSearchSettings = { maxNormalAdvance: 3, maxGogmaAdvance: 4, maxSkillAdvance: 5 }
 
-function setup(targets: TargetWeapon[], addResult?: (candidate: BuildCandidate, t: TargetWeapon) => AddBuildListCandidateResult) {
+/**
+ * A prepared input the way `prepareCandidateSearchInput()` shapes it: off has no
+ * exclusion at all, on carries the derived (here: given) excluded IDs.
+ */
+function preparedInput(
+  options: PrepareCandidateSearchInputOptions,
+  targets: TargetWeapon[],
+  excluded: OwnedWeaponId[] = [],
+): PreparedCandidateSearchInput {
+  const { excludeOtherTargetSources, ...inputOptions } = options
+  const input = { ...createFixtureInput(), ...inputOptions, targetWeapons: targets }
+  if (!excludeOtherTargetSources) return { input, sourceExclusion: null }
+  return {
+    input: { ...input, excludedSourceOwnedWeaponIds: [...excluded] },
+    sourceExclusion: {
+      exclusion: {
+        targetWeaponId: options.targetWeaponId,
+        excludedOwnedWeaponIds: [...excluded],
+        usages: excluded.map((ownedWeaponId) => ({ ownedWeaponId, reasons: [] })),
+      },
+      ownedWeapons: [],
+      targetWeapons: [],
+    },
+  }
+}
+
+function setup(
+  targets: TargetWeapon[],
+  addResult?: (candidate: BuildCandidate, t: TargetWeapon) => AddBuildListCandidateResult,
+  excludeOtherTargetSources = false,
+  overrides: Partial<Omit<BatchCandidateSearchDependencies, 'client' | 'createSearchRunId'>> = {},
+) {
   const client = new QueueClient()
   let runId = 0
   const dependencies: BatchCandidateSearchDependencies = {
     client,
     createSearchRunId: () => `batch-run-${++runId}`,
-    createInput: vi.fn(async (options) => ({
-      ...createFixtureInput(),
-      ...options,
-      targetWeapons: targets,
-    })),
+    prepareInput: vi.fn(async (options) => preparedInput(options, targets)),
     saveCandidates: vi.fn(async () => undefined),
     addCandidate: vi.fn(async (candidate: BuildCandidate, t: TargetWeapon, selection) =>
       addResult?.(candidate, t) ?? {
         status: 'added' as const,
         entry: createBuildListEntry(candidate, t, { intermediateStateSelection: selection }),
       }),
+    // Installed before the batch starts: its first input is read synchronously.
+    ...overrides,
   }
   const progress: BatchCandidateSearchProgress[] = []
   const master = createValidMasterDataFixture()
-  const run = runBatchCandidateSearch(
-    {
-      targets,
-      routeFilter: 'existing_gogma',
-      settings,
-      master,
-      calculationContext: createFixtureInput().calculationContext,
-    },
-    dependencies,
-    (next) => progress.push(next),
-  )
-  return { client, dependencies, progress, run }
+  const request: BatchCandidateSearchRequest = {
+    targets,
+    routeFilter: 'existing_gogma',
+    settings,
+    master,
+    calculationContext: createFixtureInput().calculationContext,
+    excludeOtherTargetSources,
+  }
+  const run = runBatchCandidateSearch(request, dependencies, (next) => progress.push(next))
+  return { client, dependencies, progress, request, run }
 }
 
 /** Lets pending microtasks (createInput, save, add) settle. */
@@ -191,8 +221,8 @@ describe('runBatchCandidateSearch', () => {
     client.resolveLast(candidateFor(found))
     const summary = await run.promise
     expect(summary.outcomes).toEqual([
-      { status: 'no_candidate', target: empty },
-      { status: 'failed', target: broken, message: 'fixture failure' },
+      { status: 'no_candidate', target: empty, excludedSourceOwnedWeaponIds: [] },
+      { status: 'failed', target: broken, failedAt: 'search', message: 'fixture failure' },
       expect.objectContaining({ status: 'added', target: found }),
     ])
     expect(dependencies.addCandidate).toHaveBeenCalledTimes(1)
@@ -254,5 +284,127 @@ describe('runBatchCandidateSearch', () => {
     expect(summary.outcomes).toEqual([expect.objectContaining({ status: 'failed', target: targets[0] })])
     expect(summary.notStarted).toEqual([targets[1]])
     expect(client.requests).toHaveLength(1)
+  })
+})
+
+describe('runBatchCandidateSearch with the other-Target source exclusion (Issue #157 PR-3)', () => {
+  it('reads every Target input with the condition fixed when the batch started', async () => {
+    const targets = [target('target.a'), target('target.b')]
+    const { client, dependencies, progress, request, run } = setup(targets, undefined, true)
+    await flush()
+    // A later change of the request object (the screen's value) never reaches this batch.
+    request.excludeOtherTargetSources = false
+    client.resolveLast(candidateFor(targets[0]))
+    await flush()
+    client.resolveLast(candidateFor(targets[1]))
+    const summary = await run.promise
+    expect(vi.mocked(dependencies.prepareInput).mock.calls.map(([options]) => [options.targetWeaponId, options.excludeOtherTargetSources]))
+      .toEqual([[targets[0].id, true], [targets[1].id, true]])
+    expect(client.requests.map(({ input }) => input.excludedSourceOwnedWeaponIds)).toEqual([[], []])
+    expect(summary.excludeOtherTargetSources).toBe(true)
+    expect(progress.every(({ excludeOtherTargetSources }) => excludeOtherTargetSources)).toBe(true)
+  })
+
+  it('keeps the exclusion off for every Target when the batch starts off, with no exclusion on any input', async () => {
+    const targets = [target('target.a'), target('target.b')]
+    const { client, dependencies, request, run } = setup(targets)
+    await flush()
+    request.excludeOtherTargetSources = true
+    client.resolveLast(candidateFor(targets[0]))
+    await flush()
+    client.resolveLast(null)
+    const summary = await run.promise
+    expect(vi.mocked(dependencies.prepareInput).mock.calls.map(([options]) => options.excludeOtherTargetSources)).toEqual([false, false])
+    expect(client.requests.every(({ input }) => !('excludedSourceOwnedWeaponIds' in input))).toBe(true)
+    expect(summary.excludeOtherTargetSources).toBe(false)
+    expect(summary.outcomes.at(-1)).toEqual({ status: 'no_candidate', target: targets[1], excludedSourceOwnedWeaponIds: [] })
+  })
+
+  it('records on a Target without a Candidate the weapons its search excluded, as the result reported them', async () => {
+    const empty = target('target.empty')
+    const { client, run } = setup([empty], undefined, true)
+    await flush()
+    const excluded = [ownedWeaponIdOf('owned.a'), ownedWeaponIdOf('owned.b')]
+    client.resolveLast(null, excluded)
+    const summary = await run.promise
+    expect(summary.outcomes).toEqual([{ status: 'no_candidate', target: empty, excludedSourceOwnedWeaponIds: excluded }])
+  })
+
+  it('records where each failure happened and adds nothing for a failed Target', async () => {
+    const targets = [target('target.read'), target('target.search'), target('target.save'), target('target.add'), target('target.ok')]
+    const { client, run } = setup(targets, undefined, true, {
+      prepareInput: vi.fn(async (options) => {
+        if (options.targetWeaponId === targets[0].id) throw new Error('read failure')
+        return preparedInput(options, targets)
+      }),
+      saveCandidates: vi.fn(async (targetId) => {
+        if (targetId === targets[2].id) throw new Error('save failure')
+      }),
+      addCandidate: vi.fn(async (candidate: BuildCandidate, t: TargetWeapon, selection) => {
+        if (t.id === targets[3].id) throw new Error('add failure')
+        return { status: 'added' as const, entry: createBuildListEntry(candidate, t, { intermediateStateSelection: selection }) }
+      }),
+    })
+    await flush()
+    client.rejectLast(new Error('search failure'))
+    await flush()
+    client.resolveLast(candidateFor(targets[2]))
+    await flush()
+    client.resolveLast(candidateFor(targets[3]))
+    await flush()
+    client.resolveLast(candidateFor(targets[4]))
+    const summary = await run.promise
+    expect(summary.termination).toEqual({ status: 'completed' })
+    expect(summary.outcomes).toEqual([
+      { status: 'failed', target: targets[0], failedAt: 'prepare_input', message: 'read failure' },
+      { status: 'failed', target: targets[1], failedAt: 'search', message: 'search failure' },
+      { status: 'failed', target: targets[2], failedAt: 'save_candidates', message: 'save failure' },
+      { status: 'failed', target: targets[3], failedAt: 'add_candidate', message: 'add failure' },
+      expect.objectContaining({ status: 'added', target: targets[4] }),
+    ])
+    // The Target whose input could not be read never reached the Search.
+    expect(client.requests.map(({ input }) => input.targetWeaponId)).toEqual(targets.slice(1).map(({ id }) => id))
+  })
+
+  it('never searches an input that does not carry the requested condition', async () => {
+    const targets = [target('target.ignored'), target('target.ok')]
+    const { client, run } = setup(targets, undefined, true, {
+      // A preparation that ignored the exclusion for the first Target: the off-shaped input for an on batch.
+      prepareInput: vi.fn(async (options) => preparedInput(
+        options.targetWeaponId === targets[0].id ? { ...options, excludeOtherTargetSources: false } : options,
+        targets,
+      )),
+    })
+    await flush()
+    client.resolveLast(candidateFor(targets[1]))
+    const summary = await run.promise
+    expect(summary.outcomes).toEqual([
+      { status: 'failed', target: targets[0], failedAt: 'prepare_input', message: '検索条件（他の目標武器で使用する所持武器の除外）を検索入力へ反映できませんでした。' },
+      expect.objectContaining({ status: 'added', target: targets[1] }),
+    ])
+    expect(client.requests.map(({ input }) => input.targetWeaponId)).toEqual([targets[1].id])
+  })
+
+  it('keeps the Target order, the outcome kinds, the cancel and the Worker abort unchanged with the exclusion on', async () => {
+    const targets = [target('target.a'), target('target.b'), target('target.c')]
+    const cancelled = setup(targets, undefined, true)
+    await flush()
+    cancelled.client.resolveLast(candidateFor(targets[0]))
+    await flush()
+    cancelled.run.cancel()
+    const cancelledSummary = await cancelled.run.promise
+    expect(cancelledSummary.termination).toEqual({ status: 'cancelled' })
+    expect(cancelledSummary.outcomes).toEqual([expect.objectContaining({ status: 'added', target: targets[0] })])
+    expect(cancelledSummary.notStarted).toEqual([targets[1], targets[2]])
+
+    const aborted = setup(targets, undefined, true)
+    await flush()
+    aborted.client.rejectLast(new SearchWorkerRuntimeError('worker_error', 'boom'))
+    const abortedSummary = await aborted.run.promise
+    expect(abortedSummary.termination.status).toBe('aborted')
+    expect(abortedSummary.outcomes).toEqual([
+      { status: 'failed', target: targets[0], failedAt: 'search', message: expect.any(String) },
+    ])
+    expect(abortedSummary.notStarted).toEqual([targets[1], targets[2]])
   })
 })
